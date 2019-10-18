@@ -37,6 +37,7 @@ type :: parameters
     character(len=3)      :: discrete='no'        !< be discrete(yes|no){no}
     character(len=3)      :: diverse='no'         !< diverse or not flag (yes|no){no}
     character(len=3)      :: doalign='yes'
+    character(len=3)      :: dock='no'            !< register nanoparticle maps prior comparison (yes|no){no}
     character(len=3)      :: dopca='yes'
     character(len=3)      :: doprint='no'
     character(len=3)      :: eputiltgroups='no'   !< generate relion tilt classes from epu filenames (yes|no){no}
@@ -48,7 +49,7 @@ type :: parameters
     character(len=3)      :: graphene_filt='no'   !< filter out graphene bands in correcation search
     character(len=3)      :: griddev='yes'        !< to test grid correction
     character(len=3)      :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
-    character(len=3)      :: heterogeneous='no'   !< heterogeneous nanoparticle mpdel (yes|no){no}
+    character(len=3)      :: biatomic='no'        !< heterogeneous nanoparticle model (yes|no){no}
     character(len=3)      :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
@@ -180,8 +181,6 @@ type :: parameters
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
     character(len=STDLEN) :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
     character(len=2)      :: element ='  '        !< atom kind
-    character(len=2)      :: element1='  '        !< atom kind
-    character(len=2)      :: element2='  '        !< atom kind
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
     character(len=STDLEN) :: fbody=''             !< file body
     character(len=STDLEN) :: filter='no'          !< filter type{no}
@@ -403,8 +402,6 @@ type :: parameters
     real    :: sigma=1.0           !< for gaussian function generation {1.}
     real    :: sigma2_fudge=SIGMA2_FUDGE_DEFAULT !< fudge factor for sigma2_noise{50.}
     real    :: smpd=2.             !< sampling distance, same as EMANs apix(in A)
-    real    :: smpd1=2.            !< sampling distance, same as EMANs apix(in A), when have 2 nano to compare, need smpd of each of them
-    real    :: smpd2=2.            !< sampling distance, same as EMANs apix(in A)
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio
     real    :: tau=TAU_DEFAULT     !< tau fudge factor, controls the sharpness of the orientation weight distribution,
@@ -529,6 +526,7 @@ contains
         call check_carg('discrete',       self%discrete)
         call check_carg('diverse',        self%diverse)
         call check_carg('doalign',        self%doalign)
+        call check_carg('dock',           self%dock)
         call check_carg('dockmode',       self%dockmode)
         call check_carg('dev',            self%dev)
         call check_carg('dihedral',       self%dihedral)
@@ -536,8 +534,6 @@ contains
         call check_carg('doprint',        self%doprint)
         call check_carg('draw_color',     self%draw_color)
         call check_carg('element',        self%element)
-        call check_carg('element1',       self%element1)
-        call check_carg('element2',       self%element2)
         call check_carg('errify',         self%errify)
         call check_carg('even',           self%even)
         call check_carg('exp_doc',        self%exp_doc)
@@ -550,7 +546,7 @@ contains
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('griddev',        self%griddev)
-        call check_carg('heterogeneous',  self%heterogeneous)
+        call check_carg('biatomic',       self%biatomic)
         call check_carg('hfun',           self%hfun)
         call check_carg('hist',           self%hist)
         call check_carg('imgkind',        self%imgkind)
@@ -830,8 +826,6 @@ contains
         call check_rarg('shcfrac',        self%shcfrac)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
-        call check_rarg('smpd1',          self%smpd1)
-        call check_rarg('smpd2',          self%smpd2)
         call check_rarg('sigma',          self%sigma)
         call check_rarg('sigma2_fudge',   self%sigma2_fudge)
         call check_rarg('snr',            self%snr)

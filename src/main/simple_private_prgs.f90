@@ -631,87 +631,73 @@ contains
         call private_prgs(14)%push_req_key('top')
         call private_prgs(14)%push_req_key('projfile')
 
-        ! SEGPICK, for segmentation-based particle picking
-        call private_prgs(15)%set_name('segpick')
-        ! required keys
-        call private_prgs(15)%push_req_key('fname')
-        call private_prgs(15)%push_req_key('smpd')
-        call private_prgs(15)%push_req_key('min_rad')
-        call private_prgs(15)%push_req_key('max_rad')
-        ! optional keys
-        call private_prgs(15)%push_opt_key('lp')
-        call private_prgs(15)%push_opt_key('winsz')
-        call private_prgs(15)%push_opt_key('thres')
-        call private_prgs(15)%push_opt_key('detector')
-        call private_prgs(15)%push_opt_key('draw_color')
-
         ! PICK_EXTRACT, for template-based particle picking & extraction
-        call private_prgs(16)%set_name('pick_extract')
+        call private_prgs(15)%set_name('pick_extract')
         ! required keys
-        call private_prgs(16)%push_req_key('projfile')
-        call private_prgs(16)%push_req_key('refs')
+        call private_prgs(15)%push_req_key('projfile')
+        call private_prgs(15)%push_req_key('refs')
         ! optional keys
-        call private_prgs(16)%push_opt_key('nthr')
-        call private_prgs(16)%push_opt_key('lp')
-        call private_prgs(16)%push_opt_key('thres')
-        call private_prgs(16)%push_opt_key('ndev')
-        call private_prgs(16)%push_opt_key('box_extract')
-        call private_prgs(16)%push_opt_key('pcontrast')
-        call private_prgs(16)%push_opt_key('outside')
+        call private_prgs(15)%push_opt_key('nthr')
+        call private_prgs(15)%push_opt_key('lp')
+        call private_prgs(15)%push_opt_key('thres')
+        call private_prgs(15)%push_opt_key('ndev')
+        call private_prgs(15)%push_opt_key('box_extract')
+        call private_prgs(15)%push_opt_key('pcontrast')
+        call private_prgs(15)%push_opt_key('outside')
 
         ! PRINT_PROJECT_VALS, for printing specific values in a project file field
-        call private_prgs(17)%set_name('print_project_vals')
+        call private_prgs(16)%set_name('print_project_vals')
         ! required keys
-        call private_prgs(17)%push_req_key('projfile')
-        call private_prgs(17)%push_req_key('keys')
-        call private_prgs(17)%push_req_key('oritype')
+        call private_prgs(16)%push_req_key('projfile')
+        call private_prgs(16)%push_req_key('keys')
+        call private_prgs(16)%push_req_key('oritype')
 
         ! RANK_CAVGS, for ranking class averages
-        call private_prgs(18)%set_name('rank_cavgs')
+        call private_prgs(17)%set_name('rank_cavgs')
         ! required keys
-        call private_prgs(18)%push_req_key('projfile')
-        call private_prgs(18)%push_req_key('stk')
+        call private_prgs(17)%push_req_key('projfile')
+        call private_prgs(17)%push_req_key('stk')
         ! set optional keys
-        call private_prgs(18)%push_opt_key('outstk')
+        call private_prgs(17)%push_opt_key('outstk')
 
         ! ROTMATS2ORIS, for converting a text file (9 records per line) describing rotation matrices into a SIMPLE oritab
-        call private_prgs(19)%set_name('rotmats2oris')
+        call private_prgs(18)%set_name('rotmats2oris')
         ! required keys
-        call private_prgs(19)%push_req_key('infile')
+        call private_prgs(18)%push_req_key('infile')
         ! optional keys
-        call private_prgs(19)%push_opt_key('outfile')
-        call private_prgs(19)%push_opt_key('oritype')
+        call private_prgs(18)%push_opt_key('outfile')
+        call private_prgs(18)%push_opt_key('oritype')
 
         ! SPLIT, for splitting of image stacks into partitions for parallel execution
-        call private_prgs(20)%set_name('split')
+        call private_prgs(19)%set_name('split')
         ! required keys
-        call private_prgs(20)%push_req_key('stk')
-        call private_prgs(20)%push_req_key('smpd')
-        call private_prgs(20)%push_req_key('nparts')
+        call private_prgs(19)%push_req_key('stk')
+        call private_prgs(19)%push_req_key('smpd')
+        call private_prgs(19)%push_req_key('nparts')
 
         ! STK_CORR, for correlating congruent image stacks
-        call private_prgs(21)%set_name('stk_corr')
+        call private_prgs(20)%set_name('stk_corr')
         ! required keys
-        call private_prgs(21)%push_req_key('stk')
-        call private_prgs(21)%push_req_key('stk2')
-        call private_prgs(21)%push_req_key('smpd')
-        call private_prgs(21)%push_req_key('msk')
+        call private_prgs(20)%push_req_key('stk')
+        call private_prgs(20)%push_req_key('stk2')
+        call private_prgs(20)%push_req_key('smpd')
+        call private_prgs(20)%push_req_key('msk')
         ! optional keys
-        call private_prgs(21)%push_opt_key('lp')
+        call private_prgs(20)%push_opt_key('lp')
 
         ! VOLASSEMBLE, for asssembling subvolumes generated in distributed execution
-        call private_prgs(22)%set_name('volassemble')
+        call private_prgs(21)%set_name('volassemble')
         ! required keys
-        call private_prgs(22)%push_req_key('nparts')
-        call private_prgs(22)%push_req_key('projfile')
-        call private_prgs(22)%push_req_key('msk')
+        call private_prgs(21)%push_req_key('nparts')
+        call private_prgs(21)%push_req_key('projfile')
+        call private_prgs(21)%push_req_key('msk')
         ! optional keys
-        call private_prgs(22)%push_opt_key('nthr')
-        call private_prgs(22)%push_opt_key('state')
-        call private_prgs(22)%push_opt_key('nstates')
-        call private_prgs(22)%push_opt_key('mskfile')
+        call private_prgs(21)%push_opt_key('nthr')
+        call private_prgs(21)%push_opt_key('state')
+        call private_prgs(21)%push_opt_key('nstates')
+        call private_prgs(21)%push_opt_key('mskfile')
 
-        n_private_prgs = 22
+        n_private_prgs = 21
     end subroutine new_private_prgs
 
 end module simple_private_prgs

@@ -176,6 +176,7 @@ type(simple_input_param) :: deftab
 type(simple_input_param) :: dferr
 type(simple_input_param) :: dfmax
 type(simple_input_param) :: dfmin
+type(simple_input_param) :: dock
 type(simple_input_param) :: e1, e2, e3
 type(simple_input_param) :: element
 type(simple_input_param) :: eo
@@ -185,7 +186,7 @@ type(simple_input_param) :: fraca
 type(simple_input_param) :: frcs
 type(simple_input_param) :: graphene_filt
 type(simple_input_param) :: groupframes
-type(simple_input_param) :: heterogeneous
+type(simple_input_param) :: biatomic
 type(simple_input_param) :: hp
 type(simple_input_param) :: inner
 type(simple_input_param) :: job_memory_per_task
@@ -243,8 +244,6 @@ type(simple_input_param) :: sherr
 type(simple_input_param) :: sigma
 type(simple_input_param) :: sigma2_fudge
 type(simple_input_param) :: smpd
-type(simple_input_param) :: smpd1
-type(simple_input_param) :: smpd2
 type(simple_input_param) :: star_datadir
 type(simple_input_param) :: starfile
 type(simple_input_param) :: startit
@@ -754,8 +753,6 @@ contains
         call set_param(ctf_yes,       'ctf',           'multi',  'CTF status', 'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){yes}', '(yes|no|flip){yes}', .false., 'yes')
         call set_param(ctfpatch,      'ctfpatch',      'binary', 'Patch CTF estimation', 'Whether to perform patch CTF estimation(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(smpd,          'smpd',          'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
-        call set_param(smpd1,         'smpd1',         'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms in vol1', 'pixel size in Angstroms', .true., 1.0)
-        call set_param(smpd2,         'smpd2',         'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms in vol2', 'pixel size in Angstroms', .true., 1.0)
         call set_param(phaseplate,    'phaseplate',    'binary', 'Phase-plate images', 'Images obtained with Volta phase-plate(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(deftab,        'deftab',        'file',   'CTF parameter file', 'CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values',&
         &'.simple|.txt parameter file', .false., 'deftab'//trim(METADATA_EXT))
@@ -858,7 +855,8 @@ contains
         call set_param(max_rad, 'max_rad', 'num', 'Maximum radius in A', 'Maximum radius in A {12.}', '{12.}', .false., 100.)
         call set_param(min_rad, 'min_rad', 'num', 'Minimum radius in A', 'Minimum radius in A {5.} ', '{5.}',  .false., 10.)
         call set_param(stepsz, 'stepsz', 'num', ' Steps size in A', 'Step size in A {2.} ', '{2.}',  .false., 10.)
-        call set_param(heterogeneous, 'heterogeneous', 'binary', 'Heterogeneous nanoparticle', 'Whether nanoparticle is composed by two elements or not (yes|no){no} ', '(yes|no){no}',  .true., 'no')
+        call set_param(biatomic, 'biatomic', 'binary', 'biatomic nanoparticle', 'Whether nanoparticle is composed by two elements or not (yes|no){no} ', '(yes|no){no}',  .true., 'no')
+        call set_param(dock, 'dock', 'binary', 'Volumes have to be docked', 'Volumes have to be docked(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
@@ -925,7 +923,7 @@ contains
         ! search controls
         ! parameter input/output
         call atom_cluster_analysis%set_input('parm_ios', 1, smpd)
-        call atom_cluster_analysis%set_input('parm_ios', 2, heterogeneous)
+        call atom_cluster_analysis%set_input('parm_ios', 2, biatomic)
         ! <empty>
         ! alternative inputs
         ! <empty>
@@ -944,23 +942,22 @@ contains
         &'Compare two atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for comparing two atomic-resolution nanoparticle map by RMSD calculation',& ! descr long
         &'simple_exec',&                                     ! executable
-        &2, 2, 0, 0, 2, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        &2, 1, 0, 1, 1, 0, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call atoms_rmsd%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume 1', &
+         call atoms_rmsd%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume 1', &
         & 'input volume e.g. vol1.mrc', .true., '')
-        call atoms_rmsd%set_input('img_ios', 2, 'vol2', 'file', 'Volume', 'Nanoparticle volume 2', &
+         call atoms_rmsd%set_input('img_ios', 2, 'vol2', 'file', 'Volume', 'Nanoparticle volume 2', &
         & 'input volume e.g. vol2.mrc', .true., '')
-       ! search controls
         ! parameter input/output
-        call atoms_rmsd%set_input('parm_ios', 1, smpd1)
-        call atoms_rmsd%set_input('parm_ios', 2, smpd2)
-        ! <empty>
+         call atoms_rmsd%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
+        ! search controls
+         call atoms_rmsd%set_input('srch_ctrls', 1, 'dock', 'binary', 'Volumes have to be docked', 'Dock vol2 to vol1', &
+        & 'prior comparison', .true., 'no')
         ! filter controls
-        call atoms_rmsd%set_input('filt_ctrls', 1, 'element1', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition vol1 e.g. Pt', .false., '')
-        call atoms_rmsd%set_input('filt_ctrls', 2, 'element2', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition vol2 e.g. Pt', .false., '')
+         call atoms_rmsd%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition vol1  e.g. Pt', .false., '')
         ! mask controls
         ! <empty>
         ! computer controls
@@ -2347,17 +2344,19 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_distr_exec',&                                             ! executable
-        &2, 3, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &0, 3, 4, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call pick%set_input('img_ios', 1, 'refs', 'file', 'Stack of class-averages for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
-        call pick%set_input('img_ios', 2, 'vol1', 'file', 'Volume for picking', 'Volume for picking', 'e.g. vol.mrc file', .false., '')
+        ! <empty>
         ! parameter input/output
         call pick%set_input('parm_ios', 1, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
         call pick%set_input('parm_ios', 2, pcontrast)
         call pick%set_input('parm_ios', 3, 'phasecorr', 'binary', 'Picking phasecorrelation approach','Use phase correlations approach for picking','(yes|no){no}', .true.,'no')
         ! alternative inputs
-        ! <empty>
+        call pick%set_input('alt_ios', 1, 'refs', 'file', 'Stack of class-averages for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
+        call pick%set_input('alt_ios', 2, 'vol1', 'file', 'Volume for picking', 'Volume for picking', 'e.g. vol.mrc file', .false., '')
+        call pick%set_input('alt_ios', 3, 'min_rad', 'num', 'Minimum radius in A', 'Minimum expected radius of the particles in A {5.} ', '{5.}',  .false., 10.)
+        call pick%set_input('alt_ios', 4, 'max_rad', 'num', 'Maximum radius in A', 'Maximum expected radius of the particles in A {12.} ', '{12.}',  .false., 100.)
         ! search controls
         call pick%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false., 0.)
         call pick%set_input('srch_ctrls', 2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)

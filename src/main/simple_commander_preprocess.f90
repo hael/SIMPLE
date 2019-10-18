@@ -26,7 +26,6 @@ public :: ctf_estimate_commander
 public :: map_cavgs_selection_commander
 public :: pick_commander_distr
 public :: pick_commander
-public :: segpick_commander
 public :: extract_commander_distr
 public :: extract_commander
 public :: reextract_commander_distr
@@ -89,10 +88,6 @@ type, extends(commander_base) :: pick_commander
   contains
     procedure :: execute      => exec_pick
 end type pick_commander
-type, extends(commander_base) :: segpick_commander
-  contains
-    procedure :: execute      => exec_segpick
-end type segpick_commander
 type, extends(commander_base) :: extract_commander_distr
   contains
     procedure :: execute      => exec_extract_distr
@@ -1224,50 +1219,6 @@ contains
         call qsys_job_finished(  'simple_commander_preprocess :: exec_pick' )
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
     end subroutine exec_pick
-
-    subroutine exec_segpick( self, cline )
-        use simple_segpicker, only: segpicker
-        class(segpick_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline !< command line input
-        character(len=:), allocatable :: output_dir
-        character(len=:), allocatable :: detector
-        type(segpicker)  :: pc
-        type(parameters) :: params
-        ! sanity checks
-        if( .not. cline%defined('fname') )then
-            THROW_HARD('ERROR! fname needs to be present; exec_segpick')
-        endif
-        if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_segpick')
-        endif
-        if( .not. cline%defined('min_rad') .or.  .not. cline%defined('max_rad'))then
-            THROW_HARD('ERROR! min_rad and max_rad need to be present; exec_segpick')
-        endif
-        call params%new(cline)
-        if( cline%defined('thres') .and. params%detector .ne. 'sobel')then
-            THROW_HARD('ERROR! thres is compatible only with sobel detector; exec_segpick')
-        endif
-        ! set default
-        detector = 'bin'
-        if(cline%defined('detector')) detector=params%detector
-        ! output directory
-        output_dir = PATH_HERE
-        ! particle picking
-        if(cline%defined('draw_color')) then
-            call pc%new(params%fname,params%min_rad,params%max_rad,params%smpd,params%draw_color)
-        else
-            call pc%new(params%fname,params%min_rad,params%max_rad,params%smpd)
-        endif
-        call pc%preprocess_mic(detector)
-        call pc%identify_particle_positions()
-        call pc%output_identified_particle_positions()
-        call pc%write_boxfile()
-        call pc%print_info()
-        ! kill
-        call pc%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
-    end subroutine exec_segpick
 
     subroutine exec_extract_distr( self, cline )
         use simple_oris,  only: oris

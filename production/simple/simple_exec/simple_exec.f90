@@ -255,7 +255,6 @@ select case(prg)
         call xatom_cluster_analysis%execute(cline)
     case('nano_softmask')
         call xnano_softmask%execute(cline)
-
     case('atoms_rmsd')
         call xatoms_rmsd%execute(cline)
 

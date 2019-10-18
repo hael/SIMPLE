@@ -1,359 +1,290 @@
 module simple_test_chiara_try_mod
     include 'simple_lib.f08'
-    ! use simple_aff_prop
-    ! use gnufor2
-    ! use simple_ctf
-    ! use simple_micops
     use simple_image, only : image
-    ! use simple_stackops
-    ! use simple_math
-    ! use simple_segmentation
-    ! use simple_parameters, only: parameters
-    ! use simple_cmdline,    only: cmdline
-    ! use simple_tvfilter
-    ! use simple_ctf
-    ! use simple_ppca
-    ! use simple_stat
-    ! use simple_lapackblas, only : sgeev
-    implicit none
+
+    public
+
+    type emgaufit
+        private
+        integer           :: N    ! number of data
+        integer           :: K    ! number of components
+        real, allocatable :: avgs(:), vars(:), mix(:), gammas(:,:)
+        real, pointer     :: dat(:)=>null()
+        logical           :: exists=.false.
+      contains
+        ! CONSTRUCTOR
+        procedure :: new
+        ! GETTERS/SETTERS
+        procedure :: set_data
+        procedure :: set_avgs
+        procedure :: get_avgs
+        procedure :: get_vars
+        ! MACHINERY
+        procedure :: fit
+        procedure, private :: init
+        procedure, private :: init_chiara
+        procedure, private :: logL
+        procedure, private :: estep
+        procedure, private :: mstep
+        ! DESTRUCTOR
+        procedure :: kill
+    end type
+
     contains
 
-! This subroutine performs laplacian filtering on the input image.
-subroutine laplacian_filt(self)
-    type(image), intent(inout) :: self
-    real    :: k3(3,3,3), k2(3,3) !laplacian kernels (2D-3D)
-    integer :: ldim(3)
-    ldim = self%get_ldim()
-    k2 = (1./8.)*reshape([0.,1.,0.,1.,-4., 1., 0., 1., 0.], [3,3])
-    k3 = (1./12.)*reshape([0.,0.,0., 0.,1.,0., 0.,0.,0.,&
-    &                     0.,1.,0., 1.,-6.,1., 0.,1.,0.,0.,0.,0., 0.,1.,0., 0.,0.,0.], [3,3,3])
-    if(ldim(3) .ne. 1) then
-        call self%imfilter(k3)
-    else
-        call self%imfilter(k2)
-    endif
-end subroutine laplacian_filt
+        ! CONSTRUCTOR
 
-  ! For Canny3D visit the following websites
-  ! https://au.mathworks.com/matlabcentral/fileexchange/46260-3d-differential-canny-edge-detector
-  ! https://en.wikipedia.org/wiki/Edge_detection#Second-order_approaches
+        !>  \brief  is a constructor
+        subroutine new( self, N, K )
+            class(emgaufit), intent(inout) :: self
+            integer, intent(in)            :: N, K
+            integer :: alloc_stat
+            if( self%exists ) call self%kill
+            self%N = N
+            self%K = K
+            allocate( self%avgs(K), self%vars(K), self%mix(K), self%gammas(N,K), stat=alloc_stat )
+        end subroutine
 
-  ! 3D line for regression for identification atom rows
-  function fun_try(p,n) result(r)
-          real,    intent(in) :: p(:)
-          integer, intent(in) :: n
-          real :: r(n)
-          real :: x, y
-          x = p(1)
-          y = p(2)
-          r(1) = 1
-          r(2) = x*y
-  end function fun_try
+        ! GETTERS/SETTERS
 
-      SUBROUTINE PRINT_EIGENVALUES( DESC, N, WR, WI )
-          CHARACTER(len= *)    :: DESC
-          INTEGER ::  N
-          REAL    ::  WR( : ), WI( : )
-          REAL, parameter ::   ZERO = 0.0
-          INTEGER ::  J
-          WRITE(*,*)
-          WRITE(*,*) DESC
-          DO J = 1, N
-             IF( WI( J ).EQ.ZERO ) THEN
-                WRITE(*,9998,ADVANCE='NO') WR( J )
-             ELSE
-                WRITE(*,9999,ADVANCE='NO') WR( J ), WI( J )
-             END IF
-          END DO
-          WRITE(*,*)
-     9998 FORMAT( 11(:,1X,F6.2) )
-     9999 FORMAT( 11(:,1X,'(',F6.2,',',F6.2,')') )
-          RETURN
-      END SUBROUTINE PRINT_EIGENVALUES
+        !>  \brief  is for setting pointer to data
+        subroutine set_data( self, dat )
+            class(emgaufit), intent(inout) :: self
+            real, intent(in), target       :: dat(:)
+            self%dat => dat
+        end subroutine
 
-      SUBROUTINE PRINT_EIGENVECTORS( DESC, N, WI, V, LDV )
-          CHARACTER(len = *) ::   DESC
-          INTEGER            :: N, LDV
-          REAL   :: WI( : ), V( :, : )
-          REAL, parameter    :: ZERO = 0.0
-          INTEGER   ::       I, J
-          WRITE(*,*)
-          WRITE(*,*) DESC
-          DO I = 1, N
-             J = 1
-             DO WHILE( J.LE.N )
-                IF( WI( J ).EQ.ZERO ) THEN
-                   WRITE(*,9998,ADVANCE='NO') V( I, J )
-                   J = J + 1
-                ELSE
-                   WRITE(*,9999,ADVANCE='NO') V( I, J ), V( I, J+1 )
-                   WRITE(*,9999,ADVANCE='NO') V( I, J ), -V( I, J+1 )
-                   J = J + 2
-                END IF
-             END DO
-             WRITE(*,*)
-          END DO
-     9998 FORMAT( 11(:,1X,F6.2) )
-     9999 FORMAT( 11(:,1X,'(',F6.2,',',F6.2,')') )
-          RETURN
-      END SUBROUTINE PRINT_EIGENVECTORS
+        !>  \brief  is for setting the averages
+        subroutine set_avgs( self, avgs)
+            class(emgaufit), intent(inout) :: self
+            real,            intent(in)    :: avgs(self%K)
+            self%avgs = avgs
+        end subroutine
 
-  subroutine circumference(img, center, rad, full)
-      type(image),       intent(inout) :: img
-      integer,           intent(in)    :: center(2)
-      real,              intent(in)    :: rad
-      logical, optional, intent(in)    :: full ! Default is false
-      integer :: i, j, sh, h, k
-      integer :: ldim(3)
-      real    :: smpd
-      logical :: ffull
-      ffull = .false.
-      if(present(full)) ffull = full
-      ldim = img%get_ldim()
-      smpd = img%get_smpd()
-      do i = 1, ldim(1)
-          do j = 1, ldim(2)
-              h   =  i - 1 - center(1)
-              k   =  j - 1 - center(2)
-              sh  =  nint(hyp(real(h),real(k)))
-              if(.not. ffull) then
-                  if(abs(real(sh)-rad)<1) call img%set([i,j,1], 1.)
-              else
-                  if(abs(real(sh))<rad) call img%set([i,j,1], 1.)
-              endif
+        !>  \brief  is for getting the averages
+        function get_avgs( self ) result( avgs )
+            class(emgaufit), intent(in) :: self
+            real :: avgs(self%K)
+            avgs = self%avgs
+        end function
+
+        !>  \brief  is for getting the variances
+        function get_vars( self ) result( vars )
+            class(emgaufit), intent(in) :: self
+            real :: vars(self%K)
+            vars = self%vars
+        end function
+
+        ! MACHINERY
+
+        !>  \brief  is the master fitting subroutine
+        subroutine fit( self, mits, avgs)
+            class(emgaufit), intent(inout) :: self
+            integer,         intent(in)    :: mits
+            real   ,         intent(in)    :: avgs(self%K)
+            integer :: k
+            real    :: L
+            ! initialize
+            ! call self%init
+            call self%init_chiara(avgs)
+            ! calculate initial log-likelihood
+            L = self%logL()
+            print *, 'initial log(L):', L
+            ! iterate
+            do k=1,mits
+                call self%estep
+                call self%mstep
+                L = self%logL()
+                if( k == 1 .or. mod(k,5) == 0 )then
+                    write(*,"(1X,A,1X,I3,1X,A,1X,F10.0)") 'Iteration:', k, 'Log-likelihood:', L
+                endif
+            end do
+        end subroutine
+
+        !>  \brief  is for random initialization of the gammas
+        subroutine init( self )
+            use simple_rnd, only: ran3
+            class(emgaufit), intent(inout) :: self
+            integer :: i, j
+            real    :: P(self%K), S
+            do i=1,self%N
+                S = 0.
+                do j=1,self%K
+                    P(j) = ran3()
+                    S = S+P(j)
+                end do
+                do j=1,self%K
+                    self%gammas(i,j) = P(j)/S
+                end do
+            end do
+            call self%mstep
+            print *, 'self%avgs        ',self%avgs
+            print *, 'self%mix         ',self%mix
+            print *, 'self%vars        ', self%vars
+            ! print *, 'self%gammas      ', self%gammas
+        end subroutine
+
+        !>  \brief  is for random initialization of the gammas
+        subroutine init_chiara( self, avgs )
+            use simple_rnd, only: ran3
+            class(emgaufit), intent(inout) :: self
+            real,            intent(in)    :: avgs(self%K) ! input avgs are kmeans output
+            integer :: i, j
+            real    :: P(self%K), S
+            ! set averages
+            call self%set_avgs(avgs)
+            print *, 'self%avgs   CHIARA',self%avgs
+            ! set mixing coeffs
+            self%mix = 1./real(self%K)
+            print *, 'self%mix   CHIARA',self%mix
+            ! set variances
+            do i = 1, self%K
+                self%vars(i) = 10.*ran3()
             enddo
-        enddo
-    end subroutine circumference
+            print *, 'self%vars  CHIARA', self%vars
+            ! set gammas
+            call self%estep
+            ! print *, 'self%gammas CHIARA', self%gammas
+        end subroutine
 
-    ! subroutine exec_symmetry_test_try(lp, msk)
-    !     use simple_symanalyzer
-    !     use simple_cmdline
-    !     use simple_parameters
-    !     use simple_builder
-    !     real, intent(in) :: lp
-    !     real, intent(in) :: msk ! radius in pixels
-    !     type(parameters)      :: params
-    !     type(image)           :: vol
-    !     type(cmdline)         :: cline
-    !     type(builder)         :: build
-    !     character(len=STDLEN) :: fbody
-    !     character(len=3)      :: pgrp
-    !     real                  :: shvec(3), scale, smpd
-    !     integer               :: ldim(3)
-    !     integer, parameter    :: MAXBOX = 128
-    !     !call cline%new()
-    !     call cline%set('mkdir',  'yes')
-    !     call cline%set('cenlp',     1.)
-    !     call cline%set('center', 'yes')
-    !     call cline%set('vol1', 'AutoSymmDetect/Convoluted.mrc')
-    !     call cline%set('smpd', 0.358)
-    !     call vol%new(self%ldim,self%smpd)
-    !     call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
-    !     call build%vol%read(params%vols(1))
-    !     ! possible downscaling of input vol
-    !     ldim = build%vol%get_ldim()
-    !     scale = 1.
-    !     params%msk = msk
-    !     params%lp = lp
-    !     if( ldim(1) > MAXBOX )then
-    !         scale = real(MAXBOX) / real(ldim(1))
-    !         call build%vol%fft
-    !         call build%vol%clip_inplace([MAXBOX,MAXBOX,MAXBOX])
-    !         call build%vol%ifft
-    !         smpd         = build%vol%get_smpd()
-    !         print *, 'smpd = ', smpd
-    !         params%msk   = round2even(scale * params%msk)
-    !         params%inner = round2even(scale * params%inner)
-    !         params%width = scale * params%width
-    !     endif
-    !     ! low-pass limit safety
-    !     params%lp = max(2. * smpd, params%lp)
-    !     ! centering
-    !     shvec = 0.
-    !     if( params%center.eq.'yes' )then
-    !         shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
-    !         call build%vol%shift(shvec)
-    !         ! fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
-    !         ! call build%vol%write(trim(fbody)//'_centered.mrc')
-    !     endif
-    !     ! mask volume
-    !     if( params_glob%l_innermsk )then
-    !         call build%vol%mask(params%msk, 'soft', inner=params%inner, width=params%width)
-    !     else
-    !         call build%vol%mask(params%msk, 'soft')
-    !     endif
-    !     ! run test
-    !     print *, 'DEBUGGING'
-    !     print *, 'params%msk = ', params%msk
-    !     print *, 'params%lp  = ', params%lp
-    !     print *, 'params%hp  = ', params%hp
-    !     print *, 'params%cn_stop = ', params%cn_stop
-    !     print *, 'params%platonic = ', params%platonic
-    !     print *, 'pgrp ', pgrp
-    !     call symmetry_tester(build%vol, params%msk, params%hp,&
-    !     &params%lp, params%cn_stop, params%platonic .eq. 'yes', pgrp)
-    !     ! end gracefully
-    !     call simple_end('**** SIMPLE_SYMMETRY_TEST NORMAL STOP ****')
-    ! end subroutine exec_symmetry_test_try
+        !>  \brief  calculates the log likelihood
+        function logL( self ) result ( L )
+            use simple_math
+            class(emgaufit), intent(inout) :: self
+            integer :: i, j
+            real    :: L, S
+            L = 0.
+            do i=1,self%N
+                S = 0.
+                do j=1,self%K
+                    S = S+self%mix(j)*gaussian1D(self%dat(i),self%avgs(j),sqrt(self%vars(j)))
+                end do
+                L = L+log(S)
+            end do
+        end function
 
-    subroutine generate_distribution(fname_coords_pdb, ldim, smpd)
-        use simple_atoms, only: atoms
-           character(len=*), intent(in) :: fname_coords_pdb
-           integer,          intent(in) :: ldim(3)
-           real,             intent(in) :: smpd
-           type(atoms) :: atom
-           type(image) :: vol !simulated distribution
-           real        :: cutoff
-           ! Generate distribution based on atomic position
-           call vol%new(ldim,smpd)
-           cutoff = 8.*smpd
-           call atom%new(fname_coords_pdb)
-           call atom%convolve(vol, cutoff)
-           call vol%write('Convoluted.mrc')
-   end subroutine generate_distribution
+        !>  \brief  evaluates the responsibilities (gammas) using the current parameter values
+        subroutine estep( self )
+            use simple_math
+            class(emgaufit), intent(inout) :: self
+            real    :: P(self%K), S
+            integer :: i, j
+            do i=1,self%N
+                S = 0.
+                do j=1,self%K
+                    P(j) = self%mix(j)*gaussian1D(self%dat(i),self%avgs(j),sqrt(self%vars(j)))
+                    S = S+P(j)
+                end do
+                do j=1,self%K
+                    self%gammas(i,j) = P(j)/S
+                end do
+            end do
+        end subroutine
 
+        !>  \brief  updates the statistics based on the new responsibilities
+        subroutine mstep( self )
+            class(emgaufit), intent(inout) :: self
+            real    :: NK, dev
+            integer :: i, j
+            do j=1,self%K
+                ! calculate average
+                self%avgs(j) = 0.
+                NK = 0.
+                do i=1,self%N
+                    self%avgs(j) = self%avgs(j)+self%dat(i)*self%gammas(i,j)
+                    NK = NK+self%gammas(i,j)
+                end do
+                self%avgs(j) = self%avgs(j)/NK
+                ! calculate variance
+                self%vars(j) = 0.
+                do i=1,self%N
+                    dev = self%dat(i)-self%avgs(j)
+                    self%vars(j) = self%vars(j)+self%gammas(i,j)*dev*dev
+                end do
+                self%vars(j) = self%vars(j)/NK
+                ! calculate mixing coefficients
+                self%mix(j) = NK/real(self%N)
+            end do
+        end subroutine
 
- ! My implementation of the Flood fill algorithm
- ! Soille, P., Morphological Image Analysis: Principles and Applications, Springer-Verlag, 1999, pp. 173–174.
- ! It's implemented for 8-neighbours, should I put the option for
- ! 4 neigh? To test.
-   subroutine floodfill(img, px, tvalue, nb_modif)
-     type(image), intent(inout) :: img
-     integer,     intent(in)    :: px(3)
-     integer,     intent(in)    :: tvalue ! target value
-     integer,     intent(out)   :: nb_modif ! number of 8-neighbours which value has been modified
-     integer :: pvalue ! pixel color
-     integer :: ldim(3)
-     integer :: i, nsz
-     integer :: neigh_8(3,8) ! indeces of the 8 neigh
-     integer :: neigh_px(3)
-     nb_modif = 0
-     ldim = img%get_ldim()
-     if(ldim(3) > 1)  return!THROW_HARD('Not implemented for volumes! floodfill')
-     pvalue = img%get([px(1),px(2),1]) ! For 2d images
-     if (pvalue == tvalue) return
-     ! set pixel value to tvalue
-     call img%set(px(1:3),real(tvalue))
-     call img%calc_neigh_8(px, neigh_8, nsz)
-     do i = 1, nsz
-         neigh_px(1:3) = neigh_8(1:3,i)
-         if(nint(img%get(neigh_px(1:3))) /= tvalue ) then
-             nb_modif = nb_modif + 1
-             call img%set(neigh_px(1:3),real(tvalue))
-         endif
-     enddo
-   end subroutine floodfill
+        ! DESTRUCTOR
 
-   ! ! This subroutine calculates the diamenter of the
-   ! ! connected component labelled n_cc in the connected
-   ! ! component image img_cc
-   ! subroutine diameter_cc(img_cc, n_cc, diam)
-   !     type(image),  intent(inout) :: img_cc
-   !     integer,      intent(in)    :: n_cc
-   !     real,         intent(out)   :: diam
-   !     integer, allocatable :: pos(:,:)         !position of the pixels of a fixed cc
-   !     integer, allocatable :: imat_cc(:,:,:)
-   !     logical, allocatable :: msk(:) ! For using function pixels_dist
-   !     real  :: center_of_mass(3) ! geometrical center of mass
-   !     real  :: radius
-   !     imat_cc = int(img_cc%get_rmat())
-   !     where(imat_cc .ne. n_cc) imat_cc = 0
-   !     ! if(.not. any(imat_cc(:,:,:)) > 0) THROW_HARD('Inputted non-existent cc')
-   !     ! Find center of mass of the cc
-   !     call get_pixel_pos(imat_cc,pos)
-   !     center_of_mass(1) = sum(pos(1,:))/real(size(pos,dim = 2))
-   !     center_of_mass(2) = sum(pos(2,:))/real(size(pos,dim = 2))
-   !     center_of_mass(3) = 1.
-   !     if(allocated(imat_cc)) deallocate(imat_cc)
-   !     allocate(msk(size(pos, dim =2)), source = .true.)
-   !     ! Calculate maximim radius
-   !     radius = pixels_dist(center_of_mass,real(pos),'max',msk)
-   !     ! Return diameter
-   !     diam = 2.*radius
-   !     if(allocated(msk)) deallocate(msk)
-   !     if(allocated(pos)) deallocate(pos)
-   ! end subroutine diameter_cc
+        !>  \brief  is a destructor
+        subroutine kill( self )
+            class(emgaufit), intent(inout) :: self
+            if( self%exists )then
+                deallocate(self%avgs, self%vars, self%mix, self%gammas)
+                self%exists = .false.
+            endif
+        end subroutine
 
-   subroutine kmeans_2classes(data, classes)
-       use simple_math
-       real,    intent(inout) :: data(:)
-       integer, intent(inout) :: classes(:) ! class correspondent to the data, 0 or 1
-       real    :: cen1, cen2 ! centers of the classes
-       real    :: data_copy(size(data))
-       integer :: i,N
-       integer :: val1, val2
-       logical :: converged
-       N = size(data) ! number of points
-       data_copy = data
-       ! Initialise
-       call initialise_centers(data_copy,cen1,cen2)
-       print *, 'Initial centers: ', cen1, cen2
-       converged = .false.
-       do i = 1, 5*N
-           if(.not. converged) then
-               call update_centers(cen1,cen2,converged,val1,val2)
-               print *, 'iteration', i, 'centers', cen1, cen2
-           else
-               print *,'iteration', i, 'converged'
-               exit
-           endif
-       enddo
-       ! assign
-       where( (cen1 - data)**2. < (cen2 - data)**2. )
-           classes = val1
-       elsewhere
-           classes = val2
-       end where
-       ! print *, 'assignments: ', classes
-   contains
+        ! UNIT TEST
 
-       subroutine initialise_centers(data,cen1,cen2)
-           real, intent(inout) :: cen1,cen2
-           real, intent(inout) :: data(:)
-           !>   rheapsort from numerical recepies (largest last)
-           call hpsort(data)
-           cen1 = sum(data(1:N/2))/real(N/2)
-           cen2 = sum(data(N/2+1:size(data)))/real(N/2)
-       end subroutine initialise_centers
+        !>  \brief  is the unit test for the class
+        subroutine test_emgaufit
+            use simple_rnd,  only: gasdev
+            use simple_stat, only: moment
+            use gnufor2
+            real           :: mydata(1000), avgs(2), vars(2)
+            real           :: ave, sdev, var
+            integer        :: i
+            logical        :: err
+            type(emgaufit) :: emfit
+            ! generate the data
+            do i=1,1000
+                if( i <= 500 )then
+                    mydata(i) = gasdev(1.,1.)
+                else
+                    mydata(i) = gasdev(5.,2.)
+                endif
+            end do
+            call moment(mydata(:500), ave, sdev, var, err)
+            write(*,*) 'FACIT AVG/VAR 1:', ave, var
+            call moment(mydata(501:), ave, sdev, var, err)
+            write(*,*) 'FACIT AVG/VAR 2:', ave, var
+            ! fit
+            call emfit%new(1000,2)
+            call emfit%set_data(mydata)
+            avgs = 1.5
+            avgs = 2.5
+            call emfit%fit(50, avgs)
+            avgs = emfit%get_avgs()
+            vars = emfit%get_vars()
+            write(*,*) 'AVG/VAR 1:', avgs(1), vars(1)
+            write(*,*) 'AVG/VAR 2:', avgs(2), vars(2)
+        end subroutine
 
-       subroutine update_centers(cen1,cen2,converged,val1,val2)
-           real,    intent(inout) :: cen1,cen2
-           logical, intent(inout) :: converged
-           integer, intent(inout) :: val1, val2
-           integer :: i
-           integer :: cnt1, cnt2
-           real    :: sum1, sum2
-           real :: cen1_new, cen2_new
-           sum1 = 0.
-           cnt1 = 0
-           do i=1,N
-               if( (cen1-data(i))**2. < (cen2-data(i))**2. )then
-                   cnt1 = cnt1 + 1 ! number of elements in cluster 1
-                   sum1 = sum1 + data(i)
-               endif
-           end do
-           cnt2 = N - cnt1       ! number of elements in cluster 2
-           sum2 = sum(data)- sum1
-           cen1_new = sum1 / real(cnt1)
-           cen2_new = sum2 / real(cnt2)
-           if(abs(cen1_new - cen1) < TINY .and. abs(cen2_new - cen2) < TINY) then
-               converged = .true.
-           else
-               converged = .false.
-           endif
-           ! update
-           cen1 = cen1_new
-           cen2 = cen2_new
-           ! assign values to the centers
-           if( cen1 > cen2 )then
-               val1           = 1
-               val2           = 0
-           else
-               val1           = 0
-               val2           = 1
-           endif
-       end subroutine update_centers
-   end subroutine kmeans_2classes
+   !  ! This subroutine performs laplacian filtering on the input image.
+   !  subroutine laplacian_filt(self)
+   !      type(image), intent(inout) :: self
+   !      real    :: k3(3,3,3), k2(3,3) !laplacian kernels (2D-3D)
+   !      integer :: ldim(3)
+   !      ldim = self%get_ldim()
+   !      k2 = (1./8.)*reshape([0.,1.,0.,1.,-4., 1., 0., 1., 0.], [3,3])
+   !      k3 = (1./12.)*reshape([0.,0.,0., 0.,1.,0., 0.,0.,0.,&
+   !      &                     0.,1.,0., 1.,-6.,1., 0.,1.,0.,0.,0.,0., 0.,1.,0., 0.,0.,0.], [3,3,3])
+   !      if(ldim(3) .ne. 1) then
+   !          call self%imfilter(k3)
+   !      else
+   !          call self%imfilter(k2)
+   !      endif
+   !  end subroutine laplacian_filt
+   !
+   !  subroutine generate_distribution(fname_coords_pdb, ldim, smpd)
+   !      use simple_atoms, only: atoms
+   !         character(len=*), intent(in) :: fname_coords_pdb
+   !         integer,          intent(in) :: ldim(3)
+   !         real,             intent(in) :: smpd
+   !         type(atoms) :: atom
+   !         type(image) :: vol !simulated distribution
+   !         real        :: cutoff
+   !         ! Generate distribution based on atomic position
+   !         call vol%new(ldim,smpd)
+   !         cutoff = 8.*smpd
+   !         call atom%new(fname_coords_pdb)
+   !         call atom%convolve(vol, cutoff)
+   !         call vol%write('Convoluted.mrc')
+   ! end subroutine generate_distribution
 end module simple_test_chiara_try_mod
 
     program simple_test_chiara_try
@@ -361,15 +292,16 @@ end module simple_test_chiara_try_mod
        use simple_math
        use gnufor2
        use simple_segmentation
-       use simple_test_chiara_try_mod
+       use simple_nanoML
        use simple_image, only : image
        use simple_atoms, only : atoms
-       type(image) :: aimage
+       use simple_nanoparticles_mod
+       type(image) :: img, img_cc
        real :: smpd
        integer :: ldim(3)
        smpd = 0.358
        ldim = 160
-
+       call test_nanoML
 
  end program simple_test_chiara_try
 
@@ -382,7 +314,7 @@ end module simple_test_chiara_try_mod
      ! call img1%set_rmat(rmat)
      ! call img1%write('RectangleIMG.mrc')
      ! call img2%gauimg2D(50.,10.)
-     ! call img2%write('GaussianIMG.mrc')
+     ! call img2%write('gaussian1DIMG.mrc')
      ! pc = img1%phase_corr(img2,1)
      ! call pc%write('PhaseCorrelationIMG.mrc')
      ! VOLUM CLIUPPING FOR CHANGING ITS SMPD

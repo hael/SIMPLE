@@ -73,18 +73,14 @@ subroutine iterate( self, cline, moviename_intg, boxfile, nptcls_out, dir_out )
                 call seg_picker%new(moviename_intg, params_glob%min_rad, params_glob%max_rad,&
                     &params_glob%smpd)
             endif
-            if(cline%defined('detector')) then
-                call seg_picker%preprocess_mic(params_glob%detector)
-            else
-                call seg_picker%preprocess_mic(params_glob%detector)
-            endif
+            call seg_picker%preprocess_mic(params_glob%detector)
             call seg_picker%identify_particle_positions()
             call seg_picker%output_identified_particle_positions()
             call seg_picker%write_boxfile()
             call seg_picker%print_info()
-            call seg_picker%kill !HEREEEE
+            call seg_picker%kill
         else
-            ! reference free picking
+            ! phasecorrelation based, reference-free picking
             if( cline%defined('thres') )then
                 call init_phasecorr_segpicker(moviename_intg, params_glob%min_rad, params_glob%max_rad, params_glob%smpd, lp_in=params_glob%lp,&
                     &distthr_in=params_glob%thres, ndev_in=params_glob%ndev, dir_out=dir_out)

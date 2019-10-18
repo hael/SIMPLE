@@ -768,6 +768,11 @@ contains
         w = 2.**(-(x/var)**2.)
     end function gauwfun
 
+    real function gaussian1D( x, avg, sigma_sq )
+        real, intent(in) ::   x, avg, sigma_sq
+        gaussian1D = (1./(sqrt(2.*PI*sigma_sq)))*exp((1./(2.*sigma_sq))*(x-avg)**2)
+    end function gaussian1D
+
     real function gaussian2D( center_coords, x, y, xsigma, ysigma )
         real, intent(in) :: center_coords(2), x, y, xsigma, ysigma
         gaussian2D = exp( -((x - center_coords(1))**2.0 / (2.0 * xsigma * xsigma) +&

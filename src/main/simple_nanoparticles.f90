@@ -20,7 +20,7 @@ logical, parameter :: DEBUG_HERE  = .false.!for debugging purposes
 type :: nanoparticle
     private
     type(atoms) :: centers_pdb
-    type(image) :: img, img_bin, img_cc
+    type(image) :: img, img_bin, img_cc, img_raw
     integer     :: ldim(3)            = 0
     real        :: smpd               = 0.
     real        :: nanop_mass_cen(3)  = 0.!coordinates of the center of mass of the nanoparticle
@@ -51,10 +51,12 @@ type :: nanoparticle
     procedure          :: binarize
     procedure          :: find_centers
     procedure, private :: nanopart_masscen
+    procedure          :: aspect_ratios_estimation
     procedure          :: calc_aspect_ratio
     procedure          :: discard_outliers
     procedure          :: atom_intensity_stats
     procedure          :: validate_atomic_positions
+    procedure          :: distances_distribution
     ! phase correlation
     procedure          :: phasecorrelation_nano_gaussian
     ! clustering
@@ -63,6 +65,7 @@ type :: nanoparticle
     procedure, private :: affprop_cluster_dist_distr
     procedure          :: cluster_atom_intensity
     procedure          :: search_polarization
+    procedure          :: identify_atom_columns
     ! execution
     procedure          :: identify_atomic_pos
     procedure          :: radial_dependent_stats
@@ -125,8 +128,10 @@ contains
         !self%sigma = 0.8*theoretical_radius/(2.*sqrt(2.*log(2.))*self%smpd) !0.8 not to have it too big (avoid connecting atoms)
         call find_ldim_nptcls(self%partname,  self%ldim, nptcls, smpd)
         call self%img%new         (self%ldim, self%smpd)
+        call self%img_raw%new     (self%ldim, self%smpd)
         call self%img_bin%new     (int(real(self%ldim)), self%smpd)
         call self%img%read(fname)
+        call self%img_raw%read(fname)
     end subroutine new_nanoparticle
 
      !get one of the images of the nanoparticle type
@@ -275,10 +280,10 @@ contains
            integer,               intent(in)    :: label
            type(image), optional, intent(inout) :: img_cc
            logical, allocatable :: mask(:,:,:)
-           real, pointer        :: rmat_cc_in(:,:,:)
+           real, pointer        :: rmat_cc_in(:,:,:), rmat_raw(:,:,:)
            real    :: m(3)  !mass center coords
+           real    :: sum_mass
            integer :: i, j, k
-           integer :: sz !sz of the cc identified by label
            if(present(img_cc)) then
                allocate(mask(self%ldim(1),self%ldim(2),self%ldim(3)), source = .true.)
                call img_cc%get_rmat_ptr(rmat_cc_in)
@@ -287,18 +292,22 @@ contains
                allocate(mask(self%ldim(1),self%ldim(2),self%ldim(3)), source = .true.)
            endif
            where(     abs(rmat_cc_in(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(label)) > TINY) mask = .false.
-           sz = count(abs(rmat_cc_in-real(label)) < TINY)
-           m = 0.
+           call self%img_raw%get_rmat_ptr(rmat_raw)
+           m        = 0.
+           sum_mass = 0.
            !$omp do collapse(3) schedule(static) reduction(+:m) private(i,j,k)
            do i = 1, self%ldim(1)
                do j = 1, self%ldim(2)
                    do k = 1, self%ldim(3)
-                       if(mask(i,j,k)) m = m + real([i,j,k])
+                       if(mask(i,j,k)) then
+                           m = m + real([i,j,k])*rmat_raw(i,j,k)
+                           sum_mass = sum_mass + rmat_raw(i,j,k)
+                       endif
                    enddo
                enddo
            enddo
            !$omp end do
-           m = m/real(sz)
+           m = m/sum_mass
        end function atom_masscen
     end subroutine find_centers
 
@@ -772,12 +781,16 @@ contains
         class(nanoparticle), intent(inout) :: self
         real,                intent(in)    :: min_rad, max_rad, step
         type(atoms)        :: radial_atoms_just,  radial_atoms_all
-        real, allocatable  :: coords(:,:) !coordinates of the centers of the atoms according to radial distances
+        logical, allocatable :: mask(:,:,:)
+        real,    allocatable :: coords(:,:) !coordinates of the centers of the atoms according to radial distances
+        real,    allocatable :: max_intensity(:), avg_intensity(:), stdev_intensity(:), ratios(:)
+        real,    pointer     :: rmat(:,:,:), rmat_cc(:,:,:)
         real    :: m(3)    !mass center of c3 map
         real    :: d       !distance atoms from the center
         real    :: radius  !radius of the sphere to consider
         integer :: cnt, cnt_just, cnt_all
-        integer :: nsteps, i, cc
+        integer :: nsteps, i, j, k, l, cc
+        real    :: avg_int, max_int, stdev_int
         ! min_step and max_step is in A
         self%n_cc = size(self%centers, dim = 2)
         write(logfhandle, *) '****radial atom-to-atom distances estimation, init'
@@ -787,8 +800,10 @@ contains
         call simple_mkdir(trim(self%output_dir)//'/DistDistribANDRadialDependentStat',errmsg="simple_nanoparticles :: radial_dependent_stats, simple_mkdir; ")
         call simple_chdir(trim(self%output_dir)//'/DistDistribANDRadialDependentStat',errmsg="simple_nanoparticles :: radial_dependent_stats, simple_chdir; ")
         open(11, file='RadialDependentStat')
-        do i = 1, nsteps
-            radius = min_rad+real(i-1)*step
+        allocate(mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = .false.)
+        ! allocate(max_intensity(self%n_cc),avg_intensity(self%n_cc),stdev_intensity(self%n_cc), source= 0.)
+        do l = 1, nsteps
+            radius = min_rad+real(l-1)*step
             cnt_all  = 0
             cnt_just = 0
             do cc = 1, self%n_cc
@@ -796,7 +811,7 @@ contains
                 ! Count nb of atoms in the sphere of radius radius
                if(d<=radius) then
                    cnt_all = cnt_all+1
-                   if(i == 1) then
+                   if(l == 1) then
                        cnt_just = cnt_all
                    else
                        if(d>radius-step .and. d<=radius) cnt_just = cnt_just+1
@@ -815,13 +830,13 @@ contains
                    call radial_atoms_all%set_name(cnt_all,self%atom_name)
                    call radial_atoms_all%set_element(cnt_all,self%element)
                    call radial_atoms_all%set_coord(cnt_all,(self%centers(:,cc)-1.)*self%smpd)
-                   if(i == 1) then
+                   if(l == 1) then
                        cnt_just= cnt_just+1
                        call radial_atoms_just%set_name(cnt_just,self%atom_name)
                        call radial_atoms_just%set_element(cnt_just,self%element)
                        call radial_atoms_just%set_coord(cnt_just,(self%centers(:,cc)-1.)*self%smpd)
                    endif
-                   if(d>(radius-step) .and. i > 1) then
+                   if(d>(radius-step) .and. l > 1) then
                        cnt_just = cnt_just+1
                        call radial_atoms_just%set_name(cnt_just,self%atom_name)
                        call radial_atoms_just%set_element(cnt_just,self%element)
@@ -832,116 +847,178 @@ contains
             call radial_atoms_just%writepdb(trim(int2str(nint(radius)))//'radial_atoms_just')
             call radial_atoms_all%writepdb (trim(int2str(nint(radius)))//'radial_atoms_all')
             ! Estimation of avg distance and stdev among atoms in radial dependent shells
+            write(unit = 11, fmt = '(a)')   '*********************************************************'
             write(unit = 11, fmt = '(a,a)') 'Estimation of atom-to-atom statistics in shell of radius ', trim(int2str(nint(radius)))
             allocate(coords(3,cnt_all), source = 0.)
+            allocate(max_intensity(cnt_all),avg_intensity(cnt_all),stdev_intensity(cnt_all), source = 0. )
+            allocate(ratios(cnt_all), source = 0. )
             cnt = 0
+            call self%img%get_rmat_ptr(rmat)
+            call self%img_cc%get_rmat_ptr(rmat_cc)
             do cc = 1, size(self%centers, dim = 2)
                 d = euclid(self%centers(:,cc), m)*self%smpd
                 if(d<=radius) then
-                    cnt = cnt + 1
-                    coords(:3,cnt) = self%centers(:,cc)
+                    if(l == 1) then
+                        cnt = cnt + 1
+                        coords(:3,cnt) = self%centers(:,cc)
+                        call self%calc_aspect_ratio(cc, ratios(cnt),lld=.false., print_ar=.false.)
+                        where(abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) - real(cc)) < TINY) mask = .true.
+                        max_intensity(cnt) = maxval(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),mask)
+                        avg_intensity(cnt) = sum(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),mask)
+                        avg_intensity(cnt) = avg_intensity(cnt)/real(count(mask))
+                        do i = 1, self%ldim(1)
+                            do j = 1, self%ldim(2)
+                                do k = 1, self%ldim(3)
+                                    if(mask(i,j,k)) stdev_intensity(cnt) = stdev_intensity(cnt) + (rmat(i,j,k)-avg_intensity(cnt))**2
+                                enddo
+                            enddo
+                        enddo
+                        if(count(mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))) > 1) then
+                            stdev_intensity(cnt) = sqrt(stdev_intensity(cnt)/real(count(mask)-1))
+                        else ! atom composed by one voxel
+                            stdev_intensity(cnt) = 0.
+                        endif
+                        write(unit = 11, fmt = '(a,i3,a,f9.5,a,f9.5,a,f9.5,a,f9.5)')  'ATOM ', cc,' maxval ', max_intensity(cnt), '   avg ', avg_intensity(cnt), '   stdev ', stdev_intensity(cnt),' aspect ratio ', ratios(cnt)
+                        mask = .false. !Reset
+                    elseif(d>(radius-step)) then
+                        cnt = cnt + 1
+                        coords(:3,cnt) = self%centers(:,cc)
+                        call self%calc_aspect_ratio(cc, ratios(cnt),lld=.false., print_ar=.false.)
+                        where(abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) - real(cc)) < TINY) mask = .true.
+                        max_intensity(cnt) = maxval(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),mask)
+                        avg_intensity(cnt) = sum(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),mask)
+                        avg_intensity(cnt) = avg_intensity(cnt)/real(count(mask))
+                        do i = 1, self%ldim(1)
+                            do j = 1, self%ldim(2)
+                                do k = 1, self%ldim(3)
+                                    if(mask(i,j,k)) stdev_intensity(cnt) = stdev_intensity(cnt) + (rmat(i,j,k)-avg_intensity(cnt))**2
+                                enddo
+                            enddo
+                        enddo
+                        if(count(mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))) > 1) then
+                            stdev_intensity(cnt) = sqrt(stdev_intensity(cnt)/real(count(mask)-1))
+                        else ! atom composed by one voxel
+                            stdev_intensity(cnt) = 0.
+                        endif
+                        write(unit = 11, fmt = '(a,i3,a,f9.5,a,f9.5,a,f9.5,a,f9.5)')  'ATOM ', cc,' maxval ', max_intensity(cnt), '   avg ', avg_intensity(cnt), '   stdev ', stdev_intensity(cnt), ' aspect ratio ', ratios(cnt)
+                        mask = .false. !Reset
+                    endif
                 endif
             enddo
-            call distances_distribution(coords)
+            avg_int   = sum(avg_intensity)/real(cnt)
+            max_int   = maxval(max_intensity)
+            stdev_int = 0.
+            do i = 1, cnt
+                stdev_int = stdev_int + (avg_intensity(i)-avg_int)**2
+            enddo
+            stdev_int = sqrt(stdev_int/real(cnt-1))
+            write(unit = 11, fmt = '(a,f9.5)') 'Maxval  int shell :', max_int
+            write(unit = 11, fmt = '(a,f9.5)') 'Average int shell :', avg_int
+            write(unit = 11, fmt = '(a,f9.5)') 'Stdev   int shell :', stdev_int
+            call self%distances_distribution(coords)
             deallocate(coords)
+            deallocate(avg_intensity)
+            deallocate(max_intensity)
+            deallocate(stdev_intensity)
+            deallocate(ratios)
             call radial_atoms_all%kill
             call radial_atoms_just%kill
         enddo
         close(11)
-        call distances_distribution() ! across the whole nano
+        deallocate(mask)
+        ! deallocate(avg_intensity)
+        ! deallocate(max_intensity)
+        ! deallocate(stdev_intensity)
+        call self%distances_distribution() ! across the whole nano
         ! Come back to root directory
         ! call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: radial_dependent_stats, simple_chdir; ")
         call self%kill
         write(logfhandle, *) '****radial atom-to-atom distances estimation, completed'
-        contains
-            subroutine distances_distribution(coords,volume)
-                real,    optional,   intent(in)    :: coords(:,:)
-                integer, optional,   intent(in)    :: volume
-                real, allocatable :: dist(:)
-                real    :: stdev, med
-                integer :: i, j, n_discard
-                logical :: mask(self%n_cc)
-                ! Initialisations
-                mask       = .true.
-                stdev      = 0.
-                n_discard  = 0
-                if(present(coords)) then
-                    allocate(dist(size(coords,dim=2)), source = 0.)
-                    do i = 1, size(coords,dim=2)
-                        dist(i) =  pixels_dist(coords(:,i), self%centers(:,:), 'min', mask=mask) !I have to use all the atoms when
-                        mask(:) = .true. ! restore
-                        !Discard outliers
-                        if(dist(i)*self%smpd > 3.*self%theoretical_radius ) then      !maximum interatomic distance
-                            dist(i) = 0.
-                            n_discard = n_discard + 1
-                        else if(dist(i)*self%smpd < 1.5*self%theoretical_radius ) then ! minimum interatomic distance
-                            dist(i) = 0.
-                            print *, 'atom ',i, 'dist(i)', dist(i), 'INSERT THRESHOLD FOR MIN DIST BETWEEN ATOMS'
-                            n_discard = n_discard + 1
-                        endif
-                    enddo
-                    self%avg_dist_atoms = sum(dist)/real(size(coords,dim=2)-n_discard)
-                    !$omp parallel do schedule(static) private(i) reduction(+:stdev)
-                    do i = 1, size(coords,dim=2)
-                        if(dist(i)*self%smpd <=3.*self%theoretical_radius) stdev = stdev + (dist(i)-self%avg_dist_atoms)**2
-                    enddo
-                    !$omp end parallel do
-                    stdev = sqrt(stdev/real(size(coords,dim=2)-1-n_discard))
-                    med = median(dist)
-                    if(present(volume)) then
-                        write(unit = 11, fmt = '(a,a,a,f6.3,a)') 'Average dist atoms vol ', trim(int2str(volume)),':', self%avg_dist_atoms*self%smpd, ' A'
-                        write(unit = 11, fmt = '(a,a,a,f6.3,a)') 'StDev   dist atoms vol ', trim(int2str(volume)),':', stdev*self%smpd, ' A'
-                        write(unit = 11, fmt = '(a,a,a,f6.3,a)') 'Median  dist atoms vol ', trim(int2str(volume)),':', med*self%smpd, ' A'
-                    else
-                        write(unit = 11, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd, ' A'
-                        write(unit = 11, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
-                        write(unit = 11, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
-                    endif
-                    deallocate(dist)
-                else
-                    ! Report statistics and images in dedicated directory
-                    !come back to root folder
-                    ! call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: distances_distribution, simple_chdir; ")
-                    ! call simple_mkdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: distances_distribution, simple_mkdir; ")
-                    ! call simple_chdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: distances_distribution, simple_chdir; ")
-                    open(15, file='DistancesDistr')
-                    allocate(self%dists(size(self%centers, dim = 2)), source = 0.)
-                    do i = 1, size(self%centers, dim = 2)
-                        self%dists(i) =  pixels_dist(self%centers(:,i), self%centers(:,:), 'min', mask=mask) !Use all the atoms
-                        mask(:) = .true. ! restore
-                        !Discard outliers
-                        if(self%dists(i)*self%smpd > 3.*self%theoretical_radius ) then
-                            self%dists(i) = 0.
-                            n_discard = n_discard + 1
-                        else if(self%dists(i)*self%smpd < 1.5*self%theoretical_radius ) then
-                            print *, 'atom ',i, 'dist(i)', self%dists(i), 'INSERT THRESHOLD FOR MIN DIST BETWEEN ATOMS'
-                            self%dists(i) = 0.
-                            n_discard = n_discard + 1
-                        endif
-                    enddo
-                    self%avg_dist_atoms = sum(self%dists)/real(size(self%centers, dim = 2)-n_discard)
-                    do i = 1, size(self%centers, dim = 2)
-                        if(self%dists(i)*self%smpd <=3.*self%theoretical_radius) stdev = stdev + (self%dists(i)-self%avg_dist_atoms)**2
-                    enddo
-                    stdev = sqrt(stdev/real(size(self%centers, dim = 2)-1-n_discard))
-                    med = median(self%dists)
-                    write(unit = 15, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd, ' A'
-                    write(unit = 15, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
-                    write(unit = 15, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
-                    !write on pdb file
-                    call self%centers_pdb%new(self%n_cc, dummy=.true.)
-                    do i = 1,self%n_cc
-                        call self%centers_pdb%set_element(i,self%element)
-                        call self%centers_pdb%set_name(i,self%atom_name)
-                        call self%centers_pdb%set_beta(i,self%dists(i)*self%smpd)
-                    enddo
-                    call self%centers_pdb%writepdb('DistancesDistr')
-                endif
-                close(15)
-            end subroutine distances_distribution
    end subroutine radial_dependent_stats
 
-   subroutine calc_aspect_ratio(self, print_ar)
+   subroutine distances_distribution(self,coords,volume)
+       class(nanoparticle), intent(inout) :: self
+       real,    optional,   intent(in)    :: coords(:,:)
+       integer, optional,   intent(in)    :: volume
+       real, allocatable :: dist(:)
+       real    :: stdev, med
+       integer :: i, j, n_discard
+       logical :: mask(self%n_cc)
+       ! Initialisations
+       mask       = .true.
+       stdev      = 0.
+       n_discard  = 0
+       if(present(coords)) then
+           allocate(dist(size(coords,dim=2)), source = 0.)
+           do i = 1, size(coords,dim=2)
+               dist(i) =  pixels_dist(coords(:,i), self%centers(:,:), 'min', mask=mask) !I have to use all the atoms when
+               mask(:) = .true. ! restore
+               !Discard outliers
+               if(dist(i)*self%smpd > 3.*self%theoretical_radius ) then      !maximum interatomic distance
+                   dist(i) = 0.
+                   n_discard = n_discard + 1
+               else if(dist(i)*self%smpd < 1.5*self%theoretical_radius ) then ! minimum interatomic distance
+                   dist(i) = 0.
+                   print *, 'atom ',i, 'dist(i)', dist(i), 'INSERT THRESHOLD FOR MIN DIST BETWEEN ATOMS'
+                   n_discard = n_discard + 1
+               endif
+           enddo
+           self%avg_dist_atoms = sum(dist)/real(size(coords,dim=2)-n_discard)
+           !$omp parallel do schedule(static) private(i) reduction(+:stdev)
+           do i = 1, size(coords,dim=2)
+               if(dist(i)*self%smpd <=3.*self%theoretical_radius) stdev = stdev + (dist(i)-self%avg_dist_atoms)**2
+           enddo
+           !$omp end parallel do
+           stdev = sqrt(stdev/real(size(coords,dim=2)-1-n_discard))
+           med = median(dist)
+           if(present(volume)) then
+               write(unit = 11, fmt = '(a,a,a,f6.3,a)') 'Average dist atoms vol ', trim(int2str(volume)),':', self%avg_dist_atoms*self%smpd, ' A'
+               write(unit = 11, fmt = '(a,a,a,f6.3,a)') 'StDev   dist atoms vol ', trim(int2str(volume)),':', stdev*self%smpd, ' A'
+               write(unit = 11, fmt = '(a,a,a,f6.3,a)') 'Median  dist atoms vol ', trim(int2str(volume)),':', med*self%smpd, ' A'
+           else
+               write(unit = 11, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd, ' A'
+               write(unit = 11, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
+               write(unit = 11, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
+           endif
+           deallocate(dist)
+       else
+           open(15, file='DistancesDistr')
+           allocate(self%dists(size(self%centers, dim = 2)), source = 0.)
+           do i = 1, size(self%centers, dim = 2)
+               self%dists(i) =  pixels_dist(self%centers(:,i), self%centers(:,:), 'min', mask=mask) !Use all the atoms
+               mask(:) = .true. ! restore
+               !Discard outliers
+               if(self%dists(i)*self%smpd > 3.*self%theoretical_radius ) then
+                   self%dists(i) = 0.
+                   n_discard = n_discard + 1
+               else if(self%dists(i)*self%smpd < 1.5*self%theoretical_radius ) then
+                   print *, 'atom ',i, 'dist(i)', self%dists(i), 'INSERT THRESHOLD FOR MIN DIST BETWEEN ATOMS'
+                   self%dists(i) = 0.
+                   n_discard = n_discard + 1
+               endif
+           enddo
+           self%avg_dist_atoms = sum(self%dists)/real(size(self%centers, dim = 2)-n_discard)
+           do i = 1, size(self%centers, dim = 2)
+               if(self%dists(i)*self%smpd <=3.*self%theoretical_radius) stdev = stdev + (self%dists(i)-self%avg_dist_atoms)**2
+           enddo
+           stdev = sqrt(stdev/real(size(self%centers, dim = 2)-1-n_discard))
+           med = median(self%dists)
+           write(unit = 15, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd, ' A'
+           write(unit = 15, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
+           write(unit = 15, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
+           !write on pdb file
+           call self%centers_pdb%new(self%n_cc, dummy=.true.)
+           do i = 1,self%n_cc
+               call self%centers_pdb%set_element(i,self%element)
+               call self%centers_pdb%set_name(i,self%atom_name)
+               call self%centers_pdb%set_beta(i,self%dists(i)*self%smpd)
+           enddo
+           call self%centers_pdb%writepdb('DistancesDistr')
+       endif
+       close(15)
+   end subroutine distances_distribution
+
+   subroutine aspect_ratios_estimation(self, print_ar)
        use gnufor2
        class(nanoparticle), intent(inout) :: self
        logical, optional,   intent(in)    :: print_ar !print longest/shortest dim and ratio
@@ -957,7 +1034,7 @@ contains
        call self%find_centers() !TO KEEP
        !$omp parallel do schedule(static) private(label)
        do label = 1, self%n_cc
-           call calc_aspect_ratio_private(label, self%ratios(label), ld=longest_dist(label), print_ar=print_ar)
+           call self%calc_aspect_ratio(label, self%ratios(label),lld=.true., ld=longest_dist(label), print_ar=print_ar)
        enddo
        !$omp end parallel do
        longest_dist = 2.*longest_dist ! radius --> diameter
@@ -990,73 +1067,74 @@ contains
         ! close(123)
         deallocate(longest_dist)
         write(logfhandle,*)'**aspect ratios calculations completed'
-    contains
-        ! This subroutine takes in input a connected component (cc) image
-        ! and the label of one of its ccs and calculates its aspect ratio, which
-        ! is defined as the ratio of the width and the height.
-        ! The idea behind this is that the center of the cc is calculated,
-        ! than everything is deleted except the borders of the cc. Finally,
-        ! in order to calculate the width and the height, the min/max
-        ! distances between the center and the borders are calculated. The
-        ! aspect ratio is the ratio of those 2 distances.
-        subroutine calc_aspect_ratio_private(label,ratio,ld,print_ar)
-            integer,             intent(in)    :: label
-            real,                intent(out)   :: ratio
-            real   , optional,   intent(out)   :: ld ! longest dist
-            logical, optional,   intent(in)    :: print_ar
-            integer, allocatable :: pos(:,:)
-            integer, allocatable :: imat_cc(:,:,:)
-            logical, allocatable :: border(:,:,:)
-            logical, allocatable :: mask_dist(:) !for min and max dist calculation
-            integer :: location(1) !location of the farest vxls of the atom from its center
-            integer :: i
-            real    :: shortest_dist, longest_dist
-            imat_cc = int(self%img_cc%get_rmat())
-            call self%img_cc%border_mask(border, label, .true.) !use 4neigh instead of 8neigh
-            where(border .eqv. .true.)
-                imat_cc = 1
-            elsewhere
-                imat_cc = 0
-            endwhere
-            call get_pixel_pos(imat_cc,pos)   !pxls positions of the shell
-            if(allocated(mask_dist)) deallocate(mask_dist)
-            allocate(mask_dist(size(pos, dim = 2)), source = .true. )
-            shortest_dist = pixels_dist(self%centers(:,label), real(pos),'min', mask_dist, location)
-            if(size(pos,2) == 1) then !if the connected component has size 1 (just 1 vxl)
-                shortest_dist = 0.
-                longest_dist  = shortest_dist
-                ratio = 1.
-                self%loc_longest_dist(:3, label) = self%centers(:,label)
-                if(present(print_ar) .and. (print_ar .eqv. .true.)) then
-                     write(logfhandle,*) 'ATOM #          ', label
-                     write(logfhandle,*) 'shortest dist = ', shortest_dist
-                     write(logfhandle,*) 'longest  dist = ', longest_dist
-                     write(logfhandle,*) 'RATIO         = ', ratio
-                endif
-                return
-            else
-                longest_dist  = pixels_dist(self%centers(:,label), real(pos),'max', mask_dist, location)
-                self%loc_longest_dist(:3, label) =  pos(:3,location(1))
-            endif
-            if(abs(longest_dist) > TINY .and. size(pos,2) > 1) then
-                ratio = shortest_dist/longest_dist
-            else
-                 ratio = 0.
-                 if(DEBUG_HERE) write(logfhandle,*) 'cc ', label, 'LONGEST DIST = 0'
-            endif
-            longest_dist  = longest_dist*self%smpd  !in A
-            shortest_dist = shortest_dist*self%smpd
+   end subroutine aspect_ratios_estimation
+
+   ! This subroutine takes in input a connected component (cc) image
+   ! and the label of one of its ccs and calculates its aspect ratio, which
+   ! is defined as the ratio of the width and the height.
+   ! The idea behind this is that the center of the cc is calculated,
+   ! than everything is deleted except the borders of the cc. Finally,
+   ! in order to calculate the width and the height, the min/max
+   ! distances between the center and the borders are calculated. The
+   ! aspect ratio is the ratio of those 2 distances.
+   subroutine calc_aspect_ratio(self,label,ratio,lld, ld,print_ar)
+       class(nanoparticle), intent(inout) :: self
+       integer,             intent(in)    :: label
+       real,                intent(out)   :: ratio
+       logical,             intent(in)    :: lld ! fill in self%loc_longest_dim
+       real   , optional,   intent(out)   :: ld  ! longest dist
+       logical, optional,   intent(in)    :: print_ar
+       integer, allocatable :: pos(:,:)
+       integer, allocatable :: imat_cc(:,:,:)
+       logical, allocatable :: border(:,:,:)
+       logical, allocatable :: mask_dist(:) !for min and max dist calculation
+       integer :: location(1) !location of the farest vxls of the atom from its center
+       integer :: i
+       real    :: shortest_dist, longest_dist
+       imat_cc = int(self%img_cc%get_rmat())
+       call self%img_cc%border_mask(border, label, .true.) !use 4neigh instead of 8neigh
+       where(border .eqv. .true.)
+           imat_cc = 1
+       elsewhere
+           imat_cc = 0
+       endwhere
+       call get_pixel_pos(imat_cc,pos)   !pxls positions of the shell
+       if(allocated(mask_dist)) deallocate(mask_dist)
+       allocate(mask_dist(size(pos, dim = 2)), source = .true. )
+       shortest_dist = pixels_dist(self%centers(:,label), real(pos),'min', mask_dist, location)
+       if(size(pos,2) == 1) then !if the connected component has size 1 (just 1 vxl)
+           shortest_dist = 0.
+           longest_dist  = shortest_dist
+           ratio = 1.
+           if(lld) self%loc_longest_dist(:3, label) = self%centers(:,label)
            if(present(print_ar) .and. (print_ar .eqv. .true.)) then
                 write(logfhandle,*) 'ATOM #          ', label
                 write(logfhandle,*) 'shortest dist = ', shortest_dist
                 write(logfhandle,*) 'longest  dist = ', longest_dist
                 write(logfhandle,*) 'RATIO         = ', ratio
            endif
-           if(present(ld)) ld=longest_dist
-           deallocate(imat_cc, border, pos, mask_dist)
-        end subroutine calc_aspect_ratio_private
+           return
+       else
+           longest_dist  = pixels_dist(self%centers(:,label), real(pos),'max', mask_dist, location)
+           if(lld) self%loc_longest_dist(:3, label) =  pos(:3,location(1))
+       endif
+       if(abs(longest_dist) > TINY .and. size(pos,2) > 1) then
+           ratio = shortest_dist/longest_dist
+       else
+            ratio = 0.
+            if(DEBUG_HERE) write(logfhandle,*) 'cc ', label, 'LONGEST DIST = 0'
+       endif
+       longest_dist  = longest_dist*self%smpd  !in A
+       shortest_dist = shortest_dist*self%smpd
+      if(present(print_ar) .and. (print_ar .eqv. .true.)) then
+           write(logfhandle,*) 'ATOM #          ', label
+           write(logfhandle,*) 'shortest dist = ', shortest_dist
+           write(logfhandle,*) 'longest  dist = ', longest_dist
+           write(logfhandle,*) 'RATIO         = ', ratio
+      endif
+      if(present(ld)) ld=longest_dist
+      deallocate(imat_cc, border, pos, mask_dist)
    end subroutine calc_aspect_ratio
-
 
     ! This subroutine calculates some statistics (min,max,avg,stdev)
     ! in the intensity gray level value of the nanoparticle
@@ -1122,18 +1200,21 @@ contains
     ! using kmean algorithm for 2 classes. The initial guess fo the centers
     ! is intentionally biased. It supposes there are two distinguished classes
     ! with different avgs (proved with simulated data).
-    subroutine cluster_atom_intensity(self, max_intensity, classes)
-        use simple_math
+    subroutine cluster_atom_intensity(self, max_intensity)
+        use gnufor2
+        use simple_nanoML, only : nanoML
+        use simple_math  ! for norm calculation
         class(nanoparticle), intent(inout) :: self
         real,                intent(inout) :: max_intensity(:)
-        integer,             intent(inout) :: classes(:)      ! class correspondent to avg_intensity, 0 or 1
-        real    :: cen1, cen2                     ! centers of the classes
-        real    :: data_copy(size(max_intensity))
-        integer :: i
-        integer :: val1, val2
-        logical :: converged
-        type(image) :: class1, class2
-        real, pointer :: rmat1(:,:,:), rmat2(:,:,:), rmat_cc(:,:,:)
+        integer, parameter :: MAX_IT = 50 ! maximum number of iterations for
+        type(image)        :: class1, class2
+        real, pointer      :: rmat1(:,:,:), rmat2(:,:,:), rmat_cc(:,:,:)
+        type(nanoML)       :: emfit
+        real    :: centers_kmeans(2) !output of k-means
+        real    :: avgs(2),  vars(2), gammas(self%n_cc,2) !output of ML
+        integer :: i, cnt1, cnt2
+        max_intensity = max_intensity/maxval(max_intensity)*10. !normalise with maxval 10
+        call hist(max_intensity, 20)
         write(logfhandle,*) '****clustering wrt maximum intensity, init'
         ! Report clusters on images in dedicated directory
         call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: cluster_atom_intensity, simple_chdir1; ")
@@ -1144,25 +1225,36 @@ contains
         call class1%get_rmat_ptr(rmat1)
         call class2%get_rmat_ptr(rmat2)
         call self%img_cc%get_rmat_ptr(rmat_cc)
-        data_copy = max_intensity
-        ! Initialise
-        call initialise_centers(data_copy,cen1,cen2)
-        converged = .false.
-        do i = 1, 5*self%n_cc ! maximum number of iterations
-            if(.not. converged) then
-                call update_centers(cen1,cen2,converged,val1,val2)
-            else
-                exit
+        ! kmeans
+        call emfit%kmeans_biased2classes(max_intensity, centers_kmeans)
+        print *, 'centers_kmeans', centers_kmeans
+        ! ML, fit
+        call emfit%new(self%n_cc,2)
+        call emfit%set_data(max_intensity)
+        call emfit%fit(MAX_IT,centers_kmeans)
+        avgs = emfit%get_avgs()
+        vars = emfit%get_vars()
+        gammas  = emfit%get_gammas()
+        write(*,*) 'AVG/VAR 1:', avgs(1), vars(1)
+        write(*,*) 'AVG/VAR 2:', avgs(2), vars(2)
+        cnt2 = 0
+        do i = 1, self%n_cc
+            if( (avgs(1) - max_intensity(i))**2. < (avgs(2) - max_intensity(i))**2. ) then
+                cnt2 = cnt2 + 1
+                print *, 'connected component #', i, 'belongs to class 1 with probability', max(gammas(i,1),gammas(i,2))
             endif
         enddo
         ! assign
-        where( (cen1 - max_intensity)**2. < (cen2 - max_intensity)**2. )
-            classes = val1
-        elsewhere
-            classes = val2
-        end where
+        ! avg shoudl be the output of ML
+        ! where( (avg(1) - max_intensity)**2. < (avg(2) - max_intensity)**2. )
+        !     classes = val1
+        ! elsewhere
+        !     classes = val2
+        ! end where
+        cnt1 = count((avgs(1) - max_intensity)**2. <  (avgs(2) - max_intensity)**2. )
+        cnt2 = count((avgs(1) - max_intensity)**2. >= (avgs(2) - max_intensity)**2. )
         do i = 1, self%n_cc
-            if( (cen1 - max_intensity(i))**2. < (cen2 - max_intensity(i))**2. ) then
+            if( (avgs(1) - max_intensity(i))**2. < (avgs(2) - max_intensity(i))**2. ) then
                 where(abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(i)) < TINY) rmat1(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
             else
                 where(abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(i)) < TINY) rmat2(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
@@ -1170,6 +1262,9 @@ contains
         enddo
         call class1%write('Class1.mrc')
         call class2%write('Class2.mrc')
+        print *, 'Class1 contains ', cnt1 ,' atoms'
+        print *, 'Class2 contains ', cnt2 ,' atoms'
+        print *, 'Total ', cnt1+cnt2, ' atoms'
         call class1%kill
         call class2%kill
         ! come back to root directory
@@ -1236,9 +1331,14 @@ contains
         real    :: vec_fixed(3)     !vector indentifying z direction
         real    :: theta, mod_1, mod_2, dot_prod
         integer :: k, i
+        integer, allocatable :: sz(:)
         if(allocated(self%ang_var)) deallocate(self%ang_var)
            allocate (self%ang_var(self%n_cc), source = 0.)
-        loc_ld_real(:3,:) = real(self%loc_longest_dist(:3,:))
+        sz = self%img_cc%size_connected_comps()
+        !bring vector back to center
+        do i = 1, self%n_cc
+            loc_ld_real(:3,i) = real(self%loc_longest_dist(:3,i))- self%centers(:3,i)
+        enddo
         !consider fixed vector [0,0,1] (z direction)
         vec_fixed(1) = 0.
         vec_fixed(2) = 0.
@@ -1246,7 +1346,11 @@ contains
         write(logfhandle,*)'>>>>>>>>>>>>>>>> calculating angles wrt the vector [0,0,1]'
         !$omp parallel do schedule(static) private(k)
         do k = 1, self%n_cc
-            self%ang_var(k) = ang3D_vecs(vec_fixed(:),loc_ld_real(:,k))
+            if(sz(k) > 2) then
+                self%ang_var(k) = ang3D_vecs(vec_fixed(:),loc_ld_real(:,k))
+            else
+                self%ang_var(k) = 0. ! If the cc is too small it doesn't make sense
+            endif
             if(DEBUG_HERE) write(logfhandle,*) 'ATOM ', k, 'angle between direction longest dim and vec [0,0,1] ', self%ang_var(k)
         enddo
         !$omp end parallel do
@@ -1325,7 +1429,7 @@ contains
         enddo
         write(unit = 111,fmt ='(a)') 'CENTERS ANG'
         do i=1,ncls
-            write(unit = 111,fmt ='(f6.3)') self%ang_var(centers_ap(i))
+            write(unit = 111,fmt ='(f7.3)') self%ang_var(centers_ap(i))
         end do
         !standard deviation within each center
         allocate(  avg_within(ncls), source = 0.)
@@ -1352,7 +1456,11 @@ contains
                 if(labels_ap(j) == i) stdev_within(i) = stdev_within(i) + (self%ang_var(j)-avg_within(i))**2
             enddo
         enddo
-        stdev_within = stdev_within/(cnt-1.)
+        where (cnt>1)
+            stdev_within = stdev_within/(real(cnt)-1.)
+        elsewhere
+            stdev_within = 0.
+        endwhere
         stdev_within = sqrt(stdev_within)
         write(unit = 111,fmt ='(a,f5.3)')  'stdev_within = ', stdev_within(1)
         do i = 2, ncls
@@ -1370,7 +1478,7 @@ contains
         enddo
         stdev = stdev/(real(ncls)-1.)
         stdev = sqrt(stdev)
-        write(unit = 111,fmt ='(a,f5.3)') 'standard deviation among centers: ', stdev
+        write(unit = 111,fmt ='(a,f7.3)') 'standard deviation among centers: ', stdev
         call self%centers_pdb%writepdb('ClusterAngLongestDim')
         close(111)
         write(logfhandle,*) '****clustering wrt direction longest dim, completed'
@@ -1465,7 +1573,7 @@ contains
         integer                  :: i, j, ncls, nerr
         integer                  :: dim
         integer, allocatable     :: imat_onecls(:,:,:,:)
-        dim = size(self%dists) !self%n_cc
+        dim = size(self%dists)
         call self%centers_pdb%new(dim, dummy = .true. )
         allocate(simmat(dim, dim), source = 0.)
         write(logfhandle,*) '****clustering wrt distances distribution, init'
@@ -1478,10 +1586,6 @@ contains
         call ap_nano%new(dim, simmat)
         call ap_nano%propagate(centers_ap, labels_ap, simsum)
         ncls = size(centers_ap)
-        ! Report clusters on images in dedicated directory
-        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_chdir1; ")
-        call simple_mkdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_mkdir; ")
-        call simple_chdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_chdir; ")
         call self%img_cc%get_rmat_ptr(rmat_cc)
         allocate(imat_onecls(self%ldim(1),self%ldim(2),self%ldim(3), ncls), source = 0)
         allocate(img_clusters(ncls))
@@ -1519,9 +1623,9 @@ contains
         deallocate(simmat, labels_ap, centers_ap)
     end subroutine affprop_cluster_dist_distr
 
-    subroutine cluster(self, heterogeneous)
+    subroutine cluster(self, biatomic)
         class(nanoparticle), intent(inout) :: self
-        character(len=3),       intent(in) :: heterogeneous
+        character(len=3),       intent(in) :: biatomic
         real,    allocatable :: max_intensity(:)
         integer, allocatable :: classes(:)
         real, pointer :: rmat_cc(:,:,:)
@@ -1531,7 +1635,7 @@ contains
         rmat_cc => null()
         ! PREPARING FOR CLUSTERING
         ! Aspect ratios calculations
-        call self%calc_aspect_ratio(print_ar=.false.)
+        call self%aspect_ratios_estimation(print_ar=.false.)
         ! Polarization search
         call self%search_polarization()
         ! CLUSTERING
@@ -1540,36 +1644,24 @@ contains
         ! clustering wrt aspect ratio
         call self%affprop_cluster_ar()
         ! clustering wrt interatomic distances distribution
-        ! need to fect self%dists
-        call simple_chdir(trim(self%output_dir)//'/DistDistribANDRadialDependentStat',errmsg="simple_nanoparticles :: cluster, simple_chdir; ")
-        call set_dists_from_pdb('DistancesDistr.pdb')
-        ! come back to root directory
-        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: cluster, simple_chdir; ")
+        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: cluster, simple_chdir1; ")
+        call simple_mkdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: cluster, simple_mkdir; ")
+        call simple_chdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: cluster, simple_chdir; ")
+        ! need to recalculate self%dists
+        call self%distances_distribution() ! calc distances distrib across the whole nano
         call self%affprop_cluster_dist_distr()
+        ! come back to root directory
+        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: cluster, simple_chdir1; ")
         ! performs clustering with respect to max intensity in the
-        ! gray values of each atoms, with 2 fixed classes by kmeans,
+        ! gray values of each atoms, with 2 fixed classes by using
+        ! a Maximum Likelyhood algorithm initialised with kmeans,
         ! only of the nanoparticle map is heterogeneous.
-        if(heterogeneous .eq. 'yes') then
+        if(biatomic .eq. 'yes') then
         ! Kmeans clustering (2 classes) wrt atom intensities
             call self%atom_intensity_stats(max_intensity)
-            call self%cluster_atom_intensity(max_intensity, classes)
+            call self%cluster_atom_intensity(max_intensity)
         endif
         call self%kill
-    contains
-        subroutine set_dists_from_pdb(pdbfile)
-            character(len=*),    intent(in)  :: pdbfile
-            type(atoms) :: a
-            integer     :: N ! number of atoms
-            integer     :: n_cc
-            call a%new(pdbfile)
-            N  = a%get_n()
-            if(allocated(self%dists)) deallocate(self%dists)
-            allocate(self%dists(N), source = 0.)
-            do n_cc = 1, N
-                self%dists(n_cc) = a%get_beta(n_cc)  !Keep in A (not voxels), for output purposes
-            enddo
-            call a%kill
-        end subroutine set_dists_from_pdb
     end subroutine cluster
 
     ! This subrotuine indentifies the 'rows' of atoms in the z direction.
@@ -1904,6 +1996,97 @@ contains
       call radial_atom%writepdb(fname)
     end subroutine keep_atomic_pos_at_radius
 
+    subroutine identify_atom_columns(self)
+        class(nanoparticle), intent(inout) :: self
+        real, pointer      :: rmat_cc(:,:,:), rmat_col(:,:,:)
+        type(image)        :: img_col
+        integer, parameter :: N_DISCRET = 1000
+        integer, parameter :: N_LINES   = 6    ! number of lines to consider for each atom (exhaustive search) (12???)
+        integer :: n_cc, loc(1), i, j
+        integer :: x, y, z, t
+        integer :: cnt_intersect
+        logical :: mask(self%n_cc),mask_line(N_DISCRET)
+        logical :: flag_matrix(N_LINES,self%n_cc,self%n_cc)
+        real    :: dir(3), dist
+        real    :: line(3, N_DISCRET), t_vec(N_DISCRET)
+        do i = 1, N_DISCRET/2
+            t_vec(i) = -real(i)/10.
+        enddo
+        t_vec(N_DISCRET/2+1:N_DISCRET) = -t_vec(1:N_DISCRET/2)
+        x = 1
+        y = 2
+        z = 3 ! just for notation
+        call self%img_cc%get_rmat_ptr(rmat_cc)
+        call img_col%new(self%ldim, self%smpd)
+        call img_col%get_rmat_ptr(rmat_col)
+        flag_matrix = .false.  ! initialization
+        do n_cc = 1, self%n_cc ! for each atom
+            mask   = .true.
+            do j = 1, N_LINES        ! multiple lines for each atom
+                cnt_intersect = 0  ! how many atoms does the line intersect
+                ! find nearest neighbour
+                dist   = pixels_dist(self%centers(:,n_cc), self%centers,'min', mask, loc)
+                mask(loc(1)) = .false.                                 ! next time pick other neigh
+                if(dist*self%smpd >  4.*self%theoretical_radius) cycle ! disregard if too far
+                ! direction of the line
+                dir    = self%centers(:,n_cc) - self%centers(:,loc(1))
+                ! line
+                do t = 1, N_DISCRET
+                    line(x,t) = self%centers(1,n_cc) + t_vec(t)* dir(1)
+                    line(y,t) = self%centers(2,n_cc) + t_vec(t)* dir(2)
+                    line(z,t) = self%centers(3,n_cc) + t_vec(t)* dir(3)
+                enddo
+                ! calculate how many atoms does the line intersect and flag them
+                do i = 1, self%n_cc
+                    mask_line = .true.
+                    dist   = pixels_dist(self%centers(:3,i), line(:3,:),'min', mask_line)
+                    if(dist*self%smpd <= 0.9*self%theoretical_radius) then ! it intersects atoms i
+                         cnt_intersect = cnt_intersect + 1
+                         flag_matrix(j,n_cc,i) = .true. !flags also itself
+                     endif
+                enddo
+            enddo
+        enddo
+        ! remove redundancies
+        do j = 1, N_LINES
+            do t = 1, N_LINES
+                if(j /= t) then
+                    do n_cc = 1, self%n_cc     ! fix the first row
+                        do i = 1, self%n_cc   ! fix the second row
+                            if(all(flag_matrix(j,n_cc,:) .eqv. flag_matrix(t,i,:))) then
+                                flag_matrix(t,i,:)= .false. ! unflag them
+                            endif
+                        enddo
+                    enddo
+                else
+                    do n_cc = 1, self%n_cc-1     ! fix the first row
+                        do i = n_cc+1, self%n_cc   ! fix the second row
+                            if(all(flag_matrix(j,n_cc,:) .eqv. flag_matrix(t,i,:))) then
+                                flag_matrix(t,i,:)= .false. ! unflag them
+                            endif
+                        enddo
+                    enddo
+                endif
+            enddo
+        enddo
+        ! generate images for visualisation
+        do j = 1, N_LINES
+            do n_cc = 1, self%n_cc
+                ! reset
+                rmat_col(:,:,:) = 0.
+                cnt_intersect   = 0
+                do i = 1, self%n_cc
+                    if(flag_matrix(j,n_cc,i)) then
+                        cnt_intersect = cnt_intersect + 1
+                        where(abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) - real(i)) < TINY) rmat_col(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
+                    endif
+                enddo
+                if(cnt_intersect > 5) call img_col%write(trim(int2str(n_cc))//'ImageColNonRedundant'//trim(int2str(j))//'.mrc')
+            enddo
+        enddo
+        call img_col%kill
+    end subroutine identify_atom_columns
+
     subroutine kill_nanoparticle(self)
         class(nanoparticle), intent(inout) :: self
         self%ldim(3)           = 0
@@ -1912,6 +2095,7 @@ contains
         self%avg_dist_atoms    = 0.
         self%n_cc              = 0
         call self%img%kill()
+        call self%img_raw%kill
         call self%img_bin%kill()
         call self%img_cc%kill()
         call self%centers_pdb%kill

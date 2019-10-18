@@ -183,22 +183,22 @@ contains
         rmat_phasecorr(:,1:box_shrunken/2,1) = 0. !set to zero the borders
         rmat_phasecorr(:,ldim_shrink(2)-box_shrunken/2:ldim_shrink(2),1) = 0. !set to zero the borders
         if(DOWRITEIMGS) call mic_shrunken%write(PATH_HERE//basename(trim(micname))//'_shrunken_bin.mrc')
-        allocate(mask(1:ldim_shrink(1), 1:ldim_shrink(2)), source = .false.)
+        allocate(mask(1:ldim_shrink(1),1:ldim_shrink(2)), source = .false.)
         ntargets = 0
         !$omp parallel do collapse(2) default(shared) private(xind,yind) proc_bind(close) schedule(static) reduction(+:ntargets)
-        do xind=1,ldim_shrink(1),PICKER_OFFSET
-            do yind=1,ldim_shrink(2),PICKER_OFFSET
+        do xind=1,ldim_shrink(1)
+            do yind=1,ldim_shrink(2)
                 if(rmat_phasecorr(xind,yind,1) > 0.5) then
                     ntargets = ntargets + 1
-                    mask(xind,yind) = .true.
+                    mask(xind,yind) = .true. !DON T NEED MASK, CAN BE REMOVED
                 endif
             enddo
         enddo
         !$omp end parallel do
         allocate( target_corrs(ntargets),target_positions(ntargets,2))
         ntargets = 0
-        do xind=1,ldim_shrink(1),PICKER_OFFSET
-            do yind=1,ldim_shrink(2),PICKER_OFFSET
+        do xind=1,ldim_shrink(1)
+            do yind=1,ldim_shrink(2)
                 if(mask(xind,yind)) then
                     ntargets = ntargets + 1
                     target_positions(ntargets,:) = [xind,yind]
@@ -229,18 +229,21 @@ contains
             integer :: iref
             call phasecorr%new(ldim_shrink, smpd_shrunken)
             call aux%new(ldim_shrink, smpd_shrunken)
-            call aux%set_ft(.true.)
+            call aux%zero_and_flag_ft()
+            call phasecorr%zero_and_flag_ft()
             call field%fft
             do iref = 1, nrefs
                 call refs(iref)%fft
+                call aux%zero_and_flag_ft
                 call field%phase_corr(refs(iref),aux,lp,border=box_shrunken/2) !phase correlation
-                if(DOWRITEIMGS)  call aux%write(PATH_HERE//'PhaseCorrs.mrc',iref)
+                if(DOWRITEIMGS) call aux%write(PATH_HERE//'PhaseCorrs.mrc',iref)
                 if(iref > 1) then
                     call max_image(phasecorr,phasecorr,aux) !save in phasecorr the maximum value between previous phasecorr and new phasecorr
+                    call phasecorr%write('Maxphasecorr.mrc', iref)
                 else
                     phasecorr   = aux
+                    call phasecorr%write('Maxphasecorr.mrc', iref)
                 endif
-                call aux%fft
             enddo
             call field%copy(phasecorr)
             call field%neg() !The correlations are inverted because the references are white particles on black backgound
@@ -263,13 +266,13 @@ contains
             call img%get_rmat_ptr(rmat)
             call img1%get_rmat_ptr(rmat1)
             call img2%get_rmat_ptr(rmat2)
-            !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j) proc_bind(close)
+            !omp parallel do collapse(2) schedule(static) default(shared) private(i,j) proc_bind(close)
             do i = 1, ldim_shrink(1)
                 do j = 1, ldim_shrink(2)
                     rmat(i,j,1) = max(rmat1(i,j,1), rmat2(i,j,1))
                  enddo
             enddo
-            !$omp end parallel do
+            !omp end parallel do
         end subroutine max_image
     end subroutine extract_peaks
 

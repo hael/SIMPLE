@@ -6315,44 +6315,42 @@ contains
         integer, optional, intent(in)    :: border
         real, parameter :: width = 3.
         complex     :: c1,c2
-        real        :: w,rw
+        real        :: w,rw,rhplim,rlplim,rsh
         real(dp)    :: sqsum1,sqsum2
-        integer     :: nrflims(3,2),phys(3),npix,shlim,shlimsq
-        integer     :: shlimbpsq,shlimbp,h,k,l,hsq_ksq_lsq
+        integer     :: nrflims(3,2),phys(3),npix
+        integer     :: h,k,l,shsq, hplim, hplimsq, bphplimsq, lplim, lplimsq, bplplimsq
         if(present(border) .and. self1%ldim(3) > 1) THROW_HARD('Border discarding not implemented for 3D; phase_corr')
         if(present(border) .and. (border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2 ))&
         & THROW_HARD('Input border parameter too big; phase_corr')
         if( .not. all([self1%is_ft(),self2%is_ft(),pc%is_ft()]) )then
             THROW_HARD('All inputted images must be FTed')
         endif
-        shlimsq   = huge(shlimsq)
-        shlim     = calc_fourier_index(lp,self1%ldim(1),self1%smpd)
-        shlimbpsq = shlim*shlim
-        shlimbp   = shlim+nint(width)
-        shlimbpsq = shlimbp*shlimbp
-        sqsum1 = 0.d0
-        sqsum2 = 0.d0
-        nrflims = self1%loop_lims(2)
+        sqsum1    = 0.d0
+        sqsum2    = 0.d0
+        nrflims   = self1%loop_lims(2)
+        lplim     = calc_fourier_index(lp,minval(self1%ldim(1:2)),self1%smpd)
+        rlplim    = real(lplim)
+        lplimsq   = lplim*lplim
+        bplplimsq = min(minval(nrflims(1:2,2)),lplim-nint(WIDTH))**2
+        call pc%zero_and_flag_ft
         if( self1%wthreads .or. self2%wthreads )then
-            !$omp parallel do default(shared) private(h,k,l,w,rw,hsq_ksq_lsq,phys,c1,c2) proc_bind(close) schedule(static) reduction(+:sqsum1,sqsum2)
+            !$omp parallel do default(shared) private(h,k,l,w,rw,shsq,phys,rsh,c1,c2)&
+            !$omp proc_bind(close) schedule(static) reduction(+:sqsum1,sqsum2)
             do h = nrflims(1,1),nrflims(1,2)
                 rw = merge(1., 2., h==0)
                 do k = nrflims(2,1),nrflims(2,2)
                     do l = nrflims(3,1),nrflims(3,2)
-                        hsq_ksq_lsq = h*h+k*k+l*l
-                        phys = pc%comp_addr_phys(h,k,l)
-                        w = 1.
-                        if( h==0 .and. k==0 .and. l==0 )then
-                            pc%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                        shsq = h*h+k*k+l*l
+                        w    = 1.
+                        if( shsq > lplimsq )then
                             cycle
-                        else
-                            if(hsq_ksq_lsq > shlimbpsq)then
-                                pc%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                                cycle
-                            elseif( hsq_ksq_lsq > shlimsq  )then
-                                w = (cos(((sqrt(real(hsq_ksq_lsq))-(real(shlimbp)-width))/width)*PI)+1.)/2.
-                            endif
+                        else if( shsq == 0 )then
+                            cycle
+                        else if( shsq > bplplimsq )then
+                            rsh = sqrt(real(shsq))
+                            w   = 0.5*(1.+cos(PI*(rsh-(rlplim-width))/width))
                         endif
+                        phys = pc%comp_addr_phys(h,k,l)
                         c1 = w*self1%cmat(phys(1),phys(2),phys(3))
                         c2 = w*self2%cmat(phys(1),phys(2),phys(3))
                         sqsum1 = sqsum1 + real(rw*csq(c1),dp)
@@ -6367,20 +6365,17 @@ contains
                 rw = merge(1., 2., h==0)
                 do k = nrflims(2,1),nrflims(2,2)
                     do l = nrflims(3,1),nrflims(3,2)
-                        hsq_ksq_lsq = h*h+k*k+l*l
-                        phys = pc%comp_addr_phys(h,k,l)
-                        w = 1.
-                        if( h==0 .and. k==0 .and. l==0 )then
-                            pc%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                        shsq = h*h+k*k+l*l
+                        w    = 1.
+                        if( shsq > lplimsq )then
                             cycle
-                        else
-                            if(hsq_ksq_lsq > shlimbpsq)then
-                                pc%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                                cycle
-                            elseif( hsq_ksq_lsq > shlimsq  )then
-                                w = (cos(((sqrt(real(hsq_ksq_lsq))-(real(shlimbp)-width))/width)*PI)+1.)/2.
-                            endif
+                        else if( shsq == 0 )then
+                            cycle
+                        else if( shsq > bplplimsq )then
+                            rsh = sqrt(real(shsq))
+                            w   = 0.5*(1.+cos(PI*(rsh-(rlplim-width))/width))
                         endif
+                        phys = pc%comp_addr_phys(h,k,l)
                         c1 = w*self1%cmat(phys(1),phys(2),phys(3))
                         c2 = w*self2%cmat(phys(1),phys(2),phys(3))
                         sqsum1 = sqsum1 + real(rw*csq(c1),dp)
