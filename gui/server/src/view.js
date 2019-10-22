@@ -9,12 +9,13 @@ const sqlite = require('./sqlite')
 const Task = require('./task')
 const simpleexec = require('./simpleExec')
 const filesystem = require('./fileSystem')
-
+const Relion = require('./relion')
 
 class View{
 
   constructor(){
 	this.task = new Task()
+	this.relion = new Relion()
 	this.viewlog = pug.compileFile(global.simplepath + '/gui_data/client/src/viewlog.pug')
     this.simpleview = pug.compileFile(global.simplepath + '/gui_data/client/src/simpleview.pug')
     this.simpleviewraw = pug.compileFile(global.simplepath + '/gui_data/client/src/simpleviewraw.pug')
@@ -209,7 +210,12 @@ class View{
 			postprocess = true
 		}
 		
-        return ({html : this.simpleview({projfile : arg['projfile'], micrographs:micrographs, particles:particles, cls2d:cls2d, ini3d:ini3d, refine3d:refine3d, postprocess:postprocess, manualpick:manualpick, autopick:autopick})})
+		if(arg['projfile'].includes("export_relion")){
+			return({projfile:arg['projfile'], jobs:this.relion.analyse(path.dirname(arg['projfile']))})
+		}else{
+			return ({html : this.simpleview({projfile : arg['projfile'], micrographs:micrographs, particles:particles, cls2d:cls2d, ini3d:ini3d, refine3d:refine3d, postprocess:postprocess, manualpick:manualpick, autopick:autopick})})
+		}
+  
     })
   }
   

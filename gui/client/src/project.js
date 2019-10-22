@@ -2,6 +2,7 @@ class Project {
 
   constructor(){
     this.updateProjectSelector()
+    this.relionflow = []
     setInterval(() => {
       if(this.selectedtable != undefined){
         this.refreshHistory()
@@ -114,14 +115,6 @@ class Project {
 		}
 	}
 	
-	var trees = document.getElementsByClassName('tree')
-	for(var tree of trees){
-		var branch = tree.getElementsByClassName('branch')[0]
-		if(branch.getElementsByClassName('tree').length == 0){
-			tree.getElementsByClassName('maxminicon')[0].style.display = 'none'
-		}
-	}
-	
 	var unpruned = true
 	
 	while (unpruned){
@@ -136,7 +129,19 @@ class Project {
 		}
 	}
 	
+	var trees = document.getElementsByClassName('tree')
+	for(var tree of trees){
+		drawRelionTree(tree.id)
+	}
 	
+	var trees = document.getElementsByClassName('tree')
+	for(var tree of trees){
+		var branch = tree.getElementsByClassName('branch')[0]
+		if(branch.getElementsByClassName('tree').length == 0){
+			tree.getElementsByClassName('maxminicon')[0].style.display = 'none'
+		}
+	}
+
 	function createBubble(element){
 		var bubble = document.createElement('div')
 		var topline = document.createElement('div')
@@ -177,7 +182,9 @@ class Project {
 		var lowerline = document.createElement('div')
 		lowerline.className = "lowerline"
 		if(element.type == 'preprocess_stream' && element.status == 'Killed'){
-			lowerline.innerHTML = 'Stopped'
+			lowerline.innerHTML = 'Stopped'	
+		}else if(project.relionflow[element.folder + "/" + project.selectedname + ".simple"] != undefined && project.relionflow[element.folder + "/" + project.selectedname + ".simple"].updatetime != undefined){
+			lowerline.innerHTML = element.status + ' Updated : ' + project.relionflow[element.folder + "/" + project.selectedname + ".simple"].updatetime
 		}else{
 			lowerline.innerHTML = element.status
 		}
@@ -264,6 +271,136 @@ class Project {
 		bubble.className = "bubble"
 		return bubble
 	}
+	
+	function createRelionBubble(element){
+		var bubble = document.createElement('div')
+		var topline = document.createElement('div')
+		var maxminicon = document.createElement('img')
+		
+		bubble.id = 'branch_' + element.id
+		
+		topline.className = "topline"
+		topline.innerHTML = "RELION " + element.type
+		
+		maxminicon.className = 'maxminicon'
+		maxminicon.title = 'Minimise branch'
+		maxminicon.onclick = ((event) => {
+			var tree = event.target.parentElement.parentElement.parentElement
+			var branches = tree.getElementsByClassName('branch')
+			var bubble = event.target.parentElement.parentElement
+			if(event.target.src.includes('img/minus.png')){
+				branches[0].style.display = 'none'
+				localStorage.setItem('branch_' + element.id, true)
+				event.target.src = 'img/plus.png'
+				bubble.getElementsByClassName('lowerline')[0].style.visibility = 'hidden'
+				bubble.getElementsByClassName('buttonline')[0].style.visibility = 'hidden'
+			}else{
+				branches[0].style.display = 'flex'
+				localStorage.removeItem('branch_' + element.id)
+				event.target.src = 'img/minus.png'
+				bubble.getElementsByClassName('lowerline')[0].style.visibility = 'unset'
+				bubble.getElementsByClassName('buttonline')[0].style.visibility = 'unset'
+			}
+		})
+		topline.appendChild(maxminicon)
+		
+		var centerline = document.createElement('div')
+		centerline.className = "centerline"
+		centerline.innerHTML = element.id
+		
+		var lowerline = document.createElement('div')
+		lowerline.className = "lowerline"
+		
+		var buttonline = document.createElement('div')
+		buttonline.className = "buttonline"
+		
+		if(localStorage.getItem('branch_' + element.id) == null){
+			maxminicon.src = 'img/minus.png'		
+		}else{
+			maxminicon.src = 'img/plus.png'
+			lowerline.style.visibility = 'hidden'
+			buttonline.style.visibility = 'hidden'
+		}
+		
+		
+		var viewfiles = document.createElement('img')
+		viewfiles.src = "img/folder.png"
+		viewfiles.title = "View Files"
+		viewfiles.onclick = (() => browser.show({buttons : [{ name : 'view2d', action : 'simpleview.view2D()'}, { name : 'view3d', action : 'simpleview.view3D()'}], path : element.directory, gauze : true}))
+		buttonline.appendChild(viewfiles)
+		
+		//var stalk = document.createElement('div')
+		//bubble.appendChild(stalk)
+		bubble.appendChild(topline)
+		bubble.appendChild(centerline)
+		bubble.appendChild(lowerline)
+		bubble.appendChild(buttonline)
+		
+		if(element.status == "Deleted"){
+			buttonline.style.visibility = 'hidden'
+			bubble.style.color = 'grey'
+		}
+		
+		bubble.className = "bubble"
+		return bubble
+	}
+	
+	function drawRelionTree(id){
+		if(project.relionflow != undefined && project.relionflow[id] != undefined && project.relionflow[id].jobs != undefined){	
+			var tree = document.getElementById(id)
+			var included = []
+			for(var job of project.relionflow[id].jobs){
+				if(job.id == job.parent || job.parent == null){
+					var div = document.createElement('div')
+					div.className = "tree"
+					div.id = job.id
+					var stalk = document.createElement('div')
+					stalk.className = "stalk"
+					stalk.appendChild(document.createElement('div'))
+					div.appendChild(stalk)
+					div.appendChild(createRelionBubble(job))
+					var branch = document.createElement('div')
+					if(localStorage.getItem('branch_' + job.id) != null){
+						branch.style.display = 'none'
+					}
+					branch.className = "branch"
+					div.appendChild(branch)
+					tree.getElementsByClassName('branch')[0].appendChild(div)
+					tree.getElementsByClassName('branch')[0].className = "branch relionflow"
+					included[job.directory] = true
+				}
+			}
+			var updated = true
+			while(updated){
+				var updated = false;
+				var trees = tree.getElementsByClassName('tree')
+				for(var reliontree of trees){
+					for(var job of project.relionflow[id].jobs){
+						if(job['parent'] == reliontree.id && included[job.directory] != true){
+							updated = true
+							var div = document.createElement('div')
+							div.className = "tree"
+							div.id = job.id
+							var stalk = document.createElement('div')
+							stalk.className = "stalk"
+							stalk.appendChild(document.createElement('div'))
+							div.appendChild(stalk)
+							div.appendChild(createRelionBubble(job))
+							var branch = document.createElement('div')
+							if(localStorage.getItem('branch_' + element.id) != null){
+								branch.style.display = 'none'
+							}
+							branch.className = "branch"
+							div.appendChild(branch)
+							reliontree.getElementsByClassName('branch')[0].appendChild(div)
+							included[job.directory] = true
+						}
+					}
+				}
+			}
+		}
+	}
+	
   }
   
   showCreate(){
@@ -359,12 +496,19 @@ class Project {
 		fetcher.fetchJSON(request)
 		.then(response => response.json())
 		.then (json => {
-			if(json.html != undefined){
+			
+			if(json.jobs != undefined){
+				this.relionflow[json.projfile] = {}
+				this.relionflow[json.projfile].jobs = json.jobs
+				this.relionflow[json.projfile].updatetime = new Date().toLocaleString();
+			}else if(json.html != undefined){
 				document.getElementById('popup').style.display = "block"
 				document.getElementById('popupwindow').className = "simpleview"
 				document.getElementById('popupwindow').innerHTML = json.html
 				var viewtypes = document.getElementsByClassName('viewtype')
-				if(viewtypes.length > 1){
+				if(projfile.includes('preprocess_stream')){
+					viewtypes[0].click()
+				}else if(viewtypes.length > 1){
 					viewtypes[viewtypes.length - 2].click()
 				}else{
 					viewtypes[0].click()
