@@ -444,11 +444,7 @@ contains
                     iprec = iprecs(batches(batch,1) + i - 1)
                     iori  = ioris(batches(batch,1) + i - 1)
                     ! normalize & pad & FFT
-                    if( params_glob%l_prenormpremsk )then
-                        call batch_imgs(i)%pad_fft(cgrid_imgs(i))
-                    else
-                        call batch_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(i))
-                    endif
+                    call batch_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(i))
                     ! apply CTF, shift
                     add_phshift = 0.
                     if( phaseplate ) add_phshift = precs(iprec)%phshift

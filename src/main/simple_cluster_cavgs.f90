@@ -20,9 +20,9 @@ contains
         write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES FOR MATCHING'
         ncls = size(cavg_imgs)
         do icls = 1, ncls
-            if( cavg_imgs(icls)%is_ft() )                 THROW_HARD('cavgs assumed not be FTed; cluster_cavgs')
-            if( .not. params_glob%l_prenormpremsk )       call cavg_imgs(icls)%norm
-            if( .not. params_glob%l_prenormpremsk )       call cavg_imgs(icls)%mask(params_glob%msk, 'soft')
+            if( cavg_imgs(icls)%is_ft() ) THROW_HARD('cavgs assumed not be FTed; cluster_cavgs')
+            call cavg_imgs(icls)%norm
+            call cavg_imgs(icls)%mask(params_glob%msk, 'soft')
             if( params_glob%boxmatch /= params_glob%box ) call cavg_imgs(icls)%clip_inplace([params_glob%boxmatch,params_glob%boxmatch,1])
         end do
         write(logfhandle,'(A)') '>>> PREPARING REFERENCES IN POLAR REPRESENTATION'

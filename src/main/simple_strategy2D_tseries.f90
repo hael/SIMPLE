@@ -52,7 +52,6 @@ contains
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
-        DebugPrint  '>>> strategy2D_tseries :: FINISHED STOCHASTIC SEARCH'
         contains
 
             subroutine per_ref_srch
@@ -67,6 +66,7 @@ contains
                     self%s%best_rot   = inpl_ind
                 endif
             end subroutine per_ref_srch
+
     end subroutine srch_tseries
 
     subroutine kill_tseries( self )

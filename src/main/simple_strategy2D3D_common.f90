@@ -324,7 +324,7 @@ contains
         ! CTF parameters
         ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
         ! normalise
-        if( .not. params_glob%l_prenormpremsk ) call img_in%noise_norm(build_glob%lmsk)
+        call img_in%noise_norm(build_glob%lmsk)
         ! move to Fourier space
         call img_in%fft()
         ! Shift image to rotational origin & phase-flipping
@@ -345,16 +345,14 @@ contains
         call img_in%ifft()
         ! clip image if needed
         call img_in%clip(img_out)
-        if( .not. params_glob%l_prenormpremsk )then
-            ! soft-edged mask
-            if( params_glob%l_innermsk )then
-                call img_out%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
+        ! soft-edged mask
+        if( params_glob%l_innermsk )then
+            call img_out%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
+        else
+            if( params_glob%l_focusmsk )then
+                call img_out%mask(params_glob%focusmsk, 'soft')
             else
-                if( params_glob%l_focusmsk )then
-                    call img_out%mask(params_glob%focusmsk, 'soft')
-                else
-                    call img_out%mask(params_glob%msk, 'soft')
-                endif
+                call img_out%mask(params_glob%msk, 'soft')
             endif
         endif
         ! gridding prep
