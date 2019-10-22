@@ -15,7 +15,6 @@ public :: tseries_track_commander_distr
 public :: tseries_track_commander
 public :: cleanup2D_nano_commander_distr
 public :: cluster2D_nano_commander_distr
-public :: automask2D_nano_commander
 public :: tseries_estimate_diam_commander
 public :: tseries_preproc_commander
 public :: tseries_average_commander
@@ -51,10 +50,6 @@ type, extends(commander_base) :: cluster2D_nano_commander_distr
   contains
     procedure :: execute      => exec_cluster2D_nano_distr
 end type cluster2D_nano_commander_distr
-type, extends(commander_base) :: automask2D_nano_commander
-  contains
-    procedure :: execute      => exec_automask2D_nano
-end type automask2D_nano_commander
 type, extends(commander_base) :: tseries_estimate_diam_commander
   contains
     procedure :: execute      => exec_tseries_estimate_diam
@@ -374,43 +369,6 @@ contains
         call xcluster2D_distr%execute(cline)
         call simple_end('**** SIMPLE_CLUSTER2D_NANO NORMAL STOP ****')
     end subroutine exec_cluster2D_nano_distr
-
-    subroutine exec_automask2D_nano( self, cline )
-        use simple_masker, only: automask2D
-        use simple_image,  only: image
-        class(automask2D_nano_commander), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        type(image),      allocatable :: cavgs(:)
-        character(len=:), allocatable :: cavgsstk
-        integer,          allocatable :: cavgs_states(:)
-        real,             allocatable :: diams(:)
-        integer :: ncls, n, ldim(3), icls
-        real    :: smpd
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('ngrow') ) call cline%set('ngrow',  3.0)
-        if( .not. cline%defined('winsz') ) call cline%set('winsz',  1.0)
-        if( .not. cline%defined('edge')  ) call cline%set('edge',  12.0)
-        call params%new(cline)
-        call spproj%read(params%projfile)
-        ! get class average stack
-        call spproj%get_cavgs_stk(cavgsstk, ncls, smpd)
-        call find_ldim_nptcls(cavgsstk, ldim, n)
-        ldim(3) = 1
-        if( n/= ncls ) THROW_HARD('Incosistent # classes in project file vs cavgs stack; exec_automask2D_nano')
-        allocate(cavgs(ncls), diams(ncls))
-        diams = 0.
-        do icls = 1, ncls
-            call cavgs(icls)%new(ldim, smpd)
-            call cavgs(icls)%read(cavgsstk, icls)
-        end do
-        cavgs_states = spproj%os_cls2D%get_all('state')
-        ! generate masks and mask the state /= 0 class averages
-        call automask2D(cavgs, cavgs_states > 0.5, params%ngrow, nint(params%winsz), params%edge, diams)
-
-
-    end subroutine exec_automask2D_nano
 
     subroutine exec_tseries_estimate_diam( self, cline )
         use simple_tseries_preproc

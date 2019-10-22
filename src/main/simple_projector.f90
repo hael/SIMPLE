@@ -124,7 +124,7 @@ contains
         enddo
         !$omp end parallel do
         deallocate( cych,cyck,cycm )
-        ! griiding correction
+        ! gridding correction
         self%interp_fcomp => interp_fcomp_norm
         if( params_glob%griddev.eq.'yes') self%interp_fcomp => interp_fcomp_grid
         !

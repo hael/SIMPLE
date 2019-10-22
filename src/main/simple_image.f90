@@ -4720,40 +4720,39 @@ contains
     subroutine NLmean(self)
         class(image), intent(inout) :: self
         real,  allocatable :: rmat_pad(:,:)
-        integer, parameter :: DIM_SW  = 3   !Good if use Euclidean distance
-        integer, parameter :: cfr_box = 10  !As suggested in the paper, consider a box 21x21
-        real               :: exponentials(2*cfr_box+1,2*cfr_box+1), sw_px(DIM_SW,DIM_SW)
-        real               :: z, sigma, h, h_sq
+        integer, parameter :: DIM_SW  = 3   ! good if use Euclidean distance
+        integer, parameter :: CFR_BOX = 10  ! as suggested in the paper, consider a box 21x21
+        real               :: exponentials(2*CFR_BOX+1,2*CFR_BOX+1), sw_px(DIM_SW,DIM_SW)
+        real               :: z, sigma, h, h_sq, avg
         integer            :: i, j, m, n, pad, indi, indj
         if( self%is_3d() ) THROW_HARD('2D images only; NLmean')
         if( self%ft )      THROW_HARD('Real space only;NLmean')
-        pad   = (DIM_SW-1)/2
-        sigma = self%noisesdev(3.) !estimation of noise, TO CHANGE
+        pad   = CFR_BOX + 2
+        sigma = self%noisesdev(3.) ! estimation of noise, TO CHANGE
         h     = 4.*sigma
         h_sq  = h**2.
-        allocate(rmat_pad(self%ldim(1)+2*pad,self%ldim(2)+2*pad), source=0.)
-        rmat_pad(pad+1:self%ldim(1)+pad,pad+1:self%ldim(2)+pad) = self%rmat(1:self%ldim(1),1:self%ldim(2),1)
-        !$omp parallel do default(shared) private(m,n,sw_px,exponentials,i,j,indi,indj,z) schedule(static)&
-        !$omp collapse(2) proc_bind(close)
-        do m = cfr_box+1,self%ldim(1)-cfr_box-1             !fix pixel (m,n)
-        do n = cfr_box+1,self%ldim(2)-cfr_box-1
-            sw_px        = rmat_pad(m:m+DIM_SW-1,n:n+DIM_SW-1)
-            exponentials = 0.
-            do i = -cfr_box,cfr_box       !As suggested in the paper, consider a box 21x21
-              indi = i+cfr_box+1
-              do j = -cfr_box,cfr_box
-                  if( i==0 .and. j==0 )cycle
-                  indj = j+cfr_box+1
-                  exponentials(indi,indj) = &
-                  & exp( -sum( (sw_px - rmat_pad(m+i:m+i+DIM_SW-1, n+j:n+j+DIM_SW-1))**2. )/h_sq) !euclidean norm
-              enddo
+        avg   = sum(self%rmat(:self%ldim(1),:self%ldim(2),1)) / real(product(self%ldim))
+        allocate(rmat_pad(-pad:self%ldim(1)+pad,-pad:self%ldim(2)+pad), source=avg)
+        rmat_pad(1:self%ldim(1),1:self%ldim(2)) = self%rmat(1:self%ldim(1),1:self%ldim(2),1)
+        ! KEEP THIS SERIAL AS IT IS NOT TRIVIAL TO PARALLELISE DUE TO THE INDEX MODIFICATIONS
+        ! AND IT IS GOING TO BE USED IN PREPIMG4ALIGN (STRATEGY2D3D_COMMON) UNDER PARALLEL LOOP
+        do m = 1,self%ldim(1)
+            do n = 1,self%ldim(2)
+                sw_px = rmat_pad(m:m+DIM_SW-1,n:n+DIM_SW-1)
+                exponentials = 0.
+                do i = -CFR_BOX,CFR_BOX ! as suggested in the paper, use a box 21x21
+                  indi = i + CFR_BOX + 1
+                  do j = -CFR_BOX,CFR_BOX
+                      indj = j + CFR_BOX + 1
+                      exponentials(indi,indj) = &
+                      & exp( -sum( (sw_px - rmat_pad(m+i:m+i+DIM_SW-1, n+j:n+j+DIM_SW-1))**2. )/h_sq) ! Euclidean norm
+                  enddo
+                enddo
+                z = sum(exponentials)
+                if( m == 1 .or. n == 1 .or. z < 0.0000001 ) cycle
+                self%rmat(m-1,n-1,1) = sum(exponentials * rmat_pad(m-CFR_BOX:m+CFR_BOX,n-CFR_BOX:n+CFR_BOX)) / z
             enddo
-            z = sum(exponentials)
-            if(z < 0.0001) cycle
-            self%rmat(m-1,n-1,1) = sum( exponentials * rmat_pad(m-cfr_box:m+cfr_box,n-cfr_box:n+cfr_box)) / z
         enddo
-        enddo
-        !$omp end parallel do
         deallocate(rmat_pad)
     end subroutine NLmean
 
@@ -4762,8 +4761,8 @@ contains
         class(image), intent(inout) :: self
         real,  allocatable :: rmat_pad(:,:,:)
         integer, parameter :: DIM_SW  = 3   !Good if use Euclidean distance
-        integer, parameter :: cfr_box = 10  !As suggested in the paper, consider a box 21x21
-        real               :: exponentials(2*cfr_box+1,2*cfr_box+1,2*cfr_box+1), sw_px(DIM_SW,DIM_SW,DIM_SW)
+        integer, parameter :: CFR_BOX = 10  !As suggested in the paper, consider a box 21x21
+        real               :: exponentials(2*CFR_BOX+1,2*CFR_BOX+1,2*CFR_BOX+1), sw_px(DIM_SW,DIM_SW,DIM_SW)
         real               :: z, sigma, h, h_sq
         integer            :: i, j, k, m, n, o, pad, indi, indj, indk
         if( .not. self%is_3d() ) then
@@ -4777,19 +4776,18 @@ contains
         h_sq  = h**2.
         allocate(rmat_pad(self%ldim(1)+2*pad,self%ldim(2)+2*pad,self%ldim(3)+2*pad), source=0.)
         rmat_pad(pad+1:self%ldim(1)+pad,pad+1:self%ldim(2)+pad,pad+1:self%ldim(3)+pad) = self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
-        !$omp parallel do default(shared) private(m,n,o,sw_px,exponentials,i,j,k,indi,indj,indk,z) schedule(static)&
-        !$omp collapse(3) proc_bind(close)
-        do m = cfr_box+1,self%ldim(1)-cfr_box-1  !fix pixel (m,n,o)
-        do n = cfr_box+1,self%ldim(2)-cfr_box-1
-        do o = cfr_box+1,self%ldim(3)-cfr_box-1
+        ! KEEP THIS SERIAL AS IT IS NOT TRIVIAL TO PARALLELISE DUE TO THE INDEX MODIFICATIONS
+        do m = CFR_BOX+1,self%ldim(1)-CFR_BOX-1  !fix pixel (m,n,o)
+        do n = CFR_BOX+1,self%ldim(2)-CFR_BOX-1
+        do o = CFR_BOX+1,self%ldim(3)-CFR_BOX-1
             sw_px        = rmat_pad(m:m+DIM_SW-1,n:n+DIM_SW-1,o:o+DIM_SW-1)
             exponentials = 0.
-            do i = -cfr_box,cfr_box       !As suggested in the paper, consider a box 21x21
-              indi = i+cfr_box+1
-              do j = -cfr_box,cfr_box
-                  indj = j+cfr_box+1
-                  do k = -cfr_box,cfr_box
-                      indk = k+cfr_box+1
+            do i = -CFR_BOX,CFR_BOX       !As suggested in the paper, consider a box 21x21
+              indi = i+CFR_BOX+1
+              do j = -CFR_BOX,CFR_BOX
+                  indj = j+CFR_BOX+1
+                  do k = -CFR_BOX,CFR_BOX
+                      indk = k+CFR_BOX+1
                       if( i==0 .and. j==0 .and. k==0.)cycle
                       exponentials(indi,indj,indk) = &
                       & exp( -sum( (sw_px - rmat_pad(m+i:m+i+DIM_SW-1,n+j:n+j+DIM_SW-1,o+k:o+k+DIM_SW-1))**2. )/h_sq) !euclidean norm
@@ -4798,12 +4796,10 @@ contains
             enddo
             z = sum(exponentials)
             if(z < 0.0001) cycle
-            !HEREE
-            self%rmat(m-1,n-1,o-1) = sum( exponentials * rmat_pad(m-cfr_box:m+cfr_box,n-cfr_box:n+cfr_box,o-cfr_box:o+cfr_box)) / z
+            self%rmat(m-1,n-1,o-1) = sum( exponentials * rmat_pad(m-CFR_BOX:m+CFR_BOX,n-CFR_BOX:n+CFR_BOX,o-CFR_BOX:o+CFR_BOX)) / z
         enddo
         enddo
         enddo
-        !$omp end parallel do
         deallocate(rmat_pad)
     end subroutine NLmean3D
 

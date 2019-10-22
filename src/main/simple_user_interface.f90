@@ -74,7 +74,6 @@ type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 ! declare simple_exec and simple_distr_exec program specifications here
 type(simple_program), target :: atom_cluster_analysis
 type(simple_program), target :: atoms_rmsd
-type(simple_program), target :: automask2D_nano
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
 type(simple_program), target :: cleanup2D_nano
@@ -274,7 +273,6 @@ contains
         call set_prg_ptr_array
         call new_atom_cluster_analysis
         call new_atoms_rmsd
-        call new_automask2D_nano
         call new_center
         call new_cleanup2D
         call new_cleanup2D_nano
@@ -368,7 +366,6 @@ contains
         n_prg_ptrs = 0
         call push2prg_ptr_array(atom_cluster_analysis)
         call push2prg_ptr_array(atoms_rmsd)
-        call push2prg_ptr_array(automask2D_nano)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(cleanup2D_nano)
@@ -467,8 +464,6 @@ contains
                 ptr2prg => atom_cluster_analysis
             case('atoms_rmsd')
                 ptr2prg => atoms_rmsd
-            case('automask2D_nano')
-                ptr2prg => automask2D_nano
             case('center')
                 ptr2prg => center
             case('cleanup2D')
@@ -678,7 +673,6 @@ contains
     subroutine list_shmem_prgs_in_ui
         write(logfhandle,'(A)') atom_cluster_analysis%name
         write(logfhandle,'(A)') atoms_rmsd%name
-        write(logfhandle,'(A)') automask2D_nano%name
         write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') cluster_cavgs%name
         write(logfhandle,'(A)') convert%name
@@ -963,34 +957,6 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_atoms_rmsd
-
-    subroutine new_automask2D_nano
-        ! PROGRAM SPECIFICATION
-        call automask2D_nano%new(&
-        &'automask2D_nano',&                    ! name
-        &'automask2D_nano volume',&             ! descr_short
-        &'is a program for 2D automasking of class averages of nanoparticles and mapping/application of the masks back to the particle images',& ! descr_long
-        &'simple_exec',&               ! executable
-        &0, 2, 0, 0, 0, 1, 1, .true.) ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call automask2D_nano%set_input('parm_ios', 1, 'ngrow', 'num', '# of white pixel layers to grow',&
-        &'# of white pixel layers to grow in binary image{0}', '# layers 2 grow', .false., 0.)
-        call automask2D_nano%set_input('parm_ios', 2, 'winsz', 'num', 'Half-window size for median filtering', 'Half-window size for median filtering(in pixels)', 'winsz in pixels', .false., 1.0)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        call automask2D_nano%set_input('mask_ctrls', 1, 'edge', 'num', 'Envelope mask soft edge',&
-        &'Cosine edge size for softening the binariy 2D mask(in pixels)', '# pixels cosine edge', .false., 12.)
-        ! computer controls
-        call automask2D_nano%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_automask2D_nano
 
     subroutine new_center
         ! PROGRAM SPECIFICATION

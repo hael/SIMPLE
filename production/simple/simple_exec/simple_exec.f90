@@ -92,7 +92,6 @@ type(tseries_preproc_commander)        :: xtseries_preproc
 type(tseries_average_commander)        :: xtseries_avg
 type(tseries_corrfilt_commander)       :: xtseries_corrfilt
 type(tseries_ctf_estimate_commander)   :: xtseries_ctf_estimate
-type(automask2D_nano_commander)        :: xautomsk2D_nano
 type(detect_atoms_commander)           :: xdetect_atoms
 type(atoms_rmsd_commander)             :: xatoms_rmsd
 type(radial_dependent_stats_commander) :: xradial_dependent_stats
@@ -245,8 +244,6 @@ select case(prg)
         call xtseries_corrfilt%execute(cline)
     case( 'tseries_ctf_estimate' )
         call xtseries_ctf_estimate%execute(cline)
-    case( 'automask2D_nano')
-        call xautomsk2D_nano%execute(cline)
     case('detect_atoms')
         call xdetect_atoms%execute(cline)
     case('radial_dependent_stats')

@@ -223,21 +223,25 @@ contains
         DebugPrint 'simple_masker::env_rproject done'
     end subroutine env_rproject
 
-    subroutine automask2D( imgs, mask, ngrow, winsz, edge, diams )
+    subroutine automask2D( imgs, mask, ngrow, winsz, edge, diams, write2disk )
         use simple_segmentation
         class(image),      intent(inout) :: imgs(:)
         logical,           intent(in)    :: mask(:)
         integer,           intent(in)    :: ngrow, winsz, edge
         real, allocatable, intent(inout) :: diams(:)
+        logical, optional, intent(in)    :: write2disk
         real, allocatable :: ccsizes(:)
         type(image) :: img_bin, cc_img
         integer     :: i, n, loc(1)
         real        :: thresh(3)
+        logical     :: l_write
         n = size(imgs)
         if( size(mask) /= n ) THROW_HARD('mask array size does not conform with image array; automask2D')
+        l_write = .true.
+        if( present(write2disk) ) l_write = write2disk
         if( allocated(diams) ) deallocate(diams)
         allocate(diams(n), source=0.)
-        write(logfhandle,'(A)') '>>> 2D AUTOMASKING'
+        if( l_write ) write(logfhandle,'(A)') '>>> 2D AUTOMASKING'
         do i=1,n
             call progress(i, n)
             call img_bin%copy(imgs(i))
@@ -246,13 +250,7 @@ contains
                 call img_bin%NLmean
                 ! binarise with robust Otsu
                 call otsu_robust_fast(img_bin, is2D=.true., noneg=.true., thresh=thresh)
-            else
-                call img_bin%zero
-            endif
-            call img_bin%write(BIN_OTSU, i)
-            if( mask(i) )then
-                ! grow ngrow layers
-                call img_bin%grow_bins(ngrow)
+                if( l_write ) call img_bin%write(BIN_OTSU, i)
                 ! find the largest connected component
                 call img_bin%find_connected_comps(cc_img)
                 ccsizes = cc_img%size_connected_comps()
@@ -261,26 +259,24 @@ contains
                 call cc_img%diameter_cc(loc(1), diams(i))
                 ! turn it into a binary image for mask creation
                 call cc_img%cc2bin(loc(1))
-            else
-                call cc_img%zero
-            endif
-            call cc_img%write(BIN_OTSU_GROW, i)
-            ! median filter to smoothen
-            if( mask(i) ) call cc_img%real_space_filter(winsz, 'median')
-            call cc_img%write(BIN_OTSU_GROW_MED, i)
-            if( mask(i) )then
+                ! grow ngrow layers
+                call img_bin%grow_bins(ngrow)
+                if( l_write ) call cc_img%write(BIN_OTSU_GROW, i)
+                ! median filter to smoothen
+                if( mask(i) ) call cc_img%real_space_filter(winsz, 'median')
+                if( l_write ) call cc_img%write(BIN_OTSU_GROW_MED, i)
                 ! apply cosine egde to soften mask (to avoid Fourier artefacts)
                 call cc_img%cos_edge(edge)
-                call cc_img%write(MSK_OTSU, i)
+                if( l_write ) call cc_img%write(MSK_OTSU, i)
                 ! zero negative values before applyting the mask
                 call imgs(i)%zero_neg
                 ! call imgs(i)%remove_neg
                 ! apply
                 call imgs(i)%mul(cc_img)
+                if( l_write ) call imgs(i)%write(AMSK_OTSU, i)
             else
-                call imgs(i)%zero
+                call img_bin%zero
             endif
-            call imgs(i)%write(AMSK_OTSU, i)
         end do
         call img_bin%kill
         call cc_img%kill
