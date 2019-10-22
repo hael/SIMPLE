@@ -90,13 +90,7 @@ contains
             self%moviename = trim(moviename)
         endif
         ! execute the motion_correction
-        if( cline%defined('nsig') )then
-            call motion_correct_iso(self%moviename, ctfvars, bfac_here, shifts,&
-                &gainref_fname=gainref_fname, nsig=params_glob%nsig)
-        else
-            call motion_correct_iso(self%moviename, ctfvars, bfac_here, shifts,&
-                &gainref_fname=gainref_fname)
-        endif
+        call motion_correct_iso(self%moviename, ctfvars, bfac_here, shifts, gainref_fname=gainref_fname)
         ! return shift stats
         nframes = size(shifts(:,1))
         call moment(shifts(:,1), shstats(1)%avg, shstats(1)%sdev, var, err)

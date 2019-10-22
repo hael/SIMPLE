@@ -200,7 +200,7 @@ contains
                 end do
             end do
         end do
-        self%polyfit_rmsd = sqrt(self%polyfit_rmsd/real(self%nframes*params_glob%nxpatch*params_glob%nypatch)) / params_glob%scale
+        self%polyfit_rmsd = sqrt(self%polyfit_rmsd/real(self%nframes*params_glob%nxpatch*params_glob%nypatch))
     end subroutine fit_polynomial
 
     subroutine plot_shifts(self)

@@ -76,10 +76,9 @@ contains
 
     ! PUBLIC METHODS, ISOTROPIC MOTION CORRECTION
 
-    subroutine motion_correct_init( movie_stack_fname, ctfvars, nsig, err, gainref_fname )
+    subroutine motion_correct_init( movie_stack_fname, ctfvars, err, gainref_fname )
         character(len=*),           intent(in)  :: movie_stack_fname !< input filename of stack
         type(ctfparams),            intent(in)  :: ctfvars           !< CTF parameters
-        real,                       intent(in)  :: nsig              !< # of std deviations for outliers detection
         logical,                    intent(out) :: err               !< error flag
         character(len=*), optional, intent(in)  :: gainref_fname     !< gain reference filename
         integer,       parameter :: HWINSZ = 6
@@ -169,7 +168,7 @@ contains
         if( l_gain ) call gainref%kill
         call tmpmovsum%new(ldim, smpd)
         call tmpmovsum%set_rmat(rmat_sum)
-        call tmpmovsum%cure_outliers(ncured, nsig, deadhot, outliers)
+        call tmpmovsum%cure_outliers(ncured, NSIGMAS, deadhot, outliers)
         call tmpmovsum%kill
         deallocate(rmat_sum)
         write(logfhandle,'(a,1x,i7)') '>>> # DEAD PIXELS:', deadhot(1)
@@ -262,14 +261,13 @@ contains
     end subroutine motion_correct_iso_polyn_direct_callback
 
     !> isotropic motion_correction of DDD movie
-    subroutine motion_correct_iso( movie_stack_fname, ctfvars, bfactor, shifts, gainref_fname, nsig )
+    subroutine motion_correct_iso( movie_stack_fname, ctfvars, bfactor, shifts, gainref_fname )
         character(len=*),           intent(in)    :: movie_stack_fname !< input filename of stack
         type(ctfparams),            intent(inout) :: ctfvars           !< CTF params
         real,                       intent(in)    :: bfactor           !< B-factor
         real,          allocatable, intent(out)   :: shifts(:,:)       !< the nframes shifts identified
         character(len=*), optional, intent(in)    :: gainref_fname     !< gain reference filename
-        real,             optional, intent(in)    :: nsig              !< # sigmas (for outlier removal)
-        real                                :: ave, sdev, var, minw, maxw, corr, nsig_here
+        real                                :: ave, sdev, var, minw, maxw, corr
         logical                             :: err, err_stat
         type(motion_align_hybrid)           :: hybrid_srch
         type(motion_align_iso_polyn_direct) :: align_iso_polyn_direct
@@ -279,9 +277,7 @@ contains
         if (ISO_POLYN_DIRECT) then
             call align_iso_polyn_direct%new
         end if
-        nsig_here = NSIGMAS
-        if( present(nsig) ) nsig_here = nsig
-        call motion_correct_init(movie_stack_fname, ctfvars, nsig_here, err, gainref_fname)
+        call motion_correct_init(movie_stack_fname, ctfvars, err, gainref_fname)
         if( err ) return
         call ftexp_transfmat_init(movie_frames_scaled(1))
         if (ISO_POLYN_DIRECT) then
