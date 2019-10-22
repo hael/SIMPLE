@@ -734,15 +734,6 @@ contains
                     pft(:,k) = pft(:,k) * sqrt(self%pssnr_filt(k,j))
                 endif
             enddo
-        else if( params_glob%l_whitespec )then
-            do k=params_glob%kfromto(1),params_glob%kstop
-                pw  = sum(csq(pft(:,k))) / real(self%pftsz)
-                if( pw > 0.000001 )then
-                    pft(:,k) = pft(:,k) / sqrt(pw)
-                else
-                    pft(:,k) = zero ! it means the power is really small, so we omit it
-                endif
-            enddo
         else if( params_glob%l_match_filt ) then
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw  = sum(csq(pft(:,k))) / real(self%pftsz)
@@ -769,15 +760,6 @@ contains
                     pft(:,k) = pft(:,k) * dsqrt(real(self%pssnr_filt(k,j),kind=dp) / pw)
                 else
                     pft(:,k) = pft(:,k) * dsqrt(real(self%pssnr_filt(k,j),kind=dp))
-                endif
-            enddo
-        else if( params_glob%l_whitespec )then
-            do k=params_glob%kfromto(1),params_glob%kstop
-                pw = sum(csq(pft(:,k))) / real(self%pftsz,kind=dp)
-                if( pw > 0.000001d0 )then
-                    pft(:,k) = pft(:,k) / dsqrt(pw)
-                else
-                    pft(:,k) = cmplx(0.d0,0.d0,kind=dp) ! it means the power is really small, so we omit it
                 endif
             enddo
         else if( params_glob%l_match_filt ) then
@@ -966,17 +948,7 @@ contains
         ! particle is assumed phase-flipped, reference untouched
         i = self%pinds(iptcl)
         if( iref == 0 .or. .not. params_glob%l_match_filt )then
-            if( params_glob%l_whitespec )then
-                do k=params_glob%kfromto(1),params_glob%kstop
-                    pw_ptcl = sum(csq(self%pfts_ptcls(:,k,i))) / real(self%pftsz)
-                    if( pw_ptcl > 0.000001 )then
-                        self%pfts_ptcls(:,k,i) = self%pfts_ptcls(:,k,i) / sqrt(pw_ptcl)
-                    else
-                        self%pfts_ptcls(:,k,i) = zero ! it means the power is really small, so we omit it
-                    endif
-                enddo
-            endif
-            ! memoize particle
+            ! just memoize the particle
             call self%memoize_fft(i)
             return
         endif
@@ -1975,7 +1947,7 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        if( params_glob%l_match_filt .or. params_glob%l_whitespec )then
+        if( params_glob%l_match_filt )then
             denom       = sqrt(sum(csq(pft_ref(:,params_glob%kfromto(1):params_glob%kstop))) * self%sqsums_ptcls(self%pinds(iptcl)))
             corr        = self%calc_corr_for_rot_8(pft_ref, self%pinds(iptcl), irot)
             f           = corr  / denom
@@ -2057,7 +2029,7 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        if( params_glob%l_match_filt .or. params_glob%l_whitespec )then
+        if( params_glob%l_match_filt )then
             denom       = sqrt(sum(csq(pft_ref(:,params_glob%kfromto(1):params_glob%kstop))) * self%sqsums_ptcls(self%pinds(iptcl)))
             pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
             corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)

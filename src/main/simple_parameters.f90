@@ -104,7 +104,6 @@ type :: parameters
     character(len=3)      :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)      :: tseries='no'         !< images represent a time-series(yes|no){no}
     character(len=3)      :: vis='no'             !< visualise(yes|no)
-    character(len=3)      :: whitespec='no'      !< power spectral whitening (no filter) of both reference and particle
     character(len=3)      :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
     character(len=LONGSTRLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt)
@@ -442,7 +441,6 @@ type :: parameters
     logical :: l_remap_cls      = .false.
     logical :: l_rec_soft       = .false.
     logical :: l_wglob          = .true.
-    logical :: l_whitespec      = .false.
     logical :: sp_required      = .false.
   contains
     procedure          :: new
@@ -622,7 +620,6 @@ contains
         call check_carg('vis',            self%vis)
         call check_carg('wcrit',          self%wcrit)
         call check_carg('wfun',           self%wfun)
-        call check_carg('whitespec',      self%whitespec)
         call check_carg('wscheme',        self%wscheme)
         call check_carg('zero',           self%zero)
         ! File args
@@ -1405,15 +1402,11 @@ contains
             case(OBJFUN_EUCLID)
                 self%l_corr_filt   = .false.
                 self%l_match_filt  = .false.
-                self%l_whitespec   = .false.
                 self%l_pssnr       = .false.
                 self%l_needs_sigma = .true.
             case(OBJFUN_CC)
-                if( trim(self%match_filt).eq.'yes' .and. trim(self%whitespec).eq.'yes' )&
-                &THROW_HARD('match_filt=yes and whitesepc=yes not allowed')
                 self%l_corr_filt   = (trim(self%corr_filt)  .eq.'yes') .and.       self%l_lpset
                 self%l_match_filt  = (trim(self%match_filt) .eq.'yes') .and. (.not.self%l_lpset)
-                self%l_whitespec   = (trim(self%whitespec)  .eq.'yes') .and.       self%l_lpset
                 self%l_pssnr       = (trim(self%pssnr)      .eq.'yes') .and. self%l_match_filt
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
                 if( self%l_needs_sigma )then
