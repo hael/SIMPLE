@@ -1781,23 +1781,26 @@ contains
             params%refs_odd  = 'start2Drefs_odd'//params%ext
             if( build%spproj%is_virgin_field('ptcl2D') .or. params%startit == 1 )then
                 if( params%tseries .eq. 'yes' )then
-                    cnt = 0
-                    do iptcl=1,params%nptcls,params%nptcls_per_cls
-                        cnt = cnt + 1
-                        params%ncls = cnt
-                        do ptclind=iptcl,min(params%nptcls, iptcl + params%nptcls_per_cls - 1)
-                            call build%spproj%os_ptcl2D%set(ptclind, 'class', real(cnt))
-                            call build%spproj%os_ptcl2D%e3set(ptclind,0.)
-                            call build%spproj%os_ptcl2D%set_shift(ptclind,[0.,0.])
+                    if( cline%defined('nptcls_per_cls') )then
+                        if( build%spproj%os_ptcl2D%any_state_zero() )then
+                            THROW_HARD('cluster2D_nano does not allow state=0 particles, prune project before execution; exec_cluster2D_distr')
+                        endif
+                        do iptcl=1,params%nptcls,params%nptcls_per_cls
+                            cnt = cnt + 1
+                            params%ncls = cnt
+                            do ptclind=iptcl,min(params%nptcls, iptcl + params%nptcls_per_cls - 1)
+                                call build%spproj%os_ptcl2D%set(ptclind, 'class', real(cnt))
+                            end do
                         end do
-                    end do
-                    call job_descr%set('ncls',int2str(params%ncls))
-                    call cline%set('ncls', real(params%ncls))
-                    call cline_make_cavgs%set('ncls', real(params%ncls))
-                    call cline_cavgassemble%set('ncls', real(params%ncls))
-                    call cline_make_cavgs%set('refs', params%refs)
-                    call xmake_cavgs%execute(cline_make_cavgs)
-                    call selection_from_tseries_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                        call job_descr%set('ncls',int2str(params%ncls))
+                        call cline%set('ncls', real(params%ncls))
+                        call cline_make_cavgs%set('ncls', real(params%ncls))
+                        call cline_cavgassemble%set('ncls', real(params%ncls))
+                        call cline_make_cavgs%set('refs', params%refs)
+                        call xmake_cavgs%execute(cline_make_cavgs)
+                    else
+                        call selection_from_tseries_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                    endif
                 else
                     call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
                 endif

@@ -67,6 +67,7 @@ type :: oris
     procedure          :: sample4update_and_incrcnt2D
     procedure          :: incr_updatecnt
     procedure          :: has_been_searched
+    procedure          :: any_state_zero
     procedure          :: ori2str
     procedure          :: get_ctfvars
     ! SETTERS
@@ -386,34 +387,27 @@ contains
         get_state = self%o(i)%get_state()
     end function get_state
 
+    ! assumes project has been pruned to remove state=0 particles
     subroutine get_tseries_neighs( self, nsz, ptcls2neigh  )
-        class(oris),          intent(in)    :: self
-        integer,              intent(in)    :: nsz
-        integer, allocatable, intent(inout) :: ptcls2neigh(:,:)
-        real, allocatable :: states(:), classes(:), tmp(:)
-        integer :: i, j, cls1, cls2, n
-        if( allocated(ptcls2neigh) ) deallocate(ptcls2neigh)
-        states = self%get_all('state')
-        n = count(states > 0.5)
-        tmp = self%get_all('class')
-        classes = pack(tmp, mask=states > 0.5)
-        allocate(ptcls2neigh(n,2), source=0)
-        do i=1,n-nsz
-            cls1 = nint(classes(i))
-            cls2 = nint(classes(i+1))
-            if( cls2 == cls1 )then
-                cycle
-            else
-                do j=max(1,i-nsz+1),min(self%n,i+nsz)
-                    ptcls2neigh(j,1) = cls1
-                    ptcls2neigh(j,2) = cls2
-                end do
-            endif
-        end do
-        if( allocated(states) ) deallocate(states)
-        if( allocated(tmp)    ) deallocate(tmp)
-        if( allocated(classes)) deallocate(classes)
-    end subroutine get_tseries_neighs
+       class(oris),          intent(in)    :: self
+       integer,              intent(in)    :: nsz
+       integer, allocatable, intent(inout) :: ptcls2neigh(:,:)
+       integer :: i, j, cls1, cls2
+       if( allocated(ptcls2neigh) ) deallocate(ptcls2neigh)
+       allocate(ptcls2neigh(self%n,2), source=0)
+       do i=1,self%n-nsz
+           cls1 = nint(self%o(i)%get('class'))
+           cls2 = nint(self%o(i+1)%get('class'))
+           if( cls2 == cls1 )then
+               cycle
+           else
+               do j=max(1,i-nsz+1),min(self%n,i+nsz)
+                   ptcls2neigh(j,1) = cls1
+                   ptcls2neigh(j,2) = cls2
+               end do
+           endif
+       end do
+   end subroutine get_tseries_neighs
 
     !>  \brief  is for checking if parameter is present
     pure function isthere_1( self, key ) result( is )
@@ -1296,6 +1290,17 @@ contains
         integer,     intent(in)    :: i
         has_been_searched = self%o(i)%has_been_searched()
     end function has_been_searched
+
+    logical function any_state_zero( self )
+        class(oris), intent(in) :: self
+        any_state_zero = .false.
+        do i=1,self%n
+            if( self%o(i)get_state == 0 )then
+                any_state_zero = .true.
+                return
+            endif
+        end do
+    end function any_state_zero
 
     !>  \brief  joins the hashes into a string that represent the ith ori
     function ori2str( self, i ) result( str )

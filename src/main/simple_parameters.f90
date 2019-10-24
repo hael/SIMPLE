@@ -174,6 +174,7 @@ type :: parameters
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN) :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
+    character(len=STDLEN) :: dir_exec=''          !< name of execution directory
     character(len=STDLEN) :: dockmode='rotshift'  !< mode for docking (rot|shift|rotshift)
     character(len=STDLEN) :: draw_color='white'   !< color in which to identify the picked particle
     character(len=STDLEN) :: executable=''        !< name of executable
@@ -520,6 +521,7 @@ contains
         call check_carg('cure',           self%cure)
         call check_carg('detector',       self%detector)
         call check_carg('dfunit',         self%dfunit)
+        call check_carg('dir_exec',       self%dir_exec)
         call check_carg('discrete',       self%discrete)
         call check_carg('diverse',        self%diverse)
         call check_carg('doalign',        self%doalign)
@@ -925,6 +927,8 @@ contains
             if( associated(self%ptr2prg) .and. .not. str_has_substr(self%executable,'private') )then
                 if( trim(self%prg) .eq. 'mkdir' )then
                     self%exec_dir = int2str(idir)//'_'//trim(self%dir)
+                else if( cline%defined('dir_exec') )then
+                    self%exec_dir = int2str(idir)//'_'//trim(self%dir_exec)
                 else
                     self%exec_dir = int2str(idir)//'_'//trim(self%prg)
                 endif

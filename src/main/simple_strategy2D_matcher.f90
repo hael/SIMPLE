@@ -50,7 +50,8 @@ contains
         integer               :: chunk_id(params_glob%fromp:params_glob%top)
         real                  :: frac_srch_space, rrnd
         integer               :: iptcl, i, fnr, cnt, updatecnt
-        logical               :: doprint, l_partial_sums, l_frac_update, l_snhc, l_greedy, l_stream
+        logical               :: doprint, l_partial_sums, l_frac_update
+        logical               :: l_snhc, l_greedy, l_stream, l_np_cls_defined
         if( L_BENCH )then
             t_init = tic()
             t_tot  = t_init
@@ -170,6 +171,7 @@ contains
         ! INITIALIZE STOCHASTIC IMAGE ALIGNMENT
         write(logfhandle,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         ! switch for polymorphic strategy2D construction
+        l_np_cls_defined = cline%defined('nptcls_per_cls')
         allocate(strategy2Dsrch(params_glob%fromp:params_glob%top))
         select case(trim(params_glob%neigh))
         case('yes')
@@ -208,7 +210,7 @@ contains
                     else
                         ! offline mode, based on iteration
                         if( l_greedy .or. (.not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt==1) )then
-                            if( trim(params_glob%tseries).eq.'yes' )then
+                            if( trim(params_glob%tseries).eq.'yes' .and. l_np_cls_defined )then
                                 allocate(strategy2D_tseries :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                             else
                                 allocate(strategy2D_greedy  :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)

@@ -296,6 +296,7 @@ contains
         call cline%set('autoscale',      'no')
         call cline%set('refine',     'greedy')
         call cline%set('tseries',       'yes')
+        if( .not. cline%defined('filter')  ) call cline%set('filter', 'nlmean')
         if( .not. cline%defined('lp')      ) call cline%set('lp',      1.)
         if( .not. cline%defined('ncls')    ) call cline%set('ncls',    20.)
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',   5.)
@@ -348,7 +349,8 @@ contains
         ! commander
         type(cluster2D_autoscale_commander) :: xcluster2D_distr
         ! static parameters
-        call cline%set('prg',     'cluster2D')
+        call cline%set('prg',      'cluster2D')
+        call cline%set('dir_exec', 'cluster2D_nano')
         call cline%set('match_filt',     'no')
         call cline%set('ptclw',          'no')
         call cline%set('center',        'yes')
