@@ -1003,6 +1003,11 @@ contains
             call make_avg_stack(params%stk, params%outstk, params%smpd)
             goto 999
         endif
+        ! rotationally average
+        if( params%roavg .eq. 'yes' )then
+            call roavg_imgfile(params%stk, params%outstk, params%angstep, params%smpd)
+            goto 999
+        endif
         ! add noise
         if( cline%defined('snr') )then
             call add_noise_imgfile(params%stk, params%outstk, params%snr, params%smpd)

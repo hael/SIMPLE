@@ -1426,7 +1426,7 @@ contains
         character(len=LONGSTRLEN) :: stack, boxfile_name, box_fname, ctfdoc
         integer                   :: nframes, imic, iptcl, ldim(3), nptcls,nmics,nmics_here,box, box_first, fromto(2)
         integer                   :: cnt, nmics_tot, lfoo(3), ifoo, noutside, state, iptcl_glob, cnt_stats
-        real                      :: ptcl_pos(2), meanv,sddevv,minv,maxv,stk_stats(4), dfx,dfy
+        real                      :: ptcl_pos(2), meanv,sddevv,minv,maxv,stk_stats(4),dfx,dfy,sdev_noise
         logical                   :: l_err, l_ctfpatch
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'no')
@@ -1616,7 +1616,7 @@ contains
                         ptcl_pos = boxdata(iptcl,1:2)
                         call micrograph%window(nint(ptcl_pos), params%box, build%img, noutside)
                         if( params%pcontrast .eq. 'black' ) call build%img%neg()
-                        call build%img%noise_norm(build%lmsk)
+                        call build%img%noise_norm(build%lmsk, sdev_noise)
                         ! keep track of stats
                         call build%img%stats(meanv, sddevv, maxv, minv, errout=l_err)
                         if( .not.l_err )then
@@ -1887,7 +1887,7 @@ contains
         character(len=LONGSTRLEN)     :: stack, rel_stack
         integer  :: nframes,imic,iptcl,nmics,prev_box,box_foo,cnt,nmics_tot,nptcls,stk_ind,cnt_stats
         integer :: prev_pos(2),new_pos(2),ishift(2),ldim(3),ldim_foo(3),noutside,fromp,top,istk
-        real    :: prev_shift(2), shift2d(2), shift3d(2), minv,maxv,meanv,sddevv,stk_stats(4)
+        real    :: prev_shift(2), shift2d(2), shift3d(2), minv,maxv,meanv,sddevv,stk_stats(4),sdev_noise
         logical :: l_3d, l_err
         call cline%set('mkdir','no')
         call params%new(cline)
@@ -2032,7 +2032,7 @@ contains
                         ! extracts
                         call micrograph%window(new_pos, params%box, img, noutside)
                         if( params%pcontrast .eq. 'black' ) call img%neg()
-                        call img%noise_norm(pmsk)
+                        call img%noise_norm(pmsk, sdev_noise)
                         call img%write(trim(adjustl(stack)), nptcls)
                         ! keep track of stats
                         call img%stats(meanv, sddevv, maxv, minv, errout=l_err)

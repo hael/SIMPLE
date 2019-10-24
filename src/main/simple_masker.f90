@@ -13,14 +13,14 @@ integer, parameter :: WINSZ = 3 !< real-space filter half-width window
 
 type, extends(image) :: masker
     private
-    real              :: msk           = 0.   !< maximum circular mask
-    real              :: amsklp        = 0.   !< maximum circular mask
-    real              :: mw            = 0.   !< moleclular weight (in kDa)
-    real              :: pix_thres     = 0.   !< binarisation threshold
-    integer           :: edge          = 3    !< edge width
-    integer           :: binwidth      = 1    !< additional layers to grow
-    integer           :: n             = 0    !< number of classes
-    integer           :: idim(3)       = 0    !< image dimension
+    real              :: msk       = 0.   !< maximum circular mask
+    real              :: amsklp    = 0.   !< maximum circular mask
+    real              :: mw        = 0.   !< moleclular weight (in kDa)
+    real              :: pix_thres = 0.   !< binarisation threshold
+    integer           :: edge      = 3    !< edge width
+    integer           :: binwidth  = 1    !< additional layers to grow
+    integer           :: n         = 0    !< number of classes
+    integer           :: idim(3)   = 0    !< image dimension
   contains
     procedure          :: automask3D
     procedure          :: resmask

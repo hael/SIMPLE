@@ -1797,7 +1797,7 @@ contains
                     call cline_cavgassemble%set('ncls', real(params%ncls))
                     call cline_make_cavgs%set('refs', params%refs)
                     call xmake_cavgs%execute(cline_make_cavgs)
-                    ! call selection_from_tseries_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                    call selection_from_tseries_imgfile(build%spproj, params%refs, params%box, params%ncls)
                 else
                     call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
                 endif

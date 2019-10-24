@@ -42,11 +42,10 @@ contains
         real,                       intent(in) :: smpd_in
         real,             optional, intent(in) :: lp_in, distthr_in, ndev_in
         character(len=*), optional, intent(in) :: dir_out
-        type(image)       :: refimg
-        integer           :: ifoo, iref
-        real              :: sigma
         logical, allocatable :: lmsk(:,:,:)
-        type(image)          :: mskimg
+        type(image)          :: refimg, mskimg
+        integer              :: ifoo, iref
+        real                 :: sdev_noise
         allocate(micname,  source=trim(micfname), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('picker;init, 1',alloc_stat)
         allocate(refsname, source=trim(refsfname), stat=alloc_stat)
@@ -86,7 +85,7 @@ contains
             call refs(iref)%new(ldim_refs, smpd_shrunken)
             call refimg%new([orig_box,orig_box,1], smpd)
             call refimg%read(refsname, iref)
-            call refimg%noise_norm(lmsk)
+            call refimg%noise_norm(lmsk, sdev_noise)
             call refimg%mask(msk*real(orig_box)/real(ldim_refs(1)), 'soft')
             call refimg%fft()
             call refimg%clip(refs(iref))

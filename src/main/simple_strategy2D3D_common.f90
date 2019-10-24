@@ -318,13 +318,13 @@ contains
         class(polarizer), intent(inout) :: img_out
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
-        real            :: x, y
+        real            :: x, y, sdev_noise
         x = build_glob%spproj_field%get(iptcl, 'x')
         y = build_glob%spproj_field%get(iptcl, 'y')
         ! CTF parameters
         ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
         ! normalise
-        call img_in%noise_norm(build_glob%lmsk)
+        call img_in%noise_norm(build_glob%lmsk, sdev_noise)
         ! move to Fourier space
         call img_in%fft()
         ! Shift image to rotational origin & phase-flipping
@@ -345,6 +345,8 @@ contains
         call img_in%ifft()
         ! clip image if needed
         call img_in%clip(img_out)
+        ! non-local means filter
+        if( trim(params_glob%filter) .eq. 'nlmean' ) call img_in%nlmean(sdev_noise=1.0)
         ! soft-edged mask
         if( params_glob%l_innermsk )then
             call img_out%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
@@ -419,6 +421,8 @@ contains
         call img_in%ifft()
         ! clip image if needed
         call img_in%clip(img_out)
+        ! non-local means filter
+        if( trim(params_glob%filter) .eq. 'nlmean' ) call img_in%nlmean(msk=params_glob%msk)
         ! apply mask
         if( params_glob%l_innermsk )then
             call img_out%mask(params_glob%msk, 'soft', &

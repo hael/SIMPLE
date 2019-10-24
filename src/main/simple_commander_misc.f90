@@ -304,7 +304,7 @@ contains
         integer, allocatable :: labels(:)
         logical, allocatable :: l_msk(:,:,:)
         integer  :: halfnoris, cnt1, cnt2, i, l, noris
-        real     :: cen1, cen2, sum1, sum2, sumvals
+        real     :: cen1, cen2, sum1, sum2, sumvals, sdev, sdev_noise
         real     :: minmax(2), width, height, sh1(3), ang
         if(params_glob%pgrp(1:1).eq.'d' .or. params_glob%pgrp(1:1).eq.'D')then
             ang = 360. / real(se%get_nsym()/2)
@@ -334,7 +334,7 @@ contains
         ! centers, calculates self to rotational averages images & radii
         do i = 1, noris
             call read_img%read(params_glob%stk,i)
-            call read_img%noise_norm(l_msk)
+            call read_img%noise_norm(l_msk, sdev_noise)
             ! center image
             sh1 = read_img%calc_shiftcen(params_glob%cenlp, params_glob%msk)
             call read_img%shift(-sh1)
@@ -398,7 +398,7 @@ contains
         do i=1,noris
             if(labels(i)==1)then
                 call read_img%read(params_glob%stk,i)
-                call read_img%noise_norm(l_msk)
+                call read_img%noise_norm(l_msk, sdev_noise)
                 call read_img%rtsq(0., -dsym_os%get(i,'x'), -dsym_os%get(i,'y'))
                 call topview%add(read_img)
             endif

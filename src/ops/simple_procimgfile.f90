@@ -10,6 +10,7 @@ implicit none
 public :: copy_imgfile, diff_imgfiles, pad_imgfile, resize_imgfile, clip_imgfile, mirror_imgfile
 public :: random_selection_from_imgfile, resize_and_clip_imgfile, resize_imgfile_double
 public :: subtr_backgr_imgfile, random_cls_from_imgfile, selection_from_tseries_imgfile
+public :: roavg_imgfile
 !! Normalisation
 public :: norm_bin_imgfile, norm_imgfile, norm_ext_imgfile, noise_norm_imgfile
 public :: shellnorm_imgfile, matchfilt_imgfile
@@ -213,12 +214,6 @@ contains
         call blank_img%kill
     end subroutine resize_imgfile
 
-    !>  \brief clip_imgfile is for clipping
-    !! \param fname2clip output filename
-    !! \param fname input filename
-    !! \param ldim_clip clipped logical dimension
-    !! \param smpd sampling distance
-    !!
     subroutine clip_imgfile( fname2clip, fname, ldim_clip, smpd )
         character(len=*), intent(in) :: fname2clip, fname
         integer,          intent(in) :: ldim_clip(3)
@@ -244,6 +239,28 @@ contains
             call img_clip%kill
         end if
     end subroutine clip_imgfile
+
+    subroutine roavg_imgfile( fname2roavg, fname, angstep, smpd )
+        character(len=*), intent(in) :: fname2roavg, fname
+        integer,          intent(in) :: angstep
+        real,             intent(in) :: smpd
+        type(image) :: img, img_roavg
+        integer     :: n, i, ldim(3)
+        call find_ldim_nptcls(fname2roavg, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile( n, ldim, 'roavg_imgfile' )
+        call img%new(ldim,smpd)
+        call img_roavg%new(ldim,smpd)
+        write(logfhandle,'(a)') '>>> ROTATIONALLY AVERAGING IMAGES'
+        do i=1,n
+            call progress(i,n)
+            call img%read(fname2roavg, i)
+            call img%roavg(angstep, img_roavg)
+            call img_roavg%write(fname, i)
+        end do
+        call img%kill
+        call img_roavg%kill
+    end subroutine roavg_imgfile
 
     !>  \brief mirror imgfile
     subroutine mirror_imgfile( fname2mirr, fname, mirr_flag, smpd )
@@ -486,6 +503,7 @@ contains
         type(image)          :: img
         integer              :: i, n, ldim(3)
         logical, allocatable :: lmsk(:,:,:)
+        real                 :: sdev_noise
         call find_ldim_nptcls(fname2norm, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'noise_norm_imgfile' )
@@ -494,7 +512,7 @@ contains
         do i=1,n
             call progress(i,n)
             call img%read(fname2norm, i)
-            call img%noise_norm(lmsk)
+            call img%noise_norm(lmsk, sdev_noise)
             call img%write(fname, i)
         end do
         call img%kill

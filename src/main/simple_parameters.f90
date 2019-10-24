@@ -79,6 +79,7 @@ type :: parameters
     character(len=3)      :: projw='no'           !< correct for uneven orientation distribution
     character(len=3)      :: pssnr='no'           !< correct for uneven orientation distribution
     character(len=3)      :: reliongroups='no'    !< export relion groupings
+    character(len=3)      :: roavg='no'           !< rotationally average images in stack
     character(len=3)      :: clsfrcs='no'
     character(len=3)      :: readwrite='no'
     character(len=3)      :: recdev='no'
@@ -215,7 +216,7 @@ type :: parameters
     integer(kind(ENUM_OBJFUN))     :: cc_objfun    = OBJFUN_CC     !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1)
     integer(kind=kind(ENUM_WCRIT)) :: wcrit_enum   = CORRW_CRIT    !< criterium for correlation-based weights
     ! integer variables in ascending alphabetical order
-    integer :: astep=1
+    integer :: angstep=5
     integer :: avgsz=0
     integer :: batchsz=0
     integer :: balance=0           !< max pop for balancing restraint{0}
@@ -598,6 +599,7 @@ contains
         call check_carg('rm_outliers',    self%rm_outliers)
         call check_carg('rnd',            self%rnd)
         call check_carg('roalgn',         self%roalgn)
+        call check_carg('roavg',          self%roavg)
         call check_carg('round',          self%round)
         call check_carg('shalgn',         self%shalgn)
         call check_carg('shbarrier',      self%shbarrier)
@@ -671,7 +673,7 @@ contains
         call check_dir('dir_target',     self%dir_target)
         call check_dir('star_datadir',   self%star_datadir)
         ! Integer args
-        call check_iarg('astep',          self%astep)
+        call check_iarg('angstep',        self%angstep)
         call check_iarg('avgsz',          self%avgsz)
         call check_iarg('balance',        self%balance)
         call check_iarg('binwidth',       self%binwidth)

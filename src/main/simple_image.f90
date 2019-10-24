@@ -4717,18 +4717,30 @@ contains
     end subroutine real_space_filter
 
     !>  \brief Non-local mean filter
-    subroutine NLmean(self)
-        class(image), intent(inout) :: self
+    subroutine NLmean( self, msk, sdev_noise )
+        class(image),   intent(inout) :: self
+        real, optional, intent(in)    :: msk
+        real, optional, intent(in)    :: sdev_noise
         real,  allocatable :: rmat_pad(:,:)
         integer, parameter :: DIM_SW  = 3   ! good if use Euclidean distance
         integer, parameter :: CFR_BOX = 10  ! as suggested in the paper, consider a box 21x21
-        real               :: exponentials(2*CFR_BOX+1,2*CFR_BOX+1), sw_px(DIM_SW,DIM_SW)
-        real               :: z, sigma, h, h_sq, avg
-        integer            :: i, j, m, n, pad, indi, indj
+        real    :: exponentials(2*CFR_BOX+1,2*CFR_BOX+1), sw_px(DIM_SW,DIM_SW)
+        real    :: z, sigma, h, h_sq, avg, mmsk
+        integer :: i, j, m, n, pad, indi, indj
         if( self%is_3d() ) THROW_HARD('2D images only; NLmean')
         if( self%ft )      THROW_HARD('Real space only;NLmean')
-        pad   = CFR_BOX + 2
-        sigma = self%noisesdev(3.) ! estimation of noise, TO CHANGE
+        mmsk = real(self%ldim(1)) / 2. - real(DIM_SW)
+        if( present(msk) ) mmsk = msk
+        if( present(sdev_noise) )then
+            if( sdev_noise > SMALL )then
+                sigma = sdev_noise
+            else
+                sigma = self%noisesdev(mmsk) ! estimation of noise
+            endif
+        else
+            sigma = self%noisesdev(mmsk) ! estimation of noise
+        endif
+        pad = CFR_BOX + 2
         h     = 4.*sigma
         h_sq  = h**2.
         avg   = sum(self%rmat(:self%ldim(1),:self%ldim(2),1)) / real(product(self%ldim))
@@ -6945,7 +6957,8 @@ contains
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         class(image), intent(inout) :: self_out
         integer :: starts(3), stops(3)
-        call self%noise_norm(lmsk)
+        real    :: sdev_noise
+        call self%noise_norm(lmsk, sdev_noise)
         starts        = (self_out%ldim - self%ldim) / 2 + 1
         stops         = self_out%ldim - starts + 1
         self_out%ft   = .false.
@@ -8156,19 +8169,22 @@ contains
         if( sdev     > 0.   ) self%rmat = self%rmat / sdev
     end subroutine norm_ext
 
-    subroutine noise_norm( self, lmsk )
+    subroutine noise_norm( self, lmsk, sdev_noise )
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
+        real,         intent(inout) :: sdev_noise
         integer :: npix
         real    :: ave, var, ep
         npix = product(self%ldim) - count(lmsk) ! # background pixels
         ave  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.not. lmsk) / real(npix) ! background average
         if( abs(ave) > TINY ) self%rmat = self%rmat - ave
-        ep     = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),      mask=.not. lmsk)
-        var    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0, mask=.not. lmsk)
-        var    = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
+        ep         = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),      mask=.not. lmsk)
+        var        = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0, mask=.not. lmsk)
+        var        = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
+        sdev_noise = 0.
         if( is_a_number(var) )then
-            if( var > 0. ) self%rmat = self%rmat / sqrt(var)
+            sdev_noise = sqrt(var)
+            if( var > 0. ) self%rmat = self%rmat / sdev_noise
         endif
     end subroutine noise_norm
 
