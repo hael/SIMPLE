@@ -1293,9 +1293,10 @@ contains
 
     logical function any_state_zero( self )
         class(oris), intent(in) :: self
+        integer :: i
         any_state_zero = .false.
         do i=1,self%n
-            if( self%o(i)get_state == 0 )then
+            if( self%o(i)%get_state() == 0 )then
                 any_state_zero = .true.
                 return
             endif
