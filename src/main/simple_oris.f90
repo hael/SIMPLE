@@ -391,7 +391,7 @@ contains
         integer,              intent(in)    :: nsz
         integer, allocatable, intent(inout) :: ptcls2neigh(:,:)
         real, allocatable :: states(:), classes(:), tmp(:)
-        integer :: i, j, cls1, cls2
+        integer :: i, j, cls1, cls2, n
         if( allocated(ptcls2neigh) ) deallocate(ptcls2neigh)
         states = self%get_all('state')
         n = count(states > 0.5)
