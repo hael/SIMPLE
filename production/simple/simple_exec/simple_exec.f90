@@ -49,21 +49,22 @@ type(dock_volpair_commander)    :: xdock_volpair
 type(postprocess_commander)     :: xpostprocess
 
 ! IMAGE PROCESSING PROGRAMS
-type(pspec_stats_commander) :: xpspecstats
-type(mask_commander)        :: xmask
-type(fsc_commander)         :: xfsc
-type(local_res_commander)   :: xlocal_res
-type(centervol_commander)   :: xcenter
-type(reproject_commander)   :: xreproject
-type(volops_commander)      :: xvolops
-type(convert_commander)     :: xconvert
-type(ctfops_commander)      :: xctfops
-type(filter_commander)      :: xfilter
-type(normalize_commander)   :: xnormalize
-type(scale_commander)       :: xscale
-type(stack_commander)       :: xstack
-type(stackops_commander)    :: xstackops
-type(shift_commander)       :: xshift
+type(pspec_stats_commander)   :: xpspecstats
+type(mask_commander)          :: xmask
+type(fsc_commander)           :: xfsc
+type(local_res_commander)     :: xlocal_res
+type(centervol_commander)     :: xcenter
+type(reproject_commander)     :: xreproject
+type(volops_commander)        :: xvolops
+type(convert_commander)       :: xconvert
+type(ctfops_commander)        :: xctfops
+type(filter_commander)        :: xfilter
+type(normalize_commander)     :: xnormalize
+type(scale_commander)         :: xscale
+type(stack_commander)         :: xstack
+type(stackops_commander)      :: xstackops
+type(shift_commander)         :: xshift
+type(estimate_diam_commander) :: xestimate_diam
 
 ! ORIENTATION PROCESSING PROGRAMS
 type(make_oris_commander) :: xmake_oris
@@ -84,11 +85,8 @@ type(simulate_movie_commander)       :: xsimulate_movie
 type(simulate_subtomogram_commander) :: xsimulate_subtomogram
 type(simulate_atoms_commander)       :: xsimulate_atoms
 
-
 ! TIME-SERIES (NANO-PARTICLE) PROGRAMS
 type(tseries_import_commander)         :: xtseries_import
-type(tseries_estimate_diam_commander)  :: xtseries_estimate_diam
-type(tseries_preproc_commander)        :: xtseries_preproc
 type(tseries_average_commander)        :: xtseries_avg
 type(tseries_corrfilt_commander)       :: xtseries_corrfilt
 type(tseries_ctf_estimate_commander)   :: xtseries_ctf_estimate
@@ -198,6 +196,8 @@ select case(prg)
         call xstackops%execute(cline)
     case( 'shift' )
         call xshift%execute(cline)
+    case( 'estimate_diam')
+        call xestimate_diam%execute(cline)
 
     ! ORIENTATION PROCESSING PROGRAMS
     case( 'make_oris' )
@@ -234,10 +234,6 @@ select case(prg)
     ! TIME-SERIES (NANO-PARTICLE) PROGRAMS
     case( 'tseries_import' )
         call xtseries_import%execute(cline)
-    case( 'tseries_estimate_diam')
-        call xtseries_estimate_diam%execute(cline)
-    case( 'tseries_preproc')
-        call xtseries_preproc%execute(cline)
     case( 'tseries_average')
         call xtseries_avg%execute(cline)
     case( 'tseries_corrfilt')

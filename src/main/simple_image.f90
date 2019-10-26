@@ -215,6 +215,7 @@ contains
     procedure          :: order_cc
     procedure          :: polish_cc
     procedure          :: diameter_cc
+    procedure          :: diameter_bin
     procedure          :: cc2bin
     procedure          :: dilatation
     procedure          :: erosion
@@ -3461,7 +3462,7 @@ contains
         class(image), intent(inout) :: self
         integer,      intent(in)    :: n_cc
         real,         intent(out)   :: diam
-        integer, allocatable :: pos(:,:)         !position of the pixels of a fixed cc
+        integer, allocatable :: pos(:,:)         ! position of the pixels of a fixed cc
         integer, allocatable :: imat_cc(:,:,:)
         logical, allocatable :: msk(:) ! For using function pixels_dist
         real  :: center_of_mass(3)     ! geometrical center of mass
@@ -3483,6 +3484,33 @@ contains
         if(allocated(msk)) deallocate(msk)
         if(allocated(pos)) deallocate(pos)
     end subroutine diameter_cc
+
+    subroutine diameter_bin( self, diam )
+        class(image), intent(inout) :: self
+        real,         intent(out)   :: diam
+        integer :: i, ii, j, jj, k, kk, maxdistsq, distsq
+        maxdistsq = 0
+        !$omp parallel do collapse(3) default(shared) private(i,j,k,ii,jj,kk,distsq) schedule(static)&
+        !$omp proc_bind(close) reduction(max:maxdistsq)
+        do i=1,self%ldim(1)
+            do j=1,self%ldim(2)
+                do k=1,self%ldim(3)
+                    if( self%rmat(i,j,k) < 0.5 ) cycle
+                    do ii=1,self%ldim(1)
+                        do jj=1,self%ldim(2)
+                            do kk=1,self%ldim(3)
+                                if( self%rmat(ii,jj,kk) < 0.5 ) cycle
+                                distsq = sum(([i,j,k] - [ii,jj,kk])**2)
+                                if( distsq > maxdistsq ) maxdistsq = distsq
+                            end do
+                        end do
+                    end do
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        diam = sqrt(real(maxdistsq))
+    end subroutine diameter_bin
 
     ! This subroutine modifies the input cc image by making it bin
     ! where just the cc n_cc is kept.

@@ -7,6 +7,8 @@ use simple_commander_base, only: commander_base
 use simple_oris,           only: oris
 use simple_parameters,     only: parameters
 use simple_sp_project,     only: sp_project
+use simple_image,          only : image
+use simple_nanoparticles_mod
 use simple_qsys_funs
 implicit none
 
@@ -15,8 +17,7 @@ public :: tseries_track_commander_distr
 public :: tseries_track_commander
 public :: cleanup2D_nano_commander_distr
 public :: cluster2D_nano_commander_distr
-public :: tseries_estimate_diam_commander
-public :: tseries_preproc_commander
+public :: estimate_diam_commander
 public :: tseries_average_commander
 public :: tseries_corrfilt_commander
 public :: tseries_ctf_estimate_commander
@@ -50,14 +51,10 @@ type, extends(commander_base) :: cluster2D_nano_commander_distr
   contains
     procedure :: execute      => exec_cluster2D_nano_distr
 end type cluster2D_nano_commander_distr
-type, extends(commander_base) :: tseries_estimate_diam_commander
+type, extends(commander_base) :: estimate_diam_commander
   contains
-    procedure :: execute      => exec_tseries_estimate_diam
-end type tseries_estimate_diam_commander
-type, extends(commander_base) :: tseries_preproc_commander
-  contains
-    procedure :: execute      => exec_tseries_preproc
-end type tseries_preproc_commander
+    procedure :: execute      => exec_estimate_diam
+end type estimate_diam_commander
 type, extends(commander_base) :: tseries_average_commander
   contains
     procedure :: execute      => exec_tseries_average
@@ -296,11 +293,10 @@ contains
         call cline%set('autoscale',      'no')
         call cline%set('refine',     'greedy')
         call cline%set('tseries',       'yes')
-        if( .not. cline%defined('filter')  ) call cline%set('filter', 'nlmean')
         if( .not. cline%defined('lp')      ) call cline%set('lp',      1.)
         if( .not. cline%defined('ncls')    ) call cline%set('ncls',    20.)
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',   5.)
-        if( .not. cline%defined('trs')     ) call cline%set('trs',     5.)
+        if( .not. cline%defined('trs')     ) call cline%set('trs',     10.)
         if( .not. cline%defined('maxits')  ) call cline%set('maxits', 15.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
@@ -359,7 +355,6 @@ contains
         call cline%set('refine',     'greedy')
         call cline%set('graphene_filt',  'no')
         ! dynamic parameters
-        if( .not. cline%defined('filter')         ) call cline%set('filter',    'nlmean')
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',        15.0)
         if( .not. cline%defined('lpstart')        ) call cline%set('lpstart',        1.0)
         if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',         1.0)
@@ -373,45 +368,74 @@ contains
         call simple_end('**** SIMPLE_CLUSTER2D_NANO NORMAL STOP ****')
     end subroutine exec_cluster2D_nano_distr
 
-    subroutine exec_tseries_estimate_diam( self, cline )
-        use simple_tseries_preproc
-        class(tseries_estimate_diam_commander), intent(inout) :: self
-        class(cmdline),                         intent(inout) :: cline
-        type(parameters) :: params
-        integer :: funit
-        real    :: avg_diam, med_diam, max_diam, mskrad
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp', 5.0)
-        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir','yes')
+    subroutine exec_estimate_diam( self, cline )
+        use simple_segmentation, only: otsu_robust_fast
+        class(estimate_diam_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        ! constants
+        character(len=*), parameter :: FILT   = 'nlmean_filtered.mrc'
+        character(len=*), parameter :: BINARY = 'binarised.mrc'
+        ! varables
+        type(parameters)            :: params
+        type(image),    allocatable :: imgs(:)      ! images
+        type(image)                 :: cc_img       ! connected components image
+        type(stats_struct)          :: diamstats    ! stats struct
+        integer,        allocatable :: ccsizes(:)   ! connected component sizes
+        real,           allocatable :: diams(:)     ! diameters
+        integer :: funit, i, loc(1)
+        real    :: med_diam, thresh(3)
+        if( .not. cline%defined('lp')    ) call cline%set('lp',     5.0)
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir','yes')
         call params%new(cline)
-        call init_tseries_preproc
-        call tseries_estimate_diam(avg_diam, med_diam, max_diam, mskrad)
-        call fopen(funit, file='stats.txt', status='replace')
-        write(funit,'(A,F6.1)') '>>> AVERAGE DIAMETER      (IN PIXELS): ', avg_diam
-        write(funit,'(A,F6.1)') '>>> MEDIAN  DIAMETER      (IN PIXELS): ', med_diam
-        write(funit,'(A,F6.1)') '>>> MAXIMUM DIAMETER      (IN PIXELS): ', max_diam
-        write(funit,'(A,F6.1)') '>>> MAX MASK RADIUS (MSK) (IN PIXELS): ', mskrad
+        ! allocate & read cavgs
+        allocate(imgs(params%nptcls), diams(params%nptcls))
+        diams = 0.
+        do i=1,params%nptcls
+            call imgs(i)%new([params%box,params%box,1],  params%smpd)
+            call imgs(i)%read(params%stk, i)
+        end do
+        ! prepare thread safe images in image class
+        call imgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
+        write(logfhandle,'(A)') '>>> ESTIMATING DIAMETERS THROUGH BINARY IMAGE PROCESSING'
+        call fopen(funit, file='diameters_in_pixels.txt', status='replace')
+        do i=1,params%nptcls
+            call progress(i,params%nptcls)
+            ! non-local mneans filter for denoising
+            call imgs(i)%NLmean
+            call imgs(i)%write(FILT, i)
+            ! binarise with Otsu
+            call otsu_robust_fast(imgs(i), is2D=.false., noneg=.false., thresh=thresh)
+            call imgs(i)%write(BINARY, i)
+            ! estimate diameter
+            call imgs(i)%diameter_bin(diams(i))
+            write(funit,'(F6.1)') diams(i)
+        end do
         call fclose(funit)
-        call kill_tseries_preproc
-        call simple_end('**** SIMPLE_TSERIES_ESTIMATE_DIAM NORMAL STOP ****')
-    end subroutine exec_tseries_estimate_diam
-
-    subroutine exec_tseries_preproc( self, cline )
-        use simple_tseries_preproc
-        class(tseries_preproc_commander), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
-        type(parameters) :: params
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',       5.0)
-        if( .not. cline%defined('width')  ) call cline%set('width',      12.0)
-        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'preproc_imgs.mrcs')
-        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',     'yes')
-        call params%new(cline)
-        call init_tseries_preproc
-
-        ! to be filled in
-
-        call kill_tseries_preproc
-        call simple_end('**** SIMPLE_TSERIES_PREPROC NORMAL STOP ****')
-    end subroutine exec_tseries_preproc
+        call calc_stats(diams, diamstats)
+        ! output
+        med_diam = median(diams)
+        write(logfhandle,'(A,F6.1)') '>>> AVG    DIAMETER (IN PIXELS): ', diamstats%avg
+        write(logfhandle,'(A,F6.1)') '>>> SDEV   DIAMETER (IN PIXELS): ', diamstats%sdev
+        write(logfhandle,'(A,F6.1)') '>>> MEDIAN DIAMETER (IN PIXELS): ', med_diam
+        write(logfhandle,'(A,F6.1)') '>>> MAX    DIAMETER (IN PIXELS): ', diamstats%maxv
+        write(logfhandle,'(A,F6.1)') '>>> MIN    DIAMETER (IN PIXELS): ', diamstats%minv
+        call fopen(funit, file='diameter_stats.txt', status='replace')
+        write(funit,     '(A,F6.1)') '>>> AVG    DIAMETER (IN PIXELS): ', diamstats%avg
+        write(funit,     '(A,F6.1)') '>>> SDEV   DIAMETER (IN PIXELS): ', diamstats%sdev
+        write(funit,     '(A,F6.1)') '>>> MEDIAN DIAMETER (IN PIXELS): ', med_diam
+        write(funit,     '(A,F6.1)') '>>> MAX    DIAMETER (IN PIXELS): ', diamstats%maxv
+        write(funit,     '(A,F6.1)') '>>> MIN    DIAMETER (IN PIXELS): ', diamstats%minv
+        call fclose(funit)
+        ! destruct
+        do i=1,size(imgs)
+            call imgs(i)%kill
+        end do
+        call cc_img%kill
+        if( allocated(ccsizes) ) deallocate(ccsizes)
+        deallocate(imgs, diams)
+        ! end gracefully
+        call simple_end('**** SIMPLE__ESTIMATE_DIAM NORMAL STOP ****')
+    end subroutine exec_estimate_diam
 
     subroutine exec_tseries_average( self, cline )
         use simple_tseries_averager
@@ -449,7 +473,6 @@ contains
         ! for background subtraction in time-series data. The goal is to subtract the two graphene
         ! peaks @ 2.14 A and @ 1.23 A. This is done by band-pass filtering the background image,
         ! recommended (and default settings) are hp=5.0 lp=1.1 and width=5.0.
-        use simple_image, only: image
         use simple_ctf,   only: ctf
         class(tseries_backgr_subtr_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
@@ -526,8 +549,7 @@ contains
     end subroutine exec_tseries_backgr_subtr
 
     subroutine exec_tseries_ctf_estimate( self, cline )
-        use simple_image,             only: image
-        use simple_ctf_estimate_fit,  only: ctf_estimate_fit
+        use simple_ctf_estimate_fit, only: ctf_estimate_fit
         class(tseries_ctf_estimate_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         character(len=LONGSTRLEN), parameter :: pspec_fname  = 'tseries_ctf_estimate_pspec.mrc'
@@ -674,8 +696,6 @@ contains
     ! atomic positions are identified, validated and written on
     ! a file.
     subroutine exec_detect_atoms( self, cline )
-        use simple_nanoparticles_mod
-        use simple_image, only : image
         class(detect_atoms_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline !< command line input
         type(parameters)   :: params
@@ -697,8 +717,6 @@ contains
     end subroutine exec_detect_atoms
 
     subroutine exec_atoms_rmsd( self, cline )
-        use simple_nanoparticles_mod
-        use simple_image,          only : image
         use simple_ori,            only: ori
         use simple_projector,      only: projector
         use simple_projector_hlev, only:rotvol
@@ -816,8 +834,6 @@ contains
     ! Calculates distances distribution across the whole nanoparticle
     ! and radial dependent statistics.
     subroutine exec_radial_dependent_stats( self, cline )
-        use simple_nanoparticles_mod
-        use simple_image, only : image
         class(radial_dependent_stats_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline !< command line input
         type(parameters)   :: params
@@ -853,8 +869,6 @@ contains
     end subroutine exec_radial_dependent_stats
 
     subroutine exec_atom_cluster_analysis( self, cline )
-        use simple_nanoparticles_mod
-        use simple_image, only : image
         class(atom_cluster_analysis_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline !< command line input
         type(parameters)   :: params
@@ -882,8 +896,6 @@ contains
     end subroutine exec_atom_cluster_analysis
 
     subroutine exec_nano_softmask( self, cline )
-        use simple_nanoparticles_mod
-        use simple_image, only : image
         class(nano_softmask_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline !< command line input
         type(parameters)   :: params

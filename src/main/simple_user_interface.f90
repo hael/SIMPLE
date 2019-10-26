@@ -88,6 +88,7 @@ type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
 type(simple_program), target :: detect_atoms
 type(simple_program), target :: dock_volpair
+type(simple_program), target :: estimate_diam
 type(simple_program), target :: export_relion
 type(simple_program), target :: export_starproject
 type(simple_program), target :: extract
@@ -150,12 +151,10 @@ type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
 type(simple_program), target :: tseries_import
-type(simple_program), target :: tseries_estimate_diam
 type(simple_program), target :: tseries_average
 type(simple_program), target :: tseries_corrfilt
 type(simple_program), target :: tseries_ctf_estimate
 type(simple_program), target :: tseries_track
-type(simple_program), target :: tseries_preproc
 type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
 type(simple_program), target :: volops
@@ -287,6 +286,7 @@ contains
         call new_ctfops
         call new_detect_atoms
         call new_dock_volpair
+        call new_estimate_diam
         call new_extract
         call new_export_relion
         call new_export_starproject
@@ -349,12 +349,10 @@ contains
         call new_symmetrize_map
         call new_symmetry_test
         call new_tseries_import
-        call new_tseries_estimate_diam
         call new_tseries_average
         call new_tseries_corrfilt
         call new_tseries_ctf_estimate
         call new_tseries_track
-        call new_tseries_preproc
         call new_update_project
         call new_vizoris
         call new_volops
@@ -492,6 +490,8 @@ contains
                 ptr2prg => detect_atoms
             case('dock_volpair')
                 ptr2prg => dock_volpair
+            case('estimate_diam')
+                ptr2prg => estimate_diam
             case('extract')
                 ptr2prg => extract
             case('export_relion')
@@ -616,8 +616,6 @@ contains
                 ptr2prg => symmetry_test
             case('tseries_import')
                 ptr2prg => tseries_import
-            case('tseries_estimate_diam')
-                ptr2prg => tseries_estimate_diam
             case('tseries_average')
                 ptr2prg => tseries_average
             case('tseries_corrfilt')
@@ -626,8 +624,6 @@ contains
                 ptr2prg => tseries_ctf_estimate
             case('tseries_track')
                 ptr2prg => tseries_track
-            case('tseries_preproc')
-                ptr2prg => tseries_preproc
             case('update_project')
                 ptr2prg => update_project
             case('vizoris')
@@ -679,6 +675,7 @@ contains
         write(logfhandle,'(A)') ctfops%name
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') dock_volpair%name
+        write(logfhandle,'(A)') estimate_diam%name
         write(logfhandle,'(A)') export_relion%name
         write(logfhandle,'(A)') export_starproject%name
         write(logfhandle,'(A)') filter%name
@@ -724,11 +721,9 @@ contains
         write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
         write(logfhandle,'(A)') tseries_import%name
-        write(logfhandle,'(A)') tseries_estimate_diam%name
         write(logfhandle,'(A)') tseries_average%name
         write(logfhandle,'(A)') tseries_corrfilt%name
         write(logfhandle,'(A)') tseries_ctf_estimate%name
-        write(logfhandle,'(A)') tseries_preproc%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') volops%name
@@ -1488,6 +1483,32 @@ contains
         ! computer controls
         call dock_volpair%set_input('comp_ctrls', 1, nthr)
     end subroutine new_dock_volpair
+
+    subroutine new_estimate_diam
+        ! PROGRAM SPECIFICATION
+        call estimate_diam%new(&
+        &'estimate_diam',&                                                                                    ! name
+        &'Estimation of a suitable mask radius for nanoparticle time-series',&                                        ! descr_short
+        &'is a program for estimation of a suitable mask radius for spherical masking of nanoparticle time-series ',& ! descr_long
+        &'simple_exec',&                                                                                              ! executable
+        &1, 1, 0, 0, 1, 0, 1, .false.)                                               ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call estimate_diam%set_input('img_ios', 1, stk)
+        estimate_diam%img_ios(1)%required = .true.
+        ! parameter input/output
+        call estimate_diam%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call estimate_diam%set_input('filt_ctrls', 1, lp)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call estimate_diam%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_estimate_diam
 
     subroutine new_extract
         ! PROGRAM SPECIFICATION
@@ -3793,64 +3814,6 @@ contains
         call tseries_track%set_input('comp_ctrls', 1, nparts)
         call tseries_track%set_input('comp_ctrls', 2, nthr)
     end subroutine new_tseries_track
-
-    subroutine new_tseries_estimate_diam
-        ! PROGRAM SPECIFICATION
-        call tseries_estimate_diam%new(&
-        &'tseries_estimate_diam',&                                                                                    ! name
-        &'Estimation of a suitable mask radius for nanoparticle time-series',&                                        ! descr_short
-        &'is a program for estimation of a suitable mask radius for spherical masking of nanoparticle time-series ',& ! descr_long
-        &'simple_exec',&                                                                                              ! executable
-        &1, 1, 0, 0, 1, 0, 1, .false.)                                               ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call tseries_estimate_diam%set_input('img_ios', 1, stk)
-        tseries_estimate_diam%img_ios(1)%required = .true.
-        ! parameter input/output
-        call tseries_estimate_diam%set_input('parm_ios', 1, smpd)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call tseries_estimate_diam%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit',&
-        &'Limit for low-pass filter used in binarisation prior to determination of the center of gravity of &
-        &the nanoparticles and centering', 'centering low-pass limit in Angstroms{5}', .false., 5.)
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call tseries_estimate_diam%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_tseries_estimate_diam
-
-    subroutine new_tseries_preproc
-        ! PROGRAM SPECIFICATION
-        call tseries_preproc%new(&
-        &'tseries_preproc',&                                             ! name
-        &'Pre-processing of nanoparticle time-series',&                  ! descr_short
-        &'is a program for pre-processing of nanoparticle time-series',& ! descr_long
-        &'simple_exec',&                                                 ! executable
-        &2, 1, 0, 0, 1, 2, 1, .false.)                                   ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call tseries_preproc%set_input('img_ios', 1, stk)
-        tseries_preproc%img_ios(1)%required = .true.
-        call tseries_preproc%set_input('img_ios', 2, outstk)
-        ! parameter input/output
-        call tseries_preproc%set_input('parm_ios', 1, smpd)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call tseries_preproc%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the nanoparticles and centering', 'centering low-pass limit in &
-        &Angstroms{5}', .false., 5.)
-        ! mask controls
-        call tseries_preproc%set_input('mask_ctrls', 1, msk)
-        call tseries_preproc%set_input('mask_ctrls', 2, 'width', 'num', 'Falloff cosine edge', 'Number of cosine edge pixels for smoothening', '# pixels cosine edge{12}', .false., 12.)
-        ! computer controls
-        call tseries_preproc%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_tseries_preproc
 
     subroutine new_update_project
         ! PROGRAM SPECIFICATION
