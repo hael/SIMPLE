@@ -407,7 +407,8 @@ contains
             ! works out atoms_obj dimension
             msksq  = (params%moldiam/2.)**2.
             radius = atoms_obj%get_radius(1)
-            lfcc   = 2.*sqrt(2.)*radius
+            ! lfcc   = 2.*sqrt(2.)*radius
+            lfcc   = 3.76
             hlfcc  = lfcc/2.
             ncubes = floor(real(params%box) * params%smpd / lfcc)
             ! atoms at edges

@@ -21,7 +21,7 @@ type(ctf)        :: tfun
 type(projector)  :: vol_pad
 character(len=:), allocatable :: path
 real             :: snr_pink, snr_detector, x,y, crosssection_C, crosssection, scalefactor
-integer          :: i,envstat
+integer          :: i,envstat,pad
 character(len=LONGSTRLEN), parameter :: graphene_fname = 'sheet.mrc'
 character(len=LONGSTRLEN), parameter :: particle_fname = 'ptcl.mrc'
 call cline%checkvar('smpd',      1)
@@ -31,7 +31,6 @@ call cline%checkvar('nthr',      4)
 call cline%checkvar('bfac',      5)
 call cline%checkvar('moldiam',   6)
 call cline%checkvar('element',   7)
-call cline%checkvar('outstk',    8)
 call cline%parse_oldschool
 call cline%check
 call cline%set('prg','simnano')
@@ -76,6 +75,7 @@ case('AU')
     crosssection = 5.14
 end select
 scalefactor = crosssection_C / crosssection
+pad = len(int2str(params%nptcls))
 ! graphene slice
 call graphene_vol%new([params%box,params%box,params%box],params%smpd)
 call graphene%new([params%boxpd,params%boxpd,1],params%smpd)
@@ -103,7 +103,7 @@ if( params%griddev.eq.'yes' ) call particle_vol%div_w_instrfun(params%alpha)
 call particle_vol%pad(vol_pad)
 call vol_pad%mul(scalefactor)
 call particle_vol%kill
-call del_file(particle_fname)
+! call del_file(particle_fname)
 call vol_pad%fft
 call vol_pad%expand_cmat(params%alpha)
 do i=1,params%nptcls
@@ -129,7 +129,7 @@ do i=1,params%nptcls
     call particle%ifft
     ! clip & write
     call particle%clip(img)
-    call img%write(params%outstk, i)
+    call img%write('frame_'//int2str_pad(i,pad)//'.mrc')
 end do
 call spiral%write('trajectory.txt')
 end program simple_test_simnano
