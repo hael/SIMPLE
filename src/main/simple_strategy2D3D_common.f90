@@ -214,13 +214,13 @@ contains
     end subroutine set_bp_range2D
 
     !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl_1( img, se, o, ctfvars )
-        use simple_sym, only: sym
-        use simple_ori,      only: ori
-        class(image),    intent(inout) :: img
+    subroutine grid_ptcl_1( fpl, se, o )
+        use simple_fplane, only: fplane
+        use simple_sym,    only: sym
+        use simple_ori,    only: ori
+        class(fplane),   intent(in) :: fpl
         class(sym),      intent(inout) :: se
         class(ori),      intent(inout) :: o
-        type(ctfparams), intent(in)    :: ctfvars
         real      :: pw
         integer   :: s, eo
         ! state flag
@@ -231,24 +231,19 @@ contains
         ! particle-weight
         pw = 1.0
         if( o%isthere('w') ) pw = o%get('w')
-        if( pw > TINY )then
-            ! fwd ft
-            call img%fft()
-            ! gridding
-            call build_glob%eorecvols(s)%grid_fplane(se, o, ctfvars, img, eo, pwght=pw)
-        endif
+        if( pw > TINY ) call build_glob%eorecvols(s)%grid_planes(se, o, fpl, eo, pwght=pw)
     end subroutine grid_ptcl_1
 
     !>  \brief  grids one particle image to the volume (distribution of weigted oris)
-    subroutine grid_ptcl_2( img, se, o, os, ctfvars )
-        use simple_sym,  only: sym
-        use simple_ori,  only: ori
-        use simple_oris, only: oris
-        class(image),    intent(inout) :: img
-        class(sym),      intent(inout) :: se
-        class(ori),      intent(inout) :: o
-        class(oris),     intent(inout) :: os
-        type(ctfparams), intent(in)    :: ctfvars
+    subroutine grid_ptcl_2( fpl, se, o, os )
+        use simple_fplane, only: fplane
+        use simple_sym,    only: sym
+        use simple_ori,    only: ori
+        use simple_oris,   only: oris
+        class(fplane), intent(in)    :: fpl
+        class(sym),    intent(inout) :: se
+        class(ori),    intent(inout) :: o
+        class(oris),   intent(inout) :: os
         real, allocatable :: states(:)
         real    :: pw
         integer :: s, eo
@@ -258,16 +253,14 @@ contains
         pw = 1.0
         if( o%isthere('w') ) pw = o%get('w')
         if( pw > TINY )then
-            ! fwd ft
-            call img%fft()
             ! gridding
             if( params_glob%nstates == 1 )then
-                call build_glob%eorecvols(1)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw)
+                call build_glob%eorecvols(1)%grid_planes(se, os, fpl, eo, pwght=pw)
             else
                 states = os%get_all('state')
                 do s=1,params_glob%nstates
                     if( count(nint(states) == s) > 0 )then
-                        call build_glob%eorecvols(s)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw, state=s)
+                        call build_glob%eorecvols(s)%grid_planes(se, os, fpl, eo, pwght=pw, state=s)
                     endif
                 end do
             endif

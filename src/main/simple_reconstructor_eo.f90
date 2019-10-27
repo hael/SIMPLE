@@ -1,6 +1,9 @@
 ! 3D reconstruction of even-odd pairs for FSC estimation
 module simple_reconstructor_eo
 include 'simple_lib.f08'
+use simple_ori,           only: ori
+use simple_oris,          only: oris
+use simple_sym,           only: sym
 use simple_reconstructor, only: reconstructor
 use simple_masker,        only: masker
 use simple_parameters,    only: params_glob
@@ -50,9 +53,9 @@ type :: reconstructor_eo
     procedure, private :: read_even
     procedure, private :: read_odd
     ! INTERPOLATION
-    procedure, private :: grid_fplane_1
-    procedure, private :: grid_fplane_2
-    generic            :: grid_fplane => grid_fplane_1, grid_fplane_2
+    procedure, private :: grid_planes_1
+    procedure, private :: grid_planes_2
+    generic            :: grid_planes => grid_planes_1, grid_planes_2
     procedure          :: compress_exp
     procedure          :: expand_exp
     procedure          :: sum_eos    !< for merging even and odd into sum
@@ -250,46 +253,42 @@ contains
     ! INTERPOLATION
 
     !> \brief  for gridding a Fourier plane
-    subroutine grid_fplane_1( self, se, o, ctfvars, fpl, eo, pwght )
-        use simple_ori, only: ori
-        use simple_sym, only: sym
+    subroutine grid_planes_1( self, se, o, fpl, eo, pwght )
+        use simple_fplane, only: fplane
         class(reconstructor_eo), intent(inout) :: self    !< instance
         class(sym),              intent(inout) :: se      !< symmetry elements
         class(ori),              intent(inout) :: o       !< orientation
-        type(ctfparams),         intent(in)    :: ctfvars !< varaibles needed to evaluate CTF
-        class(image),            intent(inout) :: fpl     !< Fourier plane
+        class(fplane),           intent(in)    :: fpl     !< Forurier & ctf planes
         integer,                 intent(in)    :: eo      !< eo flag
         real,                    intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         select case(eo)
             case(-1,0)
-                call self%even%insert_fplane(se, o, ctfvars, fpl, pwght)
+                call self%even%insert_planes(se, o, fpl, pwght)
             case(1)
-                call self%odd%insert_fplane(se, o, ctfvars, fpl, pwght)
+                call self%odd%insert_planes(se, o, fpl, pwght)
             case DEFAULT
-                THROW_HARD('unsupported eo flag; grid_fplane_1')
+                THROW_HARD('unsupported eo flag; grid_planes_1')
         end select
-    end subroutine grid_fplane_1
+    end subroutine grid_planes_1
 
-    subroutine grid_fplane_2( self, se, os, ctfvars, fpl, eo, pwght, state )
-        use simple_oris, only: oris
-        use simple_sym,  only: sym
+    subroutine grid_planes_2( self, se, os, fpl, eo, pwght, state )
+        use simple_fplane, only: fplane
         class(reconstructor_eo), intent(inout) :: self    !< instance
         class(sym),              intent(inout) :: se      !< symmetry elements
         class(oris),             intent(inout) :: os      !< orientation
-        type(ctfparams),         intent(in)    :: ctfvars !< varaibles needed to evaluate CTF
-        class(image),            intent(inout) :: fpl     !< Fourier plane
+        class(fplane),           intent(in)    :: fpl     !< Fourier plane
         integer,                 intent(in)    :: eo      !< eo flag
         real,                    intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         integer,       optional, intent(in)    :: state   !< state flag
         select case(eo)
             case(-1,0)
-                call self%even%insert_fplane(se, os, ctfvars, fpl, pwght, state=state)
+                call self%even%insert_planes(se, os, fpl, pwght, state=state)
             case(1)
-                call self%odd%insert_fplane(se, os, ctfvars, fpl, pwght, state=state)
+                call self%odd%insert_planes(se, os, fpl, pwght, state=state)
             case DEFAULT
                 THROW_HARD('unsupported eo flag; grid_fplane_2')
         end select
-    end subroutine grid_fplane_2
+    end subroutine grid_planes_2
 
     !> \brief  for summing the even odd pairs, resulting sum in self%even
     subroutine sum_eos( self )
@@ -332,7 +331,7 @@ contains
         real,     allocatable :: res(:), corrs(:), pssnr(:), fsc_t(:), fsc_n(:)
         real                  :: lp_rand
         integer               :: k,k_rand, find_plate, filtsz
-        if( (params_glob%cc_objfun == OBJFUN_EUCLID) .or. params_glob%l_pssnr )then
+        if( (params_glob%cc_objfun==OBJFUN_EUCLID) .or. params_glob%l_needs_sigma .or. params_glob%l_pssnr )then
             ! even
             cmat = self%even%get_cmat()
             call self%even%sampl_dens_correct(do_gridcorr=.false.)
@@ -529,17 +528,18 @@ contains
 
     !> \brief  for distributed reconstruction of even/odd maps
     subroutine eorec_distr( self, spproj, o, se, state, fbody )
-        use simple_oris,     only: oris
-        use simple_sym,      only: sym
+        use simple_fplane,   only: fplane
         class(reconstructor_eo),    intent(inout) :: self   !< object
         class(sp_project),          intent(inout) :: spproj !< project description
         class(oris),                intent(inout) :: o      !< orientations
         class(sym),                 intent(inout) :: se     !< symmetry element
         integer,                    intent(in)    :: state  !< state to reconstruct
         character(len=*), optional, intent(in)    :: fbody  !< body of output file
-        type(image)          :: img, img_pad, mskimg
+        type(fplane)         :: fpl
+        type(image)          :: img, mskimg
         type(ctfparams)      :: ctfvars
         logical, allocatable :: lmsk(:,:,:)
+        real                 :: sdev_noise
         integer              :: statecnt(params_glob%nstates), i, cnt, state_here, state_glob
         DebugPrint ' In reconstructor_eo; eorec_distr'
         ! stash global state index
@@ -547,7 +547,7 @@ contains
         ! make the images
         call img%new([params_glob%box,params_glob%box,1],params_glob%smpd)
         call mskimg%disc([params_glob%box,params_glob%box,1], params_glob%smpd, params_glob%msk, lmsk)
-        call img_pad%new([params_glob%boxpd,params_glob%boxpd,1],params_glob%smpd)
+        call fpl%new(img, spproj)
         ! zero the Fourier volumes and rhos
         call self%reset_all
         call self%reset_eoexp
@@ -576,8 +576,8 @@ contains
             endif
         endif
         call img%kill
-        call img_pad%kill
         call mskimg%kill
+        call fpl%kill
         if( allocated(lmsk) ) deallocate(lmsk)
         ! report how many particles were used to reconstruct each state
         if( params_glob%nstates > 1 )then
@@ -588,7 +588,6 @@ contains
 
             !> \brief  the density reconstruction functionality
             subroutine rec_dens
-                use simple_ori, only: ori
                 character(len=:), allocatable :: stkname
                 type(ori) :: orientation
                 integer   :: state, ind_in_stk, eo
@@ -604,9 +603,11 @@ contains
                 if( pw > TINY )then
                     call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
                     call img%read(stkname, ind_in_stk)
-                    call img%noise_norm_pad_fft(lmsk, img_pad)
                     ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
-                    call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, pw)
+                    call img%noise_norm(lmsk, sdev_noise)
+                    call img%fft
+                    call fpl%gen_planes(img, ctfvars)
+                    call self%grid_planes(se, orientation, fpl, eo, pw)
                     deallocate(stkname)
                 endif
                 call orientation%kill

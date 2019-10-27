@@ -82,7 +82,6 @@ type :: parameters
     character(len=3)      :: roavg='no'           !< rotationally average images in stack
     character(len=3)      :: clsfrcs='no'
     character(len=3)      :: readwrite='no'
-    character(len=3)      :: recdev='no'
     character(len=3)      :: remap_cls='no'
     character(len=3)      :: restart='no'
     character(len=3)      :: rnd='no'             !< random(yes|no){no}
@@ -593,7 +592,6 @@ contains
         call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('qsys_name',      self%qsys_name)
         call check_carg('readwrite',      self%readwrite)
-        call check_carg('recdev',         self%recdev)
         call check_carg('real_filter',    self%real_filter)
         call check_carg('refine',         self%refine)
         call check_carg('remap_cls',      self%remap_cls)

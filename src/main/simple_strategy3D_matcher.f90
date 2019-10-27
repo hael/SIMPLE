@@ -369,7 +369,7 @@ contains
         call pftcc%kill
         call build_glob%vol%kill
         call build_glob%vol_odd%kill
-        if( params_glob%cc_objfun /= OBJFUN_EUCLID ) call eucl_sigma%kill
+        ! if( params_glob%cc_objfun /= OBJFUN_EUCLID ) call eucl_sigma%kill
         select case(trim(params_glob%refine))
             case('eval')
                 ! nothing to do
@@ -611,12 +611,14 @@ contains
 
     !> volumetric 3d reconstruction
     subroutine calc_3Drec( cline, which_iter )
+        use simple_fplane, only: fplane
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
-        type(image), allocatable :: rec_imgs(:)
+        type(fplane),    allocatable :: fpls(:)
+        type(ctfparams), allocatable :: ctfparms(:)
         type(ori)                :: orientation
-        type(ctfparams)          :: ctfvars
         type(kbinterpol)         :: kbwin
+        real    :: sdev_noise
         integer :: batchlims(2), iptcl, i, i_batch, ibatch
         select case(trim(params_glob%refine))
             case('eval')
@@ -627,21 +629,25 @@ contains
                 kbwin = build_glob%eorecvols(1)%get_kbwin()
                 ! init volumes
                 call preprecvols
-                ! prep rec imgs
-                allocate(rec_imgs(MAXIMGBATCHSZ))
-                do i=1,MAXIMGBATCHSZ
-                    call rec_imgs(i)%new([params_glob%boxpd, params_glob%boxpd, 1], params_glob%smpd)
-                end do
+                ! prep batch imgs
+                call prepimgbatch(MAXIMGBATCHSZ)
+                ! allocate array
+                allocate(fpls(MAXIMGBATCHSZ),ctfparms(MAXIMGBATCHSZ))
                 ! prep batch imgs
                 call prepimgbatch(MAXIMGBATCHSZ)
                 ! gridding batch loop
                 do i_batch=1,nptcls2update,MAXIMGBATCHSZ
                     batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
                     call read_imgbatch( nptcls2update, pinds, batchlims)
-                    !$omp parallel do default(shared) private(i,ibatch) schedule(static) proc_bind(close)
+                    !$omp parallel do default(shared) private(i,iptcl,ibatch) schedule(static) proc_bind(close)
                     do i=batchlims(1),batchlims(2)
+                        iptcl  = pinds(i)
                         ibatch = i - batchlims(1) + 1
-                        call build_glob%imgbatch(ibatch)%noise_norm_pad_fft(build_glob%lmsk, rec_imgs(ibatch))
+                        if( .not.fpls(ibatch)%does_exist() ) call fpls(ibatch)%new(build_glob%imgbatch(1), build_glob%spproj)
+                        call build_glob%imgbatch(ibatch)%noise_norm(build_glob%lmsk, sdev_noise)
+                        call build_glob%imgbatch(ibatch)%fft
+                        ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+                        call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch))
                     end do
                     !$omp end parallel do
                     ! gridding
@@ -649,15 +655,14 @@ contains
                         iptcl       = pinds(i)
                         ibatch      = i - batchlims(1) + 1
                         call build_glob%spproj_field%get_ori(iptcl, orientation)
-                        ctfvars     = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                         if( orientation%isstatezero() ) cycle
                         call eucl_sigma%set_sigma2(iptcl)
                         select case(trim(params_glob%refine))
                             case('clustersym')
                                 ! always C1 reconstruction
-                                call grid_ptcl(rec_imgs(ibatch), c1_symop, orientation, s3D%o_peaks(iptcl), ctfvars)
+                                call grid_ptcl(fpls(ibatch), c1_symop, orientation, s3D%o_peaks(iptcl))
                             case DEFAULT
-                                call grid_ptcl(rec_imgs(ibatch), build_glob%pgrpsyms, orientation, s3D%o_peaks(iptcl), ctfvars)
+                                call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation, s3D%o_peaks(iptcl))
                         end select
                     end do
                 end do
@@ -666,9 +671,9 @@ contains
                 ! destruct
                 call killrecvols()
                 do ibatch=1,MAXIMGBATCHSZ
-                    call rec_imgs(ibatch)%kill
+                    call fpls(ibatch)%kill
                 end do
-                deallocate(rec_imgs, build_glob%imgbatch)
+                deallocate(fpls,ctfparms)
        end select
        call orientation%kill
     end subroutine calc_3Drec

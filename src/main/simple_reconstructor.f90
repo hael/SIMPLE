@@ -2,6 +2,9 @@
 module simple_reconstructor
 !$ use omp_lib
 include 'simple_lib.f08'
+use simple_ori,           only: ori
+use simple_oris,          only: oris
+use simple_sym,           only: sym
 use simple_kbinterpol,    only: kbinterpol
 use simple_image,         only: image
 use simple_parameters,    only: params_glob
@@ -20,9 +23,6 @@ type, extends(image) :: reconstructor
     real(kind=c_float), pointer :: rho(:,:,:)=>null()           !< sampling+CTF**2 density
     complex, allocatable        :: cmat_exp(:,:,:)              !< Fourier components of expanded reconstructor
     real,    allocatable        :: rho_exp(:,:,:)               !< sampling+CTF**2 density of expanded reconstructor
-    real,    allocatable        :: ctf_sqSpatFreq(:,:)          !< CTF squared reciprocal pixels
-    real,    allocatable        :: ctf_ang(:,:)                 !< CTF effective defocus
-    integer, allocatable        :: ind_map(:,:,:)               !< logical to physical index mapping (2D)
     real                        :: winsz          = RECWINSZ    !< window half-width
     real                        :: alpha          = KBALPHA     !< oversampling ratio
     real                        :: shconst_rec(3) = 0.          !< memoized constants for origin shifting
@@ -50,9 +50,9 @@ type, extends(image) :: reconstructor
     procedure          :: write_rho
     procedure          :: read_rho
     ! CONVOLUTION INTERPOLATION
-    procedure, private :: insert_fplane_1
-    procedure, private :: insert_fplane_2
-    generic            :: insert_fplane => insert_fplane_1, insert_fplane_2
+    procedure, private :: insert_planes_1
+    procedure, private :: insert_planes_2
+    generic            :: insert_planes => insert_planes_1, insert_planes_2
     procedure          :: sampl_dens_correct
     procedure          :: compress_exp
     procedure          :: expand_exp
@@ -60,9 +60,6 @@ type, extends(image) :: reconstructor
     procedure          :: sum_reduce
     procedure          :: add_invtausq2rho
     procedure          :: calc_pssnr3d
-    ! RECONSTRUCTION
-    procedure          :: rec
-
     ! DESTRUCTORS
     procedure          :: dealloc_exp
     procedure          :: dealloc_rho
@@ -79,8 +76,7 @@ contains
         class(reconstructor), intent(inout) :: self   !< this instance
         class(sp_project),    intent(inout) :: spproj !< project description
         logical, optional,    intent(in)    :: expand !< expand flag
-        real    :: inv1, inv2
-        integer :: dim, h, k, sh
+        integer :: dim
         logical :: l_expand
         l_expand = .true.
         if(.not. self%exists() ) THROW_HARD('construct image before allocating rho; alloc_rho')
@@ -122,27 +118,6 @@ contains
                 &self%ldim_exp(3,1):self%ldim_exp(3,2)), source=0., stat=alloc_stat)
             if(alloc_stat.ne.0)call allocchk("In: alloc_rho; simple_reconstructor rho_exp")
         end if
-        ! build CTF related matrices
-        if( self%ctfflag .ne. CTFFLAG_NO)then
-            allocate(self%ctf_ang(self%cyc_lims(1,1):self%cyc_lims(1,2), self%cyc_lims(2,1):self%cyc_lims(2,2)),        source=0.)
-            allocate(self%ctf_sqSpatFreq(self%cyc_lims(1,1):self%cyc_lims(1,2), self%cyc_lims(2,1):self%cyc_lims(2,2)), source=0.)
-            !$omp parallel do collapse(2) default(shared) schedule(static) private(h,k,sh,inv1,inv2) proc_bind(close)
-            do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
-                do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
-                    sh = nint(hyp(real(h),real(k)))
-                    if( sh > self%nyq + 1 )cycle
-                    ! evaluate the transfer function
-                    inv1 = real(h)*(1./real(self%ldim_img(1)))
-                    inv2 = real(k)*(1./real(self%ldim_img(2)))
-                    self%ctf_sqSpatFreq(h,k) = inv1 * inv1 + inv2 * inv2
-                    self%ctf_ang(h,k) = atan2(real(k), real(h))
-                enddo
-            enddo
-            !$omp end parallel do
-        endif
-        ! generate index map
-        allocate( self%ind_map(3,self%cyc_lims(1,1):self%cyc_lims(1,2),self%cyc_lims(2,1):self%cyc_lims(2,2)), source=0)
-        call self%get_2Dphys_ind_mapping(self%cyc_lims(1:2,:), self%ind_map)
         call self%reset
     end subroutine alloc_rho
 
@@ -251,43 +226,23 @@ contains
     ! CONVOLUTION INTERPOLATION
 
     !> insert Fourier plane, single orientation
-    subroutine insert_fplane_1( self, se, o, ctfvars, fpl, pwght )
-        use simple_ctf,  only: ctf
-        use simple_ori,  only: ori
-        use simple_oris, only: oris
-        use simple_sym,  only: sym
+    subroutine insert_planes_1( self, se, o, fpl, pwght )
+        use simple_fplane, only: fplane
         class(reconstructor), intent(inout) :: self    !< instance
         class(sym),           intent(inout) :: se      !< symmetry elements
         class(ori),           intent(inout) :: o       !< orientation
-        type(ctfparams),      intent(in)    :: ctfvars !< varaibles needed to evaluate CTF
-        class(image),         intent(inout) :: fpl     !< Fourier plane
+        class(fplane),        intent(in)    :: fpl     !< Fourier plane
         real,                 intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
-        real, allocatable :: rotmats(:,:,:)
         type(ori) :: o_sym
-        type(ctf) :: tfun
         complex   :: comp, oshift
-        real      :: sigma2(1:2*self%nyq)
-        real      :: vec(3), loc(3), dists(3), shconst_here(2)
-        real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, rsh_sq, freq_sq
-        integer   :: logi(3), phys(3), i, h, k, nsym, isym, iwinsz, sh, win(2,3)
-        logical   :: do_sigma2div
+        real      :: rotmats(se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim)
+        real      :: vec(3), loc(3), dists(3), shconst_here(2), scale, arg, ctfval
+        integer   :: i, h, k, nsym, isym, iwinsz, sh, win(2,3)
         if( pwght < TINY )return
-        do_sigma2div = associated(eucl_sigma2_glob)
-        if (do_sigma2div) then
-            do_sigma2div = eucl_sigma2_glob%get_do_divide()
-            if (do_sigma2div) call eucl_sigma2_glob%get_sigma2(self%nyq, sigma2)
-        end if
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
-        ! setup CTF
-        if( self%ctfflag /= CTFFLAG_NO )then
-            ! make CTF object
-            tfun = ctf(self%get_smpd(), ctfvars%kv, ctfvars%cs, ctfvars%fraca)
-            call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
-        endif
         ! setup rotation matrices
         nsym = se%get_nsym()
-        allocate(rotmats(nsym,3,3), source=0.)
         rotmats(1,:,:) = o%get_mat()
         if( nsym > 1 )then
             do isym=2,nsym
@@ -295,121 +250,79 @@ contains
                 rotmats(isym,:,:) = o_sym%get_mat()
             end do
         endif
-        ! memoize for origin shifting
-        shconst_here = (-o%get_2Dshift()) * self%shconst_rec(1:2)
-        ! the parallellisation must run over one plane @ the time to avoid race conditions
-        ! but by starting the parallel section here we reduce thread creation O/H
-        ! and lower the serial slack, while preserving a low memory footprint. The speeduop
-        ! (on 5000 images of betagal) is modest (10%) but significant
-        !$omp parallel default(shared) private(i,h,k,sh,freq_sq,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc,dists,phys,rsh_sq)&
+        ! scale & memoize for origin shifting
+        scale        = real(self%ldim_img(1)) / real(fpl%ldim(1))
+        shconst_here = -o%get_2Dshift() * fpl%shconst(1:2)
+        !$omp parallel default(shared) private(i,h,k,sh,comp,arg,oshift,ctfval,w,win,vec,loc,dists)&
         !$omp proc_bind(close)
         do isym=1,nsym
             !$omp do collapse(2) schedule(static)
-            do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
-                do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
-                    rsh_sq = real(h*h + k*k)
-                    sh     = nint(sqrt(rsh_sq))
-                    if( sh > self%sh_lim + 1 ) cycle
-                    logi = [h,k,0]
-                    vec  = real(logi)
+            do h=fpl%frlims(1,1),fpl%frlims(1,2)
+                do k=fpl%frlims(2,1),fpl%frlims(2,2)
+                    sh = nint(sqrt(real(h*h + k*k)))
+                    if( sh > fpl%nyq ) cycle
+                    vec  = real([h,k,0])
                     ! non-uniform sampling location
-                    loc  = matmul(vec, rotmats(isym,:,:))
+                    loc  = scale * matmul(vec, rotmats(isym,:,:))
                     ! window
                     win(1,:) = nint(loc)
                     win(2,:) = win(1,:) + iwinsz
                     win(1,:) = win(1,:) - iwinsz
-                    ! no need to update outside the non-redundant Friedel limits
-                    ! consistent with compress_exp
+                    ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
                     if( win(2,1) < self%lims(1,1) )cycle
-                    ! Fourier component
-                    phys = self%ind_map(:,h,k)
-                    comp = fpl%get_fcomp(logi, phys)
+                    ! Fourier component & CTF
+                    comp   = fpl%cmplx_plane(h,k)
+                    ctfval = fpl%ctfsq_plane(h,k)
                     ! shift
                     arg    = dot_product(shconst_here, vec(1:2))
                     oshift = cmplx(cos(arg), sin(arg))
-                    ! transfer function
-                    if( self%ctfflag /= CTFFLAG_NO )then
-                        ! CTF and CTF**2 values
-                        if( self%phaseplate )then
-                            tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), ctfvars%phshift)
-                        else
-                            tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
-                        endif
-                        tvalsq = tval * tval
-                        if( self%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
-                    else
-                        tval   = 1.
-                        tvalsq = tval
-                    endif
                     ! (weighted) kernel & CTF values
-                    w = 1.
+                    w = pwght
                     do i=1,self%wdim
                         dists    = real(win(1,:) + i - 1) - loc
                         w(i,:,:) = w(i,:,:) * self%kbwin%apod(dists(1))
                         w(:,i,:) = w(:,i,:) * self%kbwin%apod(dists(2))
                         w(:,:,i) = w(:,:,i) * self%kbwin%apod(dists(3))
                     enddo
-                    w = w * pwght / sum(w)
-                    if( do_sigma2div) w = w / sigma2(sh)
                     ! expanded matrices update
-                    ! CTF and w modulates the component before origin shift
                     self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
-                    &self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + (comp*tval*w)*oshift
+                    &self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + (comp*w)*oshift
                     self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
-                    &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + tvalsq*w
+                    &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + ctfval*w
                 end do
             end do
             !$omp end do nowait
         end do
         !$omp end parallel
         call o_sym%kill
-    end subroutine insert_fplane_1
+    end subroutine insert_planes_1
 
     !> insert Fourier plane, distribution of orientations (with weights)
-    subroutine insert_fplane_2( self, se, os, ctfvars, fpl, pwght, state )
-        use simple_ctf,        only: ctf
-        use simple_ori,        only: ori
-        use simple_oris,       only: oris
-        use simple_sym,        only: sym
+    subroutine insert_planes_2( self, se, os, fpl, pwght, state )
+        use simple_fplane, only: fplane
         class(reconstructor), intent(inout) :: self    !< instance
         class(sym),           intent(inout) :: se      !< symmetry elements
         class(oris),          intent(inout) :: os      !< orientations
-        type(ctfparams),      intent(in)    :: ctfvars !< varaibles needed to evaluate CTF
-        class(image),         intent(inout) :: fpl     !< Fourier plane
+        class(fplane),        intent(in)    :: fpl     !< Fourier plane
         real,                 intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         integer, optional,    intent(in)    :: state   !< state to reconstruct
         type(ori) :: o_sym, o
-        type(ctf) :: tfun
         complex   :: comp, oshift
-        real      :: sigma2(0:2*self%nyq)
-        real      :: rotmats(os%get_noris(),se%get_nsym(),3,3)
-        real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), rsh_sq
-        real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq
+        real      :: rotmats(os%get_noris(),se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim)
+        real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), scale, arg, ctfval
         integer   :: logi(3), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris()), iwinsz, win(2,3)
-        logical   :: do_sigma2div
-        do_sigma2div = associated(eucl_sigma2_glob)
-        if (do_sigma2div) then
-            do_sigma2div = eucl_sigma2_glob%get_do_divide()
-            if (do_sigma2div) call eucl_sigma2_glob%get_sigma2(self%nyq, sigma2)
-        end if
         ! take care of optional state flag
         sstate = 1
         if( present(state) ) sstate = state
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
-        ! setup CTF
-        if( self%ctfflag /= CTFFLAG_NO )then
-            ! make CTF object
-            tfun = ctf(self%get_smpd(), ctfvars%kv, ctfvars%cs, ctfvars%fraca)
-            call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
-        endif
         ! setup orientation weights/states/rotation matrices/shifts
         nsym  = se%get_nsym()
         noris = os%get_noris()
         do iori=1,noris
             call os%get_ori(iori, o)
             ows(iori)    = pwght * o%get('ow')
-            states(iori) = nint(o%get('state'))
+            states(iori) = o%get_state()
             if( ows(iori) < TINY ) cycle
             rotmats(iori,1,:,:) = o%get_mat()
             if( nsym > 1 )then
@@ -418,65 +331,48 @@ contains
                     rotmats(iori,isym,:,:) = o_sym%get_mat()
                 end do
             endif
-            shifts(iori,:) = (-o%get_2Dshift()) * self%shconst_rec(1:2)
+            shifts(iori,:) = -o%get_2Dshift() * fpl%shconst(1:2)
         enddo
+        scale = real(self%ldim_img(1)) / real(fpl%ldim(1))
         ! the parallellisation must run over one plane @ the time to avoid race conditions
         ! but by starting the parallel section here we reduce thread creation O/H
         ! and lower the serial slack, while preserving a low memory footprint
-        !$omp parallel default(shared) private(i,h,k,sh,rsh_sq,comp,arg,oshift,logi,tval,tvalsq,w,win,vec,loc) proc_bind(close)
+        !$omp parallel default(shared) private(i,h,k,sh,comp,arg,oshift,logi,ctfval,w,win,vec,loc) proc_bind(close)
         do isym=1,nsym
             do iori=1,noris
                 if( ows(iori) < TINY .or. states(iori) /= sstate ) cycle
                 !$omp do collapse(2) schedule(static)
-                do h=self%cyc_lims(1,1),self%cyc_lims(1,2)
-                    do k=self%cyc_lims(2,1),self%cyc_lims(2,2)
-                        rsh_sq = real(h*h + k*k)
-                        sh     = nint(sqrt(rsh_sq))
-                        if( sh > self%sh_lim + 1 ) cycle
-                        logi = [h,k,0]
-                        vec  = real(logi)
+                do h = fpl%frlims(1,1),fpl%frlims(1,2)
+                    do k = fpl%frlims(2,1),fpl%frlims(2,2)
+                        sh = nint(sqrt(real(h*h + k*k)))
+                        if( sh > fpl%nyq ) cycle
+                        vec  = real([h,k,0])
                         ! non-uniform sampling location
-                        loc  = matmul(vec, rotmats(iori,isym,:,:))
+                        loc  = scale * matmul(vec, rotmats(iori,isym,:,:))
                         ! window
                         win(1,:) = nint(loc)
                         win(2,:) = win(1,:) + iwinsz
                         win(1,:) = win(1,:) - iwinsz
-                        ! no need to update outside the non-redundant Friedel limits
-                        ! consistent with compress_exp
+                        ! no need to update outside the non-redundant Friedel limits consistent with compress_exp
                         if( win(2,1) < self%lims(1,1) )cycle
-                        ! Fourier component
-                        comp   = fpl%get_fcomp(logi, self%ind_map(:,h,k))
                         ! shift
                         arg    = dot_product(shifts(iori,:), vec(1:2))
                         oshift = cmplx(cos(arg), sin(arg))
-                        ! transfer function
-                        if( self%ctfflag /= CTFFLAG_NO )then
-                            ! CTF and CTF**2 values
-                            if( self%phaseplate )then
-                                tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k), ctfvars%phshift)
-                            else
-                                tval = tfun%eval(self%ctf_sqSpatFreq(h,k), self%ctf_ang(h,k))
-                            endif
-                            tvalsq = tval * tval
-                            if( self%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
-                        else
-                            tval   = 1.
-                            tvalsq = tval
-                        endif
-                        w = 1.
+                        ! Fourier component & CTF
+                        comp   = fpl%cmplx_plane(h,k)
+                        ctfval = fpl%ctfsq_plane(h,k)
+                        ! Interpolation kernel
+                        w = ows(iori)
                         do i=1,self%wdim
                             w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
                             w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(1,2) + i - 1) - loc(2))
                             w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(1,3) + i - 1) - loc(3))
                         enddo
-                        w = w * ows(iori) / sum(w)
-                        if( do_sigma2div ) w = w / sigma2(sh)
-                        ! expanded matrices update
-                        ! CTF and w modulates the component before origin shift
+                        ! expanded matrices update, CTF and w modulates the component before origin shift
                         self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
-                        &self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + (comp*tval*w)*oshift
+                        &self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + (comp*w)*oshift
                         self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
-                        &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + tvalsq*w
+                        &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + ctfval*w
                     end do
                 end do
                 !$omp end do nowait
@@ -485,7 +381,7 @@ contains
         !$omp end parallel
         call o_sym%kill
         call o%kill
-    end subroutine insert_fplane_2
+    end subroutine insert_planes_2
 
     !>  is for uneven distribution of orientations correction
     !>  from Pipe & Menon 1999
@@ -779,90 +675,6 @@ contains
         enddo
     end subroutine calc_pssnr3d
 
-    ! RECONSTRUCTION
-
-    !> reconstruction routine
-    subroutine rec( self, spproj, o, se, state, part )
-        use simple_ori,        only: ori
-        use simple_oris,       only: oris
-        use simple_sym,        only: sym
-        use simple_sp_project, only: sp_project
-        class(reconstructor), intent(inout) :: self   !< this object
-        class(sp_project),    intent(inout) :: spproj !< project description
-        class(oris),          intent(inout) :: o      !< orientations
-        class(sym),           intent(inout) :: se     !< symmetry element
-        integer,              intent(in)    :: state  !< state to reconstruct
-        integer, optional,    intent(in)    :: part   !< partition (4 parallel rec)
-        type(image)          :: img, img_pad, mskimg
-        type(ctfparams)      :: ctfvars
-        logical, allocatable :: lmsk(:,:,:)
-        integer              :: statecnt(params_glob%nstates), i, cnt, state_here, state_glob
-        ! stash global state index
-        state_glob = state
-        ! make the images
-        call img%new([params_glob%box,params_glob%box,1], params_glob%smpd)
-        call mskimg%disc([params_glob%box,params_glob%box,1], params_glob%smpd, params_glob%msk, lmsk)
-        call img_pad%new([params_glob%boxpd,params_glob%boxpd,1], params_glob%smpd)
-        ! zero the Fourier volume and rho
-        call self%reset
-        call self%reset_exp
-        write(logfhandle,'(A)') '>>> KAISER-BESSEL INTERPOLATION '
-        statecnt = 0
-        cnt      = 0
-        do i=1,params_glob%nptcls
-            call progress(i, params_glob%nptcls)
-            if( i <= params_glob%top .and. i >= params_glob%fromp )then
-                cnt = cnt + 1
-                state_here = o%get_state(i)
-                if( state_here > 0 .and. (state_here == state) )then
-                    statecnt(state) = statecnt(state) + 1
-                    call rec_dens
-                endif
-            endif
-        end do
-        if( present(part) )then
-            return
-        else
-            write(logfhandle,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
-            call self%compress_exp
-            call self%sampl_dens_correct
-        endif
-        call self%ifft()
-        call img%kill
-        call img_pad%kill
-        call mskimg%kill
-        if( allocated(lmsk) ) deallocate(lmsk)
-        ! report how many particles were used to reconstruct each state
-        if( params_glob%nstates > 1 )then
-            write(logfhandle,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
-        endif
-        contains
-
-            !> \brief  the density reconstruction functionality
-            subroutine rec_dens
-                character(len=:), allocatable :: stkname
-                type(ori) :: orientation
-                integer   :: state, ind_in_stk
-                real      :: pw
-                state = o%get_state(i)
-                if( state == 0 ) return
-                call o%get_ori(i, orientation)
-                ! particle-weight
-                pw = 1.
-                if( orientation%isthere('w') ) pw = orientation%get('w')
-                if( pw > TINY )then
-                    call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
-                    call img%read(stkname, ind_in_stk)
-                    call img%noise_norm_pad_fft(lmsk, img_pad)
-                    ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
-                    call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=pw)
-                    deallocate(stkname)
-                endif
-                call orientation%kill
-            end subroutine rec_dens
-
-    end subroutine rec
-
     ! DESTRUCTORS
 
     !>  \brief  is the expanded destructor
@@ -881,9 +693,6 @@ contains
             self%rho => null()
             self%rho_allocated = .false.
         endif
-        if(allocated(self%ctf_ang)        ) deallocate(self%ctf_ang)
-        if(allocated(self%ctf_sqSpatFreq) ) deallocate(self%ctf_sqSpatFreq)
-        if(allocated(self%ind_map)        ) deallocate(self%ind_map)
     end subroutine dealloc_rho
 
 

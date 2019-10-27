@@ -280,7 +280,6 @@ contains
     procedure          :: comp_addr_phys1
     procedure          :: comp_addr_phys2
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
-    procedure          :: get_2Dphys_ind_mapping
     procedure          :: corr
     procedure          :: corr_shifted
     procedure, private :: real_corr_1
@@ -6132,19 +6131,6 @@ contains
         integer                  :: phys(3) !<  Physical address
         phys = self%fit%comp_addr_phys(h,k,m)
     end function comp_addr_phys2
-
-    !>  \brief  generate physical index mapping array
-    subroutine get_2Dphys_ind_mapping( self, lims, ind_map )
-        class(image), intent(in)  :: self
-        integer,      intent(in)  :: lims(2,2)
-        integer,      intent(out) :: ind_map(3,lims(1,1):lims(1,2),lims(2,1):lims(2,2))
-        integer :: h, k
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                ind_map(:,h,k) = self%fit%comp_addr_phys([h,k,0])
-            end do
-        end do
-    end subroutine get_2Dphys_ind_mapping
 
     !>  \brief corr is for correlating two images
     function corr( self1, self2, lp_dyn, hp_dyn ) result( r )
