@@ -199,7 +199,7 @@ type :: parameters
     character(len=STDLEN) :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN) :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN) :: projname=''          !< SIMPLE  project name
-    character(len=STDLEN) :: ptclw='yes'          !< use soft particle weights(yes|no){yes}
+    character(len=STDLEN) :: ptclw='yes'          !< use particle weights(yes|otsu|no){yes}
     character(len=STDLEN) :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
     character(len=STDLEN) :: real_filter=''
     character(len=STDLEN) :: refine='single'      !< refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}
@@ -436,7 +436,6 @@ type :: parameters
     logical :: l_match_filt     = .true.
     logical :: l_needs_sigma    = .false.
     logical :: l_pssnr          = .false.
-    logical :: l_ptclw          = .true.
     logical :: l_phaseplate     = .false.
     logical :: l_projw          = .false.
     logical :: l_remap_cls      = .false.
@@ -1227,8 +1226,6 @@ contains
         self%l_envfsc = self%envfsc .ne. 'no'
         ! set projw flag
         self%l_projw  = self%projw  .ne. 'no'
-        ! set particle weighting scheme
-        self%l_ptclw  = self%ptclw  .ne. 'no'
         ! set correlation weighting scheme
         self%l_corrw = self%wcrit .ne. 'no'
         if( self%l_corrw )then

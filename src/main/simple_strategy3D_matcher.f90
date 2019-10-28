@@ -109,11 +109,14 @@ contains
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
 
         ! SETUP WEIGHTS
-        if( params_glob%l_ptclw )then
-            call build_glob%spproj_field%calc_soft_weights(params_glob%frac)
-        else
-            call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
-        endif
+        select case(trim(params_glob%ptclw))
+            case('yes')
+                call build_glob%spproj_field%calc_soft_weights(params_glob%frac)
+            case('otsu')
+                call build_glob%spproj_field%calc_hard_otsu_weights
+            case DEFAULT
+                call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
+        end select
 
         ! READ FOURIER RING CORRELATIONS
         if( params_glob%nstates.eq.1 )then
@@ -682,11 +685,14 @@ contains
         ! set npeaks
         npeaks = NPEAKS2REFINE
         ! particle weights
-        if( params_glob%l_ptclw )then
-            call build_glob%spproj_field%calc_soft_weights(params_glob%frac)
-        else
-            call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
-        endif
+        select case(trim(params_glob%ptclw))
+            case('yes')
+                call build_glob%spproj_field%calc_soft_weights(params_glob%frac)
+            case('otsu')
+                call build_glob%spproj_field%calc_hard_otsu_weights
+            case DEFAULT
+                call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
+        end select
         ! prepare particle mask
         allocate(ptcl_mask(params_glob%fromp:params_glob%top))
         call build_glob%spproj_field%sample4update_and_incrcnt_nofrac([params_glob%fromp,params_glob%top],&

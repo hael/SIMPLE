@@ -22,7 +22,7 @@ public :: tseries_average_commander
 public :: tseries_corrfilt_commander
 public :: tseries_ctf_estimate_commander
 public :: refine3D_nano_commander_distr
-public :: tseries_split_commander
+! public :: tseries_split_commander
 public :: detect_atoms_commander
 public :: atoms_rmsd_commander
 public :: radial_dependent_stats_commander
@@ -75,10 +75,10 @@ type, extends(commander_base) :: refine3D_nano_commander_distr
   contains
     procedure :: execute      => exec_refine3D_nano_distr
 end type refine3D_nano_commander_distr
-type, extends(commander_base) :: tseries_split_commander
-  contains
-    procedure :: execute      => exec_tseries_split
-end type tseries_split_commander
+! type, extends(commander_base) :: tseries_split_commander
+!   contains
+!     procedure :: execute      => exec_tseries_split
+! end type tseries_split_commander
 type, extends(commander_base) :: detect_atoms_commander
   contains
     procedure :: execute      => exec_detect_atoms
@@ -642,55 +642,55 @@ contains
         call xrefine3D_distr%execute(cline)
     end subroutine exec_refine3D_nano_distr
 
-    subroutine exec_tseries_split( self, cline )
-        use simple_ori, only: ori
-        class(tseries_split_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        type(oris)       :: os
-        type(ori)        :: o_tmp
-        character(len=:), allocatable :: stkname, oriname
-        integer :: i, iptcl, numlen, istart, istop, cnt, cnt2, ntot
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        numlen = len(int2str(params%nptcls))
-        ! count the number of chunks
-        ntot = 0
-        do i=1,params%nptcls,params%stepsz
-            istart = i
-            istop  = i + params%chunksz - 1
-            if( istop > params%nptcls ) exit
-            ntot = ntot + 1
-        end do
-        ! split
-        do i=1,params%nptcls,params%stepsz
-            istart = i
-            istop  = i + params%chunksz - 1
-            if( istop > params%nptcls ) exit
-            cnt    = cnt + 1
-            call progress(cnt,ntot)
-            call os%new(params%chunksz)
-            call simple_mkdir('tseries_chunk'//int2str_pad(cnt,numlen),errmsg="commander_tseries::exec_tseries_split")
-            stkname = filepath(PATH_HERE,'tseries_chunk'//int2str_pad(cnt,numlen),'imgs'//params%ext)
-            oriname = filepath('tseries_chunk'//int2str_pad(cnt,numlen),'oris'//trim(TXT_EXT))
-            call del_file( stkname )
-            call del_file( oriname )
-            cnt2 = 0
-            do iptcl=istart,istop
-                cnt2 = cnt2 + 1
-                call build%spproj_field%get_ori(iptcl, o_tmp)
-                call os%set_ori(cnt2, o_tmp )
-                call build%img%read(params%stk, iptcl)
-                call build%img%write(stkname,cnt2)
-            end do
-            call os%write(oriname)
-            call os%kill
-            deallocate(stkname, oriname)
-        end do
-        call o_tmp%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_TSERIES_SPLIT NORMAL STOP ****')
-    end subroutine exec_tseries_split
+    ! subroutine exec_tseries_split( self, cline )
+    !     use simple_ori, only: ori
+    !     class(tseries_split_commander), intent(inout) :: self
+    !     class(cmdline),                 intent(inout) :: cline
+    !     type(parameters) :: params
+    !     type(builder)    :: build
+    !     type(oris)       :: os
+    !     type(ori)        :: o_tmp
+    !     character(len=:), allocatable :: stkname, oriname
+    !     integer :: i, iptcl, numlen, istart, istop, cnt, cnt2, ntot
+    !     call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+    !     numlen = len(int2str(params%nptcls))
+    !     ! count the number of chunks
+    !     ntot = 0
+    !     do i=1,params%nptcls,params%stepsz
+    !         istart = i
+    !         istop  = i + params%chunksz - 1
+    !         if( istop > params%nptcls ) exit
+    !         ntot = ntot + 1
+    !     end do
+    !     ! split
+    !     do i=1,params%nptcls,params%stepsz
+    !         istart = i
+    !         istop  = i + params%chunksz - 1
+    !         if( istop > params%nptcls ) exit
+    !         cnt    = cnt + 1
+    !         call progress(cnt,ntot)
+    !         call os%new(params%chunksz)
+    !         call simple_mkdir('tseries_chunk'//int2str_pad(cnt,numlen),errmsg="commander_tseries::exec_tseries_split")
+    !         stkname = filepath(PATH_HERE,'tseries_chunk'//int2str_pad(cnt,numlen),'imgs'//params%ext)
+    !         oriname = filepath('tseries_chunk'//int2str_pad(cnt,numlen),'oris'//trim(TXT_EXT))
+    !         call del_file( stkname )
+    !         call del_file( oriname )
+    !         cnt2 = 0
+    !         do iptcl=istart,istop
+    !             cnt2 = cnt2 + 1
+    !             call build%spproj_field%get_ori(iptcl, o_tmp)
+    !             call os%set_ori(cnt2, o_tmp )
+    !             call build%img%read(params%stk, iptcl)
+    !             call build%img%write(stkname,cnt2)
+    !         end do
+    !         call os%write(oriname)
+    !         call os%kill
+    !         deallocate(stkname, oriname)
+    !     end do
+    !     call o_tmp%kill
+    !     ! end gracefully
+    !     call simple_end('**** SIMPLE_TSERIES_SPLIT NORMAL STOP ****')
+    ! end subroutine exec_tseries_split
 
     ! Performs preprocessing on the nanoparticle and steps until
     ! atomic positions are identified, validated and written on

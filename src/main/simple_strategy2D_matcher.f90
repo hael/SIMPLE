@@ -125,7 +125,7 @@ contains
         ! sees the same information in distributed execution
         ! has to be done prior to classaverager initialization
         if( which_iter > 3 )then
-            if( params_glob%l_ptclw )then
+            if( trim(params_glob%ptclw) .eq. 'yes' )then
                 call build_glob%spproj_field%calc_soft_weights2D
             else
                 call build_glob%spproj_field%calc_hard_weights2D(params_glob%frac, params_glob%ncls)

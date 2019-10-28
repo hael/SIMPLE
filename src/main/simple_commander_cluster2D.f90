@@ -137,7 +137,7 @@ contains
             call build%spproj_field%mul_shifts(params%mul)
         endif
         ! setup weights
-        if( params%l_ptclw )then
+        if( trim(params%ptclw) .eq. 'yes' )then
             call build%spproj_field%calc_soft_weights2D
         else
             call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)

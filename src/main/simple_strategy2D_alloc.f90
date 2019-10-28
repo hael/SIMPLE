@@ -43,7 +43,7 @@ contains
         nptcls = count(ptcl_mask)
         ! gather class populations
         if( build_glob%spproj_field%isthere('class') )then
-            call build_glob%spproj_field%get_pops(s2D%cls_pops, 'class', consider_w=params_glob%l_ptclw, maxn=params_glob%ncls)
+            call build_glob%spproj_field%get_pops(s2D%cls_pops, 'class', consider_w=trim(params_glob%ptclw).eq.'yes', maxn=params_glob%ncls)
         else
             ! first iteration, no class assignment: all classes are up for grab
             allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1, stat=alloc_stat)
