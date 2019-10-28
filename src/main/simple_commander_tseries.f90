@@ -624,16 +624,16 @@ contains
         ! static parameters
         call cline%set('prg',      'refine3D')
         call cline%set('match_filt',     'no')
-        call cline%set('ptclw',          'no')
         call cline%set('keepvol',       'yes')
         call cline%set('ninplpeaks',      1.0)
         call cline%set('wscheme',       'loc')
         ! dynamic parameters
+        if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
         if( .not. cline%defined('nspace')        ) call cline%set('nspace',       10000.)
         if( .not. cline%defined('shcfrac')       ) call cline%set('shcfrac',         10.)
         if( .not. cline%defined('wcrit')         ) call cline%set('wcrit',         'exp')
-        if( .not. cline%defined('trs')           ) call cline%set('trs',             2.0)
+        if( .not. cline%defined('trs')           ) call cline%set('trs',             5.0)
         if( .not. cline%defined('update_frac')   ) call cline%set('update_frac',     0.2)
         if( .not. cline%defined('lp')            ) call cline%set('lp',              1.0)
         if( .not. cline%defined('cenlp')         ) call cline%set('cenlp',            5.)

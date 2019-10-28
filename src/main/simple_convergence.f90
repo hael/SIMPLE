@@ -120,9 +120,9 @@ contains
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         real,               intent(in)    :: msk
-        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:)
+        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), pws(:)
         logical, allocatable :: mask(:)
-        real    :: min_state_mi_joint, avg_updatecnt
+        real    :: min_state_mi_joint, avg_updatecnt, percen_nonzero_pw
         logical :: converged
         integer :: iptcl, istate
         601 format(A,1X,F8.3)
@@ -130,6 +130,8 @@ contains
         updatecnts = build_glob%spproj_field%get_all('updatecnt')
         avg_updatecnt = sum(updatecnts) / size(updatecnts)
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
+        pws = build_glob%spproj_field%get_all('w')
+        percen_nonzero_pw = (real(count(pws > TINY)) / real(size(pws))) * 100.
         call build_glob%spproj_field%stats('corr',      self%corr,      mask=mask)
         call build_glob%spproj_field%stats('specscore', self%specscore, mask=mask)
         call build_glob%spproj_field%stats('dist',      self%dist,      mask=mask)
@@ -158,6 +160,7 @@ contains
         &self%npeaks%avg, self%npeaks%sdev, self%npeaks%minv, self%npeaks%maxv
         write(logfhandle,604) '>>> PARTICLE WEIGHT          AVG/SDEV/MIN/MAX:',&
         &self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
+        write(logfhandle,601) '>>> % PARTICLES WITH NONZERO WEIGHT           ', percen_nonzero_pw
         write(logfhandle,604) '>>> ORIENTATION WEIGHT MAX   AVG/SDEV/MIN/MAX:',&
         &self%ow%avg, self%ow%sdev, self%ow%minv, self%ow%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:',&
@@ -243,7 +246,7 @@ contains
         call self%ostats%set(1,'SDEV_SHIFT_INCR_PEAKS',self%shwstdev%avg)
         call self%ostats%write(STATS_FILE)
         ! destruct
-        deallocate(mask, updatecnts)
+        deallocate(mask, updatecnts, pws)
         call self%ostats%kill
     end function check_conv3D
 
