@@ -51,7 +51,7 @@ type :: nanoparticle
     ! segmentation and statistics
     procedure          :: binarize
     procedure          :: find_centers
-    procedure, private :: nanopart_masscen
+    procedure          :: nanopart_masscen
     procedure          :: aspect_ratios_estimation
     procedure          :: calc_aspect_ratio
     procedure          :: discard_outliers
@@ -67,6 +67,7 @@ type :: nanoparticle
     procedure          :: cluster_atom_intensity
     procedure          :: search_polarization
     procedure          :: identify_atom_columns
+    procedure          :: identify_atom_planes
     ! execution
     procedure          :: identify_atomic_pos
     procedure          :: radial_dependent_stats
@@ -508,7 +509,7 @@ contains
                 maximum = mm(2)
                 t       = i
             endif
-            call simulated_distrib%ifft
+            call simulated_distrib%set_ft(.false.)
         enddo
         call self%img%ifft ! To remove
         write(logfhandle,*) 'Selected threshold: ', x_thresh(t)
@@ -900,9 +901,6 @@ contains
         enddo
         close(11)
         deallocate(mask)
-        ! deallocate(avg_intensity)
-        ! deallocate(max_intensity)
-        ! deallocate(stdev_intensity)
         call self%distances_distribution() ! across the whole nano
         ! Come back to root directory
         ! call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: radial_dependent_stats, simple_chdir; ")
@@ -1111,26 +1109,27 @@ contains
     ! map in each atom. It is likely that these statistics
     ! are going to be able to distinguish between the different
     ! atom compositions in heterogeneous nanoparticles.
-    subroutine atom_intensity_stats(self,max_intensity)
+    subroutine atom_intensity_stats(self,mmax_intensity)
         class(nanoparticle), intent(inout) :: self
-        real,                intent(inout) :: max_intensity(self%n_cc)
+        real, optional,      intent(inout) :: mmax_intensity(self%n_cc)
         logical, allocatable :: mask(:,:,:)
         real,    pointer     :: rmat(:,:,:)
         real,    pointer     :: rmat_cc(:,:,:)
         integer :: n_atom
         integer :: i, j, k
-        real    :: avg_intensity(self%n_cc), stdev_intensity(self%n_cc)
+        real    :: max_intensity(self%n_cc), avg_intensity(self%n_cc), stdev_intensity(self%n_cc), radii(self%n_cc)
         real    :: avg_int, stdev_int, max_int
+        real    :: m(3) ! center of mass of the nanoparticle
         write(logfhandle,*)'**atoms intensity statistics calculations init'
         call self%img%get_rmat_ptr(rmat)
         call self%img_cc%get_rmat_ptr(rmat_cc)
         allocate(mask(self%ldim(1),self%ldim(2),self%ldim(3)), source = .false.)
-        if(nint(maxval(rmat_cc)) .ne. self%n_cc) THROW_HARD('To check self%n_cc and self%img_cc; atom_intensity_stats')
+        self%n_cc = nint(maxval(rmat_cc))
+        m = self%nanopart_masscen()
         ! initialise
         max_intensity(:)   = 0.
         avg_intensity(:)   = 0.
         stdev_intensity(:) = 0.
-        ! debugging
         ! Write on a file
         open(13, file = trim(self%output_dir)//'/IntensityStats.txt')
         do n_atom = 1, self%n_cc
@@ -1139,6 +1138,7 @@ contains
             max_intensity(n_atom) = maxval(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),mask)
             avg_intensity(n_atom) = sum(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),mask)
             avg_intensity(n_atom) = avg_intensity(n_atom)/real(count(mask))
+            radii(n_atom)         = euclid(self%centers(:,n_atom), m)*self%smpd
             do i = 1, self%ldim(1)
                 do j = 1, self%ldim(2)
                     do k = 1, self%ldim(3)
@@ -1154,6 +1154,7 @@ contains
             write(unit = 13, fmt = '(a,f9.5,a,f9.5,a,f9.5)') 'maxval ', max_intensity(n_atom), '   avg ', avg_intensity(n_atom), '   stdev ', stdev_intensity(n_atom)
             mask = .false. !Reset
         enddo
+        if(present(mmax_intensity)) mmax_intensity = max_intensity
         avg_int   = sum(avg_intensity)/real(self%n_cc)
         max_int   = maxval(max_intensity)
         stdev_int = 0.
@@ -1163,6 +1164,31 @@ contains
         stdev_int = sqrt(stdev_int/real(self%n_cc-1))
         write(unit = 13, fmt = '(a,f9.5,a,f9.5,a,f9.5)') 'maxval_general ', max_int, '   avg_general ', avg_int, '   stdev_general ', stdev_int
         close(13)
+        ! Write on a Matlab compatible file the output
+        ! to enable scatterplots
+        open(119, file='RadialPosCCs')
+        write (119,*) 'rccs=[...'
+        do n_atom = 1, self%n_cc
+            write (119,'(A)', advance='no') trim(real2str(radii(n_atom)))
+            if(n_atom < self%n_cc) write (119,'(A)', advance='no') ', '
+        end do
+        write (119,*) '];'
+        close(119)
+        open(119, file='MaxIntensityCCs')
+        write (119,*) 'mccs=[...'
+        do n_atom = 1, self%n_cc
+            write (119,'(A)', advance='no') trim(real2str(max_intensity(n_atom)))
+            if(n_atom < self%n_cc) write (119,'(A)', advance='no') ', '
+        end do
+        write (119,*) '];'
+        open(119, file='AvgIntensityCCs')
+        write (119,*) 'accs=[...'
+        do n_atom = 1, self%n_cc
+            write (119,'(A)', advance='no') trim(real2str(avg_intensity(n_atom)))
+            if(n_atom < self%n_cc) write (119,'(A)', advance='no') ', '
+        end do
+        write (119,*) '];'
+        close(119)
         write(logfhandle,*)'**atoms intensity statistics calculations completed'
     end subroutine atom_intensity_stats
 
@@ -1646,6 +1672,7 @@ contains
         real, optional,      intent(out)   :: r   !rmsd calculated
         logical, allocatable :: mask(:)
         real,    allocatable :: dist(:), dist_sq(:), dist_no_zero(:), dist_close(:)
+        real,    parameter   :: CLOSE_THRESH = 1. ! 1 Amstrong
         integer :: location(1)
         integer :: i, j
         integer :: N_min !min{nb atoms in nano1, nb atoms in nano2}
@@ -1684,7 +1711,7 @@ contains
             cnt2 = 0
             cnt3 = 0
             do i = 1, N_max !compare based on centers2
-                dist(i) = pixels_dist(nano2%centers(:,i),nano1%centers(:,:),'min',mask,location)
+                dist(i) = pixels_dist(nano2%centers(:,i),nano1%centers(:,:),'min',mask,location, keep_zero=.true.)
                 if(dist(i)*nano2%smpd > 2.*nano2%theoretical_radius) then
                     dist(i) = 0. !it means there is no correspondent atom in the other nano
                     cnt = cnt + 1  !to discard them in the rmsd calculation
@@ -1695,7 +1722,7 @@ contains
                     call centers_close1%set_occupancy(i,0.)
                     call centers_close2%set_occupancy(i,0.)
                     call couples1%set_occupancy(i,0.)
-                elseif(dist(i)*nano2%smpd < 0.5) then
+                elseif(dist(i)*nano2%smpd < CLOSE_THRESH) then
                     cnt3 = cnt3 + 1
                     dist_close(i) = dist(i)**2
                     call centers_close2%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd)
@@ -1704,7 +1731,7 @@ contains
                     call centers_coupled1%set_occupancy(i,0.)
                     call centers_coupled2%set_occupancy(i,0.)
                     call couples1%set_occupancy(i,0.)
-                elseif(dist(i)*nano2%smpd > 0.5 .and. dist(i)*nano2%smpd<=2.*nano2%theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,220] pm
+                elseif(dist(i)*nano2%smpd > CLOSE_THRESH .and. dist(i)*nano2%smpd<=2.*nano2%theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,220] pm
                     cnt2 = cnt2 + 1
                     call centers_coupled2%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd)
                     call centers_coupled1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
@@ -1738,7 +1765,7 @@ contains
             cnt2 = 0
             cnt3 = 0
             do i = 1, N_max !compare based on centers1
-                dist(i) = pixels_dist(nano1%centers(:,i),nano2%centers(:,:),'min',mask,location)
+                dist(i) = pixels_dist(nano1%centers(:,i),nano2%centers(:,:),'min',mask,location, keep_zero = .true.)
                 if(dist(i)*nano2%smpd > 2.*nano2%theoretical_radius) then
                     dist(i) = 0.
                     cnt = cnt + 1
@@ -1749,7 +1776,7 @@ contains
                     call centers_close1%set_occupancy(i,0.)
                     call centers_close2%set_occupancy(i,0.)
                     call couples1%set_occupancy(i,0.)
-                elseif(dist(i)*nano2%smpd <= 0.5) then
+                elseif(dist(i)*nano2%smpd <= CLOSE_THRESH) then
                     cnt3 = cnt3 + 1
                     dist_close(i) = dist(i)**2
                     call centers_close1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd)
@@ -1758,7 +1785,7 @@ contains
                     call centers_coupled1%set_occupancy(i,0.)
                     call centers_coupled2%set_occupancy(i,0.)
                     call couples1%set_occupancy(i,0.)
-                elseif(dist(i)*nano2%smpd > 0.5 .and. dist(i)*nano2%smpd<=2.*nano2%theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,2*theoretical_radius] pm
+                elseif(dist(i)*nano2%smpd > CLOSE_THRESH .and. dist(i)*nano2%smpd<=2.*nano2%theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,2*theoretical_radius] pm
                     cnt2 = cnt2 + 1
                     call centers_coupled1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd)
                     call centers_coupled2%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
@@ -1775,9 +1802,9 @@ contains
                 endif
             enddo
         endif
-        write(unit = 121, fmt = '(i3,a,i2,a)')      cnt3,' atoms correspond within       50 pm. (', cnt3*100/N_min, '% of the atoms )'
-        write(unit = 121, fmt = '(i3,a,a,a,i2,a)')  cnt2,' atoms correspond within 50 - ',trim(int2str(nint(2.*nano2%theoretical_radius*100.))),' pm. (', cnt2*100/N_min, '% of the atoms )'
-        write(unit = 121, fmt = '(i3,a,a,a,i2,a)')  cnt-(N_max-N_min),' atoms have error bigger than ',trim(int2str(nint(2.*nano2%theoretical_radius*100.))),' pm. (',(cnt-N_max+N_min)*100/N_min, '% of the atoms )' !remove the extra atoms
+        write(unit = 121, fmt = '(i3,a,i2,a)')      cnt3,' atoms correspond within        1 A. (', cnt3*100/N_min, '% of the atoms )'
+        write(unit = 121, fmt = '(i3,a,f3.1,a,i2,a)')  cnt2,' atoms correspond within  1 - ',2.*nano2%theoretical_radius,' A. (', cnt2*100/N_min, '% of the atoms )'
+        write(unit = 121, fmt = '(i3,a,f3.1,a,i2,a)')  cnt-(N_max-N_min),' atoms have error bigger than ',2.*nano2%theoretical_radius,' A. (',(cnt-N_max+N_min)*100/N_min, '% of the atoms )' !remove the extra atoms
         ! remove unused atoms from the pdb file
         do i = 1, N_max
             coord(:) = centers_close1%get_coord(i)
@@ -1874,8 +1901,8 @@ contains
         call couples1%kill
         !RMSD
         rmsd = sqrt(sum(dist_sq)/real(count(dist_sq > TINY)))
-        write(unit = 121, fmt = '(a,f6.3,a)') 'RMSD CALCULATED CONSIDERING ALL ATOMS   = ', rmsd*nano1%smpd, ' A'
-        write(unit = 121, fmt = '(a,f6.3,a)') 'RMSD ATOMS THAT CORRESPOND WITHIN 50 PM = ', (sqrt(sum(dist_close)/real(count(dist_close > TINY))))*nano1%smpd, ' A'
+        write(unit = 121, fmt = '(a,f6.3,a)') 'RMSD CALCULATED CONSIDERING ALL ATOMS = ', rmsd*nano1%smpd, ' A'
+        write(unit = 121, fmt = '(a,f6.3,a)') 'RMSD ATOMS THAT CORRESPOND WITHIN 1 A = ', (sqrt(sum(dist_close)/real(count(dist_close > TINY))))*nano1%smpd, ' A'
         dist_no_zero = pack(dist, dist>TINY)
         dist_no_zero = dist_no_zero*nano1%smpd ! report distances in Amstrongs
         call hist(dist_no_zero, 50)
@@ -2046,6 +2073,202 @@ contains
         enddo
         call img_col%kill
     end subroutine identify_atom_columns
+
+    subroutine identify_atom_planes(self)
+        class(nanoparticle), intent(inout) :: self
+        real, pointer      :: rmat_cc(:,:,:), rmat_plane(:,:,:)
+        type(image)        :: img_plane
+        integer, parameter :: N_DISCRET = 1000
+        integer, parameter :: N_PLANES  = 1    ! number of planes to consider for each atom
+        integer :: n_cc, loc(1), i, j
+        integer :: t, s
+        integer :: cnt_intersect, cnt
+        logical :: mask(self%n_cc),mask_plane(N_DISCRET)
+        logical :: flag_matrix(N_PLANES,self%n_cc,self%n_cc)
+        real    :: dir_1(3), dir_2(3), vec(3), m(3), dist
+        real    :: line(3,N_DISCRET)
+        real, allocatable :: plane(:,:,:), points(:,:), distances_totheplane(:), radii(:)
+        real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator
+        allocate(plane(3, N_DISCRET, N_DISCRET), source = 0.)
+        do i = 1, N_DISCRET/2
+            t_vec(i) = -real(i)/10.
+        enddo
+        t_vec(N_DISCRET/2+1:N_DISCRET) = -t_vec(1:N_DISCRET/2)
+        s_vec(:) = t_vec(:)
+        call self%img_cc%get_rmat_ptr(rmat_cc)
+        call img_plane%new(self%ldim, self%smpd)
+        call img_plane%get_rmat_ptr(rmat_plane)
+        flag_matrix(:,:,:) = .false.  ! initialization
+        rmat_plane(:,:,:) = 0.
+        write(logfhandle, *) 'planes identification'
+        do n_cc = 205, 205!1, self%n_cc ! for each atom
+            mask   = .true.
+            do j = 1, N_PLANES
+                cnt_intersect = 0  ! how many atoms does the line intersect
+                ! find nearest neighbour
+                dist   = pixels_dist(self%centers(:,n_cc), self%centers,'min', mask, loc)
+                mask(loc(1)) = .false.                                 ! next time pick other neigh
+                if(dist*self%smpd >  4.*self%theoretical_radius) cycle ! disregard if too far
+                ! direction vectors of the plane
+                dir_1    = self%centers(:,n_cc) - self%centers(:,loc(1))
+                dist   = pixels_dist(self%centers(:,n_cc), self%centers,'min', mask, loc)
+                mask(loc(1)) = .false.                                 ! next time pick other neigh
+                if(dist*self%smpd >  4.*self%theoretical_radius) cycle ! disregard if too far
+                dir_2    = self%centers(:,n_cc) - self%centers(:,loc(1))
+                do t = 1, N_DISCRET
+                    do s = 1, N_DISCRET
+                        plane(1,t,s) = self%centers(1,n_cc) + t_vec(t)* dir_1(1) + s_vec(s)* dir_2(1)
+                        plane(2,t,s) = self%centers(2,n_cc) + t_vec(t)* dir_1(2) + s_vec(s)* dir_2(2)
+                        plane(3,t,s) = self%centers(3,n_cc) + t_vec(t)* dir_1(3) + s_vec(s)* dir_2(3)
+                    enddo
+                enddo
+                ! calculate how many atoms does the plane intersect and flag them
+                do i = 1, self%n_cc
+                    mask_plane = .true.
+                    do t = 1, N_DISCRET
+                        do s = 1, N_DISCRET
+                            dist   = euclid(self%centers(:3,i),plane(:3,t,s))
+                            if(dist*self%smpd <= 0.9*self%theoretical_radius) then ! it intersects atoms i
+                                 flag_matrix(j,n_cc,i) = .true. !flags also itself
+                             endif
+                         enddo
+                    enddo
+                enddo
+            enddo
+        enddo
+        write(logfhandle, *) 'removing redundancies'
+        ! remove redundancies
+        do j = 1, N_PLANES
+            do t = 1, N_PLANES
+                if(j /= t) then
+                    do n_cc = 1, self%n_cc     ! fix the first row
+                        do i = 1, self%n_cc   ! fix the second row
+                            if(all(flag_matrix(j,n_cc,:) .eqv. flag_matrix(t,i,:))) then
+                                flag_matrix(t,i,:)= .false. ! unflag them
+                            endif
+                        enddo
+                    enddo
+                else
+                    do n_cc = 1, self%n_cc-1       ! fix the first row
+                        do i = n_cc+1, self%n_cc   ! fix the second row
+                            if(all(flag_matrix(j,n_cc,:) .eqv. flag_matrix(t,i,:))) then
+                                flag_matrix(t,i,:)= .false. ! unflag them
+                            endif
+                        enddo
+                    enddo
+                endif
+            enddo
+        enddo
+        write(logfhandle, *) 'generating volumes for visualization'
+        ! generate volume for visualisation
+        do n_cc = 205, 205!1, self%n_cc
+            call progress(n_cc, self%n_cc)
+            ! reset
+            rmat_plane(:,:,:) = 0.
+            cnt_intersect   = 0
+            do i = 1, self%n_cc
+                if(flag_matrix(1,n_cc,i)) then
+                    cnt_intersect = cnt_intersect + 1
+                    where(abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) - real(i)) < TINY) rmat_plane(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
+                endif
+            enddo
+            if(cnt_intersect > 20) call img_plane%write(trim(int2str(n_cc))//'ImagePlane'//trim(int2str(j))//'.mrc')
+        enddo
+        ! TO MOVE
+        allocate(points(3, count(flag_matrix)), source = 0.)
+        m = self%nanopart_masscen()
+        cnt = 0
+        do n_cc = 205,205 ! 1, self%n_cc
+            do j = 1, N_PLANES
+                do i = 1, self%n_cc
+                    if(flag_matrix(j,n_cc,i)) then
+                        cnt = cnt + 1
+                        points(:3,cnt) = self%centers(:3,i)-m(:)
+                    endif
+                enddo
+            enddo
+        enddo
+        vec = plane_from_points(points)
+        allocate(distances_totheplane(cnt), source = 0.)
+        allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
+        cnt = 0
+        denominator = sqrt(vec(1)*2+vec(2)*2+1.)
+        ! TO PUT TOGETHER WITH THE PREVIOUS LOOP
+        do n_cc = 205,205 ! 1, self%n_cc
+            do j = 1, N_PLANES
+                do i = 1, self%n_cc
+                    if(flag_matrix(j,n_cc,i)) then
+                        cnt = cnt + 1
+                        points(:3,cnt) = self%centers(:3,i)-m(:)
+                        ! formula for distance of a point to a plane
+                        distances_totheplane(cnt) = abs(vec(1)*points(1,cnt)+vec(2)*points(2,cnt)-points(3,cnt)+vec(3))/denominator
+                        radii(cnt) = euclid(self%centers(:,i), m)*self%smpd
+                    endif
+                enddo
+            enddo
+        enddo
+        distances_totheplane = (distances_totheplane)*self%smpd
+        open(119, file='Radii')
+        write (119,*) 'r=[...'
+        do i = 1, cnt
+            write (119,'(A)', advance='no') trim(real2str(radii(i)))
+            if(i < cnt) write (119,'(A)', advance='no') ', '
+        end do
+        write (119,*) '];'
+        close(119)
+        open(119, file='DistancesToThePlane')
+        write (119,*) 'd=[...'
+        do i = 1, cnt
+            write (119,'(A)', advance='no') trim(real2str(distances_totheplane(i)))
+            if(i < cnt) write (119,'(A)', advance='no') ', '
+        end do
+        write (119,*) '];'
+        close(119)
+        call img_plane%kill
+        deallocate(plane)
+    contains
+        ! Find the plane that minimises the distance between
+        ! a given set of points.
+        ! It consists in a solution of a overdetermined system with
+        ! the left pseudo inverse.
+        ! SOURCE :
+        ! https://stackoverflow.com/questions/1400213/3d-least-squares-plane
+        ! The output plane will have cartesian equation
+        ! vec(1)x + vec(2)y - z = -vec(3).
+        ! FORMULA
+        ! sol = inv(transpose(M)*M)*transpose(M)*b
+        function plane_from_points(points) result(sol)
+            real,                intent(inout) :: points(:,:) !input
+            real    :: sol(3)  !vec(1)x + vec(2)y - z = -vec(3).
+            real    :: M(size(points, dim = 2),3), b(size(points, dim = 2)), invM(3,size(points, dim = 2))
+            real    :: prod(3,3), prod_inv(3,3), prod1(3,size(points, dim = 2))
+            integer :: errflg ! if manages to find inverse matrix
+            integer :: p
+            integer :: N ! number of points
+            if(size(points, dim=1) /=3) then
+                write(logfhandle,*) 'Need to input points in 3D!; plane_from_points'
+                return
+            endif
+            if(size(points, dim=2) < 3) then
+                write(logfhandle,*) 'Not enough input points to fit a plane!; plane_from_points'
+                return
+            endif
+            N = size(points, dim=2)
+            do p = 1, N
+                M(p,1) =  points(1,p)
+                M(p,2) =  points(2,p)
+                M(p,3) =  1.
+                b(p)   =  points(3,p)
+            enddo
+            prod  = matmul(transpose(M),M)
+            call matinv(prod,prod_inv,3,errflg)
+            if( errflg /= 0 ) THROW_HARD('Couldn t find inverse matrix! ;plane_from_points')
+            prod1 = matmul(prod_inv,transpose(M))
+            sol   = matmul(prod1,b)
+            print *, 'Solution'
+            print *, sol
+        end function plane_from_points
+    end subroutine identify_atom_planes
 
     subroutine kill_nanoparticle(self)
         class(nanoparticle), intent(inout) :: self

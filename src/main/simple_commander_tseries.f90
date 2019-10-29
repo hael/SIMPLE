@@ -710,22 +710,24 @@ contains
     end subroutine exec_detect_atoms
 
     subroutine exec_atoms_rmsd( self, cline )
-        use simple_ori,            only: ori
-        use simple_projector,      only: projector
-        use simple_projector_hlev, only:rotvol
-        use simple_volprep,        only: read_and_prep_vol
-        use simple_vol_srch
-        use simple_volpft_srch
+        use simple_nanoparticles_mod
+        use simple_commander_volops, only: dock_volpair_commander
+        use simple_image,            only: image
+        use simple_ori,              only: ori
+        use simple_atoms,            only: atoms
         class(atoms_rmsd_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline !< command line input
+        type(dock_volpair_commander) :: xdock_volpair
         type(parameters)   :: params
         type(nanoparticle) :: nano1, nano2
-        type(image)        :: vol_out
-        type(ori)          :: orientation, orientation_best
-        type(projector)    :: vol1, vol2
-        real    :: cxyz(4), cxyz2(4)
-        real    :: smpd
-        integer :: i
+        type(cmdline)      :: cline_dock
+        type(ori)   :: orientation
+        type(oris)  :: ori2read
+        type(atoms) :: atom_coord
+        real        :: cxyz(3)
+        real        :: smpd, mat(3,3), shift(3)
+        integer     :: ldim(3), nptcls
+        integer     :: i
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_atoms_rmsd')
@@ -741,6 +743,7 @@ contains
         endif
         if(cline%defined('element')) then
             call nano1%new(params%vols(1), params%smpd,params%element)
+            call nano2%new(params%vols(2), params%smpd,params%element)
         else
             call nano1%new(params%vols(1), params%smpd)
             call nano2%new(params%vols(2), params%smpd)
@@ -748,74 +751,41 @@ contains
         call nano1%set_atomic_coords(trim(get_fbody(params%vols(1), 'mrc'))//'_atom_centers.pdb')
         ! execute
         if(params%dock .eq. 'yes') then
-            ! prep vols
-            call read_and_prep_vol(params%vols(1), vol1)
-            call read_and_prep_vol(params%vols(2), vol2)
-            ! call cline%set('hp', 100.)z
-            call cline%set('lp_start', 1.)
-            call cline%set('lp_stop',  3.)
-            call cline%set('mask',  60.)
-            ! grid search with volpft (icosahedral sampling geometry) using lpstart low-pass limit
-            call volpft_srch_init(vol1, vol2, params%hp, params%lpstart)
-            orientation = volpft_srch_minimize()
-            ! rotate vol to create reference for shift alignment
-            call vol2%ifft
-            vol_out = rotvol(vol2, orientation)
-            call vol2%fft
-            call vol_out%fft
-            ! continuous shift alignment using lpstart low-pass limit
-            call vol_srch_init(vol1, vol_out, params%hp, params%lpstart, params%trs)
-            cxyz = vol_shsrch_minimize()
-            ! re-search the angular grid with the shifts in-place
-            call volpft_srch_set_shvec(cxyz(2:4))
-            orientation = volpft_srch_minimize()
-            ! Refinment using lpstop low-pass limit
-            call volpft_srch_init(vol1, vol2, params%hp, params%lpstop)
-            call vol_srch_init(vol1, vol_out, params%hp, params%lpstop, params%trs)
-            do i=1,10
-                ! rotate and shift vol to create reference for shift alignment
-                call vol2%ifft
-                vol_out = rotvol(vol2, orientation, cxyz(2:4))
-                call vol2%fft
-                call vol_out%fft
-                cxyz2 = vol_shsrch_minimize()
-                if( cxyz2(1) > 0. )then ! a better solution was found
-                    ! obtain joint shifts by vector addition
-                    cxyz(2:4) = cxyz(2:4) + cxyz2(2:4)
-                    ! update shifts in volpft_srch class and refine angles
-                    call volpft_srch_set_shvec(cxyz(2:4))
-                    if( i <= 3 )then
-                        orientation_best = volpft_srch_refine(orientation)
-                    else
-                        orientation_best = volpft_srch_refine(orientation, angres=5.)
-                    endif
-                    orientation = orientation_best
-                    call orientation%set('x', cxyz(2))
-                    call orientation%set('y', cxyz(3))
-                    call orientation%set('z', cxyz(4))
-                endif
-            end do
-            ! rotate and shift vol for output
-            call vol2%ifft
-            vol_out = rotvol(vol2, orientation, cxyz(2:4))
-            ! write
-            call vol_out%write(params%outvol, del_if_exists=.true.)
-            ! destruct
-            call volpft_srch_kill
-            ! end gracefully
-            call simple_end('**** SIMPLE_DOCK_VOLPAIR NORMAL STOP ****')
-            !!!!!!!!!!!!!!
-            if(cline%defined('element')) then
-                call nano2%new(params%outvol, params%smpd,params%element)
-            else
-                call nano2%new(params%outvol, params%smpd)
-            endif
-            !!!!!!!!!!!!!!!
-            ! now needs to identify new atomic positions
-            call nano2%identify_atomic_pos()
+            cline_dock = cline
+            call cline_dock%set('lpstart', 1.)
+            call cline_dock%set('lpstop',  3.)
+            call cline_dock%set('msk',  60.)
+            call cline_dock%set('mkdir', 'no')
+            call cline_dock%set('nthr',0.)
+            call cline_dock%set('outfile', 'algndoc.txt')
+            call cline_dock%set('outvol', trim(get_fbody(params%vols(2), 'mrc'))//'docked.mrc')
+            call xdock_volpair%execute(cline_dock)
+            !1) Center the coords
+            call find_ldim_nptcls(params%vols(2),ldim, nptcls,smpd)
+            cxyz = (real(ldim)/2.)*smpd
+            call atom_coord%new(trim(get_fbody(params%vols(2), 'mrc'))//'_atom_centers.pdb')
+            call atom_coord%translate(-cxyz)
+            !2) Rotate the coords
+            call ori2read%new(1)
+            call ori2read%read('algndoc.txt')
+            call ori2read%get_ori(1,orientation)
+            call ori2read%kill
+            mat = orientation%get_mat()
+            call atom_coord%rotate(mat)
+            !3) Translate back
+            call atom_coord%translate(cxyz)
+            !4) Shift
+            shift = orientation%get_3Dshift()
+            call orientation%kill
+            call atom_coord%translate(shift)
+            !5) Set new coords
+            call atom_coord%writePDB(    trim(get_fbody(params%vols(2), 'mrc'))//'_ROTATEDatom_centers')
+            call atom_coord%kill
+            call nano2%set_atomic_coords(trim(get_fbody(params%vols(2), 'mrc'))//'_ROTATEDatom_centers.pdb')
         else ! no DOCKING
             call nano2%set_atomic_coords(trim(get_fbody(params%vols(2), 'mrc'))//'_atom_centers.pdb')
         endif
+        ! RMSD calculation
         call nano1%atoms_rmsd(nano2)
         ! kill
         call nano1%kill
@@ -855,6 +825,16 @@ contains
         call nano%set_atomic_coords(trim(get_fbody(params%vols(1), 'mrc'))//'_atom_centers.pdb')
         call nano%set_img(trim(get_fbody(params%vols(1), 'mrc'))//'CC.mrc', 'img_cc')
         call nano%radial_dependent_stats(min_rad,max_rad,step)
+        ! fetch again, after killing
+        if(cline%defined('element')) then
+            call nano%new(params%vols(1), params%smpd,params%element)
+        else
+            call nano%new(params%vols(1), params%smpd)
+        endif
+        call nano%set_atomic_coords(trim(get_fbody(params%vols(1), 'mrc'))//'_atom_centers.pdb')
+        call nano%set_img(trim(get_fbody(params%vols(1), 'mrc'))//'CC.mrc', 'img_cc')
+        ! calculate intensity statistics
+        call nano%atom_intensity_stats()
         ! kill
         call nano%kill
         ! end gracefully

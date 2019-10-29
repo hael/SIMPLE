@@ -497,11 +497,13 @@ contains
 
     subroutine exec_dock_volpair( self, cline )
         use simple_vol_srch
+        use simple_oris, only: oris
         class(dock_volpair_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters) :: params
         type(projector)  :: vol1, vol2
         type(image)      :: vol_out
+        type(oris)       :: ori2write
         type(ori)        :: orientation, orientation_best
         real             :: cxyz(4), cxyz2(4)
         integer          :: i
@@ -538,7 +540,7 @@ contains
                 ! Refinment using lpstop low-pass limit
                 call volpft_srch_init(vol1, vol2, params%hp, params%lpstop)
                 call vol_srch_init(vol1, vol_out, params%hp, params%lpstop, params%trs)
-                do i=1,10
+                do i=1,5
                     ! rotate and shift vol to create reference for shift alignment
                     call vol2%ifft
                     vol_out = rotvol(vol2, orientation, cxyz(2:4))
@@ -564,6 +566,12 @@ contains
                 ! rotate and shift vol for output
                 call vol2%ifft
                 vol_out = rotvol(vol2, orientation, cxyz(2:4))
+                if( cline%defined('outfile') )then
+                    call ori2write%new(1)
+                    call ori2write%set_ori(1,orientation)
+                    call ori2write%write(params%outfile)
+                    call ori2write%kill
+                endif
                 ! write
                 call vol_out%write(params%outvol, del_if_exists=.true.)
                 ! destruct
@@ -573,6 +581,12 @@ contains
             case DEFAULT
                 write(logfhandle,*) 'dockmode: ', trim(params%dockmode), ' is unsupported'
         end select
+        ! cleanup
+        call vol1%kill
+        call vol2%kill
+        call vol_out%kill
+        call orientation%kill
+        call orientation_best%kill
         ! end gracefully
         call simple_end('**** SIMPLE_DOCK_VOLPAIR NORMAL STOP ****')
     end subroutine exec_dock_volpair

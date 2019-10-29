@@ -2440,14 +2440,16 @@ contains
         end select
     end function pixels_dist_1
 
-    function pixels_dist_2( px, vec, which, mask, location) result( dist )
+    function pixels_dist_2( px, vec, which, mask, location, keep_zero) result( dist )
         real,              intent(in)     :: px(3)
         real,              intent(in)     :: vec(:,:)
         character(len=*),  intent(in)     :: which
         logical,           intent(inout)  :: mask(:)
         integer, optional, intent(out)    :: location(1)
+        logical, optional, intent(in)     :: keep_zero   ! when calculating min dist, let 0 be the output
         real    :: dist
         integer :: i
+        logical :: kkeep_zero
         if(size(mask,1) .ne. size(vec, dim = 2))  write(logfhandle,*)'Error! Incompatible sizes mask and input vector; pixels_dist_2'
         if(any(mask .eqv. .false.) .and. which .eq. 'sum')  write(logfhandle,*)'Attention! Not considering mask for sum; pixels_dist_2'
         select case(which)
@@ -2455,13 +2457,18 @@ contains
             dist =  maxval(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
             if(present(location)) location = maxloc(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
         case('min')
-            !to calculation of the 'min' excluding the pixel itself, otherwise it d always be 0
-            do i = 1, size(vec, dim = 2)
-                if(      abs(px(1)-vec(1,i)) < TINY .and. abs(px(2)-vec(2,i)) < TINY  &
-                &  .and. abs(px(3)-vec(3,i)) < TINY )then
-                    mask(i) = .false.
-                endif
-            enddo
+            kkeep_zero = .false. ! default
+            if(present(keep_zero)) kkeep_zero = keep_zero
+            if(.not. kkeep_zero ) then
+                !to calculation of the 'min' excluding the pixel itself, otherwise it d always be 0
+                do i = 1, size(vec, dim = 2)
+                    if(      abs(px(1)-vec(1,i)) < TINY .and. abs(px(2)-vec(2,i)) < TINY  &
+                    &  .and. abs(px(3)-vec(3,i)) < TINY )then
+                        mask(i) = .false.
+                        exit
+                    endif
+                enddo
+            endif
             dist =  minval(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
             if(present(location)) location = minloc(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
         case('sum')

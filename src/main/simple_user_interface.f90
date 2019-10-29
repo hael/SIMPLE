@@ -1459,7 +1459,7 @@ contains
         &'Dock a pair of volumes',&                     ! descr_short
         &'is a program for docking a pair of volumes',& ! descr long
         &'simple_exec',&                                ! executable
-        &3, 1, 0, 2, 3, 1, 1, .false.)                  ! # entries in each group, requires sp_project
+        &3, 2, 0, 2, 3, 1, 1, .false.)                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call dock_volpair%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Reference volume', &
@@ -1469,6 +1469,7 @@ contains
         call dock_volpair%set_input('img_ios', 3, outvol)
         ! parameter input/output
         call dock_volpair%set_input('parm_ios', 1, smpd)
+        call dock_volpair%set_input('parm_ios', 2,  outfile)
         ! alternative inputs
         ! <empty>
         ! search controls

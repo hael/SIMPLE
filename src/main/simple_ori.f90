@@ -550,7 +550,7 @@ contains
         real :: vec(3)
         vec(1) = self%htab%get('x')
         vec(2) = self%htab%get('y')
-        vec(2) = self%htab%get('z')
+        vec(3) = self%htab%get('z')
     end function get_3Dshift
 
     !>  \brief  is a getter

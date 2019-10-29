@@ -73,6 +73,7 @@ type :: atoms
     procedure          :: convolve
     ! MODIFIERS
     procedure          :: translate
+    procedure          :: rotate
     ! DESTRUCTOR
     procedure          :: kill
 end type atoms
@@ -578,6 +579,12 @@ contains
         self%xyz(:,2) = self%xyz(:,2) + shift(2)
         self%xyz(:,3) = self%xyz(:,3) + shift(3)
     end subroutine translate
+
+    subroutine rotate( self, mat )
+        class(atoms), intent(inout) :: self
+        real,         intent(in)    :: mat(3,3)
+        self%xyz = matmul(self%xyz,transpose(mat))
+    end subroutine rotate
 
     ! DESTRUCTOR
     subroutine kill( self )
