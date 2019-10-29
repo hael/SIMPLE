@@ -3779,7 +3779,7 @@ contains
         &'Track particles in time-series',&                                      ! descr_short
         &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
         &'simple_distr_exec',&                                                   ! executable
-        &0, 3, 0, 2, 6, 0, 2, .true.)                                            ! # entries in each group, requires sp_project
+        &0, 2, 0, 2, 6, 0, 1, .true.)                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3788,8 +3788,6 @@ contains
         &'Template output tracked series', 'e.g. tracked_ptcl', .true., '')
         call tseries_track%set_input('parm_ios', 2, 'boxfile', 'file', 'List of particle coordinates',&
         &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
-        call tseries_track%set_input('parm_ios', 3, 'ctf', 'binary', 'CTF status of output stacks',&
-        &'CTF status of output stacks(flip|no)', '(flip|no)', .true., '')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3811,8 +3809,7 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call tseries_track%set_input('comp_ctrls', 1, nparts)
-        call tseries_track%set_input('comp_ctrls', 2, nthr)
+        call tseries_track%set_input('comp_ctrls', 1, nthr)
     end subroutine new_tseries_track
 
     subroutine new_update_project

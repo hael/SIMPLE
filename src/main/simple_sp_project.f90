@@ -44,7 +44,6 @@ contains
     procedure          :: map_cavgs_selection
     ! os_mic related methods
     procedure          :: add_single_movie
-    procedure          :: add_single_movie_frame
     procedure          :: add_movies
     procedure          :: add_intgs
     procedure          :: get_movies_table
@@ -559,56 +558,21 @@ contains
         call os_ptr%set(1,'state',1.) ! default on import
     end subroutine add_single_movie
 
-    subroutine add_single_movie_frame( self, framename, ctfvars )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: framename
-        type(ctfparams),           intent(in)    :: ctfvars
-        class(oris),      pointer :: os_ptr
-        character(len=LONGSTRLEN) :: rel_fname
-        integer :: n_os_mic, ldim(3), nframes
-        ! oris object pointer
-        os_ptr => self%os_mic
-        ! check that mic field is empty
-        n_os_mic = os_ptr%get_noris()
-        if( n_os_mic > 0 )then
-            write(logfhandle,*) 'mic field (self%os_mic) already populated with # entries: ', n_os_mic
-            THROW_HARD('add_single_movie_frame')
-        endif
-        ! update ori
-        call os_ptr%new(1)
-        call make_relativepath(CWD_GLOB, framename, rel_fname)
-        call find_ldim_nptcls(trim(rel_fname), ldim, nframes)
-        if( nframes <= 0 )then
-            THROW_WARN('# frames in movie: '//trim(rel_fname)//' <= zero, omitting')
-        else if( nframes == 1 )then
-            call os_ptr%set(1, 'frame', trim(rel_fname))
-            call os_ptr%set(1, 'imgkind', 'frame')
-        else
-            THROW_HARD('multiple frames ('//int2str(nframes)//') not supported; add_single_movie_frame')
-        endif
-        ! updates segment
-        call os_ptr%set(1, 'xdim',  real(ldim(1)))
-        call os_ptr%set(1, 'ydim',  real(ldim(2)))
-        call os_ptr%set(1, 'smpd',  ctfvars%smpd)
-        call os_ptr%set(1, 'kv',    ctfvars%kv)
-        call os_ptr%set(1, 'cs',    ctfvars%cs)
-        call os_ptr%set(1, 'fraca', ctfvars%fraca)
-        ! CTF flag not set at this point
-        call os_ptr%set(1,'state',1.) ! default on import
-    end subroutine add_single_movie_frame
-
     !> Add/append movies or micrographs without ctf parameters
-    subroutine add_movies( self, movies_array, ctfvars )
+    subroutine add_movies( self, movies_array, ctfvars, singleframe )
         class(sp_project), target, intent(inout) :: self
         character(LONGSTRLEN),     intent(in)    :: movies_array(:)
         type(ctfparams),           intent(in)    :: ctfvars
+        logical,         optional, intent(in)    :: singleframe
         class(oris),      pointer     :: os_ptr
         type(ctfparams)               :: prev_ctfvars
         character(len=:), allocatable :: name
         character(len=LONGSTRLEN)     :: rel_moviename
         integer                       :: imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot, nframes_first
-        logical                       :: is_movie
+        logical                       :: is_movie, l_singleframe
         is_movie = .true.
+        l_singleframe = .false.
+        if( present(singleframe) ) l_singleframe = singleframe
         ! oris object pointer
         os_ptr => self%os_mic
         ! read movie names
@@ -643,8 +607,13 @@ contains
                     call os_ptr%set(imic, 'imgkind', 'movie')
                     is_movie = .true.
                 else
-                    call os_ptr%set(imic, 'intg',  trim(rel_moviename))
-                    call os_ptr%set(imic, 'imgkind', 'mic')
+                    if( l_singleframe )then
+                        call os_ptr%set(imic, 'frame',   trim(rel_moviename))
+                        call os_ptr%set(imic, 'imgkind', 'frame')
+                    else
+                        call os_ptr%set(imic, 'intg',    trim(rel_moviename))
+                        call os_ptr%set(imic, 'imgkind', 'mic')
+                    endif
                     is_movie = .false.
                 endif
                 if( nframes_first == 0 )then
@@ -685,7 +654,11 @@ contains
         if( is_movie )then
             name = 'MOVIE(S)'
         else
-            name = 'MICROGRAPH(S)'
+            if( l_singleframe )then
+                name = 'FRAME(S)'
+            else
+                name = 'MICROGRAPH(S)'
+            endif
         endif
         write(logfhandle,'(A13,I6,A1,A)')'>>> IMPORTED ', nmics,' ', trim(name)
         write(logfhandle,'(A20,A,A1,I6)')'>>> TOTAL NUMBER OF ', trim(name),':',ntot

@@ -130,12 +130,10 @@ contains
         ctfvars%fraca = params%fraca
         ! import the individual frames
         call spproj%read(params%projfile)
-        do iframe=1,nfiles
-            call spproj%add_single_movie_frame(filenames(iframe), ctfvars)
-        end do
+        call spproj%add_movies(filenames, ctfvars, singleframe=.true.)
         call spproj%write
         ! end gracefully
-        call simple_end('**** tseries_import NORMAL STOP ****')
+        call simple_end('**** TSERIES_IMPORT NORMAL STOP ****')
     end subroutine exec_tseries_import
 
     subroutine exec_tseries_track_distr( self, cline )
@@ -150,10 +148,9 @@ contains
         real,        allocatable      :: boxdata(:,:)
         type(chash), allocatable      :: part_params(:)
         integer :: ndatlines, numlen, alloc_stat, j, orig_box, ipart
-        call cline%set('nthr', 1.0)
+        call cline%set('nparts', 1.0)
         if( .not. cline%defined('neg')       ) call cline%set('neg',      'yes')
         if( .not. cline%defined('lp')        ) call cline%set('lp',         2.0)
-        if( .not. cline%defined('width')     ) call cline%set('width',      1.1)
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      5.0)
         if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp', 10.)
         call params%new(cline)
@@ -177,10 +174,10 @@ contains
             THROW_HARD('inputted boxfile is empty; exec_tseries_track')
         endif
         call boxfile%kill
-        call cline%delete('boxfile')
         params%nptcls = ndatlines
         params%nparts = params%nptcls
         ! box and numlen need to be part of command line
+        if( .not. cline%defined('hp') ) call cline%set('hp', real(orig_box) )
         call cline%set('box',    real(orig_box))
         call cline%set('numlen', real(numlen)  )
         ! prepare part-dependent parameters

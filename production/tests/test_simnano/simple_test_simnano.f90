@@ -92,7 +92,7 @@ call vol_pad%fft
 call vol_pad%expand_cmat(params%alpha)
 call vol_pad%fproject(orientation, graphene)
 ! prep particle
-tfun = ctf(params%smpd, 200., 0.0, 0.4)
+tfun = ctf(params%smpd, 300., 0.0, 0.4)
 call vol_pad%new([params%boxpd, params%boxpd, params%boxpd], params%smpd)
 call particle_vol%new([params%box,params%box,params%box],params%smpd)
 call particle%new([params%boxpd,params%boxpd,1],params%smpd)
