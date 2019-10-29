@@ -1433,7 +1433,7 @@ contains
         &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-comp map',& ! descr long
         &'simple_exec',&                                        ! executable
-        &1, 1, 0, 0, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
+        &1, 1, 0, 0, 1, 0, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
@@ -1449,7 +1449,7 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        !call detect_atoms%set_input('comp_ctrls', 1, nthr) to change if it works
+        call detect_atoms%set_input('comp_ctrls', 1, nthr)
     end subroutine new_detect_atoms
 
     subroutine new_dock_volpair

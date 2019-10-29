@@ -16,6 +16,7 @@ public :: nanoparticle
 ! module global constants
 integer, parameter :: N_THRESH    = 20    !number of thresholds for binarization
 logical, parameter :: DEBUG_HERE  = .false.!for debugging purposes
+integer, parameter :: SOFT_EDGE   = 6
 
 type :: nanoparticle
     private
@@ -96,7 +97,7 @@ contains
         call self%kill
         call simple_getcwd(self%output_dir)
         call self%set_partname(fname)
-        self%fbody = get_fbody(trim(fname), trim(fname2ext(fname)))
+        self%fbody = get_fbody(trim(basename(fname)), trim(fname2ext(fname)))
         self%smpd  = cline_smpd
         if(.not. present(element)) then
             self%element   = 'pt'  !default is pt
@@ -104,32 +105,32 @@ contains
             self%theoretical_radius = 1.1
         else
             select case(element)
-            case('pt')
-                self%element       = 'pt'
-                self%atom_name     = ' pt '
-                self%theoretical_radius = 1.1
-                ! thoretical radius is already set
-            case('pd')
-                self%element       = 'pd'
-                self%atom_name     = ' pd '
-                self%theoretical_radius = 1.12
-            case('fe')
-                self%element       = 'fe'
-                self%atom_name     = ' fe '
-                self%theoretical_radius = 1.02
-            case('au')
-                self%element       = 'au'
-                self%atom_name     = ' au '
-                self%theoretical_radius = 1.23
-            case default
-                THROW_HARD('Unknown atom element; new_nanoparticle')
+                case('pt')
+                    self%element       = 'pt'
+                    self%atom_name     = ' pt '
+                    self%theoretical_radius = 1.1
+                    ! thoretical radius is already set
+                case('pd')
+                    self%element       = 'pd'
+                    self%atom_name     = ' pd '
+                    self%theoretical_radius = 1.12
+                case('fe')
+                    self%element       = 'fe'
+                    self%atom_name     = ' fe '
+                    self%theoretical_radius = 1.02
+                case('au')
+                    self%element       = 'au'
+                    self%atom_name     = ' au '
+                    self%theoretical_radius = 1.23
+                case default
+                    THROW_HARD('Unknown atom element; new_nanoparticle')
            end select
         endif
         !self%sigma = 0.8*theoretical_radius/(2.*sqrt(2.*log(2.))*self%smpd) !0.8 not to have it too big (avoid connecting atoms)
         call find_ldim_nptcls(self%partname,  self%ldim, nptcls, smpd)
-        call self%img%new         (self%ldim, self%smpd)
-        call self%img_raw%new     (self%ldim, self%smpd)
-        call self%img_bin%new     (int(real(self%ldim)), self%smpd)
+        call self%img%new(self%ldim, self%smpd)
+        call self%img_raw%new(self%ldim, self%smpd)
+        call self%img_bin%new(self%ldim, self%smpd)
         call self%img%read(fname)
         call self%img_raw%read(fname)
     end subroutine new_nanoparticle
@@ -143,15 +144,15 @@ contains
          ldim = img%get_ldim()
          if(self%ldim(1) .ne. ldim(1) .or. self%ldim(2) .ne. ldim(2) .or. self%ldim(3) .ne. ldim(3)) THROW_HARD('Wrong dimension in input img; get_img')
          select case(which)
-         case('img')
-             img = self%img
-         case('img_bin')
-             img = self%img_bin
-         case('img_cc')
-             img = self%img_cc
-         case DEFAULT
-             THROW_HARD('Wrong input parameter img type; get_img')
-     end select
+             case('img')
+                 img = self%img
+             case('img_bin')
+                 img = self%img_bin
+             case('img_cc')
+                 img = self%img_cc
+             case DEFAULT
+                 THROW_HARD('Wrong input parameter img type; get_img')
+         end select
      end subroutine get_img
 
      subroutine get_ldim(self,ldim)
@@ -162,21 +163,21 @@ contains
 
      !set one of the images of the nanoparticle type
      subroutine set_img( self, imgfile, which )
-         class(nanoparticle), intent(inout)  :: self
-         character(len=*),    intent(in)     :: imgfile
-         character(len=*),     intent(in)     :: which
+         class(nanoparticle), intent(inout) :: self
+         character(len=*),    intent(in)    :: imgfile
+         character(len=*),    intent(in)    :: which
          select case(which)
-         case('img')
-             call self%img%new(self%ldim, self%smpd)
-             call self%img%read(imgfile)
-         case('img_bin')
-             call self%img_bin%new(self%ldim, self%smpd)
-             call self%img_bin%read(imgfile)
-         case('img_cc')
-             call self%img_cc%new(self%ldim, self%smpd)
-             call self%img_cc%read(imgfile)
-         case DEFAULT
-            THROW_HARD('Wrong input parameter img type; set_img')
+             case('img')
+                 call self%img%new(self%ldim, self%smpd)
+                 call self%img%read(imgfile)
+             case('img_bin')
+                 call self%img_bin%new(self%ldim, self%smpd)
+                 call self%img_bin%read(imgfile)
+             case('img_cc')
+                 call self%img_cc%new(self%ldim, self%smpd)
+                 call self%img_cc%read(imgfile)
+             case DEFAULT
+                THROW_HARD('Wrong input parameter img type; set_img')
         end select
     end subroutine set_img
 
@@ -218,10 +219,9 @@ contains
         x = self%ldim(1)/2 !x-coords of the center
         y = self%ldim(2)/2 !y-coords of the center
         vec1(:)= [0.,1.]   !fixed 2D vector
-        !$omp do collapse(2) schedule(static) private(i,j)
         do i = 1, self%ldim(1)
             do j = 1, self%ldim(2)
-                vec(:) = real([i-x,j-y])  !translate the vector in the origin
+                vec(:) = real([i-x,j-y]) !translate the vector in the origin
                 ang1 = ang2D_vecs(vec1,vec)
                 if(ang1 > 360./real(nb_asym_units) .or. i <= x) then
                     rmat1(i,j,:) = 0.    !set to 0 the all line
@@ -232,14 +232,13 @@ contains
                 if(ang1 < 360./real(nb_asym_units)) rmat3(i,j,:) = 0.
              enddo
         enddo
-        !$omp end do
         call img_asym%new(self%ldim, self%smpd)
         call img_asym%set_rmat(rmat1)
-        call img_asym%write(basename(trim(self%fbody))//'FirstAsymUnit.mrc')
+        call img_asym%write(trim(self%fbody)//'FirstAsymUnit.mrc')
         call img_asym%set_rmat(rmat2)
-        call img_asym%write(basename(trim(self%fbody))//'SecondAsymUnit.mrc')
+        call img_asym%write(trim(self%fbody)//'SecondAsymUnit.mrc')
         call img_asym%set_rmat(rmat3)
-        call img_asym%write(basename(trim(self%fbody))//'ThirdAsymUnit.mrc')
+        call img_asym%write(trim(self%fbody)//'ThirdAsymUnit.mrc')
         call img_asym%kill
         deallocate(rmat1,rmat2,rmat3)
     end subroutine print_asym_unit
@@ -251,64 +250,43 @@ contains
        class(nanoparticle),          intent(inout) :: self
        type(image), optional,        intent(inout) :: img_bin, img_cc
        real, optional, allocatable,  intent(out)   :: coords(:,:)
-       integer :: i
+       real,        pointer :: rmat_cc_in(:,:,:), rmat_raw(:,:,:)
+       logical, allocatable :: mask(:,:,:)
+       integer :: i, ii, jj, kk
+       real    :: m(3), sum_mass
        ! sanity check
        if(present(img_bin) .and. .not. present(img_cc)) THROW_HARD('img_bin and img_cc have to be both present in input')
        ! global variables allocation
        if(allocated(self%centers)) deallocate(self%centers)
-       allocate(self%centers(3,self%n_cc),source = 0.)     !global variable
-       !$omp do collapse(1) schedule(static) private(i)
+       allocate(self%centers(3,self%n_cc),source = 0.)
+       if(present(img_cc)) then
+           call img_cc%get_rmat_ptr(rmat_cc_in)
+       else
+           call self%img_cc%get_rmat_ptr(rmat_cc_in)
+       endif
+       call self%img_raw%get_rmat_ptr(rmat_raw)
+       allocate(mask(self%ldim(1),self%ldim(2),self%ldim(3)), source = .true.)
+       !$omp parallel do default(shared) private(i,ii,jj,kk,mask,m,sum_mass) schedule(static) proc_bind(close)
        do i=1,self%n_cc
-           if(present(img_bin)) then
-               self%centers(:,i) = atom_masscen(self,i,img_cc)
-           else
-               self%centers(:,i) = atom_masscen(self,i)
-           endif
-       enddo
-       !$omp end do
-       ! saving centers coordinates, optional
-       if(present(coords)) allocate(coords(3,self%n_cc), source = self%centers)
-    contains
-
-       !This function calculates the centers of mass of an
-       !atom. It takes in input the image, its connected
-       !component (cc) image and the label of the cc that
-       !identifies the atom whose center of mass is to be
-       !calculated. The result is stored in m.
-       function atom_masscen(self, label, img_cc) result(m)
-           type(nanoparticle),    intent(inout) :: self
-           integer,               intent(in)    :: label
-           type(image), optional, intent(inout) :: img_cc
-           logical, allocatable :: mask(:,:,:)
-           real, pointer        :: rmat_cc_in(:,:,:), rmat_raw(:,:,:)
-           real    :: m(3)  !mass center coords
-           real    :: sum_mass
-           integer :: i, j, k
-           if(present(img_cc)) then
-               allocate(mask(self%ldim(1),self%ldim(2),self%ldim(3)), source = .true.)
-               call img_cc%get_rmat_ptr(rmat_cc_in)
-           else
-               call self%img_cc%get_rmat_ptr(rmat_cc_in)
-               allocate(mask(self%ldim(1),self%ldim(2),self%ldim(3)), source = .true.)
-           endif
-           where(     abs(rmat_cc_in(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(label)) > TINY) mask = .false.
-           call self%img_raw%get_rmat_ptr(rmat_raw)
+           mask = .true.
+           where(abs(rmat_cc_in(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(i)) > TINY) mask = .false.
            m        = 0.
            sum_mass = 0.
-           !$omp do collapse(3) schedule(static) reduction(+:m) private(i,j,k)
-           do i = 1, self%ldim(1)
-               do j = 1, self%ldim(2)
-                   do k = 1, self%ldim(3)
-                       if(mask(i,j,k)) then
-                           m = m + real([i,j,k])*rmat_raw(i,j,k)
-                           sum_mass = sum_mass + rmat_raw(i,j,k)
+           do ii = 1, self%ldim(1)
+               do jj = 1, self%ldim(2)
+                   do kk = 1, self%ldim(3)
+                       if(mask(ii,jj,kk)) then
+                           m = m + real([ii,jj,kk]) * rmat_raw(ii,jj,kk)
+                           sum_mass = sum_mass + rmat_raw(ii,jj,kk)
                        endif
                    enddo
                enddo
            enddo
-           !$omp end do
-           m = m/sum_mass
-       end function atom_masscen
+           self%centers(:,i) = m/sum_mass
+       enddo
+       !$omp end parallel do
+       ! saving centers coordinates, optional
+       if(present(coords)) allocate(coords(3,self%n_cc), source = self%centers)
     end subroutine find_centers
 
     subroutine write_centers(self, fname, coords)
@@ -318,22 +296,18 @@ contains
         integer :: cc
         if(present(coords)) then
             call self%centers_pdb%new(size(coords, dim = 2), dummy=.true.)
-            !$omp parallel do schedule(static) private(cc)
             do cc=1,size(coords, dim = 2)
                 call self%centers_pdb%set_name(cc,self%atom_name)
                 call self%centers_pdb%set_element(cc,self%element)
                 call self%centers_pdb%set_coord(cc,(coords(:,cc)-1.)*self%smpd)
             enddo
-            !$omp end parallel do
         else
             call self%centers_pdb%new(self%n_cc, dummy=.true.)
-            !$omp parallel do schedule(static) private(cc)
             do cc=1,self%n_cc
                 call self%centers_pdb%set_name(cc,self%atom_name)
                 call self%centers_pdb%set_element(cc,self%element)
                 call self%centers_pdb%set_coord(cc,(self%centers(:,cc)-1.)*self%smpd)
             enddo
-            !$omp end parallel do
         endif
         if(present(fname)) then
             call self%centers_pdb%writepdb(fname)
@@ -366,13 +340,16 @@ contains
          class(nanoparticle), intent(inout) :: self
          real    :: m(3)  !mass center coords
          integer :: i, j, k
-         m = 0.
-         !$omp parallel do schedule(static) reduction(+:m) private(i)
-         do i = 1, self%n_cc
-              m = m + 1.*self%centers(:,i)
-         enddo
-         !$omp end parallel do
-         m = m/real(self%n_cc)
+         ! H&C
+         ! m = 0.
+         ! !$omp parallel do schedule(static) reduction(+:m) private(i)
+         ! do i = 1, self%n_cc
+         !      m = m + 1.*self%centers(:,i)
+         ! enddo
+         ! !$omp end parallel do
+         !
+         ! m = m/real(self%n_cc)
+          m = sum(self%centers(:,:), dim=2) /real(self%n_cc)
      end function nanopart_masscen
 
     ! This subroutine takes in input 2 2D vectors, centered in the origin
@@ -381,8 +358,7 @@ contains
         real, intent(inout) :: vec1(2), vec2(2)
         real :: ang        !output angle
         real :: ang_rad    !angle in radians
-        real :: mod1, mod2
-        real :: dot_prod
+        real :: mod1, mod2, dot_prod
         mod1 = sqrt(vec1(1)**2+vec1(2)**2)
         mod2 = sqrt(vec2(1)**2+vec2(2)**2)
         ! normalise
@@ -444,8 +420,7 @@ contains
     subroutine phasecorrelation_nano_gaussian(self)
         use simple_segmentation
         class(nanoparticle), intent(inout) :: self
-        type(image) :: one_atom
-        type(image) :: phasecorr
+        type(image) :: one_atom, phasecorr
         type(atoms) :: atom
         real :: cutoff, o_t
         call phasecorr%new(self%ldim, self%smpd)
@@ -459,9 +434,10 @@ contains
         call one_atom%fft()
         call self%img%fft()
         call self%img%phase_corr(one_atom,phasecorr,1.)
-        call phasecorr%write(PATH_HERE//basename(trim(self%fbody))//'CorrFiltered.mrc')
+        call phasecorr%write(trim(self%fbody)//'CorrFiltered.mrc')
         call self%img%copy(phasecorr)
         call one_atom%kill()
+        call phasecorr%kill()
     end subroutine phasecorrelation_nano_gaussian
 
     ! This subrotuine takes in input a nanoparticle and
@@ -474,7 +450,7 @@ contains
         class(nanoparticle), intent(inout) :: self
         type(image)       :: img_bin_thresh(N_THRESH/2-1)
         type(image)       :: img_ccs_thresh(N_THRESH/2-1)
-        type(image)       :: pc(N_THRESH/2-1)
+        type(image)       :: pc
         type(atoms)       :: atom
         type(image)       :: simulated_distrib
         integer, allocatable :: imat_t(:,:,:)
@@ -493,8 +469,8 @@ contains
         step = (maxval(x_mat)-otsu_thresh )/real(N_THRESH)
         deallocate(x_mat)
         call simulated_distrib%new(self%ldim,self%smpd)
+        call pc%new(self%ldim,self%smpd)
         call self%img%fft ! for pc calculation
-        !$omp do collapse(1) schedule(static) private(i)
         do i = 1, N_THRESH/2-1
             call progress(i, N_THRESH/2-1)
             call img_bin_thresh(i)%new(self%ldim, self%smpd)
@@ -512,7 +488,7 @@ contains
             call img_bin_thresh(i)%set_rmat(real(imat_t))
             call img_bin_thresh(i)%find_connected_comps(img_ccs_thresh(i))
             ! Find atom centers in the generated distributions
-            call self%update_self_ncc(img_ccs_thresh(i)) !self%n_cc is needed in find_centers
+            call self%update_self_ncc(img_ccs_thresh(i)) ! self%n_cc is needed in find_centers
             call self%find_centers(img_bin_thresh(i), img_ccs_thresh(i), coords)
             ! Generate a simulated distribution based on those center
             call self%write_centers('centers_'//trim(int2str(i))//'_iteration', coords)
@@ -523,31 +499,26 @@ contains
             call atom%kill
             ! Take care of Fourier status, for phase_corr calculation
             call simulated_distrib%fft
-            call pc(i)%new(self%ldim,self%smpd)
-            call pc(i)%zero_and_flag_ft
+            call pc%zero_and_flag_ft
             ! Correlation volume generation
-            call self%img%phase_corr(simulated_distrib, pc(i), lp=3.)
-            if(DEBUG_HERE) call pc(i)%write('phasecorr_'//trim(int2str(i))//'_iteration.mrc')
+            call self%img%phase_corr(simulated_distrib, pc, lp=3.)
             ! Calculation and update of the maxval the correlation reaches
-            mm = pc(i)%minmax()
+            mm = pc%minmax()
             if(mm(2) > maximum) then
                 maximum = mm(2)
                 t       = i
             endif
             call simulated_distrib%ifft
         enddo
-        !$omp end do
         call self%img%ifft ! To remove
         write(logfhandle,*) 'Selected threshold: ', x_thresh(t)
         ! Update img_bin and img_cc
         call self%img_bin%copy(img_bin_thresh(t))
         call self%img_cc%copy(img_ccs_thresh(t))
-        !$omp parallel do schedule(static) private(i)
         do i = 1,  N_THRESH/2-1
             call img_bin_thresh(i)%kill
             call img_ccs_thresh(i)%kill
         enddo
-        !$omp end parallel do
         ! deallocate and kill
         if(allocated(rmat))   deallocate(rmat)
         if(allocated(imat_t)) deallocate(imat_t)
@@ -633,7 +604,6 @@ contains
         write(logfhandle, *) '****outliers discarding, completed'
     end subroutine discard_outliers
 
-
     ! This subrouitne validates the identified atomic positions
     subroutine validate_atomic_positions(self)
         class(nanoparticle), intent(inout) :: self
@@ -673,16 +643,16 @@ contains
             self%centers(:,n_cc) = new_centers(:,n_cc)
         enddo
         call self%img_bin%get_rmat_ptr(rmat_bin)
-        call self%img_bin%write(PATH_HERE//basename(trim(self%fbody))//'BINbeforeValidation.mrc') !if(DEBUG_HERE)
+        call self%img_bin%write(trim(self%fbody)//'BINbeforeValidation.mrc') !if(DEBUG_HERE)
         ! Update binary image
         where(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) > 0.)
             rmat_bin(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
         elsewhere
             rmat_bin(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
         endwhere
-        call self%img_bin%write(PATH_HERE//basename(trim(self%fbody))//'BIN.mrc')
+        call self%img_bin%write(trim(self%fbody)//'BIN.mrc')
         call self%img_bin%find_connected_comps(self%img_cc)
-        call self%img_cc%write(PATH_HERE//basename(trim(self%fbody))//'CC.mrc')
+        call self%img_cc%write(trim(self%fbody)//'CC.mrc')
         ! Update number of ccs
         call self%update_self_ncc()
         ! Update and write centers
@@ -719,6 +689,10 @@ contains
                 & (imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) == n_cc) .and. .not. mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))
                 if(any(new_center2 > 0)) then !if anything was found
                     !Validate second center (check if it's 2 merged atoms, or one pointy one)
+
+                    ! READABILITY
+                    ! sum(real(new_center2-new_center1)**2.)
+
                     if(sqrt((real(new_center2(1)-new_center1(1))**2+real(new_center2(2)-new_center1(2))**2+real(new_center2(3)-new_center1(3))**2)*self%smpd) <= 2.*self%theoretical_radius) then
                         ! Set the merged cc back to 0
                         where((abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(n_cc))<TINY) .and. (.not.mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))) rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
@@ -964,11 +938,9 @@ contains
                endif
            enddo
            self%avg_dist_atoms = sum(dist)/real(size(coords,dim=2)-n_discard)
-           !$omp parallel do schedule(static) private(i) reduction(+:stdev)
            do i = 1, size(coords,dim=2)
                if(dist(i)*self%smpd <=3.*self%theoretical_radius) stdev = stdev + (dist(i)-self%avg_dist_atoms)**2
            enddo
-           !$omp end parallel do
            stdev = sqrt(stdev/real(size(coords,dim=2)-1-n_discard))
            med = median(dist)
            if(present(volume)) then
@@ -1032,11 +1004,9 @@ contains
        allocate(longest_dist(self%n_cc),             source = 0.)
        allocate(self%loc_longest_dist(3,self%n_cc),  source = 0 )
        call self%find_centers() !TO KEEP
-       !$omp parallel do schedule(static) private(label)
        do label = 1, self%n_cc
            call self%calc_aspect_ratio(label, self%ratios(label),lld=.true., ld=longest_dist(label), print_ar=print_ar)
        enddo
-       !$omp end parallel do
        longest_dist = 2.*longest_dist ! radius --> diameter
        min_diameter = minval(longest_dist(1:self%n_cc))
        max_diameter = maxval(longest_dist(1:self%n_cc))
@@ -1344,7 +1314,6 @@ contains
         vec_fixed(2) = 0.
         vec_fixed(3) = 1.
         write(logfhandle,*)'>>>>>>>>>>>>>>>> calculating angles wrt the vector [0,0,1]'
-        !$omp parallel do schedule(static) private(k)
         do k = 1, self%n_cc
             if(sz(k) > 2) then
                 self%ang_var(k) = ang3D_vecs(vec_fixed(:),loc_ld_real(:,k))
@@ -1353,7 +1322,6 @@ contains
             endif
             if(DEBUG_HERE) write(logfhandle,*) 'ATOM ', k, 'angle between direction longest dim and vec [0,0,1] ', self%ang_var(k)
         enddo
-        !$omp end parallel do
         ! Matlab compatible File
         ! open(129, file='AnglesLongestDims')
         ! write (129,*) 'ang=[...'
@@ -1403,7 +1371,6 @@ contains
         call self%img_cc%get_rmat_ptr(rmat_cc)
         allocate(imat_onecls(self%ldim(1),self%ldim(2),self%ldim(3), ncls), source = 0)
         allocate(img_clusters(ncls))
-        !$omp do collapse(2) schedule(static) private(i,j)
         do i = 1, dim
             do j = 1, ncls
                 call img_clusters(j)%new(self%ldim,self%smpd)
@@ -1412,7 +1379,6 @@ contains
                 endif
             enddo
         enddo
-        !$omp end do
         do j = 1, ncls
             call img_clusters(j)%set_rmat(real(imat_onecls(:,:,:,j)))
             call img_clusters(j)%write(int2str(j)//'ClusterAng.mrc')
@@ -1435,7 +1401,6 @@ contains
         allocate(  avg_within(ncls), source = 0.)
         allocate(stdev_within(ncls), source = 0.)
         allocate(cnt(ncls), source = 0)
-        !$omp do collapse(2) schedule(static) private(i,j)
         do i = 1, ncls
             do j = 1, dim
                 if(labels_ap(j) == i) then
@@ -1444,7 +1409,6 @@ contains
             endif
             enddo
         enddo
-        !$omp end do
         avg_within = avg_within/cnt
         write(unit = 111,fmt ='(a,i3)')     'number of atoms in each class = ', cnt(1)
         do i =2, ncls
@@ -1521,7 +1485,6 @@ contains
         call self%img_cc%get_rmat_ptr(rmat_cc)
         allocate(imat_onecls(self%ldim(1),self%ldim(2),self%ldim(3), ncls), source = 0)
         allocate(img_clusters(ncls))
-        !$omp do collapse(2) schedule(static) private(i,j)
         do i = 1, dim
             do j = 1, ncls
                 call img_clusters(j)%new(self%ldim,self%smpd)
@@ -1530,7 +1493,6 @@ contains
                 endif
             enddo
         enddo
-        !$omp end do
         do j = 1, ncls
             call img_clusters(j)%set_rmat(real(imat_onecls(:,:,:,j)))
             call img_clusters(j)%write(int2str(j)//'ClusterAr.mrc')
@@ -1589,7 +1551,6 @@ contains
         call self%img_cc%get_rmat_ptr(rmat_cc)
         allocate(imat_onecls(self%ldim(1),self%ldim(2),self%ldim(3), ncls), source = 0)
         allocate(img_clusters(ncls))
-        !$omp do collapse(2) schedule(static) private(i,j)
         do i = 1, dim
             do j = 1, ncls
                 call img_clusters(j)%new(self%ldim,self%smpd)
@@ -1598,7 +1559,6 @@ contains
                 endif
             enddo
         enddo
-        !$omp end do
         do j = 1, ncls
             call img_clusters(j)%set_rmat(real(imat_onecls(:,:,:,j)))
             call img_clusters(j)%write(int2str(j)//'ClusterDistDistr.mrc')
@@ -1654,7 +1614,7 @@ contains
         call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: cluster, simple_chdir1; ")
         ! performs clustering with respect to max intensity in the
         ! gray values of each atoms, with 2 fixed classes by using
-        ! a Maximum Likelyhood algorithm initialised with kmeans,
+        ! a Maximum Likelihood algorithm initialised with kmeans,
         ! only of the nanoparticle map is heterogeneous.
         if(biatomic .eq. 'yes') then
         ! Kmeans clustering (2 classes) wrt atom intensities
@@ -1675,8 +1635,8 @@ contains
     subroutine make_soft_mask(self) !change the name
         class(nanoparticle), intent(inout) :: self
         call self%img_bin%grow_bins(nint(0.5*self%avg_dist_atoms)+1)
-        call self%img_bin%cos_edge(6)
-        call self%img_bin%write(basename(trim(self%fbody))//'SoftMask.mrc')
+        call self%img_bin%cos_edge(SOFT_EDGE)
+        call self%img_bin%write(trim(self%fbody)//'SoftMask.mrc')
     end subroutine make_soft_mask
 
     subroutine atoms_rmsd(nano1,nano2,r)
@@ -2143,7 +2103,6 @@ end module simple_nanoparticles_mod
     !     !assuming Gaussian distrib, 95% is in [-2sigma,2sigma] and 68% is in [-sigma,sigma]
     !     !big ccs have already been removed by erosion. Now we need to remove too small
     !     !ccs, they usually represent background noise.
-    !     !$omp do collapse(1) schedule(static) private(cc)
     !     do cc = 1, size(sz)
     !         if(sz(cc)<avg_sz-2.*stdev_sz ) then
     !             where(abs(rmat_cc-real(cc)) < TINY)
@@ -2152,7 +2111,6 @@ end module simple_nanoparticles_mod
     !             endwhere
     !          endif
     !     enddo
-    !     !$omp end do
     !     !update img_cc: re-order ccs
     !     call self%img_cc%order_cc()
     !     ! UPDATE IMG_BIN???

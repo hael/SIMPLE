@@ -108,16 +108,6 @@ contains
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
 
-        ! SETUP WEIGHTS
-        select case(trim(params_glob%ptclw))
-            case('yes')
-                call build_glob%spproj_field%calc_soft_weights(params_glob%frac)
-            case('otsu')
-                call build_glob%spproj_field%calc_hard_otsu_weights
-            case DEFAULT
-                call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
-        end select
-
         ! READ FOURIER RING CORRELATIONS
         if( params_glob%nstates.eq.1 )then
             if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
@@ -367,6 +357,16 @@ contains
         ! CALCULATE PROJECTION DIRECTION WEIGHTS
         ! call calc_proj_weights !!!!!!!!!! turned off 4 now, needs integration and testing
 
+        ! CALCULATE PARTICLE WEIGHTS
+        select case(trim(params_glob%ptclw))
+            case('yes')
+                call build_glob%spproj_field%calc_soft_weights(params_glob%frac)
+            case('otsu')
+                call build_glob%spproj_field%calc_hard_otsu_weights
+            case DEFAULT
+                call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
+        end select
+
         ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton
         call pftcc%kill
@@ -405,6 +405,10 @@ contains
                 THROW_HARD('unsupported oritype: '//trim(params_glob%oritype)//'; refine3D_exec')
         end select
         params_glob%oritab = params_glob%outfile
+
+
+
+
 
         ! VOLUMETRIC 3D RECONSTRUCTION
         call calc_3Drec( cline, which_iter )
