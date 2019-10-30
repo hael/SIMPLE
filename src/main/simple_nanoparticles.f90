@@ -37,7 +37,6 @@ type :: nanoparticle
     character(len=4)      :: atom_name   = '    '
     character(len=STDLEN) :: partname    = ''     !fname
     character(len=STDLEN) :: fbody       = ''     !fbody
-    character(len=STDLEN) :: output_dir  = ''
 
   contains
     ! constructor
@@ -88,40 +87,39 @@ contains
 
     !constructor
     subroutine new_nanoparticle(self, fname, cline_smpd, element)
-        use simple_syslib
         class(nanoparticle),      intent(inout) :: self
         character(len=*),         intent(in)    :: fname
         real,                     intent(in)    :: cline_smpd
-        character(len=2),optional,intent(in)    :: element
+        character(len=2),optional,intent(inout) :: element
         integer :: nptcls
         real    :: smpd
         call self%kill
-        call simple_getcwd(self%output_dir)
         call self%set_partname(fname)
         self%fbody = get_fbody(trim(basename(fname)), trim(fname2ext(fname)))
         self%smpd  = cline_smpd
         if(.not. present(element)) then
-            self%element   = 'pt'  !default is pt
-            self%atom_name = ' pt '
+            self%element   = 'PT'  !default is pt
+            self%atom_name = ' PT '
             self%theoretical_radius = 1.1
         else
+            element = upperCase(element)
             select case(element)
-                case('pt')
-                    self%element       = 'pt'
-                    self%atom_name     = ' pt '
+                case('PT')
+                    self%element       = 'PT'
+                    self%atom_name     = ' PT '
                     self%theoretical_radius = 1.1
                     ! thoretical radius is already set
-                case('pd')
-                    self%element       = 'pd'
-                    self%atom_name     = ' pd '
+                case('PD')
+                    self%element       = 'PD'
+                    self%atom_name     = ' PD '
                     self%theoretical_radius = 1.12
-                case('fe')
-                    self%element       = 'fe'
-                    self%atom_name     = ' fe '
+                case('FE')
+                    self%element       = 'FE'
+                    self%atom_name     = ' FE '
                     self%theoretical_radius = 1.02
-                case('au')
-                    self%element       = 'au'
-                    self%atom_name     = ' au '
+                case('AU')
+                    self%element       = 'AU'
+                    self%atom_name     = ' AU '
                     self%theoretical_radius = 1.23
                 case default
                     THROW_HARD('Unknown atom element; new_nanoparticle')
@@ -192,14 +190,13 @@ contains
     subroutine update_self_ncc(self, img_cc)
         class(nanoparticle),   intent(inout) :: self
         type(image), optional, intent(in)    :: img_cc
-        real, pointer :: rmat_cc(:,:,:)
+        real :: mm(2)
         if(present(img_cc)) then
-            call img_cc%get_rmat_ptr(rmat_cc)
+            mm = img_cc%minmax()
         else
-            call self%img_cc%get_rmat_ptr(rmat_cc)
+            mm = self%img_cc%minmax()
         endif
-        self%n_cc = nint(maxval(rmat_cc))
-        rmat_cc => null()
+        self%n_cc = nint(mm(2))
     end subroutine update_self_ncc
 
     ! This subroutine has visualization purpose only.
@@ -600,8 +597,6 @@ contains
         call self%img_cc%get_rmat_ptr(rmat_cc)
         self%n_cc = nint(maxval(rmat_cc)) !update
         call self%find_centers()
-        !root folder
-        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: discard_outliers, simple_chdir; ")
         write(logfhandle, *) '****outliers discarding, completed'
     end subroutine discard_outliers
 
@@ -609,16 +604,16 @@ contains
     subroutine validate_atomic_positions(self)
         class(nanoparticle), intent(inout) :: self
         integer, allocatable :: imat(:,:,:)
-        real,    allocatable :: x(:)
-        real,    pointer     :: rmat_pc(:,:,:), rmat_cc(:,:,:), rmat_bin(:,:,:)
+        real,    allocatable :: x(:), rmat_cc(:,:,:)
+        real,    pointer     :: rmat_pc(:,:,:), rmat_bin(:,:,:)
         integer, parameter   :: RANK_THRESH = 4
         integer :: n_cc, cnt
         integer :: rank, m(1)
         real    :: new_centers(3,2*self%n_cc)   !will pack it afterwards if it has too many elements
         real    :: pc
-        call self%img%get_rmat_ptr(rmat_pc)    !now img contains the phase correlation
-        imat = nint(self%img_cc%get_rmat())
-        call self%img_cc%get_rmat_ptr(rmat_cc) !to pass to the subroutine split_atoms
+        call self%img%get_rmat_ptr(rmat_pc)     !now img contains the phase correlation
+        rmat_cc = self%img_cc%get_rmat()        !to pass to the subroutine split_atoms
+        allocate(imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = nint(rmat_cc))
         cnt = 0
         ! Remember to update the centers
         do n_cc =1, self%n_cc !for each cc check if the center corresponds with the local max of the phase corr
@@ -639,14 +634,14 @@ contains
         deallocate(self%centers)
         self%n_cc = cnt !update
         allocate(self%centers(3,cnt), source = 0.)
-        !update centers
+        ! update centers
         do n_cc =1, cnt
             self%centers(:,n_cc) = new_centers(:,n_cc)
         enddo
         call self%img_bin%get_rmat_ptr(rmat_bin)
         call self%img_bin%write(trim(self%fbody)//'BINbeforeValidation.mrc') !if(DEBUG_HERE)
-        ! Update binary image
-        where(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) > 0.)
+        ! update binary image
+        where(rmat_cc > 0.)
             rmat_bin(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
         elsewhere
             rmat_bin(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
@@ -654,9 +649,9 @@ contains
         call self%img_bin%write(trim(self%fbody)//'BIN.mrc')
         call self%img_bin%find_connected_comps(self%img_cc)
         call self%img_cc%write(trim(self%fbody)//'CC.mrc')
-        ! Update number of ccs
+        ! update number of ccs
         call self%update_self_ncc()
-        ! Update and write centers
+        ! update and write centers
         call self%find_centers()
         call self%write_centers()
     contains
@@ -672,7 +667,7 @@ contains
             logical :: mask(self%ldim(1),self%ldim(2),self%ldim(3)) !false in the layer of connection of the atom to be split
             mask = .false.  !initialization
             ! Identify first new center
-            new_center1 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) == n_cc)
+            new_center1 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), imat == n_cc)
             cnt = cnt + 1
             new_centers(:,cnt) = real(new_center1)
             do i = 1, self%ldim(1)
@@ -687,16 +682,12 @@ contains
             enddo
             ! Second likely center.
                 new_center2 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), &
-                & (imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) == n_cc) .and. .not. mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))
+                              & (imat == n_cc) .and. .not. mask)
                 if(any(new_center2 > 0)) then !if anything was found
                     !Validate second center (check if it's 2 merged atoms, or one pointy one)
-
-                    ! READABILITY
-                    ! sum(real(new_center2-new_center1)**2.)
-
-                    if(sqrt((real(new_center2(1)-new_center1(1))**2+real(new_center2(2)-new_center1(2))**2+real(new_center2(3)-new_center1(3))**2)*self%smpd) <= 2.*self%theoretical_radius) then
+                    if(sum(real(new_center2-new_center1)**2.)*self%smpd <= 2.*self%theoretical_radius) then
                         ! Set the merged cc back to 0
-                        where((abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(n_cc))<TINY) .and. (.not.mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))) rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
+                        where(abs(rmat_cc-real(n_cc))<TINY .and. (.not.mask) ) rmat_cc = 0.
                         return
                     else
                       cnt = cnt + 1
@@ -705,7 +696,8 @@ contains
                       do i = 1, self%ldim(1)
                           do j = 1, self%ldim(2)
                               do k = 1, self%ldim(3)
-                                  if(((real(i-new_center2(1)))**2 + (real(j-new_center2(2)))**2 + (real(k-new_center2(3)))**2)*self%smpd < (0.9*self%theoretical_radius)**2) then
+                                  if(((real(i-new_center2(1)))**2 + (real(j-new_center2(2)))**2 + (real(k-new_center2(3)))**2)*self%smpd < &
+                                    & (0.9*self%theoretical_radius)**2) then
                                       if(imat(i,j,k) == n_cc)   mask(i,j,k) = .true.
                                   endif
                               enddo
@@ -715,13 +707,13 @@ contains
                   endif
                   ! Third likely center.
                       new_center3 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), &
-                      & (imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) == n_cc) .and. .not. mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))
+                      & (imat == n_cc) .and. .not. mask)
                       if(any(new_center3 > 0)) then !if anything was found
                           !Validate third center
-                          if(sqrt((real(new_center3(1)-new_center1(1))**2+real(new_center3(2)-new_center1(2))**2+real(new_center3(3)-new_center1(3))**2)*self%smpd) <= 2.*self%theoretical_radius .or. &
-                          &  sqrt((real(new_center3(1)-new_center2(1))**2+real(new_center3(2)-new_center2(2))**2+real(new_center3(3)-new_center2(3))**2)*self%smpd) <= 2.*self%theoretical_radius ) then
+                          if(sum(real(new_center3-new_center1)**2.)*self%smpd <= 2.*self%theoretical_radius .or. &
+                          &  sum(real(new_center3-new_center2)**2.)*self%smpd <= 2.*self%theoretical_radius ) then
                               ! Set the merged cc back to 0
-                              where((abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(n_cc))<TINY) .and. (.not.mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))) rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
+                              where( (abs(rmat_cc-real(n_cc))<TINY) .and. (.not.mask) ) rmat_cc = 0.
                               return
                           else
                             cnt = cnt + 1
@@ -739,7 +731,7 @@ contains
                           endif
                         endif
             ! Set the merged cc back to 0
-            where((abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(n_cc))<TINY) .and. (.not.mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))) rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
+            where((abs(rmat_cc-real(n_cc))<TINY) .and. (.not.mask) ) rmat_cc = 0.
         end subroutine split_atom
     end subroutine validate_atomic_positions
 
@@ -763,18 +755,18 @@ contains
         real    :: m(3)    !mass center of c3 map
         real    :: d       !distance atoms from the center
         real    :: radius  !radius of the sphere to consider
-        integer :: cnt, cnt_just, cnt_all
-        integer :: nsteps, i, j, k, l, cc
         real    :: avg_int, max_int, stdev_int
+        integer :: cnt, cnt_just, cnt_all, filnum, io_stat
+        integer :: nsteps, i, j, k, l, cc
         ! min_step and max_step is in A
         self%n_cc = size(self%centers, dim = 2)
         write(logfhandle, *) '****radial atom-to-atom distances estimation, init'
         nsteps = floor((max_rad-min_rad)/step)+1
         m        = self%nanopart_masscen()
         ! Report statistics in dedicated directory
-        call simple_mkdir(trim(self%output_dir)//'/DistDistribANDRadialDependentStat',errmsg="simple_nanoparticles :: radial_dependent_stats, simple_mkdir; ")
-        call simple_chdir(trim(self%output_dir)//'/DistDistribANDRadialDependentStat',errmsg="simple_nanoparticles :: radial_dependent_stats, simple_chdir; ")
-        open(11, file='RadialDependentStat')
+        call simple_mkdir('./'//'/DistDistribANDRadialDependentStat',errmsg="simple_nanoparticles :: radial_dependent_stats, simple_mkdir; ")
+        call simple_chdir('./'//'/DistDistribANDRadialDependentStat',errmsg="simple_nanoparticles :: radial_dependent_stats, simple_chdir; ")
+        call fopen(filnum, file='RadialDependentStat', iostat=io_stat)
         allocate(mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = .false.)
         ! allocate(max_intensity(self%n_cc),avg_intensity(self%n_cc),stdev_intensity(self%n_cc), source= 0.)
         do l = 1, nsteps
@@ -822,8 +814,8 @@ contains
             call radial_atoms_just%writepdb(trim(int2str(nint(radius)))//'radial_atoms_just')
             call radial_atoms_all%writepdb (trim(int2str(nint(radius)))//'radial_atoms_all')
             ! Estimation of avg distance and stdev among atoms in radial dependent shells
-            write(unit = 11, fmt = '(a)')   '*********************************************************'
-            write(unit = 11, fmt = '(a,a)') 'Estimation of atom-to-atom statistics in shell of radius ', trim(int2str(nint(radius)))
+            write(unit = filnum, fmt = '(a)')   '*********************************************************'
+            write(unit = filnum, fmt = '(a,a)') 'Estimation of atom-to-atom statistics in shell of radius ', trim(int2str(nint(radius)))
             allocate(coords(3,cnt_all), source = 0.)
             allocate(max_intensity(cnt_all),avg_intensity(cnt_all),stdev_intensity(cnt_all), source = 0. )
             allocate(ratios(cnt_all), source = 0. )
@@ -853,7 +845,7 @@ contains
                         else ! atom composed by one voxel
                             stdev_intensity(cnt) = 0.
                         endif
-                        write(unit = 11, fmt = '(a,i3,a,f9.5,a,f9.5,a,f9.5,a,f9.5)')  'ATOM ', cc,' maxval ', max_intensity(cnt), '   avg ', avg_intensity(cnt), '   stdev ', stdev_intensity(cnt),' aspect ratio ', ratios(cnt)
+                        write(unit = filnum, fmt = '(a,i3,a,f9.5,a,f9.5,a,f9.5,a,f9.5)')  'ATOM ', cc,' maxval ', max_intensity(cnt), '   avg ', avg_intensity(cnt), '   stdev ', stdev_intensity(cnt),' aspect ratio ', ratios(cnt)
                         mask = .false. !Reset
                     elseif(d>(radius-step)) then
                         cnt = cnt + 1
@@ -875,7 +867,7 @@ contains
                         else ! atom composed by one voxel
                             stdev_intensity(cnt) = 0.
                         endif
-                        write(unit = 11, fmt = '(a,i3,a,f9.5,a,f9.5,a,f9.5,a,f9.5)')  'ATOM ', cc,' maxval ', max_intensity(cnt), '   avg ', avg_intensity(cnt), '   stdev ', stdev_intensity(cnt), ' aspect ratio ', ratios(cnt)
+                        write(unit = filnum, fmt = '(a,i3,a,f9.5,a,f9.5,a,f9.5,a,f9.5)')  'ATOM ', cc,' maxval ', max_intensity(cnt), '   avg ', avg_intensity(cnt), '   stdev ', stdev_intensity(cnt), ' aspect ratio ', ratios(cnt)
                         mask = .false. !Reset
                     endif
                 endif
@@ -887,9 +879,9 @@ contains
                 stdev_int = stdev_int + (avg_intensity(i)-avg_int)**2
             enddo
             stdev_int = sqrt(stdev_int/real(cnt-1))
-            write(unit = 11, fmt = '(a,f9.5)') 'Maxval  int shell :', max_int
-            write(unit = 11, fmt = '(a,f9.5)') 'Average int shell :', avg_int
-            write(unit = 11, fmt = '(a,f9.5)') 'Stdev   int shell :', stdev_int
+            write(unit = filnum, fmt = '(a,f9.5)') 'Maxval  int shell :', max_int
+            write(unit = filnum, fmt = '(a,f9.5)') 'Average int shell :', avg_int
+            write(unit = filnum, fmt = '(a,f9.5)') 'Stdev   int shell :', stdev_int
             call self%distances_distribution(coords)
             deallocate(coords)
             deallocate(avg_intensity)
@@ -899,11 +891,9 @@ contains
             call radial_atoms_all%kill
             call radial_atoms_just%kill
         enddo
-        close(11)
+        call fclose(filnum)
         deallocate(mask)
         call self%distances_distribution() ! across the whole nano
-        ! Come back to root directory
-        ! call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: radial_dependent_stats, simple_chdir; ")
         call self%kill
         write(logfhandle, *) '****radial atom-to-atom distances estimation, completed'
    end subroutine radial_dependent_stats
@@ -914,13 +904,14 @@ contains
        integer, optional,   intent(in)    :: volume
        real, allocatable :: dist(:)
        real    :: stdev, med
-       integer :: i, j, n_discard
+       integer :: i, j, n_discard, filnum, io_stat
        logical :: mask(self%n_cc)
        ! Initialisations
        mask       = .true.
        stdev      = 0.
        n_discard  = 0
        if(present(coords)) then
+           call fopen(filnum, file='DistancesDistr', iostat=io_stat)
            allocate(dist(size(coords,dim=2)), source = 0.)
            do i = 1, size(coords,dim=2)
                dist(i) =  pixels_dist(coords(:,i), self%centers(:,:), 'min', mask=mask) !I have to use all the atoms when
@@ -942,17 +933,17 @@ contains
            stdev = sqrt(stdev/real(size(coords,dim=2)-1-n_discard))
            med = median(dist)
            if(present(volume)) then
-               write(unit = 11, fmt = '(a,a,a,f6.3,a)') 'Average dist atoms vol ', trim(int2str(volume)),':', self%avg_dist_atoms*self%smpd, ' A'
-               write(unit = 11, fmt = '(a,a,a,f6.3,a)') 'StDev   dist atoms vol ', trim(int2str(volume)),':', stdev*self%smpd, ' A'
-               write(unit = 11, fmt = '(a,a,a,f6.3,a)') 'Median  dist atoms vol ', trim(int2str(volume)),':', med*self%smpd, ' A'
+               write(unit = filnum, fmt = '(a,a,a,f6.3,a)') 'Average dist atoms vol ', trim(int2str(volume)),':', self%avg_dist_atoms*self%smpd, ' A'
+               write(unit = filnum, fmt = '(a,a,a,f6.3,a)') 'StDev   dist atoms vol ', trim(int2str(volume)),':', stdev*self%smpd, ' A'
+               write(unit = filnum, fmt = '(a,a,a,f6.3,a)') 'Median  dist atoms vol ', trim(int2str(volume)),':', med*self%smpd, ' A'
            else
-               write(unit = 11, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd, ' A'
-               write(unit = 11, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
-               write(unit = 11, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
+               write(unit = filnum, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd, ' A'
+               write(unit = filnum, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
+               write(unit = filnum, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
            endif
            deallocate(dist)
        else
-           open(15, file='DistancesDistr')
+           call fopen(filnum, file='DistancesDistr', iostat=io_stat)
            allocate(self%dists(size(self%centers, dim = 2)), source = 0.)
            do i = 1, size(self%centers, dim = 2)
                self%dists(i) =  pixels_dist(self%centers(:,i), self%centers(:,:), 'min', mask=mask) !Use all the atoms
@@ -973,9 +964,9 @@ contains
            enddo
            stdev = sqrt(stdev/real(size(self%centers, dim = 2)-1-n_discard))
            med = median(self%dists)
-           write(unit = 15, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd, ' A'
-           write(unit = 15, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
-           write(unit = 15, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
+           write(unit = filnum, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd, ' A'
+           write(unit = filnum, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
+           write(unit = filnum, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
            !write on pdb file
            call self%centers_pdb%new(self%n_cc, dummy=.true.)
            do i = 1,self%n_cc
@@ -985,7 +976,7 @@ contains
            enddo
            call self%centers_pdb%writepdb('DistancesDistr')
        endif
-       close(15)
+       call fclose(filnum)
    end subroutine distances_distribution
 
    subroutine aspect_ratios_estimation(self, print_ar)
@@ -1025,14 +1016,14 @@ contains
        call hist(self%ratios, 20)
        ! To dump some of the analysis on aspect ratios on file compatible
        ! with Matlab.
-        ! open(123, file='AspectRatios')
-        ! write (123,*) 'AR=[...'
+        ! call fopen(filnum, file='AspectRatios', iostat=io_stat)
+        ! write (filnum,*) 'AR=[...'
         ! do label = 1, size(self%ratios)
-        !     write (123,'(A)', advance='no') trim(real2str(self%ratios(label)))
-        !     if(label < size(self%ratios)) write (123,'(A)', advance='no') ', '
+        !     write (filnum,'(A)', advance='no') trim(real2str(self%ratios(label)))
+        !     if(label < size(self%ratios)) write (filnum,'(A)', advance='no') ', '
         ! end do
-        ! write (123,*) '];'
-        ! close(123)
+        ! write (filnum,*) '];'
+        ! call fclose(filnum)
         deallocate(longest_dist)
         write(logfhandle,*)'**aspect ratios calculations completed'
    end subroutine aspect_ratios_estimation
@@ -1113,10 +1104,8 @@ contains
         class(nanoparticle), intent(inout) :: self
         real, optional,      intent(inout) :: mmax_intensity(self%n_cc)
         logical, allocatable :: mask(:,:,:)
-        real,    pointer     :: rmat(:,:,:)
-        real,    pointer     :: rmat_cc(:,:,:)
-        integer :: n_atom
-        integer :: i, j, k
+        real,    pointer     :: rmat(:,:,:), rmat_cc(:,:,:)
+        integer :: i, j, k,n_atom, filnum, io_stat
         real    :: max_intensity(self%n_cc), avg_intensity(self%n_cc), stdev_intensity(self%n_cc), radii(self%n_cc)
         real    :: avg_int, stdev_int, max_int
         real    :: m(3) ! center of mass of the nanoparticle
@@ -1131,9 +1120,9 @@ contains
         avg_intensity(:)   = 0.
         stdev_intensity(:) = 0.
         ! Write on a file
-        open(13, file = trim(self%output_dir)//'/IntensityStats.txt')
+        call fopen(filnum, file = './'//'/IntensityStats.txt', iostat=io_stat)
         do n_atom = 1, self%n_cc
-            write(unit = 13, fmt = '(a,i3)') 'ATOM ', n_atom
+            write(unit = filnum, fmt = '(a,i3)') 'ATOM ', n_atom
             where(abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) - real(n_atom)) < TINY) mask = .true.
             max_intensity(n_atom) = maxval(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),mask)
             avg_intensity(n_atom) = sum(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),mask)
@@ -1151,7 +1140,7 @@ contains
             else ! atom composed by one voxel
                 stdev_intensity(n_atom) = 0.
             endif
-            write(unit = 13, fmt = '(a,f9.5,a,f9.5,a,f9.5)') 'maxval ', max_intensity(n_atom), '   avg ', avg_intensity(n_atom), '   stdev ', stdev_intensity(n_atom)
+            write(unit = filnum, fmt = '(a,f9.5,a,f9.5,a,f9.5)') 'maxval ', max_intensity(n_atom), '   avg ', avg_intensity(n_atom), '   stdev ', stdev_intensity(n_atom)
             mask = .false. !Reset
         enddo
         if(present(mmax_intensity)) mmax_intensity = max_intensity
@@ -1162,33 +1151,34 @@ contains
             stdev_int = stdev_int + (avg_intensity(n_atom)-avg_int)**2
         enddo
         stdev_int = sqrt(stdev_int/real(self%n_cc-1))
-        write(unit = 13, fmt = '(a,f9.5,a,f9.5,a,f9.5)') 'maxval_general ', max_int, '   avg_general ', avg_int, '   stdev_general ', stdev_int
-        close(13)
+        write(unit = filnum, fmt = '(a,f9.5,a,f9.5,a,f9.5)') 'maxval_general ', max_int, '   avg_general ', avg_int, '   stdev_general ', stdev_int
+        call fclose(filnum)
         ! Write on a Matlab compatible file the output
         ! to enable scatterplots
-        open(119, file='RadialPosCCs')
-        write (119,*) 'rccs=[...'
+        call fopen(filnum, file='RadialPosCCs', iostat=io_stat)
+        write (filnum,*) 'rccs=[...'
         do n_atom = 1, self%n_cc
-            write (119,'(A)', advance='no') trim(real2str(radii(n_atom)))
-            if(n_atom < self%n_cc) write (119,'(A)', advance='no') ', '
+            write (filnum,'(A)', advance='no') trim(real2str(radii(n_atom)))
+            if(n_atom < self%n_cc) write (filnum,'(A)', advance='no') ', '
         end do
-        write (119,*) '];'
-        close(119)
-        open(119, file='MaxIntensityCCs')
-        write (119,*) 'mccs=[...'
+        write (filnum,*) '];'
+        call fclose(filnum)
+        call fopen(filnum, file='MaxIntensityCCs', iostat=io_stat)
+        write (filnum,*) 'mccs=[...'
         do n_atom = 1, self%n_cc
-            write (119,'(A)', advance='no') trim(real2str(max_intensity(n_atom)))
-            if(n_atom < self%n_cc) write (119,'(A)', advance='no') ', '
+            write (filnum,'(A)', advance='no') trim(real2str(max_intensity(n_atom)))
+            if(n_atom < self%n_cc) write (filnum,'(A)', advance='no') ', '
         end do
-        write (119,*) '];'
-        open(119, file='AvgIntensityCCs')
-        write (119,*) 'accs=[...'
+        write (filnum,*) '];'
+        call fclose(filnum)
+        call fopen(filnum, file='AvgIntensityCCs', iostat=io_stat)
+        write (filnum,*) 'accs=[...'
         do n_atom = 1, self%n_cc
-            write (119,'(A)', advance='no') trim(real2str(avg_intensity(n_atom)))
-            if(n_atom < self%n_cc) write (119,'(A)', advance='no') ', '
+            write (filnum,'(A)', advance='no') trim(real2str(avg_intensity(n_atom)))
+            if(n_atom < self%n_cc) write (filnum,'(A)', advance='no') ', '
         end do
-        write (119,*) '];'
-        close(119)
+        write (filnum,*) '];'
+        call fclose(filnum)
         write(logfhandle,*)'**atoms intensity statistics calculations completed'
     end subroutine atom_intensity_stats
 
@@ -1213,9 +1203,9 @@ contains
         call hist(max_intensity, 20)
         write(logfhandle,*) '****clustering wrt maximum intensity, init'
         ! Report clusters on images in dedicated directory
-        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: cluster_atom_intensity, simple_chdir1; ")
-        call simple_mkdir(trim(self%output_dir)//'/ClusterAtomsIntensities',errmsg="simple_nanoparticles :: cluster_atom_intensity, simple_mkdir; ")
-        call simple_chdir(trim(self%output_dir)//'/ClusterAtomsIntensities',errmsg="simple_nanoparticles :: cluster_atom_intensity, simple_chdir; ")
+        call simple_chdir('../',errmsg="simple_nanoparticles :: cluster_atom_intensity, simple_chdir1; ")
+        call simple_mkdir('./'//'/ClusterAtomsIntensities',errmsg="simple_nanoparticles :: cluster_atom_intensity, simple_mkdir; ")
+        call simple_chdir('./'//'/ClusterAtomsIntensities',errmsg="simple_nanoparticles :: cluster_atom_intensity, simple_chdir; ")
         call class1%new(self%ldim, self%smpd)
         call class2%new(self%ldim, self%smpd)
         call class1%get_rmat_ptr(rmat1)
@@ -1264,7 +1254,7 @@ contains
         call class1%kill
         call class2%kill
         ! come back to root directory
-        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: cluster_atom_intensity, simple_chdir; ")
+        call simple_chdir('../',errmsg="simple_nanoparticles :: cluster_atom_intensity, simple_chdir; ")
         write(logfhandle,*) '****clustering wrt maximum intensity, completed'
     contains
 
@@ -1349,16 +1339,16 @@ contains
             if(DEBUG_HERE) write(logfhandle,*) 'ATOM ', k, 'angle between direction longest dim and vec [0,0,1] ', self%ang_var(k)
         enddo
         ! Matlab compatible File
-        ! open(129, file='AnglesLongestDims')
-        ! write (129,*) 'ang=[...'
+        ! call fopen(filnum, file='AnglesLongestDims', iostat=io_stat)
+        ! write (filnum,*) 'ang=[...'
         ! do k = 1, self%n_cc
-        !     write (129,'(A)', advance='no') trim(int2str(k))
-        !     write (129,'(A)', advance='no') ', '
-        !     write (129,'(A)', advance='no') trim(real2str(self%ang_var(k)))
-        !     write (129,'(A)')'; ...'
+        !     write (filnum,'(A)', advance='no') trim(int2str(k))
+        !     write (filnum,'(A)', advance='no') ', '
+        !     write (filnum,'(A)', advance='no') trim(real2str(self%ang_var(k)))
+        !     write (filnum,'(A)')'; ...'
         ! end do
-        ! write (129,*) '];'
-        ! close(129)
+        ! write (filnum,*) '];'
+        ! call fclose(filnum)
     end subroutine search_polarization
 
     ! Affinity propagation clustering based on agles wrt vec [0,0,1].
@@ -1368,15 +1358,11 @@ contains
         type(aff_prop)           :: ap_nano
         type(image), allocatable :: img_clusters(:)
         real, pointer            :: rmat_cc(:,:,:)
-        real,    allocatable     :: simmat(:,:)
-        real,    allocatable     :: avg_within(:), stdev_within(:)
+        real,    allocatable     :: simmat(:,:), avg_within(:), stdev_within(:)
         integer, allocatable     :: centers_ap(:), labels_ap(:)
-        integer, allocatable     :: imat_onecls(:,:,:,:)
-        integer                  :: i, j, ncls, nerr
-        integer                  :: dim
-        real                     :: simsum
-        real                     :: avg, stdev
-        integer, allocatable     :: cnt(:)
+        integer, allocatable     :: imat_onecls(:,:,:,:), cnt(:)
+        integer                  :: i, j, ncls, nerr, dim, filnum, io_stat
+        real                     :: simsum, avg, stdev
         dim = size(self%ang_var)!self%n_cc
         call self%centers_pdb%new(dim, dummy = .true. )
         allocate(simmat(dim, dim), source = 0.)
@@ -1391,9 +1377,8 @@ contains
         call ap_nano%propagate(centers_ap, labels_ap, simsum)
         ncls = size(centers_ap)
         ! Report clusters on images in dedicated directory
-        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: affprop_cluster_ang, simple_chdir1; ")
-        call simple_mkdir(trim(self%output_dir)//'/ClusterAngLongestDim',errmsg="simple_nanoparticles :: affprop_cluster_ang, simple_mkdir; ")
-        call simple_chdir(trim(self%output_dir)//'/ClusterAngLongestDim',errmsg="simple_nanoparticles :: affprop_cluster_ang, simple_chdir; ")
+        call simple_mkdir('./'//'/ClusterAngLongestDim',errmsg="simple_nanoparticles :: affprop_cluster_ang, simple_mkdir; ")
+        call simple_chdir('./'//'/ClusterAngLongestDim',errmsg="simple_nanoparticles :: affprop_cluster_ang, simple_chdir; ")
         call self%img_cc%get_rmat_ptr(rmat_cc)
         allocate(imat_onecls(self%ldim(1),self%ldim(2),self%ldim(3), ncls), source = 0)
         allocate(img_clusters(ncls))
@@ -1412,16 +1397,16 @@ contains
         enddo
         if(allocated(img_clusters)) deallocate(img_clusters)
         if(allocated(imat_onecls))  deallocate(imat_onecls)
-        open(111, file='ClusterAngLongestDim')
-        write(unit = 111,fmt ='(a,i2)') 'NR OF CLUSTERS FOUND ANG:', ncls
+        call fopen(filnum, file='ClusterAngLongestDim', iostat=io_stat)
+        write(unit = filnum,fmt ='(a,i2)') 'NR OF CLUSTERS FOUND ANG:', ncls
         do i = 1, dim
             call self%centers_pdb%set_coord(i,(self%centers(:,i)-1.)*self%smpd)
             call self%centers_pdb%set_element(i,self%element)
             call self%centers_pdb%set_beta(i, real(labels_ap(i)))
         enddo
-        write(unit = 111,fmt ='(a)') 'CENTERS ANG'
+        write(unit = filnum,fmt ='(a)') 'CENTERS ANG'
         do i=1,ncls
-            write(unit = 111,fmt ='(f7.3)') self%ang_var(centers_ap(i))
+            write(unit = filnum,fmt ='(f7.3)') self%ang_var(centers_ap(i))
         end do
         !standard deviation within each center
         allocate(  avg_within(ncls), source = 0.)
@@ -1436,11 +1421,11 @@ contains
             enddo
         enddo
         avg_within = avg_within/cnt
-        write(unit = 111,fmt ='(a,i3)')     'number of atoms in each class = ', cnt(1)
+        write(unit = filnum,fmt ='(a,i3)')     'number of atoms in each class = ', cnt(1)
         do i =2, ncls
-            write(unit = 111,fmt ='(a,i3)') '                                ', cnt(i)
+            write(unit = filnum,fmt ='(a,i3)') '                                ', cnt(i)
         enddo
-        write(unit = 111,fmt ='(a,i3)')     'total atoms =                   ', sum(cnt)
+        write(unit = filnum,fmt ='(a,i3)')     'total atoms =                   ', sum(cnt)
         do i = 1, ncls
             do j = 1, dim
                 if(labels_ap(j) == i) stdev_within(i) = stdev_within(i) + (self%ang_var(j)-avg_within(i))**2
@@ -1452,9 +1437,9 @@ contains
             stdev_within = 0.
         endwhere
         stdev_within = sqrt(stdev_within)
-        write(unit = 111,fmt ='(a,f5.3)')  'stdev_within = ', stdev_within(1)
+        write(unit = filnum,fmt ='(a,f5.3)')  'stdev_within = ', stdev_within(1)
         do i = 2, ncls
-            write(unit = 111,fmt ='(a,f5.3)')   '               ', stdev_within(i)
+            write(unit = filnum,fmt ='(a,f5.3)')   '               ', stdev_within(i)
         enddo
         !standard deviation among different centers
         avg = 0.
@@ -1468,9 +1453,9 @@ contains
         enddo
         stdev = stdev/(real(ncls)-1.)
         stdev = sqrt(stdev)
-        write(unit = 111,fmt ='(a,f7.3)') 'standard deviation among centers: ', stdev
+        write(unit = filnum,fmt ='(a,f7.3)') 'standard deviation among centers: ', stdev
         call self%centers_pdb%writepdb('ClusterAngLongestDim')
-        close(111)
+        call fclose(filnum)
         write(logfhandle,*) '****clustering wrt direction longest dim, completed'
         deallocate(simmat, labels_ap, centers_ap)
         if(allocated(cnt))          deallocate(cnt)
@@ -1489,8 +1474,8 @@ contains
         integer, allocatable     :: imat_onecls(:,:,:,:)
         integer, allocatable     :: centers_ap(:), labels_ap(:)
         real                     :: simsum
-        integer                  :: i, j, ncls, nerr
-        integer                  :: dim
+        integer                  :: i, j, ncls, nerr,dim
+        integer                  :: filnum,io_stat
         dim = size(self%ratios) !self%n_cc
         call self%centers_pdb%new(dim, dummy = .true. )
         allocate(simmat(dim, dim), source = 0.)
@@ -1505,9 +1490,9 @@ contains
         call ap_nano%propagate(centers_ap, labels_ap, simsum)
         ncls = size(centers_ap)
         ! Report clusters on images in dedicated directory
-        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: affprop_cluster_ar, simple_chdir1; ")
-        call simple_mkdir(trim(self%output_dir)//'/ClusterAspectRatio',errmsg="simple_nanoparticles :: affprop_cluster_ar, simple_mkdir; ")
-        call simple_chdir(trim(self%output_dir)//'/ClusterAspectRatio',errmsg="simple_nanoparticles :: affprop_cluster_ar, simple_chdir; ")
+        call simple_chdir('../',errmsg="simple_nanoparticles :: affprop_cluster_ar, simple_chdir1; ")
+        call simple_mkdir('./'//'/ClusterAspectRatio',errmsg="simple_nanoparticles :: affprop_cluster_ar, simple_mkdir; ")
+        call simple_chdir('./'//'/ClusterAspectRatio',errmsg="simple_nanoparticles :: affprop_cluster_ar, simple_chdir; ")
         call self%img_cc%get_rmat_ptr(rmat_cc)
         allocate(imat_onecls(self%ldim(1),self%ldim(2),self%ldim(3), ncls), source = 0)
         allocate(img_clusters(ncls))
@@ -1526,20 +1511,22 @@ contains
         enddo
         if(allocated(img_clusters)) deallocate(img_clusters)
         if(allocated(imat_onecls))  deallocate(imat_onecls)
-        open(119, file='ClusterAspectRatio')
-        write(unit = 119,fmt ='(a,i2)') 'NR OF CLUSTERS FOUND AR:', ncls
+        call fopen(filnum, file='ClusterAspectRatio', iostat=io_stat)
+        write(unit = filnum,fmt ='(a,i2)') 'NR OF CLUSTERS FOUND AR:', ncls
         do i = 1, dim
             call self%centers_pdb%set_coord(i,(self%centers(:,i)-1.)*self%smpd)
             call self%centers_pdb%set_element(i,self%element)
             call self%centers_pdb%set_beta(i, real(labels_ap(i)))
         enddo
-        write(unit = 119, fmt = '(a)') 'CENTERS AR'
+        write(unit = filnum, fmt = '(a)') 'CENTERS AR'
         do i=1,size(centers_ap)
-            write(unit = 119, fmt = '(f6.3)') self%ratios(centers_ap(i))
+            write(unit = filnum, fmt = '(f6.3)') self%ratios(centers_ap(i))
         end do
         call self%centers_pdb%writepdb('ClustersAspectRatio')
-        close(119)
+        call fclose(filnum, errmsg='affprop_cluster_ar; simple_nanoparticles closing ClusterAspectRatio')
         write(logfhandle,*) '****clustering wrt aspect ratios, completed'
+        ! Come back to root directory
+        call simple_chdir('../',errmsg="simple_nanoparticles :: affprop_cluster_ar, simple_chdir; ")
         deallocate(simmat, labels_ap, centers_ap)
     end subroutine affprop_cluster_ar
 
@@ -1556,11 +1543,9 @@ contains
         real, pointer            :: rmat_cc(:,:,:)
         real, allocatable        :: simmat(:,:)
         real                     :: simsum
-        integer, allocatable     :: centers_ap(:), labels_ap(:)
+        integer, allocatable     :: centers_ap(:), labels_ap(:), imat_onecls(:,:,:,:)
         integer, allocatable     :: centers_merged(:), labels_merged(:)
-        integer                  :: i, j, ncls, nerr
-        integer                  :: dim
-        integer, allocatable     :: imat_onecls(:,:,:,:)
+        integer                  :: i, j, ncls, nerr, dim, filnum, io_stat
         dim = size(self%dists)
         call self%centers_pdb%new(dim, dummy = .true. )
         allocate(simmat(dim, dim), source = 0.)
@@ -1592,19 +1577,19 @@ contains
         enddo
         if(allocated(img_clusters)) deallocate(img_clusters)
         if(allocated(imat_onecls))  deallocate(imat_onecls)
-        open(125, file = 'ClusterDistDistr')
-        write(unit = 125, fmt = '(a,i2)') 'NR OF CLUSTERS FOUND DISTS DISTR:', ncls
+        call fopen(filnum, file = 'ClusterDistDistr', iostat= io_stat)
+        write(unit = filnum, fmt = '(a,i2)') 'NR OF CLUSTERS FOUND DISTS DISTR:', ncls
         do i = 1, dim
             call self%centers_pdb%set_coord(i,(self%centers(:,i)-1.)*self%smpd)
             call self%centers_pdb%set_element(i,self%element)
             call self%centers_pdb%set_beta(i, real(labels_ap(i)))
         enddo
-        write(unit = 125, fmt = '(a)') 'CENTERS DISTS DISTR'
+        write(unit = filnum, fmt = '(a)') 'CENTERS DISTS DISTR'
         do i=1,ncls
-            write(unit = 125, fmt = '(f6.3)') self%dists(centers_ap(i))
+            write(unit = filnum, fmt = '(f6.3)') self%dists(centers_ap(i))
         end do
         call self%centers_pdb%writepdb('ClusterDistDistr')
-        close(125)
+        call fclose(filnum)
         write(logfhandle,*) '****clustering wrt distances distribution, completed'
         deallocate(simmat, labels_ap, centers_ap)
     end subroutine affprop_cluster_dist_distr
@@ -1630,14 +1615,13 @@ contains
         ! clustering wrt aspect ratio
         call self%affprop_cluster_ar()
         ! clustering wrt interatomic distances distribution
-        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: cluster, simple_chdir1; ")
-        call simple_mkdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: cluster, simple_mkdir; ")
-        call simple_chdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: cluster, simple_chdir; ")
+        call simple_mkdir('./'//'/ClusterDistDistr',errmsg="simple_nanoparticles :: cluster, simple_mkdir; ")
+        call simple_chdir('./'//'/ClusterDistDistr',errmsg="simple_nanoparticles :: cluster, simple_chdir; ")
         ! need to recalculate self%dists
         call self%distances_distribution() ! calc distances distrib across the whole nano
         call self%affprop_cluster_dist_distr()
         ! come back to root directory
-        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: cluster, simple_chdir1; ")
+        call simple_chdir('../',errmsg="simple_nanoparticles :: cluster, simple_chdir1; ")
         ! performs clustering with respect to max intensity in the
         ! gray values of each atoms, with 2 fixed classes by using
         ! a Maximum Likelihood algorithm initialised with kmeans,
@@ -1660,7 +1644,7 @@ contains
     ! center of mass of the i-th cc.
     subroutine make_soft_mask(self) !change the name
         class(nanoparticle), intent(inout) :: self
-        call self%img_bin%grow_bins(nint(0.5*self%avg_dist_atoms)+1)
+        call self%img_bin%grow_bins(nint(0.5*self%theoretical_radius/self%smpd)+1)
         call self%img_bin%cos_edge(SOFT_EDGE)
         call self%img_bin%write(trim(self%fbody)//'SoftMask.mrc')
     end subroutine make_soft_mask
@@ -1673,32 +1657,30 @@ contains
         logical, allocatable :: mask(:)
         real,    allocatable :: dist(:), dist_sq(:), dist_no_zero(:), dist_close(:)
         real,    parameter   :: CLOSE_THRESH = 1. ! 1 Amstrong
-        integer :: location(1)
-        integer :: i, j
+        integer :: location(1), i, j
         integer :: N_min !min{nb atoms in nano1, nb atoms in nano2}
         integer :: N_max !max{nb atoms in nano1, nb atoms in nano2}
-        integer :: cnt,cnt2,cnt3
-        real    :: sum, rmsd
-        real    :: coord(3)
+        integer :: cnt,cnt2,cnt3,filnum,io_stat
+        real    :: sum, rmsd, coord(3)
         real    :: avg, stdev, m(3), tmp_max, d !for statistics calculation
         type(atoms) :: centers_coupled1, centers_coupled2 !visualization purposes
         type(atoms) :: centers_close1, centers_close2
         type(atoms) :: couples1
-        open(121, file='CompareAtomicModels')
-        write(unit = 121, fmt = '(a)') '>>>>>>>>>   COMPARE NANO   >>>>>>>>>'
-        write(unit = 121, fmt = '(a)') ''
-        write(unit = 121, fmt = '(a)') 'Comparing atomic models of particles'
-        write(unit = 121, fmt = '(a,a)') trim(nano1%fbody), ' ---> vol1'
-        write(unit = 121, fmt = '(a)') 'and'
-        write(unit = 121, fmt = '(a,a)') trim(nano2%fbody), ' ---> vol2'
-        write(unit = 121, fmt = '(a)')  '>>>>>>>>>VOLUME COMPARISION>>>>>>>>'
+        call fopen(filnum, file='CompareAtomicModels', iostat=io_stat)
+        write(unit = filnum, fmt = '(a)') '>>>>>>>>>   COMPARE NANO   >>>>>>>>>'
+        write(unit = filnum, fmt = '(a)') ''
+        write(unit = filnum, fmt = '(a)') 'Comparing atomic models of particles'
+        write(unit = filnum, fmt = '(a,a)') trim(nano1%fbody), ' ---> vol1'
+        write(unit = filnum, fmt = '(a)') 'and'
+        write(unit = filnum, fmt = '(a,a)') trim(nano2%fbody), ' ---> vol2'
+        write(unit = filnum, fmt = '(a)')  '>>>>>>>>>VOLUME COMPARISION>>>>>>>>'
         ! If they don't have the same nb of atoms
         if(size(nano1%centers, dim = 2) <= size(nano2%centers, dim = 2)) then
             N_min = size(nano1%centers, dim = 2)
             N_max = size(nano2%centers, dim = 2)
-            write(unit = 121, fmt = '(a,i3)') 'NB atoms in vol1   ', N_min
-            write(unit = 121, fmt = '(a,i3)') 'NB atoms in vol2   ', N_max
-            write(unit = 121, fmt = '(a,i3,a)') '--->', abs(N_max-N_min), ' atoms do NOT correspond'
+            write(unit = filnum, fmt = '(a,i3)') 'NB atoms in vol1   ', N_min
+            write(unit = filnum, fmt = '(a,i3)') 'NB atoms in vol2   ', N_max
+            write(unit = filnum, fmt = '(a,i3,a)') '--->', abs(N_max-N_min), ' atoms do NOT correspond'
             call centers_coupled1%new(N_max, dummy=.true.)
             call centers_coupled2%new(N_max, dummy=.true.)
             call centers_close1%new  (N_max, dummy=.true.)
@@ -1750,9 +1732,9 @@ contains
         else
             N_min = size(nano2%centers, dim = 2)
             N_max = size(nano1%centers, dim = 2)
-            write(unit = 121, fmt = '(a,i3)') 'NB atoms in vol1   ', N_max
-            write(unit = 121, fmt = '(a,i3)') 'NB atoms in vol2   ', N_min
-            write(unit = 121, fmt = '(a,i3,a)') '--->', abs(N_max-N_min), ' atoms do NOT correspond'
+            write(unit = filnum, fmt = '(a,i3)') 'NB atoms in vol1   ', N_max
+            write(unit = filnum, fmt = '(a,i3)') 'NB atoms in vol2   ', N_min
+            write(unit = filnum, fmt = '(a,i3,a)') '--->', abs(N_max-N_min), ' atoms do NOT correspond'
             allocate(dist(N_max), dist_sq(N_max), source = 0.)
             allocate(dist_close(N_max), source = 0.) ! there are going to be unused entry of the vector
             call centers_coupled1%new(N_max, dummy=.true.)
@@ -1802,9 +1784,9 @@ contains
                 endif
             enddo
         endif
-        write(unit = 121, fmt = '(i3,a,i2,a)')      cnt3,' atoms correspond within        1 A. (', cnt3*100/N_min, '% of the atoms )'
-        write(unit = 121, fmt = '(i3,a,f3.1,a,i2,a)')  cnt2,' atoms correspond within  1 - ',2.*nano2%theoretical_radius,' A. (', cnt2*100/N_min, '% of the atoms )'
-        write(unit = 121, fmt = '(i3,a,f3.1,a,i2,a)')  cnt-(N_max-N_min),' atoms have error bigger than ',2.*nano2%theoretical_radius,' A. (',(cnt-N_max+N_min)*100/N_min, '% of the atoms )' !remove the extra atoms
+        write(unit = filnum, fmt = '(i3,a,i2,a)')      cnt3,' atoms correspond within        1 A. (', cnt3*100/N_min, '% of the atoms )'
+        write(unit = filnum, fmt = '(i3,a,f3.1,a,i2,a)')  cnt2,' atoms correspond within  1 - ',2.*nano2%theoretical_radius,' A. (', cnt2*100/N_min, '% of the atoms )'
+        write(unit = filnum, fmt = '(i3,a,f3.1,a,i2,a)')  cnt-(N_max-N_min),' atoms have error bigger than ',2.*nano2%theoretical_radius,' A. (',(cnt-N_max+N_min)*100/N_min, '% of the atoms )' !remove the extra atoms
         ! remove unused atoms from the pdb file
         do i = 1, N_max
             coord(:) = centers_close1%get_coord(i)
@@ -1847,17 +1829,17 @@ contains
             endif
         enddo
         stdev = sqrt(stdev/(real(cnt3)-1.))
-        write(unit = 121, fmt = '(a)')       '--->    IN VOL1    <---'
-        write(unit = 121, fmt = '(a,f6.3,a)')'AVG     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', avg, ' A'
-        write(unit = 121, fmt = '(a,f6.3,a)')'STDEV   DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', stdev, ' A'
-        write(unit = 121, fmt = '(a,f6.3,a)')'MAX     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', tmp_max, ' A'
+        write(unit = filnum, fmt = '(a)')       '--->    IN VOL1    <---'
+        write(unit = filnum, fmt = '(a,f6.3,a)')'AVG     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', avg, ' A'
+        write(unit = filnum, fmt = '(a,f6.3,a)')'STDEV   DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', stdev, ' A'
+        write(unit = filnum, fmt = '(a,f6.3,a)')'MAX     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', tmp_max, ' A'
         tmp_max = 0. ! reset
         do i = 1, size(nano1%centers, dim = 2)
             coord(:) = (nano1%centers(:,i)-1.)*nano1%smpd
                 d =  euclid(coord,m)
                 if(d > tmp_max) tmp_max = d
         enddo
-        write(unit = 121, fmt = '(a,f6.3,a)')'MAX     DIST ATOMS IN VOL1 3D RECONSTRUCT. TO THE CENTER: ', tmp_max, ' A'
+        write(unit = filnum, fmt = '(a,f6.3,a)')'MAX     DIST ATOMS IN VOL1 3D RECONSTRUCT. TO THE CENTER: ', tmp_max, ' A'
         avg     = 0.
         cnt3    = 0
         m(:)    = nano2%nanopart_masscen()
@@ -1882,17 +1864,17 @@ contains
             endif
         enddo
         stdev = sqrt(stdev/(real(cnt3)-1.))
-        write(unit = 121, fmt = '(a)')       '--->    IN VOL2    <---'
-        write(unit = 121, fmt = '(a,f6.3,a)')'AVG     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', avg, ' A'
-        write(unit = 121, fmt = '(a,f6.3,a)')'STDEV   DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', stdev, ' A'
-        write(unit = 121, fmt = '(a,f6.3,a)')'MAX     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', tmp_max, ' A'
+        write(unit = filnum, fmt = '(a)')       '--->    IN VOL2    <---'
+        write(unit = filnum, fmt = '(a,f6.3,a)')'AVG     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', avg, ' A'
+        write(unit = filnum, fmt = '(a,f6.3,a)')'STDEV   DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', stdev, ' A'
+        write(unit = filnum, fmt = '(a,f6.3,a)')'MAX     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', tmp_max, ' A'
         tmp_max = 0. ! reset
         do i = 1, size(nano2%centers, dim = 2)
             coord(:) = (nano2%centers(:,i)-1.)*nano2%smpd
                 d =  euclid(coord,m)
                 if(d > tmp_max) tmp_max = d
         enddo
-        write(unit = 121, fmt = '(a,f6.3,a)')'MAX     DIST ATOMS IN VOL2 3D RECONSTRUCT. TO THE CENTER: ', tmp_max, ' A'
+        write(unit = filnum, fmt = '(a,f6.3,a)')'MAX     DIST ATOMS IN VOL2 3D RECONSTRUCT. TO THE CENTER: ', tmp_max, ' A'
         ! kill atoms instances
         call centers_close1%kill
         call centers_close2%kill
@@ -1901,20 +1883,20 @@ contains
         call couples1%kill
         !RMSD
         rmsd = sqrt(sum(dist_sq)/real(count(dist_sq > TINY)))
-        write(unit = 121, fmt = '(a,f6.3,a)') 'RMSD CALCULATED CONSIDERING ALL ATOMS = ', rmsd*nano1%smpd, ' A'
-        write(unit = 121, fmt = '(a,f6.3,a)') 'RMSD ATOMS THAT CORRESPOND WITHIN 1 A = ', (sqrt(sum(dist_close)/real(count(dist_close > TINY))))*nano1%smpd, ' A'
+        write(unit = filnum, fmt = '(a,f6.3,a)') 'RMSD CALCULATED CONSIDERING ALL ATOMS = ', rmsd*nano1%smpd, ' A'
+        write(unit = filnum, fmt = '(a,f6.3,a)') 'RMSD ATOMS THAT CORRESPOND WITHIN 1 A = ', (sqrt(sum(dist_close)/real(count(dist_close > TINY))))*nano1%smpd, ' A'
+        call fclose(filnum)
         dist_no_zero = pack(dist, dist>TINY)
         dist_no_zero = dist_no_zero*nano1%smpd ! report distances in Amstrongs
         call hist(dist_no_zero, 50)
         !For SCV files
-        open(117, file='RMSDhist')
-        write (117,*) 'r'
+        call fopen(filnum, file='RMSDhist')
+        write (filnum,*) 'r'
         do i = 1, size(dist_no_zero)
-            write (117,'(A)', advance='yes') trim(real2str(dist_no_zero(i)))
+            write (filnum,'(A)', advance='yes') trim(real2str(dist_no_zero(i)))
         end do
-        close(117)
+        call fclose(filnum)
         if(present(r)) r=rmsd
-        close(121)
         deallocate(dist, dist_sq, dist_no_zero, mask)
     end subroutine atoms_rmsd
 
@@ -1938,24 +1920,24 @@ contains
     subroutine keep_atomic_pos_at_radius(self, radius, element, fname)
       class(nanoparticle), intent(inout) :: self
       real,                intent(in)    :: radius
-      character(len=2),    intent(in)    :: element
+      character(len=2),    intent(inout) :: element
       character(len=*),    intent(in)    :: fname !name of the pdb file where to write the coords
       character(len=4) :: atom_name
       integer     :: n_cc,cnt
       real        :: m(3) !coords of the center of mass of the nano
       real        :: d    !distance of the atom from the center of mass
       type(atoms) :: radial_atom
-      ! Make subroutine for set_atom_name()
+      element = upperCase(element)
       select case(element)
-      case('pt')
-          atom_name     = ' pt '
+      case('PT')
+          atom_name     = ' PT '
           ! thoretical radius is already set
-      case('pd')
-          atom_name     = ' pd '
-      case('fe')
-          atom_name     = 'fe'
-      case('au')
-          self%atom_name     = ' au '
+      case('PD')
+          atom_name     = ' PD '
+      case('FE')
+          atom_name     = 'FE'
+      case('AU')
+          self%atom_name     = ' AU '
       case default
           THROW_HARD('Unknown atom element; keep_atomic_pos_at_radius')
      end select
@@ -2077,17 +2059,17 @@ contains
     subroutine identify_atom_planes(self)
         class(nanoparticle), intent(inout) :: self
         real, pointer      :: rmat_cc(:,:,:), rmat_plane(:,:,:)
+        real, allocatable  :: plane(:,:,:), points(:,:), distances_totheplane(:), radii(:)
         type(image)        :: img_plane
         integer, parameter :: N_DISCRET = 1000
         integer, parameter :: N_PLANES  = 1    ! number of planes to consider for each atom
         integer :: n_cc, loc(1), i, j
-        integer :: t, s
+        integer :: t, s, filnum,io_stat
         integer :: cnt_intersect, cnt
         logical :: mask(self%n_cc),mask_plane(N_DISCRET)
         logical :: flag_matrix(N_PLANES,self%n_cc,self%n_cc)
         real    :: dir_1(3), dir_2(3), vec(3), m(3), dist
         real    :: line(3,N_DISCRET)
-        real, allocatable :: plane(:,:,:), points(:,:), distances_totheplane(:), radii(:)
         real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator
         allocate(plane(3, N_DISCRET, N_DISCRET), source = 0.)
         do i = 1, N_DISCRET/2
@@ -2208,22 +2190,22 @@ contains
             enddo
         enddo
         distances_totheplane = (distances_totheplane)*self%smpd
-        open(119, file='Radii')
-        write (119,*) 'r=[...'
+        call fopen(filnum, file='Radii', iostat=io_stat)
+        write (filnum,*) 'r=[...'
         do i = 1, cnt
-            write (119,'(A)', advance='no') trim(real2str(radii(i)))
-            if(i < cnt) write (119,'(A)', advance='no') ', '
+            write (filnum,'(A)', advance='no') trim(real2str(radii(i)))
+            if(i < cnt) write (filnum,'(A)', advance='no') ', '
         end do
-        write (119,*) '];'
-        close(119)
-        open(119, file='DistancesToThePlane')
-        write (119,*) 'd=[...'
+        write (filnum,*) '];'
+        call fclose(filnum)
+        call fopen(filnum, file='DistancesToThePlane',iostat=io_stat)
+        write (filnum,*) 'd=[...'
         do i = 1, cnt
-            write (119,'(A)', advance='no') trim(real2str(distances_totheplane(i)))
-            if(i < cnt) write (119,'(A)', advance='no') ', '
+            write (filnum,'(A)', advance='no') trim(real2str(distances_totheplane(i)))
+            if(i < cnt) write (filnum,'(A)', advance='no') ', '
         end do
-        write (119,*) '];'
-        close(119)
+        write (filnum,*) '];'
+        call fclose(filnum)
         call img_plane%kill
         deallocate(plane)
     contains
@@ -2289,16 +2271,6 @@ contains
         if(allocated(self%ang_var))          deallocate(self%ang_var)
     end subroutine kill_nanoparticle
 end module simple_nanoparticles_mod
-
-    ! !Output on file, Matlab Compatible
-    ! open(119, file='RMSDhist')
-    ! write (119,*) 'r=[...'
-    ! do i = 1, size(dist_no_zero)
-    !     write (119,'(A)', advance='no') trim(real2str(dist_no_zero(i)))
-    !     if(i < size(dist_no_zero)) write (119,'(A)', advance='no') ', '
-    ! end do
-    ! write (119,*) '];'
-    ! close(119)
 
     ! This subroutine performs size filtering on the connected
     ! components image of the nanoparticle. It calculates the

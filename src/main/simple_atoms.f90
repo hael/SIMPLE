@@ -87,7 +87,7 @@ contains
         character(len=*), intent(in)    :: fname
         character(len=STDLEN) :: line
         character(len=11)     :: elevenfirst
-        character(len=6)     :: atom_field
+        character(len=6)      :: atom_field
         integer               :: i, l, nl, filnum, io_stat, n, num
         call self%kill
         nl = nlines(trim(fname))

@@ -718,9 +718,10 @@ contains
         class(atoms_rmsd_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline !< command line input
         type(dock_volpair_commander) :: xdock_volpair
-        type(parameters)   :: params
-        type(nanoparticle) :: nano1, nano2
-        type(cmdline)      :: cline_dock
+        character(len=STDLEN) :: fname1, fname2
+        type(parameters)      :: params
+        type(nanoparticle)    :: nano1, nano2
+        type(cmdline)         :: cline_dock
         type(ori)   :: orientation
         type(oris)  :: ori2read
         type(atoms) :: atom_coord
@@ -748,7 +749,9 @@ contains
             call nano1%new(params%vols(1), params%smpd)
             call nano2%new(params%vols(2), params%smpd)
         endif
-        call nano1%set_atomic_coords(trim(get_fbody(params%vols(1), 'mrc'))//'_atom_centers.pdb')
+        fname1 = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
+        fname2 = get_fbody(trim(basename(params%vols(2))), trim(fname2ext(params%vols(2))))
+        call nano1%set_atomic_coords(trim(fname1)//'_atom_centers.pdb')
         ! execute
         if(params%dock .eq. 'yes') then
             cline_dock = cline
@@ -758,12 +761,12 @@ contains
             call cline_dock%set('mkdir', 'no')
             call cline_dock%set('nthr',0.)
             call cline_dock%set('outfile', 'algndoc.txt')
-            call cline_dock%set('outvol', trim(get_fbody(params%vols(2), 'mrc'))//'docked.mrc')
+            call cline_dock%set('outvol', './'//trim(fname2)//'docked.mrc')
             call xdock_volpair%execute(cline_dock)
             !1) Center the coords
             call find_ldim_nptcls(params%vols(2),ldim, nptcls,smpd)
             cxyz = (real(ldim)/2.)*smpd
-            call atom_coord%new(trim(get_fbody(params%vols(2), 'mrc'))//'_atom_centers.pdb')
+            call atom_coord%new(trim(fname2)//'_atom_centers.pdb')
             call atom_coord%translate(-cxyz)
             !2) Rotate the coords
             call ori2read%new(1)
@@ -779,11 +782,11 @@ contains
             call orientation%kill
             call atom_coord%translate(shift)
             !5) Set new coords
-            call atom_coord%writePDB(    trim(get_fbody(params%vols(2), 'mrc'))//'_ROTATEDatom_centers')
+            call atom_coord%writePDB(    trim(fname2)//'_ROTATEDatom_centers')
             call atom_coord%kill
-            call nano2%set_atomic_coords(trim(get_fbody(params%vols(2), 'mrc'))//'_ROTATEDatom_centers.pdb')
+            call nano2%set_atomic_coords(trim(fname2)//'_ROTATEDatom_centers.pdb')
         else ! no DOCKING
-            call nano2%set_atomic_coords(trim(get_fbody(params%vols(2), 'mrc'))//'_atom_centers.pdb')
+            call nano2%set_atomic_coords(trim(fname2)//'_atom_centers.pdb')
         endif
         ! RMSD calculation
         call nano1%atoms_rmsd(nano2)
@@ -799,8 +802,9 @@ contains
     subroutine exec_radial_dependent_stats( self, cline )
         class(radial_dependent_stats_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline !< command line input
-        type(parameters)   :: params
-        type(nanoparticle) :: nano
+        character(len=STDLEN) :: fname
+        type(parameters)      :: params
+        type(nanoparticle)    :: nano
         integer :: ldim(3), nptcls
         real    :: smpd
         real    :: min_rad, max_rad, step
@@ -822,8 +826,9 @@ contains
             call nano%new(params%vols(1), params%smpd)
         endif
         ! execute
-        call nano%set_atomic_coords(trim(get_fbody(params%vols(1), 'mrc'))//'_atom_centers.pdb')
-        call nano%set_img(trim(get_fbody(params%vols(1), 'mrc'))//'CC.mrc', 'img_cc')
+        fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
+        call nano%set_atomic_coords(trim(fname)//'_atom_centers.pdb')
+        call nano%set_img(trim(fname)//'CC.mrc', 'img_cc')
         call nano%radial_dependent_stats(min_rad,max_rad,step)
         ! fetch again, after killing
         if(cline%defined('element')) then
@@ -831,8 +836,8 @@ contains
         else
             call nano%new(params%vols(1), params%smpd)
         endif
-        call nano%set_atomic_coords(trim(get_fbody(params%vols(1), 'mrc'))//'_atom_centers.pdb')
-        call nano%set_img(trim(get_fbody(params%vols(1), 'mrc'))//'CC.mrc', 'img_cc')
+        call nano%set_atomic_coords('../'//trim(fname)//'_atom_centers.pdb')
+        call nano%set_img('../'//trim(fname)//'CC.mrc', 'img_cc')
         ! calculate intensity statistics
         call nano%atom_intensity_stats()
         ! kill
@@ -844,8 +849,9 @@ contains
     subroutine exec_atom_cluster_analysis( self, cline )
         class(atom_cluster_analysis_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline !< command line input
-        type(parameters)   :: params
-        type(nanoparticle) :: nano
+        character(len=STDLEN) :: fname
+        type(parameters)      :: params
+        type(nanoparticle)    :: nano
         real    :: smpd
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
@@ -859,8 +865,9 @@ contains
         endif
         call nano%new(params%vols(1), params%smpd)
         ! execute
-        call nano%set_atomic_coords(trim(get_fbody(params%vols(1), 'mrc'))//'_atom_centers.pdb')
-        call nano%set_img(trim(get_fbody(params%vols(1), 'mrc'))//'CC.mrc', 'img_cc')
+        fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
+        call nano%set_atomic_coords(trim(fname)//'_atom_centers.pdb')
+        call nano%set_img(trim(fname)//'CC.mrc', 'img_cc')
         call nano%cluster(params%biatomic)
         ! kill
         call nano%kill
@@ -871,8 +878,9 @@ contains
     subroutine exec_nano_softmask( self, cline )
         class(nano_softmask_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline !< command line input
-        type(parameters)   :: params
-        type(nanoparticle) :: nano
+        character(len=STDLEN) :: fname
+        type(parameters)      :: params
+        type(nanoparticle)    :: nano
         real  :: smpd
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
@@ -887,7 +895,8 @@ contains
             call nano%new(params%vols(1), params%smpd)
         endif
         ! fetch img_bin
-        call nano%set_img(trim(get_fbody(params%vols(1), 'mrc'))//'BIN.mrc','img_bin')
+        fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
+        call nano%set_img(trim(fname)//'BIN.mrc','img_bin')
         ! execute
         call nano%make_soft_mask()
         ! kill
