@@ -22,7 +22,6 @@ public :: tseries_average_commander
 public :: tseries_corrfilt_commander
 public :: tseries_ctf_estimate_commander
 public :: refine3D_nano_commander_distr
-! public :: tseries_split_commander
 public :: detect_atoms_commander
 public :: atoms_rmsd_commander
 public :: radial_dependent_stats_commander
@@ -75,10 +74,6 @@ type, extends(commander_base) :: refine3D_nano_commander_distr
   contains
     procedure :: execute      => exec_refine3D_nano_distr
 end type refine3D_nano_commander_distr
-! type, extends(commander_base) :: tseries_split_commander
-!   contains
-!     procedure :: execute      => exec_tseries_split
-! end type tseries_split_commander
 type, extends(commander_base) :: detect_atoms_commander
   contains
     procedure :: execute      => exec_detect_atoms
@@ -290,11 +285,11 @@ contains
         call cline%set('autoscale',      'no')
         call cline%set('refine',     'greedy')
         call cline%set('tseries',       'yes')
-        if( .not. cline%defined('lp')      ) call cline%set('lp',      1.)
-        if( .not. cline%defined('ncls')    ) call cline%set('ncls',    20.)
-        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',   5.)
-        if( .not. cline%defined('trs')     ) call cline%set('trs',     10.)
-        if( .not. cline%defined('maxits')  ) call cline%set('maxits', 15.)
+        if( .not. cline%defined('lp')      ) call cline%set('lp',            1.)
+        if( .not. cline%defined('ncls')    ) call cline%set('ncls',         20.)
+        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',         5.)
+        if( .not. cline%defined('trs')     ) call cline%set('trs',          10.)
+        if( .not. cline%defined('maxits')  ) call cline%set('maxits',       15.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
         nparts = params%nparts

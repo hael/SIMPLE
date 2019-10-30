@@ -163,7 +163,6 @@ type :: oris
     procedure          :: order_corr
     procedure          :: order_cls
     procedure          :: calc_hard_weights
-    procedure          :: calc_hard_otsu_weights
     procedure          :: calc_soft_weights
     procedure          :: calc_hard_weights2D
     procedure          :: calc_soft_weights2D
@@ -2537,26 +2536,6 @@ contains
             call self%set_all2single('w', 1.)
         endif
     end subroutine calc_hard_weights
-
-    !>  \brief  calculates hard weights based on Otsu's algorithm appplied to correlations
-    subroutine calc_hard_otsu_weights( self )
-        class(oris), intent(inout) :: self
-        real, allocatable :: states(:), corrs(:), corrs_packed(:)
-        real    :: thresh
-        integer :: i
-        corrs  = self%get_all('corr')
-        states = self%get_all('state')
-        corrs_packed = pack(corrs, corrs > TINY .and. states > 0.5 )
-        call otsu(corrs_packed, thresh)
-        do i=1,self%n
-            if( states(i) > 0.5 .and. self%o(i)%get('corr') > thresh )then
-                call self%o(i)%set('w', 1.)
-            else
-                call self%o(i)%set('w', 0.)
-            endif
-        end do
-        deallocate(corrs, states, corrs_packed)
-    end subroutine calc_hard_otsu_weights
 
     !>  \brief  calculates soft weights based on specscore
     subroutine calc_soft_weights( self, frac )

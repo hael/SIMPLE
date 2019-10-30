@@ -361,8 +361,6 @@ contains
         select case(trim(params_glob%ptclw))
             case('yes')
                 call build_glob%spproj_field%calc_soft_weights(params_glob%frac)
-            case('otsu')
-                call build_glob%spproj_field%calc_hard_otsu_weights
             case DEFAULT
                 call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
         end select
@@ -692,8 +690,6 @@ contains
         select case(trim(params_glob%ptclw))
             case('yes')
                 call build_glob%spproj_field%calc_soft_weights(params_glob%frac)
-            case('otsu')
-                call build_glob%spproj_field%calc_hard_otsu_weights
             case DEFAULT
                 call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
         end select
