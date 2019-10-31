@@ -15,7 +15,7 @@ implicit none
 public :: tseries_import_commander
 public :: tseries_track_commander_distr
 public :: tseries_track_commander
-public :: cleanup2D_nano_commander_distr
+public :: center2D_nano_commander_distr
 public :: cluster2D_nano_commander_distr
 public :: estimate_diam_commander
 public :: tseries_average_commander
@@ -42,10 +42,10 @@ type, extends(commander_base) :: tseries_track_commander
   contains
     procedure :: execute      => exec_tseries_track
 end type tseries_track_commander
-type, extends(commander_base) :: cleanup2D_nano_commander_distr
+type, extends(commander_base) :: center2D_nano_commander_distr
   contains
-    procedure :: execute      => exec_cleanup2D_nano_distr
-end type cleanup2D_nano_commander_distr
+    procedure :: execute      => exec_center2D_nano_distr
+end type center2D_nano_commander_distr
 type, extends(commander_base) :: cluster2D_nano_commander_distr
   contains
     procedure :: execute      => exec_cluster2D_nano_distr
@@ -266,9 +266,9 @@ contains
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track
 
-    subroutine exec_cleanup2D_nano_distr( self, cline )
+    subroutine exec_center2D_nano_distr( self, cline )
         use simple_commander_cluster2D, only: make_cavgs_commander_distr,cluster2D_commander_distr
-        class(cleanup2D_nano_commander_distr), intent(inout) :: self
+        class(center2D_nano_commander_distr), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
         type(cluster2D_commander_distr) :: xcluster2D_distr
@@ -300,7 +300,7 @@ contains
         orig_projfile = trim(params%projfile)
         ! sanity checks
         if( spproj%get_nptcls() == 0 )then
-            THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cleanup2D_nano')
+            THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_center2D_nano')
         endif
         ! delete any previous solution
         if( .not. spproj%is_virgin_field(params%oritype) )then
@@ -327,8 +327,8 @@ contains
         ! cleanup
         call del_file('start2Drefs'//params%ext)
         ! end gracefully
-        call simple_end('**** SIMPLE_CLEANUP2D_NANO NORMAL STOP ****')
-    end subroutine exec_cleanup2D_nano_distr
+        call simple_end('**** SIMPLE_center2D_nano NORMAL STOP ****')
+    end subroutine exec_center2D_nano_distr
 
     subroutine exec_cluster2D_nano_distr( self, cline )
         use simple_commander_cluster2D, only: cluster2D_autoscale_commander
