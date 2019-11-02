@@ -328,7 +328,7 @@ contains
         ! cleanup
         call del_file('start2Drefs'//params%ext)
         ! end gracefully
-        call simple_end('**** SIMPLE_center2D_nano NORMAL STOP ****')
+        call simple_end('**** SIMPLE_CENTER2D_NANO NORMAL STOP ****')
     end subroutine exec_center2D_nano_distr
 
     subroutine exec_cluster2D_nano_distr( self, cline )
@@ -401,23 +401,24 @@ contains
             call imgs(i)%write(BINARY, i)
             ! estimate diameter
             call imgs(i)%diameter_bin(diams(i))
+            diams(i) = diams(i) * params%smpd
             write(funit,'(F6.1)') diams(i)
         end do
         call fclose(funit)
         call calc_stats(diams, diamstats)
         ! output
         med_diam = median(diams)
-        write(logfhandle,'(A,F6.1)') '>>> AVG    DIAMETER (IN PIXELS): ', diamstats%avg
-        write(logfhandle,'(A,F6.1)') '>>> SDEV   DIAMETER (IN PIXELS): ', diamstats%sdev
-        write(logfhandle,'(A,F6.1)') '>>> MEDIAN DIAMETER (IN PIXELS): ', med_diam
-        write(logfhandle,'(A,F6.1)') '>>> MAX    DIAMETER (IN PIXELS): ', diamstats%maxv
-        write(logfhandle,'(A,F6.1)') '>>> MIN    DIAMETER (IN PIXELS): ', diamstats%minv
+        write(logfhandle,'(A,F6.1)') '>>> AVG    DIAMETER (IN A): ', diamstats%avg
+        write(logfhandle,'(A,F6.1)') '>>> SDEV   DIAMETER (IN A): ', diamstats%sdev
+        write(logfhandle,'(A,F6.1)') '>>> MEDIAN DIAMETER (IN A): ', med_diam
+        write(logfhandle,'(A,F6.1)') '>>> MAX    DIAMETER (IN A): ', diamstats%maxv
+        write(logfhandle,'(A,F6.1)') '>>> MIN    DIAMETER (IN A): ', diamstats%minv
         call fopen(funit, file='diameter_stats.txt', status='replace')
-        write(funit,     '(A,F6.1)') '>>> AVG    DIAMETER (IN PIXELS): ', diamstats%avg
-        write(funit,     '(A,F6.1)') '>>> SDEV   DIAMETER (IN PIXELS): ', diamstats%sdev
-        write(funit,     '(A,F6.1)') '>>> MEDIAN DIAMETER (IN PIXELS): ', med_diam
-        write(funit,     '(A,F6.1)') '>>> MAX    DIAMETER (IN PIXELS): ', diamstats%maxv
-        write(funit,     '(A,F6.1)') '>>> MIN    DIAMETER (IN PIXELS): ', diamstats%minv
+        write(funit,     '(A,F6.1)') '>>> AVG    DIAMETER (IN A): ', diamstats%avg
+        write(funit,     '(A,F6.1)') '>>> SDEV   DIAMETER (IN A): ', diamstats%sdev
+        write(funit,     '(A,F6.1)') '>>> MEDIAN DIAMETER (IN A): ', med_diam
+        write(funit,     '(A,F6.1)') '>>> MAX    DIAMETER (IN A): ', diamstats%maxv
+        write(funit,     '(A,F6.1)') '>>> MIN    DIAMETER (IN A): ', diamstats%minv
         call fclose(funit)
         ! destruct
         do i=1,size(imgs)
@@ -427,7 +428,7 @@ contains
         if( allocated(ccsizes) ) deallocate(ccsizes)
         deallocate(imgs, diams)
         ! end gracefully
-        call simple_end('**** SIMPLE__ESTIMATE_DIAM NORMAL STOP ****')
+        call simple_end('**** SIMPLE_ESTIMATE_DIAM NORMAL STOP ****')
     end subroutine exec_estimate_diam
 
     subroutine exec_tseries_average( self, cline )
