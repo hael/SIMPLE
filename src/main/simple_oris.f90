@@ -99,6 +99,7 @@ type :: oris
     generic            :: set_all2single => set_all2single_1, set_all2single_2
     procedure          :: set_projs
     procedure          :: remap_projs
+    procedure          :: proj2class
     procedure          :: e3swapsgn
     procedure          :: swape1e3
     procedure          :: zero
@@ -1502,6 +1503,15 @@ contains
         end do
         !$omp end parallel do
     end subroutine remap_projs
+
+    subroutine proj2class( self )
+        class(oris), intent(inout) :: self
+        integer :: i
+        if( .not. self%isthere('proj') ) THROW_HARD('No proj indices to turn into class indices; proj2class')
+        do i=1,self%n
+            call self%o(i)%set('class', self%o(i)%get('proj'))
+        end do
+    end subroutine proj2class
 
     subroutine e3swapsgn( self )
         class(oris), intent(inout) :: self

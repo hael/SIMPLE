@@ -106,6 +106,7 @@ type(simple_program), target :: initial_3Dmodel
 type(simple_program), target :: local_resolution
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
+type(simple_program), target :: map_cavgs_selection
 type(simple_program), target :: mask
 type(simple_program), target :: mkdir_
 type(simple_program), target :: merge_stream_projects
@@ -304,6 +305,7 @@ contains
         call new_local_resolution
         call new_make_cavgs
         call new_make_oris
+        call new_map_cavgs_selection
         call new_mask
         call new_merge_stream_projects
         call new_mkdir_
@@ -395,6 +397,7 @@ contains
         call push2prg_ptr_array(local_resolution)
         call push2prg_ptr_array(make_cavgs)
         call push2prg_ptr_array(make_oris)
+        call push2prg_ptr_array(map_cavgs_selection)
         call push2prg_ptr_array(mask)
         call push2prg_ptr_array(mkdir_)
         call push2prg_ptr_array(motion_correct)
@@ -526,6 +529,8 @@ contains
                 ptr2prg => make_cavgs
             case('make_oris')
                 ptr2prg => make_oris
+            case('map_cavgs_selection')
+                ptr2prg => map_cavgs_selection
             case('mask')
                 ptr2prg => mask
             case('merge_stream_projects')
@@ -689,6 +694,7 @@ contains
         write(logfhandle,'(A)') import_starproject%name
         write(logfhandle,'(A)') local_resolution%name
         write(logfhandle,'(A)') make_oris%name
+        write(logfhandle,'(A)') map_cavgs_selection%name
         write(logfhandle,'(A)') mask%name
         write(logfhandle,'(A)') merge_stream_projects%name
         write(logfhandle,'(A)') mkdir_%name
@@ -2057,6 +2063,32 @@ contains
         ! computer controls
         call make_oris%set_input('comp_ctrls', 1, nthr)
     end subroutine new_make_oris
+
+    subroutine new_map_cavgs_selection
+        ! PROGRAM SPECIFICATION
+        call map_cavgs_selection%new(&
+        &'map_cavgs_selection',&                                         ! name
+        &'Map class average selection to particles in project file',&    ! descr_short
+        &'is a program for mapping selection based on class averages to the individual particles using correlation matching',& ! descr_long
+        &'simple_exec',&                                                 ! executable
+        &2, 0, 0, 0, 0, 0, 0, .true.)                                    ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call  map_cavgs_selection%set_input('img_ios', 1, 'stk', 'file', 'Stack of cavgs to select from', 'Stack of cavgs to select from', 'e.g. cavgs_iter0XX.mrc', .false., '')
+        call  map_cavgs_selection%set_input('img_ios', 2, 'stk2', 'file', 'Stack of selected cavgs', 'Stack of selected cavgs', 'e.g. selected.spi', .true., '')
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_map_cavgs_selection
 
     subroutine new_mask
         ! PROGRAM SPECIFICATION

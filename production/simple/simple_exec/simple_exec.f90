@@ -39,14 +39,15 @@ type(selection_commander)             :: xselection
 type(export_relion_commander)         :: xexport_relion
 
 ! SINGLE-PARTICLE WORKFLOW PROGRAMS
-type(cluster_cavgs_commander)   :: xcluster_cavgs
-type(write_classes_commander)   :: xwrite_classes
-type(symaxis_search_commander)  :: xsymsrch
-type(symmetry_test_commander)   :: xsymtst
-type(radial_sym_test_commander) :: xradsymtst
-type(symmetrize_map_commander)  :: xsymmetrize_map
-type(dock_volpair_commander)    :: xdock_volpair
-type(postprocess_commander)     :: xpostprocess
+type(map_cavgs_selection_commander) :: xmap_cavgs_selection
+type(cluster_cavgs_commander)       :: xcluster_cavgs
+type(write_classes_commander)       :: xwrite_classes
+type(symaxis_search_commander)      :: xsymsrch
+type(symmetry_test_commander)       :: xsymtst
+type(radial_sym_test_commander)     :: xradsymtst
+type(symmetrize_map_commander)      :: xsymmetrize_map
+type(dock_volpair_commander)        :: xdock_volpair
+type(postprocess_commander)         :: xpostprocess
 
 ! IMAGE PROCESSING PROGRAMS
 type(pspec_stats_commander)   :: xpspecstats
@@ -148,6 +149,8 @@ select case(prg)
         call xexport_relion%execute(cline)
 
     ! SINGLE-PARTICLE WORKFLOW PROGRAMS
+    case( 'map_cavgs_selection' )
+        call xmap_cavgs_selection%execute(cline)
     case('cluster_cavgs')
         call xcluster_cavgs%execute(cline)
     case('write_classes')

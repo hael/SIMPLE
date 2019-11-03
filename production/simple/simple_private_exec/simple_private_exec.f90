@@ -28,7 +28,6 @@ type(reextract_commander)             :: xreextract
 type(motion_correct_commander)        :: xmotion_correct
 type(gen_pspecs_and_thumbs_commander) :: xgen_pspecs_and_thumbs
 type(ctf_estimate_commander)          :: xctf_estimate
-type(map_cavgs_selection_commander)   :: xmap_cavgs_selection
 type(pick_extract_commander)          :: xpick_extract
 type(pick_commander)                  :: xpick
 type(make_pickrefs_commander)         :: xmake_pickrefs
@@ -120,8 +119,6 @@ select case(prg)
         call xgen_pspecs_and_thumbs%execute(cline)
     case( 'ctf_estimate' )
         call xctf_estimate%execute(cline)
-    case( 'map_cavgs_selection' )
-        call xmap_cavgs_selection%execute(cline)
     case( 'pick_extract' )
         call xpick_extract%execute(cline)
     case( 'pick' )

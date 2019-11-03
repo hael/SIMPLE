@@ -1071,17 +1071,26 @@ contains
         use simple_corrmat,             only: calc_cartesian_corrmat
         class(map_cavgs_selection_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline !< command line input
-        type(parameters)         :: params
-        type(builder)            :: build
-        type(image), allocatable :: imgs_sel(:), imgs_all(:)
-        integer,     allocatable :: states(:)
-        real,        allocatable :: correlations(:,:)
+        type(parameters)              :: params
+        type(builder)                 :: build
+        type(image),      allocatable :: imgs_sel(:), imgs_all(:)
+        integer,          allocatable :: states(:)
+        real,             allocatable :: correlations(:,:)
+        character(len=:), allocatable :: cavgstk
         integer :: iimg, isel, nall, nsel, loc(1), lfoo(3)
+        real    :: smpd
+        call cline%set('dir_exec', 'selection')
+        call cline%set('mkdir',    'yes')
         call build%init_params_and_build_spproj(cline,params)
         ! find number of selected cavgs
         call find_ldim_nptcls(params%stk2, lfoo, nsel)
         ! find number of original cavgs
-        call find_ldim_nptcls(params%stk, lfoo, nall)
+        if( .not. cline%defined('stk' ) )then
+            call build%spproj%get_cavgs_stk(cavgstk, nall, smpd)
+            params%stk = trim(cavgstk)
+        else
+            call find_ldim_nptcls(params%stk, lfoo, nall)
+        endif
         ! read images
         allocate(imgs_sel(nsel), imgs_all(nall))
         do isel=1,nsel
