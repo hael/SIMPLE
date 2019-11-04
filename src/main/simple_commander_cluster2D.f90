@@ -111,7 +111,7 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         integer :: ncls_here
-        call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call build%init_params_and_build_strategy2D_tbox(cline, params)
         write(logfhandle,'(a)') '>>> GENERATING CLUSTER CENTERS'
         ! deal with the orientations
@@ -131,6 +131,8 @@ contains
             endif
             call build%spproj_field%ini_tseries(params%ncls, 'class')
             call build%spproj_field%partition_eo(tseries=.true.)
+        else if( params%proj_is_class.eq.'yes' )then
+            call build%spproj_field%proj2class
         endif
         ! shift multiplication
         if( params%mul > 1. )then
@@ -156,7 +158,7 @@ contains
         call cavger_assemble_sums( .false. )
         ! write sums
         call cavger_readwrite_partial_sums('write')
-        call qsys_job_finished(  'simple_commander_cluster2D :: exec_make_cavgs' )
+        call qsys_job_finished('simple_commander_cluster2D :: exec_make_cavgs')
         call cavger_kill
         ! end gracefully
         call build%kill_strategy2D_tbox

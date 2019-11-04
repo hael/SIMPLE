@@ -88,6 +88,7 @@ contains
         if( s%npeaks == 1 )then
             best_loc(1)  = 1
             ws(1)        = 1.
+            best_corr    = corrs(best_loc(1))
         else
             ! find highest corr pos
             best_loc  = maxloc(corrs)
@@ -114,6 +115,7 @@ contains
         if( s%npeaks == 1 )then
             best_loc(1)  = 1
             ws(1)        = 1.
+            best_corr    = corrs(best_loc(1))
         else
             ! find highest corr pos
             best_loc  = maxloc(corrs)

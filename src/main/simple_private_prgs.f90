@@ -371,7 +371,6 @@ contains
         call cmd_dict%push('nnn',           '# nearest neighbors{200}')
         call cmd_dict%push('noise',         'noise initialisation(yes|no){no}')
         call cmd_dict%push('noise_norm',    'normalise based on sdev of background(yes|no){no}')
-        call cmd_dict%push('norec',         'do not reconstruct volume(s)(yes|no){no}')
         call cmd_dict%push('norm',          'do statistical normalisation avg')
         call cmd_dict%push('nparts',        '# partitions in distributed exection')
         call cmd_dict%push('npix',          '# pixles/voxels in binary representation')

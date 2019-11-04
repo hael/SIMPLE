@@ -323,7 +323,7 @@ contains
         ! here we read all peaks to allow deriving statistics based on the complete set
         ! this is needed for deriving projection direction weights
         select case(trim(params_glob%refine))
-        case('eval','cluster','clustersym') ! 'neigh_multi','neigh_single'
+            case('eval','cluster','clustersym') ! 'neigh_multi','neigh_single'
                 ! nothing to do
             case DEFAULT
                 if( .not. file_exists(trim(params_glob%o_peaks_file)) )then
@@ -625,6 +625,7 @@ contains
         type(kbinterpol)         :: kbwin
         real    :: sdev_noise
         integer :: batchlims(2), iptcl, i, i_batch, ibatch
+        if( trim(params_glob%dorec) .eq. 'no' ) return
         select case(trim(params_glob%refine))
             case('eval')
                 ! no reconstruction
@@ -724,7 +725,7 @@ contains
         real    :: weight_thres, wsum
         integer :: nweights, cnt, iptcl, i, nw
         select case(params_glob%refine)
-        case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval')
+            case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval')
                 ! nothing to do
             case DEFAULT
                 ! extract weights

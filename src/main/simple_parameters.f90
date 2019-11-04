@@ -40,6 +40,7 @@ type :: parameters
     character(len=3)      :: dock='no'            !< register nanoparticle maps prior comparison (yes|no){no}
     character(len=3)      :: dopca='yes'
     character(len=3)      :: doprint='no'
+    character(len=3)      :: dorec='yes'
     character(len=3)      :: eputiltgroups='no'   !< generate relion tilt classes from epu filenames (yes|no){no}
     character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
     character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
@@ -65,7 +66,6 @@ type :: parameters
     character(len=3)      :: neg='no'             !< invert contrast of images(yes|no)
     character(len=3)      :: neigh='no'           !< neighbourhood refinement(yes|no){no}
     character(len=3)      :: noise_norm ='no'
-    character(len=3)      :: norec='no'           !< do not reconstruct volume(s)(yes|no){no}
     character(len=3)      :: norm='no'            !< do statistical normalisation avg
     character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
     character(len=3)      :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
@@ -75,6 +75,7 @@ type :: parameters
     character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)      :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
+    character(len=3)      :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)      :: projstats='no'
     character(len=3)      :: projw='no'           !< correct for uneven orientation distribution
     character(len=3)      :: pssnr='no'           !< correct for uneven orientation distribution
@@ -525,6 +526,7 @@ contains
         call check_carg('doalign',        self%doalign)
         call check_carg('dock',           self%dock)
         call check_carg('dockmode',       self%dockmode)
+        call check_carg('dorec',          self%dorec)
         call check_carg('dev',            self%dev)
         call check_carg('dihedral',       self%dihedral)
         call check_carg('dopca',          self%dopca)
@@ -566,7 +568,6 @@ contains
         call check_carg('neg',            self%neg)
         call check_carg('neigh',          self%neigh)
         call check_carg('noise_norm',     self%noise_norm)
-        call check_carg('norec',          self%norec)
         call check_carg('norm',           self%norm)
         call check_carg('objfun',         self%objfun)
         call check_carg('opt',            self%opt)
@@ -584,6 +585,7 @@ contains
         call check_carg('platonic',       self%platonic)
         call check_carg('prg',            self%prg)
         call check_carg('projname',       self%projname)
+        call check_carg('proj_is_class',  self%proj_is_class)
         call check_carg('projstats',      self%projstats)
         call check_carg('projw',          self%projw)
         call check_carg('pssnr',          self%pssnr)
