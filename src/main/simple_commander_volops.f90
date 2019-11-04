@@ -282,10 +282,11 @@ contains
         type(builder)            :: build
         type(image), allocatable :: imgs(:)
         integer                  :: i
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('wfun')  ) call cline%set('wfun',   'kb')
-        if( .not. cline%defined('winsz') ) call cline%set('winsz',   1.5)
-        if( .not. cline%defined('alpha') ) call cline%set('alpha',    2.)
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('wfun')   ) call cline%set('wfun',   'kb')
+        if( .not. cline%defined('winsz')  ) call cline%set('winsz',   1.5)
+        if( .not. cline%defined('alpha')  ) call cline%set('alpha',    2.)
+        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'reprojs.mrcs')
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) THROW_HARD('need nspace (for number of projections)!')
         endif
@@ -308,6 +309,7 @@ contains
         if( file_exists(params%outstk) ) call del_file(params%outstk)
         do i=1,params%nspace
             if( params%neg .eq. 'yes' ) call imgs(i)%neg()
+            if( build%spproj_field%get_state(i) < 1 ) call imgs(i)%zero
             call imgs(i)%write(params%outstk,i)
         end do
         call build%spproj_field%write('reproject_oris'//trim(TXT_EXT), [1,params%nptcls])
