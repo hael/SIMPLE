@@ -356,6 +356,7 @@ contains
         endif
         ! return in Fourier space
         call img_out%fft()
+        img_out = img_out * (real(params_glob%boxmatch**2) / real(params_glob%box**2))
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
@@ -429,6 +430,7 @@ contains
         endif
         ! move to Fourier space
         call img_out%fft()
+        img_out = img_out * (real(params_glob%boxmatch**2) / real(params_glob%box**2))
     end subroutine prep2Dref
 
     !>  \brief  initializes all volumes for reconstruction

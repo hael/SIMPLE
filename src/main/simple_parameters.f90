@@ -679,6 +679,7 @@ contains
         call check_iarg('balance',        self%balance)
         call check_iarg('binwidth',       self%binwidth)
         call check_iarg('box',            self%box)
+        call check_iarg('boxmatch',       self%boxmatch)
         call check_iarg('box_extract',    self%box_extract)
         call check_iarg('chunksz',        self%chunksz)
         call check_iarg('clip',           self%clip)
@@ -1260,7 +1261,9 @@ contains
         ! set graphene flag
         self%l_graphene = self%graphene_filt .ne. 'no'
         ! boxmatch
-        self%boxmatch = find_boxmatch(self%box, self%msk)
+        if( .not.cline%defined('boxmatch'))then
+            self%boxmatch = find_boxmatch(self%box, self%msk)
+        end if
         ! set default outer mask value
         if( .not. cline%defined('outer') ) self%outer = self%msk
         ! checks automask related values
