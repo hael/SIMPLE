@@ -670,12 +670,14 @@ contains
 
     real function calc_group_weight( self )
         class(motion_align_hybrid), intent(in)  :: self
+        integer :: lp_update
         if( self%px == 0 .and. self%py == 0 )then
             ! iso
             calc_group_weight = 0.0
         else
             ! aniso
-            calc_group_weight = 0.25*exp(-real(self%lp_updates))
+            lp_update = min(self%lp_updates,NRESUPDATES)
+            calc_group_weight = 0.25*exp(-real(lp_update))
         endif
     end function calc_group_weight
 

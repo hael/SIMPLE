@@ -668,20 +668,23 @@ contains
         end do
     end subroutine dampen_pspec_central_cross
 
-    subroutine scale_pspec4viz( self )
-        class(image), intent(inout) :: self
+    subroutine scale_pspec4viz( self, rsmpd4viz )
+        class(image),   intent(inout) :: self
+        real, optional, intent(in)    :: rsmpd4viz
         type(image) :: tmp
-        real        :: scale4viz
+        real        :: scale4viz, smpd4viz_here
         integer     :: box4clip
         if( self%ft )          THROW_HARD('pspec input assumed to be in real-space; scale_pspec4viz')
         if( self%ldim(3) > 1 ) THROW_HARD('pspec input assumed to be 2D; scale_pspec4viz')
-        scale4viz = min(self%smpd / SMPD4VIZ, 1.)
+        smpd4viz_here = SMPD4VIZ
+        if( present(rsmpd4viz) ) smpd4viz_here = rsmpd4viz
+        scale4viz = min(self%smpd / smpd4viz_here, 1.)
         if( scale4viz < 1. )then
             box4clip = round2even(scale4viz * real(self%ldim(1)))
         else
             return
         endif
-        call tmp%new([box4clip,box4clip,1], SMPD4VIZ)
+        call tmp%new([box4clip,box4clip,1], smpd4viz_here)
         call self%clip(tmp)
         call tmp%zero_edgeavg
         call tmp%fft
@@ -2719,6 +2722,7 @@ contains
             end do
             ci = ci + 1.
         end do
+        if( is_equal(spix,0.) ) return
         xyz = xyz / spix
         if( self%ldim(3) == 1 ) xyz(3) = 0.
     end subroutine masscen
@@ -7292,7 +7296,8 @@ contains
                 if( left%is_3d() .or. right%is_3d() ) THROW_HARD('not for 3D imgs; before_after')
                 ldim = left%ldim
                 ba = left
-                ba%rmat(:ldim(1)/2,:ldim(2),1) = left%rmat(:ldim(1)/2,:ldim(2),1)
+                ba%rmat(:ldim(1)/2,:ldim(2),1)   = left%rmat(:ldim(1)/2,:ldim(2),1)
+                ba%rmat(ldim(1)/2+1:,:ldim(2),1) = 0.
                 if( present(mask) )then
                     do i=ldim(1)/2+1,ldim(1)
                         do j=1,ldim(2)
