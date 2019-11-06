@@ -33,8 +33,6 @@ contains
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         call setup_weights_read_o_peaks
-        call calc_global_ori_weights
-        ! call calc_proj_weights
         call calc_3Drec( cline, which_iter )
         call qsys_job_finished( 'simple_rec_master :: exec_rec_soft')
     end subroutine exec_rec_soft

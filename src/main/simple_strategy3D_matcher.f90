@@ -37,7 +37,7 @@ use simple_euclid_sigma2,            only: euclid_sigma2
 implicit none
 
 public :: refine3D_exec, preppftcc4align, pftcc, setup_weights_read_o_peaks
-public :: calc_global_ori_weights, calc_3Drec, calc_proj_weights
+public :: calc_3Drec, calc_proj_weights
 private
 #include "simple_local_flags.inc"
 
@@ -351,9 +351,6 @@ contains
                 call close_o_peaks_io
         end select
 
-        ! CALCULATE GLOBAL ORIENTATION WEIGHTS
-        if( params_glob%l_wglob ) call calc_global_ori_weights
-
         ! CALCULATE PROJECTION DIRECTION WEIGHTS
         ! call calc_proj_weights !!!!!!!!!! turned off 4 now, needs integration and testing
 
@@ -403,10 +400,6 @@ contains
                 THROW_HARD('unsupported oritype: '//trim(params_glob%oritype)//'; refine3D_exec')
         end select
         params_glob%oritab = params_glob%outfile
-
-
-
-
 
         ! VOLUMETRIC 3D RECONSTRUCTION
         call calc_3Drec( cline, which_iter )
@@ -719,68 +712,6 @@ contains
         end do
         call close_o_peaks_io
     end subroutine read_o_peaks
-
-    subroutine calc_global_ori_weights
-        real,    allocatable :: weights_glob(:), weights(:), ws_nonzero(:)
-        real    :: weight_thres, wsum
-        integer :: nweights, cnt, iptcl, i, nw
-        select case(params_glob%refine)
-            case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval')
-                ! nothing to do
-            case DEFAULT
-                ! extract weights
-                nweights = npeaks * nptcls2update
-                allocate(weights_glob(nweights), source=0.)
-                cnt = 0
-                do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) )then
-                        weights = s3D%o_peaks(iptcl)%get_all('ow')
-                        do i=1,size(weights)
-                            cnt = cnt + 1
-                            weights_glob(cnt) = weights(i)
-                        end do
-                    endif
-                end do
-                ! define a threshold using Otsu's algorithm
-                ws_nonzero = pack(weights_glob(:cnt), mask=weights_glob(:cnt) > TINY)
-                call otsu(ws_nonzero, weight_thres)
-                deallocate(ws_nonzero)
-                if( weight_thres <= TINY ) weight_thres = SMALL
-                ! zero and normalize weights, apply rank-based weighting scheme if so specified
-                do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) )then
-                        weights = s3D%o_peaks(iptcl)%get_all('ow')
-                        nw = size(weights)
-                        where( weights <= weight_thres ) weights = 0.
-                        wsum = sum(weights)
-                        if( wsum > TINY )then
-                            weights = weights / wsum
-                            select case(params_glob%wcrit_enum)
-                                case(RANK_SUM_CRIT,RANK_CEN_CRIT,RANK_EXP_CRIT,RANK_INV_CRIT)
-                                    if( params_glob%wcrit_enum == RANK_EXP_CRIT )then
-                                        call conv2rank_weights(nw, weights, params_glob%wcrit_enum, RANKW_EXP)
-                                    else
-                                        call conv2rank_weights(nw, weights, params_glob%wcrit_enum)
-                                    endif
-                                    call s3D%o_peaks(iptcl)%set_all('ow', weights)
-                                    call build_glob%spproj_field%set(iptcl, 'npeaks', real(count(weights > TINY)))
-                                    call build_glob%spproj_field%set(iptcl, 'ow', maxval(weights))
-                                    deallocate(weights)
-                                case DEFAULT
-                                    call s3D%o_peaks(iptcl)%set_all('ow', weights)
-                                    call build_glob%spproj_field%set(iptcl, 'npeaks', real(count(weights > TINY)))
-                                    call build_glob%spproj_field%set(iptcl, 'ow',     maxval(weights))
-                                    deallocate(weights)
-                            end select
-                        else
-                            call s3D%o_peaks(iptcl)%set_all2single('ow', 0.)
-                            call build_glob%spproj_field%set(iptcl, 'npeaks', 0.)
-                        endif
-                    endif
-                end do
-                deallocate(weights_glob)
-        end select
-    end subroutine calc_global_ori_weights
 
     subroutine calc_proj_weights
         real, allocatable :: weights(:), projs(:)

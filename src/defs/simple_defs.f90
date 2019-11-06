@@ -165,7 +165,6 @@ integer, parameter :: MC_NPATCH            = 5         !< number of patches in x
 integer, parameter :: MIN_ITERS_SHC        = 5         !< minimum number of iterations of stochastic search
 
 ! orientation weighting scheme
-character(len=*), parameter :: WSCHEME_DEFAULT      = 'glob' !< use global orientation weights extracted from pool of all weights by default
 real,             parameter :: RANKW_EXP            = 2.0    !< Exponent for exponential rank orientation weights
 real,             parameter :: SIGMA2_FUDGE_DEFAULT = 50.    !< controls the sharpeness of the orientation weight distribution when objfun .eq. euclid
                                                              !! smaller number means sharper distribution

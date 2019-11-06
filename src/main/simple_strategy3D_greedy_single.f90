@@ -32,7 +32,7 @@ contains
         logical   :: included(self%s%npeaks)
         ! extract peak info
         call extract_peaks(self%s, corrs)
-        call calc_softmax_weights(self%s, corrs, ws, best_loc, wcorr) ! stochastic weights
+        call calc_ori_weights(self%s, corrs, ws, best_loc, wcorr) ! stochastic weights
         ! angular standard deviation
         ang_spread = estimate_ang_spread(self%s)
         call estimate_shift_increment(self%s, shwmean, shwstdev)

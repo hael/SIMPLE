@@ -108,7 +108,7 @@ contains
         logical   :: included(self%s%npeaks)
         ! extract peak info
         call extract_peaks(self%s, corrs, multistates=.true.)
-        call calc_softmax_weights(self%s, corrs, ws, best_loc, wcorr) ! stochastic weights
+        call calc_ori_weights(self%s, corrs, ws, best_loc, wcorr) ! stochastic weights
         call states_reweight(self%s, ws, state, best_loc)             ! state reweighting
         ! angular standard deviation
         ang_spread = estimate_ang_spread(self%s)
