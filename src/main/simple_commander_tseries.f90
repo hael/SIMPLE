@@ -143,11 +143,13 @@ contains
         real,        allocatable      :: boxdata(:,:)
         type(chash), allocatable      :: part_params(:)
         integer :: ndatlines, numlen, alloc_stat, j, orig_box, ipart
-        call cline%set('nparts', 1.0)
         if( .not. cline%defined('neg')       ) call cline%set('neg',      'yes')
-        if( .not. cline%defined('lp')        ) call cline%set('lp',         2.0)
+        if( .not. cline%defined('lp')        ) call cline%set('lp',         2.3)
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      5.0)
-        if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp', 10.)
+        if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp', 30.)
+        if( .not. cline%defined('filter'))     call cline%set('filter',    'tv')
+        if( .not. cline%defined('nparts'))     call cline%set('nparts',    1.)
+        call cline%set('oritype','mic')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -195,17 +197,19 @@ contains
 
     subroutine exec_tseries_track( self, cline )
         use simple_tseries_tracker
-        use simple_qsys_funs,  only: qsys_job_finished
-        use simple_sp_project, only: sp_project
+        use simple_qsys_funs,        only: qsys_job_finished
+        use simple_sp_project,       only: sp_project
+        use simple_ctf_estimate_fit, only: ctf_estimate_fit
         class(tseries_track_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(sp_project)                       :: spproj
         type(parameters)                       :: params
         type(nrtxtfile)                        :: boxfile
-        character(len=:),          allocatable :: dir
+        character(len=:),          allocatable :: dir, forctf, fbody
         character(len=LONGSTRLEN), allocatable :: framenames(:)
         real,                      allocatable :: boxdata(:,:)
         integer :: i, iframe, ndatlines, j, orig_box, numlen, nframes
+        call cline%set('oritype','mic')
         call params%new(cline)
         numlen   = 5 ! default value
         orig_box = params%box
@@ -248,20 +252,19 @@ contains
         enddo
         ! actual tracking
         do j=1,ndatlines
+            fbody = trim(params%fbody)//int2str(params%ind)
+            dir   = trim(fbody)
             if( cline%defined('ind') )then
-                dir = trim(params%fbody)//int2str(params%ind)
-                call simple_mkdir(dir)
                 if( .not. cline%defined('numlen') ) THROW_HARD('need numlen to be part of command line if ind is; exec_tseries_track')
-            else
-                dir = trim(params%fbody)//int2str(params%ind)
-                call simple_mkdir(dir)
             endif
+            call simple_mkdir(dir)
             call init_tracker( nint(boxdata(j,1:2)), framenames, dir, trim(params%fbody)//int2str_pad(j,numlen))
-            call track_particle
-            ! clean
+            call track_particle( forctf )
+            ! clean tracker
             call kill_tracker
         end do
         call qsys_job_finished('simple_commander_tseries :: exec_tseries_track')
+        call spproj%kill
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track
