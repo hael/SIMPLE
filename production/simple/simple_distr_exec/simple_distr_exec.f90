@@ -10,8 +10,8 @@ use simple_commander_tseries
 use simple_commander_refine3D
 use simple_commander_rec
 use simple_commander_project
-use simple_commander_abinitio_wflows
-use simple_commander_cluster3D_wflows
+use simple_commander_abinitio
+use simple_commander_cluster3D
 use simple_spproj_hlev
 implicit none
 #include "simple_local_flags.inc"
@@ -47,7 +47,7 @@ type(cluster3D_refine_commander)            :: xcluster3D_refine
 
 ! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
 type(tseries_track_commander_distr)         :: xtseries_track_distr
-type(center2D_nano_commander_distr)        :: xcenter2D_nano_distr
+type(center2D_nano_commander_distr)         :: xcenter2D_nano_distr
 type(cluster2D_nano_commander_distr)        :: xcluster2D_nano_distr
 type(refine3D_nano_commander_distr)         :: xrefine3D_nano_distr
 

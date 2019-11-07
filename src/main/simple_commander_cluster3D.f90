@@ -1,5 +1,5 @@
 ! concrete commander: high-level workflows
-module simple_commander_cluster3D_wflows
+module simple_commander_cluster3D
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
@@ -80,7 +80,7 @@ contains
                 call spproj%read(params%projfile)
                 fall_over = spproj%os_out%get_noris() == 0
         case DEFAULT
-            write(logfhandle,*)'Unsupported ORITYPE; simple_commander_cluster3D_wflows::exec_cluster3D'
+            write(logfhandle,*)'Unsupported ORITYPE; simple_commander_cluster3D::exec_cluster3D'
         end select
         if( fall_over ) THROW_HARD('no particles found! exec_cluster3D')
         if( params%oritype.eq.'ptcl3D' )then
@@ -386,7 +386,7 @@ contains
                 call spproj%read(params%projfile)
                 fall_over = spproj%os_out%get_noris() == 0
         case DEFAULT
-            write(logfhandle,*)'Unsupported ORITYPE; simple_commander_cluster3D_wflows::exec_cluster3D_refine'
+            write(logfhandle,*)'Unsupported ORITYPE; simple_commander_cluster3D::exec_cluster3D_refine'
         end select
         if( fall_over ) THROW_HARD('no particles found! exec_cluster3D_refine')
         ! stash states
@@ -668,4 +668,4 @@ contains
 
     end subroutine exec_cluster3D_refine
 
-end module simple_commander_cluster3D_wflows
+end module simple_commander_cluster3D

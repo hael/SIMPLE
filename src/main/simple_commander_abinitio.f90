@@ -1,5 +1,5 @@
 ! concrete commander: high-level workflows
-module simple_commander_abinitio_wflows
+module simple_commander_abinitio
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
@@ -106,14 +106,14 @@ contains
             if(se1%get_nsym() > se2%get_nsym())then
                 ! ensure se2 is a subgroup of se1
                 if( .not. se1%has_subgrp(pgrp_refine) )&
-                    &THROW_HARD('Incompatible symmetry groups; simple_commander_abinitio_wflows')
+                    &THROW_HARD('Incompatible symmetry groups; simple_commander_abinitio')
                 ! set flag for symmetry randomisation before refinmement
                 ! in case we are moving from a higher to lower group
                 symran_before_refine = .true.
             else if(se2%get_nsym() > se1%get_nsym())then
                 ! ensure se1 is a subgroup of se2
                 if( .not. se2%has_subgrp(pgrp_init) )&
-                    &THROW_HARD('Incompatible symmetry groups; simple_commander_abinitio_wflows')
+                    &THROW_HARD('Incompatible symmetry groups; simple_commander_abinitio')
             endif
         endif
         ! read project & update sampling distance
@@ -579,4 +579,4 @@ contains
 
     end subroutine exec_initial_3Dmodel
 
-end module simple_commander_abinitio_wflows
+end module simple_commander_abinitio
