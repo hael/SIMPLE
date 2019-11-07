@@ -168,7 +168,7 @@ contains
             ! center reference for the next batch
             call reference%ifft
             if( l_neg ) call reference%neg
-            xyz = reference%calc_shiftcen(params_glob%cenlp,0.45*real(params_glob%box))
+            xyz = center_reference()
             if( l_neg ) call reference%neg
             call reference%fft
             call reference%shift(xyz)
@@ -284,6 +284,57 @@ contains
             end subroutine identify_neighbours
 
     end subroutine write_background_images_and_update_pspec
+
+    ! PRIVATE FUNCTIONS
+
+    function center_reference( )result( shift )
+        use simple_segmentation, only: otsu_robust_fast
+        type(image)          :: img, tmp, tmpcc
+        real,    pointer     :: rmat(:,:,:), rmat_cc(:,:,:)
+        integer, allocatable :: sz(:)
+        real                 :: shift(3), thresh(3)
+        integer              :: loc, ldim
+        ldim = params_glob%box
+        img  = reference
+        ! low-pass
+        call img%bp(0., params_glob%cenlp)
+        call img%ifft()
+        ! mask
+        call img%mask(0.45*real(params_glob%box), 'hard')
+        ! median filtering
+        call img%real_space_filter(5,'median')
+        ! thresholding
+        call img%get_rmat_ptr(rmat)
+        where(rmat(1:ldim,1:ldim,1) < TINY) rmat(1:ldim,1:ldim,1) = 0.
+        tmp = img
+        ! binarize
+        call otsu_robust_fast(tmp,is2d=.true.,noneg=.true.,thresh=thresh)
+        ! median filtering again
+        call tmp%real_space_filter(3,'median')
+        ! identify biggest connected component
+        call tmp%find_connected_comps(tmpcc)
+        sz  = tmpcc%size_connected_comps()
+        loc = maxloc(sz,dim=1)
+        ! set to zero all the other connected components
+        call tmpcc%get_rmat_ptr(rmat_cc)
+        where(abs(rmat_cc(1:ldim,1:ldim,1)-loc) < TINY)
+            rmat_cc(1:ldim,1:ldim,1) = 1.
+        elsewhere
+            rmat_cc(1:ldim,1:ldim,1) = 0.
+        endwhere
+        ! keep only thresholded values within largest CC
+        call tmp%write('Binarized.mrc',cnt4debug)
+        call tmpcc%write('Binarizedcc.mrc',cnt4debug)
+        call img%mul(tmpcc)
+        call img%write('Binarizedccmul.mrc',cnt4debug)
+        call img%masscen(shift)
+        ! cleanup
+        call tmp%kill
+        call tmpcc%kill
+        call img%kill
+    end function center_reference
+
+    ! GETTERS
 
     integer function tracker_get_nnn()
         tracker_get_nnn = NNN
