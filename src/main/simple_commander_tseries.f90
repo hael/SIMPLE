@@ -628,7 +628,7 @@ contains
         if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
         if( .not. cline%defined('nspace')        ) call cline%set('nspace',       10000.)
         if( .not. cline%defined('shcfrac')       ) call cline%set('shcfrac',         10.)
-        if( .not. cline%defined('wcrit')         ) call cline%set('wcrit',         'exp')
+        if( .not. cline%defined('wcrit')         ) call cline%set('wcrit',         'cen')
         if( .not. cline%defined('trs')           ) call cline%set('trs',             5.0)
         if( .not. cline%defined('update_frac')   ) call cline%set('update_frac',     0.2)
         if( .not. cline%defined('lp')            ) call cline%set('lp',              1.0)

@@ -693,8 +693,6 @@ contains
         if( params%center.eq.'yes' )then
             shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
             call build%vol%shift(shvec)
-            ! fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
-            ! call build%vol%write(trim(fbody)//'_centered.mrc')
             ! store un-scaled shift parameters
             params%xsh = shvec(1) / scale
             params%ysh = shvec(1) / scale
@@ -750,8 +748,6 @@ contains
         if( params%center.eq.'yes' )then
             shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
             call build%vol%shift(shvec)
-            ! fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
-            ! call build%vol%write(trim(fbody)//'_centered.mrc')
         endif
         ! mask volume
         if( params_glob%l_innermsk )then
@@ -763,11 +759,9 @@ contains
         if(cline%defined('fname')) then
           call symmetry_tester(build%vol, params%msk, params%hp,&
           &params%lp, params%cn_stop, params%platonic .eq. 'yes', pgrp, params%fname)
-          print *, 'Right branch in exec_symmetry_test'
         else
           call symmetry_tester(build%vol, params%msk, params%hp,&
             &params%lp, params%cn_stop, params%platonic .eq. 'yes', pgrp)
-            print *, 'Wrong branch in exec_symmetry_test'
           endif
         ! end gracefully
         call simple_end('**** SIMPLE_SYMMETRY_TEST NORMAL STOP ****')
