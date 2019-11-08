@@ -87,6 +87,13 @@ contains
             ws_nonzero = pack(ws, mask=ws > TINY)
             call otsu(ws_nonzero, thres)
             s%npeaks_eff = max(1,count(ws_nonzero > thres))
+            ! limit the number of peaks
+            if( s%npeaks_eff > MAXNPEAKS )then
+                call hpsort(ws_nonzero)
+                call reverse(ws_nonzero) ! largest first
+                thres = ws_nonzero(MAXNPEAKS + 1)
+                s%npeaks_eff = MAXNPEAKS
+            endif
             ! zero weights below the threshold and re-normalize
             if( s%npeaks_eff == 1 )then
                 where(ws < maxval(ws) ) ws = 0. ! always one nonzero weight

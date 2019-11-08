@@ -154,6 +154,7 @@ integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lpli
 integer, parameter :: LPLIM3ITERBOUND      = 7         !< # iteration bound lplim stage 2 (PRIME2D)
 integer, parameter :: MINCLSPOPLIM         = 5         !< limit for adaptive cluster splitting/spreading (PRIME2D)
 integer, parameter :: CONTNPEAKS           = 5         !< # peaks to refine continuously
+integer, parameter :: MAXNPEAKS            = 30        !< maximum # peaks
 integer, parameter :: NPEAKS2REFINE        = 200       !< # peaks to be further optimised
 integer, parameter :: NINPLPEAKS2SORT      = 5         !< maximum # in-plane peaks to be considered for sorting
 integer, parameter :: NSPACE_REDUCED       = 600       !< # projection directions for the balancing constraint (PRIME3D)

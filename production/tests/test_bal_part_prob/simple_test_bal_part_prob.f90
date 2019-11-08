@@ -3,12 +3,12 @@ include 'simple_lib.f08'
 use simple_map_reduce
 implicit none
 integer, parameter :: NPTCLS=20000, NPARTS=5
-real,    parameter :: MAXNPEAKS=80.
+real,    parameter :: MAXNRPEAKS=80.
 real    :: npeaks(NPTCLS), npeaks_copy(NPTCLS), sums(NPARTS)
 integer :: i, kassgn(NPTCLS)
 call seed_rnd
 do i=1,NPTCLS
-    npeaks(i) = nint(ran3()*MAXNPEAKS)
+    npeaks(i) = nint(ran3()*MAXNRPEAKS)
 end do
 npeaks_copy = npeaks
 call approx_balanced_partitioning(npeaks, NPTCLS, NPARTS, kassgn)
