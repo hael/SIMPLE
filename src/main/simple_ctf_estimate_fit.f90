@@ -16,8 +16,9 @@ public :: ctf_estimate_fit
 private
 #include "simple_local_flags.inc"
 
-character(len=STDLEN), parameter :: SPECKIND = 'sqrt'
-real,                  parameter :: TOL      = 1.e-5
+character(len=STDLEN), parameter :: SPECKIND      = 'sqrt'
+real,                  parameter :: TOL           = 1.e-5
+real,                  parameter :: SMPD4VIZ_NANO = 1.
 integer,               parameter :: IARES = 5, NSTEPS = 200, POLYDIM = 10
 logical,               parameter :: DEBUG_HERE = .false.
 
@@ -25,20 +26,21 @@ type ctf_estimate_fit
     private
     class(image),    pointer  :: micrograph
     type(image), allocatable  :: tiles(:,:)              ! for storing all tiles used to build power spectra
-    type(image), allocatable  :: pspec_patch(:,:)   ! patches micrograph powerspec
+    type(image), allocatable  :: pspec_patch(:,:)        ! patches micrograph powerspec
     type(image)               :: pspec                   ! all micrograph powerspec
     type(image)               :: pspec_ctf               ! CTF powerspec
     type(image)               :: pspec_ctf_roavg         ! rotationally averaged CTF powerspec
     type(image)               :: pspec_roavg             ! rotationally averaged all micrograph powerspec
     type(ctf)                 :: tfun                    ! transfer function object
     type(ctfparams)           :: parms                   ! for storing ctf parameters
-    type(ctfparams), allocatable  :: parms_patch(:,:) ! for storing patch ctf parameters
-    type(ctf_estimate_cost2D)     :: cost2D                        ! 2D discrete optimization object
-    type(ctf_estimate_cost4Dcont) :: costcont                      ! 4D continuous optimization object
+    type(ctfparams), allocatable  :: parms_patch(:,:)    ! for storing patch ctf parameters
+    type(ctf_estimate_cost2D)     :: cost2D              ! 2D discrete optimization object
+    type(ctf_estimate_cost4Dcont) :: costcont            ! 4D continuous optimization object
     real,    allocatable      :: roavg_spec1d(:)         ! 1D rotational average spectrum
     integer, allocatable      :: inds_msk(:,:)           ! indices of pixels within resolution mask
-    integer, allocatable      :: tiles_centers(:,:,:)
+    integer, allocatable      :: tiles_centers(:,:,:)    ! location of tiles centers
     logical, allocatable      :: cc_msk(:,:,:)           ! redundant (including Friedel symmetry) resolution mask
+    logical, allocatable      :: resmsk1D(:)             ! 1D resolution mask
     real(dp)                  :: polyx(POLYDIM), polyy(POLYDIM)
     integer, allocatable      :: centers(:,:,:)
     real                      :: smpd         = 0.
@@ -65,6 +67,7 @@ contains
     ! constructor
     procedure          :: new
     procedure          :: read_doc
+    procedure          :: fit_nano
     ! getters
     procedure          :: get_ccfit
     procedure          :: get_ctfscore
@@ -109,7 +112,7 @@ contains
         real,                 intent(in)    :: dfrange(2)  !< defocus range, [30.0,5.0] default
         real,                 intent(in)    :: resrange(2) !< resolution range, [30.0,5.0] default
         real,                 intent(in)    :: astigtol_in !< tolerated astigmatism, 0.05 microns default
-        integer :: i,j
+        integer :: i,j,sh
         call self%kill
         ! set constants
         self%parms%smpd         = parms%smpd
@@ -123,11 +126,11 @@ contains
         self%ldim_mic = self%micrograph%get_ldim()
         if( resrange(1) > resrange(2) )then
             self%hp = resrange(1)
-            self%lp = resrange(2)
+            self%lp = max(2.*self%smpd,resrange(2))
         else
             THROW_HARD('invalid resolution range; new')
         endif
-        ! power spectrum
+        ! spectrum
         self%box      = box
         self%ldim_box = [self%box,self%box,1]
         call self%pspec%new(self%ldim_box, self%smpd)
@@ -138,6 +141,10 @@ contains
         self%flims1d    = [0,maxval(abs(self%flims(1:2,:)))]
         self%freslims1d = [self%pspec%get_find(self%hp),self%pspec%get_find(self%lp)]
         allocate(self%roavg_spec1d(self%flims1d(1):self%flims1d(2)),source=0.)
+        allocate(self%resmsk1D(self%flims1d(1):self%flims1d(2)), source=.false.)
+        do sh = self%freslims1d(1),self%freslims1d(2)
+            self%resmsk1D(sh) = .true.
+        enddo
         ! generate windows
         call self%gen_tiles
         ! init patches power spectra images
@@ -179,7 +186,7 @@ contains
             self%df_lims = dfrange
             self%df_step = (self%df_lims(2)-self%df_lims(1)) / real(NSTEPS)
         else
-            THROW_HARD('invalid defocus range; ctf_estimate_init')
+            THROW_HARD('invalid defocus range; new')
         endif
         self%astigtol = astigtol_in
         ! construct CTF objects
@@ -190,6 +197,87 @@ contains
         call seed_rnd
         self%exists = .true.
     end subroutine new
+
+    ! constructs & fit
+    subroutine fit_nano( self, forctf, box, parms, dfrange, resrange, astigtol_in)
+        class(ctf_estimate_fit), intent(inout) :: self
+        character(len=*),        intent(inout) :: forctf ! background average spectrum
+        integer,                 intent(in)    :: box
+        class(ctfparams),        intent(inout) :: parms
+        real,                    intent(in)    :: dfrange(2)  !< defocus range, [30.0,5.0] default
+        real,                    intent(in)    :: resrange(2) !< resolution range, [30.0,5.0] default
+        real,                    intent(in)    :: astigtol_in !< tolerated astigmatism, 0.05 microns default
+        type(image)          :: spec
+        logical, allocatable :: graphene_msk(:)
+        integer :: foo(3),nimgs,sh
+        call self%kill
+        ! set constants
+        self%parms%smpd         = parms%smpd
+        self%parms%cs           = parms%Cs
+        self%parms%kv           = parms%kV
+        self%parms%fraca        = parms%fraca
+        self%parms%l_phaseplate = parms%l_phaseplate
+        if(.not.file_exists(forctf)) THROW_HARD('Could not find file:'//trim(forctf)//'; new_nano')
+        self%box      = box
+        self%ldim_box = [self%box,self%box,1]
+        self%ldim_mic = self%ldim_box
+        self%smpd     = self%parms%smpd
+        call find_ldim_nptcls(forctf,foo,nimgs)
+        if( foo(1) /= box .or. foo(2) /= box )then
+            THROW_WARN('Image    dimensions: '//int2str(foo(1))//' x '//int2str(foo(1)))
+            THROW_WARN('Provided dimension:  '//int2str(box))
+            THROW_HARD('Inconsistent dimensions in '//trim(forctf)//'; new_nano')
+        endif
+        if( nimgs > 1 )then
+            THROW_HARD('More than one image in '//trim(forctf)//'; new_nano')
+        endif
+        if( resrange(1) > resrange(2) )then
+            self%hp = resrange(1)
+            self%lp = max(2.*self%smpd,resrange(2))
+        else
+            THROW_HARD('invalid resolution range; fit_nano')
+        endif
+        ! spectrum objects
+        call self%pspec%new(self%ldim_box, self%smpd)
+        call self%pspec_roavg%new(self%ldim_box, self%smpd)
+        call self%pspec_ctf%new(self%ldim_box, self%smpd)
+        call self%pspec_ctf_roavg%new(self%ldim_box, self%smpd)
+        self%flims      = self%pspec%loop_lims(3) ! redundant
+        self%flims1d    = [0,maxval(abs(self%flims(1:2,:)))]
+        self%freslims1d = [self%pspec%get_find(self%hp),self%pspec%get_find(self%lp)]
+        allocate(self%roavg_spec1d(self%flims1d(1):self%flims1d(2)),source=0.)
+        allocate(self%resmsk1D(self%flims1d(1):self%flims1d(2)), source=.false.)
+        ! graphene
+        graphene_msk = calc_graphene_mask(self%box,self%smpd)
+        do sh = self%freslims1d(1),self%freslims1d(2)
+            self%resmsk1D(sh) = graphene_msk(sh)
+        enddo
+        ! read spectrum
+        call spec%new(self%ldim_box, self%smpd)
+        call spec%read(forctf)
+        call self%pspec%copy(spec)
+        ! search related
+        if( dfrange(1) < dfrange(2) )then
+            self%df_lims = dfrange
+            self%df_step = (self%df_lims(2)-self%df_lims(1)) / real(NSTEPS)
+        else
+            THROW_HARD('invalid defocus range; fit_nano')
+        endif
+        self%astigtol = astigtol_in
+        ! other things
+        self%ntiles    = 0
+        self%npatches  = 0
+        self%ntotpatch = 0
+        ! construct CTF object
+        self%tfun = ctf(self%parms%smpd, self%parms%kV, self%parms%Cs, self%parms%fraca)
+        ! generate correlation mask
+        call self%gen_resmsk
+        ! Actual fitting
+        call self%fit(parms, spec, nano=.true.)
+        ! cleanup
+        call spec%kill
+        self%exists = .true.
+    end subroutine fit_nano
 
     ! constructor for reading and evaluating the polynomials only
     ! with routine pix2polyvals
@@ -294,10 +382,14 @@ contains
     ! DOERS
 
     !>  Performs initial grid search & 2D refinement, calculate stats
-    subroutine fit( self, parms, spec )
+    subroutine fit( self, parms, spec, nano )
         class(ctf_estimate_fit), intent(inout) :: self
         type(ctfparams),         intent(inout) :: parms
         class(image),  optional, intent(inout) :: spec
+        logical,       optional, intent(in)    :: nano
+        logical :: l_nano
+        l_nano = .false.
+        if( present(nano) ) l_nano = nano
         if( present(spec) )then
             ! use provided spectrum
             if( .not. (self%pspec.eqdims.spec) )then
@@ -310,12 +402,12 @@ contains
         endif
         ! generate & normalize 1D spectrum
         call self%gen_roavspec1d
+        ! 1D grid search with rotational average
+        call self%grid_srch
         ! prepare rotationally averaged power spectra & CTF power spectrum
         call self%pspec%roavg(IARES, self%pspec_roavg, 180)
         ! normalize 2D spectrum with respect to resolution range
         call self%norm_pspec(self%pspec)
-        ! 1D grid search with rotational average
-        call self%grid_srch
         ! 3/4D refinement of grid solution
         call self%refine
         ! calculate CTF stats
@@ -333,7 +425,7 @@ contains
     subroutine fit_patches( self )
         class(ctf_estimate_fit), intent(inout) :: self
         type(ctf_estimate_cost4Dcont) :: costcont_patch(self%npatches(1),self%npatches(2))
-        real    :: limits(2,2), cc, sumw, w, dist, tilt
+        real    :: limits(2,2), cc, sumw, w, dist
         integer :: pi,pj,i,j
         if( self%ntotpatch <= 0 ) return
         limits(1,1) = max(self%df_lims(1),self%parms%dfx-1.)
@@ -425,7 +517,7 @@ contains
         class(ctf_estimate_fit), intent(inout) :: self
         real, pointer :: prmat(:,:,:)
         real          :: cnt(self%flims1d(1):self%flims1d(2)),avg,sdev
-        integer       :: i,j,h,k, mh,mk, sh, shlim
+        integer       :: i,j,h,k, mh,mk, sh, shlim, n
         call self%pspec%get_rmat_ptr(prmat)
         ! spectrum 1D
         self%roavg_spec1d = 0.
@@ -436,7 +528,7 @@ contains
         do h=self%flims(1,1),self%flims(1,2)
             do k=self%flims(2,1),self%flims(2,2)
                 sh = nint(sqrt(real(h*h+k*k)))
-                if( sh > shlim ) cycle
+                if( sh > shlim )  cycle
                 i = min(max(1,h+mh+1),self%ldim_box(1))
                 j = min(max(1,k+mk+1),self%ldim_box(2))
                 self%roavg_spec1d(sh) = self%roavg_spec1d(sh)+prmat(i,j,1)
@@ -445,35 +537,55 @@ contains
         enddo
         where( cnt > 0 ) self%roavg_spec1d = self%roavg_spec1d / real(cnt)
         ! pre_normalization
-        avg = sum(self%roavg_spec1d(self%freslims1d(1):self%freslims1d(2)))&
-            &/real(self%freslims1d(2)-self%freslims1d(1)+1)
-        sdev = sum((self%roavg_spec1d(self%freslims1d(1):self%freslims1d(2))-avg)**2.)
-        sdev = sqrt(sdev/real(self%freslims1d(2)-self%freslims1d(1)))
-        if( sdev > TINY ) self%roavg_spec1d = (self%roavg_spec1d-avg) / sdev
-        nullify(prmat)
+        n    = count(self%resmsk1D(self%freslims1d(1):self%freslims1d(2)))
+        avg  = sum(self%roavg_spec1d(self%freslims1d(1):self%freslims1d(2)),&
+                &mask=self%resmsk1D(self%freslims1d(1):self%freslims1d(2))) / real(n)
+        sdev = sum((self%roavg_spec1d(self%freslims1d(1):self%freslims1d(2))-avg)**2.,&
+                &mask=self%resmsk1D(self%freslims1d(1):self%freslims1d(2)))
+        sdev = sqrt(sdev / real(n))
+        if( sdev < TINY ) sdev = 1.
+        do sh = self%freslims1d(1),self%freslims1d(2)
+            if( self%resmsk1D(sh) )then
+                self%roavg_spec1d(sh) = (self%roavg_spec1d(sh) - avg) / sdev
+            else
+                ! zeroing flagged shells
+                self%roavg_spec1d(sh) = 0.
+            endif
+        enddo
     end subroutine gen_roavspec1d
 
     ! builds resolution dependent mask and indices for correlation calculation
     subroutine gen_resmsk( self )
         class(ctf_estimate_fit), intent(inout) :: self
         type(image) :: imgmsk
-        integer :: h,k, i,j, cnt, mh,mk
+        integer     :: h,k, i,j, cnt, mh,mk, sh
+        mh = abs(self%flims(1,1))
+        mk = abs(self%flims(2,1))
         ! resolution mask
         call imgmsk%new(self%ldim_box, self%smpd)
         call imgmsk%resmsk(self%hp, self%lp)
         self%cc_msk = imgmsk%bin2logical()
-        ! discards central cross
+        ! ignores central cross
         self%cc_msk(self%box/2+1,:,1) = .false.
         self%cc_msk(:,self%box/2+1,1) = .false.
+        ! takes into acount 1D resolution mask
+        do h=self%flims(1,1),self%flims(1,2)
+            i  = min(max(1,h+mh+1),self%ldim_box(1))
+            do k=self%flims(2,1),self%flims(2,2)
+                j  = min(max(1,k+mk+1),self%ldim_box(2))
+                if( self%cc_msk(i,j,1) )then
+                    sh = nint(sqrt(real(h*h+k*k)))
+                    self%cc_msk(i,j,1) = self%resmsk1D(sh)
+                endif
+            enddo
+        enddo
         ! builds mask indices
-        mh = abs(self%flims(1,1))
-        mk = abs(self%flims(2,1))
         self%npix_msk = count(self%cc_msk)
         allocate(self%inds_msk(2,self%npix_msk))
         cnt = 0
         do h=self%flims(1,1),self%flims(1,2)
+            i = min(max(1,h+mh+1),self%ldim_box(1))
             do k=self%flims(2,1),self%flims(2,2)
-                i = min(max(1,h+mh+1),self%ldim_box(1))
                 j = min(max(1,k+mk+1),self%ldim_box(2))
                 if( self%cc_msk(i,j,1) )then
                     cnt = cnt + 1
@@ -573,12 +685,15 @@ contains
     end subroutine calc_tilt
 
     ! make & write half-n-half diagnostic
-    subroutine write_diagnostic( self, diagfname )
+    subroutine write_diagnostic( self, diagfname, nano )
         class(ctf_estimate_fit), intent(inout) :: self
-        character(len=*),          intent(in)    :: diagfname
+        character(len=*),        intent(in)    :: diagfname
+        logical,       optional, intent(in)    :: nano
         type(image) :: pspec_half_n_half
-        logical     :: l_msk(1:self%box,1:self%box,1)
-        integer     :: logicen
+        logical     :: l_msk(1:self%box,1:self%box,1), l_nano
+        integer     :: i,logicen
+        l_nano = .false.
+        if(present(nano)) l_nano = nano
         if( self%parms%l_phaseplate )then
             call self%ctf2pspecimg(self%pspec_ctf, self%parms%dfx, self%parms%dfy, self%parms%angast, add_phshift=self%parms%phshift)
         else
@@ -590,9 +705,12 @@ contains
         ! putting back central cross for display
         logicen = self%box/2+1
         l_msk(logicen:min(self%box,logicen+self%freslims1d(2)),logicen,1) = .true.
+        do i = self%freslims1d(1),self%freslims1d(2)
+            l_msk(logicen+i,logicen,1) = self%resmsk1D(i)
+        enddo
         call self%pspec%before_after(self%pspec_ctf, pspec_half_n_half, l_msk)
-        call pspec_half_n_half%scale_pspec4viz
-        call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true., quality=92)
+        if( .not.l_nano ) call pspec_half_n_half%scale_pspec4viz
+        call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true., quality=96)
         call pspec_half_n_half%kill
     end subroutine write_diagnostic
 
@@ -607,7 +725,8 @@ contains
         if( self%parms%l_phaseplate ) self%parms%phshift = PIO2
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1,NSTEPS
-            call ctfcosts(i)%init(self%pspec_roavg,self%flims1d,self%freslims1d,self%roavg_spec1d,self%parms)
+            call ctfcosts(i)%init(self%pspec_roavg, self%flims1d, self%freslims1d,&
+                &self%roavg_spec1d, self%parms, self%resmsk1D)
             dfs(i)   = self%df_lims(1) + real(i-1)*self%df_step
             costs(i) = ctfcosts(i)%cost(dfs(i))
             call ctfcosts(i)%kill
@@ -1230,22 +1349,24 @@ contains
         else
             call os%set(1,'phaseplate','no')
         endif
-        do i = 1, POLYDIM
-            call os%set(2,'px'//int2str(i),real(self%polyx(i)))
-            call os%set(3,'py'//int2str(i),real(self%polyy(i)))
-        enddo
-        if( DEBUG_HERE )then
-            cnt = 3
-            do pi=1,self%npatches(1)
-                do pj=1,self%npatches(2)
-                    cnt = cnt+1
-                    call self%pix2poly(real(self%centers(pi,pj,1),dp), real(self%centers(pi,pj,2),dp), x,y)
-                    call os%set(cnt,'x',real(x))
-                    call os%set(cnt,'y',real(y))
-                    call os%set(cnt,'dfx',self%parms_patch(pi,pj)%dfx)
-                    call os%set(cnt,'dfy',self%parms_patch(pi,pj)%dfy)
-                enddo
+        if( self%ntotpatch > 0 )then
+            do i = 1, POLYDIM
+                call os%set(2,'px'//int2str(i),real(self%polyx(i)))
+                call os%set(3,'py'//int2str(i),real(self%polyy(i)))
             enddo
+            if( DEBUG_HERE )then
+                cnt = 3
+                do pi=1,self%npatches(1)
+                    do pj=1,self%npatches(2)
+                        cnt = cnt+1
+                        call self%pix2poly(real(self%centers(pi,pj,1),dp), real(self%centers(pi,pj,2),dp), x,y)
+                        call os%set(cnt,'x',real(x))
+                        call os%set(cnt,'y',real(y))
+                        call os%set(cnt,'dfx',self%parms_patch(pi,pj)%dfx)
+                        call os%set(cnt,'dfy',self%parms_patch(pi,pj)%dfy)
+                    enddo
+                enddo
+            endif
         endif
         call os%write(fname)
         call os%kill
@@ -1307,6 +1428,7 @@ contains
         call self%cost2D%kill
         if( allocated(self%roavg_spec1d) ) deallocate(self%roavg_spec1d)
         if( allocated(self%cc_msk) )       deallocate(self%cc_msk)
+        if( allocated(self%resmsk1D) )     deallocate(self%resmsk1D)
         if( allocated(self%inds_msk) )     deallocate(self%inds_msk)
         if( allocated(self%tiles) )then
             do i=1,self%ntiles(1)

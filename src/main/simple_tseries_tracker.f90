@@ -323,10 +323,7 @@ contains
             rmat_cc(1:ldim,1:ldim,1) = 0.
         endwhere
         ! keep only thresholded values within largest CC
-        call tmp%write('Binarized.mrc',cnt4debug)
-        call tmpcc%write('Binarizedcc.mrc',cnt4debug)
         call img%mul(tmpcc)
-        call img%write('Binarizedccmul.mrc',cnt4debug)
         call img%masscen(shift)
         ! cleanup
         call tmp%kill

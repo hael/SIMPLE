@@ -188,7 +188,6 @@ contains
         use simple_tseries_tracker
         use simple_qsys_funs,        only: qsys_job_finished
         use simple_sp_project,       only: sp_project
-        use simple_ctf_estimate_fit, only: ctf_estimate_fit
         class(tseries_track_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(sp_project)                       :: spproj
@@ -512,59 +511,32 @@ contains
         type(parameters)              :: params
         type(builder)                 :: build
         type(ctf_estimate_fit)        :: ctffit
-        type(image)                   :: mic_img, pspec_avg, pspec
         type(ctfparams)               :: ctfvars
-        character(len=:), allocatable :: micname
+        character(len=:), allocatable :: fname_diag, rel_fname, tmpl_fname, docname
         integer :: nmics, imic, dims(3), nselmics
         call cline%set('oritype','mic')
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('hp') )    call cline%set('hp', 10.)
-        if( .not. cline%defined('lp') )    call cline%set('lp', 2.5)
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('hp')      ) call cline%set('hp', 5.)
+        if( .not. cline%defined('lp')      ) call cline%set('lp', 1.)
+        if( .not. cline%defined('dfmin')   ) call cline%set('dfmin', -0.05)
+        if( .not. cline%defined('dfmax')   ) call cline%set('dfmax',  0.05)
+        if( .not. cline%defined('astigtol')) call cline%set('astigtol', 0.005)
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-        ! generates ave
-        dims(1) = nint(build%spproj_field%get(1,'xdim'))
-        dims(2) = nint(build%spproj_field%get(1,'ydim'))
-        dims(3) = 1
-        call mic_img%new(dims, params%smpd)
-        call pspec%new(    [params%pspecsz,params%pspecsz,1], params%smpd)
-        call pspec_avg%new([params%pspecsz,params%pspecsz,1], params%smpd)
-        nmics = build%spproj%get_nintgs()
-        if( nmics /= build%spproj%os_mic%get_noris() ) THROW_HARD('Invalid number of micrographs')
-        write(logfhandle,'(A)')'>>> BUILDING AVERAGE SPECTRUM'
-        ! accumulate spectrum
-        nselmics = 0
-        do imic = 1,nmics,10
-            call progress(imic,nmics)
-            nselmics = nselmics + 1
-            call build%spproj_field%getter(imic,'forctf',micname)
-            call mic_img%read(micname)
-            pspec = 0.
-            call mic_img%mic2spec(params%pspecsz, 'sqrt', params%hp, pspec, postproc=.false.)
-            call pspec_avg%add(pspec, w=0.01)
-        enddo
-        call progress(1,1)
-        call mic_img%kill
-        call pspec%kill
-        ! average spectrum
-        call pspec_avg%div(0.01*real(nselmics))
-        ! post-process
-        call pspec_avg%dampen_pspec_central_cross
-        call pspec_avg%subtr_backgr(params%hp)
-        ! ctf estimation
-        write(logfhandle,'(A)')'>>> CTF ESTIMATION'
-        ctfvars = build%spproj_field%get_ctfvars(1)
-        call ctffit%new(pspec_avg, params%pspecsz, ctfvars, [params%dfmin,params%dfmax],&
-            &[params%hp,params%lp],params%astigtol)
-        call ctffit%fit(ctfvars, pspec_avg)
-        call ctffit%write_diagnostic(diag_fname)
-        do imic = 1,nmics
-            call build%spproj_field%set_ctfvars(imic, ctfvars)
-            call build%spproj_field%set(imic, 'ctf_estimate_cc', ctffit%get_ccfit())
-            call build%spproj_field%set(imic, 'ctfscore', ctffit%get_ctfscore())
-        enddo
+        ! prep
+        nmics      = build%spproj%os_mic%get_noris()
+        tmpl_fname = trim(get_fbody(basename(trim(params%stk)), params%ext, separator=.false.))
+        fname_diag = filepath('./',trim(adjustl(tmpl_fname))//'_ctf_estimate_diag'//trim(JPG_EXT))
+        docname    = filepath('./',trim(adjustl(tmpl_fname))//'_ctf'//trim(TXT_EXT))
+        ctfvars    = build%spproj_field%get_ctfvars(1)
+        ctfvars%ctfflag = CTFFLAG_YES
+        ! fitting
+        call ctffit%fit_nano(params%stk, params%box, ctfvars, [params%dfmin,params%dfmax], [params%hp,params%lp], params%astigtol)
+        ! output
+        call ctffit%write_doc(params%stk, docname)
+        call ctffit%write_diagnostic(fname_diag, nano=.true.)
+        ! cleanup
         call ctffit%kill
-        ! final write
-        call build%spproj%write(params%projfile)
+        call build%spproj%kill
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_CTF_ESTIMATE NORMAL STOP ****')
     end subroutine exec_tseries_ctf_estimate

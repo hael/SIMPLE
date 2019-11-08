@@ -3713,27 +3713,37 @@ contains
         call tseries_ctf_estimate%new(&
         &'tseries_ctf_estimate', &                                              ! name
         &'Time-series CTF parameter fitting',&                                  ! descr_short
-        &'is a distributed SIMPLE workflow for CTF parameter fitting',& ! descr_long
+        &'is a SIMPLE application for CTF parameter fitting',& ! descr_long
         &'simple_exec',&                                                ! executable
-        &0, 1, 0, 3, 2, 0, 1, .true.)                                   ! # entries in each group, requires sp_project
+        &1, 0, 0, 3, 2, 0, 1, .true.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
+        call tseries_ctf_estimate%set_input('img_ios', 1, stk)
+        tseries_ctf_estimate%img_ios(1)%required = .true.
         ! <empty>
         ! parameter input/output
-        call tseries_ctf_estimate%set_input('parm_ios', 1, pspecsz)
+        ! <empty>
         ! alternative inputs
         ! <empty>
         ! search controls
         call tseries_ctf_estimate%set_input('srch_ctrls', 1, dfmin)
+        tseries_ctf_estimate%srch_ctrls(1)%rval_default = -0.05
+        tseries_ctf_estimate%srch_ctrls(1)%descr_placeholder = 'Expected minimum defocus; in microns{-0.05}'
         call tseries_ctf_estimate%set_input('srch_ctrls', 2, dfmax)
+        tseries_ctf_estimate%srch_ctrls(2)%rval_default = 0.05
+        tseries_ctf_estimate%srch_ctrls(2)%descr_placeholder = 'Expected maximum defocus; in microns{0.05}'
         call tseries_ctf_estimate%set_input('srch_ctrls', 3, astigtol)
+        tseries_ctf_estimate%srch_ctrls(3)%rval_default = 0.005
+        tseries_ctf_estimate%srch_ctrls(3)%descr_placeholder = 'Expected astigmatism; in microns{0.005}'
         ! filter controls
         call tseries_ctf_estimate%set_input('filt_ctrls', 1, lp)
         tseries_ctf_estimate%filt_ctrls(1)%required     = .false.
-        tseries_ctf_estimate%filt_ctrls(1)%rval_default = 2.5
+        tseries_ctf_estimate%filt_ctrls(1)%rval_default = 2.3
+        tseries_ctf_estimate%filt_ctrls(1)%descr_placeholder = 'Low-pass limit in Angstroms{1.}'
         call tseries_ctf_estimate%set_input('filt_ctrls', 2, hp)
         tseries_ctf_estimate%filt_ctrls(2)%required     = .false.
-        tseries_ctf_estimate%filt_ctrls(2)%rval_default = 10.
+        tseries_ctf_estimate%filt_ctrls(2)%rval_default = 5.
+        tseries_ctf_estimate%filt_ctrls(2)%descr_placeholder = 'High-pass limit in Angstroms{5.}'
         ! mask controls
         ! <empty>
         ! computer controls
@@ -3766,7 +3776,9 @@ contains
         ! <empty>
         ! filter controls
         call tseries_track%set_input('filt_ctrls', 1, lp)
-        tseries_track%filt_ctrls(1)%required = .false.
+        tseries_track%filt_ctrls(1)%required     = .false.
+        tseries_track%filt_ctrls(1)%rval_default = 2.3
+        tseries_track%filt_ctrls(1)%descr_placeholder = 'Low-pass limit in Angstroms{2.3}'
         call tseries_track%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{7}', .false., 7.)
         call tseries_track%set_input('filt_ctrls', 3, 'filter', 'multi','Alternative filter for particle tracking',&

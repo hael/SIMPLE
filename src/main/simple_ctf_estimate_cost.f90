@@ -16,6 +16,7 @@ type ctf_estimate_cost1D
     class(image),     pointer :: pspec              !< reference SQRT( power spectrum )
     class(ctfparams), pointer :: parms              !< For microscope characteristics
     real,             pointer :: spec1d(:)
+    logical,          pointer :: resmsk(:)
     type(ctf)                 :: tfun               !< Transfer function
     integer                   :: ldim(3)      = 0
     integer                   :: reslims1d(2) = 0
@@ -78,15 +79,17 @@ end type ctf_estimate_cost4Dcont
 contains
 
     !>  Constructors
-    subroutine init1D( self, spec_img, lims, reslims, spec,  parms )
+    pure subroutine init1D( self, spec_img, lims, reslims, spec,  parms, resmsk )
         class(ctf_estimate_cost1D), intent(inout) :: self
-        class(image),             intent(in)    :: spec_img
-        integer,                  intent(in)    :: lims(2), reslims(2)
-        real,             target, intent(inout) :: spec(lims(1):lims(2))
-        class(ctfparams), target, intent(inout) :: parms
+        class(image),               intent(in)    :: spec_img
+        integer,                    intent(in)    :: lims(2), reslims(2)
+        real,             target,   intent(inout) :: spec(lims(1):lims(2))
+        class(ctfparams), target,   intent(inout) :: parms
+        logical,          target,   intent(inout) :: resmsk(lims(1):lims(2))
         call self%kill
         self%spec1d => spec
         self%parms  => parms
+        self%resmsk => resmsk
         self%reslims1d = reslims
         self%ldim      = spec_img%get_ldim()
         self%tfun      = ctf(self%parms%smpd, self%parms%kV, self%parms%Cs, self%parms%fraca)
@@ -170,7 +173,7 @@ contains
         integer       :: h, n
         ! assumes that the 1d spectrum has zero mean and
         ! unit variance over the resolution range
-        phshift = 0
+        phshift = 0.
         if( self%parms%l_phaseplate )phshift = self%parms%phshift
         call self%tfun%init(df, df, 0.)
         n          = self%reslims1d(2)-self%reslims1d(1)+1
@@ -179,6 +182,7 @@ contains
         dotproduct = 0.d0
         ctf_sum    = 0.d0
         do h = self%reslims1d(1),self%reslims1d(2)
+            if( .not.self%resmsk(h) ) cycle
             ! |CTF|
             hinv      = real(h) * inv_ldim
             spaFreqSq = hinv * hinv
@@ -513,10 +517,11 @@ contains
 
     !>  DESTRUCTORS
 
-    subroutine kill1D( self )
+    pure subroutine kill1D( self )
         class(ctf_estimate_cost1D), intent(inout) :: self
-        self%pspec => null()
-        self%parms => null()
+        self%pspec  => null()
+        self%parms  => null()
+        self%resmsk => null()
     end subroutine kill1D
 
     subroutine kill2D( self )
