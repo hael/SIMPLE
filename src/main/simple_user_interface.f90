@@ -152,8 +152,6 @@ type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
 type(simple_program), target :: tseries_import
-type(simple_program), target :: tseries_average
-type(simple_program), target :: tseries_corrfilt
 type(simple_program), target :: tseries_ctf_estimate
 type(simple_program), target :: tseries_track
 type(simple_program), target :: update_project
@@ -351,8 +349,6 @@ contains
         call new_symmetrize_map
         call new_symmetry_test
         call new_tseries_import
-        call new_tseries_average
-        call new_tseries_corrfilt
         call new_tseries_ctf_estimate
         call new_tseries_track
         call new_update_project
@@ -621,10 +617,6 @@ contains
                 ptr2prg => symmetry_test
             case('tseries_import')
                 ptr2prg => tseries_import
-            case('tseries_average')
-                ptr2prg => tseries_average
-            case('tseries_corrfilt')
-                ptr2prg => tseries_corrfilt
             case('tseries_ctf_estimate')
                 ptr2prg => tseries_ctf_estimate
             case('tseries_track')
@@ -727,8 +719,6 @@ contains
         write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
         write(logfhandle,'(A)') tseries_import%name
-        write(logfhandle,'(A)') tseries_average%name
-        write(logfhandle,'(A)') tseries_corrfilt%name
         write(logfhandle,'(A)') tseries_ctf_estimate%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
@@ -1036,7 +1026,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after time-series tracking',&  ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &0, 0, 0, 3, 3, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 0, 0, 4, 3, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1050,12 +1040,13 @@ contains
         call center2D_nano%set_input('srch_ctrls', 2, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
         &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call center2D_nano%set_input('srch_ctrls', 3, maxits)
+        call center2D_nano%set_input('srch_ctrls', 4, trs)
         ! filter controls
         call center2D_nano%set_input('filt_ctrls', 1, hp)
         call center2D_nano%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{5}', .false., 5.)
-        call center2D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 1.)
+        call center2D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms{1.0}', .false., 1.)
         ! mask controls
         call center2D_nano%set_input('mask_ctrls', 1, msk)
         ! computer controls
@@ -1125,10 +1116,9 @@ contains
         call cluster2D_nano%new(&
         &'cluster2D_nano',&                                                                 ! name
         &'Simultaneous 2D alignment and clustering of time-series of nanoparticle images',& ! descr_short
-        &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
-        &probabilistic ab initio 3D reconstruction algorithm',&                            ! descr_long
+        &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm for time-series of nanoparticle images',& ! descr_long
         &'simple_distr_exec',&                                                             ! executable
-        &0, 0, 0, 2, 5, 2, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &0, 0, 0, 5, 5, 2, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1138,21 +1128,20 @@ contains
         ! <empty>
         ! search controls
         call cluster2D_nano%set_input('srch_ctrls', 1, 'nptcls_per_cls', 'num', 'Particles per cluster',&
-        &'Initial number of paricles per cluster', '# initial particles per cluster', .false., 10.)
+        &'Initial number of paricles per cluster{35}', '# initial particles per cluster{35}', .false., 35.)
         call cluster2D_nano%set_input('srch_ctrls', 2, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
         &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call cluster2D_nano%set_input('srch_ctrls', 3, 'winsz', 'num', 'Half-window size', 'Half-window size(frames)', 'winsz in # frames', .false., 3.0)
+        call cluster2D_nano%set_input('srch_ctrls', 4, maxits)
+        call cluster2D_nano%set_input('srch_ctrls', 5, trs)
         ! filter controls
         call cluster2D_nano%set_input('filt_ctrls', 1, hp)
         call cluster2D_nano%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30.)
-        call cluster2D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit to apply to diagnose possible &
-        &issues with the dynamic update scheme used by default', 'low-pass limit in Angstroms', .false., 20.)
-        call cluster2D_nano%set_input('filt_ctrls', 4, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
-        &few iterations of search, before the automatic scheme kicks in. Also controls the degree of downsampling in the first &
-        &phase', 'initial low-pass limit in Angstroms', .false., 15.)
-        call cluster2D_nano%set_input('filt_ctrls', 5, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit that controls the degree of &
-        &downsampling in the second phase. Give estimated best final resolution', 'final low-pass limit in Angstroms', .false., 8.)
+        &Angstroms{5.0}', .false., 5.)
+        call cluster2D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit{1.0}', 'low-pass limit in Angstroms', .false., 1.)
+        call cluster2D_nano%set_input('filt_ctrls', 4, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'initial low-pass limit in Angstroms', .false., 1.)
+        call cluster2D_nano%set_input('filt_ctrls', 5, 'lpstop', 'num', 'Final low-pass limit', 'Final low-pass limit{1.0}', 'final low-pass limit in Angstroms', .false., 1.)
         ! mask controls
         call cluster2D_nano%set_input('mask_ctrls', 1, msk)
         call cluster2D_nano%set_input('mask_ctrls', 2, inner)
@@ -2997,7 +2986,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                      ! executable
-        &1, 0, 0, 16, 10, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
+        &1, 0, 0, 16, 9, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -3035,12 +3024,11 @@ contains
         call refine3D%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20.)
         call refine3D%set_input('filt_ctrls', 4, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', 'Low-pass limit used to limit the resolution &
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
-        call refine3D%set_input('filt_ctrls', 5,  lplim_crit)
-        call refine3D%set_input('filt_ctrls', 6,  lp_backgr)
-        call refine3D%set_input('filt_ctrls', 7,  projw)
-        call refine3D%set_input('filt_ctrls', 8,  wcrit)
-        call refine3D%set_input('filt_ctrls', 9,  ptclw)
-        call refine3D%set_input('filt_ctrls', 10, envfsc)
+        call refine3D%set_input('filt_ctrls', 5, lplim_crit)
+        call refine3D%set_input('filt_ctrls', 6, lp_backgr)
+        call refine3D%set_input('filt_ctrls', 7, wcrit)
+        call refine3D%set_input('filt_ctrls', 8, ptclw)
+        call refine3D%set_input('filt_ctrls', 9, envfsc)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, msk)
         call refine3D%set_input('mask_ctrls', 2, inner)
@@ -3059,11 +3047,11 @@ contains
         &'3D refinement of metallic nanoparticles',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                                                ! executable
-        &1, 0, 0, 8, 5, 2, 2, .true.)                                                                                        ! # entries in each group, requires sp_project
+        &1, 0, 0, 8, 6, 4, 2, .true.)                                                                                        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
-        & sections for nanoparticle image matching', 'input volume e.g. vol.mrc', .true., 'vol1.mrc')
+        & sections for nanoparticle image matching', 'input volume e.g. vol.mrc', .true., '')
         ! parameter input/output
         ! <empty>
         ! alternative inputs
@@ -3082,13 +3070,16 @@ contains
         call refine3D_nano%set_input('filt_ctrls', 1, hp)
         call refine3D_nano%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30.)
-        call refine3D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20.)
-        call refine3D_nano%set_input('filt_ctrls', 4, projw)
+        &Angstroms{5}', .false., 5.)
+        call refine3D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms{1.0}', .false., 1.)
+        call refine3D_nano%set_input('filt_ctrls', 4, lp_backgr)
         call refine3D_nano%set_input('filt_ctrls', 5, wcrit)
+        call refine3D_nano%set_input('filt_ctrls', 6, ptclw)
         ! mask controls
         call refine3D_nano%set_input('mask_ctrls', 1, msk)
-        call refine3D_nano%set_input('mask_ctrls', 2, mskfile)
+        call refine3D_nano%set_input('mask_ctrls', 2, inner)
+        call refine3D_nano%set_input('mask_ctrls', 3, mskfile)
+        call refine3D_nano%set_input('mask_ctrls', 4, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
         ! computer controls
         call refine3D_nano%set_input('comp_ctrls', 1, nparts)
         call refine3D_nano%set_input('comp_ctrls', 2, nthr)
@@ -3703,10 +3694,8 @@ contains
         call tseries_import%set_input('parm_ios', 1, smpd)
         call tseries_import%set_input('parm_ios', 2, kv)
         tseries_import%parm_ios(2)%required = .true.
-        call tseries_import%set_input('parm_ios', 3, cs)
-        tseries_import%parm_ios(3)%required = .true.
-        call tseries_import%set_input('parm_ios', 4, fraca)
-        tseries_import%parm_ios(4)%required = .true.
+        call tseries_import%set_input('parm_ios', 3, 'cs', 'num', 'Spherical aberration', 'Spherical aberration constant(in mm){0.0}', 'in mm{0.0}', .true., 0.0)
+        call tseries_import%set_input('parm_ios', 4, 'fraca', 'num', 'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.4}', 'fraction{0.4}', .true., 0.4)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3718,60 +3707,6 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_tseries_import
-
-    subroutine new_tseries_average
-        ! PROGRAM SPECIFICATION
-        call tseries_average%new(&
-        &'tseries_average',&                                                                                         ! name
-        &'Average particle extracted from time-series',&                                                             ! descr_short
-        &'is a program for particle SNR enhancement through time window averaging using correlation-based weights',& ! descr_long
-        &'simple_exec',&                                                                                             ! executable
-        &2, 1, 0, 1, 1, 1, 1, .false.)                                            ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call tseries_average%set_input('img_ios', 1, stk)
-        tseries_average%img_ios(1)%required = .true.
-        call tseries_average%set_input('img_ios', 2, outstk)
-        ! parameter input/output
-        call tseries_average%set_input('parm_ios', 1, smpd)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call tseries_average%set_input('srch_ctrls', 1, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{10}', '{10}', .false., 10.)
-        ! filter controls
-        call tseries_average%set_input('filt_ctrls', 1, wcrit)
-        ! mask controls
-        call tseries_average%set_input('mask_ctrls', 1, msk)
-        ! computer controls
-        call tseries_average%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_tseries_average
-
-    subroutine new_tseries_corrfilt
-        ! PROGRAM SPECIFICATION
-        call tseries_corrfilt%new(&
-        &'tseries_corrfilt',&                                                                   ! name
-        &'Convolute particle windows extracted from time-series with a Gaussian function',&     ! descr_short
-        &'is a program for particle SNR enhancement through time window Gaussian convolution',& ! descr_long
-        &'simple_exec',&                                                                        ! executable
-        &2, 1, 0, 1, 1, 0, 1, .false.)                                                          ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call tseries_corrfilt%set_input('img_ios', 1, stk)
-        tseries_corrfilt%img_ios(1)%required = .true.
-        call tseries_corrfilt%set_input('img_ios', 2, outstk)
-        ! parameter input/output
-        call tseries_corrfilt%set_input('parm_ios', 1, smpd)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call tseries_corrfilt%set_input('srch_ctrls', 1, 'nframesgrp', 'num', '# contigous frames to convolve', 'Number of contigous frames to convolve with a Gaussian function{100}', '{100}', .false., 20.)
-        ! filter controls
-        call tseries_corrfilt%set_input('filt_ctrls', 1, 'sigma', 'num', 'sigma, for 3D Gaussian generation', 'sigma, for 3D Gaussian generation(in pixels)', '{0.5}', .false., 0.5)
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call tseries_corrfilt%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_tseries_corrfilt
 
     subroutine new_tseries_ctf_estimate
         ! PROGRAM SPECIFICATION
@@ -3812,7 +3747,7 @@ contains
         &'Track particles in time-series',&                                      ! descr_short
         &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
         &'simple_distr_exec',&                                                   ! executable
-        &0, 2, 0, 2, 4, 0, 1, .true.)                                            ! # entries in each group, requires sp_project
+        &0, 3, 0, 2, 4, 0, 1, .true.)                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3821,20 +3756,21 @@ contains
         &'Template output tracked series', 'e.g. tracked_ptcl', .true., '')
         call tseries_track%set_input('parm_ios', 2, 'boxfile', 'file', 'List of particle coordinates',&
         &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
+        call tseries_track%set_input('parm_ios', 3, 'neg', 'binary', 'Invert contrast', 'Invert image contrast(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         ! alternative inputs
         ! <empty>
         ! search controls
         call tseries_track%set_input('srch_ctrls', 1, 'offset', 'num', 'Shift half-width search bound', 'Shift half-width search bound(in pixels)',&
         'e.g. pixels window halfwidth', .false., 10.)
-        call tseries_track%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{10}', '{10}', .false., 10.)
+        call tseries_track%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{30}', '{30}', .false., 30.)
         ! <empty>
         ! filter controls
         call tseries_track%set_input('filt_ctrls', 1, lp)
         tseries_track%filt_ctrls(1)%required = .false.
         call tseries_track%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{5}', .false., 5.)
+        &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{7}', .false., 7.)
         call tseries_track%set_input('filt_ctrls', 3, 'filter', 'multi','Alternative filter for particle tracking',&
-            &'Alternative filter for particle tracking(no|tv|nlmean){no}', '(no|tv|nlmean){no}', .false., 'no')
+            &'Alternative filter for particle tracking(no|tv|nlmean){tv}', '(no|tv|nlmean){tv}', .false., 'tv')
         call tseries_track%set_input('filt_ctrls', 4, hp)
         ! mask controls
         ! <empty>

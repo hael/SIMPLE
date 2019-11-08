@@ -18,8 +18,6 @@ public :: tseries_track_commander
 public :: center2D_nano_commander_distr
 public :: cluster2D_nano_commander_distr
 public :: estimate_diam_commander
-public :: tseries_average_commander
-public :: tseries_corrfilt_commander
 public :: tseries_ctf_estimate_commander
 public :: refine3D_nano_commander_distr
 public :: detect_atoms_commander
@@ -54,14 +52,6 @@ type, extends(commander_base) :: estimate_diam_commander
   contains
     procedure :: execute      => exec_estimate_diam
 end type estimate_diam_commander
-type, extends(commander_base) :: tseries_average_commander
-  contains
-    procedure :: execute      => exec_tseries_average
-end type tseries_average_commander
-type, extends(commander_base) :: tseries_corrfilt_commander
-  contains
-    procedure :: execute      => exec_tseries_corrfilt
-end type tseries_corrfilt_commander
 type, extends(commander_base) :: tseries_backgr_subtr_commander
   contains
     procedure :: execute      => exec_tseries_backgr_subtr
@@ -145,10 +135,9 @@ contains
         integer :: ndatlines, numlen, alloc_stat, j, orig_box, ipart
         if( .not. cline%defined('neg')       ) call cline%set('neg',      'yes')
         if( .not. cline%defined('lp')        ) call cline%set('lp',         2.3)
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      5.0)
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      7.0)
         if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp', 30.)
         if( .not. cline%defined('filter'))     call cline%set('filter',    'tv')
-        if( .not. cline%defined('nparts'))     call cline%set('nparts',    1.)
         call cline%set('oritype','mic')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
@@ -434,38 +423,6 @@ contains
         call simple_end('**** SIMPLE_ESTIMATE_DIAM NORMAL STOP ****')
     end subroutine exec_estimate_diam
 
-    subroutine exec_tseries_average( self, cline )
-        use simple_tseries_averager
-        class(tseries_average_commander), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
-        type(parameters) :: params
-        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',  10.)
-        if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',     'cen')
-        if( .not. cline%defined('outstk')     ) call cline%set('outstk', 'time_window_wavgs.mrcs')
-        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',     'yes')
-        call params%new(cline)
-        call init_tseries_averager
-        call tseries_average
-        call kill_tseries_averager
-        call simple_end('**** SIMPLE_TSERIES_AVERAGE NORMAL STOP ****')
-    end subroutine exec_tseries_average
-
-    subroutine exec_tseries_corrfilt( self, cline )
-        use simple_tseries_gauconvolver
-        class(tseries_corrfilt_commander), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
-        type(parameters) :: params
-        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp', 20.)
-        if( .not. cline%defined('sigma')      ) call cline%set('sigma',      0.5)
-        if( .not. cline%defined('outstk')     ) call cline%set('outstk', 'time_window_corrfilted.mrcs')
-        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',    'yes')
-        call params%new(cline)
-        call init_tseries_gauconvolver
-        call tseries_gauconvolve
-        call kill_tseries_gauconvolver
-        call simple_end('**** SIMPLE_TSERIES_CORRFILT NORMAL STOP ****')
-    end subroutine exec_tseries_corrfilt
-
     subroutine exec_tseries_backgr_subtr( self, cline )
         ! for background subtraction in time-series data. The goal is to subtract the two graphene
         ! peaks @ 2.14 A and @ 1.23 A. This is done by band-pass filtering the background image,
@@ -619,28 +576,27 @@ contains
         ! commander
         type(refine3D_commander_distr) :: xrefine3D_distr
         ! static parameters
-        call cline%set('prg',  'refine3D')
-        call cline%set('match_filt', 'no')
-        call cline%set('keepvol',   'yes')
-        call cline%set('ninplpeaks',  1.0)
+        call cline%set('prg',      'refine3D')
+        call cline%set('match_filt',     'no')
+        call cline%set('keepvol',       'yes')
+        call cline%set('ninplpeaks',      1.0)
+        call cline%set('graphene_filt', 'yes')
         ! dynamic parameters
-        if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',          'no')
-        if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
-        if( .not. cline%defined('nspace')        ) call cline%set('nspace',       10000.)
-        if( .not. cline%defined('shcfrac')       ) call cline%set('shcfrac',         10.)
-        if( .not. cline%defined('wcrit')         ) call cline%set('wcrit',         'cen')
-        if( .not. cline%defined('trs')           ) call cline%set('trs',             5.0)
-        if( .not. cline%defined('update_frac')   ) call cline%set('update_frac',     0.2)
-        if( .not. cline%defined('lp')            ) call cline%set('lp',              1.0)
-        if( .not. cline%defined('cenlp')         ) call cline%set('cenlp',            5.)
-        if( .not. cline%defined('maxits')        ) call cline%set('maxits',          15.)
-        if( .not. cline%defined('oritype')       ) call cline%set('oritype',    'ptcl3D')
+        if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',      'no')
+        if( .not. cline%defined('nspace')      ) call cline%set('nspace',   10000.)
+        if( .not. cline%defined('shcfrac')     ) call cline%set('shcfrac',     10.)
+        if( .not. cline%defined('wcrit')       ) call cline%set('wcrit',     'cen')
+        if( .not. cline%defined('trs')         ) call cline%set('trs',         5.0)
+        if( .not. cline%defined('update_frac') ) call cline%set('update_frac', 0.2)
+        if( .not. cline%defined('lp')          ) call cline%set('lp',          1.0)
+        if( .not. cline%defined('cenlp')       ) call cline%set('cenlp',        5.)
+        if( .not. cline%defined('maxits')      ) call cline%set('maxits',      15.)
+        if( .not. cline%defined('oritype')     ) call cline%set('oritype','ptcl3D')
         call xrefine3D_distr%execute(cline)
     end subroutine exec_refine3D_nano_distr
 
-    ! Performs preprocessing on the nanoparticle and steps until
-    ! atomic positions are identified, validated and written on
-    ! a file.
+    ! Performs preprocessing on the nanoparticle map, identifies atomic positions,
+    ! validates them and write them to disk
     subroutine exec_detect_atoms( self, cline )
         class(detect_atoms_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline !< command line input
@@ -654,7 +610,7 @@ contains
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
         endif
-        call nano%new(params%vols(1), params%smpd,params%element)
+        call nano%new(params%vols(1), params%smpd, params%element)
         ! execute
         call nano%identify_atomic_pos()
         ! kill
@@ -858,4 +814,5 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_NANO_SOFTMASK NORMAL STOP ****')
     end subroutine exec_nano_softmask
+
 end module simple_commander_tseries
