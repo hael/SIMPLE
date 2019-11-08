@@ -557,7 +557,7 @@ contains
         if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',      'no')
         if( .not. cline%defined('nspace')      ) call cline%set('nspace',   10000.)
         if( .not. cline%defined('shcfrac')     ) call cline%set('shcfrac',     10.)
-        if( .not. cline%defined('wcrit')       ) call cline%set('wcrit',     'cen')
+        if( .not. cline%defined('wcrit')       ) call cline%set('wcrit',     'inv')
         if( .not. cline%defined('trs')         ) call cline%set('trs',         5.0)
         if( .not. cline%defined('update_frac') ) call cline%set('update_frac', 0.2)
         if( .not. cline%defined('lp')          ) call cline%set('lp',          1.0)
