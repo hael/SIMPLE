@@ -38,6 +38,7 @@ type(cleanup2D_commander)                   :: xcleanup2D_distr
 type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
 
 ! REFINE3D WORKFLOWS
+type(calc_pspec_commander_distr)            :: xcalc_pspec_distr
 type(refine3D_commander_distr)              :: xrefine3D_distr
 type(reconstruct3D_commander_distr)         :: xreconstruct3D_distr
 
@@ -116,6 +117,8 @@ select case(prg)
         call execute_commander(xinitial_3Dmodel, cline)
 
     ! REFINE3D WORKFLOWS
+    case( 'calc_pspec' )
+        call execute_commander(xcalc_pspec_distr, cline)
     case( 'refine3D' )
         call execute_commander(xrefine3D_distr, cline)
     case( 'reconstruct3D' )

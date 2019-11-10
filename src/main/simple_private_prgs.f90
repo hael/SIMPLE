@@ -696,7 +696,14 @@ contains
         call private_prgs(21)%push_opt_key('nstates')
         call private_prgs(21)%push_opt_key('mskfile')
 
-        n_private_prgs = 21
+        ! CALC_PSPEC, for asssembling power spectra for refine3D
+        call private_prgs(22)%set_name('calc_pspec')
+        ! required keys
+        call private_prgs(22)%push_req_key('nparts')
+        call private_prgs(22)%push_req_key('projfile')
+        call private_prgs(22)%push_req_key('nthr')
+
+        n_private_prgs = 22
     end subroutine new_private_prgs
 
 end module simple_private_prgs

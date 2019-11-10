@@ -15,6 +15,9 @@ public :: nspace_commander
 public :: refine3D_commander_distr
 public :: refine3D_commander
 public :: check_3Dconv_commander
+public :: calc_pspec_commander_distr
+public :: calc_pspec_commander
+public :: calc_pspec_assemble_commander
 private
 #include "simple_local_flags.inc"
 
@@ -34,7 +37,18 @@ type, extends(commander_base) :: check_3Dconv_commander
   contains
     procedure :: execute      => exec_check_3Dconv
 end type check_3Dconv_commander
-
+type, extends(commander_base) :: calc_pspec_commander_distr
+  contains
+    procedure :: execute      => exec_calc_pspec_distr
+end type calc_pspec_commander_distr
+type, extends(commander_base) :: calc_pspec_commander
+  contains
+    procedure :: execute      => exec_calc_pspec
+end type calc_pspec_commander
+type, extends(commander_base) :: calc_pspec_assemble_commander
+  contains
+    procedure :: execute      => exec_calc_pspec_assemble
+end type calc_pspec_assemble_commander
 contains
 
     subroutine exec_nspace(self,cline)
@@ -61,10 +75,12 @@ contains
         class(cmdline),                  intent(inout) :: cline
         ! commanders
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
+        type(calc_pspec_commander_distr)    :: xcalc_pspec_distr
         type(check_3Dconv_commander)        :: xcheck_3Dconv
         type(postprocess_commander)         :: xpostprocess
         ! command lines
         type(cmdline)    :: cline_reconstruct3D_distr
+        type(cmdline)    :: cline_calc_pspec_distr
         type(cmdline)    :: cline_check_3Dconv
         type(cmdline)    :: cline_volassemble
         type(cmdline)    :: cline_postprocess
@@ -128,11 +144,13 @@ contains
         endif
         ! prepare command lines from prototype master
         cline_reconstruct3D_distr = cline
+        cline_calc_pspec_distr    = cline
         cline_check_3Dconv        = cline
         cline_volassemble         = cline
         cline_postprocess         = cline
         ! initialise static command line parameters and static job description parameter
         call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' ) ! required for distributed call
+        call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )       ! required for distributed call
         call cline_postprocess%set('prg', 'postprocess' )            ! required for local call
         if( trim(params%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
         call cline_postprocess%set('mirr',    'no')
@@ -157,6 +175,10 @@ contains
                 call build%spproj_field%partition_eo
             endif
             call build%spproj%write_segment_inside(params%oritype)
+        endif
+        ! GENERATE INITIAL NOISE POWER ESTIMATES
+        if( l_switch2euclid .and. params%continue.ne.'yes' )then
+            call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
         endif
         ! GENERATE STARTING MODELS & ORIENTATIONS
         if( params%continue .eq. 'yes' )then
@@ -591,5 +613,188 @@ contains
         call build%kill_general_tbox
         call simple_end('**** SIMPLE_CHECK_3DCONV NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_3Dconv
+
+    subroutine exec_calc_pspec_distr( self, cline )
+        class(calc_pspec_commander_distr), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        character(len=STDLEN), parameter :: PSPEC_FBODY = 'pspec_'
+        ! command lines
+        type(cmdline)    :: cline_calc_pspec
+        type(cmdline)    :: cline_calc_pspec_assemble
+        ! other variables
+        type(parameters) :: params
+        type(builder)    :: build
+        type(qsys_env)   :: qenv
+        type(chash)      :: job_descr
+        logical          :: fall_over
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        if( .not. cline%defined('projfile') )then
+            THROW_HARD('Missing project file entry; exec_calc_pspec_distr')
+        endif
+        ! init
+        call build%init_params_and_build_spproj(cline, params)
+        ! sanity check
+        fall_over = .false.
+        select case(trim(params%oritype))
+            case('ptcl2D','ptcl3D')
+                fall_over = build%spproj%get_nptcls() == 0
+            case DEFAULT
+                write(logfhandle,*)'Unsupported ORITYPE; simple_commander_refine3D :: exec_refine3D_distr'
+        end select
+        if( fall_over )then
+            THROW_HARD('no particles found! :exec_refine3D_distr')
+        endif
+        if( build%spproj_field%get_nevenodd() == 0 )then
+            THROW_HARD('no eve/odd flag found! :calc_pspec__distr')
+        endif
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
+        ! prepare command lines from prototype master
+        cline_calc_pspec          = cline
+        cline_calc_pspec_assemble = cline
+        ! initialise static command line parameters and static job description parameter
+        call cline_calc_pspec%set('prg', 'calc_pspec' )                   ! required for distributed call
+        call cline_calc_pspec_assemble%set('prg', 'calc_pspec_assemble' ) ! required for local call
+        ! setup the environment for distributed execution
+        call qenv%new(params%nparts)
+        call cline%gen_job_descr(job_descr)
+        ! schedule
+        call qenv%gen_scripts_and_schedule_jobs(job_descr)
+        ! assemble
+        call qenv%exec_simple_prg_in_queue(cline_calc_pspec_assemble, 'CALC_PSPEC_FINISHED')
+        ! end gracefully
+        call qsys_cleanup
+        call build%spproj%kill
+        call simple_end('**** SIMPLE_DISTR_CALC_PSPEC NORMAL STOP ****')
+    end subroutine exec_calc_pspec_distr
+
+    subroutine exec_calc_pspec( self, cline )
+        use simple_parameters,          only: params_glob
+        use simple_strategy2D3D_common, only: prepimgbatch, read_imgbatch
+        use simple_image,               only: image
+        class(calc_pspec_commander), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        type(parameters)     :: params
+        type(image)          :: sum_img
+        type(builder)        :: build
+        complex, allocatable :: cmat(:,:,:), cmat_sum(:,:,:)
+        ! real,    allocatable :: pspecs(:,:), pspec(:)
+        logical, allocatable :: mask(:)
+        real                 :: sdev_noise
+        integer              :: batchlims(2),iptcl,iptcl_batch,imatch,nyq,nptcls_part,batchsz_max
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        ! init
+        nptcls_part = params%top-params%fromp+1
+        nyq         = build%img%get_nyq()
+        batchsz_max = 10 * nthr_glob
+        allocate(mask(batchsz_max),source=.false.)
+        ! allocate(pspecs(nyq,nptcls_part),source=0.)
+        call prepimgbatch(batchsz_max)
+        call sum_img%new([params%boxmatch,params%boxmatch,1],params%smpd)
+        call sum_img%zero_and_flag_ft
+        cmat_sum = sum_img%get_cmat()
+        cmat     = sum_img%get_cmat()
+        do iptcl_batch=params_glob%fromp,params_glob%top,batchsz_max
+            batchlims = [iptcl_batch, min(params_glob%top,iptcl_batch + batchsz_max - 1)]
+            ! mask
+            do iptcl = batchlims(1),batchlims(2)
+                imatch = iptcl - batchlims(1) + 1
+                mask(imatch) = .not. (build%spproj_field%get_state(iptcl) == 0)
+            enddo
+            ! read
+            call read_imgbatch( batchlims )
+            ! preprocess
+            cmat = cmplx(0.,0.)
+            !$omp parallel do default(shared) private(iptcl,imatch,cmat)&
+            !$omp schedule(static) proc_bind(close) reduction(+:cmat_sum)
+            do iptcl=batchlims(1),batchlims(2)
+                imatch = iptcl - batchlims(1) + 1
+                if( .not. mask(imatch) ) cycle
+                ! normalize
+                call build%imgbatch(imatch)%noise_norm(build%lmsk, sdev_noise)
+                !  mask
+                if( params%l_innermsk )then
+                    call build%imgbatch(imatch)%mask(params%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
+                else
+                    if( params%l_focusmsk )then
+                        call build%imgbatch(imatch)%mask(params%focusmsk, 'soft')
+                    else
+                        call build%imgbatch(imatch)%mask(params%msk, 'soft')
+                    endif
+                endif
+                call build%imgbatch(imatch)%fft
+                ! power spectrum
+                ! call build%imgbatch(imatch)%spectrum('power',pspec,norm=.true.)
+                ! pspecs(:,iptcl) = pspec
+                ! global average
+                call build%imgbatch(imatch)%get_cmat_sub(cmat)
+                cmat_sum(:,:,:) = cmat_sum(:,:,:) + cmat(:,:,:)
+            end do
+            !$omp end parallel do
+        end do
+        call sum_img%set_cmat(cmat_sum)
+        call sum_img%write('sum_img_part'//int2str_pad(params%part,params%numlen)//params%ext)
+        !! debug
+        ! call sum_img%ifft
+        ! call sum_img%write('realspace_sum_img_part'//int2str(params%part)//params%ext)
+        !! debug
+        ! end gracefully
+        call qsys_job_finished('simple_commander_refine3D :: exec_calc_pspec')
+        call simple_end('**** SIMPLE_CALC_PSPEC NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_calc_pspec
+
+    subroutine exec_calc_pspec_assemble( self, cline )
+        use simple_image,               only: image
+        class(calc_pspec_assemble_commander), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        character(len=STDLEN), parameter :: PSPEC_FBODY = 'pspec_'
+        type(parameters)                 :: params
+        type(image)                      :: avg_img
+        type(builder)                    :: build
+        character(len=:), allocatable    :: part_fname
+        integer :: iptcl,ipart,nptcls,nptcls_sel,eo,ngroups,igroup
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        ! generate average power spectrum
+        nptcls     = build%spproj_field%get_noris(consider_state=.false.)
+        nptcls_sel = build%spproj_field%get_noris(consider_state=.true.)
+        call avg_img%new([params%box,params%box,1], params%smpd)
+        call avg_img%zero_and_flag_ft
+        do ipart = 1,params%nparts
+            call build%img%zero_and_flag_ft
+            part_fname = 'sum_img_part'//int2str_pad(ipart,params%numlen)//params%ext
+            call build%img%read(part_fname)
+            call avg_img%add(build%img)
+            call del_file(part_fname)
+        enddo
+        call avg_img%div(real(nptcls_sel))
+        !! debug
+        ! call avg_img%ifft
+        ! call avg_img%write('avg_img'//params%ext)
+        !! debug
+        ! calculate power spectrum
+
+        ! generate group averages & write
+        ngroups = 0
+        !$omp parallel do default(shared) private(iptcl,igroup)&
+        !$omp schedule(static) proc_bind(close) reduction(max:ngroups)
+        do iptcl = 1,nptcls
+            if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+            igroup  = nint(build%spproj_field%get(iptcl,'stkind'))
+            ngroups = max(igroup,ngroups)
+        enddo
+        !$omp end parallel do
+        ! do iptcl = 1,nptcls
+        !     if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+        !     eo     = nint(build%spproj_field%get(iptcl,'eo')) ! 0/1
+        !     igroup = nint(build%spproj_field%get(iptcl,'stkind'))
+        !
+        ! enddo
+        ! end gracefully
+        call simple_touch('CALC_PSPEC_FINISHED',errmsg='In: commander_refine3D::calc_pspec_assemble')
+        call build%kill_general_tbox
+        call simple_end('**** SIMPLE_CALC_PSPEC_ASSEMBLE NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_calc_pspec_assemble
 
 end module simple_commander_refine3D

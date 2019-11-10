@@ -74,6 +74,7 @@ type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 ! declare simple_exec and simple_distr_exec program specifications here
 type(simple_program), target :: atom_cluster_analysis
 type(simple_program), target :: atoms_rmsd
+type(simple_program), target :: calc_pspec
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
 type(simple_program), target :: center2D_nano
@@ -271,6 +272,7 @@ contains
         call set_prg_ptr_array
         call new_atom_cluster_analysis
         call new_atoms_rmsd
+        call new_calc_pspec
         call new_center
         call new_cleanup2D
         call new_center2D_nano
@@ -362,6 +364,7 @@ contains
         n_prg_ptrs = 0
         call push2prg_ptr_array(atom_cluster_analysis)
         call push2prg_ptr_array(atoms_rmsd)
+        call push2prg_ptr_array(calc_pspec)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(center2D_nano)
@@ -461,6 +464,8 @@ contains
                 ptr2prg => atom_cluster_analysis
             case('atoms_rmsd')
                 ptr2prg => atoms_rmsd
+            case('calc_pspec')
+                ptr2prg => calc_pspec
             case('center')
                 ptr2prg => center
             case('cleanup2D')
@@ -635,6 +640,7 @@ contains
     end subroutine get_prg_ptr
 
     subroutine list_distr_prgs_in_ui
+        write(logfhandle,'(A)') calc_pspec%name
         write(logfhandle,'(A)') cleanup2D%name
         write(logfhandle,'(A)') center2D_nano%name
         write(logfhandle,'(A)') cluster2D%name
@@ -948,6 +954,32 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_atoms_rmsd
+
+    subroutine new_calc_pspec
+        ! PROGRAM SPECIFICATION
+        call calc_pspec%new(&
+        &'calc_pspec',&                                                          ! name
+        &'Calculate individual particles power spectra; internal use oly',&               ! descr_long
+        &'Calculate individual particles power spectra; internal use oly',&               ! descr_long
+        &'simple_distr_exec',&                                                  ! executable
+        &0, 0, 0, 0, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call calc_pspec%set_input('comp_ctrls', 1, nparts)
+        call calc_pspec%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_calc_pspec
 
     subroutine new_center
         ! PROGRAM SPECIFICATION

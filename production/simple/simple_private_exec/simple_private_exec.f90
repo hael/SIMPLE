@@ -42,6 +42,8 @@ type(export_cavgs_commander)          :: xexport_cavgs
 
 ! REFINE3D PROGRAMS
 type(refine3D_commander)              :: xrefine3D
+type(calc_pspec_commander)            :: xcalc_pspec
+type(calc_pspec_assemble_commander)   :: xcalc_pspec_assemble
 type(check_3Dconv_commander)          :: xcheck_3Dconv
 
 ! RECONSTRUCTION PROGRAMS
@@ -143,6 +145,10 @@ select case(prg)
     ! REFINE3D PROGRAMS
     case( 'refine3D' )
         call xrefine3D%execute(cline)
+    case( 'calc_pspec' )
+        call xcalc_pspec%execute(cline)
+    case( 'calc_pspec_assemble' )
+        call xcalc_pspec_assemble%execute(cline)
     case( 'check_3Dconv' )
         call xcheck_3Dconv%execute(cline)
 
