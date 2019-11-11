@@ -72,6 +72,38 @@ module simple_starfile_wrappers
             character(C_char), intent(in)        :: avalue
         end subroutine C_starfile_table__setValue_string
 
+        function   C_starfile_table__getValue_double(this, EMDL_id, avalue) result(aresult) bind(C,name="StarFileTable__getValue_double")
+            import
+            type(C_ptr),       value             :: this
+            integer(C_int),    intent(in), value :: EMDL_id
+            real(C_double),    intent(out)       :: avalue
+            logical(C_bool)                      :: aresult
+        end function C_starfile_table__getValue_double
+
+        function   C_starfile_table__getValue_float(this, EMDL_id, avalue) result(aresult) bind(C,name="StarFileTable__getValue_float")
+            import
+            type(C_ptr),       value             :: this
+            integer(C_int),    intent(in), value :: EMDL_id
+            real(C_float),     intent(out)       :: avalue
+            logical(C_bool)                      :: aresult
+        end function C_starfile_table__getValue_float
+
+        function   C_starfile_table__getValue_int(this, EMDL_id, avalue) result(aresult) bind(C,name="StarFileTable__getValue_int")
+            import
+            type(C_ptr),       value             :: this
+            integer(C_int),    intent(in), value :: EMDL_id
+            integer(C_int),    intent(out)       :: avalue
+            logical(C_bool)                      :: aresult
+        end function C_starfile_table__getValue_int
+
+        function   C_starfile_table__getValue_bool(this, EMDL_id, avalue) result(aresult) bind(C,name="StarFileTable__getValue_bool")
+            import
+            type(C_ptr),       value             :: this
+            integer(C_int),    intent(in), value :: EMDL_id
+            logical(C_bool),   intent(out)       :: avalue
+            logical(C_bool)                      :: aresult
+        end function C_starfile_table__getValue_bool
+
         subroutine C_starfile_table__getValue_string(this, EMDL_id, str, alen, aresult) bind(C,name="StarFileTable__getValue_string")
             import
             type(C_ptr),                 value :: this
@@ -107,6 +139,12 @@ module simple_starfile_wrappers
             import
             type(C_ptr), value :: this
         end subroutine C_starfile_table__close_ofile
+
+        subroutine C_starfile_table__read(this, fname) bind(C,name="StarFileTable__read")
+            import
+            type(C_ptr),       value      :: this
+            character(C_char), intent(in) :: fname
+        end subroutine C_starfile_table__read
 
         subroutine C_starfile_table__setname(this, aname) bind(C, name="StarFileTable__setName")
             import
@@ -187,6 +225,38 @@ contains
         call C_starfile_table__setValue_string(this%object, EMDL_id, str)
     end subroutine starfile_table__setValue_string
 
+    function starfile_table__getValue_double(this, EMDL_id, avalue) result(aresult)
+        type(starfile_table_type), intent(inout) :: this
+        integer(C_int),            intent(in)    :: EMDL_id
+        real(C_double),            intent(out)   :: avalue
+        logical(C_bool) :: aresult
+        aresult = C_starfile_table__getValue_double(this%object, EMDL_id, avalue)
+    end function starfile_table__getValue_double
+
+    function starfile_table__getValue_float(this, EMDL_id, avalue) result(aresult)
+        type(starfile_table_type), intent(inout) :: this
+        integer(C_int),            intent(in)    :: EMDL_id
+        real(C_float),             intent(out)   :: avalue
+        logical(C_bool) :: aresult
+        aresult = C_starfile_table__getValue_float(this%object, EMDL_id, avalue)
+    end function starfile_table__getValue_float
+
+    function starfile_table__getValue_int(this, EMDL_id, avalue) result(aresult)
+        type(starfile_table_type), intent(inout) :: this
+        integer(C_int),            intent(in)    :: EMDL_id
+        integer(C_int),            intent(out)   :: avalue
+        logical(C_bool) :: aresult
+        aresult = C_starfile_table__getValue_int(this%object, EMDL_id, avalue)
+    end function starfile_table__getValue_int
+
+    function starfile_table__getValue_bool(this, EMDL_id, avalue) result(aresult)
+        type(starfile_table_type), intent(inout) :: this
+        integer(C_int),            intent(in)    :: EMDL_id
+        logical(C_bool),           intent(out)   :: avalue
+        logical(C_bool) :: aresult
+        aresult = C_starfile_table__getValue_bool(this%object, EMDL_id, avalue)
+    end function starfile_table__getValue_bool
+
     function starfile_table__getValue_string(this, EMDL_id, str) result(aresult)
       type(starfile_table_type),     intent(inout) :: this
       integer(C_int),                intent(in)    :: EMDL_id
@@ -238,6 +308,14 @@ contains
         type(starfile_table_type), intent(inout) :: this
         call C_starfile_table__close_ofile(this%object)
     end subroutine starfile_table__close_ofile
+
+    subroutine starfile_table__read(this, fname)
+        type(starfile_table_type), intent(inout) :: this
+        character(len=*),          intent(in)    :: fname
+        character(len=:), allocatable :: str
+        str = fname // C_NULL_CHAR
+        call C_starfile_table__read(this%object, str)
+    end subroutine starfile_table__read
 
     subroutine starfile_table__setname(this, aname)
         type(starfile_table_type), intent(inout) :: this

@@ -1584,6 +1584,33 @@ void StarFileTable__setValue_string(StarFileTable* This, int EMDL_id, char* aval
   StarFileTable__setValue_wrapper(This, EMDL_id, avalue);
 }
 
+template<typename T>
+bool StarFileTable__getValue_wrapper(StarFileTable* This, int EMDL_id, T& avalue)
+{
+  EMDLabel emdLabel = (EMDLabel)EMDL_id;
+  return This->getValue(emdLabel, avalue);
+}
+
+bool StarFileTable__getValue_double(StarFileTable* This, int EMDL_id, double* avalue)
+{
+  return StarFileTable__getValue_wrapper(This, EMDL_id, *avalue);
+}
+
+bool StarFileTable__getValue_float(StarFileTable* This, int EMDL_id, float* avalue)
+{
+  return StarFileTable__getValue_wrapper(This, EMDL_id, *avalue);
+}
+
+bool StarFileTable__getValue_int(StarFileTable* This, int EMDL_id, int* avalue)
+{
+  return StarFileTable__getValue_wrapper(This, EMDL_id, *avalue);
+}
+
+bool StarFileTable__getValue_bool(StarFileTable* This, int EMDL_id, bool* avalue)
+{
+  return StarFileTable__getValue_wrapper(This, EMDL_id, *avalue);
+}
+
 void StarFileTable__getValue_string(StarFileTable* This, int EMDL_id, void** str, int* alen, bool* result)
 {
   EMDLabel emdLabel = (EMDLabel)EMDL_id;
@@ -1623,6 +1650,11 @@ void StarFileTable__write_ofile(StarFileTable* This)
 void StarFileTable__close_ofile(StarFileTable* This)
 {
   This->close_ofile();
+}
+
+void StarFileTable__read(StarFileTable* This, char* fname)
+{
+  This->read(fname);
 }
 
 void StarFileTable__setName(StarFileTable* This, char* aname)

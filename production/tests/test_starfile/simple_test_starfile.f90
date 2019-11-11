@@ -7,15 +7,16 @@ program simple_test_starfile
 
     logical :: aresult
     character(len=:), allocatable :: retrieved_string
-    
+    real(kind=8) :: amt, aml
+
     call starfile_table__new(sfile)
     call starfile_table__clear(sfile)
     call starfile_table__setislist(sfile, .true.)
-    
+
     call starfile_table__addObject(sfile)
-    call starfile_table__setName(sfile, "this_is_a_a_name")    
+    call starfile_table__setName(sfile, "this_is_a_a_name")
     call starfile_table__setComment(sfile, "this_is_a_comment")
-    
+
     call starfile_table__setValue_string(sfile, EMDL_MICROGRAPH_NAME, "this_is_a_string")
     call starfile_table__setValue_double(sfile, EMDL_MICROGRAPH_ACCUM_MOTION_TOTAL, 99._8)
     call starfile_table__setValue_double(sfile, EMDL_MICROGRAPH_ACCUM_MOTION_EARLY, 42._8)
@@ -31,8 +32,8 @@ program simple_test_starfile
     else
        write (*,*) 'result=', aresult
     end if
-    
-    call starfile_table__open_ofile(sfile, "outputfile.txt")
+
+    call starfile_table__open_ofile(sfile, "outputfile.star")
     call starfile_table__write_ofile(sfile)
     call starfile_table__clear(sfile)
 
@@ -43,5 +44,13 @@ program simple_test_starfile
     call starfile_table__write_ofile(sfile)
     call starfile_table__close_ofile(sfile)
     call starfile_table__delete(sfile)
-    
+
+    call starfile_table__new(sfile)
+    call starfile_table__read(sfile, "outputfile.star")
+    aresult = starfile_table__getValue_double(sfile, EMDL_MICROGRAPH_ACCUM_MOTION_TOTAL, amt)
+    write (*,*) 'aresult = ', aresult, ' ; amt = ', amt
+    aresult = starfile_table__getValue_double(sfile, EMDL_MICROGRAPH_ACCUM_MOTION_LATE, aml)
+    write (*,*) 'aresult = ', aresult, ' ; aml = ', aml
+    call starfile_table__delete(sfile)
+
   end program simple_test_starfile
