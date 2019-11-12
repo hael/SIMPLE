@@ -1545,79 +1545,92 @@ void StarFileTable__setIsList(StarFileTable* This, bool is_list)
 }
 
 template<typename T>
-void StarFileTable__setValue_wrapper(StarFileTable* This, int EMDL_id, T avalue)
+void StarFileTable__setValue_wrapper(StarFileTable* This, int EMDL_id, T avalue,
+                                     long object_id)
 {
   EMDLabel emdLabel = (EMDLabel)EMDL_id;
-  This->setValue(emdLabel, avalue);
+  This->setValue(emdLabel, avalue, object_id);
 }
 
 template<>
-void StarFileTable__setValue_wrapper(StarFileTable* This, int EMDL_id, char* avalue)
+void StarFileTable__setValue_wrapper(StarFileTable* This, int EMDL_id, char* avalue,
+                                     long object_id)
 {
   EMDLabel emdLabel = (EMDLabel)EMDL_id;
   std::string str(avalue);
-  This->setValue(emdLabel, str);
+  This->setValue(emdLabel, str, object_id);
 }
 
-void StarFileTable__setValue_double(StarFileTable* This, int EMDL_id, double avalue)
+void StarFileTable__setValue_double(StarFileTable* This, int EMDL_id, double avalue,
+                                    long object_id)
 {
-  StarFileTable__setValue_wrapper(This, EMDL_id, avalue);
+  StarFileTable__setValue_wrapper(This, EMDL_id, avalue, object_id);
 }
 
-void StarFileTable__setValue_float(StarFileTable* This, int EMDL_id, float avalue)
+void StarFileTable__setValue_float(StarFileTable* This, int EMDL_id, float avalue,
+                                   long object_id)
 {
-  StarFileTable__setValue_wrapper(This, EMDL_id, avalue);
+  StarFileTable__setValue_wrapper(This, EMDL_id, avalue, object_id);
 }
 
-void StarFileTable__setValue_int(StarFileTable* This, int EMDL_id, int avalue)
+void StarFileTable__setValue_int(StarFileTable* This, int EMDL_id, int avalue,
+                                 long object_id)
 {
-  StarFileTable__setValue_wrapper(This, EMDL_id, avalue);
+  StarFileTable__setValue_wrapper(This, EMDL_id, avalue, object_id);
 }
 
-void StarFileTable__setValue_bool(StarFileTable* This, int EMDL_id, bool avalue)
+void StarFileTable__setValue_bool(StarFileTable* This, int EMDL_id, bool avalue,
+                                  long object_id)
 {
-  StarFileTable__setValue_wrapper(This, EMDL_id, avalue);
+  StarFileTable__setValue_wrapper(This, EMDL_id, avalue, object_id);
 }
 
-void StarFileTable__setValue_string(StarFileTable* This, int EMDL_id, char* avalue)
+void StarFileTable__setValue_string(StarFileTable* This, int EMDL_id, char* avalue,
+                                    long object_id)
 {
-  StarFileTable__setValue_wrapper(This, EMDL_id, avalue);
+  StarFileTable__setValue_wrapper(This, EMDL_id, avalue, object_id);
 }
 
 template<typename T>
-bool StarFileTable__getValue_wrapper(StarFileTable* This, int EMDL_id, T& avalue)
+bool StarFileTable__getValue_wrapper(StarFileTable* This, int EMDL_id, T& avalue,
+                                     long object_id)
 {
   EMDLabel emdLabel = (EMDLabel)EMDL_id;
-  return This->getValue(emdLabel, avalue);
+  return This->getValue(emdLabel, avalue, object_id);
 }
 
-bool StarFileTable__getValue_double(StarFileTable* This, int EMDL_id, double* avalue)
+bool StarFileTable__getValue_double(StarFileTable* This, int EMDL_id, double* avalue,
+                                    long object_id)
 {
-  return StarFileTable__getValue_wrapper(This, EMDL_id, *avalue);
+  return StarFileTable__getValue_wrapper(This, EMDL_id, *avalue, object_id);
 }
 
-bool StarFileTable__getValue_float(StarFileTable* This, int EMDL_id, float* avalue)
+bool StarFileTable__getValue_float(StarFileTable* This, int EMDL_id, float* avalue,
+                                   long object_id)
 {
-  return StarFileTable__getValue_wrapper(This, EMDL_id, *avalue);
+  return StarFileTable__getValue_wrapper(This, EMDL_id, *avalue, object_id);
 }
 
-bool StarFileTable__getValue_int(StarFileTable* This, int EMDL_id, int* avalue)
+bool StarFileTable__getValue_int(StarFileTable* This, int EMDL_id, int* avalue,
+                                 long object_id)
 {
-  return StarFileTable__getValue_wrapper(This, EMDL_id, *avalue);
+  return StarFileTable__getValue_wrapper(This, EMDL_id, *avalue, object_id);
 }
 
-bool StarFileTable__getValue_bool(StarFileTable* This, int EMDL_id, bool* avalue)
+bool StarFileTable__getValue_bool(StarFileTable* This, int EMDL_id, bool* avalue,
+                                  long object_id)
 {
-  return StarFileTable__getValue_wrapper(This, EMDL_id, *avalue);
+  return StarFileTable__getValue_wrapper(This, EMDL_id, *avalue, object_id);
 }
 
-void StarFileTable__getValue_string(StarFileTable* This, int EMDL_id, void** str, int* alen, bool* result)
+void StarFileTable__getValue_string(StarFileTable* This, int EMDL_id, void** str,
+                                    long object_id, int* alen, bool* result)
 {
   EMDLabel emdLabel = (EMDLabel)EMDL_id;
   std::string value;
   bool res;
   char* c_str = NULL;
-  res = This->getValue(emdLabel, value);
+  res = This->getValue(emdLabel, value, object_id);
   *result = res;
   if (res)
   {
@@ -1652,9 +1665,9 @@ void StarFileTable__close_ofile(StarFileTable* This)
   This->close_ofile();
 }
 
-void StarFileTable__read(StarFileTable* This, char* fname)
+void StarFileTable__read(StarFileTable* This, char* fname, char* name)
 {
-  This->read(fname);
+  This->read(fname, name);
 }
 
 void StarFileTable__setName(StarFileTable* This, char* aname)
@@ -1665,6 +1678,21 @@ void StarFileTable__setName(StarFileTable* This, char* aname)
 void StarFileTable__setComment(StarFileTable* This, char* acomment)
 {
   This->setComment(acomment);
+}
+
+long StarFileTable__firstObject(StarFileTable* This)
+{
+  return This->firstObject();
+}
+
+long StarFileTable__numberOfObjects(StarFileTable* This)
+{
+  return This->numberOfObjects();
+}
+
+long StarFileTable__nextObject(StarFileTable* This)
+{
+  return This->nextObject();
 }
 
 void dealloc_str(void* str)

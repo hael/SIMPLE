@@ -393,23 +393,26 @@ extern "C"
   void StarFileTable__delete(StarFileTable* This);
   void StarFileTable__addObject(StarFileTable* This);
   void StarFileTable__setIsList(StarFileTable* This, bool is_list);
-  void StarFileTable__setValue_double(StarFileTable* This, int EMDL_id, double avalue);
-  void StarFileTable__setValue_float(StarFileTable* This, int EMDL_id, float avalue);
-  void StarFileTable__setValue_int(StarFileTable* This, int EMDL_id, int avalue);
-  void StarFileTable__setValue_bool(StarFileTable* This, int EMDL_id, bool avalue);
-  void StarFileTable__setValue_string(StarFileTable* This, int EMDL_id, char* avalue);
-  bool StarFileTable__getValue_double(StarFileTable* This, int EMDL_id, double* avalue);
-  bool StarFileTable__getValue_float(StarFileTable* This, int EMDL_id, float* avalue);
-  bool StarFileTable__getValue_int(StarFileTable* This, int EMDL_id, int* avalue);
-  bool StarFileTable__getValue_bool(StarFileTable* This, int EMDL_id, bool* avalue);
-  void StarFileTable__getValue_string(StarFileTable* This, int EMDL_id, void** str, int* alen, bool* result);
+  void StarFileTable__setValue_double(StarFileTable* This, int EMDL_id, double avalue, long object_id);
+  void StarFileTable__setValue_float(StarFileTable* This, int EMDL_id, float avalue, long object_id);
+  void StarFileTable__setValue_int(StarFileTable* This, int EMDL_id, int avalue, long object_id);
+  void StarFileTable__setValue_bool(StarFileTable* This, int EMDL_id, bool avalue, long object_id);
+  void StarFileTable__setValue_string(StarFileTable* This, int EMDL_id, char* avalue, long object_id);
+  bool StarFileTable__getValue_double(StarFileTable* This, int EMDL_id, double* avalue, long object_id);
+  bool StarFileTable__getValue_float(StarFileTable* This, int EMDL_id, float* avalue, long object_id);
+  bool StarFileTable__getValue_int(StarFileTable* This, int EMDL_id, int* avalue, long object_id);
+  bool StarFileTable__getValue_bool(StarFileTable* This, int EMDL_id, bool* avalue, long object_id);
+  void StarFileTable__getValue_string(StarFileTable* This, int EMDL_id, void** str, long object_id, int* alen, bool* result);
   void StarFileTable__clear(StarFileTable* This);
   void StarFileTable__open_ofile(StarFileTable* This, char* fname, int mode);
   void StarFileTable__write_ofile(StarFileTable* This);
   void StarFileTable__close_ofile(StarFileTable* This);
-  void StarFileTable__read(StarFileTable* This, char* fname);
+  void StarFileTable__read(StarFileTable* This, char* fname, char* name);
   void StarFileTable__setName(StarFileTable* This, char* aname);
   void StarFileTable__setComment(StarFileTable* This, char* acomment);
+  long StarFileTable__firstObject(StarFileTable* This);
+  long StarFileTable__numberOfObjects(StarFileTable* This);
+  long StarFileTable__nextObject(StarFileTable* This);
   void dealloc_str(void* str);
 }
 
