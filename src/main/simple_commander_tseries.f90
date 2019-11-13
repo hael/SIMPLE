@@ -13,6 +13,7 @@ use simple_qsys_funs
 implicit none
 
 public :: tseries_import_commander
+public :: tseries_import_particles_commander
 public :: tseries_track_commander_distr
 public :: tseries_track_commander
 public :: center2D_nano_commander_distr
@@ -32,6 +33,10 @@ type, extends(commander_base) :: tseries_import_commander
   contains
     procedure :: execute      => exec_tseries_import
 end type tseries_import_commander
+type, extends(commander_base) :: tseries_import_particles_commander
+  contains
+    procedure :: execute      => exec_tseries_import_particles
+end type tseries_import_particles_commander
 type, extends(commander_base) :: tseries_track_commander_distr
   contains
     procedure :: execute      => exec_tseries_track_distr
@@ -120,6 +125,57 @@ contains
         ! end gracefully
         call simple_end('**** TSERIES_IMPORT NORMAL STOP ****')
     end subroutine exec_tseries_import
+
+    subroutine exec_tseries_import_particles( self, cline )
+        use simple_sp_project,       only: sp_project
+        use simple_ctf_estimate_fit, only: ctf_estimate_fit
+        class(tseries_import_particles_commander), intent(inout) :: self
+        class(cmdline),                            intent(inout) :: cline
+        type(parameters)       :: params
+        type(sp_project)       :: spproj
+        type(ctfparams)        :: ctfvars
+        type(ctf_estimate_fit) :: ctffit
+        type(oris)             :: os
+        integer :: iframe, lfoo(3)
+        call cline%set('oritype','mic')
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        call spproj%read(params%projfile)
+        ! # of particles
+        call find_ldim_nptcls(params%stk, lfoo, params%nptcls)
+        call os%new(params%nptcls)
+        ! CTF parameters
+        ctfvars%smpd    = params%smpd
+        ctfvars%phshift = 0.
+        ctfvars%dfx     = 0.
+        ctfvars%dfy     = 0.
+        ctfvars%angast  = 0.
+        ctfvars%l_phaseplate = .false.
+        if( cline%defined('deftab') )then
+            call ctffit%read_doc(params%deftab)
+            call ctffit%get_parms(ctfvars)
+            if( .not.is_equal(ctfvars%smpd,params%smpd) )then
+                THROW_HARD('Iconsistent sampling distance; exec_tseries_import_particles')
+            endif
+            ctfvars%ctfflag = CTFFLAG_YES
+            do iframe = 1,spproj%os_mic%get_noris()
+                call spproj%os_mic%set(iframe,'ctf','yes')
+            enddo
+            call os%set_all2single('dfx', ctfvars%dfx)
+            call os%set_all2single('dfy', ctfvars%dfy)
+            call os%set_all2single('angast', ctfvars%angast)
+        else
+            ctfvars%ctfflag = CTFFLAG_NO
+            do iframe = 1,spproj%os_mic%get_noris()
+                call spproj%os_mic%set(iframe,'ctf','no')
+            enddo
+        endif
+        ! import stack
+        call spproj%add_single_stk(params%stk, ctfvars, os)
+        call spproj%write
+        ! end gracefully
+        call simple_end('**** TSERIES_IMPORT_PARTICLES NORMAL STOP ****')
+    end subroutine exec_tseries_import_particles
 
     subroutine exec_tseries_track_distr( self, cline )
         use simple_nrtxtfile, only: nrtxtfile
@@ -520,7 +576,7 @@ contains
         if( .not. cline%defined('lp')      ) call cline%set('lp', 1.)
         if( .not. cline%defined('dfmin')   ) call cline%set('dfmin', -0.05)
         if( .not. cline%defined('dfmax')   ) call cline%set('dfmax',  0.05)
-        if( .not. cline%defined('astigtol')) call cline%set('astigtol', 0.005)
+        if( .not. cline%defined('astigtol')) call cline%set('astigtol', 0.001)
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         ! prep
         nmics      = build%spproj%os_mic%get_noris()

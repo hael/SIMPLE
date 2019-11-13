@@ -153,6 +153,7 @@ type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
 type(simple_program), target :: tseries_import
+type(simple_program), target :: tseries_import_particles
 type(simple_program), target :: tseries_ctf_estimate
 type(simple_program), target :: tseries_track
 type(simple_program), target :: update_project
@@ -351,6 +352,7 @@ contains
         call new_symmetrize_map
         call new_symmetry_test
         call new_tseries_import
+        call new_tseries_import_particles
         call new_tseries_ctf_estimate
         call new_tseries_track
         call new_update_project
@@ -440,6 +442,9 @@ contains
         call push2prg_ptr_array(symaxis_search)
         call push2prg_ptr_array(symmetrize_map)
         call push2prg_ptr_array(symmetry_test)
+        call push2prg_ptr_array(tseries_import)
+        call push2prg_ptr_array(tseries_import_particles)
+        call push2prg_ptr_array(tseries_ctf_estimate)
         call push2prg_ptr_array(tseries_track)
         call push2prg_ptr_array(update_project)
         call push2prg_ptr_array(vizoris)
@@ -622,6 +627,8 @@ contains
                 ptr2prg => symmetry_test
             case('tseries_import')
                 ptr2prg => tseries_import
+            case('tseries_import_particles')
+                ptr2prg => tseries_import_particles
             case('tseries_ctf_estimate')
                 ptr2prg => tseries_ctf_estimate
             case('tseries_track')
@@ -725,6 +732,7 @@ contains
         write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
         write(logfhandle,'(A)') tseries_import%name
+        write(logfhandle,'(A)') tseries_import_particles%name
         write(logfhandle,'(A)') tseries_ctf_estimate%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
@@ -3740,6 +3748,32 @@ contains
         ! <empty>
     end subroutine new_tseries_import
 
+    subroutine new_tseries_import_particles
+        ! PROGRAM SPECIFICATION
+        call tseries_import_particles%new(&
+        &'tseries_import',&                               ! name
+        &'Imports time-series particles stack',&          ! descr_short
+        &'is a workflow for importing time-series data',& ! descr_long
+        &'simple_exec',&                                  ! executable
+        &1, 1, 0, 0, 0, 0, 0, .true.)                     ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call tseries_import_particles%set_input('img_ios', 1, stk)
+        tseries_import_particles%img_ios(1)%required = .true.
+        ! parameter input/output
+        call tseries_import_particles%set_input('parm_ios', 1, deftab)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_tseries_import_particles
+
     subroutine new_tseries_ctf_estimate
         ! PROGRAM SPECIFICATION
         call tseries_ctf_estimate%new(&
@@ -3765,7 +3799,7 @@ contains
         tseries_ctf_estimate%srch_ctrls(2)%rval_default = 0.05
         tseries_ctf_estimate%srch_ctrls(2)%descr_placeholder = 'Expected maximum defocus; in microns{0.05}'
         call tseries_ctf_estimate%set_input('srch_ctrls', 3, astigtol)
-        tseries_ctf_estimate%srch_ctrls(3)%rval_default = 0.005
+        tseries_ctf_estimate%srch_ctrls(3)%rval_default = 0.001
         tseries_ctf_estimate%srch_ctrls(3)%descr_placeholder = 'Expected astigmatism; in microns{0.005}'
         ! filter controls
         call tseries_ctf_estimate%set_input('filt_ctrls', 1, lp)

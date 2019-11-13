@@ -73,6 +73,7 @@ contains
     procedure          :: get_ctfscore
     procedure          :: get_pspec
     procedure          :: get_ctfres
+    procedure          :: get_parms
     ! CTF fitting
     procedure, private :: gen_resmsk
     procedure, private :: gen_tiles
@@ -297,10 +298,10 @@ contains
         self%parms%dfx     = os%get(1,'dfx')
         self%parms%dfy     = os%get(1,'dfy')
         self%parms%angast  = os%get(1,'angast')
-        self%parms%fraca   = os%get(1,'fraca')
         self%parms%phshift = os%get(1,'phshift')
         phaseplate         = os%get_static(1,'phaseplate')
         self%parms%l_phaseplate = trim(phaseplate).eq.'yes'
+        self%ntotpatch     = nint(os%get(1,'npatch'))
         ! micrograph dimensions
         self%ldim_mic(1) = nint(os%get(1,'xdim'))
         self%ldim_mic(2) = nint(os%get(1,'ydim'))
@@ -378,6 +379,20 @@ contains
         call pspec_out%copy(self%pspec)
         call self%norm_pspec(pspec_out)
     end subroutine get_pspec
+
+    subroutine get_parms(self, ctfparms)
+        class(ctf_estimate_fit), intent(inout) :: self
+        class(ctfparams),        intent(inout) :: ctfparms
+        ctfparms%smpd    = self%parms%smpd
+        ctfparms%cs      = self%parms%cs
+        ctfparms%kv      = self%parms%kv
+        ctfparms%fraca   = self%parms%fraca
+        ctfparms%dfx     = self%parms%dfx
+        ctfparms%dfy     = self%parms%dfy
+        ctfparms%angast  = self%parms%angast
+        ctfparms%phshift = self%parms%phshift
+        ctfparms%l_phaseplate = self%parms%l_phaseplate
+    end subroutine get_parms
 
     ! DOERS
 
@@ -1349,24 +1364,28 @@ contains
         else
             call os%set(1,'phaseplate','no')
         endif
-        if( self%ntotpatch > 0 )then
-            do i = 1, POLYDIM
-                call os%set(2,'px'//int2str(i),real(self%polyx(i)))
-                call os%set(3,'py'//int2str(i),real(self%polyy(i)))
-            enddo
-            if( DEBUG_HERE )then
-                cnt = 3
-                do pi=1,self%npatches(1)
-                    do pj=1,self%npatches(2)
-                        cnt = cnt+1
-                        call self%pix2poly(real(self%centers(pi,pj,1),dp), real(self%centers(pi,pj,2),dp), x,y)
-                        call os%set(cnt,'x',real(x))
-                        call os%set(cnt,'y',real(y))
-                        call os%set(cnt,'dfx',self%parms_patch(pi,pj)%dfx)
-                        call os%set(cnt,'dfy',self%parms_patch(pi,pj)%dfy)
-                    enddo
+        if( self%ntotpatch == 0 )then
+            self%polyx = 0.
+            self%polyy = 0.
+            self%polyx(1) = self%parms%dfx
+            self%polyy(1) = self%parms%dfy
+        endif
+        do i = 1, POLYDIM
+            call os%set(2,'px'//int2str(i),real(self%polyx(i)))
+            call os%set(3,'py'//int2str(i),real(self%polyy(i)))
+        enddo
+        if( DEBUG_HERE )then
+            cnt = 3
+            do pi=1,self%npatches(1)
+                do pj=1,self%npatches(2)
+                    cnt = cnt+1
+                    call self%pix2poly(real(self%centers(pi,pj,1),dp), real(self%centers(pi,pj,2),dp), x,y)
+                    call os%set(cnt,'x',real(x))
+                    call os%set(cnt,'y',real(y))
+                    call os%set(cnt,'dfx',self%parms_patch(pi,pj)%dfx)
+                    call os%set(cnt,'dfy',self%parms_patch(pi,pj)%dfy)
                 enddo
-            endif
+            enddo
         endif
         call os%write(fname)
         call os%kill

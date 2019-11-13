@@ -87,13 +87,14 @@ type(simulate_subtomogram_commander) :: xsimulate_subtomogram
 type(simulate_atoms_commander)       :: xsimulate_atoms
 
 ! TIME-SERIES (NANO-PARTICLE) PROGRAMS
-type(tseries_import_commander)         :: xtseries_import
-type(tseries_ctf_estimate_commander)   :: xtseries_ctf_estimate
-type(detect_atoms_commander)           :: xdetect_atoms
-type(atoms_rmsd_commander)             :: xatoms_rmsd
-type(radial_dependent_stats_commander) :: xradial_dependent_stats
-type(atom_cluster_analysis_commander)  :: xatom_cluster_analysis
-type(nano_softmask_commander)          :: xnano_softmask
+type(tseries_import_commander)           :: xtseries_import
+type(tseries_import_particles_commander) :: xtseries_import_particles
+type(tseries_ctf_estimate_commander)     :: xtseries_ctf_estimate
+type(detect_atoms_commander)             :: xdetect_atoms
+type(atoms_rmsd_commander)               :: xatoms_rmsd
+type(radial_dependent_stats_commander)   :: xradial_dependent_stats
+type(atom_cluster_analysis_commander)    :: xatom_cluster_analysis
+type(nano_softmask_commander)            :: xnano_softmask
 
 ! SYSTEM INTERACTION PROGRAMS
 type(mkdir_commander) :: xmkdir
@@ -235,6 +236,8 @@ select case(prg)
     ! TIME-SERIES (NANO-PARTICLE) PROGRAMS
     case( 'tseries_import' )
         call xtseries_import%execute(cline)
+    case( 'tseries_import_particles' )
+        call xtseries_import_particles%execute(cline)
     case( 'tseries_ctf_estimate' )
         call xtseries_ctf_estimate%execute(cline)
     case('detect_atoms')
