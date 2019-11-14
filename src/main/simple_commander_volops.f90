@@ -282,6 +282,7 @@ contains
         type(builder)            :: build
         type(image), allocatable :: imgs(:)
         integer                  :: i
+        logical                  :: do_zero
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('wfun')   ) call cline%set('wfun',   'kb')
         if( .not. cline%defined('winsz')  ) call cline%set('winsz',   1.5)
@@ -307,9 +308,12 @@ contains
         ! generate projections
         imgs     = reproject(build%vol, build%spproj_field)
         if( file_exists(params%outstk) ) call del_file(params%outstk)
+        do_zero  = build%spproj_field%isthere('state')
         do i=1,params%nspace
             if( params%neg .eq. 'yes' ) call imgs(i)%neg()
-            if( build%spproj_field%get_state(i) < 1 ) call imgs(i)%zero
+            if( do_zero )then
+                if( build%spproj_field%get_state(i) < 1 ) call imgs(i)%zero
+            endif
             call imgs(i)%write(params%outstk,i)
         end do
         call build%spproj_field%write('reproject_oris'//trim(TXT_EXT), [1,params%nptcls])

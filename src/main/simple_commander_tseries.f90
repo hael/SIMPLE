@@ -437,7 +437,7 @@ contains
         ! prepare thread safe images in image class
         call imgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
         write(logfhandle,'(A)') '>>> ESTIMATING DIAMETERS THROUGH BINARY IMAGE PROCESSING'
-        call fopen(funit, file='diameters_in_pixels.txt', status='replace')
+        call fopen(funit, file='diameters_in_Angstroms.txt', status='replace')
         do i=1,params%nptcls
             call progress(i,params%nptcls)
             ! non-local mneans filter for denoising
