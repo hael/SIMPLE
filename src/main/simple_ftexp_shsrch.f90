@@ -243,9 +243,7 @@ contains
         real(dp),            intent(out)   :: grad(2)
         logical, pointer :: msk(:,:)
         real(dp)    :: g1(2),g2(2),arg, transf_vec(2)
-        integer     :: kstart, kstop,hind,kind,kkind
-        kstart = self%kind_shift + 1
-        kstop  = self%kind_shift + self%flims(2,2)
+        integer     :: hind,kind,kkind
         call self%reference%get_bandmsk_ptr(msk)
         g1 = 0.d0
         g2 = 0.d0
@@ -277,9 +275,7 @@ contains
         logical, pointer :: msk(:,:)
         complex(dp) :: tmp
         real(dp)    :: f1,f2,g1(2),g2(2),arg, transf_vec(2)
-        integer     :: kstart, kstop,hind,kind,kkind
-        kstart = self%kind_shift + 1
-        kstop  = self%kind_shift + self%flims(2,2)
+        integer     :: hind,kind,kkind
         call self%reference%get_bandmsk_ptr(msk)
         f1 = 0.d0
         f2 = 0.d0
