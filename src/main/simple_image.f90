@@ -7755,16 +7755,17 @@ contains
     subroutine shift2Dserial_1( self, shvec  )
         class(image), intent(inout) :: self
         real,         intent(in)    :: shvec(2)
-        integer :: h, k, lims(3,2), phys(3)
-        real    :: shvec_here(3)
-        lims            = self%fit%loop_lims(2)
-        shvec_here(1:2) = shvec
-        shvec_here(3)   = 0.
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                phys = self%fit%comp_addr_phys([h,k,0])
-                self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) *&
-                    &self%oshift([h,k,0], shvec_here)
+        integer :: h, k, hphys, kphys, lims(3,2)
+        real    :: arg, karg, sh(2)
+        lims = self%fit%loop_lims(2)
+        sh   = shvec * self%shconst(1:2)
+        do k=lims(2,1),lims(2,2)
+            kphys = k + 1 + merge(self%ldim(2),0,k<0)
+            karg  = real(k)*sh(2)
+            do h=lims(1,1),lims(1,2)
+                hphys = h + 1
+                arg   = karg + real(h)*sh(1)
+                self%cmat(hphys,kphys,1) = self%cmat(hphys,kphys,1) * cmplx(cos(arg),sin(arg))
             end do
         end do
     end subroutine shift2Dserial_1
@@ -7772,17 +7773,17 @@ contains
     subroutine shift2Dserial_2( self, shvec, self_out )
         class(image), intent(inout) :: self, self_out
         real,         intent(in)    :: shvec(2)
-        integer :: h, k, lims(3,2), phys(3)
-        real    :: shvec_here(3)
-        lims            = self%fit%loop_lims(2)
-        shvec_here(1:2) = shvec
-        shvec_here(3)   = 0.
-        self_out%ft     = .true.
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                phys = self%fit%comp_addr_phys([h,k,0])
-                self_out%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) *&
-                    &self%oshift([h,k,0], shvec_here)
+        integer :: h, k, hphys, kphys, lims(3,2)
+        real    :: arg, karg, sh(2)
+        lims = self%fit%loop_lims(2)
+        sh   = shvec * self%shconst(1:2)
+        do k=lims(2,1),lims(2,2)
+            kphys = k + 1 + merge(self%ldim(2),0,k<0)
+            karg  = real(k)*sh(2)
+            do h=lims(1,1),lims(1,2)
+                hphys = h + 1
+                arg   = karg + real(h)*sh(1)
+                self_out%cmat(hphys,kphys,1) = self%cmat(hphys,kphys,1) * cmplx(cos(arg),sin(arg))
             end do
         end do
     end subroutine shift2Dserial_2
