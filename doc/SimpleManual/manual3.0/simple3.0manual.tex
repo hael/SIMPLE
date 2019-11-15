@@ -98,7 +98,7 @@ dominika@simplecryoem.com\\
 
 \section{About SIMPLE}
 
-\textbf{S}ingle-particle \textbf{IM}age \textbf{P}rocessing \textbf{L}inux \textbf{E}ngine (\href{www.simplecryoem.com}{\textbf{\textcolor{BurntOrange}{SIMPLE}}}) is a program package for cryo-EM image processing, covering all aspects of the single-particle analysis workflow. SIMPLE also provides tools for atomic-resolution 3D reconstruction from time-series of nanoparticles imaged in solution with graphene liquid cell TEM. The SIMPLE back-end consists of an object-oriented numerical library written in modern Fortran. In the latest SIMPLE release (version 3.0), we have revised the way that meta-data and input parameters are handled, providing a project-based execution model (described below). This model has made SIMPLE easier to use, improved output data organisation and increased performance. This document describes the command-line interface of SIMPLE and is intended for advanced users and/or developers that wish to build applications utilising the high-performance image processing algorithms in SIMPLE.
+\textbf{S}ingle-particle \textbf{IM}age \textbf{P}rocessing \textbf{L}inux \textbf{E}ngine (\href{www.simplecryoem.com}{\textbf{\textcolor{BurntOrange}{SIMPLE}}}) is a program package for cryo-EM image processing, covering all aspects of the single-particle analysis workflow. SIMPLE also provides tools for atomic-resolution 3D reconstruction from time-series of nanoparticles imaged in solution with graphene liquid cell TEM and quantitative analysis of their atomic structure. The SIMPLE back-end consists of an object-oriented numerical library written in modern Fortran. In the latest SIMPLE release (version 3.0), we have revised the way that meta-data and input parameters are handled, providing a project-based execution model (described below). This model has made SIMPLE easier to use, improved output data organisation and increased performance. This document describes the command-line interface of SIMPLE and is intended for advanced users and/or developers that wish to build applications utilising the high-performance image processing algorithms in SIMPLE.
  
 SIMPLE is free software: you can redistribute it and/or modify it under the terms of the \href{http://www.gnu.org/copyleft/gpl.html}{\textbf{\textcolor{BurntOrange}{GNU General Public License}}} as published by the Free Software Foundation, either version 3 of the license, or (at your option) any later version. SIMPLE is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the \href{http://www.gnu.org/copyleft/gpl.html}{\textbf{\textcolor{BurntOrange}{GNU General Public License}}} for more details.
 
@@ -380,7 +380,7 @@ ls
 \noindent{}and it is possible to go back to any point in the project history to re-run a job with different parameters or try a different algorithm for the task. Now, let's look closer at the project file.
 
 \subsection{Structure, interrogation and manipulation of the binary project file}
-In SIMPLE v3.0 we have implemented an abstract data type called sp\_project that manages all meta-data generated throughout a single-particle analysis project. The multi-segment binary project file is simply a mirror of this data type on disk. Segments 1-10 are reserved  for simple program outputs, orientations and files. Currently implemented segments are
+In SIMPLE v3.0 we have implemented an abstract data type called \texttt{sp\_project} that manages all meta-data generated throughout a single-particle analysis project. The multi-segment binary project file is simply a mirror of this data type on disk. Segments 1-10 are reserved  for simple program outputs, orientations and files. Currently implemented segments are
 
 \begin{enumerate}
     \item micrographs
@@ -478,11 +478,11 @@ vol=../4_refine3D/recvol_state01_iter015.mrc imgkind=vol box=256.000000 smpd=1.2
 
 \subsection{Reporting selections made by external processes to the project file}
 
-A common task when you have a GUI controlling SIMPLE is to report selections of micrographs, class averages or other images to the project file. This is done through the program \texttt{report\_selection}
+A common task when you have a GUI controlling SIMPLE is to report selections of micrographs, class averages or other images to the project file. This is done through the program \texttt{selection}
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
-simple_exec prg=report_selection
+simple_exec prg=selection
 +underline[USAGE]
-+textit[bash-3.2$ simple_distr_exec prg=report_selection key1=val1 key2=val2 ...]
++textit[bash-3.2$ simple_distr_exec prg=selection key1=val1 key2=val2 ...]
 Required input parameters in +textbf[bold] (ensure terminal support)
 +underline[PARAMETER INPUT/OUTPUT]
 +textbf[infile  = File with selection state (0/1) flags; give .txt selection file]

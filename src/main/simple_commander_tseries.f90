@@ -14,6 +14,7 @@ implicit none
 
 public :: tseries_import_commander
 public :: tseries_import_particles_commander
+public :: tseries_average_commander
 public :: tseries_track_commander_distr
 public :: tseries_track_commander
 public :: center2D_nano_commander_distr
@@ -37,6 +38,10 @@ type, extends(commander_base) :: tseries_import_particles_commander
   contains
     procedure :: execute      => exec_tseries_import_particles
 end type tseries_import_particles_commander
+type, extends(commander_base) :: tseries_average_commander
+  contains
+    procedure :: execute      => exec_tseries_average
+end type tseries_average_commander
 type, extends(commander_base) :: tseries_track_commander_distr
   contains
     procedure :: execute      => exec_tseries_track_distr
@@ -176,6 +181,54 @@ contains
         ! end gracefully
         call simple_end('**** TSERIES_IMPORT_PARTICLES NORMAL STOP ****')
     end subroutine exec_tseries_import_particles
+
+    subroutine exec_tseries_average( self, cline )
+        use simple_tseries_averager
+        class(tseries_average_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        character(len=LONGSTRLEN), allocatable :: framenames(:)
+        type(sp_project) :: spproj
+        type(parameters) :: params
+        integer          :: top, i, iframe, nframes
+        logical          :: l_frames_input
+        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',  10.)
+        if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',     'cen')
+        if( cline%defined('top') )then
+            l_frames_input = .true.
+            top = nint(cline%get_rarg('top'))
+            if( .not. cline%defined('outstk') ) call cline%set('outstk', 'avg_first'//int2str(top)//'frames.mrc')
+        else
+            l_frames_input = .false.
+            if( .not. cline%defined('outstk') ) call cline%set('outstk', 'time_window_wavgs.mrcs')
+        endif
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',  'yes')
+        call params%new(cline)
+        if( l_frames_input )then
+          call spproj%read(params%projfile)
+          nframes = spproj%get_nframes()
+
+          print *, 'nframes: ', nframes
+
+          allocate(framenames(nframes))
+          iframe = 0
+          do i = 1,spproj%os_mic%get_noris()
+              if( spproj%os_mic%isthere(i,'frame') )then
+                  iframe = iframe + 1
+                  framenames(iframe) = trim(spproj%os_mic%get_static(i,'frame'))
+              endif
+          enddo
+
+          print *, 'done, extracting framenames'
+
+          call init_tseries_averager(framenames)
+
+          print *, 'done, init_tseries_averager'
+
+        endif
+        call tseries_average
+        call kill_tseries_averager
+        call simple_end('**** SIMPLE_TSERIES_AVERAGE NORMAL STOP ****')
+    end subroutine exec_tseries_average
 
     subroutine exec_tseries_track_distr( self, cline )
         use simple_nrtxtfile, only: nrtxtfile

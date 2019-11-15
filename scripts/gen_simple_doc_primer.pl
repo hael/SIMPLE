@@ -27,7 +27,6 @@ my $simple_exec_src_abspath = $SIMPLE_SOURCE_PATH."/production/simple/simple_exe
 my $simple_distr_exec_src_abspath = $SIMPLE_SOURCE_PATH."/production/simple/simple_distr_exec/simple_distr_exec.f90";
 
 # PARSERS
-
 # extract program names
 my @prgnames;
 open( EXEC, "<$simple_exec_src_abspath", ) or die "Cannot open: $!\n Check whether this script is in source directory.\n";
@@ -41,7 +40,7 @@ my @prgnames_distr;
 open( EXEC, "<$simple_distr_exec_src_abspath", ) or die "Cannot open: $!\n Check whether this script is in source directory.\n";
 while(my$line=<EXEC>){
     if( $line =~ /case\(\s*\'(\w+)\'\s*\)/ ){
-        push(@prgnames_distr,$1);     
+        push(@prgnames_distr,$1);
     }
 }
 close(EXEC);
@@ -72,21 +71,6 @@ foreach my $comment (@comments_split){
     }
 }
 
-# generate command-line dictonary
-my $foo     = `SIMPLE_PATH=$SIMPLE_SOURCE_PATH $SIMPLE_INSTALL_PATH/bin/simple_exec prg=print_cmd_dict outfile=cmd_dict.txt`;
-my $nparams = 0;
-open(CMDDICT, "<cmd_dict.txt") or die "Cannot open file: cmd_dict.txt for reading, $!\n";
-while(my $keyval=<CMDDICT>){
-    chomp($keyval);
-    if( $keyval =~ /^(.+)\=((.+))$/ ){
-        push(@cmdlinkeys,$1);
-        my $key = str2latex($1);
-        my $val = str2latex($2);
-        $cmdlindict{$key} = $val;
-        $nparams++; # number of command line parameters
-    }
-}
-
 # generate per-program command line dictonaries
 foreach my $prg (@prgnames){
     $prgcmdlineinstr{$prg} = `SIMPLE_PATH=$SIMPLE_SOURCE_PATH $SIMPLE_INSTALL_PATH/bin/simple_exec prg=$prg`;
@@ -101,7 +85,7 @@ foreach my $prg (@prgnames_distr){
 my @prgnames_sorted       = sort @prgnames;
 my @prgnames_distr_sorted = sort @prgnames_distr;
 if( $doc eq 'tex' ){
-    print_full_latex_cmdlindict();
+    # print_full_latex_cmdlindict();
     print '\section{Distributed SIMPLE Workflows}'."\n";
     foreach my $prg (@prgnames_distr_sorted){
         print_latex_instr(1, $prg, %prginstr_distr);
@@ -109,13 +93,14 @@ if( $doc eq 'tex' ){
     }
     print '\section{SIMPLE Programs}'."\n";
     foreach my $prg (@prgnames_sorted){
+        if( $prg eq 'write_classes' ){ next;}
         print_latex_instr(0, $prg, %prginstr);
         print_latex_usage($prg, %prgcmdlineinstr);
-    }  
+    }
 }elsif( $doc eq 'web' ){
     print "************Distributed SIMPLE Workflows************\n";
     foreach my $prg (@prgnames_distr_sorted){
-        print_html_instr($prg, %prginstr_distr); 
+        print_html_instr($prg, %prginstr_distr);
     }
     print "************SIMPLE Programs************\n";
     foreach my $prg (@prgnames_sorted){
@@ -167,7 +152,7 @@ sub print_full_latex_cmdlindict{
     foreach my $key (sort keys %cmdlindict) {
         $linecnt++;
         print '\texttt{'.$key.'}&{'.$cmdlindict{$key}.'}\\';
-        print '\\', "\n";     
+        print '\\', "\n";
         if( $linecnt == $maxlc ){
             print '\end{tabular}', "\n\n";
             print '\begin{tabular}{ll}', "\n";
@@ -188,7 +173,7 @@ sub print_latex_instr{
         print '\subsection{Program: \prgname{'."$label_latex}}\n";
     }else{
         print '\subsection{Distributed Workflow: \prgname{'."$label_latex}}\n";
-    }    
+    }
     print '\label{'."$label}\n";
     if( defined($instr{$label}) ){
         my $prginstr_latex = str2latex($instr{$label});
@@ -201,7 +186,7 @@ sub print_latex_usage{
     my $label        = shift;
     my %cmdlineinstr = @_;
     print '\begin{verbatim}', "\n";
-    print $cmdlineinstr{$label};
+    print $cmdlineinstr{$label}, "\n";
     print '\end{verbatim}', "\n\n";
 }
 
@@ -305,7 +290,7 @@ sub extract_comments{
             }else{
                 $comments = ' '.$line_clean;
             }
-           
+
         }
     }
     close(FORFILE);

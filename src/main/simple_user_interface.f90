@@ -152,6 +152,7 @@ type(simple_program), target :: stackops
 type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
+type(simple_program), target :: tseries_average
 type(simple_program), target :: tseries_import
 type(simple_program), target :: tseries_import_particles
 type(simple_program), target :: tseries_ctf_estimate
@@ -351,6 +352,7 @@ contains
         call new_symaxis_search
         call new_symmetrize_map
         call new_symmetry_test
+        call new_tseries_average
         call new_tseries_import
         call new_tseries_import_particles
         call new_tseries_ctf_estimate
@@ -442,6 +444,7 @@ contains
         call push2prg_ptr_array(symaxis_search)
         call push2prg_ptr_array(symmetrize_map)
         call push2prg_ptr_array(symmetry_test)
+        call push2prg_ptr_array(tseries_average)
         call push2prg_ptr_array(tseries_import)
         call push2prg_ptr_array(tseries_import_particles)
         call push2prg_ptr_array(tseries_ctf_estimate)
@@ -625,6 +628,8 @@ contains
                 ptr2prg => symmetrize_map
             case('symmetry_test')
                 ptr2prg => symmetry_test
+            case('tseries_average')
+                ptr2prg => tseries_average
             case('tseries_import')
                 ptr2prg => tseries_import
             case('tseries_import_particles')
@@ -731,6 +736,7 @@ contains
         write(logfhandle,'(A)') symaxis_search%name
         write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
+        write(logfhandle,'(A)') tseries_average%name
         write(logfhandle,'(A)') tseries_import%name
         write(logfhandle,'(A)') tseries_import_particles%name
         write(logfhandle,'(A)') tseries_ctf_estimate%name
@@ -3719,6 +3725,33 @@ contains
         call radial_sym_test%set_input('comp_ctrls', 1, nthr)
     end subroutine new_radial_sym_test
 
+    subroutine new_tseries_average
+        ! PROGRAM SPECIFICATION
+        call tseries_average%new(&
+        &'tseries_average',&                                                                                         ! name
+        &'Average particle extracted from time-series',&                                                             ! descr_short
+        &'is a program for particle SNR enhancement through time window averaging using correlation-based weights',& ! descr_long
+        &'simple_exec',&                                                                                             ! executable
+        &1, 2, 0, 1, 1, 1, 1, .true.)                                            ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call tseries_average%set_input('img_ios', 1, outstk)
+        ! parameter input/output
+        call tseries_average%set_input('parm_ios', 1, 'fromp', 'num', 'From frame index', 'Start index for frame averaging', 'start index', .false., 1.0)
+        call tseries_average%set_input('parm_ios', 2, 'top',   'num', 'To   frame index', 'Stop  index for frame averaging', 'stop index',  .false., 1.0)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call tseries_average%set_input('srch_ctrls', 1, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{10}', '{10}', .false., 10.)
+        ! filter controls
+        call tseries_average%set_input('filt_ctrls', 1, wcrit)
+        ! mask controls
+        call tseries_average%set_input('mask_ctrls', 1, msk)
+        tseries_average%mask_ctrls(1)%required = .false.
+        ! computer controls
+        call tseries_average%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_tseries_average
+
     subroutine new_tseries_import
         ! PROGRAM SPECIFICATION
         call tseries_import%new(&
@@ -3751,7 +3784,7 @@ contains
     subroutine new_tseries_import_particles
         ! PROGRAM SPECIFICATION
         call tseries_import_particles%new(&
-        &'tseries_import',&                               ! name
+        &'tseries_import_particles',&                               ! name
         &'Imports time-series particles stack',&          ! descr_short
         &'is a workflow for importing time-series data',& ! descr_long
         &'simple_exec',&                                  ! executable
@@ -3777,11 +3810,11 @@ contains
     subroutine new_tseries_ctf_estimate
         ! PROGRAM SPECIFICATION
         call tseries_ctf_estimate%new(&
-        &'tseries_ctf_estimate', &                                              ! name
-        &'Time-series CTF parameter fitting',&                                  ! descr_short
+        &'tseries_ctf_estimate', &                             ! name
+        &'Time-series CTF parameter fitting',&                 ! descr_short
         &'is a SIMPLE application for CTF parameter fitting',& ! descr_long
-        &'simple_exec',&                                                ! executable
-        &1, 0, 0, 3, 2, 0, 1, .true.)                                   ! # entries in each group, requires sp_project
+        &'simple_exec',&                                       ! executable
+        &1, 0, 0, 3, 2, 0, 1, .true.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call tseries_ctf_estimate%set_input('img_ios', 1, stk)

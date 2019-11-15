@@ -89,6 +89,7 @@ type(simulate_atoms_commander)       :: xsimulate_atoms
 ! TIME-SERIES (NANO-PARTICLE) PROGRAMS
 type(tseries_import_commander)           :: xtseries_import
 type(tseries_import_particles_commander) :: xtseries_import_particles
+type(tseries_average_commander)          :: xtseries_avg
 type(tseries_ctf_estimate_commander)     :: xtseries_ctf_estimate
 type(detect_atoms_commander)             :: xdetect_atoms
 type(atoms_rmsd_commander)               :: xatoms_rmsd
@@ -238,6 +239,8 @@ select case(prg)
         call xtseries_import%execute(cline)
     case( 'tseries_import_particles' )
         call xtseries_import_particles%execute(cline)
+    case( 'tseries_average')
+        call xtseries_avg%execute(cline)
     case( 'tseries_ctf_estimate' )
         call xtseries_ctf_estimate%execute(cline)
     case('detect_atoms')
