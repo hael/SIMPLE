@@ -562,6 +562,8 @@ contains
             if( params_glob%l_dose_weight )then
                 ! real space interpolation
                 call motion_patch%polytransfo(iframe, movie_frames_shifted_saved(iframe), movie_frames_shifted_patched(iframe))
+            else
+                call movie_frames_shifted_patched(iframe)%ifft
             endif
             ! sum
             call movie_frames_shifted_patched(iframe)%get_rmat_ptr(prmat)
