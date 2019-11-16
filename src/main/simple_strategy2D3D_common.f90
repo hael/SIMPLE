@@ -338,8 +338,6 @@ contains
         call img_in%ifft()
         ! clip image if needed
         call img_in%clip(img_out)
-        ! non-local means filter
-        if( trim(params_glob%filter) .eq. 'nlmean' ) call img_in%nlmean(sdev_noise=1.0)
         ! soft-edged mask
         if( params_glob%l_innermsk )then
             call img_out%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
@@ -415,8 +413,6 @@ contains
         call img_in%ifft()
         ! clip image if needed
         call img_in%clip(img_out)
-        ! non-local means filter
-        if( trim(params_glob%filter) .eq. 'nlmean' ) call img_in%nlmean(msk=params_glob%msk)
         ! apply mask
         if( params_glob%l_innermsk )then
             call img_out%mask(params_glob%msk, 'soft', &

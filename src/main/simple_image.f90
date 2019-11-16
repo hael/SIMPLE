@@ -361,7 +361,6 @@ contains
     procedure          :: img2ft
     procedure          :: cure_outliers
     procedure          :: zero_below
-    ! procedure          :: build_ellipse
     procedure          :: ellipse
     procedure          :: hist_stretching
     ! FFTs
@@ -4752,12 +4751,12 @@ contains
         class(image),   intent(inout) :: self
         real, optional, intent(in)    :: msk
         real, optional, intent(in)    :: sdev_noise
-        real,  allocatable :: rmat_pad(:,:)
+        real,  allocatable :: rmat_pad(:,:), rmat_threads(:,:,:,:)
         integer, parameter :: DIM_SW  = 3   ! good if use Euclidean distance
         integer, parameter :: CFR_BOX = 10  ! as suggested in the paper, use a box 21x21
         real    :: exponentials(-CFR_BOX:CFR_BOX,-CFR_BOX:CFR_BOX), sw_px(DIM_SW,DIM_SW)
         real    :: z, sigma, h, h_sq, avg, mmsk
-        integer :: i, j, m, n, pad
+        integer :: i, j, m, n, pad, ithr
         if( self%is_3d() ) THROW_HARD('2D images only; NLmean')
         if( self%ft )      THROW_HARD('Real space only;NLmean')
         mmsk = real(self%ldim(1)) / 2. - real(DIM_SW)
@@ -4775,12 +4774,14 @@ contains
         h     = 4.*sigma
         h_sq  = h**2.
         avg   = sum(self%rmat(:self%ldim(1),:self%ldim(2),1)) / real(product(self%ldim))
+        allocate(rmat_threads(nthr_glob,self%ldim(1),self%ldim(2),1), source=0.)
         allocate(rmat_pad(-pad:self%ldim(1)+pad,-pad:self%ldim(2)+pad), source=avg)
         rmat_pad(1:self%ldim(1),1:self%ldim(2)) = self%rmat(1:self%ldim(1),1:self%ldim(2),1)
-        ! KEEP THIS SERIAL AS IT IS NOT TRIVIAL TO PARALLELISE DUE TO THE INDEX MODIFICATIONS
-        ! AND IT IS GOING TO BE USED IN PREPIMG4ALIGN (STRATEGY2D3D_COMMON) UNDER PARALLEL LOOP
+        !$omp parallel do schedule(static) default(shared) private(m,n,ithr,sw_px,exponentials,i,j,z)&
+        !$omp proc_bind(close) firstprivate(rmat_pad) collapse(2)
         do m = 1,self%ldim(1)
             do n = 1,self%ldim(2)
+                ithr  = omp_get_thread_num() + 1
                 sw_px = rmat_pad(m:m+DIM_SW-1,n:n+DIM_SW-1)
                 exponentials = 0.
                 do i = -CFR_BOX,CFR_BOX
@@ -4791,9 +4792,11 @@ contains
                 enddo
                 z = sum(exponentials)
                 if( z < 0.0000001 ) cycle
-                self%rmat(m,n,1) = sum(exponentials * rmat_pad(m-CFR_BOX:m+CFR_BOX,n-CFR_BOX:n+CFR_BOX)) / z
+                rmat_threads(ithr,m,n,1) = sum(exponentials * rmat_pad(m-CFR_BOX:m+CFR_BOX,n-CFR_BOX:n+CFR_BOX)) / z
             enddo
         enddo
+        !$omp end parallel do
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = sum(rmat_threads, dim=1)
     end subroutine NLmean
 
     !>  \brief Non-local mean filter
@@ -4832,7 +4835,6 @@ contains
         do m = 1, self%ldim(1)
             do n = 1, self%ldim(2)
                 do o = 1, self%ldim(3)
-                    ! get thread index
                     ithr  = omp_get_thread_num() + 1
                     sw_px = rmat_pad(m:m+DIM_SW-1,n:n+DIM_SW-1,o:o+DIM_SW-1)
                     exponentials = 0.
@@ -8535,8 +8537,7 @@ contains
     !>  \brief ellipse constructs an ellipse of given axes.
     !    optional parameter 'hole' (yes|no) allows the user to choose
     !    between the full ellipse or just its borders. Default: full.
-    !    It is faster then build_ellipse, but this latter has the option
-    !    of rotating the ellipse. The ellipse is built 'on top' of the image,
+    !    It has the optiono f rotating the ellipse. The ellipse is built 'on top' of the image,
     !    it doesn't cancel what is already present
     subroutine ellipse(self, center, axes, hole)
         class(image),               intent(inout) :: self
@@ -8565,7 +8566,7 @@ contains
                   do j = 1, self%ldim(2)
                       if((real(i)-real(center(1)))**2/(axes(1)-1)**2 + (real(j)-real(center(2)))**2/(axes(2)-1)**2 - 1 < TINY) then
                           if( maxval(self%rmat(:,:,:)) - minval(self%rmat(:,:,:)) > TINY) then
-                              self%rmat(i,j,1) = rmat_t(i,j,1)!minval(self%rmat(:,:,:))
+                              self%rmat(i,j,1) = rmat_t(i,j,1) !minval(self%rmat(:,:,:))
                           else
                               self%rmat(i,j,1) = rmat_t(i,j,1)
                           endif
@@ -8577,37 +8578,6 @@ contains
             endif
           endif
     end subroutine ellipse
-
-
-    ! ! build_ellipse construts an ellipse centered in center
-    ! ! with axes length equal to axes and ROTATION angle rot.
-    ! ! This supposes self has already been created.
-    ! subroutine build_ellipse(self, center, axes, rot)
-    !     class(image), intent(inout) :: self
-    !     real,         intent(in)    :: center(2), axes(2), rot
-    !     real, allocatable :: theta(:)
-    !     integer           :: i, j, k
-    !     if(rot < 0. .or. rot > 360. ) THROW_HARD("please insert an angle in the range [0,360]")
-    !     if(self%ldim(3) /= 1) THROW_HARD("the image has to be 2D!")
-    !     theta = (/ (deg2rad(real(i)),i=1,360,2) /)
-    !     do k = 1,size(theta)
-    !         do i = 1, self%ldim(1)
-    !             do j = 1,self%ldim(2)
-    !                 if(abs(real(i) - center(1) - axes(1)*cos(theta(k))*cos(deg2rad(rot))&
-    !                                          & + axes(2)*sin(theta(k))*sin(deg2rad(rot)))<1 .and. &
-    !                 &  abs(real(j) - center(1) - axes(1)*cos(theta(k))*sin(deg2rad(rot))&
-    !                                          & - axes(2)*sin(theta(k))*cos(deg2rad(rot)))<1) then
-    !                     call self%set([i,j,1], 1.)
-    !                     call self%set([i+1,j+1,1], 0.)
-    !                     call self%set([i-1,j-1,1], 0.)
-    !                     call self%set([i+2,j+2,1], 0.)
-    !                     call self%set([i-2,j-2,1], 0.)
-    !                 end if
-    !             enddo
-    !         enddo
-    !     enddo
-    !     deallocate(theta)
-    ! end subroutine build_ellipse
 
     !This function performs standardization by selective histogram stretching.
     !It consists of stretching only a selected part of the histogram that contains

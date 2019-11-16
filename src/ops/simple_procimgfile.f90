@@ -875,11 +875,14 @@ contains
     end subroutine tvfilter_imgfile
 
     !>  \brief  is for apply the non-local mean filter to an image file
-    subroutine nlmean_imgfile( fname2process, fname, smpd )
+    subroutine nlmean_imgfile( fname2process, fname, smpd, noise_sdev )
         character(len=*), intent(in) :: fname2process, fname
         real,             intent(in) :: smpd
+        real, optional,   intent(in) :: noise_sdev
         type(image)    :: img
         integer        :: n, i, ldim(3)
+        logical        :: noise_sdev_present
+        noise_sdev_present = present(noise_sdev)
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'nlmean_imgfile' )
@@ -888,7 +891,11 @@ contains
         do i=1,n
             call progress(i,n)
             call img%read(fname2process, i)
-            call img%nlmean
+            if( noise_sdev_present )then
+                call img%nlmean(sdev_noise=noise_sdev)
+            else
+                call img%nlmean
+            endif
             call img%write(fname, i)
         end do
         call img%kill

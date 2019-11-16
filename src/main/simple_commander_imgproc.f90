@@ -343,7 +343,11 @@ contains
                             call tvfilter_imgfile(params%stk, params%outstk, params%smpd, params%lambda)
                         endif
                     case('nlmean')
-                        call nlmean_imgfile(params%stk, params%outstk, params%smpd)
+                        if( cline%defined('sigma') )then
+                            call nlmean_imgfile(params%stk, params%outstk, params%smpd, params%sigma)
+                        else
+                            call nlmean_imgfile(params%stk, params%outstk, params%smpd)
+                        endif
                     case('corr')
                         if( .not. cline%defined('lp') ) THROW_HARD('correlation filter requires lp (low-pass limit) input; exec_filter')
                         sigma = SIGMA_DEFAULT

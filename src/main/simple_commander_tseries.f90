@@ -206,9 +206,6 @@ contains
         if( l_frames_input )then
           call spproj%read(params%projfile)
           nframes = spproj%get_nframes()
-
-          print *, 'nframes: ', nframes
-
           allocate(framenames(nframes))
           iframe = 0
           do i = 1,spproj%os_mic%get_noris()
@@ -217,13 +214,7 @@ contains
                   framenames(iframe) = trim(spproj%os_mic%get_static(i,'frame'))
               endif
           enddo
-
-          print *, 'done, extracting framenames'
-
           call init_tseries_averager(framenames)
-
-          print *, 'done, init_tseries_averager'
-
         endif
         call tseries_average
         call kill_tseries_averager
