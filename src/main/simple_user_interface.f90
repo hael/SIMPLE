@@ -3778,15 +3778,15 @@ contains
         call tseries_gen_ini_avg%set_input('srch_ctrls', 1, trs)
         tseries_gen_ini_avg%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{10}'
         tseries_gen_ini_avg%srch_ctrls(1)%rval_default      = 10.
-        call tseries_gen_ini_avg%set_input('srch_ctrls', 2, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{10}', .false., 10.)
+        call tseries_gen_ini_avg%set_input('srch_ctrls', 2, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
         call tseries_gen_ini_avg%set_input('srch_ctrls', 3, mcpatch)
         call tseries_gen_ini_avg%set_input('srch_ctrls', 4, nxpatch)
         call tseries_gen_ini_avg%set_input('srch_ctrls', 5, nypatch)
         ! filter controls
         call tseries_gen_ini_avg%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment (in Angstroms){6}', 'in Angstroms{6}', .false., 6.)
+        &iterations of movie alignment (in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
         call tseries_gen_ini_avg%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
-        &iterations of movie alignment (in Angstroms){2}', 'in Angstroms{2}', .false., 2.)
+        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{2}', .false., 5.)
         call tseries_gen_ini_avg%set_input('filt_ctrls', 3, wcrit)
         ! mask controls
         ! <empty>

@@ -241,16 +241,16 @@ contains
         type(ctfparams)           :: ctfvars
         type(ori)                 :: o
         integer :: i, nframes, nframesgrp, frame_counter
-        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',   5.)
+        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp', 7.)
         nframesgrp = nint(cline%get_rarg('nframesgrp'))
-        if( .not. cline%defined('fbody')      ) call cline%set('fbody', 'avg_first'//int2str(nframesgrp)//'frames')
+        call cline%set('mcpatch', 'no')
         if( .not. cline%defined('trs')        ) call cline%set('trs',           10.)
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',        8.)
-        if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',         4.)
+        if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',         5.)
         if( .not. cline%defined('bfac')       ) call cline%set('bfac',          50.)
         if( .not. cline%defined('nsig')       ) call cline%set('nsig',           6.)
         if( .not. cline%defined('groupframes')) call cline%set('groupframes',  'no')
-        if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',        'no')
+        if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',   'softmax')
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',       'yes')
         call params%new(cline)
         call spproj%read(params%projfile)
@@ -280,12 +280,12 @@ contains
         call cline_mcorr%set('prg', 'motion_correct')
         call cline_mcorr%set('mkdir', 'no')
         call o%new
-
-        call cline_mcorr%printline
-
         ctfvars%smpd  = params%smpd
         frame_counter = 0
-        call mciter%iterate(cline_mcorr, ctfvars, o, trim(params%fbody), frame_counter, 'frames2align.mrc', './')
+        ! motion corr
+        call mciter%iterate(cline_mcorr, ctfvars, o, '', frame_counter, 'frames2align.mrc', './')
+
+        
         call simple_end('**** SIMPLE_GEN_INI_TSERIES_AVG NORMAL STOP ****')
     end subroutine exec_tseries_gen_ini_avg
 
