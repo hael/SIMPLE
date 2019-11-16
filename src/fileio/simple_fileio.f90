@@ -715,8 +715,8 @@ contains
 
     !>  \brief  writes a filetable array to a text file
     subroutine write_filetable( filetable, filenames )
-        character(len=*),          intent(in)  :: filetable  !< output table filename
-        character(len=LONGSTRLEN), intent(in)  :: filenames(:)!< array of filenames
+        character(len=*),          intent(in)  :: filetable    !< output table filename
+        character(len=LONGSTRLEN), intent(in)  :: filenames(:) !< array of filenames
         integer :: nl, funit, iline, io_stat
         nl = size(filenames)
         call fopen(funit,filetable, 'replace', 'unknown', io_stat)

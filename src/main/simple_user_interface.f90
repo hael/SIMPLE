@@ -153,6 +153,7 @@ type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
 type(simple_program), target :: tseries_average
+type(simple_program), target :: tseries_gen_ini_avg
 type(simple_program), target :: tseries_import
 type(simple_program), target :: tseries_import_particles
 type(simple_program), target :: tseries_ctf_estimate
@@ -353,6 +354,7 @@ contains
         call new_symmetrize_map
         call new_symmetry_test
         call new_tseries_average
+        call new_tseries_gen_ini_avg
         call new_tseries_import
         call new_tseries_import_particles
         call new_tseries_ctf_estimate
@@ -445,6 +447,7 @@ contains
         call push2prg_ptr_array(symmetrize_map)
         call push2prg_ptr_array(symmetry_test)
         call push2prg_ptr_array(tseries_average)
+        call push2prg_ptr_array(tseries_gen_ini_avg)
         call push2prg_ptr_array(tseries_import)
         call push2prg_ptr_array(tseries_import_particles)
         call push2prg_ptr_array(tseries_ctf_estimate)
@@ -630,6 +633,8 @@ contains
                 ptr2prg => symmetry_test
             case('tseries_average')
                 ptr2prg => tseries_average
+            case('tseries_gen_ini_avg')
+                ptr2prg => tseries_gen_ini_avg
             case('tseries_import')
                 ptr2prg => tseries_import
             case('tseries_import_particles')
@@ -737,6 +742,7 @@ contains
         write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
         write(logfhandle,'(A)') tseries_average%name
+        write(logfhandle,'(A)') tseries_gen_ini_avg%name
         write(logfhandle,'(A)') tseries_import%name
         write(logfhandle,'(A)') tseries_import_particles%name
         write(logfhandle,'(A)') tseries_ctf_estimate%name
@@ -3751,6 +3757,42 @@ contains
         ! computer controls
         call tseries_average%set_input('comp_ctrls', 1, nthr)
     end subroutine new_tseries_average
+
+    subroutine new_tseries_gen_ini_avg
+        ! PROGRAM SPECIFICATION
+        call tseries_gen_ini_avg%new(&
+        &'tseries_gen_ini_avg',&                                                         ! name
+        &'Align & average the first few frames of the time-series',&                     ! descr_short
+        &'is a program for aligning & averaging the first few frames of the time-series&
+        & to accomplish SNR enhancement for particle identification',&                   ! descr_long
+        &'simple_exec',&                                                                 ! executable
+        &0, 1, 0, 5, 3, 0, 1, .true.)                                                    ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call tseries_gen_ini_avg%set_input('parm_ios', 1, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{5}', '{5}', .false., 5.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call tseries_gen_ini_avg%set_input('srch_ctrls', 1, trs)
+        tseries_gen_ini_avg%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{10}'
+        tseries_gen_ini_avg%srch_ctrls(1)%rval_default      = 10.
+        call tseries_gen_ini_avg%set_input('srch_ctrls', 2, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{10}', .false., 10.)
+        call tseries_gen_ini_avg%set_input('srch_ctrls', 3, mcpatch)
+        call tseries_gen_ini_avg%set_input('srch_ctrls', 4, nxpatch)
+        call tseries_gen_ini_avg%set_input('srch_ctrls', 5, nypatch)
+        ! filter controls
+        call tseries_gen_ini_avg%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
+        &iterations of movie alignment (in Angstroms){6}', 'in Angstroms{6}', .false., 6.)
+        call tseries_gen_ini_avg%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
+        &iterations of movie alignment (in Angstroms){2}', 'in Angstroms{2}', .false., 2.)
+        call tseries_gen_ini_avg%set_input('filt_ctrls', 3, wcrit)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call tseries_gen_ini_avg%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_tseries_gen_ini_avg
 
     subroutine new_tseries_import
         ! PROGRAM SPECIFICATION

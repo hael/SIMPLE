@@ -173,7 +173,7 @@ contains
         call motion_correct_kill_common
         call close_starfile
         ! deallocate
-        if( allocated(shifts) )       deallocate(shifts)
+        if( allocated(shifts) ) deallocate(shifts)
     end subroutine iterate
 
     function get_moviename( self, which ) result( moviename )

@@ -747,23 +747,19 @@ contains
         class(cmdline),         intent(inout)  :: cline
         character(len=LONGSTRLEN), allocatable :: filenames(:)
         type(parameters) :: params
-        type(builder)    :: build
         integer          :: nfiles, ldim(3), ifile, ifoo, cnt
         integer          :: lfoo(3), nimgs, iimg
-        type(image)      :: tmp
+        type(image)      :: img, tmp
         real             :: mm(2)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        if( cline%defined('lp') )then
-            if( .not. cline%defined('smpd') ) THROW_HARD('smpd (sampling distance) needs to be defined if lp is')
-        endif
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        call params%new(cline)
         call read_filetable(params%filetab, filenames)
         nfiles = size(filenames)
         call find_ldim_nptcls(filenames(1),ldim,ifoo)
         ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
         params%box = ldim(1)
-        ! prepare build%img and tmp for reading
-        call build%img%new([params%box,params%box,1], params%smpd)
+        ! prepare img and tmp for reading
+        call img%new(ldim, params%smpd)
         if( cline%defined('clip') ) call tmp%new([params%clip,params%clip,1], params%smpd)
         ! loop over files
         cnt = 0
@@ -774,14 +770,14 @@ contains
             call find_ldim_nptcls(filenames(ifile),lfoo,nimgs)
             do iimg=1,nimgs
                 cnt = cnt+1
-                call build%img%read(filenames(ifile), iimg, readhead=.false.)
+                call img%read(filenames(ifile), iimg, readhead=.false.)
                 if( cline%defined('clip') )then
-                    call build%img%clip(tmp)
+                    call img%clip(tmp)
                     mm = tmp%minmax()
                     DebugPrint 'min/max: ', mm(1), mm(2)
                     call tmp%write(params%outstk, cnt)
                 else
-                    call build%img%write(params%outstk, cnt)
+                    call img%write(params%outstk, cnt)
                 endif
             end do
             call progress(ifile, nfiles)

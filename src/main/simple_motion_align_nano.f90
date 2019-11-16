@@ -15,25 +15,25 @@ integer, parameter :: NRESUPDATES   = 2
 
 type :: motion_align_nano
     private
-    type(image),           pointer :: frames_orig(:)                    !< pointer to stack of frames
-    type(image),       allocatable :: frames(:)                         !< cropped frames
-    type(image),       allocatable :: frames_sh(:)                      !< shifted cropped frames
-    type(image)                    :: reference                         !< reference image
-    real,              allocatable :: weights(:,:)                      !< weight matrix (b-factor*band-pass)
-    real,              allocatable :: opt_shifts(:,:)                   !< shifts identified
-    real,              allocatable :: frameweights(:)                   !< array of frameweights
-    real,              allocatable :: corrs(:)                          !< per-frame correlations
-    real                           :: hp=-1.,      lp=-1.               !< high/low pass value
-    real                           :: bfactor = -1.                     !< b-factor for alignment weights
-    real                           :: resstep        = 0.               !< resolution step
-    real                           :: corr           = -1.              !< correlation
-    real                           :: smpd = 0.                         !< sampling distance
-    real                           :: trs            = 10.              !< half correlation discrete search bound
-    integer                        :: ldim(3) = 0                      !< frame dimensions
-    integer                        :: maxits_dcorr   = MAXITS_DCORR     !< maximum number of iterations for discrete search
-    integer                        :: nframes        = 0                !< number of frames
-    logical                        :: l_bfac           = .false.        !< whether to use b-factor weights
-    logical                        :: existence        = .false.
+    type(image), pointer     :: frames_orig(:)              !< pointer to stack of frames
+    type(image), allocatable :: frames(:)                   !< cropped frames
+    type(image), allocatable :: frames_sh(:)                !< shifted cropped frames
+    type(image)              :: reference                   !< reference image
+    real,        allocatable :: weights(:,:)                !< weight matrix (b-factor*band-pass)
+    real,        allocatable :: opt_shifts(:,:)             !< shifts identified
+    real,        allocatable :: frameweights(:)             !< array of frameweights
+    real,        allocatable :: corrs(:)                    !< per-frame correlations
+    real                     :: hp=-1., lp=-1.              !< high/low pass value
+    real                     :: bfactor      = -1.          !< b-factor for alignment weights
+    real                     :: resstep      = 0.           !< resolution step
+    real                     :: corr         = -1.          !< correlation
+    real                     :: smpd         = 0.           !< sampling distance
+    real                     :: trs          = 10.          !< half correlation discrete search bound
+    integer                  :: ldim(3)      = 0            !< frame dimensions
+    integer                  :: maxits_dcorr = MAXITS_DCORR !< maximum number of iterations for discrete search
+    integer                  :: nframes      = 0            !< number of frames
+    logical                  :: l_bfac       = .false.      !< whether to use b-factor weights
+    logical                  :: existence    = .false.
 
 contains
     ! Constructor
@@ -75,19 +75,19 @@ contains
             THROW_HARD('nframes < 2; simple_motion_align_nano: align')
         end if
         self%frames_orig => frames_ptr
-        self%smpd    = self%frames_orig(1)%get_smpd()
-        self%ldim    = self%frames_orig(1)%get_ldim()
-        self%hp      = min((real(minval(self%ldim(1:2))) * self%smpd)/4.,2000.)
-        self%hp      = min(params_glob%hp, self%hp)
-        self%lp      = params_glob%lp
+        self%smpd        =  self%frames_orig(1)%get_smpd()
+        self%ldim        =  self%frames_orig(1)%get_ldim()
+        self%hp          =  min((real(minval(self%ldim(1:2))) * self%smpd)/4.,2000.)
+        self%hp          =  min(params_glob%hp, self%hp)
+        self%lp          =  params_glob%lp
         allocate(self%frames_sh(self%nframes),self%frames(self%nframes),&
                 &self%opt_shifts(self%nframes,2),&
                 &self%corrs(self%nframes), self%frameweights(self%nframes), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('new; simple_motion_align_nano')
         self%opt_shifts       = 0.
-        self%corrs            = -1.
-        self%frameweights     = 1./real(self%nframes)
-        self%l_bfac           = .false.
+        self%corrs        = -1.
+        self%frameweights = 1./real(self%nframes)
+        self%l_bfac       = .false.
         self%existence        = .true.
     end subroutine new
 

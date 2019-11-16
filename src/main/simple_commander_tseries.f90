@@ -14,6 +14,7 @@ implicit none
 
 public :: tseries_import_commander
 public :: tseries_import_particles_commander
+public :: tseries_gen_ini_avg_commander
 public :: tseries_average_commander
 public :: tseries_track_commander_distr
 public :: tseries_track_commander
@@ -29,7 +30,6 @@ public :: atom_cluster_analysis_commander
 public :: nano_softmask_commander
 private
 #include "simple_local_flags.inc"
-
 type, extends(commander_base) :: tseries_import_commander
   contains
     procedure :: execute      => exec_tseries_import
@@ -42,6 +42,10 @@ type, extends(commander_base) :: tseries_average_commander
   contains
     procedure :: execute      => exec_tseries_average
 end type tseries_average_commander
+type, extends(commander_base) :: tseries_gen_ini_avg_commander
+  contains
+    procedure :: execute      => exec_tseries_gen_ini_avg
+end type tseries_gen_ini_avg_commander
 type, extends(commander_base) :: tseries_track_commander_distr
   contains
     procedure :: execute      => exec_tseries_track_distr
@@ -220,6 +224,70 @@ contains
         call kill_tseries_averager
         call simple_end('**** SIMPLE_TSERIES_AVERAGE NORMAL STOP ****')
     end subroutine exec_tseries_average
+
+    subroutine exec_tseries_gen_ini_avg( self, cline )
+        use simple_commander_imgproc,   only: stack_commander
+        use simple_motion_correct_iter, only: motion_correct_iter
+        use simple_ori,                 only: ori
+        class(tseries_gen_ini_avg_commander), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        character(len=LONGSTRLEN), allocatable :: framenames(:)
+        character(len=:),          allocatable :: filetabname
+        type(sp_project)          :: spproj
+        type(parameters)          :: params
+        type(cmdline)             :: cline_stack, cline_mcorr
+        type(stack_commander)     :: xstack
+        type(motion_correct_iter) :: mciter
+        type(ctfparams)           :: ctfvars
+        type(ori)                 :: o
+        integer :: i, nframes, nframesgrp, frame_counter
+        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',   5.)
+        nframesgrp = nint(cline%get_rarg('nframesgrp'))
+        if( .not. cline%defined('fbody')      ) call cline%set('fbody', 'avg_first'//int2str(nframesgrp)//'frames')
+        if( .not. cline%defined('trs')        ) call cline%set('trs',           10.)
+        if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',        8.)
+        if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',         4.)
+        if( .not. cline%defined('bfac')       ) call cline%set('bfac',          50.)
+        if( .not. cline%defined('nsig')       ) call cline%set('nsig',           6.)
+        if( .not. cline%defined('groupframes')) call cline%set('groupframes',  'no')
+        if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',        'no')
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',       'yes')
+        call params%new(cline)
+        call spproj%read(params%projfile)
+        nframes  = spproj%get_nframes()
+        allocate(framenames(nframesgrp))
+        do i = 1,params%nframesgrp
+            if( spproj%os_mic%isthere(i,'frame') )then
+                framenames(i) = trim(spproj%os_mic%get_static(i,'frame'))
+                params%smpd   = spproj%os_mic%get(i,'smpd')
+            endif
+        enddo
+        call cline%set('smpd', params%smpd)
+        filetabname = 'filetab_first'//int2str(params%nframesgrp)//'frames.txt'
+        call write_filetable(filetabname, framenames)
+        ! prepare stack command
+        call cline_stack%set('mkdir',   'no')
+        call cline_stack%set('filetab', filetabname)
+        call cline_stack%set('outstk',  'frames2align.mrc')
+        call cline_stack%set('smpd',    params%smpd)
+        call cline_stack%set('nthr',    1.0)
+        ! execute stack commander
+        call xstack%execute(cline_stack)
+        ! prepare 4 motion_correct
+        cline_mcorr = cline
+        call cline_mcorr%delete('nframesgrp')
+        params%nframesgrp = 0
+        call cline_mcorr%set('prg', 'motion_correct')
+        call cline_mcorr%set('mkdir', 'no')
+        call o%new
+
+        call cline_mcorr%printline
+
+        ctfvars%smpd  = params%smpd
+        frame_counter = 0
+        call mciter%iterate(cline_mcorr, ctfvars, o, trim(params%fbody), frame_counter, 'frames2align.mrc', './')
+        call simple_end('**** SIMPLE_GEN_INI_TSERIES_AVG NORMAL STOP ****')
+    end subroutine exec_tseries_gen_ini_avg
 
     subroutine exec_tseries_track_distr( self, cline )
         use simple_nrtxtfile, only: nrtxtfile
