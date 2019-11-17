@@ -77,7 +77,8 @@ type(o_peaksstats_commander)          :: xo_peaksstats
 type(prune_project_commander)         :: xprune_project
 
 ! TIME-SERIES ANALYSIS PROGRAMS
-type(tseries_track_commander)         :: xtseries_track
+type(tseries_track_commander)          :: xtseries_track
+type(tseries_motion_correct_commander) :: xtseries_mcorr
 
 ! PARALLEL PROCESSING PROGRAMS
 type(split_commander)                 :: xsplit
@@ -199,6 +200,8 @@ select case(prg)
         call xprune_project%execute(cline)
 
     ! TIME-SERIES ANALYSIS PROGRAMS
+    case( 'tseries_motion_correct' )
+        call xtseries_mcorr%execute(cline)
     case( 'tseries_track' )
         call xtseries_track%execute(cline)
 

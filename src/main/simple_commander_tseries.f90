@@ -15,7 +15,7 @@ implicit none
 public :: tseries_import_commander
 public :: tseries_import_particles_commander
 public :: tseries_gen_ini_avg_commander
-public :: tseries_average_commander
+public :: tseries_motion_correct_commander
 public :: tseries_track_commander_distr
 public :: tseries_track_commander
 public :: center2D_nano_commander_distr
@@ -38,10 +38,10 @@ type, extends(commander_base) :: tseries_import_particles_commander
   contains
     procedure :: execute      => exec_tseries_import_particles
 end type tseries_import_particles_commander
-type, extends(commander_base) :: tseries_average_commander
+type, extends(commander_base) :: tseries_motion_correct_commander
   contains
-    procedure :: execute      => exec_tseries_average
-end type tseries_average_commander
+    procedure :: execute      => exec_tseries_motion_correct
+end type tseries_motion_correct_commander
 type, extends(commander_base) :: tseries_gen_ini_avg_commander
   contains
     procedure :: execute      => exec_tseries_gen_ini_avg
@@ -186,44 +186,85 @@ contains
         call simple_end('**** TSERIES_IMPORT_PARTICLES NORMAL STOP ****')
     end subroutine exec_tseries_import_particles
 
-    subroutine exec_tseries_average( self, cline )
-        use simple_tseries_averager
-        class(tseries_average_commander), intent(inout) :: self
+    subroutine exec_tseries_motion_correct( self, cline )
+        use simple_commander_imgproc,   only: stack_commander
+        use simple_motion_correct_iter, only: motion_correct_iter
+        use simple_ori,                 only: ori
+        class(tseries_motion_correct_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         character(len=LONGSTRLEN), allocatable :: framenames(:)
-        type(sp_project) :: spproj
-        type(parameters) :: params
-        integer          :: top, i, iframe, nframes
-        logical          :: l_frames_input
-        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',  10.)
-        if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',     'cen')
-        if( cline%defined('top') )then
-            l_frames_input = .true.
-            top = nint(cline%get_rarg('top'))
-            if( .not. cline%defined('outstk') ) call cline%set('outstk', 'avg_first'//int2str(top)//'frames.mrc')
-        else
-            l_frames_input = .false.
-            if( .not. cline%defined('outstk') ) call cline%set('outstk', 'time_window_wavgs.mrcs')
-        endif
-        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',  'yes')
+        character(len=:),          allocatable :: filetabname, frames2align
+        type(sp_project)          :: spproj
+        type(parameters)          :: params
+        type(cmdline)             :: cline_stack, cline_mcorr
+        type(stack_commander)     :: xstack
+        type(motion_correct_iter) :: mciter
+        type(ctfparams)           :: ctfvars
+        type(ori)                 :: o
+        integer :: i, nframes, frame_counter, ldim(3), iframe, fromto(2), nframesgrp
+        integer :: numlen_nframes
+        call cline%set('mkdir', 'no') ! shared-memory workflow, dir making in driver
+        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    5.)
+        if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
+        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',       3.)
+        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',       3.)
+        if( .not. cline%defined('trs')        ) call cline%set('trs',          10.)
+        if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',       5.)
+        if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',        3.)
+        if( .not. cline%defined('bfac')       ) call cline%set('bfac',          5.)
+        if( .not. cline%defined('nsig')       ) call cline%set('nsig',          6.)
+        if( .not. cline%defined('groupframes')) call cline%set('groupframes', 'no')
+        if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',  'softmax')
         call params%new(cline)
-        if( l_frames_input )then
-          call spproj%read(params%projfile)
-          nframes = spproj%get_nframes()
-          allocate(framenames(nframes))
-          iframe = 0
-          do i = 1,spproj%os_mic%get_noris()
-              if( spproj%os_mic%isthere(i,'frame') )then
-                  iframe = iframe + 1
-                  framenames(iframe) = trim(spproj%os_mic%get_static(i,'frame'))
-              endif
-          enddo
-          call init_tseries_averager(framenames)
-        endif
-        call tseries_average
-        call kill_tseries_averager
-        call simple_end('**** SIMPLE_TSERIES_AVERAGE NORMAL STOP ****')
-    end subroutine exec_tseries_average
+        call spproj%read(params%projfile)
+        nframes  = spproj%get_nframes()
+        numlen_nframes = len(int2str(nframes))
+        allocate(framenames(nframes))
+        do i = 1,nframes
+            if( spproj%os_mic%isthere(i,'frame') )then
+                framenames(i) = trim(spproj%os_mic%get_static(i,'frame'))
+                params%smpd   = spproj%os_mic%get(i,'smpd')
+            endif
+        enddo
+        call cline%set('smpd', params%smpd)
+        filetabname  = 'filetab_of_frames_part'//int2str_pad(params%part,params%numlen)//'.txt'
+        frames2align = 'frames2align_part'//int2str_pad(params%part,params%numlen)//'.mrc'
+        ! prepare stack command
+        call cline_stack%set('mkdir',   'no')
+        call cline_stack%set('filetab', filetabname)
+        call cline_stack%set('outstk',  frames2align)
+        call cline_stack%set('smpd',    params%smpd)
+        call cline_stack%set('nthr',    1.0)
+        ! prepare 4 motion_correct
+        cline_mcorr = cline
+        call cline_mcorr%delete('nframesgrp')
+        nframesgrp = params%nframesgrp
+        params%nframesgrp = 0
+        call cline_mcorr%set('prg', 'motion_correct')
+        call cline_mcorr%set('mkdir', 'no')
+        call o%new
+        ctfvars%smpd = params%smpd
+        do iframe=params%fromp,params%top
+            ! set time window
+            fromto(1) = iframe - nframesgrp/2
+            fromto(2) = iframe + nframesgrp/2 - 1
+            ! shift the window if it's outside the time-series
+            do while(fromto(1) < 1)
+                fromto = fromto + 1
+            end do
+            do while(fromto(2) > nframes)
+                fromto = fromto - 1
+            end do
+            ! make stack
+            call write_filetable(filetabname, framenames(fromto(1):fromto(2)))
+            call xstack%execute(cline_stack)
+            ! motion corr
+            frame_counter = 0
+            call mciter%iterate(cline_mcorr, ctfvars, o, 'tseries_win'//int2str_pad(iframe,numlen_nframes), frame_counter, frames2align, './')
+        end do
+        call o%kill
+        call simple_end('**** SIMPLE_TSERIES_MOTION_CORRECT NORMAL STOP ****')
+    end subroutine exec_tseries_motion_correct
 
     subroutine exec_tseries_gen_ini_avg( self, cline )
         use simple_commander_imgproc,   only: stack_commander
@@ -244,9 +285,8 @@ contains
         type(ori)                 :: o
         type(tvfilter)            :: tvfilt
         type(image)               :: img_intg
-        integer :: i, nframes, nframesgrp, frame_counter, ldim(3), ifoo
-        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp', 7.)
-        nframesgrp = nint(cline%get_rarg('nframesgrp'))
+        integer :: i, nframes, frame_counter, ldim(3), ifoo
+        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',     7.)
         if( .not. cline%defined('mpatch')     ) call cline%set('mcpatch',     'yes')
         if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',        3.)
         if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',        3.)
@@ -261,7 +301,7 @@ contains
         call params%new(cline)
         call spproj%read(params%projfile)
         nframes  = spproj%get_nframes()
-        allocate(framenames(nframesgrp))
+        allocate(framenames(params%nframesgrp))
         do i = 1,params%nframesgrp
             if( spproj%os_mic%isthere(i,'frame') )then
                 framenames(i) = trim(spproj%os_mic%get_static(i,'frame'))

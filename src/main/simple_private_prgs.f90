@@ -346,6 +346,7 @@ contains
         call cmd_dict%push('match_filt',    'matched filter on (yes|no){yes}')
         call cmd_dict%push('maxits',        'maximum # iterations')
         call cmd_dict%push('max_rad',       'particle longest  dim (in pixels)')
+        call cmd_dict%push('mcpatch',       'Whether to perform Patch-based motion correction(yes|no){no}')
         call cmd_dict%push('min_rad',       'particle shortest dim (in pixels)')
         call cmd_dict%push('minp',          'minimum cluster population')
         call cmd_dict%push('mirr',          'mirror(no|x|y){no}')
@@ -387,6 +388,8 @@ contains
         call cmd_dict%push('numlen',        'length of number string')
         call cmd_dict%push('numlen_tomo',   'length of number string tomo series index{3}')
         call cmd_dict%push('nvox',          '# voxels{0}')
+        call cmd_dict%push('nxpatch',       'Motion correction # of patches along x-axis{5}')
+        call cmd_dict%push('nypatch',       'Motion correction # of patches along y-axis{5}')
         call cmd_dict%push('objfun',        'objective function(cc|euclid){cc}')
         call cmd_dict%push('offset',        'pixels offset{10}')
         call cmd_dict%push('opt',           'optimiser (bfgs|simplex){bfgs}')
@@ -479,6 +482,7 @@ contains
         call cmd_dict%push('vollist',       'table (text file) of volume files(.txt)')
         call cmd_dict%push('voltab',        'table (text file) of volume files(.txt)')
         call cmd_dict%push('voltab2',       'table 2(text file) of volume files(.txt)')
+        call cmd_dict%push('wcrit',         'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|no){softmax}')
         call cmd_dict%push('which_iter',    'iteration nr')
         call cmd_dict%push('width',         'falloff of inner mask or filter(in pixels){10}')
         call cmd_dict%push('wiener',        'Wiener restoration mode(yes|no){no}')
@@ -703,7 +707,29 @@ contains
         call private_prgs(22)%push_req_key('projfile')
         call private_prgs(22)%push_req_key('nthr')
 
-        n_private_prgs = 22
+        ! TSERIES_MOTION_CORRECT
+        call private_prgs(23)%set_name('tseries_motion_correct')
+        ! required keys
+        call private_prgs(23)%push_req_key('nthr')
+        call private_prgs(23)%push_req_key('projfile')
+        call private_prgs(23)%push_req_key('fromp')
+        call private_prgs(23)%push_req_key('top')
+        call private_prgs(23)%push_req_key('part')
+        call private_prgs(23)%push_req_key('nparts')
+        ! optional keys
+        call private_prgs(23)%push_opt_key('nframesgrp')
+        call private_prgs(23)%push_opt_key('mcpatch')
+        call private_prgs(23)%push_opt_key('nxpatch')
+        call private_prgs(23)%push_opt_key('nypatch')
+        call private_prgs(23)%push_opt_key('trs')
+        call private_prgs(23)%push_opt_key('lpstart')
+        call private_prgs(23)%push_opt_key('lpstop')
+        call private_prgs(23)%push_opt_key('bfac')
+        call private_prgs(23)%push_opt_key('nsig')
+        call private_prgs(23)%push_opt_key('groupframes')
+        call private_prgs(23)%push_opt_key('wcrit')
+
+        n_private_prgs = 23
     end subroutine new_private_prgs
 
 end module simple_private_prgs
