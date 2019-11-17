@@ -8,6 +8,7 @@ use simple_oris,           only: oris
 use simple_parameters,     only: parameters
 use simple_sp_project,     only: sp_project
 use simple_image,          only : image
+use simple_qsys_env,       only: qsys_env
 use simple_nanoparticles_mod
 use simple_qsys_funs
 implicit none
@@ -15,6 +16,7 @@ implicit none
 public :: tseries_import_commander
 public :: tseries_import_particles_commander
 public :: tseries_gen_ini_avg_commander
+public :: tseries_motion_correct_commander_distr
 public :: tseries_motion_correct_commander
 public :: tseries_track_commander_distr
 public :: tseries_track_commander
@@ -38,6 +40,10 @@ type, extends(commander_base) :: tseries_import_particles_commander
   contains
     procedure :: execute      => exec_tseries_import_particles
 end type tseries_import_particles_commander
+type, extends(commander_base) :: tseries_motion_correct_commander_distr
+  contains
+    procedure :: execute      => exec_tseries_motion_correct_distr
+end type tseries_motion_correct_commander_distr
 type, extends(commander_base) :: tseries_motion_correct_commander
   contains
     procedure :: execute      => exec_tseries_motion_correct
@@ -186,12 +192,56 @@ contains
         call simple_end('**** TSERIES_IMPORT_PARTICLES NORMAL STOP ****')
     end subroutine exec_tseries_import_particles
 
+    subroutine exec_tseries_motion_correct_distr( self, cline )
+        class(tseries_motion_correct_commander_distr), intent(inout) :: self
+        class(cmdline),                                intent(inout) :: cline
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        type(qsys_env)   :: qenv
+        type(chash)      :: job_descr
+        integer          :: nframes
+        call cline%set('oritype', 'mic')
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',      'yes')
+        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    5.)
+        if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
+        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',       3.)
+        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',       3.)
+        if( .not. cline%defined('trs')        ) call cline%set('trs',          10.)
+        if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',       5.)
+        if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',        3.)
+        if( .not. cline%defined('bfac')       ) call cline%set('bfac',          5.)
+        if( .not. cline%defined('nsig')       ) call cline%set('nsig',          6.)
+        if( .not. cline%defined('groupframes')) call cline%set('groupframes', 'no')
+        if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',  'softmax')
+        call params%new(cline)
+        call cline%set('numlen', real(params%numlen))
+        ! sanity check
+        call spproj%read_segment(params%oritype, params%projfile)
+        nframes = spproj%get_nframes()
+        if( nframes ==0 ) THROW_HARD('no movie frames to process! exec_tseries_motion_correct_distr')
+        call spproj%kill
+        ! setup the environment for distributed execution
+        call qenv%new(params%nparts)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
+        ! merge docs
+        call spproj%read(params%projfile)
+        call spproj%merge_algndocs(nframes, params%nparts, 'mic', ALGN_FBODY)
+        call spproj%kill
+        ! clean
+        call qsys_cleanup
+        ! end gracefully
+        call simple_end('**** SIMPLE_DISTR_TSERIES_MOTION_CORRECT NORMAL STOP ****')
+    end subroutine exec_tseries_motion_correct_distr
+
     subroutine exec_tseries_motion_correct( self, cline )
         use simple_commander_imgproc,   only: stack_commander
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_ori,                 only: ori
         class(tseries_motion_correct_commander), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
+        class(cmdline),                          intent(inout) :: cline
         character(len=LONGSTRLEN), allocatable :: framenames(:)
         character(len=:),          allocatable :: filetabname, frames2align
         type(sp_project)          :: spproj
@@ -260,7 +310,7 @@ contains
             call xstack%execute(cline_stack)
             ! motion corr
             frame_counter = 0
-            call mciter%iterate(cline_mcorr, ctfvars, o, 'tseries_win'//int2str_pad(iframe,numlen_nframes), frame_counter, frames2align, './')
+            call mciter%iterate(cline_mcorr, ctfvars, o, 'tseries_win'//int2str_pad(iframe,numlen_nframes), frame_counter, frames2align, './', tseries='yes')
         end do
         call o%kill
         call simple_end('**** SIMPLE_TSERIES_MOTION_CORRECT NORMAL STOP ****')
@@ -345,7 +395,6 @@ contains
 
     subroutine exec_tseries_track_distr( self, cline )
         use simple_nrtxtfile, only: nrtxtfile
-        use simple_qsys_env,  only: qsys_env
         class(tseries_track_commander_distr), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters)              :: params

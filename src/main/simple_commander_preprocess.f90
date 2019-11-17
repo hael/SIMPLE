@@ -677,10 +677,10 @@ contains
     subroutine exec_motion_correct_distr( self, cline )
         class(motion_correct_commander_distr), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
-        type(parameters)              :: params
-        type(sp_project)              :: spproj
-        type(qsys_env)                :: qenv
-        type(chash)                   :: job_descr
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        type(qsys_env)   :: qenv
+        type(chash)      :: job_descr
         if( .not. cline%defined('trs')        ) call cline%set('trs',           10.)
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',        8.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',         5.)
@@ -690,13 +690,10 @@ contains
         if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',   'softmax')
         call cline%set('oritype', 'mic')
         call params%new(cline)
-        params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', real(params%numlen))
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
-        if( spproj%get_nmovies() ==0 )then
-            THROW_HARD('no movie to process! exec_motion_correct_distr')
-        endif
+        if( spproj%get_nmovies() ==0 ) THROW_HARD('no movies to process! exec_motion_correct_distr')
         call spproj%kill
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)

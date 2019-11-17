@@ -63,8 +63,8 @@ contains
             case('stream')
                 self%nparts = params_glob%ncunits
                 allocate(self%parts(params_glob%nptcls,2)) ! unused
-                self%parts(:,:) = 1              ! unused
-                partsz          = 1              ! unused
+                self%parts(:,:) = 1                        ! unused
+                partsz          = 1                        ! unused
             case DEFAULT
                 THROW_HARD('split_mode: '//trim(params_glob%split_mode)//' is unsupported; new')
         end select

@@ -33,7 +33,7 @@ end type motion_correct_iter
 
 contains
 
-    subroutine iterate( self, cline, ctfvars, orientation, fbody, frame_counter, moviename, dir_out, gainref_fname )
+    subroutine iterate( self, cline, ctfvars, orientation, fbody, frame_counter, moviename, dir_out, gainref_fname, tseries )
         class(motion_correct_iter), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(ctfparams),            intent(inout) :: ctfvars
@@ -41,13 +41,16 @@ contains
         integer,                    intent(inout) :: frame_counter
         character(len=*),           intent(in)    :: moviename, fbody, dir_out
         character(len=*), optional, intent(in)    :: gainref_fname
+        character(len=*), optional, intent(in)    :: tseries
         character(len=:), allocatable :: fbody_here, ext, star_fname
         real,             allocatable :: shifts(:,:)
         type(stats_struct)        :: shstats(2)
         character(len=LONGSTRLEN) :: rel_fname
         real    :: goodnessoffit(2), scale, var, bfac_here
         integer :: ldim(3), ldim_thumb(3), nframes
-        logical :: err, patch_success
+        logical :: err, patch_success, l_tseries
+        l_tseries = .false.
+        if( present(tseries) ) l_tseries = tseries.eq.'yes'
         ! check, increment counter & print
         if( .not. file_exists(moviename) )then
             write(logfhandle,*) 'inputted movie stack does not exist: ', trim(moviename)
@@ -55,7 +58,9 @@ contains
         ! make filenames
         fbody_here = basename(trim(moviename))
         ext        = fname2ext(trim(fbody_here))
-        if( fbody.ne.'' )then
+        if( l_tseries )then
+            fbody_here = trim(fbody)
+        else if( fbody.ne.'' )then
             fbody_here = trim(fbody)//'_'//get_fbody(trim(fbody_here), trim(ext))
         else
             fbody_here = get_fbody(trim(fbody_here), trim(ext))

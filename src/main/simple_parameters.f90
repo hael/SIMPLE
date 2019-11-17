@@ -1051,10 +1051,7 @@ contains
                 else
                     call bos%open(trim(self%projfile)) ! projfile opened here
                     ! nptcls
-                    if( .not. cline%defined('nptcls') )then
-                        call bos%open(trim(self%projfile))
-                        self%nptcls = bos%get_n_records(self%spproj_iseg)
-                    endif
+                    if( .not. cline%defined('nptcls') ) self%nptcls = bos%get_n_records(self%spproj_iseg)
                     ! smpd/box
                     call o%new
                     select case(self%spproj_iseg)
@@ -1063,17 +1060,15 @@ contains
                         case DEFAULT
                             call bos%read_first_segment_record(STK_SEG, o)
                     end select
-                    if( o%isthere('smpd') .and. .not. cline%defined('smpd') )then
-                        self%smpd = o%get('smpd')
-                    endif
+                    if( o%isthere('smpd') .and. .not. cline%defined('smpd') ) self%smpd = o%get('smpd')
                     call bos%read_first_segment_record(STK_SEG, o)
-                    if( o%isthere('box') .and. .not. cline%defined('box')   ) self%box = nint(o%get('box'))
+                    if( o%isthere('box')  .and. .not. cline%defined('box')  ) self%box  = nint(o%get('box'))
                     call o%kill
                 endif
             else
                 ! nothing to do for streaming, values set at runtime
             endif
-            if( .not.bos%is_opened() )call bos%open(trim(self%projfile)) ! projfile opened here
+            if( .not.bos%is_opened() ) call bos%open(trim(self%projfile)) ! projfile opened here
             ! CTF plan
             select case(trim(self%oritype))
                 case('ptcl2D', 'ptcl3D')
