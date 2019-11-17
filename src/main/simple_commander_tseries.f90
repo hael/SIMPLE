@@ -229,8 +229,10 @@ contains
         use simple_commander_imgproc,   only: stack_commander
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_ori,                 only: ori
+        use simple_tvfilter,            only: tvfilter
         class(tseries_gen_ini_avg_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
+        real, parameter :: LAM_TV = 1.5
         character(len=LONGSTRLEN), allocatable :: framenames(:)
         character(len=:),          allocatable :: filetabname
         type(sp_project)          :: spproj
@@ -240,14 +242,18 @@ contains
         type(motion_correct_iter) :: mciter
         type(ctfparams)           :: ctfvars
         type(ori)                 :: o
-        integer :: i, nframes, nframesgrp, frame_counter
+        type(tvfilter)            :: tvfilt
+        type(image)               :: img_intg
+        integer :: i, nframes, nframesgrp, frame_counter, ldim(3), ifoo
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp', 7.)
         nframesgrp = nint(cline%get_rarg('nframesgrp'))
-        call cline%set('mcpatch', 'no')
+        if( .not. cline%defined('mpatch')     ) call cline%set('mcpatch',     'yes')
+        if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',        3.)
+        if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',        3.)
         if( .not. cline%defined('trs')        ) call cline%set('trs',           10.)
-        if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',        8.)
-        if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',         5.)
-        if( .not. cline%defined('bfac')       ) call cline%set('bfac',          50.)
+        if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',        5.)
+        if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',         3.)
+        if( .not. cline%defined('bfac')       ) call cline%set('bfac',           5.)
         if( .not. cline%defined('nsig')       ) call cline%set('nsig',           6.)
         if( .not. cline%defined('groupframes')) call cline%set('groupframes',  'no')
         if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',   'softmax')
@@ -284,8 +290,16 @@ contains
         frame_counter = 0
         ! motion corr
         call mciter%iterate(cline_mcorr, ctfvars, o, '', frame_counter, 'frames2align.mrc', './')
-
-        
+        call o%kill
+        ! apply TV filter for de-noising
+        call find_ldim_nptcls('frames2align_intg.mrc',ldim,ifoo)
+        call img_intg%new(ldim, params%smpd)
+        call img_intg%read('frames2align_intg.mrc',1)
+        call tvfilt%new
+        call tvfilt%apply_filter(img_intg, LAM_TV)
+        call tvfilt%kill
+        call img_intg%write('frames2align_intg_denoised.mrc')
+        call img_intg%kill
         call simple_end('**** SIMPLE_GEN_INI_TSERIES_AVG NORMAL STOP ****')
     end subroutine exec_tseries_gen_ini_avg
 
@@ -762,7 +776,6 @@ contains
     subroutine exec_atoms_rmsd( self, cline )
         use simple_nanoparticles_mod
         use simple_commander_volops, only: dock_volpair_commander
-        use simple_image,            only: image
         use simple_ori,              only: ori
         use simple_atoms,            only: atoms
         class(atoms_rmsd_commander), intent(inout) :: self
