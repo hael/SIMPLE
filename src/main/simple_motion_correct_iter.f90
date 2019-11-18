@@ -164,8 +164,10 @@ contains
         call orientation%set('movie',  trim(rel_fname))
         call make_relativepath(CWD_GLOB,self%moviename_intg,rel_fname)
         call orientation%set('intg',   trim(rel_fname))
-        call make_relativepath(CWD_GLOB,self%moviename_forctf,rel_fname)
-        call orientation%set('forctf', trim(rel_fname))
+        if( .not. l_tseries )then
+            call make_relativepath(CWD_GLOB,self%moviename_forctf,rel_fname)
+            call orientation%set('forctf', trim(rel_fname))
+        endif
         call make_relativepath(CWD_GLOB,self%moviename_thumb,rel_fname)
         call orientation%set('thumb',  trim(rel_fname))
         call orientation%set('imgkind', 'mic')
