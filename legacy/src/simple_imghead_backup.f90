@@ -395,7 +395,7 @@ contains
                 self%iform = -22.
             else
                 stop 'undefined file type, setMinimal; simple_imghead'
-            endif 
+            endif
             self%irec = real(ldim(2), kind=4)+self%labrec ! Total number of records (including header records)
             ! in each image of a simple image or stacked image file
             self%sig = -1.         ! Standard deviation of data. A value of -1.0 or 0.0

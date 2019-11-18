@@ -546,7 +546,7 @@ contains
                 ! Refinment using lpstop low-pass limit
                 call volpft_srch_init(vol1, vol2, params%hp, params%lpstop)
                 call vol_srch_init(vol1, vol_out, params%hp, params%lpstop, params%trs)
-                do i=1,5
+                do i=1,10
                     ! rotate and shift vol to create reference for shift alignment
                     call vol2%ifft
                     vol_out = rotvol(vol2, orientation, cxyz(2:4))
@@ -777,10 +777,10 @@ contains
         class(radial_sym_test_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(symmetry_test_commander) :: symtstcmd
-        type(parameters)      :: params
-        character(len=STDLEN) :: fbody
-        character(len=3)      :: pgrp
-        type(nanoparticle)    :: nano
+        type(parameters)       :: params
+        character(len=STDLEN)  :: fname
+        character(len=3)       :: pgrp
+        type(nanoparticle) :: nano
         type(atoms) :: atom
         type(image) :: simulated_distrib
         real        :: cutoff
@@ -788,12 +788,13 @@ contains
         integer     :: i, ldim(3)
         real        :: radius
         character(len=100) :: fname_conv
-        character(len=100) :: output_dir
+        character(len=100) :: before_dir
         call params%new(cline)
-        call simple_getcwd(output_dir)
+        call simple_getcwd(before_dir)
         call nano%new(params%vols(1), params%smpd,params%element)
         !identifiy atomic positions
-        call nano%identify_atomic_pos()
+        fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
+        call nano%set_atomic_coords(trim(fname)//'_atom_centers.pdb')
         call nano%get_ldim(ldim)
         min_rad = params%min_rad
         max_rad = params%max_rad
@@ -806,11 +807,11 @@ contains
           radius = min_rad+real(i-1)*step
           if(radius <= max_rad) then
             ! Come back to root directory
-            call simple_chdir(trim(output_dir),errmsg="simple_commander_volops :: exec_radial_sym_test, simple_chdir; ")
-             fname_conv = 'coords_'//trim(int2str(nint(radius))//'A')
+            call simple_chdir(trim(before_dir),errmsg="simple_commander_volops :: exec_radial_sym_test, simple_chdir; ")
+            fname_conv = 'atomic_coords_'//trim(int2str(nint(radius))//'A')
             call nano%keep_atomic_pos_at_radius(radius, params%element, fname_conv)
             ! Generate distribution based on atomic position
-            call atom%new('coords_'//trim(int2str(nint(radius))//'A.pdb')) !TO MODIFY
+            call atom%new('atomic_coords_'//trim(int2str(nint(radius))//'A.pdb'))
             call atom%convolve(simulated_distrib, cutoff)
             call simulated_distrib%write('density_'//trim(int2str(nint(radius))//'A.mrc'))
             ! Prepare for calling exec_symmetry_test
@@ -821,6 +822,8 @@ contains
             call cline%set('center', 'no')
             call cline%set('msk', radius/params%smpd+5.) !+5 to be sure
             call symtstcmd%execute(cline)
+            call del_file('../'//'atomic_coords_'//trim(int2str(nint(radius))//'A.pdb'))
+            call del_file('../'//'density_'//trim(int2str(nint(radius))//'A.mrc'))
             call atom%kill
           endif
         enddo

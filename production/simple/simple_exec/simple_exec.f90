@@ -89,13 +89,14 @@ type(simulate_atoms_commander)       :: xsimulate_atoms
 ! TIME-SERIES (NANO-PARTICLE) PROGRAMS
 type(tseries_import_commander)           :: xtseries_import
 type(tseries_import_particles_commander) :: xtseries_import_particles
-type(tseries_make_pickavg_commander)     :: xtseries_make_pickavg
 type(tseries_ctf_estimate_commander)     :: xtseries_ctf_estimate
+type(tseries_make_pickavg_commander)     :: xtseries_make_pickavg
 type(detect_atoms_commander)             :: xdetect_atoms
 type(atoms_rmsd_commander)               :: xatoms_rmsd
 type(radial_dependent_stats_commander)   :: xradial_dependent_stats
 type(atom_cluster_analysis_commander)    :: xatom_cluster_analysis
 type(nano_softmask_commander)            :: xnano_softmask
+type(geometry_analysis_commander)        :: xgeometry_analysis
 
 ! SYSTEM INTERACTION PROGRAMS
 type(mkdir_commander) :: xmkdir
@@ -251,7 +252,9 @@ select case(prg)
         call xatom_cluster_analysis%execute(cline)
     case( 'nano_softmask' )
         call xnano_softmask%execute(cline)
-    case( 'atoms_rmsd' )
+    case('geometry_analysis')
+          call xgeometry_analysis%execute(cline)
+    case('atoms_rmsd')
         call xatoms_rmsd%execute(cline)
 
     ! SYSTEM INTERACTION PROGRAMS

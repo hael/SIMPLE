@@ -30,6 +30,7 @@ public :: atoms_rmsd_commander
 public :: radial_dependent_stats_commander
 public :: atom_cluster_analysis_commander
 public :: nano_softmask_commander
+public :: geometry_analysis_commander
 private
 #include "simple_local_flags.inc"
 type, extends(commander_base) :: tseries_import_commander
@@ -104,6 +105,10 @@ type, extends(commander_base) :: nano_softmask_commander
   contains
     procedure :: execute      => exec_nano_softmask
 end type nano_softmask_commander
+type, extends(commander_base) :: geometry_analysis_commander
+  contains
+    procedure :: execute      => exec_geometry_analysis
+end type geometry_analysis_commander
 
 contains
 
@@ -855,7 +860,11 @@ contains
         endif
         call nano%new(params%vols(1), params%smpd, params%element)
         ! execute
-        call nano%identify_atomic_pos()
+        if(cline%defined('thres')) then
+          call nano%identify_atomic_pos(nint(params%thres))
+        else
+          call nano%identify_atomic_pos()
+        endif
         ! kill
         call nano%kill
         ! end gracefully
@@ -863,17 +872,16 @@ contains
     end subroutine exec_detect_atoms
 
     subroutine exec_atoms_rmsd( self, cline )
-        use simple_nanoparticles_mod
         use simple_commander_volops, only: dock_volpair_commander
         use simple_ori,              only: ori
         use simple_atoms,            only: atoms
         class(atoms_rmsd_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline !< command line input
         type(dock_volpair_commander) :: xdock_volpair
-        character(len=STDLEN) :: fname1, fname2
-        type(parameters)      :: params
-        type(nanoparticle)    :: nano1, nano2
-        type(cmdline)         :: cline_dock
+        character(len=STDLEN)  :: fname1, fname2
+        type(parameters)       :: params
+        type(nanoparticle) :: nano1, nano2
+        type(cmdline)          :: cline_dock
         type(ori)   :: orientation
         type(oris)  :: ori2read
         type(atoms) :: atom_coord
@@ -954,9 +962,9 @@ contains
     subroutine exec_radial_dependent_stats( self, cline )
         class(radial_dependent_stats_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline !< command line input
-        character(len=STDLEN) :: fname
-        type(parameters)      :: params
-        type(nanoparticle)    :: nano
+        character(len=STDLEN)  :: fname
+        type(parameters)       :: params
+        type(nanoparticle) :: nano
         integer :: ldim(3), nptcls
         real    :: smpd
         real    :: min_rad, max_rad, step
@@ -1001,9 +1009,10 @@ contains
     subroutine exec_atom_cluster_analysis( self, cline )
         class(atom_cluster_analysis_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline !< command line input
-        character(len=STDLEN) :: fname
-        type(parameters)      :: params
-        type(nanoparticle)    :: nano
+        character(len=STDLEN)  :: fname
+        type(parameters)       :: params
+        type(nanoparticle)     :: nano
+        real, allocatable      :: max_intensity(:)
         real    :: smpd
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
@@ -1012,15 +1021,31 @@ contains
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_atom_cluster_analysis')
         endif
-        if( .not. cline%defined('biatomic') )then
-            THROW_HARD('ERROR! biatomic needs to be present; exec_atom_cluster_analysis')
+        if( .not. cline%defined('clustermode') )then
+            THROW_HARD('ERROR! clustermode needs to be present; exec_atom_cluster_analysis')
+        endif
+        if( .not. cline%defined('thres') )then
+            THROW_HARD('ERROR! thres needs to be present; exec_atom_cluster_analysis')
         endif
         call nano%new(params%vols(1), params%smpd)
         ! execute
         fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
         call nano%set_atomic_coords(trim(fname)//'_atom_centers.pdb')
         call nano%set_img(trim(fname)//'CC.mrc', 'img_cc')
-        call nano%cluster(params%biatomic)
+        select case(trim(params%clustermode))
+            case('ar')
+              call nano%cluster_ar(params%thres)
+            case('dist')
+              call nano%cluster_interdist(params%thres)
+            case('ang')
+              call nano%cluster_ang(params%thres)
+            case('maxint')
+              call nano%atom_intensity_stats(max_intensity)
+              call nano%cluster_atom_intensity(max_intensity)
+            case DEFAULT
+                write(logfhandle,*) 'clustermode: ', trim(params%clustermode)
+                THROW_HARD('unsupported clustermode; exec_atom_cluster_analysis')
+        end select
         ! kill
         call nano%kill
         ! end gracefully
@@ -1030,9 +1055,9 @@ contains
     subroutine exec_nano_softmask( self, cline )
         class(nano_softmask_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline !< command line input
-        character(len=STDLEN) :: fname
-        type(parameters)      :: params
-        type(nanoparticle)    :: nano
+        character(len=STDLEN)  :: fname
+        type(parameters)       :: params
+        type(nanoparticle) :: nano
         real  :: smpd
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
@@ -1057,4 +1082,39 @@ contains
         call simple_end('**** SIMPLE_NANO_SOFTMASK NORMAL STOP ****')
     end subroutine exec_nano_softmask
 
-end module simple_commander_tseries
+    subroutine exec_geometry_analysis( self, cline )
+        class(geometry_analysis_commander), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline !< command line input
+        character(len=STDLEN)  :: fname
+        type(parameters)       :: params
+        type(nanoparticle) :: nano
+        real    :: smpd
+        call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        if( .not. cline%defined('smpd') )then
+            THROW_HARD('ERROR! smpd needs to be present; exec_geometry_analysis')
+        endif
+        if( .not. cline%defined('vol1') )then
+            THROW_HARD('ERROR! vol1 needs to be present; exec_geometry_analysis')
+        endif
+        if( .not. cline%defined('pdbfile') )then
+            THROW_HARD('ERROR! pdbfile needs to be present; exec_geometry_analysis')
+        endif
+        if(cline%defined('element')) then
+            call nano%new(params%vols(1), params%smpd,params%element)
+        else
+            call nano%new(params%vols(1), params%smpd)
+        endif
+        ! fetch img_bin, img_cc and atomic positions
+        fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
+        call nano%set_img('../'//trim(fname)//'BIN.mrc','img_bin')
+        call nano%set_atomic_coords('../'//trim(fname)//'_atom_centers.pdb')
+        call nano%set_img('../'//trim(fname)//'CC.mrc', 'img_cc')
+        ! execute
+          call nano%geometry_analysis(trim(params%pdbfile))
+        ! kill
+        call nano%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_GEOMETRY_ANALYSIS NORMAL STOP ****')
+    end subroutine exec_geometry_analysis
+  end module simple_commander_tseries

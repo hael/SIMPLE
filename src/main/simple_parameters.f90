@@ -50,7 +50,6 @@ type :: parameters
     character(len=3)      :: graphene_filt='no'   !< filter out graphene bands in correcation search
     character(len=3)      :: griddev='no'         !< to test gridding correction
     character(len=3)      :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
-    character(len=3)      :: biatomic='no'        !< heterogeneous nanoparticle model (yes|no){no}
     character(len=3)      :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
@@ -171,6 +170,7 @@ type :: parameters
     character(len=4)      :: automsk='no'
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|no){sum}
+    character(len=STDLEN) :: clustermode = 'ar'   !< feature used for clustering (ar|dist|ang|maxint){ar}
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN) :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
@@ -508,6 +508,7 @@ contains
         call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
         call check_carg('classtats',      self%classtats)
+        call check_carg('clustermode',    self%clustermode)
         call check_carg('clustvalid',     self%clustvalid)
         call check_carg('compare',        self%compare)
         call check_carg('continue',       self%continue)
@@ -544,7 +545,6 @@ contains
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('griddev',        self%griddev)
-        call check_carg('biatomic',       self%biatomic)
         call check_carg('hfun',           self%hfun)
         call check_carg('hist',           self%hist)
         call check_carg('imgkind',        self%imgkind)

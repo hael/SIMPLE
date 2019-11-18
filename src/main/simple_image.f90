@@ -210,7 +210,6 @@ contains
     procedure          :: collage
     procedure          :: find_connected_comps
     procedure          :: size_connected_comps
-    procedure          :: prepare_connected_comps
     procedure          :: elim_cc
     procedure          :: order_cc
     procedure          :: polish_cc
@@ -3352,33 +3351,6 @@ contains
         enddo
     end function size_connected_comps
 
-    ! This function takes in input a connected component image and modifies
-    ! it in order to prepare the centering process.
-    ! Notation: cc = connected component.
-    subroutine prepare_connected_comps(self, discard, min_sz)
-        class(image),      intent(inout) :: self     !image which contains connected components
-        logical, optional, intent(out)   :: discard
-        integer, optional, intent(in)    :: min_sz
-        integer, allocatable :: sz(:), biggest_cc(:), biggest_val(:)
-        if(present(discard) .and. .not. present(min_sz))  THROW_HARD('Need min_sz;  prepare_connected_comps')
-        if(present(min_sz)  .and. .not. present(discard)) THROW_HARD('Need discard; prepare_connected_comps')
-        sz = self%size_connected_comps()
-        if(present(discard)) then
-            if( maxval(sz) < min_sz ) then
-                discard = .true.  !if the biggest cc is smaller than min_sz, discard image
-            else
-                discard = .false.
-            endif
-        endif
-        biggest_val = maxloc(sz)
-        where( abs(self%rmat-real(biggest_val(1))) > TINY )  !keep just the biggest cc
-            self%rmat = 0.
-        elsewhere
-            self%rmat = 1.   !self is now binary
-        endwhere
-        deallocate(sz,biggest_cc,biggest_val)
-    end subroutine prepare_connected_comps
-
     ! This subroutine takes in input a connected component (cc) image
     ! and sets to 0 the cc which has size (# pixels) smaller than min_sz = range(1)
     ! or bigger than max_sz = range(2).
@@ -5966,7 +5938,7 @@ contains
             nsz = 27
             return
         else
-            print *, 'i, j, k =  ', i, j, k
+            write(logfhandle, *) 'i, j, k =  ', i, j, k
             THROW_HARD('Case not covered!; calc3D_neigh_8')
         endif
     end subroutine calc3D_neigh_8

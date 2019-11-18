@@ -95,6 +95,7 @@ type(simple_program), target :: export_starproject
 type(simple_program), target :: extract
 type(simple_program), target :: filter
 type(simple_program), target :: fsc
+type(simple_program), target :: geometry_analysis
 type(simple_program), target :: gen_pspecs_and_thumbs
 type(simple_program), target :: import_boxes
 type(simple_program), target :: import_cavgs
@@ -169,6 +170,7 @@ type(simple_input_param) :: astigtol
 type(simple_input_param) :: bfac
 type(simple_input_param) :: box
 type(simple_input_param) :: clip
+type(simple_input_param) :: clustermode
 type(simple_input_param) :: cs
 type(simple_input_param) :: ctf
 type(simple_input_param) :: ctfpatch
@@ -187,7 +189,6 @@ type(simple_input_param) :: fraca
 type(simple_input_param) :: frcs
 type(simple_input_param) :: graphene_filt
 type(simple_input_param) :: groupframes
-type(simple_input_param) :: biatomic
 type(simple_input_param) :: hp
 type(simple_input_param) :: inner
 type(simple_input_param) :: job_memory_per_task
@@ -296,6 +297,7 @@ contains
         call new_export_starproject
         call new_filter
         call new_fsc
+        call new_geometry_analysis
         call new_gen_pspecs_and_thumbs
         call new_info_image
         call new_info_stktab
@@ -390,6 +392,7 @@ contains
         call push2prg_ptr_array(export_starproject)
         call push2prg_ptr_array(filter)
         call push2prg_ptr_array(fsc)
+        call push2prg_ptr_array(geometry_analysis)
         call push2prg_ptr_array(gen_pspecs_and_thumbs)
         call push2prg_ptr_array(info_image)
         call push2prg_ptr_array(info_stktab)
@@ -517,6 +520,8 @@ contains
                 ptr2prg => filter
             case('fsc')
                 ptr2prg => fsc
+            case('geometry_analysis')
+                ptr2prg => geometry_analysis
             case('gen_pspecs_and_thumbs')
                 ptr2prg => gen_pspecs_and_thumbs
             case('info_image')
@@ -667,6 +672,7 @@ contains
         write(logfhandle,'(A)') cluster3D_refine%name
         write(logfhandle,'(A)') ctf_estimate%name
         write(logfhandle,'(A)') extract%name
+        write(logfhandle,'(A)') geometry_analysis%name
         write(logfhandle,'(A)') gen_pspecs_and_thumbs%name
         write(logfhandle,'(A)') initial_3Dmodel%name
         write(logfhandle,'(A)') make_cavgs%name
@@ -826,6 +832,7 @@ contains
         call set_param(outstk,         'outstk',       'file',   'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
         call set_param(pcontrast,      'pcontrast',    'multi',  'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
         call set_param(clip,           'clip',         'num',    'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
+        call set_param(clustermode,    'clustermode',  'multi',  'Feature used for clustering', 'Feature used for clustering (ar|dist|ang|maxint){ar}', '(ar|dist|ang|maxint){ar}', .true., 'ar')
         call set_param(neg,            'neg',          'binary', 'Invert contrast','Invert contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(sherr,          'sherr',        'num',    'Shift error half-width', 'Uniform rotational origin shift error half-width(in pixels)', 'shift error in pixels', .false., 0.)
         call set_param(angerr,         'angerr',       'num',    'Rotation angle error half-width', 'Uniform rotation angle shift error half-width(in degrees)', 'rotation error in degrees', .false., 0.)
@@ -866,7 +873,6 @@ contains
         call set_param(max_rad, 'max_rad', 'num', 'Maximum radius in A', 'Maximum radius in A {12.}', '{12.}', .false., 100.)
         call set_param(min_rad, 'min_rad', 'num', 'Minimum radius in A', 'Minimum radius in A {5.} ', '{5.}',  .false., 10.)
         call set_param(stepsz, 'stepsz', 'num', ' Steps size in A', 'Step size in A {2.} ', '{2.}',  .false., 10.)
-        call set_param(biatomic, 'biatomic', 'binary', 'biatomic nanoparticle', 'Whether nanoparticle is composed by two elements or not (yes|no){no} ', '(yes|no){no}',  .true., 'no')
         call set_param(dock, 'dock', 'binary', 'Volumes have to be docked', 'Volumes have to be docked(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
@@ -926,18 +932,18 @@ contains
         & Clusters with respect to aspect ratio, distances distribution, angle between a fixed &
         & vector and the direction of the longest dim of each atom, atoms intensities.',& ! descr long
         &'simple_exec',&                                     ! executable
-        &1, 2, 0, 0, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        &1, 1, 0, 2, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call atom_cluster_analysis%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume', &
         & 'input volume e.g. vol.mrc', .true., '')
-        ! search controls
         ! parameter input/output
         call atom_cluster_analysis%set_input('parm_ios', 1, smpd)
-        call atom_cluster_analysis%set_input('parm_ios', 2, biatomic)
-        ! <empty>
         ! alternative inputs
         ! <empty>
+        ! search controls
+        call atom_cluster_analysis%set_input('srch_ctrls', 1, clustermode)
+        call atom_cluster_analysis%set_input('srch_ctrls', 2, 'thres', 'num', 'Threshold for cluster merging','Threshold for cluster merging', 'in unit of measure of the feature', .true., 1.)
         ! filter controls
         ! <empty>
         ! mask controls
@@ -1480,17 +1486,17 @@ contains
         &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-comp map',& ! descr long
         &'simple_exec',&                                        ! executable
-        &1, 1, 0, 0, 1, 0, 1, .false.)                          ! # entries in each group, requires sp_project
+        &1, 1, 0, 1, 1, 0, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
         & 'input volume e.g. vol.mrc', .true., '')
         ! parameter input/output
         call detect_atoms%set_input('parm_ios', 1, smpd)
-        ! search controls
-        ! <empty>
         ! alternative inputs
         ! <empty>
+        ! search controls
+        call detect_atoms%set_input('srch_ctrls', 1, 'thres', 'num', 'Threshold for outlier discarding based on contact score','Threshold for outlier discarding based on contact score', 'number', .false., 5.)
         ! filter controls
         call detect_atoms%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
@@ -1659,6 +1665,35 @@ contains
         ! computer controls
         call fsc%set_input('comp_ctrls', 1, nthr)
     end subroutine new_fsc
+
+    subroutine new_geometry_analysis
+        ! PROGRAM SPECIFICATION
+        call geometry_analysis%new(&
+        &'geometry_analysis', &                                      ! name
+        &'geometry_analysis in atomic-resolution nanoparticle map',& ! descr_short
+        &'is a program generating atom columns/planes for the analysis of an atomic-res nanoparticle 3D map',& ! descr long
+        &'simple_exec',&                                        ! executable
+        &4, 1, 0, 0, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call geometry_analysis%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
+        & 'input volume e.g. vol.mrc', .true., '')
+        call geometry_analysis%set_input('img_ios', 2, 'pdbfile', 'file', 'PDB', 'Input coordinates file in PDB format', 'Input coordinates file', .true., '')
+        call geometry_analysis%set_input('img_ios', 3, outvol)
+        call geometry_analysis%set_input('img_ios', 4, 'fname', 'file', 'Name of output file', 'Name of output file', 'xxx.txt file', .false., '')
+        ! parameter input/output
+        call geometry_analysis%set_input('parm_ios', 1, smpd)
+        ! search controls
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! filter controls
+        call geometry_analysis%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_geometry_analysis
 
     subroutine new_gen_pspecs_and_thumbs
         ! PROGRAM SPECIFICATION
