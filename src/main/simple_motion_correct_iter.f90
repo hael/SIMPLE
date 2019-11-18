@@ -115,7 +115,7 @@ contains
         else
             call motion_correct_iso_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
         endif
-        call write_iso2star(star_fname, self%moviename, gainref_fname)
+        if( .not. l_tseries ) call write_iso2star(star_fname, self%moviename, gainref_fname)
         ! destruct before anisotropic correction
         call motion_correct_iso_kill
         ! Patch based approach
@@ -125,7 +125,7 @@ contains
             patch_success = all(goodnessoffit < PATCH_FIT_THRESHOLD)
             if( patch_success )then
                 call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
-                call write_aniso2star
+                if( .not. l_tseries ) call write_aniso2star
             else
                 THROW_WARN('Polynomial fitting to patch-determined shifts was of insufficient quality')
                 THROW_WARN('Only isotropic/stage-drift correction will be used')
@@ -160,25 +160,33 @@ contains
         call self%img_jpg%write_jpg(self%moviename_thumb, norm=.true., quality=90)
         ! report to ori object
         call orientation%set('smpd',   ctfvars%smpd)
-        call make_relativepath(CWD_GLOB,self%moviename,rel_fname)
-        call orientation%set('movie',  trim(rel_fname))
-        call make_relativepath(CWD_GLOB,self%moviename_intg,rel_fname)
-        call orientation%set('intg',   trim(rel_fname))
         if( .not. l_tseries )then
+            call make_relativepath(CWD_GLOB,self%moviename,rel_fname)
+            call orientation%set('movie',  trim(rel_fname))
             call make_relativepath(CWD_GLOB,self%moviename_forctf,rel_fname)
             call orientation%set('forctf', trim(rel_fname))
+            call make_relativepath(CWD_GLOB,star_fname,rel_fname)
+            call orientation%set("mc_starfile",rel_fname)
         endif
+        call make_relativepath(CWD_GLOB,self%moviename_intg,rel_fname)
+        call orientation%set('intg',   trim(rel_fname))
+        ! if( .not. l_tseries )then
+        !     call make_relativepath(CWD_GLOB,self%moviename_forctf,rel_fname)
+        !     call orientation%set('forctf', trim(rel_fname))
+        ! endif
         call make_relativepath(CWD_GLOB,self%moviename_thumb,rel_fname)
         call orientation%set('thumb',  trim(rel_fname))
         call orientation%set('imgkind', 'mic')
-        call make_relativepath(CWD_GLOB,star_fname,rel_fname)
-        call orientation%set("mc_starfile",rel_fname)
+        ! if( .not. l_tseries )then
+        !     call make_relativepath(CWD_GLOB,star_fname,rel_fname)
+        !     call orientation%set("mc_starfile",rel_fname)
+        ! endif
         if( motion_correct_with_patched )then
             call make_relativepath(CWD_GLOB, patched_shift_fname, rel_fname)
             call orientation%set('mceps', rel_fname)
         endif
         call motion_correct_kill_common
-        call close_starfile
+        if( .not. l_tseries ) call close_starfile
         ! deallocate
         if( allocated(shifts) ) deallocate(shifts)
     end subroutine iterate
