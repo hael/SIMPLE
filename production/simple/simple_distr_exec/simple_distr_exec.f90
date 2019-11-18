@@ -47,10 +47,11 @@ type(cluster3D_commander)                   :: xcluster3D
 type(cluster3D_refine_commander)            :: xcluster3D_refine
 
 ! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
-type(tseries_track_commander_distr)         :: xtseries_track_distr
-type(center2D_nano_commander_distr)         :: xcenter2D_nano_distr
-type(cluster2D_nano_commander_distr)        :: xcluster2D_nano_distr
-type(refine3D_nano_commander_distr)         :: xrefine3D_nano_distr
+type(tseries_motion_correct_commander_distr) :: xtseries_mcorr_distr
+type(tseries_track_commander_distr)          :: xtseries_track_distr
+type(center2D_nano_commander_distr)          :: xcenter2D_nano_distr
+type(cluster2D_nano_commander_distr)         :: xcluster2D_nano_distr
+type(refine3D_nano_commander_distr)          :: xrefine3D_nano_distr
 
 ! MISCELLANEOUS WORKFLOWS
 type(scale_project_commander_distr)         :: xscale_project
@@ -131,6 +132,8 @@ select case(prg)
         call xcluster3D_refine%execute( cline )
 
     ! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
+    case( 'tseries_motion_correct' )
+        call xtseries_mcorr_distr%execute( cline )
     case( 'tseries_track' )
         call xtseries_track_distr%execute( cline )
     case( 'center2D_nano' )

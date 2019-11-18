@@ -89,8 +89,7 @@ type(simulate_atoms_commander)       :: xsimulate_atoms
 ! TIME-SERIES (NANO-PARTICLE) PROGRAMS
 type(tseries_import_commander)           :: xtseries_import
 type(tseries_import_particles_commander) :: xtseries_import_particles
-type(tseries_gen_ini_avg_commander)      :: xtseries_ini_avg
-
+type(tseries_make_pickavg_commander)     :: xtseries_make_pickavg
 type(tseries_ctf_estimate_commander)     :: xtseries_ctf_estimate
 type(detect_atoms_commander)             :: xdetect_atoms
 type(atoms_rmsd_commander)               :: xatoms_rmsd
@@ -160,8 +159,8 @@ select case(prg)
         call xsymsrch%execute( cline )
     case( 'symmetry_test' )
         call xsymtst%execute( cline )
-      case( 'radial_sym_test' )
-          call xradsymtst%execute( cline )
+    case( 'radial_sym_test' )
+        call xradsymtst%execute( cline )
     case( 'symmetrize_map' )
         call xsymmetrize_map%execute(cline)
     case( 'dock_volpair' )
@@ -240,21 +239,20 @@ select case(prg)
         call xtseries_import%execute(cline)
     case( 'tseries_import_particles' )
         call xtseries_import_particles%execute(cline)
-    case('tseries_gen_ini_avg')
-        call xtseries_ini_avg%execute(cline)
+    case( 'tseries_make_pickavg')
+        call xtseries_make_pickavg%execute(cline)
     case( 'tseries_ctf_estimate' )
         call xtseries_ctf_estimate%execute(cline)
-    case('detect_atoms')
+    case( 'detect_atoms' )
         call xdetect_atoms%execute(cline)
-    case('radial_dependent_stats')
+    case( 'radial_dependent_stats' )
         call xradial_dependent_stats%execute(cline)
-    case('atom_cluster_analysis')
+    case( 'atom_cluster_analysis' )
         call xatom_cluster_analysis%execute(cline)
-    case('nano_softmask')
+    case( 'nano_softmask' )
         call xnano_softmask%execute(cline)
-    case('atoms_rmsd')
+    case( 'atoms_rmsd' )
         call xatoms_rmsd%execute(cline)
-
 
     ! SYSTEM INTERACTION PROGRAMS
     case( 'mkdir' )

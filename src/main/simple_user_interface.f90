@@ -152,11 +152,11 @@ type(simple_program), target :: stackops
 type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
-type(simple_program), target :: tseries_average
-type(simple_program), target :: tseries_gen_ini_avg
 type(simple_program), target :: tseries_import
 type(simple_program), target :: tseries_import_particles
 type(simple_program), target :: tseries_ctf_estimate
+type(simple_program), target :: tseries_make_pickavg
+type(simple_program), target :: tseries_motion_correct
 type(simple_program), target :: tseries_track
 type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
@@ -353,11 +353,11 @@ contains
         call new_symaxis_search
         call new_symmetrize_map
         call new_symmetry_test
-        call new_tseries_average
-        call new_tseries_gen_ini_avg
         call new_tseries_import
         call new_tseries_import_particles
         call new_tseries_ctf_estimate
+        call new_tseries_motion_correct
+        call new_tseries_make_pickavg
         call new_tseries_track
         call new_update_project
         call new_vizoris
@@ -446,11 +446,11 @@ contains
         call push2prg_ptr_array(symaxis_search)
         call push2prg_ptr_array(symmetrize_map)
         call push2prg_ptr_array(symmetry_test)
-        call push2prg_ptr_array(tseries_average)
-        call push2prg_ptr_array(tseries_gen_ini_avg)
         call push2prg_ptr_array(tseries_import)
         call push2prg_ptr_array(tseries_import_particles)
         call push2prg_ptr_array(tseries_ctf_estimate)
+        call push2prg_ptr_array(tseries_make_pickavg)
+        call push2prg_ptr_array(tseries_motion_correct)
         call push2prg_ptr_array(tseries_track)
         call push2prg_ptr_array(update_project)
         call push2prg_ptr_array(vizoris)
@@ -631,16 +631,16 @@ contains
                 ptr2prg => symmetrize_map
             case('symmetry_test')
                 ptr2prg => symmetry_test
-            case('tseries_average')
-                ptr2prg => tseries_average
-            case('tseries_gen_ini_avg')
-                ptr2prg => tseries_gen_ini_avg
             case('tseries_import')
                 ptr2prg => tseries_import
             case('tseries_import_particles')
                 ptr2prg => tseries_import_particles
             case('tseries_ctf_estimate')
                 ptr2prg => tseries_ctf_estimate
+            case('tseries_make_pickavg')
+                ptr2prg => tseries_make_pickavg
+            case('tseries_motion_correct')
+                ptr2prg => tseries_motion_correct
             case('tseries_track')
                 ptr2prg => tseries_track
             case('update_project')
@@ -683,6 +683,7 @@ contains
         write(logfhandle,'(A)') refine3D%name
         write(logfhandle,'(A)') refine3D_nano%name
         write(logfhandle,'(A)') scale_project%name
+        write(logfhandle,'(A)') tseries_motion_correct%name
         write(logfhandle,'(A)') tseries_track%name
     end subroutine list_distr_prgs_in_ui
 
@@ -741,11 +742,10 @@ contains
         write(logfhandle,'(A)') symaxis_search%name
         write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
-        write(logfhandle,'(A)') tseries_average%name
-        write(logfhandle,'(A)') tseries_gen_ini_avg%name
         write(logfhandle,'(A)') tseries_import%name
         write(logfhandle,'(A)') tseries_import_particles%name
         write(logfhandle,'(A)') tseries_ctf_estimate%name
+        write(logfhandle,'(A)') tseries_make_pickavg%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') volops%name
@@ -2233,18 +2233,15 @@ contains
     subroutine new_motion_correct
         ! PROGRAM SPECIFICATION
         call motion_correct%new(&
-        &'motion_correct', &                                                                  ! name
-        &'Motion correction of movies',&                                                      ! descr_short
-        &'is a distributed workflow for motion correction of movies based on the same&
-        & principal strategy as Grigorieffs program. There are two important&
-        & differences: automatic weighting of the frames using a correlation-based M-estimator and&
-        & continuous optimisation of the shift parameters. If&
-        & dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly&
+        &'motion_correct', &                                                      ! name
+        &'Anisotropic motion correction of movies',&                              ! descr_short
+        &'is a distributed workflow for anisotropic motion correction of movies.&
+        & If dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly&
         & (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to&
         & the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will&
-        & be pre-averaged in the given chunk size (Falcon 3 movies).',&                        ! descr_long
-        &'simple_distr_exec',&                                                                 ! executable
-        &1, 5, 0, 7, 3, 0, 2, .true.)                                                          ! # entries in each group, requires sp_project
+        & be pre-averaged in the given chunk size (Falcon 3 movies).',&           ! descr_long
+        &'simple_distr_exec',&                                                    ! executable
+        &1, 5, 0, 7, 3, 0, 2, .true.)                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call motion_correct%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -3731,69 +3728,6 @@ contains
         call radial_sym_test%set_input('comp_ctrls', 1, nthr)
     end subroutine new_radial_sym_test
 
-    subroutine new_tseries_average
-        ! PROGRAM SPECIFICATION
-        call tseries_average%new(&
-        &'tseries_average',&                                                                                         ! name
-        &'Average particle extracted from time-series',&                                                             ! descr_short
-        &'is a program for particle SNR enhancement through time window averaging using correlation-based weights',& ! descr_long
-        &'simple_exec',&                                                                                             ! executable
-        &1, 2, 0, 1, 1, 1, 1, .true.)                                            ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call tseries_average%set_input('img_ios', 1, outstk)
-        ! parameter input/output
-        call tseries_average%set_input('parm_ios', 1, 'fromp', 'num', 'From frame index', 'Start index for frame averaging', 'start index', .false., 1.0)
-        call tseries_average%set_input('parm_ios', 2, 'top',   'num', 'To   frame index', 'Stop  index for frame averaging', 'stop index',  .false., 1.0)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call tseries_average%set_input('srch_ctrls', 1, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{10}', '{10}', .false., 10.)
-        ! filter controls
-        call tseries_average%set_input('filt_ctrls', 1, wcrit)
-        ! mask controls
-        call tseries_average%set_input('mask_ctrls', 1, msk)
-        tseries_average%mask_ctrls(1)%required = .false.
-        ! computer controls
-        call tseries_average%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_tseries_average
-
-    subroutine new_tseries_gen_ini_avg
-        ! PROGRAM SPECIFICATION
-        call tseries_gen_ini_avg%new(&
-        &'tseries_gen_ini_avg',&                                                         ! name
-        &'Align & average the first few frames of the time-series',&                     ! descr_short
-        &'is a program for aligning & averaging the first few frames of the time-series&
-        & to accomplish SNR enhancement for particle identification',&                   ! descr_long
-        &'simple_exec',&                                                                 ! executable
-        &0, 1, 0, 5, 3, 0, 1, .true.)                                                    ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call tseries_gen_ini_avg%set_input('parm_ios', 1, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{5}', '{5}', .false., 5.)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call tseries_gen_ini_avg%set_input('srch_ctrls', 1, trs)
-        tseries_gen_ini_avg%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{10}'
-        tseries_gen_ini_avg%srch_ctrls(1)%rval_default      = 10.
-        call tseries_gen_ini_avg%set_input('srch_ctrls', 2, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
-        call tseries_gen_ini_avg%set_input('srch_ctrls', 3, mcpatch)
-        call tseries_gen_ini_avg%set_input('srch_ctrls', 4, nxpatch)
-        call tseries_gen_ini_avg%set_input('srch_ctrls', 5, nypatch)
-        ! filter controls
-        call tseries_gen_ini_avg%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment (in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
-        call tseries_gen_ini_avg%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
-        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{2}', .false., 5.)
-        call tseries_gen_ini_avg%set_input('filt_ctrls', 3, wcrit)
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call tseries_gen_ini_avg%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_tseries_gen_ini_avg
-
     subroutine new_tseries_import
         ! PROGRAM SPECIFICATION
         call tseries_import%new(&
@@ -3890,6 +3824,81 @@ contains
         ! computer controls
         call tseries_ctf_estimate%set_input('comp_ctrls', 1, nthr)
     end subroutine new_tseries_ctf_estimate
+
+    subroutine new_tseries_motion_correct
+        ! PROGRAM SPECIFICATION
+        call tseries_motion_correct%new(&
+        &'motion_correct', &                                               ! name
+        &'Anisotropic motion correction of time-series of nanoparticles',& ! descr_short
+        &'is a distributed workflow for anisotropic motion correction of time-series (movies) of nanoparticles.&
+        & If dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly&
+        & (dose-weighting strategy).',&                                    ! descr_long
+        &'simple_distr_exec',&                                             ! executable
+        &0, 0, 0, 6, 3, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call tseries_motion_correct%set_input('srch_ctrls', 1, trs)
+        tseries_motion_correct%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{10}'
+        tseries_motion_correct%srch_ctrls(1)%rval_default      = 10.
+        call tseries_motion_correct%set_input('srch_ctrls', 2, 'nframesgrp', 'num', '# frames in time moving time window', '# frames in time moving time window subjected to correction', '{5}', .false., 5.)
+        call tseries_motion_correct%set_input('srch_ctrls', 3, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{5}', .false., 5.)
+        call tseries_motion_correct%set_input('srch_ctrls', 4, mcpatch)
+        call tseries_motion_correct%set_input('srch_ctrls', 5, nxpatch)
+        call tseries_motion_correct%set_input('srch_ctrls', 6, nypatch)
+        ! filter controls
+        call tseries_motion_correct%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
+        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
+        call tseries_motion_correct%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
+        &iterations of movie alignment (in Angstroms){3}', 'in Angstroms{3}', .false., 3.)
+        call tseries_motion_correct%set_input('filt_ctrls', 3, wcrit)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call tseries_motion_correct%set_input('comp_ctrls', 1, nparts)
+        call tseries_motion_correct%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_tseries_motion_correct
+
+    subroutine new_tseries_make_pickavg
+        ! PROGRAM SPECIFICATION
+        call tseries_make_pickavg%new(&
+        &'tseries_make_pickavg',&                                                         ! name
+        &'Align & average the first few frames of the time-series',&                     ! descr_short
+        &'is a program for aligning & averaging the first few frames of the time-series&
+        & to accomplish SNR enhancement for particle identification',&                   ! descr_long
+        &'simple_exec',&                                                                 ! executable
+        &0, 1, 0, 5, 3, 0, 1, .true.)                                                    ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call tseries_make_pickavg%set_input('parm_ios', 1, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{5}', '{5}', .false., 5.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call tseries_make_pickavg%set_input('srch_ctrls', 1, trs)
+        tseries_make_pickavg%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{10}'
+        tseries_make_pickavg%srch_ctrls(1)%rval_default      = 10.
+        call tseries_make_pickavg%set_input('srch_ctrls', 2, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
+        call tseries_make_pickavg%set_input('srch_ctrls', 3, mcpatch)
+        call tseries_make_pickavg%set_input('srch_ctrls', 4, nxpatch)
+        call tseries_make_pickavg%set_input('srch_ctrls', 5, nypatch)
+        ! filter controls
+        call tseries_make_pickavg%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
+        &iterations of movie alignment (in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
+        call tseries_make_pickavg%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
+        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{2}', .false., 5.)
+        call tseries_make_pickavg%set_input('filt_ctrls', 3, wcrit)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call tseries_make_pickavg%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_tseries_make_pickavg
 
     subroutine new_tseries_track
         ! PROGRAM SPECIFICATION

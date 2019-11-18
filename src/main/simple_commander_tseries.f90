@@ -7,7 +7,7 @@ use simple_commander_base, only: commander_base
 use simple_oris,           only: oris
 use simple_parameters,     only: parameters
 use simple_sp_project,     only: sp_project
-use simple_image,          only : image
+use simple_image,          only: image
 use simple_qsys_env,       only: qsys_env
 use simple_nanoparticles_mod
 use simple_qsys_funs
@@ -15,7 +15,7 @@ implicit none
 
 public :: tseries_import_commander
 public :: tseries_import_particles_commander
-public :: tseries_gen_ini_avg_commander
+public :: tseries_make_pickavg_commander
 public :: tseries_motion_correct_commander_distr
 public :: tseries_motion_correct_commander
 public :: tseries_track_commander_distr
@@ -48,10 +48,10 @@ type, extends(commander_base) :: tseries_motion_correct_commander
   contains
     procedure :: execute      => exec_tseries_motion_correct
 end type tseries_motion_correct_commander
-type, extends(commander_base) :: tseries_gen_ini_avg_commander
+type, extends(commander_base) :: tseries_make_pickavg_commander
   contains
-    procedure :: execute      => exec_tseries_gen_ini_avg
-end type tseries_gen_ini_avg_commander
+    procedure :: execute      => exec_tseries_make_pickavg
+end type tseries_make_pickavg_commander
 type, extends(commander_base) :: tseries_track_commander_distr
   contains
     procedure :: execute      => exec_tseries_track_distr
@@ -200,7 +200,8 @@ contains
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
         integer          :: nframes
-        call cline%set('oritype', 'mic')
+        call cline%set('oritype',    'mic')
+        call cline%set('groupframes', 'no')
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    5.)
         if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
@@ -211,7 +212,6 @@ contains
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',        3.)
         if( .not. cline%defined('bfac')       ) call cline%set('bfac',          5.)
         if( .not. cline%defined('nsig')       ) call cline%set('nsig',          6.)
-        if( .not. cline%defined('groupframes')) call cline%set('groupframes', 'no')
         if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',  'softmax')
         call params%new(cline)
         call cline%set('numlen', real(params%numlen))
@@ -253,7 +253,8 @@ contains
         type(ori)                 :: o
         integer :: i, nframes, frame_counter, ldim(3), iframe, fromto(2), nframesgrp
         integer :: numlen_nframes
-        call cline%set('mkdir', 'no') ! shared-memory workflow, dir making in driver
+        call cline%set('mkdir',       'no') ! shared-memory workflow, dir making in driver
+        call cline%set('groupframes', 'no')
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    5.)
         if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
         if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',       3.)
@@ -263,7 +264,6 @@ contains
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',        3.)
         if( .not. cline%defined('bfac')       ) call cline%set('bfac',          5.)
         if( .not. cline%defined('nsig')       ) call cline%set('nsig',          6.)
-        if( .not. cline%defined('groupframes')) call cline%set('groupframes', 'no')
         if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',  'softmax')
         call params%new(cline)
         call spproj%read(params%projfile)
@@ -316,12 +316,12 @@ contains
         call simple_end('**** SIMPLE_TSERIES_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_tseries_motion_correct
 
-    subroutine exec_tseries_gen_ini_avg( self, cline )
+    subroutine exec_tseries_make_pickavg( self, cline )
         use simple_commander_imgproc,   only: stack_commander
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_ori,                 only: ori
         use simple_tvfilter,            only: tvfilter
-        class(tseries_gen_ini_avg_commander), intent(inout) :: self
+        class(tseries_make_pickavg_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         real, parameter :: LAM_TV = 1.5
         character(len=LONGSTRLEN), allocatable :: framenames(:)
@@ -391,7 +391,7 @@ contains
         call img_intg%write('frames2align_intg_denoised.mrc')
         call img_intg%kill
         call simple_end('**** SIMPLE_GEN_INI_TSERIES_AVG NORMAL STOP ****')
-    end subroutine exec_tseries_gen_ini_avg
+    end subroutine exec_tseries_make_pickavg
 
     subroutine exec_tseries_track_distr( self, cline )
         use simple_nrtxtfile, only: nrtxtfile

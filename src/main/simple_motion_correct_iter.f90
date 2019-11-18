@@ -142,7 +142,7 @@ contains
         call self%pspec_half_n_half%scale_pspec4viz
         ! write output
         call self%moviesum_corrected%write(self%moviename_intg)
-        call self%moviesum_ctf%write(self%moviename_forctf)
+        if( .not. l_tseries ) call self%moviesum_ctf%write(self%moviename_forctf)
         ! generate thumbnail
         ldim          = self%moviesum_corrected%get_ldim()
         scale         = real(params_glob%pspecsz)/real(ldim(1))
