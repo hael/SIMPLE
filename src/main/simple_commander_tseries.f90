@@ -216,7 +216,6 @@ contains
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',       5.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',        3.)
         if( .not. cline%defined('bfac')       ) call cline%set('bfac',          5.)
-        if( .not. cline%defined('nsig')       ) call cline%set('nsig',          6.)
         if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',  'softmax')
         call params%new(cline)
         call cline%set('numlen', real(params%numlen))
@@ -268,7 +267,6 @@ contains
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',       5.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',        3.)
         if( .not. cline%defined('bfac')       ) call cline%set('bfac',          5.)
-        if( .not. cline%defined('nsig')       ) call cline%set('nsig',          6.)
         if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',  'softmax')
         call params%new(cline)
         call spproj%read(params%projfile)
@@ -318,6 +316,7 @@ contains
             call mciter%iterate(cline_mcorr, ctfvars, o, 'tseries_win'//int2str_pad(iframe,numlen_nframes), frame_counter, frames2align, './', tseries='yes')
         end do
         call o%kill
+        call qsys_job_finished('simple_commander_tseries :: exec_tseries_motion_correct' )
         call simple_end('**** SIMPLE_TSERIES_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_tseries_motion_correct
 
@@ -414,6 +413,7 @@ contains
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      7.0)
         if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp', 30.)
         if( .not. cline%defined('filter'))     call cline%set('filter',    'tv')
+        if( .not. cline%defined('offset'))     call cline%set('offset',     10.)
         call cline%set('oritype','mic')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
@@ -436,8 +436,9 @@ contains
             THROW_HARD('inputted boxfile is empty; exec_tseries_track')
         endif
         call boxfile%kill
-        params%nptcls = ndatlines
-        params%nparts = params%nptcls
+        params%nptcls  = ndatlines
+        params%nparts  = params%nptcls
+        params%ncunits = params%nparts
         ! box and numlen need to be part of command line
         if( .not. cline%defined('hp') ) call cline%set('hp', real(orig_box) )
         call cline%set('box',    real(orig_box))
@@ -468,40 +469,24 @@ contains
         class(cmdline),                 intent(inout) :: cline
         type(sp_project)                       :: spproj
         type(parameters)                       :: params
-        type(nrtxtfile)                        :: boxfile
         character(len=:),          allocatable :: dir, forctf, fbody
         character(len=LONGSTRLEN), allocatable :: framenames(:)
         real,                      allocatable :: boxdata(:,:)
-        integer :: i, iframe, ndatlines, j, orig_box, numlen, nframes
+        integer :: i, iframe, j, orig_box, nframes
+        if( cline%defined('ind') )then
+            if( .not. cline%defined('numlen') ) THROW_HARD('need numlen to be part of command line if ind is; exec_tseries_track')
+        endif
         call cline%set('oritype','mic')
         call params%new(cline)
-        numlen   = 5 ! default value
         orig_box = params%box
-        ! boxfile input
-        if( cline%defined('boxfile') )then
-            if( .not. file_exists(params%boxfile) ) THROW_HARD('inputted boxfile does not exist in cwd')
-            if( nlines(params%boxfile) > 0 )then
-                call boxfile%new(params%boxfile, 1)
-                ndatlines = boxfile%get_ndatalines()
-                numlen    = len(int2str(ndatlines))
-                allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), stat=alloc_stat)
-                if(alloc_stat.ne.0)call allocchk('In: simple_commander_tseries :: exec_tseries_track boxdata')
-                do j=1,ndatlines
-                    call boxfile%readNextDataLine(boxdata(j,:))
-                    orig_box = nint(boxdata(j,3))
-                    if( nint(boxdata(j,3)) /= nint(boxdata(j,4)) )THROW_HARD('Only square windows allowed!')
-                end do
-            else
-                THROW_HARD('inputted boxfile is empty; exec_tseries_track')
-            endif
-        else if( cline%defined('xcoord') .and. cline%defined('ycoord') )then
+        ! coordinates input
+        if( cline%defined('xcoord') .and. cline%defined('ycoord') )then
             if( .not. cline%defined('box') ) THROW_HARD('need box to be part of command line for this mode of execution; exec_tseries_track')
             allocate( boxdata(1,2) )
             boxdata(1,1) = real(params%xcoord)
             boxdata(1,2) = real(params%ycoord)
-            ndatlines = 1
         else
-            THROW_HARD('need either boxfile or xcoord/ycoord to be part of command line; exec_tseries_track')
+            THROW_HARD('need xcoord/ycoord to be part of command line; exec_tseries_track')
         endif
         ! frames input
         call spproj%read(params%projfile)
@@ -515,21 +500,16 @@ contains
             endif
         enddo
         ! actual tracking
-        do j=1,ndatlines
-            fbody = trim(params%fbody)//int2str(params%ind)
-            dir   = trim(fbody)
-            if( cline%defined('ind') )then
-                if( .not. cline%defined('numlen') ) THROW_HARD('need numlen to be part of command line if ind is; exec_tseries_track')
-            endif
-            call simple_mkdir(dir)
-            call init_tracker( nint(boxdata(j,1:2)), framenames, dir, trim(params%fbody)//int2str_pad(j,numlen))
-            call track_particle( forctf )
-            ! clean tracker
-            call kill_tracker
-        end do
+        fbody = trim(params%fbody)//int2str_pad(params%ind,params%numlen)
+        dir   = trim(fbody)
+        call simple_mkdir(dir)
+        call init_tracker( nint(boxdata(1,1:2)), framenames, dir, fbody)
+        call track_particle( forctf )
+        ! clean tracker
+        call kill_tracker
+        ! end gracefully
         call qsys_job_finished('simple_commander_tseries :: exec_tseries_track')
         call spproj%kill
-        ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track
 

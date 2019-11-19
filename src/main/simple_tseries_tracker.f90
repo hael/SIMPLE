@@ -18,7 +18,7 @@ real,    parameter :: TVLAMBDA = 10.
 real,    parameter :: BFACTOR  = 5.
 integer, parameter :: NNN      = 8
 
-type(image),               allocatable :: ptcls(:)
+type(image),               allocatable :: ptcls(:), ptcls_saved(:)
 type(tvfilter),            allocatable :: tv(:)
 real,                      allocatable :: particle_locations(:,:)
 character(len=LONGSTRLEN), pointer     :: framenames(:)
@@ -82,9 +82,10 @@ contains
             fname = trim(dir)//'/'//trim(fbody)//'_background_nn'//int2str(i)//'.mrcs'
             neighstknames(i) = trim(fname)
         end do
-        allocate(ptcls(params_glob%nframesgrp))
+        allocate(ptcls(params_glob%nframesgrp),ptcls_saved(params_glob%nframesgrp))
         do i=1,params_glob%nframesgrp
             call ptcls(i)%new([params_glob%box,params_glob%box,1], params_glob%smpd, wthreads=.false.)
+            call ptcls_saved(i)%new([params_glob%box,params_glob%box,1], params_glob%smpd, wthreads=.false.)
         end do
         particle_locations(:,1) = real(boxcoord(1))
         particle_locations(:,2) = real(boxcoord(2))
@@ -148,6 +149,8 @@ contains
                     case DEFAULT
                         ! nothing to do
                 end select
+                call ptcls_saved(i)%copy(ptcls(i))
+                call ptcls_saved(i)%fft
                 call ptcls(i)%mask(real(params_glob%box/2)-3.,'soft')
                 call ptcls(i)%fft
             enddo
@@ -164,9 +167,15 @@ contains
                 call aligner%align(reference, ini_shifts=ini_shifts)
             endif
             call aligner%get_opt_shifts(opt_shifts)
-            call aligner%get_reference(reference)
-            ! center reference for the next batch
+            ! generate reference
+            call reference%zero_and_flag_ft
+            do i = 1,nrange
+                call ptcls_saved(i)%shift([-opt_shifts(i,1),-opt_shifts(i,2),0.])
+                call reference%add(ptcls_saved(i),w=1./real(nrange))
+            enddo
             call reference%ifft
+            call reference%mask(real(params_glob%box/2)-3.,'soft')
+            ! call reference%write('reference.mrc',cnt4debug)
             if( l_neg ) call reference%neg
             xyz = center_reference()
             if( l_neg ) call reference%neg
@@ -357,10 +366,11 @@ contains
         enddo
         do i=1,params_glob%nframesgrp
             call ptcls(i)%kill
+            call ptcls_saved(i)%kill
             if(trim(params_glob%filter).eq.'tv') call tv(i)%kill
         end do
         if(trim(params_glob%filter).eq.'tv') deallocate(tv)
-        deallocate(particle_locations,ptcls)
+        deallocate(particle_locations,ptcls,ptcls_saved)
         call frame_img%kill
         call frame_avg%kill
         call reference%kill

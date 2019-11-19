@@ -42,7 +42,6 @@ contains
     procedure, private :: init_images
     procedure, private :: dealloc_images
     ! Doers
-    procedure, private :: calc_corr2ref
     procedure, private :: calc_shifts
     procedure, private :: shift_frames_gen_ref
     procedure          :: align
@@ -93,8 +92,7 @@ contains
 
     subroutine init_images( self )
         class(motion_align_nano), intent(inout) :: self
-        real    :: smpd_sc
-        integer :: cdim(3), iframe,box,ind,maxldim
+        integer :: cdim(3), iframe
         call self%dealloc_images
         ! allocate & set
         call self%reference%new(self%ldim,self%smpd,wthreads=.false.)
@@ -181,7 +179,6 @@ contains
             if( l_refset .and. iter==1) self%frameweights = frameweights_saved
             ! shift frames, generate reference & calculates correlations
             call self%shift_frames_gen_ref
-            if( l_refset .and. iter==2 ) call self%reference%add(reference,0.2)
             ! convergence
             rmsd = self%calc_rmsd(opt_shifts_prev, self%opt_shifts)
             if( iter > MINITS_DCORR .and. rmsd < 0.1 ) exit
@@ -196,113 +193,46 @@ contains
         integer :: iframe
         cmat_sum = self%reference%get_cmat()
         cmat_sum = cmplx(0.,0.)
-        !$omp parallel default(shared) private(iframe,pcmat) proc_bind(close)
-        !$omp do schedule(static) reduction(+:cmat_sum)
+        !$omp parallel do default(shared) private(iframe,pcmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
         do iframe=1,self%nframes
             call self%frames_sh(iframe)%set_cmat(self%frames(iframe))
-            call self%frames_sh(iframe)%shift([-self%opt_shifts(iframe,1),-self%opt_shifts(iframe,2),0.])
+            call self%frames_sh(iframe)%shift2Dserial(-self%opt_shifts(iframe,:))
             call self%frames_sh(iframe)%get_cmat_ptr(pcmat)
             cmat_sum = cmat_sum + pcmat * self%frameweights(iframe)
         enddo
-        !$omp end do
-        !$omp single
+        !$omp end parallel do
         call self%reference%set_cmat(cmat_sum)
-        !$omp end single
-        !$omp do schedule(static)
-        do iframe = 1,self%nframes
-            self%corrs(iframe) = self%calc_corr2ref(self%frames_sh(iframe), self%frameweights(iframe))
-        end do
-        !$omp end do
-        !$omp end parallel
-        self%corr = sum(self%corrs) / real(self%nframes)
     end subroutine shift_frames_gen_ref
 
-    ! band-passed correlation to frame-subtracted reference
-    real function calc_corr2ref( self, frame, weight )
-        class(motion_align_nano), intent(inout) :: self
-        class(image),               intent(inout) :: frame
-        real,                       intent(in)    :: weight
-        complex :: cref, cframe
-        real    :: rw,w,num,sumsq_ref,sumsq_frame
-        integer :: h,k,nrflims(3,2),phys(3)
-        nrflims = self%reference%loop_lims(2)
-        num         = 0.
-        sumsq_ref   = 0.
-        sumsq_frame = 0.
-        do h = nrflims(1,1),nrflims(1,2)
-            rw = merge(1., 2., h==0) ! redundancy weight
-            do k = nrflims(2,1),nrflims(2,2)
-                phys = self%reference%comp_addr_phys(h,k,0)
-                w    = self%weights(phys(1),phys(2))
-                if( w < 1.e-12 ) cycle
-                cref   = self%reference%get_cmat_at(phys)
-                cframe = frame%get_cmat_at(phys)
-                cref   = cref - weight*cframe
-                w      = w*rw
-                num         = num         + w * real(cref*conjg(cframe))
-                sumsq_ref   = sumsq_ref   + w * csq(cref)
-                sumsq_frame = sumsq_frame + w * csq(cframe)
-            enddo
-        enddo
-        calc_corr2ref = 0.
-        if( sumsq_ref > TINY .and. sumsq_frame > TINY )then
-             calc_corr2ref = num / sqrt(sumsq_ref*sumsq_frame)
-        endif
-    end function calc_corr2ref
-
-    ! identifies interpolated shifts within search range, frame destroyed on exit
     subroutine calc_shifts( self, iframe )
         class(motion_align_nano), intent(inout) :: self
-        integer,                    intent(inout) :: iframe
-        real, pointer :: pcorrs(:,:,:)
-        complex  :: cref, cframe
-        real(dp) :: sqsum_ref,sqsum_frame
-        real     :: dshift(2),alpha,beta,gamma,weight,w,rw
-        integer  :: pos(2),center(2),trs,h,k,phys(3),nrflims(3,2)
+        integer,                  intent(inout) :: iframe
+        real,    pointer :: pcorrs(:,:,:)
+        complex, pointer :: pcmat(:,:,:), pcref(:,:,:)
+        real     :: dshift(2),alpha,beta,gamma,weight
+        integer  :: pos(2),center(2),trs
         weight = self%frameweights(iframe)
         trs    = max(1, min(floor(self%trs),minval(self%ldim(1:2)/2)))
         ! correlations
-        sqsum_ref   = 0.d0
-        sqsum_frame = 0.d0
-        nrflims = self%reference%loop_lims(2)
-        do h = nrflims(1,1),nrflims(1,2)
-            rw = merge(1., 2., h==0) ! redundancy
-            do k = nrflims(2,1),nrflims(2,2)
-                phys = self%reference%comp_addr_phys(h,k,0)
-                w    = self%weights(phys(1),phys(2))
-                if( w < 1.e-12 )then
-                    call self%frames_sh(iframe)%set_cmat_at(phys, cmplx(0.,0.))
-                    cycle
-                endif
-                cref   = self%reference%get_cmat_at(phys)
-                cframe = self%frames_sh(iframe)%get_cmat_at(phys)
-                cref   = cref - weight*cframe
-                call self%frames_sh(iframe)%set_cmat_at(phys, w*cref*conjg(cframe))
-                sqsum_ref   = sqsum_ref   + real(rw*w*csq(cref),dp)
-                sqsum_frame = sqsum_frame + real(rw*w*csq(cframe),dp)
-            enddo
-        enddo
-        if( sqsum_ref<1.d-6 .or. sqsum_frame<1.d-6 )then
-            ! most likely corrupted frame
-        else
-            call self%frames_sh(iframe)%ifft
-            call self%frames_sh(iframe)%div(sqrt(real(sqsum_ref*sqsum_frame)))
-            ! find peak
-            call self%frames_sh(iframe)%get_rmat_ptr(pcorrs)
-            center = self%ldim(1:2)/2+1
-            pos    = maxloc(pcorrs(center(1)-trs:center(1)+trs, center(2)-trs:center(2)+trs, 1))-trs-1
-            dshift = real(pos)
-            ! interpolate
-            beta  = pcorrs(pos(1)+center(1), pos(2)+center(2), 1)
-            alpha = pcorrs(pos(1)+center(1)-1,pos(2)+center(2),1)
-            gamma = pcorrs(pos(1)+center(1)+1,pos(2)+center(2),1)
-            if( alpha<beta .and. gamma<beta ) dshift(1) = dshift(1) + interp_peak()
-            alpha = pcorrs(pos(1)+center(1),pos(2)+center(2)-1,1)
-            gamma = pcorrs(pos(1)+center(1),pos(2)+center(2)+1,1)
-            if( alpha<beta .and. gamma<beta ) dshift(2) = dshift(2) + interp_peak()
-            ! update shift
-            self%opt_shifts(iframe,:) = self%opt_shifts(iframe,:) + dshift
-        endif
+        call self%frames_sh(iframe)%get_cmat_ptr(pcmat)
+        call self%reference%get_cmat_ptr(pcref)
+        pcmat(:,:,1) = self%weights(:,:) * (pcref(:,:,1)- weight*pcmat(:,:,1)) * conjg(pcmat(:,:,1))
+        call self%frames_sh(iframe)%ifft
+        ! find peak
+        call self%frames_sh(iframe)%get_rmat_ptr(pcorrs)
+        center = self%ldim(1:2)/2+1
+        pos    = maxloc(pcorrs(center(1)-trs:center(1)+trs, center(2)-trs:center(2)+trs, 1))-trs-1
+        dshift = real(pos)
+        ! interpolate
+        beta  = pcorrs(pos(1)+center(1), pos(2)+center(2), 1)
+        alpha = pcorrs(pos(1)+center(1)-1,pos(2)+center(2),1)
+        gamma = pcorrs(pos(1)+center(1)+1,pos(2)+center(2),1)
+        if( alpha<beta .and. gamma<beta ) dshift(1) = dshift(1) + interp_peak()
+        alpha = pcorrs(pos(1)+center(1),pos(2)+center(2)-1,1)
+        gamma = pcorrs(pos(1)+center(1),pos(2)+center(2)+1,1)
+        if( alpha<beta .and. gamma<beta ) dshift(2) = dshift(2) + interp_peak()
+        ! update shift
+        self%opt_shifts(iframe,:) = self%opt_shifts(iframe,:) + dshift
         ! cleanup
         call self%frames_sh(iframe)%zero_and_flag_ft
         contains

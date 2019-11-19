@@ -725,11 +725,33 @@ contains
         call private_prgs(23)%push_opt_key('lpstart')
         call private_prgs(23)%push_opt_key('lpstop')
         call private_prgs(23)%push_opt_key('bfac')
-        call private_prgs(23)%push_opt_key('nsig')
         call private_prgs(23)%push_opt_key('groupframes')
         call private_prgs(23)%push_opt_key('wcrit')
 
-        n_private_prgs = 23
+        ! TSERIES_TRACK
+        call private_prgs(24)%set_name('tseries_track')
+        ! required keys
+        call private_prgs(24)%push_req_key('nthr')
+        call private_prgs(24)%push_req_key('projfile')
+        call private_prgs(24)%push_req_key('fromp')
+        call private_prgs(24)%push_req_key('top')
+        call private_prgs(24)%push_req_key('part')
+        call private_prgs(24)%push_req_key('nparts')
+        call private_prgs(24)%push_req_key('box')
+        call private_prgs(24)%push_req_key('xcoord')
+        call private_prgs(24)%push_req_key('ycoord')
+        call private_prgs(24)%push_req_key('ind')
+        call private_prgs(24)%push_req_key('numlen')
+        call private_prgs(24)%push_req_key('nframesgrp')
+        ! optional keys
+        call private_prgs(24)%push_opt_key('offset')
+        call private_prgs(24)%push_opt_key('hp')
+        call private_prgs(24)%push_opt_key('lp')
+        call private_prgs(24)%push_opt_key('cenlp')
+        call private_prgs(24)%push_opt_key('neg')
+        call private_prgs(24)%push_opt_key('filter')
+
+        n_private_prgs = 24
     end subroutine new_private_prgs
 
 end module simple_private_prgs
