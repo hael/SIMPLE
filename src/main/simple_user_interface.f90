@@ -2328,7 +2328,7 @@ contains
         &(for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given &
         &chunk size (Falcon 3 movies)',& ! descr_long
         &'simple_distr_exec',&           ! executable
-        &0, 7, 0, 3, 4, 0, 1, .false.)   ! # entries in each group, requires sp_project
+        &0, 7, 0, 2, 4, 0, 1, .false.)   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2347,7 +2347,6 @@ contains
         ! search controls
         call motion_correct_tomo%set_input('srch_ctrls', 1, trs)
         call motion_correct_tomo%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3){0}', '{0}', .false., 0.)
-        call motion_correct_tomo%set_input('srch_ctrls', 3, nsig)
         ! filter controls
         call motion_correct_tomo%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 15.)

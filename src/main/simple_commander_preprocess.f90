@@ -145,7 +145,6 @@ contains
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            5.)
         if( .not. cline%defined('bfac')            ) call cline%set('bfac',             50.)
         if( .not. cline%defined('groupframes')     ) call cline%set('groupframes',     'no')
-        if( .not. cline%defined('nsig')            ) call cline%set('nsig',              6.)
         ! ctf estimation
         if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
         if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
@@ -469,7 +468,6 @@ contains
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            5.)
         if( .not. cline%defined('bfac')            ) call cline%set('bfac',             50.)
         if( .not. cline%defined('groupframes')     ) call cline%set('groupframes',     'no')
-        if( .not. cline%defined('nsig')            ) call cline%set('nsig',              6.)
         ! ctf estimation
         if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
         if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
@@ -685,7 +683,6 @@ contains
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',        8.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',         5.)
         if( .not. cline%defined('bfac')       ) call cline%set('bfac',          50.)
-        if( .not. cline%defined('nsig')       ) call cline%set('nsig',           6.)
         if( .not. cline%defined('groupframes')) call cline%set('groupframes',  'no')
         if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',   'softmax')
         call cline%set('oritype', 'mic')

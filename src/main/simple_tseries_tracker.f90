@@ -246,14 +246,14 @@ contains
             xind = nint((particle_locations(iframe,1)+1.) + real(params_glob%box)/2.+1.)
             yind = nint((particle_locations(iframe,2)+1.) + real(params_glob%box)/2.+1.)
             sz   = 1
-            if( iframe==1 ) sz=2
-            do j = 1,yind-sz,yind+sz
+            if( iframe==1 ) sz=3
+            do j = yind-sz,yind+sz
                 do i = xind-sz,xind+sz
                     call frame_avg%set([i,j,1],-3.)
                 enddo
             enddo
             if( iframe==1 )then
-                do j = 1,yind-1,yind+1
+                do j = yind-1,yind+1
                     do i = xind-1,xind+1
                         call frame_avg%set([i,j,1],3.)
                     enddo

@@ -353,7 +353,6 @@ contains
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',        5.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',         3.)
         if( .not. cline%defined('bfac')       ) call cline%set('bfac',           5.)
-        if( .not. cline%defined('nsig')       ) call cline%set('nsig',           6.)
         if( .not. cline%defined('groupframes')) call cline%set('groupframes',  'no')
         if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',   'softmax')
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',       'yes')
