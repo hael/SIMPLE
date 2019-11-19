@@ -97,7 +97,7 @@ contains
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc
         character(len=LONGSTRLEN) :: volassemble_output
         real    :: corr, corr_prev, smpd
-        integer :: i, state, iter, iostat, box, nfiles, niters, iter_switch2euclid
+        integer :: ldim(3), i, state, iter, iostat, box, nfiles, niters, iter_switch2euclid, ifoo
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
         logical :: l_projection_matching, l_switch2euclid, l_continue
         if( .not. cline%defined('refine') )then
@@ -243,7 +243,13 @@ contains
         vol_defined = .false.
         do state = 1,params%nstates
             vol = 'vol' // int2str(state)
-            if( cline%defined(trim(vol)) ) vol_defined = .true.
+            if( cline%defined(trim(vol)) )then
+                vol_defined = .true.
+                call find_ldim_nptcls(params%vols(state),ldim,ifoo)
+                if( ldim(1) /= params%box )then
+                    THROW_HARD('Incompatible dimensions between input volume and images: '//params%vols(state))
+                endif
+            endif
         enddo
         have_oris   = .not. build%spproj%is_virgin_field(params%oritype)
         do_abinitio = .not. have_oris .and. .not. vol_defined
