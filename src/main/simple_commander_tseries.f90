@@ -296,9 +296,9 @@ contains
         params%nframesgrp = 0
         call cline_mcorr%set('prg', 'motion_correct')
         call cline_mcorr%set('mkdir', 'no')
-        call o%new
         ctfvars%smpd = params%smpd
         do iframe=params%fromp,params%top
+            call spproj%os_mic%get_ori(iframe, o)
             ! set time window
             fromto(1) = iframe - nframesgrp/2
             fromto(2) = iframe + nframesgrp/2 - 1
@@ -318,7 +318,7 @@ contains
             call spproj%os_mic%set_ori(iframe, o)
         end do
         ! output
-        call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        call binwrite_oritab(params%outfile, spproj, spproj%os_mic, [params%fromp,params%top], isegment=MIC_SEG)
         ! done!
         call o%kill
         call qsys_job_finished('simple_commander_tseries :: exec_tseries_motion_correct' )

@@ -181,7 +181,16 @@ contains
             if( l_neg ) call reference%neg
             xyz = center_reference()
             if( l_neg ) call reference%neg
-            call reference%fft
+            select case(trim(params_glob%filter))
+                case('nlmean')
+                    call reference%nlmean
+                    call reference%fft
+                case('tv')
+                    call reference%fft
+                    call tv(1)%apply_filter(reference, TVLAMBDA)
+                case DEFAULT
+                    call reference%fft
+            end select
             call reference%shift(xyz)
             ! updates shifts
             pos = particle_locations(iframe,:)
@@ -231,26 +240,21 @@ contains
     end subroutine track_particle
 
     subroutine write_trajectory
-        real    :: val
-        integer :: xind,yind,i,j,iframe,hbox,sz
-        hbox = params_glob%box/2
+        integer :: xind,yind,i,j,iframe,sz
         call frame_avg%norm
-        call frame_avg%fft
-        call frame_avg%clip_inplace([hbox,hbox,1])
-        call frame_avg%ifft
         do iframe = nframes,1,-1
-            xind = nint((particle_locations(iframe,1)+1.)/2. + real(hbox)/2.+1.)
-            yind = nint((particle_locations(iframe,2)+1.)/2. + real(hbox)/2.+1.)
+            xind = nint((particle_locations(iframe,1)+1.) + real(params_glob%box)/2.+1.)
+            yind = nint((particle_locations(iframe,2)+1.) + real(params_glob%box)/2.+1.)
             sz   = 1
             if( iframe==1 ) sz=2
             do j = 1,yind-sz,yind+sz
-                do i = xind-sz,yind-sz
+                do i = xind-sz,xind+sz
                     call frame_avg%set([i,j,1],-3.)
                 enddo
             enddo
             if( iframe==1 )then
                 do j = 1,yind-1,yind+1
-                    do i = xind-1,yind+1
+                    do i = xind-1,xind+1
                         call frame_avg%set([i,j,1],3.)
                     enddo
                 enddo
