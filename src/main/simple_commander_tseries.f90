@@ -241,6 +241,7 @@ contains
     end subroutine exec_tseries_motion_correct_distr
 
     subroutine exec_tseries_motion_correct( self, cline )
+        use simple_binoris_io,          only: binwrite_oritab
         use simple_commander_imgproc,   only: stack_commander
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_ori,                 only: ori
@@ -314,7 +315,11 @@ contains
             ! motion corr
             frame_counter = 0
             call mciter%iterate(cline_mcorr, ctfvars, o, 'tseries_win'//int2str_pad(iframe,numlen_nframes), frame_counter, frames2align, './', tseries='yes')
+            call spproj%os_mic%set_ori(iframe, o)
         end do
+        ! output
+        call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        ! done!
         call o%kill
         call qsys_job_finished('simple_commander_tseries :: exec_tseries_motion_correct' )
         call simple_end('**** SIMPLE_TSERIES_MOTION_CORRECT NORMAL STOP ****')
@@ -410,7 +415,7 @@ contains
         integer :: ndatlines, numlen, alloc_stat, j, orig_box, ipart
         if( .not. cline%defined('neg')       ) call cline%set('neg',      'yes')
         if( .not. cline%defined('lp')        ) call cline%set('lp',         2.3)
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      7.0)
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      5.0)
         if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp', 30.)
         if( .not. cline%defined('filter'))     call cline%set('filter',    'tv')
         if( .not. cline%defined('offset'))     call cline%set('offset',     10.)
@@ -496,7 +501,11 @@ contains
         do i = 1,spproj%os_mic%get_noris()
             if( spproj%os_mic%isthere(i,'frame') )then
                 iframe = iframe + 1
-                framenames(iframe) = trim(spproj%os_mic%get_static(i,'frame'))
+                if( spproj%os_mic%isthere(i,'intg') )then
+                    framenames(iframe) = trim(spproj%os_mic%get_static(i,'intg'))
+                else
+                    framenames(iframe) = trim(spproj%os_mic%get_static(i,'frame'))
+                endif
             endif
         enddo
         ! actual tracking
