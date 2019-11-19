@@ -119,6 +119,7 @@ contains
         logical :: outside
         ! init neigh counter
         neigh_cnt = 0
+        call frame_avg%zero_and_unflag_ft
         call reference%zero_and_flag_ft
         write(logfhandle,'(a)') ">>> TRACKING PARTICLES"
         cnt4debug = 0
@@ -135,6 +136,7 @@ contains
                 call ptcls(cnt)%zero_and_unflag_ft
                 call frame_img%read(framenames(i),1)
                 call frame_img%window_slim(first_pos, params_glob%box, ptcls(cnt), outside)
+                if( cnt==1 ) call frame_avg%add(frame_img,w=0.01)
             enddo
             ! prep images: norm, mask, filter, FFT
             !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
@@ -206,6 +208,7 @@ contains
         do iframe=1,nframes
             xind = nint(particle_locations(iframe,1))
             yind = nint(particle_locations(iframe,2))
+            ! read
             call frame_img%read(framenames(iframe),1)
             ! box
             write(funit,'(I7,I7,I7,I7,I7)') xind, yind, params_glob%box, params_glob%box, -3
@@ -223,7 +226,38 @@ contains
         fname_forctf = trim(dir)//'/'//trim(fbody)//'_pspec4ctf_estimation.mrc'
         call pspec%dampen_pspec_central_cross
         call pspec%write(fname_forctf, 1)
+        ! trajectory
+        call write_trajectory
     end subroutine track_particle
+
+    subroutine write_trajectory
+        real    :: val
+        integer :: xind,yind,i,j,iframe,hbox,sz
+        hbox = params_glob%box/2
+        call frame_avg%norm
+        call frame_avg%fft
+        call frame_avg%clip_inplace([hbox,hbox,1])
+        call frame_avg%ifft
+        do iframe = nframes,1,-1
+            xind = nint((particle_locations(iframe,1)+1.)/2. + real(hbox)/2.+1.)
+            yind = nint((particle_locations(iframe,2)+1.)/2. + real(hbox)/2.+1.)
+            sz   = 1
+            if( iframe==1 ) sz=2
+            do j = 1,yind-sz,yind+sz
+                do i = xind-sz,yind-sz
+                    call frame_avg%set([i,j,1],-3.)
+                enddo
+            enddo
+            if( iframe==1 )then
+                do j = 1,yind-1,yind+1
+                    do i = xind-1,yind+1
+                        call frame_avg%set([i,j,1],3.)
+                    enddo
+                enddo
+            endif
+        enddo
+        call frame_avg%write(trim(dir)//'/'//trim(fbody)//'_trajectory.mrc')
+    end subroutine write_trajectory
 
     subroutine write_background_images_and_update_pspec( iframe, pos )
         integer, intent(in) :: iframe, pos(2)
