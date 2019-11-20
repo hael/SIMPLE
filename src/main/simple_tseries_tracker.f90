@@ -335,8 +335,9 @@ contains
     ! PRIVATE FUNCTIONS
 
     function center_reference( )result( shift )
+        use simple_binimage, only: binimage
         use simple_segmentation, only: otsu_robust_fast
-        type(image)          :: img, tmp, tmpcc
+        type(binimage)          :: img, tmp, tmpcc
         real,    pointer     :: rmat(:,:,:), rmat_cc(:,:,:)
         integer, allocatable :: sz(:)
         real                 :: shift(3), thresh(3)
@@ -359,8 +360,8 @@ contains
         ! median filtering again
         call tmp%real_space_filter(3,'median')
         ! identify biggest connected component
-        call tmp%find_connected_comps(tmpcc)
-        sz  = tmpcc%size_connected_comps()
+        call tmp%find_ccs(tmpcc)
+        sz  = tmpcc%size_ccs()
         loc = maxloc(sz,dim=1)
         ! set to zero all the other connected components
         call tmpcc%get_rmat_ptr(rmat_cc)

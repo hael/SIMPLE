@@ -2,6 +2,7 @@
 module simple_masker
 include 'simple_lib.f08'
 use simple_image,      only: image
+use simple_binimage,   only: binimage
 use simple_parameters, only: params_glob
 implicit none
 
@@ -10,20 +11,20 @@ private
 #include "simple_local_flags.inc"
 
 integer, parameter :: WINSZ = 3 !< real-space filter half-width window
+logical, parameter :: DEBUG = .false. 
 
-type, extends(image) :: masker
+type, extends(binimage) :: masker
     private
-    real              :: msk       = 0.   !< maximum circular mask
-    real              :: amsklp    = 0.   !< maximum circular mask
-    real              :: mw        = 0.   !< moleclular weight (in kDa)
-    real              :: pix_thres = 0.   !< binarisation threshold
-    integer           :: edge      = 3    !< edge width
-    integer           :: binwidth  = 1    !< additional layers to grow
-    integer           :: n         = 0    !< number of classes
-    integer           :: idim(3)   = 0    !< image dimension
+    real    :: msk       = 0.   !< maximum circular mask
+    real    :: amsklp    = 0.   !< maximum circular mask
+    real    :: mw        = 0.   !< moleclular weight (in kDa)
+    real    :: pix_thres = 0.   !< binarisation threshold
+    integer :: edge      = 3    !< edge width
+    integer :: binwidth  = 1    !< additional layers to grow
+    integer :: n         = 0    !< number of classes
+    integer :: idim(3)   = 0    !< image dimension
   contains
     procedure          :: automask3D
-    procedure          :: resmask
     procedure          :: mask_from_pdb
     procedure, private :: bin_vol_thres
     procedure, private :: env_rproject
@@ -36,7 +37,8 @@ contains
     subroutine automask3D( self, vol_inout )
         class(masker), intent(inout) :: self
         class(image),  intent(inout) :: vol_inout
-        logical :: was_ft
+        type(image) :: cos_img
+        logical     :: was_ft
         if( vol_inout%is_2d() )THROW_HARD('automask3D is intended for volumes only; automask3D')
         self%msk       = params_glob%msk
         self%amsklp    = params_glob%amsklp
@@ -49,41 +51,19 @@ contains
         write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,' PIXEL(S)'
         write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK MOLECULAR WEIGHT:   ', self%mw,      ' kDa'
         was_ft = vol_inout%is_ft()
-        if( was_ft )call vol_inout%ifft()
+        if( was_ft ) call vol_inout%ifft()
         call self%copy(vol_inout)
         ! binarize volume
         call self%bin_vol_thres
         ! add volume soft edge
-        call self%cos_edge(self%edge)
+        call self%cos_edge(cos_img, self%edge)
         ! apply mask to volume
         call vol_inout%zero_background()
-        call vol_inout%mul(self)
+        call vol_inout%mul(cos_img)
         ! the end
         if( was_ft )call vol_inout%fft()
+        call cos_img%kill
     end subroutine automask3D
-
-    !>  \brief  envelope mask for resolution estimation
-    !!          it is assumed that the envelope mask (auotmask) is set from the start
-    subroutine resmask( self )
-        class(masker), intent(inout) :: self
-        type(image) :: distimg
-        integer     :: winsz
-        real        :: ave, sdev, maxv, minv, med
-        ! create edge-less envelope
-        call self%remove_edge
-        ! calculate distance stats
-        call distimg%new(self%get_ldim(), params_glob%smpd)
-        call distimg%cendist
-        call distimg%stats(ave, sdev, maxv, minv, self, med)
-        winsz = max(8, nint((params_glob%msk - maxv) / 2.))
-        ! soft edge mask
-        call self%grow_bins(2) ! in addition to binwidth (4 safety)
-        call self%cos_edge(winsz)
-        ! mask with spherical sof mask
-        call self%mask(params_glob%msk, 'soft')
-        ! clean-up
-        call distimg%kill
-    end subroutine resmask
 
     subroutine mask_from_pdb( self,  pdb, vol_inout, os, pdbout)
         use simple_oris,  only: oris
@@ -93,7 +73,7 @@ contains
         class(image),               intent(inout) :: vol_inout
         class(oris),      optional, intent(inout) :: os
         character(len=*), optional, intent(inout) :: pdbout
-        type(image) :: distimg
+        type(image) :: distimg, cos_img
         type(atoms) :: shifted_pdb
         real        :: centre(3), shift(3), pdb_center(3), minmax(2), radius, smpd
         integer     :: i
@@ -130,17 +110,18 @@ contains
                 call self%set_within( pdb%get_coord(i), radius, 1.)
             enddo
         endif
-        call self%grow_bin()
+        call self%grow_bins(1)
         call distimg%mul(self) ! for suggested focusmsk
-        call self%cos_edge(params_glob%edge)
+        call self%cos_edge(cos_img, params_glob%edge)
         ! multiply with mask
         call vol_inout%ifft()
-        call vol_inout%mul(self)
+        call vol_inout%mul(cos_img)
         if(was_ft) call vol_inout%fft()
         ! focusmsk
         minmax = distimg%minmax()
         write(logfhandle,'(A,I4)') '>>> SUGGESTED FOCUSMSK: ', ceiling(minmax(2))+params_glob%edge
         call distimg%kill
+        call cos_img%kill
     end subroutine mask_from_pdb
 
     ! BINARISATION ROUTINES
@@ -155,10 +136,9 @@ contains
         ! find nr of voxels corresponding to mw
         nnvox = nvoxfind(self%get_smpd(), self%mw)
         ! binarize again
-        call self%bin(nnvox)
+        call self%binarize(nnvox)
         ! binary layers
         call self%grow_bins(self%binwidth)
-        DebugPrint 'simple_masker::bin_vol done'
     end subroutine bin_vol_thres
 
     ! CALCULATORS
@@ -185,7 +165,7 @@ contains
         rad      = 0.
         vec      = 0
         rmat     = self%get_rmat()
-        if( global_debug.or.debug )then
+        if( DEBUG )then
             write(logfhandle,*) 'maxrad:       ', maxrad
             write(logfhandle,*) 'sqmaxrad:     ', sqmaxrad
             write(logfhandle,*) 'maxval(rmat): ', maxval(rmat)
@@ -220,21 +200,22 @@ contains
         enddo
         !$omp end parallel do
         deallocate(rmat)
-        DebugPrint 'simple_masker::env_rproject done'
     end subroutine env_rproject
 
     subroutine automask2D( imgs, mask, ngrow, winsz, edge, diams, write2disk )
         use simple_segmentation
+        use simple_binimage, only: binimage
         class(image),      intent(inout) :: imgs(:)
         logical,           intent(in)    :: mask(:)
         integer,           intent(in)    :: ngrow, winsz, edge
         real, allocatable, intent(inout) :: diams(:)
         logical, optional, intent(in)    :: write2disk
         real, allocatable :: ccsizes(:)
-        type(image) :: img_bin, cc_img
-        integer     :: i, n, loc(1)
-        real        :: thresh(3)
-        logical     :: l_write
+        type(binimage) :: img_bin, cc_img
+        type(image)    :: cos_img
+        integer        :: i, n, loc(1)
+        real           :: thresh(3)
+        logical        :: l_write
         n = size(imgs)
         if( size(mask) /= n ) THROW_HARD('mask array size does not conform with image array; automask2D')
         l_write = .true.
@@ -252,8 +233,8 @@ contains
                 call otsu_robust_fast(img_bin, is2D=.true., noneg=.true., thresh=thresh)
                 if( l_write ) call img_bin%write(BIN_OTSU, i)
                 ! find the largest connected component
-                call img_bin%find_connected_comps(cc_img)
-                ccsizes = cc_img%size_connected_comps()
+                call img_bin%find_ccs(cc_img)
+                ccsizes = cc_img%size_ccs()
                 loc = maxloc(ccsizes)
                 ! estimate its diameter
                 call cc_img%diameter_cc(loc(1), diams(i))
@@ -266,13 +247,13 @@ contains
                 if( mask(i) ) call cc_img%real_space_filter(winsz, 'median')
                 if( l_write ) call cc_img%write(BIN_OTSU_GROW_MED, i)
                 ! apply cosine egde to soften mask (to avoid Fourier artefacts)
-                call cc_img%cos_edge(edge)
-                if( l_write ) call cc_img%write(MSK_OTSU, i)
+                call cc_img%cos_edge(cos_img, edge)
+                if( l_write ) call cos_img%write(MSK_OTSU, i)
                 ! zero negative values before applyting the mask
                 call imgs(i)%zero_neg
                 ! call imgs(i)%remove_neg
                 ! apply
-                call imgs(i)%mul(cc_img)
+                call imgs(i)%mul(cos_img)
                 if( l_write ) call imgs(i)%write(AMSK_OTSU, i)
             else
                 call img_bin%zero
@@ -280,6 +261,7 @@ contains
         end do
         call img_bin%kill
         call cc_img%kill
+        call cos_img%kill
         if( allocated(ccsizes) ) deallocate(ccsizes)
     end subroutine automask2D
 

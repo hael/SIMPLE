@@ -103,7 +103,7 @@ contains
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
         call o%kill
-        DebugPrint  '>>> STRATEGY3D_clustersoft :: FINISHED SEARCH'
+
         contains
 
             subroutine update_corr( istate )
@@ -134,7 +134,6 @@ contains
     !>  \brief retrieves and preps npeaks orientations for reconstruction
     subroutine oris_assign_clustersoft3D( self )
         class(strategy3D_clustersoft), intent(inout) :: self
-        DebugPrint   '>>> STRATEGY3D_clustersoft :: EXECUTED ORIS_ASSIGN_MULTI'
     end subroutine oris_assign_clustersoft3D
 
     subroutine kill_clustersoft3D( self )

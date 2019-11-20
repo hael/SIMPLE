@@ -56,7 +56,6 @@ contains
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
-        DebugPrint  '>>> STRATEGY2D_GREEDY :: FINISHED STOCHASTIC SEARCH'
     end subroutine srch_greedy
 
     subroutine kill_greedy( self )

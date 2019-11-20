@@ -8,6 +8,7 @@ use simple_oris,           only: oris
 use simple_parameters,     only: parameters
 use simple_sp_project,     only: sp_project
 use simple_image,          only: image
+use simple_binimage,       only: binimage
 use simple_qsys_env,       only: qsys_env
 use simple_nanoparticles_mod
 use simple_qsys_funs
@@ -625,7 +626,7 @@ contains
         character(len=*), parameter :: BINARY = 'binarised.mrc'
         ! varables
         type(parameters)            :: params
-        type(image),    allocatable :: imgs(:)      ! images
+        type(binimage), allocatable :: imgs(:)      ! images
         type(image)                 :: cc_img       ! connected components image
         type(stats_struct)          :: diamstats    ! stats struct
         integer,        allocatable :: ccsizes(:)   ! connected component sizes
@@ -639,7 +640,7 @@ contains
         allocate(imgs(params%nptcls), diams(params%nptcls))
         diams = 0.
         do i=1,params%nptcls
-            call imgs(i)%new([params%box,params%box,1],  params%smpd)
+            call imgs(i)%new_bimg([params%box,params%box,1],  params%smpd)
             call imgs(i)%read(params%stk, i)
         end do
         ! prepare thread safe images in image class
@@ -653,6 +654,7 @@ contains
             call imgs(i)%write(FILT, i)
             ! binarise with Otsu
             call otsu_robust_fast(imgs(i), is2D=.false., noneg=.false., thresh=thresh)
+            call imgs(i)%set_imat ! integer matrix set in binimage instance
             call imgs(i)%write(BINARY, i)
             ! estimate diameter
             call imgs(i)%diameter_bin(diams(i))

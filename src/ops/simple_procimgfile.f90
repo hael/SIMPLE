@@ -1165,11 +1165,13 @@ contains
     !! \param thres binary threshold
     !! \param smpd sampling distance
     subroutine bin_imgfile( fname2process, fname, smpd, thres )
+        use simple_segmentation, only: otsu_robust_fast
         character(len=*), intent(in) :: fname2process, fname
         real,             intent(in) :: smpd
         real, optional,   intent(in) :: thres
         type(image) :: img
         integer     :: n, i, ldim(3)
+        real        :: thresh(3)
         logical     :: didft
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
@@ -1186,9 +1188,9 @@ contains
                 didft = .true.
             endif
             if( present(thres) )then
-                call img%bin(thres)
+                call img%binarize(thres)
             else
-                call img%bin_kmeans
+                call otsu_robust_fast(img, is2d=.true., noneg=.false., thresh=thresh)
             endif
             if( didft ) call img%fft()
             call img%write(fname, i)

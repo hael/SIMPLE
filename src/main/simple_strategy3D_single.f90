@@ -69,7 +69,6 @@ contains
         call osym%kill
         call o1%kill
         call o2%kill
-        DebugPrint   '>>> STRATEGY3D_SINGLE :: EXECUTED ORIS_ASSIGN_SINGLE'
     end subroutine oris_assign_single
 
 end module simple_strategy3D_single

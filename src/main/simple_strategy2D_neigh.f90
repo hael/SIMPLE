@@ -59,7 +59,6 @@ contains
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
-        DebugPrint '>>> STRATEGY2D_NEIGH :: SRCH_NEIGH; FINISHED NEAREST-NEIGHBOR SEARCH'
     end subroutine srch_neigh
 
     subroutine kill_neigh( self )

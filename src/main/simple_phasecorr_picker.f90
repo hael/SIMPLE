@@ -134,7 +134,7 @@ contains
         call mic_shrunken%get_rmat_ptr(rmat_phasecorr)
         allocate(corrmat(1:ldim_shrink(1),1:ldim_shrink(2)))
         corrmat(1:ldim_shrink(1),1:ldim_shrink(2)) = rmat_phasecorr(1:ldim_shrink(1),1:ldim_shrink(2),1)
-        call mic_shrunken%bin(ave+.8*sdev)
+        call mic_shrunken%binarize(ave+.8*sdev)
         border = max(ldim_refs(1)/2,ldim_refs(2)/2)
         rmat_phasecorr(1:border,:,1) = 0. !set to zero the borders
         rmat_phasecorr(ldim_shrink(1)-border:ldim_shrink(1),:,1) = 0. !set to zero the borders

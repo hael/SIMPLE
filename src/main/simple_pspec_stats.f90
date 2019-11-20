@@ -1,49 +1,48 @@
 !USAGE : simple_exec prg=pspec_stats smpd=1.41 filetab='sjhskl.mrc'
-module simple_genpspec_and_statistics
+module simple_pspec_stats
 include 'simple_lib.f08'
-use simple_image,      only : image
-use simple_cmdline,    only : cmdline
-use simple_parameters, only : parameters
-
+use simple_image,      only: image
+use simple_binimage,   only: binimage
+use simple_cmdline,    only: cmdline
+use simple_parameters, only: parameters
 implicit none
 
-public :: pspec_statistics
+public :: pspec_stats
 private
 #include "simple_local_flags.inc"
 
-! module global constants
 logical, parameter :: DEBUG_HERE = .true.
-integer, parameter :: BOX        = 512 !ps size
-real,    parameter :: LOW_LIM    = 30. !30 A, lower limit for resolution. Before that, we discard
-real,    parameter :: UP_LIM     = 10. !upper limit for resolution in the entropy calculation. (it was 3. before)
-integer, parameter :: N_BINS     = 64  !number of bins for hist
-real,    parameter :: LAMBDA     = 1.  !for tv filtering
-integer, parameter :: N_BIG_CCS  = 5   !top N_BIG_CCS of the biggest ccs have to be considered in the avg curvature calculation
-real,    parameter :: THR_SCORE_UP    = 0.41!threshold for keeping/discarding mic wrt score
-real,    parameter :: THR_SCORE_DOWN  = 0.29!threshold for keeping/discarding mic wrt score
-real,    parameter :: THR_CURVAT_UPUP = 9.  !threshold for keeping/discarding mic wrt average curvature
-real,    parameter :: THR_CURVAT_UP   = 5.  !threshold for keeping/discarding mic wrt average curvature
-real,    parameter :: THR_CURVAT_DOWN = 4.  !threshold for keeping/discarding mic wrt average curvature
+integer, parameter :: BOX        = 512       ! ps size
+real,    parameter :: LOW_LIM    = 30.       ! 30 A, lower limit for resolution. Before that, we discard
+real,    parameter :: UP_LIM     = 10.       ! upper limit for resolution in the entropy calculation. (it was 3. before)
+integer, parameter :: N_BINS     = 64        ! number of bins for hist
+real,    parameter :: LAMBDA     = 1.        ! for tv filtering
+integer, parameter :: N_BIG_CCS  = 5         ! top N_BIG_CCS considered in the avg curvature calculation
+real,    parameter :: THR_SCORE_UP    = 0.41 ! threshold for keeping/discarding mic wrt score
+real,    parameter :: THR_SCORE_DOWN  = 0.29 ! threshold for keeping/discarding mic wrt score
+real,    parameter :: THR_CURVAT_UPUP = 9.   ! threshold for keeping/discarding mic wrt average curvature
+real,    parameter :: THR_CURVAT_UP   = 5.   ! threshold for keeping/discarding mic wrt average curvature
+real,    parameter :: THR_CURVAT_DOWN = 4.   ! threshold for keeping/discarding mic wrt average curvature
 
-type :: pspec_statistics
+type :: pspec_stats
     private
-    character(len=STDLEN)    :: micname  = ''
-    character(len=STDLEN)    :: fbody    = ''
-    type(image)           :: mic                  !micrograph
-    type(image)           :: ps, ps_bin, ps_ccs   !power spectrum, its binary version, its connected components
+    character(len=STDLEN) :: micname  = ''
+    character(len=STDLEN) :: fbody    = ''
+    type(image)           :: mic            ! micrograph
+    type(image)           :: ps             ! power spectrum
+    type(binimage)        :: ps_bin, ps_ccs ! its binary version, its connected components
     type(parameters)      :: p
     type(cmdline)         :: cline
-    integer     :: ldim_mic(3) = 0       !dim of the mic
-    integer     :: ldim(3)     = 0       !dim of the ps`
-    real        :: smpd                  !smpd
-    real        :: score       = 0.      !score, to keep/discard the mic
-    real        :: avg_curvat  = 0.
-    logical     :: fallacious  = .false. !whether the mic has to be discarded or not
-    integer     :: LLim_Findex = 0       !Fourier index corresponding to LOW_LIM
-    integer     :: ULim_Findex = 0       !Fourier index corresponding to UP_LIM
-
-  contains
-    procedure          :: new => new_pspec_statistics
+    integer :: ldim_mic(3) = 0              ! dim of the mic
+    integer :: ldim(3)     = 0              ! dim of the ps`
+    real    :: smpd                         ! smpd
+    real    :: score       = 0.             ! score, to keep/discard the mic
+    real    :: avg_curvat  = 0.
+    logical :: fallacious  = .false.        ! whether the mic has to be discarded or not
+    integer :: LLim_Findex = 0              ! Fourier index corresponding to LOW_LIM
+    integer :: ULim_Findex = 0              ! Fourier index corresponding to UP_LIM
+contains
+    procedure          :: new => new_pspec_stats
     procedure, private :: empty
     procedure, private :: calc_weighted_avg_sz_ccs
     procedure, private :: calc_avg_curvature
@@ -51,15 +50,14 @@ type :: pspec_statistics
     procedure, private :: print_info
     procedure          :: get_output
     procedure          :: run
-    procedure          :: kill => kill_pspec_statistics
-end type pspec_statistics
+    procedure          :: kill => kill_pspec_stats
+end type pspec_stats
 
 contains
 
-    !constructor
-    subroutine new_pspec_statistics(self, name, cline_smpd)
+    subroutine new_pspec_stats(self, name, cline_smpd)
         use simple_defs
-        class(pspec_statistics), intent(inout) :: self
+        class(pspec_stats), intent(inout) :: self
         character(len=*),        intent(in)    :: name
         real,                    intent(in)    :: cline_smpd
         integer     :: nptcls
@@ -77,12 +75,12 @@ contains
         self%ldim(1) = BOX
         self%ldim(2) = BOX
         self%ldim(3) = 1
-        call self%ps_bin%new(self%ldim, self%smpd)
-        call self%ps_ccs%new(self%ldim, self%smpd)
+        call self%ps_bin%new_bimg(self%ldim, self%smpd)
+        call self%ps_ccs%new_bimg(self%ldim, self%smpd)
         !power spectrum generation
         call self%mic%mic2spec(BOX, 'sqrt',LOW_LIM, self%ps)
         if(DEBUG_HERE) call self%ps%write(PATH_HERE//basename(trim(self%fbody))//'_generated_ps.mrc')
-    end subroutine new_pspec_statistics
+    end subroutine new_pspec_stats
 
     ! Result of the combination of score and curvature.
     ! It states whether to keep or discard the mic.
@@ -98,7 +96,7 @@ contains
     ! M.S + M.C  --> discard
     ! M.S + L.C  --> keep
     function get_output(self) result(keep_mic)
-        class(pspec_statistics), intent(inout) :: self
+        class(pspec_stats), intent(inout) :: self
         logical :: keep_mic
         if(DEBUG_HERE) write(logfhandle,*) 'score = ',self%score, 'avg_curvat = ', self%avg_curvat
         if(self%score > THR_SCORE_UP .and. self%avg_curvat < THR_CURVAT_UPUP) then
@@ -135,7 +133,7 @@ contains
     !# of central pixels, than it returns yes, otherwhise no.
     !The central zone is characterized by having res in [LOW_LIM,UP_LIM/2]
     function empty(self) result(yes_no)
-        class(pspec_statistics), intent(inout) :: self
+        class(pspec_stats), intent(inout) :: self
         logical             :: yes_no
         real, allocatable   :: rmat(:,:,:)
         real, parameter     :: PERCENT = 0.05
@@ -166,7 +164,7 @@ contains
     end function empty
 
     subroutine print_info(self)
-        class(pspec_statistics), intent(inout) :: self
+        class(pspec_stats), intent(inout) :: self
         character(len = 100) :: iom
         integer              :: status
         open(unit = 17, access = 'sequential', action = 'readwrite',file = basename(trim(self%fbody))//"PowerSpectraAnalysis.txt", form = 'formatted', iomsg = iom, iostat = status, position = 'append', status = 'replace')
@@ -191,7 +189,7 @@ contains
    ! center of the image.
    ! This is the SCORE.
     subroutine calc_weighted_avg_sz_ccs(self, sz)
-        class(pspec_statistics), intent(inout) :: self
+        class(pspec_stats), intent(inout) :: self
         integer,                 intent(in)    :: sz(:)
         integer, allocatable :: imat(:,:,:)
         integer, allocatable :: imat_sz(:,:,:)
@@ -200,7 +198,7 @@ contains
         real    :: denom  !denominator of the formula
         real    :: a
         denom = 0.
-        call self%ps_ccs%elim_cc([1,BOX*4]) !eliminate connected components with size one
+        call self%ps_ccs%elim_ccs([1,BOX*4]) !eliminate connected components with size one
         imat = nint(self%ps_ccs%get_rmat())
         allocate(imat_sz(BOX,BOX,1), source = 0)
         call generate_mat_sz_ccs(imat,imat_sz,sz)
@@ -222,7 +220,7 @@ contains
             enddo
         enddo
         if(DEBUG_HERE) call self%ps_bin%write(PATH_HERE//basename(trim(self%fbody))//'_binarized_polished.mrc')
-        call self%ps_bin%find_connected_comps(self%ps_ccs) ! NOT TO REDO, NEED OPTIMISATION
+        call self%ps_bin%find_ccs(self%ps_ccs) ! NOT TO REDO, NEED OPTIMISATION
         self%avg_curvat = self%calc_avg_curvature()
         !normalization
         if(abs(denom) > TINY) then
@@ -255,12 +253,13 @@ contains
     ! This function calculates the average curvature of the
     ! top N_BIG_CCS (in size) connected components.
     function calc_avg_curvature(self) result(avg)
-        class(pspec_statistics), intent(inout) :: self
+        use simple_binimage, only: binimage
+        class(pspec_stats), intent(inout) :: self
         real    :: avg !average curvature
         integer :: i
         integer :: cc(1)
         integer, allocatable :: sz(:)
-        sz = self%ps_ccs%size_connected_comps()
+        sz = self%ps_ccs%size_ccs()
         avg = 0.
         do i = 1,N_BIG_CCS
             cc(:) = maxloc(sz)
@@ -275,10 +274,9 @@ contains
         ! of pixels in the cc and the ideal circumference arc which
         ! has the same extremes as cc.
         function estimate_curvature(ps_ccs,cc) result(c)
-            type(image), intent(inout) :: ps_ccs
-            integer,     intent(in)    :: cc      ! number of the connected component to estimate the curvature
-            ! integer, intent(in) :: n_loop
-            real        :: c       ! estimation of the curvature of the cc img
+            type(binimage), intent(inout) :: ps_ccs
+            integer,        intent(in)    :: cc ! number of the connected component to estimate the curvature
+            real        :: c                    ! estimation of the curvature of the cc img
             type(image) :: img_aux
             integer, allocatable :: imat_cc(:,:,:), imat_aux(:,:,:)
             integer, allocatable :: pos(:,:)
@@ -286,10 +284,10 @@ contains
             integer :: i, j
             integer :: h, k, sh
             integer :: sz, nb_pxls
-            logical :: done   ! to prematurely exit the loops
+            logical :: done ! to prematurely exit the loops
             call img_aux%new(self%ldim, self%smpd)
             imat_cc = nint(ps_ccs%get_rmat())
-            where(imat_cc /= cc) imat_cc = 0  !keep just the considered cc
+            where(imat_cc /= cc) imat_cc = 0 ! keep just the considered cc
             allocate(imat_aux(BOX,BOX,1), source = 0)
             ! fetch white pixel positions
             call get_pixel_pos(imat_cc,pos)
@@ -354,7 +352,7 @@ contains
     !ps is performed here. Then estimation of how far do the detected rings extend.
     ! Finally estimation of the number of countiguous rings.
     subroutine process_ps(self)
-      class(pspec_statistics), intent(inout) :: self
+      class(pspec_stats), intent(inout) :: self
       integer, allocatable :: sz(:)
       real                 :: res
       integer              :: ind(1)
@@ -363,8 +361,8 @@ contains
       call prepare_ps(self)
       call binarize_ps(self)
       ! calculation of the weighted average size of the ccs ->  score
-      call self%ps_bin%find_connected_comps(self%ps_ccs)
-      sz = self%ps_ccs%size_connected_comps()
+      call self%ps_bin%find_ccs(self%ps_ccs)
+      sz = self%ps_ccs%size_ccs()
       call self%calc_weighted_avg_sz_ccs(sz)
       deallocate(sz)
   contains
@@ -374,7 +372,7 @@ contains
       !                     -) scaling
       subroutine prepare_ps(self)
           use simple_tvfilter, only: tvfilter
-          class(pspec_statistics), intent(inout) :: self
+          class(pspec_stats), intent(inout) :: self
           type(tvfilter) :: tvf
           call tvf%new()
           call tvf%apply_filter(self%ps, LAMBDA)
@@ -389,7 +387,7 @@ contains
       ! smoother.
       ! It is meant to reduce the influence of the central pixel.
       subroutine manage_central_spot(self)
-          class(pspec_statistics), intent(inout) :: self
+          class(pspec_stats), intent(inout) :: self
           real, allocatable :: rmat(:,:,:), rmat_dist(:,:,:)
           real              :: avg
           integer           :: lims(3,2), mh, mk
@@ -439,7 +437,7 @@ contains
       ! selection.
       subroutine binarize_ps(self)
           use simple_segmentation, only : canny
-          class(pspec_statistics), intent(inout) :: self
+          class(pspec_stats), intent(inout) :: self
           real,    allocatable :: rmat_bin(:,:,:)
           integer     :: ldim(3),i
           real        :: scale_range(2)
@@ -459,14 +457,14 @@ contains
   end subroutine process_ps
 
   subroutine run(self)
-      class(pspec_statistics), intent(inout) :: self
+      class(pspec_stats), intent(inout) :: self
       call self%p%new(self%cline)
       write(logfhandle,*) '******> Processing PS ',basename(trim(self%fbody))
       call process_ps(self)
   end subroutine run
 
-  subroutine kill_pspec_statistics(self)
-      class(pspec_statistics), intent(inout) :: self
+  subroutine kill_pspec_stats(self)
+      class(pspec_stats), intent(inout) :: self
       call self%mic%kill()
       call self%ps%kill()
       call self%ps_bin%kill()
@@ -478,12 +476,12 @@ contains
       self%score        = 0.
       self%avg_curvat   = 0.
       self%fallacious   = .false.
-  end subroutine kill_pspec_statistics
-end module simple_genpspec_and_statistics
+  end subroutine kill_pspec_stats
+end module simple_pspec_stats
 
 ! SUBROUTINES MIGHT BE USEFUL
 ! subroutine log_ps(self,img_out)
-!     class(pspec_statistics), intent(inout) :: self
+!     class(pspec_stats), intent(inout) :: self
 !     type(image), optional :: img_out
 !     real, allocatable :: rmat(:,:,:)
 !     ! call self%ps%scale_pixels([1.,real(BOX)*2.+1.]) !not to have problems in calculating the log

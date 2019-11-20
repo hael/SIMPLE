@@ -292,10 +292,11 @@ contains
 
     !>  dsym_cylinder search intended for symmetry of order D
     subroutine exec_dsym_volinit( dsym_os, cylinder)
-        use simple_parameters, only: params_glob
-        use simple_oris,       only: oris
-        use simple_image,      only: image
-        use simple_sym,        only: sym
+        use simple_parameters,   only: params_glob
+        use simple_oris,         only: oris
+        use simple_image,        only: image
+        use simple_sym,          only: sym
+        use simple_segmentation, only: otsu_robust_fast
         class(oris),   intent(inout) :: dsym_os
         class(image),  intent(inout) :: cylinder
         type(image)          :: read_img, img_msk, dist_img, roavg_img, topview
@@ -305,7 +306,7 @@ contains
         logical, allocatable :: l_msk(:,:,:)
         integer  :: halfnoris, cnt1, cnt2, i, l, noris
         real     :: cen1, cen2, sum1, sum2, sumvals, sdev, sdev_noise
-        real     :: minmax(2), width, height, sh1(3), ang
+        real     :: minmax(2), width, height, sh1(3), ang, thresh(3)
         if(params_glob%pgrp(1:1).eq.'d' .or. params_glob%pgrp(1:1).eq.'D')then
             ang = 360. / real(se%get_nsym()/2)
         else if(params_glob%pgrp(1:1).eq.'c' .or. params_glob%pgrp(1:1).eq.'C')then
@@ -346,7 +347,7 @@ contains
             ! radii
             call read_img%bp(0., params_glob%cenlp)
             call read_img%mask(params_glob%msk, 'hard')
-            call read_img%bin_kmeans
+            call otsu_robust_fast(read_img, is2d=.true., noneg=.false., thresh=thresh)
             call read_img%write('bin.mrc',i)
             call read_img%mul(dist_img)
             minmax = read_img%minmax()

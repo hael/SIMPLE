@@ -40,6 +40,7 @@ contains
         logical, optional, intent(in)    :: be_verbose
         type(ori)   :: ranori
         type(image) :: vol_tmp
+        logical     :: verbose
         verbose = .false.
         if( present(be_verbose) ) verbose = be_verbose
         ! it is assumed that vol1, smpd, msk are part of the inputted command line

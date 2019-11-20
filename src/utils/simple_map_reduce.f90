@@ -79,9 +79,7 @@ contains
         integer, allocatable :: pairs(:,:), parts(:,:)
         character(len=:), allocatable :: fname
         ! generate all pairs
-        DebugPrint  ' split_pairs_in_parts nobjs: ', nobjs
         npairs = (nobjs*(nobjs-1))/2
-        DebugPrint  'split_pairs_in_parts, npairs: ', npairs
         allocate( pairs(npairs,2), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('mapreduce ;split_pairs_in_parts  1',alloc_stat)
         cnt = 0
@@ -102,7 +100,6 @@ contains
             if(alloc_stat.ne.0)call allocchk("mapreduce ;split_pairs_in_parts creating fname ",alloc_stat)
             call fopen(funit, status='REPLACE', action='WRITE', file=fname, access='STREAM',iostat=io_stat)
             call fileiochk('mapreduce ;split_pairs_in_parts '//trim(fname), io_stat)
-            DebugPrint   'writing pairs in range: ', parts(ipart,1), parts(ipart,2)
             write(unit=funit,pos=1,iostat=io_stat) pairs(parts(ipart,1):parts(ipart,2),:)
             ! Check if the write was successful
             if( io_stat .ne. 0 )&
@@ -123,8 +120,6 @@ contains
         character(len=:), allocatable :: fname
         ! allocate pairs and similarities
         npairs = (nobjs*(nobjs-1))/2
-        DebugPrint   'analysing this number of objects: ', nobjs
-        DebugPrint   'analysing this number of pairs: ', npairs
         allocate( smat(nobjs,nobjs), pairs(npairs,2), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('In: simple_map_reduce::merge_similarities_from_parts, 1',alloc_stat)
         ! initialise similarities
@@ -149,7 +144,6 @@ contains
             call fclose(funit, errmsg="In map_reduce merge_similarities_from_parts closing "//trim(fname))
             deallocate(fname)
             ! retrieve the similarities
-            DebugPrint   'allocating this number of similarities: ', parts(ipart,2)-parts(ipart,1)+1
             allocate(sims(parts(ipart,1):parts(ipart,2)), stat=alloc_stat)
             if(alloc_stat.ne.0)call allocchk("In: simple_map_reduce::merge_similarities_from_parts, sims(:) 2",alloc_stat)
             allocate(fname, source='similarities_part'//int2str_pad(ipart,numlen)//'.bin')

@@ -2,6 +2,7 @@
 module simple_builder
 include 'simple_lib.f08'
 use simple_image,            only: image
+use simple_binimage,         only: binimage
 use simple_sp_project,       only: sp_project
 use simple_oris,             only: oris
 use simple_reconstructor,    only: reconstructor

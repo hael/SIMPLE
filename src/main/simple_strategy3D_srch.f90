@@ -86,7 +86,6 @@ contains
         ! update spproj_field
         call build_glob%spproj_field%set(iptcl, 'specscore',  specscore)
         call o_prev%kill
-        DebugPrint  '>>> STRATEGY3D_SRCH :: set_ptcl_stats'
     end subroutine set_ptcl_stats
 
     ! class method: evaluation of stats and objective function
@@ -121,7 +120,6 @@ contains
         call build_glob%spproj_field%set(iptcl, 'w',         1.)
         call build_glob%spproj_field%set(iptcl, 'ow',        1.)
         call o_prev%kill
-        DebugPrint  '>>> STRATEGY3D_SRCH :: eval_ptcl'
     end subroutine eval_ptcl
 
     subroutine new( self, spec, npeaks )
@@ -157,7 +155,6 @@ contains
         ! create all df:s search object
         call self%grad_orisrch_obj%new
         self%exists = .true.
-        DebugPrint  '>>> STRATEGY3D_SRCH :: CONSTRUCTED NEW STRATEGY3D_SRCH OBJECT'
     end subroutine new
 
     subroutine prep4srch( self )
@@ -205,7 +202,6 @@ contains
         endif
         self%prev_corr = corr
         call o_prev%kill
-        DebugPrint  '>>> STRATEGY3D_SRCH :: PREPARED FOR SIMPLE_STRATEGY3D_SRCH'
     end subroutine prep4srch
 
     subroutine inpl_srch( self )
@@ -278,7 +274,6 @@ contains
                     end do
                 endif
             endif
-            DebugPrint  '>>> STRATEGY3D_SRCH :: FINISHED INPL SEARCH'
         endif
     end subroutine inpl_srch
 

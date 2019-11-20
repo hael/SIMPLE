@@ -37,7 +37,6 @@ contains
         ! initialize best cost to huge number
         self%yb = huge(x)
         self%exists = .true. ! indicates existence
-        DebugPrint  'created new opt_bforce object'
     end subroutine new_opt_bforce
 
     !> \brief  brute force minimization
@@ -55,19 +54,15 @@ contains
         spec%nevals = 0
         ! generate initial vector (lower bounds)
         spec%x = spec%limits(:,1)
-        DebugPrint  'generated initial vector'
         ! set best and current point to best point in spec
         self%pb = spec%x
         self%pc = spec%x
-        DebugPrint  'did set best and current point'
         ! set best cost
         self%yb     = spec%costfun(fun_self, self%pb, spec%ndim)
-        if( debug ) write(logfhandle,'(a,1x,f7.3)') 'Initial cost:', self%yb
         spec%nevals = spec%nevals+1
         ! search: we will start at the lowest value for each dimension, then
         ! go in steps of stepsz until we get to the upper bounds
         spec%niter = 0
-        DebugPrint  'starting brute force search'
         do while( srch_not_done() )
             y = spec%costfun(fun_self, self%pc, spec%ndim)
             spec%nevals = spec%nevals+1
@@ -75,7 +70,6 @@ contains
             if( y <= self%yb )then
                 self%yb = y       ! updating the best cost
                 self%pb = self%pc ! updating the best solution
-                DebugPrint  'Found better best, cost:', self%yb
             endif
         end do
         spec%x = self%pb
@@ -103,7 +97,6 @@ contains
                         exit
                     endif
                 end do
-                DebugPrint  'New configuration:', self%pc(:)
             end function
 
     end subroutine bforce_minimize

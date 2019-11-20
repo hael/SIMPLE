@@ -116,7 +116,6 @@ contains
         self%best_corr  = self%prev_corr
         ! calculate spectral score
         self%specscore = pftcc_glob%specscore(self%prev_class, self%iptcl, prev_roind)
-        if( DEBUG ) write(logfhandle,*) '>>> strategy2D_srch::PREPARED FOR SIMPLE_strategy2D_srch'
     end subroutine prep4srch
 
     subroutine inpl_srch( self )

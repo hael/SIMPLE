@@ -38,7 +38,6 @@ type :: ftiter
     procedure :: get_lfny
     procedure :: get_lp
     procedure :: get_spat_freq
-    procedure :: get_clin_lims
     ! LOOPING LIMITS
     procedure :: loop_lims
     ! LOGICAL<->PHYSICAL ADDRESS CONVERTERS
@@ -176,15 +175,6 @@ contains
         real :: spat_freq
         spat_freq = real(ind)/self%dsteps(which)
     end function get_spat_freq
-
-    !>  \brief  is a getter
-    pure function get_clin_lims( self, lp_dyn ) result( lims )
-        class(ftiter), intent(in) :: self
-        real,          intent(in) :: lp_dyn
-        integer :: lims(2)
-        lims(2) = dynfind( self%dsteps(1), lp_dyn, self%lfnys(1) )
-        lims(1) = self%lhps(1)
-    end function get_clin_lims
 
     ! LOOPING LIMITS
 

@@ -1,7 +1,8 @@
 ! operations on micrographs
 module simple_micops
 include 'simple_lib.f08'
-use simple_image, only: image
+use simple_image,    only: image
+use simple_binimage, only: binimage
 implicit none
 
 public :: read_micrograph, shrink_micrograph, set_box, extract_boxes2file
@@ -9,12 +10,13 @@ public :: extract_windows2file, generate_sampling_coordinates
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG_HERE = .true.
+logical, parameter :: DEBUG = .true.
 type(image) :: micrograph, micrograph_shrunken, micrograph_denoised
 integer     :: ldim(3), ldim_shrunken(3), box, box_shrunken, nx, ny, border_offset
 real        :: shrink_factor
 
 contains
+
     subroutine read_micrograph( micfname, smpd, save_copy )
         character(len=*),  intent(in) :: micfname
         real,              intent(in) :: smpd
@@ -48,13 +50,13 @@ contains
         call micrograph%clip(micrograph_shrunken)
         if( present(ldim_out) ) ldim_out = ldim_shrunken
         if( present(smpd_out) ) smpd_out = micrograph%get_smpd() * shrink_factor
-        if( DEBUG_HERE ) write(logfhandle,*) 'DEBUG_HERE(micops); did shrink micrograph to logical dimension: ', ldim_shrunken
+        if( DEBUG ) write(logfhandle,*) 'DEBUG(micops); did shrink micrograph to logical dimension: ', ldim_shrunken
     end subroutine shrink_micrograph
 
     subroutine set_box( box_in, box_out, mic_out )
-        integer,               intent(in)  :: box_in
-        integer,     optional, intent(out) :: box_out
-        type(image), optional, intent(out) :: mic_out
+        integer,                  intent(in)  :: box_in
+        integer,         optional, intent(out) :: box_out
+        class(binimage), optional, intent(out) :: mic_out
         box = box_in
         box_shrunken = round2even(real(box)/shrink_factor)
         !high-pass filter shrunken micrograph according to box_shrunken
@@ -62,13 +64,13 @@ contains
         ! return filtered micrograph in real-space
         call micrograph_shrunken%ifft()
         !if(present(snr)) call micrograph_shrunken%add_gauran(snr)
-        !if( DEBUG_HERE ) call micrograph_shrunken%write('shrunken_hpassfiltered.mrc')
+        !if( DEBUG ) call micrograph_shrunken%write('shrunken_hpassfiltered.mrc')
         if(present(mic_out))  call mic_out%copy(micrograph_shrunken)
         ! loop dimensions for target extraction will be 0:nx and 0:ny
         nx = ldim_shrunken(1) - box_shrunken
         ny = ldim_shrunken(2) - box_shrunken
         if( present(box_out) ) box_out = box_shrunken
-        if( DEBUG_HERE ) write(logfhandle,*) 'DEBUG_HERE(micops); did set box_shrunken to: ', box_shrunken
+        if( DEBUG ) write(logfhandle,*) 'DEBUG(micops); did set box_shrunken to: ', box_shrunken
     end subroutine set_box
 
     subroutine extract_boxes2file( offset, outstk, n_images, boffset, coord )
@@ -113,7 +115,7 @@ contains
             end do
 
         endif
-        if( DEBUG_HERE ) write(logfhandle,*) 'DEBUG_HERE(micops); wrote # images to stack: ', n_images
+        if( DEBUG ) write(logfhandle,*) 'DEBUG(micops); wrote # images to stack: ', n_images
     end subroutine extract_boxes2file
 
     ! This subroutine does exactly what 'extract_boxes2file' in simple_micops does, but it works on
@@ -161,7 +163,7 @@ contains
             end do
 
         endif
-        if( DEBUG_HERE ) write(logfhandle,*) 'DEBUG_HERE(micops); wrote # images to stack: ', n_images
+        if( DEBUG ) write(logfhandle,*) 'DEBUG(micops); wrote # images to stack: ', n_images
     end subroutine extract_windows2file
 
     function generate_sampling_coordinates( offset ) result( coords )

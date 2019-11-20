@@ -1,6 +1,7 @@
 module simple_segpicker
 include 'simple_lib.f08'
-use simple_image, only : image
+use simple_image,      only : image
+use simple_binimage,   only: binimage
 use simple_parameters, only: params_glob
 implicit none
 
@@ -15,10 +16,10 @@ integer, parameter :: N_ROT = 18
 
 type :: segpicker
     private
-    type(image) :: img
-    type(image) :: img_cc
-    type(image) :: reference
-    type(image) :: phasecorr
+    type(image)    :: img
+    type(binimage) :: img_cc
+    type(image)    :: reference
+    type(image)    :: phasecorr
     real, allocatable :: particles_coord(:,:)
     real, allocatable :: stdev_gray_level(:)
     real    :: min_rad               = 0.
@@ -96,18 +97,18 @@ contains
         use simple_tvfilter, only : tvfilter
         use simple_micops
         use simple_segmentation, only: sobel, automatic_thresh_sobel
-        class(segpicker), intent(inout) :: self
-        character(len= *),    intent(in)    :: detector
+        class(segpicker),  intent(inout) :: self
+        character(len= *), intent(in)    :: detector
         real, allocatable :: rmat(:,:,:)
         real, allocatable :: x(:), x_out(:)
         type(tvfilter)    :: tvf
-        type(image) :: micrograph_shrunken
-        integer     :: box_shrunken
-        real        :: ave, sdev, maxv, minv
-        real        :: thresh(1)
-        real        :: sigma_x, sigma_y
-        type(image) :: aux !HEREE can I get rid of it?
-        type(image) :: mask_img
+        type(binimage) :: micrograph_shrunken
+        integer        :: box_shrunken
+        real           :: ave, sdev, maxv, minv
+        real           :: thresh(1)
+        real           :: sigma_x, sigma_y
+        type(image)    :: aux !HEREE can I get rid of it?
+        type(image)    :: mask_img
         ! 0) Reading and saving original micrograph
         call read_micrograph(self%pickername, smpd=self%smpd)
         ! 1) Shrink and high pass filtering
@@ -141,7 +142,7 @@ contains
             call sobel(micrograph_shrunken,thresh)
         else if (detector .eq. 'bin') then
             ! default self%detector is bin
-            call micrograph_shrunken%bin(ave+.8*sdev)
+            call micrograph_shrunken%binarize(ave+.8*sdev)
         else if (detector .eq. 'otsu') then
             self%detector = 'otsu'
             rmat = micrograph_shrunken%get_rmat()
@@ -149,7 +150,7 @@ contains
             call otsu(x,x_out)
             rmat = reshape(x_out, [self%ldim_shrunken(1),self%ldim_shrunken(2),1])
             call micrograph_shrunken%set_rmat(rmat)
-            call micrograph_shrunken%erosion() !morphological erosion
+            call micrograph_shrunken%erode() !morphological erosion
             deallocate(x,x_out,rmat)
         else
             THROW_HARD('Invalid detector; preprocess_mic')
@@ -161,10 +162,10 @@ contains
         if( DEBUG_HERE ) call micrograph_shrunken%write_jpg(PATH_HERE//basename(trim(self%fbody))//'_BinMedian.jpg')
         call micrograph_shrunken%write(PATH_HERE//basename(trim(self%fbody))//'_BinMedian.mrc')
         ! 5) Connected components (cc) identification
-        call micrograph_shrunken%find_connected_comps(self%img_cc)
+        call micrograph_shrunken%find_ccs(self%img_cc)
         ! 6) cc filtering !HEREEE
         print *, 'before polishing the ccs: ', self%get_n_ccs()
-        call self%img_cc%polish_cc(self%min_rad,self%max_rad)
+        call self%img_cc%polish_ccs([self%min_rad,self%max_rad])
         print *, 'after polishing the ccs: ', self%get_n_ccs()
         if( DEBUG_HERE ) call self%img_cc%write_jpg(PATH_HERE//basename(trim(self%fbody))//'_ConnectedComponentsElimin.jpg')
         call self%img_cc%write(PATH_HERE//basename(trim(self%fbody))//'_ConnectedComponentsElimin.mrc')
@@ -176,7 +177,7 @@ contains
         ! FORMULA: phasecorr = ifft2(fft2(field).*conj(fft2(reference)));
         subroutine gen_phase_correlation(field,maxv, minv,mask_img)
             use simple_procimgfile, only :  clip_imgfile
-            type(image), intent(inout) :: field
+            class(image), intent(inout) :: field
             real,        intent(in)    :: maxv, minv
             type(image), intent(out)   :: mask_img
             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

@@ -1229,7 +1229,6 @@ contains
          hi = maxval(in_buffer)
          if(allocated(img_buffer))deallocate(img_buffer)
          allocate(img_buffer(w*h*3))
-         DebugPrint " ImgExportBuffer ", w, h, lo, hi
          do j=1,h
              do i=1,w
                  if  (colorspec == 4) then
@@ -1242,7 +1241,6 @@ contains
                  else if  (colorspec == 3) then
                      c=3
                      pixel = NINT( real(2_8**24,8) * real(in_buffer(i,j) - lo,8)/real(hi-lo,8),kind=4)
-                     !DebugPrint " ImgExportBuffer ", j, i, pixel,  INT( IAND( pixel             , boz_00ff), kind=1)
                      img_buffer((i-1)*c + (j-1)*w*c + 1) = INT( IAND( ISHFT( pixel, -16), boz_00ff), kind=1)
                      img_buffer((i-1)*c + (j-1)*w*c + 2) = INT( IAND( ISHFT( pixel, -8) , boz_00ff), kind=1)
                      img_buffer((i-1)*c + (j-1)*w*c + 3) = INT( IAND( pixel             , boz_00ff), kind=1)

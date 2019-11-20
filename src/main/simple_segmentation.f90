@@ -1,30 +1,27 @@
 module simple_segmentation
 include 'simple_lib.f08'
-use simple_image, only: image
+use simple_image,    only: image
+use simple_binimage, only: binimage
+use simple_neighs
 implicit none
 
-public :: sobel, automatic_thresh_sobel, canny, iterative_thresholding, otsu_img, otsu_robust_fast, otsu_img_robust
+public :: sobel, automatic_thresh_sobel, canny, otsu_img, otsu_robust_fast
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: IMPROVED   = .true.
-logical, parameter :: DOPRINT    = .false.
+logical, parameter :: DOPRINT = .false.
 
 contains
 
-    ! Classic Sobel edge detection routine
+    ! classic Sobel edge detection routine
     subroutine sobel(img_in,thresh)
-        class(image), intent(inout) :: img_in           !image input and output
-        real,         intent(in)    :: thresh(1)        !threshold for Sobel algorithm
-        real,  allocatable :: grad(:,:,:), rmat(:,:,:)  !matrices
+        class(image), intent(inout) :: img_in    ! image input and output
+        real,         intent(in)    :: thresh(1) ! threshold for Sobel algorithm
+        real,  allocatable :: grad(:,:,:), rmat(:,:,:)
         integer :: ldim(3)
         ldim = img_in%get_ldim()
-        allocate(grad(ldim(1),ldim(2),ldim(3)), rmat(ldim(1),ldim(2),ldim(3)), source = 0.)
-        if(IMPROVED) then
-            call img_in%calc_gradient_improved(grad)
-        else
-            call img_in%calc_gradient(grad)
-        endif
+        allocate(grad(ldim(1),ldim(2),ldim(3)), rmat(ldim(1),ldim(2),ldim(3)), source=0.)
+        call img_in%calc_gradient(grad)
         where(grad > thresh(1) ) rmat = 1.
         call img_in%set_rmat(rmat)
         deallocate(grad,rmat)
@@ -36,9 +33,9 @@ contains
     ! close to 'goal'. This particular number is selected because it is what needed
     ! for Chiara's particle picking routine.
     subroutine automatic_thresh_sobel(img, goal, thresh)
-        class(image),    intent(inout)   :: img
-        real, optional,  intent(in)      :: goal
-        real, optional,  intent(inout)   :: thresh(1) !to keep track of the selected threshold
+        class(image), intent(inout)    :: img
+        real, optional,  intent(in)    :: goal
+        real, optional,  intent(inout) :: thresh(1) !to keep track of the selected threshold
         real, allocatable  :: grad(:,:,:)
         real               :: tthresh(1), ggoal       !selected threshold and ratio nforeground/nbackground
         real               :: t(3)                    !to calculate 3 possible sobel thresholds for each iteration
@@ -54,11 +51,7 @@ contains
         ldim = img%get_ldim()
         allocate(grad(ldim(1),ldim(2),ldim(3)), source = 0.)
         if(present(goal)) ggoal = goal
-        if(IMPROVED) then
-            call img%calc_gradient_improved(grad)
-        else
-            call img%calc_gradient(grad)
-        endif
+        call img%calc_gradient(grad)
         tthresh(1) = (maxval(grad) + minval(grad))/2   !initial guessing
         diff = 1.     !initialization
         if(DEBUG) print*, 'Initial guessing: ', tthresh
@@ -121,11 +114,10 @@ contains
     !        as suggested in the source.
     ! If it doesn't work as you would like you can also check "Auto Canny" in GIT directory.
     subroutine canny(img_in,img_out,thresh,lp)
-        type(image),           intent(inout) :: img_in
-        type(image), optional, intent(inout) :: img_out
-        real,        optional, intent(in)    :: thresh(2)
-        real,        optional, intent(in)    :: lp(1)
-        type(image)       :: img_copy
+        class(image),           intent(inout) :: img_in
+        class(image), optional, intent(inout) :: img_out
+        real,         optional, intent(in)    :: thresh(2)
+        real,         optional, intent(in)    :: lp(1)
         real              :: tthresh(2),  sigma, m
         real, allocatable :: grad(:,:,:), vector(:)
         integer           :: ldim(3)
@@ -142,11 +134,7 @@ contains
             endif
             sigma = 0.33
             allocate(grad(ldim(1),ldim(2),ldim(3)), source = 0.)
-            if(IMPROVED) then
-                call img_out%calc_gradient_improved(grad)
-            else
-                call img_out%calc_gradient(grad)
-            endif
+            call img_out%calc_gradient(grad)
             allocate(vector(size(grad)), source = 0.)
             vector(:) = pack(grad, .true.)
             m = median_nocopy(vector) !Use the gradient, the source talks about the image itself
@@ -154,24 +142,20 @@ contains
             tthresh(1) = max(minval(grad), (1.-sigma)*m) !lower
             tthresh(2) = min(maxval(grad), (1.+sigma)*m) !upper
             write(logfhandle,*) 'Selected thresholds: ', tthresh
-            if (present(lp)) then
+            if (present(lp) ) then
                 call canny_edge(img_out,tthresh,lp)
             else
                 call canny_edge(img_out,tthresh)
             endif
         else
-          if(present(thresh)) then
+          if( present(thresh) ) then
               call canny_edge(img_in,thresh)
               return
           endif
           sigma = 0.33
-          allocate(grad(ldim(1),ldim(2),ldim(3)), source = 0.)
-          if(IMPROVED) then
-              call img_in%calc_gradient_improved(grad)
-          else
-              call img_in%calc_gradient(grad)
-          endif
-          allocate(vector(size(grad)), source = 0.)
+          allocate(grad(ldim(1),ldim(2),ldim(3)), source=0.)
+          call img_in%calc_gradient(grad)
+          allocate(vector(size(grad)), source=0.)
           vector(:) = pack(grad, .true.)
           m = median_nocopy(vector) !Use the gradient, the source talks about the image itself
           !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
@@ -227,7 +211,7 @@ contains
                         if(mat_in(i,j,1) < mat_in(i-1,j+1,1)) temp_mat(i,j,1) = 0.       !just southwest
                     else if(i-1 > 0 .and. j+1 <= ldim(2) .and. i+1 <= ldim(1) .and. j-1 > 0) then
                         if(mat_in(i,j,1) < mat_in(i-1,j+1,1) .or. mat_in(i,j,1) < mat_in(i+1,j-1,1)) temp_mat(i,j,1) = 0. !northeast- southwest
-                        !In the angles I decide not to to anything
+                        !In the angles I decide not to to do anything
                     endif
                 else if(pi/8. < dir_mat(i,j,1) .and. dir_mat(i,j,1) <= pi/4. + pi/8.) then !case(45), northwest- southeast
                     if((j-1 < 1 .and. i+1 <= ldim(1))  .or. (i-1 < 1 .and. j+1 <= ldim(2))) then
@@ -236,7 +220,7 @@ contains
                         if(mat_in(i,j,1) < mat_in(i-1,j-1,1)) temp_mat(i,j,1) = 0.    !just northwest
                     else if(i-1 > 0 .and. j+1 <= ldim(2) .and. i+1 <= ldim(1) .and. j-1 > 0) then
                         if(mat_in(i,j,1) < mat_in(i-1,j-1,1) .or. mat_in(i,j,1) < mat_in(i+1,j+1,1)) temp_mat(i,j,1) = 0. !northwest - southeast
-                        !In the angles I decide not to to anything
+                        !In the angles I decide not to to do anything
                     endif
                 else !case default
                     write(logfhandle,*) "There is an error in the direction matrix"
@@ -270,13 +254,13 @@ contains
     ! Canny routine for edge detection, in its classical verison.
     ! It requires a double threshold.
     subroutine canny_edge(img_in, thresh, lp)
-        type(image),    intent(inout) :: img_in     !input and output image
-        real,           intent(in)    :: thresh(2)  !low and high thresholds
-        real, optional, intent(in)    :: lp(1)        !lp filtering
-        type(image) :: Gr !gradient image
-        integer     :: ldim(3), s(3), r(3), k, i, j, nsz                   !just for implementation
+        class(image), intent(inout) :: img_in    ! input and output image
+        real,            intent(in) :: thresh(2) ! low and high thresholds
+        real, optional,  intent(in) :: lp(1)     ! lp filtering
+        type(binimage) :: Gr !gradient image
+        integer        :: ldim(3), s(3), r(3), k, i, j, nsz                   !just for implementation
         real,    allocatable :: dir_mat(:,:,:), Dc(:,:,:), Dr(:,:,:), grad(:,:,:)   !derivates, gradient
-        integer :: neigh_8(3,8) !8-neighborhoods of a pixel
+        integer :: neigh_8_inds(3,8) ! 8-neighborhoods of a pixel
         real    :: smpd, llp(1)
         ldim = img_in%get_ldim()
         smpd = img_in%get_smpd()
@@ -292,11 +276,7 @@ contains
         call img_in%ifft()
         !STEP 2: FINDING GRADIENTS
         allocate(dir_mat(ldim(1),ldim(2),ldim(3)), source = 0.)
-        if(IMPROVED) then
-            call img_in%calc_gradient_improved(grad, Dc, Dr)
-        else
-            call img_in%calc_gradient(grad, Dc, Dr)
-        endif
+        call img_in%calc_gradient(grad, Dc, Dr)
         do i = 1, ldim(1)
             do j = 1, ldim(2)
                 if(.not. is_zero(Dc(i,j,1))) then              !Do not divide by 0
@@ -317,12 +297,12 @@ contains
         do i = 1, ldim(1) !now grad is in {0,0.5,1}
             do j = 1, ldim(2)
                 if( abs( Gr%get([i,j,1]) - 0.5 ) < TINY ) then
-                    call Gr%set([i,j,1],0.)                         !suppress this edge, later I might re-build it
-                    call Gr%calc_neigh_8([i,j,1], neigh_8, nsz)
+                    call Gr%set([i,j,1],0.)                            ! suppress this edge, later I might re-build it
+                    call neigh_8(ldim, [i,j,1], neigh_8_inds, nsz)
                     do k = 1, nsz
-                        r = neigh_8(1:3,k)                                !indexes of 8 neighbourhoods
-                        if(is_equal( Gr%get([r(1),r(2),1]), 1.) ) then      !one of the 8 neigh is a strong edge
-                            call Gr%set([i,j,1], 1.)                         !re-build edge
+                        r = neigh_8_inds(1:3,k)                        ! indexes of 8 neighbourhoods
+                        if(is_equal( Gr%get([r(1),r(2),1]), 1.) ) then ! one of the 8 neigh is a strong edge
+                            call Gr%set([i,j,1], 1.)                   ! re-build edge
                             exit
                         endif
                     enddo
@@ -332,44 +312,6 @@ contains
         call img_in%copy(Gr)
         deallocate(grad)
     end subroutine canny_edge
-
-    !This subroutine binarises an image through iterative thresholding.
-    !ALGORITHM: -) select initial threshold T
-    !           -) split the image in 2 groups according to T
-    !           -) calc the mean grey level value in each group M1, M2
-    !           -) update T as the mean value of M1 and M2
-    !           -) stop when 2 threshold in a row are 'similar'
-    subroutine iterative_thresholding(img_in,img_out,thresh)
-        class(image),   intent(inout) :: img_in
-        type(image),    intent(inout) :: img_out
-        real, optional, intent(inout) :: thresh  !selected threshold for binarisation
-        real,    allocatable :: rmat(:,:,:)
-        logical, allocatable :: mask(:,:,:)
-        real, parameter :: TOLL = 0.05           !tollerance for threshold selection
-        real            :: T_n, T
-        integer         :: cnt
-        call img_out%new(img_in%get_ldim(),img_in%get_smpd())
-        rmat = img_in%get_rmat()
-        allocate(mask(size(rmat, dim =1), size(rmat, dim =1), size(rmat, dim = 3)), source = .false.)
-        T = (maxval(rmat) + minval(rmat))/2.    !initial guessing
-        T_n = T + 1                             !to get into the while loop
-        cnt = 0                                 !# of iterations
-        do while(abs(T-T_n)> TOLL)
-            cnt = cnt + 1
-            if(cnt > 0)  T = T_n
-            where(rmat <= T) mask = .true.                          ! in order to distinguish the 2 groups
-            T_n = ((sum(rmat,     mask)/real(count(     mask))) + &
-               & (sum(rmat, .not. mask)/real(count(.not. mask))))/2.! new threshold
-        enddo
-        if(present(thresh)) thresh = T_n
-        where(rmat > T_n)  !thresholding
-          rmat = 1.
-        elsewhere
-          rmat = 0.
-        endwhere
-        call img_out%set_rmat(rmat)
-        deallocate(rmat, mask)
-    end subroutine iterative_thresholding
 
     ! otsu binarization for images, based on the implementation
     ! of otsu algo for 1D vectors
@@ -409,14 +351,15 @@ contains
     ! It is very robust to salt & pepper noise. Much more than
     ! otsu_img_robust
     subroutine otsu_robust_fast(img, is2D, noneg, thresh)
-        type(image), intent(inout) :: img
-        logical,     intent(in)    :: is2D   ! is it a 2D image
-        logical,     intent(in)    :: noneg ! is it a nanoparticle
-        real,        intent(inout) :: thresh(3)
-        type(image) :: img_copy         ! copy of the original img
-        type(image) :: img_avg, img_med
+        class(image), intent(inout) :: img
+        logical,      intent(in)    :: is2D   ! is it a 2D image
+        logical,      intent(in)    :: noneg ! is it a nanoparticle
+        real,         intent(inout) :: thresh(3)
+        type(image)       :: img_copy
+        type(image)       :: img_avg, img_med
+        real, allocatable :: neigh_8_pixs(:)
         integer :: ldim(3)
-        integer :: i,j,k
+        integer :: i,j,k,nsz
         integer :: count_back          ! counts how many times a px is selected as background
         real    :: smpd
         real, pointer :: rmat(:,:,:)   ! original matrix
@@ -429,9 +372,36 @@ contains
         call img_copy%copy(img)
         call img_avg%new(ldim, smpd)
         call img_med%new(ldim, smpd)
+        ! Fetch pointers
+        call img%get_rmat_ptr(rmat_t)
+        call img_copy%get_rmat_ptr(rmat)
+        call img_avg%get_rmat_ptr(rmat_avg)
+        call img_med%get_rmat_ptr(rmat_med)
         ! Generate avg and median volumes
-        call generate_avg_and_median_vols(img,ldim,img_avg,img_med)
-        ! Apply otsu1D on each img
+        ! 1) img_avg: image where in each pixel is contained
+        ! the average value of the gray levels in the neighbours of the pixel.
+        ! 2) img_med: image where in each pixel is contained
+        ! the median value of the gray levels in the neighbours of the pixel.
+        if(ldim(3) == 1) then
+            allocate(neigh_8_pixs(9))
+        else
+            allocate(neigh_8_pixs(27))
+        endif
+        do i = 1, ldim(1)
+            do j = 1, ldim(2)
+                do k = 1, ldim(3)
+                    if(ldim(3) == 1 ) then
+                        call neigh_8(   ldim, rmat(:ldim(1),:ldim(2),:ldim(3)), [i,j,k], neigh_8_pixs, nsz)
+                    else
+                        call neigh_8_3D(ldim, rmat(:ldim(1),:ldim(2),:ldim(3)), [i,j,k], neigh_8_pixs, nsz)
+                    endif
+                    rmat_avg(i,j,k) = sum(neigh_8_pixs(1:nsz)) / real(nsz)
+                    rmat_med(i,j,k) = median(neigh_8_pixs(1:nsz))
+                enddo
+            enddo
+        enddo
+        deallocate(neigh_8_pixs)
+        ! Apply otsu1D to each img
         if(noneg .eqv. .true. ) then
             call otsu_img(img_copy, thresh(1), positive = .true.)
             call otsu_img(img_avg,  thresh(2), positive = .true.)
@@ -441,11 +411,6 @@ contains
             call otsu_img(img_avg,  thresh(2), positive = .false.)
             call otsu_img(img_med,  thresh(3), positive = .false.)
         endif
-        ! Fetch pointers
-        call img%get_rmat_ptr(rmat_t)
-        call img_copy%get_rmat_ptr(rmat)
-        call img_avg%get_rmat_ptr(rmat_avg)
-        call img_med%get_rmat_ptr(rmat_med)
         ! Find most frequent value in the binary version of each voxel
         do i = 1, ldim(1)
             do j = 1, ldim(2)
@@ -466,200 +431,6 @@ contains
         call img_copy%kill
         call img_avg%kill
         call img_med%kill
-    contains
-        ! This subroutine generates 2 images:
-        ! 1) img_avg: image where in each pixel is contained
-        ! the average value of the gray levels in the neighbours of the pixel.
-        ! 2) img_med: image where in each pixel is contained
-        ! the median value of the gray levels in the neighbours of the pixel.
-        subroutine generate_avg_and_median_vols(img,ldim,img_avg,img_med)
-            type(image), intent(inout) :: img, img_avg, img_med
-            integer,     intent(in)    :: ldim(3)
-            integer :: i, j, k
-            integer :: nsz
-            real, allocatable :: neigh_8(:)
-            real, pointer     :: rmat_avg(:,:,:),rmat_med(:,:,:)
-            call img_avg%get_rmat_ptr(rmat_avg)
-            call img_med%get_rmat_ptr(rmat_med)
-            if(ldim(3) == 1) then
-                allocate(neigh_8(9))
-            else
-                allocate(neigh_8(27))
-            endif
-            do i = 1, ldim(1)
-                do j = 1, ldim(2)
-                    do k = 1, ldim(3)
-                        if(ldim(3) == 1 ) then
-                            call img%calc_neigh_8([i,j,k],neigh_8,nsz)
-                        else
-                            call img%calc3D_neigh_8([i,j,k],neigh_8,nsz)
-                        endif
-                        rmat_avg(i,j,k) = sum(neigh_8(1:nsz))/real(nsz)
-                        rmat_med(i,j,k) = median(neigh_8(1:nsz))
-                    enddo
-                enddo
-            enddo
-            deallocate(neigh_8)
-        end subroutine generate_avg_and_median_vols
     end subroutine otsu_robust_fast
-
-    ! otsu binarization for images, based on the implementation
-    ! of otsu algo for 2D arrays. It should be better in case
-    ! of salt and pepper noise. It is computationally expensive.
-    ! Don't use it unless necessary
-    subroutine otsu_img_robust(img, thresh)
-        type(image),    intent(inout) :: img
-        real, optional, intent(inout) :: thresh
-        integer, parameter   :: MIN_VAL = 0, MAX_VAL = 255
-        integer, allocatable :: yhist_orig(:)
-        real,    allocatable :: xhist_orig(:)
-        real,    allocatable :: x_orig(:) ! vectorization of the img
-        real,    pointer     :: rmat(:,:,:), rmat_avg(:,:,:)
-        integer     :: i, j, k, h, ldim(3), S, T, ss, tt
-        real        :: hists(MAX_VAL-MIN_VAL+1,MAX_VAL-MIN_VAL+1), smpd, tr, max
-        real        :: sc, old_range(2) ! scale factor and old pixel range
-        type(image) :: img_avg
-        if( DOPRINT ) write(logfhandle,*) '*** initialising otsu'
-        ldim = img%get_ldim()
-        smpd = img%get_smpd()
-        if(ldim(3) > 1) THROW_HARD('Not implemented for volumes! otsu_img_robust')
-        call img%scale_pixels(real([MIN_VAL,MAX_VAL]), sc, old_range)
-        call img%get_rmat_ptr(rmat)
-        x_orig = pack(rmat(1:ldim(1),1:ldim(2),1), .true.)
-        call create_hist_vector(x_orig, MAX_VAL-MIN_VAL+1, xhist_orig, yhist_orig)
-        deallocate(yhist_orig)
-        call img_avg%new(ldim, smpd)
-        call generate_neigh_avg_mat(img, img_avg)
-        call img_avg%get_rmat_ptr(rmat_avg)
-        if( DOPRINT ) write(logfhandle,*)  '*** hists generation'
-        hists = 0.
-        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,h,k)&
-        !$omp proc_bind(close) reduction(+:hists)
-        do i = 1, ldim(1)
-            do j = 1, ldim(2)
-                do k = MIN_VAL, MAX_VAL
-                    do h = MIN_VAL, MAX_VAL
-                        if(k == MAX_VAL .and. h == MAX_VAL) then
-                            if(rmat(i,j,1)    >= xhist_orig(k) .and. &
-                               rmat_avg(i,j,1)>= xhist_orig(h)) then
-                                   hists(k+1,h+1) = hists(k+1,h+1) + 1.
-                            endif
-                            cycle
-                        endif
-                        if(k == MAX_VAL) then
-                            if(rmat(i,j,1)    >= xhist_orig(k) .and. &
-                               rmat_avg(i,j,1)>= xhist_orig(h) .and. rmat_avg(i,j,1) < xhist_orig(h+1)) then
-                                   hists(k+1,h+1) = hists(k+1,h+1) + 1.
-                             endif
-                            cycle
-                        endif
-                        if(h == MAX_VAL) then
-                            if(rmat(i,j,1)    >= xhist_orig(k) .and. rmat(i,j,1)     < xhist_orig(k+1) .and. &
-                               rmat_avg(i,j,1)>= xhist_orig(h)) then
-                                   hists(k+1,h+1) = hists(k+1,h+1) + 1.
-                             endif
-                            cycle
-                        endif
-                        if(rmat(i,j,1)    >= xhist_orig(k) .and. rmat(i,j,1)        < xhist_orig(k+1) .and. &
-                           rmat_avg(i,j,1)>= xhist_orig(h) .and. rmat_avg(i,j,1)    < xhist_orig(h+1)) then
-                               hists(k+1,h+1) = hists(k+1,h+1) + 1.
-                        endif
-                    enddo
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-        ! hists is the joint probability, normalise
-        hists = hists/real(ldim(1)*ldim(2))
-        if( DOPRINT ) write(logfhandle,*) 'sum ', sum(hists)
-        ! Threshold selection
-        if( DOPRINT ) write(logfhandle,*) '*** selecting thresholds'
-        call calc_tr(hists,MIN_VAL,MAX_VAL,threshold = tr)
-        where(rmat >= tr)
-            rmat = 1.
-        elsewhere
-            rmat = 0.
-        endwhere
-        if(present(thresh))  thresh =  tr/sc+old_range(1) !rescale threshold in the old range
-        call img_avg%kill
-        if( DOPRINT ) write(logfhandle,*) '*** binarization successfully completed'
-
-        contains
-
-            subroutine calc_tr(hists,MIN_VAL,MAX_VAL,threshold)
-                real,    intent(inout) :: hists(:,:)
-                integer, intent(in)    :: MIN_VAL,MAX_VAL
-                real,    intent(inout) :: threshold
-                real :: tr, maximum
-                real :: p_0(MAX_VAL-MIN_VAL+1,MAX_VAL-MIN_VAL+1)
-                integer :: i, j
-                real :: mu_T(2)
-                real :: mu_k(MAX_VAL-MIN_VAL+1,MAX_VAL-MIN_VAL+1), mu_h(MAX_VAL-MIN_VAL+1,MAX_VAL-MIN_VAL+1)
-                mu_T(:) = 0.
-                !$omp parallel do collapse(2) schedule(static) default(shared) private(k,h)&
-                !$omp reduction(+:mu_T) proc_bind(close)
-                do i = MIN_VAL+1, MAX_VAL+1
-                    do j = MIN_VAL+1, MAX_VAL+1
-                        mu_T(1) = mu_T(1) + (real(i)*hists(i,j))
-                        mu_T(2) = mu_T(2) + (real(j)*hists(i,j))
-                    enddo
-                enddo
-                !$omp end parallel do
-                maximum   = 0.
-                threshold = 0.
-                p_0     = 0.
-                mu_k    = 0.
-                mu_h    = 0.
-                do i = MIN_VAL+1, MAX_VAL + 1
-                    do j = MIN_VAL+1, MAX_VAL + 1
-                        if(j == 1) then
-                            if(i == 1) then
-                                p_0(1,1) = hists(1,1)
-                            else
-                                p_0(i,1)  = p_0(i-1,1)+hists(i,1)
-                                mu_k(i,1) = mu_k(i-1,1)+real(i-1)*hists(i,1)
-                                mu_h(i,1) = mu_h(i-1,1)
-                            endif
-                        elseif(i == 1) then
-                            p_0(i,j)  = p_0(i,j-1)+hists(i,j)
-                            mu_k(i,j) = mu_k(i,j-1)
-                            mu_h(i,j) = mu_h(i,j-1)+real(j-1)*hists(i,j)
-                        else
-                             p_0(i,j)  = p_0(i,j-1)+p_0(i-1,j)-p_0(i-1,j-1)+hists(i,j)
-                             mu_k(i,j) = mu_k(i,j-1)+mu_k(i-1,j)-mu_k(i-1,j-1)+real(i-1)*hists(i,j)
-                             mu_h(i,j) = mu_h(i,j-1)+mu_h(i-1,j)-mu_h(i-1,j-1)+real(j-1)*hists(i,j)
-                         endif
-                         if(abs(p_0(i,j)) < TINY) cycle
-                         if(p_0(i,j)-0.99 > 0.)  exit
-                         if(i == 2 .and. j == 2) exit
-                         tr = ((mu_k(i,j)-p_0(i,j)*mu_T(1))**2+(mu_h(i,j)-p_0(i,j)*mu_T(2))**2)/(p_0(i,j)*(1.-p_0(i,j)))
-                         if(tr >= maximum) then
-                             threshold = real(i)
-                             maximum = tr
-                         endif
-                    enddo
-                enddo
-            end subroutine calc_tr
-
-            ! This subroutine generates an image where in each pixel is contained
-            ! the average value of the gray levels in the neighbours of the pixel.
-            subroutine generate_neigh_avg_mat(img, img_avg)
-                type(image), intent(inout) :: img, img_avg
-                integer :: ldim(3) !shape of the matrix
-                integer :: i, j
-                integer :: nsz
-                real    :: neigh_8(9)
-                real, pointer :: rmat(:,:,:)
-                call img_avg%get_rmat_ptr(rmat)
-                ldim = img%get_ldim()
-                do i = 1, ldim(1)
-                    do j = 1, ldim(2)
-                        call img%calc_neigh_8([i,j,1],neigh_8,nsz)
-                        rmat(i,j,1) = sum(neigh_8(1:nsz))/real(nsz)
-                    enddo
-                enddo
-            end subroutine generate_neigh_avg_mat
-
-    end subroutine otsu_img_robust
 
 end module simple_segmentation

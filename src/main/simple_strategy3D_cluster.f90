@@ -69,7 +69,6 @@ contains
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
         call o%kill
-        DebugPrint   '>>> STRATEGY3D_CLUSTER :: FINISHED SRCH_CLUSTER3D'
     end subroutine srch_cluster3D
 
     subroutine statesrch_cluster3D(s, spec)
@@ -140,7 +139,6 @@ contains
         call build_glob%spproj_field%set(s%iptcl,'proj',     real(iproj))
         call build_glob%spproj_field%set(s%iptcl,'mi_proj',  mi_proj)
         call build_glob%spproj_field%set(s%iptcl,'mi_state', mi_state)
-        DebugPrint   '>>> STRATEGY3D_CLUSTER :: FINISHED STATESRCH_CLUSTER3D'
     end subroutine statesrch_cluster3D
 
     subroutine symsrch_cluster3D(s, spec)
@@ -217,7 +215,6 @@ contains
         call build_glob%spproj_field%set(s%iptcl,'proj',     real(iproj))
         call build_glob%spproj_field%set(s%iptcl,'mi_proj',  mi_proj)
         call build_glob%spproj_field%set(s%iptcl,'mi_state', mi_state)
-        DebugPrint   '>>> STRATEGY3D_CLUSTER :: FINISHED SYMSRCH_CLUSTER3D'
     end subroutine symsrch_cluster3D
 
     subroutine greedy_inplsrch(s, corr, istate, iproj)

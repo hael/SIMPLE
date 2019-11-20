@@ -46,8 +46,6 @@ contains
             if( file_exists(params%mskfile) )then
                 call mskvol%new([params%box,params%box,params%box], params%smpd)
                 call mskvol%read(params%mskfile)
-                call mskvol%resmask()
-                call mskvol%write('resmask'//params%ext)
                 call even%zero_background
                 call odd%zero_background
                 call even%mul(mskvol)
@@ -111,8 +109,6 @@ contains
             if( file_exists(params%mskfile) )then
                 call mskvol%new([params%box,params%box,params%box], params%smpd)
                 call mskvol%read(params%mskfile)
-                call mskvol%resmask()
-                call mskvol%write('resmask'//params%ext)
                 call even%zero_background
                 call odd%zero_background
                 call even%mul(mskvol)

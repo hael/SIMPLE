@@ -209,7 +209,7 @@ contains
                     iminds(2)  = cnt     ! im to
                 end do
             endif
-            class DEFAULT
+        class DEFAULT
             THROW_HARD('format not supported')
         end select
     end subroutine slice2recpos

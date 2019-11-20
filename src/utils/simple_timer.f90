@@ -178,8 +178,6 @@ end function cast_time_char
          dummytimestamp = tic()
          in_loop = .true.
       end if
-DebugPrint 'Size of elapsed array ', size(elapsed_times)
-
    end subroutine timer_loop_start
 !< end timer loop
    subroutine timer_loop_end(COMMENT)
@@ -228,8 +226,6 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
       character(len=*), intent(inout) :: vin
       character(len=20), allocatable  :: v(:)
       integer :: nargs_parse, ind, tmp_nargs=0
-      DebugPrint " timer_profile_setup ", char(nLoops), "  ", char(nVars)
-      DebugPrint vin
       ! define number of tokens
       if(nVars .le. 0)then
           call removepunct(vin)
@@ -239,39 +235,24 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
       end if
 
       if (nLoops .lt. 1) then
-
-          DebugPrint "timer_profile_setup error -- must have more than 1 loop"
          stop
       elseif (nargs_parse .gt. MAX_TOKENS .or. nargs_parse .le. 0) then
           print*, "timer_profile_setup  nargs_parse error -- outside range"
           stop
       elseif (len_trim(vin)==0 )then
-          DebugPrint "timer_profile_setup error -- token string is empty"
           stop
       else
           call removepunct(vin)
-
-          DebugPrint " timer_profile_setup remove punct"
-          DebugPrint vin
-
-
           allocate(v(nargs_parse))
           ind = index(vin, ',')
           if( ind == 0 ) then
               call parsestr(vin,' ', v,nargs_parse)
-              DebugPrint " timer_profile_setup no-comma token input"
-              DebugPrint vin
           else
               call parsestr(vin,',',v,tmp_nargs)
           end if
-          DebugPrint " timer_profile_setup parsed tokens"
-          DebugPrint v
           if (nargs_parse .ne. tmp_nargs .or. size(v,1) .ne. nargs_parse) then
-              DebugPrint "timer_profile_setup error -- parsing token string error ", nargs_parse, size(v,1)
               stop
           end if
-          DebugPrint  " timer_profile_setup parsed tokens OK"
-          DebugPrint  v
 
          ! profile_labels are a fixed size
          if (nVars .ge. 1 .and. v(1) .ne. "") then
@@ -365,8 +346,6 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
       allocate (profile_matrix(num_profile_loops, num_profile_vars))
       profile_matrix = REAL(0.0, timer_int_kind)
       profile_last_timerstamp = INT(0, timer_int_kind)
-      DebugPrint  " Profile matrix size ", size(profile_matrix, 1), size(profile_matrix, 2)
-      DebugPrint profile_matrix(1:10, 1:2)
    end subroutine timer_profile_setup
 
    !< Within profile loop - start timer with token
@@ -385,7 +364,6 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
             trim(adjustl(token)), " label index outside range ", ival
 #ifdef _DEBUG
       else
-         DebugPrint "Label: ", profile_labels(ival), " time stamp "
 #endif
       end if
    end subroutine timer_profile_start
@@ -400,7 +378,6 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
       do ival = 1, num_profile_vars
          iloop = 0
          if (.not. (INDEX(profile_labels(ival), trim(adjustl(token))) == 0)) then
-             DebugPrint  'Timer profile break: Found label ', profile_labels(ival)
             do iloop = 1, num_profile_loops
                if (profile_matrix(iloop, ival) .eq. 0) then
                   tmp_tstamp = tic()
@@ -425,8 +402,6 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
 #ifdef _DEBUG
       if ((ival .gt. num_profile_vars) .or. (iloop .gt. num_profile_loops)) then
          write (*, '(A,2i10)') "Timer_Profile_break: label/loop index outside range ", ival, iloop
-      else
-         DebugPrint "Label: ", profile_labels(ival), " time ", profile_matrix(iloop, ival)
       end if
 #endif
    end subroutine timer_profile_break

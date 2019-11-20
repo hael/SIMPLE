@@ -59,7 +59,6 @@ contains
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
-        DebugPrint  '>>> STRATEGY3D_SNHC_SINGLE :: FINISHED SEARCH'
 
         contains
 
@@ -130,7 +129,6 @@ contains
         call osym%kill
         call o1%kill
         call o2%kill
-        DebugPrint  '>>> STRATEGY3D_SNHC_SINGLE :: EXECUTED ORIS_ASSIGN_SNHC_SINGLE'
     end subroutine oris_assign_snhc_single
 
     subroutine kill_snhc_single( self )

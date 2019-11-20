@@ -7,6 +7,8 @@ public :: list_shmem_prgs_in_ui, write_ui_json, print_ui_latex
 private
 #include "simple_local_flags.inc"
 
+logical, parameter :: DEBUG = .false.
+
 type simple_input_param
     character(len=:), allocatable :: key
     character(len=:), allocatable :: keytype ! (binary|multi|num|str|file|dir)

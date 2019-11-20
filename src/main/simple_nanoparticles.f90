@@ -1,22 +1,21 @@
-module simple_nanoparticles_mod
+module simple_nanoparticle
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_image,         only : image
-use simple_bin_cc_image,  only : binimage
-use simple_atoms,         only : atoms
+use simple_image,     only : image
+use simple_binimage,  only : binimage
+use simple_atoms,     only : atoms
 implicit none
 
-private
 public :: nanoparticle
-
+private
 #include "simple_local_flags.inc"
 
 ! module global constants
-integer, parameter :: N_THRESH    = 20    !number of thresholds for binarization
-logical, parameter :: DEBUG_HERE  = .false.!for debugging purposes
-integer, parameter :: SOFT_EDGE   = 6
-integer, parameter :: N_DISCRET   = 1000
+integer, parameter :: N_THRESH   = 20      ! number of thresholds for binarization
+logical, parameter :: DEBUG      = .false. ! for debugging purposes
+integer, parameter :: SOFT_EDGE  = 6
+integer, parameter :: N_DISCRET  = 1000
 
 type :: nanoparticle
     private
@@ -25,20 +24,19 @@ type :: nanoparticle
     type(binimage) :: img_bin, img_cc
     integer        :: ldim(3)            = 0
     real           :: smpd               = 0.
-    real           :: nanop_mass_cen(3)  = 0.!coordinates of the center of mass of the nanoparticle
+    real           :: nanop_mass_cen(3)  = 0. !coordinates of the center of mass of the nanoparticle
     real           :: avg_dist_atoms     = 0.
-    real           :: theoretical_radius = 0.!theoretical atom radius
-    integer        :: n_cc               = 0 !number of atoms (connected components)
+    real           :: theoretical_radius = 0. !theoretical atom radius
+    integer        :: n_cc               = 0  !number of atoms (connected components)
     real,    allocatable  :: centers(:,:)
     real,    allocatable  :: ratios(:)
     real,    allocatable  :: ang_var(:)
     real,    allocatable  :: dists(:)
-    integer, allocatable  :: loc_longest_dist(:,:)   !for indentific of the vxl that determins the longest dim of the atom
+    integer, allocatable  :: loc_longest_dist(:,:)   ! for indentific of the vxl that determins the longest dim of the atom
     character(len=2)      :: element     = ' '
     character(len=4)      :: atom_name   = '    '
-    character(len=STDLEN) :: partname    = ''     !fname
-    character(len=STDLEN) :: fbody       = ''     !fbody
-
+    character(len=STDLEN) :: partname    = ''     ! fname
+    character(len=STDLEN) :: fbody       = ''     ! fbody
   contains
     ! constructor
     procedure          :: new => new_nanoparticle
@@ -85,18 +83,19 @@ end type nanoparticle
 
 contains
 
-    !constructor
     subroutine new_nanoparticle(self, fname, cline_smpd, element)
-        class(nanoparticle),      intent(inout) :: self
-        character(len=*),         intent(in)    :: fname
-        real,                     intent(in)    :: cline_smpd
-        character(len=2),optional,intent(inout) :: element
+        class(nanoparticle),        intent(inout) :: self
+        character(len=*),           intent(in)    :: fname
+        real,                       intent(in)    :: cline_smpd
+        character(len=2), optional, intent(inout) :: element
         integer :: nptcls
         real    :: smpd
         call self%kill
         call self%set_partname(fname)
         self%fbody = get_fbody(trim(basename(fname)), trim(fname2ext(fname)))
         self%smpd  = cline_smpd
+
+        ! CHIARA, the below should be in a defs module atom_constants or similar, discuss with C# please
         if(.not. present(element)) then
             self%element   = 'PT'  !default is pt
             self%atom_name = ' PT '
@@ -156,11 +155,11 @@ contains
                  call self%img%new(self%ldim, self%smpd)
                  call self%img%read(imgfile)
              case('img_bin')
-                 call self%img_bin%new_bimage(self%ldim, self%smpd)
-                 call self%img_bin%read_bimage(imgfile)
+                 call self%img_bin%new_bimg(self%ldim, self%smpd)
+                 call self%img_bin%read_bimg(imgfile)
              case('img_cc')
-                 call self%img_cc%new_bimage(self%ldim, self%smpd)
-                 call self%img_cc%read_bimage(imgfile)
+                 call self%img_cc%new_bimg(self%ldim, self%smpd)
+                 call self%img_cc%read_bimg(imgfile)
              case DEFAULT
                 THROW_HARD('Wrong input parameter img type; set_img')
         end select
@@ -448,7 +447,7 @@ contains
         call self%img%fft ! for pc calculation
         do i = 1, N_THRESH/2-1
             call progress(i, N_THRESH/2-1)
-            call img_bin_thresh(i)%new_bimage(self%ldim, self%smpd)
+            call img_bin_thresh(i)%new_bimg(self%ldim, self%smpd)
             if(i == 1) then
                 x_thresh(i) = otsu_thresh
             else
@@ -488,11 +487,11 @@ contains
         call self%img%ifft ! To remove
         write(logfhandle,*) 'Selected threshold: ', x_thresh(t)
         ! Update img_bin and img_cc
-        call self%img_bin%copy_bimage(img_bin_thresh(t))
-        call self%img_cc%copy_bimage(img_ccs_thresh(t))
+        call self%img_bin%copy_bimg(img_bin_thresh(t))
+        call self%img_cc%copy_bimg(img_ccs_thresh(t))
         do i = 1,  N_THRESH/2-1
-            call img_bin_thresh(i)%kill_bimage
-            call img_ccs_thresh(i)%kill_bimage
+            call img_bin_thresh(i)%kill_bimg
+            call img_ccs_thresh(i)%kill_bimg
         enddo
         ! deallocate and kill
         if(allocated(rmat))   deallocate(rmat)
@@ -628,7 +627,7 @@ contains
             self%centers(:,n_cc) = new_centers(:,n_cc)
         enddo
         call self%img_bin%get_imat(imat_bin)
-        if(DEBUG_HERE) call self%img_bin%write_bimage(trim(self%fbody)//'BINbeforeValidation.mrc')
+        if(DEBUG_HERE) call self%img_bin%write_bimg(trim(self%fbody)//'BINbeforeValidation.mrc')
         ! update binary image
         where(imat_cc > 0)
             imat_bin = 1
@@ -636,9 +635,9 @@ contains
             imat_bin = 0
         endwhere
         call self%img_bin%set_imat(imat_bin)
-        call self%img_bin%write_bimage(trim(self%fbody)//'BIN.mrc')
+        call self%img_bin%write_bimg(trim(self%fbody)//'BIN.mrc')
         call self%img_bin%find_ccs(self%img_cc)
-        call self%img_cc%write_bimage(trim(self%fbody)//'CC.mrc')
+        call self%img_cc%write_bimg(trim(self%fbody)//'CC.mrc')
         ! update number of ccs
         call self%update_self_ncc()
         ! update and write centers
@@ -1036,7 +1035,7 @@ contains
        integer :: i
        real    :: shortest_dist, longest_dist
        call self%img_cc%get_imat(imat_cc)
-       call self%img_cc%border_msk(border, label, .true.) !use 4neigh instead of 8neigh
+       call self%img_cc%border_mask(border, label, .true.) !use 4neigh instead of 8neigh
        where(border .eqv. .true.)
            imat_cc = 1
        elsewhere
@@ -1292,7 +1291,7 @@ contains
         integer, allocatable :: sz(:)
         if(allocated(self%ang_var)) deallocate(self%ang_var)
            allocate (self%ang_var(self%n_cc), source = 0.)
-        sz = self%img_cc%size_connected_comps()
+        sz = self%img_cc%size_ccs()
         !bring vector back to center
         do i = 1, self%n_cc
             loc_ld_real(:3,i) = real(self%loc_longest_dist(:3,i))- self%centers(:3,i)
@@ -1613,8 +1612,8 @@ contains
     subroutine make_soft_mask(self) !change the name
         class(nanoparticle), intent(inout) :: self
         type(image) :: img_cos
-        call self%img_bin%grow_bins_bimage(nint(0.5*self%theoretical_radius/self%smpd)+1)
-        call self%img_bin%cos_edge_bimage(img_cos,SOFT_EDGE)
+        call self%img_bin%grow_bins(nint(0.5*self%theoretical_radius/self%smpd)+1)
+        call self%img_bin%cos_edge(img_cos,SOFT_EDGE)
         call img_cos%write(trim(self%fbody)//'SoftMask.mrc')
         call img_cos%kill
     end subroutine make_soft_mask
@@ -1987,7 +1986,7 @@ contains
        ! generate volume for visualisation
        imat          = 0
        cnt_intersect = 0
-       call img_out%new_bimage(self%ldim, self%smpd)
+       call img_out%new_bimg(self%ldim, self%smpd)
        do i = 1, self%n_cc
            if(flag(i)) then
                cnt_intersect = cnt_intersect + 1
@@ -1995,7 +1994,7 @@ contains
            endif
        enddo
        call img_out%set_imat(imat)
-       call img_out%write_bimage('ImageColumn.mrc')
+       call img_out%write_bimg('ImageColumn.mrc')
        ! Find the plane that best fits the atoms belonging to the line
        allocate(points(3, count(flag)), source = 0.)
        m = self%nanopart_masscen()
@@ -2063,7 +2062,7 @@ contains
         ! reset
         imat    = 0
         cnt_intersect = 0
-        call img_out%new_bimage(self%ldim, self%smpd)
+        call img_out%new_bimg(self%ldim, self%smpd)
         do i = 1, self%n_cc
             if(flag(i)) then
                 cnt_intersect = cnt_intersect + 1
@@ -2071,7 +2070,7 @@ contains
             endif
         enddo
         call img_out%set_imat(imat)
-        call img_out%write_bimage('ImagePlane.mrc')
+        call img_out%write_bimg('ImagePlane.mrc')
         ! TO MOVE
         allocate(points(3, count(flag)), source = 0.)
         m = self%nanopart_masscen()
@@ -2109,7 +2108,7 @@ contains
         end do
         call fclose(filnum)
       endif
-      call img_out%kill_bimage
+      call img_out%kill_bimg
       call init_atoms%kill
       if(allocated(line))  deallocate(line)
       if(allocated(plane)) deallocate(plane)
@@ -2165,8 +2164,8 @@ contains
         self%n_cc              = 0
         call self%img%kill()
         call self%img_raw%kill
-        call self%img_bin%kill_bimage()
-        call self%img_cc%kill_bimage()
+        call self%img_bin%kill_bimg()
+        call self%img_cc%kill_bimg()
         call self%centers_pdb%kill
         if(allocated(self%centers))          deallocate(self%centers)
         if(allocated(self%ratios))           deallocate(self%ratios)
@@ -2174,4 +2173,5 @@ contains
         if(allocated(self%loc_longest_dist)) deallocate(self%loc_longest_dist)
         if(allocated(self%ang_var))          deallocate(self%ang_var)
     end subroutine kill_nanoparticle
-end module simple_nanoparticles_mod
+
+end module simple_nanoparticle

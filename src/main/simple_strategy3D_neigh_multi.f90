@@ -63,7 +63,6 @@ contains
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
-        DebugPrint  '>>> strategy3D_neigh_multi :: FINISHED STOCHASTIC SEARCH'
 
     contains
 
@@ -146,7 +145,6 @@ contains
         call osym%kill
         call o%kill
         call o2%kill
-        DebugPrint  '>>> STRATEGY3D_NEIGH_MULTI :: EXECUTED ORIS_ASSIGN_GREEDY_MULTI'
     end subroutine oris_assign_neigh_multi
 
     subroutine kill_neigh_multi( self )

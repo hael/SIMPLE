@@ -64,7 +64,6 @@ contains
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
-        DebugPrint  '>>> STRATEGY3D_CONT_SINGLE :: FINISHED CONTINUOUS SEARCH'
     end subroutine srch_cont_single
 
     !>  \brief retrieves and preps npeaks orientations for reconstruction

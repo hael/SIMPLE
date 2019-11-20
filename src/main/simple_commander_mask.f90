@@ -8,7 +8,6 @@ use simple_commander_base, only: commander_base
 implicit none
 
 public :: mask_commander
-public :: resmask_commander
 private
 #include "simple_local_flags.inc"
 
@@ -16,10 +15,6 @@ type, extends(commander_base) :: mask_commander
  contains
    procedure :: execute      => exec_mask
 end type mask_commander
-type, extends(commander_base) :: resmask_commander
-  contains
-    procedure :: execute      => exec_resmask
-end type resmask_commander
 
 contains
 
@@ -112,28 +107,5 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MASK NORMAL STOP ****')
     end subroutine exec_mask
-
-    !> for generating an envelope mask for resolution estimation
-    subroutine exec_resmask( self, cline )
-        use simple_masker, only: masker
-        class(resmask_commander), intent(inout) :: self
-        class(cmdline),           intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        type(masker)     :: mskvol
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.,boxmatch_off=.true.)
-        call mskvol%new([params%box,params%box,params%box], params%smpd)
-        if( file_exists(params%mskfile) )then
-            call mskvol%read(params%mskfile)
-            call mskvol%resmask()
-            call mskvol%write('resmask'//params%ext)
-            call mskvol%kill
-        else
-            write(logfhandle,*)
-            THROW_HARD('inputted mskfile: '//trim(params%mskfile)//'does not exists in cwd; exec_resmask')
-        endif
-         ! end gracefully
-        call simple_end('**** SIMPLE_RESMASK NORMAL STOP ****')
-    end subroutine exec_resmask
 
 end module simple_commander_mask

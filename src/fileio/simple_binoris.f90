@@ -397,12 +397,8 @@ contains
             nspaces = self%header(isegment)%n_bytes_per_record - len_trim(sarr(i)%str)
             if( nspaces > 0 )then
                 write(unit=self%funit,pos=ibytes) sarr(i)%str//spaces(nspaces)
-                DebugPrint 'wrote: ', sizeof(sarr(i)%str//spaces(nspaces)),&
-                    &' segment: ', isegment, ' bytes, starting @: ', ibytes
             else
                 write(unit=self%funit,pos=ibytes) sarr(i)%str
-                DebugPrint 'wrote: ', sizeof(sarr(i)%str),&
-                    &' segment: ', isegment, ' bytes, starting @: ', ibytes
             endif
             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
         end do

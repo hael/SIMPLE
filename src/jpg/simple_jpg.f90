@@ -20,6 +20,7 @@ integer, parameter, public :: max_colors    =  256
 integer, parameter         :: GREYSCALE     =  1
 integer(kind=4), parameter :: boz_00ff = INT(z'000000ff',kind=4)
 integer(kind=4), parameter :: boz_ffff = INT(z'00ffffff',kind=4)
+logical                    :: debug, verbose
 
 type jpg_img
     private

@@ -31,7 +31,6 @@ contains
    end subroutine reset_timer_omp
    !< Get the clock tick count per second
    real(dp) function tickrate_omp()
-       DebugPrint " OMP timer doesn't have a CLOCK_RATE "
        tickrate_omp = REAL(1.0, dp)
    end function tickrate_omp
    !< Get system_clock timestamp

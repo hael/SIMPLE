@@ -65,12 +65,13 @@ contains
 
     !> for binarisation of stacks and volumes
     subroutine exec_binarise( self, cline )
-        use simple_segmentation, only: otsu_img_robust, otsu_robust_fast
+        use simple_segmentation, only: otsu_robust_fast
+        use simple_binimage,     only: binimage
         use simple_image,        only: image
         class(binarise_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(parameters) :: params
-        type(builder)    :: build
+        type(binimage)   :: img_or_vol
         integer :: igrow, iptcl
         logical :: is2D
         ! error check
@@ -83,48 +84,47 @@ contains
         if( cline%defined('thres') .and. cline%defined('npix') )then
             THROW_HARD('either thres-based or npix-based binarisation; both keys cannot be present; simple_binarise')
         endif
+        call params%new(cline)
         if( cline%defined('stk') )then
             is2D = .true.
-            call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+            call img_or_vol%new_bimg([params%box,params%box,1], params%smpd)
             do iptcl=1,params%nptcls
-                call build%img%read(params%stk, iptcl)
-                call doit(build%img)
-                call build%img%write(params%outstk, iptcl)
+                call img_or_vol%read(params%stk, iptcl)
+                call doit
+                call img_or_vol%write(params%outstk, iptcl)
             end do
         else if( cline%defined('vol1') )then
             is2D = .false.
-            call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
-            call build%vol%read(params%vols(1))
-            call doit(build%vol)
-            call build%vol%write(params%outvol)
+            call img_or_vol%new_bimg([params%box,params%box,params%box], params%smpd)
+            call img_or_vol%read(params%vols(1))
+            call doit
+            call img_or_vol%write(params%outvol)
         endif
+        call img_or_vol%kill
         ! end gracefully
         call simple_end('**** SIMPLE_BINARISE NORMAL STOP ****')
 
         contains
 
-            subroutine doit( img_or_vol )
-                class(image), intent(inout) :: img_or_vol
+            subroutine doit
+                type(image) :: cos_img
                 real :: ave, sdev, maxv, minv, thresh(3)
                 if( cline%defined('thres') )then
-                    call img_or_vol%bin(params%thres)
+                    call img_or_vol%binarize(params%thres)
                 else if( cline%defined('npix') )then
-                    call img_or_vol%bin(params%npix)
+                    call img_or_vol%binarize(params%npix)
                 else if( cline%defined('ndev') )then
                     call img_or_vol%stats( ave, sdev, maxv, minv)
-                    call img_or_vol%bin(ave + params%ndev * sdev)
+                    call img_or_vol%binarize(ave + params%ndev * sdev)
                 else
-                    ! call otsu_img_robust(img_or_vol)
                     call otsu_robust_fast(img_or_vol, is2D, noneg=.false., thresh=thresh)
                 endif
                 write(logfhandle,'(a,1x,i9)') '# FOREGROUND PIXELS:', img_or_vol%nforeground()
                 write(logfhandle,'(a,1x,i9)') '# BACKGROUND PIXELS:', img_or_vol%nbackground()
-                if( cline%defined('grow') )then
-                    do igrow=1,params%grow
-                        call img_or_vol%grow_bin
-                    end do
-                endif
-                if( cline%defined('edge') ) call img_or_vol%cos_edge(params%edge)
+                if( cline%defined('grow') ) call img_or_vol%grow_bins(params%grow)
+                if( cline%defined('edge') ) call img_or_vol%cos_edge(cos_img, params%edge)
+                call img_or_vol%copy(cos_img)
+                call cos_img%kill
                 if( cline%defined('neg')  ) call img_or_vol%bin_inv
             end subroutine doit
 
@@ -524,11 +524,11 @@ contains
     !> for online power spectra analysis through statistic calculation
     !! to perform prior ctf estimation.
     subroutine exec_pspec_stats( self, cline )
-        use simple_genpspec_and_statistics, only: pspec_statistics
+        use simple_pspec_stats, only: pspec_stats
         class(pspec_stats_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline !< command line input
-        type(pspec_statistics) :: pspec
-        type(parameters)       :: params
+        type(pspec_stats) :: pspec
+        type(parameters)  :: params
         integer :: nfiles,n_mic
         character(len=LONGSTRLEN), allocatable :: filenames(:)
         real, allocatable    :: score(:)
@@ -774,7 +774,6 @@ contains
                 if( cline%defined('clip') )then
                     call img%clip(tmp)
                     mm = tmp%minmax()
-                    DebugPrint 'min/max: ', mm(1), mm(2)
                     call tmp%write(params%outstk, cnt)
                 else
                     call img%write(params%outstk, cnt)

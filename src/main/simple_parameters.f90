@@ -460,7 +460,6 @@ contains
         logical,         optional, intent(in)    :: silent
         character(len=LONGSTRLEN), allocatable   :: sp_files(:)
         character(len=:),          allocatable   :: phaseplate, ctfflag
-        character(len=:),          allocatable   :: debug_local, verbose_local
         logical                       :: vol_defined(MAXS)
         character(len=1)              :: checkupfile(50)
         character(len=:), allocatable :: absname
@@ -477,22 +476,9 @@ contains
         ! seed random number generator
         call seed_rnd
         ! constants
-        nparts_set    = .false.
-        debug_local   = 'no'
-        verbose_local = 'no'
+        nparts_set = .false.
         ! file counter
         cntfile = 0
-        ! take care of debug/verbose flags
-        call check_carg('debug', debug_local)
-        if( debug_local == 'yes' )then
-            global_debug = .true. ! from simple_parameters
-            debug        = .true. ! from simple_local_flags.inc
-        end if
-        call check_carg('verbose', verbose_local)
-        if(verbose_local == 'yes')then
-            global_verbose = .true.
-            verbose        = .true.
-        end if
         ! default initialisations that depend on meta-data file format
         self%outfile = 'outfile'//trim(METADATA_EXT)
         ! checkers in ascending alphabetical order
@@ -991,13 +977,11 @@ contains
         if( self%stk .eq. '' .and. vol_defined(1) )then
             call find_ldim_nptcls(self%vols(1), self%ldim, ifoo)
             self%box  = self%ldim(1)
-            DebugPrint 'found logical dimension of volume: ', self%ldim
         endif
         ! no stack given,not vol given, get ldim from mskfile if present
         if( self%stk .eq. '' .and. .not. vol_defined(1) .and. self%mskfile .ne. '' )then
             call find_ldim_nptcls(self%mskfile, self%ldim, ifoo)
             self%box  = self%ldim(1)
-            DebugPrint 'found logical dimension of volume: ', self%ldim
         endif
         ! directories
         if( self%mkdir.eq.'yes' )then
@@ -1318,7 +1302,6 @@ contains
         if( file_exists(self%refs) )then
             ! get number of particles from stack
             call find_ldim_nptcls(self%refs, lfoo, ncls)
-            DebugPrint 'found ncls from refs: ', ncls
             if( cline%defined('ncls') )then
                 if( ncls /= self%ncls )then
                     write(logfhandle,*)'ncls in ',trim(self%refs),' : ',ncls
@@ -1619,7 +1602,6 @@ contains
                     call cline%set(file,trim(var))
                     deallocate(abspath_file)
                 endif
-                DebugPrint trim(file), '=', trim(var)
             endif
         end subroutine check_file
 

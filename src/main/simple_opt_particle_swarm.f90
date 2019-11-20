@@ -37,8 +37,6 @@ contains
         allocate(self%swarm(spec%npop,spec%ndim), self%velocities(spec%npop,spec%ndim), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: new_particle_swarm, 1",alloc_stat)
         self%exists = .true. ! indicates existence
-        if( spec%debug ) write(logfhandle,*) 'created new particle swarm (spec debug)'
-        DebugPrint 'created new particle swarm (instance)'
     end subroutine new_particle_swarm
 
     !> \brief  is the particle swarm minimize minimization routine

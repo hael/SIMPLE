@@ -71,7 +71,6 @@ contains
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
-        DebugPrint  '>>> STRATEGY3D_MULTI :: FINISHED STOCHASTIC SEARCH'
 
     contains
 
@@ -171,7 +170,6 @@ contains
         call osym%kill
         call o1%kill
         call o2%kill
-        DebugPrint   '>>> STRATEGY3D_MULTI :: EXECUTED ORIS_ASSIGN_MULTI'
     end subroutine oris_assign_multi
 
     subroutine kill_multi( self )

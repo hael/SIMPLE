@@ -541,7 +541,6 @@ contains
         logical, allocatable :: lmsk(:,:,:)
         real                 :: sdev_noise
         integer              :: statecnt(params_glob%nstates), i, cnt, state_here, state_glob
-        DebugPrint ' In reconstructor_eo; eorec_distr'
         ! stash global state index
         state_glob = state
         ! make the images
