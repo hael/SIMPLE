@@ -347,7 +347,7 @@ contains
         else
             ang_rad = acos(dot_prod)
         endif
-        if(DEBUG_HERE) then
+        if(DEBUG) then
             write(logfhandle,*)'>>>>>>>>>>>>>>>>>>>>>>'
             write(logfhandle,*)'mod_1     = ', mod1
             write(logfhandle,*)'mod_2     = ', mod2
@@ -380,7 +380,7 @@ contains
         else
             ang_rad = acos(dot_prod)
         endif
-        if(DEBUG_HERE) then
+        if(DEBUG) then
             write(logfhandle,*)'>>>>>>>>>>>>>>>>>>>>>>'
             write(logfhandle,*)'mod_1     = ', mod1
             write(logfhandle,*)'mod_2     = ', mod2
@@ -469,7 +469,7 @@ contains
             call atom%new          ('centers_'//trim(int2str(i))//'_iteration.pdb')
             call atom%convolve(simulated_distrib, cutoff = 8.*self%smpd)
             call del_file('centers_'//trim(int2str(i))//'_iteration.pdb')
-            if(DEBUG_HERE) call simulated_distrib%write('simulated_'//trim(int2str(i))//'_iteration.mrc')
+            if(DEBUG) call simulated_distrib%write('simulated_'//trim(int2str(i))//'_iteration.mrc')
             call atom%kill
             ! Take care of Fourier status, for phase_corr calculation
             call simulated_distrib%fft
@@ -627,7 +627,7 @@ contains
             self%centers(:,n_cc) = new_centers(:,n_cc)
         enddo
         call self%img_bin%get_imat(imat_bin)
-        if(DEBUG_HERE) call self%img_bin%write_bimg(trim(self%fbody)//'BINbeforeValidation.mrc')
+        if(DEBUG) call self%img_bin%write_bimg(trim(self%fbody)//'BINbeforeValidation.mrc')
         ! update binary image
         where(imat_cc > 0)
             imat_bin = 1
@@ -995,7 +995,7 @@ contains
            stdev_diameter = stdev_diameter + (avg_diameter-longest_dist(label))**2
        enddo
        stdev_diameter = sqrt(stdev_diameter/real(self%n_cc-1))
-       if(DEBUG_HERE) then
+       if(DEBUG) then
            write(logfhandle,*) 'minimum  value diameter ', min_diameter, 'A'
            write(logfhandle,*) 'maximum  value diameter ', max_diameter, 'A'
            write(logfhandle,*) 'median   value diameter ', median_diameter, 'A'
@@ -1065,7 +1065,7 @@ contains
            ratio = shortest_dist/longest_dist
        else
             ratio = 0.
-            if(DEBUG_HERE) write(logfhandle,*) 'cc ', label, 'LONGEST DIST = 0'
+            if(DEBUG) write(logfhandle,*) 'cc ', label, 'LONGEST DIST = 0'
        endif
        longest_dist  = longest_dist*self%smpd  !in A
        shortest_dist = shortest_dist*self%smpd
@@ -1307,7 +1307,7 @@ contains
             else
                 self%ang_var(k) = 0. ! If the cc is too small it doesn't make sense
             endif
-            if(DEBUG_HERE) write(logfhandle,*) 'ATOM ', k, 'angle between direction longest dim and vec [0,0,1] ', self%ang_var(k)
+            if(DEBUG) write(logfhandle,*) 'ATOM ', k, 'angle between direction longest dim and vec [0,0,1] ', self%ang_var(k)
         enddo
         call fopen(filnum, file='AnglesLongestDims.csv', iostat=io_stat)
         write (filnum,*) 'ang'
@@ -1693,7 +1693,7 @@ contains
                     call centers_close2%set_occupancy(i,0.)
                 endif
                 dist_sq(i) = dist(i)**2 !formula wants them square, could improve performance here
-                if(DEBUG_HERE) then
+                if(DEBUG) then
                      write(logfhandle,*) 'ATOM', i,'coords: ', nano2%centers(:,i), 'coupled with '
                      write(logfhandle,*) '    ',location, 'coordinates: ', nano1%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
                 endif
@@ -1747,7 +1747,7 @@ contains
                     call centers_close2%set_occupancy(i,0.)
                 endif
                 dist_sq(i) = dist(i)**2 !formula wants them square
-                if(DEBUG_HERE) then
+                if(DEBUG) then
                     write(logfhandle,*) 'ATOM', i,'coordinates: ', nano1%centers(:,i), 'coupled with '
                     write(logfhandle,*) '    ',location, 'coordinates: ', nano2%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
                 endif

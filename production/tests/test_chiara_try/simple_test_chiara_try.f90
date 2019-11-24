@@ -395,7 +395,7 @@ end module simple_test_chiara_try_mod
        use simple_math
        use simple_image, only : image
        use simple_atoms, only : atoms
-       use simple_nanoparticles_mod, only: nanoparticle
+       use simple_nanoparticle, only: nanoparticle
        use simple_segmentation
        use simple_binimage, only : binimage
        use simple_test_chiara_try_mod

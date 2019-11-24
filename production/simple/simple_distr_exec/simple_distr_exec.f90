@@ -69,13 +69,7 @@ pos = index(args, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, args, pos )
 prg = args(pos+1:) ! this is the program name
 ! make UI
-
-print *, 'trying to make UI'
-
 call make_user_interface
-
-print *, 'DONE, making UI'
-
 if( str_has_substr(entire_line, 'prg=list') )then
     call list_distr_prgs_in_ui
     stop

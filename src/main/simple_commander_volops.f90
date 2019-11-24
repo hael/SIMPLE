@@ -772,8 +772,8 @@ contains
     end subroutine exec_symmetry_test
 
     subroutine exec_radial_sym_test( self, cline )
-      use simple_nanoparticles_mod, only : nanoparticle
-      use simple_atoms,         only : atoms
+      use simple_nanoparticle, only : nanoparticle
+      use simple_atoms,        only : atoms
         class(radial_sym_test_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(symmetry_test_commander) :: symtstcmd

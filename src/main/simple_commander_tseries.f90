@@ -10,7 +10,7 @@ use simple_sp_project,     only: sp_project
 use simple_image,          only: image
 use simple_binimage,       only: binimage
 use simple_qsys_env,       only: qsys_env
-use simple_nanoparticles_mod
+use simple_nanoparticle
 use simple_qsys_funs
 implicit none
 
