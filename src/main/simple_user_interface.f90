@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 implicit none
 
 public :: simple_program, make_user_interface, get_prg_ptr, list_distr_prgs_in_ui
-public :: list_shmem_prgs_in_ui, write_ui_json, print_ui_latex
+public :: list_shmem_prgs_in_ui, write_ui_json, print_ui_latex, list_quant_prgs_in_ui
 private
 #include "simple_local_flags.inc"
 
@@ -759,6 +759,25 @@ contains
         write(logfhandle,'(A)') volops%name
         write(logfhandle,'(A)') write_classes%name
     end subroutine list_shmem_prgs_in_ui
+
+    subroutine list_single_prgs_in_ui
+        write(logfhandle,'(A)') center2D_nano%name
+        write(logfhandle,'(A)') cluster2D_nano%name
+        write(logfhandle,'(A)') refine3D_nano%name
+        write(logfhandle,'(A)') tseries_motion_correct%name
+        write(logfhandle,'(A)') tseries_track%name
+    end subroutine list_single_prgs_in_ui
+
+    subroutine list_quant_prgs_in_ui
+        write(logfhandle,'(A)') atom_cluster_analysis%name
+        write(logfhandle,'(A)') atoms_rmsd%name
+        write(logfhandle,'(A)') center%name
+        write(logfhandle,'(A)') detect_atoms%name
+        write(logfhandle,'(A)') geometry_analysis%name
+        write(logfhandle,'(A)') nano_softmask%name
+        write(logfhandle,'(A)') radial_dependent_stats%name
+        write(logfhandle,'(A)') radial_sym_test%name
+    end subroutine list_quant_prgs_in_ui
 
     ! private class methods
 

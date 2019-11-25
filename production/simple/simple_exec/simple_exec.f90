@@ -44,7 +44,6 @@ type(cluster_cavgs_commander)       :: xcluster_cavgs
 type(write_classes_commander)       :: xwrite_classes
 type(symaxis_search_commander)      :: xsymsrch
 type(symmetry_test_commander)       :: xsymtst
-type(radial_sym_test_commander)     :: xradsymtst
 type(symmetrize_map_commander)      :: xsymmetrize_map
 type(dock_volpair_commander)        :: xdock_volpair
 type(postprocess_commander)         :: xpostprocess
@@ -154,8 +153,6 @@ select case(prg)
         call xsymsrch%execute( cline )
     case( 'symmetry_test' )
         call xsymtst%execute( cline )
-    case( 'radial_sym_test' )
-        call xradsymtst%execute( cline )
     case( 'symmetrize_map' )
         call xsymmetrize_map%execute(cline)
     case( 'dock_volpair' )

@@ -15,6 +15,8 @@ public :: radial_dependent_stats_commander
 public :: atom_cluster_analysis_commander
 public :: nano_softmask_commander
 public :: geometry_analysis_commander
+public :: radial_sym_test_commander
+
 private
 #include "simple_local_flags.inc"
 
@@ -42,6 +44,10 @@ type, extends(commander_base) :: geometry_analysis_commander
   contains
     procedure :: execute      => exec_geometry_analysis
 end type geometry_analysis_commander
+type, extends(commander_base) :: radial_sym_test_commander
+  contains
+    procedure :: execute      => exec_radial_sym_test
+end type radial_sym_test_commander
 
 contains
 
@@ -319,5 +325,66 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_GEOMETRY_ANALYSIS NORMAL STOP ****')
     end subroutine exec_geometry_analysis
+
+    subroutine exec_radial_sym_test( self, cline )
+        use simple_nanoparticle,    only : nanoparticle
+        use simple_atoms,           only : atoms
+        use simple_commander_volops, only: symmetry_test_commander
+        class(radial_sym_test_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(symmetry_test_commander) :: symtstcmd
+        type(parameters)       :: params
+        character(len=STDLEN)  :: fname
+        character(len=3)       :: pgrp
+        type(nanoparticle) :: nano
+        type(atoms) :: atom
+        type(image) :: simulated_distrib
+        real        :: cutoff
+        real        :: min_rad, max_rad, step
+        integer     :: i, ldim(3)
+        real        :: radius
+        character(len=100) :: fname_conv
+        character(len=100) :: before_dir
+        call params%new(cline)
+        call simple_getcwd(before_dir)
+        call nano%new(params%vols(1), params%smpd,params%element)
+        !identifiy atomic positions
+        fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
+        call nano%set_atomic_coords(trim(fname)//'_atom_centers.pdb')
+        call nano%get_ldim(ldim)
+        min_rad = params%min_rad
+        max_rad = params%max_rad
+        step    = params%stepsz
+        if(min_rad > max_rad) THROW_HARD('Minimum radius has to be smaller then maximum radius! exec_radial_sym_test')
+        if(step > max_rad-min_rad) THROW_HARD('Inputted too big stepsz! exec_radial_sym_test')
+        cutoff = 8.*params%smpd
+        call simulated_distrib%new(ldim,params%smpd)
+        do i =1, nint((max_rad-min_rad)/step)
+            radius = min_rad+real(i-1)*step
+            if(radius <= max_rad) then
+              ! Come back to root directory
+              call simple_chdir(trim(before_dir),errmsg="simple_commander_volops :: exec_radial_sym_test, simple_chdir; ")
+              fname_conv = 'atomic_coords_'//trim(int2str(nint(radius))//'A')
+              call nano%keep_atomic_pos_at_radius(radius, params%element, fname_conv)
+              ! Generate distribution based on atomic position
+              call atom%new('atomic_coords_'//trim(int2str(nint(radius))//'A.pdb'))
+              call atom%convolve(simulated_distrib, cutoff)
+              call simulated_distrib%write('density_'//trim(int2str(nint(radius))//'A.mrc'))
+              ! Prepare for calling exec_symmetry_test
+              call cline%set('vol1','density_'//trim(int2str(nint(radius))//'A.mrc'))
+              ! Check for symmetry
+              call cline%set('fname','sym_test_'//int2str(nint(radius))//'A.txt')
+              if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'yes')
+              call cline%set('center', 'no')
+              call cline%set('msk', radius/params%smpd+5.) !+5 to be sure
+              call symtstcmd%execute(cline)
+              call del_file('../'//'atomic_coords_'//trim(int2str(nint(radius))//'A.pdb'))
+              call del_file('../'//'density_'//trim(int2str(nint(radius))//'A.mrc'))
+              call atom%kill
+            endif
+        enddo
+        ! end gracefully
+        call simple_end('**** SIMPLE_RADIAL_SYM_TEST NORMAL STOP ****')
+    end subroutine exec_radial_sym_test
 
 end module simple_commander_quant
