@@ -139,6 +139,7 @@ contains
         integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev
         logical                                :: l_pick
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
+        if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',          'yes')
         ! mnotion correction
         if( .not. cline%defined('trs')             ) call cline%set('trs',              10.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           8.)
@@ -462,6 +463,7 @@ contains
         logical                       :: l_pick
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
         if( .not. cline%defined('stream')          ) call cline%set('stream',          'no')
+        if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',          'yes')
         ! mnotion correction
         if( .not. cline%defined('trs')             ) call cline%set('trs',              10.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           8.)
@@ -679,6 +681,7 @@ contains
         type(sp_project) :: spproj
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('trs')        ) call cline%set('trs',           10.)
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',        8.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',         5.)
@@ -720,6 +723,7 @@ contains
         character(len=KEYLEN)    :: str
         type(chash)              :: job_descr
         type(chash), allocatable :: part_params(:)
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',         10.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',     20.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',       6.)
@@ -870,6 +874,7 @@ contains
         type(chash)      :: job_descr
         integer          :: nintgs
         call cline%set('oritype', 'mic')
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', real(params%numlen))
@@ -962,6 +967,7 @@ contains
         type(sp_project)              :: spproj
         type(chash)                   :: job_descr
         type(qsys_env)                :: qenv
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',  'yes')
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
         if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
         if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
@@ -1126,8 +1132,9 @@ contains
         endif
         use_segmentation = .true.
         if( cline%defined('refs') .or. cline%defined('vol1') ) use_segmentation = .false.
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
-        if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'mic')
+        if( .not. cline%defined('oritype')   ) call cline%set('oritype',     'mic')
         call params%new(cline)
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
@@ -1239,9 +1246,10 @@ contains
         real    :: dfx,dfy
         integer :: boxcoords(2), lfoo(3)
         integer :: nframes,imic,i,nmics_tot,numlen,nmics,cnt,state,istk,nstks,ipart
-        if( .not. cline%defined('outside')   ) call cline%set('outside',   'no')
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',       'yes')
+        if( .not. cline%defined('outside')   ) call cline%set('outside',      'no')
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
-        if( .not. cline%defined('stream')    ) call cline%set('stream',    'no')
+        if( .not. cline%defined('stream')    ) call cline%set('stream',       'no')
         if( cline%defined('ctf') )then
             if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
                 THROW_HARD('Only CTF=NO/FLIP are allowed')
@@ -1717,8 +1725,9 @@ contains
                 THROW_HARD('Only CTF=NO/FLIP are allowed')
             endif
         endif
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
-        if( .not. cline%defined('oritype')   ) call cline%set('oritype',   'ptcl3D')
+        if( .not. cline%defined('oritype')   ) call cline%set('oritype',  'ptcl3D')
         call cline%set('nthr',1.)
         call params%new(cline)
         call cline%set('mkdir', 'no')
@@ -2147,6 +2156,7 @@ contains
         if( .not.cline%defined('refs') .and. .not.cline%defined('vol1') )then
             THROW_HARD('one of REFS and VOL1 must be provided!')
         endif
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
         ! output command line executed
         write(logfhandle,'(a)') '>>> COMMAND LINE EXECUTED'

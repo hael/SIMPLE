@@ -80,7 +80,7 @@ contains
         type(simple_program), pointer :: ptr2prg => null()
         character(len=LONGSTRLEN)     :: arg
         character(len=STDLEN)         :: exec_cmd
-        character(len=:), allocatable :: exec
+        character(len=:), allocatable :: prgname, exec
         integer :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
         ! parse command line
         self%argcnt = command_argument_count()
@@ -92,25 +92,31 @@ contains
         call get_command_argument(1, arg, cmdlen, cmdstat)
         pos = index(arg, '=') ! position of '='
         call cmdline_err(cmdstat, cmdlen, arg, pos)
-        if( str_has_substr(arg(pos+1:), 'report_selection') ) arg(pos+1:) = 'selection' ! FIX4NOW
+        allocate(prgname, source=arg(pos+1:))
+        if( str_has_substr(prgname, 'report_selection') ) prgname = 'selection' ! FIX4NOW
         ! obtain pointer to the program in the simple_user_interface specification
-        call get_prg_ptr(arg(pos+1:), ptr2prg)
-        if( .not. associated(ptr2prg) ) THROW_HARD(trim(arg(pos+1:))//' is not part of SIMPLE')
+        call get_prg_ptr(prgname, ptr2prg)
+        if( .not. associated(ptr2prg) ) THROW_HARD(prgname//' is not part of SIMPLE')
         exec = ptr2prg%get_executable()
         if( .not. str_has_substr(exec_cmd,exec) )then
-            THROW_HARD('program '//trim(arg(pos+1:))//' not executed by '//trim(basename(exec_cmd))//' but '//exec)
+            THROW_HARD('program '//trim(prgname)//' not executed by '//trim(basename(exec_cmd))//' but '//exec)
         endif
         ! list programs if so instructed
-        ! *****************NEEDS DEALING WITH
-        ! if( str_has_substr(self%entire_line, 'prg=list') )then
-        !     if( ptr2prg%is_distr() )then
-        !         call list_distr_prgs_in_ui
-        !         call exit(EXIT_FAILURE2)
-        !     else
-        !
-        !         call exit(EXIT_FAILURE2)
-        !     endif
-        ! endif
+        if( str_has_substr(self%entire_line, 'prg=list') )then
+            select case(prgname)
+                case('simple_exec')
+                    call list_simple_prgs_in_ui
+                    call exit(EXIT_FAILURE2)
+                case('single_exec')
+                    call list_single_prgs_in_ui
+                    call exit(EXIT_FAILURE2)
+                case('quant_exec')
+                    call list_quant_prgs_in_ui
+                    call exit(EXIT_FAILURE2)
+                case DEFAULT
+                    THROW_HARD('Program '//prgname//' not supported; parse')
+            end select
+        endif
         ! describe program if so instructed
         if( str_has_substr(self%entire_line, 'describe=yes') )then
             call ptr2prg%print_prg_descr_long()

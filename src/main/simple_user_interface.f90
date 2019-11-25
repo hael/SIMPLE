@@ -59,7 +59,6 @@ type :: simple_program
     procedure          :: get_executable
     procedure          :: get_nrequired_keys
     procedure          :: get_required_keys
-    procedure          :: is_distr
     procedure          :: requires_sp_project
     procedure, private :: kill
 end type simple_program
@@ -4680,11 +4679,6 @@ contains
             end subroutine key_extractor
 
     end function get_required_keys
-
-    logical function is_distr( self )
-        class(simple_program), intent(in) :: self
-        is_distr = str_has_substr(self%executable, 'distr')
-    end function is_distr
 
     logical function requires_sp_project( self )
         class(simple_program), intent(in) :: self

@@ -826,6 +826,7 @@ contains
         logical          :: gen_sc_project
         ! mkdir=yes: a new *_sc project + stacks are generated
         ! mkdir=no : only stacks are scaled
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         gen_sc_project = cline%get_carg('mkdir').eq.'yes'
         ! make parameters and project
         call build%init_params_and_build_spproj(cline, params)
@@ -906,6 +907,7 @@ contains
         integer :: imic,nmics,cnt,istk,nstks,ipart,nptcls,nparts,iptcl
         integer :: nstks_orig, nptcls_orig, nmics_orig
         ! init
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         call cline%set('mkdir', 'no')
         ! sanity checks

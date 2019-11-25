@@ -10,10 +10,10 @@ use simple_commander_tseries
 use simple_spproj_hlev
 implicit none
 #include "simple_local_flags.inc"
-type(tseries_import_commander)               :: ximport
-type(tseries_import_particles_commander)     :: ximport_particles
-type(tseries_ctf_estimate_commander)         :: xctf_estimate
-type(tseries_make_pickavg_commander)         :: xmake_pickavg
+type(tseries_import_commander)               :: xtseries_import
+type(tseries_import_particles_commander)     :: xtseries_import_particles
+type(tseries_ctf_estimate_commander)         :: xtseries_ctf_estimate
+type(tseries_make_pickavg_commander)         :: xtseries_make_pickavg
 type(tseries_motion_correct_commander_distr) :: xmcorr_distr
 type(tseries_track_commander_distr)          :: xtrack_distr
 type(center2D_nano_commander_distr)          :: xcenter2D_distr
@@ -43,6 +43,14 @@ call cline%parse
 if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
 select case(prg)
     ! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
+    case( 'tseries_import' )
+       call xtseries_import%execute(cline)
+    case( 'tseries_import_particles' )
+       call xtseries_import_particles%execute(cline)
+   case( 'tseries_make_pickavg')
+       call xtseries_make_pickavg%execute(cline)
+   case( 'tseries_ctf_estimate' )
+       call xtseries_ctf_estimate%execute(cline)
     case( 'motion_correct, tseries_motion_correct' )
         call xmcorr_distr%execute( cline )
     case( 'track', 'tseries_track' )

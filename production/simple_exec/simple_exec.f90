@@ -62,6 +62,15 @@ type(cleanup2D_commander)                   :: xcleanup2D_distr
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
 type(initial_3Dmodel_commander) :: xinitial_3Dmodel
 
+! REFINE3D WORKFLOWS
+type(calc_pspec_commander_distr)    :: xcalc_pspec_distr
+type(refine3D_commander_distr)      :: xrefine3D_distr
+type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
+
+! CLUSTER3D WORKFLOWS
+type(cluster3D_commander)           :: xcluster3D
+type(cluster3D_refine_commander)    :: xcluster3D_refine
+
 ! OTHER SINGLE-PARTICLE WORKFLOW PROGRAMS
 type(map_cavgs_selection_commander) :: xmap_cavgs_selection
 type(cluster_cavgs_commander)       :: xcluster_cavgs
@@ -71,15 +80,6 @@ type(symmetry_test_commander)       :: xsymtst
 type(symmetrize_map_commander)      :: xsymmetrize_map
 type(dock_volpair_commander)        :: xdock_volpair
 type(postprocess_commander)         :: xpostprocess
-
-! REFINE3D WORKFLOWS
-type(calc_pspec_commander_distr)    :: xcalc_pspec_distr
-type(refine3D_commander_distr)      :: xrefine3D_distr
-type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
-
-! CLUSTER3D WORKFLOWS
-type(cluster3D_commander)           :: xcluster3D
-type(cluster3D_refine_commander)    :: xcluster3D_refine
 
 ! IMAGE PROCESSING PROGRAMS
 type(pspec_stats_commander)   :: xpspecstats
@@ -173,54 +173,53 @@ select case(prg)
 
     ! PRE-PROCESSING WORKFLOWS
     case( 'preprocess' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xpreprocess%execute(cline)
     case( 'preprocess_stream' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xpreprocess_stream%execute(cline)
     case( 'extract' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xextract_distr%execute(cline)
     case( 'reextract' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xreextract_distr%execute(cline)
     case( 'motion_correct' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xmotion_correct_distr%execute(cline)
     case( 'gen_pspecs_and_thumbs' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xgen_pspecs_and_thumbs%execute(cline)
     case( 'motion_correct_tomo' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xmotion_correct_tomo_distr%execute(cline)
     case( 'ctf_estimate' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xctf_estimate_distr%execute(cline)
     case( 'pick' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xpick_distr%execute(cline)
     case( 'pick_extract_stream' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xpick_extract_stream%execute(cline)
 
     ! CLUSTER2D WORKFLOWS
     case( 'make_cavgs' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xmake_cavgs_distr%execute(cline)
     case( 'cleanup2D' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xcleanup2D_distr%execute(cline)
     case( 'cluster2D' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call execute_commander(xcluster2D_distr, cline)
     case( 'cluster2D_stream' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xcluster2D_stream%execute(cline)
 
     ! AB INITIO 3D RECONSTRUCTION WORKFLOW
     case( 'initial_3Dmodel' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call execute_commander(xinitial_3Dmodel, cline)
+
+    ! REFINE3D WORKFLOWS
+    case( 'calc_pspec' )
+        call execute_commander(xcalc_pspec_distr, cline)
+    case( 'refine3D' )
+        call execute_commander(xrefine3D_distr, cline)
+    case( 'reconstruct3D' )
+        call xreconstruct3D_distr%execute( cline )
+
+    ! CLUSTER3D WORKFLOWS
+    case( 'cluster3D' )
+        call xcluster3D%execute( cline )
+    case( 'cluster3D_refine' )
+        call xcluster3D_refine%execute( cline )
 
     ! OTHER SINGLE-PARTICLE WORKFLOW PROGRAMS
     case( 'map_cavgs_selection' )
@@ -239,24 +238,6 @@ select case(prg)
         call xdock_volpair%execute(cline)
     case( 'postprocess' )
         call xpostprocess%execute(cline)
-
-    ! REFINE3D WORKFLOWS
-    case( 'calc_pspec' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call execute_commander(xcalc_pspec_distr, cline)
-    case( 'refine3D' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call execute_commander(xrefine3D_distr, cline)
-    case( 'reconstruct3D' )
-        call xreconstruct3D_distr%execute( cline )
-
-    ! CLUSTER3D WORKFLOWS
-    case( 'cluster3D' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call xcluster3D%execute( cline )
-    case( 'cluster3D_refine' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call xcluster3D_refine%execute( cline )
 
     ! IMAGE PROCESSING PROGRAMS
     case('pspec_stats')
@@ -318,17 +299,16 @@ select case(prg)
     case( 'simulate_subtomogram' )
         call xsimulate_subtomogram%execute(cline)
 
+    ! MISCELLANEOUS WORKFLOWS
+    case( 'scale_project' )
+        call xscale_project%execute( cline )
+    case( 'prune_project' )
+        call xprune_project%execute( cline )
+
     ! SYSTEM INTERACTION PROGRAMS
     case( 'mkdir' )
         call xmkdir%execute(cline)
 
-    ! MISCELLANEOUS WORKFLOWS
-    case( 'scale_project' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call xscale_project%execute( cline )
-    case( 'prune_project' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call xprune_project%execute( cline )
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select

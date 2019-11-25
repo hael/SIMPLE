@@ -75,6 +75,7 @@ contains
         real                  :: scale_factor1, scale_factor2
         integer               :: icls, ncavgs, orig_box, box, istk, status, cnt
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         ! hard set oritype
         call cline%set('oritype', 'out') ! because cavgs are part of out segment

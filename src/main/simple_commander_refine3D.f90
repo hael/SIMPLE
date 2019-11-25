@@ -107,7 +107,8 @@ contains
                 THROW_HARD('refine=MULTI requires specification of NSTATES')
             endif
         endif
-        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp', 30.)
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
+        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! objfun=euclid logics, part 1
         l_switch2euclid  = .false.
@@ -633,7 +634,8 @@ contains
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
         logical          :: fall_over
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        if( .not. cline%defined('mkdir')    ) call cline%set('mkdir',      'yes')
+        if( .not. cline%defined('oritype')  ) call cline%set('oritype', 'ptcl3D')
         if( .not. cline%defined('projfile') )then
             THROW_HARD('Missing project file entry; exec_calc_pspec_distr')
         endif

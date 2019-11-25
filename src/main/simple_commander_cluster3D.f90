@@ -60,7 +60,8 @@ contains
         integer  :: nptcls_part, istate, n_nozero
         logical  :: fall_over, cavgs_import
         if( nint(cline%get_rarg('nstates')) <= 1 ) THROW_HARD('Non-sensical NSTATES argument for heterogeneity analysis!')
-        if( .not. cline%defined('refine') )  call cline%set('refine', 'cluster')
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',      'yes')
+        if( .not. cline%defined('refine') ) call cline%set('refine', 'cluster')
         if( .not. cline%defined('oritype')) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
         call params%new(cline)

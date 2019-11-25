@@ -47,6 +47,7 @@ contains
         type(chash)      :: job_descr
         integer          :: state, ipart
         logical          :: fall_over
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call cline%delete('refine')

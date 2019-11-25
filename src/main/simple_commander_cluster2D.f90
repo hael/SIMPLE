@@ -85,6 +85,7 @@ contains
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -193,6 +194,7 @@ contains
         real,    parameter    :: MINITS      = 5.
         real,    parameter    :: MAXITS      = 15.
         real                  :: SMPD_TARGET = 4.
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('lp')        ) call cline%set('lp',         15. )
         if( .not. cline%defined('ncls')      ) call cline%set('ncls',      200. )
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      20. )
@@ -422,6 +424,7 @@ contains
         else
             if( .not.cline%defined('msk') ) THROW_HARD('MSK must be defined!')
         endif
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('lp')        ) call cline%set('lp',          15.)
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       20.)
         if( .not. cline%defined('center')    ) call cline%set('center',     'no')
