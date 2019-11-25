@@ -1,25 +1,26 @@
 ! executes the parallel (or distributed workflows) of SIMPLE
 program single_exec
 include 'simple_lib.f08'
-use simple_user_interface, only: make_user_interface, list_distr_prgs_in_ui
+use simple_user_interface, only: make_user_interface, list_single_prgs_in_ui
 use simple_cmdline,        only: cmdline, cmdline_err
 use simple_commander_base, only: execute_commander
+use simple_commander_sim,  only: simulate_atoms_commander
 use simple_commander_cluster2D
 use simple_commander_tseries
 use simple_spproj_hlev
 implicit none
 #include "simple_local_flags.inc"
-type(import_commander)               :: ximport
-type(import_particles_commander)     :: ximport_particles
-type(ctf_estimate_commander)         :: xctf_estimate
-type(make_pickavg_commander)         :: xmake_pickavg
-type(motion_correct_commander_distr) :: xmcorr_distr
-type(track_commander_distr)          :: xtrack_distr
-type(center2D_commander_distr)       :: xcenter2D_distr
-type(cluster2D_commander_distr)      :: xcluster2D_distr
-type(estimate_diam_commander)        :: xestimate_diam
-type(simulate_atoms_commander)       :: xsimulate_atoms
-type(refine3D_commander_distr)       :: xrefine3D_distr
+type(tseries_import_commander)               :: ximport
+type(tseries_import_particles_commander)     :: ximport_particles
+type(tseries_ctf_estimate_commander)         :: xctf_estimate
+type(tseries_make_pickavg_commander)         :: xmake_pickavg
+type(tseries_motion_correct_commander_distr) :: xmcorr_distr
+type(tseries_track_commander_distr)          :: xtrack_distr
+type(center2D_nano_commander_distr)          :: xcenter2D_distr
+type(cluster2D_nano_commander_distr)         :: xcluster2D_distr
+type(estimate_diam_commander)                :: xestimate_diam
+type(simulate_atoms_commander)               :: xsimulate_atoms
+type(refine3D_nano_commander_distr)          :: xrefine3D_distr
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: args, prg, entire_line
 type(cmdline)         :: cline

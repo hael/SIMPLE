@@ -13,7 +13,7 @@ message(" tcsh$ cat add2.tcshrc >> ~/.tcshrc                                    
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 	message("Fixing library names with install_name_tool")
 #	execute_process(COMMAND install_name_tool -add_rpath ${CMAKE_INSTALL_PREFIX}/lib ${CMAKE_INSTALL_PREFIX}/bin/simple_exec)
-#	execute_process(COMMAND install_name_tool -add_rpath ${CMAKE_INSTALL_PREFIX}/lib ${CMAKE_INSTALL_PREFIX}/bin/simple_distr_exec)
+#	execute_process(COMMAND install_name_tool -add_rpath ${CMAKE_INSTALL_PREFIX}/lib ${CMAKE_INSTALL_PREFIX}/bin/single_exec)
 #	execute_process(COMMAND install_name_tool -add_rpath ${CMAKE_INSTALL_PREFIX}/lib ${CMAKE_INSTALL_PREFIX}/bin/quant_exec)
 endif()
 message("==========================================================================")

@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 implicit none
 
 public :: simple_program, make_user_interface, get_prg_ptr, list_simple_prgs_in_ui
-public :: write_ui_json, print_ui_latex, list_quant_prgs_in_ui
+public :: write_ui_json, print_ui_latex, list_quant_prgs_in_ui, list_single_prgs_in_ui
 private
 #include "simple_local_flags.inc"
 
@@ -68,12 +68,12 @@ type simple_prg_ptr
     type(simple_program), pointer :: ptr2prg => null()
 end type simple_prg_ptr
 
-! array of pointers to all simple_exec and simple_distr_exec programs
+! array of pointers to all simple_exec and simple_exec programs
 integer, parameter   :: NMAX_PTRS  = 200
 integer              :: n_prg_ptrs = 0
 type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
-! declare simple_exec and simple_distr_exec program specifications here
+! declare simple_exec and simple_exec program specifications here
 type(simple_program), target :: atom_cluster_analysis
 type(simple_program), target :: atoms_rmsd
 type(simple_program), target :: calc_pspec
@@ -741,15 +741,15 @@ contains
     end subroutine list_simple_prgs_in_ui
 
     subroutine list_single_prgs_in_ui
-        write(logfhandle,'(A)') tseries_import%name
-        write(logfhandle,'(A)') tseries_import_particles%name
-        write(logfhandle,'(A)') tseries_ctf_estimate%name
-        write(logfhandle,'(A)') tseries_make_pickavg%name
         write(logfhandle,'(A)') center2D_nano%name
         write(logfhandle,'(A)') cluster2D_nano%name
         write(logfhandle,'(A)') estimate_diam%name
-        write(logfhandle,'(A)') simulate_atoms%name
         write(logfhandle,'(A)') refine3D_nano%name
+        write(logfhandle,'(A)') simulate_atoms%name
+        write(logfhandle,'(A)') tseries_ctf_estimate%name
+        write(logfhandle,'(A)') tseries_import%name
+        write(logfhandle,'(A)') tseries_import_particles%name
+        write(logfhandle,'(A)') tseries_make_pickavg%name
         write(logfhandle,'(A)') tseries_motion_correct%name
         write(logfhandle,'(A)') tseries_track%name
     end subroutine list_single_prgs_in_ui
@@ -757,7 +757,6 @@ contains
     subroutine list_quant_prgs_in_ui
         write(logfhandle,'(A)') atom_cluster_analysis%name
         write(logfhandle,'(A)') atoms_rmsd%name
-        write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') geometry_analysis%name
         write(logfhandle,'(A)') nano_softmask%name
@@ -938,7 +937,7 @@ contains
         &'is a program for determine atom clustering of nanoparticle atomic-resolution map. &
         & Clusters with respect to aspect ratio, distances distribution, angle between a fixed &
         & vector and the direction of the longest dim of each atom, atoms intensities.',& ! descr long
-        &'simple_exec',&                                     ! executable
+        &'quant_exec',&                                     ! executable
         &1, 1, 0, 2, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -965,7 +964,7 @@ contains
         &'atoms_rmsd', &                                   ! name
         &'Compare two atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for comparing two atomic-resolution nanoparticle map by RMSD calculation',& ! descr long
-        &'simple_exec',&                                     ! executable
+        &'quant_exec',&                                     ! executable
         &2, 1, 0, 1, 1, 0, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -994,7 +993,7 @@ contains
         &'calc_pspec',&                                                          ! name
         &'Calculate individual particles power spectra; internal use oly',&               ! descr_long
         &'Calculate individual particles power spectra; internal use oly',&               ! descr_long
-        &'simple_distr_exec',&                                                  ! executable
+        &'simple_exec',&                                                  ! executable
         &0, 0, 0, 0, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1051,7 +1050,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images',& ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after picking',&               ! descr_long
-        &'simple_distr_exec',&                                                  ! executable
+        &'simple_exec',&                                                  ! executable
         &0, 0, 0, 6, 3, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1090,7 +1089,7 @@ contains
         &'Simultaneous 2D alignment and clustering of nanoparticle images',&    ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after time-series tracking',&  ! descr_long
-        &'simple_distr_exec',&                                                  ! executable
+        &'single_exec',&                                                  ! executable
         &0, 0, 0, 4, 3, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1126,7 +1125,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images',& ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
-        &'simple_distr_exec',&                                                  ! executable
+        &'simple_exec',&                                                  ! executable
         &1, 0, 0, 11, 8, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1182,7 +1181,7 @@ contains
         &'cluster2D_nano',&                                                                 ! name
         &'Simultaneous 2D alignment and clustering of time-series of nanoparticle images',& ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm for time-series of nanoparticle images',& ! descr_long
-        &'simple_distr_exec',&                                                             ! executable
+        &'single_exec',&                                                             ! executable
         &0, 0, 0, 5, 5, 2, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1221,7 +1220,7 @@ contains
         &'cluster2D_stream',&                                                                     ! name
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
-        &'simple_distr_exec',&                                                                    ! executable
+        &'simple_exec',&                                                                    ! executable
         &0, 1, 0, 8, 4, 2, 2, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1274,7 +1273,7 @@ contains
         &'cluster3D',&                                                             ! name
         &'3D heterogeneity analysis',&                                             ! descr_short
         &'is a distributed workflow for heterogeneity analysis by 3D clustering',& ! descr_long
-        &'simple_distr_exec',&                                                     ! executable
+        &'simple_exec',&                                                     ! executable
         &0, 1, 0, 8, 6, 5, 2, .true.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1320,7 +1319,7 @@ contains
         &'cluster 3D refinement',&                                           ! descr_short
         &'is a distributed workflow based on probabilistic projection matching &
         &for refinement of 3D heterogeneity analysis by cluster3D ',&        ! descr_long
-        &'simple_distr_exec',&                                               ! executable
+        &'simple_exec',&                                               ! executable
         &2, 1, 0, 11, 6, 3, 2, .true.)                                       ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1428,7 +1427,7 @@ contains
         &'ctf_estimate', &                                              ! name
         &'CTF parameter fitting',&                                      ! descr_short
         &'is a distributed SIMPLE workflow for CTF parameter fitting',& ! descr_long
-        &'simple_distr_exec',&                                          ! executable
+        &'simple_exec',&                                          ! executable
         &0, 2, 0, 3, 2, 0, 2, .true.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1492,7 +1491,7 @@ contains
         &'detect_atoms', &                                      ! name
         &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-comp map',& ! descr long
-        &'simple_exec',&                                        ! executable
+        &'quant_exec',&                                        ! executable
         &1, 1, 0, 1, 1, 0, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1551,7 +1550,7 @@ contains
         &'estimate_diam',&                                                                                    ! name
         &'Estimation of a suitable mask radius for nanoparticle time-series',&                                        ! descr_short
         &'is a program for estimation of a suitable mask radius for spherical masking of nanoparticle time-series ',& ! descr_long
-        &'simple_exec',&                                                                                              ! executable
+        &'single_exec',&                                                                                              ! executable
         &1, 1, 0, 0, 1, 0, 1, .false.)                                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1577,7 +1576,7 @@ contains
         &'extract', &                                                           ! name
         &'Extract particle images from integrated movies',&                     ! descr_short
         &'is a program for extracting particle images from integrated movies',& ! descr long
-        &'simple_distr_exec',&                                                  ! executable
+        &'simple_exec',&                                                  ! executable
         &1, 4, 0, 0, 0, 0, 1, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1679,7 +1678,7 @@ contains
         &'geometry_analysis', &                                      ! name
         &'geometry_analysis in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program generating atom columns/planes for the analysis of an atomic-res nanoparticle 3D map',& ! descr long
-        &'simple_exec',&                                        ! executable
+        &'quant_exec',&                                        ! executable
         &4, 1, 0, 0, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1709,7 +1708,7 @@ contains
         &'Motion correction of movies',&                                         ! descr_short
         &'is a distributed workflow for generating power spectra and thumbnails&
         & for imported integrated movies',&                                      ! descr_long
-        &'simple_distr_exec',&                                                   ! executable
+        &'simple_exec',&                                                   ! executable
         &0, 1, 0, 0, 0, 0, 2, .true.)                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1788,7 +1787,7 @@ contains
         &'3D ab initio model generation from class averages',&                        ! descr_short
         &'is a distributed workflow for generating an initial 3D model from class&
         & averages obtained with cluster2D',&                                        ! descr_long
-        &'simple_distr_exec',&                                                        ! executable
+        &'simple_exec',&                                                        ! executable
         &0, 0, 0, 7, 7, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2084,7 +2083,7 @@ contains
         &'Make class averages',&                   ! descr_short
         &'is a distributed workflow for generating class averages or initial random references&
         & for cluster2D execution',&                ! descr_long
-        &'simple_distr_exec',&                     ! executable
+        &'simple_exec',&                     ! executable
         &1, 3, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2282,7 +2281,7 @@ contains
         & (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to&
         & the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will&
         & be pre-averaged in the given chunk size (Falcon 3 movies).',&           ! descr_long
-        &'simple_distr_exec',&                                                    ! executable
+        &'simple_exec',&                                                    ! executable
         &1, 5, 0, 7, 3, 0, 2, .true.)                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2334,7 +2333,7 @@ contains
         &If scale is given, the movie will be Fourier cropped according to the down-scaling factor &
         &(for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given &
         &chunk size (Falcon 3 movies)',& ! descr_long
-        &'simple_distr_exec',&           ! executable
+        &'simple_exec',&           ! executable
         &0, 7, 0, 2, 4, 0, 1, .false.)   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2373,7 +2372,7 @@ contains
         &'nano_softmask', &                                      ! name
         &'nano_softmask in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program generating soft mask for 3D refinement of an atomic-res nanoparticle 3D map',& ! descr long
-        &'simple_exec',&                                        ! executable
+        &'quant_exec',&                                        ! executable
         &1, 1, 0, 0, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2439,7 +2438,7 @@ contains
         &'pick', &                                                         ! name
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
-        &'simple_distr_exec',&                                             ! executable
+        &'simple_exec',&                                             ! executable
         &0, 3, 4, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2473,7 +2472,7 @@ contains
         &'pick_extract_stream', &                                          ! name
         &'Template-based particle picking and extraction in streaming mode',& ! descr_short
         &'is a distributed workflow for template-based particle picking and extraction in streaming mode',& ! descr_long
-        &'simple_distr_exec',&                                             ! executable
+        &'simple_exec',&                                             ! executable
         &3, 3, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2550,7 +2549,7 @@ contains
         &'Preprocessing',&                                                                  ! descr_short
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
-        &'simple_distr_exec',&                                                              ! executable
+        &'simple_exec',&                                                              ! executable
         &3, 9, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2614,7 +2613,7 @@ contains
         &'Preprocessing in streaming mode',&                                                ! descr_short
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
-        &'simple_distr_exec',&                                                              ! executable
+        &'simple_exec',&                                                              ! executable
         &5, 12, 0, 16, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2820,7 +2819,7 @@ contains
         &'reextract', &                                                         ! name
         &'Re-extract particle images from integrated movies',&                  ! descr_short
         &'is a program for re-extracting particle images from integrated movies based on determined 2D/3D shifts',& ! descr long
-        &'simple_distr_exec',&                                                  ! executable
+        &'simple_exec',&                                                  ! executable
         &0, 4, 0, 0, 0, 0, 1, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3014,7 +3013,7 @@ contains
         &'prune_project',&                            ! name
         &'discards deselected data from a project',&  ! descr_short
         &'is a program for discarding deselected data (particles,stacks) from a project',& ! descr_long
-        &'simple_distr_exec',&                       ! executable
+        &'simple_exec',&                       ! executable
         &0, 0, 0, 0, 0, 0, 1, .true.)                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3041,7 +3040,7 @@ contains
         &'is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks,&
         & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
         & with a Kaiser-Bessel (KB) interpolation kernel',&
-        &'simple_distr_exec',&                                                 ! executable
+        &'simple_exec',&                                                 ! executable
         &0, 1, 0, 4, 4, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3075,7 +3074,7 @@ contains
         &'refine3D',&                                                                               ! name
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
-        &'simple_distr_exec',&                                                                      ! executable
+        &'simple_exec',&                                                                      ! executable
         &1, 0, 0, 16, 9, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3136,7 +3135,7 @@ contains
         &'refine3D_nano',&                                                                                                    ! name
         &'3D refinement of metallic nanoparticles',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
-        &'simple_distr_exec',&                                                                                                ! executable
+        &'single_exec',&                                                                                                ! executable
         &1, 0, 0, 8, 6, 4, 2, .true.)                                                                                        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3273,7 +3272,7 @@ contains
         &'scale_project', &                                                                ! name
         &'Re-scaling of MRC and SPIDER stacks',&                                           ! descr_short
         &'is a distributed workflow for re-scaling MRC and SPIDER stacks part of project specification',& ! descr_long
-        &'simple_distr_exec',&                                                             ! executable
+        &'simple_exec',&                                                             ! executable
         &0, 1, 0, 0, 0, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3362,7 +3361,7 @@ contains
         &'simulate_atoms',&                                 ! name
         &'Simulate atoms or FCC lattice density',&          ! descr_short
         &'is a program for simulation of atoms or FCC lattice density',& ! descr_long
-        &'simple_exec',&                                    ! executable
+        &'single_exec',&                                    ! executable
         &2, 4, 0, 0, 0, 0, 1, .false.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3712,7 +3711,7 @@ contains
         &'radial_dependent_stats',&                                                                                           ! name
         &'Statistical test for radial dependent symmetry',&                                                                           ! descr_short
         &'is a program that generates statistics at different radii and across the whold nano map.',& ! descr long
-        &'simple_exec',&                                                                                             ! executable
+        &'quant_exec',&                                                                                             ! executable
         &1, 4, 0, 0, 1, 0, 0, .false.)                                                                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3744,7 +3743,7 @@ contains
         & Input is a volume reconstructed without symmetry (c1), minimum radius, maximum radius and step. &
         & Output is the most likely point-group symmetry at radii from minimum radius to maximum radius with &
         & step size stepsz',& ! descr long
-        &'simple_exec',&                                                                                             ! executable
+        &'quant_exec',&                                                                                             ! executable
         &1, 4, 0, 1, 3, 0, 1, .false.)                                                                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3775,7 +3774,7 @@ contains
         &'tseries_import',&                               ! name
         &'Imports time-series datasets',&                 ! descr_short
         &'is a workflow for importing time-series data',& ! descr_long
-        &'simple_exec',&                                  ! executable
+        &'single_exec',&                                  ! executable
         &1, 4, 0, 0, 0, 0, 0, .true.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3804,7 +3803,7 @@ contains
         &'tseries_import_particles',&                               ! name
         &'Imports time-series particles stack',&          ! descr_short
         &'is a workflow for importing time-series data',& ! descr_long
-        &'simple_exec',&                                  ! executable
+        &'single_exec',&                                  ! executable
         &1, 1, 0, 0, 0, 0, 0, .true.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3830,7 +3829,7 @@ contains
         &'tseries_ctf_estimate', &                             ! name
         &'Time-series CTF parameter fitting',&                 ! descr_short
         &'is a SIMPLE application for CTF parameter fitting',& ! descr_long
-        &'simple_exec',&                                       ! executable
+        &'single_exec',&                                       ! executable
         &1, 0, 0, 3, 2, 0, 1, .true.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3869,12 +3868,12 @@ contains
     subroutine new_tseries_motion_correct
         ! PROGRAM SPECIFICATION
         call tseries_motion_correct%new(&
-        &'motion_correct', &                                               ! name
+        &'tseries_motion_correct', &                                               ! name
         &'Anisotropic motion correction of time-series of nanoparticles',& ! descr_short
         &'is a distributed workflow for anisotropic motion correction of time-series (movies) of nanoparticles.&
         & If dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly&
         & (dose-weighting strategy).',&                                    ! descr_long
-        &'simple_distr_exec',&                                             ! executable
+        &'single_exec',&                                             ! executable
         &0, 0, 0, 6, 3, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3912,7 +3911,7 @@ contains
         &'Align & average the first few frames of the time-series',&                     ! descr_short
         &'is a program for aligning & averaging the first few frames of the time-series&
         & to accomplish SNR enhancement for particle identification',&                   ! descr_long
-        &'simple_exec',&                                                                 ! executable
+        &'single_exec',&                                                                 ! executable
         &0, 1, 0, 5, 3, 0, 1, .true.)                                                    ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3947,7 +3946,7 @@ contains
         &'tseries_track',&                                                       ! name
         &'Track particles in time-series',&                                      ! descr_short
         &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
-        &'simple_distr_exec',&                                                   ! executable
+        &'single_exec',&                                                   ! executable
         &0, 3, 0, 2, 4, 0, 1, .true.)                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -4339,10 +4338,10 @@ contains
         use simple_ansi_ctrls
         class(simple_program), intent(in) :: self
         logical     :: l_distr_exec
-        l_distr_exec = self%executable .eq. 'simple_distr_exec'
+        l_distr_exec = self%executable .eq. 'simple_exec'
         write(logfhandle,'(a)') format_str('USAGE', C_UNDERLINED)
         if( l_distr_exec )then
-            write(logfhandle,'(a)') format_str('bash-3.2$ simple_distr_exec prg=' //self%name // ' key1=val1 key2=val2 ...', C_ITALIC)
+            write(logfhandle,'(a)') format_str('bash-3.2$ simple_exec prg=' //self%name // ' key1=val1 key2=val2 ...', C_ITALIC)
         else
             write(logfhandle,'(a)') format_str('bash-3.2$ simple_exec prg='       //self%name // ' key1=val1 key2=val2 ...', C_ITALIC)
         endif
@@ -4367,11 +4366,11 @@ contains
         use simple_ansi_ctrls
         class(simple_program), intent(in) :: self
         logical     :: l_distr_exec
-        l_distr_exec = self%executable .eq. 'simple_distr_exec'
+        l_distr_exec = self%executable .eq. 'simple_exec'
         write(logfhandle,'(a)') '\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]'
         write(logfhandle,'(a)') '+underline[USAGE]'
         if( l_distr_exec )then
-            write(logfhandle,'(a)') '+textit[bash-3.2$ simple_distr_exec prg=' // self%name // ' key1=val1 key2=val2 ...]'
+            write(logfhandle,'(a)') '+textit[bash-3.2$ simple_exec prg=' // self%name // ' key1=val1 key2=val2 ...]'
         else
             write(logfhandle,'(a)') '+textit[bash-3.2$ simple_exec prg='       // self%name // ' key1=val1 key2=val2 ...]'
         endif
