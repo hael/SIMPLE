@@ -1,7 +1,7 @@
 ! executes the parallel (or distributed workflows) of SIMPLE
 program simple_distr_exec
 include 'simple_lib.f08'
-use simple_user_interface, only: make_user_interface, list_distr_prgs_in_ui
+use simple_user_interface, only: make_user_interface, list_simple_prgs_in_ui
 use simple_cmdline,        only: cmdline, cmdline_err
 use simple_commander_base, only: execute_commander
 use simple_commander_preprocess
@@ -71,7 +71,7 @@ prg = args(pos+1:) ! this is the program name
 ! make UI
 call make_user_interface
 if( str_has_substr(entire_line, 'prg=list') )then
-    call list_distr_prgs_in_ui
+    call list_simple_prgs_in_ui
     stop
 endif
 ! parse command line into cline object

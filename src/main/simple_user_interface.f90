@@ -2,8 +2,8 @@ module simple_user_interface
 include 'simple_lib.f08'
 implicit none
 
-public :: simple_program, make_user_interface, get_prg_ptr, list_distr_prgs_in_ui
-public :: list_shmem_prgs_in_ui, write_ui_json, print_ui_latex, list_quant_prgs_in_ui
+public :: simple_program, make_user_interface, get_prg_ptr, list_simple_prgs_in_ui
+public :: write_ui_json, print_ui_latex, list_quant_prgs_in_ui
 private
 #include "simple_local_flags.inc"
 
@@ -663,52 +663,26 @@ contains
         end select
     end subroutine get_prg_ptr
 
-    subroutine list_distr_prgs_in_ui
+    subroutine list_simple_prgs_in_ui
         write(logfhandle,'(A)') calc_pspec%name
+        write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') cleanup2D%name
-        write(logfhandle,'(A)') center2D_nano%name
+        write(logfhandle,'(A)') cluster_cavgs%name
         write(logfhandle,'(A)') cluster2D%name
-        write(logfhandle,'(A)') cluster2D_nano%name
         write(logfhandle,'(A)') cluster2D_stream%name
         write(logfhandle,'(A)') cluster3D%name
         write(logfhandle,'(A)') cluster3D_refine%name
-        write(logfhandle,'(A)') ctf_estimate%name
-        write(logfhandle,'(A)') extract%name
-        write(logfhandle,'(A)') geometry_analysis%name
-        write(logfhandle,'(A)') gen_pspecs_and_thumbs%name
-        write(logfhandle,'(A)') initial_3Dmodel%name
-        write(logfhandle,'(A)') make_cavgs%name
-        write(logfhandle,'(A)') motion_correct%name
-        write(logfhandle,'(A)') motion_correct_tomo%name
-        write(logfhandle,'(A)') nano_softmask%name
-        write(logfhandle,'(A)') pick%name
-        write(logfhandle,'(A)') pick_extract_stream%name
-        write(logfhandle,'(A)') preprocess%name
-        write(logfhandle,'(A)') preprocess_stream%name
-        write(logfhandle,'(A)') prune_project%name
-        write(logfhandle,'(A)') reconstruct3D%name
-        write(logfhandle,'(A)') reextract%name
-        write(logfhandle,'(A)') refine3D%name
-        write(logfhandle,'(A)') refine3D_nano%name
-        write(logfhandle,'(A)') scale_project%name
-        write(logfhandle,'(A)') tseries_motion_correct%name
-        write(logfhandle,'(A)') tseries_track%name
-    end subroutine list_distr_prgs_in_ui
-
-    subroutine list_shmem_prgs_in_ui
-        write(logfhandle,'(A)') atom_cluster_analysis%name
-        write(logfhandle,'(A)') atoms_rmsd%name
-        write(logfhandle,'(A)') center%name
-        write(logfhandle,'(A)') cluster_cavgs%name
         write(logfhandle,'(A)') convert%name
+        write(logfhandle,'(A)') ctf_estimate%name
         write(logfhandle,'(A)') ctfops%name
-        write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') dock_volpair%name
-        write(logfhandle,'(A)') estimate_diam%name
+        write(logfhandle,'(A)') extract%name
         write(logfhandle,'(A)') export_relion%name
         write(logfhandle,'(A)') export_starproject%name
         write(logfhandle,'(A)') filter%name
         write(logfhandle,'(A)') fsc%name
+        write(logfhandle,'(A)') gen_pspecs_and_thumbs%name
+        write(logfhandle,'(A)') initial_3Dmodel%name
         write(logfhandle,'(A)') info_image%name
         write(logfhandle,'(A)') info_stktab%name
         write(logfhandle,'(A)') import_boxes%name
@@ -717,52 +691,64 @@ contains
         write(logfhandle,'(A)') import_particles%name
         write(logfhandle,'(A)') import_starproject%name
         write(logfhandle,'(A)') local_resolution%name
+        write(logfhandle,'(A)') make_cavgs%name
         write(logfhandle,'(A)') make_oris%name
         write(logfhandle,'(A)') map_cavgs_selection%name
         write(logfhandle,'(A)') mask%name
         write(logfhandle,'(A)') merge_stream_projects%name
         write(logfhandle,'(A)') mkdir_%name
+        write(logfhandle,'(A)') motion_correct%name
+        write(logfhandle,'(A)') motion_correct_tomo%name
         write(logfhandle,'(A)') new_project%name
         write(logfhandle,'(A)') normalize_%name
         write(logfhandle,'(A)') orisops%name
         write(logfhandle,'(A)') oristats%name
+        write(logfhandle,'(A)') pick%name
+        write(logfhandle,'(A)') pick_extract_stream%name
         write(logfhandle,'(A)') postprocess%name
+        write(logfhandle,'(A)') preprocess%name
+        write(logfhandle,'(A)') preprocess_stream%name
         write(logfhandle,'(A)') print_fsc%name
         write(logfhandle,'(A)') print_magic_boxes%name
         write(logfhandle,'(A)') print_project_info%name
         write(logfhandle,'(A)') print_project_field%name
+        write(logfhandle,'(A)') prune_project%name
         write(logfhandle,'(A)') pspec_stats%name
-        write(logfhandle,'(A)') radial_dependent_stats%name
-        write(logfhandle,'(A)') radial_sym_test%name
+        write(logfhandle,'(A)') reconstruct3D%name
+        write(logfhandle,'(A)') reextract%name
+        write(logfhandle,'(A)') refine3D%name
+        write(logfhandle,'(A)') refine3D_nano%name
         write(logfhandle,'(A)') replace_project_field%name
         write(logfhandle,'(A)') selection%name
         write(logfhandle,'(A)') reproject%name
         write(logfhandle,'(A)') select_%name
         write(logfhandle,'(A)') shift%name
-        write(logfhandle,'(A)') simulate_atoms%name
         write(logfhandle,'(A)') simulate_movie%name
         write(logfhandle,'(A)') simulate_noise%name
         write(logfhandle,'(A)') simulate_particles%name
         write(logfhandle,'(A)') simulate_subtomogram%name
         write(logfhandle,'(A)') scale%name
+        write(logfhandle,'(A)') scale_project%name
         write(logfhandle,'(A)') stack%name
         write(logfhandle,'(A)') stackops%name
         write(logfhandle,'(A)') symaxis_search%name
         write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
-        write(logfhandle,'(A)') tseries_import%name
-        write(logfhandle,'(A)') tseries_import_particles%name
-        write(logfhandle,'(A)') tseries_ctf_estimate%name
-        write(logfhandle,'(A)') tseries_make_pickavg%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') volops%name
         write(logfhandle,'(A)') write_classes%name
-    end subroutine list_shmem_prgs_in_ui
+    end subroutine list_simple_prgs_in_ui
 
     subroutine list_single_prgs_in_ui
+        write(logfhandle,'(A)') tseries_import%name
+        write(logfhandle,'(A)') tseries_import_particles%name
+        write(logfhandle,'(A)') tseries_ctf_estimate%name
+        write(logfhandle,'(A)') tseries_make_pickavg%name
         write(logfhandle,'(A)') center2D_nano%name
         write(logfhandle,'(A)') cluster2D_nano%name
+        write(logfhandle,'(A)') estimate_diam%name
+        write(logfhandle,'(A)') simulate_atoms%name
         write(logfhandle,'(A)') refine3D_nano%name
         write(logfhandle,'(A)') tseries_motion_correct%name
         write(logfhandle,'(A)') tseries_track%name

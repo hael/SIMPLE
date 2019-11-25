@@ -6,9 +6,6 @@ use simple_commander_quant
 use simple_user_interface
 implicit none
 #include "simple_local_flags.inc"
-
-
-
 ! QUANT PROGRAMS
 type(detect_atoms_commander)           :: xdetect_atoms
 type(atoms_rmsd_commander)             :: xatoms_rmsd
@@ -17,12 +14,10 @@ type(atom_cluster_analysis_commander)  :: xatom_cluster_analysis
 type(nano_softmask_commander)          :: xnano_softmask
 type(geometry_analysis_commander)      :: xgeometry_analysis
 type(radial_sym_test_commander)        :: xrad_sym_tst
-
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: xarg, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
-
 ! parse command-line
 call get_command_argument(1, xarg, cmdlen, cmdstat)
 call get_command(entire_line)
@@ -37,9 +32,7 @@ if( str_has_substr(entire_line, 'prg=list') )then
 endif
 ! parse command line into cline object
 call cline%parse
-
 select case(prg)
-
     ! QUANT PROGRAMS
     case( 'detect_atoms' )
         call xdetect_atoms%execute(cline)

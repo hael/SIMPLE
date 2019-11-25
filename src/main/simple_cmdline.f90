@@ -101,15 +101,16 @@ contains
             THROW_HARD('program '//trim(arg(pos+1:))//' not executed by '//trim(basename(exec_cmd))//' but '//exec)
         endif
         ! list programs if so instructed
-        if( str_has_substr(self%entire_line, 'prg=list') )then
-            if( ptr2prg%is_distr() )then
-                call list_distr_prgs_in_ui
-                call exit(EXIT_FAILURE2)
-            else
-                call list_shmem_prgs_in_ui
-                call exit(EXIT_FAILURE2)
-            endif
-        endif
+        ! *****************NEEDS DEALING WITH
+        ! if( str_has_substr(self%entire_line, 'prg=list') )then
+        !     if( ptr2prg%is_distr() )then
+        !         call list_distr_prgs_in_ui
+        !         call exit(EXIT_FAILURE2)
+        !     else
+        !
+        !         call exit(EXIT_FAILURE2)
+        !     endif
+        ! endif
         ! describe program if so instructed
         if( str_has_substr(self%entire_line, 'describe=yes') )then
             call ptr2prg%print_prg_descr_long()
