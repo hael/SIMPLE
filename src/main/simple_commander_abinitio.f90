@@ -8,14 +8,14 @@ use simple_sp_project,     only: sp_project
 use simple_qsys_funs
 implicit none
 
-public :: initial_3Dmodel_commander
+public :: initial_3Dmodel_commander_hlev
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: initial_3Dmodel_commander
+type, extends(commander_base) :: initial_3Dmodel_commander_hlev
   contains
     procedure :: execute      => exec_initial_3Dmodel
-end type initial_3Dmodel_commander
+end type initial_3Dmodel_commander_hlev
 
 contains
 
@@ -31,8 +31,8 @@ contains
         use simple_parameters,         only: params_glob
         use simple_qsys_env,           only: qsys_env
         use simple_sym,                only: sym
-        class(initial_3Dmodel_commander), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
+        class(initial_3Dmodel_commander_hlev), intent(inout) :: self
+        class(cmdline),                        intent(inout) :: cline
         ! constants
         real,                  parameter :: SCALEFAC2_TARGET = 0.5
         real,                  parameter :: CENLP=30. !< consistency with refine3D

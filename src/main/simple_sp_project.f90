@@ -2256,6 +2256,7 @@ contains
         call cline_scale%set('scale',    scale_factor)
         call cline_scale%set('projfile', projfile)
         call cline_scale%set('smpd',     smpd_sc)
+        if( cline%defined('mkdir') ) call cline_scale%set('mkdir', cline%get_carg('mkdir'))
         if(present(dir))call cline_scale%set('dir_target',trim(dir)//path_separator)
         if( box == box_sc )then
             ! no scaling
