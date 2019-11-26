@@ -67,7 +67,7 @@ type simple_prg_ptr
     type(simple_program), pointer :: ptr2prg => null()
 end type simple_prg_ptr
 
-! array of pointers to all simple_exec and simple_exec programs
+! array of pointers to all simple_exec, simple_distr_exec  and quant_exec programs
 integer, parameter   :: NMAX_PTRS  = 200
 integer              :: n_prg_ptrs = 0
 type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
@@ -122,6 +122,7 @@ type(simple_program), target :: orisops
 type(simple_program), target :: oristats
 type(simple_program), target :: pick
 type(simple_program), target :: pick_extract_stream
+type(simple_program), target :: plot_atom
 type(simple_program), target :: postprocess
 type(simple_program), target :: preprocess
 type(simple_program), target :: preprocess_stream
@@ -324,6 +325,7 @@ contains
         call new_oristats
         call new_pick
         call new_pick_extract_stream
+        call new_plot_atom
         call new_postprocess
         call new_preprocess
         call new_preprocess_stream
@@ -418,6 +420,7 @@ contains
         call push2prg_ptr_array(oristats)
         call push2prg_ptr_array(pick)
         call push2prg_ptr_array(pick_extract_stream)
+        call push2prg_ptr_array(plot_atom)
         call push2prg_ptr_array(postprocess)
         call push2prg_ptr_array(preprocess)
         call push2prg_ptr_array(preprocess_stream)
@@ -573,6 +576,8 @@ contains
                 ptr2prg => pick
             case('pick_extract_stream')
                 ptr2prg => pick_extract_stream
+            case('plot_atom')
+                ptr2prg => plot_atom
             case('postprocess')
                 ptr2prg => postprocess
             case('preprocess')
@@ -704,6 +709,7 @@ contains
         write(logfhandle,'(A)') oristats%name
         write(logfhandle,'(A)') pick%name
         write(logfhandle,'(A)') pick_extract_stream%name
+        write(logfhandle,'(A)') plot_atom%name
         write(logfhandle,'(A)') postprocess%name
         write(logfhandle,'(A)') preprocess%name
         write(logfhandle,'(A)') preprocess_stream%name
@@ -837,7 +843,7 @@ contains
         call set_param(outstk,         'outstk',       'file',   'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
         call set_param(pcontrast,      'pcontrast',    'multi',  'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
         call set_param(clip,           'clip',         'num',    'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
-        call set_param(clustermode,    'clustermode',  'multi',  'Feature used for clustering', 'Feature used for clustering (ar|dist|ang|maxint){ar}', '(ar|dist|ang|maxint){ar}', .true., 'ar')
+        call set_param(clustermode,    'clustermode',  'multi',  'Feature used for clustering', 'Feature used for clustering (ar|dist|ang|maxint|intint){ar}', '(ar|dist|ang|maxint|intint){ar}', .true., 'ar')
         call set_param(neg,            'neg',          'binary', 'Invert contrast','Invert contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(sherr,          'sherr',        'num',    'Shift error half-width', 'Uniform rotational origin shift error half-width(in pixels)', 'shift error in pixels', .false., 0.)
         call set_param(angerr,         'angerr',       'num',    'Rotation angle error half-width', 'Uniform rotation angle shift error half-width(in degrees)', 'rotation error in degrees', .false., 0.)
@@ -948,7 +954,7 @@ contains
         ! <empty>
         ! search controls
         call atom_cluster_analysis%set_input('srch_ctrls', 1, clustermode)
-        call atom_cluster_analysis%set_input('srch_ctrls', 2, 'thres', 'num', 'Threshold for cluster merging','Threshold for cluster merging', 'in unit of measure of the feature', .true., 1.)
+        call atom_cluster_analysis%set_input('srch_ctrls', 2, 'thres', 'num', 'Threshold for cluster merging','Threshold for cluster merging', 'in unit of measure of the feature', .false., 1.)
         ! filter controls
         ! <empty>
         ! mask controls
@@ -1678,19 +1684,18 @@ contains
         &'geometry_analysis in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program generating atom columns/planes for the analysis of an atomic-res nanoparticle 3D map',& ! descr long
         &'quant_exec',&                                        ! executable
-        &4, 1, 0, 0, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
+        &1, 2, 2, 0, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call geometry_analysis%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
-        & 'input volume e.g. vol.mrc', .true., '')
-        call geometry_analysis%set_input('img_ios', 2, 'pdbfile', 'file', 'PDB', 'Input coordinates file in PDB format', 'Input coordinates file', .true., '')
-        call geometry_analysis%set_input('img_ios', 3, outvol)
-        call geometry_analysis%set_input('img_ios', 4, 'fname', 'file', 'Name of output file', 'Name of output file', 'xxx.txt file', .false., '')
+        call geometry_analysis%set_input('img_ios', 1, 'pdbfile2', 'file', 'PDB', 'Input coordinates file in PDB format of the selected atoms', 'Input coordinates file', .true., '')
         ! parameter input/output
         call geometry_analysis%set_input('parm_ios', 1, smpd)
-        ! search controls
-        ! <empty>
+        call geometry_analysis%set_input('parm_ios', 2, 'outvol', 'file', 'Name of image file', 'Name of image file', 'xxx.mrc file', .false. ,'')
         ! alternative inputs
+        call geometry_analysis%set_input('alt_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
+        & 'input volume e.g. vol.mrc', .false., '')
+        call geometry_analysis%set_input('alt_ios', 2, 'pdbfile', 'file', 'PDB', 'Input coordinates file in PDB format of all the atoms', 'Input coordinates file', .false., '')
+        ! search controls
         ! <empty>
         ! filter controls
         call geometry_analysis%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
@@ -2388,7 +2393,7 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        ! call nano_softmask%set_input('comp_ctrls', 1, nthr) to change if it works
+        ! <empty>
     end subroutine new_nano_softmask
 
     subroutine new_new_project
@@ -2498,6 +2503,32 @@ contains
         call pick_extract_stream%set_input('comp_ctrls', 1, nparts)
         call pick_extract_stream%set_input('comp_ctrls', 2, nthr)
     end subroutine new_pick_extract_stream
+
+    subroutine new_plot_atom
+        ! PROGRAM SPECIFICATION
+        call plot_atom%new(&
+        &'plot_atom', &                                      ! name
+        &'plot the atom belonging to an atomic-resolution nanoparticle map',& ! descr_short
+        &'is a program for plotting the atom belonging to an atomic-resolution nanoparticle map based on the cc label assigned to it',& ! descr long
+        &'quant_exec',&                                        ! executable
+        &1, 1, 0, 0, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call plot_atom%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
+        & 'input volume e.g. vol.mrc', .true., '')
+        ! parameter input/output
+        call plot_atom%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call plot_atom%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_plot_atom
 
     subroutine new_postprocess
         ! PROGRAM SPECIFICATION
@@ -3757,7 +3788,7 @@ contains
         ! <empty>
         ! search controls
         call radial_sym_test%set_input('srch_ctrls', 1, 'cn_stop',  'num', 'Rotational symmetry order stop index',  'Rotational symmetry order stop index',  'give stop index',  .false., 10.)
-              ! filter controls
+        ! filter controls
         call radial_sym_test%set_input('filt_ctrls', 1, lp)
         call radial_sym_test%set_input('filt_ctrls', 2, hp)
         call radial_sym_test%set_input('filt_ctrls', 3, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')

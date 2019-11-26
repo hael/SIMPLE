@@ -71,6 +71,7 @@ type :: atoms
     procedure, private :: Z_and_radius_from_name
     procedure          :: get_geom_center
     procedure          :: convolve
+    procedure          :: geometry_analysis_pdb
     ! MODIFIERS
     procedure          :: translate
     procedure          :: rotate
@@ -147,7 +148,7 @@ contains
                 if( str(1:6).eq.'HETATM' ) is_valid_entry = .true.
                 if( str(1:4).eq.'ATOM' )   is_valid_entry = .true.
             end function
-            
+
     end subroutine new_from_pdb
 
     subroutine new_instance( self, n, dummy )
@@ -422,7 +423,7 @@ contains
         if( .not.self%exists ) THROW_HARD('Non-existent atoms object! guess_atomic_number')
         if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; guess_an_element')
         if( len_trim(self%element(i)) == 0 )then
-            call self%Z_and_radius_from_name(self%name(i),z,r)
+            call self%Z_and_radius_from_name(self%name(i),z,r,self%element(i))
         else
             call self%Z_and_radius_from_name(self%element(i)//'  ',z,r)
         endif
@@ -436,11 +437,12 @@ contains
 
     ! single covalent radii from Cordero, et al., 2008, "Covalent radii revisited"
     ! Dalton Trans. (21): 2832–2838. doi:10.1039/b801115j
-    subroutine Z_and_radius_from_name( self, name, Z, r )
+    subroutine Z_and_radius_from_name( self, name, Z, r, el )
         class(atoms),     intent(inout) :: self
         character(len=4), intent(in)    :: name
         integer,          intent(out)   :: Z
         real,             intent(out)   :: r
+        character(len=2), optional, intent(inout) :: el
         character(len=4) :: uppercase_name
         Z = 0
         r = 1.
@@ -469,6 +471,7 @@ contains
         case('AU')
             Z = 79; r = 1.23
         end select
+        if( present(el) ) el = trim(adjustl(uppercase_name))
     end subroutine Z_and_radius_from_name
 
     function get_geom_center(self) result(center)
@@ -570,6 +573,198 @@ contains
         end function epot
 
     end subroutine convolve
+
+    subroutine geometry_analysis_pdb(self, pdbfile)
+      class(atoms),     intent(inout) :: self
+      character(len=*), intent(in)    :: pdbfile   ! all the atomic positions
+      character(len=2)     :: element
+      type(atoms)          :: init_atoms, final_atoms
+      real,    allocatable :: line(:,:), plane(:,:,:),points(:,:), distances_totheplane(:)
+      real,    allocatable :: radii(:)
+      logical, allocatable :: flag(:) ! flags the atoms belonging to the plane/column
+      integer, parameter   :: N_DISCRET = 500
+      integer :: i, j, n, n_tot, t, s, filnum, io_stat, cnt_intersect, cnt, n_cc
+      real    :: atom1(3), atom2(3), atom3(3), dir_1(3), dir_2(3), vec(3), m(3), dist_plane, dist_line
+      real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator
+      call init_atoms%new(pdbfile)
+      n = init_atoms%get_n()
+      if(n < 2 .or. n > 3 ) THROW_HARD('Inputted pdb file contains the wrong number of atoms!; geometry_analysis_pdb')
+      do i = 1, N_DISCRET/2
+          t_vec(i) = -real(i)/10.
+      enddo
+      t_vec(N_DISCRET/2+1:N_DISCRET) = -t_vec(1:N_DISCRET/2)
+      s_vec(:) = t_vec(:)
+      n_tot = self%n
+      ! fetch thoretical radius
+      element = self%element(1) ! pick the first atom (should be heterogeneous)
+      allocate(flag(n_tot), source = .false.)
+      if(n == 2) then
+        write(logfhandle,*)'COLUMN IDENTIFICATION, INITIATION'
+        allocate(line(3, N_DISCRET), source = 0.)
+        atom1(:) = init_atoms%get_coord(1)
+        atom2(:) = init_atoms%get_coord(2)
+        dir_1 = atom1-atom2
+        do t = 1, N_DISCRET
+          line(1,t) = atom1(1) + t_vec(t)* dir_1(1)
+          line(2,t) = atom1(2) + t_vec(t)* dir_1(2)
+          line(3,t) = atom1(3) + t_vec(t)* dir_1(3)
+        enddo
+        ! calculate how many atoms does the line intersect and flag them
+        do i = 1, n_tot
+            do t = 1, N_DISCRET
+              dist_line = euclid(self%xyz(i,:3),line(:3,t))
+              if(dist_line <= 0.6*self%radius(i)) then ! it intersects atoms
+                   flag(i) = .true. !flags also itself
+               endif
+            enddo
+        enddo
+        write(logfhandle, *) 'generating files for visualization'
+       ! generate pdb file for visualisation
+       cnt_intersect = 0
+       call final_atoms%new(count(flag), dummy=.true.)
+       do i = 1, n_tot
+           if(flag(i)) then
+               cnt_intersect = cnt_intersect + 1
+               call final_atoms%set_name(cnt_intersect,self%name(i))
+               call final_atoms%set_element(cnt_intersect,self%element(i))
+               call final_atoms%set_coord(cnt_intersect,(self%xyz(i,:3)))
+           endif
+       enddo
+       call final_atoms%writePDB('AtomColumn')
+       call final_atoms%kill
+       ! Find the plane that best fits the atoms belonging to the line
+       allocate(points(3,count(flag)), source = 0.)
+       m = masscen()
+       cnt = 0
+       do i = 1, n_tot
+           if(flag(i)) then
+               cnt = cnt + 1
+               points(:3,cnt) = self%xyz(i,:3)-m(:)
+           endif
+       enddo
+       ! TO FIX
+       vec = plane_from_points(points)
+       allocate(distances_totheplane(cnt), source = 0.)
+       allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
+       cnt = 0
+       denominator = sqrt(vec(1)*2+vec(2)*2+1.)
+       write(logfhandle,*) 'Directional vector: [', -1., ',', -1., ',', -vec(1)-vec(2), ']'
+      elseif(n == 3) then
+        write(logfhandle,*)'PLANE IDENTIFICATION, INITIATION'
+        atom1(:) = init_atoms%get_coord(1)
+        atom2(:) = init_atoms%get_coord(2)
+        atom3(:) = init_atoms%get_coord(3)
+        dir_1 = atom1-atom2
+        dir_2 = atom1-atom3
+        allocate(plane(3, N_DISCRET, N_DISCRET), source = 0.)
+        do t = 1, N_DISCRET
+            do s = 1, N_DISCRET
+                plane(1,t,s) = atom1(1) + t_vec(t)* dir_1(1) + s_vec(s)* dir_2(1)
+                plane(2,t,s) = atom1(2) + t_vec(t)* dir_1(2) + s_vec(s)* dir_2(2)
+                plane(3,t,s) = atom1(3) + t_vec(t)* dir_1(3) + s_vec(s)* dir_2(3)
+            enddo
+        enddo
+        ! calculate how many atoms does the plane intersect and flag them
+        do i = 1, n_tot
+            do t = 1, N_DISCRET
+              do s = 1, N_DISCRET
+                dist_plane = euclid(self%xyz(i,:3),plane(:3,t,s))
+                if(dist_plane <= 0.6*self%radius(i)) then ! it intersects atoms i
+                     flag(i) = .true. !flags also itself
+                 endif
+              enddo
+            enddo
+        enddo
+        print *, 'count(flag) ', count(flag)
+        write(logfhandle, *) 'generating files for visualization'
+        ! generate pdb for visualisation
+        cnt_intersect = 0
+        call final_atoms%new(count(flag), dummy=.true.)
+        do i = 1, n_tot
+            if(flag(i)) then
+                cnt_intersect = cnt_intersect + 1
+                call final_atoms%set_name(cnt_intersect,self%name(i))
+                call final_atoms%set_element(cnt_intersect,self%element(i))
+                call final_atoms%set_coord(cnt_intersect,(self%xyz(i,:3)))
+            endif
+        enddo
+        call final_atoms%writePDB('AtomPlane')
+        call final_atoms%kill
+        stop
+        allocate(points(3, count(flag)), source = 0.)
+        m = masscen()
+        cnt = 0
+        do i = 1, n_tot
+            if(flag(i)) then
+                cnt = cnt + 1
+                points(:3,cnt) = self%xyz(i,:3)-m(:)
+            endif
+        enddo
+        vec = plane_from_points(points)
+        allocate(distances_totheplane(cnt), source = 0.)
+        allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
+        cnt = 0
+        denominator = sqrt(vec(1)**2+vec(2)**2+1.)
+        write(logfhandle,*) 'Normal vector: [', vec(1), ',', vec(2), ',', -1., ']'
+        do i = 1, n_tot
+            if(flag(i)) then
+                cnt = cnt + 1
+                ! formula for distance of a point to a plane
+                distances_totheplane(cnt) = abs(vec(1)*points(1,cnt)+vec(2)*points(2,cnt)-points(3,cnt)+vec(3))/denominator
+                radii(cnt) = euclid(self%xyz(i,:3), m)
+            endif
+        enddo
+        distances_totheplane = (distances_totheplane)
+      endif
+      call init_atoms%kill
+      if(allocated(line))  deallocate(line)
+      if(allocated(plane)) deallocate(plane)
+  contains
+      ! Find the plane that minimises the distance between
+      ! a given set of points.
+      ! It consists in a solution of a overdetermined system with
+      ! the left pseudo inverse.
+      ! SOURCE :
+      ! https://stackoverflow.com/questions/1400213/3d-least-squares-plane
+      ! The output plane will have cartesian equation
+      ! vec(1)x + vec(2)y - z = -vec(3).
+      ! FORMULA
+      ! sol = inv(transpose(M)*M)*transpose(M)*b
+      function plane_from_points(points) result(sol)
+          real, intent(inout) :: points(:,:) !input
+          real    :: sol(3)  !vec(1)x + vec(2)y - z = -vec(3).
+          real    :: M(size(points, dim = 2),3), b(size(points, dim = 2)), invM(3,size(points, dim = 2))
+          real    :: prod(3,3), prod_inv(3,3), prod1(3,size(points, dim = 2))
+          integer :: errflg ! if manages to find inverse matrix
+          integer :: p
+          integer :: N ! number of points
+          if(size(points, dim=1) /=3) then
+              write(logfhandle,*) 'Need to input points in 3D!; plane_from_points'
+              return
+          endif
+          if(size(points, dim=2) < 3) then
+              write(logfhandle,*) 'Not enough input points for fitting!; plane_from_points'
+              return
+          endif
+          N = size(points, dim=2)
+          do p = 1, N
+              M(p,1) =  points(1,p)
+              M(p,2) =  points(2,p)
+              M(p,3) =  1.
+              b(p)   =  points(3,p)
+          enddo
+          prod  = matmul(transpose(M),M)
+          call matinv(prod,prod_inv,3,errflg)
+          if( errflg /= 0 ) THROW_HARD('Couldn t find inverse matrix! ;plane_from_points')
+          prod1 = matmul(prod_inv,transpose(M))
+          sol   = matmul(prod1,b)
+      end function plane_from_points
+
+      function masscen() result(m)
+        real :: m(3) ! center of mass of the coords
+        m = sum(self%xyz(:,:), dim=1) /real(self%n)
+      end function masscen
+    end subroutine geometry_analysis_pdb
 
     ! MODIFIERS
 

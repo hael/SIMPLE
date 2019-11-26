@@ -402,12 +402,20 @@ end module simple_test_chiara_try_mod
        real          :: thresh ! threshold for class definition, user inputted
        integer                  :: i, j, ncls
        integer, parameter       :: DIM = 10
-       ! real     :: avg, stdev
-       real, allocatable :: vector(:)
+       real, allocatable :: vector(:), vector_read(:)
        integer  :: labels(DIM), centers(DIM)
-       integer  :: cnt(DIM), not_found
+       integer  :: io_stat, filnum
        real     :: avg_within(DIM), stdev_within(DIM)
-
-
+       character(len=2) :: element
+       character(len=6) :: pdbout
+       type(atoms) :: atom
+       type(nanoparticle) :: nano
+       element = 'pt'
+       pdbout = 'PDBout'
+       call nano%new( '../'//'71-4_NP65A.mrc', 0.358, element)
+       call nano%set_atomic_coords('71-4_NP65A_atom_centers.pdb')
+       call nano%set_img('71-4_NP65ACC.mrc', 'img_cc')
+       call atom%new('71-4_NP65A_atom_centers.pdb')
+       call nano%center_on_atom('71-4_NP65A_atom_centers.pdb',pdbout )
 
  end program simple_test_chiara_try

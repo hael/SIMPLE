@@ -14,6 +14,7 @@ type(atom_cluster_analysis_commander)  :: xatom_cluster_analysis
 type(nano_softmask_commander)          :: xnano_softmask
 type(geometry_analysis_commander)      :: xgeometry_analysis
 type(radial_sym_test_commander)        :: xrad_sym_tst
+type(plot_atom_commander)              :: xplot_atom
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: xarg, prg, entire_line
 type(cmdline)         :: cline
@@ -48,6 +49,8 @@ select case(prg)
         call xatoms_rmsd%execute(cline)
     case('radial_sym_test')
         call xrad_sym_tst%execute(cline)
+    case('plot_atom')
+        call xplot_atom%execute(cline)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select

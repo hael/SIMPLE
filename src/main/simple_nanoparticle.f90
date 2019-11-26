@@ -60,10 +60,12 @@ type :: nanoparticle
     procedure          :: phasecorrelation_nano_gaussian
     ! clustering
     procedure, private :: hierarc_clust
+    procedure, private :: cluster_atom_intensity
     procedure          :: cluster_ang
     procedure          :: cluster_ar
     procedure          :: cluster_interdist
-    procedure          :: cluster_atom_intensity
+    procedure          :: cluster_atom_maxint
+    procedure          :: cluster_atom_intint
     procedure          :: search_polarization
     procedure          :: geometry_analysis
     ! execution
@@ -74,9 +76,11 @@ type :: nanoparticle
     ! visualization and output
     procedure          :: write_centers
     procedure          :: print_asym_unit
+    procedure          :: print_atoms
     ! others
-    procedure, private :: update_self_ncc
+    procedure          :: update_self_ncc
     procedure          :: keep_atomic_pos_at_radius
+    procedure          :: center_on_atom
     ! kill
     procedure          :: kill => kill_nanoparticle
 end type nanoparticle
@@ -94,7 +98,6 @@ contains
         call self%set_partname(fname)
         self%fbody = get_fbody(trim(basename(fname)), trim(fname2ext(fname)))
         self%smpd  = cline_smpd
-
         ! CHIARA, the below should be in a defs module atom_constants or similar, discuss with C# please
         if(.not. present(element)) then
             self%element   = 'PT'  !default is pt
@@ -224,6 +227,27 @@ contains
         call img_asym%kill
         deallocate(rmat1,rmat2,rmat3)
     end subroutine print_asym_unit
+
+    subroutine print_atoms(self)
+      class(nanoparticle), intent(inout) :: self
+      type(binimage)       :: img_atom
+      integer, allocatable :: imat(:,:,:), imat_atom(:,:,:)
+      integer :: i
+      call img_atom%copy_bimg(self%img_cc)
+      allocate(imat_atom(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
+      call img_atom%get_imat(imat)
+      do i = 1, maxval(imat)
+        where(imat == i)
+           imat_atom = 1
+         elsewhere
+           imat_atom = 0
+         endwhere
+         call img_atom%set_imat(imat_atom)
+         call img_atom%write_bimg('Atom'//trim(int2str(i))//'.mrc')
+      enddo
+      deallocate(imat,imat_atom)
+      call img_atom%kill_bimg
+    end subroutine print_atoms
 
     ! Find the centers coordinates of the atoms in the particle
     ! and save it in the global variable centers.
@@ -893,7 +917,7 @@ contains
         deallocate(mask, imat_cc)
         call simulated_density%kill
         call self%distances_distribution() ! across the whole nano
-        call self%atom_intensity_stats(max_intensity)
+        ! call self%atom_intensity_stats(max_intensity)
         call self%kill
         write(logfhandle, *) '****radial atom-to-atom distances estimation, completed'
    end subroutine radial_dependent_stats
@@ -1084,14 +1108,15 @@ contains
     ! map in each atom. It is likely that these statistics
     ! are going to be able to distinguish between the different
     ! atom compositions in heterogeneous nanoparticles.
-    subroutine atom_intensity_stats(self,mmax_intensity)
-        class(nanoparticle),         intent(inout) :: self
-        real, optional, allocatable, intent(inout) :: mmax_intensity(:)
+    subroutine atom_intensity_stats(self, print_file)
+        class(nanoparticle), intent(inout) :: self
+        logical,             intent(in)    :: print_file ! whether to print on a file all the calc stats
         real,    pointer     :: rmat(:,:,:)
         logical, allocatable :: mask(:,:,:)
         integer, allocatable :: imat_cc(:,:,:)
         integer :: i, j, k,n_atom, filnum, io_stat
-        real    :: max_intensity(self%n_cc), avg_intensity(self%n_cc), stdev_intensity(self%n_cc), radii(self%n_cc)
+        real    :: max_intensity(self%n_cc), avg_intensity(self%n_cc)
+        real    :: stdev_intensity(self%n_cc), radii(self%n_cc), int_intensity(self%n_cc) ! integrated intensity
         real    :: avg_int, stdev_int, max_int
         real    :: m(3) ! center of mass of the nanoparticle
         write(logfhandle,*)'**atoms intensity statistics calculations init'
@@ -1103,15 +1128,15 @@ contains
         ! initialise
         max_intensity(:)   = 0.
         avg_intensity(:)   = 0.
+        int_intensity(:)   = 0.
         stdev_intensity(:) = 0.
         ! Write on a file
-        call fopen(filnum, file = './'//'/IntensityStats.txt', iostat=io_stat)
+        if(print_file) call fopen(filnum, file ='IntensityStats.txt', iostat=io_stat)
         do n_atom = 1, self%n_cc
-            write(unit = filnum, fmt = '(a,i3)') 'ATOM ', n_atom
             where(imat_cc == n_atom) mask = .true.
             max_intensity(n_atom) = maxval(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),mask)
-            avg_intensity(n_atom) = sum(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),mask)
-            avg_intensity(n_atom) = avg_intensity(n_atom)/real(count(mask))
+            int_intensity(n_atom) = sum(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),mask)
+            avg_intensity(n_atom) = int_intensity(n_atom)/real(count(mask))
             radii(n_atom)         = euclid(self%centers(:,n_atom), m)*self%smpd
             do i = 1, self%ldim(1)
                 do j = 1, self%ldim(2)
@@ -1125,10 +1150,10 @@ contains
             else ! atom composed by one voxel
                 stdev_intensity(n_atom) = 0.
             endif
-            write(unit = filnum, fmt = '(a,f9.5,a,f9.5,a,f9.5)') 'maxval ', max_intensity(n_atom), '   avg ', avg_intensity(n_atom), '   stdev ', stdev_intensity(n_atom)
+             if(print_file) write(unit = filnum, fmt = '(a,i3,a,f9.5,a,f9.5,a,f9.5)') &
+             & 'ATOM # ', n_atom, 'maxval ', max_intensity(n_atom),'   avg ', avg_intensity(n_atom), '   stdev ', stdev_intensity(n_atom), ' integrated ', int_intensity(n_atom)
             mask = .false. !Reset
         enddo
-        if(present(mmax_intensity)) allocate(mmax_intensity(size(max_intensity)), source = max_intensity)
         avg_int   = sum(avg_intensity)/real(self%n_cc)
         max_int   = maxval(max_intensity)
         stdev_int = 0.
@@ -1136,38 +1161,46 @@ contains
             stdev_int = stdev_int + (avg_intensity(n_atom)-avg_int)**2
         enddo
         stdev_int = sqrt(stdev_int/real(self%n_cc-1))
-        write(unit = filnum, fmt = '(a,f9.5,a,f9.5,a,f9.5)') 'maxval_general ', max_int, '   avg_general ', avg_int, '   stdev_general ', stdev_int
-        call fclose(filnum)
-        call fopen(filnum, file='RadialPosCCs.csv', iostat=io_stat)
-        write (filnum,*) 'rccs'
+        if(print_file) write(unit = filnum, fmt = '(a,f9.5,a,f9.5,a,f9.5)') 'maxval_general ', max_int, '   avg_general ', avg_int, '   stdev_general ', stdev_int
+        if(print_file) call fclose(filnum)
+        ! print one by one the stats anyway
+        call fopen(filnum, file='RadialPos.csv', iostat=io_stat)
+        write (filnum,*) 'radius'
         do n_atom = 1, self%n_cc
             write (filnum,'(A)', advance='yes') trim(real2str(radii(n_atom)))
         end do
         call fclose(filnum)
-        call fopen(filnum, file='MaxIntensityCCs.csv', iostat=io_stat)
-        write (filnum,*) 'mccs'
+        call fopen(filnum, file='MaxIntensity.csv', iostat=io_stat)
+        write (filnum,*) 'maxint'
         do n_atom = 1, self%n_cc
             write (filnum,'(A)', advance='yes') trim(real2str(max_intensity(n_atom)))
         end do
         call fclose(filnum)
-        call fopen(filnum, file='AvgIntensityCCs.csv', iostat=io_stat)
-        write (filnum,*) 'accs'
+        call fopen(filnum, file='AvgIntensity.csv', iostat=io_stat)
+        write (filnum,*) 'avgint'
         do n_atom = 1, self%n_cc
             write (filnum,'(A)', advance='yes') trim(real2str(avg_intensity(n_atom)))
+        end do
+        call fclose(filnum)
+        call fopen(filnum, file='IntIntensity.csv', iostat=io_stat)
+        write (filnum,*) 'intint'
+        do n_atom = 1, self%n_cc
+            write (filnum,'(A)', advance='yes') trim(real2str(int_intensity(n_atom)))
         end do
         call fclose(filnum)
         write(logfhandle,*)'**atoms intensity statistics calculations completed'
     end subroutine atom_intensity_stats
 
     ! This subroutine clusters the atoms with respect to the maximum intensity
+    ! or the integrated density (according to the values contained in feature)
     ! using kmean algorithm for 2 classes. The initial guess fo the centers
     ! is intentionally biased. It supposes there are two distinguished classes
     ! with different avgs (proved with simulated data).
-    subroutine cluster_atom_intensity(self, max_intensity)
+    subroutine cluster_atom_intensity(self, feature)
         use gnufor2
         use simple_nanoML, only : nanoML
         class(nanoparticle), intent(inout) :: self
-        real,                intent(inout) :: max_intensity(:)
+        real,                intent(inout) :: feature(:)
         integer, parameter   :: MAX_IT = 50 ! maximum number of iterations for
         integer, allocatable :: imat_cc(:,:,:)
         real, pointer        :: rmat1(:,:,:), rmat2(:,:,:)
@@ -1176,8 +1209,8 @@ contains
         real    :: centers_kmeans(2) !output of k-means
         real    :: avgs(2),  vars(2), gammas(self%n_cc,2) !output of ML
         integer :: i, cnt1, cnt2, filnum, io_stat
-        max_intensity = max_intensity/maxval(max_intensity)*10. !normalise with maxval 10
-        call hist(max_intensity, 20)
+        feature = feature/maxval(feature)*10. !normalise with maxval 10
+        call hist(feature, 20)
         write(logfhandle,*) '****clustering wrt maximum intensity, init'
         ! Report clusters on images in dedicated directory
         call class1%new(self%ldim, self%smpd)
@@ -1187,11 +1220,11 @@ contains
         call self%img_cc%get_imat(imat_cc)
         call fopen(filnum, file='ClusterIntensities.txt', iostat=io_stat)
         ! kmeans
-        call emfit%kmeans_biased2classes(max_intensity, centers_kmeans)
+        call emfit%kmeans_biased2classes(feature, centers_kmeans)
         write(filnum,*) 'centers_kmeans', centers_kmeans
         ! ML, fit
         call emfit%new(self%n_cc,2)
-        call emfit%set_data(max_intensity)
+        call emfit%set_data(feature)
         call emfit%fit(MAX_IT,centers_kmeans)
         avgs = emfit%get_avgs()
         vars = emfit%get_vars()
@@ -1200,17 +1233,17 @@ contains
         write(filnum,*) 'AVG/VAR 2:', avgs(2), vars(2)
         cnt2 = 0
         do i = 1, self%n_cc
-            if( (avgs(1) - max_intensity(i))**2. < (avgs(2) - max_intensity(i))**2. ) then
+            if( (avgs(1) - feature(i))**2. < (avgs(2) - feature(i))**2. ) then
                 cnt2 = cnt2 + 1
                 write(filnum,*) 'connected component #', i, 'belongs to class 1 with probability', max(gammas(i,1),gammas(i,2))
               else
                 write(filnum,*) 'connected component #', i, 'belongs to class 2 with probability', max(gammas(i,1),gammas(i,2))
             endif
         enddo
-        cnt1 = count((avgs(1) - max_intensity)**2. <  (avgs(2) - max_intensity)**2. )
-        cnt2 = count((avgs(1) - max_intensity)**2. >= (avgs(2) - max_intensity)**2. )
+        cnt1 = count((avgs(1) - feature)**2. <  (avgs(2) - feature)**2. )
+        cnt2 = count((avgs(1) - feature)**2. >= (avgs(2) - feature)**2. )
         do i = 1, self%n_cc
-            if( (avgs(1) - max_intensity(i))**2. < (avgs(2) - max_intensity(i))**2. ) then
+            if( (avgs(1) - feature(i))**2. < (avgs(2) - feature(i))**2. ) then
                 where( imat_cc == i ) rmat1(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
             else
                 where( imat_cc == i ) rmat2(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
@@ -1249,13 +1282,13 @@ contains
             sum1 = 0.
             cnt1 = 0
             do i=1,self%n_cc
-                if( (cen1-max_intensity(i))**2. < (cen2-max_intensity(i))**2. )then
+                if( (cen1-feature(i))**2. < (cen2-feature(i))**2. )then
                     cnt1 = cnt1 + 1 ! number of elements in cluster 1
-                    sum1 = sum1 + max_intensity(i)
+                    sum1 = sum1 + feature(i)
                 endif
             end do
             cnt2 = self%n_cc - cnt1       ! number of elements in cluster 2
-            sum2 = sum(max_intensity)- sum1
+            sum2 = sum(feature)- sum1
             cen1_new = sum1 / real(cnt1)
             cen2_new = sum2 / real(cnt2)
             if(abs(cen1_new - cen1) < TINY .and. abs(cen2_new - cen2) < TINY) then
@@ -1276,6 +1309,42 @@ contains
             endif
         end subroutine update_centers
     end subroutine cluster_atom_intensity
+
+    ! Cluster the atoms wrt the maximum intensity
+    ! k-means 2 classes + ML
+    subroutine cluster_atom_maxint(self)
+      class(nanoparticle), intent(inout) :: self
+      real    :: max_intensity(self%n_cc)
+      integer :: i, io_stat, filnum
+      call fopen(filnum, file='MaxIntensity.csv', iostat=io_stat)
+      if( io_stat .ne. 0 ) then
+        THROW_HARD('Unable to read file MaxIntensity.csv Did you run atom_intensity_stats?; cluster_atom_maxint')
+      endif
+      read(filnum,*) ! first line is variable name
+      do i = 1, self%n_cc
+        read(filnum,*) max_intensity(i)
+      enddo
+      call fclose(filnum)
+      call self%cluster_atom_intensity(max_intensity)
+    end subroutine cluster_atom_maxint
+
+    ! Cluster the atoms wrt the integrated density
+    ! k-means 2 classes + ML
+    subroutine cluster_atom_intint(self)
+      class(nanoparticle), intent(inout) :: self
+      real    :: int_intensity(self%n_cc)
+      integer :: i, io_stat, filnum
+      call fopen(filnum, file='IntIntensity.csv', iostat=io_stat)
+      if( io_stat .ne. 0 ) then
+        THROW_HARD('Unable to read file IntIntensity.csv Did you run atom_intensity_stats?; cluster_atom_intint')
+      endif
+      read(filnum,*) ! first line is variable name
+      do i = 1, self%n_cc
+        read(filnum,*) int_intensity(i)
+      enddo
+      call fclose(filnum)
+      call self%cluster_atom_intensity(int_intensity)
+    end subroutine cluster_atom_intint
 
     ! Polarization search via angle variance. The considered angle is
     ! the angle between the vector [0,0,1] and the direction of the
@@ -1422,8 +1491,7 @@ contains
         integer              :: i, j, ncls, dim, filnum, io_stat, cnt
         real                 :: avg, stdev
         ! Preparing for clustering
-        call self%update_self_ncc()
-        ! Aspect ratios calculations
+        ! Aspect ratios and loc_longest dist estimation
         call self%aspect_ratios_estimation(print_ar=.false.) ! it's needed to identify the dir of longest dim
         call self%search_polarization()
         dim = size(self%ang_var)
@@ -1469,12 +1537,86 @@ contains
         enddo
         write(unit = filnum,fmt ='(a,f6.2,a,f6.2,a)') 'AVG among the classes: ', avg, ' degrees; STDEV among the classes: ', stdev, ' degrees'
         call fclose(filnum)
+        call fopen(filnum, file='Ang.csv', iostat=io_stat)
+        write(filnum,*) 'ang'
+        do i  = 1, self%n_cc
+          write(filnum,*) self%ang_var(i)
+        enddo
+        call fclose(filnum)
         if(allocated(stdev_within)) deallocate(stdev_within)
         deallocate(centroids, labels, populations)
       end subroutine cluster_ang
 
-    ! Cluster the atoms wrt to the aspect ratio
-    subroutine cluster_ar(self, thresh)
+  ! Cluster the atoms wrt to the aspect ratio
+  subroutine cluster_ar(self, thresh)
+      class(nanoparticle), intent(inout) :: self
+      real,    intent(in)  :: thresh ! threshold for class definition, user inputted
+      real,    allocatable :: centroids(:)
+      integer, allocatable :: labels(:), populations(:)
+      real,    allocatable :: stdev_within(:)
+      integer              :: i, j, ncls, dim, filnum, io_stat, cnt
+      real                 :: avg, stdev
+      if(thresh > 1. .or. thresh < 0.) THROW_HARD('Invalid input threshold! AR is in [0,1]; cluster_ar')
+      ! Preparing for clustering
+      ! Aspect ratios calculations
+      call self%aspect_ratios_estimation(print_ar=.false.) ! it's needed to identify the dir of longest dim
+      dim = size(self%ratios)
+      allocate(labels(dim), source = 0)
+      ! classify
+      call self%hierarc_clust(self%ratios,thresh,labels,centroids,populations)
+      ! Stats calculations
+      ncls = maxval(labels)
+      allocate(stdev_within(ncls), source = 0.)
+      ! stdev within the same class
+      do i = 1, ncls
+          do j = 1, dim
+              if(labels(j) == i) stdev_within(i) = stdev_within(i) + (self%ratios(j)-centroids(i))**2
+          enddo
+      enddo
+      where (populations>1)
+          stdev_within = sqrt(stdev_within/(real(populations)-1.))
+      elsewhere
+          stdev_within = 0.
+      endwhere
+      ! avg and stdev among different classes
+      avg = 0.
+      do i = 1, ncls
+          avg = avg + centroids(i)
+      enddo
+      avg = avg/real(ncls)
+      stdev = 0.
+      if(ncls>1) then
+        do i = 1, ncls
+            stdev = stdev + (centroids(i) - avg)**2
+        enddo
+        stdev = sqrt(stdev/(real(ncls)-1.))
+      endif
+      ! Output on a file
+      call fopen(filnum, file='ClusterARThresh'//trim(real2str(thresh))//'.txt', iostat=io_stat)
+      write(unit = filnum,fmt ='(a,i2,a,f6.2)') 'NR OF IDENTIFIED CLUSTERS:', ncls, ' SELECTED THRESHOLD: ',  thresh
+      write(unit = filnum,fmt ='(a)') 'CLASSIFICATION '
+      do i = 1, dim
+        write(unit = filnum,fmt ='(a,i3,a,f6.2,a,i3,a,f6.2)') 'Atom #: ', i, '; data (adimensional): ', self%ratios(i), '; class: ', labels(i)
+      enddo
+      write(unit = filnum,fmt ='(a)') 'CLASS STATISTICS '
+      do i = 1, ncls
+        write(unit = filnum,fmt ='(a,i3,a,i3,a,f6.2,a,f6.2)') 'class: ', i, '; cardinality: ', populations(i), '; centroid: ', centroids(i), '; stdev within the class: ', stdev_within(i)
+      enddo
+      write(unit = filnum,fmt ='(a,f6.2,a,f6.2)') 'AVG among the classes: ', avg, '; STDEV among the classes: ', stdev
+      call fclose(filnum)
+      ! Generate file that contains the calculater AR, that can be read afterwards
+      call fopen(filnum, file='Ar.csv', iostat=io_stat)
+      write(filnum,*) 'ar'
+      do i  = 1, self%n_cc
+        write(filnum,*) self%ratios(i)
+      enddo
+      call fclose(filnum)
+      if(allocated(stdev_within)) deallocate(stdev_within)
+      deallocate(centroids, labels, populations)
+    end subroutine cluster_ar
+
+    ! Cluster the atoms wrt to the interatomic distances
+    subroutine cluster_interdist(self, thresh)
         class(nanoparticle), intent(inout) :: self
         real,    intent(in)  :: thresh ! threshold for class definition, user inputted
         real,    allocatable :: centroids(:)
@@ -1482,22 +1624,23 @@ contains
         real,    allocatable :: stdev_within(:)
         integer              :: i, j, ncls, dim, filnum, io_stat, cnt
         real                 :: avg, stdev
-        if(thresh > 1. .or. thresh < 0.) THROW_HARD('Invalid input threshold! AR is in [0,1]; cluster_ar')
         ! Preparing for clustering
-        call self%update_self_ncc()
+        ! need to recalculate self%dists
+        call self%distances_distribution()
         ! Aspect ratios calculations
-        call self%aspect_ratios_estimation(print_ar=.false.) ! it's needed to identify the dir of longest dim
-        dim = size(self%ratios)
+        dim = size(self%dists)
+        ! pass from pixels to A
+        self%dists = self%dists*self%smpd
         allocate(labels(dim), source = 0)
         ! classify
-        call self%hierarc_clust(self%ratios,thresh,labels,centroids,populations)
+        call self%hierarc_clust(self%dists,thresh,labels,centroids,populations)
         ! Stats calculations
         ncls = maxval(labels)
         allocate(stdev_within(ncls), source = 0.)
         ! stdev within the same class
         do i = 1, ncls
             do j = 1, dim
-                if(labels(j) == i) stdev_within(i) = stdev_within(i) + (self%ratios(j)-centroids(i))**2
+                if(labels(j) == i) stdev_within(i) = stdev_within(i) + (self%dists(j)-centroids(i))**2
             enddo
         enddo
         where (populations>1)
@@ -1519,103 +1662,45 @@ contains
           stdev = sqrt(stdev/(real(ncls)-1.))
         endif
         ! Output on a file
-        call fopen(filnum, file='ClusterARThresh'//trim(real2str(thresh))//'.txt', iostat=io_stat)
+        call fopen(filnum, file='ClusterInterDistThresh'//trim(real2str(thresh))//'.txt', iostat=io_stat)
         write(unit = filnum,fmt ='(a,i2,a,f6.2)') 'NR OF IDENTIFIED CLUSTERS:', ncls, ' SELECTED THRESHOLD: ',  thresh
         write(unit = filnum,fmt ='(a)') 'CLASSIFICATION '
         do i = 1, dim
-          write(unit = filnum,fmt ='(a,i3,a,f6.2,a,i3,a,f6.2)') 'Atom #: ', i, '; data (adimensional): ', self%ratios(i), '; class: ', labels(i)
+          write(unit = filnum,fmt ='(a,i3,a,f6.2,a,i3)') 'Atom #: ', i, '; data (A): ', self%dists(i), '; class: ', labels(i)
         enddo
         write(unit = filnum,fmt ='(a)') 'CLASS STATISTICS '
         do i = 1, ncls
-          write(unit = filnum,fmt ='(a,i3,a,i3,a,f6.2,a,f6.2)') 'class: ', i, '; cardinality: ', populations(i), '; centroid: ', centroids(i), '; stdev within the class: ', stdev_within(i)
+          write(unit = filnum,fmt ='(a,i3,a,i3,a,f6.2,a,f6.2,a)') 'class: ', i, '; cardinality: ', populations(i), '; centroid: ', centroids(i), ' A; stdev within the class: ', stdev_within(i), ' A'
         enddo
-        write(unit = filnum,fmt ='(a,f6.2,a,f6.2)') 'AVG among the classes: ', avg, '; STDEV among the classes: ', stdev
+        write(unit = filnum,fmt ='(a,f6.2,a,f6.2,a)') 'AVG among the classes: ', avg, ' A; STDEV among the classes: ', stdev, ' A'
+        call fclose(filnum)
+        call fopen(filnum, file='Dist.csv', iostat=io_stat)
+        write(filnum,*) 'dist'
+        do i  = 1, self%n_cc
+          write(filnum,*) self%dists(i)
+        enddo
         call fclose(filnum)
         if(allocated(stdev_within)) deallocate(stdev_within)
         deallocate(centroids, labels, populations)
-      end subroutine cluster_ar
+      end subroutine cluster_interdist
 
 
-      ! Cluster the atoms wrt to the interatomic distances
-      subroutine cluster_interdist(self, thresh)
-          class(nanoparticle), intent(inout) :: self
-          real,    intent(in)  :: thresh ! threshold for class definition, user inputted
-          real,    allocatable :: centroids(:)
-          integer, allocatable :: labels(:), populations(:)
-          real,    allocatable :: stdev_within(:)
-          integer              :: i, j, ncls, dim, filnum, io_stat, cnt
-          real                 :: avg, stdev
-          ! Preparing for clustering
-          call self%update_self_ncc()
-          ! need to recalculate self%dists
-          call self%distances_distribution()
-          ! Aspect ratios calculations
-          dim = size(self%dists)
-          ! pass from pixels to A
-          self%dists = self%dists*self%smpd
-          allocate(labels(dim), source = 0)
-          ! classify
-          call self%hierarc_clust(self%dists,thresh,labels,centroids,populations)
-          ! Stats calculations
-          ncls = maxval(labels)
-          allocate(stdev_within(ncls), source = 0.)
-          ! stdev within the same class
-          do i = 1, ncls
-              do j = 1, dim
-                  if(labels(j) == i) stdev_within(i) = stdev_within(i) + (self%dists(j)-centroids(i))**2
-              enddo
-          enddo
-          where (populations>1)
-              stdev_within = sqrt(stdev_within/(real(populations)-1.))
-          elsewhere
-              stdev_within = 0.
-          endwhere
-          ! avg and stdev among different classes
-          avg = 0.
-          do i = 1, ncls
-              avg = avg + centroids(i)
-          enddo
-          avg = avg/real(ncls)
-          stdev = 0.
-          if(ncls>1) then
-            do i = 1, ncls
-                stdev = stdev + (centroids(i) - avg)**2
-            enddo
-            stdev = sqrt(stdev/(real(ncls)-1.))
-          endif
-          ! Output on a file
-          call fopen(filnum, file='ClusterInterDistThresh'//trim(real2str(thresh))//'.txt', iostat=io_stat)
-          write(unit = filnum,fmt ='(a,i2,a,f6.2)') 'NR OF IDENTIFIED CLUSTERS:', ncls, ' SELECTED THRESHOLD: ',  thresh
-          write(unit = filnum,fmt ='(a)') 'CLASSIFICATION '
-          do i = 1, dim
-            write(unit = filnum,fmt ='(a,i3,a,f6.2,a,i3)') 'Atom #: ', i, '; data (A): ', self%dists(i), '; class: ', labels(i)
-          enddo
-          write(unit = filnum,fmt ='(a)') 'CLASS STATISTICS '
-          do i = 1, ncls
-            write(unit = filnum,fmt ='(a,i3,a,i3,a,f6.2,a,f6.2,a)') 'class: ', i, '; cardinality: ', populations(i), '; centroid: ', centroids(i), ' A; stdev within the class: ', stdev_within(i), ' A'
-          enddo
-          write(unit = filnum,fmt ='(a,f6.2,a,f6.2,a)') 'AVG among the classes: ', avg, ' A; STDEV among the classes: ', stdev, ' A'
-          call fclose(filnum)
-          if(allocated(stdev_within)) deallocate(stdev_within)
-          deallocate(centroids, labels, populations)
-        end subroutine cluster_interdist
 
-
-    ! This subrotuine indentifies the 'rows' of atoms in the z direction.
-    ! The idea is to look at the projection of the nanoparticle on the
-    ! xy plane and identify all the atoms whose center has (almost, see
-    ! MAX_DIST_CENTERS) the same x and y coords.
-    ! The inputs are:
-    ! -) centers, coordinates of the centers of mass of the atoms;
-    ! For how it is built, self%centers(:3,i) contains the coords of the
-    ! center of mass of the i-th cc.
     subroutine make_soft_mask(self) !change the name
         class(nanoparticle), intent(inout) :: self
-        type(image) :: img_cos
-        call self%img_bin%grow_bins(nint(0.5*self%theoretical_radius/self%smpd)+1)
-        call self%img_bin%cos_edge(img_cos,SOFT_EDGE)
+        type(binimage) :: simulated_density
+        type(image)   :: img_cos
+        type(atoms)   :: atomic_pos
+        call simulated_density%new_bimg(self%ldim, self%smpd)
+        call atomic_pos%new(trim(self%fbody)//'_atom_centers.pdb')
+        call atomic_pos%convolve(simulated_density, cutoff=8.*self%smpd)
+        call simulated_density%grow_bins(nint(0.5*self%theoretical_radius/self%smpd)+1)
+        call simulated_density%cos_edge(img_cos,SOFT_EDGE)
         call img_cos%write(trim(self%fbody)//'SoftMask.mrc')
+        !kill
         call img_cos%kill
+        call simulated_density%kill_bimg
+        call atomic_pos%kill
     end subroutine make_soft_mask
 
     subroutine atoms_rmsd(nano1,nano2,r)
@@ -1939,18 +2024,62 @@ contains
       call radial_atom%writepdb(fname)
     end subroutine keep_atomic_pos_at_radius
 
-    subroutine geometry_analysis(self, pdbfile)
+    ! Translate the identified atomic positions so that the center of mass
+    ! of the nanoparticle coincides with its closest atom
+    subroutine center_on_atom(self, pdbfile_in, pdbfile_out)
       class(nanoparticle), intent(inout) :: self
-      character(len=*),        intent(in)    :: pdbfile
-      type(atoms)           :: init_atoms
+      character(len=*),    intent(in)    :: pdbfile_in
+      character(len=*),    intent(inout) :: pdbfile_out
+      type(atoms) :: atom_centers
+      real        :: m(3), mm(3), vec(3), d, d_before
+      integer     :: i
+      !!!!!!!!!!! DEBUG !!!!!!!!!!
+      type(atoms) :: center_of_mass
+      integer :: index
+      real :: coords(3)
+      call atom_centers%new(pdbfile_in)
+      m(:)  = self%nanopart_masscen()
+      ! print *, 'm: ', m
+      d_before = huge(d_before)
+      do i = 1, self%n_cc
+        d = euclid(m,self%centers(:,i))
+        if(d < d_before) then
+          vec(:)   = m(:) - self%centers(:,i)
+          d_before = d
+          index = i
+        endif
+      enddo
+      print *, 'self%centers(:, index) + vec: ', self%centers(:, index) + vec, 'm(:): ', m(:)
+      print *, 'self%smpd:', self%smpd
+      vec = (vec-1.)*self%smpd
+      m   = (m-1.)*self%smpd
+      coords = atom_centers%get_coord(index)
+      print *, 'coords + vec: ', coords + vec, '(m(:)-1.)*self%smpd: ', m
+      call atom_centers%translate(vec)
+      call atom_centers%writePDB(pdbfile_out)
+      !!!!!!!!!
+      call center_of_mass%new(1)
+      call center_of_mass%set_coord(1,m)
+      call center_of_mass%writePDB('CenterOfMass')
+      call center_of_mass%kill
+      !!!!!!!!!
+      call atom_centers%kill
+    end subroutine center_on_atom
+
+    subroutine geometry_analysis(self, pdbfile2, outfile)
+      class(nanoparticle),        intent(inout) :: self
+      character(len=*),           intent(in)    :: pdbfile2  ! atomic pos of the 2 (or 3) selected atoms
+      character(len=*), optional, intent(in)    :: outfile
+      type(atoms)           :: init_atoms, final_atoms
       type(binimage)        :: img_out
       integer, allocatable  :: imat_cc(:,:,:), imat(:,:,:)
-      real,    allocatable  :: line(:,:), plane(:,:,:),points(:,:), distances_totheplane(:), radii(:)
+      real,    allocatable  :: line(:,:), plane(:,:,:),points(:,:), distances_totheplane(:)
+      real,    allocatable  :: radii(:), max_intensity(:), int_intensity(:)
       integer :: i, j, n, t, s, filnum, io_stat, cnt_intersect, cnt, n_cc
       logical :: flag(self%n_cc)
       real    :: atom1(3), atom2(3), atom3(3), dir_1(3), dir_2(3), vec(3), m(3), dist_plane, dist_line
       real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator
-      call init_atoms%new(pdbfile)
+      call init_atoms%new(pdbfile2)
       n = init_atoms%get_n()
       if(n < 2 .or. n > 3 ) THROW_HARD('Inputted pdb file contains the wrong number of atoms!; geometry_analysis')
       do i = 1, N_DISCRET/2
@@ -1987,14 +2116,24 @@ contains
        imat          = 0
        cnt_intersect = 0
        call img_out%new_bimg(self%ldim, self%smpd)
+       call final_atoms%new(count(flag), dummy=.true.)
        do i = 1, self%n_cc
            if(flag(i)) then
                cnt_intersect = cnt_intersect + 1
+               call final_atoms%set_name(cnt_intersect,self%atom_name)
+               call final_atoms%set_element(cnt_intersect,self%element)
+               call final_atoms%set_coord(cnt_intersect,(self%centers(:,i)-1.)*self%smpd)
                where(imat_cc == i) imat = 1
            endif
        enddo
        call img_out%set_imat(imat)
-       call img_out%write_bimg('ImageColumn.mrc')
+       if(present(outfile)) then
+           call img_out%write_bimg(outfile)
+       else
+         call img_out%write_bimg('ImageColumn.mrc')
+       endif
+       call final_atoms%writePDB('AtomColumn')
+       call final_atoms%kill
        ! Find the plane that best fits the atoms belonging to the line
        allocate(points(3, count(flag)), source = 0.)
        m = self%nanopart_masscen()
@@ -2005,32 +2144,96 @@ contains
                points(:3,cnt) = self%centers(:3,i)-m(:)
            endif
        enddo
+       ! TO FIX
        vec = plane_from_points(points)
        allocate(distances_totheplane(cnt), source = 0.)
        allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
        cnt = 0
        denominator = sqrt(vec(1)*2+vec(2)*2+1.)
+       write(logfhandle,*) 'Directional vector: [', -1., ',', -1., ',', -vec(1)-vec(2), ']'
+       ! Read ratios, ang_var, dists, max_intensity
+       if(.not. allocated(self%ratios)) allocate(self%ratios(self%n_cc))
+       call fopen(filnum, file='../'//'Ar.csv', iostat=io_stat)
+       if( io_stat .ne. 0 ) then
+         THROW_HARD('Unable to read file Ar.csv Did you run cluster_analysis?; geometry_analysis')
+       endif
+       read(filnum,*) ! first line is variable name
        do i = 1, self%n_cc
-           if(flag(i)) then
-               cnt = cnt + 1
-               ! formula for distance of a point to a plane
-               distances_totheplane(cnt) = abs(vec(1)*points(1,cnt)+vec(2)*points(2,cnt)-points(3,cnt)+vec(3))/denominator
-               radii(cnt) = euclid(self%centers(:,i), m)*self%smpd
-           endif
+         read(filnum,*) self%ratios(i)
        enddo
-       distances_totheplane = (distances_totheplane)*self%smpd
-       call fopen(filnum, file='Radii.csv', iostat=io_stat)
-       write (filnum,*) 'r'
-       do i = 1, cnt
-           write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
+       call fclose(filnum)
+       if(.not. allocated(self%ang_var)) allocate(self%ang_var(self%n_cc))
+       call fopen(filnum, file='../'//'Ang.csv', iostat=io_stat)
+       if( io_stat .ne. 0 ) then
+         THROW_HARD('Unable to read file Ang.csv Did you run cluster_analysis?; geometry_analysis')
+       endif
+       read(filnum,*)
+       do i = 1, self%n_cc
+         read(filnum,*) self%ang_var(i)
+       enddo
+       call fclose(filnum)
+       if(.not. allocated(self%dists)) allocate(self%dists(self%n_cc))
+       call fopen(filnum, file='../'//'Dist.csv', iostat=io_stat)
+       if( io_stat .ne. 0 ) then
+         THROW_HARD('Unable to read file Dist.csv Did you run cluster_analysis?; geometry_analysis')
+       endif
+       read(filnum,*)
+       do i = 1, self%n_cc
+         read(filnum,*) self%dists(i)
+       enddo
+       call fclose(filnum)
+       allocate(max_intensity(self%n_cc))
+       call fopen(filnum, file='../'//'MaxIntensity.csv', iostat=io_stat)
+       if( io_stat .ne. 0 ) then
+         THROW_HARD('Unable to read file MaxIntensity.csv Did you run radial_dependent_stats?; geometry_analysis')
+       endif
+       read(filnum,*)
+       do i = 1, self%n_cc
+         read(filnum,*) max_intensity(i)
+       enddo
+       call fclose(filnum)
+       allocate(int_intensity(self%n_cc))
+       call fopen(filnum, file='../'//'IntIntensity.csv', iostat=io_stat)
+       if( io_stat .ne. 0 ) then
+         THROW_HARD('Unable to read file IntIntensity.csv Did you run radial_dependent_stats?; geometry_analysis')
+       endif
+       read(filnum,*)
+       do i = 1, self%n_cc
+         read(filnum,*) int_intensity(i)
+       enddo
+       call fclose(filnum)
+       ! Output on Excel file all the stats on the atoms belonging to the plane
+       cnt = 0
+       call fopen(filnum, file='AtomColumnInfo.xls',iostat=io_stat)
+       write (filnum,*) '        Atom #    ','   Ar        ','       Dist     ','         Ang     ','         MaxInt     ', '          IntInt     '
+       do i = 1, self%n_cc
+         if(flag(i)) then
+           cnt = cnt + 1
+             write (filnum,*) i, '   ', self%ratios(i), self%dists(i), self%ang_var(i), max_intensity(i), int_intensity(i)
+         endif
        end do
        call fclose(filnum)
-       call fopen(filnum, file='DistancesToThePlane.csv',iostat=io_stat)
-       write (filnum,*) 'd'
-       do i = 1, cnt
-           write (filnum,'(A)', advance='yes') trim(real2str(distances_totheplane(i)))
-       end do
-       call fclose(filnum)
+       ! do i = 1, self%n_cc
+       !     if(flag(i)) then
+       !         cnt = cnt + 1
+       !         ! formula for distance of a point to a plane
+       !         distances_totheplane(cnt) = abs(vec(1)*points(1,cnt)+vec(2)*points(2,cnt)-points(3,cnt)+vec(3))/denominator
+       !         radii(cnt) = euclid(self%centers(:,i), m)*self%smpd
+       !     endif
+       ! enddo
+       ! distances_totheplane = (distances_totheplane)*self%smpd
+       ! call fopen(filnum, file='Radii.csv', iostat=io_stat)
+       ! write (filnum,*) 'r'
+       ! do i = 1, cnt
+       !     write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
+       ! end do
+       ! call fclose(filnum)
+       ! call fopen(filnum, file='DistancesToThePlane.csv',iostat=io_stat)
+       ! write (filnum,*) 'd'
+       ! do i = 1, cnt
+       !     write (filnum,'(A)', advance='yes') trim(real2str(distances_totheplane(i)))
+       ! end do
+       ! call fclose(filnum)
       elseif(n == 3) then
         write(logfhandle,*)'PLANE IDENTIFICATION, INITIATION'
         atom1(:) = init_atoms%get_coord(1)/self%smpd + 1.
@@ -2063,15 +2266,24 @@ contains
         imat    = 0
         cnt_intersect = 0
         call img_out%new_bimg(self%ldim, self%smpd)
+        call final_atoms%new(count(flag), dummy=.true.)
         do i = 1, self%n_cc
             if(flag(i)) then
                 cnt_intersect = cnt_intersect + 1
+                call final_atoms%set_name(cnt_intersect,self%atom_name)
+                call final_atoms%set_element(cnt_intersect,self%element)
+                call final_atoms%set_coord(cnt_intersect,(self%centers(:,i)-1.)*self%smpd)
                 where(imat_cc == i) imat = 1
             endif
         enddo
         call img_out%set_imat(imat)
-        call img_out%write_bimg('ImagePlane.mrc')
-        ! TO MOVE
+        if(present(outfile)) then
+            call img_out%write_bimg(outfile)
+        else
+          call img_out%write_bimg('ImagePlane.mrc')
+        endif
+        call final_atoms%writePDB('AtomPlane')
+        call final_atoms%kill
         allocate(points(3, count(flag)), source = 0.)
         m = self%nanopart_masscen()
         cnt = 0
@@ -2085,7 +2297,8 @@ contains
         allocate(distances_totheplane(cnt), source = 0.)
         allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
         cnt = 0
-        denominator = sqrt(vec(1)*2+vec(2)*2+1.)
+        denominator = sqrt(vec(1)**2+vec(2)**2+1.)
+        write(logfhandle,*) 'Normal vector: [', vec(1), ',', vec(2), ',', -1., ']'
         do i = 1, self%n_cc
             if(flag(i)) then
                 cnt = cnt + 1
@@ -2105,6 +2318,68 @@ contains
         write (filnum,*) 'd'
         do i = 1, cnt
             write (filnum,'(A)', advance='yes') trim(real2str(distances_totheplane(i)))
+        end do
+        call fclose(filnum)
+        ! Read ratios, ang_var, dists, max_intensity
+        if(.not. allocated(self%ratios)) allocate(self%ratios(self%n_cc))
+        call fopen(filnum, file='../'//'Ar.csv', iostat=io_stat)
+        if( io_stat .ne. 0 ) then
+          THROW_HARD('Unable to read file Ar.csv Did you run cluster_analysis?; geometry_analysis')
+        endif
+        read(filnum,*) ! first line is variable name
+        do i = 1, self%n_cc
+          read(filnum,*) self%ratios(i)
+        enddo
+        call fclose(filnum)
+        if(.not. allocated(self%ang_var)) allocate(self%ang_var(self%n_cc))
+        call fopen(filnum, file='../'//'Ang.csv', iostat=io_stat)
+        if( io_stat .ne. 0 ) then
+          THROW_HARD('Unable to read file Ang.csv Did you run cluster_analysis?; geometry_analysis')
+        endif
+        read(filnum,*)
+        do i = 1, self%n_cc
+          read(filnum,*) self%ang_var(i)
+        enddo
+        call fclose(filnum)
+        if(.not. allocated(self%dists)) allocate(self%dists(self%n_cc))
+        call fopen(filnum, file='../'//'Dist.csv', iostat=io_stat)
+        if( io_stat .ne. 0 ) then
+          THROW_HARD('Unable to read file Dist.csv Did you run cluster_analysis?; geometry_analysis')
+        endif
+        read(filnum,*)
+        do i = 1, self%n_cc
+          read(filnum,*) self%dists(i)
+        enddo
+        call fclose(filnum)
+        allocate(max_intensity(self%n_cc))
+        call fopen(filnum, file='../'//'MaxIntensity.csv', iostat=io_stat)
+        if( io_stat .ne. 0 ) then
+          THROW_HARD('Unable to read file MaxIntensity.csv Did you run atom_intensity_stats?; geometry_analysis')
+        endif
+        read(filnum,*)
+        do i = 1, self%n_cc
+          read(filnum,*) max_intensity(i)
+        enddo
+        call fclose(filnum)
+        allocate(int_intensity(self%n_cc))
+        call fopen(filnum, file='../'//'IntIntensity.csv', iostat=io_stat)
+        if( io_stat .ne. 0 ) then
+          THROW_HARD('Unable to read file IntIntensity.csv Did you run atom_intensity_stats?; geometry_analysis')
+        endif
+        read(filnum,*)
+        do i = 1, self%n_cc
+          read(filnum,*) int_intensity(i)
+        enddo
+        call fclose(filnum)
+        ! Output on Excel file all the stats on the atoms belonging to the plane
+        cnt = 0
+        call fopen(filnum, file='AtomPlaneInfo.xls',iostat=io_stat)
+        write (filnum,*) '        Atom #    ','   Ar        ','       Dist     ','         Ang     ','      MaxInt     ','       IntInt     '
+        do i = 1, self%n_cc
+          if(flag(i)) then
+            cnt = cnt + 1
+              write (filnum,*) i, '   ', self%ratios(i), self%dists(i), self%ang_var(i), max_intensity(i), int_intensity(i)
+          endif
         end do
         call fclose(filnum)
       endif

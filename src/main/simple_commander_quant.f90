@@ -16,6 +16,7 @@ public :: atom_cluster_analysis_commander
 public :: nano_softmask_commander
 public :: geometry_analysis_commander
 public :: radial_sym_test_commander
+public :: plot_atom_commander
 
 private
 #include "simple_local_flags.inc"
@@ -48,6 +49,10 @@ type, extends(commander_base) :: radial_sym_test_commander
   contains
     procedure :: execute      => exec_radial_sym_test
 end type radial_sym_test_commander
+type, extends(commander_base) :: plot_atom_commander
+  contains
+    procedure :: execute      => exec_plot_atom
+end type plot_atom_commander
 
 contains
 
@@ -186,8 +191,8 @@ contains
         min_rad = params%min_rad
         max_rad = params%max_rad
         step    = params%stepsz
-        if(min_rad > max_rad) THROW_HARD('Minimum radius has to be smaller then maximum radius! exec_radial_sym_test')
-        if(step > max_rad-min_rad) THROW_HARD('Inputted too big stepsz! exec_radial_sym_test')
+        if(min_rad > max_rad) THROW_HARD('Minimum radius has to be smaller then maximum radius! exec_radial_dependent_stats')
+        if(step > max_rad-min_rad) THROW_HARD('Inputted too big stepsz! exec_radial_dependent_stats')
         if(cline%defined('element')) then
             call nano%new(params%vols(1), params%smpd,params%element)
         else
@@ -197,17 +202,8 @@ contains
         fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
         call nano%set_atomic_coords(trim(fname)//'_atom_centers.pdb')
         call nano%set_img(trim(fname)//'CC.mrc', 'img_cc')
+        call nano%update_self_ncc()
         call nano%radial_dependent_stats(min_rad,max_rad,step)
-        ! fetch again, after killing
-        if(cline%defined('element')) then
-            call nano%new(params%vols(1), params%smpd,params%element)
-        else
-            call nano%new(params%vols(1), params%smpd)
-        endif
-        call nano%set_atomic_coords('../'//trim(fname)//'_atom_centers.pdb')
-        call nano%set_img('../'//trim(fname)//'CC.mrc', 'img_cc')
-        ! calculate intensity statistics
-        call nano%atom_intensity_stats()
         ! kill
         call nano%kill
         ! end gracefully
@@ -240,6 +236,7 @@ contains
         fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
         call nano%set_atomic_coords(trim(fname)//'_atom_centers.pdb')
         call nano%set_img(trim(fname)//'CC.mrc', 'img_cc')
+        call nano%update_self_ncc()
         select case(trim(params%clustermode))
             case('ar')
               call nano%cluster_ar(params%thres)
@@ -248,8 +245,11 @@ contains
             case('ang')
               call nano%cluster_ang(params%thres)
             case('maxint')
-              call nano%atom_intensity_stats(max_intensity)
-              call nano%cluster_atom_intensity(max_intensity)
+              call nano%atom_intensity_stats(.false.)
+              call nano%cluster_atom_maxint()
+            case('intint')
+              call nano%atom_intensity_stats(.false.)
+              call nano%cluster_atom_intint()
             case DEFAULT
                 write(logfhandle,*) 'clustermode: ', trim(params%clustermode)
                 THROW_HARD('unsupported clustermode; exec_atom_cluster_analysis')
@@ -291,37 +291,50 @@ contains
     end subroutine exec_nano_softmask
 
     subroutine exec_geometry_analysis( self, cline )
+        use simple_atoms, only : atoms
         class(geometry_analysis_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline !< command line input
         character(len=STDLEN)  :: fname
         type(parameters)       :: params
-        type(nanoparticle) :: nano
+        type(nanoparticle)     :: nano
+        type(atoms)            :: a
         real    :: smpd
         call cline%set('mkdir', 'yes')
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_geometry_analysis')
         endif
-        if( .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! vol1 needs to be present; exec_geometry_analysis')
+        if( .not. cline%defined('pdbfile2') )then
+            THROW_HARD('ERROR! pdbfile2 needs to be present; exec_geometry_analysis')
+        endif
+        if( .not. cline%defined('pdbfile2') )then
+            THROW_HARD('ERROR! pdbfile2 needs to be present; exec_geometry_analysis')
         endif
         if( .not. cline%defined('pdbfile') )then
-            THROW_HARD('ERROR! pdbfile needs to be present; exec_geometry_analysis')
+          if(.not. cline%defined('vol1')) THROW_HARD('ERROR! pdbfile or vol1 need to be present; exec_geometry_analysis')
         endif
-        if(cline%defined('element')) then
-            call nano%new(params%vols(1), params%smpd,params%element)
-        else
-            call nano%new(params%vols(1), params%smpd)
+        if(cline%defined('vol1')) then
+          if(cline%defined('element')) then
+              call nano%new(params%vols(1), params%smpd,params%element)
+          else
+              call nano%new(params%vols(1), params%smpd)
+          endif
+          ! fetch img_bin, img_cc and atomic positions
+          fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
+          call nano%set_img('../'//trim(fname)//'BIN.mrc','img_bin')
+          call nano%set_atomic_coords('../'//trim(fname)//'_atom_centers.pdb')
+          call nano%set_img('../'//trim(fname)//'CC.mrc', 'img_cc')
+          call nano%update_self_ncc()
+          ! execute
+            call nano%geometry_analysis(trim(params%pdbfile2))
+          ! kill
+          call nano%kill
+        elseif(cline%defined('pdbfile')) then
+          ! if(.not. cline%defined('element')) THROW_HARD('ERROR! element needs to be present; exec_geometry_analysis')
+          call a%new(params%pdbfile)
+          call a%geometry_analysis_pdb(params%pdbfile2)
+          call a%kill
         endif
-        ! fetch img_bin, img_cc and atomic positions
-        fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
-        call nano%set_img('../'//trim(fname)//'BIN.mrc','img_bin')
-        call nano%set_atomic_coords('../'//trim(fname)//'_atom_centers.pdb')
-        call nano%set_img('../'//trim(fname)//'CC.mrc', 'img_cc')
-        ! execute
-          call nano%geometry_analysis(trim(params%pdbfile))
-        ! kill
-        call nano%kill
         ! end gracefully
         call simple_end('**** SIMPLE_GEOMETRY_ANALYSIS NORMAL STOP ****')
     end subroutine exec_geometry_analysis
@@ -386,5 +399,37 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_RADIAL_SYM_TEST NORMAL STOP ****')
     end subroutine exec_radial_sym_test
+
+    subroutine exec_plot_atom( self, cline )
+        class(plot_atom_commander), intent(inout) :: self
+        class(cmdline),             intent(inout) :: cline !< command line input
+        character(len=STDLEN)  :: fname
+        type(parameters)       :: params
+        type(nanoparticle)     :: nano
+        call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        if( .not. cline%defined('smpd') )then
+            THROW_HARD('ERROR! smpd needs to be present; exec_plot_atom')
+        endif
+        if( .not. cline%defined('vol1') )then
+            THROW_HARD('ERROR! vol1 needs to be present; exec_plot_atom')
+        endif
+        if(cline%defined('element')) then
+            call nano%new(params%vols(1), params%smpd,params%element)
+        else
+            call nano%new(params%vols(1), params%smpd)
+        endif
+        ! fetch img_bin, img_cc and atomic positions
+        fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
+        call nano%set_atomic_coords('../'//trim(fname)//'_atom_centers.pdb')
+        call nano%set_img('../'//trim(fname)//'CC.mrc', 'img_cc')
+        call nano%update_self_ncc()
+        ! execute
+        call nano%print_atoms()
+        ! kill
+        call nano%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_PLOT_ATOM NORMAL STOP ****')
+      end subroutine exec_plot_atom
 
 end module simple_commander_quant
