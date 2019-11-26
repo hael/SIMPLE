@@ -17,7 +17,7 @@ type(tseries_make_pickavg_commander)         :: xtseries_make_pickavg
 type(tseries_motion_correct_commander_distr) :: xmcorr_distr
 type(tseries_track_commander_distr)          :: xtrack_distr
 type(center2D_nano_commander_distr)          :: xcenter2D_distr
-type(cluster2D_nano_commander_hlev)         :: xcluster2D_distr
+type(cluster2D_nano_commander_hlev)          :: xcluster2D_distr
 type(estimate_diam_commander)                :: xestimate_diam
 type(simulate_atoms_commander)               :: xsimulate_atoms
 type(refine3D_nano_commander_distr)          :: xrefine3D_distr

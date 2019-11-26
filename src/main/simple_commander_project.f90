@@ -904,6 +904,7 @@ contains
         type(chash),      allocatable :: part_params(:)
         integer,          allocatable :: parts(:,:)
         character(len=:), allocatable :: fname
+        logical,          allocatable :: part_mask(:)
         integer :: imic,nmics,cnt,istk,nstks,ipart,nptcls,nparts,iptcl
         integer :: nstks_orig, nptcls_orig, nmics_orig
         ! init
@@ -927,8 +928,9 @@ contains
         call cline_distr%set('nthr', 1.)
         call cline_distr%set('oritype', 'stk')
         nparts = min(params%nparts, nstks)
-        allocate(spproj_part(nparts))
-        parts = split_nobjs_even(nstks, nparts)
+        allocate(spproj_part(nparts),part_mask(nparts))
+        parts     = split_nobjs_even(nstks, nparts)
+        part_mask = .true.
         allocate(part_params(nparts))
         do ipart=1,nparts
             call part_params(ipart)%new(2)
@@ -941,13 +943,17 @@ contains
         ! schedule & clean
         call qenv%gen_scripts_and_schedule_jobs( job_descr, part_params=part_params )
         ! ASSEMBLY
+        do ipart = 1,nparts
+            fname = trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT
+            part_mask(ipart) = file_exists(fname)
+        enddo
         ! copy updated micrographs
         nstks = 0
         if( nmics > 0 )then
             cnt = 0
             do ipart = 1,nparts
                 fname = trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT
-                if( file_exists(fname) )then
+                if( part_mask(ipart) )then
                     call spproj_part(ipart)%read_segment('mic',fname)
                     cnt = cnt + spproj_part(ipart)%os_mic%get_noris()
                 endif
@@ -974,7 +980,7 @@ contains
         cnt = 0
         do ipart = 1,nparts
             fname = trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT
-            if( file_exists(fname) )then
+            if( part_mask(ipart) )then
                 call spproj_part(ipart)%read_segment('stk',fname)
                 cnt = cnt + spproj_part(ipart)%os_stk%get_noris()
             endif
@@ -997,7 +1003,7 @@ contains
             cnt = 0
             do ipart = 1,nparts
                 fname = trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT
-                if( file_exists(fname) )then
+                if( part_mask(ipart) )then
                     call spproj_part(ipart)%read_segment('ptcl2D',fname)
                     cnt = cnt + spproj_part(ipart)%os_ptcl2D%get_noris()
                 endif
@@ -1018,14 +1024,16 @@ contains
             cnt = 0
             do ipart = 1,nparts
                 fname = trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT
-                call spproj_part(ipart)%read_segment('ptcl3D',fname)
-                if( spproj_part(ipart)%os_ptcl3D%get_noris() == 0 ) cycle
-                do iptcl = 1,spproj_part(ipart)%os_ptcl3D%get_noris()
-                    cnt = cnt + 1
-                    call spproj_part(ipart)%os_ptcl3D%get_ori(iptcl, o)
-                    call spproj%os_ptcl3D%set_ori(cnt,o)
-                enddo
-                call spproj_part(ipart)%kill
+                if( part_mask(ipart) )then
+                    call spproj_part(ipart)%read_segment('ptcl3D',fname)
+                    if( spproj_part(ipart)%os_ptcl3D%get_noris() == 0 ) cycle
+                    do iptcl = 1,spproj_part(ipart)%os_ptcl3D%get_noris()
+                        cnt = cnt + 1
+                        call spproj_part(ipart)%os_ptcl3D%get_ori(iptcl, o)
+                        call spproj%os_ptcl3D%set_ori(cnt,o)
+                    enddo
+                    call spproj_part(ipart)%kill
+                endif
             enddo
         endif
         write(logfhandle,'(A,I8,A,I8)')'>>> # OF PARTICLES  :',nptcls_orig,' -> ', nptcls
