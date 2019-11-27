@@ -11,9 +11,9 @@ use simple_image,          only: image
 use simple_qsys_funs
 implicit none
 
-public :: cleanup2D_commander
+public :: cleanup2D_commander_hlev
 public :: cluster2D_commander_stream
-public :: cluster2D_autoscale_commander
+public :: cluster2D_autoscale_commander_hlev
 public :: cluster2D_commander_distr
 public :: cluster2D_commander
 public :: make_cavgs_commander_distr
@@ -26,18 +26,18 @@ public :: write_classes_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: cleanup2D_commander
+type, extends(commander_base) :: cleanup2D_commander_hlev
   contains
     procedure :: execute      => exec_cleanup2D
-end type cleanup2D_commander
+end type cleanup2D_commander_hlev
 type, extends(commander_base) :: cluster2D_commander_stream
   contains
     procedure :: execute      => exec_cluster2D_stream
 end type cluster2D_commander_stream
-type, extends(commander_base) :: cluster2D_autoscale_commander
+type, extends(commander_base) :: cluster2D_autoscale_commander_hlev
   contains
     procedure :: execute      => exec_cluster2D_autoscale
-end type cluster2D_autoscale_commander
+end type cluster2D_autoscale_commander_hlev
 type, extends(commander_base) :: cluster2D_commander_distr
   contains
     procedure :: execute      => exec_cluster2D_distr
@@ -170,8 +170,8 @@ contains
     subroutine exec_cleanup2D( self, cline )
         use simple_commander_project, only: scale_project_commander_distr
         use simple_procimgfile,       only: random_selection_from_imgfile, random_cls_from_imgfile
-        class(cleanup2D_commander), intent(inout) :: self
-        class(cmdline),             intent(inout) :: cline
+        class(cleanup2D_commander_hlev), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
         ! commanders
         type(cluster2D_commander_distr)     :: xcluster2D_distr
         type(scale_project_commander_distr) :: xscale_distr
@@ -1504,8 +1504,8 @@ contains
     subroutine exec_cluster2D_autoscale( self, cline )
         use simple_commander_project, only: scale_project_commander_distr, prune_project_commander_distr
         use simple_commander_imgproc, only: scale_commander
-        class(cluster2D_autoscale_commander), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
+        class(cluster2D_autoscale_commander_hlev), intent(inout) :: self
+        class(cmdline),                            intent(inout) :: cline
         ! constants
         integer,               parameter :: MAXITS_STAGE1      = 10
         integer,               parameter :: MAXITS_STAGE1_EXTR = 15
@@ -1531,6 +1531,7 @@ contains
         integer  :: nparts, last_iter_stage1, last_iter_stage2, status
         integer  :: nptcls_sel
         logical  :: scaling
+        if( .not. cline%defined('mkdir') )   call cline%set('mkdir', 'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15. )
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',      8. )

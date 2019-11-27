@@ -55,12 +55,12 @@ type(pick_extract_commander_stream)         :: xpick_extract_stream
 
 ! CLUSTER2D WORKFLOWS
 type(make_cavgs_commander_distr)            :: xmake_cavgs_distr
-type(cluster2D_autoscale_commander)         :: xcluster2D_distr
+type(cluster2D_autoscale_commander_hlev)    :: xcluster2D_distr
 type(cluster2D_commander_stream)            :: xcluster2D_stream
-type(cleanup2D_commander)                   :: xcleanup2D_distr
+type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
-type(initial_3Dmodel_commander) :: xinitial_3Dmodel
+type(initial_3Dmodel_commander_hlev) :: xinitial_3Dmodel
 
 ! REFINE3D WORKFLOWS
 type(calc_pspec_commander_distr)    :: xcalc_pspec_distr
@@ -199,6 +199,7 @@ select case(prg)
     case( 'cleanup2D' )
         call xcleanup2D_distr%execute(cline)
     case( 'cluster2D' )
+        call cline%set('mkdir','yes')
         call execute_commander(xcluster2D_distr, cline)
     case( 'cluster2D_stream' )
         call xcluster2D_stream%execute(cline)

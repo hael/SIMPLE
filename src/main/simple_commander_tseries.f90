@@ -22,7 +22,7 @@ public :: tseries_motion_correct_commander
 public :: tseries_track_commander_distr
 public :: tseries_track_commander
 public :: center2D_nano_commander_distr
-public :: cluster2D_nano_commander_distr
+public :: cluster2D_nano_commander_hlev
 public :: estimate_diam_commander
 public :: tseries_ctf_estimate_commander
 public :: refine3D_nano_commander_distr
@@ -60,10 +60,12 @@ type, extends(commander_base) :: center2D_nano_commander_distr
   contains
     procedure :: execute      => exec_center2D_nano_distr
 end type center2D_nano_commander_distr
-type, extends(commander_base) :: cluster2D_nano_commander_distr
+
+type, extends(commander_base) :: cluster2D_nano_commander_hlev
   contains
-    procedure :: execute      => exec_cluster2D_nano_distr
-end type cluster2D_nano_commander_distr
+    procedure :: execute      => exec_cluster2D_nano_hlev
+end type cluster2D_nano_commander_hlev
+
 type, extends(commander_base) :: estimate_diam_commander
   contains
     procedure :: execute      => exec_estimate_diam
@@ -557,12 +559,12 @@ contains
         call simple_end('**** SIMPLE_CENTER2D_NANO NORMAL STOP ****')
     end subroutine exec_center2D_nano_distr
 
-    subroutine exec_cluster2D_nano_distr( self, cline )
-        use simple_commander_cluster2D, only: cluster2D_autoscale_commander
-        class(cluster2D_nano_commander_distr), intent(inout) :: self
-        class(cmdline),                        intent(inout) :: cline
+    subroutine exec_cluster2D_nano_hlev( self, cline )
+        use simple_commander_cluster2D, only: cluster2D_autoscale_commander_hlev
+        class(cluster2D_nano_commander_hlev), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
         ! commander
-        type(cluster2D_autoscale_commander) :: xcluster2D_distr
+        type(cluster2D_autoscale_commander_hlev) :: xcluster2D_distr
         ! static parameters
         call cline%set('prg',      'cluster2D')
         call cline%set('dir_exec', 'cluster2D_nano')
@@ -585,7 +587,7 @@ contains
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',   'ptcl2D')
         call xcluster2D_distr%execute(cline)
         call simple_end('**** SIMPLE_CLUSTER2D_NANO NORMAL STOP ****')
-    end subroutine exec_cluster2D_nano_distr
+    end subroutine exec_cluster2D_nano_hlev
 
     subroutine exec_estimate_diam( self, cline )
         use simple_segmentation, only: otsu_robust_fast
