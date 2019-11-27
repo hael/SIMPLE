@@ -102,6 +102,7 @@ contains
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
+        call cline%set('mkdir', 'no')
         call params%new(cline)
         if( cline%defined('projname') .and. cline%defined('dir') )then
             THROW_HARD('both projname and dir defined on command line, use either or; exec_new_project')
