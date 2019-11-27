@@ -33,6 +33,7 @@ type :: nanoparticle
     real,    allocatable  :: ang_var(:)
     real,    allocatable  :: dists(:)
     integer, allocatable  :: loc_longest_dist(:,:)   ! for indentific of the vxl that determins the longest dim of the atom
+    integer, allocatable  :: contact_scores(:)
     character(len=2)      :: element     = ' '
     character(len=4)      :: atom_name   = '    '
     character(len=STDLEN) :: partname    = ''     ! fname
@@ -314,6 +315,8 @@ contains
                 call self%centers_pdb%set_name(cc,self%atom_name)
                 call self%centers_pdb%set_element(cc,self%element)
                 call self%centers_pdb%set_coord(cc,(self%centers(:,cc)-1.)*self%smpd)
+                call self%centers_pdb%set_beta(cc,real(self%contact_scores(cc)))
+                call self%centers_pdb%set_resnum(cc,cc)
             enddo
         endif
         if(present(fname)) then
@@ -513,6 +516,8 @@ contains
         ! Update img_bin and img_cc
         call self%img_bin%copy_bimg(img_bin_thresh(t))
         call self%img_cc%copy_bimg(img_ccs_thresh(t))
+        call self%update_self_ncc()
+        call self%find_centers()
         do i = 1,  N_THRESH/2-1
             call img_bin_thresh(i)%kill_bimg
             call img_ccs_thresh(i)%kill_bimg
@@ -585,13 +590,18 @@ contains
         else
           n_discard = self%n_cc*PERCENT_DISCARD
         endif
+        allocate(self%contact_scores(self%n_cc-n_discard), source = 0)
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
+        cnt = 0
         ! Removing outliers from the binary image and the connected components image
         if(present(cs_thresh)) then
           do cc = 1, self%n_cc
             if(contact_scores(cc)<cs_thresh) then
               where(imat_cc == cc) imat_bin = 0
+            else
+              cnt = cnt + 1
+              self%contact_scores(cnt) = contact_scores(cc)
             endif
           enddo
         else
@@ -602,6 +612,12 @@ contains
                  imat_bin = 0
               endwhere
               mask(label(1)) = .false.
+          enddo
+          do cc = 1, self%n_cc ! fill in self%contact_scores
+            if(mask(cc)) then
+              cnt = cnt + 1
+              self%contact_scores(cnt) = contact_scores(cc)
+            endif
           enddo
         endif
         call self%img_bin%set_imat(imat_bin)
@@ -622,6 +638,7 @@ contains
         integer :: n_cc, cnt
         integer :: rank, m(1)
         real    :: new_centers(3,2*self%n_cc)   !will pack it afterwards if it has too many elements
+        real    :: new_contact_scores(2*self%n_cc)   !will pack it afterwards if it has too many elements
         real    :: pc
         call self%img%get_rmat_ptr(rmat_pc)     !now img contains the phase correlation
         call self%img_cc%get_imat(imat_cc)        !to pass to the subroutine split_atoms
@@ -637,10 +654,11 @@ contains
             rank = size(x)-m(1)
             deallocate(x)
             if(rank > RANK_THRESH) then
-                call split_atom(rmat_pc,imat_cc,imat,n_cc,new_centers,cnt)
+                call split_atom(new_centers,cnt)
             else
                 cnt = cnt + 1 !new number of centers deriving from splitting
-                new_centers(:,cnt) = self%centers(:,n_cc)
+                new_centers(:,cnt)      = self%centers(:,n_cc)
+                new_contact_scores(cnt) = self%contact_scores(n_cc)
             endif
         enddo
         deallocate(self%centers)
@@ -649,6 +667,12 @@ contains
         ! update centers
         do n_cc =1, cnt
             self%centers(:,n_cc) = new_centers(:,n_cc)
+        enddo
+        deallocate(self%contact_scores)
+        allocate(self%contact_scores(cnt), source = 0)
+        ! update contact scores
+        do n_cc =1, cnt
+            self%contact_scores(n_cc) = new_contact_scores(n_cc)
         enddo
         call self%img_bin%get_imat(imat_bin)
         if(DEBUG) call self%img_bin%write_bimg(trim(self%fbody)//'BINbeforeValidation.mrc')
@@ -668,11 +692,7 @@ contains
         call self%find_centers()
         call self%write_centers()
     contains
-        subroutine split_atom(rmat_pc,imat_cc,imat,n_cc,new_centers,cnt)
-            real,    intent(in)    :: rmat_pc(:,:,:)    !correlation matrix
-            integer, intent(inout) :: imat_cc(:,:,:)    !ccs matrix, variable
-            integer, intent(in)    :: imat(:,:,:)       !ccs matrix, fixed
-            integer, intent(in)    :: n_cc              !label of the cc to split
+        subroutine split_atom(new_centers,cnt)
             real,    intent(inout) :: new_centers(:,:)  !updated coordinates of the centers
             integer, intent(inout) :: cnt               !atom counter, to u pdate the center coords
             integer :: new_center1(3),new_center2(3),new_center3(3)
@@ -683,6 +703,7 @@ contains
             new_center1 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), imat == n_cc)
             cnt = cnt + 1
             new_centers(:,cnt) = real(new_center1)
+            new_contact_scores(cnt) = self%contact_scores(n_cc)
             do i = 1, self%ldim(1)
                 do j = 1, self%ldim(2)
                     do k = 1, self%ldim(3)
@@ -705,6 +726,8 @@ contains
                     else
                       cnt = cnt + 1
                       new_centers(:,cnt) = real(new_center2)
+                      new_contact_scores(cnt)   = self%contact_scores(n_cc) + 1
+                      new_contact_scores(cnt-1) = new_contact_scores(cnt)
                       !In the case two merged atoms, build the second atom
                       do i = 1, self%ldim(1)
                           do j = 1, self%ldim(2)
@@ -731,6 +754,9 @@ contains
                           else
                             cnt = cnt + 1
                             new_centers(:,cnt) = real(new_center3)
+                            new_contact_scores(cnt)   = self%contact_scores(n_cc) + 2
+                            new_contact_scores(cnt-1) = new_contact_scores(cnt)
+                            new_contact_scores(cnt-2) = new_contact_scores(cnt)
                             !In the case two merged atoms, build the second atom
                             do i = 1, self%ldim(1)
                                 do j = 1, self%ldim(2)
@@ -781,8 +807,8 @@ contains
         nsteps = floor((max_rad-min_rad)/step)+1
         m        = self%nanopart_masscen()
         ! Report statistics in dedicated directory
-        call simple_mkdir('./'//'/DistDistribANDRadialDependentStat',errmsg="simple_nanoparticles :: radial_dependent_stats, simple_mkdir; ")
-        call simple_chdir('./'//'/DistDistribANDRadialDependentStat',errmsg="simple_nanoparticles :: radial_dependent_stats, simple_chdir; ")
+        call simple_mkdir('./'//'/RadialDependentStat',errmsg="simple_nanoparticles :: radial_dependent_stats, simple_mkdir; ")
+        call simple_chdir('./'//'/RadialDependentStat',errmsg="simple_nanoparticles :: radial_dependent_stats, simple_chdir; ")
         call fopen(filnum, file='RadialDependentStat.txt', iostat=io_stat)
         allocate(mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = .false.)
         call simulated_density%new(self%ldim,self%smpd)
@@ -917,7 +943,7 @@ contains
         deallocate(mask, imat_cc)
         call simulated_density%kill
         call self%distances_distribution() ! across the whole nano
-        ! call self%atom_intensity_stats(max_intensity)
+        call self%atom_intensity_stats(.false.)
         call self%kill
         write(logfhandle, *) '****radial atom-to-atom distances estimation, completed'
    end subroutine radial_dependent_stats
@@ -1113,7 +1139,7 @@ contains
         logical,             intent(in)    :: print_file ! whether to print on a file all the calc stats
         real,    pointer     :: rmat(:,:,:)
         logical, allocatable :: mask(:,:,:)
-        integer, allocatable :: imat_cc(:,:,:)
+        integer, allocatable :: imat_cc(:,:,:), sz(:)
         integer :: i, j, k,n_atom, filnum, io_stat
         real    :: max_intensity(self%n_cc), avg_intensity(self%n_cc)
         real    :: stdev_intensity(self%n_cc), radii(self%n_cc), int_intensity(self%n_cc) ! integrated intensity
@@ -1163,31 +1189,40 @@ contains
         stdev_int = sqrt(stdev_int/real(self%n_cc-1))
         if(print_file) write(unit = filnum, fmt = '(a,f9.5,a,f9.5,a,f9.5)') 'maxval_general ', max_int, '   avg_general ', avg_int, '   stdev_general ', stdev_int
         if(print_file) call fclose(filnum)
+        ! calculate sz of connected components, just for output on a file
+        sz = self%img_cc%size_ccs()
         ! print one by one the stats anyway
-        call fopen(filnum, file='RadialPos.csv', iostat=io_stat)
+        call fopen(filnum, file='../'//'RadialPos.csv', iostat=io_stat)
         write (filnum,*) 'radius'
         do n_atom = 1, self%n_cc
             write (filnum,'(A)', advance='yes') trim(real2str(radii(n_atom)))
         end do
         call fclose(filnum)
-        call fopen(filnum, file='MaxIntensity.csv', iostat=io_stat)
+        call fopen(filnum, file='../'//'MaxIntensity.csv', iostat=io_stat)
         write (filnum,*) 'maxint'
         do n_atom = 1, self%n_cc
             write (filnum,'(A)', advance='yes') trim(real2str(max_intensity(n_atom)))
         end do
         call fclose(filnum)
-        call fopen(filnum, file='AvgIntensity.csv', iostat=io_stat)
+        call fopen(filnum, file='../'//'AvgIntensity.csv', iostat=io_stat)
         write (filnum,*) 'avgint'
         do n_atom = 1, self%n_cc
             write (filnum,'(A)', advance='yes') trim(real2str(avg_intensity(n_atom)))
         end do
         call fclose(filnum)
-        call fopen(filnum, file='IntIntensity.csv', iostat=io_stat)
+        call fopen(filnum, file='../'//'IntIntensity.csv', iostat=io_stat)
         write (filnum,*) 'intint'
         do n_atom = 1, self%n_cc
             write (filnum,'(A)', advance='yes') trim(real2str(int_intensity(n_atom)))
         end do
         call fclose(filnum)
+        call fopen(filnum, file='../'//'Size.csv', iostat=io_stat)
+        write (filnum,*) 'sz'
+        do n_atom = 1, self%n_cc
+            write (filnum,'(A)', advance='yes') trim(int2str(sz(n_atom)))
+        end do
+        call fclose(filnum)
+        deallocate(sz)
         write(logfhandle,*)'**atoms intensity statistics calculations completed'
     end subroutine atom_intensity_stats
 
@@ -1318,7 +1353,7 @@ contains
       integer :: i, io_stat, filnum
       call fopen(filnum, file='MaxIntensity.csv', iostat=io_stat)
       if( io_stat .ne. 0 ) then
-        THROW_HARD('Unable to read file MaxIntensity.csv Did you run atom_intensity_stats?; cluster_atom_maxint')
+        THROW_HARD('Unable to read file MaxIntensity.csv Did you run radial_dependent_stats?; cluster_atom_maxint')
       endif
       read(filnum,*) ! first line is variable name
       do i = 1, self%n_cc
@@ -1336,7 +1371,7 @@ contains
       integer :: i, io_stat, filnum
       call fopen(filnum, file='IntIntensity.csv', iostat=io_stat)
       if( io_stat .ne. 0 ) then
-        THROW_HARD('Unable to read file IntIntensity.csv Did you run atom_intensity_stats?; cluster_atom_intint')
+        THROW_HARD('Unable to read file IntIntensity.csv Did you run radial_dependent_stats?; cluster_atom_intint')
       endif
       read(filnum,*) ! first line is variable name
       do i = 1, self%n_cc
@@ -2039,7 +2074,6 @@ contains
       real :: coords(3)
       call atom_centers%new(pdbfile_in)
       m(:)  = self%nanopart_masscen()
-      ! print *, 'm: ', m
       d_before = huge(d_before)
       do i = 1, self%n_cc
         d = euclid(m,self%centers(:,i))
@@ -2067,6 +2101,7 @@ contains
     end subroutine center_on_atom
 
     subroutine geometry_analysis(self, pdbfile2, outfile)
+      use simple_math, only : plane_from_points
       class(nanoparticle),        intent(inout) :: self
       character(len=*),           intent(in)    :: pdbfile2  ! atomic pos of the 2 (or 3) selected atoms
       character(len=*), optional, intent(in)    :: outfile
@@ -2354,7 +2389,7 @@ contains
         allocate(max_intensity(self%n_cc))
         call fopen(filnum, file='../'//'MaxIntensity.csv', iostat=io_stat)
         if( io_stat .ne. 0 ) then
-          THROW_HARD('Unable to read file MaxIntensity.csv Did you run atom_intensity_stats?; geometry_analysis')
+          THROW_HARD('Unable to read file MaxIntensity.csv Did you run radial_dependent_stats?; geometry_analysis')
         endif
         read(filnum,*)
         do i = 1, self%n_cc
@@ -2364,7 +2399,7 @@ contains
         allocate(int_intensity(self%n_cc))
         call fopen(filnum, file='../'//'IntIntensity.csv', iostat=io_stat)
         if( io_stat .ne. 0 ) then
-          THROW_HARD('Unable to read file IntIntensity.csv Did you run atom_intensity_stats?; geometry_analysis')
+          THROW_HARD('Unable to read file IntIntensity.csv Did you run radial_dependent_stats?; geometry_analysis')
         endif
         read(filnum,*)
         do i = 1, self%n_cc
@@ -2388,46 +2423,6 @@ contains
       if(allocated(line))  deallocate(line)
       if(allocated(plane)) deallocate(plane)
       deallocate(imat_cc, imat)
-  contains
-      ! Find the plane that minimises the distance between
-      ! a given set of points.
-      ! It consists in a solution of a overdetermined system with
-      ! the left pseudo inverse.
-      ! SOURCE :
-      ! https://stackoverflow.com/questions/1400213/3d-least-squares-plane
-      ! The output plane will have cartesian equation
-      ! vec(1)x + vec(2)y - z = -vec(3).
-      ! FORMULA
-      ! sol = inv(transpose(M)*M)*transpose(M)*b
-      function plane_from_points(points) result(sol)
-          real, intent(inout) :: points(:,:) !input
-          real    :: sol(3)  !vec(1)x + vec(2)y - z = -vec(3).
-          real    :: M(size(points, dim = 2),3), b(size(points, dim = 2)), invM(3,size(points, dim = 2))
-          real    :: prod(3,3), prod_inv(3,3), prod1(3,size(points, dim = 2))
-          integer :: errflg ! if manages to find inverse matrix
-          integer :: p
-          integer :: N ! number of points
-          if(size(points, dim=1) /=3) then
-              write(logfhandle,*) 'Need to input points in 3D!; plane_from_points'
-              return
-          endif
-          if(size(points, dim=2) < 3) then
-              write(logfhandle,*) 'Not enough input points for fitting!; plane_from_points'
-              return
-          endif
-          N = size(points, dim=2)
-          do p = 1, N
-              M(p,1) =  points(1,p)
-              M(p,2) =  points(2,p)
-              M(p,3) =  1.
-              b(p)   =  points(3,p)
-          enddo
-          prod  = matmul(transpose(M),M)
-          call matinv(prod,prod_inv,3,errflg)
-          if( errflg /= 0 ) THROW_HARD('Couldn t find inverse matrix! ;plane_from_points')
-          prod1 = matmul(prod_inv,transpose(M))
-          sol   = matmul(prod1,b)
-      end function plane_from_points
     end subroutine geometry_analysis
 
     subroutine kill_nanoparticle(self)
@@ -2446,6 +2441,7 @@ contains
         if(allocated(self%ratios))           deallocate(self%ratios)
         if(allocated(self%dists))            deallocate(self%dists)
         if(allocated(self%loc_longest_dist)) deallocate(self%loc_longest_dist)
+        if(allocated(self%contact_scores))   deallocate(self%contact_scores)
         if(allocated(self%ang_var))          deallocate(self%ang_var)
     end subroutine kill_nanoparticle
 

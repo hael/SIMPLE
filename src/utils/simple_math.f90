@@ -3442,4 +3442,47 @@ contains
         END DO ! i loop
     end subroutine LUBKSB
 
+    ! Find the plane that minimises the distance between
+    ! a given set of points.
+    ! It consists in a solution of a overdetermined system with
+    ! the left pseudo inverse.
+    ! SOURCE :
+    ! https://stackoverflow.com/questions/1400213/3d-least-squares-plane
+    ! The output plane will have cartesian equation
+    ! vec(1)x + vec(2)y - z = -vec(3).
+    ! FORMULA
+    ! sol = inv(transpose(M)*M)*transpose(M)*b
+    function plane_from_points(points) result(sol)
+        real, intent(inout) :: points(:,:) !input
+        real    :: sol(3)  !vec(1)x + vec(2)y - z = -vec(3).
+        real    :: M(size(points, dim = 2),3), b(size(points, dim = 2)), invM(3,size(points, dim = 2))
+        real    :: prod(3,3), prod_inv(3,3), prod1(3,size(points, dim = 2))
+        integer :: errflg ! if manages to find inverse matrix
+        integer :: p
+        integer :: N ! number of points
+        if(size(points, dim=1) /=3) then
+            write(logfhandle,*) 'Need to input points in 3D!; plane_from_points'
+            return
+        endif
+        if(size(points, dim=2) < 3) then
+            write(logfhandle,*) 'Not enough input points for fitting!; plane_from_points'
+            return
+        endif
+        N = size(points, dim=2)
+        do p = 1, N
+            M(p,1) =  points(1,p)
+            M(p,2) =  points(2,p)
+            M(p,3) =  1.
+            b(p)   =  points(3,p)
+        enddo
+        prod  = matmul(transpose(M),M)
+        call matinv(prod,prod_inv,3,errflg)
+        if( errflg /= 0 ) then
+            write(logfhandle,*) 'Couldn t find inverse matrix! ;plane_from_points'
+            stop
+        endif
+        prod1 = matmul(prod_inv,transpose(M))
+        sol   = matmul(prod1,b)
+    end function plane_from_points
+
 end module simple_math

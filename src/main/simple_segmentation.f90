@@ -352,8 +352,8 @@ contains
     ! otsu_img_robust
     subroutine otsu_robust_fast(img, is2D, noneg, thresh)
         class(image), intent(inout) :: img
-        logical,      intent(in)    :: is2D   ! is it a 2D image
-        logical,      intent(in)    :: noneg ! is it a nanoparticle
+        logical,      intent(in)    :: is2D    ! is it a 2D image
+        logical,      intent(in)    :: noneg   ! is it a nanoparticle
         real,         intent(inout) :: thresh(3)
         type(image)       :: img_copy
         type(image)       :: img_avg, img_med

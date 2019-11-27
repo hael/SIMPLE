@@ -575,6 +575,7 @@ contains
     end subroutine convolve
 
     subroutine geometry_analysis_pdb(self, pdbfile)
+      use simple_math, only : plane_from_points
       class(atoms),     intent(inout) :: self
       character(len=*), intent(in)    :: pdbfile   ! all the atomic positions
       character(len=2)     :: element
@@ -634,7 +635,8 @@ contains
        call final_atoms%kill
        ! Find the plane that best fits the atoms belonging to the line
        allocate(points(3,count(flag)), source = 0.)
-       m = masscen()
+       ! calculate center of mass of the points
+       m = sum(self%xyz(:,:), dim=1) /real(self%n)
        cnt = 0
        do i = 1, n_tot
            if(flag(i)) then
@@ -675,7 +677,6 @@ contains
               enddo
             enddo
         enddo
-        print *, 'count(flag) ', count(flag)
         write(logfhandle, *) 'generating files for visualization'
         ! generate pdb for visualisation
         cnt_intersect = 0
@@ -692,7 +693,8 @@ contains
         call final_atoms%kill
         stop
         allocate(points(3, count(flag)), source = 0.)
-        m = masscen()
+        ! calculate center of mass of the points
+        m = sum(self%xyz(:,:), dim=1) /real(self%n)
         cnt = 0
         do i = 1, n_tot
             if(flag(i)) then
@@ -719,51 +721,6 @@ contains
       call init_atoms%kill
       if(allocated(line))  deallocate(line)
       if(allocated(plane)) deallocate(plane)
-  contains
-      ! Find the plane that minimises the distance between
-      ! a given set of points.
-      ! It consists in a solution of a overdetermined system with
-      ! the left pseudo inverse.
-      ! SOURCE :
-      ! https://stackoverflow.com/questions/1400213/3d-least-squares-plane
-      ! The output plane will have cartesian equation
-      ! vec(1)x + vec(2)y - z = -vec(3).
-      ! FORMULA
-      ! sol = inv(transpose(M)*M)*transpose(M)*b
-      function plane_from_points(points) result(sol)
-          real, intent(inout) :: points(:,:) !input
-          real    :: sol(3)  !vec(1)x + vec(2)y - z = -vec(3).
-          real    :: M(size(points, dim = 2),3), b(size(points, dim = 2)), invM(3,size(points, dim = 2))
-          real    :: prod(3,3), prod_inv(3,3), prod1(3,size(points, dim = 2))
-          integer :: errflg ! if manages to find inverse matrix
-          integer :: p
-          integer :: N ! number of points
-          if(size(points, dim=1) /=3) then
-              write(logfhandle,*) 'Need to input points in 3D!; plane_from_points'
-              return
-          endif
-          if(size(points, dim=2) < 3) then
-              write(logfhandle,*) 'Not enough input points for fitting!; plane_from_points'
-              return
-          endif
-          N = size(points, dim=2)
-          do p = 1, N
-              M(p,1) =  points(1,p)
-              M(p,2) =  points(2,p)
-              M(p,3) =  1.
-              b(p)   =  points(3,p)
-          enddo
-          prod  = matmul(transpose(M),M)
-          call matinv(prod,prod_inv,3,errflg)
-          if( errflg /= 0 ) THROW_HARD('Couldn t find inverse matrix! ;plane_from_points')
-          prod1 = matmul(prod_inv,transpose(M))
-          sol   = matmul(prod1,b)
-      end function plane_from_points
-
-      function masscen() result(m)
-        real :: m(3) ! center of mass of the coords
-        m = sum(self%xyz(:,:), dim=1) /real(self%n)
-      end function masscen
     end subroutine geometry_analysis_pdb
 
     ! MODIFIERS
