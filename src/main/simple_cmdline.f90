@@ -80,7 +80,7 @@ contains
         type(simple_program), pointer :: ptr2prg => null()
         character(len=LONGSTRLEN)     :: arg
         character(len=STDLEN)         :: exec_cmd
-        character(len=:), allocatable :: prgname, exec
+        character(len=:), allocatable :: prgname
         integer :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
         ! parse command line
         self%argcnt = command_argument_count()
@@ -97,10 +97,6 @@ contains
         ! obtain pointer to the program in the simple_user_interface specification
         call get_prg_ptr(prgname, ptr2prg)
         if( .not. associated(ptr2prg) ) THROW_HARD(prgname//' is not part of SIMPLE')
-        exec = ptr2prg%get_executable()
-        if( .not. str_has_substr(exec_cmd,exec) )then
-            THROW_HARD('program '//trim(prgname)//' not executed by '//trim(basename(exec_cmd))//' but '//exec)
-        endif
         ! list programs if so instructed
         if( str_has_substr(self%entire_line, 'prg=list') )then
             select case(prgname)

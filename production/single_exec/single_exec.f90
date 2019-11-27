@@ -5,12 +5,14 @@ use simple_user_interface, only: make_user_interface, list_single_prgs_in_ui
 use simple_cmdline,        only: cmdline, cmdline_err
 use simple_commander_base, only: execute_commander
 use simple_commander_sim,  only: simulate_atoms_commander
+use simple_commander_project
 use simple_commander_cluster2D
 use simple_commander_tseries
 use simple_spproj_hlev
 implicit none
 #include "simple_local_flags.inc"
 type(tseries_import_commander)               :: xtseries_import
+type(import_particles_commander)             :: ximport_particles
 type(tseries_import_particles_commander)     :: xtseries_import_particles
 type(tseries_ctf_estimate_commander)         :: xtseries_ctf_estimate
 type(tseries_make_pickavg_commander)         :: xtseries_make_pickavg
@@ -42,28 +44,30 @@ call cline%parse
 ! set global defaults
 if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
 select case(prg)
-    ! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
+        ! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
     case( 'tseries_import' )
-       call xtseries_import%execute(cline)
+        call xtseries_import%execute(cline)
     case( 'tseries_import_particles' )
-       call xtseries_import_particles%execute(cline)
-   case( 'tseries_make_pickavg')
-       call xtseries_make_pickavg%execute(cline)
-   case( 'tseries_ctf_estimate' )
-       call xtseries_ctf_estimate%execute(cline)
-   case( 'motion_correct', 'tseries_motion_correct' )
+        call xtseries_import_particles%execute(cline)
+    case( 'import_particles')
+        call ximport_particles%execute(cline)
+    case( 'tseries_make_pickavg')
+        call xtseries_make_pickavg%execute(cline)
+    case( 'tseries_ctf_estimate' )
+        call xtseries_ctf_estimate%execute(cline)
+    case( 'tseries_motion_correct' )
         call xmcorr_distr%execute( cline )
-    case( 'track', 'tseries_track' )
+    case( 'tseries_track' )
         call xtrack_distr%execute( cline )
-    case( 'center2D', 'center2D_nano' )
+    case( 'center2D_nano' )
         call xcenter2D_distr%execute(cline)
-    case( 'cluster2D', 'cluster2D_nano' )
+    case( 'cluster2D_nano' )
         call xcluster2D_distr%execute(cline)
     case( 'estimate_diam')
         call xestimate_diam%execute(cline)
     case( 'simulate_atoms' )
         call xsimulate_atoms%execute(cline)
-    case( 'refine3D', 'refine3D_nano')
+    case( 'refine3D_nano')
         call execute_commander(xrefine3D_distr, cline)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
