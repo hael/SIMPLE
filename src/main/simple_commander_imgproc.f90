@@ -269,6 +269,8 @@ contains
         else
             THROW_HARD('either vol1 or stk argument required to execute simple_convert')
         endif
+        ! cleanup
+        call build%kill_general_tbox
         ! end gracefully
         call simple_end('**** SIMPLE_CONVERT NORMAL STOP ****')
     end subroutine exec_convert
@@ -306,6 +308,8 @@ contains
         else
             THROW_HARD('Nothing to do!')
         endif
+        ! cleanup
+        call build%kill_general_tbox
         ! end gracefully
         call simple_end('**** SIMPLE_CTFOPS NORMAL STOP ****')
     end subroutine exec_ctfops
@@ -324,7 +328,6 @@ contains
         real, parameter   :: SIGMA_DEFAULT=1.0
         real              :: width, fsc05, fsc0143, sigma
         integer           :: find
-        type(image)       :: outputvol
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'filtered.mrcs')
         if( .not. cline%defined('outvol') ) call cline%set('outvol', 'filtered.mrc')
@@ -462,6 +465,8 @@ contains
             endif
             if( params%outvol .ne. '' ) call build%vol%write(params%outvol, del_if_exists=.true.)
         endif
+        ! cleanup
+        call build%kill_general_tbox
         ! end gracefully
         call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
     end subroutine exec_filter
@@ -517,6 +522,8 @@ contains
         else
             THROW_HARD('No input images(s) or volume provided')
         endif
+        ! cleanup
+        call build%kill_general_tbox
         ! end gracefully
         call simple_end('**** SIMPLE_NORMALIZE NORMAL STOP ****')
     end subroutine exec_normalize
@@ -781,6 +788,9 @@ contains
             end do
             call progress(ifile, nfiles)
         end do
+        ! cleanup
+        call img%kill
+        call tmp%kill
         ! end gracefully
         call simple_end('**** SIMPLE_STACK NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_stack
@@ -1034,6 +1044,8 @@ contains
         call os_ran%kill
         call o%kill
         call o2%kill
+        call rt%kill
+        call build%kill_general_tbox
         call simple_end('**** SIMPLE_STACKOPS NORMAL STOP ****')
     end subroutine exec_stackops
 
