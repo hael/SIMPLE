@@ -5764,7 +5764,7 @@ contains
     !>  \brief  an image shifter to prepare for Fourier transformation
     subroutine shift_phorig( self )
         class(image), intent(inout) :: self
-        integer :: i, j, k
+        integer :: i, j, k, ii,jj
         real    :: rswap
         integer :: kfrom,kto
         if( self%ft ) THROW_HARD('this method is intended for real images; shift_phorig')
@@ -5787,16 +5787,18 @@ contains
                     end do
                     !$omp end parallel do
                 else
-                    do i=1,self%ldim(1)/2
-                        do j=1,self%ldim(2)/2
+                    do j=1,self%ldim(2)/2
+                        jj = self%ldim(2)/2+j
+                        do i=1,self%ldim(1)/2
+                            ii = self%ldim(1)/2+i
                             !(1)
                             rswap = self%rmat(i,j,1)
-                            self%rmat(i,j,1) = self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,1)
-                            self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,1) = rswap
+                            self%rmat(i,j,1) = self%rmat(ii,jj,1)
+                            self%rmat(ii,jj,1) = rswap
                             !(2)
-                            rswap = self%rmat(i,self%ldim(2)/2+j,1)
-                            self%rmat(i,self%ldim(2)/2+j,1) = self%rmat(self%ldim(1)/2+i,j,1)
-                            self%rmat(self%ldim(1)/2+i,j,1) = rswap
+                            rswap = self%rmat(i,jj,1)
+                            self%rmat(i,jj,1) = self%rmat(ii,j,1)
+                            self%rmat(ii,j,1) = rswap
                         end do
                     end do
                 endif
@@ -6201,21 +6203,32 @@ contains
         class(image), intent(inout) :: self_in, self_out
         real                        :: ratio
         integer                     :: starts(3), stops(3), lims(3,2)
-        integer                     :: phys_out(3), phys_in(3), h, k, l
+        integer                     :: phys_out(3), phys_in(3), h,k,l,kpi,kpo,hp
         if( self_out%ldim(1) <= self_in%ldim(1) .and. self_out%ldim(2) <= self_in%ldim(2)&
         .and. self_out%ldim(3) <= self_in%ldim(3) )then
             if( self_in%ft )then
                 lims = self_out%fit%loop_lims(2)
-                do h=lims(1,1),lims(1,2)
+                if( self_in%is_2d() )then
                     do k=lims(2,1),lims(2,2)
-                        do l=lims(3,1),lims(3,2)
-                            phys_out = self_out%fit%comp_addr_phys(h,k,l)
-                            phys_in = self_in%fit%comp_addr_phys(h,k,l)
-                            self_out%cmat(phys_out(1),phys_out(2),phys_out(3)) =&
-                            self_in%cmat(phys_in(1),phys_in(2),phys_in(3))
+                        kpi = k + 1 + merge(self_in%ldim(2) ,0,k<0)
+                        kpo = k + 1 + merge(self_out%ldim(2),0,k<0)
+                        do h=lims(1,1),lims(1,2)
+                            hp = h+1
+                            self_out%cmat(hp,kpo,1) = self_in%cmat(hp,kpi,1)
                         end do
                     end do
-                end do
+                else
+                    do l=lims(3,1),lims(3,2)
+                        do k=lims(2,1),lims(2,2)
+                            do h=lims(1,1),lims(1,2)
+                                phys_out = self_out%fit%comp_addr_phys(h,k,l)
+                                phys_in = self_in%fit%comp_addr_phys(h,k,l)
+                                self_out%cmat(phys_out(1),phys_out(2),phys_out(3)) =&
+                                self_in%cmat(phys_in(1),phys_in(2),phys_in(3))
+                            end do
+                        end do
+                    end do
+                endif
                 ratio = real(self_in%ldim(1))/real(self_out%ldim(1))
                 self_out%smpd = self_in%smpd*ratio ! clipping Fourier transform, so sampling is coarser
                 self_out%ft = .true.

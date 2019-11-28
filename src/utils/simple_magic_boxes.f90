@@ -5,7 +5,8 @@ use simple_error, only: simple_exception
 use simple_defs
 implicit none
 
-public :: find_magic_box, find_boxmatch, print_magic_box_range, find_magic_boxes4scale, autoscale
+public :: find_larger_magic_box, find_magic_box, find_boxmatch
+public :: print_magic_box_range, find_magic_boxes4scale, autoscale
 private
 #include "simple_local_flags.inc"
 
@@ -20,13 +21,29 @@ integer :: boxsizes(NSZS) = [32, 36, 40, 48, 52, 56, 64, 66, 70, 72, 80, 84, 88,
 
 contains
 
+    function find_larger_magic_box( trial_box ) result( best_box )
+        integer, intent(in) :: trial_box
+        integer :: best_box, dist, ind
+        call find(boxsizes, NSZS, trial_box, ind, dist)
+        best_box = boxsizes(ind)
+        if( best_box < trial_box .and. ind < NSZS )then
+            ind = ind+1
+            best_box = boxsizes(ind)
+        endif
+        if( best_box == boxsizes(NSZS) .and. trial_box-best_box>16 )then
+            ! when trial_box >> 12500
+            best_box = round2even(real(trial_box))
+        endif
+    end function find_larger_magic_box
+
+    ! closest size
     function find_magic_box( trial_box ) result( best_box )
         integer, intent(in) :: trial_box
         integer :: best_box, dist, ind
         call find(boxsizes, NSZS, trial_box, ind, dist)
         best_box = boxsizes(ind)
         if( best_box == boxsizes(NSZS) .and. trial_box-best_box>16 )then
-            ! when trial_box >> 1024
+            ! when trial_box >> 12500
             best_box = round2even(real(trial_box))
         endif
     end function find_magic_box
