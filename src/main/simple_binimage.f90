@@ -239,6 +239,7 @@ contains
         ! update instance
         ccimage%bimat_is_set = .true.
         ccimage%nccs = maxval(ccimage%bimat)
+        call ccimage%update_img_rmat
         ! kill
         deallocate(mat4compare)
         call ccimage_unordered%kill_bimg
