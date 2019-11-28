@@ -177,7 +177,6 @@ contains
             enddo
             call reference%ifft
             call reference%mask(real(params_glob%box/2)-3.,'soft')
-            ! call reference%write('reference.mrc',cnt4debug)
             if( l_neg ) call reference%neg
             xyz = center_reference()
             if( l_neg ) call reference%neg
@@ -354,7 +353,7 @@ contains
         ! thresholding
         call img%get_rmat_ptr(rmat)
         where(rmat(1:ldim,1:ldim,1) < TINY) rmat(1:ldim,1:ldim,1) = 0.
-        tmp = img
+        call tmp%copy_bimg(img)
         ! binarize
         call otsu_robust_fast(tmp,is2d=.true.,noneg=.true.,thresh=thresh)
         ! median filtering again
