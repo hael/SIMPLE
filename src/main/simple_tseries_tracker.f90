@@ -337,13 +337,13 @@ contains
     function center_reference( )result( shift )
         use simple_binimage, only: binimage
         use simple_segmentation, only: otsu_robust_fast
-        type(binimage)          :: img, tmp, tmpcc
+        type(binimage)       :: img, tmp, tmpcc
         real,    pointer     :: rmat(:,:,:), rmat_cc(:,:,:)
         integer, allocatable :: sz(:)
         real                 :: shift(3), thresh(3)
         integer              :: loc, ldim
         ldim = params_glob%box
-        img  = reference
+        call img%transfer2bimg(reference)
         ! low-pass
         call img%bp(0., params_glob%cenlp)
         call img%ifft()
@@ -360,6 +360,7 @@ contains
         ! median filtering again
         call tmp%real_space_filter(3,'median')
         ! identify biggest connected component
+        call tmp%set_imat
         call tmp%find_ccs(tmpcc)
         sz  = tmpcc%size_ccs()
         loc = maxloc(sz,dim=1)
