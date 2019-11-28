@@ -39,6 +39,7 @@ contains
     generic            :: disc => disc_1, disc_2
     procedure          :: ring
     procedure          :: copy
+    procedure          :: img2spec
     procedure          :: mic2spec
     procedure          :: dampen_pspec_central_cross
     procedure          :: scale_pspec4viz
@@ -536,6 +537,39 @@ contains
             &self_in%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
         self%ft = self_in%ft
     end subroutine copy
+
+    !> mic2spec calculates the powerspectrum of the input image
+    !!          the resulting spectrum has dampened central cross and subtracted background
+    subroutine img2spec( self, speckind, lp_backgr_subtr, img_out, postproc )
+        class(image),      intent(inout) :: self
+        character(len=*),  intent(in)    :: speckind
+        real,              intent(in)    :: lp_backgr_subtr
+        type(image),       intent(inout) :: img_out
+        logical, optional, intent(in)    :: postproc
+        type(image) :: tmp, tmp2
+        logical     :: didft, l_postproc
+        if( self%ldim(3) /= 1 ) THROW_HARD('only for 2D images')
+        l_postproc = .true.
+        if( present(postproc) ) l_postproc = postproc
+        didft = .false.
+        if( self%ft )then
+            call self%ifft()
+            didft = .true.
+        endif
+        call img_out%new(self%ldim, self%smpd)
+        call tmp%copy(self)
+        call tmp%norm()
+        call tmp%zero_edgeavg
+        call tmp%fft()
+        call tmp%ft2img(speckind, img_out)
+        if( l_postproc )then
+            call img_out%dampen_pspec_central_cross
+            call img_out%subtr_backgr(lp_backgr_subtr)
+        endif
+        if( didft ) call self%fft()
+        call tmp%kill
+        call tmp2%kill
+    end subroutine img2spec
 
     !> mic2spec calculates the average powerspectrum over a micrograph
     !!          the resulting spectrum has dampened central cross and subtracted background
@@ -5644,18 +5678,18 @@ contains
                     inds(2) = min(max(1,k+mk+1),self%ldim(2))
                     inds(3) = min(max(1,l+ml+1),self%ldim(3))
                     select case(which)
-                    case ('real')
-                        call img%set(inds,real(comp))
-                    case('power')
-                        call img%set(inds,csq(comp))
-                    case('sqrt')
-                        call img%set(inds,sqrt(csq(comp)))
-                    case ('log')
-                        call img%set(inds,log(csq(comp)))
-                    case('phase')
-                        call img%set(inds,phase_angle(comp))
-                    case DEFAULT
-                        THROW_HARD('unsupported mode: '//trim(which)//'; ft2img')
+                        case ('real')
+                            call img%set(inds,real(comp))
+                        case('power')
+                            call img%set(inds,csq(comp))
+                        case('sqrt')
+                            call img%set(inds,sqrt(csq(comp)))
+                        case ('log')
+                            call img%set(inds,log(csq(comp)))
+                        case('phase')
+                            call img%set(inds,phase_angle(comp))
+                        case DEFAULT
+                            THROW_HARD('unsupported mode: '//trim(which)//'; ft2img')
                     end select
                 end do
             end do
