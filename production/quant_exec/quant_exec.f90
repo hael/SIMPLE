@@ -1,3 +1,4 @@
+! QUANT = Quantitative Unsupervised analysis of Atomic-resolution NanoparTicle 3D charge density maps
 program quant_exec
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline, cmdline_err
@@ -6,7 +7,6 @@ use simple_commander_quant
 use simple_user_interface
 implicit none
 #include "simple_local_flags.inc"
-! QUANT PROGRAMS
 type(detect_atoms_commander)           :: xdetect_atoms
 type(atoms_rmsd_commander)             :: xatoms_rmsd
 type(radial_dependent_stats_commander) :: xradial_dependent_stats
@@ -34,7 +34,6 @@ endif
 ! parse command line into cline object
 call cline%parse
 select case(prg)
-    ! QUANT PROGRAMS
     case( 'detect_atoms' )
         call xdetect_atoms%execute(cline)
     case( 'radial_dependent_stats' )

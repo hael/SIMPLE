@@ -23,11 +23,13 @@ public :: tseries_track_commander_distr
 public :: tseries_track_commander
 public :: center2D_nano_commander_distr
 public :: cluster2D_nano_commander_hlev
+public :: pspec_int_rank_commander
 public :: estimate_diam_commander
 public :: tseries_ctf_estimate_commander
 public :: refine3D_nano_commander_distr
 private
 #include "simple_local_flags.inc"
+
 type, extends(commander_base) :: tseries_import_commander
   contains
     procedure :: execute      => exec_tseries_import
@@ -60,12 +62,14 @@ type, extends(commander_base) :: center2D_nano_commander_distr
   contains
     procedure :: execute      => exec_center2D_nano_distr
 end type center2D_nano_commander_distr
-
 type, extends(commander_base) :: cluster2D_nano_commander_hlev
   contains
     procedure :: execute      => exec_cluster2D_nano_hlev
 end type cluster2D_nano_commander_hlev
-
+type, extends(commander_base) :: pspec_int_rank_commander
+  contains
+    procedure :: execute      => exec_pspec_int_rank
+end type pspec_int_rank_commander
 type, extends(commander_base) :: estimate_diam_commander
   contains
     procedure :: execute      => exec_estimate_diam
@@ -588,6 +592,35 @@ contains
         call xcluster2D_distr%execute(cline)
         call simple_end('**** SIMPLE_CLUSTER2D_NANO NORMAL STOP ****')
     end subroutine exec_cluster2D_nano_hlev
+
+    subroutine exec_pspec_int_rank( self, cline )
+        class(pspec_int_rank_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        ! constants
+        character(len=*), parameter :: PSPECS   = 'pspecs.mrc'
+        character(len=*), parameter :: SPECKIND = 'sqrt'
+        ! varables
+        type(parameters) :: params
+        type(image)      :: img, img_pspec
+        integer :: i
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir','yes')
+        call params%new(cline)
+        call img%new([params%box,params%box,1], params%smpd)
+        call img_pspec%new([params%box,params%box,1], params%smpd)
+        do i=1,params%nptcls
+            call img%read(params%stk, i)
+            call img%norm
+            call img%mask(params%msk, 'soft')
+            call img%img2spec('sqrt', params%lp_backgr, img_pspec)
+            call img_pspec%write(PSPECS, i)
+            call img_pspec%nlmean
+            call img_pspec%write('pspecs_nlmean.mrc', i)
+        end do
+        call img%kill
+        call img_pspec%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_PSPEC_INT_RANK NORMAL STOP ****')
+    end subroutine exec_pspec_int_rank
 
     subroutine exec_estimate_diam( self, cline )
         use simple_segmentation, only: otsu_robust_fast
