@@ -757,9 +757,10 @@ contains
         call private_prgs(25)%push_req_key('nthr')
         call private_prgs(25)%push_req_key('stk')
         call private_prgs(25)%push_req_key('smpd')
-        call private_prgs(25)%push_req_key('lp_backgr')
-        call private_prgs(25)%push_req_key('msk')
-
+        call private_prgs(25)%push_req_key('moldiam')
+        ! optional keys
+        call private_prgs(25)%push_opt_key('lp_backgr')
+        
         n_private_prgs = 25
     end subroutine new_private_prgs
 

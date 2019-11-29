@@ -41,6 +41,7 @@ contains
     procedure          :: copy
     procedure          :: img2spec
     procedure          :: mic2spec
+    procedure          :: pspec_graphene_mask
     procedure          :: dampen_pspec_central_cross
     procedure          :: scale_pspec4viz
     procedure          :: window
@@ -620,6 +621,38 @@ contains
         call tmp%kill
         call tmp2%kill
     end subroutine mic2spec
+
+    subroutine pspec_graphene_mask( self, ldim, smpd )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: ldim(3)
+        real,         intent(in)    :: smpd
+        logical, allocatable :: graphene_mask(:)
+        type(image) :: tmp
+        integer     :: h, k, l, lims(3,2), phys(3), sh, lfny
+        call self%new(ldim, smpd)
+        self%ft = .true.
+        call tmp%new(ldim, smpd)
+        graphene_mask = calc_graphene_mask(ldim(1), self%smpd)
+        lims = self%fit%loop_lims(2)
+        lfny = self%get_lfny(1)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    phys = self%fit%comp_addr_phys([h,k,l])
+                    sh   = nint(hyp(real(h),real(k),real(l)))
+                    if( sh == 0 .or. sh > lfny ) cycle
+                    if( graphene_mask(sh) )then
+                        self%cmat(phys(1),phys(2),phys(3)) = cmplx(1.,0.)
+                    else
+                        self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                    endif
+                end do
+            end do
+        end do
+        call self%ft2img('real', tmp)
+        call self%copy(tmp)
+        call tmp%kill
+    end subroutine pspec_graphene_mask
 
     !> \brief dampens the central cross of a powerspectrum by mean filtering
     subroutine dampen_pspec_central_cross( self )
