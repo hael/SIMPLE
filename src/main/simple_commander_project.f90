@@ -1056,6 +1056,8 @@ contains
     end subroutine exec_prune_project_distr
 
     subroutine exec_prune_project( self, cline )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
         use simple_qsys_funs,  only: qsys_job_finished
         use simple_binoris_io, only: binwrite_oritab
         use simple_ori,        only: ori
@@ -1087,6 +1089,7 @@ contains
         nptcls_tot = spproj%os_ptcl2D%get_noris()
         allocate(ptcls_mask(nptcls_tot), stkinds(nptcls_tot))
         nptcls_part = 0
+        !$omp parallel do proc_bind(close) default(shared) private(iptcl) reduction(+:nptcls_part)
         do iptcl=1,nptcls_tot
             ptcls_mask(iptcl) = spproj%os_ptcl2D%get_state(iptcl) > 0
             if( ptcls_mask(iptcl) )then
@@ -1098,6 +1101,7 @@ contains
                 stkinds(iptcl) = 0
             endif
         enddo
+        !$omp end parallel do
         call spproj%read_segment('ptcl3D', params%projfile)
         call spproj_out%os_ptcl2D%new(nptcls_part)
         call spproj_out%os_ptcl3D%new(nptcls_part)
@@ -1130,7 +1134,7 @@ contains
             do imic=1,nmics_tot
                 if( spproj%os_mic%get_state(imic) == 0 ) cycle
                 istk = istk+1
-                if( stks_mask(istk) ) stk2mic_inds(istk) = imic
+                if( stks_mask(imic) ) stk2mic_inds(istk) = imic
             enddo
             call spproj_out%os_mic%new(nstks_part)
         endif
@@ -1187,7 +1191,7 @@ contains
             call spproj_out%os_stk%set_ori(stk_cnt, o_stk)
             ! update micrograph
             if( nmics_tot > 0 )then
-                imic = stk2mic_inds(istk)
+                imic = stk2mic_inds(stkind)
                 call spproj%os_mic%get_ori(imic, o)
                 call spproj_out%os_mic%set_ori(stk_cnt, o)
             endif
