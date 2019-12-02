@@ -39,7 +39,9 @@ contains
     generic            :: disc => disc_1, disc_2
     procedure          :: ring
     procedure          :: copy
+    procedure          :: img2spec
     procedure          :: mic2spec
+    procedure          :: pspec_graphene_mask
     procedure          :: dampen_pspec_central_cross
     procedure          :: scale_pspec4viz
     procedure          :: window
@@ -537,6 +539,39 @@ contains
         self%ft = self_in%ft
     end subroutine copy
 
+    !> mic2spec calculates the powerspectrum of the input image
+    !!          the resulting spectrum has dampened central cross and subtracted background
+    subroutine img2spec( self, speckind, lp_backgr_subtr, img_out, postproc )
+        class(image),      intent(inout) :: self
+        character(len=*),  intent(in)    :: speckind
+        real,              intent(in)    :: lp_backgr_subtr
+        type(image),       intent(inout) :: img_out
+        logical, optional, intent(in)    :: postproc
+        type(image) :: tmp, tmp2
+        logical     :: didft, l_postproc
+        if( self%ldim(3) /= 1 ) THROW_HARD('only for 2D images')
+        l_postproc = .true.
+        if( present(postproc) ) l_postproc = postproc
+        didft = .false.
+        if( self%ft )then
+            call self%ifft()
+            didft = .true.
+        endif
+        call img_out%new(self%ldim, self%smpd)
+        call tmp%copy(self)
+        call tmp%norm()
+        call tmp%zero_edgeavg
+        call tmp%fft()
+        call tmp%ft2img(speckind, img_out)
+        if( l_postproc )then
+            call img_out%dampen_pspec_central_cross
+            call img_out%subtr_backgr(lp_backgr_subtr)
+        endif
+        if( didft ) call self%fft()
+        call tmp%kill
+        call tmp2%kill
+    end subroutine img2spec
+
     !> mic2spec calculates the average powerspectrum over a micrograph
     !!          the resulting spectrum has dampened central cross and subtracted background
     subroutine mic2spec( self, box, speckind, lp_backgr_subtr, img_out, postproc )
@@ -586,6 +621,38 @@ contains
         call tmp%kill
         call tmp2%kill
     end subroutine mic2spec
+
+    subroutine pspec_graphene_mask( self, ldim, smpd )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: ldim(3)
+        real,         intent(in)    :: smpd
+        logical, allocatable :: graphene_mask(:)
+        type(image) :: tmp
+        integer     :: h, k, l, lims(3,2), phys(3), sh, lfny
+        call self%new(ldim, smpd)
+        self%ft = .true.
+        call tmp%new(ldim, smpd)
+        graphene_mask = calc_graphene_mask(ldim(1), self%smpd)
+        lims = self%fit%loop_lims(2)
+        lfny = self%get_lfny(1)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    phys = self%fit%comp_addr_phys([h,k,l])
+                    sh   = nint(hyp(real(h),real(k),real(l)))
+                    if( sh == 0 .or. sh > lfny ) cycle
+                    if( graphene_mask(sh) )then
+                        self%cmat(phys(1),phys(2),phys(3)) = cmplx(1.,0.)
+                    else
+                        self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                    endif
+                end do
+            end do
+        end do
+        call self%ft2img('real', tmp)
+        call self%copy(tmp)
+        call tmp%kill
+    end subroutine pspec_graphene_mask
 
     !> \brief dampens the central cross of a powerspectrum by mean filtering
     subroutine dampen_pspec_central_cross( self )
@@ -5644,18 +5711,18 @@ contains
                     inds(2) = min(max(1,k+mk+1),self%ldim(2))
                     inds(3) = min(max(1,l+ml+1),self%ldim(3))
                     select case(which)
-                    case ('real')
-                        call img%set(inds,real(comp))
-                    case('power')
-                        call img%set(inds,csq(comp))
-                    case('sqrt')
-                        call img%set(inds,sqrt(csq(comp)))
-                    case ('log')
-                        call img%set(inds,log(csq(comp)))
-                    case('phase')
-                        call img%set(inds,phase_angle(comp))
-                    case DEFAULT
-                        THROW_HARD('unsupported mode: '//trim(which)//'; ft2img')
+                        case ('real')
+                            call img%set(inds,real(comp))
+                        case('power')
+                            call img%set(inds,csq(comp))
+                        case('sqrt')
+                            call img%set(inds,sqrt(csq(comp)))
+                        case ('log')
+                            call img%set(inds,log(csq(comp)))
+                        case('phase')
+                            call img%set(inds,phase_angle(comp))
+                        case DEFAULT
+                            THROW_HARD('unsupported mode: '//trim(which)//'; ft2img')
                     end select
                 end do
             end do
@@ -5764,7 +5831,7 @@ contains
     !>  \brief  an image shifter to prepare for Fourier transformation
     subroutine shift_phorig( self )
         class(image), intent(inout) :: self
-        integer :: i, j, k
+        integer :: i, j, k, ii,jj
         real    :: rswap
         integer :: kfrom,kto
         if( self%ft ) THROW_HARD('this method is intended for real images; shift_phorig')
@@ -5787,16 +5854,18 @@ contains
                     end do
                     !$omp end parallel do
                 else
-                    do i=1,self%ldim(1)/2
-                        do j=1,self%ldim(2)/2
+                    do j=1,self%ldim(2)/2
+                        jj = self%ldim(2)/2+j
+                        do i=1,self%ldim(1)/2
+                            ii = self%ldim(1)/2+i
                             !(1)
                             rswap = self%rmat(i,j,1)
-                            self%rmat(i,j,1) = self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,1)
-                            self%rmat(self%ldim(1)/2+i,self%ldim(2)/2+j,1) = rswap
+                            self%rmat(i,j,1) = self%rmat(ii,jj,1)
+                            self%rmat(ii,jj,1) = rswap
                             !(2)
-                            rswap = self%rmat(i,self%ldim(2)/2+j,1)
-                            self%rmat(i,self%ldim(2)/2+j,1) = self%rmat(self%ldim(1)/2+i,j,1)
-                            self%rmat(self%ldim(1)/2+i,j,1) = rswap
+                            rswap = self%rmat(i,jj,1)
+                            self%rmat(i,jj,1) = self%rmat(ii,j,1)
+                            self%rmat(ii,j,1) = rswap
                         end do
                     end do
                 endif
@@ -6201,21 +6270,32 @@ contains
         class(image), intent(inout) :: self_in, self_out
         real                        :: ratio
         integer                     :: starts(3), stops(3), lims(3,2)
-        integer                     :: phys_out(3), phys_in(3), h, k, l
+        integer                     :: phys_out(3), phys_in(3), h,k,l,kpi,kpo,hp
         if( self_out%ldim(1) <= self_in%ldim(1) .and. self_out%ldim(2) <= self_in%ldim(2)&
         .and. self_out%ldim(3) <= self_in%ldim(3) )then
             if( self_in%ft )then
                 lims = self_out%fit%loop_lims(2)
-                do h=lims(1,1),lims(1,2)
+                if( self_in%is_2d() )then
                     do k=lims(2,1),lims(2,2)
-                        do l=lims(3,1),lims(3,2)
-                            phys_out = self_out%fit%comp_addr_phys(h,k,l)
-                            phys_in = self_in%fit%comp_addr_phys(h,k,l)
-                            self_out%cmat(phys_out(1),phys_out(2),phys_out(3)) =&
-                            self_in%cmat(phys_in(1),phys_in(2),phys_in(3))
+                        kpi = k + 1 + merge(self_in%ldim(2) ,0,k<0)
+                        kpo = k + 1 + merge(self_out%ldim(2),0,k<0)
+                        do h=lims(1,1),lims(1,2)
+                            hp = h+1
+                            self_out%cmat(hp,kpo,1) = self_in%cmat(hp,kpi,1)
                         end do
                     end do
-                end do
+                else
+                    do l=lims(3,1),lims(3,2)
+                        do k=lims(2,1),lims(2,2)
+                            do h=lims(1,1),lims(1,2)
+                                phys_out = self_out%fit%comp_addr_phys(h,k,l)
+                                phys_in = self_in%fit%comp_addr_phys(h,k,l)
+                                self_out%cmat(phys_out(1),phys_out(2),phys_out(3)) =&
+                                self_in%cmat(phys_in(1),phys_in(2),phys_in(3))
+                            end do
+                        end do
+                    end do
+                endif
                 ratio = real(self_in%ldim(1))/real(self_out%ldim(1))
                 self_out%smpd = self_in%smpd*ratio ! clipping Fourier transform, so sampling is coarser
                 self_out%ft = .true.

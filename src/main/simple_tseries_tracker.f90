@@ -177,7 +177,6 @@ contains
             enddo
             call reference%ifft
             call reference%mask(real(params_glob%box/2)-3.,'soft')
-            ! call reference%write('reference.mrc',cnt4debug)
             if( l_neg ) call reference%neg
             xyz = center_reference()
             if( l_neg ) call reference%neg
@@ -337,13 +336,13 @@ contains
     function center_reference( )result( shift )
         use simple_binimage, only: binimage
         use simple_segmentation, only: otsu_robust_fast
-        type(binimage)          :: img, tmp, tmpcc
+        type(binimage)       :: img, tmp, tmpcc
         real,    pointer     :: rmat(:,:,:), rmat_cc(:,:,:)
         integer, allocatable :: sz(:)
         real                 :: shift(3), thresh(3)
         integer              :: loc, ldim
         ldim = params_glob%box
-        img  = reference
+        call img%transfer2bimg(reference)
         ! low-pass
         call img%bp(0., params_glob%cenlp)
         call img%ifft()
@@ -354,12 +353,13 @@ contains
         ! thresholding
         call img%get_rmat_ptr(rmat)
         where(rmat(1:ldim,1:ldim,1) < TINY) rmat(1:ldim,1:ldim,1) = 0.
-        tmp = img
+        call tmp%copy_bimg(img)
         ! binarize
         call otsu_robust_fast(tmp,is2d=.true.,noneg=.true.,thresh=thresh)
         ! median filtering again
         call tmp%real_space_filter(3,'median')
         ! identify biggest connected component
+        call tmp%set_imat
         call tmp%find_ccs(tmpcc)
         sz  = tmpcc%size_ccs()
         loc = maxloc(sz,dim=1)

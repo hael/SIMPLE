@@ -1,28 +1,37 @@
-! executes the parallel (or distributed workflows) of SIMPLE
+! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
 program single_exec
 include 'simple_lib.f08'
-use simple_user_interface, only: make_user_interface, list_single_prgs_in_ui
-use simple_cmdline,        only: cmdline, cmdline_err
-use simple_commander_base, only: execute_commander
-use simple_commander_sim,  only: simulate_atoms_commander
+use simple_user_interface,       only: make_user_interface, list_single_prgs_in_ui
+use simple_cmdline,              only: cmdline, cmdline_err
+use simple_commander_base,       only: execute_commander
+use simple_commander_sim,        only: simulate_atoms_commander
+use simple_commander_preprocess, only: map_cavgs_selection_commander
 use simple_commander_project
 use simple_commander_cluster2D
 use simple_commander_tseries
 use simple_spproj_hlev
 implicit none
 #include "simple_local_flags.inc"
+
+! PROJECT MANAGEMENT PROGRAMS
+type(new_project_commander)                  :: xnew_project
 type(tseries_import_commander)               :: xtseries_import
 type(import_particles_commander)             :: ximport_particles
 type(tseries_import_particles_commander)     :: xtseries_import_particles
+type(prune_project_commander_distr)          :: xprune_project
+
+! RECONSTRUCTION PROGRAMS
 type(tseries_ctf_estimate_commander)         :: xtseries_ctf_estimate
 type(tseries_make_pickavg_commander)         :: xtseries_make_pickavg
 type(tseries_motion_correct_commander_distr) :: xmcorr_distr
 type(tseries_track_commander_distr)          :: xtrack_distr
 type(center2D_nano_commander_distr)          :: xcenter2D_distr
 type(cluster2D_nano_commander_hlev)          :: xcluster2D_distr
+type(map_cavgs_selection_commander)          :: xmap_cavgs_selection
 type(estimate_diam_commander)                :: xestimate_diam
 type(simulate_atoms_commander)               :: xsimulate_atoms
 type(refine3D_nano_commander_distr)          :: xrefine3D_distr
+
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: args, prg, entire_line
 type(cmdline)         :: cline
@@ -44,13 +53,20 @@ call cline%parse
 ! set global defaults
 if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
 select case(prg)
-        ! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
+
+    ! PROJECT MANAGEMENT PROGRAMS
+    case( 'new_project' )
+        call xnew_project%execute(cline)
     case( 'tseries_import' )
         call xtseries_import%execute(cline)
     case( 'tseries_import_particles' )
         call xtseries_import_particles%execute(cline)
     case( 'import_particles')
         call ximport_particles%execute(cline)
+    case( 'prune_project' )
+        call xprune_project%execute( cline )
+
+    ! RECONSTRUCTION PROGRAMS
     case( 'tseries_make_pickavg')
         call xtseries_make_pickavg%execute(cline)
     case( 'tseries_ctf_estimate' )
@@ -63,6 +79,8 @@ select case(prg)
         call xcenter2D_distr%execute(cline)
     case( 'cluster2D_nano' )
         call xcluster2D_distr%execute(cline)
+    case( 'map_cavgs_selection' )
+        call xmap_cavgs_selection%execute(cline)
     case( 'estimate_diam')
         call xestimate_diam%execute(cline)
     case( 'simulate_atoms' )

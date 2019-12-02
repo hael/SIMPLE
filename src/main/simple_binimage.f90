@@ -21,6 +21,7 @@ type, extends(image) :: binimage
     ! CONSTRUCTORS
     procedure          :: new_bimg
     procedure          :: copy_bimg
+    procedure          :: transfer2bimg
     ! SETTERS/GETTERS
     procedure          :: set_imat
     procedure          :: get_imat
@@ -65,16 +66,31 @@ contains
         self%bsmpd = self%get_smpd()
         allocate(self%bimat(self%bldim(1),self%bldim(2),self%bldim(3)), source=0)
         self%bimat_is_set = .false.
+        self%nccs = 0
     end subroutine new_bimg
 
     subroutine copy_bimg( self, self_in )
         class(binimage),         intent(inout) :: self
         class(binimage), target, intent(in)    :: self_in
-        real(kind=c_float), pointer :: brmat(:,:,:)=>null()
-        call self%new_bimg(self_in%bldim, self_in%bsmpd)
-        self%bimat = self_in%bimat
-        call self%update_img_rmat
-    end subroutine copy_bimg
+        call self%copy(self_in)
+        self%bldim = self_in%bldim
+        self%bsmpd = self_in%bsmpd
+        allocate(self%bimat(self%bldim(1),self%bldim(2),self%bldim(3)), source=self_in%bimat)
+        self%bimat_is_set = self_in%bimat_is_set
+        self%nccs = self_in%nccs
+     end subroutine copy_bimg
+
+    subroutine transfer2bimg( self, self_in )
+        class(binimage),         intent(inout) :: self
+        class(image),    target, intent(in)    :: self_in
+        call self%kill_bimg
+        call self%copy(self_in)
+        self%bldim = self_in%get_ldim()
+        self%bsmpd = self_in%get_smpd()
+        allocate(self%bimat(self%bldim(1),self%bldim(2),self%bldim(3)), source=nint(self_in%get_rmat()))
+        self%bimat_is_set = .true.
+        self%nccs = 0
+      end subroutine transfer2bimg
 
     ! SETTERS/GETTERS
 
@@ -116,18 +132,20 @@ contains
 
     ! I/O
 
-    subroutine write_bimg(self, fname)
-        class(binimage),  intent(inout) :: self
-        character(len=*), intent(in)    :: fname
+    subroutine write_bimg(self, fname, i)
+        class(binimage),   intent(inout) :: self
+        character(len=*),  intent(in)    :: fname
+        integer, optional, intent(in)    :: i
         if( .not. self%bimat_is_set ) call self%set_imat
         call self%set_rmat(real(self%bimat))
         call self%write(fname)
     end subroutine write_bimg
 
-    subroutine read_bimg(self, fname)
-        class(binimage),  intent(inout) :: self
-        character(len=*), intent(in)    :: fname
-        call self%read(fname)
+    subroutine read_bimg(self, fname, i)
+        class(binimage),   intent(inout) :: self
+        character(len=*),  intent(in)    :: fname
+        integer, optional, intent(in)    :: i
+        call self%read(fname, i)
         call self%set_imat()
     end subroutine read_bimg
 
@@ -223,6 +241,7 @@ contains
         ! update instance
         ccimage%bimat_is_set = .true.
         ccimage%nccs = maxval(ccimage%bimat)
+        call ccimage%update_img_rmat
         ! kill
         deallocate(mat4compare)
         call ccimage_unordered%kill_bimg
@@ -710,6 +729,8 @@ contains
     subroutine kill_bimg( self )
         class(binimage), intent(inout) :: self
         if(allocated(self%bimat)) deallocate(self%bimat)
+        self%nccs = 0
+        self%bimat_is_set = .false.
         call self%kill
     end subroutine kill_bimg
 

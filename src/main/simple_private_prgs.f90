@@ -751,7 +751,17 @@ contains
         call private_prgs(24)%push_opt_key('neg')
         call private_prgs(24)%push_opt_key('filter')
 
-        n_private_prgs = 24
+        ! PSPEC_INT_RANK
+        call private_prgs(25)%set_name('pspec_int_rank')
+        ! required keys
+        call private_prgs(25)%push_req_key('nthr')
+        call private_prgs(25)%push_req_key('stk')
+        call private_prgs(25)%push_req_key('smpd')
+        call private_prgs(25)%push_req_key('moldiam')
+        ! optional keys
+        call private_prgs(25)%push_opt_key('lp_backgr')
+        
+        n_private_prgs = 25
     end subroutine new_private_prgs
 
 end module simple_private_prgs
