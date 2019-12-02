@@ -4,6 +4,7 @@ module simple_tseries_tracker
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_parameters, only: params_glob
+use simple_nano_utils, only: remove_graphene_peaks
 use simple_image,      only: image
 use simple_tvfilter
 implicit none
@@ -25,10 +26,10 @@ character(len=LONGSTRLEN), pointer     :: framenames(:)
 character(len=:),          allocatable :: dir, fbody
 type(image)               :: frame_img      ! individual frame image
 type(image)               :: frame_avg      ! average over time window
-type(image)               :: reference, ptcl_target
-type(image)               :: neigh_imgs(NNN), backgr_imgs(NNN), tmp_imgs(NNN), pspec
+type(image)               :: reference, ptcl_target, pspec, pspec_nn
+type(image)               :: neigh_imgs(NNN), backgr_imgs(NNN), tmp_imgs(NNN)
 character(len=LONGSTRLEN) :: neighstknames(NNN), stkname
-integer                   :: ldim(3), nframes, neigh_cnt
+integer                   :: ldim(3), nframes, track_freq
 logical                   :: l_neg
 
 integer :: cnt4debug = 0
@@ -45,6 +46,7 @@ contains
         dir    = trim(dir_in)
         fbody  = trim(fbody_in)
         l_neg  = .false.
+        track_freq = max(1,nint(real(params_glob%nframesgrp/2)))
         if( trim(params_glob%neg) .eq. 'yes' ) l_neg = .true.
         select case(trim(params_glob%filter))
             case('no','nlmean')
@@ -75,6 +77,7 @@ contains
         call reference%new([params_glob%box,params_glob%box,1], params_glob%smpd)
         call ptcl_target%new([params_glob%box,params_glob%box,1], params_glob%smpd)
         call pspec%new([params_glob%box,params_glob%box,1], params_glob%smpd)
+        call pspec_nn%new([params_glob%box,params_glob%box,1], params_glob%smpd)
         do i=1,NNN
             call neigh_imgs(i)%new([params_glob%box,params_glob%box,1], params_glob%smpd,wthreads=.false.)
             call backgr_imgs(i)%new([params_glob%box,params_glob%box,1], params_glob%smpd,wthreads=.false.)
@@ -113,22 +116,20 @@ contains
         character(len=:), allocatable, intent(inout) :: fname_forctf
         type(motion_align_nano)       :: aligner
         character(len=:), allocatable :: fname
-        real,             allocatable :: ini_shifts(:,:), opt_shifts(:,:)
+        real,             allocatable :: opt_shifts(:,:)
         integer :: first_pos(3), funit, io_stat, iframe, xind,yind, i, last_frame, cnt, nrange
         real    :: xyz(3), pos(2)
         logical :: outside
         ! init neigh counter
-        neigh_cnt = 0
         call frame_avg%zero_and_unflag_ft
         call reference%zero_and_flag_ft
         write(logfhandle,'(a)') ">>> TRACKING PARTICLES"
         cnt4debug = 0
-        do iframe = 1,nframes,params_glob%nframesgrp
+        do iframe = 1,nframes,track_freq
             cnt4debug = cnt4debug + 1
             ! read frames & extract particles
             last_frame = min(iframe+params_glob%nframesgrp-1,nframes)
             nrange     = last_frame-iframe+1
-            allocate(ini_shifts(nrange,2),source=0.)
             first_pos = nint([particle_locations(iframe,1),particle_locations(iframe,2),1.])
             cnt = 0
             do i=iframe,last_frame
@@ -141,7 +142,6 @@ contains
             ! prep images: norm, mask, filter, FFT
             !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
             do i = 1,nrange
-                ini_shifts(i,:) = particle_locations(iframe,:) - real(first_pos(1:2))
                 call ptcls(i)%norm
                 select case(trim(params_glob%filter))
                     case('nlmean')
@@ -166,19 +166,26 @@ contains
                 call aligner%align
             else
                 ! providing previous reference to mitigate drift
-                call aligner%align(reference, ini_shifts=ini_shifts)
+                call aligner%align(reference)
             endif
             call aligner%get_opt_shifts(opt_shifts)
             ! generate reference
             call reference%zero_and_flag_ft
+            !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
             do i = 1,nrange
-                call ptcls_saved(i)%shift([-opt_shifts(i,1),-opt_shifts(i,2),0.])
+                call ptcls_saved(i)%shift2Dserial(-opt_shifts(i,:))
+            enddo
+            !$omp parallel do
+            do i = 1,nrange
                 call reference%add(ptcls_saved(i),w=1./real(nrange))
             enddo
             call reference%ifft
-            call reference%mask(real(params_glob%box/2)-3.,'soft')
+            !!!!!!!!!1
+            ! call reference%write(trim(dir)//'/'//trim(fbody)//'_reference.mrc',cnt4debug)
+            !!!!!!!!!!!!!
+            ! center reference for next alignment
             if( l_neg ) call reference%neg
-            xyz = center_reference()
+            xyz = center_reference(iframe)
             if( l_neg ) call reference%neg
             select case(trim(params_glob%filter))
                 case('nlmean')
@@ -191,20 +198,24 @@ contains
                     call reference%fft
             end select
             call reference%shift(xyz)
+            call reference%ifft
+            call reference%mask(real(params_glob%box/2)-3.,'soft')
+            !!!!!!!!!1
+            ! call reference%write(trim(dir)//'/'//trim(fbody)//'_reference_shifted.mrc',cnt4debug)
+            !!!!!!!!!!!!!
+            call reference%fft
             ! updates shifts
             pos = particle_locations(iframe,:)
             cnt = 0
             do i=iframe,last_frame
                 cnt = cnt + 1
-                particle_locations(i,1) = pos(1) - opt_shifts(cnt,1)
-                particle_locations(i,2) = pos(2) - opt_shifts(cnt,2)
+                particle_locations(i,1) = pos(1) - opt_shifts(cnt,1) + xyz(1)
+                particle_locations(i,2) = pos(2) - opt_shifts(cnt,2) + xyz(2)
             enddo
             particle_locations(last_frame+1:,1) = particle_locations(last_frame,1)
             particle_locations(last_frame+1:,2) = particle_locations(last_frame,2)
-            ! cleanup
-            call aligner%kill
-            deallocate(ini_shifts)
         enddo
+        call aligner%kill
         write(logfhandle,'(a)') ">>> WRITING PARTICLES, NEIGHBOURS & SPECTRUM"
         ! Second pass write box file, tracked particles, neighbours & update spectrum
         call pspec%zero_and_unflag_ft
@@ -226,14 +237,19 @@ contains
             if( l_neg ) call ptcl_target%neg()
             call ptcl_target%write(stkname, iframe)
             ! neighbors & spectrum
-            call write_background_images_and_update_pspec(iframe, [xind,yind])
+            call update_background_pspec(iframe, [xind,yind])
+            call pspec%add(pspec_nn,w=SPECW)
+            call pspec_nn%write(trim(dir)//'/'//trim(fbody)//'_background_pspec.mrc',iframe)
+            ! graphene removal, does not work yet
+            ! call remove_graphene_peaks(ptcl_target, pspec_nn)
+            ! call ptcl_target%write(trim(dir)//'/'//trim(fbody)//'_subtr.mrc',iframe)
         end do
         call fclose(funit, errmsg="tseries tracker ; write_tracked_series end")
         ! average and write power spectrum for CTF estimation
-        call pspec%div(SPECW * real(neigh_cnt))
+        call pspec%div(SPECW/real(nframes))
         fname_forctf = trim(dir)//'/'//trim(fbody)//'_pspec4ctf_estimation.mrc'
         call pspec%dampen_pspec_central_cross
-        call pspec%write(fname_forctf, 1)
+        call pspec%write(fname_forctf)
         ! trajectory
         call write_trajectory
     end subroutine track_particle
@@ -262,43 +278,30 @@ contains
         call frame_avg%write(trim(dir)//'/'//trim(fbody)//'_trajectory.mrc')
     end subroutine write_trajectory
 
-    subroutine write_background_images_and_update_pspec( iframe, pos )
+    subroutine update_background_pspec( iframe, pos )
         integer, intent(in) :: iframe, pos(2)
-        integer :: neigh(NNN,2), i
+        integer :: neigh(NNN,2), i, neigh_cnt
         logical :: outside(NNN)
         call identify_neighbours
-        !$omp parallel default(shared) private(i) proc_bind(close)
-        !$omp do schedule(static)
+        neigh_cnt = 0
+        call pspec_nn%zero_and_unflag_ft
+        !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static) reduction(+:neigh_cnt)
         do i=1,NNN
+            call backgr_imgs(i)%zero_and_unflag_ft
+            call tmp_imgs(i)%zero_and_unflag_ft
             call frame_img%window_slim(neigh(i,:), params_glob%box, backgr_imgs(i), outside(i))
-            if( outside(i) ) call backgr_imgs(i)%zero
-            if( l_neg )      call backgr_imgs(i)%neg()
-        enddo
-        !$omp end do nowait
-        !$omp single
-        do i=1,NNN
-            call backgr_imgs(i)%write(neighstknames(i), iframe)
-        enddo
-        neigh_cnt = neigh_cnt + count(.not.outside)
-        !$omp end single
-        !$omp do schedule(static)
-        do i=1,NNN
-            if( .not. outside(i) )then
+            if( .not.outside(i) )then
+                neigh_cnt = neigh_cnt + 1
                 if( l_neg ) call backgr_imgs(i)%neg()
                 call backgr_imgs(i)%norm()
                 call backgr_imgs(i)%zero_edgeavg
                 call backgr_imgs(i)%fft()
                 call backgr_imgs(i)%ft2img('sqrt', tmp_imgs(i))
-                call backgr_imgs(i)%zero_and_unflag_ft
             endif
-        end do
-        !$omp end do
-        !$omp end parallel
+        enddo
+        !$omp end parallel do
         do i=1,NNN
-            if( .not. outside(i) )then
-                call pspec%add(tmp_imgs(i), SPECW)
-            endif
-            call tmp_imgs(i)%zero_and_unflag_ft
+            if( .not. outside(i) ) call pspec_nn%add(tmp_imgs(i), 1./real(neigh_cnt))
         end do
         contains
 
@@ -329,13 +332,14 @@ contains
                 neigh(8,2) = pos(2) - params_glob%box
             end subroutine identify_neighbours
 
-    end subroutine write_background_images_and_update_pspec
+    end subroutine update_background_pspec
 
     ! PRIVATE FUNCTIONS
 
-    function center_reference( )result( shift )
-        use simple_binimage, only: binimage
+    function center_reference( iframe )result( shift )
+        use simple_binimage,     only: binimage
         use simple_segmentation, only: otsu_robust_fast
+        integer, intent(in) :: iframe
         type(binimage)       :: img, tmp, tmpcc
         real,    pointer     :: rmat(:,:,:), rmat_cc(:,:,:)
         integer, allocatable :: sz(:)
@@ -415,6 +419,7 @@ contains
         call reference%kill
         call ptcl_target%kill
         call pspec%kill
+        call pspec_nn%kill
     end subroutine kill_tracker
 
 end module simple_tseries_tracker

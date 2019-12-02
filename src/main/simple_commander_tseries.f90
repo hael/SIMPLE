@@ -424,13 +424,18 @@ contains
         if( .not. cline%defined('hp') ) call cline%set('hp', real(orig_box) )
         call cline%set('box',    real(orig_box))
         call cline%set('numlen', real(numlen)  )
+        call cline%delete('fbody')
         ! prepare part-dependent parameters
         allocate(part_params(params%nparts))
         do ipart=1,params%nparts
             call part_params(ipart)%new(3)
             call part_params(ipart)%set('xcoord', real2str(boxdata(ipart,1)))
             call part_params(ipart)%set('ycoord', real2str(boxdata(ipart,2)))
-            call part_params(ipart)%set('ind',    int2str(ipart))
+            if( params%nparts > 1 )then
+                call part_params(ipart)%set('fbody', trim(params%fbody)//'_'//int2str_pad(ipart,numlen))
+            else
+                call part_params(ipart)%set('fbody', trim(params%fbody))
+            endif
         end do
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
@@ -450,13 +455,10 @@ contains
         class(cmdline),                 intent(inout) :: cline
         type(sp_project)                       :: spproj
         type(parameters)                       :: params
-        character(len=:),          allocatable :: dir, forctf, fbody
+        character(len=:),          allocatable :: dir, forctf
         character(len=LONGSTRLEN), allocatable :: framenames(:)
         real,                      allocatable :: boxdata(:,:)
         integer :: i, iframe, j, orig_box, nframes
-        if( cline%defined('ind') )then
-            if( .not. cline%defined('numlen') ) THROW_HARD('need numlen to be part of command line if ind is; exec_tseries_track')
-        endif
         call cline%set('oritype','mic')
         call params%new(cline)
         orig_box = params%box
@@ -485,10 +487,9 @@ contains
             endif
         enddo
         ! actual tracking
-        fbody = trim(params%fbody)//int2str_pad(params%ind,params%numlen)
-        dir   = trim(fbody)
+        dir = trim(params%fbody)
         call simple_mkdir(dir)
-        call init_tracker( nint(boxdata(1,1:2)), framenames, dir, fbody)
+        call init_tracker( nint(boxdata(1,1:2)), framenames, dir, params%fbody)
         call track_particle( forctf )
         ! clean tracker
         call kill_tracker

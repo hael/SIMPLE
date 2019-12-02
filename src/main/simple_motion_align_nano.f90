@@ -11,7 +11,6 @@ private
 #include "simple_local_flags.inc"
 
 integer, parameter :: MINITS_DCORR  = 3, MAXITS_DCORR  = 10
-integer, parameter :: NRESUPDATES   = 2
 
 type :: motion_align_nano
     private
@@ -22,11 +21,8 @@ type :: motion_align_nano
     real,        allocatable :: weights(:,:)                !< weight matrix (b-factor*band-pass)
     real,        allocatable :: opt_shifts(:,:)             !< shifts identified
     real,        allocatable :: frameweights(:)             !< array of frameweights
-    real,        allocatable :: corrs(:)                    !< per-frame correlations
     real                     :: hp=-1., lp=-1.              !< high/low pass value
     real                     :: bfactor      = -1.          !< b-factor for alignment weights
-    real                     :: resstep      = 0.           !< resolution step
-    real                     :: corr         = -1.          !< correlation
     real                     :: smpd         = 0.           !< sampling distance
     real                     :: trs          = 10.          !< half correlation discrete search bound
     integer                  :: ldim(3)      = 0            !< frame dimensions
@@ -52,8 +48,6 @@ contains
     procedure          :: set_reslims
     procedure          :: set_trs
     procedure          :: get_reference
-    procedure          :: get_corr
-    procedure          :: get_corrs
     procedure          :: get_opt_shifts
     procedure          :: set_bfactor
     ! Destructor
@@ -81,10 +75,9 @@ contains
         self%lp          =  params_glob%lp
         allocate(self%frames_sh(self%nframes),self%frames(self%nframes),&
                 &self%opt_shifts(self%nframes,2),&
-                &self%corrs(self%nframes), self%frameweights(self%nframes), stat=alloc_stat )
+                &self%frameweights(self%nframes), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('new; simple_motion_align_nano')
-        self%opt_shifts       = 0.
-        self%corrs        = -1.
+        self%opt_shifts   = 0.
         self%frameweights = 1./real(self%nframes)
         self%l_bfac       = .false.
         self%existence        = .true.
@@ -193,14 +186,18 @@ contains
         integer :: iframe
         cmat_sum = self%reference%get_cmat()
         cmat_sum = cmplx(0.,0.)
-        !$omp parallel do default(shared) private(iframe,pcmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
+        !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
         do iframe=1,self%nframes
             call self%frames_sh(iframe)%set_cmat(self%frames(iframe))
             call self%frames_sh(iframe)%shift2Dserial(-self%opt_shifts(iframe,:))
-            call self%frames_sh(iframe)%get_cmat_ptr(pcmat)
-            cmat_sum = cmat_sum + pcmat * self%frameweights(iframe)
         enddo
         !$omp end parallel do
+        do iframe=1,self%nframes
+            call self%frames_sh(iframe)%get_cmat_ptr(pcmat)
+            !$omp parallel workshare
+            cmat_sum = cmat_sum + pcmat * self%frameweights(iframe)
+            !$omp end parallel workshare
+        enddo
         call self%reference%set_cmat(cmat_sum)
     end subroutine shift_frames_gen_ref
 
@@ -265,8 +262,8 @@ contains
         bplplimsq = min(minval(nr_lims(1:2,2)),lplim-BPWIDTH)**2
         !$omp parallel do collapse(2) schedule(static) default(shared) proc_bind(close)&
         !$omp private(h,k,shsq,phys,rsh,bfacw,w,spafreqsq,spafreqh,spafreqk)
-        do h = nr_lims(1,1),nr_lims(1,2)
-            do k = nr_lims(2,1),nr_lims(2,2)
+        do k = nr_lims(2,1),nr_lims(2,2)
+            do h = nr_lims(1,1),nr_lims(1,2)
                 shsq = h*h+k*k
                 if( shsq < hplimsq ) cycle
                 if( shsq > lplimsq ) cycle
@@ -334,17 +331,6 @@ contains
         call img%copy(self%reference)
     end subroutine get_reference
 
-    real function get_corr( self )
-        class(motion_align_nano), intent(in) :: self
-        get_corr = self%corr
-    end function get_corr
-
-    subroutine get_corrs( self, corrs )
-        class(motion_align_nano), intent(inout) :: self
-        real, allocatable,          intent(out)   :: corrs(:)
-        allocate( corrs(self%nframes), source=self%corrs )
-    end subroutine get_corrs
-
     subroutine get_opt_shifts( self, opt_shifts )
         class(motion_align_nano), intent(inout) :: self
         real, allocatable,          intent(out)   :: opt_shifts(:,:)
@@ -368,17 +354,19 @@ contains
     subroutine kill( self )
         class(motion_align_nano), intent(inout) :: self
         nullify(self%frames_orig)
-        self%hp      =-1.
-        self%lp      =-1.
+        self%hp      = -1.
+        self%lp      = -1.
         self%bfactor = -1.
         self%smpd    = 0.
         self%ldim    = 0
         call self%dealloc_images
+        self%nframes = 0
         if( allocated(self%opt_shifts) )    deallocate(self%opt_shifts)
-        if( allocated(self%corrs) )         deallocate(self%corrs)
         if( allocated(self%frameweights) )  deallocate(self%frameweights)
+        if( allocated(self%weights) )       deallocate(self%weights)
         self%l_bfac    = .false.
         self%existence = .false.
+        call self%reference%kill
     end subroutine kill
-
+    
 end module simple_motion_align_nano
