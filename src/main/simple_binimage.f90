@@ -25,7 +25,7 @@ type, extends(image) :: binimage
     procedure          :: set_imat
     procedure          :: get_imat
     procedure          :: get_nccs
-    procedure, private :: update_img_rmat ! for updating the rmat in the extended image class
+    procedure          :: update_img_rmat ! for updating the rmat in the extended image class
     ! I/O
     procedure          :: write_bimg
     procedure          :: read_bimg

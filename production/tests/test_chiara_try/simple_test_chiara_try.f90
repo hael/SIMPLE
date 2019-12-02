@@ -1,6 +1,7 @@
 module simple_test_chiara_try_mod
     include 'simple_lib.f08'
     use simple_image, only : image
+    use simple_binimage, only : binimage
 
     public
 
@@ -388,6 +389,227 @@ module simple_test_chiara_try_mod
    !         call atom%convolve(vol, cutoff)
    !         call vol%write('Convoluted.mrc')
    ! end subroutine generate_distribution
+
+   subroutine generate_peakmask(img_spec, lmsk)
+     type(image),          intent(inout) :: img_spec
+     integer, allocatable, intent(inout) :: lmsk(:,:,:)
+     integer, parameter :: WIDTH=2 ! for peak identification
+     real, parameter   :: UP_LIM=2.14, L_LIM = 1.23
+     real, pointer     :: rmat(:,:,:)
+     real, allocatable :: x(:)
+     real    :: thresh, smpd
+     integer :: ldim(3),i,j,h,k,sh,nframe, cnt
+     integer :: UFlim, LFlim, lims(2)
+     type(binimage) :: img_mask
+     type(binimage) :: img_mask_roavg
+     ! debug
+     real, allocatable :: rmat_aux(:,:,:)
+     type(image) :: img_aux
+     nthr_glob=8
+     if(allocated(lmsk)) deallocate(lmsk)
+     ldim = img_spec%get_ldim()
+     smpd = img_spec%get_smpd()
+     allocate(rmat_aux(ldim(1),ldim(2),1), source=0.)
+     call img_spec%get_rmat_ptr(rmat)
+     rmat_aux(:,:,1) = rmat(1:ldim(1),1:ldim(2),1)
+     UFlim = calc_fourier_index(max(2.*smpd,UP_LIM),ldim(1),smpd)! Everything at a resolution higher than UP_LIM A is discarded
+     lims(1) = UFlim-WIDTH
+     lims(2) = UFlim+WIDTH
+     cnt = 0
+     do i = 1, ldim(1)
+         do j = 1, ldim(2)
+             h   = -int(ldim(1)/2) + i - 1
+             k   = -int(ldim(2)/2) + j - 1
+             sh  =  nint(hyp(real(h),real(k)))
+             if(sh < lims(2) .and. sh > lims(1)) then
+                 !do nothing
+             else
+                 rmat_aux(i,j,1) = 0.
+             endif
+          enddo
+     enddo
+     x = pack(rmat_aux, abs(rmat_aux) > TINY) ! pack where it's not 0
+     call otsu(x, thresh)
+     deallocate(x)
+     ! report results on the image
+     allocate(lmsk(ldim(1),ldim(2),1), source =0)
+     where(rmat(1:ldim(1),1:ldim(2),1)>=thresh .and. abs(rmat_aux(:,:,1)) > TINY)  lmsk(:,:,1) = 1
+     ! Do the same thing for the other band
+     ! reset
+     rmat_aux(:,:,1) = rmat(1:ldim(1),1:ldim(2),1)
+     LFlim = calc_fourier_index(max(2.*smpd,L_LIM),ldim(1),smpd)! Everything at a resolution higher than UP_LIM A is discarded
+     lims(1) = LFlim-WIDTH
+     lims(2) = LFlim+WIDTH
+     do i = 1, ldim(1)
+         do j = 1, ldim(2)
+             h   = -int(ldim(1)/2) + i - 1
+             k   = -int(ldim(2)/2) + j - 1
+             sh  =  nint(hyp(real(h),real(k)))
+             if(sh < lims(2) .and. sh > lims(1)) then
+                ! do nothing
+             else
+                 rmat_aux(i,j,1) = 0.
+             endif
+          enddo
+     enddo
+     x = pack(rmat_aux, abs(rmat_aux) > 0.) ! pack where it's not 0
+     call otsu(x, thresh)
+     where(rmat(1:ldim(1),1:ldim(2),1)>=thresh  .and. abs(rmat_aux(:,:,1)) > TINY) lmsk(:,:,1) = 1
+     ! Debug
+     call img_mask%new_bimg(ldim, smpd)
+     call img_mask%set_imat(lmsk)
+     call img_mask%update_img_rmat()
+     call img_mask_roavg%new_bimg(ldim, smpd)
+     call img_mask%roavg(60,img_mask_roavg)
+     call img_mask_roavg%get_rmat_ptr(rmat)
+     where(rmat<TINY)
+       rmat(:,:,:) = 0.
+     elsewhere
+       rmat(:,:,:) = 1.
+     endwhere
+     call img_mask_roavg%write('MaskROAVG.mrc')
+     call img_mask_roavg%set_imat()
+     call img_mask_roavg%grow_bins(2) ! grow 2 layers
+     call img_mask_roavg%write_bimg('MaskGrown.mrc')
+     call img_mask_roavg%get_imat(lmsk)
+     call img_mask_roavg%kill_bimg
+     call img_mask%kill_bimg
+   end subroutine generate_peakmask
+
+   ! ! This subroutine operates on img_spec on the basis of the
+   ! ! provided logical mask. For each pxl in the msk, it subsitutes
+   ! ! its value with the avg value in the neighbours of the pxl that
+   ! ! do not belong to the msk. The neighbours are in a shpere of radius 3 pxls.
+   ! subroutine filter_peaks(fname,nimage,lmsk)
+   !   character(len=*), intent(in) :: fname
+   !   integer,          intent(in) :: nimage ! img identifier in the stack
+   !   integer,          intent(in) :: lmsk(:,:,:)
+   !   real,    pointer   :: rmat(:,:,:)
+   !   complex, pointer   :: cmat(:,:,:)
+   !   real,    parameter :: RAD = 4.
+   !   type(image) :: img_spec
+   !   real        :: avg, smpd, rabs, ang
+   !   integer     :: nptcls, i, j, ii, jj, ldim(3), cnt
+   !   integer     :: hp,k,kp,phys(3),h
+   !
+   !
+   !   call find_ldim_nptcls( fname, ldim, nptcls, smpd)
+   !   ldim(3) = 1
+   !   if(nimage < 1 .or. nimage > nptcls) stop !sanity check
+   !   call img_spec%new(ldim, smpd)
+   !   call img_spec%read(fname, nimage)
+   !   call img_spec%norm()
+   !   call img_spec%fft()
+   !
+   !   call img_spec%get_cmat_ptr(cmat)
+   !   do i = ldim(1)/2+1, ldim(1)
+   !      do j = 1, ldim(2)
+   !        if(lmsk(i,j,1)==0) then
+   !          h = i-(ldim(1)/2+1)
+   !          k = j-(ldim(2)/2+1)
+   !          phys = img_spec%comp_addr_phys(h,k,0)
+   !          cmat(phys(1),phys(2),1) = cmplx(0.,0.)
+   !        endif
+   !      enddo
+   !    enddo
+   !    call img_spec%ifft()
+   !    call img_spec%write('graphene.mrc')
+   !    call img_spec%kill
+   ! end subroutine filter_peaks
+
+
+   ! This subroutine operates on img_spec on the basis of the
+   ! provided logical mask. For each pxl in the msk, it subsitutes
+   ! its value with the avg value in the neighbours of the pxl that
+   ! do not belong to the msk. The neighbours are in a shpere of radius 3 pxls.
+   subroutine filter_peaks(fname,nimage,lmsk)
+     character(len=*), intent(in) :: fname
+     integer,          intent(in) :: nimage ! img identifier in the stack
+     integer,          intent(in) :: lmsk(:,:,:)
+     real,    pointer   :: rmat(:,:,:)
+     complex, pointer   :: cmat(:,:,:)
+     real,    parameter :: RAD = 4.
+     type(image) :: img_spec
+     real        :: avg, smpd, rabs, ang
+     integer     :: nptcls, i, j, ii, jj, ldim(3), cnt
+     integer     :: hp,k,kp,phys(3),h
+
+
+     call find_ldim_nptcls( fname, ldim, nptcls, smpd)
+     ldim(3) = 1
+     if(nimage < 1 .or. nimage > nptcls) stop !sanity check
+     call img_spec%new(ldim, smpd)
+     call img_spec%read(fname, nimage)
+     call img_spec%norm()
+     call img_spec%fft()
+
+     call img_spec%get_cmat_ptr(cmat)
+     do i = ldim(1)/2+1, ldim(1)
+        do j = 1, ldim(2)
+          if(lmsk(i,j,1)>0) then
+
+
+              cnt = 0 ! number of pxls in the sphere that are not flagged by lmsk
+              !avg = 0.
+              rabs = 0.
+              do ii = 1, ldim(1)
+                  h  = ii-(ldim(1)/2+1)
+                  do jj = 1, ldim(2)
+                      if(ii/=i .and. jj/=j) then
+                          if(euclid(real([i,j]), real([ii,jj])) <= RAD) then
+                              if(lmsk(ii,jj,1)<1) then
+                                  k = jj-(ldim(2)/2+1)
+                                  phys = img_spec%comp_addr_phys(h,k,0)
+                                  cnt = cnt + 1
+                                  rabs = rabs + sqrt(csq(cmat(phys(1),phys(2),1)))
+                                  ! avg = avg + real(cmat(phys(1),phys(2),1))
+                              endif
+                          endif
+                        endif
+                  enddo
+              enddo
+              ! substitute with the min in the neighbours
+              h = i-(ldim(1)/2+1)
+              k = j-(ldim(2)/2+1)
+              phys = img_spec%comp_addr_phys(h,k,0)
+              ! print *,i,j,cnt,fcomp/real(cnt)
+              rabs = rabs/real(cnt)
+
+
+
+              if(cnt == 0) then
+                print *, 'Insert modification!!'
+                stop
+                ! do ii = 1, ldim(1)
+                !     do jj = 1, ldim(2)
+                !         if(ii/=i .and. jj/=j) then
+                !             if(euclid(real([i,j]), real([ii,jj])) <= RAD+2.) then
+                !                 if(lmsk(ii,jj,1)<1) then
+                !                     cnt = cnt + 1
+                !                     avg = avg + rmat(ii,jj,1)
+                !                 endif
+                !             endif
+                !           endif
+                !     enddo
+                ! enddo
+                ! cmat(phys(1),phys(2),1) = cmplx(avg/real(cnt), aimag(cmat(phys(1),phys(2),1)))
+                ! cmat(phys(1),phys(2),1) = fcomp/real(cnt)
+                ! cmat(phys(1),phys(2),1) = cmplx(0.,0.)
+              else
+                ! cmat(phys(1),phys(2),1) = cmplx(0.,0.)
+                ang = TWOPI*ran3()
+                cmat(phys(1),phys(2),1) = rabs * cmplx(cos(ang), sin(ang))
+                ! cmat(phys(1),phys(2),1) = fcomp/real(cnt)
+                ! cmat(phys(1),phys(2),1) = cmplx(avg/real(cnt), aimag(cmat(phys(1),phys(2),1)))
+              endif
+          endif
+        enddo
+      enddo
+      call img_spec%ifft()
+      call img_spec%write('PeakFiltered.mrc')
+      call img_spec%kill
+   end subroutine filter_peaks
+
 end module simple_test_chiara_try_mod
 
     program simple_test_chiara_try
@@ -399,23 +621,182 @@ end module simple_test_chiara_try_mod
        use simple_segmentation
        use simple_binimage, only : binimage
        use simple_test_chiara_try_mod
-       real          :: thresh ! threshold for class definition, user inputted
-       integer                  :: i, j, ncls
-       integer, parameter       :: DIM = 10
-       real, allocatable :: vector(:), vector_read(:)
-       integer  :: labels(DIM), centers(DIM)
-       integer  :: io_stat, filnum
-       real     :: avg_within(DIM), stdev_within(DIM)
-       character(len=2) :: element
-       character(len=6) :: pdbout
-       type(atoms) :: atom
-       type(nanoparticle) :: nano
-       element = 'pt'
-       pdbout = 'PDBout'
-       call nano%new( '../'//'71-4_NP65A.mrc', 0.358, element)
-       call nano%set_atomic_coords('71-4_NP65A_atom_centers.pdb')
-       call nano%set_img('71-4_NP65ACC.mrc', 'img_cc')
-       call atom%new('71-4_NP65A_atom_centers.pdb')
-       call nano%center_on_atom('71-4_NP65A_atom_centers.pdb',pdbout )
+       use simple_nano_utils, only : remove_graphene_peaks
+       real :: A(4,2), sig(4), copyA(4,2)
+       type(image)    :: img_spec, raw_img
+       real :: ave, sdev, maxv, minv
+       real, parameter :: UP_LIM=2.14, L_LIM = 1.42 !1.23
+       real, allocatable :: x(:)
+       integer :: UFlim, LFlim, lims(2), i, j, h, k, sh, cnt, loc(3)
+       integer, parameter :: BOX = 180
+       real :: smpd, thresh, radius, m1(3)
+       integer :: center(3)
+       real, pointer :: rmat(:,:,:)
+       real, allocatable :: rmat_aux(:,:,:)
+       integer, allocatable :: lmsk(:,:,:), lmat(:,:,:)
+       smpd=0.358
+       call img_spec%new([BOX,BOX,1], smpd)
+       call img_spec%read('RotationalAvgStk.mrc',1)
+       call raw_img%new([BOX,BOX,1], 1.)
+       call raw_img%read('NP841_background_nn2.mrcs',1)
+       call remove_graphene_peaks(raw_img,img_spec,'RemovedPeaksUTILS.mrc')
+       call img_spec%kill
+       call raw_img%kill
+       ! call generate_peakmask(img_spec, lmsk)
+       ! call filter_peaks('NP841_background_nn2.mrcs',1,lmsk)
 
+       ! center(1:2) = BOX/2 + 1
+       ! center(3)   = 1
+       ! call img_spec%new([BOX,BOX,1],smpd)
+       ! call img_spec%get_rmat_ptr(rmat)
+       ! UFlim = calc_fourier_index(max(2.*smpd,UP_LIM), BOX,smpd)! Everything at a resolution higher than UP_LIM A is discarded
+       ! lims(1) = UFlim-3
+       ! lims(2) = UFlim+3
+       ! cnt = 0
+       ! do i = 1, BOX
+       !     do j = 1, BOX
+       !         h   = -int(BOX/2) + i - 1
+       !         k   = -int(BOX/2) + j - 1
+       !         sh  =  nint(hyp(real(h),real(k)))
+       !         if(sh < lims(2) .and. sh > lims(1)) then
+       !             cnt = cnt + 1                                !number of pixels in the selected zone
+       !             rmat(i,j,1) = real(cnt)
+       !         else
+       !             rmat(i,j,1) = 0.
+       !         endif
+       !      enddo
+       ! enddo
+       ! print *, 'Nb of pxls in the selected zone: ', cnt
+       ! call img_spec%write('OrigianalImg.mrc')
+       ! ! Find maximum
+       ! loc = maxloc(rmat(1:BOX,1:BOX,:))
+       ! print *, 'location of the maximum :', loc, 'value: ', maxval(rmat(1:BOX,1:BOX,1))
+       ! ! Calculate the radius
+       ! radius = euclid(real(loc), real(center))
+       ! print *, 'Maximum value identified at radius: ', radius
+       ! !  Translate into the origin
+       ! loc = loc - center
+       ! m1(3) = 1
+       ! m1(2) = sin(PI/3.)*loc(2)
+       ! m1(1) = cos(PI/3.)*loc(1)
+       ! print *, 'm1 : ', m1
+       ! ! Come back
+       ! m1(1:2)  = m1(1:2)  + real(center(1:2))
+       ! loc(1:2) = loc(1:2) + center(1:2)
+       ! call img_aux%new([BOX,BOX,1], smpd)
+       ! rmat_aux = img_aux%get_rmat()
+       ! rmat_aux(nint(m1(1)), nint(m1(2)),1) = 20.
+       ! rmat_aux(loc(1), loc(2), 1) = 1.
+       ! call img_aux%set_rmat(rmat_aux)
+       ! call img_aux%write('RotatedPoint.mrc')
+       ! call img_spec%kill
+       ! call img_aux%kill
+       ! ! Do they have the same dist from the origin?
+       ! print *, 'euclid(loc, center):', euclid(real(loc), real(center))
+       ! print *, 'euclid(m1, center):', euclid(m1, real(center))
+       !
+       ! stop
+       ! x = pack(rmat(1:BOX,1:BOX,1), abs(rmat(1:BOX,1:BOX,1)) > 0.) ! pack where it's not 0
+       ! call otsu(x, thresh)
+       ! print *, 'selected threshold : ', thresh
+       ! ! report results on the image
+       ! where(rmat(1:BOX,1:BOX,1)>=thresh)
+       !     rmat(1:BOX,1:BOX,1) = 1.
+       ! elsewhere
+       !     rmat(1:BOX,1:BOX,1) = 0.
+       ! endwhere
+       ! call img_spec%write('BinarizedZoneOtsu.mrc')
+
+
+        ! TRASLATE  INTO SUBROUTINE
+        ! call img_spec%new([BOX,BOX,1],smpd)
+        ! call img_spec%read('RotationalAvgStk.mrc', 1)
+        ! call img_spec%get_rmat_ptr(rmat)
+        ! UFlim = calc_fourier_index(max(2.*smpd,UP_LIM), BOX,smpd)! Everything at a resolution higher than UP_LIM A is discarded
+        ! lims(1) = UFlim-3
+        ! lims(2) = UFlim+3
+        ! cnt = 0
+        ! do i = 1, BOX
+        !     do j = 1, BOX
+        !         h   = -int(BOX/2) + i - 1
+        !         k   = -int(BOX/2) + j - 1
+        !         sh  =  nint(hyp(real(h),real(k)))
+        !         if(sh < lims(2) .and. sh > lims(1)) then
+        !             cnt = cnt + 1                                !number of pixels in the selected zone
+        !         else
+        !             rmat(i,j,1) = 0.
+        !         endif
+        !      enddo
+        ! enddo
+        ! print *, 'Nb of pxls in the selected zone: ', cnt
+        ! call img_spec%write('ROAVGSelectedZone.mrc')
+        ! x = pack(rmat(1:BOX,1:BOX,1), abs(rmat(1:BOX,1:BOX,1)) > 0.) ! pack where it's not 0
+        ! call otsu(x, thresh)
+        ! print *, 'selected threshold : ', thresh
+        ! ! report results on the image
+        ! allocate(lmat(1:BOX,1:BOX), source = .false.)
+        ! where(rmat(1:BOX,1:BOX,1)>=thresh)  lmat = .true.
+        !
+        ! call img_spec%write('ROAVGBinarizedZoneOtsu.mrc')
+        !
+        ! ! Do the same thing for the other band
+        ! deallocate(x)
+        ! call img_spec%read('RotationalAvgStk.mrc', 1) ! reset
+        ! call img_spec%get_rmat_ptr(rmat)
+        ! LFlim = calc_fourier_index(max(2.*smpd,L_LIM), BOX,smpd)! Everything at a resolution higher than UP_LIM A is discarded
+        ! lims(1) = LFlim-3
+        ! lims(2) = LFlim+3
+        ! cnt = 0
+        ! do i = 1, BOX
+        !     do j = 1, BOX
+        !         h   = -int(BOX/2) + i - 1
+        !         k   = -int(BOX/2) + j - 1
+        !         sh  =  nint(hyp(real(h),real(k)))
+        !         if(sh < lims(2) .and. sh > lims(1)) then
+        !             cnt = cnt + 1                                !number of pixels in the selected zone
+        !         else
+        !             rmat(i,j,1) = 0.
+        !         endif
+        !      enddo
+        ! enddo
+        ! print *, 'Nb of pxls in the selected zone: ', cnt
+        ! call img_spec%write('ROAVGSelectedZone2.mrc')
+        ! x = pack(rmat(1:BOX,1:BOX,1), abs(rmat(1:BOX,1:BOX,1)) > 0.) ! pack where it's not 0
+        ! call otsu(x, thresh)
+        ! print *, 'selected threshold : ', thresh
+        ! ! report results on the image
+        ! where(rmat(1:BOX,1:BOX,1)>=thresh)  lmat = .true.
+        !
+        ! call img_spec%write('ROAVGBinarizedZone2Otsu.mrc')
+
+        ! mask merge generation
+
+
+
+        ! call img_spec%stats( ave=ave, sdev=sdev, maxv=maxv, minv=minv)!,mskimg=mask_img)
+        ! call img_spec%binarize(ave+2.5*sdev)
+        ! call img_spec%write('BinarizedBIN.mrc')
+
+
+
+
+       ! SVD tries
+       ! A = reshape([1.,3.,5.,7.,2.,4.,6.,8.], [4,2])
+       ! copyA = A
+       ! print *, 'A'
+       ! call vis_mat(A)
+       ! call svdcmp(A,w,v)
+       ! print *, 'u'
+       ! call vis_mat(A)
+       ! print *, 'w', w
+       ! print *, 'v'
+       ! call vis_mat(v)
+       ! d = A(:,2)
+       ! print *, 'd', d
+       ! t = matmul(d,copyA)
+       ! t1  = minval(t)
+       ! t2  = maxval(t)
+       ! print *, 't', t
+       ! print *, 't1', t1
+       ! print *, 't2', t2
  end program simple_test_chiara_try

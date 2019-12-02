@@ -2108,12 +2108,12 @@ contains
       type(atoms)           :: init_atoms, final_atoms
       type(binimage)        :: img_out
       integer, allocatable  :: imat_cc(:,:,:), imat(:,:,:)
-      real,    allocatable  :: line(:,:), plane(:,:,:),points(:,:), distances_totheplane(:)
-      real,    allocatable  :: radii(:), max_intensity(:), int_intensity(:)
+      real,    allocatable  :: line(:,:), plane(:,:,:),points(:,:), pointsCopy(:,:),distances_totheplane(:)
+      real,    allocatable  :: radii(:), max_intensity(:), int_intensity(:), w(:), v(:,:), d(:)
       integer :: i, j, n, t, s, filnum, io_stat, cnt_intersect, cnt, n_cc
       logical :: flag(self%n_cc)
       real    :: atom1(3), atom2(3), atom3(3), dir_1(3), dir_2(3), vec(3), m(3), dist_plane, dist_line
-      real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator
+      real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator, t1, t2
       call init_atoms%new(pdbfile2)
       n = init_atoms%get_n()
       if(n < 2 .or. n > 3 ) THROW_HARD('Inputted pdb file contains the wrong number of atoms!; geometry_analysis')
@@ -2179,6 +2179,34 @@ contains
                points(:3,cnt) = self%centers(:3,i)-m(:)
            endif
        enddo
+       !!!!!! SVDFIT!!!!!!! TO COMPLETE
+       ! allocate(pointsCopy(3,count(flag)), source = points) ! because svdcmp modifies its input
+       ! allocate(w(3), v(3,3), source = 0.)
+       ! allocate(d(count(flag)), source = 0.)
+       ! call svdcmp(points,w,v)
+       ! print *, 'u'
+       ! ! call vis_mat(points)
+       ! print *, 'w', w
+       ! print *, 'v'
+       ! call vis_mat(v)
+       ! d = A(:,2)
+       ! print *, 'directional vector of the line', d
+
+
+       ! line
+       ! line(1,t) = m(1) + t_vec(t)* d(1)
+       ! line(2,t) = m(2) + t_vec(t)* d(2)
+       ! line(3,t) = m(3) + t_vec(t)* d(3)
+
+       ! t   = matmul(d,copyA)
+       ! t1  = minval(t)
+       ! t2  = maxval(t)
+       ! print *, 't', t
+       ! print *, 't1', t1
+       ! print *, 't2', t2
+
+       stop
+       !!!!!!!!!!!!!!!!!!!!!!
        ! TO FIX
        vec = plane_from_points(points)
        allocate(distances_totheplane(cnt), source = 0.)
