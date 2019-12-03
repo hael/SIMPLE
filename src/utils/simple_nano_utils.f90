@@ -1,11 +1,9 @@
 module simple_nano_utils
   use simple_image,    only : image
   use simple_binimage, only : binimage
-  ! use simple_syslib,   only : get_process_id
   use simple_rnd
   use simple_math
   use simple_defs ! singleton
-  ! use simple_error!,  only: , simple_exception
   implicit none
 
   public :: remove_graphene_peaks
@@ -18,22 +16,27 @@ contains
   subroutine generate_peakmask(img_spec, msk)
     type(image),          intent(inout) :: img_spec
     integer, allocatable, intent(inout) :: msk(:,:,:)
-    integer, parameter :: WIDTH   =2 ! width of the shell for peak identification
-    integer, parameter :: N_LAYERS=2 ! nb of layers to grow
-    real,    parameter :: UP_LIM  =2.14, L_LIM=1.23 ! resolution where to fine peaks (2 bands)
-    real,    pointer   :: rmat(:,:,:)
-    real, allocatable  :: x(:),rmat_aux(:,:,:)
-    real               :: thresh, smpd
-    integer            :: ldim(3),i,j,h,k,sh,nframe,cnt,UFlim,LFlim,lims(2)
-    type(binimage)     :: img_mask, img_mask_roavg
-    nthr_glob=8
+    type(binimage)       :: img_spec_roavg
+    integer, parameter   :: WIDTH   =2 ! width of the shell for peak identification
+    integer, parameter   :: N_LAYERS=1 ! nb of layers to grow
+    real,    pointer     :: rmat(:,:,:)
+    logical, allocatable :: lmsk(:)
+    real, allocatable    :: x(:),rmat_aux(:,:,:)
+    real                 :: thresh, smpd
+    integer              :: ldim(3),i,j,h,k,sh,nframe,cnt,UFlim,LFlim,lims(2),nyq
+    type(binimage)       :: img_mask
+    nthr_glob=8 !! TO REMOVE AFTER TESTING
     if(allocated(msk)) deallocate(msk)
     ldim = img_spec%get_ldim()
+    ldim(3) = 1 ! stack
     smpd = img_spec%get_smpd()
-    call img_spec%get_rmat_ptr(rmat)
+    ! calculate rotational avg of the spectrum
+    call img_spec_roavg%new_bimg(ldim,smpd)
+    call img_spec%roavg(60,img_spec_roavg)
+    call img_spec_roavg%get_rmat_ptr(rmat)
     allocate(rmat_aux(1:ldim(1),1:ldim(2),1), source= 0.)
     rmat_aux(1:ldim(1),1:ldim(2),1)=rmat(1:ldim(1),1:ldim(2),1)
-    UFlim   = calc_fourier_index(max(2.*smpd,UP_LIM),ldim(1),smpd)
+    UFlim   = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND1),ldim(1),smpd)
     lims(1) = UFlim-WIDTH
     lims(2) = UFlim+WIDTH
     cnt = 0
@@ -57,7 +60,7 @@ contains
     ! Do the same thing for the other band
     ! reset
     rmat_aux(:,:,1) = rmat(1:ldim(1),1:ldim(2),1)
-    LFlim   = calc_fourier_index(max(2.*smpd,L_LIM),ldim(1),smpd)
+    LFlim   = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND2),ldim(1),smpd)
     lims(1) = LFlim-WIDTH
     lims(2) = LFlim+WIDTH
     do i = 1, ldim(1)
@@ -75,23 +78,35 @@ contains
     x = pack(rmat_aux, abs(rmat_aux) > 0.) ! pack where it's not 0
     call otsu(x, thresh)
     where(rmat(1:ldim(1),1:ldim(2),1)>=thresh  .and. abs(rmat_aux(:,:,1)) > TINY) msk(:,:,1) = 1
-    ! Debug
     call img_mask%new_bimg(ldim, smpd)
     call img_mask%set_imat(msk)
     call img_mask%update_img_rmat()
-    call img_mask_roavg%new_bimg(ldim,smpd)
-    call img_mask%roavg(60,img_mask_roavg)
-    call img_mask_roavg%get_rmat_ptr(rmat)
+    call img_mask%get_rmat_ptr(rmat)
     where(rmat<TINY)
       rmat(:,:,:) = 0.
     elsewhere
       rmat(:,:,:) = 1.
     endwhere
-    call img_mask_roavg%set_imat()
-    call img_mask_roavg%grow_bins(N_LAYERS)
-    call img_mask_roavg%get_imat(msk)
-    call img_mask_roavg%kill_bimg
+    call img_mask%set_imat()
+    call img_mask%grow_bins(N_LAYERS)
+    call img_mask%get_imat(msk)
+    ! filter results with graphene-bands mask
+    lmsk = calc_graphene_mask( ldim(1), smpd )
+    nyq  = size(lmsk)
+    do i = 1, ldim(1)
+      do j = 1, ldim(2)
+        h   =  i - (ldim(1)/2 + 1)
+        k   =  j - (ldim(1)/2 + 1)
+        sh  =  nint(hyp(real(h),real(k)))
+        if( sh > nyq .or. sh == 0 ) then
+          cycle
+        else
+          if(lmsk(sh)) msk(i,j,1) = 0 ! reset
+        endif
+      enddo
+    enddo
     call img_mask%kill_bimg
+    call img_spec_roavg%kill_bimg
   end subroutine generate_peakmask
 
 
@@ -140,20 +155,18 @@ contains
             rabs = rabs/real(cnt)
           endif
           ang = TWOPI*ran3()
-          cmat(phys(1),phys(2),1) = rabs * cmplx(cos(ang), sin(ang))
+          cmat(phys(1),phys(2),1) = 0.! rabs * cmplx(cos(ang), sin(ang))
         endif
       enddo
     enddo
     call raw_img%ifft()
   end subroutine filter_peaks
 
-  subroutine remove_graphene_peaks(raw_img, spectrum, outfile)
+  subroutine remove_graphene_peaks(raw_img, spectrum)
     type(image), intent(inout) :: raw_img
     type(image), intent(inout) :: spectrum
-    character(len=*), optional, intent(in) :: outfile
     integer, allocatable       :: msk(:,:,:)
     call generate_peakmask(spectrum, msk)
     call filter_peaks(raw_img,msk)
-    if(present(outfile)) call raw_img%write(outfile)
   end subroutine remove_graphene_peaks
 end module simple_nano_utils
