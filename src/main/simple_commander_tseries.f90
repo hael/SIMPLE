@@ -428,9 +428,10 @@ contains
         ! prepare part-dependent parameters
         allocate(part_params(params%nparts))
         do ipart=1,params%nparts
-            call part_params(ipart)%new(3)
+            call part_params(ipart)%new(4)
             call part_params(ipart)%set('xcoord', real2str(boxdata(ipart,1)))
             call part_params(ipart)%set('ycoord', real2str(boxdata(ipart,2)))
+            call part_params(ipart)%set('box',    real2str(boxdata(ipart,3)))
             if( params%nparts > 1 )then
                 call part_params(ipart)%set('fbody', trim(params%fbody)//'_'//int2str_pad(ipart,numlen))
             else

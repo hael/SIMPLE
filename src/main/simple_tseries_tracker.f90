@@ -180,9 +180,6 @@ contains
                 call reference%add(ptcls_saved(i),w=1./real(nrange))
             enddo
             call reference%ifft
-            !!!!!!!!!1
-            ! call reference%write(trim(dir)//'/'//trim(fbody)//'_reference.mrc',cnt4debug)
-            !!!!!!!!!!!!!
             ! center reference for next alignment
             if( l_neg ) call reference%neg
             xyz = center_reference(iframe)
@@ -200,9 +197,6 @@ contains
             call reference%shift(xyz)
             call reference%ifft
             call reference%mask(real(params_glob%box/2)-3.,'soft')
-            !!!!!!!!!1
-            ! call reference%write(trim(dir)//'/'//trim(fbody)//'_reference_shifted.mrc',cnt4debug)
-            !!!!!!!!!!!!!
             call reference%fft
             ! updates shifts
             pos = particle_locations(iframe,:)
@@ -238,7 +232,7 @@ contains
             call ptcl_target%write(stkname, iframe)
             ! neighbors & spectrum
             call update_background_pspec(iframe, [xind,yind])
-            call pspec%add(pspec_nn,w=SPECW)
+            call pspec%add(pspec_nn,w=1./real(nframes))
             call pspec_nn%write(trim(dir)//'/'//trim(fbody)//'_background_pspec.mrc',iframe)
             ! graphene removal, does not work yet
             ! call remove_graphene_peaks(ptcl_target, pspec_nn)
@@ -246,7 +240,6 @@ contains
         end do
         call fclose(funit, errmsg="tseries tracker ; write_tracked_series end")
         ! average and write power spectrum for CTF estimation
-        call pspec%div(SPECW/real(nframes))
         fname_forctf = trim(dir)//'/'//trim(fbody)//'_pspec4ctf_estimation.mrc'
         call pspec%dampen_pspec_central_cross
         call pspec%write(fname_forctf)
@@ -343,7 +336,7 @@ contains
         type(binimage)       :: img, tmp, tmpcc
         real,    pointer     :: rmat(:,:,:), rmat_cc(:,:,:)
         integer, allocatable :: sz(:)
-        real                 :: shift(3), thresh(3)
+        real                 :: shift(3), thresh(3), cen_cc(2), img_cen(2), dist_cc, threshold
         integer              :: loc, ldim
         ldim = params_glob%box
         call img%transfer2bimg(reference)
@@ -362,11 +355,32 @@ contains
         call otsu_robust_fast(tmp,is2d=.true.,noneg=.true.,thresh=thresh)
         ! median filtering again
         call tmp%real_space_filter(3,'median')
-        ! identify biggest connected component
+        ! identify biggest reasonable connected component
+        threshold = min(15., real(ldim)/10.)
+        img_cen   = real(ldim/2+1)
         call tmp%set_imat
         call tmp%find_ccs(tmpcc)
         sz  = tmpcc%size_ccs()
         loc = maxloc(sz,dim=1)
+        call tmpcc%masscen_cc(loc,cen_cc)
+        dist_cc = sqrt(sum((img_cen-cen_cc)**2.))
+        if( dist_cc > threshold )then
+            ! if CC identified is too off centered (artefact)
+            ! we fall back on the second or do nothing
+            if( size(sz) == 1 )then
+                shift = 0.
+                return
+            else
+                sz(loc) = 0
+                loc = maxloc(sz,dim=1)
+                call tmpcc%masscen_cc(loc,cen_cc)
+                dist_cc = sqrt(sum((img_cen-cen_cc)**2.))
+                if( dist_cc > threshold )then
+                    shift = 0.
+                    return
+                endif
+            endif
+        endif
         ! set to zero all the other connected components
         call tmpcc%get_rmat_ptr(rmat_cc)
         where(abs(rmat_cc(1:ldim,1:ldim,1)-loc) < TINY)

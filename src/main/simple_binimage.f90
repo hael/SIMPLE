@@ -38,6 +38,7 @@ type, extends(image) :: binimage
     procedure          :: polish_ccs
     procedure          :: fill_holes
     procedure          :: diameter_cc
+    procedure          :: masscen_cc
     ! BINARY IMAGE METHODS
     procedure          :: diameter_bin
     procedure          :: grow_bins
@@ -138,7 +139,7 @@ contains
         integer, optional, intent(in)    :: i
         if( .not. self%bimat_is_set ) call self%set_imat
         call self%set_rmat(real(self%bimat))
-        call self%write(fname)
+        call self%write(fname,i)
     end subroutine write_bimg
 
     subroutine read_bimg(self, fname, i)
@@ -378,6 +379,24 @@ contains
         diam = 2.*radius
         deallocate(msk, pos, imat_cc)
     end subroutine diameter_cc
+
+    !>  Returns the center of a CC in pixel coordinates
+    subroutine masscen_cc( self, label, xy )
+        class(binimage), intent(inout) :: self
+        integer,         intent(in)    :: label
+        real,            intent(out)   :: xy(2)
+        integer :: i,j,n,pxy(2)
+        xy = 0.
+        n = count(self%bimat(:,:,1) == label)
+        if( n == 0 ) return ! absent
+        pxy = 0
+        do j=1,self%bldim(2)
+            do i=1,self%bldim(1)
+                if( self%bimat(i,j,1) == label ) pxy = pxy+[i,j]
+            enddo
+        enddo
+        xy = real(pxy) / real(n)
+    end subroutine masscen_cc
 
     subroutine diameter_bin( self, diam )
         class(binimage), intent(inout) :: self
