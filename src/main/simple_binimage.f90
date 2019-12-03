@@ -46,7 +46,7 @@ type, extends(image) :: binimage
     procedure          :: border_mask
     procedure          :: cc2bin
     ! MORPHOLOGICAL OPERATIONS
-    procedure          :: dilatate
+    procedure          :: dilate
     procedure          :: erode
     ! DESTRUCT
     procedure          :: kill_bimg
@@ -441,7 +441,7 @@ contains
     ! MORPHOLOGICAL OPERATIONS
 
     ! This subroutine implements the morphological operation dilatation for 2D binary images
-    subroutine dilatate( self )
+    subroutine dilate( self )
         class(binimage), intent(inout) :: self
         type(binimage) :: self_copy
         integer        :: neigh_8_inds(3,8), i, j, k, nsz
@@ -460,7 +460,7 @@ contains
         enddo
         call self_copy%kill_bimg
         call self%update_img_rmat
-    end subroutine dilatate
+    end subroutine dilate
 
     ! This subroutine implements the morphological operation erosion for 2D binary images
     subroutine erode(self, label)
