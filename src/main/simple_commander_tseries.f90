@@ -23,8 +23,6 @@ public :: tseries_track_commander_distr
 public :: tseries_track_commander
 public :: center2D_nano_commander_distr
 public :: cluster2D_nano_commander_hlev
-public :: pspec_int_rank_commander
-public :: estimate_diam_commander
 public :: tseries_ctf_estimate_commander
 public :: refine3D_nano_commander_distr
 private
@@ -66,14 +64,6 @@ type, extends(commander_base) :: cluster2D_nano_commander_hlev
   contains
     procedure :: execute      => exec_cluster2D_nano_hlev
 end type cluster2D_nano_commander_hlev
-type, extends(commander_base) :: pspec_int_rank_commander
-  contains
-    procedure :: execute      => exec_pspec_int_rank
-end type pspec_int_rank_commander
-type, extends(commander_base) :: estimate_diam_commander
-  contains
-    procedure :: execute      => exec_estimate_diam
-end type estimate_diam_commander
 type, extends(commander_base) :: tseries_backgr_subtr_commander
   contains
     procedure :: execute      => exec_tseries_backgr_subtr
@@ -502,13 +492,16 @@ contains
 
     subroutine exec_center2D_nano_distr( self, cline )
         use simple_commander_cluster2D, only: make_cavgs_commander_distr,cluster2D_commander_distr
+        use simple_commander_imgproc,   only: pspec_int_rank_commander
         class(center2D_nano_commander_distr), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
+        class(cmdline),                       intent(inout) :: cline
         ! commanders
         type(cluster2D_commander_distr) :: xcluster2D_distr
+        type(pspec_int_rank_commander)  :: xpspec_rank
         ! other variables
         type(parameters)              :: params
         type(sp_project)              :: spproj
+        type(cmdline)                 :: cline_pspec_rank
         character(len=:), allocatable :: orig_projfile
         character(len=LONGSTRLEN)     :: finalcavgs
         integer  :: nparts, last_iter_stage2
@@ -555,6 +548,14 @@ contains
         call spproj%read( params%projfile )
         call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
         call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
+        ! rank based on maximum of power spectrum
+        call cline_pspec_rank%set('mkdir',   'no')
+        call cline_pspec_rank%set('moldiam', params%moldiam)
+        call cline_pspec_rank%set('nthr',    real(params%nthr))
+        call cline_pspec_rank%set('smpd',    params%smpd)
+        call cline_pspec_rank%set('stk',     finalcavgs)
+        if( cline%defined('lp_backgr') ) call cline_pspec_rank%set('lp_backgr', params%lp_backgr)
+        call xpspec_rank%execute(cline_pspec_rank)
         ! transfer 2D shifts to 3D field
         call spproj%map2Dshifts23D
         call spproj%write
@@ -594,145 +595,6 @@ contains
         call xcluster2D_distr%execute(cline)
         call simple_end('**** SIMPLE_CLUSTER2D_NANO NORMAL STOP ****')
     end subroutine exec_cluster2D_nano_hlev
-
-    subroutine exec_pspec_int_rank( self, cline )
-        use simple_segmentation, only: otsu_robust_fast
-        class(pspec_int_rank_commander), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
-        ! varables
-        type(parameters)     :: params
-        type(image)          :: img, img_pspec, graphene_mask
-        character(len=:), allocatable :: ranked_fname, good_fname, bad_fname
-        real,             allocatable :: peakvals(:), peakvals_copy(:)
-        integer,          allocatable :: order(:)
-        logical,          allocatable :: good_bad_msk(:)
-        integer :: i, cnt_good, cnt_bad
-        real    :: thresh(3), ave, sdev, minv, mskrad
-        if( .not. cline%defined('lp_backgr') ) call cline%set('lp_backgr', 7.)
-        call params%new(cline)
-        mskrad = params%moldiam / params%smpd / 2.
-        ranked_fname = add2fbody(trim(params%stk), '.'//fname2ext(trim(params%stk)), '_ranked')
-        good_fname   = add2fbody(trim(params%stk), '.'//fname2ext(trim(params%stk)), '_high_quality')
-        bad_fname    = add2fbody(trim(params%stk), '.'//fname2ext(trim(params%stk)), '_low_quality')
-        call graphene_mask%pspec_graphene_mask([params%box,params%box,1], params%smpd)
-        call graphene_mask%write('graphene_mask.mrc')
-        call img%new([params%box,params%box,1], params%smpd)
-        call img_pspec%new([params%box,params%box,1], params%smpd)
-        allocate(peakvals(params%nptcls), order(params%nptcls))
-        do i=1,params%nptcls
-            call progress(i,params%nptcls)
-            call img%read(params%stk, i)
-            call img%norm
-            call img%mask(mskrad, 'soft')
-            call img%img2spec('sqrt', params%lp_backgr, img_pspec)
-            call img_pspec%write('pspecs.mrc', i)
-            call img_pspec%mul(graphene_mask)
-            call img_pspec%write('pspecs_graphene_msk.mrc', i)
-            call img_pspec%nlmean
-            call img_pspec%write('pspecs_graphene_msk_nlmean.mrc', i)
-            call img_pspec%stats(ave, sdev, peakvals(i), minv)
-        end do
-        ! write ranked cavgs
-        allocate(peakvals_copy(params%nptcls), source=peakvals)
-        order = (/(i,i=1,params%nptcls)/)
-        call hpsort(peakvals, order)
-        call reverse(order) ! largest first
-        do i=1,params%nptcls
-            call img%read(params%stk, order(i))
-            call img%write(ranked_fname, i)
-        end do
-        ! make an automatic good/bad classification
-        call otsu(peakvals_copy, good_bad_msk)
-        cnt_good = 0
-        cnt_bad  = 0
-        do i=1,params%nptcls
-            call img%read(params%stk, i)
-            if( good_bad_msk(i) )then
-                cnt_good = cnt_good + 1
-                call img%write(good_fname, cnt_good)
-            else
-                cnt_bad = cnt_bad + 1
-                call img%write(bad_fname, cnt_bad)
-            endif
-        end do
-        if( allocated(good_bad_msk) ) deallocate(good_bad_msk)
-        call img%kill
-        call img_pspec%kill
-        call graphene_mask%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_PSPEC_INT_RANK NORMAL STOP ****')
-    end subroutine exec_pspec_int_rank
-
-    subroutine exec_estimate_diam( self, cline )
-        use simple_segmentation, only: otsu_robust_fast
-        class(estimate_diam_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        ! constants
-        character(len=*), parameter :: FILT   = 'nlmean_filtered.mrc'
-        character(len=*), parameter :: BINARY = 'binarised.mrc'
-        ! varables
-        type(parameters)            :: params
-        type(binimage), allocatable :: imgs(:)      ! images
-        type(image)                 :: cc_img       ! connected components image
-        type(stats_struct)          :: diamstats    ! stats struct
-        integer,        allocatable :: ccsizes(:)   ! connected component sizes
-        real,           allocatable :: diams(:)     ! diameters
-        integer :: funit, i, loc(1)
-        real    :: med_diam, thresh(3)
-        if( .not. cline%defined('lp')    ) call cline%set('lp',     5.0)
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir','yes')
-        call params%new(cline)
-        ! allocate & read cavgs
-        allocate(imgs(params%nptcls), diams(params%nptcls))
-        diams = 0.
-        do i=1,params%nptcls
-            call imgs(i)%new_bimg([params%box,params%box,1],  params%smpd)
-            call imgs(i)%read(params%stk, i)
-        end do
-        ! prepare thread safe images in image class
-        call imgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
-        write(logfhandle,'(A)') '>>> ESTIMATING DIAMETERS THROUGH BINARY IMAGE PROCESSING'
-        call fopen(funit, file='diameters_in_Angstroms.txt', status='replace')
-        do i=1,params%nptcls
-            call progress(i,params%nptcls)
-            ! non-local mneans filter for denoising
-            call imgs(i)%NLmean
-            call imgs(i)%write(FILT, i)
-            ! binarise with Otsu
-            call otsu_robust_fast(imgs(i), is2D=.false., noneg=.false., thresh=thresh)
-            call imgs(i)%set_imat ! integer matrix set in binimage instance
-            call imgs(i)%write(BINARY, i)
-            ! estimate diameter
-            call imgs(i)%diameter_bin(diams(i))
-            diams(i) = diams(i) * params%smpd
-            write(funit,'(F6.1)') diams(i)
-        end do
-        call fclose(funit)
-        call calc_stats(diams, diamstats)
-        ! output
-        med_diam = median(diams)
-        write(logfhandle,'(A,F6.1)') '>>> AVG    DIAMETER (IN A): ', diamstats%avg
-        write(logfhandle,'(A,F6.1)') '>>> SDEV   DIAMETER (IN A): ', diamstats%sdev
-        write(logfhandle,'(A,F6.1)') '>>> MEDIAN DIAMETER (IN A): ', med_diam
-        write(logfhandle,'(A,F6.1)') '>>> MAX    DIAMETER (IN A): ', diamstats%maxv
-        write(logfhandle,'(A,F6.1)') '>>> MIN    DIAMETER (IN A): ', diamstats%minv
-        call fopen(funit, file='diameter_stats.txt', status='replace')
-        write(funit,     '(A,F6.1)') '>>> AVG    DIAMETER (IN A): ', diamstats%avg
-        write(funit,     '(A,F6.1)') '>>> SDEV   DIAMETER (IN A): ', diamstats%sdev
-        write(funit,     '(A,F6.1)') '>>> MEDIAN DIAMETER (IN A): ', med_diam
-        write(funit,     '(A,F6.1)') '>>> MAX    DIAMETER (IN A): ', diamstats%maxv
-        write(funit,     '(A,F6.1)') '>>> MIN    DIAMETER (IN A): ', diamstats%minv
-        call fclose(funit)
-        ! destruct
-        do i=1,size(imgs)
-            call imgs(i)%kill
-        end do
-        call cc_img%kill
-        if( allocated(ccsizes) ) deallocate(ccsizes)
-        deallocate(imgs, diams)
-        ! end gracefully
-        call simple_end('**** SIMPLE_ESTIMATE_DIAM NORMAL STOP ****')
-    end subroutine exec_estimate_diam
 
     subroutine exec_tseries_backgr_subtr( self, cline )
         ! for background subtraction in time-series data. The goal is to subtract the two graphene

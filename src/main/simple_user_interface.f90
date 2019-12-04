@@ -1187,12 +1187,12 @@ contains
         &'Simultaneous 2D alignment and clustering of time-series of nanoparticle images',& ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm for time-series of nanoparticle images',& ! descr_long
         &'single_exec',&                                                             ! executable
-        &0, 0, 0, 5, 5, 2, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &0, 1, 0, 5, 5, 2, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        ! <empty>
+        call cluster2D_nano%set_input('parm_ios', 1, moldiam)
         ! alternative inputs
         ! <empty>
         ! search controls

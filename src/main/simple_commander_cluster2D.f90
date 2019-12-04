@@ -1503,7 +1503,7 @@ contains
 
     subroutine exec_cluster2D_autoscale( self, cline )
         use simple_commander_project, only: scale_project_commander_distr, prune_project_commander_distr
-        use simple_commander_imgproc, only: scale_commander
+        use simple_commander_imgproc, only: scale_commander, pspec_int_rank_commander
         class(cluster2D_autoscale_commander_hlev), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         ! constants
@@ -1514,6 +1514,7 @@ contains
         type(prune_project_commander_distr) :: xprune_project
         type(make_cavgs_commander_distr)    :: xmake_cavgs
         type(cluster2D_commander_distr)     :: xcluster2D_distr
+        type(pspec_int_rank_commander)      :: xpspec_rank
         type(rank_cavgs_commander)          :: xrank_cavgs
         type(scale_commander)               :: xscale
         type(scale_project_commander_distr) :: xscale_distr
@@ -1521,7 +1522,8 @@ contains
         type(cmdline) :: cline_cluster2D_stage1
         type(cmdline) :: cline_cluster2D_stage2
         type(cmdline) :: cline_scalerefs, cline_scale1, cline_scale2
-        type(cmdline) :: cline_make_cavgs, cline_rank_cavgs, cline_prune_project
+        type(cmdline) :: cline_make_cavgs, cline_rank_cavgs, cline_pspec_rank
+        type(cmdline) :: cline_prune_project
         ! other variables
         type(parameters)              :: params
         type(sp_project)              :: spproj, spproj_sc
@@ -1531,13 +1533,13 @@ contains
         integer  :: nparts, last_iter_stage1, last_iter_stage2, status
         integer  :: nptcls_sel
         logical  :: scaling
-        if( .not. cline%defined('mkdir') )   call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
-        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15. )
-        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',      8. )
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30. )
-        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30. )
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',      'yes')
+        if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',     15. )
+        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',       8. )
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       30. )
+        if( .not. cline%defined('maxits')    ) call cline%set('maxits',      30. )
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
         call cline%delete('clip')
         ! master parameters
         call params%new(cline)
@@ -1708,11 +1710,23 @@ contains
         call spproj%write_segment_inside('out')
         call spproj%kill()
         ! ranking
-        finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//params%ext
-        call cline_rank_cavgs%set('projfile', trim(params%projfile))
-        call cline_rank_cavgs%set('stk',      trim(finalcavgs))
-        call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
-        call xrank_cavgs%execute( cline_rank_cavgs )
+        if( trim(params%tseries).eq.'yes' )then
+            ! rank based on maximum of power spectrum
+            call cline_pspec_rank%set('mkdir',   'no')
+            call cline_pspec_rank%set('moldiam', params%moldiam)
+            call cline_pspec_rank%set('nthr',    real(params%nthr))
+            call cline_pspec_rank%set('smpd',    params%smpd)
+            call cline_pspec_rank%set('stk',     finalcavgs)
+            if( cline%defined('lp_backgr') ) call cline_pspec_rank%set('lp_backgr', params%lp_backgr)
+            call xpspec_rank%execute(cline_pspec_rank)
+        else
+            ! rank baseed on gold-standard resolution estimates
+            finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//params%ext
+            call cline_rank_cavgs%set('projfile', trim(params%projfile))
+            call cline_rank_cavgs%set('stk',      trim(finalcavgs))
+            call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
+            call xrank_cavgs%execute( cline_rank_cavgs )
+        endif
         ! cleanup
         call del_file('start2Drefs'//params%ext)
         ! end gracefully
