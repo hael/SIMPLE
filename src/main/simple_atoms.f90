@@ -580,13 +580,13 @@ contains
       character(len=*), intent(in)    :: pdbfile   ! all the atomic positions
       character(len=2)     :: element
       type(atoms)          :: init_atoms, final_atoms
-      real,    allocatable :: line(:,:), plane(:,:,:),points(:,:), distances_totheplane(:)
-      real,    allocatable :: radii(:)
+      real,    allocatable :: radii(:),line(:,:), plane(:,:,:),points(:,:), distances_totheplane(:), distances_totheline(:)
+      real,    allocatable :: w(:),v(:,:),d(:),pointsTrans(:,:)
       logical, allocatable :: flag(:) ! flags the atoms belonging to the plane/column
       integer, parameter   :: N_DISCRET = 500
       integer :: i, j, n, n_tot, t, s, filnum, io_stat, cnt_intersect, cnt, n_cc
       real    :: atom1(3), atom2(3), atom3(3), dir_1(3), dir_2(3), vec(3), m(3), dist_plane, dist_line
-      real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator
+      real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator, centroid(3), prod(3)
       call init_atoms%new(pdbfile)
       n = init_atoms%get_n()
       if(n < 2 .or. n > 3 ) THROW_HARD('Inputted pdb file contains the wrong number of atoms!; geometry_analysis_pdb')
@@ -633,24 +633,57 @@ contains
        enddo
        call final_atoms%writePDB('AtomColumn')
        call final_atoms%kill
-       ! Find the plane that best fits the atoms belonging to the line
+       ! Find the line that best fits the atoms
        allocate(points(3,count(flag)), source = 0.)
-       ! calculate center of mass of the points
-       m = sum(self%xyz(:,:), dim=1) /real(self%n)
        cnt = 0
-       do i = 1, n_tot
-           if(flag(i)) then
-               cnt = cnt + 1
-               points(:3,cnt) = self%xyz(i,:3)-m(:)
-           endif
+       do i = 1,n_tot
+         if(flag(i)) then
+           cnt = cnt + 1
+           points(:3,cnt) = self%xyz(i,:3)
+         endif
        enddo
-       ! TO FIX
-       vec = plane_from_points(points)
-       allocate(distances_totheplane(cnt), source = 0.)
+       ! calculate centroid of the points
+       centroid = sum(points(:,:), dim = 2)/real(count(flag))
+       ! svd fit
+       allocate(pointsTrans(count(flag),3), source = 0.) ! because svdcmp modifies its input
+       ! translate
+       do i = 1, count(flag)
+         pointsTrans(i,:3) = points(:3,i) - centroid(:3)
+       enddo
+       allocate(w(3), v(3,3), source = 0.)
+       allocate(d(3), source = 0.)
+       call svdcmp(pointsTrans,w,v)
+       d = v(:,1)
+       print *, 'Directional vector of the line', d
+       ! line
+       ! line(1,t) = centroid(1) + t_vec(t)* d(1)
+       ! line(2,t) = centroid(2) + t_vec(t)* d(2)
+       ! line(3,t) = centroid(3) + t_vec(t)* d(3)
+       ! calculate the distance to the points from the identified line
+       allocate(distances_totheline(cnt), source = 0.)
        allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
-       cnt = 0
-       denominator = sqrt(vec(1)*2+vec(2)*2+1.)
-       write(logfhandle,*) 'Directional vector: [', -1., ',', -1., ',', -vec(1)-vec(2), ']'
+       denominator = sqrt(d(1)**2+d(2)**2+d(3)**2)
+       m = sum(self%xyz(:,:), dim=1) /real(self%n)
+       cnt = count(flag)
+       do i = 1, cnt
+         vec  = centroid(:3)-points(:3,i)
+         prod = cross(vec,d)
+         distances_totheline(i) = sqrt(prod(1)**2+prod(2)**2+prod(3)**2)/denominator
+         radii(i) = euclid(points(:,i), m)
+       enddo
+       ! it's already in A
+       call fopen(filnum, file='Radii.csv', iostat=io_stat)
+       write (filnum,*) 'r'
+       do i = 1, cnt
+         write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
+       end do
+       call fclose(filnum)
+       call fopen(filnum, file='DistancesToTheLine.csv',iostat=io_stat)
+       write (filnum,*) 'd'
+       do i = 1, cnt
+         write (filnum,'(A)', advance='yes') trim(real2str(distances_totheline(i)))
+       end do
+       call fclose(filnum)
       elseif(n == 3) then
         write(logfhandle,*)'PLANE IDENTIFICATION, INITIATION'
         atom1(:) = init_atoms%get_coord(1)
@@ -721,6 +754,16 @@ contains
       call init_atoms%kill
       if(allocated(line))  deallocate(line)
       if(allocated(plane)) deallocate(plane)
+    contains
+
+      ! Compute the cross product of 2 3D real vectors
+      function cross(a, b) result(c)
+          real, intent(in) :: a(3),b(3)
+          real :: c(3)
+          c(1) = a(2) * b(3) - a(3) * b(2)
+          c(2) = a(3) * b(1) - a(1) * b(3)
+          c(3) = a(1) * b(2) - a(2) * b(1)
+      end function cross
     end subroutine geometry_analysis_pdb
 
     ! MODIFIERS

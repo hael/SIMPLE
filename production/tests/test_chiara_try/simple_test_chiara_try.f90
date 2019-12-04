@@ -457,18 +457,22 @@ end module simple_test_chiara_try_mod
        real, pointer :: rmat(:,:,:)
        real, allocatable :: rmat_aux(:,:,:)
        integer, allocatable :: lmsk(:,:,:), lmat(:,:,:)
-       smpd=0.358
-       call img_spec%new([BOX,BOX,1], smpd)
-       call raw_img%new([BOX,BOX,1], 1.)
-       do i = 1, 1000
-           call progress(i,1000)
-           call img_spec%read('NP_4_background_pspec.mrc',i)
-           call raw_img%read('NP_4.mrc',i)
-           call remove_graphene_peaks(raw_img,img_spec)
-           call raw_img%write('RemovedPeaksNOroavgMASKED.mrc',i)
-       enddo
-       call img_spec%kill
-       call raw_img%kill
+       real :: M0M1(3), s(3)
+       M0M1 = [3.,-1.,-4.]
+       s = [2.,1.,2.]
+       print *, 'prod: ', dot_product(M0M1, s)
+       ! smpd=0.358
+       ! call img_spec%new([BOX,BOX,1], smpd)
+       ! call raw_img%new([BOX,BOX,1], 1.)
+       ! do i = 1, 1000
+       !     call progress(i,1000)
+       !     call img_spec%read('NP_4_background_pspec.mrc',i)
+       !     call raw_img%read('NP_4.mrc',i)
+       !     call remove_graphene_peaks(raw_img,img_spec)
+       !     call raw_img%write('RemovedPeaksNOroavgMASKED.mrc',i)
+       ! enddo
+       ! call img_spec%kill
+       ! call raw_img%kill
 
 
        ! center(1:2) = BOX/2 + 1

@@ -1687,7 +1687,7 @@ contains
         &1, 2, 2, 0, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call geometry_analysis%set_input('img_ios', 1, 'pdbfile2', 'file', 'PDB', 'Input coordinates file in PDB format of the selected atoms', 'Input coordinates file', .true., '')
+        call geometry_analysis%set_input('img_ios', 1, 'pdbfile2', 'file', 'PDB', 'Input coordinates file in PDB format of the selected atoms', 'Input coordinates file, 2 or 3 selected atoms', .true., '')
         ! parameter input/output
         call geometry_analysis%set_input('parm_ios', 1, smpd)
         call geometry_analysis%set_input('parm_ios', 2, 'outvol', 'file', 'Name of image file', 'Name of image file', 'xxx.mrc file', .false. ,'')

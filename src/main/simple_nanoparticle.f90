@@ -2108,12 +2108,12 @@ contains
       type(atoms)           :: init_atoms, final_atoms
       type(binimage)        :: img_out
       integer, allocatable  :: imat_cc(:,:,:), imat(:,:,:)
-      real,    allocatable  :: line(:,:), plane(:,:,:),points(:,:), pointsCopy(:,:),distances_totheplane(:)
-      real,    allocatable  :: radii(:), max_intensity(:), int_intensity(:), w(:), v(:,:), d(:)
+      real,    allocatable  :: line(:,:), plane(:,:,:),points(:,:),distances_totheplane(:),pointsTrans(:,:)
+      real,    allocatable  :: radii(:),max_intensity(:),int_intensity(:),w(:),v(:,:),d(:),distances_totheline(:)
       integer :: i, j, n, t, s, filnum, io_stat, cnt_intersect, cnt, n_cc
       logical :: flag(self%n_cc)
       real    :: atom1(3), atom2(3), atom3(3), dir_1(3), dir_2(3), vec(3), m(3), dist_plane, dist_line
-      real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator, t1, t2
+      real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator, prod(3), centroid(3)
       call init_atoms%new(pdbfile2)
       n = init_atoms%get_n()
       if(n < 2 .or. n > 3 ) THROW_HARD('Inputted pdb file contains the wrong number of atoms!; geometry_analysis')
@@ -2127,330 +2127,324 @@ contains
       allocate(imat(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
       flag(:) = .false.  ! initialization
       if(n == 2) then
-        write(logfhandle,*)'COLUMN IDENTIFICATION, INITIATION'
-        allocate(line(3, N_DISCRET), source = 0.)
-        atom1(:) = init_atoms%get_coord(1)/self%smpd + 1.
-        atom2(:) = init_atoms%get_coord(2)/self%smpd + 1.
-        dir_1 = atom1-atom2
-        do t = 1, N_DISCRET
-          line(1,t) = atom1(1) + t_vec(t)* dir_1(1)
-          line(2,t) = atom1(2) + t_vec(t)* dir_1(2)
-          line(3,t) = atom1(3) + t_vec(t)* dir_1(3)
-        enddo
-        ! calculate how many atoms does the line intersect and flag them
-        do i = 1, self%n_cc
+          write(logfhandle,*)'COLUMN IDENTIFICATION, INITIATION'
+          allocate(line(3, N_DISCRET), source = 0.)
+          atom1(:) = init_atoms%get_coord(1)/self%smpd + 1.
+          atom2(:) = init_atoms%get_coord(2)/self%smpd + 1.
+          dir_1 = atom1-atom2
+          do t = 1, N_DISCRET
+            line(1,t) = atom1(1) + t_vec(t)* dir_1(1)
+            line(2,t) = atom1(2) + t_vec(t)* dir_1(2)
+            line(3,t) = atom1(3) + t_vec(t)* dir_1(3)
+          enddo
+          ! calculate how many atoms does the line intersect and flag them
+          do i = 1, self%n_cc
             do t = 1, N_DISCRET
               dist_line = euclid(self%centers(:3,i),line(:3,t))
               if(dist_line*self%smpd <= 0.9*self%theoretical_radius) then ! it intersects atoms i
-                   flag(i) = .true. !flags also itself
-               endif
+                flag(i) = .true. !flags also itself
+              endif
             enddo
-        enddo
-        write(logfhandle, *) 'generating volumes for visualization'
-       ! generate volume for visualisation
-       imat          = 0
-       cnt_intersect = 0
-       call img_out%new_bimg(self%ldim, self%smpd)
-       call final_atoms%new(count(flag), dummy=.true.)
-       do i = 1, self%n_cc
-           if(flag(i)) then
-               cnt_intersect = cnt_intersect + 1
-               call final_atoms%set_name(cnt_intersect,self%atom_name)
-               call final_atoms%set_element(cnt_intersect,self%element)
-               call final_atoms%set_coord(cnt_intersect,(self%centers(:,i)-1.)*self%smpd)
-               where(imat_cc == i) imat = 1
-           endif
-       enddo
-       call img_out%set_imat(imat)
-       if(present(outfile)) then
-           call img_out%write_bimg(outfile)
-       else
-         call img_out%write_bimg('ImageColumn.mrc')
-       endif
-       call final_atoms%writePDB('AtomColumn')
-       call final_atoms%kill
-       ! Find the plane that best fits the atoms belonging to the line
-       allocate(points(3, count(flag)), source = 0.)
-       m = self%nanopart_masscen()
-       cnt = 0
-       do i = 1, self%n_cc
-           if(flag(i)) then
-               cnt = cnt + 1
-               points(:3,cnt) = self%centers(:3,i)-m(:)
-           endif
-       enddo
-       !!!!!! SVDFIT!!!!!!! TO COMPLETE
-       ! allocate(pointsCopy(3,count(flag)), source = points) ! because svdcmp modifies its input
-       ! allocate(w(3), v(3,3), source = 0.)
-       ! allocate(d(count(flag)), source = 0.)
-       ! call svdcmp(points,w,v)
-       ! print *, 'u'
-       ! ! call vis_mat(points)
-       ! print *, 'w', w
-       ! print *, 'v'
-       ! call vis_mat(v)
-       ! d = A(:,2)
-       ! print *, 'directional vector of the line', d
-
-
-       ! line
-       ! line(1,t) = m(1) + t_vec(t)* d(1)
-       ! line(2,t) = m(2) + t_vec(t)* d(2)
-       ! line(3,t) = m(3) + t_vec(t)* d(3)
-
-       ! t   = matmul(d,copyA)
-       ! t1  = minval(t)
-       ! t2  = maxval(t)
-       ! print *, 't', t
-       ! print *, 't1', t1
-       ! print *, 't2', t2
-
-       stop
-       !!!!!!!!!!!!!!!!!!!!!!
-       ! TO FIX
-       vec = plane_from_points(points)
-       allocate(distances_totheplane(cnt), source = 0.)
-       allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
-       cnt = 0
-       denominator = sqrt(vec(1)*2+vec(2)*2+1.)
-       write(logfhandle,*) 'Directional vector: [', -1., ',', -1., ',', -vec(1)-vec(2), ']'
-       ! Read ratios, ang_var, dists, max_intensity
-       if(.not. allocated(self%ratios)) allocate(self%ratios(self%n_cc))
-       call fopen(filnum, file='../'//'Ar.csv', iostat=io_stat)
-       if( io_stat .ne. 0 ) then
-         THROW_HARD('Unable to read file Ar.csv Did you run cluster_analysis?; geometry_analysis')
-       endif
-       read(filnum,*) ! first line is variable name
-       do i = 1, self%n_cc
-         read(filnum,*) self%ratios(i)
-       enddo
-       call fclose(filnum)
-       if(.not. allocated(self%ang_var)) allocate(self%ang_var(self%n_cc))
-       call fopen(filnum, file='../'//'Ang.csv', iostat=io_stat)
-       if( io_stat .ne. 0 ) then
-         THROW_HARD('Unable to read file Ang.csv Did you run cluster_analysis?; geometry_analysis')
-       endif
-       read(filnum,*)
-       do i = 1, self%n_cc
-         read(filnum,*) self%ang_var(i)
-       enddo
-       call fclose(filnum)
-       if(.not. allocated(self%dists)) allocate(self%dists(self%n_cc))
-       call fopen(filnum, file='../'//'Dist.csv', iostat=io_stat)
-       if( io_stat .ne. 0 ) then
-         THROW_HARD('Unable to read file Dist.csv Did you run cluster_analysis?; geometry_analysis')
-       endif
-       read(filnum,*)
-       do i = 1, self%n_cc
-         read(filnum,*) self%dists(i)
-       enddo
-       call fclose(filnum)
-       allocate(max_intensity(self%n_cc))
-       call fopen(filnum, file='../'//'MaxIntensity.csv', iostat=io_stat)
-       if( io_stat .ne. 0 ) then
-         THROW_HARD('Unable to read file MaxIntensity.csv Did you run radial_dependent_stats?; geometry_analysis')
-       endif
-       read(filnum,*)
-       do i = 1, self%n_cc
-         read(filnum,*) max_intensity(i)
-       enddo
-       call fclose(filnum)
-       allocate(int_intensity(self%n_cc))
-       call fopen(filnum, file='../'//'IntIntensity.csv', iostat=io_stat)
-       if( io_stat .ne. 0 ) then
-         THROW_HARD('Unable to read file IntIntensity.csv Did you run radial_dependent_stats?; geometry_analysis')
-       endif
-       read(filnum,*)
-       do i = 1, self%n_cc
-         read(filnum,*) int_intensity(i)
-       enddo
-       call fclose(filnum)
-       ! Output on Excel file all the stats on the atoms belonging to the plane
-       cnt = 0
-       call fopen(filnum, file='AtomColumnInfo.xls',iostat=io_stat)
-       write (filnum,*) '        Atom #    ','   Ar        ','       Dist     ','         Ang     ','         MaxInt     ', '          IntInt     '
-       do i = 1, self%n_cc
-         if(flag(i)) then
-           cnt = cnt + 1
-             write (filnum,*) i, '   ', self%ratios(i), self%dists(i), self%ang_var(i), max_intensity(i), int_intensity(i)
-         endif
-       end do
-       call fclose(filnum)
-       ! do i = 1, self%n_cc
-       !     if(flag(i)) then
-       !         cnt = cnt + 1
-       !         ! formula for distance of a point to a plane
-       !         distances_totheplane(cnt) = abs(vec(1)*points(1,cnt)+vec(2)*points(2,cnt)-points(3,cnt)+vec(3))/denominator
-       !         radii(cnt) = euclid(self%centers(:,i), m)*self%smpd
-       !     endif
-       ! enddo
-       ! distances_totheplane = (distances_totheplane)*self%smpd
-       ! call fopen(filnum, file='Radii.csv', iostat=io_stat)
-       ! write (filnum,*) 'r'
-       ! do i = 1, cnt
-       !     write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
-       ! end do
-       ! call fclose(filnum)
-       ! call fopen(filnum, file='DistancesToThePlane.csv',iostat=io_stat)
-       ! write (filnum,*) 'd'
-       ! do i = 1, cnt
-       !     write (filnum,'(A)', advance='yes') trim(real2str(distances_totheplane(i)))
-       ! end do
-       ! call fclose(filnum)
+          enddo
+          write(logfhandle, *) 'generating volumes for visualization'
+          ! generate volume for visualisation
+          imat          = 0
+          cnt_intersect = 0
+          call img_out%new_bimg(self%ldim, self%smpd)
+          call final_atoms%new(count(flag), dummy=.true.)
+          do i = 1, self%n_cc
+            if(flag(i)) then
+              cnt_intersect = cnt_intersect + 1
+              call final_atoms%set_name(cnt_intersect,self%atom_name)
+              call final_atoms%set_element(cnt_intersect,self%element)
+              call final_atoms%set_coord(cnt_intersect,(self%centers(:,i)-1.)*self%smpd)
+              where(imat_cc == i) imat = 1
+            endif
+          enddo
+          call img_out%set_imat(imat)
+          if(present(outfile)) then
+            call img_out%write_bimg(outfile)
+          else
+            call img_out%write_bimg('ImageColumn.mrc')
+          endif
+          call final_atoms%writePDB('AtomColumn')
+          call final_atoms%kill
+          ! Find the line that best fits the atoms
+          allocate(points(3,count(flag)), source = 0.)
+          cnt = 0
+          do i = 1, self%n_cc
+            if(flag(i)) then
+              cnt = cnt + 1
+              points(:3,cnt) = self%centers(:3,i)
+            endif
+          enddo
+          ! svd fit
+          allocate(pointsTrans(count(flag),3), source = 0.) ! because svdcmp modifies its input
+          ! translate
+          centroid = sum(points, dim = 2)/real(count(flag)) ! it belongs to the line
+          do i = 1, count(flag)
+            pointsTrans(i,:3) = points(:3,i) - centroid(:3)
+          enddo
+          allocate(w(3), v(3,3), source = 0.)
+          allocate(d(3), source = 0.)
+          call svdcmp(pointsTrans,w,v)
+          d = v(:,1)
+          print *, 'Directional vector of the line', d
+          ! line
+          ! line(1,t) = centroid(1) + t_vec(t)* d(1)
+          ! line(2,t) = centroid(2) + t_vec(t)* d(2)
+          ! line(3,t) = centroid(3) + t_vec(t)* d(3)
+          ! calculate the distance to the points from the identified line
+          allocate(distances_totheline(cnt), source = 0.)
+          allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
+          denominator = sqrt(d(1)**2+d(2)**2+d(3)**2)
+          m = self%nanopart_masscen()
+          cnt = count(flag)
+          do i = 1, cnt
+            vec  = centroid(:3)-points(:3,i)
+            prod = cross(vec,d)
+            distances_totheline(i) = sqrt(prod(1)**2+prod(2)**2+prod(3)**2)/denominator
+            radii(i) = euclid(points(:,i), m)*self%smpd
+          enddo
+          distances_totheline = distances_totheline*self%smpd ! go to A
+          call fopen(filnum, file='Radii.csv', iostat=io_stat)
+          write (filnum,*) 'r'
+          do i = 1, cnt
+            write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
+          end do
+          call fclose(filnum)
+          call fopen(filnum, file='DistancesToTheLine.csv',iostat=io_stat)
+          write (filnum,*) 'd'
+          do i = 1, cnt
+            write (filnum,'(A)', advance='yes') trim(real2str(distances_totheline(i)))
+          end do
+          call fclose(filnum)
+          ! Read ratios, ang_var, dists, max_intensity
+          if(.not. allocated(self%ratios)) allocate(self%ratios(self%n_cc))
+          call fopen(filnum, file='../'//'Ar.csv', iostat=io_stat)
+          if( io_stat .ne. 0 ) then
+            THROW_HARD('Unable to read file Ar.csv Did you run cluster_analysis?; geometry_analysis')
+          endif
+          read(filnum,*) ! first line is variable name
+          do i = 1, self%n_cc
+            read(filnum,*) self%ratios(i)
+          enddo
+          call fclose(filnum)
+          if(.not. allocated(self%ang_var)) allocate(self%ang_var(self%n_cc))
+          call fopen(filnum, file='../'//'Ang.csv', iostat=io_stat)
+          if( io_stat .ne. 0 ) then
+            THROW_HARD('Unable to read file Ang.csv Did you run cluster_analysis?; geometry_analysis')
+          endif
+          read(filnum,*)
+          do i = 1, self%n_cc
+            read(filnum,*) self%ang_var(i)
+          enddo
+          call fclose(filnum)
+          if(.not. allocated(self%dists)) allocate(self%dists(self%n_cc))
+          call fopen(filnum, file='../'//'Dist.csv', iostat=io_stat)
+          if( io_stat .ne. 0 ) then
+            THROW_HARD('Unable to read file Dist.csv Did you run cluster_analysis?; geometry_analysis')
+          endif
+          read(filnum,*)
+          do i = 1, self%n_cc
+            read(filnum,*) self%dists(i)
+          enddo
+          call fclose(filnum)
+          allocate(max_intensity(self%n_cc))
+          call fopen(filnum, file='../'//'MaxIntensity.csv', iostat=io_stat)
+          if( io_stat .ne. 0 ) then
+            THROW_HARD('Unable to read file MaxIntensity.csv Did you run radial_dependent_stats?; geometry_analysis')
+          endif
+          read(filnum,*)
+          do i = 1, self%n_cc
+            read(filnum,*) max_intensity(i)
+          enddo
+          call fclose(filnum)
+          allocate(int_intensity(self%n_cc))
+          call fopen(filnum, file='../'//'IntIntensity.csv', iostat=io_stat)
+          if( io_stat .ne. 0 ) then
+            THROW_HARD('Unable to read file IntIntensity.csv Did you run radial_dependent_stats?; geometry_analysis')
+          endif
+          read(filnum,*)
+          do i = 1, self%n_cc
+            read(filnum,*) int_intensity(i)
+          enddo
+          call fclose(filnum)
+          ! Output on Excel file all the stats on the atoms belonging to the plane
+          cnt = 0
+          call fopen(filnum, file='AtomColumnInfo.txt',iostat=io_stat)
+          write (filnum,*) '        Atom #    ','   Ar        ','       Dist     ','         Ang     ','         MaxInt     ', '       IntInt     '
+          do i = 1, self%n_cc
+            if(flag(i)) then
+              cnt = cnt + 1
+              write (filnum,*) i, '   ', self%ratios(i), self%dists(i), self%ang_var(i), max_intensity(i), int_intensity(i)
+            endif
+          end do
+          call fclose(filnum)
       elseif(n == 3) then
-        write(logfhandle,*)'PLANE IDENTIFICATION, INITIATION'
-        atom1(:) = init_atoms%get_coord(1)/self%smpd + 1.
-        atom2(:) = init_atoms%get_coord(2)/self%smpd + 1.
-        atom3(:) = init_atoms%get_coord(3)/self%smpd + 1.
-        dir_1 = atom1-atom2
-        dir_2 = atom1-atom3
-        allocate(plane(3, N_DISCRET, N_DISCRET), source = 0.)
-        do t = 1, N_DISCRET
+          write(logfhandle,*)'PLANE IDENTIFICATION, INITIATION'
+          atom1(:) = init_atoms%get_coord(1)/self%smpd + 1.
+          atom2(:) = init_atoms%get_coord(2)/self%smpd + 1.
+          atom3(:) = init_atoms%get_coord(3)/self%smpd + 1.
+          dir_1 = atom1-atom2
+          dir_2 = atom1-atom3
+          allocate(plane(3, N_DISCRET, N_DISCRET), source = 0.)
+          do t = 1, N_DISCRET
             do s = 1, N_DISCRET
-                plane(1,t,s) = atom1(1) + t_vec(t)* dir_1(1) + s_vec(s)* dir_2(1)
-                plane(2,t,s) = atom1(2) + t_vec(t)* dir_1(2) + s_vec(s)* dir_2(2)
-                plane(3,t,s) = atom1(3) + t_vec(t)* dir_1(3) + s_vec(s)* dir_2(3)
+              plane(1,t,s) = atom1(1) + t_vec(t)* dir_1(1) + s_vec(s)* dir_2(1)
+              plane(2,t,s) = atom1(2) + t_vec(t)* dir_1(2) + s_vec(s)* dir_2(2)
+              plane(3,t,s) = atom1(3) + t_vec(t)* dir_1(3) + s_vec(s)* dir_2(3)
             enddo
-        enddo
-        ! calculate how many atoms does the plane intersect and flag them
-        do i = 1, self%n_cc
+          enddo
+          ! calculate how many atoms does the plane intersect and flag them
+          do i = 1, self%n_cc
             do t = 1, N_DISCRET
               do s = 1, N_DISCRET
                 dist_plane = euclid(self%centers(:3,i),plane(:3,t,s))
                 if(dist_plane*self%smpd <= 0.9*self%theoretical_radius) then ! it intersects atoms i
-                     flag(i) = .true. !flags also itself
-                 endif
+                  flag(i) = .true. !flags also itself
+                endif
               enddo
             enddo
-        enddo
-        write(logfhandle, *) 'generating volumes for visualization'
-        ! generate volume for visualisation
-        ! reset
-        imat    = 0
-        cnt_intersect = 0
-        call img_out%new_bimg(self%ldim, self%smpd)
-        call final_atoms%new(count(flag), dummy=.true.)
-        do i = 1, self%n_cc
+          enddo
+          write(logfhandle, *) 'generating volumes for visualization'
+          ! generate volume for visualisation
+          ! reset
+          imat    = 0
+          cnt_intersect = 0
+          call img_out%new_bimg(self%ldim, self%smpd)
+          call final_atoms%new(count(flag), dummy=.true.)
+          do i = 1, self%n_cc
             if(flag(i)) then
-                cnt_intersect = cnt_intersect + 1
-                call final_atoms%set_name(cnt_intersect,self%atom_name)
-                call final_atoms%set_element(cnt_intersect,self%element)
-                call final_atoms%set_coord(cnt_intersect,(self%centers(:,i)-1.)*self%smpd)
-                where(imat_cc == i) imat = 1
+              cnt_intersect = cnt_intersect + 1
+              call final_atoms%set_name(cnt_intersect,self%atom_name)
+              call final_atoms%set_element(cnt_intersect,self%element)
+              call final_atoms%set_coord(cnt_intersect,(self%centers(:,i)-1.)*self%smpd)
+              where(imat_cc == i) imat = 1
             endif
-        enddo
-        call img_out%set_imat(imat)
-        if(present(outfile)) then
+          enddo
+          call img_out%set_imat(imat)
+          if(present(outfile)) then
             call img_out%write_bimg(outfile)
-        else
-          call img_out%write_bimg('ImagePlane.mrc')
-        endif
-        call final_atoms%writePDB('AtomPlane')
-        call final_atoms%kill
-        allocate(points(3, count(flag)), source = 0.)
-        m = self%nanopart_masscen()
-        cnt = 0
-        do i = 1, self%n_cc
-            if(flag(i)) then
-                cnt = cnt + 1
-                points(:3,cnt) = self%centers(:3,i)-m(:)
-            endif
-        enddo
-        vec = plane_from_points(points)
-        allocate(distances_totheplane(cnt), source = 0.)
-        allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
-        cnt = 0
-        denominator = sqrt(vec(1)**2+vec(2)**2+1.)
-        write(logfhandle,*) 'Normal vector: [', vec(1), ',', vec(2), ',', -1., ']'
-        do i = 1, self%n_cc
-            if(flag(i)) then
-                cnt = cnt + 1
-                ! formula for distance of a point to a plane
-                distances_totheplane(cnt) = abs(vec(1)*points(1,cnt)+vec(2)*points(2,cnt)-points(3,cnt)+vec(3))/denominator
-                radii(cnt) = euclid(self%centers(:,i), m)*self%smpd
-            endif
-        enddo
-        distances_totheplane = (distances_totheplane)*self%smpd
-        call fopen(filnum, file='Radii.csv', iostat=io_stat)
-        write (filnum,*) 'r'
-        do i = 1, cnt
-            write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
-        end do
-        call fclose(filnum)
-        call fopen(filnum, file='DistancesToThePlane.csv',iostat=io_stat)
-        write (filnum,*) 'd'
-        do i = 1, cnt
-            write (filnum,'(A)', advance='yes') trim(real2str(distances_totheplane(i)))
-        end do
-        call fclose(filnum)
-        ! Read ratios, ang_var, dists, max_intensity
-        if(.not. allocated(self%ratios)) allocate(self%ratios(self%n_cc))
-        call fopen(filnum, file='../'//'Ar.csv', iostat=io_stat)
-        if( io_stat .ne. 0 ) then
-          THROW_HARD('Unable to read file Ar.csv Did you run cluster_analysis?; geometry_analysis')
-        endif
-        read(filnum,*) ! first line is variable name
-        do i = 1, self%n_cc
-          read(filnum,*) self%ratios(i)
-        enddo
-        call fclose(filnum)
-        if(.not. allocated(self%ang_var)) allocate(self%ang_var(self%n_cc))
-        call fopen(filnum, file='../'//'Ang.csv', iostat=io_stat)
-        if( io_stat .ne. 0 ) then
-          THROW_HARD('Unable to read file Ang.csv Did you run cluster_analysis?; geometry_analysis')
-        endif
-        read(filnum,*)
-        do i = 1, self%n_cc
-          read(filnum,*) self%ang_var(i)
-        enddo
-        call fclose(filnum)
-        if(.not. allocated(self%dists)) allocate(self%dists(self%n_cc))
-        call fopen(filnum, file='../'//'Dist.csv', iostat=io_stat)
-        if( io_stat .ne. 0 ) then
-          THROW_HARD('Unable to read file Dist.csv Did you run cluster_analysis?; geometry_analysis')
-        endif
-        read(filnum,*)
-        do i = 1, self%n_cc
-          read(filnum,*) self%dists(i)
-        enddo
-        call fclose(filnum)
-        allocate(max_intensity(self%n_cc))
-        call fopen(filnum, file='../'//'MaxIntensity.csv', iostat=io_stat)
-        if( io_stat .ne. 0 ) then
-          THROW_HARD('Unable to read file MaxIntensity.csv Did you run radial_dependent_stats?; geometry_analysis')
-        endif
-        read(filnum,*)
-        do i = 1, self%n_cc
-          read(filnum,*) max_intensity(i)
-        enddo
-        call fclose(filnum)
-        allocate(int_intensity(self%n_cc))
-        call fopen(filnum, file='../'//'IntIntensity.csv', iostat=io_stat)
-        if( io_stat .ne. 0 ) then
-          THROW_HARD('Unable to read file IntIntensity.csv Did you run radial_dependent_stats?; geometry_analysis')
-        endif
-        read(filnum,*)
-        do i = 1, self%n_cc
-          read(filnum,*) int_intensity(i)
-        enddo
-        call fclose(filnum)
-        ! Output on Excel file all the stats on the atoms belonging to the plane
-        cnt = 0
-        call fopen(filnum, file='AtomPlaneInfo.xls',iostat=io_stat)
-        write (filnum,*) '        Atom #    ','   Ar        ','       Dist     ','         Ang     ','      MaxInt     ','       IntInt     '
-        do i = 1, self%n_cc
-          if(flag(i)) then
-            cnt = cnt + 1
-              write (filnum,*) i, '   ', self%ratios(i), self%dists(i), self%ang_var(i), max_intensity(i), int_intensity(i)
+          else
+            call img_out%write_bimg('ImagePlane.mrc')
           endif
-        end do
-        call fclose(filnum)
+          call final_atoms%writePDB('AtomPlane')
+          call final_atoms%kill
+          allocate(points(3, count(flag)), source = 0.)
+          m = self%nanopart_masscen()
+          cnt = 0
+          do i = 1, self%n_cc
+            if(flag(i)) then
+              cnt = cnt + 1
+              points(:3,cnt) = self%centers(:3,i)-m(:)
+            endif
+          enddo
+          vec = plane_from_points(points)
+          allocate(distances_totheplane(cnt), source = 0.)
+          allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
+          cnt = 0
+          denominator = sqrt(vec(1)**2+vec(2)**2+1.)
+          write(logfhandle,*) 'Normal vector: [', vec(1), ',', vec(2), ',', -1., ']'
+          do i = 1, self%n_cc
+            if(flag(i)) then
+              cnt = cnt + 1
+              ! formula for distance of a point to a plane
+              distances_totheplane(cnt) = abs(vec(1)*points(1,cnt)+vec(2)*points(2,cnt)-points(3,cnt)+vec(3))/denominator
+              radii(cnt) = euclid(self%centers(:,i), m)*self%smpd
+            endif
+          enddo
+          distances_totheplane = (distances_totheplane)*self%smpd
+          call fopen(filnum, file='Radii.csv', iostat=io_stat)
+          write (filnum,*) 'r'
+          do i = 1, cnt
+            write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
+          end do
+          call fclose(filnum)
+          call fopen(filnum, file='DistancesToThePlane.csv',iostat=io_stat)
+          write (filnum,*) 'd'
+          do i = 1, cnt
+            write (filnum,'(A)', advance='yes') trim(real2str(distances_totheplane(i)))
+          end do
+          call fclose(filnum)
+          ! Read ratios, ang_var, dists, max_intensity
+          if(.not. allocated(self%ratios)) allocate(self%ratios(self%n_cc))
+          call fopen(filnum, file='../'//'Ar.csv', iostat=io_stat)
+          if( io_stat .ne. 0 ) then
+            THROW_HARD('Unable to read file Ar.csv Did you run cluster_analysis?; geometry_analysis')
+          endif
+          read(filnum,*) ! first line is variable name
+          do i = 1, self%n_cc
+            read(filnum,*) self%ratios(i)
+          enddo
+          call fclose(filnum)
+          if(.not. allocated(self%ang_var)) allocate(self%ang_var(self%n_cc))
+          call fopen(filnum, file='../'//'Ang.csv', iostat=io_stat)
+          if( io_stat .ne. 0 ) then
+            THROW_HARD('Unable to read file Ang.csv Did you run cluster_analysis?; geometry_analysis')
+          endif
+          read(filnum,*)
+          do i = 1, self%n_cc
+            read(filnum,*) self%ang_var(i)
+          enddo
+          call fclose(filnum)
+          if(.not. allocated(self%dists)) allocate(self%dists(self%n_cc))
+          call fopen(filnum, file='../'//'Dist.csv', iostat=io_stat)
+          if( io_stat .ne. 0 ) then
+            THROW_HARD('Unable to read file Dist.csv Did you run cluster_analysis?; geometry_analysis')
+          endif
+          read(filnum,*)
+          do i = 1, self%n_cc
+            read(filnum,*) self%dists(i)
+          enddo
+          call fclose(filnum)
+          allocate(max_intensity(self%n_cc))
+          call fopen(filnum, file='../'//'MaxIntensity.csv', iostat=io_stat)
+          if( io_stat .ne. 0 ) then
+            THROW_HARD('Unable to read file MaxIntensity.csv Did you run radial_dependent_stats?; geometry_analysis')
+          endif
+          read(filnum,*)
+          do i = 1, self%n_cc
+            read(filnum,*) max_intensity(i)
+          enddo
+          call fclose(filnum)
+          allocate(int_intensity(self%n_cc))
+          call fopen(filnum, file='../'//'IntIntensity.csv', iostat=io_stat)
+          if( io_stat .ne. 0 ) then
+            THROW_HARD('Unable to read file IntIntensity.csv Did you run radial_dependent_stats?; geometry_analysis')
+          endif
+          read(filnum,*)
+          do i = 1, self%n_cc
+            read(filnum,*) int_intensity(i)
+          enddo
+          call fclose(filnum)
+          ! Output on Excel file all the stats on the atoms belonging to the plane
+          cnt = 0
+          call fopen(filnum, file='AtomPlaneInfo.txt',iostat=io_stat)
+          write (filnum,*) '        Atom #    ','   Ar        ','       Dist     ','         Ang     ','      MaxInt     ','       IntInt     '
+          do i = 1, self%n_cc
+            if(flag(i)) then
+              cnt = cnt + 1
+              write (filnum,*) i, '   ', self%ratios(i), self%dists(i), self%ang_var(i), max_intensity(i), int_intensity(i)
+            endif
+          end do
+          call fclose(filnum)
       endif
       call img_out%kill_bimg
       call init_atoms%kill
       if(allocated(line))  deallocate(line)
       if(allocated(plane)) deallocate(plane)
       deallocate(imat_cc, imat)
+    contains
+
+      ! Compute the cross product of 2 3D real vectors
+      function cross(a, b) result(c)
+          real, intent(in) :: a(3),b(3)
+          real :: c(3)
+          c(1) = a(2) * b(3) - a(3) * b(2)
+          c(2) = a(3) * b(1) - a(1) * b(3)
+          c(3) = a(1) * b(2) - a(2) * b(1)
+      end function cross
     end subroutine geometry_analysis
 
     subroutine kill_nanoparticle(self)
