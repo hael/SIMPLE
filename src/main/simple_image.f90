@@ -5683,6 +5683,7 @@ contains
         character(len=*), intent(in)    :: which
         class(image),     intent(inout) :: img
         integer :: h,mh,k,mk,l,ml,lims(3,2),inds(3),phys(3)
+        integer :: which_flag
         logical :: didft
         complex :: comp
         if( .not.(self.eqdims.img) )then
@@ -5695,39 +5696,73 @@ contains
             call self%fft()
             didft = .true.
         endif
+        select case(which)
+            case ('real')
+                which_flag = 0
+            case('power')
+                which_flag = 1
+            case('sqrt')
+                which_flag = 2
+            case ('log')
+                which_flag = 3
+            case('phase')
+                which_flag = 4
+            case DEFAULT
+                THROW_HARD('unsupported mode: '//trim(which)//'; ft2img')
+        end select
         call img%zero_and_unflag_ft
         lims = self%loop_lims(3)
         mh = abs(lims(1,1))
         mk = abs(lims(2,1))
         ml = abs(lims(3,1))
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,comp,inds)&
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
+        if( .not.self%wthreads .and. self%is_2d() )then
             do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    phys = self%comp_addr_phys([h,k,l])
-                    comp = self%get_fcomp([h,k,l],phys)
+                inds(2) = min(max(1,k+mk+1),self%ldim(2))
+                do h=lims(1,1),lims(1,2)
                     inds(1) = min(max(1,h+mh+1),self%ldim(1))
-                    inds(2) = min(max(1,k+mk+1),self%ldim(2))
-                    inds(3) = min(max(1,l+ml+1),self%ldim(3))
-                    select case(which)
-                        case ('real')
-                            call img%set(inds,real(comp))
-                        case('power')
-                            call img%set(inds,csq(comp))
-                        case('sqrt')
-                            call img%set(inds,sqrt(csq(comp)))
-                        case ('log')
-                            call img%set(inds,log(csq(comp)))
-                        case('phase')
-                            call img%set(inds,phase_angle(comp))
-                        case DEFAULT
-                            THROW_HARD('unsupported mode: '//trim(which)//'; ft2img')
+                    comp    = self%get_fcomp2D(h,k)
+                    select case(which_flag)
+                    case(0)
+                        img%rmat(inds(1),inds(2),1) = real(comp)
+                    case(1)
+                        img%rmat(inds(1),inds(2),1) = csq(comp)
+                    case(2)
+                        img%rmat(inds(1),inds(2),1) = sqrt(csq(comp))
+                    case(3)
+                        img%rmat(inds(1),inds(2),1) = log(csq(comp))
+                    case(4)
+                        img%rmat(inds(1),inds(2),1) = phase_angle(comp)
                     end select
                 end do
             end do
-        end do
-        !$omp end parallel do
+        else
+            !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,comp,inds)&
+            !$omp schedule(static) proc_bind(close)
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        phys = self%comp_addr_phys([h,k,l])
+                        comp = self%get_fcomp([h,k,l],phys)
+                        inds(1) = min(max(1,h+mh+1),self%ldim(1))
+                        inds(2) = min(max(1,k+mk+1),self%ldim(2))
+                        inds(3) = min(max(1,l+ml+1),self%ldim(3))
+                        select case(which_flag)
+                        case (0)
+                            call img%set(inds,real(comp))
+                        case(1)
+                            call img%set(inds,csq(comp))
+                        case(2)
+                            call img%set(inds,sqrt(csq(comp)))
+                        case (3)
+                            call img%set(inds,log(csq(comp)))
+                        case(4)
+                            call img%set(inds,phase_angle(comp))
+                        end select
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        endif
         if( didft ) call self%ifft()
     end subroutine ft2img
 

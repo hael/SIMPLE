@@ -70,7 +70,7 @@ contains
         self%frames_orig => frames_ptr
         self%smpd        =  self%frames_orig(1)%get_smpd()
         self%ldim        =  self%frames_orig(1)%get_ldim()
-        self%hp          =  min((real(minval(self%ldim(1:2))) * self%smpd)/4.,2000.)
+        self%hp          =  min((real(minval(self%ldim(1:2))) * self%smpd)/4.,1000.)
         self%hp          =  min(params_glob%hp, self%hp)
         self%lp          =  params_glob%lp
         allocate(self%frames_sh(self%nframes),self%frames(self%nframes),&
@@ -368,5 +368,5 @@ contains
         self%existence = .false.
         call self%reference%kill
     end subroutine kill
-    
+
 end module simple_motion_align_nano

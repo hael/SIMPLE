@@ -14,7 +14,6 @@ private
 real,    parameter :: TOL    = 1e-4 !< tolerance parameter
 integer, parameter :: MAXITS = 30   !< maximum number of iterations
 
-complex(dp), parameter   :: J     = CMPLX(0.0_dp, 1.0_dp, kind=dp)
 real(dp),    parameter   :: num   = 1.0d8      ! numerator for rescaling of cost function
 
 type :: ftexp_shsrch
@@ -224,10 +223,10 @@ contains
                     arg = dot_product(shvec, real(ftexp_transfmat(hind,kkind,:),dp))
                     if( hind == 1 )then
                         ! h = 0
-                        r1  = r1 + real(self%ftexp_tmp_cmat12(1,kind) * exp(-J * arg),kind=dp)
+                        r1  = r1 + real(self%ftexp_tmp_cmat12(1,kind) * dcmplx(cos(arg),sin(arg)),kind=dp)
                     else
                         ! h > 0
-                        r2  = r2 + real(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
+                        r2  = r2 + real(self%ftexp_tmp_cmat12(hind,kind) * dcmplx(cos(arg),sin(arg)),kind=dp)
                     endif
                 endif
             end do
@@ -254,9 +253,9 @@ contains
                     transf_vec = real(ftexp_transfmat(hind,kkind,:),dp)
                     arg        = dot_product(shvec, transf_vec)
                     if( hind == 1 )then ! h = 0
-                        g1(:) = g1(:) + dimag(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg))*real(transf_vec,dp)
+                        g1(:) = g1(:) + dimag(self%ftexp_tmp_cmat12(hind,kind) * dcmplx(cos(arg),sin(arg)))*transf_vec
                     else ! h > 0
-                        g2(:) = g2(:) + dimag(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg))*real(transf_vec,dp)
+                        g2(:) = g2(:) + dimag(self%ftexp_tmp_cmat12(hind,kind) * dcmplx(cos(arg),sin(arg)))*transf_vec
                     endif
                 endif
             end do
@@ -265,7 +264,6 @@ contains
         grad(1) = (g1(1)+ 2.d0*g2(1)) * num / self%denominator
         grad(2) = (g1(2)+ 2.d0*g2(2)) * num / self%denominator
     end subroutine corr_gshifted_cost_8
-
 
     !< cost function for minimizer, f and gradient
     subroutine corr_fdfshifted_cost_8( self, shvec, f, grad )
@@ -287,7 +285,7 @@ contains
                 if( msk(hind,kind) )then
                     transf_vec = real(ftexp_transfmat(hind,kkind,:),dp)
                     arg        = dot_product(shvec, transf_vec)
-                    tmp        = dcmplx(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg))
+                    tmp        = self%ftexp_tmp_cmat12(hind,kind) * dcmplx(cos(arg),sin(arg))
                     if( hind == 1 )then ! h = 0
                         f1    = f1    + real(tmp,dp)
                         g1(:) = g1(:) + dimag(tmp) * transf_vec
