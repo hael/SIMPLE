@@ -568,7 +568,7 @@ contains
         type(ctfparams)               :: prev_ctfvars
         character(len=:), allocatable :: name
         character(len=LONGSTRLEN)     :: rel_moviename
-        integer                       :: imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot, nframes_first
+        integer                       :: ldim_orig(3), imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot, nframes_first
         logical                       :: is_movie, l_singleframe
         is_movie = .true.
         l_singleframe = .false.
@@ -598,6 +598,15 @@ contains
             cnt = cnt + 1
             call make_relativepath(CWD_GLOB,movies_array(cnt),rel_moviename)
             call find_ldim_nptcls(trim(rel_moviename), ldim, nframes)
+            if( cnt == 1 )then
+                ldim_orig = ldim
+            else
+                if( ldim(1) /= ldim_orig(1) .or. ldim(2) /= ldim_orig(2) )then
+                    write(logfhandle,*)'Inconsistent size for file: ',trim(movies_array(cnt))
+                    write(logfhandle,*)'Dimensions: ', ldim(1),'x ',ldim(2), ' vs. previous dimensions: ', ldim_orig(1),'x ',ldim_orig(2)
+                    THROW_HARD('All files imported must have identical diemnsions!')
+                endif
+            endif
             if( nframes <= 0 )then
                 THROW_WARN('# frames in movie: '//trim(movies_array(imic))//' <= zero, omitting')
                 cycle
