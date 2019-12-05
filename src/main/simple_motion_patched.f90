@@ -355,32 +355,59 @@ contains
     end subroutine get_local_shift
 
     !>  Per frame real space polynomial interpolation
-    subroutine polytransfo( self, iframe, frame, frame_output )
+    subroutine polytransfo( self, frames, weights, frame_output )
         class(motion_patched), intent(inout) :: self
-        integer,               intent(in)    :: iframe
-        type(image),           intent(inout) :: frame, frame_output
-        integer  :: i, j
-        real     :: coords(2), sh(2), shinterp(2)
-        type(rmat_ptr_type) :: rmat_in, rmat_out
-        call frame_output%new(self%ldim, self%smpd, wthreads=.false.)
-        call frame%ifft()
-        call frame%get_rmat_ptr(rmat_in%rmat_ptr)
-        call frame_output%get_rmat_ptr(rmat_out%rmat_ptr)
-        do i = 1, self%ldim(1)
+        type(image),           intent(inout) :: frames(self%nframes)
+        real,                  intent(in)    :: weights(self%nframes)
+        type(image),           intent(inout) :: frame_output
+        real, pointer :: rmatin(:,:,:), rmatout(:,:,:)
+        real(dp)      :: t,ti, dt,dt2,dt3, x,x2,y,y2,xy, A1,A2, B1x,B1x2,B1xy,B2x,B2x2,B2xy
+        integer       :: i, j, iframe
+        real          :: coords(2), w, pixx,pixy
+        call frame_output%zero_and_unflag_ft
+        call frame_output%get_rmat_ptr(rmatout)
+        ti = real(self%interp_fixed_frame-self%fixed_frame, dp)
+        do iframe = 1,self%nframes
+            call frames(iframe)%get_rmat_ptr(rmatin)
+            w = weights(iframe)
+            t = real(iframe-self%fixed_frame, dp)
+            dt  = ti-t
+            dt2 = ti*ti - t*t
+            dt3 = ti*ti*ti - t*t*t
+            B1x  = sum(self%poly_coeffs(4:6,1)   * [dt,dt2,dt3])
+            B1x2 = sum(self%poly_coeffs(7:9,1)   * [dt,dt2,dt3])
+            B1xy = sum(self%poly_coeffs(16:18,1) * [dt,dt2,dt3])
+            B2x  = sum(self%poly_coeffs(4:6,2)   * [dt,dt2,dt3])
+            B2x2 = sum(self%poly_coeffs(7:9,2)   * [dt,dt2,dt3])
+            B2xy = sum(self%poly_coeffs(16:18,2) * [dt,dt2,dt3])
+            !$omp parallel do default(shared) private(i,j,x,x2,y,y2,xy,A1,A2,pixx,pixy)&
+            !$omp proc_bind(close) schedule(static)
             do j = 1, self%ldim(2)
-                call self%get_local_shift(iframe, real(i), real(j), sh)
-                call self%get_local_shift(self%interp_fixed_frame, real(i), real(j), shinterp)
-                coords = real([i,j]) - sh + shinterp
-                rmat_out%rmat_ptr(i,j,1) = interp_bilin(coords(1), coords(2))
+                y  = real(j-1,dp) / real(self%ldim(2)-1,dp) - 0.5d0
+                y2 = y*y
+                A1 =           sum(self%poly_coeffs(1:3,1)   * [dt,dt2,dt3])
+                A1 = A1 + y  * sum(self%poly_coeffs(10:12,1) * [dt,dt2,dt3])
+                A1 = A1 + y2 * sum(self%poly_coeffs(13:15,1) * [dt,dt2,dt3])
+                A2 =           sum(self%poly_coeffs(1:3,2)   * [dt,dt2,dt3])
+                A2 = A2 + y  * sum(self%poly_coeffs(10:12,2) * [dt,dt2,dt3])
+                A2 = A2 + y2 * sum(self%poly_coeffs(13:15,2) * [dt,dt2,dt3])
+                do i = 1, self%ldim(1)
+                    x  = real(i-1,dp) / real(self%ldim(1)-1,dp) - 0.5d0
+                    x2 = x*x
+                    xy = x*y
+                    pixx = real(i) + real(A1 + B1x*x + B1x2*x2 + B1xy*xy)
+                    pixy = real(j) + real(A2 + B2x*x + B2x2*x2 + B2xy*xy)
+                    rmatout(i,j,1) = rmatout(i,j,1) + w*interp_bilin(pixx,pixy)
+                end do
             end do
-        end do
-
+            !$omp end parallel do
+        enddo
     contains
 
         pure real function interp_bilin( xval, yval )
             real, intent(in) :: xval, yval
             integer  :: x1_h,  x2_h,  y1_h,  y2_h
-            real     :: y1, y2, y3, y4, t, u
+            real     :: t, u
             logical  :: outside
             outside = .false.
             x1_h = floor(xval)
@@ -404,19 +431,15 @@ contains
                 outside = .true.
             endif
             if( outside )then
-                interp_bilin = rmat_in%rmat_ptr(x1_h, y1_h, 1)
+                interp_bilin = rmatin(x1_h, y1_h, 1)
                 return
             endif
-            y1 = rmat_in%rmat_ptr(x1_h, y1_h, 1)
-            y2 = rmat_in%rmat_ptr(x2_h, y1_h, 1)
-            y3 = rmat_in%rmat_ptr(x2_h, y2_h, 1)
-            y4 = rmat_in%rmat_ptr(x1_h, y2_h, 1)
-            t   = xval - real(x1_h)
-            u   = yval - real(y1_h)
-            interp_bilin =  (1. - t) * (1. - u) * y1 + &
-                                 &t  * (1. - u) * y2 + &
-                                 &t  *       u  * y3 + &
-                           &(1. - t) *       u  * y4
+            t  = xval - real(x1_h)
+            u  = yval - real(y1_h)
+            interp_bilin =  (1. - t) * (1. - u) * rmatin(x1_h, y1_h, 1) + &
+                                 &t  * (1. - u) * rmatin(x2_h, y1_h, 1) + &
+                                 &t  *       u  * rmatin(x2_h, y2_h, 1) + &
+                           &(1. - t) *       u  * rmatin(x1_h, y2_h, 1)
         end function interp_bilin
 
     end subroutine polytransfo
@@ -475,6 +498,9 @@ contains
         self%ldim_patch(1) = round2even(real(self%ldim(1)) / real(params_glob%nxpatch))
         self%ldim_patch(2) = round2even(real(self%ldim(2)) / real(params_glob%nypatch))
         self%ldim_patch(3) = 1
+        ! fftw friendly size
+        self%ldim_patch(1) = find_larger_magic_box(self%ldim_patch(1))
+        self%ldim_patch(2) = find_larger_magic_box(self%ldim_patch(2))
         ! along X
         ! limits & center first patches
         self%lims_patches(1,:,1,1) = 1
@@ -572,33 +598,20 @@ contains
         class(motion_patched),          intent(inout) :: self
         type(image),       allocatable, intent(inout) :: stack(:)
         integer,                        intent(in)    :: pi, pj
-        integer             :: iframe, k, l, kk, ll
+        integer             :: ldim(3),iframe, k, l, kk, ll
         integer             :: ip, jp           ! ip, jp: i_patch, j_patch
         real, pointer       :: prmat_patch(:,:,:), prmat_frame(:,:,:)
         do iframe=1,self%nframes
             ! init
-            call self%frame_patches(pi,pj)%stack(iframe)%new(self%ldim_patch, self%smpd)
+            call self%frame_patches(pi,pj)%stack(iframe)%new(self%ldim_patch, self%smpd, wthreads=.false.)
             call self%frame_patches(pi,pj)%stack(iframe)%get_rmat_ptr(prmat_patch)
             call stack(iframe)%get_rmat_ptr(prmat_frame)
             ! copy
-            do k = self%lims_patches(pi,pj,1,1), self%lims_patches(pi,pj,1,2)
-                kk = k
-                if (kk < 1) then
-                    kk = kk + self%ldim(1)
-                else if (kk > self%ldim(1)) then
-                    kk = kk - self%ldim(1)
-                end if
-                ip = k - self%lims_patches(pi,pj,1,1) + 1
-                do l = self%lims_patches(pi,pj,2,1), self%lims_patches(pi,pj,2,2)
-                    ll = l
-                    if (ll < 1) then
-                        ll = ll + self%ldim(2)
-                    else if (ll > self%ldim(2)) then
-                        ll = ll - self%ldim(2)
-                    end if
-                    jp = l - self%lims_patches(pi,pj,2,1) + 1
-                    ! now copy the value
-                    prmat_patch(ip,jp,1) = prmat_frame(kk,ll,1)
+            do l = self%lims_patches(pi,pj,2,1), self%lims_patches(pi,pj,2,2)
+                jp = l - self%lims_patches(pi,pj,2,1) + 1
+                do k = self%lims_patches(pi,pj,1,1), self%lims_patches(pi,pj,1,2)
+                    ip = k - self%lims_patches(pi,pj,1,1) + 1
+                    prmat_patch(ip,jp,1) = prmat_frame(k,l,1)
                 end do
             end do
         end do
@@ -618,13 +631,14 @@ contains
         if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched')
         corr_avg = 0.
         ! initialize transfer matrix to correct dimensions
-        call self%frame_patches(1,1)%stack(1)%new(self%ldim_patch, self%smpd)
-        call ftexp_transfmat_init(self%frame_patches(1,1)%stack(1))
-        res = self%frame_patches(1,1)%stack(1)%get_res()
-        self%hp = min(self%hp,res(1))
+        call self%frame_patches(1,1)%stack(1)%new(self%ldim_patch, self%smpd, wthreads=.false.)
+        call ftexp_transfmat_init(self%frame_patches(1,1)%stack(1), params_glob%lpstop)
+        res      = self%frame_patches(1,1)%stack(1)%get_res()
+        self%hp  = min(self%hp,res(1))
+        corr_avg = 0.
         write(logfhandle,'(A,F6.1)')'>>> PATCH HIGH-PASS: ',self%hp
         !$omp parallel do collapse(2) default(shared) private(i,j,iframe,opt_shifts)&
-        !$omp proc_bind(close) schedule(static) reduction(+:corr_avg)
+        !$omp proc_bind(close) schedule(dynamic) reduction(+:corr_avg)
         do i = 1,params_glob%nxpatch
             do j = 1,params_glob%nypatch
                 ! init
@@ -635,7 +649,6 @@ contains
                 call align_hybrid(i,j)%set_rand_init_shifts(.true.)
                 call align_hybrid(i,j)%set_reslims(self%hp, self%lp(i,j), params_glob%lpstop)
                 call align_hybrid(i,j)%set_trs(params_glob%scale*params_glob%trs)
-                call align_hybrid(i,j)%set_shsrch_tol(TOL)
                 call align_hybrid(i,j)%set_coords(i,j)
                 call align_hybrid(i,j)%set_fitshifts(self%fitshifts)
                 call align_hybrid(i,j)%set_fixed_frame(self%fixed_frame)
@@ -661,6 +674,7 @@ contains
         corr_avg = corr_avg / real(params_glob%nxpatch*params_glob%nypatch)
         write(logfhandle,'(A,F6.3)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
         deallocate(align_hybrid,res)
+        call ftexp_transfmat_kill
     end subroutine det_shifts
 
     subroutine det_shifts_polyn( self, frames )

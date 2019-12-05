@@ -15,13 +15,13 @@ use simple_starfile_wrappers
 implicit none
 
 ! Stage drift
-public :: motion_correct_iso, motion_correct_iso_calc_sums, motion_correct_iso_calc_sums_tomo
+public :: motion_correct_iso, motion_correct_iso_calc_sums, motion_correct_iso_calc_sums_tomo, motion_correct_iso_shift_frames
 public :: write_iso2star, motion_correct_iso_kill
 ! Beam-induced motion correction
 public :: motion_correct_patched, motion_correct_patched_calc_sums, motion_correct_patched_kill
 public :: write_aniso2star, motion_correct_with_patched
 ! Common & convenience
-public :: motion_correct_kill_common, close_starfile, patched_shift_fname
+public :: motion_correct_kill_common, close_starfile, motion_correct_mic2spec, patched_shift_fname
 private
 #include "simple_local_flags.inc"
 
@@ -33,16 +33,15 @@ integer                          :: updateres
 logical                          :: didupdateres
 
 ! data structures for patch-based motion correction
-type(motion_patched)        :: motion_patch
-real(dp),       allocatable :: patched_polyn(:)           !< polynomial from patched-based correction
+type(motion_patched)     :: motion_patch
+real(dp),    allocatable :: patched_polyn(:)              !< polynomial from patched-based correction
 
 ! data structures used by both isotropic & patch-based correction
-type(image), allocatable :: movie_frames_shifted_saved(:) !< shifted movie frames
 real,        allocatable :: corrs(:)                      !< per-frame correlations
 real,        allocatable :: shifts_toplot(:,:)            !< shifts for plotting & parsing
 real,        allocatable :: frameweights(:)               !< array of frameweights
 real,        allocatable :: acc_doses(:)                  !< accumulated doses
-complex,     allocatable :: cmat_sum(:,:,:)               !< complex matrices for OpenMP reduction
+complex,     allocatable :: cmat_sum(:,:,:)               !< complex matrice
 
 ! module global variables
 integer :: nframes        = 0                             !< number of frames
@@ -65,31 +64,34 @@ type(starfile_table_type)     :: mc_starfile              !< starfile for motion
 
 ! module global constants
 real,    parameter :: NSIGMAS                       = 6.       !< Number of standard deviations for outliers detection
-real,    parameter :: SMALLSHIFT                    = 1.       !< small initial shift to blur out fixed pattern noise
 logical, parameter :: FITSHIFTS                     = .true.
 logical, parameter :: ISO_POLYN_DIRECT              = .false.   !< use polynomial constraint for isotropic motion correction
 logical, parameter :: ISO_UNCONSTR_AFTER            = .false.   !< run a unconstrained (direct) as the second step (at highest resolution)
 logical, parameter :: DO_PATCHED_POLYN              = .false.   !< run polynomially constrained motion correction for patch-based motion correction
 logical, parameter :: DO_PATCHED_POLYN_DIRECT_AFTER = .false.   !< run a direct polynomial optimization for patch-based motion correction as the second step (at highest resolution)
 logical, parameter :: DO_OPT_WEIGHTS                = .false.   !< continuously optimize weights after alignment
+
+! benchmarking
+logical                 :: L_BENCH = .false.
+integer(timer_int_kind) :: t_read, t_cure, t_shift, t_forctf, t_mic, t_fft_clip, t_patched, t_patched_forctf, t_patched_mic
+integer(timer_int_kind) :: t_correct_iso_init, t_correct_iso_transfmat,  t_correct_iso_align, t_dose, t_new, t
+real(timer_int_kind)    :: rt_read, rt_cure, rt_shift, rt_forctf, rt_mic, rt_fft_clip, rt_patched, rt_patched_forctf, rt_patched_mic
+real(timer_int_kind)    :: rt_correct_iso_init, rt_correct_iso_transfmat, rt_correct_iso_align, rt_dose, rt_new
+
 contains
 
     ! PUBLIC METHODS, ISOTROPIC MOTION CORRECTION
 
-    subroutine motion_correct_init( movie_stack_fname, ctfvars, err, gainref_fname )
-        character(len=*),           intent(in)  :: movie_stack_fname !< input filename of stack
-        type(ctfparams),            intent(in)  :: ctfvars           !< CTF parameters
-        logical,                    intent(out) :: err               !< error flag
-        character(len=*), optional, intent(in)  :: gainref_fname     !< gain reference filename
-        integer,       parameter :: HWINSZ = 6
+    subroutine motion_correct_init( movie_stack_fname, ctfvars, err, movie_sum, gainref_fname )
+        character(len=*),           intent(in)    :: movie_stack_fname !< input filename of stack
+        type(ctfparams),            intent(in)    :: ctfvars           !< CTF parameters
+        logical,                    intent(out)   :: err               !< error flag
+        type(image),                intent(inout) :: movie_sum
+        character(len=*), optional, intent(in)    :: gainref_fname     !< gain reference filename
         type(image), allocatable :: movie_frames(:)
-        real,        allocatable :: rmat_pad(:,:), win(:,:), rmat_sum(:,:,:)
-        logical,     allocatable :: outliers(:,:)
-        real,      pointer :: prmat(:,:,:)
-        type(image)        :: tmpmovsum, gainref
-        real               :: moldiam, dimo4, time_per_frame, current_time
-        integer            :: iframe, ncured, deadhot(2), i, j, winsz, shp(3)
-        logical            :: l_gain
+        complex,     pointer     :: pcmat(:,:,:)
+        real     :: moldiam, dimo4, time_per_frame, current_time
+        integer  :: iframe, shp(3)
         ! get number of frames & dim from stack
         call find_ldim_nptcls(movie_stack_fname, ldim, nframes)
         ldim_orig = ldim
@@ -119,7 +121,7 @@ contains
         ! set reslims
         dimo4   = (real(minval(ldim_scaled(1:2))) * smpd_scaled) / 4.
         moldiam = 0.7 * real(params_glob%box) * smpd_scaled
-        hp      = min(dimo4,2000.)
+        hp      = min(dimo4,1000.)
         lp      = params_glob%lpstart
         resstep = (params_glob%lpstart - params_glob%lpstop) / 3.
         ! allocate abstract data structures
@@ -127,85 +129,49 @@ contains
         if(alloc_stat.ne.0)call allocchk('motion_correct_init 1; simple_motion_correct')
         allocate( shifts_toplot(nframes, 2), source=0., stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('motion_correct_init 2; simple_motion_correct')
-        if ( motion_correct_with_patched ) then
-            allocate( movie_frames_shifted_saved(nframes), stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk('motion_correct_init 3; simple_motion_correct')
-        end if
-        ! retrieve array shapes
-        winsz = 2 * HWINSZ + 1
         ! additional allocations
-        allocate(win(winsz,winsz), corrs(nframes), opt_shifts(nframes,2),&
-        &rmat_sum(ldim(1),ldim(2),1), rmat_pad(1-HWINSZ:ldim(1)+HWINSZ,1-HWINSZ:ldim(2)+HWINSZ),&
-        &frameweights(nframes), source=0.,stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('motion_correct_init 5; simple_motion_correct')
+        allocate(corrs(nframes), opt_shifts(nframes,2),frameweights(nframes), source=0.,stat=alloc_stat)
+        if(alloc_stat.ne.0)call allocchk('motion_correct_init 4; simple_motion_correct')
         frameweights = 1./real(nframes)
-        ! gain reference
-        l_gain = .false.
-        if( present(gainref_fname) )then
-            if( file_exists(gainref_fname) )then
-                l_gain = .true.
-                call gainref%new(ldim, smpd)
-                call gainref%read(gainref_fname)
-            else
-                THROW_HARD('gain reference: '//trim(gainref_fname)//' not found; motion_correct_init')
-            endif
-        endif
         ! allocate & read frames
+        if( l_BENCH ) t_new = tic()
+        !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
         do iframe=1,nframes
             call movie_frames(iframe)%new(ldim, smpd, wthreads=.false.)
+        enddo
+        !$omp end parallel do
+        if( l_BENCH ) rt_new = toc(t_new)
+        if( l_BENCH ) t_read = tic()
+        do iframe=1,nframes
             call movie_frames(iframe)%read(movie_stack_fname, iframe)
         end do
-        ! calculate image sum and identify outliers
-        write(logfhandle,'(a)') '>>> REMOVING DEAD/HOT PIXELS & FOURIER TRANSFORMING FRAMES'
-        ! gain correction, generation of temporary movie sum and outlier detection
-        !$omp parallel do schedule(static) default(shared) private(iframe,prmat) proc_bind(close) reduction(+:rmat_sum)
+        if( l_BENCH ) rt_read = toc(t_read)
+        ! gain reference & outliers detections
+        if( l_BENCH ) t_cure = tic()
+        call cure_outliers( movie_frames, gainref_fname )
+        if( l_BENCH ) rt_cure = toc(t_cure)
+        if( l_BENCH ) t_fft_clip = tic()
+        call movie_sum%new(ldim_scaled, smpd_scaled)
+        shp = movie_sum%get_array_shape()
+        !$omp parallel do schedule(guided) default(shared) private(iframe) proc_bind(close)
         do iframe=1,nframes
-            if( l_gain ) call movie_frames(iframe)%mul(gainref) ! gain correction
-            call movie_frames(iframe)%get_rmat_ptr(prmat)
-            rmat_sum(:,:,1) = rmat_sum(:,:,1) + prmat(1:ldim(1),1:ldim(2),1)
-        end do
+            call movie_frames_scaled(iframe)%new(ldim_scaled, smpd_scaled, wthreads=.false.)
+            call movie_frames(iframe)%fft()
+            call movie_frames(iframe)%clip(movie_frames_scaled(iframe))
+            call movie_frames(iframe)%kill
+        enddo
         !$omp end parallel do
-        if( l_gain ) call gainref%kill
-        call tmpmovsum%new(ldim, smpd)
-        call tmpmovsum%set_rmat(rmat_sum)
-        call tmpmovsum%cure_outliers(ncured, NSIGMAS, deadhot, outliers)
-        call tmpmovsum%kill
-        deallocate(rmat_sum)
-        write(logfhandle,'(a,1x,i7)') '>>> # DEAD PIXELS:', deadhot(1)
-        write(logfhandle,'(a,1x,i7)') '>>> # HOT  PIXELS:', deadhot(2)
-        if( any(outliers) )then ! remove the outliers & do the rest
-            !$omp parallel do schedule(static) default(shared) private(iframe,prmat,rmat_pad,i,j,win) proc_bind(close)
-            do iframe=1,nframes
-                call movie_frames(iframe)%get_rmat_ptr(prmat)
-                rmat_pad(:,:) = median( reshape(prmat(1:ldim(1),1:ldim(2),1),(/(ldim(1)*ldim(2))/)) )
-                rmat_pad(1:ldim(1),1:ldim(2)) = prmat(1:ldim(1),1:ldim(2),1)
-                do i=1,ldim(1)
-                    do j=1,ldim(2)
-                        if( outliers(i,j) )then
-                            win = rmat_pad( i-HWINSZ:i+HWINSZ, j-HWINSZ:j+HWINSZ )
-                            prmat(i,j,1) = median( reshape(win,(/winsz**2/)) )
-                        endif
-                    enddo
-                enddo
-                call movie_frames(iframe)%fft()
-                call movie_frames_scaled(iframe)%new(ldim_scaled, smpd_scaled, wthreads=.false.)
-                call movie_frames(iframe)%clip(movie_frames_scaled(iframe))
-                call movie_frames(iframe)%kill
-            enddo
-            !$omp end parallel do
-        else
-            !$omp parallel do schedule(static) default(shared) private(iframe) proc_bind(close)
-            do iframe=1,nframes
-                call movie_frames(iframe)%fft()
-                call movie_frames_scaled(iframe)%new(ldim_scaled, smpd_scaled, wthreads=.false.)
-                call movie_frames(iframe)%clip(movie_frames_scaled(iframe))
-                call movie_frames(iframe)%kill
-            end do
-            !$omp end parallel do
-        endif
-        ! additional allocations
-        shp = movie_frames_scaled(1)%get_array_shape()
+        ! generate sum
         allocate(cmat_sum(shp(1),shp(2),shp(3)), source=cmplx(0.,0.))
+        do iframe = 1,nframes
+            call movie_frames_scaled(iframe)%get_cmat_ptr(pcmat)
+            !$omp parallel workshare proc_bind(close)
+            cmat_sum(:,:,:) = cmat_sum(:,:,:) + pcmat(:,:,:)
+            !$omp end parallel workshare
+        enddo
+        call movie_sum%set_cmat(cmat_sum)
+        call movie_sum%ifft
+        if( l_BENCH ) rt_fft_clip = toc(t_fft_clip)
         ! check if we are doing dose weighting
         if( params_glob%l_dose_weight )then
             if( allocated(acc_doses) ) deallocate(acc_doses)
@@ -218,7 +184,14 @@ contains
                 acc_doses(iframe) = dose_rate*current_time      ! unit: e/A2/s * s = e/A2
             end do
         endif
-        deallocate(rmat_pad, win, outliers, movie_frames)
+        deallocate(movie_frames)
+        if( L_BENCH )then
+            print *,'t_fft_clip: ',rt_fft_clip
+            print *,'t_cure:     ',rt_cure
+            print *,'t_new:      ',rt_new
+            print *,'t_read:     ',rt_read
+        endif
+        ! stop
     end subroutine motion_correct_init
 
     subroutine motion_correct_iso_polyn_direct_callback( aPtr, align_iso_polyn_direct, converged )
@@ -261,11 +234,11 @@ contains
     end subroutine motion_correct_iso_polyn_direct_callback
 
     !> isotropic motion_correction of DDD movie
-    subroutine motion_correct_iso( movie_stack_fname, ctfvars, bfactor, shifts, gainref_fname )
+    subroutine motion_correct_iso( movie_stack_fname, ctfvars, bfactor, movie_sum, gainref_fname )
         character(len=*),           intent(in)    :: movie_stack_fname !< input filename of stack
         type(ctfparams),            intent(inout) :: ctfvars           !< CTF params
         real,                       intent(in)    :: bfactor           !< B-factor
-        real,          allocatable, intent(out)   :: shifts(:,:)       !< the nframes shifts identified
+        type(image),                intent(inout) :: movie_sum
         character(len=*), optional, intent(in)    :: gainref_fname     !< gain reference filename
         real                                :: ave, sdev, var, minw, maxw, corr
         logical                             :: err, err_stat
@@ -277,9 +250,14 @@ contains
         if (ISO_POLYN_DIRECT) then
             call align_iso_polyn_direct%new
         end if
-        call motion_correct_init(movie_stack_fname, ctfvars, err, gainref_fname)
+        if( l_BENCH ) t_correct_iso_init = tic()
+        call motion_correct_init(movie_stack_fname, ctfvars, err, movie_sum, gainref_fname)
+        if( l_BENCH ) rt_correct_iso_init = toc(t_correct_iso_init)
         if( err ) return
-        call ftexp_transfmat_init(movie_frames_scaled(1))
+        if( l_BENCH ) t_correct_iso_transfmat = tic()
+        call ftexp_transfmat_init(movie_frames_scaled(1), params_glob%lpstop)
+        if( l_BENCH ) rt_correct_iso_transfmat = toc(t_correct_iso_transfmat)
+        if( l_BENCH ) t_correct_iso_align = tic()
         if (ISO_POLYN_DIRECT) then
             call align_iso_polyn_direct%set_frames(movie_frames_scaled, nframes)
             call align_iso_polyn_direct%set_hp_lp(hp,lp)
@@ -296,8 +274,6 @@ contains
                 THROW_WARN('OPTIMAL CORRELATION < 0.0')
             endif
             call align_iso_polyn_direct%get_opt_shifts(opt_shifts)
-            if( allocated(shifts) ) deallocate(shifts)
-            allocate(shifts(nframes,2), source=opt_shifts)
             call align_iso_polyn_direct%get_weights(frameweights)
             call align_iso_polyn_direct%get_shifts_toplot(shifts_toplot)
             call align_iso_polyn_direct%kill
@@ -308,7 +284,6 @@ contains
             call hybrid_srch%set_bfactor(bfactor)
             call hybrid_srch%set_trs(params_glob%scale*params_glob%trs)
             call hybrid_srch%set_rand_init_shifts(.true.)
-            call hybrid_srch%set_shsrch_tol(TOL_ISO)
             call hybrid_srch%set_fitshifts(FITSHIFTS)
             call hybrid_srch%set_fixed_frame(fixed_frame)
             call hybrid_srch%align
@@ -321,15 +296,14 @@ contains
                write(logfhandle,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
                THROW_WARN('OPTIMAL CORRELATION < 0.0')
             endif
-            shifts = opt_shifts
         end if
+        if( l_BENCH ) rt_correct_iso_align = toc(t_correct_iso_align)
         ! deals with reference frame convention
         select case(trim(params_glob%mcconvention))
         case('relion')
-            shifts(:,1) = shifts(:,1) - shifts(1,1)
-            shifts(:,2) = shifts(:,2) - shifts(1,2)
-            opt_shifts    = shifts
-            shifts_toplot = shifts
+            opt_shifts(:,1) = opt_shifts(:,1) - opt_shifts(1,1)
+            opt_shifts(:,2) = opt_shifts(:,2) - opt_shifts(1,2)
+            shifts_toplot   = opt_shifts
         case DEFAULT
             ! using central frame
         end select
@@ -342,86 +316,93 @@ contains
         write(logfhandle,'(a,7x,f7.4)') '>>> MAX WEIGHT     :', maxw
         ! report the sampling distance of the possibly scaled movies
         ctfvars%smpd = smpd_scaled
+        if( L_BENCH )then
+            print *,'rt_correct_iso_init:      ',rt_correct_iso_init
+            print *,'rt_correct_iso_transfmat: ',rt_correct_iso_transfmat
+            print *,'rt_correct_iso_align:     ',rt_correct_iso_align
+        endif
     end subroutine motion_correct_iso
 
     ! generates sums & shift frames
-    subroutine motion_correct_iso_calc_sums( movie_sum, movie_sum_corrected, movie_sum_ctf)
-        type(image), intent(inout) :: movie_sum, movie_sum_corrected, movie_sum_ctf
-        type(image),   allocatable :: movie_frames_shifted(:)
+    subroutine motion_correct_iso_shift_frames()
+        integer :: iframe
+        ! copy unaligned frames & shift frames
+        if( l_BENCH ) t_shift = tic()
+        !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+        do iframe=1,nframes
+            call movie_frames_scaled(iframe)%shift2Dserial(-opt_shifts(iframe,:))
+        end do
+        !$omp end parallel do
+        if( L_BENCH )then
+            rt_shift = toc(t_shift)
+            print *,'t_shift:      ',rt_shift
+        endif
+    end subroutine motion_correct_iso_shift_frames
+
+    !>  Generates sums, movie_frames_scaled are assumed shifted
+    subroutine motion_correct_iso_calc_sums( movie_sum_corrected, movie_sum_ctf)
+        type(image), intent(inout) :: movie_sum_corrected, movie_sum_ctf
+        complex,           pointer :: pcmat(:,:,:)
         type(opt_image_weights)    :: opt_weights
-        real                       :: wvec(1:nframes), scalar_weight
+        real                       :: scalar_weight
         integer                    :: iframe
+        ! for CTF estimation
+        if( l_BENCH ) t_forctf = tic()
+        call movie_sum_ctf%new(ldim_scaled, smpd_scaled)
         scalar_weight = 1. / real(nframes)
-        ! copy unaligned frames
-         allocate(movie_frames_shifted(nframes))
+        ! in case anisotropic alignement failed
+        if( l_BENCH ) t_forctf = tic()
         !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
         do iframe=1,nframes
-            call movie_frames_shifted(iframe)%new(ldim_scaled, smpd_scaled)
-            call movie_frames_shifted(iframe)%copy(movie_frames_scaled(iframe))
-        end do
+            call movie_frames_scaled(iframe)%fft
+        enddo
         !$omp end parallel do
-        ! Unaligned, unweighted, unfiltered sum for comparison
-        wvec = scalar_weight
-        call sum_frames(movie_sum, wvec)
-        ! shift frames
-        !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+        ! Sum for CTF estimation
+        cmat_sum = cmplx(0.,0.)
         do iframe=1,nframes
-            call movie_frames_shifted(iframe)%shift2Dserial(-opt_shifts(iframe,:))
-            if (motion_correct_with_patched) then
-                ! Save the isotropically corrected frames for anisotropic alignment
-                call movie_frames_shifted_saved(iframe)%new(ldim_scaled, smpd_scaled)
-                call movie_frames_shifted_saved(iframe)%copy(movie_frames_shifted(iframe))
-                call movie_frames_shifted_saved(iframe)%ifft
-            endif
+            call movie_frames_scaled(iframe)%get_cmat_ptr(pcmat)
+            !$omp parallel workshare proc_bind(close)
+            cmat_sum(:,:,:) = cmat_sum(:,:,:) + scalar_weight*pcmat(:,:,:)
+            !$omp end parallel workshare
         end do
-        !$omp end parallel do
-        ! Following sums are performed in case anisotropic correction will be unsuccessfull
-        ! Unweighted, unfiltered sum for CTF estimation
-        wvec = scalar_weight
-        where( frameweights < 1.e-6 ) wvec = 0.
-        call sum_frames(movie_sum_ctf, wvec)
-        ! Weighted, filtered sum for micrograph
+        call movie_sum_ctf%set_cmat(cmat_sum)
+        call movie_sum_ctf%ifft
+        if( l_BENCH ) rt_forctf = toc(t_forctf)
+        ! Optimal weights
         if (DO_OPT_WEIGHTS) then
-            call opt_weights%new(movie_frames_shifted, hp, params_glob%lpstop)
+            call opt_weights%new(movie_frames_scaled, hp, params_glob%lpstop)
             call opt_weights%calc_opt_weights
             frameweights = opt_weights%get_weights()
             call opt_weights%kill
         end if
-        call apply_dose_weighting(movie_frames_shifted)
-        call sum_frames(movie_sum_corrected,frameweights)
-        ! cleanup
+        ! dose weighing
+        if( l_BENCH ) t_dose = tic()
+        call apply_dose_weighting(movie_frames_scaled(:))
+        if( l_BENCH ) rt_dose = toc(t_dose)
+        ! Micrograph
+        if( l_BENCH ) t_mic = tic()
+        call movie_sum_corrected%new(ldim_scaled, smpd_scaled)
+        cmat_sum = cmplx(0.,0.)
         do iframe=1,nframes
-            call movie_frames_shifted(iframe)%kill
+            call movie_frames_scaled(iframe)%get_cmat_ptr(pcmat)
+            !$omp parallel workshare proc_bind(close)
+            cmat_sum(:,:,:) = cmat_sum(:,:,:) + frameweights(iframe)*pcmat(:,:,:)
+            !$omp end parallel workshare
         end do
-        deallocate(movie_frames_shifted)
-        contains
-
-            subroutine sum_frames( img_sum, weights )
-                class(image), intent(inout) :: img_sum
-                real,         intent(in)    :: weights(1:nframes)
-                complex,  pointer :: pcmat(:,:,:)
-                integer :: iframe
-                call img_sum%new(ldim_scaled, smpd_scaled)
-                cmat_sum = cmplx(0.,0.)
-                !$omp parallel do default(shared) private(iframe,pcmat) proc_bind(close)&
-                !$omp schedule(static) reduction(+:cmat_sum)
-                do iframe=1,nframes
-                    if( weights(iframe) < TINY ) cycle
-                    call movie_frames_shifted(iframe)%get_cmat_ptr(pcmat)
-                    cmat_sum = cmat_sum + pcmat * weights(iframe)
-                end do
-                !$omp end parallel do
-                call img_sum%set_ft(.true.)
-                call img_sum%set_cmat(cmat_sum)
-                call img_sum%ifft()
-            end subroutine sum_frames
-
+        call movie_sum_corrected%set_cmat(cmat_sum)
+        call movie_sum_corrected%ifft
+        if( l_BENCH ) rt_mic = toc(t_mic)
+        if( L_BENCH )then
+            print *,'t_forctf:     ',rt_forctf
+            print *,'t_dose:       ',rt_dose
+            print *,'t_mic:        ',rt_mic
+        endif
     end subroutine motion_correct_iso_calc_sums
 
-    subroutine motion_correct_iso_calc_sums_tomo( frame_counter, time_per_frame, movie_sum, movie_sum_corrected, movie_sum_ctf )
+    subroutine motion_correct_iso_calc_sums_tomo( frame_counter, time_per_frame, movie_sum_corrected, movie_sum_ctf )
         integer,     intent(inout) :: frame_counter  !< frame counter
         real,        intent(in)    :: time_per_frame !< time resolution
-        type(image), intent(inout) :: movie_sum, movie_sum_corrected, movie_sum_ctf
+        type(image), intent(inout) :: movie_sum_corrected, movie_sum_ctf
         real    :: current_time
         integer :: iframe
         ! re-calculates doses
@@ -430,7 +411,7 @@ contains
             current_time      = real(frame_counter)*time_per_frame ! unit: seconds
             acc_doses(iframe) = dose_rate*current_time             ! unit e/A2
         end do
-        call  motion_correct_iso_calc_sums(movie_sum, movie_sum_corrected, movie_sum_ctf)
+        call  motion_correct_iso_calc_sums(movie_sum_corrected, movie_sum_ctf)
     end subroutine motion_correct_iso_calc_sums_tomo
 
     ! open, write isotropic shifts and do not close star file
@@ -481,23 +462,24 @@ contains
     end subroutine write_iso2star
 
     subroutine motion_correct_iso_kill
-        integer :: iframe
-        if( allocated(movie_frames_scaled) )then
-            do iframe=1,size(movie_frames_scaled)
-                call movie_frames_scaled(iframe)%kill
-            end do
-            deallocate(movie_frames_scaled)
-        endif
         if (allocated(opt_shifts)) deallocate(opt_shifts)
         call ftexp_transfmat_kill
     end subroutine motion_correct_iso_kill
 
     ! PUBLIC METHODS, PATCH-BASED MOTION CORRECTION
 
-    !> patch-based motion_correction of DDD movie
+    !>  patch-based motion_correction of DDD movie
+    !>  movie_frames_scaled assumed shifted, in Fourier domain
     subroutine motion_correct_patched( bfac, rmsd )
         real, intent(in)  :: bfac
         real, intent(out) :: rmsd(2)     !< whether polynomial fitting was within threshold
+        integer :: iframe
+        if( l_BENCH ) t_patched = tic()
+        !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+        do iframe=1,nframes
+            call movie_frames_scaled(iframe)%ifft
+        end do
+        !$omp end parallel do
         rmsd = huge(rmsd(1))
         call motion_patch%new(motion_correct_ftol = params_glob%motion_correctftol, &
             motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale*params_glob%trs)
@@ -506,76 +488,66 @@ contains
         PRINT_NEVALS = .false.
         if (DO_PATCHED_POLYN) then
             call motion_patch%set_bfactor(bfac)
-            call motion_patch%correct_polyn( hp, resstep, movie_frames_shifted_saved,&
+            call motion_patch%correct_polyn( hp, resstep, movie_frames_scaled,&
                 &patched_shift_fname, DO_PATCHED_POLYN_DIRECT_AFTER, shifts_toplot)
             rmsd = 0.
         else
             call motion_patch%set_fitshifts(FITSHIFTS)
-            call motion_patch%set_frameweights( frameweights )
+            call motion_patch%set_frameweights(frameweights)
             call motion_patch%set_fixed_frame(fixed_frame)
             call motion_patch%set_interp_fixed_frame(fixed_frame)
             call motion_patch%set_bfactor(bfac)
-            call motion_patch%correct(hp, resstep, movie_frames_shifted_saved,patched_shift_fname, shifts_toplot)
+            call motion_patch%correct(hp, resstep, movie_frames_scaled, patched_shift_fname, shifts_toplot)
             rmsd = motion_patch%get_polyfit_rmsd()
         end if
         call motion_patch%get_poly4star(patched_polyn)
+        if( L_BENCH )then
+            rt_patched = toc(t_patched)
+            print *,'rt_patched:      ',rt_patched
+        endif
     end subroutine motion_correct_patched
 
     ! weighted & un-weighted sums, dose-weighting
+    ! movie_frames_shifted assumed in real-space
     subroutine motion_correct_patched_calc_sums( movie_sum_corrected, movie_sum_ctf )
         type(image), intent(inout) :: movie_sum_corrected, movie_sum_ctf
-        type(opt_image_weights)    :: opt_weights
-        real,            pointer   :: prmat(:,:,:)
-        type(image), allocatable   :: movie_frames_shifted_patched(:)
-        real,        allocatable   :: rmat_sum(:,:,:)
-        real                       :: scalar_weight
+        real                       :: scalar_weight, weights(nframes)
         integer                    :: iframe
         scalar_weight = 1. / real(nframes)
+        ! for CTF estimation
+        if( l_BENCH ) t_patched_forctf = tic()
         call movie_sum_ctf%new(ldim_scaled, smpd_scaled)
-        allocate(rmat_sum(ldim_scaled(1),ldim_scaled(2),1), source=0.)
-        allocate(movie_frames_shifted_patched(nframes))
-        ! micrograph for CTF estimation
-        !$omp parallel do default(shared) private(iframe,prmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
-        do iframe=1,nframes
-            call motion_patch%polytransfo(iframe, movie_frames_shifted_saved(iframe), movie_frames_shifted_patched(iframe))
-            call movie_frames_shifted_patched(iframe)%get_rmat_ptr(prmat)
-            rmat_sum(:,:,1) = rmat_sum(:,:,1) + scalar_weight*prmat(1:ldim_scaled(1),1:ldim_scaled(2),1)
-            if( params_glob%l_dose_weight ) call movie_frames_shifted_saved(iframe)%fft
-            call movie_frames_shifted_patched(iframe)%fft
-        end do
-        !$omp end parallel do
-        call movie_sum_ctf%set_rmat(rmat_sum)
-        if (DO_OPT_WEIGHTS) then
-            call opt_weights%new(movie_frames_shifted_patched, hp, params_glob%lpstop)
-            call opt_weights%calc_opt_weights
-            frameweights = opt_weights%get_weights()
-            call opt_weights%kill
-        end if
+        weights = scalar_weight
+        call motion_patch%polytransfo(movie_frames_scaled(:), weights, movie_sum_ctf)
+        if( l_BENCH ) rt_patched_forctf = toc(t_patched_forctf)
+        if( params_glob%l_dose_weight )then
+            ! dose weighing
+            if( l_BENCH ) t_dose = tic()
+            !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(guided)
+            do iframe=1,nframes
+                call movie_frames_scaled(iframe)%fft
+            end do
+            !$omp end parallel do
+            call apply_dose_weighting(movie_frames_scaled(:))
+            !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(guided)
+            do iframe=1,nframes
+                call movie_frames_scaled(iframe)%ifft
+            end do
+            !$omp end parallel do
+            if( l_BENCH ) rt_dose = toc(t_dose)
+        endif
         ! micrograph
+        if( l_BENCH ) t_patched_mic = tic()
         call movie_sum_corrected%new(ldim_scaled, smpd_scaled)
-        call apply_dose_weighting(movie_frames_shifted_saved(:))
-        rmat_sum = 0.
-        !$omp parallel do default(shared) private(iframe,prmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
-        do iframe=1,nframes
-            if( frameweights(iframe) < 1.e-6 ) cycle
-            call movie_frames_shifted_saved(iframe)%ifft
-            if( params_glob%l_dose_weight )then
-                ! real space interpolation
-                call motion_patch%polytransfo(iframe, movie_frames_shifted_saved(iframe), movie_frames_shifted_patched(iframe))
-            else
-                call movie_frames_shifted_patched(iframe)%ifft
-            endif
-            ! sum
-            call movie_frames_shifted_patched(iframe)%get_rmat_ptr(prmat)
-            rmat_sum(:,:,1) = rmat_sum(:,:,1) + frameweights(iframe) * prmat(1:ldim_scaled(1),1:ldim_scaled(2),1)
-        end do
-        !$omp end parallel do
-        call movie_sum_corrected%set_rmat(rmat_sum)
-        ! cleanup
-        do iframe=1,nframes
-            call movie_frames_shifted_patched(iframe)%kill
-        enddo
-        deallocate(movie_frames_shifted_patched,rmat_sum)
+        weights = frameweights
+        call motion_patch%polytransfo(movie_frames_scaled(:), weights, movie_sum_corrected)
+        if( l_BENCH ) rt_patched_mic = toc(t_patched_mic)
+        if( L_BENCH )then
+            rt_patched = toc(t_patched)
+            print *,'rt_patched_forctf: ',rt_patched_forctf
+            print *,'rt_patched_mic   : ',rt_patched_mic
+            print *,'rt_dose   : ',rt_dose
+        endif
     end subroutine motion_correct_patched_calc_sums
 
     ! write anisotropic shifts
@@ -602,18 +574,69 @@ contains
     end subroutine write_aniso2star
 
     subroutine motion_correct_patched_kill
-        integer :: iframe
         call motion_patch%kill
-        if( allocated(movie_frames_shifted_saved) )then
-            do iframe=1,size(movie_frames_shifted_saved)
-                call movie_frames_shifted_saved(iframe)%kill
-            end do
-            deallocate(movie_frames_shifted_saved)
-        endif
         call ftexp_transfmat_kill
     end subroutine motion_correct_patched_kill
 
     ! PUBLIC COMMON
+
+    !> mic2spec calculates the average powerspectrum over a micrograph
+    !!          the resulting spectrum has dampened central cross and subtracted background
+    subroutine motion_correct_mic2spec( img_in, box, speckind, lp_backgr_subtr, img_out )
+        class(image),      intent(inout) :: img_in
+        integer,           intent(in)    :: box
+        character(len=*),  intent(in)    :: speckind
+        real,              intent(in)    :: lp_backgr_subtr
+        type(image),       intent(inout) :: img_out
+        type(image)       :: tiles(nthr_glob), tmp(nthr_glob)
+        real, allocatable :: rmat_sum(:,:,:)
+        real, pointer     :: prmat(:,:,:)
+        real    :: smpd
+        integer :: ldim(3), i,j, n, hbox, ithr
+        logical :: outside
+        hbox = box/2
+        call img_in%ifft
+        smpd = img_in%get_smpd()
+        ldim = img_in%get_ldim()
+        n    = 0
+        call img_out%new([box,box,1], smpd)
+        call img_out%zero_and_unflag_ft
+        rmat_sum = img_out%get_rmat()
+        ! sum individual spectra
+        !$omp parallel do private(i,j,ithr,prmat) default(shared) schedule(static)&
+        !$omp proc_bind(close) reduction(+:n,rmat_sum)
+        do j = 0,ldim(2)-box,hbox
+            do i = 0,ldim(1)-box,hbox
+                n    = n+1
+                ithr = omp_get_thread_num() + 1
+                if( tiles(ithr)%exists() )then
+                    call tiles(ithr)%zero_and_unflag_ft
+                else
+                    call tiles(ithr)%new([box,box,1], smpd, wthreads=.false.)
+                    call tmp(ithr)%new([box,box,1], smpd, wthreads=.false.)
+                endif
+                call img_in%window_slim([i,j], box, tiles(ithr), outside)
+                call tiles(ithr)%norm()
+                call tiles(ithr)%zero_edgeavg
+                call tiles(ithr)%fft()
+                call tiles(ithr)%ft2img(speckind, tmp(ithr))
+                call tmp(ithr)%get_rmat_ptr(prmat)
+                rmat_sum(:,:,1) = rmat_sum(:,:,1) + prmat(:ldim(1),:ldim(2),1)
+            enddo
+        enddo
+        !$omp end parallel do
+        call img_out%set_rmat(rmat_sum)
+        ! average
+        call img_out%div(real(n))
+        ! post-process
+        call img_out%dampen_pspec_central_cross
+        call img_out%subtr_backgr(lp_backgr_subtr)
+        ! cleanup
+        do ithr=1,nthr_glob
+            call tiles(ithr)%kill
+            call tmp(ithr)%kill
+        enddo
+    end subroutine motion_correct_mic2spec
 
     subroutine close_starfile
         call starfile_table__close_ofile(mc_starfile)
@@ -621,11 +644,18 @@ contains
     end subroutine close_starfile
 
     subroutine motion_correct_kill_common
+        integer :: iframe
         if( allocated(corrs)              ) deallocate(corrs)
         if( allocated(shifts_toplot)      ) deallocate(shifts_toplot)
         if( allocated(frameweights)       ) deallocate(frameweights)
         if( allocated(acc_doses)          ) deallocate(acc_doses)
         if( allocated(cmat_sum)           ) deallocate(cmat_sum)
+        if( allocated(movie_frames_scaled) )then
+            do iframe=1,size(movie_frames_scaled)
+                call movie_frames_scaled(iframe)%kill
+            end do
+            deallocate(movie_frames_scaled)
+        endif
         call ftexp_transfmat_kill
     end subroutine motion_correct_kill_common
 
@@ -635,14 +665,16 @@ contains
     ! Frames assumed in fourier space
     subroutine apply_dose_weighting( frames )
         class(image), intent(inout) :: frames(nframes)
-        real, parameter :: A=0.245, B=-1.665, C=2.81
-        real    :: frame_dose(nframes)
-        real    :: twoNe, smpd, q, sumqsq, qnorm, spafreq, limhsq,limksq
-        integer :: nrflims(3,2), ldim(3), phys(3), iframe, h,k
+        real, parameter   :: A=0.245, B=-1.665, C=2.81
+        real, allocatable :: qs(:)
+        real    :: frame_dose(nframes), spaFreqk
+        real    :: twoNe, smpd, spafreq, limhsq,limksq
+        integer :: nrflims(3,2), ldim(3), hphys,kphys,kphys2, iframe, h,k
         if( .not.params_glob%l_dose_weight ) return
         if( .not.frames(1)%is_ft() ) THROW_HARD('Frames should be in in the Fourier domain')
         nrflims = frames(1)%loop_lims(2)
         smpd    = frames(1)%get_smpd()
+        allocate(qs(nframes),source=0.)
         ! doses
         ldim   = frames(1)%get_ldim()
         limhsq = (real(ldim(1))*smpd)**2.
@@ -655,26 +687,116 @@ contains
                 frame_dose(iframe) = frame_dose(iframe) / 0.64
             endif
         enddo
-        !$omp parallel do collapse(2) private(h,k,spafreq,twone,phys,sumqsq,iframe,q,qnorm)&
+        ! dose normalization
+        !$omp parallel do private(h,k,spafreq,spafreqk,twone,kphys,hphys,iframe,qs)&
         !$omp default(shared) schedule(static) proc_bind(close)
-        do h = nrflims(1,1),nrflims(1,2)
-            do k = nrflims(2,1),nrflims(2,2)
-                spaFreq = sqrt( real(h*h)/limhsq + real(k*k)/limksq )
-                twoNe   = 2. * (A*spaFreq**B + C)
-                phys    = frames(1)%comp_addr_phys([h,k,0])
-                sumqsq  = 0.
+        do k = nrflims(2,1),nrflims(2,2)
+            kphys    = k + 1 + merge(ldim(2),0,k<0)
+            spaFreqk = real(k*k)/limksq
+            do h = nrflims(1,1),nrflims(1,2)
+                hphys   = h + 1
+                spaFreq = sqrt( real(h*h)/limhsq + spaFreqk )
+                twoNe   = 2.*(A*spaFreq**B + C)
+                qs = exp(-frame_dose/twoNe)
+                qs = qs / sqrt(sum(qs*qs))
                 do iframe = 1,nframes
-                    q      = exp(-frame_dose(iframe)/twoNe)
-                    sumqsq = sumqsq + q*q
-                    call frames(iframe)%mul_cmat_at(phys, q)
-                enddo
-                qnorm = sqrt(sumqsq)
-                do iframe = 1,nframes
-                    call frames(iframe)%div_cmat_at(phys, qnorm)
+                    call frames(iframe)%mul_cmat_at([hphys,kphys,1], qs(iframe))
                 enddo
             enddo
         enddo
         !$omp end parallel do
     end subroutine apply_dose_weighting
+
+    ! gain correction, calculate image sum and identify outliers
+    subroutine cure_outliers( frames, gainref_fname )
+        class(image),               intent(inout) :: frames(nframes)
+        character(len=*), optional, intent(in)    :: gainref_fname
+        integer, parameter   :: hwinsz = 6
+        type(image)          :: gainref
+        real,        pointer :: prmat(:,:,:)
+        real,    allocatable :: rsum(:,:), vals(:), new_vals(:,:)
+        integer, allocatable :: pos_outliers(:,:)
+        real    :: ave, sdev, var, lthresh, uthresh
+        integer :: iframe, noutliers, l,r,b,u,i,j,k, nvals, winsz
+        logical :: outliers(ldim(1),ldim(2)), err
+        allocate(rsum(ldim(1),ldim(2)),source=0.)
+        if( l_BENCH ) t_cure = tic()
+        write(logfhandle,'(a)') '>>> REMOVING DEAD/HOT PIXELS & FOURIER TRANSFORMING FRAMES'
+        if( present(gainref_fname) )then
+            if( file_exists(gainref_fname) )then
+                call gainref%new(ldim, smpd)
+                call gainref%read(gainref_fname)
+                !$omp parallel do schedule(static) default(shared) private(iframe) proc_bind(close)
+                do iframe = 1,nframes
+                    call frames(iframe)%mul(gainref)
+                enddo
+                !$omp end parallel do
+                call gainref%kill
+            else
+                THROW_HARD('gain reference: '//trim(gainref_fname)//' not found; motion_correct_init')
+            endif
+        endif
+        ! sum
+        do iframe = 1,nframes
+            call frames(iframe)%get_rmat_ptr(prmat)
+            !$omp parallel workshare
+            rsum(:,:) = rsum(:,:) + prmat(:ldim(1),:ldim(2),1)
+            !$omp end parallel workshare
+        enddo
+        ! outliers detection
+        call moment( rsum, ave, sdev, var, err )
+        if( sdev<TINY )return
+        lthresh   = ave - NSIGMAS * sdev
+        uthresh   = ave + NSIGMAS * sdev
+        where( rsum<lthresh .or. rsum>uthresh )
+            outliers = .true.
+        elsewhere
+            outliers = .false.
+        end where
+        noutliers = count(outliers)
+        deallocate(rsum)
+        ! cure
+        if( noutliers > 0 )then
+            write(logfhandle,'(a,1x,i7)') '>>> # DEAD/HOT PIXELS:', noutliers
+            winsz = 2*HWINSZ+1
+            nvals = winsz*winsz
+            allocate(new_vals(noutliers,nframes),pos_outliers(2,noutliers),vals(nvals))
+            ! gather positions
+            k = 0
+            do j = 1,ldim(2)
+                do i = 1,ldim(1)
+                    if( outliers(i,j) )then
+                        k = k + 1
+                        pos_outliers(:,k) = [i,j]
+                    endif
+                enddo
+            enddo
+            !$omp parallel do default(shared) private(iframe,k,i,j,l,r,b,u,vals,prmat)&
+            !$omp proc_bind(close) schedule(static)
+            do iframe=1,nframes
+                call frames(iframe)%get_rmat_ptr(prmat)
+                ! calulate new values
+                do k = 1,noutliers
+                    i = pos_outliers(1,k)
+                    j = pos_outliers(2,k)
+                    l = max(i-HWINSZ,1)
+                    r = min(ldim(1),l+winsz-1)
+                    l = r-winsz+1
+                    b = max(j-HWINSZ,1)
+                    u = min(ldim(2),b+winsz-1)
+                    b = u-winsz+1
+                    vals = reshape(prmat(l:r,b:u,1),(/nvals/))
+                    new_vals(k,iframe) = median_nocopy(vals)
+                enddo
+                ! substitute
+                do k = 1,noutliers
+                    i = pos_outliers(1,k)
+                    j = pos_outliers(2,k)
+                    prmat(i,j,1) = new_vals(k,iframe)
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
+    end subroutine cure_outliers
 
 end module simple_motion_correct

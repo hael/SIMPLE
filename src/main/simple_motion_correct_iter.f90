@@ -7,7 +7,6 @@ use simple_parameters,   only: params_glob
 use simple_ori,          only: ori
 use simple_stackops,     only: frameavg_stack
 use simple_motion_correct
-!use simple_starfile_wrappers
 implicit none
 
 public :: motion_correct_iter
@@ -16,6 +15,10 @@ private
 
 real,             parameter :: PATCH_FIT_THRESHOLD = 10.0 ! threshold for polynomial fitting in pixels
 character(len=*), parameter :: speckind = 'sqrt'
+! benchmarking
+logical                 :: L_BENCH = .true.
+integer(timer_int_kind) :: t_postproc1
+real(timer_int_kind)    :: rt_postproc1
 
 type :: motion_correct_iter
     private
@@ -43,11 +46,10 @@ contains
         character(len=*), optional, intent(in)    :: gainref_fname
         character(len=*), optional, intent(in)    :: tseries
         character(len=:), allocatable :: fbody_here, ext, star_fname
-        real,             allocatable :: shifts(:,:)
         type(stats_struct)        :: shstats(2)
         character(len=LONGSTRLEN) :: rel_fname
         real    :: goodnessoffit(2), scale, var, bfac_here
-        integer :: ldim(3), ldim_thumb(3), nframes
+        integer :: ldim(3), ldim_thumb(3)
         logical :: err, patch_success, l_tseries
         l_tseries = .false.
         if( present(tseries) ) l_tseries = tseries.eq.'yes'
@@ -95,38 +97,28 @@ contains
             self%moviename = trim(moviename)
         endif
         ! execute the motion_correction
-        call motion_correct_iso(self%moviename, ctfvars, bfac_here, shifts, gainref_fname=gainref_fname)
-        ! return shift stats
-        nframes = size(shifts(:,1))
-        call moment(shifts(:,1), shstats(1)%avg, shstats(1)%sdev, var, err)
-        call moment(shifts(:,2), shstats(2)%avg, shstats(2)%sdev, var, err)
-        call orientation%set('xavg',  shstats(1)%avg)
-        call orientation%set('xsdev', shstats(1)%sdev)
-        call orientation%set('xmax',  maxval(shifts(:,1)))
-        call orientation%set('xmin',  minval(shifts(:,1)))
-        call orientation%set('yavg',  shstats(2)%avg)
-        call orientation%set('ysdev', shstats(2)%sdev)
-        call orientation%set('ymax',  maxval(shifts(:,2)))
-        call orientation%set('ymin',  minval(shifts(:,2)))
-        ! generate sums
-        if( params_glob%tomo .eq. 'yes' )then
-            call motion_correct_iso_calc_sums_tomo(frame_counter, params_glob%time_per_frame,&
-            &self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
-        else
-            call motion_correct_iso_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
-        endif
-        call write_iso2star(star_fname, self%moviename, gainref_fname)
+        call motion_correct_iso(self%moviename, ctfvars, bfac_here, self%moviesum, gainref_fname=gainref_fname)
+        ! shifts frames accordingly
+        call motion_correct_iso_shift_frames
         ! destruct before anisotropic correction
         call motion_correct_iso_kill
+        if( .not. l_tseries ) call write_iso2star(star_fname, self%moviename, gainref_fname)
         ! Patch based approach
         if( motion_correct_with_patched ) then
             patched_shift_fname = trim(dir_out)//trim(adjustl(fbody_here))//'_shifts.eps'
             call motion_correct_patched( bfac_here, goodnessoffit )
+            if( .not. l_tseries ) call write_aniso2star
             patch_success = all(goodnessoffit < PATCH_FIT_THRESHOLD)
+            ! generate sums
             if( patch_success )then
                 call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
-                call write_aniso2star
             else
+                if( params_glob%tomo .eq. 'yes' )then
+                    call motion_correct_iso_calc_sums_tomo(frame_counter, params_glob%time_per_frame,&
+                    &self%moviesum_corrected, self%moviesum_ctf)
+                else
+                    call motion_correct_iso_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
+                endif
                 THROW_WARN('Polynomial fitting to patch-determined shifts was of insufficient quality')
                 THROW_WARN('Only isotropic/stage-drift correction will be used')
             endif
@@ -134,21 +126,30 @@ contains
             call orientation%set('gofy',goodnessoffit(2))
             ! cleanup
             call motion_correct_patched_kill
+        else
+            ! generate sums
+            if( params_glob%tomo .eq. 'yes' )then
+                call motion_correct_iso_calc_sums_tomo(frame_counter, params_glob%time_per_frame,&
+                &self%moviesum_corrected, self%moviesum_ctf)
+            else
+                call motion_correct_iso_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
+            endif
         endif
         ! generate power-spectra
-        call self%moviesum%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)
-        call self%moviesum_ctf%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_ctf)
+        if( L_BENCH ) t_postproc1 = tic()
+        call motion_correct_mic2spec(self%moviesum,     params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)
+        call motion_correct_mic2spec(self%moviesum_ctf, params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_ctf)
         call self%pspec_sum%before_after(self%pspec_ctf, self%pspec_half_n_half)
         call self%pspec_half_n_half%scale_pspec4viz
         ! write output
         call self%moviesum_corrected%write(self%moviename_intg)
         if( .not. l_tseries ) call self%moviesum_ctf%write(self%moviename_forctf)
+        if( L_BENCH ) rt_postproc1 = toc(t_postproc1)
         ! generate thumbnail
-        ldim          = self%moviesum_corrected%get_ldim()
-        scale         = real(params_glob%pspecsz)/real(ldim(1))
-        ldim_thumb(1) = round2even(real(ldim(1))*scale)
-        ldim_thumb(2) = round2even(real(ldim(2))*scale)
-        ldim_thumb(3) = 1
+        ldim  = self%moviesum_corrected%get_ldim()
+        scale = real(params_glob%pspecsz)/real(ldim(1))
+        ldim_thumb(1:2) = round2even(real(ldim(1:2))*scale)
+        ldim_thumb(3)   = 1
         call orientation%set('xdim', real(ldim(1)))
         call orientation%set('ydim', real(ldim(2)))
         call self%thumbnail%new(ldim_thumb, ctfvars%smpd)
@@ -165,9 +166,9 @@ contains
             call orientation%set('movie',  trim(rel_fname))
             call make_relativepath(CWD_GLOB,self%moviename_forctf,rel_fname)
             call orientation%set('forctf', trim(rel_fname))
+            call make_relativepath(CWD_GLOB,star_fname,rel_fname)
+            call orientation%set("mc_starfile",rel_fname)
         endif
-        call make_relativepath(CWD_GLOB,star_fname,rel_fname)
-        call orientation%set("mc_starfile",rel_fname)
         call make_relativepath(CWD_GLOB,self%moviename_intg,rel_fname)
         call orientation%set('intg',   trim(rel_fname))
         call make_relativepath(CWD_GLOB,self%moviename_thumb,rel_fname)
@@ -178,9 +179,10 @@ contains
             call orientation%set('mceps', rel_fname)
         endif
         call motion_correct_kill_common
-        call close_starfile
-        ! deallocate
-        if( allocated(shifts) ) deallocate(shifts)
+        if( .not. l_tseries ) call close_starfile
+        if( L_BENCH )then
+            print *,'rt_postproc1: ',rt_postproc1
+        endif
     end subroutine iterate
 
     function get_moviename( self, which ) result( moviename )
