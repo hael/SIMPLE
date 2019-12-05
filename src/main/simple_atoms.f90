@@ -619,7 +619,6 @@ contains
                endif
             enddo
         enddo
-        write(logfhandle, *) 'generating files for visualization'
        ! generate pdb file for visualisation
        cnt_intersect = 0
        call final_atoms%new(count(flag), dummy=.true.)
@@ -710,7 +709,6 @@ contains
               enddo
             enddo
         enddo
-        write(logfhandle, *) 'generating files for visualization'
         ! generate pdb for visualisation
         cnt_intersect = 0
         call final_atoms%new(count(flag), dummy=.true.)

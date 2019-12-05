@@ -88,20 +88,22 @@ contains
         use simple_commander_volops, only: dock_volpair_commander
         use simple_ori,              only: ori
         use simple_atoms,            only: atoms
+        use simple_nano_utils,       only: kabsch, read_pdb2matrix, write_matrix2pdb, find_couples
         class(atoms_rmsd_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline !< command line input
         type(dock_volpair_commander) :: xdock_volpair
         character(len=STDLEN)  :: fname1, fname2
         type(parameters)       :: params
-        type(nanoparticle) :: nano1, nano2
+        type(nanoparticle)     :: nano1, nano2
         type(cmdline)          :: cline_dock
+        integer, parameter     :: D = 3 ! dimension of the space (3D)
+        real(dp), allocatable  :: points_P(:,:), points_Q(:,:), P(:,:), Q(:,:)
         type(ori)   :: orientation
         type(oris)  :: ori2read
         type(atoms) :: atom_coord
-        real        :: cxyz(3)
-        real        :: smpd, mat(3,3), shift(3)
-        integer     :: ldim(3), nptcls
-        integer     :: i
+        real        :: smpd, cxyz(D), mat(D,D), shift(D)
+        real(dp)    :: U(D,D), r(D), lrms
+        integer     :: ldim(3), nptcls, i
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_atoms_rmsd')
@@ -115,13 +117,11 @@ contains
         if( .not. cline%defined('dock') )then
             THROW_HARD('ERROR! dock needs to be present; exec_atoms_rmsd')
         endif
-        if(cline%defined('element')) then
-            call nano1%new(params%vols(1), params%smpd,params%element)
-            call nano2%new(params%vols(2), params%smpd,params%element)
-        else
-            call nano1%new(params%vols(1), params%smpd)
-            call nano2%new(params%vols(2), params%smpd)
+        if(.not. cline%defined('element')) then
+          THROW_HARD('ERROR! element needs to be present; exec_atoms_rmsd')
         endif
+        call nano1%new(params%vols(1), params%smpd,params%element)
+        call nano2%new(params%vols(2), params%smpd,params%element)
         fname1 = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
         fname2 = get_fbody(trim(basename(params%vols(2))), trim(fname2ext(params%vols(2))))
         call nano1%set_atomic_coords(trim(fname1)//'_atom_centers.pdb')
@@ -135,6 +135,7 @@ contains
             call cline_dock%set('nthr',0.)
             call cline_dock%set('outfile', 'algndoc.txt')
             call cline_dock%set('outvol', './'//trim(fname2)//'docked.mrc')
+            ! Initial estimation of the rot/transl performed on VOLUMES
             call xdock_volpair%execute(cline_dock)
             !1) Center the coords
             call find_ldim_nptcls(params%vols(2),ldim, nptcls,smpd)
@@ -155,9 +156,25 @@ contains
             call orientation%kill
             call atom_coord%translate(shift)
             !5) Set new coords
-            call atom_coord%writePDB(    trim(fname2)//'_ROTATEDatom_centers')
+            call atom_coord%writePDB(    trim(fname2)//'_DockedVol_atom_centers')
             call atom_coord%kill
-            call nano2%set_atomic_coords(trim(fname2)//'_ROTATEDatom_centers.pdb')
+            call nano2%set_atomic_coords(trim(fname2)//'_DockedVol_atom_centers.pdb')
+            ! Refinement on the solution with Kabsch algorithm, performed on COORDS
+            ! read the coordinates in the pdb file and save them in matrixes
+            call read_pdb2matrix(trim(fname1)//'_atom_centers.pdb', points_P)
+            call read_pdb2matrix(trim(fname2)//'_DockedVol_atom_centers.pdb', points_Q)
+            ! Identify atom couples
+            call find_couples(points_P,points_Q,params%element,P,Q)
+            ! to remove after testing
+            call write_matrix2pdb(real(P,sp), trim(fname1)//'_FindCouples')
+            call write_matrix2pdb(real(Q,sp), trim(fname2)//'_FindCouples')
+            ! identify rotation matrix, translation vector and calculate RMSD
+            call kabsch(P,Q,U,r,lrms) !U: rot matrix, r: transl vec, lrms: RMSD
+            write(logfhandle,*) 'Calculated RMSD of the identified couples: ', lrms
+            ! Debug
+            call write_matrix2pdb(real(P,sp), trim(fname1)//'_Kabsch_atom_centers')
+            call write_matrix2pdb(real(Q,sp), trim(fname2)//'_Kabsch_atom_centers')
+           ! kabsh internally perfoms roation/translation
         else ! no DOCKING
             call nano2%set_atomic_coords(trim(fname2)//'_atom_centers.pdb')
         endif

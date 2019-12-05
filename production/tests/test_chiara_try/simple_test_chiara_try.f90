@@ -431,7 +431,6 @@ module simple_test_chiara_try_mod
    !    call img_spec%write('graphene.mrc')
    !    call img_spec%kill
    ! end subroutine filter_peaks
-
 end module simple_test_chiara_try_mod
 
     program simple_test_chiara_try
@@ -443,24 +442,58 @@ end module simple_test_chiara_try_mod
        use simple_segmentation
        use simple_binimage, only : binimage
        use simple_test_chiara_try_mod
-       use simple_nano_utils, only : remove_graphene_peaks
-       real :: A(4,2), sig(4), copyA(4,2)
-       type(image)    :: raw_img
-       type(image) :: img_spec
-       real :: ave, sdev, maxv, minv
-       real, parameter :: UP_LIM=2.14, L_LIM = 1.42 !1.23
-       real, allocatable :: x(:)
-       integer :: UFlim, LFlim, lims(2), i, j, h, k, sh, cnt, loc(3)
-       integer, parameter :: BOX = 160
-       real :: smpd, thresh, radius, m1(3)
-       integer :: center(3)
-       real, pointer :: rmat(:,:,:)
-       real, allocatable :: rmat_aux(:,:,:)
-       integer, allocatable :: lmsk(:,:,:), lmat(:,:,:)
-       real :: M0M1(3), s(3)
-       M0M1 = [3.,-1.,-4.]
-       s = [2.,1.,2.]
-       print *, 'prod: ', dot_product(M0M1, s)
+       use simple_nano_utils
+
+
+       ! test function find_couples
+       ! real :: P(3,6), Q(3,8), U(3,3), r(3), lrms
+       ! real, allocatable :: PP(:,:), QQ(:,:)
+       ! character(len=2) :: element
+       ! element='PT'
+       ! P = reshape([1.,6.,0.,2.,5.,9.,3.,4.,8.,4.,3.,7.,5.,2.,6.,6.,1.,5.],[3,6])
+       ! Q = reshape([1.,6.,0.,2.,5.,9.,3.,4.,8.,4.,3.,7.,5.,2.,6.,6.,1.,5.,5.,6.,7.,8.,9.,0.],[3,8])
+       ! print *, 'P: '
+       ! call vis_mat(P)
+       ! print *, 'Q: '
+       ! call vis_mat(Q)
+       ! call find_couples(P,Q,element,0.358,PP,QQ)
+       ! print *, 'shape(PP): ', shape(PP)
+       ! print *, 'shape(QQ): ', shape(QQ)
+       ! print *, 'PP: '
+       ! call vis_mat(PP)
+       ! print *, 'QQ: '
+       ! call vis_mat(QQ)
+
+
+       ! real :: A(4,2), sig(4), copyA(4,2)
+       ! type(image)    :: raw_img
+       ! type(image) :: img_spec
+       ! real :: ave, sdev, maxv, minv
+       ! real, parameter :: UP_LIM=2.14, L_LIM = 1.42 !1.23
+       ! real, allocatable :: x(:)
+       ! integer :: UFlim, LFlim, lims(2), i, h, k, sh, cnt, loc(3)
+       ! integer, parameter :: BOX = 160
+       ! real :: smpd, thresh, radius, m1(3)
+       ! integer :: center(3)
+       ! real, pointer :: rmat(:,:,:)
+       ! real, allocatable :: rmat_aux(:,:,:)
+       ! integer, allocatable :: lmsk(:,:,:), lmat(:,:,:)
+
+       ! Kabsch testing
+       real :: P(3,6), Q(3,6), U(3,3), r(3), lrms
+       P = reshape([1.,6.,0.,2.,5.,9.,3.,4.,8.,4.,3.,7.,5.,2.,6.,6.,1.,5.],[3,6])
+       Q = P + 0.2
+       call kabsch(P, Q, U,r,lrms)
+       print *, 'Rotation matrix: '
+       call vis_mat(U)
+       print *, 'Translation vec: ', r
+       print *, 'RMSD: ', lrms
+       print *, 'coords after kabsch, P'
+       call vis_mat(P)
+       print *, 'Q'
+       call vis_mat(Q)
+
+       ! ! test for removing graphene peaks
        ! smpd=0.358
        ! call img_spec%new([BOX,BOX,1], smpd)
        ! call raw_img%new([BOX,BOX,1], 1.)

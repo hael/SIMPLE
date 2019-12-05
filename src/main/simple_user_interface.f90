@@ -985,7 +985,7 @@ contains
          call atoms_rmsd%set_input('srch_ctrls', 1, 'dock', 'binary', 'Volumes have to be docked', 'Dock vol2 to vol1', &
         & 'prior comparison', .true., 'no')
         ! filter controls
-         call atoms_rmsd%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition vol1  e.g. Pt', .false., '')
+         call atoms_rmsd%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition vol1  e.g. Pt', .true., '')
         ! mask controls
         ! <empty>
         ! computer controls

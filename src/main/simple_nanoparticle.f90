@@ -979,7 +979,11 @@ contains
            do i = 1, size(coords,dim=2)
                if(dist(i)*self%smpd <=3.*self%theoretical_radius) stdev = stdev + (dist(i)-self%avg_dist_atoms)**2
            enddo
-           stdev = sqrt(stdev/real(size(coords,dim=2)-1-n_discard))
+           if(size(coords,dim=2)-1-n_discard > 0) then
+             stdev = sqrt(stdev/real(size(coords,dim=2)-1-n_discard))
+           else
+             stdev = 0.
+           endif
            med = median(dist)
            if(present(volume)) then
                write(unit = filnum, fmt = '(a,a,a,f6.3,a)') 'Average dist atoms vol ', trim(int2str(volume)),':', self%avg_dist_atoms*self%smpd, ' A'
@@ -1874,7 +1878,7 @@ contains
             enddo
         endif
         write(unit = filnum, fmt = '(i3,a,i2,a)')      cnt3,' atoms correspond within        1 A. (', cnt3*100/N_min, '% of the atoms )'
-        write(unit = filnum, fmt = '(i3,a,f3.1,a,i2,a)')  cnt2,' atoms correspond within  1 - ',2.*nano2%theoretical_radius,' A. (', cnt2*100/N_min, '% of the atoms )'
+        write(unit = filnum, fmt = '(i3,a,f3.1,a,i2,a)')  cnt2,' atoms correspond within  1 - ', 2.*nano2%theoretical_radius,' A. (', cnt2*100/N_min, '% of the atoms )'
         write(unit = filnum, fmt = '(i3,a,f3.1,a,i2,a)')  cnt-(N_max-N_min),' atoms have error bigger than ',2.*nano2%theoretical_radius,' A. (',(cnt-N_max+N_min)*100/N_min, '% of the atoms )' !remove the extra atoms
         ! remove unused atoms from the pdb file
         do i = 1, N_max
@@ -1918,6 +1922,11 @@ contains
             endif
         enddo
         stdev = sqrt(stdev/(real(cnt3)-1.))
+        if(cnt3-1 > 0) then
+          stdev = sqrt(stdev/(real(cnt3)-1.))
+        else
+          stdev = 0.
+        endif
         write(unit = filnum, fmt = '(a)')       '--->    IN VOL1    <---'
         write(unit = filnum, fmt = '(a,f6.3,a)')'AVG     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', avg, ' A'
         write(unit = filnum, fmt = '(a,f6.3,a)')'STDEV   DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', stdev, ' A'
@@ -1952,7 +1961,11 @@ contains
                 stdev = stdev + (euclid(coord,m)-avg)**2
             endif
         enddo
-        stdev = sqrt(stdev/(real(cnt3)-1.))
+        if(cnt3-1 > 0) then
+            stdev = sqrt(stdev/(real(cnt3)-1.))
+        else
+            stdev = 0.
+        endif
         write(unit = filnum, fmt = '(a)')       '--->    IN VOL2    <---'
         write(unit = filnum, fmt = '(a,f6.3,a)')'AVG     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', avg, ' A'
         write(unit = filnum, fmt = '(a,f6.3,a)')'STDEV   DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', stdev, ' A'
@@ -2146,7 +2159,6 @@ contains
               endif
             enddo
           enddo
-          write(logfhandle, *) 'generating volumes for visualization'
           ! generate volume for visualisation
           imat          = 0
           cnt_intersect = 0
@@ -2178,7 +2190,7 @@ contains
               points(:3,cnt) = self%centers(:3,i)
             endif
           enddo
-          ! svd fit
+          ! svd fit (https://au.mathworks.com/matlabcentral/answers/424591-3d-best-fit-line)
           allocate(pointsTrans(count(flag),3), source = 0.) ! because svdcmp modifies its input
           ! translate
           centroid = sum(points, dim = 2)/real(count(flag)) ! it belongs to the line
@@ -2307,7 +2319,6 @@ contains
               enddo
             enddo
           enddo
-          write(logfhandle, *) 'generating volumes for visualization'
           ! generate volume for visualisation
           ! reset
           imat    = 0
