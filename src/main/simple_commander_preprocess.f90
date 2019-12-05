@@ -546,7 +546,7 @@ contains
         character(len=:), allocatable :: output_dir_ctf_estimate, output_dir_extract
         character(len=LONGSTRLEN)     :: boxfile
         integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out
-        logical :: l_pick
+        logical :: l_pick, l_del_forctf
         call cline%set('oritype', 'mic')
         call params%new(cline)
         if( params%scale > 1.05 )then
@@ -556,6 +556,7 @@ contains
             THROW_HARD('tomography mode (tomo=yes) not yet supported!')
         endif
         l_pick = cline%defined('refs')
+        l_del_forctf = .false.
         ! read in movies
         call spproj%read( params%projfile )
         if( spproj%get_nmovies()==0 .and. spproj%get_nintgs()==0 ) THROW_HARD('No movie/micrograph to process!')
@@ -625,6 +626,7 @@ contains
                             &output_dir_motion_correct)
                     endif
                     moviename_forctf = mciter%get_moviename('forctf')
+                    l_del_forctf     = .true.
                 case('mic')
                     ctfvars = spproj%get_micparams(imovie)
                     call o_mov%getter('intg', moviename_forctf)
@@ -636,8 +638,10 @@ contains
             params_glob%lp = max(params%fny, params%lp_ctf_estimate)
             call ctfiter%iterate(ctfvars, moviename_forctf, o_mov, output_dir_ctf_estimate, .false.)
             ! delete file after estimation
-            call o_mov%delete_entry('forctf')
-            call del_file(moviename_forctf)
+            if( l_del_forctf )then
+                call o_mov%delete_entry('forctf')
+                call del_file(moviename_forctf)
+            endif
             ! update project
             call spproj%os_mic%set_ori(imovie, o_mov)
             ! picker
@@ -1017,7 +1021,7 @@ contains
         type(ori)                     :: o
         character(len=:), allocatable :: intg_forctf, output_dir, imgkind
         integer                       :: fromto(2), imic, ntot, cnt, state
-        logical                       :: l_gen_thumb
+        logical                       :: l_gen_thumb, l_del_forctf
         call cline%set('oritype', 'mic')
         call params%new(cline)
         call spproj%read(params%projfile)
@@ -1026,6 +1030,7 @@ contains
         ! output directory
         output_dir = PATH_HERE
         ! parameters & loop range
+        l_del_forctf = .false.
         if( params%stream .eq. 'yes' )then
             ! determine loop range
             fromto(:) = 1
@@ -1051,6 +1056,7 @@ contains
                 if( imgkind.ne.'mic' )cycle
                 if( o%isthere('forctf') )then
                     call o%getter('forctf', intg_forctf)
+                    l_del_forctf = .true.
                 else if( o%isthere('intg') )then
                     call o%getter('intg', intg_forctf)
                 else
@@ -1060,8 +1066,10 @@ contains
                 ctfvars     = o%get_ctfvars()
                 call ctfiter%iterate( ctfvars, intg_forctf, o, trim(output_dir), l_gen_thumb)
                 ! delete file after estimation
-                call o%delete_entry('forctf')
-                call del_file(intg_forctf)
+                if( l_del_forctf )then
+                    call o%delete_entry('forctf')
+                    call del_file(intg_forctf)
+                endif
                 ! update project
                 call spproj%os_mic%set_ori(imic, o)
             endif
