@@ -16,7 +16,7 @@ private
 real,             parameter :: PATCH_FIT_THRESHOLD = 10.0 ! threshold for polynomial fitting in pixels
 character(len=*), parameter :: speckind = 'sqrt'
 ! benchmarking
-logical                 :: L_BENCH = .true.
+logical                 :: L_BENCH = .false.
 integer(timer_int_kind) :: t_postproc1
 real(timer_int_kind)    :: rt_postproc1
 

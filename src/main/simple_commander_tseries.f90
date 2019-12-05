@@ -209,22 +209,21 @@ contains
 
     subroutine exec_tseries_motion_correct( self, cline )
         use simple_binoris_io,          only: binwrite_oritab
-        use simple_commander_imgproc,   only: stack_commander
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_ori,                 only: ori
         class(tseries_motion_correct_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
         character(len=LONGSTRLEN), allocatable :: framenames(:)
         character(len=:),          allocatable :: filetabname, frames2align
+        type(image)               :: img
         type(sp_project)          :: spproj
         type(parameters)          :: params
-        type(cmdline)             :: cline_stack, cline_mcorr
-        type(stack_commander)     :: xstack
+        type(cmdline)             :: cline_mcorr
         type(motion_correct_iter) :: mciter
         type(ctfparams)           :: ctfvars
-        type(ori)                 :: o
-        integer :: i, nframes, frame_counter, ldim(3), iframe, fromto(2), nframesgrp
-        integer :: numlen_nframes
+        type(ori)                 :: o, otmp
+        integer :: i, iframe, nframes, frame_counter, ldim(3), fromto(2), nframesgrp
+        integer :: numlen_nframes, cnt
         call cline%set('mkdir',       'no') ! shared-memory workflow, dir making in driver
         call cline%set('groupframes', 'no')
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    5.)
@@ -248,15 +247,10 @@ contains
             endif
         enddo
         call cline%set('smpd', params%smpd)
-        filetabname  = 'filetab_of_frames_part'//int2str_pad(params%part,params%numlen)//'.txt'
         frames2align = 'frames2align_part'//int2str_pad(params%part,params%numlen)//'.mrc'
-        ! prepare stack command
-        call cline_stack%set('mkdir',   'no')
-        call cline_stack%set('filetab', filetabname)
-        call cline_stack%set('outstk',  frames2align)
-        call cline_stack%set('smpd',    params%smpd)
-        call cline_stack%set('nthr',    1.0)
         ! prepare 4 motion_correct
+        ldim = [nint(spproj%os_mic%get(1,'xdim')), nint(spproj%os_mic%get(1,'ydim')), 1]
+        call img%new(ldim, ctfvars%smpd)
         cline_mcorr = cline
         call cline_mcorr%delete('nframesgrp')
         nframesgrp = params%nframesgrp
@@ -277,8 +271,12 @@ contains
                 fromto = fromto - 1
             end do
             ! make stack
-            call write_filetable(filetabname, framenames(fromto(1):fromto(2)))
-            call xstack%execute(cline_stack)
+            cnt = 0
+            do i = fromto(1),fromto(2)
+                cnt = cnt + 1
+                call img%read(framenames(i))
+                call img%write(frames2align, cnt)
+            enddo
             ! motion corr
             frame_counter = 0
             call mciter%iterate(cline_mcorr, ctfvars, o, 'tseries_win'//int2str_pad(iframe,numlen_nframes), frame_counter, frames2align, './', tseries='yes')
@@ -287,6 +285,8 @@ contains
         ! output
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, [params%fromp,params%top], isegment=MIC_SEG)
         ! done!
+        call del_file(frames2align)
+        call img%kill
         call o%kill
         call qsys_job_finished('simple_commander_tseries :: exec_tseries_motion_correct' )
         call simple_end('**** SIMPLE_TSERIES_MOTION_CORRECT NORMAL STOP ****')

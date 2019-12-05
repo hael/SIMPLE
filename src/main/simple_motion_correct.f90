@@ -621,7 +621,7 @@ contains
                 call tiles(ithr)%fft()
                 call tiles(ithr)%ft2img(speckind, tmp(ithr))
                 call tmp(ithr)%get_rmat_ptr(prmat)
-                rmat_sum(:,:,1) = rmat_sum(:,:,1) + prmat(:ldim(1),:ldim(2),1)
+                rmat_sum(:box,:box,1) = rmat_sum(:box,:box,1) + prmat(:box,:box,1)
             enddo
         enddo
         !$omp end parallel do
@@ -669,7 +669,7 @@ contains
         real, allocatable :: qs(:)
         real    :: frame_dose(nframes), spaFreqk
         real    :: twoNe, smpd, spafreq, limhsq,limksq
-        integer :: nrflims(3,2), ldim(3), hphys,kphys,kphys2, iframe, h,k
+        integer :: nrflims(3,2), ldim(3), hphys,kphys, iframe, h,k
         if( .not.params_glob%l_dose_weight ) return
         if( .not.frames(1)%is_ft() ) THROW_HARD('Frames should be in in the Fourier domain')
         nrflims = frames(1)%loop_lims(2)
