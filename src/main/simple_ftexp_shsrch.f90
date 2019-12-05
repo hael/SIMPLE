@@ -3,7 +3,7 @@ module simple_ftexp_shsrch
 include 'simple_lib.f08'
 use simple_opt_spec,    only: opt_spec
 use simple_optimizer,   only: optimizer
-use simple_ft_expanded, only: ft_expanded, ftexp_transfmat
+use simple_ft_expanded, only: ft_expanded, ftexp_transfmat, ftexp_transfmat_init
 
 implicit none
 
@@ -211,22 +211,30 @@ contains
         class(ftexp_shsrch), intent(inout) :: self
         real(dp),            intent(in)    :: shvec(2)
         logical, pointer :: msk(:,:)
-        real(dp) :: r, r1, r2, arg
+        real(dp) :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
+        real(dp) :: r, r1, r2, ck,sk, argh,argk
         integer  :: hind,kind,kkind
         call self%reference%get_bandmsk_ptr(msk)
+        do hind=self%flims(1,1),self%flims(1,2)
+            argh     = real(ftexp_transfmat(hind,1,1),dp) * shvec(1)
+            ch(hind) = cos(argh)
+            sh(hind) = sin(argh)
+        enddo
         r1 = 0.d0
         r2 = 0.d0
         do kind=self%flims(2,1),self%flims(2,2)
             kkind = kind+self%kind_shift
+            argk  = real(ftexp_transfmat(1,kkind,2),dp) * shvec(2)
+            ck    = cos(argk)
+            sk    = sin(argk)
             do hind=self%flims(1,1),self%flims(1,2)
                 if( msk(hind,kind) )then
-                    arg = dot_product(shvec, real(ftexp_transfmat(hind,kkind,:),dp))
                     if( hind == 1 )then
                         ! h = 0
-                        r1  = r1 + real(self%ftexp_tmp_cmat12(1,kind) * dcmplx(cos(arg),sin(arg)),kind=dp)
+                        r1  = r1 + real(self%ftexp_tmp_cmat12(1,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind))),kind=dp)
                     else
                         ! h > 0
-                        r2  = r2 + real(self%ftexp_tmp_cmat12(hind,kind) * dcmplx(cos(arg),sin(arg)),kind=dp)
+                        r2  = r2 + real(self%ftexp_tmp_cmat12(hind,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind))),kind=dp)
                     endif
                 endif
             end do
@@ -241,21 +249,29 @@ contains
         real(dp),            intent(in)    :: shvec(2)
         real(dp),            intent(out)   :: grad(2)
         logical, pointer :: msk(:,:)
-        real(dp)    :: g1(2),g2(2),arg, transf_vec(2)
+        real(dp)    :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
+        real(dp)    :: g1(2),g2(2),transf_vec(2), ck,sk, argh,argk
         integer     :: hind,kind,kkind
         call self%reference%get_bandmsk_ptr(msk)
+        do hind=self%flims(1,1),self%flims(1,2)
+            argh     = real(ftexp_transfmat(hind,1,1),dp) * shvec(1)
+            ch(hind) = cos(argh)
+            sh(hind) = sin(argh)
+        enddo
         g1 = 0.d0
         g2 = 0.d0
         do kind=self%flims(2,1),self%flims(2,2)
             kkind = kind+self%kind_shift
+            argk  = real(ftexp_transfmat(1,kkind,2),dp) * shvec(2)
+            ck    = cos(argk)
+            sk    = sin(argk)
             do hind=self%flims(1,1),self%flims(1,2)
                 if( msk(hind,kind) )then
                     transf_vec = real(ftexp_transfmat(hind,kkind,:),dp)
-                    arg        = dot_product(shvec, transf_vec)
                     if( hind == 1 )then ! h = 0
-                        g1(:) = g1(:) + dimag(self%ftexp_tmp_cmat12(hind,kind) * dcmplx(cos(arg),sin(arg)))*transf_vec
+                        g1(:) = g1(:) + dimag(self%ftexp_tmp_cmat12(hind,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind))))*transf_vec
                     else ! h > 0
-                        g2(:) = g2(:) + dimag(self%ftexp_tmp_cmat12(hind,kind) * dcmplx(cos(arg),sin(arg)))*transf_vec
+                        g2(:) = g2(:) + dimag(self%ftexp_tmp_cmat12(hind,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind))))*transf_vec
                     endif
                 endif
             end do
@@ -272,20 +288,28 @@ contains
         real(dp),            intent(out)   :: grad(2), f
         logical, pointer :: msk(:,:)
         complex(dp) :: tmp
-        real(dp)    :: f1,f2,g1(2),g2(2),arg, transf_vec(2)
+        real(dp)    :: f1,f2,g1(2),g2(2), transf_vec(2), argh,argk, ck,sk
+        real(dp)    :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
         integer     :: hind,kind,kkind
         call self%reference%get_bandmsk_ptr(msk)
         f1 = 0.d0
         f2 = 0.d0
         g1 = 0.d0
         g2 = 0.d0
+        do hind=self%flims(1,1),self%flims(1,2)
+            argh     = real(ftexp_transfmat(hind,1,1),dp) * shvec(1)
+            ch(hind) = cos(argh)
+            sh(hind) = sin(argh)
+        enddo
         do kind=self%flims(2,1),self%flims(2,2)
             kkind = kind+self%kind_shift
+            argk  = real(ftexp_transfmat(1,kkind,2),dp) * shvec(2)
+            ck    = cos(argk)
+            sk    = sin(argk)
             do hind=self%flims(1,1),self%flims(1,2)
                 if( msk(hind,kind) )then
                     transf_vec = real(ftexp_transfmat(hind,kkind,:),dp)
-                    arg        = dot_product(shvec, transf_vec)
-                    tmp        = self%ftexp_tmp_cmat12(hind,kind) * dcmplx(cos(arg),sin(arg))
+                    tmp        = self%ftexp_tmp_cmat12(hind,kind) * dcmplx(ck*ch(hind)-sk*sh(hind), -(sk*ch(hind)+ck*sh(hind)))
                     if( hind == 1 )then ! h = 0
                         f1    = f1    + real(tmp,dp)
                         g1(:) = g1(:) + dimag(tmp) * transf_vec
@@ -366,13 +390,15 @@ contains
         integer           :: i
         lims(:,1) = -TRS
         lims(:,2) = TRS
-        call img_ref%new([100,100,1], 2.)
-        call img_ptcl%new([100,100,1], 2.)
-        call img_ref%square(20)
+        call img_ref%new([32,32,1], 2.)
+        call img_ptcl%new([32,32,1], 2.)
+        img_ref = 1.
+        call img_ref%mask(8.,'soft',backgr=0.)
         call img_ref%fft()
         call ftexp_ref%new(img_ref, hp, lp, .true.)
-        call ftexp_ptcl%new(img_ptcl, hp, lp, .true.)
+        call ftexp_ptcl%new(img_ptcl, hp, lp, .false.)
         call ftexp_srch%new(ftexp_ref, ftexp_ptcl, trs)
+        call ftexp_transfmat_init(img_ref,lp)
         do i=1,100
             x = ran3()*2*TRS-TRS
             y = ran3()*2*TRS-TRS
@@ -380,6 +406,7 @@ contains
             call img_ptcl%shift([x,y,0.])
             call ftexp_ptcl%new(img_ptcl, hp, lp, .true.)
             cxy = ftexp_srch%minimize()
+            print *,i,x,y,cxy
             if( cxy(1) < 0.995 )then
                 THROW_HARD('shift alignment failed; test_ftexp_shsrch')
             endif

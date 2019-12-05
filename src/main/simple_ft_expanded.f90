@@ -92,14 +92,14 @@ contains
         self%lp   = max(lp, lp_nyq)
         self%lims = img%loop_lims(1,self%lp)
         ! shift the limits 2 make transfer 2 GPU painless
-        self%flims     = 1
+        self%flims = 1
         do i=1,3
             self%flims(i,2)= self%lims(i,2) - self%lims(i,1) + 1
         end do
         ! set the squared filter limits
         hplim = img%get_find(hp)
         hplim = hplim*hplim
-        lplim = img%get_find(lp)
+        lplim = img%get_find(self%lp)
         lplim = lplim*lplim
         ! indexing to transfer matrix
         kcnt = 0
@@ -285,13 +285,24 @@ contains
         class(ft_expanded), intent(in)    :: self
         real,               intent(in)    :: shvec(2)
         class(ft_expanded), intent(inout) :: self_out
-        integer :: hind,kind,kind_shift
-        real    :: arg
+        integer :: hind,kind,kind_shift,kkind
+        real    :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
+        real    :: argh,argk,ck,sk
         kind_shift = self%get_kind_shift()
         do hind=self%flims(1,1),self%flims(1,2)
-            do kind=self%flims(2,1),self%flims(2,2)
-                arg = sum(shvec*ftexp_transfmat(hind,kind+kind_shift,:))
-                self_out%cmat(hind,kind) = self%cmat(hind,kind) * cmplx(cos(arg),sin(arg))
+            argh     = real(ftexp_transfmat(hind,1,1),dp) * shvec(1)
+            ch(hind) = cos(argh)
+            sh(hind) = sin(argh)
+        enddo
+        do kind=self%flims(2,1),self%flims(2,2)
+            kkind = kind+kind_shift
+            argk  = real(ftexp_transfmat(1,kkind,2),dp) * shvec(2)
+            ck    = cos(argk)
+            sk    = sin(argk)
+            do hind=self%flims(1,1),self%flims(1,2)
+                if( self%bandmsk(hind,kind) )then
+                    self_out%cmat(hind,kind) = self%cmat(hind,kind) * cmplx(ck*ch(hind)-sk*sh(hind), (sk*ch(hind)+ck*sh(hind)))
+                endif
             end do
         end do
         call self_out%calc_sumsq
@@ -301,13 +312,24 @@ contains
         class(ft_expanded), intent(in)    :: self
         real,               intent(in)    :: shvec(2), w
         class(ft_expanded), intent(inout) :: self_out
-        integer :: hind,kind,kind_shift
-        real    :: arg
+        integer :: hind,kind,kind_shift,kkind
+        real    :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
+        real    :: argh,argk,ck,sk
         kind_shift = self%get_kind_shift()
         do hind=self%flims(1,1),self%flims(1,2)
-            do kind=self%flims(2,1),self%flims(2,2)
-                arg = sum(shvec*ftexp_transfmat(hind,kind+kind_shift,:))
-                self_out%cmat(hind,kind) = self_out%cmat(hind,kind) + w * self%cmat(hind,kind) * cmplx(cos(arg),sin(arg))
+            argh     = real(ftexp_transfmat(hind,1,1),dp) * shvec(1)
+            ch(hind) = cos(argh)
+            sh(hind) = sin(argh)
+        enddo
+        do kind=self%flims(2,1),self%flims(2,2)
+            kkind = kind+kind_shift
+            argk  = real(ftexp_transfmat(1,kkind,2),dp) * shvec(2)
+            ck    = cos(argk)
+            sk    = sin(argk)
+            do hind=self%flims(1,1),self%flims(1,2)
+                if( self%bandmsk(hind,kind) )then
+                    self_out%cmat(hind,kind) = self_out%cmat(hind,kind) + w * self%cmat(hind,kind) * cmplx(ck*ch(hind)-sk*sh(hind), (sk*ch(hind)+ck*sh(hind)))
+                endif
             end do
         end do
         call self_out%calc_sumsq
@@ -319,9 +341,9 @@ contains
         integer :: hind,kind
         anorm = sqrt(self%corr_unnorm(self))
         !$omp parallel do collapse(2) default(shared) private(hind,kind) proc_bind(close) schedule(static)
-        do hind=self%flims(1,1),self%flims(1,2)
-            do kind=self%flims(2,1),self%flims(2,2)
-                self%cmat(hind,kind) = self%cmat(hind,kind) / anorm
+        do kind=self%flims(2,1),self%flims(2,2)
+            do hind=self%flims(1,1),self%flims(1,2)
+                if( self%bandmsk(hind,kind) ) self%cmat(hind,kind) = self%cmat(hind,kind) / anorm
             end do
         end do
         !$omp end parallel do
@@ -336,14 +358,12 @@ contains
         self%sumsq = self%sumsq + 2.*sum(csq(self%cmat(2:self%flims(1,2),:)), mask=self%bandmsk(2:self%flims(1,2),:))
     end subroutine calc_sumsq
 
-    pure function corr( self1, self2 ) result( r )
-        class(ft_expanded), intent(in) :: self1, self2
+    function corr( self1, self2 ) result( r )
+        class(ft_expanded), intent(inout) :: self1, self2
         real :: r
         ! corr is real part of the complex mult btw 1 and 2*
-        r =        sum(real(self1%cmat(                 1,:)*conjg(self2%cmat(                 1,:))),&
-                       &mask=self1%bandmsk(1,:))
-        r = r + 2.*sum(real(self1%cmat(2:self1%flims(1,2),:)*conjg(self2%cmat(2:self1%flims(1,2),:))),&
-                       &mask=self1%bandmsk(2:self1%flims(1,2),:) )
+        r =        sum(real(self1%cmat(                 1,:)*conjg(self2%cmat(                 1,:))), mask=self1%bandmsk(1,:))
+        r = r + 2.*sum(real(self1%cmat(2:self1%flims(1,2),:)*conjg(self2%cmat(2:self1%flims(1,2),:))), mask=self1%bandmsk(2:self1%flims(1,2),:) )
         ! normalise the correlation coefficient
         if( self1%sumsq > 0. .and. self2%sumsq > 0. )then
             r = r / sqrt(self1%sumsq * self2%sumsq)
@@ -362,8 +382,8 @@ contains
             mask=self1%bandmsk(1,:))
         tmp = 0._dp
         !$omp parallel do collapse(2) default(shared) private(kind,hind) reduction(+:tmp) proc_bind(close) schedule(static)
-        do hind = 2, self1%flims(1,2)
-            do kind = self1%flims(2,1), self1%flims(2,2)
+        do kind = self1%flims(2,1), self1%flims(2,2)
+            do hind = 2, self1%flims(1,2)
                 if (self1%bandmsk(hind,kind)) then
                     tmp = tmp + real(self1%cmat(hind,kind)*conjg(self2%cmat(hind,kind)),dp)
                 end if
@@ -452,31 +472,32 @@ contains
 
     ! TRANSFER MATRIX ROUTINES
 
-    subroutine ftexp_transfmat_init( img )
+    subroutine ftexp_transfmat_init( img, lp )
         class(image), intent(in) :: img
-        real    :: lp_nyq, shconst(2)
+        real, optional,        intent(in) :: lp
+        real    :: lp_nyq, lp_here, shconst(2)
         integer :: h,k,i,hcnt,kcnt
         integer :: ldim(3),flims(3,2),ftexp_transf_flims(3,2)
         call ftexp_transfmat_kill
         ! dimensions
         ldim = img%get_ldim()
         if( ldim(3) > 1 ) THROW_HARD("In: ftexp_transfmat_init; simple_ft_expanded, 1")
-        lp_nyq      = 2.*img%get_smpd()
-        flims       = img%loop_lims(1,lp_nyq)
+        lp_here      = 2.*img%get_smpd()
+        if( present(lp) ) lp_here = lp
+        flims = img%loop_lims(1,lp_here)
         ftexp_transf_flims = flims
         do i=1,3
             ftexp_transf_flims(i,2) = ftexp_transf_flims(i,2) - ftexp_transf_flims(i,1) + 1
         end do
         ftexp_transf_flims(:,1) = 1
         ! set shift constant
+        shconst = 0.
         do i=1,2
-            if( ldim(i) == 1 )then
-                shconst(i) = 0.
-            else
+            if( ldim(i) > 1 )then
                 if( is_even(ldim(i)) )then
-                    shconst(i) = PI/(real(ldim(i))/2.)
+                    shconst(i) = PI/real(ldim(i)/2)
                 else
-                    shconst(i) = PI/(real(ldim(i)-1)/2.)
+                    shconst(i) = PI/real((ldim(i)-1)/2)
                 endif
             endif
         end do
@@ -485,8 +506,8 @@ contains
                 &source=0., stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: ftexp_transfmat_init; simple_ft_expanded, 2",alloc_stat)
         !$omp parallel do collapse(2) default(shared) private(h,k,hcnt,kcnt) proc_bind(close) schedule(static)
-        do h=flims(1,1),flims(1,2)
-            do k=flims(2,1),flims(2,2)
+        do k=flims(2,1),flims(2,2)
+            do h=flims(1,1),flims(1,2)
                 hcnt = h-flims(1,1)+1
                 kcnt = k-flims(2,1)+1
                 if( k==0 ) ftexp_transf_kzero = kcnt ! for transfer matrix indexing
