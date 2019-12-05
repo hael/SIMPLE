@@ -534,7 +534,7 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(parameters)              :: params
         type(ori)                     :: o_mov
-        type(ctf_estimate_iter)       :: cfiter
+        type(ctf_estimate_iter)       :: ctfiter
         type(motion_correct_iter)     :: mciter
         type(picker_iter)             :: piter
         type(extract_commander)       :: xextract
@@ -634,7 +634,10 @@ contains
             ! ctf_estimate
             params_glob%hp = params%hp_ctf_estimate
             params_glob%lp = max(params%fny, params%lp_ctf_estimate)
-            call cfiter%iterate(ctfvars, moviename_forctf, o_mov, output_dir_ctf_estimate, .false.)
+            call ctfiter%iterate(ctfvars, moviename_forctf, o_mov, output_dir_ctf_estimate, .false.)
+            ! delete file after estimation
+            call o_mov%delete_entry('forctf')
+            call del_file(moviename_forctf)
             ! update project
             call spproj%os_mic%set_ori(imovie, o_mov)
             ! picker
@@ -995,6 +998,7 @@ contains
         call spproj%read(params%projfile)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         ! cleanup
+        call spproj%kill
         call qsys_cleanup
         ! graceful ending
         call simple_end('**** SIMPLE_DISTR_CTF_ESTIMATE NORMAL STOP ****')
@@ -1008,7 +1012,7 @@ contains
         class(cmdline),                intent(inout) :: cline  !< command line input
         type(parameters)              :: params
         type(sp_project)              :: spproj
-        type(ctf_estimate_iter)       :: cfiter
+        type(ctf_estimate_iter)       :: ctfiter
         type(ctfparams)               :: ctfvars
         type(ori)                     :: o
         character(len=:), allocatable :: intg_forctf, output_dir, imgkind
@@ -1054,7 +1058,11 @@ contains
                 endif
                 l_gen_thumb = .not. o%isthere('thumb')
                 ctfvars     = o%get_ctfvars()
-                call cfiter%iterate( ctfvars, intg_forctf, o, trim(output_dir), l_gen_thumb)
+                call ctfiter%iterate( ctfvars, intg_forctf, o, trim(output_dir), l_gen_thumb)
+                ! delete file after estimation
+                call o%delete_entry('forctf')
+                call del_file(intg_forctf)
+                ! update project
                 call spproj%os_mic%set_ori(imic, o)
             endif
             write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'

@@ -261,8 +261,8 @@ contains
         do iframe=params%fromp,params%top
             call spproj%os_mic%get_ori(iframe, o)
             ! set time window
-            fromto(1) = iframe - nframesgrp/2
-            fromto(2) = iframe + nframesgrp/2 - 1
+            fromto(1) = iframe - (nframesgrp-1)/2
+            fromto(2) = fromto(1) + nframesgrp - 1
             ! shift the window if it's outside the time-series
             do while(fromto(1) < 1)
                 fromto = fromto + 1

@@ -93,11 +93,11 @@ contains
         call ctffit%write_diagnostic(fname_diag)
         call make_relativepath(CWD_GLOB,fname_diag, rel_fname)
         !score pspec
-        call pspecscore%score(ctfvars, moviename_forctf)
-        call orientation%set('icescore',       pspecscore%icescore)
-        call orientation%set('grapheneindex',  real(pspecscore%grapheneindex))
-        call orientation%set('graphenescore',  pspecscore%graphenescore)
-        call pspecscore%kill
+        ! call pspecscore%score(ctfvars, moviename_forctf)
+        ! call orientation%set('icescore',       pspecscore%icescore)
+        ! call orientation%set('grapheneindex',  real(pspecscore%grapheneindex))
+        ! call orientation%set('graphenescore',  pspecscore%graphenescore)
+        ! call pspecscore%kill
         ! reporting
         call orientation%set('dfx',            ctfvars%dfx)
         call orientation%set('dfy',            ctfvars%dfy)
