@@ -701,7 +701,7 @@ contains
         cavgs_fname   = trim(projfile_path)//'/'//trim(cavgs_fname)
         call find_ldim_nptcls(cavgs_fname, ldim, ncavgs, smpd=smpd_phys)
         if(ncavgs /= ncls)    THROW_HARD('Inconsistent # of cls2D cavgs & physical cavgs!')
-        if(smpd /= smpd_phys) THROW_HARD('Inconsistent sampling distancs in project & physical cavgs!')
+        if( abs(smpd-smpd_phys) > 0.001 ) THROW_HARD('Inconsistent sampling distancs in project & physical cavgs!')
         ! copy selected cavgs
         cnt     = 0
         ldim(3) = 1
