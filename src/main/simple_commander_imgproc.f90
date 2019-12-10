@@ -132,7 +132,7 @@ contains
                 write(logfhandle,'(a,1x,i9)') '# FOREGROUND PIXELS:', img_or_vol%nforeground()
                 write(logfhandle,'(a,1x,i9)') '# BACKGROUND PIXELS:', img_or_vol%nbackground()
                 if( cline%defined('grow') ) call img_or_vol%grow_bins(params%grow)
-                if( cline%defined('edge') ) call img_or_vol%cos_edge(cos_img, params%edge)
+                if( cline%defined('edge') ) call img_or_vol%cos_edge(params%edge,cos_img)
                 call img_or_vol%copy(cos_img)
                 call cos_img%kill
                 if( cline%defined('neg')  ) call img_or_vol%bin_inv

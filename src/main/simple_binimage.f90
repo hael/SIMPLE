@@ -91,7 +91,7 @@ contains
         allocate(self%bimat(self%bldim(1),self%bldim(2),self%bldim(3)), source=nint(self_in%get_rmat()))
         self%bimat_is_set = .true.
         self%nccs = 0
-      end subroutine transfer2bimg
+    end subroutine transfer2bimg
 
     ! SETTERS/GETTERS
 
@@ -548,7 +548,6 @@ contains
     subroutine fill_holes( self )
         class(binimage), intent(inout) :: self
         type (binimage)      :: img_cc ! connected component image
-        real,    pointer     :: rmat(:,:,:)
         integer, allocatable :: imat_cc(:,:,:)
         integer :: seed
         if(self%bldim(3) > 1) THROW_HARD('Not implemented for volumes! fill_holes')
@@ -597,111 +596,115 @@ contains
         ! init paddedd logical array
         add_pixels = .false.
         forall( i=1:self%bldim(1), j=1:self%bldim(2), k=1:self%bldim(3), self%bimat(i,j,k)==1 ) add_pixels(i,j,k) = .true.
-            ! cycle
-            if( self%bldim(3) > 1 )then
-                do i = 1, self%bldim(1)
-                    if( .not.any(self%bimat(i,:,:) > 0) ) cycle
-                    do j = 1, self%bldim(2)
-                        if( .not.any(self%bimat(i,j,:) > 0) ) cycle
-                        win(1:2,1) = [i, j] - nlayers
-                        win(1:2,2) = [i, j] + nlayers
-                        do k = 1, self%bldim(3)
-                            if (self%bimat(i,j,k) < 1) cycle
-                            win(3,1) = k - nlayers
-                            win(3,2) = k + nlayers
-                            add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
-                            &add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)).or.template
-                        enddo
+        ! cycle
+        if( self%bldim(3) > 1 )then
+            do i = 1, self%bldim(1)
+                if( .not.any(self%bimat(i,:,:) > 0) ) cycle
+                do j = 1, self%bldim(2)
+                    if( .not.any(self%bimat(i,j,:) > 0) ) cycle
+                    win(1:2,1) = [i, j] - nlayers
+                    win(1:2,2) = [i, j] + nlayers
+                    do k = 1, self%bldim(3)
+                        if (self%bimat(i,j,k) < 1) cycle
+                        win(3,1) = k - nlayers
+                        win(3,2) = k + nlayers
+                        add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&
+                        &add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)).or.template
                     enddo
                 enddo
-            else
-                do i=1,self%bldim(1)
-                    if( .not.any(self%bimat(i,:,1) > 0) ) cycle
-                    do j=1,self%bldim(2)
-                        win(1:2,1) = [i, j] - nlayers
-                        win(1:2,2) = [i, j] + nlayers
-                        if (self%bimat(i,j,1) < 1) cycle
-                        add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), 1) =&
-                        &add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), 1).or.template(:,:,1)
-                    enddo
+            enddo
+        else
+            do i=1,self%bldim(1)
+                if( .not.any(self%bimat(i,:,1) > 0) ) cycle
+                do j=1,self%bldim(2)
+                    win(1:2,1) = [i, j] - nlayers
+                    win(1:2,2) = [i, j] + nlayers
+                    if (self%bimat(i,j,1) < 1) cycle
+                    add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), 1) =&
+                    &add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), 1).or.template(:,:,1)
                 enddo
-            endif
-            ! finalize
-            self%bimat = 0
-            forall( i=1:self%bldim(1), j=1:self%bldim(2), k=1:self%bldim(3), add_pixels(i,j,k) ) self%bimat(i,j,k) = 1
-                deallocate(template, add_pixels)
-            call self%update_img_rmat
-        end subroutine grow_bins
+            enddo
+        endif
+        ! finalize
+        self%bimat = 0
+        forall( i=1:self%bldim(1), j=1:self%bldim(2), k=1:self%bldim(3), add_pixels(i,j,k) ) self%bimat(i,j,k) = 1
+        deallocate(template, add_pixels)
+        call self%update_img_rmat
+    end subroutine grow_bins
 
-        !>  \brief cos_edge applies cosine squared edge to a binary image
-        subroutine cos_edge( self, cos_img, falloff )
-            class(binimage), intent(inout)  :: self    ! input
-            class(image),     intent(inout) :: cos_img ! output
-            integer,         intent(in)     :: falloff
-            integer, allocatable :: imat(:,:,:)
-            real,    pointer     :: rmat(:,:,:)
-            real                 :: rfalloff, scalefactor
-            integer              :: i, j, k, is, js, ks, ie, je, ke
-            integer              :: il, ir, jl, jr, kl, kr, falloff_sq
-            if( falloff<=0 ) THROW_HARD('only stictly positive values for edge fall-off allowed; cos_edge')
-            if( .not. self%bimat_is_set ) call self%set_imat
-            rfalloff    = real( falloff )
-            falloff_sq  = falloff**2
-            scalefactor = PI / rfalloff
-            allocate(imat(self%bldim(1),self%bldim(2),self%bldim(3)), source=self%bimat)
+    !>  \brief cos_edge applies cosine squared edge to a binary image
+    subroutine cos_edge( self, falloff, cos_img )
+        class(binimage),        intent(inout) :: self    ! input
+        integer,                intent(in)    :: falloff
+        class(image), optional, intent(inout) :: cos_img ! output
+        integer, allocatable :: imat(:,:,:)
+        real,    pointer     :: rmat(:,:,:)
+        real                 :: rfalloff, scalefactor
+        integer              :: i, j, k, is, js, ks, ie, je, ke
+        integer              :: il, ir, jl, jr, kl, kr, falloff_sq
+        if( falloff<=0 ) THROW_HARD('only stictly positive values for edge fall-off allowed; cos_edge')
+        if( .not. self%bimat_is_set ) call self%set_imat
+        rfalloff    = real( falloff )
+        falloff_sq  = falloff**2
+        scalefactor = PI / rfalloff
+        allocate(imat(self%bldim(1),self%bldim(2),self%bldim(3)), source=self%bimat)
+        if( present(cos_img) )then
             call cos_img%new(self%bldim,self%bsmpd)
             call cos_img%get_rmat_ptr(rmat)
-            rmat(1:self%bldim(1),1:self%bldim(2),1:self%bldim(3)) = real(imat)
-            rmat = rmat/maxval(rmat(:self%bldim(1),:self%bldim(2),:self%bldim(3)))
-            if( self%bldim(3) == 1 )then
-                ! 2d
-                do i=1,self%bldim(1)
-                    is = max(1,i-1)                   ! left neighbour
-                    ie = min(i+1,self%bldim(1))       ! right neighbour
-                    il = max(1,i-falloff)             ! left bounding box limit
-                    ir = min(i+falloff,self%bldim(1)) ! right bounding box limit
-                    if( .not. any(imat == 1) ) cycle
-                    do j=1,self%bldim(2)
-                        if( imat(i,j,1) /= 1 ) cycle
-                        js = max(1,j-1)
-                        je = min(j+1,self%bldim(2))
-                        if( any( imat(is:ie,js:je,1) < 1) )then
-                            jl = max(1,j-falloff)
-                            jr = min(j+falloff,self%bldim(2))
-                            call update_mask_2d
+        else
+            call self%get_rmat_ptr(rmat)
+        endif
+        rmat(1:self%bldim(1),1:self%bldim(2),1:self%bldim(3)) = real(imat)
+        rmat = rmat/maxval(rmat(:self%bldim(1),:self%bldim(2),:self%bldim(3)))
+        if( self%bldim(3) == 1 )then
+            ! 2d
+            do i=1,self%bldim(1)
+                is = max(1,i-1)                   ! left neighbour
+                ie = min(i+1,self%bldim(1))       ! right neighbour
+                il = max(1,i-falloff)             ! left bounding box limit
+                ir = min(i+falloff,self%bldim(1)) ! right bounding box limit
+                if( .not. any(imat == 1) ) cycle
+                do j=1,self%bldim(2)
+                    if( imat(i,j,1) /= 1 ) cycle
+                    js = max(1,j-1)
+                    je = min(j+1,self%bldim(2))
+                    if( any( imat(is:ie,js:je,1) < 1) )then
+                        jl = max(1,j-falloff)
+                        jr = min(j+falloff,self%bldim(2))
+                        call update_mask_2d
+                    endif
+                end do
+            end do
+        else
+            ! 3d
+            do i=1,self%bldim(1)
+                is = max(1,i-1)                   ! left neighbour
+                ie = min(i+1,self%bldim(1))       ! right neighbour
+                il = max(1,i-falloff)             ! left bounding box limit
+                ir = min(i+falloff,self%bldim(1)) ! right bounding box limit
+                if( .not. any(imat == 1) ) cycle  ! no values equal to one
+                do j=1,self%bldim(2)
+                    js = max(1,j-1)
+                    je = min(j+1,self%bldim(2))
+                    jl = max(1,j-falloff)
+                    jr = min(j+falloff,self%bldim(2))
+                    if(.not. any(imat == 1) ) cycle ! cycle if equal to one
+                    do k=1,self%bldim(3)
+                        if(imat(i,j,k) /= 1) cycle
+                        ! within mask region
+                        ks = max(1,k-1)
+                        ke = min(k+1,self%bldim(3))
+                        if( any( imat(is:ie,js:je,ks:ke) < 1) )then
+                            ! update since has a masked neighbour
+                            kl = max(1,k-falloff)
+                            kr = min(k+falloff,self%bldim(3))
+                            call update_mask_3d
                         endif
                     end do
                 end do
-            else
-                ! 3d
-                do i=1,self%bldim(1)
-                    is = max(1,i-1)                   ! left neighbour
-                    ie = min(i+1,self%bldim(1))       ! right neighbour
-                    il = max(1,i-falloff)             ! left bounding box limit
-                    ir = min(i+falloff,self%bldim(1)) ! right bounding box limit
-                    if( .not. any(imat == 1) ) cycle  ! no values equal to one
-                    do j=1,self%bldim(2)
-                        js = max(1,j-1)
-                        je = min(j+1,self%bldim(2))
-                        jl = max(1,j-falloff)
-                        jr = min(j+falloff,self%bldim(2))
-                        if(.not. any(imat == 1) ) cycle ! cycle if equal to one
-                        do k=1,self%bldim(3)
-                            if(imat(i,j,k) /= 1) cycle
-                            ! within mask region
-                            ks = max(1,k-1)
-                            ke = min(k+1,self%bldim(3))
-                            if( any( imat(is:ie,js:je,ks:ke) < 1) )then
-                                ! update since has a masked neighbour
-                                kl = max(1,k-falloff)
-                                kr = min(k+falloff,self%bldim(3))
-                                call update_mask_3d
-                            endif
-                        end do
-                    end do
-                end do
-            endif
-            deallocate(imat)
+            end do
+        endif
+        deallocate(imat)
 
         contains
 

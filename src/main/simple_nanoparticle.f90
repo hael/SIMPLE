@@ -1723,8 +1723,6 @@ contains
         deallocate(centroids, labels, populations)
       end subroutine cluster_interdist
 
-
-
     subroutine make_soft_mask(self) !change the name
         class(nanoparticle), intent(inout) :: self
         type(binimage) :: simulated_density
@@ -1734,7 +1732,7 @@ contains
         call atomic_pos%new(trim(self%fbody)//'_atom_centers.pdb')
         call atomic_pos%convolve(simulated_density, cutoff=8.*self%smpd)
         call simulated_density%grow_bins(nint(0.5*self%theoretical_radius/self%smpd)+1)
-        call simulated_density%cos_edge(img_cos,SOFT_EDGE)
+        call simulated_density%cos_edge(SOFT_EDGE, img_cos)
         call img_cos%write(trim(self%fbody)//'SoftMask.mrc')
         !kill
         call img_cos%kill

@@ -11,7 +11,7 @@ private
 #include "simple_local_flags.inc"
 
 integer, parameter :: WINSZ = 3 !< real-space filter half-width window
-logical, parameter :: DEBUG = .false. 
+logical, parameter :: DEBUG = .false.
 
 type, extends(binimage) :: masker
     private
@@ -37,7 +37,6 @@ contains
     subroutine automask3D( self, vol_inout )
         class(masker), intent(inout) :: self
         class(image),  intent(inout) :: vol_inout
-        type(image) :: cos_img
         logical     :: was_ft
         if( vol_inout%is_2d() )THROW_HARD('automask3D is intended for volumes only; automask3D')
         self%msk       = params_glob%msk
@@ -52,17 +51,16 @@ contains
         write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK MOLECULAR WEIGHT:   ', self%mw,      ' kDa'
         was_ft = vol_inout%is_ft()
         if( was_ft ) call vol_inout%ifft()
-        call self%copy(vol_inout)
+        call self%transfer2bimg(vol_inout)
         ! binarize volume
         call self%bin_vol_thres
         ! add volume soft edge
-        call self%cos_edge(cos_img, self%edge)
+        call self%cos_edge(self%edge)
         ! apply mask to volume
         call vol_inout%zero_background()
-        call vol_inout%mul(cos_img)
+        call vol_inout%mul(self)
         ! the end
         if( was_ft )call vol_inout%fft()
-        call cos_img%kill
     end subroutine automask3D
 
     subroutine mask_from_pdb( self,  pdb, vol_inout, os, pdbout)
@@ -112,7 +110,7 @@ contains
         endif
         call self%grow_bins(1)
         call distimg%mul(self) ! for suggested focusmsk
-        call self%cos_edge(cos_img, params_glob%edge)
+        call self%cos_edge(params_glob%edge,cos_img)
         ! multiply with mask
         call vol_inout%ifft()
         call vol_inout%mul(cos_img)
@@ -138,6 +136,7 @@ contains
         ! binarize again
         call self%binarize(nnvox)
         ! binary layers
+        call self%set_imat
         call self%grow_bins(self%binwidth)
     end subroutine bin_vol_thres
 
@@ -247,7 +246,7 @@ contains
                 if( mask(i) ) call cc_img%real_space_filter(winsz, 'median')
                 if( l_write ) call cc_img%write(BIN_OTSU_GROW_MED, i)
                 ! apply cosine egde to soften mask (to avoid Fourier artefacts)
-                call cc_img%cos_edge(cos_img, edge)
+                call cc_img%cos_edge(edge,cos_img)
                 if( l_write ) call cos_img%write(MSK_OTSU, i)
                 ! zero negative values before applyting the mask
                 call imgs(i)%zero_neg
