@@ -2258,7 +2258,7 @@ contains
         integer,                 intent(in)    :: iref, iptcl, irot
         real :: frc(params_glob%kfromto(1):params_glob%kstop)
         call self%genfrc(iref, iptcl, irot, frc)
-        specscore_1 = sum(frc) / real(params_glob%kstop - params_glob%kfromto(1) + 1)
+        specscore_1 = median_nocopy(frc)
     end function specscore_1
 
     real function specscore_2( self, iref, iptcl, irot, shvec )
@@ -2267,7 +2267,7 @@ contains
         real,                    intent(in)    :: shvec(2)
         real :: frc(params_glob%kfromto(1):params_glob%kstop)
         call self%calc_frc(iref, iptcl, irot, shvec, frc )
-        specscore_2 = sum(frc) / real(params_glob%kstop - params_glob%kfromto(1) + 1)
+        specscore_2 = median_nocopy(frc)
     end function specscore_2
 
     function calc_roinv_corrmat( self) result(corrmat )
