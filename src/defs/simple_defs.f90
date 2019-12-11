@@ -39,7 +39,7 @@ integer                       :: logfhandle = OUTPUT_UNIT  !< log file handle, d
 logical, parameter            :: STDOUT2LOG = .false.
 
 ! other global variables
-integer                       :: nthr_glob         !< number of threads global variable
+integer                       :: nthr_glob = 1     !< number of threads global variable
 logical                       :: l_distr_exec_glob !< global distributed execution flag
 integer                       :: part_glob         !< global part index
 character(len=:), allocatable :: cmdline_glob      !< global command line string

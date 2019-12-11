@@ -83,9 +83,9 @@ call orientation%new
 call orientation%set_euler([0.,0.,0.])
 call graphene_vol%read(graphene_fname)
 call graphene_vol%neg
-if( params%griddev.eq.'yes' ) call graphene_vol%div_w_instrfun(params%alpha)
 call vol_pad%new([params%boxpd, params%boxpd, params%boxpd], params%smpd)
 call graphene_vol%pad(vol_pad)
+if( params%griddev.eq.'yes' ) call vol_pad%div_w_instrfun(params%alpha)
 call graphene_vol%kill
 call del_file(graphene_fname)
 call vol_pad%fft
@@ -96,11 +96,12 @@ tfun = ctf(params%smpd, 300., 0.0, 0.4)
 call vol_pad%new([params%boxpd, params%boxpd, params%boxpd], params%smpd)
 call particle_vol%new([params%box,params%box,params%box],params%smpd)
 call particle%new([params%boxpd,params%boxpd,1],params%smpd)
+print *,params%box,params%boxpd
 call img%new([params%box,params%box,1],params%smpd)
 call particle_vol%read(particle_fname)
 call particle_vol%neg
-if( params%griddev.eq.'yes' ) call particle_vol%div_w_instrfun(params%alpha)
 call particle_vol%pad(vol_pad)
+if( params%griddev.eq.'yes' ) call vol_pad%div_w_instrfun(params%alpha)
 call vol_pad%mul(scalefactor)
 call particle_vol%kill
 ! call del_file(particle_fname)

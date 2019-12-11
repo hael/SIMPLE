@@ -234,9 +234,6 @@ contains
             call update_background_pspec(iframe, [xind,yind])
             call pspec%add(pspec_nn,w=1./real(nframes))
             call pspec_nn%write(trim(dir)//'/'//trim(fbody)//'_background_pspec.mrc',iframe)
-            ! graphene removal, does not work yet
-            ! call remove_graphene_peaks(ptcl_target, pspec_nn)
-            ! call ptcl_target%write(trim(dir)//'/'//trim(fbody)//'_subtr.mrc',iframe)
         end do
         call fclose(funit, errmsg="tseries tracker ; write_tracked_series end")
         ! average and write power spectrum for CTF estimation

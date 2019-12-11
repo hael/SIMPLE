@@ -38,10 +38,6 @@ type :: builder
     type(projection_frcs)               :: projfrcs               !< projection FRC's used in the anisotropic Wiener filter
     type(projection_frcs)               :: projpssnrs             !<
     type(image),            allocatable :: imgbatch(:)            !< batch of images
-    ! COMMON LINES TOOLBOX
-    type(image),            allocatable :: imgs(:)                !< images (all should be read in)
-    type(image),            allocatable :: imgs_sym(:)            !< images (all should be read in)
-    type(image),            allocatable :: ref_imgs(:,:)          !< array of reference images
     ! RECONSTRUCTION TOOLBOX
     type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction
     ! STRATEGY3D TOOLBOX

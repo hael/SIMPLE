@@ -36,9 +36,8 @@ contains
     logical, allocatable :: lmsk(:)
     real, allocatable    :: x(:),rmat_aux(:,:,:)
     real                 :: thresh, smpd
-    integer              :: ldim(3),i,j,h,k,sh,nframe,cnt,UFlim,LFlim,lims(2),nyq
+    integer              :: ldim(3),i,j,h,k,sh,cnt,UFlim,LFlim,lims(2),nyq
     type(binimage)       :: img_mask
-    nthr_glob=8 !! TO REMOVE AFTER TESTING
     if(allocated(msk)) deallocate(msk)
     ldim = img_spec%get_ldim()
     ldim(3) = 1 ! stack
@@ -133,7 +132,7 @@ contains
     complex, pointer   :: cmat(:,:,:)
     real,    parameter :: RAD = 4.
     real        :: rabs, ang
-    integer     :: nptcls,i,j,ii,jj,ldim(3),cnt,hp,h,k,kp,phys(3)
+    integer     :: i,j,ii,jj,ldim(3),cnt,h,k,phys(3)
     ldim  = raw_img%get_ldim()
     call raw_img%norm()
     call raw_img%fft()

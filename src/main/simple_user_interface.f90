@@ -161,6 +161,7 @@ type(simple_program), target :: tseries_ctf_estimate
 type(simple_program), target :: tseries_make_pickavg
 type(simple_program), target :: tseries_motion_correct
 type(simple_program), target :: tseries_track
+type(simple_program), target :: tseries_graphene_subtr
 type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
 type(simple_program), target :: volops
@@ -253,6 +254,7 @@ type(simple_input_param) :: starfile
 type(simple_input_param) :: startit
 type(simple_input_param) :: startype
 type(simple_input_param) :: stk
+type(simple_input_param) :: stk2
 type(simple_input_param) :: stktab
 type(simple_input_param) :: stepsz
 type(simple_input_param) :: time_per_image
@@ -364,6 +366,7 @@ contains
         call new_tseries_motion_correct
         call new_tseries_make_pickavg
         call new_tseries_track
+        call new_tseries_graphene_subtr
         call new_update_project
         call new_vizoris
         call new_volops
@@ -459,6 +462,7 @@ contains
         call push2prg_ptr_array(tseries_make_pickavg)
         call push2prg_ptr_array(tseries_motion_correct)
         call push2prg_ptr_array(tseries_track)
+        call push2prg_ptr_array(tseries_graphene_subtr)
         call push2prg_ptr_array(update_project)
         call push2prg_ptr_array(vizoris)
         call push2prg_ptr_array(volops)
@@ -654,6 +658,8 @@ contains
                 ptr2prg => tseries_motion_correct
             case('tseries_track')
                 ptr2prg => tseries_track
+            case('tseries_graphene_subtr')
+                ptr2prg => tseries_graphene_subtr
             case('update_project')
                 ptr2prg => update_project
             case('vizoris')
@@ -757,6 +763,7 @@ contains
         write(logfhandle,'(A)') tseries_make_pickavg%name
         write(logfhandle,'(A)') tseries_motion_correct%name
         write(logfhandle,'(A)') tseries_track%name
+        write(logfhandle,'(A)') tseries_graphene_subtr%name
     end subroutine list_single_prgs_in_ui
 
     subroutine list_quant_prgs_in_ui
@@ -775,6 +782,7 @@ contains
         call set_param(projfile,      'projfile',      'file',   'Project file', 'SIMPLE projectfile', 'e.g. myproject.simple', .true., 'myproject.simple')
         call set_param(projfile_target,'projfile_target','file', 'Another project file', 'SIMPLE projectfile', 'e.g. myproject2.simple', .true., 'myproject2.simple')
         call set_param(stk,           'stk',           'file',   'Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false., 'stk.mrc')
+        call set_param(stk2,          'stk2',          'file',   'Second Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false., 'stk2.mrc')
         call set_param(stktab,        'stktab',        'file',   'List of per-micrograph particle stacks', 'List of per-micrograph particle stacks', 'stktab.txt file containing file names', .false., 'stktab.txt')
         call set_param(ctf,           'ctf',           'multi',  'CTF status', 'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){no}',&
         &'(yes|no|flip){no}', .true., 'no')
@@ -4009,6 +4017,36 @@ contains
         ! computer controls
         call tseries_track%set_input('comp_ctrls', 1, nthr)
     end subroutine new_tseries_track
+
+    subroutine new_tseries_graphene_subtr
+        ! PROGRAM SPECIFICATION
+        call tseries_graphene_subtr%new(&
+        &'tseries_graphene_subtr',&                        ! name
+        &'Removes graphene Fourier peaks in time-series',& ! descr_short
+        &'Removes graphene Fourier peaks in time-series',& ! descr_long
+        &'single_exec',&                                   ! executable
+        &3, 0, 0, 0, 0, 0, 1, .true.)                      ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call tseries_graphene_subtr%set_input('img_ios', 1, stk)
+        tseries_graphene_subtr%img_ios(1)%required = .true.
+        call tseries_graphene_subtr%set_input('img_ios', 2, stk2)
+        tseries_graphene_subtr%img_ios(2)%required = .true.
+        call tseries_graphene_subtr%set_input('img_ios', 3, outstk)
+        tseries_graphene_subtr%img_ios(3)%required = .true.
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call tseries_graphene_subtr%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_tseries_graphene_subtr
 
     subroutine new_update_project
         ! PROGRAM SPECIFICATION

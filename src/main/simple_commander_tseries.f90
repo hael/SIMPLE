@@ -25,6 +25,7 @@ public :: center2D_nano_commander_distr
 public :: cluster2D_nano_commander_hlev
 public :: tseries_ctf_estimate_commander
 public :: refine3D_nano_commander_distr
+public :: tseries_graphene_subtr_commander
 private
 #include "simple_local_flags.inc"
 
@@ -76,6 +77,10 @@ type, extends(commander_base) :: refine3D_nano_commander_distr
   contains
     procedure :: execute      => exec_refine3D_nano_distr
 end type refine3D_nano_commander_distr
+type, extends(commander_base) :: tseries_graphene_subtr_commander
+  contains
+    procedure :: execute      => exec_tseries_graphene_subtr
+end type tseries_graphene_subtr_commander
 
 contains
 
@@ -740,5 +745,62 @@ contains
         if( .not. cline%defined('oritype')     ) call cline%set('oritype','ptcl3D')
         call xrefine3D_distr%execute(cline)
     end subroutine exec_refine3D_nano_distr
+
+    subroutine exec_tseries_graphene_subtr( self, cline )
+        use simple_nano_utils, only: remove_graphene_peaks
+        class(tseries_graphene_subtr_commander), intent(inout) :: self
+        class(cmdline),                          intent(inout) :: cline
+        character(len=LONGSTRLEN), parameter :: pspec_fname  = 'tseries_ctf_estimate_pspec.mrc'
+        character(len=LONGSTRLEN), parameter :: diag_fname   = 'tseries_ctf_estimate_diag'//JPG_EXT
+        integer,                   parameter :: nmics4ctf    = 10
+        type(parameters) :: params
+        type(builder)    :: build
+        type(image)      :: avg1, avg2
+        real             :: smpd, w
+        integer          :: iptcl, ldim_ptcl(3), ldim(3), n, nptcls
+        call cline%set('oritype','mic')
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        ! snaity checks
+        call find_ldim_nptcls(params%stk,ldim_ptcl,nptcls,smpd=smpd)
+        ldim_ptcl(3) = 1
+        if( abs(smpd-params%smpd) > 1.e-4 )then
+            THROW_HARD('Inconsistent sampling distances between project & input')
+        endif
+        call find_ldim_nptcls(params%stk2,ldim,n,smpd=smpd)
+        ldim(3) = 1
+        if( abs(smpd-params%smpd) > 1.e-4 )then
+            THROW_HARD('Inconsistent sampling distances between project & input')
+        endif
+        if( any(ldim-ldim_ptcl/=0) )THROW_HARD('Inconsistent dimensions between stacks')
+        if( n /= nptcls )THROW_HARD('Inconsistent number of images between stacks')
+        ! init images
+        ldim(3) = 1
+        w = 1./real(nptcls)
+        call build%img%new(ldim,smpd)       ! particle
+        call build%img_tmp%new(ldim,smpd)   ! nn background
+        call avg1%new(ldim,smpd)
+        call avg2%new(ldim,smpd)
+        avg1 = 0.
+        avg2 = 0.
+        ! read, subtract & write
+        do iptcl = 1,nptcls
+            call build%img%read(params%stk,iptcl)
+            call avg1%add(build%img,w=w)
+            call build%img_tmp%read(params%stk2,iptcl)
+            call remove_graphene_peaks(build%img, build%img_tmp)
+            call build%img%write(params%outstk,iptcl)
+            call avg2%add(build%img,w=w)
+            if( mod(iptcl,50) == 0 )then
+                call avg1%write('avg1.mrc')
+                call avg2%write('avg2.mrc')
+            endif
+        enddo
+        call avg1%kill; call avg2%kill
+        ! cleanup
+        call build%kill_general_tbox
+        call build%spproj%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_TSERIES_GRAPHENE_SUBTR NORMAL STOP ****')
+    end subroutine exec_tseries_graphene_subtr
 
   end module simple_commander_tseries
