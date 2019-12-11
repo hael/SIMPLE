@@ -1713,6 +1713,11 @@ contains
                 self%ext = '.mrc'
             case('S')
                 self%ext = '.spi'
+#ifdef USING_TIFF
+            case('J')
+                ! for tiff we set .mrc as preferred output format
+                self%ext = '.mrc'
+#endif
             case DEFAULT
                 write(logfhandle,*)'format: ', trim(ext)
                 THROW_HARD('This file format is not supported by SIMPLE')

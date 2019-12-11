@@ -15,7 +15,7 @@ use simple_error
 use simple_math,    only: is_odd, is_even
 use simple_syslib,  only: is_open, file_exists, del_file
 use simple_fileio,  only: fname2format, fopen, fileiochk, fclose
-use simple_imghead, only: ImgHead, MrcImgHead, SpiImgHead
+use simple_imghead, only: ImgHead, MrcImgHead, SpiImgHead, TiffImgHead
 use gnufor2
 implicit none
 
@@ -40,6 +40,7 @@ contains
     procedure, private :: slice2recpos
     procedure, private :: slice2bytepos
     procedure          :: rSlices
+    procedure, private :: rTiffSlices
     procedure          :: wSlices
     procedure          :: update_MRC_stats
     procedure          :: getDims
@@ -101,6 +102,10 @@ contains
             allocate(SpiImgHead :: self%overall_head)
             call self%overall_head%new(ldim)
             if( ldim(3) > 1 ) self%isvol = .true.
+        case ('J')
+            if( write_enabled ) THROW_HARD('TIFF format is only for reading; open')
+            allocate(TiffImgHead :: self%overall_head)
+            call self%overall_head%new(ldim)
         case DEFAULT
             THROW_HARD('unsupported file format')
         end select
@@ -110,7 +115,12 @@ contains
         if( file_exists(self%fname) )then
             ! read header
             if( rreadhead )then
-                call self%overall_head%read(self%funit)
+                select case(self%head_format)
+                case ('M','S')
+                    call self%overall_head%read(self%funit)
+                case('J')
+                    call self%overall_head%read_tiff(self%fname)
+                end select
             endif
         else
             ! write header
@@ -133,36 +143,46 @@ contains
         character(len=9) :: rw_str
         character(len=7) :: stat_str
         integer          :: ios
-        ! We need to prepare a string for the open statement
-        if( present(rwaction) )then
-            rw_str = trim(rwaction)
+        if( self%overall_head%isTiff() )then
+            ! nothing to do, we are using the API
         else
-            rw_str = 'READWRITE'
-        endif
-        ! What is the status of the file?
-        stat_str = 'UNKNOWN'
-        if( present(del_if_exists) )then
-            if( del_if_exists )then
-                call del_file(self%fname)
+            ! We need to prepare a string for the open statement
+            if( present(rwaction) )then
+                rw_str = trim(rwaction)
+            else
+                rw_str = 'READWRITE'
             endif
+            ! What is the status of the file?
+            stat_str = 'UNKNOWN'
+            if( present(del_if_exists) )then
+                if( del_if_exists )then
+                    call del_file(self%fname)
+                endif
+            endif
+            ! Get an IO unit number
+            call fopen(self%funit,access='STREAM',file=self%fname,action=rw_str,status=stat_str,iostat=ios)
+            call fileiochk("imgfile::open_local fopen error",ios)
         endif
-        ! Get an IO unit number
-        call fopen(self%funit,access='STREAM',file=self%fname,action=rw_str,&
-            status=stat_str,iostat=ios)
-        call fileiochk("imgfile::open_local fopen error",ios)
         self%was_written_to = .false.
     end subroutine open_local
 
     !>  \brief  close the file(s) and "de-initialise" the imgfile object
     subroutine close( self )
-        class(imgfile), intent(inout) :: self
+        class(imgfile), target, intent(inout) :: self
+        class(ImgHead), pointer :: ptr=>null()
         integer :: ios
-        if( is_open(self%funit) )then
-            if( self%was_written_to )then
-                call self%overall_head%write(self%funit)
+        ptr => self%overall_head
+        select type(ptr)
+        type is (TiffImgHead)
+            call self%overall_head%CloseTiff
+        class DEFAULT
+            if( is_open(self%funit) )then
+                if( self%was_written_to )then
+                    call self%overall_head%write(self%funit)
+                endif
+                call fclose(self%funit, ios,errmsg="simple_imgfile::close error")
             endif
-            call fclose(self%funit, ios,errmsg="simple_imgfile::close error")
-        endif
+        end select
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
         self%was_written_to = .false.
@@ -171,9 +191,16 @@ contains
 
     !>  \brief  close the file(s)
     subroutine close_nowrite( self )
-        class(imgfile), intent(inout) :: self
+        class(imgfile), target, intent(inout) :: self
+        class(ImgHead), pointer :: ptr=>null()
         integer :: ios
-        call fclose( self%funit, ios,errmsg="simple_imgfile close nowrite error")
+        ptr => self%overall_head
+        select type(ptr)
+        type is (TiffImgHead)
+            call self%overall_head%CloseTiff
+        class DEFAULT
+            call fclose( self%funit, ios,errmsg="simple_imgfile close nowrite error")
+        end select
         if( allocated(self%overall_head) ) call self%overall_head%kill
         if( allocated(self%overall_head) ) deallocate(self%overall_head)
         self%was_written_to = .false.
@@ -209,6 +236,8 @@ contains
                     iminds(2)  = cnt     ! im to
                 end do
             endif
+        type is (TiffImgHead)
+            THROW_HARD('Should not be here for TIFF format; slice2recpos')
         class DEFAULT
             THROW_HARD('format not supported')
         end select
@@ -217,9 +246,15 @@ contains
     !>  \brief  for translating an image index to record indices in the stack
     !! \param[out] hedinds,iminds  indices in the stack
     subroutine slice2bytepos( self, nr, hedinds, iminds )
-        class(imgfile),  intent(in)    :: self
-        integer,         intent(in)    :: nr
-        integer(kind=8), intent(inout) :: hedinds(2), iminds(2)
+        class(imgfile), target, intent(in)    :: self
+        integer,               intent(in)     :: nr
+        integer(kind=8),        intent(inout) :: hedinds(2), iminds(2)
+        class(ImgHead), pointer :: ptr=>null()
+        ptr => self%overall_head
+        select type(ptr)
+        type is (TiffImgHead)
+            THROW_HARD('Should not be here for TIFF format; slice2recpos')
+        end select
         if( nr < 0 )then
             THROW_HARD('cannot have negative slice indices')
         else if( nr == 0 )then
@@ -265,6 +300,12 @@ contains
             write(logfhandle,*) 'Dimensions: ', dims(1), dims(2), dims(3)
             THROW_HARD('array not properly allocated')
         endif
+        ! Tiff format
+        select type(ptr)
+        type is( TiffImgHead )
+            call self%rTiffSlices(first_slice, rarr)
+            return
+        end select
         byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
         ! Work out the position of the first byte
         select case(self%head_format)
@@ -353,6 +394,78 @@ contains
         endif
     end subroutine rSlices
 
+    !>  \brief  reads a set of TIFF contiguous slices of the image file from disk into memory.
+    !!          The array of reals should have +2 elements in the first dimension.
+    !!          2-Dimensional images are assumed
+    subroutine rTiffSlices( self, image_index, rarr )
+#ifdef USING_TIFF
+        use simple_tifflib
+#endif
+        use simple_strings, only: int2str, tocstring
+        use, intrinsic :: iso_c_binding
+        class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
+        integer,                intent(in)    :: image_index  !<
+        real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
+        integer, parameter :: SAMPLEFORMAT_UINT = 1
+        class(ImgHead),  pointer :: ptr=>null()
+        integer(kind=1), pointer :: temp_byte_array(:)
+        type(c_ptr)              :: strip_buffer_cptr
+        integer :: NumberOfStrips, rows_per_strip, prev_nbytes_in_buffer, nbytes_in_buffer, current_first_byte, current_first_row
+        integer :: io_stat,dims(3),current_last_byte,current_last_row,row_counter,strip_counter
+        ! checks have been performed in rSlices
+        if( self%head_format.ne.'J' ) THROW_HARD('format not supported; rTiffSlices')
+        ptr  => self%overall_head
+        ! Get the dims of the image file
+        dims = self%overall_head%getDims()
+        rarr = 0. ! initialize to zero
+        select type(ptr)
+        type is( TiffImgHead )
+#ifdef USING_TIFF
+        io_stat = TIFFSetDirectory(ptr%fhandle,int(image_index-1,kind=c_int16_t))
+        if (io_stat .ne. 1) THROW_HARD('rTiffSlices; Failed to set directory to: '//int2str(image_index-1))
+        ! We don't support tiled organization, only strips
+        if (ptr%IsTiled) THROW_HARD('rTiffSlices; Tile-based TIFF files not supported')
+        ! We only support 8-bit grayscale TIFFs
+        if (ptr%BitsPerSample .ne. 8) then
+            THROW_HARD('rTiffSlices; Unsupported bit depth: '//int2str(ptr%BitsPerSample))
+        endif
+        if (ptr%SamplesPerPixel .ne. 1) then
+            THROW_HARD('rTiffSlices; Unsupported number of samples per pixel: '//int2str(ptr%SamplesPerPixel))
+        endif
+        if(ptr%SampleFormat .ne. SAMPLEFORMAT_UINT)then
+            THROW_HARD('rTiffSlices; Unsupported sample format: '//int2str(ptr%SampleFormat))
+        endif
+        rows_per_strip    = ptr%RowsPerStrip
+        strip_buffer_cptr = ptr%StripBuffer_cptr
+        NumberOfStrips    = ptr%NumberOfStrips
+        prev_nbytes_in_buffer = 0
+        do strip_counter = 1,NumberOfStrips
+            ! Read a strip from the file
+            nbytes_in_buffer = TIFFReadEncodedStrip(ptr%fhandle, int(strip_counter-1,kind=c_int32_t),&
+                                                   &strip_buffer_cptr, int(-1,kind=c_int32_t))
+            if (nbytes_in_buffer .le. 0) THROW_HARD('rTiffSlices; Failed to read from strip: '//int2str(strip_counter))
+            ! Setup F pointer to the strip data
+            if (nbytes_in_buffer .ne. prev_nbytes_in_buffer) then
+                call c_f_pointer(strip_buffer_cptr,temp_byte_array,[nbytes_in_buffer])
+            endif
+            ! Sanity check
+            if (nbytes_in_buffer .ne. rows_per_strip * dims(1)) THROW_HARD('rTiffSlices; Unexpected number of bytes in buffer')
+            ! Which rows of the image did we just get
+            current_first_row = rows_per_strip*(strip_counter-1) + 1
+            current_last_row  = rows_per_strip*strip_counter
+            ! Copy (and cast) the data to the output array
+            do row_counter=current_first_row,current_last_row
+                current_first_byte = (row_counter-current_first_row)*dims(1)+1
+                current_last_byte  = current_first_byte + dims(1) - 1
+                rarr(1:dims(1),dims(2)-row_counter+1,1) = temp_byte_array(current_first_byte:current_last_byte)
+            enddo
+        enddo
+        ! cleanup
+        io_stat = TIFFDeallocateStripBuffer(strip_buffer_cptr)
+#endif
+        end select
+    end subroutine rTiffSlices
+
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
     subroutine wSlices( self, first_slice, last_slice, rarr, ldim, is_ft, smpd )
@@ -385,6 +498,8 @@ contains
             dims(3)     = max(last_slice,dims(3))
             call self%overall_head%setDims(dims)
             ! dims = dims_stored ! safety
+        type is (TiffImgHead)
+            THROW_HARD('Writing is unsupported in TIFF format')
         end select
         if( is_odd(dims(1)) )then
             arr_is_ready = (size(rarr,1) .eq. dims(1) + 1) .and. size(rarr,2) .eq. dims(2)
@@ -492,7 +607,7 @@ contains
             call self%setMinmax(stats(1), stats(2))
             call self%setMean(stats(3))
             call self%setRMSD(stats(4))
-        case('S')
+        case('S','J')
             ! this routine is for MRC only
             return
         case DEFAULT

@@ -691,6 +691,10 @@ contains
             fname2format = 'O'
         case('star')
             fname2format = 'R'
+#ifdef USING_TIFF
+        case('tif','tiff')
+            fname2format = 'J'
+#endif
         case DEFAULT
             fname2format = 'N'
         end select

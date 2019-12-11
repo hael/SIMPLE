@@ -58,7 +58,7 @@ message(STATUS "Making sure your Fortran compiler points to the correct binary")
     message(STATUS "WARNING gfortran points to Clang -- Trying other paths")
     find_file (
       CMAKE_Fortran_COMPILER
-      NAMES gfortran- gfortran-8 gfortran-7 gfortran-6 gfortran-5 gfortran-4.9 gfortran8 gfortran7 gfortran6 gfortran5
+      NAMES gfortran-  gfortran-9 gfortran-8 gfortran-7 gfortran-6 gfortran-5 gfortran-4.9 gfortran9 gfortran8 gfortran7 gfortran6 gfortran5
       PATHS /usr/local/bin /opt/local/bin /sw/bin /usr/bin
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
       DOC "Searching for GNU gfortran preprocessor "
@@ -87,7 +87,7 @@ message(STATUS "Making sure your C compiler points to the correct binary")
     message(STATUS "WARNING gcc points to Clang -- Attempting other paths, starting with ${FORTRAN_PARENT_DIR}")
     find_file (
       CMAKE_C_COMPILER_NEW
-      NAMES gcc-8 gcc-7 gcc-6 gcc-5 gcc-4.9 gcc- gcc-fsf-6 gcc-fsf-5 gcc8 gcc7 gcc6 gcc5 gcc4.9
+      NAMES gcc-9 gcc-8 gcc-7 gcc-6 gcc-5 gcc-4.9 gcc- gcc-fsf-6 gcc-fsf-5 gcc9 gcc8 gcc7 gcc6 gcc5 gcc4.9
       HINTS ${FORTRAN_PARENT_DIR}
       PATHS  /sw/bin /usr/local/bin /opt/local/bin /usr/bin
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
@@ -114,7 +114,7 @@ message(STATUS "Making sure your C++ compiler points to the correct binary")
     message(STATUS "WARNING g++ points to Clang -- Trying other paths")
     find_file (
       CMAKE_CXX_COMPILER_NEW
-      NAMES g++- g++-8 g++-7 g++-6 g++-5 g++-4.9 g++-fsf-6 g++-fsf-5 g++8 g++7 g++6 g++5 g++4.9 g++
+      NAMES g++- g++-9 g++-8 g++-7 g++-6 g++-5 g++-4.9 g++-fsf-6 g++-fsf-5 g++9 g++8 g++7 g++6 g++5 g++4.9 g++
       PATHS ${FORTRAN_PARENT_DIR} /sw/bin /usr/local/bin /opt/local/bin /usr/bin
       DOC "Searching for GNU g++ preprocessor "
 NO_DEFAULT_PATH NO_CMAKE_PATH NO_CMAKE_ENVIRONMENT_PATH NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH
@@ -539,36 +539,53 @@ else()
   set(BUILD_NAME "${BUILD_NAME}_FFTW" )
 endif()
 
-
+#############################################
+# TIFF library & dependencies
+#############################################
 if(USE_LIBTIFF)
   find_package(TIFF)
-  # Big TIFF  is dependent on Jbig Jpeg, Lzma, Zip and Libm
+  set(TIFFLIBS "0")
   if(TIFF_FOUND)
-    find_package(JBIG)
-    find_package(JPEG9)
-    find_package(LibLZMA)
-    find_package(ZLIB)
-
-    if(JBIG_FOUND AND JPEG9_FOUND AND ZLIB_FOUND AND LIBLZMA_FOUND)
-
-      add_definitions("-DUSING_JBIG=1")
-      add_definitions("-DUSING_TIFF=1")
-      include_directories(${TIFF_INCLUDE_DIR})
-      message(STATUS "FOUND libtiff -- ${TIFF_LIBRARY}")
-
-      set(EXTRA_LIBS ${EXTRA_LIBS} ${TIFF_LIBRARY}
-        ${JBIG_LIBRARIES}
-        ${JPEG9_LIBRARY}
-        ${LIBLZMA_LIBRARY}
-        ${ZLIB_LIBRARY} -lm )
-
-    else()
-      set(USE_LIBTIFF OFF)
-      message(STATUS "LibTIFF unable to be used due to dependent libraries JBIG/JPEG-9/LZMA/ZLIB not found ")
+    set(TIFFLIBS "1")
+    find_library(JBIG_LIBRARY jbig)
+    if( JBIG_LIBRARY STREQUAL "JBIG_LIBRARY-NOTFOUND" )
+      message(STATUS "JBIG Not Found")
+      set(TIFFLIBS "0")
     endif()
+    find_library(JPEG_LIBRARY jpeg)
+    if( JPEG_LIBRARY STREQUAL "JPEG_LIBRARY-NOTFOUND" )
+      message(STATUS "JPEG Not Found")
+      set(TIFFLIBS "0")
+    endif()
+    find_library(LZMA_LIBRARY lzma)
+        if( LZMA_LIBRARY STREQUAL "LZMA_LIBRARY-NOTFOUND" )
+      message(STATUS "LibLZMA Not Found")
+      set(TIFFLIBS "0")
+    endif()
+    find_library(Z_LIBRARY z)
+    if( Z_LIBRARY STREQUAL "Z_LIBRARY-NOTFOUND" )
+      message(STATUS "LibZ Not Found")
+      set(TIFFLIBS "0")
+    endif()
+    if(APPLE)
+      find_library(ZSTD_LIBRARY zstd)
+      if( ZSTD_LIBRARY STREQUAL "ZSTD_LIBRARY-NOTFOUND" )
+        message(STATUS "Zstd Not Found")
+        set(TIFFLIBS "0")
+      else()
+        set(EXTRA_LIBS ${EXTRA_LIBS} ${ZSTD_LIBRARY} )
+      endif()
+    endif()
+  endif()
+  if( TIFFLIBS STREQUAL "1")
+    add_definitions("-DUSING_TIFF=1")
+    include_directories(${TIFF_INCLUDE_DIR})
+    message(STATUS "FOUND libtiff -- ${TIFF_LIBRARY} ")
+    set(EXTRA_LIBS ${EXTRA_LIBS} ${TIFF_LIBRARY} ${LZMA_LIBRARY} ${Z_LIBRARY} ${JBIG_LIBRARY} ${JPEG_LIBRARY} -lm )
   else()
+    message(STATUS "NOT FOUND libtiff -- TIFF format will not be supported ")
     set(USE_LIBTIFF OFF)
-endif()
+  endif()
 endif()
 
 #############################################
@@ -602,7 +619,6 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU" OR Fortran_COMPILER_NAME MATCHES
   set(CMAKE_CPP_COMPILER_FLAGS           "-E -C -CC -w -Wno-endif-labels -fopenmp") # only seen by preprocessor if #include.*timer is present
   set(CMAKE_Fortran_FLAGS                "${EXTRA_FLAGS} ")
   set(CMAKE_Fortran_FLAGS_DEBUG          "${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${CMAKE_Fortran_FLAGS_DEBUG} ${EXTRA_FLAGS} " )
-  # set(CMAKE_Fortran_FLAGS_MINSIZEREL     "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
   set(CMAKE_Fortran_FLAGS_RELEASE        "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_RELEASE} ${EXTRA_FLAGS} ")
 
   set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT} \

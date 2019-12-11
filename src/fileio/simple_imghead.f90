@@ -15,11 +15,21 @@ module simple_imghead
 use simple_defs
 use simple_error,   only: allocchk, simple_exception
 use simple_fileio,  only: fopen, fileiochk, fclose, fname2format
-use simple_strings, only: int2str
+use simple_strings, only: int2str, toCstring
 use simple_syslib,  only: file_exists
+#ifdef USING_TIFF
+use simple_tifflib
+#define     SAMPLEFORMAT_UINT       1   /* !unsigned integer data */
+#define     SAMPLEFORMAT_INT        2   /* !signed integer data */
+#define     SAMPLEFORMAT_IEEEFP     3   /* !IEEE floating point data */
+#define     SAMPLEFORMAT_VOID       4   /* !untyped data */
+#define     SAMPLEFORMAT_COMPLEXINT 5   /* !complex signed int */
+#define     SAMPLEFORMAT_COMPLEXIEEEFP  6   /* !complex ieee floating */
+#endif
 implicit none
 
-public :: ImgHead, MrcImgHead, SpiImgHead, test_imghead, find_ldim_nptcls, has_ldim_nptcls
+public :: ImgHead, MrcImgHead, SpiImgHead, TiffImgHead
+public :: test_imghead, find_ldim_nptcls, has_ldim_nptcls
 private
 #include "simple_local_flags.inc"
 
@@ -45,11 +55,15 @@ contains
     ! I/O
     procedure          :: print_imghead
     procedure          :: read
+    procedure          :: read_tiff
     procedure          :: write
     ! byte array conversions
     procedure, private :: transfer_obj2byte_array
     procedure, private :: transfer_byte_array2obj
     ! getters/setters
+    procedure          :: isTiff
+    ! procedure          :: isTiffOpen
+    procedure          :: CloseTiff
     procedure          :: bytesPerPix
     procedure          :: pixIsSigned
     procedure          :: getPixType
@@ -122,6 +136,23 @@ type, extends(ImgHead) :: MrcImgHead
     integer   :: nlabl        !< number of labels being used
     character(len=80) :: label(NLABL) !< 10 80-character text labels
 end type MrcImgHead
+
+type, extends(ImgHead) :: TiffImgHead
+    type(c_ptr) :: fhandle = c_null_ptr !< file handle
+    integer     :: nx = 0                 !< number of columns
+    integer     :: ny = 0                 !< number of rows
+    integer     :: nz = 0                 !< number of frames
+    integer     :: BitsPerSample    = 0
+    integer     :: SamplesPerPixel  = 0
+    integer     :: SampleFormat     = 0
+    integer     :: RowsPerStrip     = 0
+    type(c_ptr) :: StripBuffer_cptr = c_null_ptr
+    integer     :: NumberOfStrips   = 0
+    integer     :: MinVal           = 0
+    integer     :: MaxVal           = 0
+    logical     :: isTiled = .true.       !< tiled is not supported
+    real        :: pixsiz  = 0.           !< ??
+end type TiffImgHead
 
 type, extends(ImgHead) :: SpiImgHead
     ! All SPIDER image files consist of unformatted, direct access records.
@@ -231,6 +262,13 @@ contains
                 else
                     THROW_HARD('need logical dimension (ldim) to create SPIDER header')
                 end if
+            type is( TiffImgHead )
+                call self%reset2default
+                if( present(ldim) )then
+                    self%nx = ldim(1)
+                    self%ny = ldim(2)
+                    self%nz = ldim(3)
+                endif
             class DEFAULT
                 THROW_HARD('unsupported header type')
         end select
@@ -255,6 +293,16 @@ contains
                 if (self%my .ne. 0) smpd(2) = self%cella2/self%my
                 if (self%mz .ne. 0) smpd(3) = self%cella3/self%mz
                 write(logfhandle,'(a,3(f0.3,1x))')   'Pixel size: ', smpd
+            type is( TiffImgHead )
+                write(logfhandle,'(a,3(1x,i6))') 'Number of columns, rows, sections: ', self%nx, self%ny, self%nz
+                write(logfhandle,'(a,1x,i16)') 'Bits Per Samples:   ', self%BitsPerSample
+                write(logfhandle,'(a,1x,i16)') 'Samples Per Pixel : ', self%SamplesPerPixel
+                write(logfhandle,'(a,1x,i16)') 'Sample Format :     ', self%SampleFormat
+                write(logfhandle,'(a,1x,a1)')  'Tiled :             ', self%istiled
+                write(logfhandle,'(a,1x,i16)') 'Maximum data value: ', self%maxval
+                write(logfhandle,'(a,1x,i16)') 'Minimum data value: ', self%maxval
+                write(logfhandle,'(a,1x,i16)') 'Rows Per Strip :    ', self%RowsPerStrip
+                write(logfhandle,'(a,1x,i16)') 'Number of Strips :  ', self%RowsPerStrip
             type is( SpiImgHead )
                 write(logfhandle,'(a,3(1x,f7.0))') 'Number of columns, rows, sections: ', self%nx, self%ny, self%nz
                 write(logfhandle,'(a,1x,f7.0)') 'SPIDER data mode (iform):                                       ', self%iform
@@ -306,10 +354,10 @@ contains
         integer,                   intent(in)    :: lun
         integer(kind=8), optional, intent(in)    :: pos
         logical,         optional, intent(in)    :: print_entire
-        integer(kind=8)                   ::  ppos, i, cnt
-        integer                   :: io_status
-        character(len=512)        :: io_message
-        real(kind=4), allocatable :: spihed(:)
+        real(kind=4),           allocatable :: spihed(:)
+        integer(kind=8)    ::  ppos, i, cnt
+        integer            :: io_status
+        character(len=512) :: io_message
         ppos = 1
         if( present(pos) ) ppos = pos
         select type( self )
@@ -372,6 +420,43 @@ contains
                 THROW_HARD('format not supported')
         end select
     end subroutine read
+
+    !>  \brief  Read the header data from disk
+    subroutine read_tiff( self, fname, pos, print_entire )
+        class(ImgHead),            intent(inout) :: self
+        character(len=*),          intent(in)    :: fname
+        integer(kind=8), optional, intent(in)    :: pos
+        logical,         optional, intent(in)    :: print_entire
+        character(kind=c_char), allocatable :: filename_c(:), open_mode_c(:)
+        integer            :: io_status
+        select type( self )
+#ifdef USING_TIFF
+            type is( TiffImgHead )
+                filename_c  = toCstring(fname)
+                open_mode_c = toCstring('rc')
+                self%fhandle = TIFFOpen(filename_c,open_mode_c)
+                self%nx = TIFFGetWidth(self%fhandle)
+                self%ny = TIFFGetLength(self%fhandle)
+                do
+                    if (TIFFLastDirectory(self%fhandle) .ne. 0) exit
+                    io_status = TIFFReadDirectory(self%fhandle)
+                    if (io_status .ne. 1)THROW_HARD('Error setting TIFF directory, or already at last directory; get_tiffile_info')
+                enddo
+                self%nz = TIFFCurrentDirectory(self%fhandle) + 1
+                self%sampleformat     = TIFFGetSampleFormat(self%fhandle)
+                self%bitspersample    = TIFFGetBitsPerSample(self%fhandle)
+                self%samplesperpixel  = TIFFGetSamplesPerPixel(self%fhandle)
+                self%isTiled          = TIFFIsTiled(self%fhandle) .ne. 0
+                self%RowsPerStrip     = TIFFGetRowsPerStrip(self%fhandle)
+                self%StripBuffer_cptr = TIFFAllocateStripBuffer(self%fhandle)
+                self%NumberOfStrips   = TIFFNumberOfStrips(self%fhandle)
+                self%minval           = TIFFGetMinVal(self%fhandle)
+                self%maxval           = TIFFGetMaxVal(self%fhandle)
+#endif
+            class DEFAULT
+                THROW_HARD('format not supported')
+        end select
+    end subroutine read_tiff
 
     !>  \brief write header data to disk
     subroutine write( self, lun, pos )
@@ -444,6 +529,8 @@ contains
             call self%transfer_obj2byte_array
             write(unit=lun,pos=ppos,iostat=io_status) self%byte_array
             call fileiochk(" simple_imghead::write  writing header bytes to disk , unit "//int2str(lun),io_status)
+        type is( TiffImgHead )
+            THROW_HARD('TIFF format is for reading only; write')
         class DEFAULT
             THROW_HARD('format not supported')
         end select
@@ -619,6 +706,20 @@ contains
                 self%mic      = 0.
                 self%num      = 0.
                 self%glonum   = 0.
+            type is (TiffImgHead)
+                self%fhandle = c_null_ptr
+                self%nx = 0
+                self%ny = 0
+                self%nz = 0
+                self%BitsPerSample   = 0
+                self%SamplesPerPixel = 0
+                self%SampleFormat    = 0
+                self%RowsPerStrip    = 0
+                self%NumberOfStrips  = 0
+                self%MinVal          = 0
+                self%MaxVal          = 0
+                self%pixsiz          = 0.
+                self%istiled         = .true.
             class DEFAULT
                 THROW_HARD('format not supported')
         end select
@@ -641,6 +742,9 @@ contains
         if( ldim(3) > 1 ) is_3d = .true.
         select type(self)
             type is( MrcImgHead )
+                call self%setPixSz(smpd)
+                call self%setDims(ldim)
+            type is( TiffImgHead )
                 call self%setPixSz(smpd)
                 call self%setDims(ldim)
             type is( SpiImgHead )
@@ -705,6 +809,25 @@ contains
         end function is_even
 
     end subroutine setMinimal
+
+    pure logical function isTiff( self )
+        class(ImgHead), intent(in) :: self
+        isTiff = .false.
+        select type( self )
+            type is( TiffImgHead )
+                isTiff = .true.
+        end select
+    end function isTiff
+
+    subroutine CloseTiff( self )
+        class(ImgHead), intent(inout) :: self
+        select type( self )
+            type is( TiffImgHead )
+#ifdef USING_TIFF
+                if( c_associated(self%fhandle) ) call TIFFClose(self%fhandle)
+#endif
+        end select
+    end subroutine CloseTiff
 
     !>  \brief  Return the number of bytes per pixel
     !!          All SPIDER image files consist of unformatted, direct access records.
@@ -778,6 +901,9 @@ contains
                 firstDataByte = MRCHEADSZ+1+self%nsymbt
             type is( SpiImgHead )
                 firstDataByte = int(self%labbyt)+1
+            type is (TiffImgHead)
+                ! not applicable
+                firstDataByte = 0
             class DEFAULT
                 THROW_HARD('unsupported header type')
         end select
@@ -790,6 +916,8 @@ contains
         select type(self)
             type is (MrcImgHead)
                 getMinPixVal = self%dmin
+            type is (TiffImgHead)
+                getMinPixVal = real(self%minval)
             type is (SpiImgHead)
                 getMinPixVal = self%fmin
         end select
@@ -804,6 +932,8 @@ contains
                 getMaxPixVal = self%dmax
             type is (SpiImgHead)
                 getMaxPixVal = self%fmax
+            type is (TiffImgHead)
+                getMaxPixVal = real(self%minval)
         end select
     end function getMaxPixVal
 
@@ -817,6 +947,8 @@ contains
             type is (SpiImgHead)
                 self%fmin  = new_value
                 self%imami = 1
+            type is (TiffImgHead)
+                ! not applicable
         end select
     end subroutine setMinPixVal
 
@@ -830,6 +962,8 @@ contains
             type is (SpiImgHead)
                 self%fmax  = new_value
                 self%imami = 1
+            type is (TiffImgHead)
+                ! not applicable
         end select
     end subroutine setMaxPixVal
 
@@ -841,6 +975,8 @@ contains
             type is (MrcImgHead)
                 if( self%mx .ne. 0 ) getPixSz = self%cella1/self%mx
             type is (SpiImgHead)
+                getPixSz = self%pixsiz
+            type is (TiffImgHead)
                 getPixSz = self%pixsiz
         end select
     end function getPixSz
@@ -854,6 +990,8 @@ contains
                 self%cella1 = smpd*self%mx
                 self%cella2 = smpd*self%my
                 self%cella3 = smpd*self%mz
+            type is (TiffImgHead)
+                self%pixsiz = smpd ! units?
             type is (SpiImgHead)
                 self%pixsiz = smpd
         end select
@@ -864,7 +1002,9 @@ contains
         class(ImgHead), intent(in) ::  self
         stack_size = 0
         select type(self)
-            type is (MrcImgHead)
+        type is (MrcImgHead)
+                stack_size = self%nz
+        type is (TiffImgHead)
                 stack_size = self%nz
             type is (SpiImgHead)
                 stack_size = int(self%maxim)
@@ -879,6 +1019,8 @@ contains
         select type(self)
             type is (MrcImgHead)
                 dims = [self%nx,self%ny,self%nz]
+            type is (TiffImgHead)
+                dims = [self%nx,self%ny,self%nz]
             type is (SpiImgHead)
                 dims = int([self%nx,self%ny,self%nz])
         end select
@@ -890,6 +1032,7 @@ contains
         integer,        intent(in) :: which_dim
         integer :: dim
         dim = 0
+        if( which_dim < 1 .or. which_dim > 3 ) THROW_HARD('dimension should be 1, 2 or 3')
         select type( self )
             type is( MrcImgHead )
                 select case( which_dim )
@@ -899,8 +1042,15 @@ contains
                         dim = self%ny
                     case (3)
                         dim = self%nz
-                    case DEFAULT
-                        THROW_HARD('dimension should be 1, 2 or 3')
+                end select
+            type is( TiffImgHead )
+                select case( which_dim )
+                    case (1)
+                        dim = self%nx
+                    case (2)
+                        dim = self%ny
+                    case (3)
+                        dim = self%nz
                 end select
             type is( SpiImgHead )
                 select case( which_dim )
@@ -910,8 +1060,6 @@ contains
                         dim = int(self%ny)
                     case (3)
                         dim = int(self%nz)
-                    case DEFAULT
-                        THROW_HARD('dimension should be 1, 2 or 3')
                 end select
         end select
     end function getDim
@@ -932,6 +1080,10 @@ contains
                 self%nx = ldim(1)
                 self%ny = ldim(2)
                 self%nz = ldim(3)
+            type is( TiffImgHead )
+                self%nx = ldim(1)
+                self%ny = ldim(2)
+                self%nz = ldim(3)
         end select
     end subroutine setDims
 
@@ -939,7 +1091,7 @@ contains
     subroutine setDim( self, which_dim, d )
         class(ImgHead), intent(inout) :: self
         integer,        intent(inout) :: which_dim, d
-        if( d < 1 )then
+        if( d < 1 .or. d > 3)then
             write(logfhandle,'(a,1x,f7.0)') 'Dimension: ', real(d)
             THROW_HARD('trying to set image dimension that is nonconforming')
         endif
@@ -955,8 +1107,6 @@ contains
                     case(3)
                         self%nz = d
                         self%mz = d
-                    case DEFAULT
-                        THROW_HARD('not a valid dimension')
                 end select
             class is( SpiImgHead )
                 select case( which_dim )
@@ -966,8 +1116,15 @@ contains
                         self%ny = d
                     case(3)
                         self%nz = d
-                    case DEFAULT
-                        THROW_HARD('not a valid dimension')
+                end select
+            class is( TiffImgHead )
+                select case( which_dim )
+                    case(1)
+                        self%nx = d
+                    case(2)
+                        self%ny = d
+                    case(3)
+                        self%nz = d
                 end select
         end select
     end subroutine setDim
@@ -1013,7 +1170,9 @@ contains
         select type( self )
             type is( SpiImgHead )
                 maxim = int(self%maxim)
-            type is( MrcImgHead)
+            type is( MrcImgHead )
+                maxim = self%nz
+            type is( TiffImgHead )
                 maxim = self%nz
         end select
     end function getMaxim
@@ -1023,7 +1182,7 @@ contains
         class(ImgHead), intent(inout) :: self
         integer,        intent(in) :: maxim
         select type( self )
-            type is( SpiImgHead )
+        type is( SpiImgHead )
                 self%maxim = maxim
         end select
     end subroutine setMaxim
@@ -1236,6 +1395,37 @@ contains
 
     end subroutine get_spifile_info
 
+    subroutine get_tiffile_info(fname, ldim, nptcls, smpd_here, doprint)
+        use simple_strings, only: tocstring
+        character(len=*), intent(in)  :: fname
+        real,             intent(out) :: smpd_here
+        integer,          intent(out) :: ldim(3), nptcls
+        logical,          intent(in)  :: doprint
+        character(kind=c_char), allocatable :: filename_c(:), open_mode_c(:)
+        type(c_ptr) :: fhandle = c_null_ptr
+        integer     :: success
+        ldim   = 0
+        nptcls = 0
+        smpd_here = 0.
+        filename_c  = toCstring(fname)
+        open_mode_c = toCstring('rc')
+#ifdef USING_TIFF
+        fhandle = TIFFOpen(filename_c,open_mode_c)
+        ldim(1) = TIFFGetWidth(fhandle)
+        ldim(2) = TIFFGetLength(fhandle)
+        ldim(3) = 1 ! by convention
+        do
+            if (TIFFLastDirectory(fhandle) .ne. 0) exit
+            success = TIFFReadDirectory(fhandle)
+            if (success .ne. 1)THROW_HARD('Error setting TIFF directory, or already at last directory; get_tiffile_info')
+        enddo
+        nptcls = TIFFCurrentDirectory(fhandle) + 1
+        if( doprint ) call TIFFPrintInfo(fhandle)
+        call TIFFClose(fhandle)
+#endif
+    end subroutine get_tiffile_info
+
+
     !>  \brief  is for finding logical dimension and number of particles in stack
     subroutine find_ldim_nptcls( fname, ldim, nptcls, smpd, doprint, formatchar )
         character(len=*),           intent(in)  :: fname      !< filename
@@ -1264,6 +1454,10 @@ contains
             case('S')
                 call get_spifile_info(fname, ldim, iform, maxim, smpd_here, conv, ddoprint)
                 nptcls = maxim
+#ifdef USING_TIFF
+            case('J')
+                call get_tiffile_info(fname, ldim, nptcls, smpd_here, ddoprint)
+#endif
             case DEFAULT
                 THROW_HARD('format of file: '//trim(fname)//' not supported')
         end select
@@ -1300,6 +1494,8 @@ contains
                     end if
                 type is (SpiImgHead)
                     return
+                type is (TiffImgHead)
+                    self%fhandle = c_null_ptr
                 class DEFAULT
                     THROW_HARD('unsupported header type')
             end select

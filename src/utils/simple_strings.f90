@@ -718,4 +718,16 @@ contains
 
     end subroutine lexSort
 
+    !>  \brief  converst to C string
+    pure function toCstring( f_string )result( c_string )
+        character(len=*),intent(in)  :: f_string
+        character(len=1,kind=c_char) :: c_string(len_trim(f_string)+1)
+        integer :: i, n
+        n = len_trim(f_string)
+        do i=1,n
+            c_string(i) = f_string(i:i)
+        enddo
+        c_string(n+1) = C_NULL_CHAR
+    end function toCstring
+
 end module simple_strings

@@ -61,6 +61,7 @@ contains
         class(moviewatcher),           intent(inout) :: self
         integer,                       intent(out)   :: n_movies
         character(len=*), allocatable, intent(out)   :: movies(:)
+        character(len=:),          allocatable :: list_glob
         character(len=LONGSTRLEN), allocatable :: farray(:)
         integer,                   allocatable :: fileinfo(:)
         logical,                   allocatable :: is_new_movie(:)
@@ -79,8 +80,13 @@ contains
         n_movies = 0
         fail_cnt = 0
         ! builds files array
-        call simple_list_files(trim(self%watch_dir)//PATH_SEPARATOR//'*.mrc '//&
-            &trim(self%watch_dir)//PATH_SEPARATOR//'*.mrcs', farray)
+        list_glob = trim(self%watch_dir)//PATH_SEPARATOR//'*.mrc'
+        list_glob = trim(list_glob)//' '//trim(self%watch_dir)//PATH_SEPARATOR//'*.mrcs'
+#ifdef USING_TIFF
+        list_glob = trim(list_glob)//' '//trim(self%watch_dir)//PATH_SEPARATOR//'*.tif'
+        list_glob = trim(list_glob)//' '//trim(self%watch_dir)//PATH_SEPARATOR//'*.tiff'
+#endif
+        call simple_list_files(list_glob, farray)
         if( .not.allocated(farray) )return ! nothing to report
         n_lsfiles = size(farray)
         ! identifies closed & untouched files
