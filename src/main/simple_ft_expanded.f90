@@ -78,7 +78,8 @@ contains
         real,               intent(in)    :: hp, lp
         logical,            intent(in)    :: fetch_comps
         real, optional,     intent(in)    :: bfac
-        real    :: lp_nyq, spafreq_sq, w, spafreqh,spafreqk
+        real, allocatable :: wh(:)
+        real    :: lp_nyq, spafreq_sq, spafreqh,spafreqk,w,wk
         integer :: h,k,i,hcnt,kcnt,lplim,hplim,hh,sqarg
         logical :: didft, l_bfac
         ! kill pre-existing object
@@ -124,27 +125,32 @@ contains
                  &stat=alloc_stat)
         self%cmat    = cmplx(0.,0.)
         self%bandmsk = .false.
-        if(alloc_stat.ne.0)call allocchk("In: new_1; simple_ft_expanded, 2",alloc_stat)
+        if(alloc_stat.ne.0)call allocchk("In: new_1; simple_ft_expanded",alloc_stat)
         ! init matrices
-        hcnt = 0
-        do h=self%lims(1,1),self%lims(1,2)
-            spafreqh = real(h)/real(self%ldim(1))/self%smpd
-            hh   = h * h
-            hcnt = hcnt + 1
-            kcnt = 0
-            do k=self%lims(2,1),self%lims(2,2)
+        if( fetch_comps .and. l_bfac )then
+            allocate(wh(self%lims(1,1):self%lims(1,2)))
+            do h=self%lims(1,1),self%lims(1,2)
+                spafreqh = real(h)/real(self%ldim(1))/self%smpd
+                wh(h)    =  exp(-spafreqh*spafreqh*bfac/4.)
+            enddo
+        endif
+        kcnt = 0
+        do k=self%lims(2,1),self%lims(2,2)
+            kcnt = kcnt + 1
+            hcnt = 0
+            if( fetch_comps .and. l_bfac )then
                 spafreqk = real(k)/real(self%ldim(2))/self%smpd
-                kcnt  = kcnt + 1
-                sqarg = hh +  k*k
+                wk = exp(-spafreqk*spafreqk*bfac/4.)
+            endif
+            do h=self%lims(1,1),self%lims(1,2)
+                sqarg = h*h + k*k
+                hcnt  = hcnt + 1
                 if( sqarg < 1 )then
                     cycle ! excludes zero
                 elseif( sqarg <= lplim .and. sqarg >= hplim  )then
                     if( fetch_comps )then
                         if( l_bfac )then
-                            ! b-factor weight
-                            spafreq_sq = spafreqh*spafreqh + spafreqk*spafreqk
-                            w =  max(0.,exp(-spafreq_sq*bfac/4.))
-                            self%cmat(hcnt,kcnt) = w * img%get_fcomp2D(h,k)
+                            self%cmat(hcnt,kcnt) = wh(h) * wk * img%get_fcomp2D(h,k)
                         else
                             self%cmat(hcnt,kcnt) = img%get_fcomp2D(h,k)
                         endif
@@ -290,13 +296,13 @@ contains
         real    :: argh,argk,ck,sk
         kind_shift = self%get_kind_shift()
         do hind=self%flims(1,1),self%flims(1,2)
-            argh     = real(ftexp_transfmat(hind,1,1),dp) * shvec(1)
+            argh     = ftexp_transfmat(hind,1,1) * shvec(1)
             ch(hind) = cos(argh)
             sh(hind) = sin(argh)
         enddo
         do kind=self%flims(2,1),self%flims(2,2)
             kkind = kind+kind_shift
-            argk  = real(ftexp_transfmat(1,kkind,2),dp) * shvec(2)
+            argk  = ftexp_transfmat(1,kkind,2) * shvec(2)
             ck    = cos(argk)
             sk    = sin(argk)
             do hind=self%flims(1,1),self%flims(1,2)
@@ -317,13 +323,13 @@ contains
         real    :: argh,argk,ck,sk
         kind_shift = self%get_kind_shift()
         do hind=self%flims(1,1),self%flims(1,2)
-            argh     = real(ftexp_transfmat(hind,1,1),dp) * shvec(1)
+            argh     = ftexp_transfmat(hind,1,1) * shvec(1)
             ch(hind) = cos(argh)
             sh(hind) = sin(argh)
         enddo
         do kind=self%flims(2,1),self%flims(2,2)
             kkind = kind+kind_shift
-            argk  = real(ftexp_transfmat(1,kkind,2),dp) * shvec(2)
+            argk  = ftexp_transfmat(1,kkind,2) * shvec(2)
             ck    = cos(argk)
             sk    = sin(argk)
             do hind=self%flims(1,1),self%flims(1,2)
@@ -473,16 +479,16 @@ contains
     ! TRANSFER MATRIX ROUTINES
 
     subroutine ftexp_transfmat_init( img, lp )
-        class(image), intent(in) :: img
-        real, optional,        intent(in) :: lp
-        real    :: lp_nyq, lp_here, shconst(2)
+        class(image),   intent(in) :: img
+        real, optional, intent(in) :: lp
+        real    :: lp_here, shconst(2)
         integer :: h,k,i,hcnt,kcnt
         integer :: ldim(3),flims(3,2),ftexp_transf_flims(3,2)
         call ftexp_transfmat_kill
         ! dimensions
         ldim = img%get_ldim()
         if( ldim(3) > 1 ) THROW_HARD("In: ftexp_transfmat_init; simple_ft_expanded, 1")
-        lp_here      = 2.*img%get_smpd()
+        lp_here = 2.*img%get_smpd()
         if( present(lp) ) lp_here = lp
         flims = img%loop_lims(1,lp_here)
         ftexp_transf_flims = flims

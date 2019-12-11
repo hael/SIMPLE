@@ -37,7 +37,6 @@ type(motion_patched)     :: motion_patch
 real(dp),    allocatable :: patched_polyn(:)              !< polynomial from patched-based correction
 
 ! data structures used by both isotropic & patch-based correction
-real,        allocatable :: corrs(:)                      !< per-frame correlations
 real,        allocatable :: shifts_toplot(:,:)            !< shifts for plotting & parsing
 real,        allocatable :: frameweights(:)               !< array of frameweights
 real,        allocatable :: acc_doses(:)                  !< accumulated doses
@@ -130,7 +129,7 @@ contains
         allocate( shifts_toplot(nframes, 2), source=0., stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('motion_correct_init 2; simple_motion_correct')
         ! additional allocations
-        allocate(corrs(nframes), opt_shifts(nframes,2),frameweights(nframes), source=0.,stat=alloc_stat)
+        allocate(opt_shifts(nframes,2),frameweights(nframes), source=0.,stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('motion_correct_init 4; simple_motion_correct')
         frameweights = 1./real(nframes)
         ! allocate & read frames
@@ -191,7 +190,6 @@ contains
             print *,'t_new:      ',rt_new
             print *,'t_read:     ',rt_read
         endif
-        ! stop
     end subroutine motion_correct_init
 
     subroutine motion_correct_iso_polyn_direct_callback( aPtr, align_iso_polyn_direct, converged )
@@ -645,7 +643,6 @@ contains
 
     subroutine motion_correct_kill_common
         integer :: iframe
-        if( allocated(corrs)              ) deallocate(corrs)
         if( allocated(shifts_toplot)      ) deallocate(shifts_toplot)
         if( allocated(frameweights)       ) deallocate(frameweights)
         if( allocated(acc_doses)          ) deallocate(acc_doses)

@@ -153,7 +153,7 @@ contains
     subroutine init_images( self )
         class(motion_align_hybrid), intent(inout) :: self
         real    :: smpd_sc
-        integer :: iframe,box,ind,maxldim
+        integer :: iframe,box,ind,maxldim,magic_maxldim
         call self%dealloc_images
         ! works out dimensions for Fourier cropping
         maxldim           = maxval(self%ldim(1:2))
@@ -166,6 +166,12 @@ contains
             smpd_sc           = self%lpstop/2.
             self%scale_factor = min(1.,self%smpd/smpd_sc)
             box               = round2even(self%scale_factor*real(maxldim))
+        endif
+        ! fftw friendly dimensions
+        magic_maxldim = find_larger_magic_box(box)
+        if( (magic_maxldim.ne.box) .and. (magic_maxldim.lt.maxldim) )then
+            box = magic_maxldim
+            self%scale_factor = real(box) / real(maxldim)
         endif
         if( self%ldim(1) > self%ldim(2) )then
             self%ldim_sc = [box, round2even(self%scale_factor*real(self%ldim(2))), 1]
