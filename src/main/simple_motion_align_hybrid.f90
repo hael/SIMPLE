@@ -277,7 +277,6 @@ contains
     subroutine align( self, ini_shifts, frameweights )
         class(motion_align_hybrid), intent(inout) :: self
         real,             optional, intent(in)    :: ini_shifts(self%nframes,2), frameweights(self%nframes)
-        real :: coarse_shifts(self%nframes,2)
         if( self%L_BENCH )then
             self%t_init = tic()
             self%t_tot  = self%t_init
@@ -291,6 +290,8 @@ contains
         if (( self%hp < 0. ) .or. ( self%lp < 0.)) then
             THROW_HARD('hp or lp < 0; simple_motion_align_hybrid: align')
         end if
+        ! deactivating polynomial fitting for low number of frames
+        self%fitshifts = self%fitshifts .and. (self%nframes < 3*POLYDIM)
         write(logfhandle,'(A,2I3)') '>>> PERFORMING OPTIMIZATION FOR PATCH',self%px,self%py
         ! discrete correlation search
         call self%init_images
@@ -305,7 +306,6 @@ contains
             self%t_initftexp = tic()
         endif
         self%opt_shifts = self%opt_shifts / self%scale_factor
-        coarse_shifts   = self%opt_shifts
         ! correlation continuous search
         call self%init_ftexps
         if( self%L_BENCH )then

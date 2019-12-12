@@ -755,7 +755,6 @@ contains
         integer,                   parameter :: nmics4ctf    = 10
         type(parameters) :: params
         type(builder)    :: build
-        type(image)      :: avg1, avg2
         real             :: smpd, w
         integer          :: iptcl, ldim_ptcl(3), ldim(3), n, nptcls
         call cline%set('oritype','mic')
@@ -778,24 +777,13 @@ contains
         w = 1./real(nptcls)
         call build%img%new(ldim,smpd)       ! particle
         call build%img_tmp%new(ldim,smpd)   ! nn background
-        call avg1%new(ldim,smpd)
-        call avg2%new(ldim,smpd)
-        avg1 = 0.
-        avg2 = 0.
         ! read, subtract & write
         do iptcl = 1,nptcls
             call build%img%read(params%stk,iptcl)
-            call avg1%add(build%img,w=w)
             call build%img_tmp%read(params%stk2,iptcl)
             call remove_graphene_peaks(build%img, build%img_tmp)
             call build%img%write(params%outstk,iptcl)
-            call avg2%add(build%img,w=w)
-            if( mod(iptcl,50) == 0 )then
-                call avg1%write('avg1.mrc')
-                call avg2%write('avg2.mrc')
-            endif
         enddo
-        call avg1%kill; call avg2%kill
         ! cleanup
         call build%kill_general_tbox
         call build%spproj%kill
