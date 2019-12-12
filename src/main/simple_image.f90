@@ -5122,7 +5122,8 @@ contains
         integer           :: cnt, npix, npix_env, i,j,k
         logical           :: env_mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
         npix = product(self%ldim)
-        where( volmsk%rmat>0.0001 .and. volmsk%rmat<0.9999 )
+        where( volmsk%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) > 0.0001&
+        &.and. volmsk%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) < 0.9999 )
             env_mask = .true.
         else where
             env_mask = .false.
