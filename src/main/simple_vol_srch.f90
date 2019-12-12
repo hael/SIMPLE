@@ -62,10 +62,10 @@ contains
             ! discrete search to start-off with (half-pixel resolution)
             cost_best = 1.
             xsh = lims(1,1)
-            ysh = lims(2,1)
-            zsh = lims(3,1)
             do while( xsh <= lims(1,2) )
+                ysh = lims(2,1)
                 do while( ysh <= lims(2,2) )
+                    zsh = lims(3,1)
                     do while( zsh <= lims(3,2) )
                         shvec = [xsh,ysh,zsh]
                         cost = vol_shsrch_costfun(fun_self, shvec, ospec%ndim)
@@ -73,11 +73,11 @@ contains
                             shvec_best = shvec
                             cost_best  = cost
                         endif
-                        zsh = zsh + 0.5
+                        zsh = zsh + 1.
                     end do
-                    ysh = ysh + 0.5
+                    ysh = ysh + 1.
                 end do
-                xsh = xsh + 0.5
+                xsh = xsh + 1.
             end do
         endif
         ! refinement with simplex

@@ -1546,6 +1546,7 @@ contains
         ! <empty>
         ! search controls
         call dock_volpair%set_input('srch_ctrls', 1, trs)
+        dock_volpair%srch_ctrls(1)%rval_default = 5.
         call dock_volpair%set_input('srch_ctrls', 2, 'dockmode', 'multi', 'Docking mode', 'Docking mode(rot|shift|rotshift|refine){rotshift}', '(rot|shift|rotshift|refine){rotshift}', .false., 'rotshift')
         ! filter controls
         call dock_volpair%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit', 'low-pass limit in Angstroms', .true., 0.)

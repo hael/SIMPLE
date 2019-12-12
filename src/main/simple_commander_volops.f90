@@ -502,6 +502,7 @@ contains
         use simple_oris, only: oris
         class(dock_volpair_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
+        real,  parameter :: SHSRCH_HWDTH  = 5.0
         type(parameters) :: params
         type(projector)  :: vol1, vol2
         type(image)      :: vol_out
@@ -509,13 +510,15 @@ contains
         type(ori)        :: orientation, orientation_best
         real             :: cxyz(4), cxyz2(4)
         integer          :: i
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes'       )
+        if( .not. cline%defined('trs'  ) ) call cline%set('trs',   SHSRCH_HWDTH)
         call params%new(cline)
+        write (*,*) 'params%trs:', params%trs
         ! prep vols
         call read_and_prep_vol(params%vols(1), vol1)
         call read_and_prep_vol(params%vols(2), vol2)
         select case( trim(params%dockmode) )
-            case('shift')
+        case('shift')
                 call vol_srch_init(vol1, vol2, params%hp, params%lpstart, params%trs)
                 cxyz = vol_shsrch_minimize()
                 write(logfhandle,*) 'corr: ', cxyz(1), 'shift: ', cxyz(2:4)
