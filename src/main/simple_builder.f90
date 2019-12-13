@@ -242,8 +242,10 @@ contains
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         endif
         ! resolution mask for correlation calculation (omitting shells corresponding to the graphene signal if params%l_graphene = .true.)
-        self%l_resmsk = calc_graphene_mask(params%boxmatch, params%smpd)
-        if( .not. params%l_graphene ) self%l_resmsk = .true.
+        if( params%boxmatch > 0 ) then
+            self%l_resmsk = calc_graphene_mask(params%boxmatch, params%smpd)
+            if( .not. params%l_graphene ) self%l_resmsk = .true.
+        end if
         ! associate global build pointer
         if( .not. associated(build_glob) ) build_glob => self
         self%general_tbox_exists = .true.
