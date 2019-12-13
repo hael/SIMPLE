@@ -101,6 +101,7 @@ contains
         ! transfer data to o_peaks
         call build_glob%spproj_field%get_ori(self%s%iptcl, o_tmp)
         call s3D%o_peaks(self%s%iptcl)%set_ori(1, o_tmp)
+        call osym%kill
         call o_tmp%kill
     end subroutine oris_assign_cont_single
 

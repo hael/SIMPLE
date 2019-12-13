@@ -154,11 +154,15 @@ contains
         real(dp),          intent(in) :: x
         real(dp) :: r, arg
         if( abs(x) > self%Whalf )then
-            r = 0.
+            r = 0._dp
             return ! for insignificant values return as soon as possible
         endif
         arg = self%twooW * x
         arg = 1._dp - arg * arg
+        if( arg < 0._dp )then  ! need to double-check to prevent spurious occurence of NaN's
+            r = 0._dp
+            return
+        end if
         r = self%oneoW * bessi0_dp(self%beta * sqrt(arg))
     end function apod_dp
 
