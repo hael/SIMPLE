@@ -347,7 +347,6 @@ contains
           ! kill
           call nano%kill
         elseif(cline%defined('pdbfile')) then
-          ! if(.not. cline%defined('element')) THROW_HARD('ERROR! element needs to be present; exec_geometry_analysis')
           call a%new(params%pdbfile)
           call a%geometry_analysis_pdb(params%pdbfile2)
           call a%kill
@@ -375,12 +374,17 @@ contains
         real        :: radius
         character(len=100) :: fname_conv
         character(len=100) :: before_dir
+        character(len=100) :: out_pdbfile
         call params%new(cline)
         call simple_getcwd(before_dir)
         call nano%new(params%vols(1), params%smpd,params%element)
         !identifiy atomic positions
         fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
         call nano%set_atomic_coords(trim(fname)//'_atom_centers.pdb')
+        !Translate so that the center of mass coincide with its closest atom
+        out_pdbfile = trim(fname)//'_atom_centeredOnAtom'
+        call nano%center_on_atom(trim(fname)//'_atom_centers.pdb', out_pdbfile )
+        call nano%set_atomic_coords(trim(fname)//'_atom_centeredOnAtom.pdb')
         call nano%get_ldim(ldim)
         min_rad = params%min_rad
         max_rad = params%max_rad

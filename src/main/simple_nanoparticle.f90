@@ -2077,12 +2077,8 @@ contains
       character(len=*),    intent(in)    :: pdbfile_in
       character(len=*),    intent(inout) :: pdbfile_out
       type(atoms) :: atom_centers
-      real        :: m(3), mm(3), vec(3), d, d_before
+      real        :: m(3), vec(3), d, d_before
       integer     :: i
-      !!!!!!!!!!! DEBUG !!!!!!!!!!
-      type(atoms) :: center_of_mass
-      integer :: index
-      real :: coords(3)
       call atom_centers%new(pdbfile_in)
       m(:)  = self%nanopart_masscen()
       d_before = huge(d_before)
@@ -2091,23 +2087,13 @@ contains
         if(d < d_before) then
           vec(:)   = m(:) - self%centers(:,i)
           d_before = d
-          index = i
         endif
       enddo
-      print *, 'self%centers(:, index) + vec: ', self%centers(:, index) + vec, 'm(:): ', m(:)
-      print *, 'self%smpd:', self%smpd
-      vec = (vec-1.)*self%smpd
-      m   = (m-1.)*self%smpd
-      coords = atom_centers%get_coord(index)
-      print *, 'coords + vec: ', coords + vec, '(m(:)-1.)*self%smpd: ', m
-      call atom_centers%translate(vec)
+      do i = 1, self%n_cc
+        self%centers(:,i) = self%centers(:,i) + vec
+        call atom_centers%set_coord(i,(self%centers(:,i)-1.)*self%smpd)
+      enddo
       call atom_centers%writePDB(pdbfile_out)
-      !!!!!!!!!
-      call center_of_mass%new(1)
-      call center_of_mass%set_coord(1,m)
-      call center_of_mass%writePDB('CenterOfMass')
-      call center_of_mass%kill
-      !!!!!!!!!
       call atom_centers%kill
     end subroutine center_on_atom
 
