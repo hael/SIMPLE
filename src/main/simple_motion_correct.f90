@@ -11,18 +11,17 @@ use simple_opt_image_weights,             only: opt_image_weights
 use simple_image,                         only: image
 use simple_parameters,                    only: params_glob
 use simple_opt_lbfgsb,                    only: PRINT_NEVALS
-use simple_starfile_wrappers
 implicit none
 
 ! Stage drift
 public :: motion_correct_iso, motion_correct_iso_calc_sums, motion_correct_iso_calc_sums_tomo, motion_correct_iso_shift_frames
-public :: write_iso2star, motion_correct_iso_kill
+public :: motion_correct_iso_kill
 ! Beam-induced motion correction
 public :: motion_correct_patched, motion_correct_patched_calc_sums, motion_correct_patched_kill
-public :: write_aniso2star, motion_correct_with_patched
+public :: motion_correct_with_patched
 ! Common & convenience
-public :: motion_correct_kill_common, close_starfile, motion_correct_mic2spec, patched_shift_fname
-public :: motion_correct_calc_opt_weights
+public :: motion_correct_kill_common, motion_correct_mic2spec, patched_shift_fname
+public :: motion_correct_write2star, motion_correct_calc_opt_weights
 private
 #include "simple_local_flags.inc"
 
@@ -59,8 +58,6 @@ real    :: dose_rate      = 0.                            !< dose rate
 logical :: do_scale                    = .false.          !< scale or not
 logical :: motion_correct_with_patched = .false.          !< run patch-based aniso or not
 character(len=:), allocatable :: patched_shift_fname      !< file name for shift plot for patched-based alignment
-character(len=:), allocatable :: mc_starfile_fname        !< file name for starfile rel. to motion correct
-type(starfile_table_type)     :: mc_starfile              !< starfile for motion correct output
 
 ! module global constants
 real,    parameter :: NSIGMAS                       = 6.       !< Number of standard deviations for outliers detection
@@ -415,13 +412,16 @@ contains
         call  motion_correct_iso_calc_sums(movie_sum_corrected, movie_sum_ctf)
     end subroutine motion_correct_iso_calc_sums_tomo
 
-    ! open, write isotropic shifts and do not close star file
-    subroutine write_iso2star( mc_starfile_fname, moviename, gainref_fname )
+    ! Write iso/aniso-tropic shifts
+    subroutine motion_correct_write2star( mc_starfile_fname, moviename, writepoly, gainref_fname )
+        use simple_starfile_wrappers
         character(len=*),           intent(in) :: mc_starfile_fname, moviename
+        logical,                    intent(in) :: writepoly
         character(len=*), optional, intent(in) :: gainref_fname
-        real    :: shift(2), doserateperframe
-        integer :: iframe
-        ! open as new file
+        type(starfile_table_type) :: mc_starfile
+        real(dp) :: u,v,poly_coeffs(size(patched_polyn,1))
+        real     :: shift(2), doserateperframe
+        integer  :: iframe, n
         call starfile_table__new(mc_starfile)
         call starfile_table__open_ofile(mc_starfile, mc_starfile_fname)
         ! global fields
@@ -446,7 +446,11 @@ contains
         call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_PRE_EXPOSURE, 0.0_dp)
         call starfile_table__setValue_double(mc_starfile, EMDL_CTF_VOLTAGE, real(params_glob%kv, dp))
         call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_START_FRAME, 1)
-        call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_MOTION_MODEL_VERSION, 1)
+        if( writepoly )then
+            call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_MOTION_MODEL_VERSION, 1)
+        else
+            call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_MOTION_MODEL_VERSION, 0)
+        endif
         call starfile_table__write_ofile(mc_starfile)
         ! isotropic shifts
         call starfile_table__clear(mc_starfile)
@@ -460,7 +464,29 @@ contains
             call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, real(shift(2)/params_glob%scale, dp))
         end do
         call starfile_table__write_ofile(mc_starfile)
-    end subroutine write_iso2star
+        if( writepoly )then
+            ! anisotropic shifts
+            n = size(patched_polyn,1)
+            poly_coeffs = patched_polyn
+            if( do_scale )then
+                u = 1.d0 / real(params_glob%scale,dp)
+                v = real(params_glob%scale,dp)
+                poly_coeffs(    1:n/2) = patched_polyn(    1:n/2) * [u,u,u,1.d0,1.d0,1.d0,v,v,v,1.d0,1.d0,1.d0,v,v,v,v,v,v]
+                poly_coeffs(n/2+1:n)   = patched_polyn(n/2+1:n)   * [u,u,u,1.d0,1.d0,1.d0,v,v,v,1.d0,1.d0,1.d0,v,v,v,v,v,v]
+            endif
+            call starfile_table__clear(mc_starfile)
+            call starfile_table__setIsList(mc_starfile, .false.)
+            call starfile_table__setName(mc_starfile, "local_motion_model")
+            do iframe = 1, n
+                call starfile_table__addObject(mc_starfile)
+                call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_MOTION_COEFFS_IDX, iframe-1)
+                call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_MOTION_COEFF, poly_coeffs(iframe))
+            end do
+            call starfile_table__write_ofile(mc_starfile)
+        endif
+        call starfile_table__close_ofile(mc_starfile)
+        call starfile_table__delete(mc_starfile)
+    end subroutine motion_correct_write2star
 
     subroutine motion_correct_iso_kill
         if (allocated(opt_shifts)) deallocate(opt_shifts)
@@ -551,29 +577,6 @@ contains
         endif
     end subroutine motion_correct_patched_calc_sums
 
-    ! write anisotropic shifts
-    subroutine write_aniso2star
-        real(dp) :: u,v,poly_coeffs(size(patched_polyn,1))
-        integer  :: n,iframe
-        n = size(patched_polyn,1)
-        poly_coeffs = patched_polyn
-        if( do_scale )then
-            u = 1.d0 / real(params_glob%scale,dp)
-            v = real(params_glob%scale,dp)
-            poly_coeffs(    1:n/2) = patched_polyn(    1:n/2) * [u,u,u,1.d0,1.d0,1.d0,v,v,v,1.d0,1.d0,1.d0,v,v,v,v,v,v]
-            poly_coeffs(n/2+1:n)   = patched_polyn(n/2+1:n)   * [u,u,u,1.d0,1.d0,1.d0,v,v,v,1.d0,1.d0,1.d0,v,v,v,v,v,v]
-        endif
-        call starfile_table__clear(mc_starfile)
-        call starfile_table__setIsList(mc_starfile, .false.)
-        call starfile_table__setName(mc_starfile, "local_motion_model")
-        do iframe = 1, n
-            call starfile_table__addObject(mc_starfile)
-            call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_MOTION_COEFFS_IDX, iframe-1)
-            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_MOTION_COEFF, poly_coeffs(iframe))
-        end do
-        call starfile_table__write_ofile(mc_starfile)
-    end subroutine write_aniso2star
-
     subroutine motion_correct_patched_kill
         call motion_patch%kill
         call ftexp_transfmat_kill
@@ -638,11 +641,6 @@ contains
             call tmp(ithr)%kill
         enddo
     end subroutine motion_correct_mic2spec
-
-    subroutine close_starfile
-        call starfile_table__close_ofile(mc_starfile)
-        call starfile_table__delete(mc_starfile)
-    end subroutine close_starfile
 
     subroutine motion_correct_kill_common
         integer :: iframe

@@ -46,11 +46,11 @@ contains
         character(len=*), optional, intent(in)    :: gainref_fname
         character(len=*), optional, intent(in)    :: tseries
         character(len=:), allocatable :: fbody_here, ext, star_fname
-        type(stats_struct)        :: shstats(2)
-        character(len=LONGSTRLEN) :: rel_fname
-        real    :: goodnessoffit(2), scale, var, bfac_here
+        character(len=LONGSTRLEN)     :: rel_fname
+        real    :: goodnessoffit(2), scale, bfac_here
         integer :: ldim(3), ldim_thumb(3)
-        logical :: err, patch_success, l_tseries
+        logical :: patch_success, l_tseries
+        patch_success = .false.
         l_tseries = .false.
         if( present(tseries) ) l_tseries = tseries.eq.'yes'
         ! check, increment counter & print
@@ -106,12 +106,10 @@ contains
         call motion_correct_calc_opt_weights
         ! destruct before anisotropic correction
         call motion_correct_iso_kill
-        if( .not. l_tseries ) call write_iso2star(star_fname, self%moviename, gainref_fname)
         ! Patch based approach
         if( motion_correct_with_patched ) then
             patched_shift_fname = trim(dir_out)//trim(adjustl(fbody_here))//'_shifts.eps'
             call motion_correct_patched( bfac_here, goodnessoffit )
-            if( .not. l_tseries ) call write_aniso2star
             patch_success = all(goodnessoffit < PATCH_FIT_THRESHOLD)
             ! generate sums
             if( patch_success )then
@@ -139,6 +137,8 @@ contains
                 call motion_correct_iso_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
             endif
         endif
+        ! STAR output
+        if( .not. l_tseries ) call motion_correct_write2star(star_fname, self%moviename, patch_success, gainref_fname)
         ! generate power-spectra
         if( L_BENCH ) t_postproc1 = tic()
         call motion_correct_mic2spec(self%moviesum_ctf, params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_ctf)
@@ -182,7 +182,6 @@ contains
             call orientation%set('mceps', rel_fname)
         endif
         call motion_correct_kill_common
-        if( .not. l_tseries ) call close_starfile
         if( L_BENCH )then
             print *,'rt_postproc1: ',rt_postproc1
         endif
