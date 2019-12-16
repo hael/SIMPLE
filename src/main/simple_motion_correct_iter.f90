@@ -13,7 +13,7 @@ public :: motion_correct_iter
 private
 #include "simple_local_flags.inc"
 
-real,             parameter :: PATCH_FIT_THRESHOLD = 10.0 ! threshold for polynomial fitting in pixels
+real,             parameter :: PATCH_FIT_THRESHOLD = 4.0 ! threshold for polynomial fitting in pixels
 character(len=*), parameter :: speckind = 'sqrt'
 ! benchmarking
 logical                 :: L_BENCH = .false.
@@ -98,8 +98,12 @@ contains
         endif
         ! execute the motion_correction
         call motion_correct_iso(self%moviename, ctfvars, bfac_here, self%moviesum, gainref_fname=gainref_fname)
+        call motion_correct_mic2spec(self%moviesum, params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)
+        call self%moviesum%kill
         ! shifts frames accordingly
         call motion_correct_iso_shift_frames
+        ! optionally calculate optimal weights
+        call motion_correct_calc_opt_weights
         ! destruct before anisotropic correction
         call motion_correct_iso_kill
         if( .not. l_tseries ) call write_iso2star(star_fname, self%moviename, gainref_fname)
@@ -137,7 +141,6 @@ contains
         endif
         ! generate power-spectra
         if( L_BENCH ) t_postproc1 = tic()
-        call motion_correct_mic2spec(self%moviesum,     params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)
         call motion_correct_mic2spec(self%moviesum_ctf, params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_ctf)
         call self%pspec_sum%before_after(self%pspec_ctf, self%pspec_half_n_half)
         call self%pspec_half_n_half%scale_pspec4viz

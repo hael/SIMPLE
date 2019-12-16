@@ -202,6 +202,7 @@ type(simple_input_param) :: lplim_crit
 type(simple_input_param) :: max_rad
 type(simple_input_param) :: maxits
 type(simple_input_param) :: mcpatch
+type(simple_input_param) :: mcconvention
 type(simple_input_param) :: min_rad
 type(simple_input_param) :: mirr
 type(simple_input_param) :: moldiam
@@ -863,6 +864,7 @@ contains
         call set_param(e3,             'e3',           'num',    'Rotation along Psi',  'Psi Euler angle',   'in degrees', .false., 0.)
         call set_param(groupframes,    'groupframes',  'binary', 'Patch motion correction frames averaging', 'Whether to perform frames averaging during motion correction - for patchesonly(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(mcpatch,        'mcpatch',      'binary', 'Patch-based motion correction', 'Whether to perform Patch-based motion correction(yes|no){no}', '(yes|no){yes}', .false., 'yes')
+        call set_param(mcconvention,   'mcconvention', 'str',    'Frame of reference during movie alignment', 'Frame of reference during movie alignment; simple:central; relion:first(simple|relion){simple}', '(simple|relion){simple}', .false., 'simple')
         call set_param(nxpatch,        'nxpatch',      'num',    '# of patches along x-axis', 'Motion correction # of patches along x-axis', '# x-patches{5}', .false., 5.)
         call set_param(nypatch,        'nypatch',      'num',    '# of patches along y-axis', 'Motion correction # of patches along y-axis', '# y-patches{5}', .false., 5.)
         call set_param(numlen,         'numlen',       'num',    'Length of number string', 'Length of number string', '# characters', .false., 5.0)
@@ -885,14 +887,14 @@ contains
         call set_param(sigma2_fudge,   'sigma2_fudge', 'num',    'Sigma2-fudge factor', 'Fudge factor for sigma2_noise{100.}', '{100.}', .false., 100.)
         call set_param(ptclw,          'ptclw',        'multi',  'Particle weights', 'Particle weights(yes|no){yes}',  '(yes|otsu|no){yes}',  .false., 'yes')
         call set_param(envfsc,         'envfsc',       'binary', 'Envelope mask e/o maps for FSC', 'Envelope mask even/odd pairs prior to FSC calculation(yes|no){no}',  '(yes|no){no}',  .false., 'no')
-        call set_param(graphene_filt,  'graphene_filt','binary',  'Omit graphene bands from corr calc', 'Omit graphene bands from corr calc(yes|no){no}',  '(yes|no){no}',  .false., 'no')
+        call set_param(graphene_filt,  'graphene_filt','binary', 'Omit graphene bands from corr calc', 'Omit graphene bands from corr calc(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(wcrit,          'wcrit',        'multi',  'Correlation to weights conversion scheme', 'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|no){softmax}',  '(softmax|zscore|sum|cen|exp|inv|no){softmax}',  .false., 'softmax')
         call set_param(element,        'element',      'str',    'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
-        call set_param(tseries, 'tseries', 'binary', 'Stack is time-series', 'Stack is time-series(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(max_rad, 'max_rad', 'num', 'Maximum radius in A', 'Maximum radius in A {12.}', '{12.}', .false., 100.)
-        call set_param(min_rad, 'min_rad', 'num', 'Minimum radius in A', 'Minimum radius in A {5.} ', '{5.}',  .false., 10.)
-        call set_param(stepsz, 'stepsz', 'num', ' Steps size in A', 'Step size in A {2.} ', '{2.}',  .false., 10.)
-        call set_param(dock, 'dock', 'binary', 'Volumes have to be docked', 'Volumes have to be docked(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(tseries,        'tseries',      'binary', 'Stack is time-series', 'Stack is time-series(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(max_rad,        'max_rad',      'num',    'Maximum radius in A', 'Maximum radius in A {12.}', '{12.}', .false., 100.)
+        call set_param(min_rad,        'min_rad',      'num',    'Minimum radius in A', 'Minimum radius in A {5.} ', '{5.}',  .false., 10.)
+        call set_param(stepsz,         'stepsz',       'num',    'Steps size in A', 'Step size in A {2.} ', '{2.}',  .false., 10.)
+        call set_param(dock,           'dock',         'binary', 'Volumes have to be docked', 'Volumes have to be docked(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
@@ -2293,9 +2295,9 @@ contains
         & If dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly&
         & (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to&
         & the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will&
-        & be pre-averaged in the given chunk size (Falcon 3 movies).',&           ! descr_long
+        & be pre-averaged in the given chunk size (Falcon 3 movies).',&     ! descr_long
         &'simple_exec',&                                                    ! executable
-        &1, 5, 0, 7, 3, 0, 2, .true.)                                             ! # entries in each group, requires sp_project
+        &1, 5, 0, 8, 3, 0, 2, .true.)                                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call motion_correct%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2317,7 +2319,8 @@ contains
         call motion_correct%set_input('srch_ctrls', 4, mcpatch)
         call motion_correct%set_input('srch_ctrls', 5, nxpatch)
         call motion_correct%set_input('srch_ctrls', 6, nypatch)
-        call motion_correct%set_input('srch_ctrls', 7, groupframes)
+        call motion_correct%set_input('srch_ctrls', 7, mcconvention)
+        call motion_correct%set_input('srch_ctrls', 8, groupframes)
         ! filter controls
         call motion_correct%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment (in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -2588,8 +2591,8 @@ contains
         &'Preprocessing',&                                                                  ! descr_short
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
-        &'simple_exec',&                                                              ! executable
-        &3, 9, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &'simple_exec',&                                                                    ! executable
+        &3, 9, 0, 15, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2626,7 +2629,8 @@ contains
         call preprocess%set_input('srch_ctrls', 11, mcpatch)
         call preprocess%set_input('srch_ctrls', 12, nxpatch)
         call preprocess%set_input('srch_ctrls', 13, nypatch)
-        call preprocess%set_input('srch_ctrls', 14, groupframes)
+        call preprocess%set_input('srch_ctrls', 14, mcconvention)
+        call preprocess%set_input('srch_ctrls', 15, groupframes)
         ! filter controls
         call preprocess%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -2653,7 +2657,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                              ! executable
-        &5, 12, 0, 16, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 12, 0, 17, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
@@ -2702,7 +2706,8 @@ contains
         call preprocess_stream%set_input('srch_ctrls',13, mcpatch)
         call preprocess_stream%set_input('srch_ctrls',14, nxpatch)
         call preprocess_stream%set_input('srch_ctrls',15, nypatch)
-        call preprocess_stream%set_input('srch_ctrls',16, groupframes)
+        call preprocess_stream%set_input('srch_ctrls',16, mcconvention)
+        call preprocess_stream%set_input('srch_ctrls',17, groupframes)
         ! filter controls
         call preprocess_stream%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)

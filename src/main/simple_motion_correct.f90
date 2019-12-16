@@ -22,6 +22,7 @@ public :: motion_correct_patched, motion_correct_patched_calc_sums, motion_corre
 public :: write_aniso2star, motion_correct_with_patched
 ! Common & convenience
 public :: motion_correct_kill_common, close_starfile, motion_correct_mic2spec, patched_shift_fname
+public :: motion_correct_calc_opt_weights
 private
 #include "simple_local_flags.inc"
 
@@ -72,9 +73,9 @@ logical, parameter :: DO_OPT_WEIGHTS                = .false.   !< continuously 
 
 ! benchmarking
 logical                 :: L_BENCH = .false.
-integer(timer_int_kind) :: t_read, t_cure, t_shift, t_forctf, t_mic, t_fft_clip, t_patched, t_patched_forctf, t_patched_mic
+integer(timer_int_kind) :: t_read, t_cure, t_forctf, t_mic, t_fft_clip, t_patched, t_patched_forctf, t_patched_mic
 integer(timer_int_kind) :: t_correct_iso_init, t_correct_iso_transfmat,  t_correct_iso_align, t_dose, t_new, t
-real(timer_int_kind)    :: rt_read, rt_cure, rt_shift, rt_forctf, rt_mic, rt_fft_clip, rt_patched, rt_patched_forctf, rt_patched_mic
+real(timer_int_kind)    :: rt_read, rt_cure, rt_forctf, rt_mic, rt_fft_clip, rt_patched, rt_patched_forctf, rt_patched_mic
 real(timer_int_kind)    :: rt_correct_iso_init, rt_correct_iso_transfmat, rt_correct_iso_align, rt_dose, rt_new
 
 contains
@@ -325,23 +326,32 @@ contains
     subroutine motion_correct_iso_shift_frames()
         integer :: iframe
         ! copy unaligned frames & shift frames
-        if( l_BENCH ) t_shift = tic()
+        if( l_BENCH ) t = tic()
         !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
         do iframe=1,nframes
             call movie_frames_scaled(iframe)%shift2Dserial(-opt_shifts(iframe,:))
         end do
         !$omp end parallel do
-        if( L_BENCH )then
-            rt_shift = toc(t_shift)
-            print *,'t_shift:      ',rt_shift
-        endif
+        if( L_BENCH ) print *,'t_shift:      ', toc(t)
     end subroutine motion_correct_iso_shift_frames
+
+    ! Optimal weights, frames assumed in Fourier space
+    subroutine motion_correct_calc_opt_weights()
+        type(opt_image_weights)    :: opt_weights
+        if (DO_OPT_WEIGHTS) then
+            if( l_BENCH ) t = tic()
+            call opt_weights%new(movie_frames_scaled, hp, params_glob%lpstop)
+            call opt_weights%calc_opt_weights
+            frameweights = opt_weights%get_weights()
+            call opt_weights%kill
+            if( L_BENCH ) print *,'t_opt_weights:',toc(t)
+        end if
+    end subroutine motion_correct_calc_opt_weights
 
     !>  Generates sums, movie_frames_scaled are assumed shifted
     subroutine motion_correct_iso_calc_sums( movie_sum_corrected, movie_sum_ctf)
         type(image), intent(inout) :: movie_sum_corrected, movie_sum_ctf
         complex,           pointer :: pcmat(:,:,:)
-        type(opt_image_weights)    :: opt_weights
         real                       :: scalar_weight
         integer                    :: iframe
         ! for CTF estimation
@@ -366,14 +376,7 @@ contains
         call movie_sum_ctf%set_cmat(cmat_sum)
         call movie_sum_ctf%ifft
         if( l_BENCH ) rt_forctf = toc(t_forctf)
-        ! Optimal weights
-        if (DO_OPT_WEIGHTS) then
-            call opt_weights%new(movie_frames_scaled, hp, params_glob%lpstop)
-            call opt_weights%calc_opt_weights
-            frameweights = opt_weights%get_weights()
-            call opt_weights%kill
-        end if
-        ! dose weighing
+        ! dose-weighting
         if( l_BENCH ) t_dose = tic()
         call apply_dose_weighting(movie_frames_scaled(:))
         if( l_BENCH ) rt_dose = toc(t_dose)
