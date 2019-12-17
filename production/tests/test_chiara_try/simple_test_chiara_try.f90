@@ -443,7 +443,58 @@ end module simple_test_chiara_try_mod
        use simple_binimage, only : binimage
        use simple_test_chiara_try_mod
        use simple_nano_utils
-
+       real,    allocatable :: points1(:,:), points2(:,:), ppoints1(:,:), dist(:), dist_sq(:),dist_close(:)
+       logical, allocatable :: mask(:)
+       integer :: i, j, N_min, N_max
+       integer :: cnt, cnt2, cnt3, location(1)
+       real    :: smpd, theoretical_radius, rmsd!,avg, m(3), tmp_max
+       real, parameter :: CLOSE_THRESH = 1.
+       real :: U(3,3), r(3), lrms
+       theoretical_radius = 1.1
+       smpd = 1.
+       N_min = 5
+       N_max = 7
+       allocate(points1(3,N_max), points2(3,N_min), source  = 0.)
+       do i = 1, N_max
+         points1(:,i) = [0.8*real(i),2.*real(i)+0.1,real(i)+0.2]
+         if(i <= N_min) points2(:3,i) = [0.77*real(i),2.*real(i)+0.02,real(i)+0.54]
+       enddo
+       allocate(dist(N_max), dist_sq(N_max), source = 0.)
+       allocate(dist_close(N_max), source = 0.) ! there are going to be unused entry of the vector
+       allocate(mask(N_min), source = .true.)
+       cnt  = 0
+       cnt2 = 0
+       cnt3 = 0
+       do i = 1, N_max !compare based on centers1
+           if(cnt2+cnt3+1 <=N_min) then ! just N_min couples, starting from 0
+               dist(i) = pixels_dist(points1(:,i),points2(:,:),'min',mask,location, keep_zero = .true.)
+               if(dist(i)*smpd > 2.*theoretical_radius) then
+                   dist(i) = 0.
+                   cnt = cnt + 1
+               elseif(dist(i)*smpd <= CLOSE_THRESH) then
+                   cnt3 = cnt3 + 1
+                   dist_close(i) = dist(i)**2
+               elseif(dist(i)*smpd > CLOSE_THRESH .and. dist(i)*smpd<=2.*theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,2*theoretical_radius] pm
+                   cnt2 = cnt2 + 1
+                   mask(location(1)) = .false. ! not to consider the same atom more than once
+               endif
+               dist_sq(i) = dist(i)**2 !formula wants them square
+            endif
+       enddo
+       rmsd = sqrt(sum(dist_sq)/real(count(abs(dist_sq) > TINY)))
+       write(*,*) 'RMSD CALCULATED CONSIDERING ALL ATOMS = ', rmsd*smpd, ' A'
+       write(*,*) 'RMSD ATOMS THAT CORRESPOND WITHIN 1 A = ', (sqrt(sum(dist_close)/real(count(dist_close > TINY))))*smpd, ' A'
+       ! Kabsch testing
+       allocate(ppoints1(3,5), source = points1(:3,:5))
+       call kabsch(ppoints1,points2,U,r,lrms)
+       print *, 'Rotation matrix: '
+       call vis_mat(U)
+       print *, 'Translation vec: ', r
+       print *, 'RMSD: ', lrms
+       print *, 'coords after kabsch, ppoints1'
+       call vis_mat(ppoints1)
+       print *, 'points2'
+       call vis_mat(points2)
 
        ! test function find_couples
        ! real :: P(3,6), Q(3,8), U(3,3), r(3), lrms
@@ -478,20 +529,8 @@ end module simple_test_chiara_try_mod
        ! real, pointer :: rmat(:,:,:)
        ! real, allocatable :: rmat_aux(:,:,:)
        ! integer, allocatable :: lmsk(:,:,:), lmat(:,:,:)
+       !
 
-       ! Kabsch testing
-       real :: P(3,6), Q(3,6), U(3,3), r(3), lrms
-       P = reshape([1.,6.,0.,2.,5.,9.,3.,4.,8.,4.,3.,7.,5.,2.,6.,6.,1.,5.],[3,6])
-       Q = P + 0.2
-       call kabsch(P, Q, U,r,lrms)
-       print *, 'Rotation matrix: '
-       call vis_mat(U)
-       print *, 'Translation vec: ', r
-       print *, 'RMSD: ', lrms
-       print *, 'coords after kabsch, P'
-       call vis_mat(P)
-       print *, 'Q'
-       call vis_mat(Q)
 
        ! ! test for removing graphene peaks
        ! smpd=0.358

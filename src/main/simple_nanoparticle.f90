@@ -1784,40 +1784,42 @@ contains
             cnt2 = 0
             cnt3 = 0
             do i = 1, N_max !compare based on centers2
-                dist(i) = pixels_dist(nano2%centers(:,i),nano1%centers(:,:),'min',mask,location, keep_zero=.true.)
-                if(dist(i)*nano2%smpd > 2.*nano2%theoretical_radius) then
-                    dist(i) = 0. !it means there is no correspondent atom in the other nano
-                    cnt = cnt + 1  !to discard them in the rmsd calculation
-                    call couples1%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
-                    ! remove the atoms from the pdb file
-                    call centers_coupled1%set_occupancy(i,0.)
-                    call centers_coupled2%set_occupancy(i,0.)
-                    call centers_close1%set_occupancy(i,0.)
-                    call centers_close2%set_occupancy(i,0.)
-                    call couples1%set_occupancy(i,0.)
-                elseif(dist(i)*nano2%smpd < CLOSE_THRESH) then
-                    cnt3 = cnt3 + 1
-                    dist_close(i) = dist(i)**2
-                    call centers_close2%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd)
-                    call centers_close1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
-                    ! remove the atoms from the pdb file
-                    call centers_coupled1%set_occupancy(i,0.)
-                    call centers_coupled2%set_occupancy(i,0.)
-                    call couples1%set_occupancy(i,0.)
-                elseif(dist(i)*nano2%smpd > CLOSE_THRESH .and. dist(i)*nano2%smpd<=2.*nano2%theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,220] pm
-                    cnt2 = cnt2 + 1
-                    call centers_coupled2%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd)
-                    call centers_coupled1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
-                    call couples1%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
-                    mask(location(1)) = .false. ! not to consider the same atom more than once
-                    ! remove the atoms from the pdb file
-                    call centers_close1%set_occupancy(i,0.)
-                    call centers_close2%set_occupancy(i,0.)
-                endif
-                dist_sq(i) = dist(i)**2 !formula wants them square, could improve performance here
-                if(DEBUG) then
-                     write(logfhandle,*) 'ATOM', i,'coords: ', nano2%centers(:,i), 'coupled with '
-                     write(logfhandle,*) '    ',location, 'coordinates: ', nano1%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
+                if(cnt2+cnt3+1 <= N_min) then ! just N_min couples, starting from 0
+                    dist(i) = pixels_dist(nano2%centers(:,i),nano1%centers(:,:),'min',mask,location, keep_zero=.true.)
+                    if(dist(i)*nano2%smpd > 2.*nano2%theoretical_radius) then
+                        dist(i) = 0. !it means there is no correspondent atom in the other nano
+                        cnt = cnt + 1  !to discard them in the rmsd calculation
+                        call couples1%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
+                        ! remove the atoms from the pdb file
+                        call centers_coupled1%set_occupancy(i,0.)
+                        call centers_coupled2%set_occupancy(i,0.)
+                        call centers_close1%set_occupancy(i,0.)
+                        call centers_close2%set_occupancy(i,0.)
+                        call couples1%set_occupancy(i,0.)
+                    elseif(dist(i)*nano2%smpd < CLOSE_THRESH) then
+                        cnt3 = cnt3 + 1
+                        dist_close(i) = dist(i)**2
+                        call centers_close2%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd)
+                        call centers_close1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
+                        ! remove the atoms from the pdb file
+                        call centers_coupled1%set_occupancy(i,0.)
+                        call centers_coupled2%set_occupancy(i,0.)
+                        call couples1%set_occupancy(i,0.)
+                    elseif(dist(i)*nano2%smpd > CLOSE_THRESH .and. dist(i)*nano2%smpd<=2.*nano2%theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,220] pm
+                        cnt2 = cnt2 + 1
+                        call centers_coupled2%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd)
+                        call centers_coupled1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
+                        call couples1%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
+                        mask(location(1)) = .false. ! not to consider the same atom more than once
+                        ! remove the atoms from the pdb file
+                        call centers_close1%set_occupancy(i,0.)
+                        call centers_close2%set_occupancy(i,0.)
+                    endif
+                    dist_sq(i) = dist(i)**2 !formula wants them square, could improve performance here
+                    if(DEBUG) then
+                         write(logfhandle,*) 'ATOM', i,'coords: ', nano2%centers(:,i), 'coupled with '
+                         write(logfhandle,*) '    ',location, 'coordinates: ', nano1%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
+                    endif
                 endif
             enddo
         else
@@ -1838,46 +1840,48 @@ contains
             cnt2 = 0
             cnt3 = 0
             do i = 1, N_max !compare based on centers1
-                dist(i) = pixels_dist(nano1%centers(:,i),nano2%centers(:,:),'min',mask,location, keep_zero = .true.)
-                if(dist(i)*nano2%smpd > 2.*nano2%theoretical_radius) then
-                    dist(i) = 0.
-                    cnt = cnt + 1
-                    call couples1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
-                    ! remove the atoms from the pdb file
-                    call centers_coupled1%set_occupancy(i,0.)
-                    call centers_coupled2%set_occupancy(i,0.)
-                    call centers_close1%set_occupancy(i,0.)
-                    call centers_close2%set_occupancy(i,0.)
-                    call couples1%set_occupancy(i,0.)
-                elseif(dist(i)*nano2%smpd <= CLOSE_THRESH) then
-                    cnt3 = cnt3 + 1
-                    dist_close(i) = dist(i)**2
-                    call centers_close1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd)
-                    call centers_close2%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
-                    ! remove the atoms from the pdb file
-                    call centers_coupled1%set_occupancy(i,0.)
-                    call centers_coupled2%set_occupancy(i,0.)
-                    call couples1%set_occupancy(i,0.)
-                elseif(dist(i)*nano2%smpd > CLOSE_THRESH .and. dist(i)*nano2%smpd<=2.*nano2%theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,2*theoretical_radius] pm
-                    cnt2 = cnt2 + 1
-                    call centers_coupled1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd)
-                    call centers_coupled2%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
-                    call couples1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
-                    mask(location(1)) = .false. ! not to consider the same atom more than once
-                    ! remove the atoms from the pdb file
-                    call centers_close1%set_occupancy(i,0.)
-                    call centers_close2%set_occupancy(i,0.)
-                endif
-                dist_sq(i) = dist(i)**2 !formula wants them square
-                if(DEBUG) then
-                    write(logfhandle,*) 'ATOM', i,'coordinates: ', nano1%centers(:,i), 'coupled with '
-                    write(logfhandle,*) '    ',location, 'coordinates: ', nano2%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
+                if(cnt2+cnt3+1 <= N_min) then ! just N_min couples, starting from 0
+                    dist(i) = pixels_dist(nano1%centers(:,i),nano2%centers(:,:),'min',mask,location, keep_zero = .true.)
+                    if(dist(i)*nano2%smpd > 2.*nano2%theoretical_radius) then
+                        dist(i) = 0.
+                        cnt = cnt + 1
+                        call couples1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
+                        ! remove the atoms from the pdb file
+                        call centers_coupled1%set_occupancy(i,0.)
+                        call centers_coupled2%set_occupancy(i,0.)
+                        call centers_close1%set_occupancy(i,0.)
+                        call centers_close2%set_occupancy(i,0.)
+                        call couples1%set_occupancy(i,0.)
+                    elseif(dist(i)*nano2%smpd <= CLOSE_THRESH) then
+                        cnt3 = cnt3 + 1
+                        dist_close(i) = dist(i)**2
+                        call centers_close1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd)
+                        call centers_close2%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
+                        ! remove the atoms from the pdb file
+                        call centers_coupled1%set_occupancy(i,0.)
+                        call centers_coupled2%set_occupancy(i,0.)
+                        call couples1%set_occupancy(i,0.)
+                    elseif(dist(i)*nano2%smpd > CLOSE_THRESH .and. dist(i)*nano2%smpd<=2.*nano2%theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,2*theoretical_radius] pm
+                        cnt2 = cnt2 + 1
+                        call centers_coupled1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd)
+                        call centers_coupled2%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
+                        call couples1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
+                        mask(location(1)) = .false. ! not to consider the same atom more than once
+                        ! remove the atoms from the pdb file
+                        call centers_close1%set_occupancy(i,0.)
+                        call centers_close2%set_occupancy(i,0.)
+                    endif
+                    dist_sq(i) = dist(i)**2 !formula wants them square
+                    if(DEBUG) then
+                        write(logfhandle,*) 'ATOM', i,'coordinates: ', nano1%centers(:,i), 'coupled with '
+                        write(logfhandle,*) '    ',location, 'coordinates: ', nano2%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
+                    endif
                 endif
             enddo
         endif
-        write(unit = filnum, fmt = '(i3,a,i2,a)')      cnt3,' atoms correspond within        1 A. (', cnt3*100/N_min, '% of the atoms )'
-        write(unit = filnum, fmt = '(i3,a,f3.1,a,i2,a)')  cnt2,' atoms correspond within  1 - ', 2.*nano2%theoretical_radius,' A. (', cnt2*100/N_min, '% of the atoms )'
-        write(unit = filnum, fmt = '(i3,a,f3.1,a,i2,a)')  cnt-(N_max-N_min),' atoms have error bigger than ',2.*nano2%theoretical_radius,' A. (',(cnt-N_max+N_min)*100/N_min, '% of the atoms )' !remove the extra atoms
+        write(unit = filnum, fmt = '(i3,a,i2,a)')        cnt3,' atoms correspond within        1 A. ( ~', cnt3*100/N_min, '% of the atoms )'
+        write(unit = filnum, fmt = '(i3,a,f3.1,a,i2,a)') cnt2,' atoms correspond within  1 - ', 2.*nano2%theoretical_radius,' A. ( ~', cnt2*100/N_min, '% of the atoms )'
+        write(unit = filnum, fmt = '(i3,a,f3.1,a,i2,a)') cnt, ' atoms have error bigger than ',2.*nano2%theoretical_radius,' A. ( ~',  cnt*100/N_min, '% of the atoms )' !remove the extra atoms
         ! remove unused atoms from the pdb file
         do i = 1, N_max
             coord(:) = centers_close1%get_coord(i)
@@ -1909,7 +1913,9 @@ contains
                 if(euclid(coord,m) > tmp_max) tmp_max = euclid(coord,m)
             endif
         enddo
-        avg   = avg/real(cnt3)
+        if(cnt3 > 0) then
+            avg   = avg/real(cnt3)
+          endif
         cnt3  = 0
         stdev = 0.
         do i = 1, N_max
@@ -1949,7 +1955,9 @@ contains
                 if(euclid(coord,m) > tmp_max) tmp_max = euclid(coord,m)
             endif
         enddo
-        avg   = avg/real(cnt3)
+        if(cnt3 > 0) then
+            avg   = avg/real(cnt3)
+        endif
         cnt3  = 0
         stdev = 0.
         do i = 1, N_max
@@ -1982,7 +1990,7 @@ contains
         call centers_coupled2%kill
         call couples1%kill
         !RMSD
-        rmsd = sqrt(sum(dist_sq)/real(count(dist_sq > TINY)))
+        rmsd = sqrt(sum(dist_sq)/real(count(abs(dist_sq) > TINY)))
         write(unit = filnum, fmt = '(a,f6.3,a)') 'RMSD CALCULATED CONSIDERING ALL ATOMS = ', rmsd*nano1%smpd, ' A'
         write(unit = filnum, fmt = '(a,f6.3,a)') 'RMSD ATOMS THAT CORRESPOND WITHIN 1 A = ', (sqrt(sum(dist_close)/real(count(dist_close > TINY))))*nano1%smpd, ' A'
         call fclose(filnum)
@@ -2185,7 +2193,7 @@ contains
           allocate(d(3), source = 0.)
           call svdcmp(pointsTrans,w,v)
           d = v(:,1)
-          print *, 'Directional vector of the line', d
+          write(logfhandle,*) 'Directional vector of the line', d
           ! line
           ! line(1,t) = centroid(1) + t_vec(t)* d(1)
           ! line(2,t) = centroid(2) + t_vec(t)* d(2)

@@ -332,6 +332,7 @@ contains
             pgrps(igrp)%cc = vol_sym%corr(vol_asym_aligned2axis, lp_dyn=lp, hp_dyn=hp)
         end do
         ! destruct
+        call vol_pad%kill_expanded
         call vol_pad%kill
         call rovol_pad%kill
         call rovol%kill

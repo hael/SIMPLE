@@ -513,7 +513,6 @@ contains
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes'       )
         if( .not. cline%defined('trs'  ) ) call cline%set('trs',   SHSRCH_HWDTH)
         call params%new(cline)
-        write (*,*) 'params%trs:', params%trs
         ! prep vols
         call read_and_prep_vol(params%vols(1), vol1)
         call read_and_prep_vol(params%vols(2), vol2)
@@ -767,6 +766,7 @@ contains
             &params%lp, params%cn_stop, params%platonic .eq. 'yes', pgrp)
           endif
         ! end gracefully
+        call build%kill_general_tbox
         call simple_end('**** SIMPLE_SYMMETRY_TEST NORMAL STOP ****')
     end subroutine exec_symmetry_test
 
