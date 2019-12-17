@@ -1590,6 +1590,12 @@ contains
                         ! PDB files are supported
                         ! *.simple project files are supported
                         ! R=*.star format -- in testing
+#ifdef USING_TIFF
+                    case('J')
+                        ! TIFF
+                        cntfile = cntfile+1
+                        checkupfile(cntfile) = 'J'
+#endif
                     case DEFAULT
                         write(logfhandle,*) 'file: ', trim(var)
                         THROW_HARD('This file format is not supported by SIMPLE')
