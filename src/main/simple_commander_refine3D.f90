@@ -110,7 +110,7 @@ contains
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
         if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',      'yes')
-        if( .not. cline%defined('wcrit')   ) call cline%set('wcrit'       'inv')
+        if( .not. cline%defined('wcrit')   ) call cline%set('wcrit',      'inv')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! objfun=euclid logics, part 1
         l_switch2euclid  = .false.
