@@ -5,7 +5,7 @@
   "description": "Graphical user interface for SIMPLE",
   "main": "simple_multiuser.js",
   "scripts": {
-    "build": "pkg --target=host -o dist/simple_gui_multiuser.linux --max_old_space_size=16000 simple_multiuser.js"
+    "build": "pkg simple_multiuser.js --target=host -o dist/simple_gui_multiuser.linux --options max_old_space_size=16000"
   },
   "keywords": [],
   "author": "Joseph Caesar",
