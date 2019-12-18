@@ -133,15 +133,12 @@ class Task{
 	executeprocess.stderr.on('data', data => {
                         console.log('DATA ERROR', data.toString())
                 })
-	//	return new Promise((resolve, reject) => {
-	//		resolve({status:'running', jobid:})
-	//	})
 	return sqlite.sqlQuery("SELECT seq FROM sqlite_sequence WHERE name='" + arg['projecttable'] + "'")
 	.then(rows => {
 		if(rows != undefined){
-			return({status:'running', jobid: 1})
-		}else{
 			return({status:'running', jobid: rows[0]['seq'] + 1})
+		}else{
+			return({status:'running', jobid: 1})
 		}
 	})
   }

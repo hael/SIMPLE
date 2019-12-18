@@ -45,6 +45,7 @@ class SimpleView {
   }
   
   getManualPick(projfile){
+
 	  this.projfile = projfile
 	  this.updateTitle('Manual Particle Picking')
 	  this.resetSideBar()
@@ -67,45 +68,219 @@ class SimpleView {
 				this.boxes = json.boxes['boxes']
 				document.getElementById('boxsize').value = json.boxes['boxsize']
 				document.getElementById('ptclradius').value = json.boxes['ptclradius']
+				document.getElementById('boxstep').value = json.boxes['boxstep']
 			}else{
 				this.boxes = {}
 			}
+			if(json.boxes != undefined && json.boxes['tracks'] != undefined){
+				this.tracks = json.boxes['tracks']
+			}else{
+				this.tracks = {}
+			}
 			document.getElementById("pickingcanvas").addEventListener("click", (evt) => {
-					if(!this.boxes[this.currentmic]){
-						  this.boxes[this.currentmic] = []
-					  }
-					var canvas = document.getElementById("pickingcanvas")
-					var rect = canvas.getBoundingClientRect();
-					var x = evt.clientX - rect.left
-					var y = evt.clientY - rect.top
-					var xscale = canvas.width/rect.width
-					var yscale = canvas.height/rect.height
-					var xcoord = Math.round(x * xscale)
-					var ycoord = Math.round(y * yscale)
-					var newbox = true
-					for(var box = this.boxes[this.currentmic].length - 1; box >= 0; box--){
-						var distance = Math.sqrt(Math.pow(xcoord - this.boxes[this.currentmic][box][0] ,2) + Math.pow(ycoord - this.boxes[this.currentmic][box][1] ,2))
-						if(distance < document.getElementById('ptclradius').value / 2){
-							this.boxes[this.currentmic].splice(box,1)
-							newbox = false
+					var helical = document.getElementsByName('boxmode')
+					if(!helical[0].checked){
+						if(!this.boxes[this.currentmic]){
+							  this.boxes[this.currentmic] = []
 						}
+						var canvas = document.getElementById("pickingcanvas")
+						var rect = canvas.getBoundingClientRect();
+						var x = evt.clientX - rect.left
+						var y = evt.clientY - rect.top
+						var xscale = canvas.width/rect.width
+						var yscale = canvas.height/rect.height
+						var xcoord = Math.round(x * xscale)
+						var ycoord = Math.round(y * yscale)
+						var newbox = true
+						for(var box = this.boxes[this.currentmic].length - 1; box >= 0; box--){
+							var distance = Math.sqrt(Math.pow(xcoord - this.boxes[this.currentmic][box][0] ,2) + Math.pow(ycoord - this.boxes[this.currentmic][box][1] ,2))
+							if(distance < document.getElementById('ptclradius').value / 2){
+								this.boxes[this.currentmic].splice(box,1)
+								newbox = false
+							}
+						}
+						if(newbox){
+							this.boxes[this.currentmic].push([xcoord, ycoord])
+						}
+						this.drawBoxes()
 					}
-					if(newbox){
-						this.boxes[this.currentmic].push([xcoord, ycoord])
-					}
-					var boxtotal = 0
-					for(var key in this.boxes){
-						if(key != 'boxsize' && key != 'ptclradius')
-							boxtotal += this.boxes[key].length
-					}   
-					
-					document.getElementById("particlecounter").innerHTML = 'Boxes ' + this.boxes[this.currentmic].length + '/' + boxtotal
-					this.drawBoxes()
 			})
 			this.getManualPickMicrograph(document.getElementById('iterationselector'))
 		})
   }
   
+
+  manualPickHelix(){
+	this.boxes[this.currentmic] = []
+	this.findBoxes()
+	document.getElementById("pickingcanvas").onmousedown = function() {
+		if(!simpleview.boxes[simpleview.currentmic]){
+				simpleview.boxes[simpleview.currentmic] = []
+		}
+		var ptclradius = document.getElementById('ptclradius').value
+		var canvas = document.getElementById("pickingcanvas")
+		var rect = canvas.getBoundingClientRect();
+		var x = event.clientX - rect.left
+		var y = event.clientY - rect.top
+		var xscale = canvas.width/rect.width
+		var yscale = canvas.height/rect.height
+		var xcoord = Math.round(x * xscale)
+		var ycoord = Math.round(y * yscale)	
+		
+		if(!simpleview.tracks[simpleview.currentmic]){
+			simpleview.tracks[simpleview.currentmic] =  []
+		}
+		
+		document.getElementById("pickingcanvas").onmouseup = function(){
+			simpleview.mouseUp({"x":xcoord,"y":ycoord}, false)
+		}
+		
+		var newpoint = true
+		
+		for ( var i = 0 ; i < simpleview.tracks[simpleview.currentmic].length ; i++ ){
+			for ( var j = 0; j < simpleview.tracks[simpleview.currentmic][i].length ; j++ ){
+				if ( (xcoord-simpleview.tracks[simpleview.currentmic][i][j].xcoord)**2 + (ycoord-simpleview.tracks[simpleview.currentmic][i][j].ycoord)**2 < ptclradius**2 ){
+					var point = {"index":i,"pointno":j}
+					document.getElementById("pickingcanvas").onmouseup = function(){
+						simpleview.mouseUp(point, false)
+					}
+					document.getElementById("pickingcanvas").onmousemove = function(event){
+						simpleview.checkMousePos(point)
+					}
+					
+					break
+				}
+			}
+		}
+	};
+	
+  }
+
+ checkMousePos(point){
+
+	var ptclradius = document.getElementById('ptclradius').value
+	var canvas = document.getElementById("pickingcanvas")
+	var rect = canvas.getBoundingClientRect();
+	var x = event.clientX - rect.left
+	var y = event.clientY - rect.top
+	var xscale = canvas.width/rect.width
+	var yscale = canvas.height/rect.height
+	var xcoord = Math.round(x * xscale)
+	var ycoord = Math.round(y * yscale)	
+	if ( (xcoord - this.tracks[this.currentmic][point.index][point.pointno].xcoord)**2 + (ycoord - this.tracks[this.currentmic][point.index][point.pointno].ycoord)**2 < ptclradius**2 ){
+		document.getElementById("pickingcanvas").onmouseup = function(){
+			simpleview.mouseUp(point, true)
+		}
+		document.getElementById("pickingcanvas").onmousemove = function(){
+			simpleview.changeCoords(point)
+		}
+	}
+  }
+  
+  changeCoords(point){
+//	var x = event.offsetX;
+//	var y = event.offsetY;
+	var canvas = document.getElementById("pickingcanvas")
+	var rect = canvas.getBoundingClientRect();
+	var x = event.clientX - rect.left
+	var y = event.clientY - rect.top
+	var xscale = canvas.width/rect.width
+	var yscale = canvas.height/rect.height
+	var xcoord = Math.round(x * xscale)
+	var ycoord = Math.round(y * yscale)	
+	
+	this.tracks[this.currentmic][point.index][point.pointno].xcoord = xcoord
+	this.tracks[this.currentmic][point.index][point.pointno].ycoord = ycoord
+	this.findBoxes()
+	this.drawBoxes()
+}
+
+  mouseUp(point, dragging){
+	document.getElementById("pickingcanvas").onmousemove = function(){}
+
+	// clicked on a point, so either deleting or moving it
+	if ( point.hasOwnProperty("index") ){
+		// clicked on a point and didn't drag
+		if ( !dragging ) {
+			this.tracks[this.currentmic].splice(point.index,1)
+			this.findBoxes()
+			this.drawBoxes()
+		}
+	} else {
+		// new point
+		if ( this.tracks[this.currentmic].length !== 0 && this.tracks[this.currentmic][this.tracks[this.currentmic].length - 1].length == 1 ) {
+			// if previous coord is unpaired, pair it, otherwise add on its own
+			this.tracks[this.currentmic][this.tracks[this.currentmic].length - 1].push({"xcoord":point.x, "ycoord":point.y})
+			this.findBoxes()
+		} else {
+			this.tracks[this.currentmic].push([{"xcoord":point.x, "ycoord":point.y}])
+		}
+		
+		this.drawBoxes()
+	}
+}
+
+  findBoxes(){
+	var helical = document.getElementsByName('boxmode')
+	if(helical[0].checked){
+		this.boxes[this.currentmic] = []
+		if(!this.tracks[this.currentmic]){
+			this.tracks[this.currentmic] = []
+		}
+		
+		var step = Number(document.getElementById("boxstep").value);
+		
+		for ( var coords of this.tracks[this.currentmic] ){
+			if ( coords.length == 2 ){
+				var linelength = Math.sqrt( (coords[0].xcoord-coords[1].xcoord)**2 + (coords[0].ycoord-coords[1].ycoord)**2 )
+				
+				var num = Math.round(linelength/step);
+				
+				var xseg = (coords[1].xcoord-coords[0].xcoord)/num
+				var yseg = (coords[1].ycoord-coords[0].ycoord)/num
+				
+				for (var box = 0; box <= num; box++){
+					var xc = coords[0].xcoord + (box*xseg)
+					var yc = coords[0].ycoord + (box*yseg)
+					this.boxes[this.currentmic].push([xc, yc])
+				}
+			}
+		}
+	}
+  }
+  
+  findAllBoxes(){
+	var helical = document.getElementsByName('boxmode')
+	if(helical[0].checked){
+		for(var key of Object.keys(this.boxes)){
+			this.boxes[key] = []
+			if(!this.tracks[key]){
+				this.tracks[key] = []
+			}
+		
+			var step = Number(document.getElementById("boxstep").value);
+		
+				for ( var coords of this.tracks[key] ){
+				if ( coords.length == 2 ){
+					var linelength = Math.sqrt( (coords[0].xcoord-coords[1].xcoord)**2 + (coords[0].ycoord-coords[1].ycoord)**2 )
+					
+					var num = Math.round(linelength/step);
+					
+					var xseg = (coords[1].xcoord-coords[0].xcoord)/num
+					var yseg = (coords[1].ycoord-coords[0].ycoord)/num
+					
+					for (var box = 0; box <= num; box++){
+						var xc = coords[0].xcoord + (box*xseg)
+						var yc = coords[0].ycoord + (box*yseg)
+						this.boxes[key].push([xc, yc])
+					}
+				}
+			}
+		}
+	}
+  } 
+  
+
   getAutoPick(projfile){
 	  this.projfile = projfile
 	  this.updateTitle('Automatic Particle Picking')
@@ -171,29 +346,64 @@ class SimpleView {
 	  document.getElementById("particlecounter").innerHTML = 'Boxes ' + this.boxes[this.currentmic].length + '/' + boxtotal
 	  this.background.onload = function(){
 		  simpleview.drawBoxes()
+		//  simpleview.drawTracks()
 		  
 	  }
   }
 
   drawBoxes(){
+		var boxtotal = 0
+		for(var key in this.boxes){
+		if(key != 'boxsize' && key != 'ptclradius')
+			boxtotal += this.boxes[key].length
+		}   
+				
+	  document.getElementById("particlecounter").innerHTML = 'Boxes ' + this.boxes[this.currentmic].length + '/' + boxtotal
+	  
 	  var canvas = document.getElementById("pickingcanvas")
 	  var ctx = canvas.getContext("2d")
 	  ctx.clearRect(0, 0, canvas.width, canvas.height)
 	  ctx.drawImage(this.background,0,0)
 	  var boxsize = document.getElementById('boxsize').value
 	  var ptclradius = document.getElementById('ptclradius').value
-	  for(var box of this.boxes[this.currentmic]){
-			  ctx.beginPath()
-			  ctx.lineWidth = document.getElementById('linewidth').value
-			  ctx.strokeStyle = 'green'
-			  if(document.getElementById('showradii').checked){
-				ctx.arc(box[0], box[1], ptclradius, 0, 2 * Math.PI)
-			  }
-			  if(document.getElementById('showboxes').checked){
-				ctx.rect(box[0] - boxsize/2, box[1] - boxsize/2, boxsize, boxsize)
-			  }
-			  ctx.stroke()
-		  }
+	  if(this.boxes[this.currentmic]){
+		  for(var box of this.boxes[this.currentmic]){
+				  ctx.beginPath()
+				  ctx.lineWidth = document.getElementById('linewidth').value
+				  ctx.strokeStyle = 'green'
+				  if(document.getElementById('showradii').checked){
+					ctx.arc(box[0], box[1], ptclradius, 0, 2 * Math.PI)
+				  }
+				  if(document.getElementById('showboxes').checked){
+					ctx.rect(box[0] - boxsize/2, box[1] - boxsize/2, boxsize, boxsize)
+				  }
+				  ctx.stroke()
+			 }
+		 }
+	  var helical = document.getElementsByName('boxmode')
+	  if(helical[0].checked){
+		  if(this.tracks[this.currentmic]){
+			for ( var coords of this.tracks[this.currentmic] ){
+				ctx.beginPath();
+				ctx.arc(coords[0].xcoord,coords[0].ycoord, ptclradius,0,2*Math.PI)
+				ctx.lineWidth = document.getElementById('linewidth').value
+				ctx.strokeStyle="DodgerBlue"
+				ctx.stroke()
+
+				if ( coords.length == 2 ){
+					ctx.beginPath()
+					ctx.arc(coords[1].xcoord,coords[1].ycoord, ptclradius,0,2*Math.PI)
+					ctx.stroke()
+					
+					ctx.beginPath()
+					ctx.moveTo(coords[0].xcoord, coords[0].ycoord)
+					ctx.lineTo(coords[1].xcoord, coords[1].ycoord)
+					ctx.strokeStyle="Red"
+					ctx.stroke()
+				}
+			}
+		}
+	}
   }
   
   saveBoxes(){
@@ -204,8 +414,10 @@ class SimpleView {
 		  arg : {
 			  projfile : this.projfile,
 			  boxes: this.boxes,
+			  tracks: this.tracks,
 			  boxsize:document.getElementById('boxsize').value,
-			  ptclradius:document.getElementById('ptclradius').value
+			  ptclradius:document.getElementById('ptclradius').value,
+			  boxstep:document.getElementById('boxstep').value
 			  }
 	  }
 	fetcher.fetchJSON(request)
@@ -1526,6 +1738,33 @@ class SimpleView {
 		 
 	  var controlbodyelements = document.createElement('div')
 	  controlbodyelements.className = "controlbodyelements"
+
+	  var div = document.createElement('div')
+      var label = document.createElement('label')
+      label.innerHTML = "Helical Mode"
+      var input = document.createElement('input')
+	  input.type = 'checkbox'
+	  input.name = 'boxmode'
+	  input.value = 'helical'
+	  input.onclick = function(element){ 
+		  if(element.target.checked){
+				simpleview.manualPickHelix()
+				document.getElementById("helixboxstep").style.display = 'flex'
+				document.getElementById("showboxes").checked = false
+				document.getElementById("showradii").checked = false
+		  }else{
+			  document.getElementById("pickingcanvas").onmouseup = function(){}
+			  document.getElementById("pickingcanvas").onmousedown = function(){}
+			  document.getElementById("pickingcanvas").onmousemove = function(){}
+			  document.getElementById("helixboxstep").style.display = 'none'
+			  document.getElementById("showboxes").checked = true
+			  document.getElementById("showradii").checked = true
+		  }
+		  simpleview.drawBoxes()
+	  }
+	  div.appendChild(label)
+          div.appendChild(input)
+          controlbodyelements.appendChild(div)
 		    
 	  var div = document.createElement('div')
 	  var label = document.createElement('label')
@@ -1533,9 +1772,30 @@ class SimpleView {
 	  var input = document.createElement('input')
 	  input.id = "boxsize"
 	  input.value="100"
+	  input.onchange = function () {
+		simpleview.findBoxes()
+		simpleview.drawBoxes()
+	  }
 	  div.appendChild(label)
 	  div.appendChild(input)
 	  controlbodyelements.appendChild(div)
+	  
+	  var div = document.createElement('div')
+	  var label = document.createElement('label')
+	  label.innerHTML = "Box Step"
+	  var input = document.createElement('input')
+	  input.id = "boxstep"
+	  input.value="10"
+	  input.onchange = function () {
+		simpleview.findAllBoxes()
+		simpleview.drawBoxes()
+	  }
+	  div.appendChild(label)
+	  div.appendChild(input)
+	  div.style.display = 'none'
+	  div.id = 'helixboxstep'
+	  controlbodyelements.appendChild(div)
+	  
 		  
 	  var div = document.createElement('div')
 	  var label = document.createElement('label')
@@ -1589,7 +1849,7 @@ class SimpleView {
 	  
 	  var div = document.createElement('div')
 	  div.className = 'buttons'
-	  div.appendChild(this.createControlsButton("Clear Boxes", "simpleview.clearBoxes()"))
+	  div.appendChild(this.createControlsButton("Clear All Boxes", "simpleview.clearBoxes()"))
 	  controlbodyelements.appendChild(div)
 	  
 	  body.appendChild(controlbodyelements)
