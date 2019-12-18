@@ -137,8 +137,8 @@ contains
         if(params%dock .eq. 'yes') then
             cline_dock = cline
             call cline_dock%set('lpstart', 1.)
-            call cline_dock%set('lpstop',  5.) ! to verify
-            call cline_dock%set('msk',  60.)   ! ?? TO CHANGE
+            call cline_dock%set('lpstop',  3.)
+            if(.not. cline%defined('msk')) THROW_HARD('If dock has to be performed, msk needs to be inserted; exec_atoms_rmsd')
             call cline_dock%set('mkdir', 'no')
             call cline_dock%set('nthr',0.)
             call cline_dock%set('outfile', 'algndoc.txt')

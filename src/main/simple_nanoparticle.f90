@@ -1748,12 +1748,12 @@ contains
         class(nanoparticle), intent(inout) :: nano1, nano2 !nanoparticles to compare
         real, optional,      intent(out)   :: r   !rmsd calculated
         logical, allocatable :: mask(:)
-        real,    allocatable :: dist(:), dist_sq(:), dist_no_zero(:), dist_close(:)
+        real,    allocatable :: dist(:), dist_sq(:), dist_no_zero(:), dist_close(:), radii(:), deviation(:)
         real,    parameter   :: CLOSE_THRESH = 1. ! 1 Amstrong
         integer :: location(1), i, j
         integer :: N_min !min{nb atoms in nano1, nb atoms in nano2}
         integer :: N_max !max{nb atoms in nano1, nb atoms in nano2}
-        integer :: cnt,cnt2,cnt3,filnum,io_stat
+        integer :: cnt,cnt1,cnt2,cnt3,filnum,io_stat
         real    :: sum, rmsd, coord(3)
         real    :: avg, stdev, m(3), tmp_max, d !for statistics calculation
         type(atoms) :: centers_coupled1, centers_coupled2 !visualization purposes
@@ -1771,6 +1771,7 @@ contains
         if(size(nano1%centers, dim = 2) <= size(nano2%centers, dim = 2)) then
             N_min = size(nano1%centers, dim = 2)
             N_max = size(nano2%centers, dim = 2)
+            m(:)       = nano1%nanopart_masscen()
             write(unit = filnum, fmt = '(a,i3)') 'NB atoms in vol1   ', N_min
             write(unit = filnum, fmt = '(a,i3)') 'NB atoms in vol2   ', N_max
             write(unit = filnum, fmt = '(a,i3,a)') '--->', abs(N_max-N_min), ' atoms do NOT correspond'
@@ -1782,11 +1783,13 @@ contains
             allocate(dist(N_max), dist_sq(N_max), source = 0.)
             allocate(dist_close(N_max), source = 0.) ! there are going to be unused entry of the vector
             allocate(mask(N_min), source = .true.)
+            allocate(radii(N_min),deviation(N_min), source = 0.)
             cnt  = 0
+            cnt1 = 0
             cnt2 = 0
             cnt3 = 0
             do i = 1, N_max !compare based on centers2
-                if(cnt2+cnt3+1 <= N_min) then ! just N_min couples, starting from 0
+                if(cnt1+1 <= N_min) then ! just N_min couples, starting from 0
                     dist(i) = pixels_dist(nano2%centers(:,i),nano1%centers(:,:),'min',mask,location, keep_zero=.true.)
                     if(dist(i)*nano2%smpd > 2.*nano2%theoretical_radius) then
                         dist(i) = 0. !it means there is no correspondent atom in the other nano
@@ -1799,8 +1802,11 @@ contains
                         call centers_close2%set_occupancy(i,0.)
                         call couples1%set_occupancy(i,0.)
                     elseif(dist(i)*nano2%smpd < CLOSE_THRESH) then
-                        cnt3 = cnt3 + 1
-                        dist_close(i) = dist(i)**2
+                        cnt3 = cnt3 + 1 ! number of high agreement
+                        cnt1 = cnt1 + 1 ! number of couples
+                        dist_close(i)   = dist(i)**2
+                        radii(cnt1)     = euclid(nano1%centers(:,location(1)),m)*nano1%smpd !radius, based on nano1
+                        deviation(cnt1) = dist(i)*nano2%smpd
                         call centers_close2%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd)
                         call centers_close1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
                         ! remove the atoms from the pdb file
@@ -1808,7 +1814,10 @@ contains
                         call centers_coupled2%set_occupancy(i,0.)
                         call couples1%set_occupancy(i,0.)
                     elseif(dist(i)*nano2%smpd > CLOSE_THRESH .and. dist(i)*nano2%smpd<=2.*nano2%theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,220] pm
+                        cnt1 = cnt1 + 1
                         cnt2 = cnt2 + 1
+                        radii(cnt1)     = euclid(nano1%centers(:3,location(1)),m(:))*nano1%smpd !radius, based on nano1
+                        deviation(cnt1) = dist(i)*nano2%smpd
                         call centers_coupled2%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd)
                         call centers_coupled1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
                         call couples1%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
@@ -1827,6 +1836,7 @@ contains
         else
             N_min = size(nano2%centers, dim = 2)
             N_max = size(nano1%centers, dim = 2)
+            m(:)       = nano2%nanopart_masscen()
             write(unit = filnum, fmt = '(a,i3)') 'NB atoms in vol1   ', N_max
             write(unit = filnum, fmt = '(a,i3)') 'NB atoms in vol2   ', N_min
             write(unit = filnum, fmt = '(a,i3,a)') '--->', abs(N_max-N_min), ' atoms do NOT correspond'
@@ -1838,11 +1848,13 @@ contains
             call centers_close2%new  (N_max, dummy=.true.)
             call couples1%new        (N_max, dummy=.true.)
             allocate(mask(N_min), source = .true.)
+            allocate(radii(N_min),deviation(N_min), source = 0.)
             cnt  = 0
+            cnt1 = 0
             cnt2 = 0
             cnt3 = 0
             do i = 1, N_max !compare based on centers1
-                if(cnt2+cnt3+1 <= N_min) then ! just N_min couples, starting from 0
+                if(cnt1+1 <= N_min) then ! just N_min couples, starting from 0
                     dist(i) = pixels_dist(nano1%centers(:,i),nano2%centers(:,:),'min',mask,location, keep_zero = .true.)
                     if(dist(i)*nano2%smpd > 2.*nano2%theoretical_radius) then
                         dist(i) = 0.
@@ -1855,8 +1867,11 @@ contains
                         call centers_close2%set_occupancy(i,0.)
                         call couples1%set_occupancy(i,0.)
                     elseif(dist(i)*nano2%smpd <= CLOSE_THRESH) then
+                        cnt1 = cnt1 + 1
                         cnt3 = cnt3 + 1
                         dist_close(i) = dist(i)**2
+                        radii(cnt1)     = euclid(nano2%centers(:,location(1)),m)*nano2%smpd !radius, based on nano2
+                        deviation(cnt1) = dist(i)*nano2%smpd
                         call centers_close1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd)
                         call centers_close2%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
                         ! remove the atoms from the pdb file
@@ -1864,7 +1879,10 @@ contains
                         call centers_coupled2%set_occupancy(i,0.)
                         call couples1%set_occupancy(i,0.)
                     elseif(dist(i)*nano2%smpd > CLOSE_THRESH .and. dist(i)*nano2%smpd<=2.*nano2%theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,2*theoretical_radius] pm
+                        cnt1 = cnt1 + 1
                         cnt2 = cnt2 + 1
+                        radii(cnt1)     = euclid(nano2%centers(:3,location(1)),m(:))*nano2%smpd !radius, based on nano2
+                        deviation(cnt1) = dist(i)
                         call centers_coupled1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd)
                         call centers_coupled2%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
                         call couples1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
@@ -1904,7 +1922,7 @@ contains
         !Max dist atoms from the center
         avg     = 0.
         cnt3    = 0
-        m(:)    = nano1%nanopart_masscen()
+        ! m(:)    = nano1%nanopart_masscen()
         m(:)    = (m(:)-1.)*nano1%smpd
         tmp_max = 0.
         do i = 1, N_max
@@ -2006,8 +2024,21 @@ contains
             write (filnum,'(A)', advance='yes') trim(real2str(dist_no_zero(i)))
         end do
         call fclose(filnum)
+        !For CSV files
+        call fopen(filnum, file='Radii.csv')
+        write (filnum,*) 'rad'
+        do i = 1, cnt1
+            write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
+        end do
+        call fclose(filnum)
+        call fopen(filnum, file='Deviation.csv')
+        write (filnum,*) 'dev'
+        do i = 1, cnt1
+            write (filnum,'(A)', advance='yes') trim(real2str(deviation(i)))
+        end do
+        call fclose(filnum)
         if(present(r)) r=rmsd
-        deallocate(dist, dist_sq, dist_no_zero, mask)
+        deallocate(dist, dist_sq, dist_no_zero, mask,radii,deviation)
     end subroutine atoms_rmsd
 
     ! Detect atoms. User does NOT input threshold for binarization..
