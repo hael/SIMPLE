@@ -1513,7 +1513,7 @@ contains
         &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-comp map',& ! descr long
         &'quant_exec',&                                        ! executable
-        &1, 1, 0, 1, 1, 0, 1, .false.)                          ! # entries in each group, requires sp_project
+        &1, 1, 0, 2, 1, 0, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
@@ -1523,7 +1523,8 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call detect_atoms%set_input('srch_ctrls', 1, 'thres', 'num', 'Threshold for outlier discarding based on contact score','Threshold for outlier discarding based on contact score', 'number', .false., 5.)
+        call detect_atoms%set_input('srch_ctrls', 1, 'thres', 'num', 'Threshold for binarization','Threshold for volume binarization', 'number', .false., 1.)
+        call detect_atoms%set_input('srch_ctrls', 2, 'cs_thres', 'num', 'Threshold for outlier discarding based on contact score','Threshold for outlier discarding based on contact score', 'number', .false., 5.)
         ! filter controls
         call detect_atoms%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls

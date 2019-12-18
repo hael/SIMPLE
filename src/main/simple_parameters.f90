@@ -336,6 +336,7 @@ type :: parameters
     real    :: bw_ratio=0.3        !< ratio between foreground-background pixel desired in edge detection
     real    :: cenlp=20.           !< low-pass limit for binarisation in centering(in A){30 A}
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
+    real    :: cs_thres=5.         !< threshold (outliers removal based on contact score)
     real    :: ctfreslim=8.
     real    :: dcrit_rel=0.5       !< critical distance relative to box(0-1){0.5}
     real    :: deflim=4.
@@ -755,6 +756,7 @@ contains
         call check_rarg('bw_ratio',       self%bw_ratio)
         call check_rarg('cenlp',          self%cenlp)
         call check_rarg('cs',             self%cs)
+        call check_rarg('cs_thres',       self%cs_thres)
         call check_rarg('ctfreslim',      self%ctfreslim)
         call check_rarg('dcrit_rel',      self%dcrit_rel)
         call check_rarg('deflim',         self%deflim)

@@ -74,9 +74,17 @@ contains
         call nano%new(params%vols(1), params%smpd, params%element)
         ! execute
         if(cline%defined('thres')) then
-          call nano%identify_atomic_pos(nint(params%thres))
+          if(cline%defined('cs_thres')) then ! contact score threshold for outliers removal
+              call nano%identify_atomic_pos_thresh(params%thres, nint(params%cs_thres))
+          else
+              call nano%identify_atomic_pos_thresh(params%thres)
+          endif
         else
-          call nano%identify_atomic_pos()
+          if(cline%defined('cs_thres')) then ! contact score threshold for outliers removal
+              call nano%identify_atomic_pos(nint(params%cs_thres))
+          else
+              call nano%identify_atomic_pos()
+          endif
         endif
         ! kill
         call nano%kill

@@ -48,7 +48,7 @@ type :: nanoparticle
     procedure          :: set_partname
     procedure          :: set_atomic_coords
     ! segmentation and statistics
-    procedure          :: binarize
+    procedure          :: binarize_nano
     procedure          :: find_centers
     procedure          :: nanopart_masscen
     procedure          :: aspect_ratios_estimation
@@ -71,6 +71,7 @@ type :: nanoparticle
     procedure          :: geometry_analysis
     ! execution
     procedure          :: identify_atomic_pos
+    procedure          :: identify_atomic_pos_thresh
     procedure          :: radial_dependent_stats
     procedure          :: atoms_rmsd
     procedure          :: make_soft_mask
@@ -132,6 +133,7 @@ contains
         call find_ldim_nptcls(self%partname,  self%ldim, nptcls, smpd)
         call self%img%new(self%ldim, self%smpd)
         call self%img_raw%new(self%ldim, self%smpd)
+        call self%img_bin%new_bimg(self%ldim, self%smpd)
         call self%img_bin%new(self%ldim, self%smpd)
         call self%img%read(fname)
         call self%img_raw%read(fname)
@@ -254,9 +256,9 @@ contains
     ! and save it in the global variable centers.
     ! If coords is present, it saves it also in coords.
     subroutine find_centers(self, img_bin, img_cc, coords)
-       class(nanoparticle),      intent(inout) :: self
-       type(binimage), optional,     intent(inout) :: img_bin, img_cc
-       real, optional, allocatable,  intent(out)   :: coords(:,:)
+       class(nanoparticle),        intent(inout) :: self
+       type(binimage), optional,   intent(inout) :: img_bin, img_cc
+       real, optional, allocatable,intent(out)   :: coords(:,:)
        real,        pointer :: rmat_raw(:,:,:)
        integer, allocatable :: imat_cc_in(:,:,:)
        logical, allocatable :: mask(:,:,:)
@@ -447,7 +449,7 @@ contains
     ! Among those threshold, the selected one is the for which
     ! tha correlation between the raw map and a simulated distribution
     ! obtained with that threshold reaches the maximum value.
-    subroutine binarize( self )
+    subroutine binarize_nano( self )
         class(nanoparticle), intent(inout) :: self
         type(binimage)       :: img_bin_thresh(N_THRESH/2-1)
         type(binimage)       :: img_ccs_thresh(N_THRESH/2-1)
@@ -543,7 +545,7 @@ contains
              x = pack(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) > 0.)
              call otsu(x, scaled_thresh)
          end subroutine otsu_nano
-    end subroutine binarize
+    end subroutine binarize_nano
 
     ! This subroutine discard outliers that resisted binarization.
     ! It calculates the contact score of each atom and discards the bottom
@@ -555,7 +557,7 @@ contains
     ! equal to N. Do it for each atom.
     subroutine discard_outliers(self, cs_thresh)
         class(nanoparticle), intent(inout) :: self
-        integer, optional,       intent(in)    :: cs_thresh ! threshold for discard outliers based on contact score
+        integer, optional,   intent(in)    :: cs_thresh ! threshold for discard outliers based on contact score
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
         integer, parameter   :: PERCENT_DISCARD = 5/100
         integer, allocatable :: contact_scores(:)
@@ -2008,18 +2010,16 @@ contains
         deallocate(dist, dist_sq, dist_no_zero, mask)
     end subroutine atoms_rmsd
 
-    ! Check for symmetry at different radii.
-    ! radii: 5, 7, 9, 12 A
-    ! The idea is to identify the atomic positions
-    ! contained in a certain radius, generate a distribution
-    ! based on that and check for symmetry.
+    ! Detect atoms. User does NOT input threshold for binarization..
+    ! User might have inputted threshold for outliers
+    ! removal based on contact score.
     subroutine identify_atomic_pos(self, cs_thresh)
       class(nanoparticle), intent(inout) :: self
       integer, optional,       intent(in)    :: cs_thresh
       ! Phase correlations approach
       call self%phasecorrelation_nano_gaussian()
       ! Nanoparticle binarization
-      call self%binarize()
+      call self%binarize_nano()
       ! Outliers discarding
       if(present(cs_thresh)) then
         call self%discard_outliers(cs_thresh)
@@ -2029,6 +2029,32 @@ contains
       ! Validation of the selected atomic positions
        call self%validate_atomic_positions()
     end subroutine identify_atomic_pos
+
+    ! Detect atoms. User DOES input threshold for binarization.
+    ! No phasecorrelation filter is applied.
+    ! User might have inputted threshold for outliers
+    ! removal based on contact score.
+    subroutine identify_atomic_pos_thresh(self, thresh, cs_thresh)
+      class(nanoparticle), intent(inout) :: self
+      real,                intent(in)    :: thresh
+      integer, optional,   intent(in)    :: cs_thresh
+      ! Nanoparticle binarization
+      call self%img%binarize(thres=thresh,self_out=self%img_bin)
+      call self%img_bin%set_imat()
+      ! Find connected components
+      call self%img_bin%find_ccs(self%img_cc)
+      call self%update_self_ncc
+      ! Find atom centers
+      call self%find_centers(self%img_bin, self%img_cc)
+      ! Outliers discarding
+      if(present(cs_thresh)) then
+        call self%discard_outliers(cs_thresh)
+      else
+        call self%discard_outliers()
+      endif
+      ! Validation of the selected atomic positions
+       call self%validate_atomic_positions()
+    end subroutine identify_atomic_pos_thresh
 
     subroutine keep_atomic_pos_at_radius(self, radius, element, fname)
       class(nanoparticle), intent(inout) :: self

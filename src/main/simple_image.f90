@@ -2601,15 +2601,25 @@ contains
 
     !>  \brief  is for binarizing an image with given threshold value
     !!          binary normalization (norm_bin) assumed!> bin_1
-    subroutine binarize_1( self, thres )
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: thres
-        if( self%ft ) THROW_HARD('only for real images; bin_1')
-        where( self%rmat >= thres )
-            self%rmat = 1.
-        elsewhere
-            self%rmat = 0.
-        end where
+    subroutine binarize_1( self_in, thres, self_out )
+        class(image),           intent(inout) :: self_in
+        real,                   intent(in)    :: thres
+        class(image), optional, intent(inout) :: self_out
+        if( self_in%ft ) THROW_HARD('only for real images; bin_1')
+        if(present(self_out)) then
+            if( any(self_in%ldim /= self_out%ldim)) THROW_HARD('Images dimensions are not compatible; bin_1')
+            where( self_in%rmat >= thres )
+                self_out%rmat  = 1.
+            elsewhere
+                self_out%rmat  = 0.
+            end where
+        else
+            where( self_in%rmat >= thres )
+                self_in%rmat = 1.
+            elsewhere
+                self_in%rmat = 0.
+            end where
+        endif
     end subroutine binarize_1
 
     !>  \brief  bin_2 is for binarizing an image using nr of pixels/voxels threshold
