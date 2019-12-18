@@ -1447,6 +1447,11 @@ contains
             self%nxpatch = 0
             self%nypatch = 0
         endif
+        select case(trim(self%mcconvention))
+        case('simple','unblur','motioncorr','relion')
+        case DEFAULT
+            THROW_HARD('Invalid entry for MCCONVENTION='//trim(self%mcconvention))
+        end select
         !>>> END, IMAGE-PROCESSING-RELATED
         ! set global pointer to instance
         ! first touch policy here
