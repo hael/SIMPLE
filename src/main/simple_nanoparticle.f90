@@ -2162,11 +2162,11 @@ contains
       call atom_centers%kill
     end subroutine center_on_atom
 
-    subroutine geometry_analysis(self, pdbfile2, outfile)
+    subroutine geometry_analysis(self, pdbfile2, thresh)
       use simple_math, only : plane_from_points
       class(nanoparticle),        intent(inout) :: self
       character(len=*),           intent(in)    :: pdbfile2  ! atomic pos of the 2 (or 3) selected atoms
-      character(len=*), optional, intent(in)    :: outfile
+      real,             optional, intent(in)    :: thresh    ! for belonging/not belonging to the plane/column
       type(atoms)           :: init_atoms, final_atoms
       type(binimage)        :: img_out
       integer, allocatable  :: imat_cc(:,:,:), imat(:,:,:)
@@ -2175,7 +2175,12 @@ contains
       integer :: i, j, n, t, s, filnum, io_stat, cnt_intersect, cnt, n_cc
       logical :: flag(self%n_cc)
       real    :: atom1(3), atom2(3), atom3(3), dir_1(3), dir_2(3), vec(3), m(3), dist_plane, dist_line
-      real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator, prod(3), centroid(3)
+      real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator, prod(3), centroid(3), tthresh
+      if(present(thresh)) then
+          tthresh = thresh
+      else
+          tthresh = 0.9*self%theoretical_radius
+      endif
       call init_atoms%new(pdbfile2)
       n = init_atoms%get_n()
       if(n < 2 .or. n > 3 ) THROW_HARD('Inputted pdb file contains the wrong number of atoms!; geometry_analysis')
@@ -2203,7 +2208,7 @@ contains
           do i = 1, self%n_cc
             do t = 1, N_DISCRET
               dist_line = euclid(self%centers(:3,i),line(:3,t))
-              if(dist_line*self%smpd <= 0.9*self%theoretical_radius) then ! it intersects atoms i
+              if(dist_line*self%smpd <= tthresh) then ! it intersects atoms i
                 flag(i) = .true. !flags also itself
               endif
             enddo
@@ -2223,11 +2228,7 @@ contains
             endif
           enddo
           call img_out%set_imat(imat)
-          if(present(outfile)) then
-            call img_out%write_bimg(outfile)
-          else
-            call img_out%write_bimg('ImageColumn.mrc')
-          endif
+          call img_out%write_bimg('ImageColumn.mrc')
           call final_atoms%writePDB('AtomColumn')
           call final_atoms%kill
           ! Find the line that best fits the atoms
@@ -2362,7 +2363,7 @@ contains
             do t = 1, N_DISCRET
               do s = 1, N_DISCRET
                 dist_plane = euclid(self%centers(:3,i),plane(:3,t,s))
-                if(dist_plane*self%smpd <= 0.9*self%theoretical_radius) then ! it intersects atoms i
+                if(dist_plane*self%smpd <= tthresh) then ! it intersects atoms i
                   flag(i) = .true. !flags also itself
                 endif
               enddo
@@ -2384,11 +2385,7 @@ contains
             endif
           enddo
           call img_out%set_imat(imat)
-          if(present(outfile)) then
-            call img_out%write_bimg(outfile)
-          else
-            call img_out%write_bimg('ImagePlane.mrc')
-          endif
+          call img_out%write_bimg('ImagePlane.mrc')
           call final_atoms%writePDB('AtomPlane')
           call final_atoms%kill
           allocate(points(3, count(flag)), source = 0.)

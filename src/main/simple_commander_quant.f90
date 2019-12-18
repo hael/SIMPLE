@@ -356,12 +356,20 @@ contains
           call nano%set_img('../'//trim(fname)//'CC.mrc', 'img_cc')
           call nano%update_self_ncc()
           ! execute
-            call nano%geometry_analysis(trim(params%pdbfile2))
+          if(cline%defined('thres')) then
+              call nano%geometry_analysis(trim(params%pdbfile2), params%thres)
+          else
+              call nano%geometry_analysis(trim(params%pdbfile2))
+          endif
           ! kill
           call nano%kill
         elseif(cline%defined('pdbfile')) then
           call a%new(params%pdbfile)
-          call a%geometry_analysis_pdb(params%pdbfile2)
+          if(cline%defined('thres')) then
+              call a%geometry_analysis_pdb(trim(params%pdbfile2), params%thres)
+          else
+              call a%geometry_analysis_pdb(trim(params%pdbfile2))
+          endif
           call a%kill
         endif
         ! end gracefully

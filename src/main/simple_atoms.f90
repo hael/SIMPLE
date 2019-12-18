@@ -574,10 +574,11 @@ contains
 
     end subroutine convolve
 
-    subroutine geometry_analysis_pdb(self, pdbfile)
+    subroutine geometry_analysis_pdb(self, pdbfile, thresh)
       use simple_math, only : plane_from_points
       class(atoms),     intent(inout) :: self
       character(len=*), intent(in)    :: pdbfile   ! all the atomic positions
+      real, optional,   intent(in)    :: thresh    ! for belonging
       character(len=2)     :: element
       type(atoms)          :: init_atoms, final_atoms
       real,    allocatable :: radii(:),line(:,:), plane(:,:,:),points(:,:), distances_totheplane(:), distances_totheline(:)
@@ -586,9 +587,14 @@ contains
       integer, parameter   :: N_DISCRET = 500
       integer :: i, j, n, n_tot, t, s, filnum, io_stat, cnt_intersect, cnt, n_cc
       real    :: atom1(3), atom2(3), atom3(3), dir_1(3), dir_2(3), vec(3), m(3), dist_plane, dist_line
-      real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator, centroid(3), prod(3)
+      real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator, centroid(3), prod(3), tthresh
       call init_atoms%new(pdbfile)
       n = init_atoms%get_n()
+      if(present(thresh)) then
+          tthresh = thresh
+      else
+          tthresh = 1.2*sum(self%radius)/real(self%get_n())  ! avg of the radii*1.2
+      endif
       if(n < 2 .or. n > 3 ) THROW_HARD('Inputted pdb file contains the wrong number of atoms!; geometry_analysis_pdb')
       do i = 1, N_DISCRET/2
           t_vec(i) = -real(i)/10.
@@ -614,7 +620,7 @@ contains
         do i = 1, n_tot
             do t = 1, N_DISCRET
               dist_line = euclid(self%xyz(i,:3),line(:3,t))
-              if(dist_line <= 0.6*self%radius(i)) then ! it intersects atoms
+              if(dist_line <= 0.6*tthresh) then ! it intersects atoms
                    flag(i) = .true. !flags also itself
                endif
             enddo
@@ -703,7 +709,7 @@ contains
             do t = 1, N_DISCRET
               do s = 1, N_DISCRET
                 dist_plane = euclid(self%xyz(i,:3),plane(:3,t,s))
-                if(dist_plane <= 0.6*self%radius(i)) then ! it intersects atoms i
+                if(dist_plane <= 0.6*tthresh) then ! it intersects atoms i
                      flag(i) = .true. !flags also itself
                  endif
               enddo

@@ -1702,7 +1702,7 @@ contains
         &'geometry_analysis in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program generating atom columns/planes for the analysis of an atomic-res nanoparticle 3D map',& ! descr long
         &'quant_exec',&                                        ! executable
-        &1, 2, 2, 0, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
+        &1, 2, 2, 1, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call geometry_analysis%set_input('img_ios', 1, 'pdbfile2', 'file', 'PDB', 'Input coordinates file in PDB format of the selected atoms', 'Input coordinates file, 2 or 3 selected atoms', .true., '')
@@ -1714,7 +1714,7 @@ contains
         & 'input volume e.g. vol.mrc', .false., '')
         call geometry_analysis%set_input('alt_ios', 2, 'pdbfile', 'file', 'PDB', 'Input coordinates file in PDB format of all the atoms', 'Input coordinates file', .false., '')
         ! search controls
-        ! <empty>
+        call geometry_analysis%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold','Distance filer (in A)', 'in A', .false., 1.1)
         ! filter controls
         call geometry_analysis%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
         ! mask controls
