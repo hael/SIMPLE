@@ -134,6 +134,7 @@ type(simple_program), target :: prune_project
 type(simple_program), target :: pspec_stats
 type(simple_program), target :: radial_dependent_stats
 type(simple_program), target :: radial_sym_test
+type(simple_program), target :: random_rec
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: reextract
 type(simple_program), target :: refine3D
@@ -341,6 +342,7 @@ contains
         call new_radial_dependent_stats
         call new_radial_sym_test
         call new_reproject
+        call new_random_rec
         call new_reconstruct3D
         call new_reextract
         call new_refine3D
@@ -437,6 +439,7 @@ contains
         call push2prg_ptr_array(radial_dependent_stats)
         call push2prg_ptr_array(radial_sym_test)
         call push2prg_ptr_array(reproject)
+        call push2prg_ptr_array(random_rec)
         call push2prg_ptr_array(reconstruct3D)
         call push2prg_ptr_array(reextract)
         call push2prg_ptr_array(refine3D)
@@ -607,6 +610,8 @@ contains
                   ptr2prg => radial_sym_test
             case('reproject')
                 ptr2prg => reproject
+            case('random_rec')
+                ptr2prg => random_rec
             case('reconstruct3D')
                 ptr2prg => reconstruct3D
             case('reextract')
@@ -726,6 +731,7 @@ contains
         write(logfhandle,'(A)') print_project_field%name
         write(logfhandle,'(A)') prune_project%name
         write(logfhandle,'(A)') pspec_stats%name
+        write(logfhandle,'(A)') random_rec%name
         write(logfhandle,'(A)') reconstruct3D%name
         write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') refine3D%name
@@ -3058,7 +3064,7 @@ contains
         &'discards deselected data from a project',&  ! descr_short
         &'is a program for discarding deselected data (particles,stacks) from a project',& ! descr_long
         &'simple_exec',&                       ! executable
-        &0, 0, 0, 0, 0, 0, 1, .true.)                ! # entries in each group, requires sp_project
+        &0, 0, 0, 0, 0, 0, 1, .true.)          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3075,6 +3081,33 @@ contains
         ! computer controls
         call prune_project%set_input('comp_ctrls', 1, nparts)
     end subroutine new_prune_project
+
+    subroutine new_random_rec
+        ! PROGRAM SPECIFICATION
+        call random_rec%new(&
+        &'random_rec',&                                                        ! name
+        &'3D reconstruction from random orientations',&                        ! descr_long
+        &'is a distributed workflow for reconstructing a volume from MRC and SPIDER stacks,&
+        & with random orientations. The algorithm is based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation kernel',&
+        &'single_exec',&                                                       ! executable
+        &0, 0, 0, 1, 0, 1, 2, .true.)         ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call random_rec%set_input('srch_ctrls', 1, pgrp)
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call random_rec%set_input('mask_ctrls', 1, msk)
+        ! computer controls
+        call random_rec%set_input('comp_ctrls', 1, nparts)
+        call random_rec%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_random_rec
 
     subroutine new_reconstruct3D
         ! PROGRAM SPECIFICATION

@@ -14,6 +14,7 @@ implicit none
 public :: reconstruct3D_commander_distr
 public :: reconstruct3D_commander
 public :: volassemble_commander
+public :: random_rec_commander_distr
 private
 #include "simple_local_flags.inc"
 
@@ -29,6 +30,11 @@ type, extends(commander_base) :: volassemble_commander
   contains
     procedure :: execute      => exec_volassemble
 end type volassemble_commander
+type, extends(commander_base) :: random_rec_commander_distr
+  contains
+    procedure :: execute      => exec_random_rec
+end type random_rec_commander_distr
+
 
 contains
 
@@ -322,5 +328,23 @@ contains
             call fclose(fnr)
         endif
     end subroutine exec_volassemble
+
+    subroutine exec_random_rec( self, cline )
+        class(random_rec_commander_distr), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        type(reconstruct3D_commander_distr) :: xrec3D_distr
+        type(parameters) :: params
+        type(builder)    :: build
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes'   )
+        call build%init_params_and_build_spproj(cline, params)
+        call build%spproj%os_ptcl3D%rnd_oris
+        call build%spproj%write_segment_inside('ptcl3D', params%projfile)
+        call cline%set('mkdir', 'no') ! to avoid nested dirs
+        call cline%set('prg',   'reconstruct3D')
+        call xrec3D_distr%execute(cline)
+        call build%spproj_field%kill
+        call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_random_rec
 
 end module simple_commander_rec

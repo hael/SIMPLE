@@ -96,7 +96,7 @@ contains
         if( str_has_substr(prgname, 'report_selection') ) prgname = 'selection' ! FIX4NOW
         ! obtain pointer to the program in the simple_user_interface specification
         call get_prg_ptr(prgname, ptr2prg)
-        if( .not. associated(ptr2prg) ) THROW_HARD(prgname//' is not part of SIMPLE')
+        if( .not. associated(ptr2prg) ) THROW_HARD(trim(prgname)//' is not part of this executable')
         ! list programs if so instructed
         if( str_has_substr(self%entire_line, 'prg=list') )then
             select case(prgname)

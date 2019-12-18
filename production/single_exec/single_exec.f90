@@ -7,6 +7,7 @@ use simple_commander_base,       only: execute_commander
 use simple_commander_sim,        only: simulate_atoms_commander
 use simple_commander_preprocess, only: map_cavgs_selection_commander
 use simple_commander_imgproc,    only: estimate_diam_commander, pspec_int_rank_commander
+use simple_commander_rec,        only: random_rec_commander_distr
 use simple_commander_project
 use simple_commander_cluster2D
 use simple_commander_tseries
@@ -32,6 +33,7 @@ type(cluster2D_nano_commander_hlev)          :: xcluster2D_distr
 type(map_cavgs_selection_commander)          :: xmap_cavgs_selection
 type(estimate_diam_commander)                :: xestimate_diam
 type(simulate_atoms_commander)               :: xsimulate_atoms
+type(random_rec_commander_distr)             :: xrndrec
 type(refine3D_nano_commander_distr)          :: xrefine3D_distr
 
 ! OTHER DECLARATIONS
@@ -89,6 +91,8 @@ select case(prg)
         call xestimate_diam%execute(cline)
     case( 'simulate_atoms' )
         call xsimulate_atoms%execute(cline)
+    case( 'random_rec')
+        call xrndrec%execute(cline)
     case( 'refine3D_nano')
         call execute_commander(xrefine3D_distr, cline)
     case DEFAULT
