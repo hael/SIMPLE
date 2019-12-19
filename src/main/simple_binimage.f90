@@ -76,6 +76,7 @@ contains
         call self%copy(self_in)
         self%bldim = self_in%bldim
         self%bsmpd = self_in%bsmpd
+        if(allocated(self%bimat)) deallocate(self%bimat)
         allocate(self%bimat(self%bldim(1),self%bldim(2),self%bldim(3)), source=self_in%bimat)
         self%bimat_is_set = self_in%bimat_is_set
         self%nccs = self_in%nccs
