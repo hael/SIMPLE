@@ -505,10 +505,11 @@ contains
         real,  parameter :: SHSRCH_HWDTH  = 5.0
         type(parameters) :: params
         type(projector)  :: vol1, vol2
-        type(image)      :: vol_out
+        ! type(image)      :: vol_out
+        type(projector)      :: vol_out
         type(oris)       :: ori2write
         type(ori)        :: orientation, orientation_best
-        real             :: cxyz(4), cxyz2(4)
+        real             :: cxyz(4), cxyz2(4), corr_prev
         integer          :: i
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes'       )
         if( .not. cline%defined('trs'  ) ) call cline%set('trs',   SHSRCH_HWDTH)
@@ -542,8 +543,38 @@ contains
                 call volpft_srch_set_shvec(cxyz(2:4))
                 orientation = volpft_srch_minimize()
                 ! Refinment using lpstop low-pass limit
-                call volpft_srch_init(vol1, vol2, params%hp, params%lpstop)
+                call volpft_srch_init(vol1, vol_out, params%hp, params%lpstop)
+                ! call volpft_srch_init(vol1, vol2, params%hp, params%lpstop)
                 call vol_srch_init(vol1, vol_out, params%hp, params%lpstop, params%trs)
+                corr_prev = 0. ! initialise
+                cxyz2     = 0.
+                ! do i=1,10
+                !     ! rotate and shift vol to create reference for shift alignment
+                !     call vol2%ifft
+                !     vol_out = rotvol(vol2, orientation, cxyz(2:4))
+                !     call vol2%fft
+                !     call vol_out%fft
+                !     ! obtain joint shifts by vector addition
+                !     cxyz(2:4) = cxyz(2:4) + cxyz2(2:4)
+                !     ! update shifts in volpft_srch class and refine angles
+                !     call volpft_srch_set_shvec(cxyz(2:4))
+                !     if( i <= 3 )then
+                !         orientation_best = volpft_srch_refine(orientation)
+                !         cxyz2 = vol_shsrch_minimize()
+                !         if( cxyz2(1) > corr_prev )then ! a better solution was found
+                !             corr_prev = cxyz2(1)
+                !         endif
+                !     else
+                !         orientation_best = volpft_srch_refine(orientation, angres=5.)
+                !         if( cxyz2(1) > corr_prev )then ! a better solution was found
+                !             corr_prev = cxyz2(1)
+                !         endif
+                !     endif
+                !     orientation = orientation_best
+                !     call orientation%set('x', cxyz(2))
+                !     call orientation%set('y', cxyz(3))
+                !     call orientation%set('z', cxyz(4))
+                ! end do
                 do i=1,10
                     ! rotate and shift vol to create reference for shift alignment
                     call vol2%ifft
@@ -551,7 +582,8 @@ contains
                     call vol2%fft
                     call vol_out%fft
                     cxyz2 = vol_shsrch_minimize()
-                    if( cxyz2(1) > 0. )then ! a better solution was found
+                    if( any(abs(cxyz2(2:4)) > 0.) )then ! a better solution was found
+                        corr_prev = cxyz2(1)
                         ! obtain joint shifts by vector addition
                         cxyz(2:4) = cxyz(2:4) + cxyz2(2:4)
                         ! update shifts in volpft_srch class and refine angles
@@ -565,11 +597,13 @@ contains
                         call orientation%set('x', cxyz(2))
                         call orientation%set('y', cxyz(3))
                         call orientation%set('z', cxyz(4))
+                        call orientation%print_ori
                     endif
                 end do
                 ! rotate and shift vol for output
                 call vol2%ifft
                 vol_out = rotvol(vol2, orientation, cxyz(2:4))
+                call orientation%print_ori
                 if( cline%defined('outfile') )then
                     call ori2write%new(1)
                     call ori2write%set_ori(1,orientation)

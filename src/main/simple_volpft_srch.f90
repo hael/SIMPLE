@@ -85,7 +85,7 @@ contains
         type(ori)  :: orientation, orientation_best
         integer    :: iproj, iproj_best, inpl_best
         integer    :: iloc, inpl, ithr, n_inpls
-        real       :: eul(3), corr_best, cost
+        real       :: eul(3), corr_best, cost, prev_cost
         ! create
         call orientation%new
         call cand_oris%new(NPROJ)
@@ -148,14 +148,16 @@ contains
         ! order the local optima according to correlation
         order = cand_oris%order_corr()
         call cand_oris%get_ori(order(1), orientation_best)
-        call orientation_best%print_ori
-        !$omp parallel do schedule(static) default(shared) private(iloc,ithr) proc_bind(close)
+        !$omp parallel do schedule(static) default(shared) private(iloc,ithr,prev_cost,cost) proc_bind(close)
         do iloc=1,NBEST
             ithr = omp_get_thread_num() + 1
             opt_eul(ithr)%ospec%x = cand_oris%get_euler(order(iloc))
+            prev_cost = -cand_oris%get(order(iloc),'corr')
             call opt_eul(ithr)%nlopt%minimize(opt_eul(ithr)%ospec, fun_self, cost)
-            call cand_oris%set_euler(order(iloc), opt_eul(ithr)%ospec%x)
-            call cand_oris%set(order(iloc), 'corr', -cost)
+            if( cost < prev_cost )then
+              call cand_oris%set_euler(order(iloc), opt_eul(ithr)%ospec%x)
+              call cand_oris%set(order(iloc), 'corr', -cost)
+            endif
         end do
         !$omp end parallel do
         ! order the local optima according to correlation
@@ -164,7 +166,6 @@ contains
         call cand_oris%get_ori(order(1), e_glob)
         ! return best
         call cand_oris%get_ori(order(1), orientation_best)
-        call orientation_best%print_ori
         ! destruct
         call espace%kill
         call cand_oris%kill
@@ -177,7 +178,7 @@ contains
         real, optional, intent(in) :: angres
         class(*), pointer      :: fun_self => null()
         type(ori) :: orientation_best
-        real      :: cost
+        real      :: cost, prev_cost
         integer   :: ithr
         call orientation_best%new
         ithr = omp_get_thread_num() + 1
@@ -188,10 +189,16 @@ contains
         else
             opt_eul(ithr)%ospec%limits = lims_eul
         endif
+        prev_cost = -vpftcc%corr(euler2m(opt_eul(ithr)%ospec%x(:)), shvec_glob)
         call opt_eul(ithr)%nlopt%minimize(opt_eul(ithr)%ospec, fun_self, cost)
-        call orientation_best%set_euler(opt_eul(ithr)%ospec%x)
-        call orientation_best%set('corr', -cost)
-        call orientation_best%print_ori
+        if(cost < prev_cost) then
+          call orientation_best%set_euler(opt_eul(ithr)%ospec%x)
+          call orientation_best%set('corr', -cost)
+          call orientation_best%print_ori
+        else
+          orientation_best = orientation_start
+          call orientation_best%set('corr', -prev_cost)
+        endif
     end function volpft_srch_refine
 
     function volpft_srch_costfun( fun_self, vec, D ) result( cost )

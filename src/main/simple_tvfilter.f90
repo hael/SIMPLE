@@ -36,7 +36,7 @@ contains
 
     subroutine apply_filter( self, img, lambda )
         class(tvfilter),   intent(inout) :: self
-        class(image),      intent(inout) :: img
+        class(image),      intent(inout) :: img    
         real,              intent(in)    :: lambda ! >0.; 0.1 is a starting point
         integer :: img_ldim(3), rb_ldim(3)
         real    :: img_smpd, lambda_here
