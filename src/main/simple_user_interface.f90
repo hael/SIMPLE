@@ -181,10 +181,12 @@ type(simple_input_param) :: ctf
 type(simple_input_param) :: ctfpatch
 type(simple_input_param) :: ctf_yes
 type(simple_input_param) :: deftab
+type(simple_input_param) :: detector
 type(simple_input_param) :: dferr
 type(simple_input_param) :: dfmax
 type(simple_input_param) :: dfmin
 type(simple_input_param) :: dock
+type(simple_input_param) :: draw_color
 type(simple_input_param) :: e1, e2, e3
 type(simple_input_param) :: element
 type(simple_input_param) :: elongated
@@ -831,6 +833,8 @@ contains
         'fraction of particles(0.1-0.9){1.0}', .false., 1.0)
         call set_param(mskfile,       'mskfile',       'file',   'Input mask file', 'Input mask file to apply to reference volume(s) before projection', 'e.g. automask.mrc from postprocess', .false., 'mskfile.mrc')
         call set_param(pgrp,          'pgrp',          'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true., 'c1')
+        call set_param(detector,      'detector',      'str',    'Detector mode', 'Detector mode for binarization(bin|sobel|otsu){bin}', 'detector (bin|sobel|otsu){bin}', .false., 'bin')
+        call set_param(draw_color,    'draw_color',    'str',    'Output color', 'color of the cross that identify the picked particle (white|black){white}', 'output color  (white|black){white}', .false., 'white')
         call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
         &used', '# projections', .false., 2500.)
         call set_param(objfun,        'objfun',        'multi',  'Objective function', 'Objective function(cc|euclid){cc}', '(cc|euclid){cc}', .false., 'cc')
@@ -2466,7 +2470,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                             ! executable
-        &0, 3, 5, 5, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &0, 3, 5, 7, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2489,6 +2493,10 @@ contains
         pick%srch_ctrls(4)%required = .false.
         call pick%set_input('srch_ctrls', 5, elongated)
         pick%srch_ctrls(5)%required = .false.
+        call pick%set_input('srch_ctrls', 6, detector)
+        pick%srch_ctrls(6)%required = .false.
+        call pick%set_input('srch_ctrls', 7, draw_color)
+        pick%srch_ctrls(7)%required = .false.
         ! filter controls
         call pick%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
         ! mask controls

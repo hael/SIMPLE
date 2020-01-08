@@ -58,6 +58,7 @@ subroutine iterate( self, cline, moviename_intg, boxfile, nptcls_out, dir_out )
             call kill_phasecorr_picker
         endif
     else
+        print *, 'here okay'
         if( .not. cline%defined('min_rad') .or. .not. cline%defined('max_rad') )then
             THROW_HARD('ERROR! min_rad, max_rad need to be present; iterate')
         endif
@@ -83,13 +84,15 @@ subroutine iterate( self, cline, moviename_intg, boxfile, nptcls_out, dir_out )
             ! phasecorrelation based, reference-free picking
             if(.not. cline%defined('stepsz')) THROW_HARD('stepsz needs to be defined!; iterate')
             if(.not. cline%defined('circular'))  params_glob%circular  = 'no'
-            if(.not. cline%defined('elongated')) params_glob%elongated = 'yes'
+            if(.not. cline%defined('elongated')) params_glob%elongated = 'no'
             if( cline%defined('thres') )then
+              print *, 'before init'
                 call init_phasecorr_segpicker(moviename_intg, params_glob%min_rad, params_glob%max_rad, real(params_glob%stepsz),params_glob%circular,params_glob%elongated, params_glob%smpd, lp_in=params_glob%lp,&
                     &distthr_in=params_glob%thres, ndev_in=params_glob%ndev, dir_out=dir_out)
             else
                 call init_phasecorr_segpicker(moviename_intg, params_glob%min_rad, params_glob%max_rad, real(params_glob%stepsz),params_glob%circular,params_glob%elongated, params_glob%smpd, lp_in=params_glob%lp, ndev_in=params_glob%ndev, dir_out=dir_out)
             endif
+            print *, 'before execution'
             call exec_phasecorr_segpicker(boxfile, nptcls_out)
             call kill_phasecorr_segpicker
         endif

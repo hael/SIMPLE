@@ -1,4 +1,6 @@
 module simple_segmentation
+!$ use omp_lib
+!$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_image,    only: image
 use simple_binimage, only: binimage
@@ -384,22 +386,31 @@ contains
         ! the median value of the gray levels in the neighbours of the pixel.
         if(ldim(3) == 1) then
             allocate(neigh_8_pixs(9))
-        else
-            allocate(neigh_8_pixs(27))
-        endif
-        do i = 1, ldim(1)
-            do j = 1, ldim(2)
-                do k = 1, ldim(3)
-                    if(ldim(3) == 1 ) then
-                        call neigh_8(   ldim, rmat(:ldim(1),:ldim(2),:ldim(3)), [i,j,k], neigh_8_pixs, nsz)
-                    else
-                        call neigh_8_3D(ldim, rmat(:ldim(1),:ldim(2),:ldim(3)), [i,j,k], neigh_8_pixs, nsz)
-                    endif
-                    rmat_avg(i,j,k) = sum(neigh_8_pixs(1:nsz)) / real(nsz)
-                    rmat_med(i,j,k) = median(neigh_8_pixs(1:nsz))
+            !$omp parallel do collapse(2) default(shared) private(i,j,neigh_8_pixs,nsz)&
+            !$omp schedule(static) proc_bind(close)
+            do i = 1, ldim(1)
+                do j = 1, ldim(2)
+                    call neigh_8(ldim, rmat(:ldim(1),:ldim(2),:1), [i,j,1], neigh_8_pixs, nsz)
+                    rmat_avg(i,j,1) = sum(neigh_8_pixs(1:nsz)) / real(nsz)
+                    rmat_med(i,j,1) = median(neigh_8_pixs(1:nsz))
                 enddo
             enddo
-        enddo
+            !$omp end parallel do
+        else
+            allocate(neigh_8_pixs(27))
+            !$omp parallel do collapse(3) default(shared) private(i,j,k,neigh_8_pixs,nsz)&
+            !$omp schedule(static) proc_bind(close)
+            do i = 1, ldim(1)
+                do j = 1, ldim(2)
+                    do k = 1, ldim(3)
+                        call neigh_8_3D(ldim, rmat(:ldim(1),:ldim(2),:ldim(3)), [i,j,k], neigh_8_pixs, nsz)
+                        rmat_avg(i,j,k) = sum(neigh_8_pixs(1:nsz)) / real(nsz)
+                        rmat_med(i,j,k) = median(neigh_8_pixs(1:nsz))
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
         deallocate(neigh_8_pixs)
         ! Apply otsu1D to each img
         if(noneg .eqv. .true. ) then
@@ -411,7 +422,9 @@ contains
             call otsu_img(img_avg,  thresh(2), positive = .false.)
             call otsu_img(img_med,  thresh(3), positive = .false.)
         endif
-        ! Find most frequent value in the binary version of each voxel
+        !Find most frequent value in the binary version of each voxel
+        !$omp parallel do collapse(3) default(shared) private(i,j,k,count_back)&
+        !$omp schedule(static) proc_bind(close)
         do i = 1, ldim(1)
             do j = 1, ldim(2)
                 do k = 1, ldim(3)
@@ -427,6 +440,7 @@ contains
                 enddo
             enddo
         enddo
+        !$omp end parallel do
         ! kill
         call img_copy%kill
         call img_avg%kill
