@@ -17,10 +17,11 @@ real        :: shrink_factor
 
 contains
 
-    subroutine read_micrograph( micfname, smpd, save_copy )
-        character(len=*),  intent(in) :: micfname
-        real,              intent(in) :: smpd
-        logical, optional, intent(in) :: save_copy
+    subroutine read_micrograph( micfname, smpd, save_copy, mic_out)
+        character(len=*),      intent(in)  :: micfname
+        real,                  intent(in)  :: smpd
+        logical,     optional, intent(in)  :: save_copy
+        type(image), optional, intent(out) :: mic_out
         logical :: ssave_copy
         integer :: nframes
         ssave_copy = .false.
@@ -32,6 +33,7 @@ contains
         endif
         call micrograph%new(ldim, smpd)
         call micrograph%read(trim(micfname))
+        if(present(mic_out))  call mic_out%copy(micrograph)
         if(ssave_copy) call micrograph%write('Original_micrograph.mrc')
         if( DEBUG ) write(logfhandle,*) 'debug(micops); read micrograph'
     end subroutine read_micrograph
@@ -54,18 +56,21 @@ contains
     end subroutine shrink_micrograph
 
     subroutine set_box( box_in, box_out, mic_out )
-        integer,                  intent(in)  :: box_in
+        integer,                   intent(in)  :: box_in
         integer,         optional, intent(out) :: box_out
         class(binimage), optional, intent(out) :: mic_out
+        real :: smpd
         box = box_in
         box_shrunken = round2even(real(box)/shrink_factor)
         !high-pass filter shrunken micrograph according to box_shrunken
         call micrograph_shrunken%bp(4*box_shrunken *micrograph_shrunken%get_smpd(), 0.)!width=real(box_shrunken)) ! width = 30. Chiara
         ! return filtered micrograph in real-space
         call micrograph_shrunken%ifft()
-        !if(present(snr)) call micrograph_shrunken%add_gauran(snr)
-        !if( DEBUG ) call micrograph_shrunken%write('shrunken_hpassfiltered.mrc')
-        if(present(mic_out))  call mic_out%copy(micrograph_shrunken)
+        if(present(mic_out))  then
+          smpd = micrograph_shrunken%get_smpd()
+          call mic_out%new_bimg(ldim_shrunken, smpd)
+          call mic_out%copy(micrograph_shrunken)
+        endif
         ! loop dimensions for target extraction will be 0:nx and 0:ny
         nx = ldim_shrunken(1) - box_shrunken
         ny = ldim_shrunken(2) - box_shrunken

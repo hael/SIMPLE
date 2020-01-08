@@ -595,15 +595,11 @@ contains
         allocate(self%contact_scores(self%n_cc-n_discard), source = 0)
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
-        cnt = 0
         ! Removing outliers from the binary image and the connected components image
         if(present(cs_thresh)) then
           do cc = 1, self%n_cc
             if(contact_scores(cc)<cs_thresh) then
-              where(imat_cc == cc) imat_bin = 0
-            else
-              cnt = cnt + 1
-              self%contact_scores(cnt) = contact_scores(cc)
+                where(imat_cc == cc) imat_bin = 0
             endif
           enddo
         else
@@ -615,18 +611,27 @@ contains
               endwhere
               mask(label(1)) = .false.
           enddo
-          do cc = 1, self%n_cc ! fill in self%contact_scores
-            if(mask(cc)) then
-              cnt = cnt + 1
-              self%contact_scores(cnt) = contact_scores(cc)
-            endif
-          enddo
         endif
         call self%img_bin%set_imat(imat_bin)
         call self%img_bin%find_ccs(self%img_cc)
         ! update number of connected components
         call self%img_cc%get_nccs(self%n_cc)
         call self%find_centers()
+        ! fill in self%contact_scores (I have to recalculate it to be consistent with the indexes of the ccs)
+        if(allocated(mask)) deallocate(mask)
+        allocate(mask(self%n_cc), source = .true.)
+        do cc = 1, self%n_cc !fix the atom
+            dist = 0.
+            mask = .true.
+            cnt = 0
+            mask(cc)  = .false.
+            do while(dist < radius)
+                dist = pixels_dist(self%centers(:,cc), self%centers,'min', mask, loc)
+                mask(loc) = .false.
+                cnt = cnt + 1
+            enddo
+            self%contact_scores(cc) = cnt - 1 !-1 because while loop counts one extra before exiting
+        enddo
         write(logfhandle, *) '****outliers discarding, completed'
     end subroutine discard_outliers
 

@@ -92,6 +92,9 @@ contains
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
 
+    ! Example of cline:
+    ! simple_exec prg=dock_volpair lpstart=3 lpstop=1 smpd=0.358 vol1=vol_Nov26.mrc
+    ! vol2=vol_Nov28_2.mrc  msk=40 nthr=8
     subroutine exec_atoms_rmsd( self, cline )
         use simple_commander_volops, only: dock_volpair_commander
         use simple_ori,              only: ori
@@ -136,8 +139,8 @@ contains
         ! execute
         if(params%dock .eq. 'yes') then
             cline_dock = cline
-            call cline_dock%set('lpstart', 1.)
-            call cline_dock%set('lpstop',  3.)
+            if(.not. cline%defined('lpstart')) call cline_dock%set('lpstart', 1.)
+            if(.not. cline%defined('lpstop' )) call cline_dock%set('lpstop',  3.)
             if(.not. cline%defined('msk')) THROW_HARD('If dock has to be performed, msk needs to be inserted; exec_atoms_rmsd')
             call cline_dock%set('mkdir', 'no')
             call cline_dock%set('nthr',0.)

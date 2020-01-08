@@ -23,6 +23,7 @@ type :: parameters
     character(len=3)      :: avg='no'             !< calculate average (yes|no){no}
     character(len=3)      :: bin='no'             !< binarise image(yes|no){no}
     character(len=3)      :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
+    character(len=3)      :: circular='no'        !< circular particles(yes|no){no}
     character(len=3)      :: classtats='no'       !< calculate class population statistics(yes|no){no}
     character(len=3)      :: clustvalid='no'      !< validate clustering(yes|homo|no){no}
     character(len=3)      :: compare='no'         !< do comparison(yes|no){no}
@@ -41,6 +42,7 @@ type :: parameters
     character(len=3)      :: dopca='yes'
     character(len=3)      :: doprint='no'
     character(len=3)      :: dorec='yes'
+    character(len=3)      :: elongated='no'       !< elongated particles(yes|no){no}
     character(len=3)      :: eputiltgroups='no'   !< generate relion tilt classes from epu filenames (yes|no){no}
     character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
     character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
@@ -495,6 +497,7 @@ contains
         call check_carg('bin',            self%bin)
         call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
+        call check_carg('circular',       self%circular)
         call check_carg('classtats',      self%classtats)
         call check_carg('clustermode',    self%clustermode)
         call check_carg('clustvalid',     self%clustvalid)
@@ -521,6 +524,7 @@ contains
         call check_carg('doprint',        self%doprint)
         call check_carg('draw_color',     self%draw_color)
         call check_carg('element',        self%element)
+        call check_carg('elongated',      self%elongated)
         call check_carg('errify',         self%errify)
         call check_carg('even',           self%even)
         call check_carg('exp_doc',        self%exp_doc)

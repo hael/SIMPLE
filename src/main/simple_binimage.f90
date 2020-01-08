@@ -80,6 +80,7 @@ contains
         allocate(self%bimat(self%bldim(1),self%bldim(2),self%bldim(3)), source=self_in%bimat)
         self%bimat_is_set = self_in%bimat_is_set
         self%nccs = self_in%nccs
+        call self%copy(self_in) ! as an image
      end subroutine copy_bimg
 
     subroutine transfer2bimg( self, self_in )
@@ -156,15 +157,18 @@ contains
     ! Finds connected components in the binary input image and saves
     ! them in the output connected component image.
     ! Black = .true. finds the black connected components instead of the white ones
-    subroutine find_ccs(self, ccimage, black)
+    subroutine find_ccs(self, ccimage, black, update_imat)
         class(binimage),   intent(inout) :: self
         class(binimage),   intent(inout) :: ccimage
-        logical, optional, intent(in)    :: black
+        logical, optional, intent(in)    :: black, update_imat
         type(binimage)       :: ccimage_unordered ! in this img will be stored the cc with no specific order
         integer, allocatable :: mat4compare(:,:,:), neigh_8_pixs(:)
         integer :: i, j, k, n_it, n_maxit, nsz, cnt, diff, tmp
         logical :: finished_job, black_present
         if( .not. self%bimat_is_set ) call self%set_imat
+        if(present(update_imat)) then
+          if(update_imat .eqv. .true.) call self%set_imat
+        endif
         black_present = present(black)
         call ccimage_unordered%new_bimg(self%bldim,self%bsmpd)
         call ccimage%new_bimg          (self%bldim,self%bsmpd)

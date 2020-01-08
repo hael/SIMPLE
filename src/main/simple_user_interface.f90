@@ -173,6 +173,7 @@ type(simple_input_param) :: angerr
 type(simple_input_param) :: astigtol
 type(simple_input_param) :: bfac
 type(simple_input_param) :: box
+type(simple_input_param) :: circular
 type(simple_input_param) :: clip
 type(simple_input_param) :: clustermode
 type(simple_input_param) :: cs
@@ -186,6 +187,7 @@ type(simple_input_param) :: dfmin
 type(simple_input_param) :: dock
 type(simple_input_param) :: e1, e2, e3
 type(simple_input_param) :: element
+type(simple_input_param) :: elongated
 type(simple_input_param) :: eo
 type(simple_input_param) :: focusmsk
 type(simple_input_param) :: frac
@@ -857,6 +859,7 @@ contains
         call set_param(nptcls,         'nptcls',       'num',    'Number of particles', 'Number of particle images', '# particles', .true., 0.)
         call set_param(outstk,         'outstk',       'file',   'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
         call set_param(pcontrast,      'pcontrast',    'multi',  'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
+        call set_param(circular,       'circular',    'binary', 'Elongated particles', 'Whether to perform generate only circular gaussian references during picking averaging, for phasecorr picker only(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(clip,           'clip',         'num',    'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
         call set_param(clustermode,    'clustermode',  'multi',  'Feature used for clustering', 'Feature used for clustering (ar|dist|ang|maxint|intint){ar}', '(ar|dist|ang|maxint|intint){ar}', .true., 'ar')
         call set_param(neg,            'neg',          'binary', 'Invert contrast','Invert contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
@@ -868,6 +871,7 @@ contains
         call set_param(e1,             'e1',           'num',    'Rotation along Phi',  'Phi Euler angle',   'in degrees', .false., 0.)
         call set_param(e2,             'e2',           'num',    'Rotation along Theta','Theat Euler angle', 'in degrees', .false., 0.)
         call set_param(e3,             'e3',           'num',    'Rotation along Psi',  'Psi Euler angle',   'in degrees', .false., 0.)
+        call set_param(elongated,      'elongated',    'binary', 'Elongated particles', 'Whether to perform generate only elliptical gaussian references during picking averaging, for phasecorr picker only(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(groupframes,    'groupframes',  'binary', 'Patch motion correction frames averaging', 'Whether to perform frames averaging during motion correction - for patchesonly(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(mcpatch,        'mcpatch',      'binary', 'Patch-based motion correction', 'Whether to perform Patch-based motion correction(yes|no){no}', '(yes|no){yes}', .false., 'yes')
         call set_param(mcconvention,   'mcconvention', 'str',    'Frame of reference during movie alignment', 'Frame of reference during movie alignment; simple/unblur:central; relion/motioncorr:first(simple|unblur|relion|motioncorr){simple}', '(simple|unblur|relion|motioncorr){simple}', .false., 'simple')
@@ -2462,7 +2466,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                             ! executable
-        &0, 3, 4, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &0, 3, 5, 5, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2473,13 +2477,18 @@ contains
         ! alternative inputs
         call pick%set_input('alt_ios', 1, 'refs', 'file', 'Stack of class-averages for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
         call pick%set_input('alt_ios', 2, 'vol1', 'file', 'Volume for picking', 'Volume for picking', 'e.g. vol.mrc file', .false., '')
-        call pick%set_input('alt_ios', 3, 'min_rad', 'num', 'Minimum radius in A', 'Minimum expected radius of the particles in A {5.} ', '{5.}',  .false., 10.)
-        call pick%set_input('alt_ios', 4, 'max_rad', 'num', 'Maximum radius in A', 'Maximum expected radius of the particles in A {12.} ', '{12.}',  .false., 100.)
+        call pick%set_input('alt_ios', 3, 'min_rad', 'num', 'Minimum radius in A', 'Minimum expected radius of the particles in A {5.} ', '{5.}',  .false., 5.)
+        call pick%set_input('alt_ios', 4, 'max_rad', 'num', 'Maximum radius in A', 'Maximum expected radius of the particles in A {12.} ', '{12.}',  .false., 12.)
+        call pick%set_input('alt_ios', 5, 'stepsz', 'num', 'Step size in A', 'Step size for gaussian reference generation in A {2.} ', '{2.}',  .false., 2.)
         ! search controls
         call pick%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false., 0.)
         call pick%set_input('srch_ctrls', 2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
         call pick%set_input('srch_ctrls', 3, pgrp)
         pick%srch_ctrls(3)%required = .false.
+        call pick%set_input('srch_ctrls', 4, circular)
+        pick%srch_ctrls(4)%required = .false.
+        call pick%set_input('srch_ctrls', 5, elongated)
+        pick%srch_ctrls(5)%required = .false.
         ! filter controls
         call pick%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
         ! mask controls
