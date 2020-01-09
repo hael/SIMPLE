@@ -104,7 +104,6 @@ contains
             real    :: rad_x, rad_y
             integer :: i, j, max_nrefs, tot_refs
             nrefs = 0
-            if(DOPRINT) write(logfhandle,*) 'min_rad: ', min_rad, 'max_rad: ', max_rad, 'stepsz:', step_sz
             max_nrefs = ceiling((max_rad-min_rad)/step_sz)
             do i = 0, max_nrefs
                 rad_x   = (min_rad + real(i)*step_sz)
@@ -119,7 +118,6 @@ contains
             allocate( refs(nrefs) )
             allocate(rmat_out(ldim_shrink(1),ldim_shrink(2),1), source = 0.)
             tot_refs = nrefs ! save number of references to create
-            if(DOPRINT) write(logfhandle,*) 'counted ', tot_refs, 'references to generate'
             nrefs = 0
             do i = 0, tot_refs-1
                 rad_x = (min_rad + real(i)*step_sz)
@@ -131,7 +129,7 @@ contains
                     call refs(nrefs)%new(ldim_shrink,smpd_shrunken)
                     call refs(nrefs)%gauimg2D(sigma_x,sigma_y,(rad_x+rad_y)/2.+5.) !five pxls cutoff
                     call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
-                    if(DOPRINT) write(logfhandle,*) 'generating ref with rads: ', rad_x, rad_y, nrefs
+                    if(DOPRINT) write(logfhandle,*) 'generating ref with rads: ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
                 endif
             enddo
             deallocate(rmat_out)
@@ -146,7 +144,6 @@ contains
             real    :: rad_x, rad_y
             integer :: i, j, max_nrefs, tot_refs
             nrefs = 0
-            if(DOPRINT) write(logfhandle,*) 'min_rad: ', min_rad, 'max_rad: ', max_rad, 'stepsz:', step_sz
             max_nrefs = ceiling((max_rad-min_rad)/step_sz)
             do i = 0, max_nrefs-1
                 rad_x   = (min_rad + real(i)*step_sz)
@@ -167,7 +164,6 @@ contains
             allocate( refs(nrefs) )
             allocate(rmat_out(ldim_shrink(1),ldim_shrink(2),1), source = 0.)
             tot_refs = nrefs ! save number of references to create
-            if(DOPRINT) write(logfhandle,*) 'counted ', tot_refs, 'references to generate'
             nrefs = 0
             do i = 0, tot_refs-2
                 rad_x = (min_rad + real(i)*step_sz)
@@ -182,25 +178,25 @@ contains
                                  call refs(nrefs)%new(ldim_shrink,smpd_shrunken)
                                  call refs(nrefs)%gauimg2D(sigma_x,sigma_y,(rad_x+rad_y)/2.+5.) !five pxls cutoff
                                  call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
-                                 if(DOPRINT) write(logfhandle,*) 'generating ref with rads: ', rad_x, rad_y, nrefs
+                                 if(DOPRINT) write(logfhandle,*) 'generating ref with rads: ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
                                  call refs(nrefs)%rtsq_serial( 45., 0., 0., rmat_out )
                                  nrefs = nrefs + 1
                                  call refs(nrefs)%new(ldim_shrink,smpd_shrunken)
                                  call refs(nrefs)%set_rmat(rmat_out)
                                  call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
-                                 if(DOPRINT) write(logfhandle,*) 'rotating 45 degrees ref with rads: ', rad_x, rad_y, nrefs
+                                 if(DOPRINT) write(logfhandle,*) 'rotating 45 degrees ref:  ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
                                  call refs(nrefs)%rtsq_serial( 90., 0., 0., rmat_out )
                                  nrefs = nrefs + 1
                                  call refs(nrefs)%new(ldim_shrink,smpd_shrunken)
                                  call refs(nrefs)%set_rmat(rmat_out)
                                  call refs(nrefs)%write(PATH_HERE//'_GaussianReference.mrc',nrefs)
-                                 if(DOPRINT) write(logfhandle,*) 'rotating 90 degrees ref with rads: ', rad_x, rad_y, nrefs
+                                 if(DOPRINT) write(logfhandle,*) 'rotating 90 degrees ref:  ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
                                  call refs(nrefs)%rtsq_serial( 135., 0., 0., rmat_out )
                                  nrefs = nrefs + 1
                                  call refs(nrefs)%new(ldim_shrink,smpd_shrunken)
                                  call refs(nrefs)%set_rmat(rmat_out)
                                  call refs(nrefs)%write(PATH_HERE//'_GaussianReference.mrc',nrefs)
-                                 if(DOPRINT) write(logfhandle,*) 'rotating 135 degrees ref with rads: ', rad_x, rad_y, nrefs
+                                 if(DOPRINT) write(logfhandle,*) 'rotating 135 degrees ref:  ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
                               endif
                         endif
                     enddo
@@ -219,7 +215,6 @@ contains
             integer :: i, j, max_nrefs, tot_refs
             logical :: rotate_ref
             nrefs = 0
-            if(DOPRINT) write(logfhandle,*) 'min_rad: ', min_rad, 'max_rad: ', max_rad,'stepsz:', step_sz
             max_nrefs = ceiling((max_rad-min_rad)/step_sz)
             do i = 0, max_nrefs
                 rad_x   = (min_rad + real(i)*step_sz)
@@ -243,7 +238,6 @@ contains
             allocate( refs(nrefs) )
             allocate(rmat_out(ldim_shrink(1),ldim_shrink(2),1), source = 0.)
             tot_refs = nrefs ! save number of references to create
-            if(DOPRINT) write(logfhandle,*)  'counted ', tot_refs, 'references to generate'
             nrefs = 0
             do i = 0, tot_refs-1
                 rad_x = (min_rad + real(i)*step_sz)
@@ -258,20 +252,20 @@ contains
                              call refs(nrefs)%new(ldim_shrink,smpd_shrunken)
                              call refs(nrefs)%gauimg2D(sigma_x,sigma_y,(rad_x+rad_y)/2.+5.) !five pxls cutoff
                              call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
-                             if(DOPRINT) write(logfhandle,*)  'generating ref with rads: ', rad_x, rad_y, nrefs
+                             if(DOPRINT) write(logfhandle,*)  'generating ref with rads: ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
                              if(rotate_ref) then
                                  call refs(nrefs)%rtsq_serial( 45., 0., 0., rmat_out )
                                  nrefs = nrefs + 1
                                  call refs(nrefs)%new(ldim_shrink,smpd_shrunken)
                                  call refs(nrefs)%set_rmat(rmat_out)
                                  call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
-                                 if(DOPRINT) write(logfhandle,*)  'rotating 45 degrees ref with rads: ', rad_x, rad_y, nrefs
+                                 if(DOPRINT) write(logfhandle,*)  'rotating 45 degrees ref:  ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
                                  call refs(nrefs)%rtsq_serial( 90., 0., 0., rmat_out )
                                  nrefs = nrefs + 1
                                  call refs(nrefs)%new(ldim_shrink,smpd_shrunken)
                                  call refs(nrefs)%set_rmat(rmat_out)
                                  call refs(nrefs)%write(PATH_HERE//'_GaussianReference.mrc',nrefs)
-                                 if(DOPRINT) write(logfhandle,*) 'rotating 90 degrees ref with rads: ', rad_x, rad_y, nrefs
+                                 if(DOPRINT) write(logfhandle,*) 'rotating 90 degrees ref:  ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
                              endif
                         endif
                         rotate_ref = .false. !restore
@@ -283,11 +277,16 @@ contains
         end subroutine generate_gaussian_refs
     end subroutine init_phasecorr_segpicker
 
-    subroutine exec_phasecorr_segpicker( boxname_out, nptcls_out )
+    subroutine exec_phasecorr_segpicker( boxname_out, nptcls_out, center )
         character(len=LONGSTRLEN), intent(out) :: boxname_out
         integer,                   intent(out) :: nptcls_out
+        character(len=3),          intent(in)  :: center
         call extract_peaks
-        call distance_filter
+        if(center .eq. 'yes') then
+            call distance_filter_and_center
+        else
+            call distance_filter
+        endif
         call gather_stats
         call one_cluster_clustering
         nptcls_out = count(selected_peak_positions)
@@ -413,6 +412,37 @@ contains
         end subroutine max_image
     end subroutine extract_peaks
 
+    subroutine distance_filter_and_center
+        integer :: ipeak, jpeak, ipos(2), jpos(2), loc(1), cnt_peaks
+        real    :: dist
+        logical, allocatable :: mask(:)
+        real,    allocatable :: corrs(:)
+        write(logfhandle,'(a)') '>>> DISTANCE FILTERING'
+        allocate( mask(npeaks), corrs(npeaks), selected_peak_positions(npeaks), stat=alloc_stat)
+        if(alloc_stat.ne.0)call allocchk( 'In: simple_picker :: distance_filter',alloc_stat)
+        selected_peak_positions = .true.
+        call center_particles(cnt_peaks)
+        print *, 'after centering and cc elim we have ', cnt_peaks, 'peaks'
+        print *, 'should be the same as ', count(selected_peak_positions)
+        ! HEREEEE TO PUT BACK OPENMP
+        !omp do collapse(2) schedule(static) default(shared) private(ipeak,jpeak) proc_bind(close)
+        do ipeak = 1, cnt_peaks-1            !fix one coord
+            do jpeak = ipeak+1, cnt_peaks       !fix another coord to compare
+                if(selected_peak_positions(ipeak) .and. selected_peak_positions(jpeak)) then !not compare twice ,and if the particles haven t been deleted yet
+                    if( euclid(real(peak_positions(ipeak,:)),real(peak_positions(jpeak,:))) <= distthr) then
+                        selected_peak_positions(ipeak) = .false.
+                        selected_peak_positions(jpeak) = .false.
+                    endif
+                endif
+            enddo
+        enddo
+        !omp end do
+        print *, 'after distance threshold we have', count(selected_peak_positions), 'peaks'
+        npeaks_sel = count(selected_peak_positions)
+        write(logfhandle,'(a,1x,I5)') 'peak positions left after distance filtering: ', npeaks_sel
+        deallocate(mask,corrs)
+    end subroutine distance_filter_and_center
+
     subroutine distance_filter
         integer :: ipeak, jpeak, ipos(2), jpos(2), loc(1)
         real    :: dist
@@ -474,6 +504,63 @@ contains
         call ptcl_target%kill()
         deallocate(spec)
     end subroutine gather_stats
+
+    ! This subroutine centers the picked particles. The center
+    ! is defined as the center of mass of the
+    ! connected component to which the particle belongs.
+    subroutine center_particles(cnt_peaks)
+      use simple_binimage, only : binimage
+      integer, intent(out) :: cnt_peaks
+      type(binimage)       :: micrograph_bin,micrograph_cc
+      logical, allocatable :: center(:) ! not to center more than once the same cc
+      integer, allocatable :: imat_cc(:,:,:), imat_aux(:,:,:)
+      integer :: ipeak, cc, cnt, i, j
+      print *, 'Initialization centering'
+      call micrograph_bin%new_bimg(ldim_shrink, smpd_shrunken)
+      ! I need a copy to have a binimage instead of an image
+      call micrograph_bin%copy(mic_shrunken) ! mic_shrunken is already binary
+      call micrograph_bin%find_ccs(micrograph_cc)
+      ! 6) cc filtering !HEREEE
+      ! I could elaborate the function polish cc on the basis of
+      ! circular/elongated..
+      call micrograph_cc%polish_ccs([min_rad,max_rad])
+      call micrograph_cc%write_bimg('CcsElimin.mrc')
+      call micrograph_cc%get_imat(imat_cc)
+      allocate(imat_aux(ldim_shrink(1), ldim_shrink(2),1), source = 0)
+      print *, 'before loop'
+      allocate(center(maxval(imat_cc)), source = .true.)
+      cnt_peaks = 0 ! count the number of peaks after centering and cc filtering
+      !$omp parallel do default(shared) private(ipeak,cc,cnt,i,j) proc_bind(close) schedule(static)
+      do ipeak = 1,npeaks
+          cc = imat_cc(peak_positions(ipeak,1), peak_positions(ipeak,2),1)
+          if(cc < 0.5) then
+             ! remove peaks that correspond to filtered ccs.
+              selected_peak_positions(ipeak) = .false.
+           elseif(center(cc)) then
+              cnt_peaks = cnt_peaks + 1
+              center(cc) = .false.
+              print *, 'centering cc ', cc, 'correspondent to peak', ipeak
+              ! center peaks, center of mass of the cc
+              peak_positions(ipeak,:) = 0 ! reset
+              cnt = 0
+              do i = 1, ldim_shrink(1)
+                    do j = 1, ldim_shrink(2)
+                        if(imat_cc(i,j,1) == cc) then
+                            cnt = cnt + 1
+                            peak_positions(ipeak,1:2) = peak_positions(ipeak,1:2) + [i,j]
+                        endif
+                    enddo
+                enddo
+                peak_positions(ipeak,1:2) = peak_positions(ipeak,1:2)/cnt
+              else
+                selected_peak_positions(ipeak) = .false.
+           endif
+      enddo
+      !$omp end parallel do
+      print *, 'after loop'
+      call micrograph_bin%kill_bimg
+      call micrograph_cc%kill_bimg
+    end subroutine center_particles
 
     subroutine one_cluster_clustering
         real, allocatable :: dmat(:,:)

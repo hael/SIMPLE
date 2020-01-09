@@ -217,7 +217,7 @@ contains
         real,                 intent(in)     :: saved_coord(:,:)     !Coordinates of picked particles
         logical,              intent(inout)  :: msk(:)
         integer              :: i, j, cnt
-        do i = 1, self%n_particles             !fix one coord
+        do i = 1, self%n_particles-1           !fix one coord
             do j = i+1, self%n_particles       !fix another coord to compare
                 if(msk(i) .and. msk(j)) then !not compare twice ,and if the particles haven t been deleted yet
                     if( euclid(saved_coord(i,:), saved_coord(j,:)) <= 2.*self%min_rad) then

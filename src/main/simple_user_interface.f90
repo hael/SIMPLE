@@ -2470,7 +2470,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                             ! executable
-        &0, 3, 5, 7, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &0, 3, 5, 8, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2497,6 +2497,8 @@ contains
         pick%srch_ctrls(6)%required = .false.
         call pick%set_input('srch_ctrls', 7, draw_color)
         pick%srch_ctrls(7)%required = .false.
+        call pick%set_input('srch_ctrls', 8, 'center', 'binary', 'Center particles', 'Center particles based on center of mass of the connected component &
+        &(yes|no){yes}', '(yes|no){yes}', .false., 'no')
         ! filter controls
         call pick%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
         ! mask controls
