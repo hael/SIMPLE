@@ -10,9 +10,9 @@ implicit none
 #include "simple_local_flags.inc"
 
 ! module global constants
-real,    parameter :: SHRINK  = 4.
+real,    parameter :: SHRINK     = 4.
 logical, parameter :: DEBUG_HERE = .true.
-integer, parameter :: N_ROT = 18
+integer, parameter :: N_ROT      = 18
 
 type :: segpicker
     private
@@ -27,6 +27,7 @@ type :: segpicker
     real    :: smpd_shrunken         = 0.
     real    :: hp_box                = 0.
     real    :: lambda                = 0.  ! for tv denoising
+    real    :: distthr               = 0.
     integer :: winsz                 = 0   ! for median filtering
     integer :: ldim(3)               = 0
     integer :: ldim_shrunken(3)      = 0
@@ -61,12 +62,13 @@ end type segpicker
 
 contains
 
-    subroutine new(self, fname, min_rad, max_rad,smpd, color)
+    subroutine new(self, fname, min_rad, max_rad, smpd, color, distthr_in)
         class(segpicker),       intent(inout) :: self
         character(len=*),           intent(in)    :: fname
+        real, optional,             intent(in)    :: distthr_in
         real,                       intent(in)    :: min_rad, max_rad
         real,                       intent(in)    :: smpd
-        character(len=*), optional, intent(in)    :: color
+        character(len=*),           intent(in)    :: color
         integer :: nptcls
         self%pickername = fname
         call find_ldim_nptcls(self%pickername, self%ldim, nptcls, self%smpd)
@@ -77,30 +79,30 @@ contains
         self%smpd_shrunken = self%smpd*SHRINK
         self%min_rad = min_rad/(SHRINK*self%smpd)    !in pixel, shrunken dimensions
         self%max_rad = max_rad/(SHRINK*self%smpd)    !in pixel, shrunken dimensions
+        self%distthr = 2.*self%max_rad/self%smpd     !in pixel, shrunken dimensions
+        if( present(distthr_in) ) self%distthr = distthr_in/SHRINK
         self%fbody = get_fbody(trim(fname), trim(fname2ext(fname)))
-        ! self%boxname = basename( fname_new_ext(self%fbody,'box') )
         self%boxname =  basename(self%fbody)//'.box'
         call self%mic%new        (self%ldim, self%smpd)
         call self%img%new        (self%ldim_shrunken, self%smpd_shrunken)
         call self%img_cc%new_bimg(self%ldim_shrunken, self%smpd_shrunken)
         self%n_particles = 0
-        self%lambda      = 3. !HEREEE
-        self%color       = 'white' !default
-        if(present(color)) self%color = color
+        self%lambda      = 3.
+        self%color       = color
     end subroutine new
 
     subroutine preprocess_mic(self, detector)
-        use simple_segmentation, only : sobel, otsu_robust_fast
+        use simple_segmentation, only : otsu_robust_fast
         use simple_tvfilter,     only : tvfilter
         use simple_micops
         class(segpicker),  intent(inout) :: self
         character(len= *), intent(in)    :: detector
         type(tvfilter) :: tvf
         type(binimage) :: micrograph_shrunken
-        integer        :: box_shrunken
         real           :: ave, sdev, maxv, minv
-        real           :: thresh(1), ttthresh(3)
+        real           :: ttthresh(3)
         real           :: sigma_x, sigma_y
+        integer        :: box_shrunken
         type(image)    :: mask_img
         ! 0) Reading and saving original micrograph
         call read_micrograph(self%pickername, smpd=self%smpd, mic_out=self%mic)
@@ -121,11 +123,7 @@ contains
         call micrograph_shrunken%neg() !TO REMOVE IN CASE OF NEGATIVE STAINING
         call micrograph_shrunken%stats( ave=ave, sdev=sdev, maxv=maxv, minv=minv)
         ! 3) Binarization
-        if(detector .eq. 'sobel') then
-            self%detector = 'sobel'
-            thresh(1) = ave+.5*sdev !sobel needs lower thresh not to pick just edges
-            call sobel(micrograph_shrunken,thresh)
-        else if (detector .eq. 'bin') then
+        if (detector .eq. 'bin') then
             call micrograph_shrunken%binarize(ave+.8*sdev)
         else if (detector .eq. 'otsu') then
             self%detector = 'otsu'
@@ -220,7 +218,7 @@ contains
         do i = 1, self%n_particles-1           !fix one coord
             do j = i+1, self%n_particles       !fix another coord to compare
                 if(msk(i) .and. msk(j)) then !not compare twice ,and if the particles haven t been deleted yet
-                    if( euclid(saved_coord(i,:), saved_coord(j,:)) <= 2.*self%min_rad) then
+                    if( euclid(saved_coord(i,:), saved_coord(j,:)) <= self%distthr) then
                         msk(i) = .false.
                         msk(j) = .false.
                     endif
@@ -485,6 +483,7 @@ contains
         self%smpd             = 0.
         self%smpd_shrunken    = 0.
         self%hp_box           = 0.
+        self%distthr          = 0.
         self%winsz            = 0
         self%ldim(:)          = 0
         self%ldim_shrunken(:) = 0

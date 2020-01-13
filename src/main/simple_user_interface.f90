@@ -833,7 +833,7 @@ contains
         'fraction of particles(0.1-0.9){1.0}', .false., 1.0)
         call set_param(mskfile,       'mskfile',       'file',   'Input mask file', 'Input mask file to apply to reference volume(s) before projection', 'e.g. automask.mrc from postprocess', .false., 'mskfile.mrc')
         call set_param(pgrp,          'pgrp',          'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true., 'c1')
-        call set_param(detector,      'detector',      'str',    'Detector mode', 'Detector mode for binarization(bin|sobel|otsu){bin}', 'detector (bin|sobel|otsu){bin}', .false., 'bin')
+        call set_param(detector,      'detector',      'str',    'Detector mode', 'Detector mode for binarization(bin|otsu){bin}', 'detector (bin|otsu){bin}', .false., 'bin')
         call set_param(draw_color,    'draw_color',    'str',    'Output color', 'color of the cross that identify the picked particle (white|black){white}', 'output color  (white|black){white}', .false., 'white')
         call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
         &used', '# projections', .false., 2500.)
@@ -2485,7 +2485,7 @@ contains
         call pick%set_input('alt_ios', 4, 'max_rad', 'num', 'Maximum radius in A', 'Maximum expected radius of the particles in A {12.} ', '{12.}',  .false., 12.)
         call pick%set_input('alt_ios', 5, 'stepsz', 'num', 'Step size in A', 'Step size for gaussian reference generation in A {2.} ', '{2.}',  .false., 2.)
         ! search controls
-        call pick%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false., 0.)
+        call pick%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold in A','Distance filer in A {24.}', '{24.}', .false., 24.)
         call pick%set_input('srch_ctrls', 2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
         call pick%set_input('srch_ctrls', 3, pgrp)
         pick%srch_ctrls(3)%required = .false.

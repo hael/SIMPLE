@@ -326,17 +326,23 @@ contains
     ! and their standar deviation.
     ! Elimin ccs which have size: > ave + 2.*stdev
     !                             < ave - 2.*stdev
-    ! If present(minmax_rad(2)), it cleans up ccs more.
-    subroutine polish_ccs( self, minmax_rad )
-        class(binimage), intent(inout) :: self
-        real, optional,  intent(in)    :: minmax_rad(2)
+    ! If present(minmax_rad(2)), it cleans up ccs more, also considering
+    ! if the cc is supposed to be circular/elongated.
+    subroutine polish_ccs( self, minmax_rad, circular, elongated )
+        class(binimage),            intent(inout) :: self
+        real, optional,             intent(in)    :: minmax_rad(2)
+        character(len=3), optional, intent(in)    :: circular, elongated
         integer, allocatable :: sz(:)
         real    :: lt, ht     ! low and high thresh for ccs polising
         real    :: ave, stdev ! avg and stdev of the size od the ccs
-        integer :: n_cc
+        integer :: n_cc, thresh_down, thresh_up
+        character(len=3) :: ccircular, eelongated
         if(.not. any(self%bimat > 0)) THROW_HARD('Inputted non-existent cc; polish_ccs')
-        ! Assuming gaussian distribution 95% of the particles
-        ! are in [-2sigma, 2sigma]
+        ! set default
+        ccircular  = 'no'
+        eelongated = 'no'
+        if(present(circular))  ccircular  = circular
+        if(present(elongated)) eelongated = elongated
         sz = self%size_ccs()
         ave = sum(sz)/size(sz)
         stdev = 0.
@@ -344,14 +350,37 @@ contains
             stdev = stdev + (real(sz(n_cc))-ave)**2
          enddo
         stdev = sqrt(stdev/real(size(sz)-1))
-        call self%elim_ccs([ floor(ave-2.*stdev) , ceiling(ave+2.*stdev) ])
-        ! call img_cc%order_cc() is already done in the elim_cc subroutine
-        ! Use particle radius. Hypothesis is the biggest possible area is when
-        ! particle is circular (with rad 3*minmax_rad(2)), the smallest one is when the particle is rectangular
+        ! Assuming gaussian distribution 95% of the particles
+        ! are in [-2sigma, 2sigma]
+        ! Use particle radius.
+        ! In general case: the biggest possible area is when
+        ! particle is circular (with rad 2*minmax_rad(2)), the smallest
+        ! one is when the particle is rectangular
         ! with lengths minmax_rad(1)/2 and minmax_rad(2)/2
-        if( present(minmax_rad) )then
-            call self%elim_ccs([int(minmax_rad(1)*minmax_rad(2)/4.), int(2.*PI*(3.*minmax_rad(2))**2.)])
+        ! In circular case: the biggest possible area is when
+        ! particle is circular (with rad 2*minmax_rad(2)), the smallest
+        ! one is when the particle is circular (with rad minmax_rad(2)/2),
+        ! In elongated case: the biggest possible area is when
+        ! particle is rectanguler with lenghts 2*minmax_rad(1) and 2*minmax_rad(2),
+        ! the smallest one is when the particle is rectangular
+        ! with lengths minmax_rad(1)/2 and minmax_rad(2)/2
+        if( .not. present(minmax_rad) )then
+          thresh_down = floor(ave-2.*stdev)
+          thresh_up   = ceiling(ave+2.*stdev)
+        else
+          if(ccircular .eq. 'yes') then
+              thresh_down = int(max(2.*PI*(.5*minmax_rad(2))**2.,   ave-2.*stdev))
+              thresh_up   = int(min(2.*PI*(2.*minmax_rad(2))**2.,   ave+2.*stdev))
+          elseif(eelongated .eq. 'yes') then
+              thresh_down = int(max(minmax_rad(1)*minmax_rad(2)/4., ave-2.*stdev))
+              thresh_up   = int(min(minmax_rad(1)*minmax_rad(2)*4., ave+2.*stdev))
+          else
+              thresh_down = int(max(minmax_rad(1)*minmax_rad(2)/4., ave-2.*stdev))
+              thresh_up   = int(min(2.*PI*(2.*minmax_rad(2))**2.,   ave+2.*stdev))
+          endif
         endif
+        call self%elim_ccs([thresh_down,thresh_up])
+        ! call img_cc%order_cc() is already done in the elim_cc subroutine
         ! update number of connected components
         self%nccs = maxval(self%bimat)
         call self%update_img_rmat
