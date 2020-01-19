@@ -1096,7 +1096,7 @@ contains
        allocate(d(3), source = 0.)
        call svdcmp(pointsTrans,w,v)
        d = v(:,1)
-       print *, 'Directional vector of the line', d
+       write(logfhandle, *) 'Directional vector of the line', d
        ! line
        ! line(1,t) = centroid(1) + t_vec(t)* d(1)
        ! line(2,t) = centroid(2) + t_vec(t)* d(2)
@@ -1165,7 +1165,6 @@ contains
         enddo
         call final_atoms%writePDB('AtomPlane')
         call final_atoms%kill
-        stop
         allocate(points(3, count(flag)), source = 0.)
         ! calculate center of mass of the points
         m = sum(self%xyz(:,:), dim=1) /real(self%n)
@@ -1190,7 +1189,19 @@ contains
                 radii(cnt) = euclid(self%xyz(i,:3), m)
             endif
         enddo
-        distances_totheplane = (distances_totheplane)
+        ! it's already in A
+        call fopen(filnum, file='Radii.csv', iostat=io_stat)
+        write (filnum,*) 'r'
+        do i = 1, cnt
+          write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
+        end do
+        call fclose(filnum)
+        call fopen(filnum, file='DistancesToThePlane.csv',iostat=io_stat)
+        write (filnum,*) 'd'
+        do i = 1, cnt
+          write (filnum,'(A)', advance='yes') trim(real2str(distances_totheplane(i)))
+        end do
+        call fclose(filnum)
       endif
       call init_atoms%kill
       if(allocated(line))  deallocate(line)

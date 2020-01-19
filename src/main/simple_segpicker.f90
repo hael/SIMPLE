@@ -33,6 +33,7 @@ type :: segpicker
     integer :: ldim_shrunken(3)      = 0
     integer :: n_particles           = 0
     integer :: orig_box              = 0
+    character(len=3)              :: circular, elongated = ''   !user inputted particle shape
     character(len=STDLEN)         :: color      = ''   !color in which to draw on the mic to identify picked particles
     character(len=STDLEN)         :: pickername = ''   !fname
     character(len=STDLEN)         :: fbody      = ''   !fbody
@@ -62,11 +63,12 @@ end type segpicker
 
 contains
 
-    subroutine new(self, fname, min_rad, max_rad, smpd, color, distthr_in)
+    subroutine new(self, fname, min_rad, max_rad, ccircular, eelongated, smpd, color, distthr_in)
         class(segpicker),       intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         real, optional,             intent(in)    :: distthr_in
         real,                       intent(in)    :: min_rad, max_rad
+        character(len=3),           intent(in)    :: ccircular, eelongated
         real,                       intent(in)    :: smpd
         character(len=*),           intent(in)    :: color
         integer :: nptcls
@@ -89,6 +91,9 @@ contains
         self%n_particles = 0
         self%lambda      = 3.
         self%color       = color
+        ! set shape
+        self%circular  = ccircular
+        self%elongated = eelongated
     end subroutine new
 
     subroutine preprocess_mic(self, detector)
@@ -141,7 +146,7 @@ contains
         call micrograph_shrunken%find_ccs(self%img_cc,update_imat=.true.)
         ! 6) cc filtering !HEREEE
         print *, 'before polishing the ccs: ', self%get_n_ccs()
-        call self%img_cc%polish_ccs([self%min_rad,self%max_rad])
+        call self%img_cc%polish_ccs([self%min_rad,self%max_rad], self%circular, self%elongated)
         print *, 'after polishing the ccs: ', self%get_n_ccs()
         if(DEBUG_HERE) call self%img_cc%write_bimg('CcsElimin.mrc')
         call micrograph_shrunken%kill_bimg
@@ -282,79 +287,6 @@ contains
             stdev_gray_level = sqrt(stdev_gray_level/(real(count(mask)-1)))
         end subroutine calc_avgst_intensity_particle
     end subroutine relative_intensity_filtering
-
-    ! ! Adapted from simple_picker.f90
-    ! subroutine distance_filter(self)
-    !     class(segpicker),  intent(inout) :: self
-    !     integer :: i, j, ipos(2), jpos(2), loc(1)
-    !     real    :: dist
-    !     logical, allocatable :: mask(:)
-    !     real,    allocatable :: corrs(:)
-    !     write(logfhandle,'(a)') '>>> DISTANCE FILTERING'
-    !     allocate( mask(npeaks), corrs(npeaks), selected_peak_positions(npeaks), stat=alloc_stat)
-    !     if(alloc_stat.ne.0)call allocchk( 'In: simple_picker :: distance_filter',alloc_stat)
-    !     selected_peak_positions = .true.
-    !     do i=1, size(saved_coord, dim = 1)
-    !         ipos = saved_coord(i,:)
-    !         mask = .false.
-    !         !$omp parallel do schedule(static) default(shared) private(j,jpos,dist) proc_bind(close)
-    !         do j=1,npeaks
-    !             jpos = saved_coord(j,:)
-    !             dist = euclid(real(ipos),real(jpos))
-    !             if( dist < 2.*self%min_rad ) mask(j) = .true.
-    !             corrs(j) = corrmat(jpos(1),jpos(2))
-    !         end do
-    !         !$omp end parallel do
-    !         ! find best match in the neigh
-    !         loc = maxloc(corrs, mask=mask)
-    !         ! eliminate all but the best
-    !         mask(loc(1)) = .false.
-    !         where( mask )
-    !             selected_peak_positions = .false.
-    !         end where
-    !     end do
-    !     npeaks_sel = count(selected_peak_positions)
-    !     write(logfhandle,'(a,1x,I5)') 'peak positions left after distance filtering: ', npeaks_sel
-    ! end subroutine distance_filter
-    !
-    ! ! This subroutine takes in input an image, its connected components image,
-    ! ! and extract particles. It doesn't use mass_center.
-    ! ! notation:: cc = connected component.
-    ! subroutine identify_particle_positions(self)
-    !   class(segpicker), intent(inout) :: self
-    !   integer              :: n_cc
-    !   integer              :: cnt
-    !   real                 :: pos(3)            !center of each cc
-    !   real, allocatable    :: xyz_saved(:,:), xyz_norep_noagg(:,:)
-    !   integer, allocatable :: imat(:,:,:), imat_cc(:,:,:)
-    !   ! Initialisations
-    !   self%orig_box = int(4.*(self%max_rad)+2.*self%max_rad) !needs to be bigger than the particle
-    !   call self%img_cc%get_imat(imat_cc)
-    !   allocate(xyz_saved(maxval(imat_cc),2), source = 0.) ! size of the # of cc (likely particles)
-    !   allocate(imat(1:self%ldim_shrunken(1),1:self%ldim_shrunken(2),1:self%ldim_shrunken(3)), source = 0)
-    !   ! Particle identification, extraction and centering
-    !   where(imat_cc > 0.5) imat = 1 ! binary version
-    !   do n_cc = 1, maxval(imat_cc)
-    !       pos(:) = self%center_mass_cc(n_cc)
-    !       xyz_saved(n_cc,:) = pos(:2)
-    !   enddo
-    !   deallocate(imat_cc)
-    !   self%n_particles = size(xyz_saved, dim = 1) ! first estimation
-    !   print *, 'before elimin aggregations: ', size(xyz_saved, dim=1)
-    !   call self%elimin_aggregation(xyz_saved, xyz_norep_noagg)
-    !   allocate(self%particles_coord(count(xyz_norep_noagg(:,1)> TINY),2), source = 0.) !TO IMPROVE
-    !   cnt = 0 !initialise
-    !   do n_cc = 1,  size(xyz_norep_noagg, dim=1)
-    !       if(abs(xyz_norep_noagg(n_cc,1)) > TINY .and. abs(xyz_norep_noagg(n_cc,2))> TINY) then
-    !           cnt = cnt + 1
-    !           self%particles_coord(cnt,:) = xyz_norep_noagg(n_cc,:)
-    !       endif
-    !   enddo
-    !   self%n_particles = size(self%particles_coord, dim = 1) !update after elim aggregations
-    !   print *, 'after elimin aggregations: ', self%n_particles
-    !   if(allocated(xyz_saved))       deallocate(xyz_saved)
-    !   if(allocated(xyz_norep_noagg)) deallocate(xyz_norep_noagg)
-    ! end subroutine identify_particle_positions
 
 
     ! This subroutine takes in input an image, its connected components image,

@@ -61,15 +61,17 @@ subroutine iterate( self, cline, moviename_intg, boxfile, nptcls_out, dir_out )
         if( .not. cline%defined('min_rad') .or. .not. cline%defined('max_rad') )then
             THROW_HARD('ERROR! min_rad, max_rad need to be present; iterate')
         endif
+        if(.not. cline%defined('elongated')) params_glob%elongated = 'no'
+        if(.not. cline%defined('center'))    params_glob%center    = 'no'
         if(params_glob%phasecorr .ne. 'yes') then
             ! reference free picking
             if(.not. cline%defined('draw_color')) call cline%set('draw_color', 'white')
             if(cline%defined('thres')) then
                 call seg_picker%new(moviename_intg, params_glob%min_rad, params_glob%max_rad,&
-                    &params_glob%smpd, params_glob%draw_color, params_glob%thres)
+                    &params_glob%circular,params_glob%elongated,params_glob%smpd, params_glob%draw_color, params_glob%thres)
             else
                 call seg_picker%new(moviename_intg, params_glob%min_rad, params_glob%max_rad,&
-                    &params_glob%smpd, params_glob%draw_color)
+                    &params_glob%circular,params_glob%elongated,params_glob%smpd, params_glob%draw_color)
             endif
             call seg_picker%preprocess_mic(params_glob%detector)
             call seg_picker%identify_particle_positions()
@@ -81,8 +83,6 @@ subroutine iterate( self, cline, moviename_intg, boxfile, nptcls_out, dir_out )
             ! phasecorrelation based, reference-free picking
             if(.not. cline%defined('stepsz')) THROW_HARD('stepsz needs to be defined!; iterate')
             if(.not. cline%defined('circular'))  params_glob%circular  = 'no'
-            if(.not. cline%defined('elongated')) params_glob%elongated = 'no'
-            if(.not. cline%defined('center'))    params_glob%center    = 'no'
             if( cline%defined('thres') )then
                 call init_phasecorr_segpicker(moviename_intg, params_glob%min_rad, params_glob%max_rad, real(params_glob%stepsz),params_glob%circular,params_glob%elongated, params_glob%smpd, lp_in=params_glob%lp,&
                     &distthr_in=params_glob%thres, ndev_in=params_glob%ndev, dir_out=dir_out)

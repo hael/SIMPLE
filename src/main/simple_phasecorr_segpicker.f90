@@ -271,17 +271,24 @@ contains
     end subroutine init_phasecorr_segpicker
 
     subroutine exec_phasecorr_segpicker( boxname_out, nptcls_out, center )
+        use simple_timer
         character(len=LONGSTRLEN), intent(out) :: boxname_out
         integer,                   intent(out) :: nptcls_out
         character(len=3),          intent(in)  :: center
+        integer(timer_int_kind) :: time
+        time = tic()
         call extract_peaks
+        print *, 'time of extract peaks: ', toc(time)
         if(center .eq. 'yes') then
             call distance_filter_and_center
         else
             call distance_filter
         endif
+        print *, 'time of distance filtering: ', toc(time)
         call gather_stats
+        print *, 'time of gather stats: ', toc(time)
         call one_cluster_clustering
+        print *, 'time of one cluster clustering: ', toc(time)
         nptcls_out = count(selected_peak_positions)
         ! bring back coordinates to original sampling
         peak_positions = nint(PICKER_SHRINK_HERE*(real(peak_positions)))-orig_box/2
@@ -518,7 +525,6 @@ contains
       call micrograph_cc%write_bimg('CcsElimin.mrc')
       call micrograph_cc%get_imat(imat_cc)
       allocate(imat_aux(ldim_shrink(1), ldim_shrink(2),1), source = 0)
-      print *, 'before loop'
       allocate(center(maxval(imat_cc)), source = .true.)
       cnt_peaks = 0 ! count the number of peaks after centering and cc filtering
       !$omp parallel do default(shared) private(ipeak,cc,cnt,i,j) proc_bind(close) schedule(static)
@@ -547,7 +553,6 @@ contains
            endif
       enddo
       !$omp end parallel do
-      print *, 'after loop'
       call micrograph_bin%kill_bimg
       call micrograph_cc%kill_bimg
     end subroutine center_particles
