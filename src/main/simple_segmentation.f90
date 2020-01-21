@@ -143,7 +143,7 @@ contains
             !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
             tthresh(1) = max(minval(grad), (1.-sigma)*m) !lower
             tthresh(2) = min(maxval(grad), (1.+sigma)*m) !upper
-            write(logfhandle,*) 'Selected thresholds: ', tthresh
+            if(DOPRINT) write(logfhandle,*) 'Selected thresholds: ', tthresh
             if (present(lp) ) then
                 call canny_edge(img_out,tthresh,lp)
             else

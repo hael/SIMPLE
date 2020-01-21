@@ -13,16 +13,17 @@ private
 
 logical, parameter :: DEBUG_HERE = .true.
 integer, parameter :: BOX        = 512       ! ps size
-real,    parameter :: LOW_LIM    = 30.       ! 30 A, lower limit for resolution. Before that, we discard
-real,    parameter :: UP_LIM     = 10.       ! upper limit for resolution in the entropy calculation. (it was 3. before)
+real,    parameter :: LOW_LIM    = 20.       ! 30 A, lower limit for resolution. Before that, we discard
+real,    parameter :: UP_LIM     = 8.        ! 8  A, upper limit for resolution in the entropy calculation. (it was 3. before)
 integer, parameter :: N_BINS     = 64        ! number of bins for hist
 real,    parameter :: LAMBDA     = 1.        ! for tv filtering
 integer, parameter :: N_BIG_CCS  = 5         ! top N_BIG_CCS considered in the avg curvature calculation
-real,    parameter :: THR_SCORE_UP    = 0.41 ! threshold for keeping/discarding mic wrt score
-real,    parameter :: THR_SCORE_DOWN  = 0.29 ! threshold for keeping/discarding mic wrt score
-real,    parameter :: THR_CURVAT_UPUP = 9.   ! threshold for keeping/discarding mic wrt average curvature
-real,    parameter :: THR_CURVAT_UP   = 5.   ! threshold for keeping/discarding mic wrt average curvature
-real,    parameter :: THR_CURVAT_DOWN = 4.   ! threshold for keeping/discarding mic wrt average curvature
+real,    parameter :: THR_SCORE_UP_UP = 1.3   ! threshold for keeping/discarding mic wrt score
+real,    parameter :: THR_SCORE_UP    = 0.4   ! threshold for keeping/discarding mic wrt score
+real,    parameter :: THR_SCORE_DOWN  = 0.25  ! threshold for keeping/discarding mic wrt score
+real,    parameter :: THR_CURVAT_UPUP = 6.    ! threshold for keeping/discarding mic wrt average curvature
+real,    parameter :: THR_CURVAT_UP   = 4.1   ! threshold for keeping/discarding mic wrt average curvature
+real,    parameter :: THR_CURVAT_DOWN = 2.5   ! threshold for keeping/discarding mic wrt average curvature
 
 type :: pspec_stats
     private
@@ -44,8 +45,8 @@ type :: pspec_stats
 contains
     procedure          :: new => new_pspec_stats
     procedure, private :: empty
-    procedure, private :: calc_weighted_avg_sz_ccs
-    procedure, private :: calc_avg_curvature
+    procedure, private :: calc_weighted_avg_sz_ccs   !score
+    procedure, private :: calc_avg_curvature         !curvature
     procedure, private :: process_ps
     procedure, private :: print_info
     procedure          :: get_output
@@ -98,28 +99,46 @@ contains
     function get_output(self) result(keep_mic)
         class(pspec_stats), intent(inout) :: self
         logical :: keep_mic
+        ! print *,'THR_SCORE_UP', THR_SCORE_UP
+        ! print *,'THR_SCORE_DOWN', THR_SCORE_DOWN
+        ! print *,'THR_CURVAT_UPUP', THR_CURVAT_UPUP
+        ! print *,'THR_CURVAT_UP', THR_CURVAT_UP
+        ! print *,'THR_CURVAT_DOWN', THR_CURVAT_DOWN
         if(DEBUG_HERE) write(logfhandle,*) 'score = ',self%score, 'avg_curvat = ', self%avg_curvat
-        if(self%score > THR_SCORE_UP .and. self%avg_curvat < THR_CURVAT_UPUP) then
+        if(self%score > THR_SCORE_UP_UP) then
             keep_mic = .true.
+            print *, 'keep because score very high'
             return
-        elseif(self%avg_curvat > THR_CURVAT_UPUP) then
-            keep_mic = .false.
-            return
-        elseif(self%score > THR_SCORE_DOWN .and. self%avg_curvat < THR_CURVAT_UP ) then
-            keep_mic = .true.
-            return
-        elseif(self%score > THR_SCORE_DOWN .and. self%avg_curvat > THR_CURVAT_UP ) then
-            keep_mic = .false.
-            return
-        elseif(self%score < THR_SCORE_DOWN .and. self%avg_curvat > THR_CURVAT_DOWN ) then
-            keep_mic = .false.
-            return
-        elseif(self%score < THR_SCORE_DOWN .and. self%avg_curvat > THR_CURVAT_DOWN) then
-            keep_mic = .false.
-            return
-        elseif(self%score < THR_SCORE_DOWN .and. self%avg_curvat < THR_CURVAT_DOWN) then
-            keep_mic = .true.
-            return
+        elseif(self%score >= THR_SCORE_UP .and. self%score < THR_SCORE_UP_UP) then
+            if(self%avg_curvat > THR_CURVAT_UPUP) then
+                keep_mic = .false.
+                print *, 'discard: score high but curvature also high'
+                return
+            else
+                keep_mic = .true.
+                print *, 'keep: high score and curvature not high'
+                return
+            endif
+        elseif(self%score >= THR_SCORE_DOWN .and. self%score < THR_SCORE_UP) then
+            if(self%avg_curvat > THR_CURVAT_UP) then
+                keep_mic = .false.
+                print *, 'discard: low score but curvature not so low'
+                return
+            else
+                keep_mic = .true.
+                print *, 'keep:  low score and low curvature'
+                return
+            endif
+        elseif(self%score < THR_SCORE_DOWN) then
+            if(self%avg_curvat > THR_CURVAT_DOWN) then
+                keep_mic = .false.
+                print *, 'discard: low score'
+                return
+            else
+                keep_mic = .true.
+                print *, 'keep:  low score and low curvature'
+                return
+            endif
         else
             keep_mic = .false.
             THROW_WARN('This case has not been considered')
@@ -190,17 +209,19 @@ contains
    ! This is the SCORE.
     subroutine calc_weighted_avg_sz_ccs(self, sz)
         class(pspec_stats), intent(inout) :: self
-        integer,                 intent(in)    :: sz(:)
-        integer, allocatable :: imat(:,:,:)
-        integer, allocatable :: imat_sz(:,:,:)
+        integer, allocatable :: imat(:,:,:), imat_sz(:,:,:), sz(:)
         integer :: h,k,sh
         integer :: i, j
         real    :: denom  !denominator of the formula
         real    :: a
         denom = 0.
-        call self%ps_ccs%elim_ccs([1,BOX*4]) !eliminate connected components with size one
+        ! call self%ps_ccs%write(PATH_HERE//basename(trim(self%fbody))//'BeforeElimCCs.mrc')
+        ! STILL TO DO?
+        call self%ps_ccs%elim_ccs([4,BOX*4]) !eliminate connected components with size one
+        ! call self%ps_ccs%write(PATH_HERE//basename(trim(self%fbody))//'AfterElimCCs.mrc')
         imat = nint(self%ps_ccs%get_rmat())
         allocate(imat_sz(BOX,BOX,1), source = 0)
+        sz = self%ps_ccs%size_ccs()
         call generate_mat_sz_ccs(imat,imat_sz,sz)
         self%score = 0.  !initialise
         do i = 2, BOX-1  !discard border effects due to binarization
@@ -209,18 +230,16 @@ contains
                     h   = -int(BOX/2) + i - 1
                     k   = -int(BOX/2) + j - 1
                     sh  =  nint(hyp(real(h),real(k)))
-                    if( sh > self%ULim_Findex .or. sh < self%LLim_Findex ) then
-                         if(DEBUG_HERE) call self%ps_bin%set([i,j,1], 0.)
-                         cycle ! Do not consider white pixels detected after outside frequency range [LOW_LIM,UP_LIM]
-                    endif
                     a = (1.-real(sh)/real(self%ULim_Findex))
                     denom = denom + a
                     self%score = self%score + a*imat_sz(i,j,1)/(2.*PI*sh)
+                else
+                    call self%ps_bin%set([i,j,1], 0.)
                 endif
             enddo
         enddo
-        if(DEBUG_HERE) call self%ps_bin%write(PATH_HERE//basename(trim(self%fbody))//'_binarized_polished.mrc')
-        call self%ps_bin%find_ccs(self%ps_ccs) ! NOT TO REDO, NEED OPTIMISATION
+        call self%ps_bin%write(PATH_HERE//basename(trim(self%fbody))//'_binarized_polished.mrc') !if(DEBUG_HERE)
+        call self%ps_bin%find_ccs(self%ps_ccs, update_imat = .true.)
         self%avg_curvat = self%calc_avg_curvature()
         !normalization
         if(abs(denom) > TINY) then
@@ -231,20 +250,28 @@ contains
     contains
 
         ! This subroutine is meant to generate a matrix in which in each pixel is
-        ! stored the size of the correspondent connected component.
+        ! stored the size of the correspondent connected component. Moreover
+        ! the ccs outside the rage [LOW_LIM,UP_LIM] are COMPLETELY removed (otherwise
+        ! the size of the ccs would be incorrect).
         subroutine generate_mat_sz_ccs(imat_in,imat_out,sz)
-            integer, intent(in)  :: imat_in (:,:,:)
-            integer, intent(out) :: imat_out(:,:,:)
-            integer, intent(in)  :: sz(:)
-            integer :: i, j, k
+            integer, intent(inout)  :: imat_in (:,:,:)
+            integer, intent(out)    :: imat_out(:,:,:)
+            integer, intent(inout)  :: sz(:)
+            integer :: i, j, k, h, sh
             if(size(imat_in) .ne. size(imat_out)) THROW_HARD('Input and Output matrices have to have the same dim!')
-            do i = 1,size(imat_in, dim = 1)
-                do j = 1,size(imat_in, dim = 2)
-                    do k = 1,size(imat_in, dim = 3)
-                        if(imat_in(i,j,k) > 0) then
-                            where(imat_in == imat_in(i,j,k)) imat_out = sz(imat_in(i,j,k))
+            do i = 2, BOX-1  !discard border effects due to binarization
+                do j = 2, BOX-1
+                    if(imat_in(i,j,1) > 0 .and. imat_out(i,j,1) == 0) then ! condition on imat_out is not to set it more than once
+                        h   = -int(BOX/2) + i - 1
+                        k   = -int(BOX/2) + j - 1
+                        sh  =  nint(hyp(real(h),real(k)))
+                        if( sh > self%ULim_Findex .or. sh < self%LLim_Findex ) then
+                            sz(imat_in(i,j,1)) = 0
+                            where(imat_in == imat_in(i,j,1)) imat_in = 0 ! set to 0 ALL the cc
+                        else
+                            where(imat_in == imat_in(i,j,1)) imat_out = sz(imat_in(i,j,1))
                         endif
-                    enddo
+                    endif
                 enddo
             enddo
         end subroutine generate_mat_sz_ccs

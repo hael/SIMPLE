@@ -437,9 +437,6 @@ end module simple_test_chiara_try_mod
        include 'simple_lib.f08'
        use simple_math
        use simple_image, only : image
-       use simple_atoms, only : atoms
-       use simple_nanoparticle, only: nanoparticle
-       use simple_segmentation
        use simple_binimage, only : binimage
        use simple_test_chiara_try_mod
        use simple_nano_utils
@@ -702,3 +699,34 @@ end module simple_test_chiara_try_mod
        ! print *, 't1', t1
        ! print *, 't2', t2
  end program simple_test_chiara_try
+
+ ! SVD tries
+ ! A = reshape([1.,3.,5.,7.,2.,4.,6.,8.], [4,2])
+ ! copyA = A
+ ! print *, 'A'
+ ! call vis_mat(A)
+ ! call svdcmp(A,w,v)
+ ! print *, 'u'
+ ! call vis_mat(A)
+ ! print *, 'w', w
+ ! print *, 'v'
+ ! call vis_mat(v)
+ ! d = A(:,2)
+ ! print *, 'd', d
+ ! t = matmul(d,copyA)
+ ! t1  = minval(t)
+ ! t2  = maxval(t)
+ ! print *, 't', t
+ ! print *, 't1', t1
+ ! print *, 't2', t2
+
+
+! GRAPHENE PEAKS
+! real, parameter :: UP_LIM=2.14, L_LIM = 1.23
+! call img_spec%new([BOX,BOX,1], smpd)
+! call img_spec%read('RotationalAvgStk.mrc',1)
+! call raw_img%new([BOX,BOX,1], 1.)
+! call raw_img%read('NP841_background_nn2.mrcs',1)
+! call remove_graphene_peaks(raw_img,img_spec,'RemovedPeaksUTILS.mrc')
+! call img_spec%kill
+! call raw_img%kill
