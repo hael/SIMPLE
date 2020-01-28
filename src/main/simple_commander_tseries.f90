@@ -747,15 +747,12 @@ contains
     end subroutine exec_refine3D_nano_distr
 
     subroutine exec_tseries_graphene_subtr( self, cline )
-        use simple_nano_utils, only: remove_graphene_peaks
+        use simple_nano_utils, only: remove_graphene_peaks2
         class(tseries_graphene_subtr_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
-        character(len=LONGSTRLEN), parameter :: pspec_fname  = 'tseries_ctf_estimate_pspec.mrc'
-        character(len=LONGSTRLEN), parameter :: diag_fname   = 'tseries_ctf_estimate_diag'//JPG_EXT
-        integer,                   parameter :: nmics4ctf    = 10
         type(parameters) :: params
         type(builder)    :: build
-        real             :: smpd, w
+        real             :: smpd, w, ang
         integer          :: iptcl, ldim_ptcl(3), ldim(3), n, nptcls
         call cline%set('oritype','mic')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
@@ -781,7 +778,7 @@ contains
         do iptcl = 1,nptcls
             call build%img%read(params%stk,iptcl)
             call build%img_tmp%read(params%stk2,iptcl)
-            call remove_graphene_peaks(build%img, build%img_tmp)
+            call remove_graphene_peaks2(iptcl, build%img, build%img_tmp, ang)
             call build%img%write(params%outstk,iptcl)
         enddo
         ! cleanup

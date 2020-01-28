@@ -7,7 +7,7 @@ module simple_nano_utils
   use simple_atoms,    only : atoms
   implicit none
 
-  public :: remove_graphene_peaks, kabsch, read_pdb2matrix, write_matrix2pdb, find_couples
+  public :: remove_graphene_peaks2, remove_graphene_peaks, kabsch, read_pdb2matrix, write_matrix2pdb, find_couples
   private
 
   interface kabsch
@@ -23,6 +23,137 @@ module simple_nano_utils
   end interface find_couples
 
 contains
+
+    subroutine remove_graphene_peaks2(iptcl, raw_img, spectrum, ang)
+        integer,     intent(in)    :: iptcl
+        type(image), intent(inout) :: raw_img
+        type(image), intent(inout) :: spectrum
+        real,        intent(out)   :: ang ! estimated angle between both sheets
+        type(image)          :: spectrum_roavg
+        real,    pointer     :: pspectrum_roavg(:,:,:)
+        complex, pointer     :: pcmat(:,:,:)
+        logical, allocatable :: msk(:,:)
+        real    :: smpd, first_ang, second_ang, val
+        integer :: phys(3),cen(2), ldim(3), loc(2), h,k,i,j, band2_ind, sh, cnt
+        ldim    = raw_img%get_ldim()
+        ldim(3) = 1
+        smpd    = raw_img%get_smpd()
+        cen     = ldim(1:2)/2 + 1
+        ! calculate rotational avg of the spectrum
+        call spectrum_roavg%new(ldim,smpd)
+        call spectrum%roavg(60,spectrum_roavg)
+        call spectrum_roavg%get_rmat_ptr(pspectrum_roavg)
+        ! call spectrum_roavg%write('rovavg.mrc',iptcl)
+        call raw_img%fft
+        call raw_img%get_cmat_ptr(pcmat)
+        ! build peak detection mask
+        band2_ind = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND2),ldim(1),smpd)
+        allocate(msk(ldim(1),ldim(2)),source=.false.)
+        do i = 1, ldim(1)
+            h  = -ldim(1)/2 + i - 1
+            do j = 1, ldim(2)
+                k  = -ldim(2)/2 + j - 1
+                sh =  nint(hyp(real(h),real(k)))
+                if( k < 0 ) cycle
+                if( sh >= band2_ind-1 .and. sh <= band2_ind+1 ) msk(i,j) = .true.
+          enddo
+        enddo
+        ! calculate substitution value
+        cnt = 0
+        val = 0.
+        do i = 1, ldim(1)
+            h  = -ldim(1)/2 + i - 1
+            do j = 1, ldim(2)
+                k  = -ldim(2)/2 + j - 1
+                sh =  nint(hyp(real(h),real(k)))
+                if( sh >= cen(1) .and. sh < cen(1)+5 )then
+                    phys = raw_img%comp_addr_phys(h,k,0)
+                    val  = val + csq(pcmat(phys(1),phys(2),1))
+                    cnt  = cnt + 1
+                endif
+          enddo
+        enddo
+        val = sqrt(val / real(cnt))
+        ! first sheet
+        loc       = maxloc(pspectrum_roavg(1:ldim(1),1:ldim(2),1),mask=msk)
+        first_ang = atan2(real(loc(2)-cen(2)),real(loc(1)-cen(1))) ! radians
+        ! remove first sheet
+        call remove_lattice(first_ang, val)
+        ! second sheet
+        loc        = maxloc(pspectrum_roavg(1:ldim(1),1:ldim(2),1),mask=msk)
+        second_ang = atan2(real(loc(2)-cen(2)),real(loc(1)-cen(1))) ! radians
+        ! angle between sheets
+        ang = abs(rad2deg(second_ang - first_ang))
+        do while( ang > 60. )
+            ang = ang-60.
+        end do
+        ang = min(ang,abs(ang-60.))
+        ! remove second sheet
+        if( ang > 3. )then
+            call remove_lattice(second_ang, val)
+        endif
+        ! back to real space
+        call raw_img%ifft
+        ! cleanup
+        call spectrum_roavg%kill
+        contains
+
+            subroutine remove_lattice(ang,val)
+                real, intent(in) :: ang,val
+                real, parameter :: pionsix   = PI/6.
+                real, parameter :: pionthree = PI/3.
+                real :: b1(2), b1b2(2), rp, r, ang1, rot, rxy(2), Rm(2,2)
+                integer :: ind, rot_ind
+                ind  = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND2),ldim(1),smpd)
+                rp   = real(ind)
+                r    = rp / (2.*cos(pionsix))
+                ang1 = ang+pionsix
+                b1b2 = rp*[cos(ang),sin(ang)]
+                ! lattice parameters (eg, band 1)
+                b1   = r*[cos(ang1),sin(ang1)]
+                ! remove peaks
+                do rot_ind = 0,6
+                    rot = real(rot_ind)*pionthree
+                    Rm(1,:) = [cos(rot), -sin(rot)]
+                    Rm(2,:) = [-Rm(1,2), Rm(1,1)]
+                    ! band 1 (=b1); resolution ~ 2.14 angs
+                    rxy = matmul(Rm,b1) + real(cen)
+                    call obscure_peak(rxy, val, 2.)
+                    ! 2. * band 1 (=2*b1); resolution ~ 1.06
+                    rxy = matmul(Rm,2.*b1) + real(cen)
+                    call obscure_peak(rxy, val, sqrt(2.))
+                    ! band 2 (=b1+b2); resolution ~ 1.23
+                    rxy = matmul(Rm,b1b2) + real(cen)
+                    call obscure_peak(rxy, val, 2.)
+                enddo
+            end subroutine remove_lattice
+
+            subroutine obscure_peak(vec, val, hwidth)
+                real, intent(in) :: vec(2), val, hwidth
+                complex :: comp
+                integer :: i,j,x,y,h,k,lim
+                lim = ceiling(hwidth+1.e-8)
+                do i=-lim,lim
+                    x = nint(vec(1)+real(i))
+                    if( x > ldim(1) ) cycle
+                    do j=-lim,lim
+                        y = nint(vec(2)+real(j))
+                        msk(x,y) = .false. ! needs to mask out complex conjugate
+                        if( y < 1 .or. y > ldim(2) .or. x < cen(1) ) cycle
+                        if( real(i*i+j*j) > hwidth*hwidth ) cycle
+                        h = x - cen(1)
+                        k = y - cen(2)
+                        phys = raw_img%comp_addr_phys(h,k,0)
+                        comp = pcmat(phys(1),phys(2),1)
+                        pcmat(phys(1),phys(2),1) = comp/sqrt(csq(comp)) * ran3()*val
+                        ! pcmat(phys(1),phys(2),1) = 0.
+                    enddo
+                enddo
+            end subroutine obscure_peak
+
+    end subroutine remove_graphene_peaks2
+
+
 
   ! This subroutine generates a mask that identifies the graphene
   ! peaks in the spectrum.
@@ -499,7 +630,6 @@ contains
        deallocate(mask, points_P_out, points_Q_out)
   end subroutine find_couples_sp
 
-
   subroutine find_couples_dp(points_P, points_Q, element, P, Q)
       use simple_strings, only: upperCase
       real(dp),             intent(inout) :: points_P(:,:), points_Q(:,:)
@@ -589,4 +719,5 @@ contains
        endif
        deallocate(mask, points_P_out, points_Q_out)
   end subroutine find_couples_dp
+
 end module simple_nano_utils
