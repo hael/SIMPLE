@@ -14,6 +14,7 @@ private
 #include "simple_local_flags.inc"
 
 real,             parameter :: PATCH_FIT_THRESHOLD = 4.0 ! threshold for polynomial fitting in pixels
+real,             parameter :: SMPD4VIZ_NANO = 0.9
 character(len=*), parameter :: speckind = 'sqrt'
 ! benchmarking
 logical                 :: L_BENCH = .false.
@@ -143,7 +144,11 @@ contains
         if( L_BENCH ) t_postproc1 = tic()
         call motion_correct_mic2spec(self%moviesum_ctf, params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_ctf)
         call self%pspec_sum%before_after(self%pspec_ctf, self%pspec_half_n_half)
-        call self%pspec_half_n_half%scale_pspec4viz
+        if( l_tseries )then
+            call self%pspec_half_n_half%scale_pspec4viz(rsmpd4viz=max(SMPD4VIZ_NANO,2.*ctfvars%smpd))
+        else
+            call self%pspec_half_n_half%scale_pspec4viz
+        endif
         ! write output
         call self%moviesum_corrected%write(self%moviename_intg)
         if( .not. l_tseries ) call self%moviesum_ctf%write(self%moviename_forctf)

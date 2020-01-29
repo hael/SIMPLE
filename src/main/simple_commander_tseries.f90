@@ -219,14 +219,14 @@ contains
         class(tseries_motion_correct_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
         character(len=LONGSTRLEN), allocatable :: framenames(:)
-        character(len=:),          allocatable :: filetabname, frames2align
+        character(len=:),          allocatable :: frames2align
         type(image)               :: img
         type(sp_project)          :: spproj
         type(parameters)          :: params
         type(cmdline)             :: cline_mcorr
         type(motion_correct_iter) :: mciter
         type(ctfparams)           :: ctfvars
-        type(ori)                 :: o, otmp
+        type(ori)                 :: o
         integer :: i, iframe, nframes, frame_counter, ldim(3), fromto(2), nframesgrp
         integer :: numlen_nframes, cnt
         call cline%set('mkdir',       'no') ! shared-memory workflow, dir making in driver
@@ -454,7 +454,7 @@ contains
         character(len=:),          allocatable :: dir, forctf
         character(len=LONGSTRLEN), allocatable :: framenames(:)
         real,                      allocatable :: boxdata(:,:)
-        integer :: i, iframe, j, orig_box, nframes
+        integer :: i, iframe, orig_box, nframes
         call cline%set('oritype','mic')
         call params%new(cline)
         orig_box = params%box
@@ -691,8 +691,8 @@ contains
         type(builder)                 :: build
         type(ctf_estimate_fit)        :: ctffit
         type(ctfparams)               :: ctfvars
-        character(len=:), allocatable :: fname_diag, rel_fname, tmpl_fname, docname
-        integer :: nmics, imic, dims(3), nselmics
+        character(len=:), allocatable :: fname_diag, tmpl_fname, docname
+        integer :: nmics
         call cline%set('oritype','mic')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('hp')      ) call cline%set('hp', 5.)
@@ -778,7 +778,7 @@ contains
         do iptcl = 1,nptcls
             call build%img%read(params%stk,iptcl)
             call build%img_tmp%read(params%stk2,iptcl)
-            call remove_graphene_peaks2(iptcl, build%img, build%img_tmp, ang)
+            call remove_graphene_peaks2(build%img, build%img_tmp, ang)
             call build%img%write(params%outstk,iptcl)
         enddo
         ! cleanup

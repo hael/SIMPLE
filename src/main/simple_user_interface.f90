@@ -3987,7 +3987,11 @@ contains
         call tseries_motion_correct%set_input('srch_ctrls', 3, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{5}', .false., 5.)
         call tseries_motion_correct%set_input('srch_ctrls', 4, mcpatch)
         call tseries_motion_correct%set_input('srch_ctrls', 5, nxpatch)
+        tseries_motion_correct%srch_ctrls(5)%descr_placeholder = '# x-patches{3}'
+        tseries_motion_correct%srch_ctrls(5)%rval_default = 3.
         call tseries_motion_correct%set_input('srch_ctrls', 6, nypatch)
+        tseries_motion_correct%srch_ctrls(6)%descr_placeholder = '# y-patches{3}'
+        tseries_motion_correct%srch_ctrls(6)%rval_default = 3.
         ! filter controls
         call tseries_motion_correct%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
@@ -4021,15 +4025,19 @@ contains
         call tseries_make_pickavg%set_input('srch_ctrls', 1, trs)
         tseries_make_pickavg%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{10}'
         tseries_make_pickavg%srch_ctrls(1)%rval_default      = 10.
-        call tseries_make_pickavg%set_input('srch_ctrls', 2, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
+        call tseries_make_pickavg%set_input('srch_ctrls', 2, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{5}', .false., 5.)
         call tseries_make_pickavg%set_input('srch_ctrls', 3, mcpatch)
         call tseries_make_pickavg%set_input('srch_ctrls', 4, nxpatch)
+        tseries_make_pickavg%srch_ctrls(4)%rval_default = 3.
+        tseries_make_pickavg%srch_ctrls(4)%descr_placeholder = '# x-patches{3}'
         call tseries_make_pickavg%set_input('srch_ctrls', 5, nypatch)
+        tseries_make_pickavg%srch_ctrls(5)%rval_default = 3.
+        tseries_make_pickavg%srch_ctrls(5)%descr_placeholder = '# x-patches{3}'
         ! filter controls
         call tseries_make_pickavg%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment (in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
+        &iterations of movie alignment (in Angstroms){8}', 'in Angstroms{5}', .false., 5.)
         call tseries_make_pickavg%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
-        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{2}', .false., 5.)
+        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{3}', .false., 3.)
         call tseries_make_pickavg%set_input('filt_ctrls', 3, wcrit)
         ! mask controls
         ! <empty>

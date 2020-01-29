@@ -18,7 +18,6 @@ private
 
 character(len=STDLEN), parameter :: SPECKIND      = 'sqrt'
 real,                  parameter :: TOL           = 1.e-5
-real,                  parameter :: SMPD4VIZ_NANO = 1.
 integer,               parameter :: IARES = 5, NSTEPS = 200, POLYDIM = 10
 logical,               parameter :: DEBUG_HERE = .false.
 

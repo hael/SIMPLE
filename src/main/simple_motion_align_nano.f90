@@ -293,7 +293,7 @@ contains
 
     real function calc_rmsd( self, prev_shifts, shifts )
         class(motion_align_nano), intent(in) :: self
-        real,                       intent(in) :: prev_shifts(self%nframes,2), shifts(self%nframes,2)
+        real,                     intent(in) :: prev_shifts(self%nframes,2), shifts(self%nframes,2)
         integer :: iframe
         calc_rmsd = 0.
         do iframe = 1,self%nframes

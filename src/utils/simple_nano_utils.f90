@@ -24,8 +24,7 @@ module simple_nano_utils
 
 contains
 
-    subroutine remove_graphene_peaks2(iptcl, raw_img, spectrum, ang)
-        integer,     intent(in)    :: iptcl
+    subroutine remove_graphene_peaks2(raw_img, spectrum, ang)
         type(image), intent(inout) :: raw_img
         type(image), intent(inout) :: spectrum
         real,        intent(out)   :: ang ! estimated angle between both sheets
@@ -43,7 +42,6 @@ contains
         call spectrum_roavg%new(ldim,smpd)
         call spectrum%roavg(60,spectrum_roavg)
         call spectrum_roavg%get_rmat_ptr(pspectrum_roavg)
-        ! call spectrum_roavg%write('rovavg.mrc',iptcl)
         call raw_img%fft
         call raw_img%get_cmat_ptr(pcmat)
         ! build peak detection mask
@@ -152,8 +150,6 @@ contains
             end subroutine obscure_peak
 
     end subroutine remove_graphene_peaks2
-
-
 
   ! This subroutine generates a mask that identifies the graphene
   ! peaks in the spectrum.
