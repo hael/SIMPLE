@@ -384,7 +384,7 @@ contains
         use simple_oris,            only: oris
         use simple_ori,             only: ori
         class(cluster2D_commander_stream), intent(inout) :: self
-        class(cmdline),                          intent(inout) :: cline
+        class(cmdline),                    intent(inout) :: cline
         integer,               parameter   :: WAIT_WATCHER        = 30    ! seconds prior to new stack detection
         integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600   ! 10mins, Frequency at which the original project file should be updated
         integer,               parameter   :: MINBOXSZ            = 72   ! minimum boxsize for scaling
@@ -791,7 +791,7 @@ contains
                 call pool_proj%os_cls2D%find_best_classes(boxmatch,smpd,params%lpthresh,cls_mask,ndev_here)
                 if( debug_here )call pool_proj%os_cls2D%write('pool_aftersel_'//int2str(pool_iter)//'.txt')
                 if( .not.all(cls_mask) )then
-                    ncls_rejected = count(.not.cls_mask)
+                    ncls_rejected = 0
                     do iptcl=1,pool_proj%os_ptcl2D%get_noris()
                         if( pool_proj%os_ptcl2D%get_state(iptcl) == 0 )cycle
                         icls = nint(pool_proj%os_ptcl2D%get(iptcl,'class'))
@@ -804,6 +804,7 @@ contains
                             if( .not.cls_mask(icls) )then
                                 call pool_proj%os_cls2D%set(icls,'pop',0.)
                                 call pool_proj%os_cls2D%set(icls,'corr',-1.)
+                                ncls_rejected = ncls_rejected+1
                             endif
                         enddo
                         cnt = 0
@@ -811,10 +812,10 @@ contains
                         do icls=1,ncls_glob
                             if( cls_mask(icls) ) cycle
                             cnt = cnt+1
-                            !if( debug_here )then
+                            if( debug_here )then
                                 call img%read(refs_glob,icls)
                                 call img%write('rejected_pool_'//int2str(pool_iter)//'.mrc',cnt)
-                            !endif
+                            endif
                             img = 0.
                             call img%write(refs_glob,icls)
                         enddo
@@ -1058,12 +1059,8 @@ contains
                 if(pool_iter>1)then
                     prev_refs = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-1,3))//trim(params%ext)
                     call del_file(prev_refs)
-                    if( l_greedy )then
-                        ! no even/odd stored
-                    else
-                        call del_file(add2fbody(trim(prev_refs),params%ext,'_even'))
-                        call del_file(add2fbody(trim(prev_refs),params%ext,'_odd'))
-                    endif
+                    call del_file(add2fbody(trim(prev_refs),params%ext,'_even'))
+                    call del_file(add2fbody(trim(prev_refs),params%ext,'_odd'))
                 endif
                 ! cleanup
                 call o_tmp%kill
@@ -1141,16 +1138,12 @@ contains
                         ! first time
                         refs_glob = 'start_cavgs'//params%ext
                         call simple_copy_file(refs_buffer,refs_glob)
-                        if( l_greedy )then
-                            ! no even/odd stored
-                        else
-                            stkin  = add2fbody(trim(refs_buffer),params%ext,'_even')
-                            stkout = add2fbody(trim(refs_glob),params%ext,'_even')
-                            call simple_copy_file(stkin,stkout)
-                            stkin  = add2fbody(trim(refs_buffer),params%ext,'_odd')
-                            stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
-                            call simple_copy_file(stkin,stkout)
-                        endif
+                        stkin  = add2fbody(trim(refs_buffer),params%ext,'_even')
+                        stkout = add2fbody(trim(refs_glob),params%ext,'_even')
+                        call simple_copy_file(stkin,stkout)
+                        stkin  = add2fbody(trim(refs_buffer),params%ext,'_odd')
+                        stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
+                        call simple_copy_file(stkin,stkout)
                         call simple_copy_file(trim(buffer_dir)//'/'//trim(FRCS_FILE),FRCS_FILE)
                     else
                         ! class averages &
@@ -1160,24 +1153,20 @@ contains
                             call img%read(refs_buffer, icls)
                             call img%write(refs_glob, ind)
                         enddo
-                        if( l_greedy )then
-                            ! no even/odd stored
-                        else
-                            stkin  = add2fbody(trim(refs_buffer),params%ext,'_even')
-                            stkout = add2fbody(trim(refs_glob),params%ext,'_even')
-                            do icls=1,params%ncls_start
-                                ind = ncls_glob+icls
-                                call img%read(stkin, icls)
-                                call img%write(stkout, ind)
-                            enddo
-                            stkin  = add2fbody(trim(refs_buffer),params%ext,'_odd')
-                            stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
-                            do icls=1,params%ncls_start
-                                ind = ncls_glob+icls
-                                call img%read(stkin, icls)
-                                call img%write(stkout, ind)
-                            enddo
-                        endif
+                        stkin  = add2fbody(trim(refs_buffer),params%ext,'_even')
+                        stkout = add2fbody(trim(refs_glob),params%ext,'_even')
+                        do icls=1,params%ncls_start
+                            ind = ncls_glob+icls
+                            call img%read(stkin, icls)
+                            call img%write(stkout, ind)
+                        enddo
+                        stkin  = add2fbody(trim(refs_buffer),params%ext,'_odd')
+                        stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
+                        do icls=1,params%ncls_start
+                            ind = ncls_glob+icls
+                            call img%read(stkin, icls)
+                            call img%write(stkout, ind)
+                        enddo
                         ! FRCs
                         state = 1
                         call frcs_prev%new(ncls_glob, box, smpd, state)
@@ -1228,18 +1217,14 @@ contains
                             ! classes
                             call img%read(refs_buffer, ind)
                             call img%write(refs_glob, icls)
-                            if( l_greedy )then
-                                ! no even/odd stored
-                            else
-                                stkin  = add2fbody(trim(refs_buffer),params%ext,'_even')
-                                stkout = add2fbody(trim(refs_glob),params%ext,'_even')
-                                call img%read(stkin, ind)
-                                call img%write(stkout, icls)
-                                stkin  = add2fbody(trim(refs_buffer),params%ext,'_odd')
-                                stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
-                                call img%read(stkin, ind)
-                                call img%write(stkout, icls)
-                            endif
+                            stkin  = add2fbody(trim(refs_buffer),params%ext,'_even')
+                            stkout = add2fbody(trim(refs_glob),params%ext,'_even')
+                            call img%read(stkin, ind)
+                            call img%write(stkout, icls)
+                            stkin  = add2fbody(trim(refs_buffer),params%ext,'_odd')
+                            stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
+                            call img%read(stkin, ind)
+                            call img%write(stkout, icls)
                             call buffer_proj%os_cls2D%get_ori(ind, o)
                             call o%set('class',real(icls))
                             call pool_proj%os_cls2D%set_ori(icls,o)
@@ -1253,18 +1238,14 @@ contains
                                 call pool_proj%os_ptcl2D%set(iptcl,'class',real(icls))
                             enddo
                         enddo
-                        if( l_greedy )then
-                            ! no even/odd stored
-                        else
-                            call img%read(refs_glob, ncls_glob)
-                            call img%write(refs_glob, ncls_glob)
-                            stkout = add2fbody(trim(refs_glob),params%ext,'_even')
-                            call img%read(stkout, ncls_glob)
-                            call img%write(stkout, ncls_glob)
-                            stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
-                            call img%read(stkout, ncls_glob)
-                            call img%write(stkout, ncls_glob)
-                        endif
+                        call img%read(refs_glob, ncls_glob)
+                        call img%write(refs_glob, ncls_glob)
+                        stkout = add2fbody(trim(refs_glob),params%ext,'_even')
+                        call img%read(stkout, ncls_glob)
+                        call img%write(stkout, ncls_glob)
+                        stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
+                        call img%read(stkout, ncls_glob)
+                        call img%write(stkout, ncls_glob)
                         call frcs_glob%write(FRCS_FILE)
                         call frcs_glob%kill
                         call frcs_buffer%kill

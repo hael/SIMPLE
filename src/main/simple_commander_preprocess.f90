@@ -363,11 +363,14 @@ contains
                 type(ori) :: o, o_stk
                 character(len=LONGSTRLEN), allocatable :: sp_files(:)
                 character(len=:), allocatable :: mic, mov
+                logical,          allocatable :: spproj_mask(:)
                 integer :: iproj,nprojs,cnt
                 logical :: err
                 if( .not.cline%defined('dir_prev') ) return
                 call simple_list_files(trim(params%dir_prev)//'/preprocess_*.simple', sp_files)
                 nprojs = size(sp_files)
+                if( nprojs < 1 ) return
+                allocate(spproj_mask(nprojs),source=.false.)
                 cnt    = 0
                 do iproj = 1,nprojs
                     err = .false.
@@ -415,9 +418,23 @@ contains
                     call stream_spproj%write(basename(sp_files(iproj)))
                     ! count
                     cnt = cnt + 1
+                    spproj_mask(iproj) = .true.
                     ! cleanup
                     call stream_spproj%kill
                 enddo
+                if( cnt > 0 )then
+                    ! updating STREAM_SPPROJFILES for Cluster2D_stream
+                    allocate(completed_jobs_clines(cnt))
+                    cnt = 0
+                    do iproj = 1,nprojs
+                        if(spproj_mask(iproj))then
+                            cnt = cnt+1
+                            call completed_jobs_clines(cnt)%set('projfile',basename(sp_files(iproj)))
+                        endif
+                    enddo
+                    call update_projects_list
+                    deallocate(completed_jobs_clines)
+                endif
                 call o%kill
                 call o_stk%kill
                 write(*,'(A,I3)')'>>> IMPORTED PREVIOUS PROCESSED MOVIES: ', cnt
