@@ -24,7 +24,7 @@ type :: reconstructor_eo
     character(len=4)    :: ext
     real                :: res_fsc05          !< target resolution at FSC=0.5
     real                :: res_fsc0143        !< target resolution at FSC=0.143
-    real                :: smpd, msk, fny, inner=0., width=10.
+    real                :: smpd, msk, fny, inner=0., width=10., pad_correction=1.
     integer             :: box=0, nstates=1, numlen=2, hpind_fsc=0
     logical             :: phaseplate = .false.
     logical             :: automsk    = .false.
@@ -94,6 +94,7 @@ contains
         self%automsk    = file_exists(params_glob%mskfile) .and. params_glob%l_envfsc
         self%phaseplate = params_glob%l_phaseplate
         self%hpind_fsc  = params_glob%hpind_fsc
+        self%pad_correction = (real(params_glob%boxpd)/real(self%box))**3. * real(self%box)
         ! create composites
         if( self%automsk )then
             call self%envmask%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
@@ -394,6 +395,9 @@ contains
             ! Clip
             call self%even%clip_inplace([self%box,self%box,self%box])
             call self%odd%clip_inplace([self%box,self%box,self%box])
+            ! FFTW padding correction
+            call self%even%div(self%pad_correction)
+            call self%odd%div(self%pad_correction)
             ! write unnormalised unmasked even/odd volumes
             call self%even%write(trim(fname_even), del_if_exists=.true.)
             call self%odd%write(trim(fname_odd),   del_if_exists=.true.)
@@ -410,6 +414,9 @@ contains
             ! clip
             call self%even%clip(even)
             call self%odd%clip(odd)
+            ! FFTW padding correction
+            call even%div(self%pad_correction)
+            call odd%div(self%pad_correction)
             ! write un-normalised unmasked even/odd volumes
             call even%write(trim(fname_even), del_if_exists=.true.)
             call odd%write(trim(fname_odd),   del_if_exists=.true.)
@@ -521,6 +528,7 @@ contains
         call reference%set_ft(.false.)
         call self%eosum%sampl_dens_correct
         call self%eosum%ifft()
+        call self%eosum%div(self%pad_correction)
         call self%eosum%clip(reference)
     end subroutine sampl_dens_correct_sum
 
