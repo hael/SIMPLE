@@ -119,6 +119,7 @@ contains
 
         ! ARRAY ALLOCATION FOR STRATEGY2D prior to weights
         call prep_strategy2D( ptcl_mask, which_iter )
+        write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
 
         ! SETUP WEIGHTS
         ! this needs to be done prior to search such that each part
@@ -133,6 +134,7 @@ contains
         else
             call build_glob%spproj_field%set_all2single('w', 1.0)
         endif
+        write(logfhandle,'(A)') '>>> WEIGHTS ASSIGNED'
 
         ! PREP REFERENCES
         call cavger_new( 'class', ptcl_mask)

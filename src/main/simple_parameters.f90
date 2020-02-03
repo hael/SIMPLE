@@ -140,7 +140,6 @@ type :: parameters
     character(len=LONGSTRLEN) :: oritab3D=''          !< table of 3D orientations(.txt|.simple)
     character(len=LONGSTRLEN) :: outfile=''           !< output document
     character(len=LONGSTRLEN) :: outstk=''            !< output image stack
-    character(len=LONGSTRLEN) :: outstk2=''           !< output image stack 2nd
     character(len=LONGSTRLEN) :: outvol=''            !< output volume{outvol.ext}
     character(len=LONGSTRLEN) :: pdbfile=''           !< PDB file
     character(len=LONGSTRLEN) :: pdbfile2=''           !< PDB file, another one
@@ -267,7 +266,6 @@ type :: parameters
     integer :: ndiscrete=0         !< # discrete orientations
     integer :: ndocs=0             !< # documents
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
-    integer :: newbox2=0
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
     integer :: ninplpeaks=NINPLPEAKS2SORT !< # of in-plane peaks
@@ -399,7 +397,6 @@ type :: parameters
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
     real    :: scale=1.            !< image scale factor{1}
-    real    :: scale2=1.           !< image scale factor 2nd{1}
     real    :: shcfrac=SHCFRAC_DEFAULT !< min % of projection directions evaluated in stochastic search
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
@@ -635,7 +632,6 @@ contains
         call check_file('oritab3D',       self%oritab3D,     'T', 'O')
         call check_file('outfile',        self%outfile,      'T', 'O')
         call check_file('outstk',         self%outstk,       notAllowed='T')
-        call check_file('outstk2',        self%outstk2,      notAllowed='T')
         call check_file('outvol',         self%outvol,       notAllowed='T')
         call check_file('pdbfile',        self%pdbfile)
         call check_file('pdbfile2',       self%pdbfile2)
@@ -812,7 +808,6 @@ contains
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('power',          self%power)
         call check_rarg('scale',          self%scale)
-        call check_rarg('scale2',         self%scale2)
         call check_rarg('shcfrac',        self%shcfrac)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
@@ -1189,7 +1184,7 @@ contains
         self%smpd_targets2D(1) = self%lplims2D(2)*LP2SMPDFAC2D
         self%smpd_targets2D(2) = self%lplims2D(3)*LP2SMPDFAC2D
         ! check scale factor sanity
-        if( self%scale > 1.00001 ) THROW_HARD('scale out if range, should be [0,1] for down-scaling; new')
+        if( self%scale < 0.00001 ) THROW_HARD('scale out if range, should be > 0; new')
         ! set default ring2 value
         if( .not. cline%defined('ring2') )then
             if( cline%defined('msk') )then
@@ -1272,9 +1267,6 @@ contains
             endif
         endif
         ! set newbox if scale is defined
-        if( cline%defined('scale2') )then
-            self%newbox2 = find_magic_box(nint(self%scale2*real(self%box)))
-        endif
         self%kfromto(1) = max(2,int(self%dstep/self%hp)) ! high-pass Fourier index set according to hp
         self%kfromto(2) = int(self%dstep/self%lp)        ! low-pass Fourier index set according to lp
         self%kstop      = self%kfromto(2)                ! -"-
@@ -1675,7 +1667,6 @@ contains
 
         subroutine mkfnames
             if( .not. cline%defined('outstk')  ) self%outstk  = 'outstk'//self%ext
-            if( .not. cline%defined('outstk2') ) self%outstk2 = 'outstk2'//self%ext
             if( .not. cline%defined('outvol')  ) self%outvol  = 'outvol'//self%ext
         end subroutine mkfnames
 

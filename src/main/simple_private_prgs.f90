@@ -402,7 +402,6 @@ contains
         call cmd_dict%push('outfile',       'output document')
         call cmd_dict%push('outside',       'extract boxes outside the micrograph boundaries(yes|no){no}')
         call cmd_dict%push('outstk',        'output image stack')
-        call cmd_dict%push('outstk2',       'output image stack 2')
         call cmd_dict%push('outvol',        'output volume{outvol.ext}')
         call cmd_dict%push('part',          'partition in distributed execution{1}')
         call cmd_dict%push('pcontrast',     'particle contrast(black|white){black}')
@@ -432,7 +431,6 @@ contains
         call cmd_dict%push('rnd',           'random(yes|no){no}')
         call cmd_dict%push('rrate',         'randomization rate{0.8}')
         call cmd_dict%push('scale',         'image scale factor{1}')
-        call cmd_dict%push('scale2',        'image scale factor 2{1}')
         call cmd_dict%push('shalgn',        'do 2D shift alignment(yes|no){no}')
         call cmd_dict%push('shbarrier',     'use shift search barrier constraint(yes|no){yes}')
         call cmd_dict%push('shell_norm',    'normalise based on power spectrum (yes|no){no}')
@@ -760,7 +758,7 @@ contains
         call private_prgs(25)%push_req_key('moldiam')
         ! optional keys
         call private_prgs(25)%push_opt_key('lp_backgr')
-        
+
         n_private_prgs = 25
     end subroutine new_private_prgs
 

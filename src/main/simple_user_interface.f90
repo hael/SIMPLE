@@ -3333,19 +3333,17 @@ contains
         &'Re-scaling MRC and SPIDER stacks and volumes',&                                         ! descr_short
         &'is a program for re-scaling, clipping and padding MRC and SPIDER stacks and volumes',&  ! descr_long
         &'simple_exec',&                                                                        ! executable
-        &0, 8, 3, 0, 0, 0, 1, .false.)                                                          ! # entries in each group, requires sp_project
+        &0, 6, 3, 0, 0, 0, 1, .false.)                                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call scale%set_input('parm_ios', 1, smpd)
         call scale%set_input('parm_ios', 2, 'newbox', 'num', 'Scaled box size', 'Target for scaled box size in pixels', 'new box in pixels', .false., 0.)
-        call scale%set_input('parm_ios', 3, 'scale', 'num', 'Scaling ratio', 'Target box ratio for scaling(0-1)', '(0-1)', .false., 1.)
-        call scale%set_input('parm_ios', 4, 'scale2', 'num', 'Second scaling ratio', 'Second target box ratio for scaling(0-1)', '(0-1)', .false., 1.)
-        call scale%set_input('parm_ios', 5, clip)
-        call scale%set_input('parm_ios', 6, outvol)
-        call scale%set_input('parm_ios', 7, outstk)
-        call scale%set_input('parm_ios', 8, 'outstk2', 'file', 'Second output stack name', 'Second output images stack name', 'e.g. outstk2.mrc', .false., '')
+        call scale%set_input('parm_ios', 3, 'scale', 'num', 'Scaling ratio', 'Target box ratio for scaling(0-1+)', '(0-1+)', .false., 1.)
+        call scale%set_input('parm_ios', 4, clip)
+        call scale%set_input('parm_ios', 5, outvol)
+        call scale%set_input('parm_ios', 6, outstk)
         ! alternative inputs
         call scale%set_input('alt_ios', 1, stk)
         scale%alt_ios(1)%required = .false.
