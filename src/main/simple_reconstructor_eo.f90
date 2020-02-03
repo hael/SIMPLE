@@ -415,8 +415,8 @@ contains
             call self%even%clip(even)
             call self%odd%clip(odd)
             ! FFTW padding correction
-            call even%div(self%pad_correction)
-            call odd%div(self%pad_correction)
+            ! call even%div(self%pad_correction)
+            ! call odd%div(self%pad_correction)
             ! write un-normalised unmasked even/odd volumes
             call even%write(trim(fname_even), del_if_exists=.true.)
             call odd%write(trim(fname_odd),   del_if_exists=.true.)

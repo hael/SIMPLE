@@ -2663,10 +2663,14 @@ contains
                 else if( pop <= MINCLSPOPLIM )then
                     where( specscores > TINY .and. (classes == icls .and. states > 0.5) ) weights_glob = 1.0
                 else
-                    weights = z_scores(specscores, mask=specscores > TINY .and. (classes == icls .and. states > 0.5))
-                    minw    = minval(weights,      mask=specscores > TINY .and. (classes == icls .and. states > 0.5))
-                    where( specscores > TINY .and. (classes == icls .and. states > 0.5) ) weights_glob = weights + abs(minw)
-                    deallocate(weights)
+                    if( count(specscores > TINY) <= MINCLSPOPLIM )then
+                        where( specscores > TINY .and. (classes == icls .and. states > 0.5) ) weights_glob = 1.0
+                    else
+                        weights = z_scores(specscores, mask=specscores > TINY .and. (classes == icls .and. states > 0.5))
+                        minw    = minval(weights,      mask=specscores > TINY .and. (classes == icls .and. states > 0.5))
+                        where( specscores > TINY .and. (classes == icls .and. states > 0.5) ) weights_glob = weights + abs(minw)
+                        deallocate(weights)
+                    endif
                 endif
             end do
             call self%set_all('w', weights_glob)
