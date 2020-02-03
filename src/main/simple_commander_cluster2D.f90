@@ -751,8 +751,10 @@ contains
                     do icls=1,ncls_here
                         if( cls_mask(icls) ) cycle
                         cnt = cnt+1
-                        call img%read(refs_buffer,icls)
-                        call img%write('rejected_'//int2str(pool_iter)//'.mrc',cnt)
+                        if( debug_here )then
+                            call img%read(refs_buffer,icls)
+                            call img%write('rejected_'//int2str(pool_iter)//'.mrc',cnt)
+                        endif
                         img = 0.
                         call img%write(refs_buffer,icls)
                     enddo

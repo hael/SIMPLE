@@ -203,16 +203,16 @@ contains
         self%polyfit_rmsd = sqrt(self%polyfit_rmsd/real(self%nframes*params_glob%nxpatch*params_glob%nypatch))
     end subroutine fit_polynomial
 
-    subroutine plot_shifts(self)
+    subroutine plot_shifts( self )
         class(motion_patched), intent(inout) :: self
-        real, parameter       :: SCALE = 40.
-        type(str4arr)         :: title
-        type(CPlot2D_type)    :: plot2D
-        type(CDataSet_type)   :: dataSetStart, dataSet, fit, obs, patch_start
-        type(CDataPoint_type) :: point2, p_obs, p_fit, point
-        integer               :: ipx,ipy, iframe, j
-        real                  :: shifts(self%nframes,2), loc_shift(2), ref_shift(2)
-        real                  :: xcenter,ycenter, cx,cy
+        real, parameter           :: SCALE = 40.
+        type(str4arr)             :: title
+        type(CPlot2D_type)        :: plot2D
+        type(CDataSet_type)       :: dataSetStart, dataSet, fit, obs, patch_start
+        type(CDataPoint_type)     :: point2, p_obs, p_fit, point
+        character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf
+        integer :: l, ipx,ipy, iframe, j, iostat
+        real    :: shifts(self%nframes,2), loc_shift(2), ref_shift(2), xcenter,ycenter, cx,cy
         call CPlot2D__new(plot2D, self%shift_fname)
         call CPlot2D__SetXAxisSize(plot2D, 600._c_double)
         call CPlot2D__SetYAxisSize(plot2D, 600._c_double)
@@ -296,6 +296,17 @@ contains
         call CPlot2D__SetYAxisTitle(plot2D, title%str)
         call CPlot2D__OutputPostScriptPlot(plot2D, self%shift_fname)
         call CPlot2D__delete(plot2D)
+        ! conversion to PDF
+        l = len_trim(self%shift_fname)
+        self%shift_fname = self%shift_fname(:l-1) ! removing trailing C NULL character
+        fname_pdf  = trim(get_fbody(self%shift_fname,'eps'))//'.pdf'
+        ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=760 -dDEVICEHEIGHTPOINTS=760 -sOutputFile='&
+            //trim(fname_pdf)//' '//trim(self%shift_fname)
+        call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+        if( iostat == 0 )then
+            call del_file(self%shift_fname)
+            self%shift_fname = trim(fname_pdf)
+        endif
     end subroutine plot_shifts
 
     ! produces shifts for 'polishing' close to relion 3 convention
@@ -363,7 +374,7 @@ contains
         real, pointer :: rmatin(:,:,:), rmatout(:,:,:)
         real(dp)      :: t,ti, dt,dt2,dt3, x,x2,y,y2,xy, A1,A2, B1x,B1x2,B1xy,B2x,B2x2,B2xy
         integer       :: i, j, iframe
-        real          :: coords(2), w, pixx,pixy
+        real          :: w, pixx,pixy
         call frame_output%zero_and_unflag_ft
         call frame_output%get_rmat_ptr(rmatout)
         ti = real(self%interp_fixed_frame-self%fixed_frame, dp)
@@ -897,7 +908,7 @@ contains
         class(motion_patched),           intent(inout) :: self
         real,                            intent(in)    :: hp, resstep
         type(image),        allocatable, intent(inout) :: frames(:)
-        character(len=:),   allocatable, intent(in)    :: shift_fname
+        character(len=:),   allocatable, intent(inout) :: shift_fname
         real,     optional, allocatable, intent(in)    :: global_shifts(:,:)
         integer :: ldim_frames(3)
         integer :: iframe
@@ -946,13 +957,14 @@ contains
         call self%fit_polynomial()
         ! report visual results
         call self%plot_shifts()
+        shift_fname = trim(self%shift_fname) // C_NULL_CHAR
     end subroutine motion_patched_correct
 
     subroutine motion_patched_correct_polyn( self, hp, resstep, frames, shift_fname, refine_direct, global_shifts )
         class(motion_patched),           intent(inout) :: self
         real,                            intent(in)    :: hp, resstep
         type(image),        allocatable, intent(inout) :: frames(:)
-        character(len=:),   allocatable, intent(in)    :: shift_fname
+        character(len=:),   allocatable, intent(inout) :: shift_fname
         logical,                         intent(in)    :: refine_direct
         real,     optional, allocatable, intent(in)    :: global_shifts(:,:)
         integer :: ldim_frames(3)
@@ -995,6 +1007,7 @@ contains
         end if
         ! report visual results
         call self%plot_shifts()
+        shift_fname = trim(self%shift_fname) // C_NULL_CHAR
     end subroutine motion_patched_correct_polyn
 
     subroutine motion_patched_kill( self )
