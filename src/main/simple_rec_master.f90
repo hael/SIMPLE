@@ -15,8 +15,7 @@ contains
     subroutine exec_rec
         character(len=:), allocatable :: fbody
         integer :: s
-        if( .not. params_glob%l_distr_exec ) THROW_HARD('eo .ne. no not supported here, use simple_distr_exec!')
-        ! rebuild build_glob%vol according to box size (beacuse it is otherwise boxmatch)
+        ! rebuild build_glob%vol according to box size (because it is otherwise boxmatch)
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
         do s=1,params_glob%nstates
             if( build_glob%spproj_field%get_pop(s, 'state') == 0 ) cycle ! empty state

@@ -94,7 +94,7 @@ contains
         self%automsk    = file_exists(params_glob%mskfile) .and. params_glob%l_envfsc
         self%phaseplate = params_glob%l_phaseplate
         self%hpind_fsc  = params_glob%hpind_fsc
-        self%pad_correction = (real(params_glob%boxpd)/real(self%box))**3. * real(self%box)
+        ! self%pad_correction = (real(params_glob%boxpd)/real(self%box))**3. * real(self%box)
         ! create composites
         if( self%automsk )then
             call self%envmask%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
@@ -415,8 +415,8 @@ contains
             call self%even%clip(even)
             call self%odd%clip(odd)
             ! FFTW padding correction
-            ! call even%div(self%pad_correction)
-            ! call odd%div(self%pad_correction)
+            call even%div(self%pad_correction)
+            call odd%div(self%pad_correction)
             ! write un-normalised unmasked even/odd volumes
             call even%write(trim(fname_even), del_if_exists=.true.)
             call odd%write(trim(fname_odd),   del_if_exists=.true.)

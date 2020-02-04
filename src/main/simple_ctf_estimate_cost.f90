@@ -442,7 +442,7 @@ contains
             dabsctf_ddf = signctf * DPI*self%wl*spaFreqSq * tvalsh
             ! gradients defocus
             ddf_ddfx    = 0.5d0*(1.d0+costerm)
-            ddf_ddfy    = 0.5d0*(1.d0-costerm)
+            ddf_ddfy    = 0.5d0*(1.d0-costerm) ! also = 1 - ddf_ddfx
             dcc_ddfx    = dcc_ddfx + dabsctf_ddf*ddf_ddfx*[absctf_obs, abstval]
             dcc_ddfy    = dcc_ddfy + dabsctf_ddf*ddf_ddfy*[absctf_obs, abstval]
             if( D >= 3 )then
