@@ -727,8 +727,8 @@ contains
         if( params_glob%l_pssnr )then
             j = merge(1, 2, self%iseven(self%pinds(iptcl)))
             do k=params_glob%kfromto(1),params_glob%kstop
-                pw = sum(csq(pft(:,k))) / real(self%pftsz)
-                if( pw > 0.000001 )then
+                pw = real(sum(csq(dcmplx(pft(:,k)))) / real(self%pftsz,dp))
+                if( pw > 1.e-12 )then
                     pft(:,k) = pft(:,k) * sqrt(self%pssnr_filt(k,j) / pw)
                 else
                     pft(:,k) = pft(:,k) * sqrt(self%pssnr_filt(k,j))
@@ -736,8 +736,8 @@ contains
             enddo
         else if( params_glob%l_match_filt ) then
             do k=params_glob%kfromto(1),params_glob%kstop
-                pw  = sum(csq(pft(:,k))) / real(self%pftsz)
-                if( pw > 0.000001 )then
+                pw = real(sum(csq(dcmplx(pft(:,k)))) / real(self%pftsz,dp))
+                if( pw > 1.e-12 )then
                     pft(:,k) = pft(:,k) * (self%ref_optlp(k,iref) / sqrt(pw))
                 else
                     pft(:,k) = pft(:,k) * self%ref_optlp(k,iref)
@@ -756,7 +756,7 @@ contains
             j = merge(1, 2, self%iseven(self%pinds(iptcl)))
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = sum(csq(pft(:,k))) / real(self%pftsz,kind=dp)
-                if( pw > 0.000001d0 )then
+                if( pw > 1.d-12 )then
                     pft(:,k) = pft(:,k) * dsqrt(real(self%pssnr_filt(k,j),kind=dp) / pw)
                 else
                     pft(:,k) = pft(:,k) * dsqrt(real(self%pssnr_filt(k,j),kind=dp))
@@ -765,7 +765,7 @@ contains
         else if( params_glob%l_match_filt ) then
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = sum(csq(pft(:,k))) / real(self%pftsz,kind=dp)
-                if( pw > 0.000001d0 )then
+                if( pw > 1.d-12 )then
                     pft(:,k) = pft(:,k) * (real(self%ref_optlp(k,iref),kind=dp) / dsqrt(pw))
                 else
                     pft(:,k) = pft(:,k) * real(self%ref_optlp(k,iref),kind=dp)
@@ -785,7 +785,7 @@ contains
             j = merge(1, 2, self%iseven(self%pinds(iptcl)))
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = sum(csq(pft(:,k))) / real(self%pftsz,kind=dp)
-                if( pw > 0.000001d0 )then
+                if( pw > 1.d-12 )then
                     w  = dsqrt( real(self%pssnr_filt(k,j),kind=dp) / pw)
                 else
                     w  = dsqrt(real(self%pssnr_filt(k,j),kind=dp))
@@ -796,7 +796,7 @@ contains
         else
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = sum(csq(pft(:,k))) / real(self%pftsz,kind=dp)
-                if( pw > 0.000001d0 )then
+                if( pw > 1.d-12 )then
                     w  = real(self%ref_optlp(k,iref),kind=dp) / dsqrt(pw)
                 else
                     w  = real(self%ref_optlp(k,iref),kind=dp)
@@ -941,6 +941,7 @@ contains
         integer,                 intent(in)    :: iptcl, iref, irot
         complex(sp), pointer :: pft_ref(:,:)
         complex(sp) :: pft_ptcl(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
+        real(dp)    :: pw_diffk
         real        :: pw_diff(params_glob%kfromto(1):params_glob%kfromto(2))
         real        :: pw_diff_fit(params_glob%kfromto(1):params_glob%kfromto(2))
         real        :: pw_ptcl, pw_ref, w, ssnr
@@ -965,7 +966,7 @@ contains
             j = merge(1, 2, self%iseven(i))
             do k=params_glob%kfromto(1),params_glob%kstop
                 ! particle power spectrum
-                pw_ptcl = sum(csq(pft_ptcl(:,k))) / real(self%pftsz)
+                pw_ptcl = real(sum(csq(dcmplx(pft_ptcl(:,k)))) / real(self%pftsz,dp))
                 ! shell normalization
                 pft_ptcl(:,k) = pft_ptcl(:,k) / sqrt(pw_ptcl)
                 ! pssnr filter
@@ -981,15 +982,15 @@ contains
             ! match spectrums
             do k=params_glob%kfromto(1),params_glob%kstop
                 ! particle
-                pw_ptcl = sum(csq(pft_ptcl(:,k))) / real(self%pftsz)
-                if( pw_ptcl > 0.000001 )then
+                pw_ptcl = real(sum(csq(dcmplx(pft_ptcl(:,k)))) / real(self%pftsz,dp))
+                if( pw_ptcl > 1.e-12 )then
                     pft_ptcl(:,k) = pft_ptcl(:,k) * self%ref_optlp(k,iref) / sqrt(pw_ptcl)
                 else
                     pft_ptcl(:,k) = pft_ptcl(:,k) * self%ref_optlp(k,iref)
                 endif
                 ! reference
-                pw_ref = sum(csq(pft_ref(:,k))) / real(self%pftsz)
-                if( pw_ref > 0.000001 )then
+                pw_ref = real(sum(csq(dcmplx(pft_ref(:,k)))) / real(self%pftsz,dp))
+                if( pw_ref > 1.e-12 )then
                     pft_ref(:,k) = pft_ref(:,k) * self%ref_optlp(k,iref) / sqrt(pw_ref)
                 else
                     pft_ref(:,k) = pft_ref(:,k) * self%ref_optlp(k,iref)
@@ -999,17 +1000,17 @@ contains
             rot = merge(irot - self%pftsz, irot, irot >= self%pftsz + 1)
             do k = params_glob%kfromto(1), params_glob%kstop
                 if( irot == 1 )then
-                    pw_diff(k) = sum(csq(pft_ref(:,k) - pft_ptcl(:,k)))
+                    pw_diffk = sum(csq(dcmplx(pft_ref(:,k) - pft_ptcl(:,k))))
                 else if( irot <= self%pftsz )then
-                    pw_diff(k) =              sum(csq(pft_ref(1:self%pftsz-rot+1,k)          - pft_ptcl(rot:self%pftsz,k)))
-                    pw_diff(k) = pw_diff(k) + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(pft_ptcl(1:rot-1,k))))
+                    pw_diffk =            sum(csq(dcmplx(pft_ref(1:self%pftsz-rot+1,k)          - pft_ptcl(rot:self%pftsz,k))))
+                    pw_diffk = pw_diffk + sum(csq(dcmplx(pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(pft_ptcl(1:rot-1,k)))))
                 else if( irot == self%pftsz + 1 )then
-                    pw_diff(k) = sum(csq(pft_ref(:,k) - conjg(pft_ptcl(:,k))))
+                    pw_diffk = sum(csq(pft_ref(:,k) - conjg(pft_ptcl(:,k))))
                 else
-                    pw_diff(k) =              sum(csq(pft_ref(1:self%pftsz-rot+1,k)          - conjg(pft_ptcl(rot:self%pftsz,k))))
-                    pw_diff(k) = pw_diff(k) + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,k) - pft_ptcl(1:rot-1,k)))
+                    pw_diffk =            sum(csq(dcmplx(pft_ref(1:self%pftsz-rot+1,k)          - conjg(pft_ptcl(rot:self%pftsz,k)))))
+                    pw_diffk = pw_diffk + sum(csq(dcmplx(pft_ref(self%pftsz-rot+2:self%pftsz,k) - pft_ptcl(1:rot-1,k))))
                 end if
-                pw_diff(k) = pw_diff(k) / real(self%pftsz)
+                pw_diff(k) = real(pw_diffk / real(self%pftsz,dp))
             end do
             ! fitting of difference
             pw_diff_fit = pw_diff
@@ -1020,13 +1021,13 @@ contains
             ! shell normalize & filter particle
             do k=params_glob%kfromto(1),params_glob%kstop
                 ! particle
-                pw_ptcl = sum(csq(pft_ptcl(:,k))) / real(self%pftsz)
+                pw_ptcl = real(sum(csq(dcmplx(pft_ptcl(:,k)))) / real(self%pftsz,dp))
                 w = 1.
-                if( pw_ptcl > 0.000001 ) w  = 1. / sqrt(pw_ptcl)
+                if( pw_ptcl > 1.e-12 ) w  = 1. / sqrt(pw_ptcl)
                 ! reference
-                pw_ref = sum(csq(pft_ref(:,k))) / real(self%pftsz)
+                pw_ref = real(sum(csq(dcmplx(pft_ref(:,k)))) / real(self%pftsz,dp))
                 ! optimal filter
-                if( pw_diff_fit(k) > 0.000001 )then
+                if( pw_diff_fit(k) > 1.e-12 )then
                     ssnr = pw_ref / pw_diff_fit(k)
                     w    = w * sqrt(ssnr / (ssnr + 1.))
                 else

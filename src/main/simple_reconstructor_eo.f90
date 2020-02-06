@@ -94,7 +94,7 @@ contains
         self%automsk    = file_exists(params_glob%mskfile) .and. params_glob%l_envfsc
         self%phaseplate = params_glob%l_phaseplate
         self%hpind_fsc  = params_glob%hpind_fsc
-        ! self%pad_correction = (real(params_glob%boxpd)/real(self%box))**3. * real(self%box)
+        self%pad_correction = (real(params_glob%boxpd)/real(self%box))**3. * real(self%box)
         ! create composites
         if( self%automsk )then
             call self%envmask%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)

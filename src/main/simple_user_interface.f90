@@ -214,6 +214,7 @@ type(simple_input_param) :: moldiam
 type(simple_input_param) :: msk
 type(simple_input_param) :: mskfile
 type(simple_input_param) :: envfsc
+type(simple_input_param) :: mul
 type(simple_input_param) :: mw
 type(simple_input_param) :: ncls
 type(simple_input_param) :: neg
@@ -910,6 +911,7 @@ contains
         call set_param(stepsz,         'stepsz',       'num',    'Steps size in A', 'Step size in A {2.} ', '{2.}',  .false., 10.)
         call set_param(dock,           'dock',         'binary', 'Volumes have to be docked', 'Volumes have to be docked(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
+        call set_param(mul,            'mul',          'num',    'Multiplication factor', 'Multiplication factor{1.}','{1.}',.false., 1.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -3899,13 +3901,14 @@ contains
         &'Imports time-series particles stack',&          ! descr_short
         &'is a workflow for importing time-series data',& ! descr_long
         &'single_exec',&                                  ! executable
-        &1, 1, 0, 0, 0, 0, 0, .true.)                     ! # entries in each group, requires sp_project
+        &1, 2, 0, 0, 0, 0, 0, .true.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call tseries_import_particles%set_input('img_ios', 1, stk)
         tseries_import_particles%img_ios(1)%required = .true.
         ! parameter input/output
-        call tseries_import_particles%set_input('parm_ios', 1, deftab)
+        call tseries_import_particles%set_input('parm_ios', 1, smpd)
+        call tseries_import_particles%set_input('parm_ios', 2, deftab)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -4183,7 +4186,7 @@ contains
         &'Standard volume editing',&                                                              ! descr_short
         &'is a program that provides standard single-particle image processing routines for MRC or SPIDER volumes',& ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &2, 12, 0, 0, 3, 1, 1, .false.)                                                           ! # entries in each group, requires sp_project
+        &2, 13, 0, 0, 3, 1, 1, .false.)                                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call volops%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to mask', &
@@ -4203,6 +4206,7 @@ contains
         call volops%set_input('parm_ios',10, 'ysh', 'num', 'Translation along y-axis','Shift along Y in pixels', 'in pixels', .false., 0.)
         call volops%set_input('parm_ios',11, 'zsh', 'num', 'Translation along z-axis','Shift along Z in pixels', 'in pixels', .false., 0.)
         call volops%set_input('parm_ios',12, outfile)
+        call volops%set_input('parm_ios',13, mul)
         ! alternative inputs
         ! <empty>
         ! search controls
