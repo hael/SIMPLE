@@ -930,7 +930,7 @@ contains
         call calc_frc
         ! skip aliasing identification
         ! abracadabra
-        sh = ctfres_shell()
+        sh = max(1, ctfres_shell())
         self%ctfres = specimg%get_lp(sh)
         ! cleanup
         call extrema%kill
