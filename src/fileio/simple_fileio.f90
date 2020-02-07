@@ -389,7 +389,7 @@ contains
         character(len=*), intent(in)  :: fname, suffix, str
         character(len=:), allocatable :: newname
         integer :: pos
-        pos = index(fname, suffix) ! position of suffix
+        pos = index(trim(fname), trim(suffix)) ! position of suffix
         allocate(newname, source=fname(:pos-1)//trim(str)//trim(suffix))
     end function add2fbody
 

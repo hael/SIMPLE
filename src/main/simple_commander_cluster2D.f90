@@ -1512,6 +1512,7 @@ contains
         type(sp_project)              :: spproj, spproj_sc
         character(len=:), allocatable :: projfile_sc, orig_projfile
         character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
+        character(len=STDLEN)         :: prev_ctfflag
         real     :: scale_stage1, scale_stage2, trs_stage2
         integer  :: nparts, last_iter_stage1, last_iter_stage2, status
         integer  :: nptcls_sel
@@ -1554,6 +1555,14 @@ contains
         endif
         ! refinement flag
         if(.not.cline%defined('refine')) call cline%set('refine','snhc')
+        ! de-activating CTF correction for time-series
+        if( trim(params%tseries).eq.'yes' )then
+            prev_ctfflag = spproj%get_ctfflag(params%oritype)
+            if( trim(prev_ctfflag) /= 'no' )then
+                call spproj%os_stk%set_all2single('ctf','no')
+                call spproj%write_segment_inside('stk')
+            endif
+        endif
         ! splitting
         call spproj%split_stk(params%nparts, dir=PATH_PARENT)
         ! general options planning
@@ -1691,6 +1700,14 @@ contains
         call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
         call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
         call spproj%write_segment_inside('out')
+        ! re-activating CTF correction for time series
+        if( trim(params%tseries).eq.'yes' )then
+            if( trim(prev_ctfflag) /= 'no' )then
+                call spproj%os_stk%set_all2single('ctf',prev_ctfflag)
+                call spproj%write_segment_inside('stk')
+            endif
+        endif
+        ! clean
         call spproj%kill()
         ! ranking
         if( trim(params%tseries).eq.'yes' )then

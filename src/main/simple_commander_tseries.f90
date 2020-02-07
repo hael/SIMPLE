@@ -508,6 +508,7 @@ contains
         type(sp_project)              :: spproj
         type(cmdline)                 :: cline_pspec_rank
         character(len=:), allocatable :: orig_projfile
+        character(len=STDLEN)         :: prev_ctfflag
         character(len=LONGSTRLEN)     :: finalcavgs
         integer  :: nparts, last_iter_stage2
         call cline%set('dir_exec', 'center2D_nano')
@@ -541,6 +542,12 @@ contains
             call spproj%os_ptcl2D%delete_2Dclustering
             call spproj%write_segment_inside(params%oritype)
         endif
+        ! de-activating CTF correction for this application
+        prev_ctfflag = spproj%get_ctfflag(params%oritype)
+        if( trim(prev_ctfflag) /= 'no' )then
+            call spproj%os_stk%set_all2single('ctf','no')
+            call spproj%write_segment_inside('stk')
+        endif
         ! splitting
         call spproj%split_stk(params%nparts, dir=PATH_PARENT)
         ! no auto-scaling
@@ -553,6 +560,10 @@ contains
         call spproj%read( params%projfile )
         call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
         call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
+        ! re-activating CTF correction for this application
+        if( trim(prev_ctfflag) /= 'no' )then
+            call spproj%os_stk%set_all2single('ctf',prev_ctfflag)
+        endif
         ! rank based on maximum of power spectrum
         call cline_pspec_rank%set('mkdir',   'no')
         call cline_pspec_rank%set('moldiam', params%moldiam)
@@ -731,18 +742,18 @@ contains
         call cline%set('match_filt',     'no')
         call cline%set('keepvol',       'yes')
         call cline%set('ninplpeaks',      1.0)
-        call cline%set('graphene_filt', 'yes')
         ! dynamic parameters
-        if( .not. cline%defined('ptclw')       ) call cline%set('ptclw',      'no')
-        if( .not. cline%defined('nspace')      ) call cline%set('nspace',   10000.)
-        if( .not. cline%defined('shcfrac')     ) call cline%set('shcfrac',     10.)
-        if( .not. cline%defined('wcrit')       ) call cline%set('wcrit',     'inv')
-        if( .not. cline%defined('trs')         ) call cline%set('trs',         5.0)
-        if( .not. cline%defined('update_frac') ) call cline%set('update_frac', 0.2)
-        if( .not. cline%defined('lp')          ) call cline%set('lp',          1.0)
-        if( .not. cline%defined('cenlp')       ) call cline%set('cenlp',        5.)
-        if( .not. cline%defined('maxits')      ) call cline%set('maxits',      15.)
-        if( .not. cline%defined('oritype')     ) call cline%set('oritype','ptcl3D')
+        if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
+        if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',          'no')
+        if( .not. cline%defined('nspace')        ) call cline%set('nspace',       10000.)
+        if( .not. cline%defined('shcfrac')       ) call cline%set('shcfrac',         10.)
+        if( .not. cline%defined('wcrit')         ) call cline%set('wcrit',         'inv')
+        if( .not. cline%defined('trs')           ) call cline%set('trs',             5.0)
+        if( .not. cline%defined('update_frac')   ) call cline%set('update_frac',     0.2)
+        if( .not. cline%defined('lp')            ) call cline%set('lp',              1.0)
+        if( .not. cline%defined('cenlp')         ) call cline%set('cenlp',            5.)
+        if( .not. cline%defined('maxits')        ) call cline%set('maxits',          15.)
+        if( .not. cline%defined('oritype')       ) call cline%set('oritype',    'ptcl3D')
         call xrefine3D_distr%execute(cline)
     end subroutine exec_refine3D_nano_distr
 

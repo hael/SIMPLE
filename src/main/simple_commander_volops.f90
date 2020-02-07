@@ -348,6 +348,9 @@ contains
             params%bfac = build%vol%guinier_bfac(params%hp, params%lp)
             write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', params%bfac
         else
+            if( cline%defined('mul') )then
+                call build%vol%mul(params%mul)
+            end if
             if( cline%defined('neg')  )then
                 call build%vol%neg()
             end if
