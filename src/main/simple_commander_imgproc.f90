@@ -589,6 +589,7 @@ contains
         integer          :: istk, nstks, ptcl_fromp, ptcl_top
         character(len=:), allocatable :: fname, stkin, stkout
         character(len=LONGSTRLEN), allocatable :: filenames(:)
+        character(len=STDLEN)         :: ext
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( cline%defined('stk') .and. cline%defined('vol1') ) THROW_HARD('Cannot operate on images AND volume at once')
         if( cline%defined('projfile') .and. cline%defined('fromp') .and. cline%defined('top')&
@@ -627,10 +628,11 @@ contains
                 ptcl_fromp = nint(build%spproj%os_stk%get(istk,'fromp'))
                 ptcl_top   = nint(build%spproj%os_stk%get(istk,'top'))
                 ptcl_msk   = (states(ptcl_fromp:ptcl_top) == 1)
+                ext        = '.'//fname2ext(stkin)
                 if( cline%defined('dir_target') )then
-                    stkout = filepath(trim(params%dir_target),add2fbody(basename(stkin),params%ext,SCALE_SUFFIX))
+                    stkout = filepath(trim(params%dir_target),add2fbody(basename(stkin),ext,SCALE_SUFFIX))
                 else
-                    stkout = add2fbody(trim(stkin),params%ext,SCALE_SUFFIX)
+                    stkout = add2fbody(trim(stkin),ext,SCALE_SUFFIX)
                 endif
                 call resize_imgfile(stkin, stkout, params%smpd, ldim_scaled, smpd_new, mask=ptcl_msk)
             enddo
