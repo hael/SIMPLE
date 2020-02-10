@@ -1419,7 +1419,7 @@ contains
         real(sp),                 intent(out)   :: frc(params_glob%kfromto(1):params_glob%kstop)
         complex(sp), pointer :: pft_ref(:,:)
         real(sp),    pointer :: kcorrs(:)
-        real(sp) :: sumsqref, sumsqptcl, sqsum_ref
+        real(sp) :: sumsqref, sumsqptcl, sqsum_ref, denom
         integer  :: k, ithr, i
         i       =  self%pinds(iptcl)
         ithr    =  omp_get_thread_num() + 1
@@ -1430,7 +1430,12 @@ contains
             call self%calc_k_corrs(pft_ref, i, k, kcorrs)
             sumsqptcl = sum(csq(self%pfts_ptcls(:,k,i)))
             sumsqref  = sum(csq(pft_ref(:,k)))
-            frc(k)    = kcorrs(irot) / sqrt(sumsqptcl * sumsqref)
+            denom     = sqrt(sumsqptcl * sumsqref)
+            if( denom < 1.e-12 )then
+                frc(k) = 0.
+            else
+                frc(k) = kcorrs(irot) / denom
+            endif
         end do
     end subroutine genfrc
 
@@ -1441,7 +1446,7 @@ contains
         real(sp),                 intent(out)   :: frc(params_glob%kfromto(1):params_glob%kstop)
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(sp),    pointer :: kcorrs(:), argmat(:,:)
-        real(sp) :: sumsqref, sumsqptcl
+        real(sp) :: sumsqref, sumsqptcl, denom
         integer  :: k, ithr, i
         i       =  self%pinds(iptcl)
         ithr    =  omp_get_thread_num() + 1
@@ -1470,7 +1475,12 @@ contains
             call self%calc_k_corrs(pft_ref, i, k, kcorrs)
             sumsqptcl = sum(csq(self%pfts_ptcls(:,k,i)))
             sumsqref  = sum(csq(pft_ref(:,k)))
-            frc(k)    = kcorrs(irot) / sqrt(sumsqptcl * sumsqref)
+            denom     = sqrt(sumsqptcl * sumsqref)
+            if( denom < 1.e-12 )then
+                frc(k) = 0.
+            else
+                frc(k) = kcorrs(irot) / denom
+            endif
         end do
     end subroutine calc_frc
 
