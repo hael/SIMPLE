@@ -464,12 +464,41 @@ class SimpleView {
 			viewmaster.appendChild(particlecount)
 			var thumbnails = document.createElement('div')
 			thumbnails.id = "thumbnails"
+			var trackviewer = document.createElement('div')
+			var trackviewergauze = document.createElement('div')
+			var trackviewerimg= document.createElement('img')
+			trackviewergauze.className = "gauze"
+			trackviewerimg.id = "trackviewerimg"
+			trackviewer.appendChild(trackviewergauze)
+			trackviewer.appendChild(trackviewerimg)
+			trackviewer.id = "trackviewer"
+			
 			this.resetSideBar()
 			var targets = []
 			for(var micrograph of json.stats){
 				var thumbnail = document.createElement('div')
 				thumbnail.className = "thumbnail"
 				thumbnail.dataset.number = micrograph['number']
+				
+				var container = document.createElement('div')
+				var img = document.createElement('img')
+				img.src = "img/log.png"
+				container.className = "thumbnailbutton"
+				container.dataset.path = window.location.href + "/image?trackfile=" + micrograph.intg + "&stackfile=.jpg"
+				container.setAttribute("onclick", "event.stopPropagation(); simpleview.viewTracks(this)")
+				container.title = "View motion tracks"
+				img.className = "motiontracksicon"
+				container.appendChild(img)
+				
+				thumbnail.appendChild(container)
+				
+				if(!micrograph.state){
+					thumbnail.dataset.state = 1
+				}
+				thumbnail.setAttribute("onclick", "simpleview.toggleThumbnail(this)")
+				thumbnails.appendChild(thumbnail)
+				
+				
 				if(micrograph.thumb){
 					targets.push("micrograph")
 					targets.push("pspec")
@@ -546,16 +575,14 @@ class SimpleView {
 					container.appendChild(containerimg)
 					thumbnail.appendChild(container)
 				}
-				if(!micrograph.state){
-					thumbnail.dataset.state = 1
-				}
-				thumbnail.setAttribute("onclick", "simpleview.toggleThumbnail(this)")
-				thumbnails.appendChild(thumbnail)
+				
 			}
 			var mainpane = document.getElementById('mainpane')
 			mainpane.innerHTML = ""
 			mainpane.appendChild(viewmaster)
 			mainpane.appendChild(thumbnails)
+			trackviewer.style.display = "none"
+			mainpane.appendChild(trackviewer)
 			this.addImageControls(Array.from(new Set(targets)), true, false)
 			this.addSortControls(json.stats)
 			this.addSelectControls(json.stats)
@@ -568,6 +595,18 @@ class SimpleView {
 		})
 
   }
+  
+  viewTracks(element){
+	  var trackviewer = document.getElementById("trackviewer")
+	  var trackviewerimg = document.getElementById("trackviewerimg")
+	  trackviewerimg.src = ""
+	  
+	  trackviewerimg.src = element.dataset.path.replace("//image","/image")
+	  trackviewer.style.display =  "block"
+	  trackviewer.setAttribute("onclick", "document.getElementById('trackviewer').style.display = 'none'")
+  }
+  
+  
   
   getIni3D(projfile){
 	  fetcher.killWorker()

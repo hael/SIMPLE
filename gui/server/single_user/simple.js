@@ -45,13 +45,13 @@ if (!commandExistsSync('simple_exec')){
 	process.exit(1)
 }
 
-if (!commandExistsSync('simple_distr_exec')){
-	console.log("Error: simple_dist_exec not found")
+if (!commandExistsSync('simple_private_exec')){
+	console.log("Error: simple_private_exec not found")
 	process.exit(1)
 }
 
-if (!commandExistsSync('simple_private_exec')){
-	console.log("Error: simple_private_exec not found")
+if (!commandExistsSync('gs')){
+	console.log("Error: ghostscript command gs not found")
 	process.exit(1)
 }
 

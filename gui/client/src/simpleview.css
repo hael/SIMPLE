@@ -276,6 +276,21 @@ margin-right: 0% !important;
 .simpleview .navarrows img {
 	height: 24px;
 }
+
+.simpleview #trackviewerimg{
+	position: fixed;
+	top: calc(50vh - 380px);
+	left: calc(50vw - 380px);
+ }
+ 
+  .simpleview .thumbnailbutton{
+	padding:5px;
+	position:absolute;
+ }
+ 
+ .simpleview .motiontracksicon{
+	height:20px;
+ }
  
 @keyframes spin {
 0% { transform: rotate(0deg); }

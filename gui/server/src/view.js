@@ -3,6 +3,7 @@ const path = require('path');
 const sharp = require(global.base + '/node_modules/sharp');
 const fs = require(global.base + '/node_modules/fs-extra');
 const {getHeader, toPixels} = require(global.base + '/node_modules/mrchandler')
+const spawn = require(global.base + '/node_modules/child-process-promise').spawn
 
 const pack = require(global.simplepath + '/gui_data/server/src/DensityServer/pack/main.js')
 const sqlite = require('./sqlite')
@@ -160,8 +161,43 @@ class View{
 			.then(image => {	
 				return({image : image})
 			})
-	}
-	else{
+	}else if(arg['trackfile'] != undefined){
+
+		var trackfilebase = arg['trackfile'].replace("_intg.mrc", "_shifts")
+		
+		if (fs.existsSync(trackfilebase + ".jpg")){
+			return sharp(trackfilebase + ".jpg")
+			.jpeg()
+			.toBuffer()
+			.then(image => {
+			  return({image : image})
+			})
+		} else if (! fs.existsSync(trackfilebase + ".jpg") && fs.existsSync(trackfilebase + ".eps")){
+			var commandargs = ["-q", "-sDEVICE=jpeg", "-dNOPAUSE", "-dBATCH", "-dSAFER", "-dDEVICEWIDTHPOINTS=760", "-dDEVICEHEIGHTPOINTS=760", "-sOutputFile=" + trackfilebase + ".jpg", trackfilebase + ".eps"]
+			return spawn("gs", commandargs)
+			.then(() => {
+				return sharp(trackfilebase + ".jpg")
+				.jpeg()
+				.toBuffer()
+				.then(image => {
+					return({image : image})
+				})
+			})
+		} else if (! fs.existsSync(trackfilebase + ".jpg") && fs.existsSync(trackfilebase + ".pdf")){
+			var commandargs = ["-q", "-sDEVICE=jpeg", "-dNOPAUSE", "-dBATCH", "-dSAFER", "-dDEVICEWIDTHPOINTS=760", "-dDEVICEHEIGHTPOINTS=760", "-sOutputFile=" + trackfilebase + ".jpg", trackfilebase + ".pdf"]
+			return spawn("gs", commandargs)
+			.then(() => {
+				return sharp(trackfilebase + ".jpg")
+				.jpeg()
+				.toBuffer()
+				.then(image => {
+					return({image : image})
+				})
+			})
+		}
+		
+		
+	}else{
 		return sharp(arg['stackfile'])
 		.resize(Number(arg['width']))
 		.jpeg()
@@ -602,6 +638,7 @@ class View{
 			selectiontxt += 0 + "\n"
 			count++
 		}
+		arg['selection'] = []
 		return fs.writeFile(arg['projfile'].replace(".simple", "_selected.txt"), selectiontxt)
 	})
 	.then(() => {
