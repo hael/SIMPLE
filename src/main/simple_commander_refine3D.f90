@@ -482,25 +482,27 @@ contains
                 call job_descr%set( 'trs', trim(str) )
                 call cline%set( 'trs', cline_check_3Dconv%get_rarg('trs') )
             endif
-            if( l_projection_matching .and. cline%defined('lp_iters') .and. (niters == params%lp_iters ) )then
-                ! e/o projection matching
-                write(logfhandle,'(A)')'>>>'
-                write(logfhandle,'(A)')'>>> SWITCHING TO EVEN/ODD RESOLUTION LIMIT'
-                write(logfhandle,'(A)')'>>>'
-                l_projection_matching = .false.
-                if( cline%defined('match_filt') )then
-                    if( cline%get_carg('match_filt').eq.'no' )then
-                        ! flags are kept so match_filt is not used
-                        call job_descr%set('match_filt','no')
+            if( l_projection_matching .and. (niters == params%lp_iters ) )then
+                if( cline%defined('lp_iters') )then
+                    ! e/o projection matching
+                    write(logfhandle,'(A)')'>>>'
+                    write(logfhandle,'(A)')'>>> SWITCHING TO EVEN/ODD RESOLUTION LIMIT'
+                    write(logfhandle,'(A)')'>>>'
+                    l_projection_matching = .false.
+                    if( cline%defined('match_filt') )then
+                        if( cline%get_carg('match_filt').eq.'no' )then
+                            ! flags are kept so match_filt is not used
+                            call job_descr%set('match_filt','no')
+                        else
+                            call cline%delete('lp')
+                            call job_descr%delete('lp')
+                            call cline_postprocess%delete('lp')
+                        endif
                     else
                         call cline%delete('lp')
                         call job_descr%delete('lp')
                         call cline_postprocess%delete('lp')
                     endif
-                else
-                    call cline%delete('lp')
-                    call job_descr%delete('lp')
-                    call cline_postprocess%delete('lp')
                 endif
                 if( params%l_frac_update )then
                     call job_descr%set('update_frac', real2str(params%update_frac))

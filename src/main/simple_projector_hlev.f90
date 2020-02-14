@@ -38,6 +38,7 @@ contains
         call vol_pad%new(ldim_pd, smpd)
         call vol%pad(vol_pad)
         call vol_pad%fft
+        call vol_pad%mul(real(boxpd)) ! correct for FFTW convention
         if( present(top) )then
             n = top
         else

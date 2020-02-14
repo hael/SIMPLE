@@ -73,7 +73,12 @@ contains
         lims(:,2)       =  params_glob%trs
         lims_init(:,1)  = -SHC_INPL_TRSHWDTH
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
-        call self%grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=MAXITS)
+        if( trim(params_glob%tseries).eq.'yes' )then
+            ! shift only search
+            call self%grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=MAXITS, opt_angle=.false.)
+        else
+            call self%grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=MAXITS)
+        endif
     end subroutine new
 
     subroutine prep4srch( self )
@@ -126,6 +131,10 @@ contains
         if( s2D%do_inplsrch(self%iptcl_map) )then
             ! BFGS
             call self%grad_shsrch_obj%set_indices(self%best_class, self%iptcl)
+            if( .not.self%grad_shsrch_obj%does_opt_angle() )then
+                ! shift-only optimization
+                irot = self%best_rot
+            endif
             cxy = self%grad_shsrch_obj%minimize(irot=irot)
             if( irot > 0 )then
                 self%best_corr  = cxy(1)

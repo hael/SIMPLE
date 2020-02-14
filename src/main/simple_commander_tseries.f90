@@ -510,21 +510,21 @@ contains
         character(len=:), allocatable :: orig_projfile
         character(len=STDLEN)         :: prev_ctfflag
         character(len=LONGSTRLEN)     :: finalcavgs
-        integer  :: nparts, last_iter_stage2
+        integer  :: nparts, last_iter_stage2, nptcls
         call cline%set('dir_exec', 'center2D_nano')
         call cline%set('match_filt',          'no')
-        call cline%set('graphene_filt',      'yes')
         call cline%set('ptclw',               'no')
         call cline%set('center',             'yes')
         call cline%set('autoscale',           'no')
         call cline%set('refine',          'greedy')
         call cline%set('tseries',            'yes')
-        if( .not. cline%defined('lp')      ) call cline%set('lp',            1.)
-        if( .not. cline%defined('ncls')    ) call cline%set('ncls',         20.)
-        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',         5.)
-        if( .not. cline%defined('trs')     ) call cline%set('trs',          10.)
-        if( .not. cline%defined('maxits')  ) call cline%set('maxits',       15.)
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
+        if( .not. cline%defined('lp')      )       call cline%set('lp',            1.)
+        if( .not. cline%defined('ncls')    )       call cline%set('ncls',         20.)
+        if( .not. cline%defined('cenlp')   )       call cline%set('cenlp',         5.)
+        if( .not. cline%defined('trs')     )       call cline%set('trs',           5.)
+        if( .not. cline%defined('maxits')  )       call cline%set('maxits',       15.)
+        if( .not. cline%defined('oritype') )       call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
         nparts = params%nparts
         ! set mkdir to no (to avoid nested directory structure)
@@ -533,7 +533,8 @@ contains
         call spproj%read(params%projfile)
         orig_projfile = trim(params%projfile)
         ! sanity checks
-        if( spproj%get_nptcls() == 0 )then
+        nptcls = spproj%get_nptcls()
+        if( nptcls == 0 )then
             THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_center2D_nano')
         endif
         ! delete any previous solution
@@ -544,10 +545,9 @@ contains
         endif
         ! de-activating CTF correction for this application
         prev_ctfflag = spproj%get_ctfflag(params%oritype)
-        if( trim(prev_ctfflag) /= 'no' )then
-            call spproj%os_stk%set_all2single('ctf','no')
-            call spproj%write_segment_inside('stk')
-        endif
+        ! chronological initialisation
+        params%nptcls_per_cls = ceiling(real(nptcls)/real(params%ncls))
+        call cline%set('nptcls_per_cls', real(params%nptcls_per_cls))
         ! splitting
         call spproj%split_stk(params%nparts, dir=PATH_PARENT)
         ! no auto-scaling
@@ -560,10 +560,6 @@ contains
         call spproj%read( params%projfile )
         call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
         call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
-        ! re-activating CTF correction for this application
-        if( trim(prev_ctfflag) /= 'no' )then
-            call spproj%os_stk%set_all2single('ctf',prev_ctfflag)
-        endif
         ! rank based on maximum of power spectrum
         call cline_pspec_rank%set('mkdir',   'no')
         call cline_pspec_rank%set('moldiam', params%moldiam)
@@ -749,7 +745,6 @@ contains
         if( .not. cline%defined('shcfrac')       ) call cline%set('shcfrac',         10.)
         if( .not. cline%defined('wcrit')         ) call cline%set('wcrit',         'inv')
         if( .not. cline%defined('trs')           ) call cline%set('trs',             5.0)
-        if( .not. cline%defined('update_frac')   ) call cline%set('update_frac',     0.2)
         if( .not. cline%defined('lp')            ) call cline%set('lp',              1.0)
         if( .not. cline%defined('cenlp')         ) call cline%set('cenlp',            5.)
         if( .not. cline%defined('maxits')        ) call cline%set('maxits',          15.)

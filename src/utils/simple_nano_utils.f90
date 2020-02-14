@@ -32,12 +32,16 @@ contains
         real,    pointer     :: pspectrum_roavg(:,:,:)
         complex, pointer     :: pcmat(:,:,:)
         logical, allocatable :: msk(:,:)
+        real    :: REMOVAL_HWIDTH
         real    :: smpd, first_ang, second_ang, val
         integer :: phys(3),cen(2), ldim(3), loc(2), h,k,i,j, band2_ind, sh, cnt
         ldim    = raw_img%get_ldim()
         ldim(3) = 1
         smpd    = raw_img%get_smpd()
         cen     = ldim(1:2)/2 + 1
+        ! Empirical size of peak obscuring
+        REMOVAL_HWIDTH = 2.
+        if( ldim(1) >= 150 ) REMOVAL_HWIDTH = 3. ! larger image, larger peak
         ! calculate rotational avg of the spectrum
         call spectrum_roavg%new(ldim,smpd)
         call spectrum%roavg(60,spectrum_roavg)
@@ -87,7 +91,7 @@ contains
         end do
         ang = min(ang,abs(ang-60.))
         ! remove second sheet
-        if( ang > 3. )then
+        if( ang > 2. )then
             call remove_lattice(second_ang, val)
         endif
         ! back to real space
@@ -116,13 +120,13 @@ contains
                     Rm(2,:) = [-Rm(1,2), Rm(1,1)]
                     ! band 1 (=b1); resolution ~ 2.14 angs
                     rxy = matmul(Rm,b1) + real(cen)
-                    call obscure_peak(rxy, val, 2.)
-                    ! 2. * band 1 (=2*b1); resolution ~ 1.06
+                    call obscure_peak(rxy, val, REMOVAL_HWIDTH)
+                    ! 2. * band 1 (=2*b1); resolution ~ 1.06; generally a weaker peak
                     rxy = matmul(Rm,2.*b1) + real(cen)
-                    call obscure_peak(rxy, val, sqrt(2.))
+                    call obscure_peak(rxy, val, sqrt(REMOVAL_HWIDTH))
                     ! band 2 (=b1+b2); resolution ~ 1.23
                     rxy = matmul(Rm,b1b2) + real(cen)
-                    call obscure_peak(rxy, val, 2.)
+                    call obscure_peak(rxy, val, REMOVAL_HWIDTH)
                 enddo
             end subroutine remove_lattice
 
@@ -143,8 +147,7 @@ contains
                         k = y - cen(2)
                         phys = raw_img%comp_addr_phys(h,k,0)
                         comp = pcmat(phys(1),phys(2),1)
-                        pcmat(phys(1),phys(2),1) = comp/sqrt(csq(comp)) * ran3()*val
-                        ! pcmat(phys(1),phys(2),1) = 0.
+                        pcmat(phys(1),phys(2),1) = comp/sqrt(csq(comp)) * (1.+ran3()) *val
                     enddo
                 enddo
             end subroutine obscure_peak

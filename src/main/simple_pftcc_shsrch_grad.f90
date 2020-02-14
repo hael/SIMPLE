@@ -33,6 +33,7 @@ contains
     procedure :: set_indices => grad_shsrch_set_indices
     procedure :: minimize    => grad_shsrch_minimize
     procedure :: kill        => grad_shsrch_kill
+    procedure :: does_opt_angle
     procedure :: coarse_search
     procedure :: coarse_search_opt_angle
 end type pftcc_shsrch_grad
@@ -73,6 +74,11 @@ contains
         self%ospec%fdfcostfun_8 => grad_shsrch_fdfcostfun
         if( self%opt_angle ) self%ospec%opt_callback => grad_shsrch_optimize_angle_wrapper
     end subroutine grad_shsrch_new
+
+    pure logical function does_opt_angle( self )
+        class(pftcc_shsrch_grad), intent(in) :: self
+        does_opt_angle = self%opt_angle
+    end function does_opt_angle
 
     function grad_shsrch_costfun( self, vec, D ) result( cost )
         class(*), intent(inout) :: self

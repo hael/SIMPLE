@@ -1512,7 +1512,6 @@ contains
         type(sp_project)              :: spproj, spproj_sc
         character(len=:), allocatable :: projfile_sc, orig_projfile
         character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
-        character(len=STDLEN)         :: prev_ctfflag
         real     :: scale_stage1, scale_stage2, trs_stage2
         integer  :: nparts, last_iter_stage1, last_iter_stage2, status
         integer  :: nptcls_sel
@@ -1555,14 +1554,6 @@ contains
         endif
         ! refinement flag
         if(.not.cline%defined('refine')) call cline%set('refine','snhc')
-        ! de-activating CTF correction for time-series
-        if( trim(params%tseries).eq.'yes' )then
-            prev_ctfflag = spproj%get_ctfflag(params%oritype)
-            if( trim(prev_ctfflag) /= 'no' )then
-                call spproj%os_stk%set_all2single('ctf','no')
-                call spproj%write_segment_inside('stk')
-            endif
-        endif
         ! splitting
         call spproj%split_stk(params%nparts, dir=PATH_PARENT)
         ! general options planning
@@ -1702,10 +1693,6 @@ contains
         call spproj%write_segment_inside('out')
         ! re-activating CTF correction for time series
         if( trim(params%tseries).eq.'yes' )then
-            if( trim(prev_ctfflag) /= 'no' )then
-                call spproj%os_stk%set_all2single('ctf',prev_ctfflag)
-                call spproj%write_segment_inside('stk')
-            endif
         endif
         ! clean
         call spproj%kill()
@@ -1805,6 +1792,7 @@ contains
                         if( build%spproj%os_ptcl2D%any_state_zero() )then
                             THROW_HARD('cluster2D_nano does not allow state=0 particles, prune project before execution; exec_cluster2D_distr')
                         endif
+                        cnt = 0
                         do iptcl=1,params%nptcls,params%nptcls_per_cls
                             cnt = cnt + 1
                             params%ncls = cnt
