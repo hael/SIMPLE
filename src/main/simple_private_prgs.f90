@@ -759,7 +759,15 @@ contains
         ! optional keys
         call private_prgs(25)%push_opt_key('lp_backgr')
 
-        n_private_prgs = 25
+        ! TSERIES_ROTRATE, for estimating the rotation rate of nanocrystal time-series data
+        call private_prgs(26)%set_name('tseries_rotrate')
+        ! required keys
+        call private_prgs(26)%push_req_key('dir_refine')
+        call private_prgs(26)%push_req_key('nparts')
+        call private_prgs(26)%push_req_key('nptcls')
+        call private_prgs(26)%push_req_key('projfile')
+
+        n_private_prgs = 26
     end subroutine new_private_prgs
 
 end module simple_private_prgs

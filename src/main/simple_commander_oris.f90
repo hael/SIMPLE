@@ -15,6 +15,7 @@ public :: make_oris_commander
 public :: orisops_commander
 public :: oristats_commander
 public :: o_peaksstats_commander
+public :: tseries_rotrate_commander
 public :: rotmats2oris_commander
 public :: vizoris_commander
 private
@@ -36,6 +37,10 @@ type, extends(commander_base) :: o_peaksstats_commander
   contains
     procedure :: execute      => exec_o_peaksstats
 end type o_peaksstats_commander
+type, extends(commander_base) :: tseries_rotrate_commander
+  contains
+    procedure :: execute      => exec_tseries_rotrate
+end type tseries_rotrate_commander
 type, extends(commander_base) :: rotmats2oris_commander
   contains
     procedure :: execute      => exec_rotmats2oris
@@ -369,6 +374,7 @@ contains
                 deallocate(weights, specscores, corrs, corrs_x_specscores)
             endif
         end do
+        call o_peak%kill
         call close_o_peaks_io
         ! we are only interested in the standard deviations here to understand
         ! how well the different orientations in the peak set are discriminated
@@ -390,6 +396,72 @@ contains
         write(logfhandle,604) '>>> CORR        SDEV  AVG/SDEV/MIN/MAX:', csdev_avg, csdev_sdev, csdev_min, csdev_max
         write(logfhandle,604) '>>> CORR x SPEC SDEV  AVG/SDEV/MIN/MAX:', cxssdev_avg, cxssdev_sdev, cxssdev_min, cxssdev_max
     end subroutine exec_o_peaksstats
+
+    subroutine exec_tseries_rotrate( self, cline )
+        use simple_o_peaks_io
+        class(tseries_rotrate_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(parameters) :: params
+        type(builder)    :: build
+        type(oris)       :: o_peak1, o_peak2
+        integer,                   allocatable :: parts(:,:)
+        character(len=:),          allocatable :: target_name, refine_path
+        character(len=LONGSTRLEN), allocatable :: list(:)
+        integer :: iptcl, n_nozero, ipart, ptcl1, ptcl2
+        real    :: mindist
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
+        ! fetch orientation peak distributions
+        refine_path = simple_abspath(params%dir_refine)
+        call simple_list_files(trim(refine_path)//'/oridistributions_part*', list)
+        if( size(list) /= params%nparts )then
+            THROW_HARD('# partitions not consistent with that in '//trim(params%dir_refine))
+        endif
+        ! generate even partitioning
+        parts = split_nobjs_even(params%nptcls, params%nparts)
+        ! read o_peaks & gather angular distances (in degrees)
+        call o_peak1%new(NPEAKS2REFINE)
+        call o_peak2%new(NPEAKS2REFINE)
+        do ipart = 1, params%nparts
+            call open_o_peaks_io(trim(list(ipart)))
+            do iptcl = parts(ipart,1), parts(ipart,2)
+                if( iptcl == params%nptcls )then
+                    mindist = 0. ! no right-hand neighbour available
+                    cycle
+                else
+                    if( iptcl == parts(ipart,1) )then
+                        call read_o_peak(o_peak2, [parts(ipart,1),parts(ipart,2)], iptcl, n_nozero)
+                        ! o_peak1 now has the last o_peak in the previous part and o_peak2 the first o_peak in this part
+                        call o_peak1%min_euldist(o_peak2, mindist)
+                        ptcl1 = parts(ipart,1) - 1
+                        ptcl2 = iptcl
+
+                        print *, ptcl1, ptcl2, mindist
+
+                        ! copy back
+                        o_peak1 = o_peak2
+                    else
+                        call read_o_peak(o_peak1, [parts(ipart,1),parts(ipart,2)], iptcl, n_nozero)
+                    endif
+                    ptcl1 = iptcl
+                    ptcl2 = iptcl + 1
+                    if( iptcl == parts(ipart,2) )then
+                        ! nothing to do, last particle in partition
+                        cycle
+                    else
+                        ! not on a boundary, read and calc dist
+                        call read_o_peak(o_peak2, [parts(ipart,1),parts(ipart,2)], iptcl + 1, n_nozero)
+                        call o_peak1%min_euldist(o_peak2, mindist)
+                    endif
+                endif
+
+                print *, ptcl1, ptcl2, mindist
+
+            end do
+            call close_o_peaks_io
+        end do
+        call o_peak1%kill
+        call o_peak2%kill
+    end subroutine exec_tseries_rotrate
 
     !> convert rotation matrix to orientation oris class
     subroutine exec_rotmats2oris( self, cline )

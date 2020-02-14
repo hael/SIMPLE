@@ -173,6 +173,7 @@ type :: oris
     procedure, private :: nearest_proj_neighbors_1
     procedure, private :: nearest_proj_neighbors_2
     generic            :: nearest_proj_neighbors => nearest_proj_neighbors_1, nearest_proj_neighbors_2
+    procedure          :: min_euldist
     procedure          :: find_angres
     procedure          :: extremal_bound
     procedure          :: set_extremal_vars
@@ -2770,6 +2771,29 @@ contains
         end do
         deallocate(ows)
     end subroutine nearest_proj_neighbors_2
+
+    subroutine min_euldist( self, o_peaks, mindist )
+        class(oris), intent(inout) :: self
+        class(oris), intent(in)    :: o_peaks
+        real,        intent(inout) :: mindist
+        real, allocatable :: ows(:)
+        real      :: dists(self%n), x
+        integer   :: inds(self%n), i, ii, loc(1)
+        type(ori) :: o
+        dists = huge(x)
+        ows   = o_peaks%get_all('ow')
+        do i=1,o_peaks%n
+            if( ows(i) <= TINY ) cycle
+            do ii=1,self%n
+                inds(ii) = ii
+                call self%get_ori(ii, o)
+                dists(ii) = o.euldist.o_peaks%o(i)
+            end do
+        end do
+        loc = minloc(dists)
+        mindist = rad2deg(dists(loc(1)))
+        deallocate(ows)
+    end subroutine min_euldist
 
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
     function find_angres( self ) result( res )
