@@ -425,7 +425,6 @@ contains
             call open_o_peaks_io(trim(list(ipart)))
             do iptcl = parts(ipart,1), parts(ipart,2)
                 if( iptcl == params%nptcls )then
-                    mindist = 0. ! no right-hand neighbour available
                     cycle
                 else
                     if( iptcl == parts(ipart,1) )then
@@ -434,9 +433,11 @@ contains
                         call o_peak1%min_euldist(o_peak2, mindist)
                         ptcl1 = parts(ipart,1) - 1
                         ptcl2 = iptcl
+                        if( ptcl1 /= 0 )then
 
-                        print *, ptcl1, ptcl2, mindist
+                            print *, ptcl1, ptcl2, mindist
 
+                        endif
                         ! copy back
                         o_peak1 = o_peak2
                     else
