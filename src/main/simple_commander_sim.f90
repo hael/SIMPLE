@@ -407,12 +407,19 @@ contains
             ! works out atoms_obj dimension
             msksq  = (params%moldiam/2.)**2.
             radius = atoms_obj%get_radius(1)
-            if( uppercase(trim(params%element)).eq.'PT' )then
-                lfcc   = 3.92
-            else
-                ! lfcc   = 2.*sqrt(2.)*radius
-                lfcc   = 3.76
-            endif
+            select case(uppercase(trim(params%element)))
+                case('PT')
+                    lfcc = 3.92
+                case('AU')
+                    lfcc = 4.065
+                case('AG')
+                    lfcc = 4.09
+                case('PD')
+                    lfcc = 3.89
+                case DEFAULT
+                    lfcc = 3.76
+                    ! lfcc = 2.*sqrt(2.)*radius
+            end select
             hlfcc  = lfcc/2.
             ncubes = floor(real(params%box) * params%smpd / lfcc)
             ! atoms at edges
