@@ -296,22 +296,20 @@ contains
         call CPlot2D__SetYAxisTitle(plot2D, title%str)
         call CPlot2D__OutputPostScriptPlot(plot2D, self%shift_fname)
         call CPlot2D__delete(plot2D)
-        
-        ! conversion to JPEG
+        ! Format conversion
         l = len_trim(self%shift_fname)
         self%shift_fname = self%shift_fname(:l-1) ! removing trailing C NULL character
+        ! conversion to JPEG
         fname_jpeg  = trim(get_fbody(self%shift_fname,'eps'))//'.jpeg'
-        ps2jpeg_cmd = 'gs -q -sDEVICE=jpeg -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=760 -dDEVICEHEIGHTPOINTS=760 -sOutputFile='&
+        ps2jpeg_cmd = 'gs -q -sDEVICE=jpeg -dJPEGQ=92 -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=760 -dDEVICEHEIGHTPOINTS=760 -sOutputFile='&
             //trim(fname_jpeg)//' '//trim(self%shift_fname)
         call exec_cmdline(trim(adjustl(ps2jpeg_cmd)), suppress_errors=.true., exitstat=iostat)
-        
         ! conversion to PDF
-        l = len_trim(self%shift_fname)
-        self%shift_fname = self%shift_fname(:l-1) ! removing trailing C NULL character
         fname_pdf  = trim(get_fbody(self%shift_fname,'eps'))//'.pdf'
         ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=760 -dDEVICEHEIGHTPOINTS=760 -sOutputFile='&
             //trim(fname_pdf)//' '//trim(self%shift_fname)
         call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+        ! update name
         if( iostat == 0 )then
             call del_file(self%shift_fname)
             self%shift_fname = trim(fname_pdf)
