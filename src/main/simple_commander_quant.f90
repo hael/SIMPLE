@@ -72,6 +72,8 @@ contains
             THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
         endif
         call nano%new(params%vols(1), params%smpd, params%element)
+        ! volume soft-edge masking
+        if(cline%defined('msk')) call nano%mask(params%msk)
         ! execute
         if(cline%defined('thres')) then
           if(cline%defined('cs_thres')) then ! contact score threshold for outliers removal

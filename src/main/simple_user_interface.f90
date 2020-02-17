@@ -1523,7 +1523,7 @@ contains
         &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-comp map',& ! descr long
         &'quant_exec',&                                        ! executable
-        &1, 1, 0, 2, 1, 0, 1, .false.)                          ! # entries in each group, requires sp_project
+        &1, 1, 0, 2, 1, 1, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
@@ -1538,7 +1538,7 @@ contains
         ! filter controls
         call detect_atoms%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
-        ! <empty>
+        call detect_atoms%set_input('mask_ctrls', 1, 'msk','num','Mask radius','Mask radius in pixels for application of a soft circular mask', 'mask radius in pixels', .false., 75.)
         ! computer controls
         call detect_atoms%set_input('comp_ctrls', 1, nthr)
     end subroutine new_detect_atoms

@@ -84,6 +84,7 @@ type :: nanoparticle
     procedure          :: update_self_ncc
     procedure          :: keep_atomic_pos_at_radius
     procedure          :: center_on_atom
+    procedure          :: mask
     ! kill
     procedure          :: kill => kill_nanoparticle
 end type nanoparticle
@@ -2072,7 +2073,7 @@ contains
     ! removal based on contact score.
     subroutine identify_atomic_pos(self, cs_thresh)
       class(nanoparticle), intent(inout) :: self
-      integer, optional,       intent(in)    :: cs_thresh
+      integer, optional,   intent(in)    :: cs_thresh
       ! Phase correlations approach
       call self%phasecorrelation_nano_gaussian()
       ! Nanoparticle binarization
@@ -2189,6 +2190,13 @@ contains
       call atom_centers%writePDB(pdbfile_out)
       call atom_centers%kill
     end subroutine center_on_atom
+
+    subroutine mask(self, msk_rad)
+      class(nanoparticle), intent(inout) :: self
+      real,                intent(in)    :: msk_rad
+      call self%img%mask(msk_rad, 'soft')
+      if(DEBUG) call self%img%write(trim(self%fbody)//'_masked.mrc') 
+    end subroutine mask
 
     subroutine geometry_analysis(self, pdbfile2, thresh)
       use simple_math, only : plane_from_points
