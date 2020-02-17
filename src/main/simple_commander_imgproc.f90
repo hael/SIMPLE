@@ -1143,10 +1143,16 @@ contains
         integer,        allocatable :: ccsizes(:)   ! connected component sizes
         real,           allocatable :: diams(:)     ! diameters
         integer :: funit, i, loc(1)
-        real    :: med_diam, thresh(3)
+        real    :: med_diam, thresh(3), msk_rad
         if( .not. cline%defined('lp')    ) call cline%set('lp',     5.0)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir','yes')
         call params%new(cline)
+        ! set radius for hard mask of binary image
+        if(cline%defined('msk') )  then
+            msk_rad = params%msk
+        else
+            msk_rad = 0.4*params%box
+        endif
         ! allocate & read cavgs
         allocate(imgs(params%nptcls), diams(params%nptcls))
         diams = 0.
@@ -1165,6 +1171,8 @@ contains
             call imgs(i)%write(FILT, i)
             ! binarise with Otsu
             call otsu_robust_fast(imgs(i), is2D=.false., noneg=.false., thresh=thresh)
+            ! hard mask for removing noise, default diameter 80% of the box size
+            call imgs(i)%mask(msk_rad,'hard')
             call imgs(i)%set_imat ! integer matrix set in binimage instance
             call imgs(i)%write(BINARY, i)
             ! estimate diameter

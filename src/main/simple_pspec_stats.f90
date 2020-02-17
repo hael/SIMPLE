@@ -23,7 +23,7 @@ real,    parameter :: THR_SCORE_UP    = 0.4   ! threshold for keeping/discarding
 real,    parameter :: THR_SCORE_DOWN  = 0.25  ! threshold for keeping/discarding mic wrt score
 real,    parameter :: THR_CURVAT_UPUP = 6.    ! threshold for keeping/discarding mic wrt average curvature
 real,    parameter :: THR_CURVAT_UP   = 4.1   ! threshold for keeping/discarding mic wrt average curvature
-real,    parameter :: THR_CURVAT_DOWN = 2.5   ! threshold for keeping/discarding mic wrt average curvature
+real,    parameter :: THR_CURVAT_DOWN = 2.6   ! threshold for keeping/discarding mic wrt average curvature
 
 type :: pspec_stats
     private

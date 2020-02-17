@@ -12,10 +12,11 @@ private
 #include "simple_local_flags.inc"
 
 ! module global constants
-integer, parameter :: N_THRESH   = 20      ! number of thresholds for binarization
-logical, parameter :: DEBUG      = .false. ! for debugging purposes
-integer, parameter :: SOFT_EDGE  = 6
-integer, parameter :: N_DISCRET  = 1000
+integer, parameter :: N_THRESH      = 20      ! number of thresholds for binarization
+logical, parameter :: DEBUG         = .false. ! for debugging purposes
+logical, parameter :: GENERATE_FIGS = .true.  ! for figures generation
+integer, parameter :: SOFT_EDGE     = 6
+integer, parameter :: N_DISCRET     = 1000
 
 type :: nanoparticle
     private
@@ -517,6 +518,7 @@ contains
         write(logfhandle,*) 'Selected threshold: ', x_thresh(t)
         ! Update img_bin and img_cc
         call self%img_bin%copy_bimg(img_bin_thresh(t))
+        if(GENERATE_FIGS) call self%img_bin%write_bimg(trim(self%fbody)//'SelectedThreshold.mrc')
         call self%img_cc%copy_bimg(img_ccs_thresh(t))
         call self%update_self_ncc()
         call self%find_centers()
@@ -1602,6 +1604,8 @@ contains
       real,    allocatable :: stdev_within(:)
       integer              :: i, j, ncls, dim, filnum, io_stat, cnt
       real                 :: avg, stdev
+      type(binimage)       :: img_1clss
+      integer, allocatable :: imat_cc(:,:,:), imat_1clss(:,:,:)
       if(thresh > 1. .or. thresh < 0.) THROW_HARD('Invalid input threshold! AR is in [0,1]; cluster_ar')
       ! Preparing for clustering
       ! Aspect ratios calculations
@@ -1657,6 +1661,23 @@ contains
         write(filnum,*) self%ratios(i)
       enddo
       call fclose(filnum)
+      ! Generate one figure for each class
+      if(GENERATE_FIGS) then
+        call img_1clss%new_bimg(self%ldim, self%smpd)
+        call self%img_cc%get_imat(imat_cc)
+        allocate(imat_1clss(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
+        do i = 1, ncls
+          imat_1clss = 0
+          do j = 1, dim
+            if(labels(j) == i) then
+              where(imat_cc == j) imat_1clss = i
+            endif
+          enddo
+          call img_1clss%set_imat(imat_1clss)
+          call img_1clss%write_bimg('ArClass'//int2str(i)//'.mrc')
+        enddo
+        call img_1clss%kill_bimg
+      endif
       if(allocated(stdev_within)) deallocate(stdev_within)
       deallocate(centroids, labels, populations)
     end subroutine cluster_ar
@@ -2062,8 +2083,10 @@ contains
       else
         call self%discard_outliers()
       endif
+      if(GENERATE_FIGS) call self%img_bin%write(trim(self%fbody)//'AfterOutliersRemoval.mrc')
       ! Validation of the selected atomic positions
        call self%validate_atomic_positions()
+       if(GENERATE_FIGS) call self%img_bin%write(trim(self%fbody)//'AfterAPValidation.mrc')
     end subroutine identify_atomic_pos
 
     ! Detect atoms. User DOES input threshold for binarization.
