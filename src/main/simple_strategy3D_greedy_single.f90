@@ -30,6 +30,7 @@ contains
         real      :: shwmean, shwstdev
         integer   :: best_loc(1)
         logical   :: included(self%s%npeaks)
+        real      :: shifts(2)
         ! extract peak info
         call extract_peaks(self%s, corrs)
         call calc_ori_weights(self%s, corrs, ws, best_loc, wcorr) ! stochastic weights
@@ -55,7 +56,8 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'dist_inpl', dist_inpl)
         ! all the other stuff
         call build_glob%spproj_field%set_euler(self%s%iptcl,  s3D%o_peaks(self%s%iptcl)%get_euler(best_loc(1)))
-        call build_glob%spproj_field%set_shift(self%s%iptcl,  s3D%o_peaks(self%s%iptcl)%get_2Dshift(best_loc(1)))
+        shifts = s3D%o_peaks(self%s%iptcl)%get_2Dshift(best_loc(1))
+        call build_glob%spproj_field%set_shift(self%s%iptcl,  shifts)
         call build_glob%spproj_field%set(self%s%iptcl, 'state',     1.)
         call build_glob%spproj_field%set(self%s%iptcl, 'frac',      frac)
         call build_glob%spproj_field%set(self%s%iptcl, 'corr',      wcorr)
