@@ -421,6 +421,7 @@ contains
         ! read o_peaks & gather angular distances (in degrees)
         call o_peak1%new(NPEAKS2REFINE)
         call o_peak2%new(NPEAKS2REFINE)
+        write(*,'(A)') '#PARTICLE INDEX #PARTICLE_INDEX #MIN_ANG_DIST'
         do ipart = 1, params%nparts
             call open_o_peaks_io(trim(list(ipart)))
             do iptcl = parts(ipart,1), parts(ipart,2)
@@ -434,9 +435,7 @@ contains
                         ptcl1 = parts(ipart,1) - 1
                         ptcl2 = iptcl
                         if( ptcl1 /= 0 )then
-
-                            print *, ptcl1, ptcl2, mindist
-
+                            write(*,'(I7,1X,I7,1X,F6.1)') ptcl1, ptcl2, mindist
                         endif
                         ! copy back
                         o_peak1 = o_peak2
@@ -454,9 +453,7 @@ contains
                         call o_peak1%min_euldist(o_peak2, mindist)
                     endif
                 endif
-
-                print *, ptcl1, ptcl2, mindist
-
+                write(*,'(I7,1X,I7,1X,F6.1)') ptcl1, ptcl2, mindist
             end do
             call close_o_peaks_io
         end do
