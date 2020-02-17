@@ -103,6 +103,9 @@ class StarFileTable
 
 public:
 
+    // Vector of names in Starfile, temporary storage for fortran interoperability
+    std::vector<std::string> temp_names;
+
     /** What labels have been read from a docfile/metadata file
      *  and/or will be stored on a new metadata file when "save" is
      *  called
@@ -143,6 +146,8 @@ public:
     void setName(const std::string Name);
     std::string getName() const;
 
+    void getNames(const FileName &filename, std::vector<std::string>& names) const;
+    void getNames(std::ifstream& in, std::vector<std::string>& names) const;
 
     //	getValue: returns true if the label exists
     template<class T>
@@ -410,9 +415,13 @@ extern "C"
   void StarFileTable__read(StarFileTable* This, char* fname, char* name);
   void StarFileTable__setName(StarFileTable* This, char* aname);
   void StarFileTable__setComment(StarFileTable* This, char* acomment);
+  void StarFileTable__getComment(StarFileTable* This, void** str, int* alen);
+  bool StarFileTable__hasComment(StarFileTable* This);
   long StarFileTable__firstObject(StarFileTable* This);
   long StarFileTable__numberOfObjects(StarFileTable* This);
   long StarFileTable__nextObject(StarFileTable* This);
+  void StarFileTable__getnames_cnt(StarFileTable* This, char* fname, int* count);
+  void StarFileTable__getnames_nr(StarFileTable* This, int nr, void** str, int* alen);
   void dealloc_str(void* str);
 }
 

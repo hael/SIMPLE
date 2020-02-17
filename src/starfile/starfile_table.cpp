@@ -46,6 +46,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <fstream>
+#include <list>
 #include "starfile_filename.h"
 #include "starfile_table.h"
 #include "starfile_error.h"
@@ -85,8 +86,8 @@ StarFileTable::StarFileTable(const StarFileTable &MD)
 {
     for (size_t idx = 0; idx < MD.objects.size(); idx++)
     {
-        objects[idx] = new StarFileContainer(*(MD.objects[idx]));
-        objects[idx]->table = this;
+	objects[idx] = new StarFileContainer(*(MD.objects[idx]));
+	objects[idx]->table = this;
     }
 }
 
@@ -94,27 +95,27 @@ StarFileTable& StarFileTable::operator = (const StarFileTable &MD)
 {
     if (this != &MD)
     {
-        clear();
+	clear();
 
-        objects.resize(MD.objects.size());
-        label2offset = MD.label2offset;
-        current_objectID = 0;
-        doubleLabels = MD.doubleLabels;
-        intLabels = MD.intLabels;
-        boolLabels = MD.boolLabels;
-        stringLabels = MD.stringLabels;
-        isList = MD.isList;
-        name = MD.name;
-        comment = MD.comment;
+	objects.resize(MD.objects.size());
+	label2offset = MD.label2offset;
+	current_objectID = 0;
+	doubleLabels = MD.doubleLabels;
+	intLabels = MD.intLabels;
+	boolLabels = MD.boolLabels;
+	stringLabels = MD.stringLabels;
+	isList = MD.isList;
+	name = MD.name;
+	comment = MD.comment;
 
-        activeLabels = MD.activeLabels;
-        ignoreLabels = MD.ignoreLabels;
+	activeLabels = MD.activeLabels;
+	ignoreLabels = MD.ignoreLabels;
 
-        for (long int idx = 0; idx < MD.objects.size(); idx++)
-        {
-            objects[idx] = new StarFileContainer(this, MD.objects[idx]);
-            objects[idx]->table = this;
-        }
+	for (long int idx = 0; idx < MD.objects.size(); idx++)
+	{
+	    objects[idx] = new StarFileContainer(this, MD.objects[idx]);
+	    objects[idx]->table = this;
+	}
     }
 
     return *this;
@@ -129,7 +130,7 @@ StarFileTable::~StarFileTable()
 {
     for (long i = 0; i < objects.size(); i++)
     {
-        delete objects[i];
+	delete objects[i];
     }
 }
 
@@ -147,7 +148,7 @@ void StarFileTable::clear()
 {
     for (long i = 0; i < objects.size(); i++)
     {
-        delete objects[i];
+	delete objects[i];
     }
     objects.clear();
 
@@ -192,6 +193,65 @@ std::string StarFileTable::getName() const
     return name;
 }
 
+void StarFileTable::getNames(const FileName &filename, std::vector<std::string>& names) const
+{
+	std::list<std::string> namesList;
+
+	FileName fn_read = filename.removeFileFormat();
+
+	std::ifstream in(fn_read.data(), std::ios_base::in);
+	if (in.fail())
+		REPORT_ERROR( (std::string) "StarFileTable::getNames: File " + fn_read + " does not exist" );
+
+	FileName ext = filename.getFileFormat();
+	if (ext =="star")
+	{
+		//REPORT_ERROR("readSTAR not implemented yet...");
+		return getNames(in, names);
+	}
+	else
+	{
+		REPORT_ERROR("StarFileTable::read ERROR: metadata table should have a .star extension");
+	}
+
+	in.close();
+}
+
+void StarFileTable::getNames(std::ifstream& in, std::vector<std::string>& names) const
+{
+
+	std::list<std::string> namesList;
+	std::string line, token;
+
+
+	// Start reading the ifstream at the top
+	in.seekg(0);
+
+	// Proceed until the next data_ or _loop statement
+	// The loop statement may be necessary for data blocks that have a list AND a table inside them
+	while (getline(in, line, '\n'))
+	{
+		// Find data_ lines
+		if (line.find("data_") != std::string::npos)
+		{
+			token = line.substr(line.find("data_") + 5);
+			namesList.push_back(token);
+		}
+	}
+
+	names.clear();
+	names.resize(namesList.size());
+	size_t idx = 0;
+	for (std::list<std::string>::iterator it = namesList.begin();
+	     it != namesList.end();
+	     ++it,++idx)
+	{
+	  names[idx] = *it;
+	}
+
+
+}
+
 void StarFileTable::getValueToString(EMDLabel label, std::string &value, long objectID) const
 {
 
@@ -202,55 +262,55 @@ void StarFileTable::getValueToString(EMDLabel label, std::string &value, long ob
 
     if (EMDL::isString(label))
     {
-        getValue(label, value, objectID);
+	getValue(label, value, objectID);
     }
     else
     {
 
-        if (EMDL::isDouble(label))
-        {
-            double v;
-            getValue(label, v, objectID);
+	if (EMDL::isDouble(label))
+	{
+	    double v;
+	    getValue(label, v, objectID);
 
-            if ((ABS(v) > 0. && ABS(v) < 0.001) || ABS(v) > 100000.)
-            {
-                if (v < 0.)
-                {
-                    snprintf(buffer,13, "%12.5e", v);
-                }
-                else
-                {
-                    snprintf(buffer,13, "%12.6e", v);
-                }
-            }
-            else
-            {
-                if (v < 0.)
-                {
-                    snprintf(buffer,13, "%12.5f", v);
-                }
-                else
-                {
-                    snprintf(buffer,13, "%12.6f", v);
-                }
-            }
+	    if ((ABS(v) > 0. && ABS(v) < 0.001) || ABS(v) > 100000.)
+	    {
+		if (v < 0.)
+		{
+		    snprintf(buffer,13, "%12.5e", v);
+		}
+		else
+		{
+		    snprintf(buffer,13, "%12.6e", v);
+		}
+	    }
+	    else
+	    {
+		if (v < 0.)
+		{
+		    snprintf(buffer,13, "%12.5f", v);
+		}
+		else
+		{
+		    snprintf(buffer,13, "%12.6f", v);
+		}
+	    }
 
-        }
-        else if (EMDL::isInt(label))
-        {
-            long v;
-            getValue(label, v, objectID);
-            snprintf(buffer,13, "%12ld", v);
-        }
-        else if (EMDL::isBool(label))
-        {
-            bool v;
-            getValue(label, v, objectID);
-            snprintf(buffer,13, "%12d", (int)v);
-        }
+	}
+	else if (EMDL::isInt(label))
+	{
+	    long v;
+	    getValue(label, v, objectID);
+	    snprintf(buffer,13, "%12ld", v);
+	}
+	else if (EMDL::isBool(label))
+	{
+	    bool v;
+	    getValue(label, v, objectID);
+	    snprintf(buffer,13, "%12d", (int)v);
+	}
 
-        std::string tt(buffer);
-        value = tt;
+	std::string tt(buffer);
+	value = tt;
     }
 
 }
@@ -261,35 +321,35 @@ size_t StarFileTable::size()
 }
 
 bool StarFileTable::setValueFromString(EMDLabel label, const std::string &value,
-                                       long int objectID)
+				       long int objectID)
 {
     if (EMDL::isString(label))
     {
-        return setValue(label, value, objectID);
+	return setValue(label, value, objectID);
     }
     else
     {
-        std::istringstream i(value);
+	std::istringstream i(value);
 
-        if (EMDL::isDouble(label))
-        {
-            double v;
-            i >> v;
-            return setValue(label, v, objectID);
-        }
-        else if (EMDL::isInt(label))
-        {
-            long v;
-            i >> v;
-            return setValue(label, v, objectID);
-        }
-        else if (EMDL::isBool(label))
-        {
-            bool v;
-            i >> v;
-            return setValue(label, v, objectID);
-        }
-        return false;          // added by Simon to suppress compiler warning
+	if (EMDL::isDouble(label))
+	{
+	    double v;
+	    i >> v;
+	    return setValue(label, v, objectID);
+	}
+	else if (EMDL::isInt(label))
+	{
+	    long v;
+	    i >> v;
+	    return setValue(label, v, objectID);
+	}
+	else if (EMDL::isBool(label))
+	{
+	    bool v;
+	    i >> v;
+	    return setValue(label, v, objectID);
+	}
+	return false;          // added by Simon to suppress compiler warning
     }
 }
 
@@ -301,7 +361,7 @@ struct MdDoubleComparator
 
     bool operator()(StarFileContainer *lh, StarFileContainer *rh) const
     {
-        return lh->doubles[index] < rh->doubles[index];
+	return lh->doubles[index] < rh->doubles[index];
     }
 
     long index;
@@ -313,7 +373,7 @@ struct MdIntComparator
 
     bool operator()(StarFileContainer *lh, StarFileContainer *rh) const
     {
-        return lh->ints[index] < rh->ints[index];
+	return lh->ints[index] < rh->ints[index];
     }
 
     long index;
@@ -325,7 +385,7 @@ struct MdStringComparator
 
     bool operator()(StarFileContainer *lh, StarFileContainer *rh) const
     {
-        return lh->strings[index] < rh->strings[index];
+	return lh->strings[index] < rh->strings[index];
     }
 
     long index;
@@ -337,11 +397,11 @@ struct MdStringAfterAtComparator
 
     bool operator()(StarFileContainer *lh, StarFileContainer *rh) const
     {
-        std::string slh = lh->strings[index];
-        std::string srh = rh->strings[index];
-        slh = slh.substr(slh.find("@")+1);
-        srh = srh.substr(srh.find("@")+1);
-        return slh < srh;
+	std::string slh = lh->strings[index];
+	std::string srh = rh->strings[index];
+	slh = slh.substr(slh.find("@")+1);
+	srh = srh.substr(srh.find("@")+1);
+	return slh < srh;
     }
 
     long index;
@@ -353,18 +413,18 @@ struct MdStringBeforeAtComparator
 
     bool operator()(StarFileContainer *lh, StarFileContainer *rh) const
     {
-        std::string slh = lh->strings[index];
-        std::string srh = rh->strings[index];
-        slh = slh.substr(0, slh.find("@"));
-        srh = srh.substr(0, srh.find("@"));
-        std::stringstream stslh, stsrh;
-        stslh << slh;
-        stsrh << srh;
-        long ilh, irh;
-        stslh >> ilh;
-        stsrh >> irh;
+	std::string slh = lh->strings[index];
+	std::string srh = rh->strings[index];
+	slh = slh.substr(0, slh.find("@"));
+	srh = srh.substr(0, srh.find("@"));
+	std::stringstream stslh, stsrh;
+	stslh << slh;
+	stsrh << srh;
+	long ilh, irh;
+	stslh >> ilh;
+	stsrh >> irh;
 
-        return ilh < irh;
+	return ilh < irh;
     }
 
     long index;
@@ -374,58 +434,58 @@ void StarFileTable::sort(EMDLabel name, bool do_reverse, bool only_set_index, bo
 {
 
     if (do_random)
-        srand (time(NULL));			  /* initialize random seed: */
+	srand (time(NULL));			  /* initialize random seed: */
     else if (!(EMDL::isInt(name) || EMDL::isDouble(name)) )
-        REPORT_ERROR("MetadataTable::sort%% ERROR: can only sorted numbers");
+	REPORT_ERROR("StarFileTable::sort%% ERROR: can only sorted numbers");
 
     std::vector<std::pair<double,long int> > vp;
     vp.reserve(objects.size());
     long int i = 0;
     FOR_ALL_OBJECTS_IN_METADATA_TABLE(*this)
     {
-        double dval;
-        if (do_random)
-        {
-            dval = (double)rand();
-        }
-        else if (EMDL::isInt(name))
-        {
-            long val;
-            getValue(name, val);
-            dval = (double) val;
-        }
-        else // EMDL::isDouble(name)
-        {
-            getValue(name, dval);
-        }
+	double dval;
+	if (do_random)
+	{
+	    dval = (double)rand();
+	}
+	else if (EMDL::isInt(name))
+	{
+	    long val;
+	    getValue(name, val);
+	    dval = (double) val;
+	}
+	else // EMDL::isDouble(name)
+	{
+	    getValue(name, dval);
+	}
 
-        vp.push_back(std::make_pair(dval, i));
-        i++;
+	vp.push_back(std::make_pair(dval, i));
+	i++;
     }
 
     std::sort(vp.begin(), vp.end());
     if (do_reverse && !do_random)
-        std::reverse(vp.begin(), vp.end());
+	std::reverse(vp.begin(), vp.end());
 
     if (only_set_index)
     {
-        // Add an extra column with the sorted position of each entry
-        for (long j = 0; j < vp.size(); j++)
-        {
-            (*this).setValue(EMDL_SORTED_IDX, j, vp[j].second);
-        }
+	// Add an extra column with the sorted position of each entry
+	for (long j = 0; j < vp.size(); j++)
+	{
+	    (*this).setValue(EMDL_SORTED_IDX, j, vp[j].second);
+	}
     }
     else
     {
-        // Change the actual order in the StarFileTable
-        std::vector<StarFileContainer*> objs(objects.size());
+	// Change the actual order in the StarFileTable
+	std::vector<StarFileContainer*> objs(objects.size());
 
-        for (long j = 0; j < vp.size(); j++)
-        {
-            objs[j] = objects[vp[j].second];
-        }
+	for (long j = 0; j < vp.size(); j++)
+	{
+	    objs[j] = objects[vp[j].second];
+	}
 
-        objects = objs;
+	objects = objs;
     }
     // reset pointer to the beginning of the table
     firstObject();
@@ -435,37 +495,37 @@ void StarFileTable::newSort(const EMDLabel label, bool do_reverse, bool do_sort_
 {
     if (EMDL::isString(label))
     {
-        if (do_sort_after_at)
-        {
-            std::stable_sort(objects.begin(), objects.end(),
-                             MdStringAfterAtComparator(label2offset[label]));
-        }
-        else if (do_sort_before_at)
-        {
-            std::stable_sort(objects.begin(), objects.end(),
-                             MdStringBeforeAtComparator(label2offset[label]));
-        }
-        else
-        {
-            std::stable_sort(objects.begin(), objects.end(), MdStringComparator(label2offset[label]));
-        }
+	if (do_sort_after_at)
+	{
+	    std::stable_sort(objects.begin(), objects.end(),
+			     MdStringAfterAtComparator(label2offset[label]));
+	}
+	else if (do_sort_before_at)
+	{
+	    std::stable_sort(objects.begin(), objects.end(),
+			     MdStringBeforeAtComparator(label2offset[label]));
+	}
+	else
+	{
+	    std::stable_sort(objects.begin(), objects.end(), MdStringComparator(label2offset[label]));
+	}
     }
     else if (EMDL::isDouble(label))
     {
-        std::stable_sort(objects.begin(), objects.end(), MdDoubleComparator(label2offset[label]));
+	std::stable_sort(objects.begin(), objects.end(), MdDoubleComparator(label2offset[label]));
     }
     else if (EMDL::isInt(label))
     {
-        std::stable_sort(objects.begin(), objects.end(), MdIntComparator(label2offset[label]));
+	std::stable_sort(objects.begin(), objects.end(), MdIntComparator(label2offset[label]));
     }
     else
     {
-        REPORT_ERROR("Cannot sort this label: " + EMDL::label2Str(label));
+	REPORT_ERROR("Cannot sort this label: " + EMDL::label2Str(label));
     }
 
     if (do_reverse)
     {
-        std::reverse(objects.begin(), objects.end());
+	std::reverse(objects.begin(), objects.end());
     }
 }
 
@@ -488,11 +548,11 @@ std::vector<EMDLabel> StarFileTable::getActiveLabels() const
 void StarFileTable::deactivateLabel(EMDLabel label)
 {
     std::vector<EMDLabel>::iterator location
-        = std::find(activeLabels.begin(), activeLabels.end(), label);
+	= std::find(activeLabels.begin(), activeLabels.end(), label);
 
     if (location != activeLabels.end())
     {
-        activeLabels.erase(location);
+	activeLabels.erase(location);
     }
 }
 
@@ -500,62 +560,62 @@ void StarFileTable::addLabel(EMDLabel label)
 {
     if (label < 0 || label >= EMDL_LAST_LABEL)
     {
-        std::stringstream sts;
-        sts << label;
-        REPORT_ERROR("StarFileTable::addLabel: unrecognised label: " + sts.str());
+	std::stringstream sts;
+	sts << label;
+	REPORT_ERROR("StarFileTable::addLabel: unrecognised label: " + sts.str());
     }
 
     if (label2offset[label] < 0)
     {
-        activeLabels.push_back(label);
-        long id;
+	activeLabels.push_back(label);
+	long id;
 
-        if (EMDL::isDouble(label))
-        {
-            id = doubleLabels;
+	if (EMDL::isDouble(label))
+	{
+	    id = doubleLabels;
 
-            for (long i = 0; i < objects.size(); i++)
-            {
-                objects[i]->doubles.push_back(0);
-            }
+	    for (long i = 0; i < objects.size(); i++)
+	    {
+		objects[i]->doubles.push_back(0);
+	    }
 
-            doubleLabels++;
-        }
-        else if (EMDL::isInt(label))
-        {
-            id = intLabels;
+	    doubleLabels++;
+	}
+	else if (EMDL::isInt(label))
+	{
+	    id = intLabels;
 
-            for (long i = 0; i < objects.size(); i++)
-            {
-                objects[i]->ints.push_back(0);
-            }
+	    for (long i = 0; i < objects.size(); i++)
+	    {
+		objects[i]->ints.push_back(0);
+	    }
 
-            intLabels++;
-        }
-        else if (EMDL::isBool(label))
-        {
-            id = boolLabels;
+	    intLabels++;
+	}
+	else if (EMDL::isBool(label))
+	{
+	    id = boolLabels;
 
-            for (long i = 0; i < objects.size(); i++)
-            {
-                objects[i]->bools.push_back(false);
-            }
+	    for (long i = 0; i < objects.size(); i++)
+	    {
+		objects[i]->bools.push_back(false);
+	    }
 
-            boolLabels++;
-        }
-        else if (EMDL::isString(label))
-        {
-            id = stringLabels;
+	    boolLabels++;
+	}
+	else if (EMDL::isString(label))
+	{
+	    id = stringLabels;
 
-            for (long i = 0; i < objects.size(); i++)
-            {
-                objects[i]->strings.push_back("empty");
-            }
+	    for (long i = 0; i < objects.size(); i++)
+	    {
+		objects[i]->strings.push_back("empty");
+	    }
 
-            stringLabels++;
-        }
+	    stringLabels++;
+	}
 
-        label2offset[label] = id;
+	label2offset[label] = id;
     }
 }
 
@@ -563,12 +623,12 @@ void StarFileTable::addMissingLabels(const StarFileTable* mdt)
 {
     for (long i = 0; i < mdt->activeLabels.size(); i++)
     {
-        EMDLabel l = mdt->activeLabels[i];
+	EMDLabel l = mdt->activeLabels[i];
 
-        if (label2offset[l] < 0)
-        {
-            addLabel(l);
-        }
+	if (label2offset[l] < 0)
+	{
+	    addLabel(l);
+	}
     }
 }
 
@@ -577,24 +637,24 @@ void StarFileTable::append(const StarFileTable& mdt)
 
     if (activeLabels.size() == 0)
     {
-        // If the current one is empty, add missing labels and append the new one:
-        addMissingLabels(&mdt);
+	// If the current one is empty, add missing labels and append the new one:
+	addMissingLabels(&mdt);
     }
     else
     {
-        // If the current one is not-empty, check all labels are the same before appending. Otherwise, raise error
-        if (!compareLabels(*this, mdt))
-            REPORT_ERROR("ERROR in appending metadata tables with not the same columns!");
+	// If the current one is not-empty, check all labels are the same before appending. Otherwise, raise error
+	if (!compareLabels(*this, mdt))
+	    REPORT_ERROR("ERROR in appending metadata tables with not the same columns!");
     }
 
     // Now append
     objects.reserve(objects.size() + mdt.numberOfObjects());
     for (long i = 0; i < mdt.objects.size(); i++)
     {
-        objects.push_back(new StarFileContainer(
-                              this, doubleLabels, intLabels, boolLabels, stringLabels));
+	objects.push_back(new StarFileContainer(
+			      this, doubleLabels, intLabels, boolLabels, stringLabels));
 
-        setObjectUnsafe(mdt.getObject(i), objects.size() - 1);
+	setObjectUnsafe(mdt.getObject(i), objects.size() - 1);
     }
 
     // reset pointer to the beginning of the table
@@ -641,36 +701,36 @@ void StarFileTable::setObjectUnsafe(StarFileContainer* data, long objectID)
 
     for (long i = 0; i < data->table->activeLabels.size(); i++)
     {
-        EMDLabel label = data->table->activeLabels[i];
+	EMDLabel label = data->table->activeLabels[i];
 
-        long myOff = label2offset[label];
-        long srcOff = data->table->label2offset[label];
+	long myOff = label2offset[label];
+	long srcOff = data->table->label2offset[label];
 
-        if (myOff < 0) continue;
+	if (myOff < 0) continue;
 
-        if (EMDL::isDouble(label))
-        {
-            obj->doubles[myOff] = data->doubles[srcOff];
-        }
-        else if (EMDL::isInt(label))
-        {
-            obj->ints[myOff] = data->ints[srcOff];
-        }
-        else if (EMDL::isBool(label))
-        {
-            obj->bools[myOff] = data->bools[srcOff];
-        }
-        else if (EMDL::isString(label))
-        {
-            obj->strings[myOff] = data->strings[srcOff];
-        }
+	if (EMDL::isDouble(label))
+	{
+	    obj->doubles[myOff] = data->doubles[srcOff];
+	}
+	else if (EMDL::isInt(label))
+	{
+	    obj->ints[myOff] = data->ints[srcOff];
+	}
+	else if (EMDL::isBool(label))
+	{
+	    obj->bools[myOff] = data->bools[srcOff];
+	}
+	else if (EMDL::isString(label))
+	{
+	    obj->strings[myOff] = data->strings[srcOff];
+	}
     }
 }
 
 void StarFileTable::addObject()
 {
     objects.push_back(new StarFileContainer(
-                          this, doubleLabels, intLabels, boolLabels, stringLabels));
+			  this, doubleLabels, intLabels, boolLabels, stringLabels));
 
     current_objectID = objects.size()-1;
 }
@@ -678,7 +738,7 @@ void StarFileTable::addObject()
 void StarFileTable::addObject(StarFileContainer* data)
 {
     objects.push_back(new StarFileContainer(
-                          this, doubleLabels, intLabels, boolLabels, stringLabels));
+			  this, doubleLabels, intLabels, boolLabels, stringLabels));
 
     setObject(data, objects.size()-1);
     current_objectID = objects.size()-1;
@@ -687,7 +747,7 @@ void StarFileTable::addObject(StarFileContainer* data)
 void StarFileTable::addValuesOfDefinedLabels(StarFileContainer* data)
 {
     objects.push_back(new StarFileContainer(
-                          this, doubleLabels, intLabels, boolLabels, stringLabels));
+			  this, doubleLabels, intLabels, boolLabels, stringLabels));
 
     setValuesOfDefinedLabels(data, objects.size()-1);
     current_objectID = objects.size()-1;
@@ -717,11 +777,11 @@ long int StarFileTable::nextObject()
 
     if (current_objectID >= objects.size())
     {
-        return NO_MORE_OBJECTS;
+	return NO_MORE_OBJECTS;
     }
     else
     {
-        return current_objectID;
+	return current_objectID;
     }
 }
 
@@ -744,42 +804,42 @@ long int StarFileTable::readStarLoop(std::ifstream& in, std::vector<EMDLabel> *d
     // First read all the column labels
     while (getline(in, line, '\n'))
     {
-        line = simplify(line);
-        // TODO: handle comments...
-        if (line[0] == '#' || line[0] == '\0' || line[0] == ';')
-            continue;
+	line = simplify(line);
+	// TODO: handle comments...
+	if (line[0] == '#' || line[0] == '\0' || line[0] == ';')
+	    continue;
 
-        if (line[0] == '_') // label definition line
-        {
-            //Only take string from "_" until "#"
-            size_t pos0 = line.find("_");
-            size_t pos1 = line.find("#");
+	if (line[0] == '_') // label definition line
+	{
+	    //Only take string from "_" until "#"
+	    size_t pos0 = line.find("_");
+	    size_t pos1 = line.find("#");
 
-            token = line.substr(pos0 + 1, pos1 - pos0 - 2);
+	    token = line.substr(pos0 + 1, pos1 - pos0 - 2);
 
-            EMDLabel label = EMDL::str2Label(token);
+	    EMDLabel label = EMDL::str2Label(token);
 
-            //std::cerr << " label= XX" << label << "XX token= XX" << token<<"XX" << std::endl;
-            if (desiredLabels != NULL && !vectorContainsLabel(*desiredLabels, label))
-                label = EMDL_UNDEFINED; //ignore if not present in desiredLabels
+	    //std::cerr << " label= XX" << label << "XX token= XX" << token<<"XX" << std::endl;
+	    if (desiredLabels != NULL && !vectorContainsLabel(*desiredLabels, label))
+		label = EMDL_UNDEFINED; //ignore if not present in desiredLabels
 
-            if (label == EMDL_UNDEFINED)
-            {
-                //std::cerr << "Warning: ignoring the following (undefined) label:" <<token << std::endl;
-                REPORT_ERROR("ERROR: Unrecognised metadata label: " + token);
-                ignoreLabels.push_back(labelPosition);
-            }
-            else
-            {
-                addLabel(label);
-            }
+	    if (label == EMDL_UNDEFINED)
+	    {
+		//std::cerr << "Warning: ignoring the following (undefined) label:" <<token << std::endl;
+		REPORT_ERROR("ERROR: Unrecognised metadata label: " + token);
+		ignoreLabels.push_back(labelPosition);
+	    }
+	    else
+	    {
+		addLabel(label);
+	    }
 
-            labelPosition++;
-        }
-        else // found first data line
-        {
-            break;
-        }
+	    labelPosition++;
+	}
+	else // found first data line
+	{
+	    break;
+	}
     }
 
     // Then fill the table (dont read another line until the one from above has been handled)
@@ -788,41 +848,41 @@ long int StarFileTable::readStarLoop(std::ifstream& in, std::vector<EMDLabel> *d
 
     while (is_first || getline(in, line, '\n'))
     {
-        is_first = false;
+	is_first = false;
 
-        if (grep_pattern == "" || line.find(grep_pattern) != std::string::npos)
-        {
-            line = simplify(line);
-            // Stop at empty line
-            if (line[0] == '\0')
-                break;
+	if (grep_pattern == "" || line.find(grep_pattern) != std::string::npos)
+	{
+	    line = simplify(line);
+	    // Stop at empty line
+	    if (line[0] == '\0')
+		break;
 
-            nr_objects++;
-            if (!do_only_count)
-            {
-                // Add a new line to the table
-                addObject();
+	    nr_objects++;
+	    if (!do_only_count)
+	    {
+		// Add a new line to the table
+		addObject();
 
-                // Parse data values
-                std::stringstream os2(line);
-                std::string value;
-                labelPosition = 0;
-                int counterIgnored = 0;
-                while (os2 >> value)
-                {
-                    // TODO: handle comments here...
-                    if (std::find(ignoreLabels.begin(), ignoreLabels.end(), labelPosition) != ignoreLabels.end())
-                    {
-                        // Ignore this column
-                        counterIgnored++;
-                        labelPosition++;
-                        continue;
-                    }
-                    setValueFromString(activeLabels[labelPosition - counterIgnored], value);
-                    labelPosition++;
-                }
-            }
-        } // end if grep_pattern
+		// Parse data values
+		std::stringstream os2(line);
+		std::string value;
+		labelPosition = 0;
+		int counterIgnored = 0;
+		while (os2 >> value)
+		{
+		    // TODO: handle comments here...
+		    if (std::find(ignoreLabels.begin(), ignoreLabels.end(), labelPosition) != ignoreLabels.end())
+		    {
+			// Ignore this column
+			counterIgnored++;
+			labelPosition++;
+			continue;
+		    }
+		    setValueFromString(activeLabels[labelPosition - counterIgnored], value);
+		    labelPosition++;
+		}
+	    }
+	} // end if grep_pattern
     }
 
     return nr_objects;
@@ -842,50 +902,50 @@ bool StarFileTable::readStarList(std::ifstream& in, std::vector<EMDLabel> *desir
     // Read data and fill structures accordingly
     while (getline(in, line, '\n'))
     {
-        tokenize(line, words);
+	tokenize(line, words);
 
-        // Ignore empty lines
-        if (words.size() == 0)
-            continue;
-        else
-            firstword = words[0];
+	// Ignore empty lines
+	if (words.size() == 0)
+	    continue;
+	else
+	    firstword = words[0];
 
-        // Get label-value pairs
-        if (firstword[0] == '_')
-        {
-            EMDLabel label = EMDL::str2Label(firstword.substr(1)); // get rid of leading underscore
-            if (words.size() != 2)
-                REPORT_ERROR("StarFileTable::readStarList: did not encounter a single word after "+firstword);
-            value = words[1];
+	// Get label-value pairs
+	if (firstword[0] == '_')
+	{
+	    EMDLabel label = EMDL::str2Label(firstword.substr(1)); // get rid of leading underscore
+	    if (words.size() != 2)
+		REPORT_ERROR("StarFileTable::readStarList: did not encounter a single word after "+firstword);
+	    value = words[1];
 
-            if (desiredLabels != NULL && !vectorContainsLabel(*desiredLabels, label))
-            {
-                label = EMDL_UNDEFINED; //ignore if not present in desiredLabels
-            }
-            if (label != EMDL_UNDEFINED)
-            {
-                addLabel(label);
-                setValueFromString(label, value, objectID);
-            }
-        }
-        // Check whether there is a comment or an empty line
-        else if (firstword[0] == '#' || firstword[0] == ';')
-        {
-            // TODO: handle comments?
-            continue;
-        }
-        // Check whether a loop structure comes after this list
-        else if (firstword.find("loop_") == 0)
-        {
-            also_has_loop = true;
-            return also_has_loop;
-        }
-        // Check whether this data blocks ends (because a next one is there)
-        else if (firstword.find("data_") == 0)
-        {
-            // Should I reverse the pointer one line?
-            return also_has_loop;
-        }
+	    if (desiredLabels != NULL && !vectorContainsLabel(*desiredLabels, label))
+	    {
+		label = EMDL_UNDEFINED; //ignore if not present in desiredLabels
+	    }
+	    if (label != EMDL_UNDEFINED)
+	    {
+		addLabel(label);
+		setValueFromString(label, value, objectID);
+	    }
+	}
+	// Check whether there is a comment or an empty line
+	else if (firstword[0] == '#' || firstword[0] == ';')
+	{
+	    // TODO: handle comments?
+	    continue;
+	}
+	// Check whether a loop structure comes after this list
+	else if (firstword.find("loop_") == 0)
+	{
+	    also_has_loop = true;
+	    return also_has_loop;
+	}
+	// Check whether this data blocks ends (because a next one is there)
+	else if (firstword.find("data_") == 0)
+	{
+	    // Should I reverse the pointer one line?
+	    return also_has_loop;
+	}
     }
     // Reached the end of the file
     return also_has_loop;
@@ -904,34 +964,38 @@ long int StarFileTable::readStar(std::ifstream& in, const std::string &name, std
     // The loop statement may be necessary for data blocks that have a list AND a table inside them
     while (getline(in, line, '\n'))
     {
-        // Find data_ lines
-        if (line.find("data_") != std::string::npos)
-        {
-            token = line.substr(line.find("data_") + 5);
-            // If a name has been given, only read data_thatname
-            // Otherwise, just read the first data_ block
-            if (name == "" || name == token)
-            {
-                setName(token);
-                // Get the next item that starts with "_somelabel" or with "loop_"
-                int current_pos = in.tellg();
-                while (getline(in, line, '\n'))
-                {
-                    trim(line);
-                    if (line.find("loop_") != std::string::npos)
-                    {
-                        return readStarLoop(in, desiredLabels, grep_pattern, do_only_count);
-                    }
-                    else if (line[0] == '_')
-                    {
-                        // go back one line in the ifstream
-                        in.seekg(current_pos);
-                        also_has_loop = readStarList(in, desiredLabels);
-                        return (also_has_loop) ? 0 : 1;
-                    }
-                }
-            }
-        }
+	// Find data_ lines
+	if (line.find("data_") != std::string::npos)
+	{
+	    token = line.substr(line.find("data_") + 5);
+	    // If a name has been given, only read data_thatname
+	    // Otherwise, just read the first data_ block
+	    if (name == "" || name == token)
+	    {
+		setName(token);
+		// Get the next item that starts with "_somelabel" or with "loop_"
+		int current_pos = in.tellg();
+		while (getline(in, line, '\n'))
+		{
+		    trim(line);
+		    if (line[0] == '#')
+		    {
+			comment = line.substr(2);
+		    }
+		    else if (line.find("loop_") != std::string::npos)
+		    {
+			return readStarLoop(in, desiredLabels, grep_pattern, do_only_count);
+		    }
+		    else if (line[0] == '_')
+		    {
+			// go back one line in the ifstream
+			in.seekg(current_pos);
+			also_has_loop = readStarList(in, desiredLabels);
+			return (also_has_loop) ? 0 : 1;
+		    }
+		}
+	    }
+	}
     }
 
     // Clear the eofbit so we can perform more actions on the stream.
@@ -951,17 +1015,17 @@ long int StarFileTable::read(const FileName &filename, const std::string &name, 
 
     std::ifstream in(fn_read.data(), std::ios_base::in);
     if (in.fail())
-        REPORT_ERROR( (std::string) "StarFileTable::read: File " + fn_read + " does not exist" );
+	REPORT_ERROR( (std::string) "StarFileTable::read: File " + fn_read + " does not exist" );
 
     FileName ext = filename.getFileFormat();
     if (ext =="star")
     {
-        //REPORT_ERROR("readSTAR not implemented yet...");
-        return readStar(in, name, desiredLabels, grep_pattern, do_only_count);
+	//REPORT_ERROR("readSTAR not implemented yet...");
+	return readStar(in, name, desiredLabels, grep_pattern, do_only_count);
     }
     else
     {
-        REPORT_ERROR("StarFileTable::read ERROR: metadata table should have a .star extension");
+	REPORT_ERROR("StarFileTable::read ERROR: metadata table should have a .star extension");
     }
 
     in.close();
@@ -975,102 +1039,102 @@ void StarFileTable::write(std::ostream& out) const
 {
     // Only write tables that have something in them
     if (isEmpty())
-        return;
+	return;
 
     out << "\n";
     out << "data_" << getName() <<"\n";
     if (containsComment())
-        out << "# "<< comment << "\n";
+	out << "# "<< comment << "\n";
     out << "\n";
 
     if (!isList)
     {
-        // Write loop header structure
-        out << "loop_ \n";
-        for (long i = 0; i < activeLabels.size(); i++)
-        {
-            EMDLabel l = activeLabels[i];
+	// Write loop header structure
+	out << "loop_ \n";
+	for (long i = 0; i < activeLabels.size(); i++)
+	{
+	    EMDLabel l = activeLabels[i];
 
-            if (l != EMDL_COMMENT && l != EMDL_SORTED_IDX) // EMDL_SORTED_IDX is only for internal use, never write it out!
-            {
-                out << "_" << EMDL::label2Str(l) << " #" << i+1 << " \n";
-            }
-        }
+	    if (l != EMDL_COMMENT && l != EMDL_SORTED_IDX) // EMDL_SORTED_IDX is only for internal use, never write it out!
+	    {
+		out << "_" << EMDL::label2Str(l) << " #" << i+1 << " \n";
+	    }
+	}
 
-        // Write actual data block
-        for (long int idx = 0; idx < objects.size(); idx++)
-        {
-            std::string entryComment = "";
+	// Write actual data block
+	for (long int idx = 0; idx < objects.size(); idx++)
+	{
+	    std::string entryComment = "";
 
-            for (long i = 0; i < activeLabels.size(); i++)
-            {
-                EMDLabel l = activeLabels[i];
+	    for (long i = 0; i < activeLabels.size(); i++)
+	    {
+		EMDLabel l = activeLabels[i];
 
-                if (l != EMDL_COMMENT && l != EMDL_SORTED_IDX)
-                {
-                    out.width(10);
-                    std::string val;
-                    getValueToString(l, val, idx);
-                    out << val << " ";
-                }
-                if (l == EMDL_COMMENT)
-                {
-                    getValue(EMDL_COMMENT, entryComment, idx);
-                }
-            }
-            if (entryComment != std::string(""))
-            {
-                out << "# " << entryComment;
-            }
-            out << "\n";
-        }
-        // Finish table with a white-line
-        out << " \n";
+		if (l != EMDL_COMMENT && l != EMDL_SORTED_IDX)
+		{
+		    out.width(10);
+		    std::string val;
+		    getValueToString(l, val, idx);
+		    out << val << " ";
+		}
+		if (l == EMDL_COMMENT)
+		{
+		    getValue(EMDL_COMMENT, entryComment, idx);
+		}
+	    }
+	    if (entryComment != std::string(""))
+	    {
+		out << "# " << entryComment;
+	    }
+	    out << "\n";
+	}
+	// Finish table with a white-line
+	out << " \n";
 
     }
     else
     {
-        // Get first object. In this case (row format) there is a single object
-        std::string entryComment = "";
-        int maxWidth=10;
+	// Get first object. In this case (row format) there is a single object
+	std::string entryComment = "";
+	int maxWidth=10;
 
-        for (long i = 0; i < activeLabels.size(); i++)
-        {
-            EMDLabel l = activeLabels[i];
+	for (long i = 0; i < activeLabels.size(); i++)
+	{
+	    EMDLabel l = activeLabels[i];
 
-            if (l != EMDL_COMMENT)
-            {
-                int w = EMDL::label2Str(l).length();
+	    if (l != EMDL_COMMENT)
+	    {
+		int w = EMDL::label2Str(l).length();
 
-                if (w > maxWidth) maxWidth = w;
-            }
-            else
-            {
-                getValue(EMDL_COMMENT, entryComment, 0);
-            }
-        }
+		if (w > maxWidth) maxWidth = w;
+	    }
+	    else
+	    {
+		getValue(EMDL_COMMENT, entryComment, 0);
+	    }
+	}
 
-        for (long i = 0; i < activeLabels.size(); i++)
-        {
-            EMDLabel l = activeLabels[i];
+	for (long i = 0; i < activeLabels.size(); i++)
+	{
+	    EMDLabel l = activeLabels[i];
 
-            if (l != EMDL_COMMENT)
-            {
-                int w = EMDL::label2Str(l).length();
-                out << "_" << EMDL::label2Str(l) << std::setw(12 + maxWidth - w) << " ";
+	    if (l != EMDL_COMMENT)
+	    {
+		int w = EMDL::label2Str(l).length();
+		out << "_" << EMDL::label2Str(l) << std::setw(12 + maxWidth - w) << " ";
 
-                std::string val;
-                getValueToString(l, val, 0);
-                out << val << "\n";
-            }
-        }
-        if (entryComment != std::string(""))
-        {
-            out << "# " << entryComment << "\n";
-        }
+		std::string val;
+		getValueToString(l, val, 0);
+		out << val << "\n";
+	    }
+	}
+	if (entryComment != std::string(""))
+	{
+	    out << "# " << entryComment << "\n";
+	}
 
-        // End a data block with a white line
-        out << " \n";
+	// End a data block with a white line
+	out << " \n";
     }
 
 }
@@ -1080,7 +1144,7 @@ void StarFileTable::write(const FileName &fn_out) const
     std::ofstream  fh;
     fh.open((fn_out).c_str(), std::ios::out);
     if (!fh)
-        REPORT_ERROR( (std::string)"StarFileTable::write: cannot write to file: " + fn_out);
+	REPORT_ERROR( (std::string)"StarFileTable::write: cannot write to file: " + fn_out);
     write(fh);
     fh.close();
 
@@ -1090,7 +1154,7 @@ void StarFileTable::printLabels(std::ostream &ost)
 {
     for (int i = 0; i < activeLabels.size(); i++)
     {
-        ost << EMDL::label2Str(activeLabels[i]) << "\n";
+	ost << EMDL::label2Str(activeLabels[i]) << "\n";
     }
 }
 
@@ -1103,41 +1167,41 @@ void StarFileTable::checkObjectID(long id, std::string caller) const
 {
     if (id >= objects.size() || id < 0)
     {
-        std::stringstream sts0, sts1;
-        sts0 << id;
-        sts1 << objects.size();
-        REPORT_ERROR(caller+": object " + sts0.str()
-                     + " out of bounds! (" + sts1.str() + " objects present)");
+	std::stringstream sts0, sts1;
+	sts0 << id;
+	sts1 << objects.size();
+	REPORT_ERROR(caller+": object " + sts0.str()
+		     + " out of bounds! (" + sts1.str() + " objects present)");
     }
 }
 
 void compareStarFileTable(StarFileTable &MD1, StarFileTable &MD2,
-                          StarFileTable &MDboth, StarFileTable &MDonly1, StarFileTable &MDonly2,
-                          EMDLabel label1, double eps, EMDLabel label2, EMDLabel label3)
+			  StarFileTable &MDboth, StarFileTable &MDonly1, StarFileTable &MDonly2,
+			  EMDLabel label1, double eps, EMDLabel label2, EMDLabel label3)
 {
     if (!MD1.containsLabel(label1))
-        REPORT_ERROR("compareStarFileTableEqualLabel::ERROR MD1 does not contain the specified label1.");
+	REPORT_ERROR("compareStarFileTableEqualLabel::ERROR MD1 does not contain the specified label1.");
     if (!MD2.containsLabel(label1))
-        REPORT_ERROR("compareStarFileTableEqualLabel::ERROR MD2 does not contain the specified label1.");
+	REPORT_ERROR("compareStarFileTableEqualLabel::ERROR MD2 does not contain the specified label1.");
 
     if (label2 != EMDL_UNDEFINED)
     {
-        if (!EMDL::isDouble(label1) || !EMDL::isDouble(label2))
-            REPORT_ERROR("compareStarFileTableEqualLabel::ERROR 2D or 3D distances are only allowed for doubles.");
-        if (!MD1.containsLabel(label2))
-            REPORT_ERROR("compareStarFileTableEqualLabel::ERROR MD1 does not contain the specified label2.");
-        if (!MD2.containsLabel(label2))
-            REPORT_ERROR("compareStarFileTableEqualLabel::ERROR MD2 does not contain the specified label2.");
+	if (!EMDL::isDouble(label1) || !EMDL::isDouble(label2))
+	    REPORT_ERROR("compareStarFileTableEqualLabel::ERROR 2D or 3D distances are only allowed for doubles.");
+	if (!MD1.containsLabel(label2))
+	    REPORT_ERROR("compareStarFileTableEqualLabel::ERROR MD1 does not contain the specified label2.");
+	if (!MD2.containsLabel(label2))
+	    REPORT_ERROR("compareStarFileTableEqualLabel::ERROR MD2 does not contain the specified label2.");
     }
 
     if (label3 != EMDL_UNDEFINED)
     {
-        if (!EMDL::isDouble(label3))
-            REPORT_ERROR("compareStarFileTableEqualLabel::ERROR 3D distances are only allowed for doubles.");
-        if (!MD1.containsLabel(label3))
-            REPORT_ERROR("compareStarFileTableEqualLabel::ERROR MD1 does not contain the specified label3.");
-        if (!MD2.containsLabel(label3))
-            REPORT_ERROR("compareStarFileTableEqualLabel::ERROR MD2 does not contain the specified label3.");
+	if (!EMDL::isDouble(label3))
+	    REPORT_ERROR("compareStarFileTableEqualLabel::ERROR 3D distances are only allowed for doubles.");
+	if (!MD1.containsLabel(label3))
+	    REPORT_ERROR("compareStarFileTableEqualLabel::ERROR MD1 does not contain the specified label3.");
+	if (!MD2.containsLabel(label3))
+	    REPORT_ERROR("compareStarFileTableEqualLabel::ERROR MD2 does not contain the specified label3.");
     }
 
     MDboth.clear();
@@ -1152,104 +1216,104 @@ void compareStarFileTable(StarFileTable &MD1, StarFileTable &MD2,
     // loop over MD1
     std::vector<long int> to_remove_from_only2;
     for (long int current_object1 = MD1.firstObject();
-            current_object1 != StarFileTable::NO_MORE_OBJECTS && current_object1 != StarFileTable::NO_OBJECTS_STORED;
-            current_object1 = MD1.nextObject())
+	    current_object1 != StarFileTable::NO_MORE_OBJECTS && current_object1 != StarFileTable::NO_OBJECTS_STORED;
+	    current_object1 = MD1.nextObject())
     {
-        if (EMDL::isString(label1))
-            MD1.getValue(label1, mystr1);
-        else if (EMDL::isInt(label1))
-            MD1.getValue(label1, myint1);
-        else if (EMDL::isDouble(label1))
-        {
-            MD1.getValue(label1, myd1);
-            if (label2 != EMDL_UNDEFINED)
-                MD1.getValue(label2, mydy1);
-            if (label3 != EMDL_UNDEFINED)
-                MD1.getValue(label3, mydz1);
-        }
-        else
-            REPORT_ERROR("compareStarFileTableEqualLabel ERROR: only implemented for strings, integers or doubles");
+	if (EMDL::isString(label1))
+	    MD1.getValue(label1, mystr1);
+	else if (EMDL::isInt(label1))
+	    MD1.getValue(label1, myint1);
+	else if (EMDL::isDouble(label1))
+	{
+	    MD1.getValue(label1, myd1);
+	    if (label2 != EMDL_UNDEFINED)
+		MD1.getValue(label2, mydy1);
+	    if (label3 != EMDL_UNDEFINED)
+		MD1.getValue(label3, mydz1);
+	}
+	else
+	    REPORT_ERROR("compareStarFileTableEqualLabel ERROR: only implemented for strings, integers or doubles");
 
-        // loop over MD2
-        bool have_in_2 = false;
-        for (long int current_object2 = MD2.firstObject();
-                current_object2 != StarFileTable::NO_MORE_OBJECTS && current_object2 != StarFileTable::NO_OBJECTS_STORED;
-                current_object2 = MD2.nextObject())
-        {
+	// loop over MD2
+	bool have_in_2 = false;
+	for (long int current_object2 = MD2.firstObject();
+		current_object2 != StarFileTable::NO_MORE_OBJECTS && current_object2 != StarFileTable::NO_OBJECTS_STORED;
+		current_object2 = MD2.nextObject())
+	{
 
-            if (EMDL::isString(label1))
-            {
-                MD2.getValue(label1, mystr2);
-                if (strcmp(mystr1.c_str(), mystr2.c_str()) == 0)
-                {
-                    have_in_2 = true;
-                    to_remove_from_only2.push_back(current_object2);
-                    MDboth.addObject(MD1.getObject());
-                    break;
-                }
-            }
-            else if (EMDL::isInt(label1))
-            {
-                MD2.getValue(label1, myint2);
-                if ( ABS(myint2 - myint1) <= ROUND(eps) )
-                {
-                    have_in_2 = true;
-                    to_remove_from_only2.push_back(current_object2);
-                    MDboth.addObject(MD1.getObject());
-                    break;
-                }
-            }
-            else if (EMDL::isDouble(label1))
-            {
-                MD2.getValue(label1, myd2);
-                if (label2 != EMDL_UNDEFINED)
-                    MD2.getValue(label2, mydy2);
-                if (label3 != EMDL_UNDEFINED)
-                    MD2.getValue(label3, mydz2);
+	    if (EMDL::isString(label1))
+	    {
+		MD2.getValue(label1, mystr2);
+		if (strcmp(mystr1.c_str(), mystr2.c_str()) == 0)
+		{
+		    have_in_2 = true;
+		    to_remove_from_only2.push_back(current_object2);
+		    MDboth.addObject(MD1.getObject());
+		    break;
+		}
+	    }
+	    else if (EMDL::isInt(label1))
+	    {
+		MD2.getValue(label1, myint2);
+		if ( ABS(myint2 - myint1) <= ROUND(eps) )
+		{
+		    have_in_2 = true;
+		    to_remove_from_only2.push_back(current_object2);
+		    MDboth.addObject(MD1.getObject());
+		    break;
+		}
+	    }
+	    else if (EMDL::isDouble(label1))
+	    {
+		MD2.getValue(label1, myd2);
+		if (label2 != EMDL_UNDEFINED)
+		    MD2.getValue(label2, mydy2);
+		if (label3 != EMDL_UNDEFINED)
+		    MD2.getValue(label3, mydz2);
 
-                double dist = sqrt( (myd1 - myd2) * (myd1 - myd2) +
-                                    (mydy1 - mydy2) * (mydy1 - mydy2) +
-                                    (mydz1 - mydz2) * (mydz1 - mydz2) );
-                if ( ABS(dist) <= eps )
-                {
-                    have_in_2 = true;
-                    to_remove_from_only2.push_back(current_object2);
-                    //std::cerr << " current_object1= " << current_object1 << std::endl;
-                    //std::cerr << " myd1= " << myd1 << " myd2= " << myd2 << " mydy1= " << mydy1 << " mydy2= " << mydy2 << " dist= "<<dist<<std::endl;
-                    //std::cerr << " to be removed current_object2= " << current_object2 << std::endl;
-                    MDboth.addObject(MD1.getObject());
-                    break;
-                }
-            }
-        }
+		double dist = sqrt( (myd1 - myd2) * (myd1 - myd2) +
+				    (mydy1 - mydy2) * (mydy1 - mydy2) +
+				    (mydz1 - mydz2) * (mydz1 - mydz2) );
+		if ( ABS(dist) <= eps )
+		{
+		    have_in_2 = true;
+		    to_remove_from_only2.push_back(current_object2);
+		    //std::cerr << " current_object1= " << current_object1 << std::endl;
+		    //std::cerr << " myd1= " << myd1 << " myd2= " << myd2 << " mydy1= " << mydy1 << " mydy2= " << mydy2 << " dist= "<<dist<<std::endl;
+		    //std::cerr << " to be removed current_object2= " << current_object2 << std::endl;
+		    MDboth.addObject(MD1.getObject());
+		    break;
+		}
+	    }
+	}
 
-        if (!have_in_2)
-        {
-            MDonly1.addObject(MD1.getObject());
-        }
+	if (!have_in_2)
+	{
+	    MDonly1.addObject(MD1.getObject());
+	}
     }
 
 
 
     for (long int current_object2 = MD2.firstObject();
-            current_object2 != StarFileTable::NO_MORE_OBJECTS && current_object2 != StarFileTable::NO_OBJECTS_STORED;
-            current_object2 = MD2.nextObject())
+	    current_object2 != StarFileTable::NO_MORE_OBJECTS && current_object2 != StarFileTable::NO_OBJECTS_STORED;
+	    current_object2 = MD2.nextObject())
     {
 
-        bool to_be_removed = false;
-        for (long int i = 0; i < to_remove_from_only2.size(); i++)
-        {
-            if (to_remove_from_only2[i] == current_object2)
-            {
-                to_be_removed = true;
-                break;
-            }
-        }
-        if (!to_be_removed)
-        {
-            //std::cerr << " doNOT remove current_object2= " << current_object2 << std::endl;
-            MDonly2.addObject(MD2.getObject(current_object2));
-        }
+	bool to_be_removed = false;
+	for (long int i = 0; i < to_remove_from_only2.size(); i++)
+	{
+	    if (to_remove_from_only2[i] == current_object2)
+	    {
+		to_be_removed = true;
+		break;
+	    }
+	}
+	if (!to_be_removed)
+	{
+	    //std::cerr << " doNOT remove current_object2= " << current_object2 << std::endl;
+	    MDonly2.addObject(MD2.getObject(current_object2));
+	}
     }
 
 
@@ -1261,76 +1325,76 @@ StarFileTable combineStarFileTables(std::vector<StarFileTable> &MDin)
 
     if (MDin.size() == 0)
     {
-        REPORT_ERROR("combineStarFileTables ERROR: No input STAR files selected!");
+	REPORT_ERROR("combineStarFileTables ERROR: No input STAR files selected!");
     }
     else if (MDin.size() == 1 )
     {
-        MDc = MDin[0];
+	MDc = MDin[0];
     }
     else
     {
-        bool some_labels_missing = false;
-        // Find which labels occur in all input tables
-        std::vector<EMDLabel> labelsc;
-        std::vector<EMDLabel> labels1 = MDin[0].getActiveLabels();
+	bool some_labels_missing = false;
+	// Find which labels occur in all input tables
+	std::vector<EMDLabel> labelsc;
+	std::vector<EMDLabel> labels1 = MDin[0].getActiveLabels();
 
-        // Loop over all labels
-        for (size_t i = 0; i < labels1.size(); i++)
-        {
-            // Check their presence in each of the input files
-            bool is_present = true;
+	// Loop over all labels
+	for (size_t i = 0; i < labels1.size(); i++)
+	{
+	    // Check their presence in each of the input files
+	    bool is_present = true;
 
-            for (size_t j = 1; j < MDin.size(); j++)
-            {
-                is_present = vectorContainsLabel(MDin[j].getActiveLabels(), labels1[i]);
+	    for (size_t j = 1; j < MDin.size(); j++)
+	    {
+		is_present = vectorContainsLabel(MDin[j].getActiveLabels(), labels1[i]);
 
-                if (!is_present)
-                {
-                    some_labels_missing = true;
-                    break;
-                }
-            }
+		if (!is_present)
+		{
+		    some_labels_missing = true;
+		    break;
+		}
+	    }
 
-            if (is_present)
-            {
-                labelsc.push_back(labels1[i]);
-            }
-        }
+	    if (is_present)
+	    {
+		labelsc.push_back(labels1[i]);
+	    }
+	}
 
-        if (!some_labels_missing)
-        {
-            // Just append entire tables
-            for (size_t j = 0; j < MDin.size(); j++)
-            {
-                MDc.append(MDin[j]);
-            }
-        }
-        else
-        {
-            // Select only the labels in common, do this per line!
+	if (!some_labels_missing)
+	{
+	    // Just append entire tables
+	    for (size_t j = 0; j < MDin.size(); j++)
+	    {
+		MDc.append(MDin[j]);
+	    }
+	}
+	else
+	{
+	    // Select only the labels in common, do this per line!
 
-            for (size_t i = 0; i < labelsc.size(); i++)
-            {
-                MDc.addLabel(labelsc[i]);
-            }
+	    for (size_t i = 0; i < labelsc.size(); i++)
+	    {
+		MDc.addLabel(labelsc[i]);
+	    }
 
-            long totalLines = 0;
+	    long totalLines = 0;
 
-            for (size_t i = 0; i < MDin.size(); i++)
-            {
-                totalLines += MDin[i].numberOfObjects();
-            }
+	    for (size_t i = 0; i < MDin.size(); i++)
+	    {
+		totalLines += MDin[i].numberOfObjects();
+	    }
 
-            MDc.reserve(totalLines);
+	    MDc.reserve(totalLines);
 
-            for (size_t i = 0; i < MDin.size(); i++)
-            {
-                for (size_t j = 0; j < MDin[i].numberOfObjects(); j++)
-                {
-                    MDc.addValuesOfDefinedLabels(MDin[i].getObject(j));
-                }
-            }
-        }
+	    for (size_t i = 0; i < MDin.size(); i++)
+	    {
+		for (size_t j = 0; j < MDin[i].numberOfObjects(); j++)
+		{
+		    MDc.addValuesOfDefinedLabels(MDin[i].getObject(j));
+		}
+	    }
+	}
     }
 
     return MDc;
@@ -1344,15 +1408,15 @@ bool compareLabels(const StarFileTable &MD1, const StarFileTable &MD2)
     labels2 = MD2.getActiveLabels();
 
     if (labels1.size() != labels2.size())
-        return false;
+	return false;
 
     std::stable_sort(labels1.begin(), labels1.end());
     std::stable_sort(labels2.begin(), labels2.end());
 
     for (size_t id = 0; id < labels1.size(); id++)
     {
-        if (labels1[id] != labels2[id])
-            return false;
+	if (labels1[id] != labels2[id])
+	    return false;
     }
     return true;
 }
@@ -1360,32 +1424,32 @@ bool compareLabels(const StarFileTable &MD1, const StarFileTable &MD2)
 StarFileTable subsetStarFileTable(StarFileTable &MDin, EMDLabel label, RFLOAT min_value, RFLOAT max_value)
 {
     if (!(EMDL::isInt(label) || EMDL::isDouble(label)) )
-        REPORT_ERROR("subsetMetadataTable ERROR: can only make a subset selection based on numbers");
+	REPORT_ERROR("subsetStarFileTable ERROR: can only make a subset selection based on numbers");
 
     if (!MDin.containsLabel(label))
-        REPORT_ERROR("subsetMetadataTable ERROR: input StarFileTable does not contain label: " +  EMDL::label2Str(label));
+	REPORT_ERROR("subsetStarFileTable ERROR: input StarFileTable does not contain label: " +  EMDL::label2Str(label));
 
     StarFileTable MDout;
     FOR_ALL_OBJECTS_IN_METADATA_TABLE(MDin)
     {
-        bool do_include = false;
-        if (EMDL::isInt(label))
-        {
-            long val;
-            MDin.getValue(label, val);
-            do_include = ((RFLOAT)val < max_value && (RFLOAT)val > min_value);
-        }
-        else
-        {
-            RFLOAT val;
-            MDin.getValue(label, val);
-            do_include = ((RFLOAT)val < max_value && (RFLOAT)val > min_value);
-        }
+	bool do_include = false;
+	if (EMDL::isInt(label))
+	{
+	    long val;
+	    MDin.getValue(label, val);
+	    do_include = ((RFLOAT)val < max_value && (RFLOAT)val > min_value);
+	}
+	else
+	{
+	    RFLOAT val;
+	    MDin.getValue(label, val);
+	    do_include = ((RFLOAT)val < max_value && (RFLOAT)val > min_value);
+	}
 
-        if (do_include)
-        {
-            MDout.addObject(MDin.getObject(current_object));
-        }
+	if (do_include)
+	{
+	    MDout.addObject(MDin.getObject(current_object));
+	}
 
     }
 
@@ -1397,23 +1461,23 @@ StarFileTable subsetStarFileTable(StarFileTable &MDin, EMDLabel label, std::stri
 {
 
     if (!EMDL::isString(label))
-        REPORT_ERROR("subsetMetadataTable ERROR: can only make a subset selection based on strings");
+	REPORT_ERROR("subsetStarFileTable ERROR: can only make a subset selection based on strings");
 
     if (!MDin.containsLabel(label))
-        REPORT_ERROR("subsetMetadataTable ERROR: input StarFileTable does not contain label: " +  EMDL::label2Str(label));
+	REPORT_ERROR("subsetStarFileTable ERROR: input StarFileTable does not contain label: " +  EMDL::label2Str(label));
 
     StarFileTable MDout;
     FOR_ALL_OBJECTS_IN_METADATA_TABLE(MDin)
     {
-        std::string val;
-        MDin.getValue(label, val);
+	std::string val;
+	MDin.getValue(label, val);
 
-        bool found = (val.find(search_str) != std::string::npos);
+	bool found = (val.find(search_str) != std::string::npos);
 
-        if ((!exclude && found) || (exclude && !found))
-        {
-            MDout.addObject(MDin.getObject(current_object));
-        }
+	if ((!exclude && found) || (exclude && !found))
+	{
+	    MDout.addObject(MDin.getObject(current_object));
+	}
     }
 
     return MDout;
@@ -1423,11 +1487,11 @@ StarFileTable removeDuplicatedParticles(StarFileTable &MDin, EMDLabel mic_label,
 {
     // Sanity check
     if (!MDin.containsLabel(EMDL_ORIENT_ORIGIN_X) || !MDin.containsLabel(EMDL_ORIENT_ORIGIN_Y) ||
-            !MDin.containsLabel(EMDL_IMAGE_COORD_X) || !MDin.containsLabel(EMDL_IMAGE_COORD_Y))
-        REPORT_ERROR("You need rlnCoordinateX, rlnCoordinateY, rlnOriginX and rlnOriginY to remove duplicated particles");
+	    !MDin.containsLabel(EMDL_IMAGE_COORD_X) || !MDin.containsLabel(EMDL_IMAGE_COORD_Y))
+	REPORT_ERROR("You need rlnCoordinateX, rlnCoordinateY, rlnOriginX and rlnOriginY to remove duplicated particles");
 
     if (!MDin.containsLabel(mic_label))
-        REPORT_ERROR("STAR file does not contain " + EMDL::label2Str(mic_label));
+	REPORT_ERROR("STAR file does not contain " + EMDL::label2Str(mic_label));
 
     std::vector<bool> valid(MDin.numberOfObjects(), true);
     std::vector<RFLOAT> xs(MDin.numberOfObjects(), 0.0);
@@ -1439,42 +1503,42 @@ StarFileTable removeDuplicatedParticles(StarFileTable &MDin, EMDLabel mic_label,
     std::map<std::string, std::vector<long> > grouped;
     FOR_ALL_OBJECTS_IN_METADATA_TABLE(MDin)
     {
-        std::string mic_name;
-        MDin.getValue(mic_label, mic_name);
+	std::string mic_name;
+	MDin.getValue(mic_label, mic_name);
 
-        RFLOAT val1, val2;
-        MDin.getValue(EMDL_ORIENT_ORIGIN_X, val1);
-        MDin.getValue(EMDL_IMAGE_COORD_X, val2);
-        xs[current_object] = -val1 * origin_scale + val2;
-        MDin.getValue(EMDL_ORIENT_ORIGIN_Y, val1);
-        MDin.getValue(EMDL_IMAGE_COORD_Y, val2);
-        ys[current_object] = -val1 * origin_scale + val2;
+	RFLOAT val1, val2;
+	MDin.getValue(EMDL_ORIENT_ORIGIN_X, val1);
+	MDin.getValue(EMDL_IMAGE_COORD_X, val2);
+	xs[current_object] = -val1 * origin_scale + val2;
+	MDin.getValue(EMDL_ORIENT_ORIGIN_Y, val1);
+	MDin.getValue(EMDL_IMAGE_COORD_Y, val2);
+	ys[current_object] = -val1 * origin_scale + val2;
 
-        grouped[mic_name].push_back(current_object);
+	grouped[mic_name].push_back(current_object);
     }
 
     // find duplicate
     for (std::map<std::string, std::vector<long> >::iterator it = grouped.begin(); it != grouped.end(); ++it)
     {
-        long n_particles = it->second.size();
+	long n_particles = it->second.size();
 
-        for (long i = 0; i < n_particles; i++)
-        {
-            long part_id1 = it->second[i];
+	for (long i = 0; i < n_particles; i++)
+	{
+	    long part_id1 = it->second[i];
 
-            for (long j = i + 1; j < n_particles; j++)
-            {
-                long part_id2 = it->second[j];
-                RFLOAT dist_sq = (xs[part_id1] - xs[part_id2]) * (xs[part_id1] - xs[part_id2]) + (ys[part_id1] - ys[part_id2]) * (ys[part_id1] - ys[part_id2]);
+	    for (long j = i + 1; j < n_particles; j++)
+	    {
+		long part_id2 = it->second[j];
+		RFLOAT dist_sq = (xs[part_id1] - xs[part_id2]) * (xs[part_id1] - xs[part_id2]) + (ys[part_id1] - ys[part_id2]) * (ys[part_id1] - ys[part_id2]);
 
-                if (dist_sq <= threshold_sq)
-                {
+		if (dist_sq <= threshold_sq)
+		{
 //					std::cout << it->first << " " << part_id1 << " " << part_id2 << " " << dist_sq << std::endl;
-                    valid[part_id1] = false;
-                    break;
-                }
-            }
-        }
+		    valid[part_id1] = false;
+		    break;
+		}
+	    }
+	}
     }
 
 
@@ -1482,19 +1546,19 @@ StarFileTable removeDuplicatedParticles(StarFileTable &MDin, EMDLabel mic_label,
     long n_removed = 0;
     FOR_ALL_OBJECTS_IN_METADATA_TABLE(MDin)
     {
-        if (valid[current_object])
-        {
-            MDout.addObject(MDin.getObject(current_object));
-        }
-        else
-        {
-            MDremoved.addObject(MDin.getObject(current_object));
-            n_removed++;
-        }
+	if (valid[current_object])
+	{
+	    MDout.addObject(MDin.getObject(current_object));
+	}
+	else
+	{
+	    MDremoved.addObject(MDin.getObject(current_object));
+	    n_removed++;
+	}
     }
 
     if (fn_removed != "")
-        MDremoved.write(fn_removed);
+	MDremoved.write(fn_removed);
 
     std::cout << "Removed " << n_removed << " duplicated objects from " << MDin.numberOfObjects() << " objects." << std::endl;
 
@@ -1546,7 +1610,7 @@ void StarFileTable__setIsList(StarFileTable* This, bool is_list)
 
 template<typename T>
 void StarFileTable__setValue_wrapper(StarFileTable* This, int EMDL_id, T avalue,
-                                     long object_id)
+				     long object_id)
 {
   EMDLabel emdLabel = (EMDLabel)EMDL_id;
   This->setValue(emdLabel, avalue, object_id);
@@ -1554,7 +1618,7 @@ void StarFileTable__setValue_wrapper(StarFileTable* This, int EMDL_id, T avalue,
 
 template<>
 void StarFileTable__setValue_wrapper(StarFileTable* This, int EMDL_id, char* avalue,
-                                     long object_id)
+				     long object_id)
 {
   EMDLabel emdLabel = (EMDLabel)EMDL_id;
   std::string str(avalue);
@@ -1562,69 +1626,69 @@ void StarFileTable__setValue_wrapper(StarFileTable* This, int EMDL_id, char* ava
 }
 
 void StarFileTable__setValue_double(StarFileTable* This, int EMDL_id, double avalue,
-                                    long object_id)
+				    long object_id)
 {
   StarFileTable__setValue_wrapper(This, EMDL_id, avalue, object_id);
 }
 
 void StarFileTable__setValue_float(StarFileTable* This, int EMDL_id, float avalue,
-                                   long object_id)
+				   long object_id)
 {
   StarFileTable__setValue_wrapper(This, EMDL_id, avalue, object_id);
 }
 
 void StarFileTable__setValue_int(StarFileTable* This, int EMDL_id, int avalue,
-                                 long object_id)
+				 long object_id)
 {
   StarFileTable__setValue_wrapper(This, EMDL_id, avalue, object_id);
 }
 
 void StarFileTable__setValue_bool(StarFileTable* This, int EMDL_id, bool avalue,
-                                  long object_id)
+				  long object_id)
 {
   StarFileTable__setValue_wrapper(This, EMDL_id, avalue, object_id);
 }
 
 void StarFileTable__setValue_string(StarFileTable* This, int EMDL_id, char* avalue,
-                                    long object_id)
+				    long object_id)
 {
   StarFileTable__setValue_wrapper(This, EMDL_id, avalue, object_id);
 }
 
 template<typename T>
 bool StarFileTable__getValue_wrapper(StarFileTable* This, int EMDL_id, T& avalue,
-                                     long object_id)
+				     long object_id)
 {
   EMDLabel emdLabel = (EMDLabel)EMDL_id;
   return This->getValue(emdLabel, avalue, object_id);
 }
 
 bool StarFileTable__getValue_double(StarFileTable* This, int EMDL_id, double* avalue,
-                                    long object_id)
+				    long object_id)
 {
   return StarFileTable__getValue_wrapper(This, EMDL_id, *avalue, object_id);
 }
 
 bool StarFileTable__getValue_float(StarFileTable* This, int EMDL_id, float* avalue,
-                                   long object_id)
+				   long object_id)
 {
   return StarFileTable__getValue_wrapper(This, EMDL_id, *avalue, object_id);
 }
 
 bool StarFileTable__getValue_int(StarFileTable* This, int EMDL_id, int* avalue,
-                                 long object_id)
+				 long object_id)
 {
   return StarFileTable__getValue_wrapper(This, EMDL_id, *avalue, object_id);
 }
 
 bool StarFileTable__getValue_bool(StarFileTable* This, int EMDL_id, bool* avalue,
-                                  long object_id)
+				  long object_id)
 {
   return StarFileTable__getValue_wrapper(This, EMDL_id, *avalue, object_id);
 }
 
 void StarFileTable__getValue_string(StarFileTable* This, int EMDL_id, void** str,
-                                    long object_id, int* alen, bool* result)
+				    long object_id, int* alen, bool* result)
 {
   EMDLabel emdLabel = (EMDLabel)EMDL_id;
   std::string value;
@@ -1680,6 +1744,20 @@ void StarFileTable__setComment(StarFileTable* This, char* acomment)
   This->setComment(acomment);
 }
 
+void StarFileTable__getComment(StarFileTable* This, void** str, int* alen)
+{
+  std::string value = This->getComment();
+  char* c_str = NULL;
+  c_str = strdup(value.c_str());  // need to make a persevering copy here because "value" will be destroyed once it goes out of scope
+  *str = (void*)c_str;            // the caller has to free it manually
+  *alen = strlen(c_str);
+}
+
+bool StarFileTable__hasComment(StarFileTable* This)
+{
+  return This->containsComment();
+}
+
 long StarFileTable__firstObject(StarFileTable* This)
 {
   return This->firstObject();
@@ -1693,6 +1771,21 @@ long StarFileTable__numberOfObjects(StarFileTable* This)
 long StarFileTable__nextObject(StarFileTable* This)
 {
   return This->nextObject();
+}
+
+void StarFileTable__getnames_cnt(StarFileTable* This, char* fname, int* count)
+{
+  This->getNames(fname, This->temp_names);
+  *count = This->temp_names.size();
+}
+
+void StarFileTable__getnames_nr(StarFileTable* This, int nr, void** str, int* alen)
+{
+  std::string value = This->temp_names[nr-1];
+  char* c_str = NULL;
+  c_str = strdup(value.c_str());  // need to make a persevering copy here because "value" will be destroyed once it goes out of scope
+  *str = (void*)c_str;            // the caller has to free it manually
+  *alen = strlen(c_str);
 }
 
 void dealloc_str(void* str)

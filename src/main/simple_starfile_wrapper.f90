@@ -1,5 +1,6 @@
 module simple_starfile_wrappers
     use, intrinsic :: ISO_C_Binding, only: C_int, C_ptr, C_NULL_ptr, C_NULL_CHAR, C_char, C_double, C_float, C_bool, C_long, C_F_pointer
+    use simple_defs
     implicit none
 
 #include "starfile/starfile_enum.inc"
@@ -169,6 +170,19 @@ module simple_starfile_wrappers
             character(C_char), intent(in) :: acomment
         end subroutine C_starfile_table__setcomment
 
+        subroutine C_starfile_table__getcomment(this, str, alen) bind(C, name="StarFileTable__getComment")
+            import
+            type(C_ptr), value :: this
+            type(C_ptr),    intent(out) :: str
+            integer(C_int), intent(out) :: alen
+        end subroutine C_starfile_table__getcomment
+
+        function C_starfile_table__hascomment(this) result(ares) bind(C, name="StarFileTable__hasComment")
+            import
+            type(C_ptr), value ::this
+            logical(C_bool) :: ares
+        end function C_starfile_table__hascomment
+
         function C_starfile_table__firstobject(this) result(ares) bind(C, name="StarFileTable__firstObject")
             import
             type(C_ptr), value :: this
@@ -186,6 +200,21 @@ module simple_starfile_wrappers
             type(C_ptr), value :: this
             integer(C_long)    :: ares
         end function C_starfile_table__nextobject
+
+        subroutine C_starfile_table__getnames_cnt(this, fname, count) bind(C, name="StarFileTable__getnames_cnt")
+            import
+            type(C_ptr), value            :: this
+            character(C_char), intent(in) :: fname
+            integer(C_int)                :: count
+        end subroutine C_starfile_table__getnames_cnt
+
+        subroutine C_starfile_table__getnames_nr(this, nr, str, alen) bind(C, name="StarFileTable__getnames_nr")
+            import
+            type(C_ptr),    value       :: this
+            integer(C_int), value       :: nr
+            type(C_ptr),    intent(out) :: str
+            integer(C_int), intent(out) :: alen
+        end subroutine C_starfile_table__getnames_nr
 
     end interface
 
@@ -440,6 +469,30 @@ contains
         call C_starfile_table__setcomment(this%object, acomment2)
     end subroutine starfile_table__setcomment
 
+    subroutine starfile_table__getcomment(this, str)
+        type(starfile_table_type),     intent(inout) :: this
+        character(len=:), allocatable, intent(out)   :: str
+        type(C_ptr)                                         :: c_str
+        character(len=1,kind=C_char), dimension(:), pointer :: f_str
+        integer(C_int)                                      :: alen
+        integer                                             :: i
+        call C_starfile_table__getcomment(this%object, c_str, alen)
+        allocate( character(len=alen) :: str )
+        call c_f_pointer(c_str, f_str, [alen])
+        do i = 1, alen
+            str(i:i) = f_str(i)
+        end do
+        call C_dealloc_str(c_str)
+    end subroutine starfile_table__getcomment
+
+    function starfile_table__hascomment(this) result(ares)
+        type(starfile_table_type), intent(inout) :: this
+        logical :: ares
+        logical(C_bool) :: ares2
+        ares2 = C_starfile_table__hascomment(this%object)
+        ares = ares2
+    end function starfile_table__hascomment
+
     function starfile_table__firstobject(this) result(ares)
         type(starfile_table_type), intent(inout) :: this
         integer(C_long) :: ares
@@ -457,5 +510,33 @@ contains
         integer(C_long) :: ares
         ares = C_starfile_table__nextobject(this%object)
     end function starfile_table__nextobject
+
+    subroutine starfile_table__getnames(this, fname, names)
+        type(starfile_table_type),  intent(inout) :: this
+        character(len=*),           intent(in)    :: fname
+        type(str4arr), allocatable, intent(out)   :: names(:)
+        character(len=:), allocatable :: fname2
+        integer(C_int) :: count
+        integer(C_int) :: nr
+        integer(C_int) :: alen
+        type(C_ptr)    :: c_str
+        integer        :: i
+        character(len=1,kind=C_char), dimension(:), pointer :: f_str
+        ! first determine number of names
+        fname2 = fname // C_NULL_CHAR
+        call C_starfile_table__getnames_cnt(this%object, fname2, count)
+        allocate(names(count))
+        ! now get the names one-by-ony
+        do nr = 1, count
+            call C_starfile_table__getnames_nr(this%object, nr, c_str, alen)
+            ! allocate memory for the ffortran string
+            allocate( character(len=alen) :: names(nr)%str)
+            call c_f_pointer(c_str, f_str, [alen]) ! cast c-pointer to fortran pointer
+            do i = 1, alen
+                names(nr)%str(i:i) = f_str(i)      ! copy over the data
+            end do
+            call C_dealloc_str(c_str)              ! free c-pointer to avoid memory leak
+        end do
+    end subroutine starfile_table__getnames
 
 end module simple_starfile_wrappers
