@@ -109,6 +109,8 @@ contains
         enddo
         ! Exclude Friedel mates in the first dimension
         self%clogi_lbounds(1) = 0
+        self%clogi_ubounds(1) = self%ldim(1)/2
+        self%clogi_ubounds_all(1) =  self%clogi_ubounds(1)
         ! if the image is 2D, the 3rd dimension is special
         if(self%ldim(3) == 1)then
             self%rlogi_lbounds(3) = 0
