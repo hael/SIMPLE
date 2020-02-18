@@ -63,14 +63,14 @@ contains
         class(cmdline),                intent(inout) :: cline !< command line input
         type(parameters)   :: params
         type(nanoparticle) :: nano
-        call cline%set('mkdir', 'yes')
-        call params%new(cline)
+        if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
         endif
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
         endif
+        call params%new(cline)
         call nano%new(params%vols(1), params%smpd, params%element)
         ! volume soft-edge masking
         if(cline%defined('msk')) call nano%mask(params%msk)

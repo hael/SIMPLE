@@ -26,6 +26,7 @@ public :: cluster2D_nano_commander_hlev
 public :: tseries_ctf_estimate_commander
 public :: refine3D_nano_commander_distr
 public :: tseries_graphene_subtr_commander
+public :: initial_3Dmodel_nano_commander_distr
 private
 #include "simple_local_flags.inc"
 
@@ -81,7 +82,10 @@ type, extends(commander_base) :: tseries_graphene_subtr_commander
   contains
     procedure :: execute      => exec_tseries_graphene_subtr
 end type tseries_graphene_subtr_commander
-
+type, extends(commander_base) :: initial_3Dmodel_nano_commander_distr
+  contains
+    procedure :: execute      => exec_initial_3Dmodel_nano
+end type initial_3Dmodel_nano_commander_distr
 contains
 
     subroutine exec_tseries_import( self, cline )
@@ -793,5 +797,363 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_GRAPHENE_SUBTR NORMAL STOP ****')
     end subroutine exec_tseries_graphene_subtr
+
+    !> for generation of an initial 3d model from class averages
+    subroutine exec_initial_3Dmodel_nano( self, cline )
+        use simple_commander_refine3D, only: refine3D_commander_distr
+        use simple_commander_sim,      only: simulate_atoms_commander
+        use simple_image,              only: image
+        use simple_commander_volops,   only: reproject_commander
+        use simple_parameters,         only: params_glob
+        use simple_commander_quant,    only: detect_atoms_commander
+        use simple_commander_rec,      only: reconstruct3D_commander_distr
+        class(initial_3Dmodel_nano_commander_distr), intent(inout) :: self
+        class(cmdline),                              intent(inout) :: cline
+        ! constants
+        real,                  parameter :: CENLP  = 5. !< consistency with refine3D
+        integer,               parameter :: MAXITS = 15, NSPACE = 1000
+        character(len=STDLEN), parameter :: WORK_PROJFILE      = 'initial_3Dmodel_tmpproj.simple'   ! temporary project
+        character(len=STDLEN), parameter :: SIM_VOL            = 'simulated_vol.mrc'                ! starting volume
+        character(len=STDLEN), parameter :: REC_FBODY          = 'rec_final'                        ! from refine3D
+        character(len=STDLEN), parameter :: REC_PPROC_FBODY    = trim(REC_FBODY)//trim(PPROC_SUFFIX)
+        character(len=STDLEN), parameter :: REC_ORIS           = 'final_oris.txt'
+        character(len=STDLEN), parameter :: REC_PROJS          = trim(REC_FBODY)//'_reprojs.mrc'
+        character(len=STDLEN), parameter :: DETECTED_ATOMS_PDB = trim(REC_FBODY)//'_atom_centers.pdb'
+        character(len=STDLEN), parameter :: DETECTED_SIM_VOL   = 'detected_sim_vol.mrc'
+        character(len=STDLEN), parameter :: DETECTED_PROJS     = 'detected_reprojs.mrc'
+        character(len=STDLEN), parameter :: REC_RANKED_FBODY   = 'rec_ranked_final'                 ! after ranked reconstruction
+        character(len=STDLEN), parameter :: RANKED_ATOMS_PDB   = trim(REC_RANKED_FBODY)//'_atom_centers.pdb'
+        character(len=STDLEN), parameter :: RANKED_SIM_VOL     = 'rec_ranked_sim.mrc'
+        character(len=STDLEN), parameter :: RANKED_PROJS       = 'rec_ranked_reprojs.mrc'
+        character(len=STDLEN), parameter :: FINAL_REPROJS      = 'tseries_reprojs.mrc'              ! final output
+        ! distributed commanders
+        type(refine3D_commander_distr)      :: xrefine3D_distr
+        type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
+        ! shared-mem commanders
+        type(reproject_commander)      :: xreproject
+        type(simulate_atoms_commander) :: xsimatoms
+        type(detect_atoms_commander)   :: xdetect_atoms
+        ! command lines
+        type(cmdline) :: cline_refine3D, cline_detect_atoms1, cline_detect_atoms2, cline_reconstruct3D
+        type(cmdline) :: cline_simatoms1, cline_simatoms2, cline_reproject1, cline_reproject2
+        ! other variables
+        character(len=:), allocatable :: stk
+        integer,          allocatable :: states(:)
+        real,             allocatable :: real_corrs(:), corrs_msk(:), tmp(:)
+        logical,          allocatable :: lmsk(:,:,:), msk(:)
+        character(len=2)              :: str_state
+        type(parameters)      :: params
+        type(ctfparams)       :: ctfvars ! ctf=yes by default
+        type(sp_project)      :: spproj, work_proj
+        type(image)           :: img, img2, img_msk
+        character(len=STDLEN) :: vol_iter
+        real                  :: iter, smpd, ave, sdev, var, corr_thresh
+        integer               :: icls, ncavgs, status, cnt
+        logical :: l_startvol, err
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
+        ! static parameters
+        call cline%set('match_filt', 'no')
+        call cline%set('ninplpeaks', 1.0)
+        call cline%set('objfun',     'cc')
+        ! dynamic parameters
+        if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
+        if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',          'no')
+        if( .not. cline%defined('nspace')        ) call cline%set('nspace',        1000.)
+        if( .not. cline%defined('wcrit')         ) call cline%set('wcrit',         'inv')
+        if( .not. cline%defined('trs')           ) call cline%set('trs',             5.0)
+        if( .not. cline%defined('lp')            ) call cline%set('lp',              1.5)
+        if( .not. cline%defined('cenlp')         ) call cline%set('cenlp',         CENLP)
+        if( .not. cline%defined('oritype')       ) call cline%set('oritype',    'ptcl3D')
+        if( .not. cline%defined('element')       ) call cline%set('element',        'PT')
+        if( cline%defined('moldiam').or.cline%defined('vol1') )then
+            l_startvol = cline%defined('vol1')
+        else
+            THROW_HARD('MOLDIAM or VOL1 must be defined!')
+        endif
+        l_startvol = cline%defined('vol1')
+        ! hard set oritype
+        call cline%set('oritype', 'out') ! because cavgs are part of out segment
+        ! class averages, so no CTF!!
+        ctfvars%ctfflag = CTFFLAG_NO
+        ! make master parameters
+        call params%new(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
+        ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
+        call cline%set('oritype', 'ptcl3D')
+        ! state string
+        str_state = int2str_pad(1,2)
+        ! read project & update sampling distance
+        call spproj%read(params%projfile)
+        ! retrieve cavgs stack
+        call spproj%get_cavgs_stk(stk, ncavgs, smpd)
+        if( .not.spproj%os_cls2D%isthere('state') )then
+            allocate(states(ncavgs), source=1) ! start from import
+        else
+            states = nint(spproj%os_cls2D%get_all('state')) ! start from previous 2D
+        endif
+        if( count(states==0) .eq. ncavgs )then
+            THROW_HARD('no class averages detected in project file: '//trim(params%projfile)//'; initial_3Dmodel')
+        endif
+        ctfvars%smpd = params%smpd
+        ! SANITY CHECKS
+        ! prepare a temporary project file for the class average processing
+        call del_file(WORK_PROJFILE)
+        work_proj%projinfo = spproj%projinfo
+        work_proj%compenv  = spproj%compenv
+        if( spproj%jobproc%get_noris()  > 0 ) work_proj%jobproc = spproj%jobproc
+        call work_proj%add_stk(trim(stk), ctfvars)
+        call work_proj%os_ptcl3D%set_all('state', real(states)) ! takes care of states
+        ! name change
+        call work_proj%projinfo%delete_entry('projname')
+        call work_proj%projinfo%delete_entry('projfile')
+        call cline%set('projfile', trim(WORK_PROJFILE))
+        call cline%set('projname', trim(get_fbody(trim(WORK_PROJFILE),trim('simple'))))
+        call work_proj%update_projinfo(cline)
+        params%box = work_proj%get_box()
+        ! split
+        if(params%nparts == 1 )then
+            call work_proj%write()
+        else
+            call work_proj%split_stk(params%nparts)
+        endif
+        ! prepare command lines from prototype
+        ! projects names are subject to change and updated individually
+        call cline%delete('projname')
+        call cline%delete('projfile')
+        cline_refine3D      = cline
+        cline_reconstruct3D = cline
+        cline_reproject1 = cline
+        cline_reproject2 = cline
+        cline_simatoms1  = cline
+        cline_simatoms2  = cline
+        ! In shnc & stage 1 the objective function is always standard cross-correlation,
+        ! in stage 2 it follows optional user input and defaults to cc
+        call cline_refine3D%set('objfun', 'cc')
+        ! reproject & simulate_atoms are not distributed executions, so remove the nparts flag
+        call cline_reproject1%delete('nparts')
+        call cline_reproject2%delete('nparts')
+        call cline_simatoms1%delete('nparts')
+        call cline_simatoms2%delete('nparts')
+        ! initialise command line parameters
+        ! (1) SIMULATED LATTICE
+        call cline_simatoms1%set('prg',    'simulate_atoms')
+        call cline_simatoms1%set('outvol', SIM_VOL)
+        call cline_simatoms1%set('smpd',   params%smpd)
+        call cline_simatoms1%set('box',    real(params%box))
+        call cline_simatoms1%delete('lp')
+        ! (2) REFINE3D
+        call cline_refine3D%set('prg',      'refine3D')
+        call cline_refine3D%set('projfile', trim(WORK_PROJFILE))
+        call cline_refine3D%set('box',      real(params%box))
+        call cline_refine3D%set('maxits',   real(MAXITS))
+        if( l_startvol )then
+            ! volume provided by user
+            call cline_refine3D%set('refine', 'greedy_single')
+        else
+            call cline_refine3D%set('vol1',   SIM_VOL)
+            call cline_refine3D%set('refine', 'single')
+        endif
+        call cline_refine3D%set('lp', params%lp)
+        ! (3) RE-PROJECT VOLUME, produces REC_PROJS
+        call cline_reproject1%set('prg',    'reproject')
+        call cline_reproject1%set('outstk', REC_PROJS)
+        call cline_reproject1%set('smpd',   params%smpd)
+        call cline_reproject1%set('msk',    params%msk)
+        call cline_reproject1%set('box',    real(params%box))
+        call cline_reproject1%set('vol1',   trim(REC_FBODY)//params%ext)
+        call cline_reproject1%set('oritab', REC_ORIS)
+        call cline_reproject1%delete('lp')
+        ! (4) DETECT ATOMS, produces DETECTED_ATOMS_PDB
+        call cline_detect_atoms1%set('prg',      'detect_atoms')
+        call cline_detect_atoms1%set('smpd',     real(params%smpd))
+        call cline_detect_atoms1%set('cs_thres', 8.)
+        call cline_detect_atoms1%set('vol1',     trim(REC_FBODY)//params%ext)
+        call cline_detect_atoms1%set('nthr',     real(params%nthr))
+        call cline_detect_atoms1%set('msk',      params%msk)
+        call cline_detect_atoms1%set('element',  trim(params%element))
+        call cline_detect_atoms1%set('mkdir',    'no')
+        call cline_detect_atoms1%delete('lp')
+        ! (5) SIMULATED DETECTED ATOMS, produces DETECTED_SIM_VOL
+        call cline_simatoms2%set('prg',     'simulate_atoms')
+        call cline_simatoms2%set('pdbfile', DETECTED_ATOMS_PDB)
+        call cline_simatoms2%set('outvol',  DETECTED_SIM_VOL)
+        call cline_simatoms2%set('smpd',    params%smpd)
+        call cline_simatoms2%set('box',     real(params%box))
+        call cline_simatoms2%delete('vol1')
+        call cline_simatoms2%delete('element')
+        call cline_simatoms2%delete('moldiam')
+        call cline_simatoms2%delete('lp')
+        ! (6) REPROJECTION OF SIMULATED DETECTED ATOMS
+        call cline_reproject2%set('prg',   'reproject')
+        call cline_reproject2%set('outstk', DETECTED_PROJS)
+        call cline_reproject2%set('smpd',   params%smpd)
+        call cline_reproject2%set('msk',    params%msk)
+        call cline_reproject2%set('box',    real(params%box))
+        call cline_reproject2%set('vol1',   DETECTED_SIM_VOL)
+        call cline_reproject2%set('oritab', REC_ORIS)
+        call cline_reproject2%delete('lp')
+        if( l_startvol )then
+            ! the end
+        else
+            ! (7) RECONSTRUCT WITH BEST RANKING IMAGES, produces REC_RANKED_FBODY
+            call cline_reconstruct3D%set('prg',      'reconstruct3D')
+            call cline_reconstruct3D%set('msk',      params%msk)
+            call cline_reconstruct3D%set('box',      real(params%box))
+            call cline_reconstruct3D%set('projfile', trim(WORK_PROJFILE))
+            ! (8) DETECT ATOMS, produces RANKED_ATOMS_PDB
+            call cline_detect_atoms2%set('prg',      'detect_atoms')
+            call cline_detect_atoms2%set('smpd',     real(params%smpd))
+            call cline_detect_atoms2%set('cs_thres', 8.)
+            call cline_detect_atoms2%set('vol1',     trim(REC_RANKED_FBODY)//params%ext)
+            call cline_detect_atoms2%set('nthr',     real(params%nthr))
+            call cline_detect_atoms2%set('msk',      params%msk)
+            call cline_detect_atoms2%set('element',  trim(params%element))
+            call cline_detect_atoms2%set('mkdir',    'no')
+            call cline_detect_atoms2%delete('lp')
+            !  (9) SIMULATED DETECTED ATOMS, produces RANKED_SIMULATED_VOL, updated on the fly
+            ! (10) RE-PROJECTION OF RANKED VOLUME
+        endif
+        ! EXECUTIONS
+        if( l_startvol )then
+            ! provided by user
+        else
+            ! lattice simulation
+            write(logfhandle,'(A)') '>>>'
+            write(logfhandle,'(A)') '>>> SIMULATED SPHERICAL LATTICE'
+            write(logfhandle,'(A)') '>>>'
+            call xsimatoms%execute(cline_simatoms1)
+        endif
+        ! refine3D
+        write(logfhandle,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH REFINE3D'
+        write(logfhandle,'(A)') '>>>'
+        call xrefine3D_distr%execute(cline_refine3D)
+        iter     = cline_refine3D%get_rarg('endit')
+        vol_iter = trim(VOL_FBODY)//trim(str_state)//params%ext
+        call del_files(O_PEAKS_FBODY, params_glob%nparts, ext=BIN_EXT)
+        ! deals with final volume
+        status = simple_rename(vol_iter, trim(REC_FBODY)//params%ext)
+        status = simple_rename(add2fbody(vol_iter,params%ext,PPROC_SUFFIX),trim(REC_PPROC_FBODY)//params%ext)
+        ! updates original cls3D segment
+        call work_proj%read_segment('ptcl3D', WORK_PROJFILE)
+        params_glob%nptcls = ncavgs
+        spproj%os_cls3D    = work_proj%os_ptcl3D
+        call spproj%os_cls3D%delete_entry('eo')
+        call spproj%os_cls3D%set_all2single('stkind',1.) ! revert splitting
+        ! map the orientation parameters obtained for the clusters back to the particles
+        call spproj%map2ptcls
+        ! add rec_final to os_out
+        call spproj%add_vol2os_out(trim(REC_FBODY)//params%ext, params%smpd, 1, 'vol_cavg')
+        ! write results (this needs to be a full write as multiple segments are updated)
+        call spproj%write()
+        ! reprojections
+        call spproj%os_cls3D%write(REC_ORIS)
+        write(logfhandle,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
+        write(logfhandle,'(A)') '>>>'
+        call xreproject%execute(cline_reproject1)
+        ! Atoms detection
+        write(logfhandle,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>> ATOMS POSITIONS DETECTION WITH QUANT'
+        write(logfhandle,'(A)') '>>>'
+        call xdetect_atoms%execute(cline_detect_atoms1)
+        ! Simulation of detected atoms
+        write(logfhandle,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>> SIMULATION OF DETECTED ATOMS'
+        write(logfhandle,'(A)') '>>>'
+        call xsimatoms%execute(cline_simatoms2)
+        ! Re-projection of simulated detected atoms
+        write(logfhandle,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>> RE-PROJECTION OF SIMULATED DETECTED ATOMS'
+        write(logfhandle,'(A)') '>>>'
+        call xreproject%execute(cline_reproject2)
+        ! write alternated stack
+        allocate(real_corrs(ncavgs),source=0.)
+        msk = states > 0
+        call img%new([params%box,params%box,1], smpd)
+        call img2%new([params%box,params%box,1],smpd)
+        call img_msk%disc([params%box,params%box,1], params%smpd, params%msk, lmsk)
+        call img_msk%kill
+        cnt = -2
+        do icls=1,ncavgs
+            cnt = cnt + 3
+            ! class-averages
+            call img%read(stk, icls)
+            call img%norm
+            call img%write(FINAL_REPROJS, cnt)
+            ! volume re-projections
+            call img%read(REC_PROJS, icls)
+            call img%norm
+            call img%write(FINAL_REPROJS, cnt+1)
+            ! simulated atoms volume reprojections
+            call img2%read(DETECTED_PROJS,icls)
+            call img2%norm
+            call img2%write(FINAL_REPROJS,cnt+2)
+            ! real space correlations
+            if( msk(icls) ) real_corrs(icls) = img%real_corr(img2, lmsk)
+        enddo
+        if( l_startvol )then
+            ! done
+        else
+            corrs_msk = pack(real_corrs, mask=msk)
+            call moment(corrs_msk, ave, sdev, var, err)
+            call otsu(corrs_msk, corr_thresh)
+            corr_thresh = min(corr_thresh, max(minval(corrs_msk), ave-sdev))
+            write(logfhandle,'(A)') '>>>'
+            do icls=1,ncavgs
+                if( states(icls) == 0 ) cycle
+                if( real_corrs(icls) < corr_thresh )then
+                    states(icls) = 0 ! preserved in msk
+                    write(logfhandle,'(A,I4)') '>>> POTENTIALLY MISALIGNED CLASS AVERAGE: ',icls
+                endif
+            enddo
+            ! Reconstruction with best ranking images
+            write(logfhandle,'(A)') '>>>'
+            write(logfhandle,'(A)') '>>> RECONSTRUCTION FROM RANKED CLASS-AVERAGES'
+            write(logfhandle,'(A)') '>>>'
+            call work_proj%os_ptcl3D%set_all('state',real(states))
+            call work_proj%write
+            call xreconstruct3D_distr%execute(cline_reconstruct3D)
+            status = simple_rename('recvol_state01.mrc', trim(REC_RANKED_FBODY)//params%ext)
+            where( msk ) states = 1
+            ! Atoms detection
+            write(logfhandle,'(A)') '>>>'
+            write(logfhandle,'(A)') '>>> ATOMS POSITIONS DETECTION WITH QUANT'
+            write(logfhandle,'(A)') '>>>'
+            call xdetect_atoms%execute(cline_detect_atoms2)
+            ! Simulation
+            call cline_simatoms2%set('pdbfile', RANKED_ATOMS_PDB)
+            call cline_simatoms2%set('outvol',  RANKED_SIM_VOL)
+            call xsimatoms%execute(cline_simatoms2)
+            ! Re-projection of simulated atoms
+            write(logfhandle,'(A)') '>>>'
+            write(logfhandle,'(A)') '>>> RE-PROJECTION OF SIMULATED DETECTED ATOMS'
+            write(logfhandle,'(A)') '>>>'
+            call cline_reproject2%set('outstk', RANKED_PROJS)
+            call cline_reproject2%set('vol1',   RANKED_SIM_VOL)
+            call cline_reproject2%set('oritab', REC_ORIS)
+            call xreproject%execute(cline_reproject2)
+            ! write alternated stack
+            call img_msk%disc([params%box,params%box,1], params%smpd, params%msk, lmsk)
+            call img_msk%kill
+            cnt = -2
+            do icls=1,ncavgs
+                cnt = cnt + 3
+                ! simulated atoms from ranked volume reprojections
+                call img2%read(RANKED_PROJS,icls)
+                call img2%norm
+                call img2%write(FINAL_REPROJS,cnt+2)
+            enddo
+        endif
+        ! end gracefully
+        call img%kill
+        call img2%kill
+        call work_proj%kill
+        call spproj%kill
+        call del_file(WORK_PROJFILE)
+        call simple_rmdir(STKPARTSDIR)
+        call simple_end('**** SIMPLE_INITIAL_3DMODEL_NANO NORMAL STOP ****')
+    end subroutine exec_initial_3Dmodel_nano
 
   end module simple_commander_tseries

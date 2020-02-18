@@ -107,7 +107,7 @@ contains
             endif
             self%cphys_ubounds(d) = self%ldim(d)
         enddo
-        ! Exclude Friedel mates in the first dimension
+        ! Exclude Friedel mates & adjusts limits in the first dimension
         self%clogi_lbounds(1) = 0
         self%clogi_ubounds(1) = self%ldim(1)/2
         self%clogi_ubounds_all(1) =  self%clogi_ubounds(1)

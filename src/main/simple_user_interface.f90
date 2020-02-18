@@ -106,6 +106,7 @@ type(simple_program), target :: import_starproject
 type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
 type(simple_program), target :: initial_3Dmodel
+type(simple_program), target :: initial_3Dmodel_nano
 type(simple_program), target :: local_resolution
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
@@ -313,6 +314,7 @@ contains
         call new_info_image
         call new_info_stktab
         call new_initial_3Dmodel
+        call new_initial_3Dmodel_nano
         call new_import_boxes
         call new_import_cavgs
         call new_import_movies
@@ -411,6 +413,7 @@ contains
         call push2prg_ptr_array(info_image)
         call push2prg_ptr_array(info_stktab)
         call push2prg_ptr_array(initial_3Dmodel)
+        call push2prg_ptr_array(initial_3Dmodel_nano)
         call push2prg_ptr_array(import_boxes)
         call push2prg_ptr_array(import_cavgs)
         call push2prg_ptr_array(import_movies)
@@ -547,6 +550,8 @@ contains
                 ptr2prg => info_stktab
             case('initial_3Dmodel')
                 ptr2prg => initial_3Dmodel
+            case('initial_3Dmodel_nano')
+                ptr2prg => initial_3Dmodel_nano
             case('import_boxes')
                 ptr2prg => import_boxes
             case('import_cavgs')
@@ -768,6 +773,7 @@ contains
         write(logfhandle,'(A)') cluster2D_nano%name
         write(logfhandle,'(A)') estimate_diam%name
         write(logfhandle,'(A)') refine3D_nano%name
+        write(logfhandle,'(A)') initial_3Dmodel_nano%name
         write(logfhandle,'(A)') simulate_atoms%name
         write(logfhandle,'(A)') tseries_ctf_estimate%name
         write(logfhandle,'(A)') tseries_import%name
@@ -1859,6 +1865,42 @@ contains
         call initial_3Dmodel%set_input('comp_ctrls', 1, nparts)
         call initial_3Dmodel%set_input('comp_ctrls', 2, nthr)
     end subroutine new_initial_3Dmodel
+
+    subroutine new_initial_3Dmodel_nano
+        ! PROGRAM SPECIFICATION
+        call initial_3Dmodel_nano%new(&
+        &'initial_3Dmodel',&                                                         ! name
+        &'3D ab initio model generation from time-series averages',&                 ! descr_short
+        &'is a distributed workflow for generating an initial 3D model from tiem-series&
+        & averages obtained with cluster2D_nano',&                                   ! descr_long
+        &'single_exec',&                                                             ! executable
+        &1, 1, 0, 4, 3, 1, 2, .true.)                                                ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call initial_3Dmodel_nano%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
+        & sections for particle image matching', 'input volume e.g. vol.mrc', .false., 'vol1.mrc')
+        ! parameter input/output
+        call initial_3Dmodel_nano%set_input('parm_ios', 1, moldiam)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call initial_3Dmodel_nano%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call initial_3Dmodel_nano%set_input('srch_ctrls', 2, pgrp)
+        call initial_3Dmodel_nano%set_input('srch_ctrls', 3, trs)
+        call initial_3Dmodel_nano%set_input('srch_ctrls', 4, nrestarts)
+        ! filter controls
+        call initial_3Dmodel_nano%set_input('filt_ctrls', 1, hp)
+        call initial_3Dmodel_nano%set_input('filt_ctrls', 2, lp)
+        call initial_3Dmodel_nano%set_input('filt_ctrls', 3, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
+        &Angstroms{5.}', .false., 5.)
+        ! mask controls
+        call initial_3Dmodel_nano%set_input('mask_ctrls', 1, msk)
+        ! computer controls
+        call initial_3Dmodel_nano%set_input('comp_ctrls', 1, nparts)
+        call initial_3Dmodel_nano%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_initial_3Dmodel_nano
 
     subroutine new_import_boxes
         ! PROGRAM SPECIFICATION

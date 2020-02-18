@@ -396,7 +396,7 @@ contains
         call vol%new([params%box,params%box,params%box], params%smpd)
         if( cline%defined('element') )then
             if( .not.cline%defined('moldiam') )then
-                THROW_HARD('MOLDIAM must be provided for FFC lattice!')
+                THROW_HARD('MOLDIAM must be provided for FCC lattice!')
             endif
             ! FCC lattice
             call atoms_obj%new(1)

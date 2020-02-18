@@ -2195,7 +2195,7 @@ contains
       class(nanoparticle), intent(inout) :: self
       real,                intent(in)    :: msk_rad
       call self%img%mask(msk_rad, 'soft')
-      if(DEBUG) call self%img%write(trim(self%fbody)//'_masked.mrc') 
+      if(DEBUG) call self%img%write(trim(self%fbody)//'_masked.mrc')
     end subroutine mask
 
     subroutine geometry_analysis(self, pdbfile2, thresh)
