@@ -45,6 +45,7 @@ type(refine3D_commander)              :: xrefine3D
 type(calc_pspec_commander)            :: xcalc_pspec
 type(calc_pspec_assemble_commander)   :: xcalc_pspec_assemble
 type(check_3Dconv_commander)          :: xcheck_3Dconv
+type(calc_group_sigmas_commander)     :: xcalc_group_sigmas
 
 ! RECONSTRUCTION PROGRAMS
 type(volassemble_commander)           :: xvolassemble
@@ -154,6 +155,8 @@ select case(prg)
         call xcalc_pspec_assemble%execute(cline)
     case( 'check_3Dconv' )
         call xcheck_3Dconv%execute(cline)
+    case( 'calc_group_sigmas' )
+        call xcalc_group_sigmas%execute(cline)
 
     ! RECONSTRUCTION PROGRAMS
     case( 'reconstruct3D' )

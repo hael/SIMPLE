@@ -766,8 +766,15 @@ contains
         call private_prgs(26)%push_req_key('nparts')
         call private_prgs(26)%push_req_key('nptcls')
         call private_prgs(26)%push_req_key('projfile')
+        ! CALC_GROUOP_SIGMAS, for asssembling sigmas for refine3D
+        call private_prgs(27)%set_name('calc_group_sigmas')
+        ! required keys
+        call private_prgs(27)%push_req_key('nparts')
+        call private_prgs(27)%push_req_key('projfile')
+        call private_prgs(27)%push_req_key('nthr')
+        call private_prgs(27)%push_req_key('which_iter')
 
-        n_private_prgs = 26
+        n_private_prgs = 27
     end subroutine new_private_prgs
 
 end module simple_private_prgs

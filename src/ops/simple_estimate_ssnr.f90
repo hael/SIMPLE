@@ -3,8 +3,8 @@ module simple_estimate_ssnr
 include 'simple_lib.f08'
 implicit none
 
-public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp, subsample_filter
-public :: acc_dose2filter, dose_weight, local_res, local_res_lp
+public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, fsc2optlp_sub_for_tau, ssnr2fsc, ssnr2optlp, subsample_optlp
+public :: subsample_filter, acc_dose2filter, dose_weight, local_res, local_res_lp
 private
 #include "simple_local_flags.inc"
 
@@ -47,6 +47,19 @@ contains
         where( corrs > 0. )     filt = sqrt( 2. * corrs / (corrs + 1.) )
         where( filt  > 0.9999 ) filt = 0.99999
     end subroutine fsc2optlp_sub
+
+    !> \brief  converts the FSC to the optimal low-pass filter
+    subroutine fsc2optlp_sub_for_tau( filtsz, corrs, filt )
+        integer, intent(in)  :: filtsz        !< sz of filter
+        real,    intent(in)  :: corrs(filtsz) !< fsc plot (correlations)
+        real,    intent(out) :: filt(filtsz)  !< output filter coefficients
+        filt = 0.
+        !where( corrs < 0.001 )  corrs = 0.001
+        filt  = corrs
+        where( filt < 0.001 )  filt = 0.001
+        filt  = sqrt( 2. * filt / (filt + 1.) )
+        where( filt  > 0.999 )  filt  = 0.999
+    end subroutine fsc2optlp_sub_for_tau
 
     subroutine subsample_optlp( filtsz, subfiltsz, filt, subfilt )
         integer, intent(in)  :: filtsz, subfiltsz   !< sz of filters

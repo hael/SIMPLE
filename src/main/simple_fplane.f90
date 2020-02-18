@@ -4,6 +4,7 @@ module simple_fplane
 include 'simple_lib.f08'
 use simple_image,         only: image
 use simple_parameters,    only: params_glob
+use simple_euclid_sigma2, only: euclid_sigma2, eucl_sigma2_glob
 use simple_fftw3
 use simple_ctf, only: ctf
 implicit none
@@ -72,19 +73,27 @@ contains
     end function does_exist
 
     !> Produces CTF multiplied fourier & CTF-squared planes
-    subroutine gen_planes( self, img, ctfvars )
+    subroutine gen_planes( self, img, ctfvars, iptcl )
         class(fplane),    intent(inout) :: self
         class(image),     intent(inout) :: img
         class(ctfparams), intent(in)    :: ctfvars
+        integer, optional,intent(in)    :: iptcl
         type(ctf) :: tfun
         complex   :: c
         real      :: invldim(2), inv(2), tval, tvalsq, sqSpatFreq
         integer   :: h,k,sh
+        logical   :: use_sigmas
+        integer   :: sigma2_kfromto(2)
         if( ctfvars%ctfflag /= CTFFLAG_NO )then
             tfun = ctf(ctfvars%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)
             call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
             invldim = 1./real(self%ldim(1:2))
         endif
+        use_sigmas        = ((params_glob%l_needs_sigma) .and. present(iptcl))
+        if( use_sigmas )then
+            sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
+            sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
+        end if
         !$omp parallel do collapse(2) default(shared) schedule(static) proc_bind(close)&
         !$omp private(h,k,sh,c,tval,tvalsq,inv,sqSpatFreq)
         do h = self%frlims(1,1),self%frlims(1,2)
@@ -113,8 +122,13 @@ contains
                     c = tval * img%get_fcomp2D(h,k)
                 endif
                 ! set
-                self%cmplx_plane(h,k) = c
-                self%ctfsq_plane(h,k) = tvalsq
+                if( (use_sigmas).and.(sh >= sigma2_kfromto(1)).and.(sh <= sigma2_kfromto(2)) )then
+                    self%cmplx_plane(h,k) = c      / eucl_sigma2_glob%sigma2_noise(sh,iptcl)
+                    self%ctfsq_plane(h,k) = tvalsq / eucl_sigma2_glob%sigma2_noise(sh,iptcl)
+                else
+                    self%cmplx_plane(h,k) = c
+                    self%ctfsq_plane(h,k) = tvalsq
+                end if
             enddo
         enddo
         !$omp end parallel do

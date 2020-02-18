@@ -66,6 +66,7 @@ type, extends(image) :: reconstructor
 end type reconstructor
 
 integer(timer_int_kind) :: trec
+logical, parameter :: insert_plane_trilinear = .false.
 
 contains
 
@@ -238,6 +239,10 @@ contains
         real      :: rotmats(se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim)
         real      :: vec(3), loc(3), dists(3), shconst_here(2), scale, arg, ctfval
         integer   :: i, h, k, nsym, isym, iwinsz, sh, win(2,3)
+        ! trilinear interpolation start
+        real      :: fx, fy, fz, mfx, mfy, mfz, xp, yp, zp
+        real      :: dd000, dd001, dd010, dd011, dd100, dd101, dd110, dd111
+        integer   :: first_x, x0, x1, y0, y1, z0, z1, y, y2, r2
         if( pwght < TINY )return
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
@@ -277,18 +282,67 @@ contains
                     arg    = dot_product(shconst_here, vec(1:2))
                     oshift = cmplx(cos(arg), sin(arg))
                     ! (weighted) kernel & CTF values
-                    w = pwght
-                    do i=1,self%wdim
-                        dists    = real(win(1,:) + i - 1) - loc
-                        w(i,:,:) = w(i,:,:) * self%kbwin%apod(dists(1))
-                        w(:,i,:) = w(:,i,:) * self%kbwin%apod(dists(2))
-                        w(:,:,i) = w(:,:,i) * self%kbwin%apod(dists(3))
-                    enddo
-                    ! expanded matrices update
-                    self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
-                    &self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + (comp*w)*oshift
-                    self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
-                    &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + ctfval*w
+                    if( insert_plane_trilinear )then
+                        x0 = floor(loc(1))
+                        fx = loc(1) - x0
+                        x1 = x0 + 1
+
+                        y0 = floor(loc(2))
+                        fy = loc(2) - y0
+                        !y0 = y0 - 0 !STARTINGY(data)
+                        y1 = y0 + 1
+
+                        z0 = floor(loc(3))
+                        fz = loc(3) - z0
+                        !z0 = z0 - 0 !STARTINGZ(data)
+                        z1 = z0 + 1
+
+                        mfx = 1. - fx
+                        mfy = 1. - fy
+                        mfz = 1. - fz
+
+                        dd000 = mfz * mfy * mfx
+                        dd001 = mfz * mfy *  fx
+                        dd010 = mfz *  fy * mfx
+                        dd011 = mfz *  fy *  fx
+                        dd100 =  fz * mfy * mfx
+                        dd101 =  fz * mfy *  fx
+                        dd110 =  fz *  fy * mfx
+                        dd111 =  fz *  fy *  fx
+
+                        self%cmat_exp(x0, y0, z0) = self%cmat_exp(x0, y0, z0) + dd000 * comp*oshift
+                        self%cmat_exp(x0, y0, z1) = self%cmat_exp(x0, y0, z1) + dd001 * comp*oshift
+                        self%cmat_exp(x0, y1, z0) = self%cmat_exp(x0, y1, z0) + dd010 * comp*oshift
+                        self%cmat_exp(x0, y1, z1) = self%cmat_exp(x0, y1, z1) + dd011 * comp*oshift
+                        self%cmat_exp(x1, y0, z0) = self%cmat_exp(x1, y0, z0) + dd100 * comp*oshift
+                        self%cmat_exp(x1, y0, z1) = self%cmat_exp(x1, y0, z1) + dd101 * comp*oshift
+                        self%cmat_exp(x1, y1, z0) = self%cmat_exp(x1, y1, z0) + dd110 * comp*oshift
+                        self%cmat_exp(x1, y1, z1) = self%cmat_exp(x1, y1, z1) + dd111 * comp*oshift
+                        ctfval = 1.
+                        self%rho_exp(x0, y0, z0)  = self%rho_exp(x0, y0, z0) + dd000 * ctfval
+                        self%rho_exp(x0, y0, z1)  = self%rho_exp(x0, y0, z1) + dd001 * ctfval
+                        self%rho_exp(x0, y1, z0)  = self%rho_exp(x0, y1, z0) + dd010 * ctfval
+                        self%rho_exp(x0, y1, z1)  = self%rho_exp(x0, y1, z1) + dd011 * ctfval
+                        self%rho_exp(x1, y0, z0)  = self%rho_exp(x1, y0, z0) + dd100 * ctfval
+                        self%rho_exp(x1, y0, z1)  = self%rho_exp(x1, y0, z1) + dd101 * ctfval
+                        self%rho_exp(x1, y1, z0)  = self%rho_exp(x1, y1, z0) + dd110 * ctfval
+                        self%rho_exp(x1, y1, z1)  = self%rho_exp(x1, y1, z1) + dd111 * ctfval
+                    else
+                        w = 1.
+                        do i=1,self%wdim
+                            dists    = real(win(1,:) + i - 1) - loc
+                            w(i,:,:) = w(i,:,:) * self%kbwin%apod(dists(1))
+                            w(:,i,:) = w(:,i,:) * self%kbwin%apod(dists(2))
+                            w(:,:,i) = w(:,:,i) * self%kbwin%apod(dists(3))
+                        enddo
+                        w = w / sum(w)
+                        w = w * pwght
+                        ! expanded matrices update
+                        self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
+                            &self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + (comp*w)*oshift
+                        self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
+                            &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + ctfval*w
+                    end if
                 end do
             end do
             !$omp end do nowait
@@ -311,6 +365,10 @@ contains
         real      :: rotmats(os%get_noris(),se%get_nsym(),3,3), w(self%wdim,self%wdim,self%wdim)
         real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), scale, arg, ctfval
         integer   :: logi(3), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris()), iwinsz, win(2,3)
+        ! trilinear interpolation start
+        real      :: fx, fy, fz, mfx, mfy, mfz, xp, yp, zp
+        real      :: dd000, dd001, dd010, dd011, dd100, dd101, dd110, dd111
+        integer   :: first_x, x0, x1, y0, y1, z0, z1, y, y2, r2
         ! take care of optional state flag
         sstate = 1
         if( present(state) ) sstate = state
@@ -362,17 +420,66 @@ contains
                         comp   = fpl%cmplx_plane(h,k)
                         ctfval = fpl%ctfsq_plane(h,k)
                         ! Interpolation kernel
-                        w = ows(iori)
-                        do i=1,self%wdim
-                            w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
-                            w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(1,2) + i - 1) - loc(2))
-                            w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(1,3) + i - 1) - loc(3))
-                        enddo
-                        ! expanded matrices update, CTF and w modulates the component before origin shift
-                        self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
-                        &self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + (comp*w)*oshift
-                        self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
-                        &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + ctfval*w
+                        if( insert_plane_trilinear )then
+                            x0 = floor(loc(1))
+                            fx = loc(1) - x0
+                            x1 = x0 + 1
+
+                            y0 = floor(loc(2))
+                            fy = loc(2) - y0
+                            !y0 = y0 - 0 !STARTINGY(data)
+                            y1 = y0 + 1
+
+                            z0 = floor(loc(3))
+                            fz = loc(3) - z0
+                            !z0 = z0 - 0 !STARTINGZ(data)
+                            z1 = z0 + 1
+
+                            mfx = 1. - fx
+                            mfy = 1. - fy
+                            mfz = 1. - fz
+
+                            dd000 = mfz * mfy * mfx
+                            dd001 = mfz * mfy *  fx
+                            dd010 = mfz *  fy * mfx
+                            dd011 = mfz *  fy *  fx
+                            dd100 =  fz * mfy * mfx
+                            dd101 =  fz * mfy *  fx
+                            dd110 =  fz *  fy * mfx
+                            dd111 =  fz *  fy *  fx
+
+                            self%cmat_exp(x0, y0, z0) = self%cmat_exp(x0, y0, z0) + dd000 * comp*oshift
+                            self%cmat_exp(x0, y0, z1) = self%cmat_exp(x0, y0, z1) + dd001 * comp*oshift
+                            self%cmat_exp(x0, y1, z0) = self%cmat_exp(x0, y1, z0) + dd010 * comp*oshift
+                            self%cmat_exp(x0, y1, z1) = self%cmat_exp(x0, y1, z1) + dd011 * comp*oshift
+                            self%cmat_exp(x1, y0, z0) = self%cmat_exp(x1, y0, z0) + dd100 * comp*oshift
+                            self%cmat_exp(x1, y0, z1) = self%cmat_exp(x1, y0, z1) + dd101 * comp*oshift
+                            self%cmat_exp(x1, y1, z0) = self%cmat_exp(x1, y1, z0) + dd110 * comp*oshift
+                            self%cmat_exp(x1, y1, z1) = self%cmat_exp(x1, y1, z1) + dd111 * comp*oshift
+                            ctfval = 1.
+                            self%rho_exp(x0, y0, z0)  = self%rho_exp(x0, y0, z0) + dd000 * ctfval
+                            self%rho_exp(x0, y0, z1)  = self%rho_exp(x0, y0, z1) + dd001 * ctfval
+                            self%rho_exp(x0, y1, z0)  = self%rho_exp(x0, y1, z0) + dd010 * ctfval
+                            self%rho_exp(x0, y1, z1)  = self%rho_exp(x0, y1, z1) + dd011 * ctfval
+                            self%rho_exp(x1, y0, z0)  = self%rho_exp(x1, y0, z0) + dd100 * ctfval
+                            self%rho_exp(x1, y0, z1)  = self%rho_exp(x1, y0, z1) + dd101 * ctfval
+                            self%rho_exp(x1, y1, z0)  = self%rho_exp(x1, y1, z0) + dd110 * ctfval
+                            self%rho_exp(x1, y1, z1)  = self%rho_exp(x1, y1, z1) + dd111 * ctfval
+                        else
+                            w = 1.
+                            do i=1,self%wdim
+                                w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
+                                w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(1,2) + i - 1) - loc(2))
+                                w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(1,3) + i - 1) - loc(3))
+                            enddo
+                            w = w / sum(w)
+                            w = w * ows(iori)
+                            ! expanded matrices update, CTF and w modulates the component before origin shift
+                            self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
+                                &self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + (comp*w)*oshift
+                            self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
+                                &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + ctfval*w
+                        end if
                     end do
                 end do
                 !$omp end do nowait
@@ -399,6 +506,8 @@ contains
         real               :: winsz, val_prev, val, invrho, rsh_sq, w
         integer            :: h,k,m, phys(3), iter, sh, cmat_shape(3), i,j,l
         logical            :: l_gridcorr, l_lastiter
+        logical, parameter :: skip_pipemenon = .false.
+        logical, parameter :: do_hann_window = .true.
         ! kernel
         winsz   = max(1., 2.*self%kbwin%get_winsz())
         kbwin   = kbinterpol(winsz, self%alpha)
@@ -427,6 +536,7 @@ contains
                 end do
             end do
             !$omp end parallel do
+            if( .not. skip_pipemenon )then
             do iter = 1, GRIDCORR_MAXITS
                 l_lastiter = (iter == GRIDCORR_MAXITS)
                 ! W <- (W / rho) x kernel
@@ -458,6 +568,7 @@ contains
                 end do
                 !$omp end parallel do
             enddo
+            end if
             nullify(cmatW)
             nullify(cmatWprev)
             call Wprev_img%kill
@@ -474,8 +585,16 @@ contains
                             ! outside Nyqvist, zero
                             call self%set_cmat_at(phys(1),phys(2),phys(3), zero)
                         else
-                            w = antialw(max(1,abs(h)))*antialw(max(1,abs(k)))*antialw(max(1,abs(m)))
-                            invrho = real(W_img%get_cmat_at(phys(1), phys(2), phys(3))) !! Real(C) == Real(C*)
+                            if( do_hann_window )then
+                                w = antialw(max(1,abs(h)))*antialw(max(1,abs(k)))*antialw(max(1,abs(m)))
+                            else
+                                w = 1.
+                            end if
+                            if( .not. skip_pipemenon )then
+                                invrho = real(W_img%get_cmat_at(phys(1), phys(2), phys(3))) !! Real(C) == Real(C*)
+                            else
+                                invrho = 1. / (1.e-2+self%rho(phys(1),phys(2),phys(3)))
+                            end if
                             call self%mul_cmat_at(phys(1),phys(2),phys(3),invrho * w)
                         endif
                     end do
@@ -570,14 +689,15 @@ contains
          call self%add_workshare(self_in, self%rho, self_in%rho)
     end subroutine sum_reduce
 
-    subroutine add_invtausq2rho( self, fsc )
+    subroutine add_invtausq2rho( self, fsc, evenodd )
         use simple_estimate_ssnr, only: fsc2optlp_sub
         class(reconstructor), intent(inout) :: self !< this instance
         real,    allocatable, intent(in)    :: fsc(:)
+        integer,              intent(in)    :: evenodd
         real, allocatable :: optlp(:), ssnr(:)
-        real(dp) :: rsum(0:self%nyq)
-        real     :: tau2(0:self%nyq), invtau2, sig2,ri,d,ssnri
-        integer  :: cnt(0:self%nyq), h,k,m, sh, phys(3), sz, reslim_ind, il,ir
+        real(dp)          :: rsum(0:self%nyq)
+        real              :: tau2(0:self%nyq), invtau2, sig2,ri,d,ssnri
+        integer           :: cnt(0:self%nyq), h,k,m, sh, phys(3), sz, reslim_ind, il,ir
         sz = size(fsc) ! original image size
         allocate(optlp(sz), ssnr(sz), source=0.)
         rsum = 0.d0
@@ -596,7 +716,8 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        ! tau2 & ssnr are determined from the corrected fsc (Henderson & Rosenthal, JMB, 2002)
+        ! tau2 & ssnr are determined from the corrected fsc
+        ! (Henderson & Rosenthal, JMB, 2002)
         call fsc2optlp_sub(sz, fsc, optlp)
         ssnr = optlp / (1.-optlp)
         do k = 1,self%nyq
@@ -612,11 +733,14 @@ contains
             tau2(k) = ssnri * sig2
         enddo
         ! add Tau2 inverse to denominator
-        ! because signal assumed infinite at very low resolution there is no addition
-        reslim_ind = max(6,calc_fourier_index(params_glob%hp,self%ldim_img(1),params_glob%smpd))
+        ! because signal assumed infinite at very low resolution
+        ! there is no addition
+        reslim_ind = max(6,calc_fourier_index(params_glob%hp,self&
+            &%ldim_img(1),params_glob%smpd))
         tau2(:reslim_ind-1) = 1.
-        !$omp parallel do collapse(3) default(shared) schedule(static)&
-        !$omp private(h,k,m,phys,sh,invtau2) proc_bind(close)
+        !$omp parallel do collapse(3) default(shared)
+        !schedule(static) $omp private(h,k,m,phys,sh,invtau2)
+        !proc_bind(close)
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
                 do m = self%lims(3,1),self%lims(3,2)
@@ -626,9 +750,11 @@ contains
                     if( tau2(sh) > TINY )then
                         invtau2 = 1./ tau2(sh)
                     else
-                        invtau2 = min(1.e3,1.e3*self%rho(phys(1),phys(2),phys(3)))
+                        invtau2 = min(1.e3,1.e3*self%rho(phys(1)&
+                            &,phys(2),phys(3)))
                     endif
-                    self%rho(phys(1),phys(2),phys(3)) = self%rho(phys(1),phys(2),phys(3)) + invtau2
+                    self%rho(phys(1),phys(2),phys(3)) = self&
+                        &%rho(phys(1),phys(2),phys(3)) + invtau2
                 enddo
             enddo
         enddo

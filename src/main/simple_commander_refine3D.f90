@@ -7,7 +7,9 @@ use simple_commander_base, only: commander_base
 use simple_ori,            only: ori
 use simple_oris,           only: oris
 use simple_parameters,     only: parameters
+use simple_sigma2_binfile, only: sigma2_binfile
 use simple_qsys_env,       only: qsys_env
+use simple_euclid_sigma2,  only: write_groups_starfile
 use simple_qsys_funs
 implicit none
 
@@ -18,6 +20,8 @@ public :: check_3Dconv_commander
 public :: calc_pspec_commander_distr
 public :: calc_pspec_commander
 public :: calc_pspec_assemble_commander
+public :: calc_group_sigmas_commander
+
 private
 #include "simple_local_flags.inc"
 
@@ -49,6 +53,16 @@ type, extends(commander_base) :: calc_pspec_assemble_commander
   contains
     procedure :: execute      => exec_calc_pspec_assemble
 end type calc_pspec_assemble_commander
+type, extends(commander_base) :: calc_group_sigmas_commander
+  contains
+    procedure :: execute      => exec_calc_group_sigmas
+end type calc_group_sigmas_commander
+
+type :: sigma_array
+    character(len=:), allocatable :: fname
+    real,             allocatable :: sigma2(:,:)
+end type sigma_array
+
 contains
 
     subroutine exec_nspace(self,cline)
@@ -81,6 +95,7 @@ contains
         ! command lines
         type(cmdline)    :: cline_reconstruct3D_distr
         type(cmdline)    :: cline_calc_pspec_distr
+        type(cmdline)    :: cline_calc_group_sigmas
         type(cmdline)    :: cline_check_3Dconv
         type(cmdline)    :: cline_volassemble
         type(cmdline)    :: cline_postprocess
@@ -151,10 +166,12 @@ contains
         cline_check_3Dconv        = cline
         cline_volassemble         = cline
         cline_postprocess         = cline
+        cline_calc_group_sigmas   = cline
         ! initialise static command line parameters and static job description parameter
         call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' ) ! required for distributed call
         call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )       ! required for distributed call
         call cline_postprocess%set('prg', 'postprocess' )            ! required for local call
+        call cline_calc_group_sigmas%set('prg', 'calc_group_sigmas' )! required for local call
         if( trim(params%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
         call cline_postprocess%set('mirr',    'no')
         call cline_postprocess%set('mkdir',   'no')
@@ -170,6 +187,7 @@ contains
             call cline_postprocess%delete( vol )
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
+        if( l_switch2euclid ) call cline_volassemble%set('objfun','euclid')
         ! E/O PARTITIONING
         if( build%spproj_field%get_nevenodd() == 0 )then
             if( params%tseries .eq. 'yes' )then
@@ -329,6 +347,11 @@ contains
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
             write(logfhandle,'(A)')   '>>>'
+            if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' )then
+                ! use of l_needs_sigma?
+                call cline_calc_group_sigmas%set('which_iter',real(iter))
+                call qenv%exec_simple_prg_in_queue(cline_calc_group_sigmas, 'CALC_GROUP_SIGMAS_FINISHED')
+            endif
             if( have_oris .or. iter > params%startit )then
                 call build%spproj%read(params%projfile)
                 if( params%refine .eq. 'snhc' )then
@@ -382,6 +405,7 @@ contains
                 ! nothing to do
             case DEFAULT
                 call cline_volassemble%set( 'prg', 'volassemble' ) ! required for cmdline exec
+                call cline_volassemble%set( 'which_iter', int2str(params%which_iter) )
                 do state = 1,params%nstates
                     str_state = int2str_pad(state,2)
                     if( str_has_substr(params%refine,'snhc') )then
@@ -690,10 +714,15 @@ contains
         type(image)          :: sum_img
         type(builder)        :: build
         complex, allocatable :: cmat(:,:,:), cmat_sum(:,:,:)
-        ! real,    allocatable :: pspecs(:,:), pspec(:)
+        real,    allocatable :: pspecs(:,:), pspec(:)
         logical, allocatable :: mask(:)
         real                 :: sdev_noise
         integer              :: batchlims(2),iptcl,iptcl_batch,imatch,nyq,nptcls_part,batchsz_max
+        real, allocatable    :: sigma2(:,:)
+        type(sigma2_binfile) :: binfile
+        integer              :: kfromto(2)
+        character(len=:), allocatable :: binfname
+        call cline%set('mkdir', 'no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! init
@@ -701,7 +730,7 @@ contains
         nyq         = build%img%get_nyq()
         batchsz_max = 10 * nthr_glob
         allocate(mask(batchsz_max),source=.false.)
-        ! allocate(pspecs(nyq,nptcls_part),source=0.)
+        allocate(pspecs(nyq,nptcls_part),source=0.)
         call prepimgbatch(batchsz_max)
         call sum_img%new([params%boxmatch,params%boxmatch,1],params%smpd)
         call sum_img%zero_and_flag_ft
@@ -718,7 +747,7 @@ contains
             call read_imgbatch( batchlims )
             ! preprocess
             cmat = cmplx(0.,0.)
-            !$omp parallel do default(shared) private(iptcl,imatch,cmat)&
+            !$omp parallel do default(shared) private(iptcl,imatch,cmat,pspec)&
             !$omp schedule(static) proc_bind(close) reduction(+:cmat_sum)
             do iptcl=batchlims(1),batchlims(2)
                 imatch = iptcl - batchlims(1) + 1
@@ -737,8 +766,8 @@ contains
                 endif
                 call build%imgbatch(imatch)%fft
                 ! power spectrum
-                ! call build%imgbatch(imatch)%spectrum('power',pspec,norm=.true.)
-                ! pspecs(:,iptcl) = pspec
+                call build%imgbatch(imatch)%spectrum('power',pspec,norm=.true.)
+                pspecs(:,iptcl-params_glob%fromp+1) = pspec
                 ! global average
                 call build%imgbatch(imatch)%get_cmat_sub(cmat)
                 cmat_sum(:,:,:) = cmat_sum(:,:,:) + cmat(:,:,:)
@@ -747,6 +776,16 @@ contains
         end do
         call sum_img%set_cmat(cmat_sum)
         call sum_img%write('sum_img_part'//int2str_pad(params%part,params%numlen)//params%ext)
+        ! write to disk
+        kfromto(1) = 1
+        kfromto(2) = nyq
+        binfname = 'init_pspec_part'//trim(int2str(params%part))//'.dat'
+        allocate(sigma2(nyq,params%fromp:params%top))
+        do iptcl = params%fromp, params%top
+            sigma2(:,iptcl) = pspecs(:,iptcl-params%fromp+1)
+        end do
+        call binfile%new(binfname,params%fromp,params%top,kfromto)
+        call binfile%write(sigma2)
         !! debug
         ! call sum_img%ifft
         ! call sum_img%write('realspace_sum_img_part'//int2str(params%part)//params%ext)
@@ -764,10 +803,18 @@ contains
         type(parameters)                 :: params
         type(image)                      :: avg_img
         type(builder)                    :: build
-        character(len=:), allocatable    :: part_fname
-        integer :: iptcl,ipart,nptcls,nptcls_sel,eo,ngroups,igroup
+        type(sigma2_binfile)             :: binfile
+        type(sigma_array), allocatable   :: sigma2_arrays(:)
+        character(len=:),  allocatable   :: part_fname,starfile_fname,outbin_fname
+        integer                          :: iptcl,ipart,nptcls,nptcls_sel,eo,ngroups,igroup,nyq,pspec_l,pspec_u
+        real,              allocatable   :: group_pspecs(:,:,:),pspec_ave(:),pspecs(:,:),sigma2_output(:,:)
+        integer,           allocatable   :: group_weights(:,:)
+        call cline%set('mkdir', 'no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        ! set Fourier index range
+        params%kfromto(1) = max(2, calc_fourier_index(params%hp, params%boxmatch, params%smpd))
+        params%kfromto(2) = calc_fourier_index(2.*params%smpd, params%boxmatch, params%smpd)
         ! generate average power spectrum
         nptcls     = build%spproj_field%get_noris(consider_state=.false.)
         nptcls_sel = build%spproj_field%get_noris(consider_state=.true.)
@@ -786,7 +833,21 @@ contains
         ! call avg_img%write('avg_img'//params%ext)
         !! debug
         ! calculate power spectrum
-
+        call avg_img%spectrum('power',pspec_ave,norm=.true.)
+        nyq = avg_img%get_nyq()
+        ! read power spectra of particles
+        allocate(pspecs(nyq,params%nptcls),sigma2_arrays(params%nparts))
+        do ipart = 1,params%nparts
+            sigma2_arrays(ipart)%fname = 'init_pspec_part'//trim(int2str(ipart))//'.dat'
+            call binfile%new_from_file(sigma2_arrays(ipart)%fname)
+            call binfile%read(sigma2_arrays(ipart)%sigma2)
+            pspec_l = lbound(sigma2_arrays(ipart)%sigma2,2)
+            pspec_u = ubound(sigma2_arrays(ipart)%sigma2,2)
+            if( (pspec_l<1).or.(pspec_u>params%nptcls) )then
+                THROW_HARD('commander_refine3d; exec_calc_pspec_assemble; file ' // sigma2_arrays(ipart)%fname // ' has ptcl range ' // int2str(pspec_l) // '-' // int2str(pspec_u))
+            end if
+            pspecs(:,pspec_l:pspec_u) = sigma2_arrays(ipart)%sigma2(:,:)
+        end do
         ! generate group averages & write
         ngroups = 0
         !$omp parallel do default(shared) private(iptcl,igroup)&
@@ -797,16 +858,156 @@ contains
             ngroups = max(igroup,ngroups)
         enddo
         !$omp end parallel do
-        ! do iptcl = 1,nptcls
-        !     if( build%spproj_field%get_state(iptcl) == 0 ) cycle
-        !     eo     = nint(build%spproj_field%get(iptcl,'eo')) ! 0/1
-        !     igroup = nint(build%spproj_field%get(iptcl,'stkind'))
-        !
-        ! enddo
+        allocate(group_pspecs(2,ngroups,nyq),source=0.)
+        allocate(group_weights(2,ngroups),source=0)
+        do iptcl = 1,nptcls
+            if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+            eo     = nint(build%spproj_field%get(iptcl,'eo')) ! 0/1
+            igroup = nint(build%spproj_field%get(iptcl,'stkind'))
+            group_pspecs(eo+1,igroup,:) = group_pspecs(eo+1,igroup,:) + pspecs(:, iptcl)
+            group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)  + 1
+        enddo
+        do eo = 1,2
+            do igroup = 1,ngroups
+                if( group_weights(eo,igroup) < 1 ) cycle
+                group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) / real(group_weights(eo,igroup))
+                group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) - pspec_ave(:)
+                call remove_negative_sigmas(eo, igroup)
+            end do
+        end do
+        ! write group sigmas to starfile
+        starfile_fname = 'sigma2_it_1.star'
+        call write_groups_starfile(starfile_fname, group_pspecs, ngroups)
+        ! update sigmas in binfiles to match averages
+        do iptcl = 1,nptcls
+            if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+            eo     = nint(build%spproj_field%get(iptcl,'eo')) ! 0/1
+            igroup = nint(build%spproj_field%get(iptcl,'stkind'))
+            pspecs(:,iptcl) = group_pspecs(eo+1,igroup,:)
+        enddo
+        ! write updated sigmas to disc
+        do ipart = 1,params%nparts
+            pspec_l = lbound(sigma2_arrays(ipart)%sigma2,2)
+            pspec_u = ubound(sigma2_arrays(ipart)%sigma2,2)
+            if( allocated(sigma2_output) ) deallocate(sigma2_output)
+            allocate(sigma2_output(params%kfromto(1):params%kfromto(2),pspec_l:pspec_u))
+            do iptcl = pspec_l, pspec_u
+                sigma2_output(params%kfromto(1):params%kfromto(2),iptcl) = pspecs(params%kfromto(1):params%kfromto(2),iptcl)
+            end do
+            outbin_fname = SIGMA2_FBODY//int2str_pad(ipart,params%numlen)//'.dat'
+            call binfile%new(outbin_fname, fromp=pspec_l, top=pspec_u, kfromto=(/params%kfromto(1), params%kfromto(2)/))
+            call binfile%write(sigma2_output)
+        end do
         ! end gracefully
+        do ipart = 1,params%nparts
+            deallocate(sigma2_arrays(ipart)%fname)
+            deallocate(sigma2_arrays(ipart)%sigma2)
+        end do
         call simple_touch('CALC_PSPEC_FINISHED',errmsg='In: commander_refine3D::calc_pspec_assemble')
         call build%kill_general_tbox
         call simple_end('**** SIMPLE_CALC_PSPEC_ASSEMBLE NORMAL STOP ****', print_simple=.false.)
+
+    contains
+
+        subroutine remove_negative_sigmas(eo, igroup)
+            integer, intent(in) :: eo, igroup
+            logical :: is_positive
+            logical :: fixed_from_prev
+            integer :: nn, idx
+            ! remove any negative sigma2 noise values: replace by positive neighboring value
+            do idx = 1, size(group_pspecs, 3)
+                if( group_pspecs(eo,igroup,idx) < 0. )then
+                    ! first try the previous value
+                    fixed_from_prev = .false.
+                    if( idx - 1 >= 1 )then
+                        if( group_pspecs(eo,igroup,idx-1) > 0. )then
+                            group_pspecs(eo,igroup,idx) = group_pspecs(eo,igroup,idx-1)
+                            fixed_from_prev = .true.
+                        end if
+                    end if
+                    if( .not. fixed_from_prev )then
+                        is_positive = .false.
+                        nn          = idx
+                        do while (.not. is_positive)
+                            nn = nn + 1
+                            if( nn > size(group_pspecs,3) )then
+                                THROW_HARD('BUG! Cannot find positive values in sigma2 noise spectrum; eo=' // trim(int2str(eo)) // ', igroup=' // trim(int2str(igroup)))
+                            end if
+                            if( group_pspecs(eo,igroup,nn) > 0. )then
+                                is_positive = .true.
+                                group_pspecs(eo,igroup,idx) = group_pspecs(eo,igroup,nn)
+                            end if
+                        end do
+                    end if
+                end if
+            end do
+        end subroutine remove_negative_sigmas
+
     end subroutine exec_calc_pspec_assemble
+
+    subroutine exec_calc_group_sigmas( self, cline )
+        use simple_image,               only: image
+        class(calc_group_sigmas_commander), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        character(len=STDLEN), parameter :: PSPEC_FBODY = 'pspec_'
+        type(parameters)                 :: params
+        type(image)                      :: avg_img
+        type(builder)                    :: build
+        type(sigma2_binfile)             :: binfile
+        type(sigma_array), allocatable   :: sigma2_arrays(:)
+        character(len=:),  allocatable   :: part_fname,starfile_fname,outbin_fname
+        integer                          :: iptcl,ipart,nptcls,nptcls_sel,eo,ngroups,igroup,nyq,pspec_l,pspec_u
+        real,              allocatable   :: group_pspecs(:,:,:),pspec_ave(:),pspecs(:,:),sigma2_output(:,:)
+        integer,           allocatable   :: group_weights(:,:)
+        call cline%set('mkdir', 'no')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        ! set Fourier index range
+        params%kfromto(1) = max(2, calc_fourier_index(params%hp, params%boxmatch, params%smpd))
+        params%kfromto(2) = calc_fourier_index(2.*params%smpd, params%boxmatch, params%smpd)
+        ! read sigmas from binfiles
+        allocate(pspecs(params%kfromto(1):params%kfromto(2),params%nptcls),sigma2_arrays(params%nparts))
+        do ipart = 1,params%nparts
+            sigma2_arrays(ipart)%fname = SIGMA2_FBODY//int2str_pad(ipart,params%numlen)//'.dat'
+            call binfile%new_from_file(sigma2_arrays(ipart)%fname)
+            call binfile%read(sigma2_arrays(ipart)%sigma2)
+            pspec_l = lbound(sigma2_arrays(ipart)%sigma2,2)
+            pspec_u = ubound(sigma2_arrays(ipart)%sigma2,2)
+            if( (pspec_l<1).or.(pspec_u>params%nptcls) )then
+                THROW_HARD('commander_refine3d; exec_calc_group_sigmas; file ' // sigma2_arrays(ipart)%fname // ' has ptcl range ' // int2str(pspec_l) // '-' // int2str(pspec_u))
+            end if
+            pspecs(:,pspec_l:pspec_u) = sigma2_arrays(ipart)%sigma2(:,:)
+        end do
+        ngroups = 0
+        !$omp parallel do default(shared) private(iptcl,igroup)&
+        !$omp schedule(static) proc_bind(close) reduction(max:ngroups)
+        do iptcl = 1,params%nptcls
+            if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+            igroup  = nint(build%spproj_field%get(iptcl,'stkind'))
+            ngroups = max(igroup,ngroups)
+        enddo
+        !$omp end parallel do
+        allocate(group_pspecs(2,ngroups,params%kfromto(1):params%kfromto(2)),source=0.)
+        allocate(group_weights(2,ngroups),source=0)
+        do iptcl = 1,params%nptcls
+            if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+            eo     = nint(build%spproj_field%get(iptcl,'eo'    )) ! 0/1
+            igroup = nint(build%spproj_field%get(iptcl,'stkind'))
+            group_pspecs(eo+1,igroup,:) = group_pspecs (eo+1,igroup,:) + pspecs(:, iptcl)
+            group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)   + 1
+        enddo
+        do eo = 1,2
+            do igroup = 1,ngroups
+                if( group_weights(eo,igroup) < 1 ) cycle
+                group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) / real(group_weights(eo,igroup))
+            end do
+        end do
+        ! write group sigmas to starfile
+        starfile_fname = 'sigma2_it_' // trim(int2str(params%which_iter)) // '.star'
+        call write_groups_starfile(starfile_fname, group_pspecs, ngroups)
+        call simple_touch('CALC_GROUP_SIGMAS_FINISHED',errmsg='In: commander_refine3D::calc_group_sigmas')
+        call build%kill_general_tbox
+        call simple_end('**** SIMPLE_CALC_GROUP_SIGMAS NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_calc_group_sigmas
 
 end module simple_commander_refine3D

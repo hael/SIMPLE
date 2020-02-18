@@ -236,7 +236,7 @@ contains
                 end do
             case('cluster','clustersym')
                 do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) ) allocate(strategy3D_cluster :: strategy3Dsrch(iptcl)%ptr)
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_cluster      :: strategy3Dsrch(iptcl)%ptr)
                 end do
             case('clustersoft')
                 call open_o_peaks_io(trim(params_glob%o_peaks_file))
@@ -272,7 +272,7 @@ contains
                         strategy3Dspec%szsn  =  params_glob%szsn
                         strategy3Dspec%extr_score_thresh = extr_score_thresh
                         if( allocated(het_mask) ) strategy3Dspec%do_extr =  het_mask(iptcl)
-                        if( allocated(symmat) )   strategy3Dspec%symmat  => symmat
+                        if( allocated(symmat)   ) strategy3Dspec%symmat  => symmat
                         ! search object
                         call strategy3Dsrch(iptcl)%ptr%new(strategy3Dspec, npeaks)
                     endif
@@ -312,8 +312,9 @@ contains
 
         ! CALCULATE AND WRITE SIGMAS FOR ML-BASED REFINEMENT
         if ( params_glob%l_needs_sigma ) then
-            call eucl_sigma%calc_and_write_sigmas(build_glob%spproj_field, s3D%o_peaks, ptcl_mask)
-            call eucl_sigma%kill_ptclsigma2
+            if( params_glob%which_iter > 1 )then
+                call eucl_sigma%calc_and_write_sigmas(build_glob%spproj_field, s3D%o_peaks, ptcl_mask)
+            end if
         end if
 
         ! UPDATE PARTICLE STATS
@@ -444,8 +445,9 @@ contains
         class(cmdline), intent(inout) :: cline !< command line
         type(ori) :: o_tmp
         real      :: xyz(3)
-        integer   :: cnt, s, ind, iref, nrefs, imatch
+        integer   :: cnt, s, ind, iref, nrefs, imatch, idx, eo
         logical   :: do_center
+        character(len=:), allocatable :: fname
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
         if( params_glob%l_lpset )then
@@ -455,8 +457,10 @@ contains
                 &nint(build_glob%spproj_field%get_all('eo', [params_glob%fromp,params_glob%top])))
         endif
         if ( params_glob%l_needs_sigma ) then
-            call eucl_sigma%new(SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat')
-            call eucl_sigma%read(build_glob%spproj_field, ptcl_mask)
+            fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
+            call eucl_sigma%new(fname)
+            call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
+            call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
         end if
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
@@ -646,7 +650,7 @@ contains
                         call build_glob%imgbatch(ibatch)%noise_norm(build_glob%lmsk, sdev_noise)
                         call build_glob%imgbatch(ibatch)%fft
                         ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-                        call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch))
+                        call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), iptcl=iptcl)
                     end do
                     !$omp end parallel do
                     ! gridding
@@ -655,7 +659,6 @@ contains
                         ibatch      = i - batchlims(1) + 1
                         call build_glob%spproj_field%get_ori(iptcl, orientation)
                         if( orientation%isstatezero() ) cycle
-                        call eucl_sigma%set_sigma2(iptcl)
                         select case(trim(params_glob%refine))
                             case('clustersym')
                                 ! always C1 reconstruction

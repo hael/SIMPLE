@@ -137,7 +137,7 @@ contains
         real    :: wsum
         if( params_glob%cc_objfun == OBJFUN_EUCLID )then
             ! subtracts minimum distance
-            dists = corrs / params_glob%sigma2_fudge
+            dists = corrs! / params_glob%sigma2_fudge
             dists = dists - maxval(dists)
             ! exponential weights
             ws = exp(dists)
@@ -298,7 +298,7 @@ contains
         endif
         ! loop over valid peaks and find shift increment
         cnt = 0
-        do ipeak = 1, npeaks - 1
+        do ipeak = 1, max(1, npeaks - 1)
             ! take care of ow > 0. requirement
             if( ws(ipeak) <= TINY ) cycle
             ! take care of multi-state case

@@ -3,44 +3,37 @@ include 'simple_lib.f08'
 use simple_parameters,       only: params_glob
 use simple_polarft_corrcalc, only: polarft_corrcalc, pftcc_glob
 use simple_oris,             only: oris
+use simple_sigma2_binfile,   only: sigma2_binfile
+use simple_starfile_wrappers
 implicit none
 
-public :: euclid_sigma2, eucl_sigma2_glob
+public :: euclid_sigma2, eucl_sigma2_glob, write_groups_starfile
 private
 #include "simple_local_flags.inc"
 
 type euclid_sigma2
     private
-    real,    allocatable  :: divide_by(:)
-    real,    allocatable  :: sigma2_noise(:,:)      !< for reading & calculating individual contributions
-    real,    allocatable  :: mic_sigma2_noise(:,:)  !< weighted average for euclidian distance calculation and reconstruction
-    logical, allocatable  :: sigma2_exists_msk(:)   !< particle &
-    integer, allocatable  :: pinds(:)
-    integer, allocatable  :: micinds(:)
-    integer               :: file_header(4) = 0
-    integer               :: kfromto(2)     = 0
-    integer               :: headsz         = 0
-    integer               :: sigmassz       = 0
-    integer               :: pftsz          = 0
-    character(len=STDLEN) :: fname
-    logical               :: do_divide = .false.
-    logical               :: exists    = .false.
+    real,    allocatable, public  :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
+    real,    allocatable          :: sigma2_part(:,:)               !< the actual sigmas per particle (this part only)
+    real,    allocatable, public  :: sigma2_groups(:,:,:)   !< sigmas for groups
+    real,    allocatable          :: mic_sigma2_noise(:,:)  !< weighted average for euclidian distance calculation and reconstruction
+    integer, allocatable          :: pinds(:)
+    integer, allocatable          :: micinds(:)
+    integer                       :: fromp
+    integer                       :: top
+    integer                       :: kfromto(2)     = 0
+    integer                       :: pftsz          = 0
+    character(len=:), allocatable :: binfname
+    logical                       :: exists    = .false.
 
 contains
     ! constructor
     procedure          :: new
     ! I/O
-    procedure          :: read
-    procedure, private :: create_empty
+    procedure          :: read_part
+    procedure          :: read_groups
     procedure          :: calc_and_write_sigmas
-    procedure, private :: open_and_check_header
-    procedure, private :: write
-    ! getters / setters
-    procedure          :: sigma2_exists
-    procedure, private :: set_do_divide
-    procedure          :: get_do_divide
-    procedure          :: set_sigma2
-    procedure          :: get_sigma2
+    procedure, private :: read_groups_starfile
     ! destructor
     procedure          :: kill_ptclsigma2
     procedure          :: kill
@@ -50,95 +43,63 @@ class(euclid_sigma2), pointer :: eucl_sigma2_glob => null()
 
 contains
 
-    subroutine new( self, fname )
+    subroutine new( self, binfname )
+        ! read individual sigmas from binary file, to be modified at the end of the iteration
+        ! read group sigmas from starfile, to be used for alignment and volume reconstruction
+        ! set up fields for fast access to sigmas
         class(euclid_sigma2), target, intent(inout) :: self
-        character(len=*),             intent(in)    :: fname
+        character(len=*),             intent(in)    :: binfname
         real(sp) :: r
         call self%kill
         self%kfromto = params_glob%kfromto
-        allocate( self%sigma2_noise(self%kfromto(1):self%kfromto(2),1:pftcc_glob%get_nptcls()),&
-            self%sigma2_exists_msk(1:pftcc_glob%get_nptcls()),&
-            self%pinds(params_glob%fromp:params_glob%top),&
-            self%divide_by(self%kfromto(1):self%kfromto(2)) )
-        call pftcc_glob%assign_sigma2_noise(self%sigma2_noise )
+        allocate( self%sigma2_noise(self%kfromto(1):self%kfromto(2),params_glob%fromp:params_glob%top),&
+                  self%pinds(params_glob%fromp:params_glob%top) )
+        call pftcc_glob%assign_sigma2_noise(self%sigma2_noise)
         call pftcc_glob%assign_pinds(self%pinds)
-        self%fname            = trim(fname)
-        self%file_header(1)   = params_glob%fromp
-        self%file_header(2)   = params_glob%top
-        self%file_header(3:4) = self%kfromto
-        self%headsz           = sizeof(self%file_header)
-        self%sigmassz         = sizeof(r)*(self%kfromto(2)-self%kfromto(1)+1)
+        self%binfname         = trim(binfname)
+        self%fromp            = params_glob%fromp
+        self%top              = params_glob%top
+        self%kfromto          = self%kfromto
         self%pftsz            = pftcc_glob%get_pftsz()
         self%sigma2_noise     = 0.
-        self%do_divide          = .false.
-        self%sigma2_exists_msk  = .false.
-        self%exists             = .true.
-        eucl_sigma2_glob       => self
+        self%exists           = .true.
+        eucl_sigma2_glob      => self
     end subroutine new
 
     ! I/O
 
-    subroutine read( self, os, ptcl_mask )
-        class(euclid_sigma2),    intent(inout) :: self
-        class(oris),            intent(inout) :: os
-        logical,                intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
-        real, allocatable :: wsums(:)
-        real(sp) :: sigma2_noise_n(self%kfromto(1):self%kfromto(2)),w
-        integer  :: fromm, tom, funit, iptcl, addr, pind, imic
-        logical  :: success, defined
+    subroutine read_part( self, os, ptcl_mask )
+        class(euclid_sigma2), intent(inout) :: self
+        class(oris),          intent(inout) :: os
+        logical,              intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
+        type(sigma2_binfile) :: binfile
+        call binfile%new_from_file(self%binfname)
+        call binfile%read(self%sigma2_part)
+    end subroutine read_part
+
+    subroutine read_groups( self, os, ptcl_mask )
+        class(euclid_sigma2), intent(inout) :: self
+        class(oris),          intent(inout) :: os
+        logical,              intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
+        integer                             :: iptcl,igroup,fromm,tom,eo
         call pftcc_glob%assign_pinds(self%pinds)
-        self%sigma2_noise      = 0.
-        self%sigma2_exists_msk = .false.
-        if (.not. file_exists(trim(self%fname))) call self%create_empty()
-        if( params_glob%cc_objfun /= OBJFUN_EUCLID ) return
-        success = self%open_and_check_header(funit)
-        if (success) then
-            ! mic related init
-            allocate(self%micinds(params_glob%fromp:params_glob%top),source=0)
-            fromm = huge(fromm)
-            tom   = -1
-            do iptcl = params_glob%fromp, params_glob%top
-                imic  = nint(os%get(iptcl, 'stkind'))
-                fromm = min(fromm, imic)
-                tom   = max(tom, imic)
-            enddo
-            allocate(self%mic_sigma2_noise(self%kfromto(1):self%kfromto(2),fromm:tom),&
-            &wsums(fromm:tom),source=0.)
-            ! read & sum
-            do iptcl = params_glob%fromp, params_glob%top
-                if( os%get_state(iptcl) == 0 ) cycle
-                addr = self%headsz + (iptcl - params_glob%fromp) * self%sigmassz + 1
-                read(unit=funit,pos=addr) sigma2_noise_n
-                defined = any(sigma2_noise_n > TINY)
-                if( .not.defined .and. ptcl_mask(iptcl) )then
-                    THROW_WARN('UNDEFINED SIGMA2: '//int2str(iptcl))
-                endif
-                ! sets mask
-                if( ptcl_mask(iptcl) ) self%sigma2_exists_msk(self%pinds(iptcl)) = .true.
-                ! accumulates weighted sum
-                w    = os%get(iptcl, 'w')
-                imic = nint(os%get(iptcl, 'stkind'))
-                self%micinds(iptcl) = imic
-                wsums(imic) = wsums(imic) + w
-                self%mic_sigma2_noise(:,imic) = self%mic_sigma2_noise(:,imic) + w*sigma2_noise_n
-            end do
-            call fclose(funit, errmsg='euclid_sigma2; read; fhandle close')
-            ! micrograph weighted average
-            do imic = fromm,tom
-                w = wsums(imic)
-                if( w <= TINY ) cycle
-                self%mic_sigma2_noise(:,imic) = self%mic_sigma2_noise(:,imic) / w
-            enddo
-            ! transfer micrograph sigma2 to masked ptcls only for euclidian distance calculation
-            do iptcl = params_glob%fromp, params_glob%top
-                if( .not.ptcl_mask(iptcl) )cycle
-                imic = self%micinds(iptcl)
-                pind = self%pinds(iptcl)
-                self%sigma2_noise(:,pind) = self%mic_sigma2_noise(:,imic)
-            end do
-            deallocate(wsums)
-        end if
-    end subroutine read
+        ! determine number of groups
+        fromm = HUGE(fromm)
+        tom   = -1000
+        do iptcl = 1, params_glob%nptcls
+            igroup = nint(os%get(iptcl, 'stkind'))
+            fromm  = min(fromm, igroup)
+            tom    = max(tom,   igroup)
+        end do
+        call self%read_groups_starfile( params_glob%which_iter, self%sigma2_groups, tom )
+        ! copy sigmas to particles
+        do iptcl = params_glob%fromp, params_glob%top
+            igroup  = nint(os%get(iptcl, 'stkind'))
+            eo      = nint(os%get(iptcl, 'eo'    )) ! 0/1
+            self%sigma2_noise(:,iptcl) = self%sigma2_groups(eo+1,igroup,:)
+        end do
+        self%sigma2_noise = self%sigma2_noise / 2.
+    end subroutine read_groups
 
     !>  For soft assignment
     subroutine calc_and_write_sigmas( self, os, o_peaks, ptcl_mask )
@@ -146,200 +107,146 @@ contains
         class(oris),                      intent(inout) :: os
         type(oris),          allocatable, intent(inout) :: o_peaks(:)
         logical,             allocatable, intent(in)    :: ptcl_mask(:)
-        integer :: iptcl, ipeak, iref, npeaks, irot, funit
-        real    :: sigmas_tmp(self%kfromto(1):self%kfromto(2))
-        real    :: sigma_contrib(self%kfromto(1):self%kfromto(2))
-        real    :: shvec(2), weight
-        logical :: success
-        if (.not. file_exists(trim(self%fname))) then
-            call self%create_empty()
-        else
-            success = self%open_and_check_header(funit)
-            call fclose(funit, errmsg='euclid_sigma2; write ')
-            if (.not. success) then
-                THROW_HARD('sigmas file has wrong dimensions')
-            end if
-        end if
-        self%sigma2_noise = 0.
-        !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-        !$omp private(iref,iptcl,ipeak,weight,shvec,irot,npeaks,sigmas_tmp,sigma_contrib)
+        integer              :: iptcl, ipeak, iref, npeaks, irot, funit
+        real                 :: sigmas_tmp(self%kfromto(1):self%kfromto(2))
+        real                 :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        real                 :: ptcl_sumsq(self%kfromto(1):self%kfromto(2))
+        real                 :: ref_sumsq(self%kfromto(1):self%kfromto(2))
+        real                 :: shvec(2), weight, weightnorm
+        logical              :: success
+        type(sigma2_binfile) :: binfile
+!        !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+!        !$omp private(iref,iptcl,ipeak,weight,shvec,irot,npeaks,sigmas_tmp,sigma_contrib,ptcl_sumsq,ref_sumsq)
         do iptcl = params_glob%fromp,params_glob%top
             if (.not. ptcl_mask(iptcl)) cycle
             if ( os%get_state(iptcl)==0 ) cycle
             sigmas_tmp = 0.
             npeaks = o_peaks(iptcl)%get_noris()
+            weightnorm = 0.
+            do ipeak = 1,npeaks
+                weight = o_peaks(iptcl)%get(ipeak, 'ow')
+                if (weight < TINY) cycle
+                weightnorm = weightnorm + weight
+            end do
             do ipeak = 1,npeaks
                 weight = o_peaks(iptcl)%get(ipeak, 'ow')
                 if (weight < TINY) cycle
                 iref   = nint(o_peaks(iptcl)%get(ipeak, 'proj'))
                 shvec  = o_peaks(iptcl)%get_2Dshift(ipeak)
                 irot   = pftcc_glob%get_roind(360. - o_peaks(iptcl)%e3get(ipeak))
-                call pftcc_glob%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
-                sigmas_tmp = sigmas_tmp + weight * sigma_contrib
+                call pftcc_glob%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib, ptcl_sumsq, ref_sumsq)
+                sigmas_tmp = sigmas_tmp + weight / weightnorm * sigma_contrib
             end do
-            self%sigma2_noise(:,self%pinds(iptcl)) = sigmas_tmp
+            self%sigma2_part(:,iptcl) = sigmas_tmp
         end do
-        !$omp end parallel do
-        call self%write(funit, os, ptcl_mask)
+        !        !$omp end parallel do
+        call binfile%new_from_file(self%binfname)
+        call binfile%write(self%sigma2_part)
     end subroutine calc_and_write_sigmas
-
-    function open_and_check_header( self, funit ) result ( success )
-        class(euclid_sigma2), intent(inout) :: self
-        integer,             intent(out)   :: funit
-        logical                            :: success
-        integer                            :: io_stat
-        integer                            :: fromp_here, top_here
-        if (.not. file_exists(trim(self%fname))) then
-            success = .false.
-            return
-        end if
-        call fopen(funit,trim(self%fname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
-        call fileiochk('euclid_sigma2; read_sigmas; open for read '//trim(self%fname), io_stat)
-        read(unit=funit,pos=1) self%file_header
-        fromp_here      = self%file_header(1)
-        top_here        = self%file_header(2)
-        self%kfromto    = self%file_header(3:4)
-        if ((fromp_here.ne.params_glob%fromp) .or. (top_here.ne.params_glob%top) .or. &
-            (self%kfromto(1).ne.self%kfromto(1)) .or. (self%kfromto(2).ne.self%kfromto(2))) then
-            THROW_WARN('dimensions in sigmas file do not match')
-            write (*,*) 'params_glob%fromp: ',   params_glob%fromp,   ' ; in sigmas file: ', fromp_here
-            write (*,*) 'params_glob%top: ',     params_glob%top,     ' ; in sigmas file: ', top_here
-            write (*,*) 'self%kfromto: ', self%kfromto, ' ; in sigmas file: ', self%kfromto
-            write (*,*) 'resorting to cross-correlations.'
-            call fclose(funit)
-            success = .false.
-        else
-            success = .true.
-        end if
-    end function open_and_check_header
-
-    subroutine create_empty( self )
-        class(euclid_sigma2), intent(in) :: self
-        integer  :: funit, io_stat
-        real(sp) :: sigmas_empty(self%kfromto(1):self%kfromto(2), params_glob%fromp:params_glob%top)
-        sigmas_empty = 0.
-        call fopen(funit,trim(self%fname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
-        write(unit=funit,pos=1) self%file_header
-        write(unit=funit,pos=self%headsz + 1) sigmas_empty
-        call fclose(funit)
-    end subroutine create_empty
-
-    subroutine write( self, funit, os, ptcl_mask )
-        class(euclid_sigma2),  intent(inout) :: self
-        integer,              intent(inout) :: funit
-        class(oris),          intent(in)    :: os
-        logical, allocatable, intent(in)    :: ptcl_mask(:)
-        integer :: io_stat, addr, iptcl
-        call fopen(funit,trim(self%fname),access='STREAM',iostat=io_stat)
-        call fileiochk('euclid_sigma2; write; open for write '//trim(self%fname), io_stat)
-        do iptcl = params_glob%fromp,params_glob%top
-            if (.not. ptcl_mask(iptcl) ) cycle
-            if( os%get_state(iptcl)==0 ) cycle
-            addr = self%headsz + (iptcl - params_glob%fromp) * self%sigmassz + 1
-            write(funit,pos=addr) self%sigma2_noise(:,self%pinds(iptcl))
-        end do
-        call fclose(funit, errmsg='euclid_sigma2; write; fhandle close')
-    end subroutine
-
-    ! getters / setters
-
-    logical function sigma2_exists( self, iptcl )
-        class(euclid_sigma2), intent(in) :: self
-        integer,             intent(in) :: iptcl
-        sigma2_exists = .false.
-        if( .not. self%exists ) return
-        if( self%pinds(iptcl) .eq. 0 )then
-            write (*,*) 'iptcl = ', iptcl
-            THROW_HARD('sigma2_exists. iptcl index wrong!')
-        else
-            sigma2_exists = self%sigma2_exists_msk(self%pinds(iptcl))
-        end if
-    end function sigma2_exists
-
-    subroutine set_do_divide( self, do_divide )
-        class(euclid_sigma2), intent(inout) :: self
-        logical,             intent(in)    :: do_divide
-        self%do_divide = do_divide
-    end subroutine set_do_divide
-
-    logical function get_do_divide( self )
-        class(euclid_sigma2), intent(in) :: self
-        get_do_divide = .false.
-        if( self%exists ) get_do_divide = self%do_divide
-    end function get_do_divide
-
-    !>  push sigma2 average to buffer
-    subroutine set_sigma2( self, iptcl )
-        class(euclid_sigma2), intent(inout) :: self
-        integer,             intent(in)    :: iptcl
-        integer :: micind
-        self%do_divide = .false.
-        if( .not. self%exists ) return
-        if( self%sigma2_exists(iptcl) )then
-            micind = self%micinds(iptcl)
-            if( micind <= 0 ) THROW_HARD('set_sigma2; mic index wrong! micind='//int2str(micind))
-            self%divide_by(:) = self%mic_sigma2_noise(:,micind)
-            self%do_divide    = .true.
-        else
-            self%divide_by(:) = 1.
-        end if
-    end subroutine set_sigma2
-
-    !>  fetch sigma2 average from buffer for reconstruction
-    subroutine get_sigma2( self, nyq, sigma2 )
-        class(euclid_sigma2), intent(in)  :: self
-        integer,              intent(in)  :: nyq ! oversampling nyquist limit
-        real,                 intent(out) :: sigma2(1:2*nyq)
-        real    :: scale, loc, ld
-        integer :: k, kstart, lk
-        sigma2 = 1.
-        if( .not.self%exists )return
-        if( nyq == self%kfromto(2) )then
-            do k = self%kfromto(1),self%kfromto(2)
-                sigma2(k) = self%divide_by(k) * real(k) / real(self%pftsz)
-            enddo
-        else if( nyq > self%kfromto(2) )then
-            ! resampling
-            scale  = real(self%kfromto(2)) / real(nyq)
-            kstart = ceiling(real(self%kfromto(1))/scale)
-            do k = kstart,nyq-1
-                loc = real(k)*scale
-                lk  = floor(loc)
-                ld  = loc-real(lk)
-                ! linear interpolation
-                sigma2(k) = ld*self%divide_by(lk+1) + (1.-ld)*self%divide_by(lk)
-                sigma2(k) = sigma2(k) * real(k) / real(self%pftsz)
-            enddo
-            sigma2(nyq) = self%divide_by(self%kfromto(2)) * real(nyq) / real(self%pftsz)
-        else
-            THROW_HARD('Incompatible requested size; get_sigma2')
-        endif
-    end subroutine get_sigma2
 
     ! destructor
 
     subroutine kill_ptclsigma2( self )
         class(euclid_sigma2), intent(inout) :: self
-        if(allocated(self%sigma2_noise)) deallocate(self%sigma2_noise)
+        if( allocated(self%sigma2_noise) ) deallocate(self%sigma2_noise)
     end subroutine kill_ptclsigma2
 
     subroutine kill( self )
         class(euclid_sigma2), intent(inout) :: self
         if( self%exists )then
             call self%kill_ptclsigma2
-            if(allocated(self%sigma2_exists_msk)) deallocate(self%sigma2_exists_msk)
             if(allocated(self%pinds))             deallocate(self%pinds)
-            if(allocated(self%divide_by))         deallocate(self%divide_by)
             if(allocated(self%mic_sigma2_noise))  deallocate(self%mic_sigma2_noise)
             if(allocated(self%micinds))           deallocate(self%micinds)
-            self%file_header  = 0
-            self%headsz       = 0
-            self%sigmassz     = 0
             self%kfromto      = 0
-            self%do_divide    = .false.
+            self%fromp        = -1
+            self%top          = -1
             self%exists       = .false.
             eucl_sigma2_glob  => null()
         endif
     end subroutine kill
+
+    subroutine write_groups_starfile( fname, group_pspecs, ngroups )
+        character(len=:), allocatable, intent(in) :: fname
+        real, allocatable,             intent(in) :: group_pspecs(:,:,:)
+        integer,                       intent(in) :: ngroups
+        character(len=:), allocatable :: stmp
+        integer                       :: eo, igroup, idx
+        type(starfile_table_type)     :: ostarfile
+        call starfile_table__new(ostarfile)
+        call starfile_table__open_ofile(ostarfile, fname)
+        do eo = 1, 2
+            if( eo == 1 )then
+                stmp = 'even'
+            else
+                stmp = 'odd'
+            end if
+            do igroup = 1, ngroups
+                call starfile_table__clear(ostarfile)
+                call starfile_table__setComment(ostarfile, stmp // ', group ' // trim(int2str(igroup)) )
+                call starfile_table__setName(ostarfile, trim(int2str(eo)) // '_group_' // trim(int2str(igroup)) )
+                call starfile_table__setIsList(ostarfile, .false.)
+                do idx = lbound(group_pspecs,3), ubound(group_pspecs, 3)
+                    call starfile_table__addObject(ostarfile)
+                    call starfile_table__setValue_int(ostarfile,    EMDL_SPECTRAL_IDX, idx)
+                    call starfile_table__setValue_double(ostarfile, EMDL_MLMODEL_SIGMA2_NOISE,&
+                        real(group_pspecs(eo,igroup,idx),dp) )
+                end do
+                call starfile_table__write_ofile(ostarfile)
+            end do
+        end do
+        call starfile_table__close_ofile(ostarfile)
+        call starfile_table__delete(ostarfile)
+    end subroutine write_groups_starfile
+
+    subroutine read_groups_starfile( self, iter, group_pspecs, ngroups )
+        class(euclid_sigma2),          intent(inout) :: self
+        integer,                       intent(in)    :: iter
+        real,             allocatable, intent(out)   :: group_pspecs(:,:,:)
+        integer,                       intent(in)    :: ngroups
+        type(str4arr),    allocatable :: names(:)
+        type(starfile_table_type)     :: istarfile
+        character                     :: eo_char
+        integer                       :: stat, spec_idx, nyq, eo, igroup, idx
+        real(dp)                      :: val
+        logical                       :: ares
+        integer(C_long)               :: num_objs, object_id
+        character(len=:), allocatable :: starfile_fname
+        starfile_fname = 'sigma2_it_' // trim(int2str(iter)) // '.star'
+        allocate(group_pspecs(2,ngroups,self%kfromto(1):self%kfromto(2)))
+        call starfile_table__new(istarfile)
+        if (.not. file_exists(starfile_fname)) then
+            THROW_HARD('euclid_sigma2_starfile: read_groups_pspecs; file does not exists: ' // starfile_fname)
+        end if
+        call starfile_table__getnames(istarfile, starfile_fname, names)
+        do idx = 1, size(names)
+            if( len(names(idx)%str) < len('1_group_')+1 )cycle
+            if( names(idx)%str(2:8) .ne. '_group_' ) cycle
+            eo_char = names(idx)%str(1:1)
+            if ((eo_char .ne. '1').and.(eo_char .ne. '2')) cycle
+            if (eo_char == '1') eo = 1
+            if (eo_char == '2') eo = 2
+            call str2int( names(idx)%str(9:), stat, igroup )
+            if( stat > 0 ) cycle
+            if( (igroup < 1).or.(igroup>ngroups) ) cycle
+            call starfile_table__read( istarfile, starfile_fname, names(idx)%str )
+            object_id = starfile_table__firstobject(istarfile)
+            num_objs  = starfile_table__numberofobjects(istarfile)
+            do while( (object_id < num_objs) .and. (object_id >= 0) )
+                ares = starfile_table__getValue_int   (istarfile, EMDL_SPECTRAL_IDX, spec_idx)
+                if( ares ) then
+                    ares = starfile_table__getValue_double(istarfile, EMDL_MLMODEL_SIGMA2_NOISE, val)
+                    if( ares ) then
+                        if( (spec_idx >= self%kfromto(1)).and.(spec_idx <= self%kfromto(2)) ) then
+                            group_pspecs(eo,igroup,spec_idx) = real(val)
+                        end if
+                    end if
+                end if
+                object_id = starfile_table__nextobject(istarfile)
+            end do
+        end do
+        call starfile_table__delete(istarfile)
+    end subroutine read_groups_starfile
+
 
 end module simple_euclid_sigma2

@@ -612,8 +612,24 @@ contains
                     endif
                 endif
             else
-                if( params_glob%cc_objfun == OBJFUN_EUCLID)then
-                    ! nothing to do
+                if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+                    call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
+                    if( params_glob%nstates == 1 )then
+                        allocate(fname_vol_filter, source=trim(ANISOLP_FBODY)//int2str_pad(s,2)//trim(params_glob%ext))
+                    else
+                        allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(params_glob%ext))
+                    endif
+                    if( file_exists(fname_vol_filter) )then
+                        ! anisotropic filter
+                        call build_glob%vol2%read(fname_vol_filter)
+                        call build_glob%vol%apply_filter(build_glob%vol2)
+                    else
+                        ! match filter based on Rosenthal & Henderson, 2003
+                        if( any(build_glob%fsc(s,:) > 0.143) )then
+                            call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
+                            call build_glob%vol%apply_filter(filter)
+                        endif
+                    endif
                 else
                     call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
                     if( params_glob%nstates == 1 )then

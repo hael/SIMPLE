@@ -381,11 +381,10 @@ contains
                 call arr2file(pssnr, PSSNR_FBODY//int2str_pad(state,2)//'_even'//BIN_EXT)
                 call self%odd%calc_pssnr3d(corrs, pssnr)
                 call arr2file(pssnr, PSSNR_FBODY//int2str_pad(state,2)//'_odd'//BIN_EXT)
-            else
-                ! regularization for objfun = euclid
-                call self%even%add_invtausq2rho(corrs)
-                call self%odd%add_invtausq2rho(corrs)
             endif
+            ! regularization for objfun = euclid
+            call self%even%add_invtausq2rho(corrs, 1)
+            call self%odd %add_invtausq2rho(corrs, 2)
             ! correct for the uneven sampling density
             call self%even%sampl_dens_correct
             call self%odd%sampl_dens_correct
