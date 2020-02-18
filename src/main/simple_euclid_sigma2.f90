@@ -226,7 +226,7 @@ contains
             if ((eo_char .ne. '1').and.(eo_char .ne. '2')) cycle
             if (eo_char == '1') eo = 1
             if (eo_char == '2') eo = 2
-            call str2int( names(idx)%str(9:), stat, igroup )
+            call str2int( names(idx)%str(9:len_trim(names(idx)%str)), stat, igroup )
             if( stat > 0 ) cycle
             if( (igroup < 1).or.(igroup>ngroups) ) cycle
             call starfile_table__read( istarfile, starfile_fname, names(idx)%str )
