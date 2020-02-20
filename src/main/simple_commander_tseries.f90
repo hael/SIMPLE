@@ -762,6 +762,7 @@ contains
         class(cmdline),                          intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
+        type(image)      :: ave_pre, ave_post, tmp
         real             :: smpd, w, ang
         integer          :: iptcl, ldim_ptcl(3), ldim(3), n, nptcls
         call cline%set('oritype','mic')
@@ -784,16 +785,43 @@ contains
         w = 1./real(nptcls)
         call build%img%new(ldim,smpd)       ! particle
         call build%img_tmp%new(ldim,smpd)   ! nn background
+        call build%img_copy%new(ldim,smpd)
+        call tmp%new(ldim,smpd)
+        call ave_pre%new(ldim,smpd)
+        call ave_post%new(ldim,smpd)
+        ave_pre  = 0.
+        ave_post = 0.
         ! read, subtract & write
         do iptcl = 1,nptcls
             call build%img%read(params%stk,iptcl)
             call build%img_tmp%read(params%stk2,iptcl)
+            ! pre-subtraction average
+            build%img_copy = build%img
+            call build%img_copy%norm()
+            call build%img_copy%zero_edgeavg
+            call build%img_copy%fft()
+            call build%img_copy%ft2img('sqrt', tmp)
+            call ave_pre%add(tmp)
+            ! subtraction
             call remove_graphene_peaks2(build%img, build%img_tmp, ang)
             call build%img%write(params%outstk,iptcl)
+            ! graphene subtracted average
+            call build%img%norm()
+            call build%img%zero_edgeavg
+            call build%img%fft()
+            call build%img%ft2img('sqrt', tmp)
+            call ave_post%add(tmp)
         enddo
+        call ave_pre%div(real(nptcls))
+        call ave_post%div(real(nptcls))
+        call ave_pre%write('pre_subtr_ave_pspec.mrc')
+        call ave_post%write('subtr_ave_pspec.mrc')
         ! cleanup
         call build%kill_general_tbox
         call build%spproj%kill
+        call tmp%kill
+        call ave_pre%kill
+        call ave_post%kill
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_GRAPHENE_SUBTR NORMAL STOP ****')
     end subroutine exec_tseries_graphene_subtr
@@ -967,7 +995,7 @@ contains
         ! (4) DETECT ATOMS, produces DETECTED_ATOMS_PDB
         call cline_detect_atoms1%set('prg',      'detect_atoms')
         call cline_detect_atoms1%set('smpd',     real(params%smpd))
-        call cline_detect_atoms1%set('cs_thres', 8.)
+        call cline_detect_atoms1%set('cs_thres', 6.)
         call cline_detect_atoms1%set('vol1',     trim(REC_FBODY)//params%ext)
         call cline_detect_atoms1%set('nthr',     real(params%nthr))
         call cline_detect_atoms1%set('msk',      params%msk)
@@ -985,7 +1013,7 @@ contains
         call cline_simatoms2%delete('moldiam')
         call cline_simatoms2%delete('lp')
         ! (6) REPROJECTION OF SIMULATED DETECTED ATOMS
-        call cline_reproject2%set('prg',   'reproject')
+        call cline_reproject2%set('prg',   'reprojeband3_indct')
         call cline_reproject2%set('outstk', DETECTED_PROJS)
         call cline_reproject2%set('smpd',   params%smpd)
         call cline_reproject2%set('msk',    params%msk)
@@ -1004,7 +1032,7 @@ contains
             ! (8) DETECT ATOMS, produces RANKED_ATOMS_PDB
             call cline_detect_atoms2%set('prg',      'detect_atoms')
             call cline_detect_atoms2%set('smpd',     real(params%smpd))
-            call cline_detect_atoms2%set('cs_thres', 8.)
+            call cline_detect_atoms2%set('cs_thres', 6.)
             call cline_detect_atoms2%set('vol1',     trim(REC_RANKED_FBODY)//params%ext)
             call cline_detect_atoms2%set('nthr',     real(params%nthr))
             call cline_detect_atoms2%set('msk',      params%msk)

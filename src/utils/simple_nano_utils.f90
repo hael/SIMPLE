@@ -28,20 +28,29 @@ contains
         type(image), intent(inout) :: raw_img
         type(image), intent(inout) :: spectrum
         real,        intent(out)   :: ang ! estimated angle between both sheets
+        real, parameter :: GRAPHENE_BAND3 = 1.05
         type(image)          :: spectrum_roavg
         real,    pointer     :: pspectrum_roavg(:,:,:)
         complex, pointer     :: pcmat(:,:,:)
         logical, allocatable :: msk(:,:)
-        real    :: REMOVAL_HWIDTH
-        real    :: smpd, first_ang, second_ang, val
-        integer :: phys(3),cen(2), ldim(3), loc(2), h,k,i,j, band2_ind, sh, cnt
+        real,    allocatable :: vals(:), vals_sel(:)
+        real    :: REMOVAL_HWIDTH, med_vals(3)
+        real    :: smpd, first_ang, second_ang
+        integer :: phys(3),cen(2), ldim(3), loc(2), h,k,i,j,l, sh, cnt
+        integer :: band_inds(3) ! respectively resolutions 2.14, 1.23, 1.05 angstroms
         ldim    = raw_img%get_ldim()
         ldim(3) = 1
         smpd    = raw_img%get_smpd()
         cen     = ldim(1:2)/2 + 1
+        band_inds(1) = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND1),ldim(1),smpd)
+        band_inds(2) = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND2),ldim(1),smpd)
+        band_inds(3) = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND3),ldim(1),smpd)
         ! Empirical size of peak obscuring
-        REMOVAL_HWIDTH = 2.
-        if( ldim(1) >= 150 ) REMOVAL_HWIDTH = 3. ! larger image, larger peak
+        if( ldim(1) >= 200 )then
+            REMOVAL_HWIDTH = 3. ! larger image, larger peak
+        else
+            REMOVAL_HWIDTH = 2.
+        endif
         ! calculate rotational avg of the spectrum
         call spectrum_roavg%new(ldim,smpd)
         call spectrum%roavg(60,spectrum_roavg)
@@ -49,7 +58,6 @@ contains
         call raw_img%fft
         call raw_img%get_cmat_ptr(pcmat)
         ! build peak detection mask
-        band2_ind = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND2),ldim(1),smpd)
         allocate(msk(ldim(1),ldim(2)),source=.false.)
         do i = 1, ldim(1)
             h  = -ldim(1)/2 + i - 1
@@ -57,30 +65,42 @@ contains
                 k  = -ldim(2)/2 + j - 1
                 sh =  nint(hyp(real(h),real(k)))
                 if( k < 0 ) cycle
-                if( sh >= band2_ind-1 .and. sh <= band2_ind+1 ) msk(i,j) = .true.
+                if( sh >= band_inds(2)-1 .and. sh <= band_inds(2)+1 ) msk(i,j) = .true.
           enddo
         enddo
-        ! calculate substitution value
-        cnt = 0
-        val = 0.
-        do i = 1, ldim(1)
-            h  = -ldim(1)/2 + i - 1
-            do j = 1, ldim(2)
-                k  = -ldim(2)/2 + j - 1
-                sh =  nint(hyp(real(h),real(k)))
-                if( sh >= cen(1) .and. sh < cen(1)+5 )then
-                    phys = raw_img%comp_addr_phys(h,k,0)
-                    val  = val + csq(pcmat(phys(1),phys(2),1))
-                    cnt  = cnt + 1
-                endif
-          enddo
+        ! calculate stats for each band
+        do l = 1,3
+            cnt = 0
+            do i = 1, ldim(1)
+                h  = -ldim(1)/2 + i - 1
+                do j = 1, ldim(2)
+                    k  = -ldim(2)/2 + j - 1
+                    sh =  nint(hyp(real(h),real(k)))
+                    if( sh >= band_inds(l)-1 .and. sh <= band_inds(l)+1 ) cnt = cnt+1
+              enddo
+            enddo
+            allocate(vals(cnt))
+            cnt = 0
+            do i = 1, ldim(1)
+                h  = -ldim(1)/2 + i - 1
+                do j = 1, ldim(2)
+                    k  = -ldim(2)/2 + j - 1
+                    sh =  nint(hyp(real(h),real(k)))
+                    if( sh >= band_inds(l)-1 .and. sh <= band_inds(l)+1 )then
+                        cnt = cnt+1
+                        phys = raw_img%comp_addr_phys(h,k,0)
+                        vals(cnt) = sqrt(csq(pcmat(phys(1),phys(2),1)))
+                    endif
+              enddo
+            enddo
+            med_vals(l) = median(vals)
+            deallocate(vals)
         enddo
-        val = sqrt(val / real(cnt))
         ! first sheet
         loc       = maxloc(pspectrum_roavg(1:ldim(1),1:ldim(2),1),mask=msk)
         first_ang = atan2(real(loc(2)-cen(2)),real(loc(1)-cen(1))) ! radians
         ! remove first sheet
-        call remove_lattice(first_ang, val)
+        call remove_lattice(first_ang)
         ! second sheet
         loc        = maxloc(pspectrum_roavg(1:ldim(1),1:ldim(2),1),mask=msk)
         second_ang = atan2(real(loc(2)-cen(2)),real(loc(1)-cen(1))) ! radians
@@ -92,7 +112,7 @@ contains
         ang = min(ang,abs(ang-60.))
         ! remove second sheet
         if( ang > 2. )then
-            call remove_lattice(second_ang, val)
+            call remove_lattice(second_ang)
         endif
         ! back to real space
         call raw_img%ifft
@@ -100,14 +120,13 @@ contains
         call spectrum_roavg%kill
         contains
 
-            subroutine remove_lattice(ang,val)
-                real, intent(in) :: ang,val
+            subroutine remove_lattice(ang)
+                real, intent(in) :: ang
                 real, parameter :: pionsix   = PI/6.
                 real, parameter :: pionthree = PI/3.
                 real :: b1(2), b1b2(2), rp, r, ang1, rot, rxy(2), Rm(2,2)
                 integer :: ind, rot_ind
-                ind  = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND2),ldim(1),smpd)
-                rp   = real(ind)
+                rp   = real(band_inds(2))
                 r    = rp / (2.*cos(pionsix))
                 ang1 = ang+pionsix
                 b1b2 = rp*[cos(ang),sin(ang)]
@@ -120,38 +139,39 @@ contains
                     Rm(2,:) = [-Rm(1,2), Rm(1,1)]
                     ! band 1 (=b1); resolution ~ 2.14 angs
                     rxy = matmul(Rm,b1) + real(cen)
-                    call obscure_peak(rxy, val, REMOVAL_HWIDTH)
+                    call obscure_peak(rxy, med_vals(1), REMOVAL_HWIDTH)
                     ! 2. * band 1 (=2*b1); resolution ~ 1.06; generally a weaker peak
                     rxy = matmul(Rm,2.*b1) + real(cen)
-                    call obscure_peak(rxy, val, sqrt(REMOVAL_HWIDTH))
+                    call obscure_peak(rxy, med_vals(3), REMOVAL_HWIDTH-1.)
                     ! band 2 (=b1+b2); resolution ~ 1.23
                     rxy = matmul(Rm,b1b2) + real(cen)
-                    call obscure_peak(rxy, val, REMOVAL_HWIDTH)
+                    call obscure_peak(rxy, med_vals(2), (REMOVAL_HWIDTH-1.)*sqrt(2.))
                 enddo
             end subroutine remove_lattice
 
             subroutine obscure_peak(vec, val, hwidth)
                 real, intent(in) :: vec(2), val, hwidth
                 complex :: comp
-                integer :: i,j,x,y,h,k,lim
-                lim = ceiling(hwidth+1.e-8)
-                do i=-lim,lim
-                    x = nint(vec(1)+real(i))
-                    if( x > ldim(1) ) cycle
-                    do j=-lim,lim
-                        y = nint(vec(2)+real(j))
-                        msk(x,y) = .false. ! needs to mask out complex conjugate
-                        if( y < 1 .or. y > ldim(2) .or. x < cen(1) ) cycle
-                        if( real(i*i+j*j) > hwidth*hwidth ) cycle
-                        h = x - cen(1)
-                        k = y - cen(2)
+                real    :: dist, ang
+                integer :: i,j,x,y,h,k,lim,rx,ry,lims(2,2)
+                lims(:,1) = floor(vec-hwidth)
+                lims(:,2) = ceiling(vec+hwidth)
+                do i=lims(1,1),lims(1,2)
+                    if( i <  1 .or. i > ldim(1) )cycle
+                    do j=lims(2,1),lims(2,2)
+                        if( j < 1 .or. j > ldim(2) )cycle
+                        msk(i,j) = .false. ! needs to mask out complex conjugate
+                        if( i < cen(1) ) cycle
+                        dist = sqrt(sum((real([i,j])-vec)**2.)) / hwidth
+                        if( dist > 1. ) cycle
+                        h = i - cen(1)
+                        k = j - cen(2)
                         phys = raw_img%comp_addr_phys(h,k,0)
-                        comp = pcmat(phys(1),phys(2),1)
-                        pcmat(phys(1),phys(2),1) = comp/sqrt(csq(comp)) * (1.+ran3()) *val
+                        ang  = ran3()*TWOPI
+                        pcmat(phys(1),phys(2),1) = val * cmplx(cos(ang),sin(ang)) * dist**4.
                     enddo
                 enddo
             end subroutine obscure_peak
-
     end subroutine remove_graphene_peaks2
 
   ! This subroutine generates a mask that identifies the graphene

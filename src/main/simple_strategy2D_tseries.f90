@@ -12,7 +12,7 @@ private
 
 #include "simple_local_flags.inc"
 
-real, parameter :: hwidth_ang = 15. ! degrees, < 180.
+real, parameter :: hwidth_ang = 12. ! +/-, in degrees, < 180.
 
 type, extends(strategy2D) :: strategy2D_tseries
     type(strategy2D_srch) :: s
@@ -39,7 +39,7 @@ contains
         real    :: corrs(self%s%nrots),inpl_corr,corr
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
-            corr    = -huge(corr)
+            corr       = -huge(corr)
             hwidth_rot = max(1,floor(real(self%s%nrots)*hwidth_ang/360.))
             rotmask    = .true.
             rotmask(hwidth_rot+1:self%s%nrots-hwidth_rot) = .false.
