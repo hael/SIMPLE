@@ -756,7 +756,7 @@ contains
         use simple_strings, only: int2str
         character(len=*),                       intent(in)    :: pattern
         character(len=LONGSTRLEN), allocatable, intent(inout) :: list(:)
-        character(len=STDLEN)     :: cmd
+        character(len=LONGSTRLEN) :: cmd
         character(len=LONGSTRLEN) :: tmpfile
         character(len=1) :: junk
         integer :: sz, funit, ios, i, nlines
