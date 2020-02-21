@@ -10,9 +10,10 @@ implicit none
 #include "simple_local_flags.inc"
 
 ! module global constants
-real,    parameter :: SHRINK     = 4.
-logical, parameter :: DEBUG_HERE = .true.
-integer, parameter :: N_ROT      = 18
+real,    parameter :: SHRINK      = 4.
+logical, parameter :: DEBUG_HERE  = .true.
+logical, parameter :: DOWRITEIMGS = .true.
+integer, parameter :: N_ROT       = 18
 
 type :: segpicker
     private
@@ -33,7 +34,7 @@ type :: segpicker
     integer :: ldim_shrunken(3)      = 0
     integer :: n_particles           = 0
     integer :: orig_box              = 0
-    character(len=3)              :: circular, elongated = ''   !user inputted particle shape
+    character(len=3)              :: elongated  = ''   !user inputted particle shape
     character(len=STDLEN)         :: color      = ''   !color in which to draw on the mic to identify picked particles
     character(len=STDLEN)         :: pickername = ''   !fname
     character(len=STDLEN)         :: fbody      = ''   !fbody
@@ -63,12 +64,12 @@ end type segpicker
 
 contains
 
-    subroutine new(self, fname, min_rad, max_rad, ccircular, eelongated, smpd, color, distthr_in)
+    subroutine new(self, fname, min_rad, max_rad, eelongated, smpd, color, distthr_in)
         class(segpicker),       intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         real, optional,             intent(in)    :: distthr_in
         real,                       intent(in)    :: min_rad, max_rad
-        character(len=3),           intent(in)    :: ccircular, eelongated
+        character(len=3),           intent(in)    :: eelongated
         real,                       intent(in)    :: smpd
         character(len=*),           intent(in)    :: color
         integer :: nptcls
@@ -92,7 +93,6 @@ contains
         self%lambda      = 3.
         self%color       = color
         ! set shape
-        self%circular  = ccircular
         self%elongated = eelongated
     end subroutine new
 
@@ -123,12 +123,13 @@ contains
         call tvf%new()
         call tvf%apply_filter(micrograph_shrunken, self%lambda)
         call tvf%kill
-        if(DEBUG_HERE) call micrograph_shrunken%write('tvfiltered.mrc')
+        if(DOWRITEIMGS) call micrograph_shrunken%write('tvfiltered.mrc')
         ! 2.2) Negative image, to obtain a binarization with white particles
         call micrograph_shrunken%neg() !TO REMOVE IN CASE OF NEGATIVE STAINING
         call micrograph_shrunken%stats( ave=ave, sdev=sdev, maxv=maxv, minv=minv)
         ! 3) Binarization
         if (detector .eq. 'bin') then
+            self%detector = 'bin'
             call micrograph_shrunken%binarize(ave+.8*sdev)
         else if (detector .eq. 'otsu') then
             self%detector = 'otsu'
@@ -136,19 +137,18 @@ contains
             call micrograph_shrunken%erode() !morphological erosion HEREE
         else
           ! default self%detector is bin
+           self%detector = 'bin'
            call micrograph_shrunken%binarize(ave+.8*sdev)
         endif
-        if( DEBUG_HERE ) call micrograph_shrunken%write('bin.mrc')
+        if( DOWRITEIMGS ) call micrograph_shrunken%write('bin.mrc')
         self%winsz = int(self%min_rad+self%max_rad)/4 !half of the avg between the dimensions of the particles
         call micrograph_shrunken%real_space_filter(self%winsz,'median') !median filtering allows easy calculation of cc
-        if(DEBUG_HERE) call micrograph_shrunken%write('bin_median.mrc')
+        if(DOWRITEIMGS) call micrograph_shrunken%write('bin_median.mrc')
         ! 5) Connected components (cc) identification
         call micrograph_shrunken%find_ccs(self%img_cc,update_imat=.true.)
-        ! 6) cc filtering !HEREEE
-        print *, 'before polishing the ccs: ', self%get_n_ccs()
-        call self%img_cc%polish_ccs([self%min_rad,self%max_rad], self%circular, self%elongated)
-        print *, 'after polishing the ccs: ', self%get_n_ccs()
-        if(DEBUG_HERE) call self%img_cc%write_bimg('CcsElimin.mrc')
+        ! 6) cc filtering
+        call self%img_cc%polish_ccs([self%min_rad,self%max_rad],circular=' no',elongated=self%elongated)
+        if(DOWRITEIMGS) call self%img_cc%write_bimg('CcsElimin.mrc')
         call micrograph_shrunken%kill_bimg
     contains
 
@@ -201,11 +201,11 @@ contains
         write(unit = 17, fmt = '(a)') ''
         write(unit = 17, fmt = "(a)")  'SELECTED PARAMETERS '
         write(unit = 17, fmt = '(a)') ''
-        write(unit = 17, fmt = "(a,f4.2)")  'Lp filter parameter     ', params_glob%lp
         write(unit = 17, fmt = "(a,i4)")    'Winsz for median filter ', self%winsz
         write(unit = 17, fmt = "(a,f4.2)")  'TV filter parameter     ', self%lambda
         write(unit = 17, fmt = "(a,a,a,a)") 'particle dimensions     ', trim(int2str(int(self%min_rad))),' ', trim(int2str(int(self%max_rad)))
         write(unit = 17, fmt = "(a,a)")     'detector                ', self%detector
+        write(unit = 17, fmt = "(a,f4.2,f4.2)")  'min/max rad in A        ', self%min_rad*(SHRINK*self%smpd), self%max_rad*(SHRINK*self%smpd)
         close(17, status = "keep")
     end subroutine print_info
 

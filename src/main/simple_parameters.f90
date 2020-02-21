@@ -23,7 +23,6 @@ type :: parameters
     character(len=3)      :: avg='no'             !< calculate average (yes|no){no}
     character(len=3)      :: bin='no'             !< binarise image(yes|no){no}
     character(len=3)      :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
-    character(len=3)      :: circular='no'        !< circular particles(yes|no){no}
     character(len=3)      :: classtats='no'       !< calculate class population statistics(yes|no){no}
     character(len=3)      :: clustvalid='no'      !< validate clustering(yes|homo|no){no}
     character(len=3)      :: compare='no'         !< do comparison(yes|no){no}
@@ -71,7 +70,6 @@ type :: parameters
     character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
     character(len=3)      :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)      :: pad='no'
-    character(len=3)      :: phasecorr='no'       !< picker phasecorrelation approach (yes|no){no}
     character(len=3)      :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)      :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
@@ -200,6 +198,7 @@ type :: parameters
     character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN) :: pgrp_start='c1'      !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN) :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
+    character(len=STDLEN) :: picker='phasecorr'   !< picker approach (seg|phasecorr|old_school){phasecorr}
     character(len=STDLEN) :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN) :: projname=''          !< SIMPLE  project name
     character(len=STDLEN) :: ptclw='yes'          !< use particle weights(yes|no){yes}
@@ -494,7 +493,6 @@ contains
         call check_carg('bin',            self%bin)
         call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
-        call check_carg('circular',       self%circular)
         call check_carg('classtats',      self%classtats)
         call check_carg('clustermode',    self%clustermode)
         call check_carg('clustvalid',     self%clustvalid)
@@ -567,9 +565,9 @@ contains
         call check_carg('pgrp',           self%pgrp)
         call check_carg('pgrp_start',     self%pgrp_start)
         call check_carg('phaseplate',     self%phaseplate)
-        call check_carg('phasecorr',      self%phasecorr)
         call check_carg('phrand',         self%phrand)
         call check_carg('phshiftunit',    self%phshiftunit)
+        call check_carg('picker',         self%picker)
         call check_carg('platonic',       self%platonic)
         call check_carg('prg',            self%prg)
         call check_carg('projname',       self%projname)

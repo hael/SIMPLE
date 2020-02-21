@@ -50,6 +50,8 @@ contains
     procedure, private :: process_ps
     procedure, private :: print_info
     procedure          :: get_output
+    procedure          :: get_score
+    procedure          :: get_curvature
     procedure          :: run
     procedure          :: kill => kill_pspec_stats
 end type pspec_stats
@@ -144,6 +146,18 @@ contains
             THROW_WARN('This case has not been considered')
         endif
     end function get_output
+
+    function get_score(self) result(score)
+      class(pspec_stats), intent(inout) :: self
+      real :: score
+      score = self%score
+    end function get_score
+
+    function get_curvature(self) result(curvature)
+      class(pspec_stats), intent(inout) :: self
+      real :: curvature
+      curvature = self%avg_curvat
+    end function get_curvature
 
     !This subroutine is meant to discard fallacious power spectra images
     !characterized by producing an 'empty' binarization.

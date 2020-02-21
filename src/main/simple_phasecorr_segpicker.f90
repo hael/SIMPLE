@@ -29,7 +29,7 @@ real,             allocatable :: corrmat(:,:), peak_stats(:,:)
 integer,          allocatable :: peak_positions(:,:)
 character(len=:), allocatable :: micname
 character(len=LONGSTRLEN)     :: boxname
-character(len=3)              :: circular, elongated  !additional info inputted by the user
+character(len=3)              :: elongated  !additional info inputted by the user
 integer                       :: ldim(3), ldim_shrink(3)
 integer                       :: ntargets
 integer                       :: nrefs, npeaks, npeaks_sel
@@ -40,11 +40,11 @@ real                          :: lp, distthr, ndev
 
 contains
 
-    subroutine init_phasecorr_segpicker( micfname, minrad, maxrad, stepsz, ccircular, eelongated, smpd_in, lp_in, distthr_in, ndev_in, dir_out )
+    subroutine init_phasecorr_segpicker( micfname, minrad, maxrad, stepsz, eelongated, smpd_in, lp_in, distthr_in, ndev_in, dir_out )
         use simple_procimgfile, only :  clip_imgfile
         character(len=*),           intent(in) :: micfname
         real,                       intent(in) :: minrad, maxrad, stepsz ! in A
-        character(len=3),           intent(in) :: ccircular, eelongated
+        character(len=3),           intent(in) :: eelongated
         real,                       intent(in) :: smpd_in
         real,             optional, intent(in) :: lp_in, distthr_in, ndev_in
         character(len=*), optional, intent(in) :: dir_out
@@ -75,13 +75,9 @@ contains
         smpd_shrunken         = PICKER_SHRINK_HERE*smpd
         distthr               = BOXFRAC*real(box_shrunken) !In shrunken dimensions
         if( present(distthr_in) ) distthr = distthr_in/PICKER_SHRINK_HERE
-        circular  = ccircular
         elongated = eelongated
         ! generate references
-        if(circular .eq. 'yes') then
-            write(logfhandle, *) 'Circular references generation'
-            call generate_gaussian_refs_circular(refs,min_rad,max_rad,step_sz)
-        elseif(elongated .eq. 'yes') then
+        if(elongated .eq. 'yes') then
             write(logfhandle, *) 'Elongated references generation'
             call generate_gaussian_refs_elongated(refs,min_rad,max_rad,step_sz)
         else
@@ -97,39 +93,6 @@ contains
         call mic_shrunken%ifft()
         if(DOWRITEIMGS) call mic_shrunken%write('mic_shrunken.mrc')
     contains
-
-        subroutine generate_gaussian_refs_circular(refs,min_rad,max_rad,step_sz)
-            type(image), allocatable, intent(inout) :: refs(:)
-            real, intent(in)  :: min_rad, max_rad, step_sz
-            real, allocatable :: rmat_out(:,:,:) !to use rtsq_serial
-            real    :: rad, sigma
-            integer :: i, j, max_nrefs
-            nrefs = 0
-            max_nrefs = ceiling((max_rad-min_rad)/step_sz)
-            do i = 0, max_nrefs
-                rad     = (min_rad + real(i)*step_sz)
-                if(rad <= max_rad) then
-                    nrefs = nrefs + 1
-                endif
-            enddo
-            if(allocated(refs)) deallocate(refs)
-            allocate( refs(nrefs) )
-            allocate(rmat_out(ldim_shrink(1),ldim_shrink(2),1), source = 0.)
-            nrefs = 0
-            do i = 0, max_nrefs
-                rad = (min_rad + real(i)*step_sz)
-                if(rad  <= max_rad) then
-                    sigma = rad/(sqrt(log(2.))) ! FWHM = rad (see Wiki formula)
-                    nrefs = nrefs + 1
-                    call refs(nrefs)%new(ldim_shrink,smpd_shrunken)
-                    call refs(nrefs)%gauimg2D(sigma,sigma,(rad+rad)/2.+5.) !five pxls cutoff
-                    call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
-                    if(DOPRINT) write(logfhandle,*) 'generating ref with rads: ', rad*smpd_shrunken, ' A'
-                endif
-            enddo
-            deallocate(rmat_out)
-            if(DOPRINT) write(logfhandle,*) 'Refs generation completed'
-        end subroutine generate_gaussian_refs_circular
 
         subroutine generate_gaussian_refs_elongated(refs,min_rad,max_rad,step_sz)
             type(image), allocatable, intent(inout) :: refs(:)
@@ -521,7 +484,7 @@ contains
       call micrograph_bin%copy(mic_shrunken) ! mic_shrunken is already binary
       call micrograph_bin%find_ccs(micrograph_cc)
       ! 6) cc filtering, based on the shape of the particle
-      call micrograph_cc%polish_ccs([min_rad,max_rad], circular, elongated)
+      call micrograph_cc%polish_ccs([min_rad,max_rad], circular=' no',elongated=elongated)
       call micrograph_cc%write_bimg('CcsElimin.mrc')
       call micrograph_cc%get_imat(imat_cc)
       allocate(imat_aux(ldim_shrink(1), ldim_shrink(2),1), source = 0)

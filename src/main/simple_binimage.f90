@@ -339,8 +339,8 @@ contains
         character(len=3) :: ccircular, eelongated
         if(.not. any(self%bimat > 0)) THROW_HARD('Inputted non-existent cc; polish_ccs')
         ! set default
-        ccircular  = 'no'
-        eelongated = 'no'
+        ccircular  = ' no'
+        eelongated = ' no'
         if(present(circular))  ccircular  = circular
         if(present(elongated)) eelongated = elongated
         sz = self%size_ccs()

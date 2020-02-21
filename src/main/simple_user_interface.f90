@@ -174,7 +174,6 @@ type(simple_input_param) :: angerr
 type(simple_input_param) :: astigtol
 type(simple_input_param) :: bfac
 type(simple_input_param) :: box
-type(simple_input_param) :: circular
 type(simple_input_param) :: clip
 type(simple_input_param) :: clustermode
 type(simple_input_param) :: cs
@@ -239,8 +238,8 @@ type(simple_input_param) :: outstk
 type(simple_input_param) :: outvol
 type(simple_input_param) :: pcontrast
 type(simple_input_param) :: pgrp
-type(simple_input_param) :: phasecorr
 type(simple_input_param) :: phaseplate
+type(simple_input_param) :: picker
 type(simple_input_param) :: projfile
 type(simple_input_param) :: projfile_target
 type(simple_input_param) :: projname
@@ -870,7 +869,6 @@ contains
         call set_param(nptcls,         'nptcls',       'num',    'Number of particles', 'Number of particle images', '# particles', .true., 0.)
         call set_param(outstk,         'outstk',       'file',   'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
         call set_param(pcontrast,      'pcontrast',    'multi',  'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
-        call set_param(circular,       'circular',    'binary', 'Elongated particles', 'Whether to perform generate only circular gaussian references during picking averaging, for phasecorr picker only(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(clip,           'clip',         'num',    'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
         call set_param(clustermode,    'clustermode',  'multi',  'Feature used for clustering', 'Feature used for clustering (ar|dist|ang|maxint|intint){ar}', '(ar|dist|ang|maxint|intint){ar}', .true., 'ar')
         call set_param(neg,            'neg',          'binary', 'Invert contrast','Invert contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
@@ -912,9 +910,9 @@ contains
         call set_param(wcrit,          'wcrit',        'multi',  'Correlation to weights conversion scheme', 'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|no){softmax}',  '(softmax|zscore|sum|cen|exp|inv|no){softmax}',  .false., 'softmax')
         call set_param(element,        'element',      'str',    'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
         call set_param(tseries,        'tseries',      'binary', 'Stack is time-series', 'Stack is time-series(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(max_rad,        'max_rad',      'num',    'Maximum radius in A', 'Maximum radius in A {12.}', '{12.}', .false., 100.)
-        call set_param(min_rad,        'min_rad',      'num',    'Minimum radius in A', 'Minimum radius in A {5.} ', '{5.}',  .false., 10.)
-        call set_param(stepsz,         'stepsz',       'num',    'Steps size in A', 'Step size in A {2.} ', '{2.}',  .false., 10.)
+        call set_param(max_rad,        'max_rad',      'num',    'Maximum radius in A', 'Maximum radius in A {12.}', '{12.}', .true., 12.)
+        call set_param(min_rad,        'min_rad',      'num',    'Minimum radius in A', 'Minimum radius in A {5.} ', '{5.}',  .true., 7.)
+        call set_param(stepsz,         'stepsz',       'num',    'Steps size in A', 'Step size in A {2.} ', '{2.}',  .true., 2.)
         call set_param(dock,           'dock',         'binary', 'Volumes have to be docked', 'Volumes have to be docked(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
         call set_param(mul,            'mul',          'num',    'Multiplication factor', 'Multiplication factor{1.}','{1.}',.false., 1.)
@@ -2514,35 +2512,34 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                             ! executable
-        &0, 3, 5, 8, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &0, 3, 2, 10, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call pick%set_input('parm_ios', 1, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
         call pick%set_input('parm_ios', 2, pcontrast)
-        call pick%set_input('parm_ios', 3, 'phasecorr', 'binary', 'Picking phasecorrelation approach','Use phase correlations approach for picking','(yes|no){no}', .true.,'no')
+        call pick%set_input('parm_ios', 3, 'picker', 'str', 'Picking approach','Picking approach','(seg|phasecorr|old_school){phasecorr}', .true.,'phasecorr')
         ! alternative inputs
         call pick%set_input('alt_ios', 1, 'refs', 'file', 'Stack of class-averages for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
         call pick%set_input('alt_ios', 2, 'vol1', 'file', 'Volume for picking', 'Volume for picking', 'e.g. vol.mrc file', .false., '')
-        call pick%set_input('alt_ios', 3, 'min_rad', 'num', 'Minimum radius in A', 'Minimum expected radius of the particles in A {5.} ', '{5.}',  .false., 5.)
-        call pick%set_input('alt_ios', 4, 'max_rad', 'num', 'Maximum radius in A', 'Maximum expected radius of the particles in A {12.} ', '{12.}',  .false., 12.)
-        call pick%set_input('alt_ios', 5, 'stepsz', 'num', 'Step size in A', 'Step size for gaussian reference generation in A {2.} ', '{2.}',  .false., 2.)
         ! search controls
         call pick%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold in A','Distance filer in A {24.}', '{24.}', .false., 24.)
         call pick%set_input('srch_ctrls', 2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
         call pick%set_input('srch_ctrls', 3, pgrp)
         pick%srch_ctrls(3)%required = .false.
-        call pick%set_input('srch_ctrls', 4, circular)
         pick%srch_ctrls(4)%required = .false.
-        call pick%set_input('srch_ctrls', 5, elongated)
+        call pick%set_input('srch_ctrls', 4, elongated)
         pick%srch_ctrls(5)%required = .false.
-        call pick%set_input('srch_ctrls', 6, detector)
+        call pick%set_input('srch_ctrls', 5, detector)
         pick%srch_ctrls(6)%required = .false.
-        call pick%set_input('srch_ctrls', 7, draw_color)
+        call pick%set_input('srch_ctrls', 6, draw_color)
         pick%srch_ctrls(7)%required = .false.
-        call pick%set_input('srch_ctrls', 8, 'center', 'binary', 'Center particles', 'Center particles based on center of mass of the connected component &
+        call pick%set_input('srch_ctrls', 7, 'center', 'binary', 'Center particles', 'Center particles based on center of mass of the connected component &
         &(yes|no){yes}', '(yes|no){yes}', .false., 'no')
+        call pick%set_input('srch_ctrls', 8, 'min_rad', 'num', 'Minimum radius in A', 'Minimum expected radius of the particles in A {50.} ',  '{50.}',  .true., 50.)
+        call pick%set_input('srch_ctrls', 9, 'max_rad', 'num', 'Maximum radius in A', 'Maximum expected radius of the particles in A {300.} ', '{300.}', .true., 300.)
+        call pick%set_input('srch_ctrls', 10, 'stepsz',  'num', 'Step size in A', 'Step size for gaussian reference generation in A {10.} ',    '{10.}',  .true., 10.)
         ! filter controls
         call pick%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
         ! mask controls
