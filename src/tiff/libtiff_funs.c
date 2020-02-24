@@ -100,9 +100,3 @@ int TIFFDeallocateStripBuffer(tdata_t buf)
     _TIFFfree(buf);
     return 0;
 }
-
-tsize_t TIFFMyReadEncodedStrip(TIFF *tif, int32 strip_int32, tdata_t buf, tsize_t size)
-{
-    printf("Strip number %i\n",strip_int32);
-    return TIFFReadEncodedStrip(tif, (tstrip_t) strip_int32, buf, size);
-}
