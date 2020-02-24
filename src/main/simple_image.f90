@@ -4361,6 +4361,7 @@ contains
         grad = sqrt(Ddc**2 + Ddr**2)
         if(present(Dc)) Dc = Ddc
         if(present(Dr)) Dr = Ddr
+        call img_p%kill
     end subroutine calc_gradient
 
     !>  \brief  Convert logical address to physical address. Complex image.

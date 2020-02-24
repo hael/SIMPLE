@@ -170,20 +170,22 @@ contains
     subroutine exec_cleanup2D( self, cline )
         use simple_commander_project, only: scale_project_commander_distr
         use simple_procimgfile,       only: random_selection_from_imgfile, random_cls_from_imgfile
+        use simple_commander_imgproc, only: scale_commander
         class(cleanup2D_commander_hlev), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
         type(cluster2D_commander_distr)     :: xcluster2D_distr
         type(scale_project_commander_distr) :: xscale_distr
+        type(scale_commander)               :: xscale
         type(rank_cavgs_commander)          :: xrank_cavgs
         ! command lines
         type(cmdline)                       :: cline_cluster2D1, cline_cluster2D2
-        type(cmdline)                       :: cline_rank_cavgs, cline_scale
+        type(cmdline)                       :: cline_rank_cavgs, cline_scale, cline_scalerefs
         ! other variables
         type(parameters)                    :: params
         type(sp_project)                    :: spproj, spproj_sc
         character(len=:),       allocatable :: projfile, orig_projfile
-        character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, cavgs
+        character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
         real                                :: scale_factor, smpd, msk, ring2, lp1, lp2
         integer                             :: last_iter, box, status
         logical                             :: do_scaling
@@ -284,14 +286,28 @@ contains
         lp1   = max(2.*smpd, max(params%lp,TARGET_LP))
         lp2   = max(2.*smpd, params%lp)
         ! execute initialiser
-        params%refs = 'start2Drefs' // params%ext
-        call spproj%read(projfile)
-        if( params%avg.eq.'yes' )then
-            call random_cls_from_imgfile(spproj, params%refs, params%ncls)
+        if( cline%defined('refs') )then
+            if( params%autoscale.eq.'yes')then
+                call cline_scalerefs%set('stk', params%refs)
+                refs_sc = 'refs'//trim(SCALE_SUFFIX)//'.mrc'
+                call cline_scalerefs%set('outstk', trim(refs_sc))
+                call cline_scalerefs%set('smpd',   smpd)
+                call cline_scalerefs%set('newbox', real(box))
+                call xscale%execute(cline_scalerefs)
+                params%refs = trim(refs_sc)
+            else
+                ! all good
+            endif
         else
-            call random_selection_from_imgfile(spproj, params%refs, box, params%ncls)
+            params%refs = 'start2Drefs' // params%ext
+            call spproj%read(projfile)
+            if( params%avg.eq.'yes' )then
+                call random_cls_from_imgfile(spproj, params%refs, params%ncls)
+            else
+                call random_selection_from_imgfile(spproj, params%refs, box, params%ncls)
+            endif
+            call spproj%kill
         endif
-        call spproj%kill
         ! updates command-lines
         call cline_cluster2D1%set('refs',   params%refs)
         call cline_cluster2D1%set('msk',    msk)
@@ -389,21 +405,19 @@ contains
         integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600   ! 10mins, Frequency at which the original project file should be updated
         integer,               parameter   :: MINBOXSZ            = 72   ! minimum boxsize for scaling
         ! dev settings
-        ! integer,               parameter   :: WAIT_WATCHER        = 30    ! seconds prior to new stack detection
         ! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 60    ! 10mins, Frequency at which the original project file should be updated
         real,                 parameter    :: GREEDY_TARGET_LP   = 15.
         real                               :: SMPD_TARGET         = 4.    ! target sampling distance
         character(len=STDLEN), parameter   :: MICS_SELECTION_FILE = 'stream2D_selection.txt'
+        character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
         character(len=STDLEN), parameter   :: PROJFILE_BUFFER     = 'buffer.simple'
         character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'pool.simple'
         character(len=STDLEN), parameter   :: PROJFILE2D          = 'cluster2D.simple'
         character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
         logical,               parameter   :: debug_here = .false.
         type(parameters)                   :: params
-        type(make_cavgs_commander_distr)   :: xmake_cavgs
         type(rank_cavgs_commander)         :: xrank_cavgs
-        type(cmdline)                      :: cline_cluster2D, cline_cluster2D_buffer
-        type(cmdline)                      :: cline_make_cavgs, cline_rank_cavgs
+        type(cmdline)                      :: cline_cluster2D, cline_cluster2D_buffer, cline_rank_cavgs
         type(sp_project)                   :: orig_proj, stream_proj, buffer_proj, pool_proj
         type(ctfparams)                    :: ctfvars
         type(oris)                         :: os_stk
@@ -431,7 +445,8 @@ contains
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('lpthresh')  ) call cline%set('lpthresh',    30.)
         if( .not. cline%defined('ndev')      ) call cline%set('ndev',        1.5)
-        if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('oritype')   ) call cline%set('oritype','ptcl2D')
+        if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',      'no')
         call cline%set('stream','yes') ! only for parameters determination
         call seed_rnd
         call params%new(cline)
@@ -459,6 +474,7 @@ contains
         l_greedy          = trim(params%refine).eq.'greedy'
         lp_greedy         = GREEDY_TARGET_LP
         if( cline%defined('lp') ) lp_greedy = params%lp
+        call write_user_params
         ! for microscopes that don't work too good, automatically turned off after 2 hours
         if(.not.cline%defined('time_inactive'))params%time_inactive = 2*3600
         ! init command-lines
@@ -466,7 +482,6 @@ contains
         call cline%delete('refine')
         cline_cluster2D         = cline
         cline_cluster2D_buffer  = cline
-        cline_make_cavgs        = cline
         ! buffer classification
         ! down-scaling for fast execution, aggressive stochastic optimisation, no match filter, bi-linear interpolation,
         ! no incremental learning, objective function default is standard cross-correlation (cc), no centering
@@ -504,10 +519,6 @@ contains
             call cline_cluster2D%set('lp',     lp_greedy)
         endif
         call cline_cluster2D%delete('update_frac')
-        ! final averaging
-        call cline_make_cavgs%set('prg', 'make_cavgs')
-        call cline_make_cavgs%delete('autoscale')
-        call cline_make_cavgs%delete('remap_cls')
         ! WAIT FOR FIRST STACKS
         nptcls_glob = 0
         do
@@ -624,7 +635,7 @@ contains
                 call reject_from_buffer
                 ! book keeping
                 call transfer_buffer_to_pool
-                buffer_exists = .false.
+                buffer_exists   = .false.
                 ! cleanup
                 call buffer_proj%kill
                 call simple_rmdir(buffer_dir)
@@ -633,7 +644,7 @@ contains
             ! or after transfer from buffer or each 5 iterations
             if( .not.cline_cluster2D%defined('converged') .or. mod(iter,5)==0 )then
                 call classify_pool
-                pool_iter = pool_iter+1
+                pool_iter       = pool_iter+1
                 ! rejection each 5 iterations
                 if( mod(iter,5)==0 )then
                     call reject_from_pool
@@ -662,27 +673,15 @@ contains
             ! update original project
             if( simple_gettime()-origproj_time > ORIGPROJ_WRITEFREQ )then
                 call update_orig_proj
-                origproj_time = simple_gettime()
+                origproj_time   = simple_gettime()
             endif
         enddo
         call qsys_cleanup
         ! updates original project
+        call add_leftovers_to_pool
         call update_orig_proj
         ! class averages at original sampling
-        if ( do_autoscale )then
-            nptcls_glob = orig_proj%get_nptcls()
-            nparts      = calc_nparts(orig_proj, nptcls_glob)
-            call orig_proj%kill
-            call cline_make_cavgs%set('nparts', real(nparts))
-            call cline_make_cavgs%set('ncls',   real(ncls_glob))
-            call cline_make_cavgs%set('refs',   refs_glob)
-            if( .not.cline%defined('msk') )then
-                large_msk = real(orig_box/2)-COSMSKHALFWIDTH
-                call cline_make_cavgs%set('msk',large_msk)
-            endif
-            call xmake_cavgs%execute(cline_make_cavgs)
-            call orig_proj%read(orig_projfile)
-        endif
+        if( do_autoscale ) call rescale_cavgs
         call orig_proj%add_cavgs2os_out(refs_glob, orig_smpd)
         call orig_proj%add_frcs2os_out(trim(FRCS_FILE), 'frc2D')
         call orig_proj%write_segment_inside('out',orig_projfile)
@@ -699,10 +698,34 @@ contains
         call del_file(PROJFILE_POOL)
         call del_file(PROJFILE_BUFFER)
         call del_file(PROJFILE2D)
+        call simple_rmdir(buffer_dir)
         call o_stk%kill
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER2D_STREAM NORMAL STOP ****')
         contains
+
+            subroutine rescale_cavgs
+                type(image) :: img, img_pad
+                integer, allocatable :: cls_pop(:)
+                integer     :: icls, iostat
+                call img%new([box,box,1],smpd)
+                call img_pad%new([orig_box,orig_box,1],params%smpd)
+                cls_pop = nint(orig_proj%os_cls2D%get_all('pop'))
+                do icls = 1,ncls_glob
+                    if( cls_pop(icls) > 0 )then
+                        call img%read(refs_glob,icls)
+                        call img%fft
+                        call img%pad(img_pad, backgr=0.)
+                        call img_pad%ifft
+                    else
+                        img_pad = 0.
+                    endif
+                    call img_pad%write('tmp_cavgs.mrc',icls)
+                enddo
+                iostat = simple_rename('tmp_cavgs.mrc',refs_glob)
+                call img%kill
+                call img_pad%kill
+            end subroutine rescale_cavgs
 
             subroutine reject_from_buffer
                 type(image)          :: img
@@ -712,6 +735,7 @@ contains
                 integer              :: nptcls_rejected, ncls_rejected, iptcl
                 integer              :: boxmatch, icls, endit, ncls_here, cnt
                 if( debug_here ) print *,'in reject from_buffer'; call flush(6)
+                call update_user_params
                 ncls_rejected   = 0
                 nptcls_rejected = 0
                 ncls_here       = buffer_proj%os_cls2D%get_noris()
@@ -719,15 +743,15 @@ contains
                 endit           = nint(cline_cluster2D_buffer%get_rarg('endit'))
                 refs_buffer     = trim(buffer_dir)//'/'//trim(CAVGS_ITER_FBODY)//int2str_pad(endit,3)//params%ext
                 allocate(cls_mask(ncls_here), source=.true.)
-                if( debug_here )then
-                    ! variance
-                    call img%new([box,box,1],smpd)
-                    do icls=1,ncls_here
-                        call img%read(refs_buffer,icls)
-                        call img%stats(ave, sdev, maxv, minv)
-                        call buffer_proj%os_cls2D%set(icls,'sdev',sdev)
-                    enddo
-                endif
+                ! variance
+                call img%new([box,box,1],smpd)
+                do icls=1,ncls_here
+                    call img%read(refs_buffer,icls)
+                    call img%stats(ave, sdev, maxv, minv)
+                    call buffer_proj%os_cls2D%set(icls,'var',sdev**2.)
+                enddo
+                ! print out prior to rejection
+                call buffer_proj%os_cls2D%write('classdoc_buffer_'//int2str_pad(iter,3)//'.txt')
                 ! resolution and correlation
                 call buffer_proj%os_cls2D%find_best_classes(boxmatch,smpd,params%lpthresh,cls_mask,params%ndev)
                 if( debug_here ) call buffer_proj%os_cls2D%write('buffer_'//trim(str_iter)//'.txt')
@@ -760,10 +784,10 @@ contains
                     enddo
                     call img%read(refs_buffer, params%ncls_start)
                     call img%write(refs_buffer,params%ncls_start)
-                    call img%kill
                     deallocate(cls_mask)
                     write(logfhandle,'(A,I4,A,I6,A)')'>>> REJECTED FROM BUFFER: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
                 endif
+                call img%kill
                 if( debug_here ) print *,'end reject from_buffer'; call flush(6)
             end subroutine reject_from_buffer
 
@@ -774,20 +798,19 @@ contains
                 integer              :: nptcls_rejected, ncls_rejected, iptcl
                 integer              :: boxmatch, icls, cnt
                 if( debug_here ) print *,'in reject from_pool'; call flush(6)
+                call update_user_params
                 ncls_rejected   = 0
                 nptcls_rejected = 0
                 boxmatch        = find_boxmatch(box, msk)
                 allocate(cls_mask(ncls_glob), source=.true.)
-                if( debug_here )then
-                    call img%new([box,box,1],smpd)
-                    do icls=1,ncls_glob
-                        if( pool_proj%os_cls2D%get_state(icls)==0 .or. pool_proj%os_cls2D%get(icls,'pop')<1. ) cycle
-                        call img%read(refs_glob,icls)
-                        call img%stats(ave, sdev, maxv, minv)
-                        call pool_proj%os_cls2D%set(icls,'sdev',sdev)
-                    enddo
-                endif
-                if( debug_here )call pool_proj%os_cls2D%write('pool_'//int2str(pool_iter)//'.txt')
+                call img%new([box,box,1],smpd)
+                do icls=1,ncls_glob
+                    if( pool_proj%os_cls2D%get_state(icls)==0 .or. pool_proj%os_cls2D%get(icls,'pop')<1. ) cycle
+                    call img%read(refs_glob,icls)
+                    call img%stats(ave, sdev, maxv, minv)
+                    call pool_proj%os_cls2D%set(icls,'var',sdev**2.)
+                enddo
+                call pool_proj%os_cls2D%write('classdoc_pool_'//int2str(pool_iter)//'.txt')
                 ! correlation & resolution
                 ndev_here = 1.5*params%ndev ! less stringent rejection
                 call pool_proj%os_cls2D%find_best_classes(boxmatch,smpd,params%lpthresh,cls_mask,ndev_here)
@@ -830,6 +853,7 @@ contains
                 else
                     write(logfhandle,'(A,I4,A,I6,A)')'>>> NO PARTICLES FLAGGED FOR REJECTION FROM POOL'
                 endif
+                call img%kill
                 if( debug_here ) print *,'end reject from_pool'; call flush(6)
             end subroutine reject_from_pool
 
@@ -1060,7 +1084,7 @@ contains
                 ! removes previous references
                 if(pool_iter>1)then
                     prev_refs = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-1,3))//trim(params%ext)
-                    call del_file(prev_refs)
+                    ! call del_file(prev_refs) ! for now
                     call del_file(add2fbody(trim(prev_refs),params%ext,'_even'))
                     call del_file(add2fbody(trim(prev_refs),params%ext,'_odd'))
                 endif
@@ -1311,14 +1335,13 @@ contains
                 type(ctfparams) :: ctfparms
                 character(len=:), allocatable :: stkname
                 integer :: iptcl, stkind, ind_in_stk, imic, micind, nptcls_here
-                integer :: fromp, top, istk, state, nmics_here, nptcls_tot
+                integer :: fromp, top, istk, state, nmics_here, nptcls_tot, nptcls_per_buffer_here
                 if( debug_here )print *,'in gen_buffer_from_pool'; call flush(6)
                 buffer_exists = .false.
                 call buffer_proj%kill
                 ! to account for directory structure
                 call simple_rmdir('buffer2D') ! clean previous round
                 call simple_mkdir('buffer2D')
-                call simple_chdir('buffer2D')
                 ! determines whether there are enough particles for a buffer
                 if( buffer_ptcls_range(2) > 0 )then
                     call pool_proj%map_ptcl_ind2stk_ind('ptcl2D', buffer_ptcls_range(2), stkind, ind_in_stk)
@@ -1338,10 +1361,15 @@ contains
                     top         = nint(pool_proj%os_stk%get(istk,'top'))
                     nptcls_here = nptcls_here + top-fromp+1
                 enddo
-                if( nptcls_here < nptcls_per_buffer )then
-                    call simple_chdir('..')
+                ! to allow most leftovers particles to be classified
+                if( nptcls_here >= 1.5*nptcls_per_buffer )then
+                    nptcls_per_buffer_here = nptcls_per_buffer
+                else if( nptcls_here >= nptcls_per_buffer )then
+                    nptcls_per_buffer_here = nptcls_here
+                else
                     return
                 endif
+                call simple_chdir('buffer2D')
                 ! builds buffer if enough particles
                 buffer_proj%projinfo = pool_proj%projinfo
                 buffer_proj%compenv  = pool_proj%compenv
@@ -1371,7 +1399,7 @@ contains
                     if( state == 0 ) cycle
                     nmics_here  = nmics_here+1
                     nptcls_here = nptcls_here + top-fromp+1
-                    if( nptcls_here > nptcls_per_buffer )exit
+                    if( nptcls_here > nptcls_per_buffer_here ) exit
                 enddo
                 buffer_ptcls_range(1) = buffer_ptcls_range(2)+1
                 buffer_ptcls_range(2) = buffer_ptcls_range(1)+top-1
@@ -1380,6 +1408,49 @@ contains
                 buffer_exists = .true.
                 write(logfhandle,'(A,I4,A,I6,A)')'>>> BUILT NEW BUFFER WITH ', nmics_here, ' MICROGRAPHS, ',nptcls_here, ' PARTICLES'
             end subroutine gen_buffer_from_pool
+
+            !> add deactivated particles to the project that have not had a chance to be classified
+            subroutine add_leftovers_to_pool
+                character(len=:), allocatable :: stkname
+                integer, allocatable :: cls_pop(:)
+                integer :: iptcl, stkind, ind_in_stk, imic, micind, icls, fromp, top, istk, cnt, state
+                if( debug_here )print *,'in add_leftovers_to_project'; call flush(6)
+                ! determines whether there are leftovers
+                if( buffer_ptcls_range(2) > 0 )then
+                    call pool_proj%map_ptcl_ind2stk_ind('ptcl2D', buffer_ptcls_range(2), stkind, ind_in_stk)
+                else
+                    return
+                endif
+                cls_pop = nint(pool_proj%os_cls2D%get_all('pop'))
+                micind  = stkind + 1
+                cnt     = 0
+                do istk=micind,pool_proj%os_stk%get_noris()
+                    if(.not.pool_proj%os_stk%isthere(istk,'state'))then
+                        write(logfhandle,*)'error: missing state flag; add_leftovers_to_pool'
+                        stop
+                    endif
+                    state = pool_proj%os_stk%get_state(istk)
+                    if( state == 0 )cycle
+                    fromp       = nint(pool_proj%os_stk%get(istk,'fromp'))
+                    top         = nint(pool_proj%os_stk%get(istk,'top'))
+                    do iptcl = fromp,top
+                        cnt = cnt+1
+                        call pool_proj%os_ptcl2D%set(iptcl,'state',    1.)
+                        call pool_proj%os_ptcl2D%set(iptcl,'updatecnt',1.)
+                        call pool_proj%os_ptcl2D%set(iptcl,'w',        0.)
+                        call pool_proj%os_ptcl2D%set(iptcl,'specscore',0.001)
+                        call pool_proj%os_ptcl2D%set(iptcl,'eo',real(merge(0.,1.,is_even(iptcl))))
+                        icls = irnd_uni(ncls_glob)
+                        do while( cls_pop(icls)==0 )
+                            icls = irnd_uni(ncls_glob)
+                        enddo
+                        call pool_proj%os_ptcl2D%set(iptcl,'class', real(icls))
+                    enddo
+                enddo
+                buffer_ptcls_range(1) = buffer_ptcls_range(2)+1
+                buffer_ptcls_range(2) = buffer_ptcls_range(1)+top-1
+                write(logfhandle,'(A,I8,A)')'>>> ADDED ', cnt, ' UNCLASSIFIED PARTICLES TO THE PROJECT'
+            end subroutine add_leftovers_to_pool
 
             logical function is_timeout( time_now )
                 integer, intent(in) :: time_now
@@ -1432,18 +1503,17 @@ contains
                     if( has_mics )then
                         call orig_proj%add_movies(mic_list, ctfparms)
                     endif
-                    ! updates 2D, os_out not updated as not correct scale
                     do iproj=nprev+1,n_spprojs
                         rstate = pool_proj%os_stk%get(iproj,'state')
                         call orig_proj%os_stk%set(iproj,'state', rstate)
                         if( has_mics )call orig_proj%os_mic%set(iproj,'state', rstate)
                     enddo
-                    orig_proj%os_cls2D  = pool_proj%os_cls2D
-                    orig_proj%os_ptcl2D = pool_proj%os_ptcl2D
-                    if( do_autoscale )call orig_proj%os_ptcl2D%mul_shifts( 1./scale_factor )
-                    ! write
-                    call orig_proj%write
                 endif
+                orig_proj%os_cls2D  = pool_proj%os_cls2D
+                orig_proj%os_ptcl2D = pool_proj%os_ptcl2D
+                if( do_autoscale ) call orig_proj%os_ptcl2D%mul_shifts( 1./scale_factor )
+                ! write
+                call orig_proj%write
                 ! cleanup
                 call o%kill
                 call o_stks%kill
@@ -1481,6 +1551,42 @@ contains
                 call del_file(SCALE_FILETAB)
                 call qenv%kill
             end subroutine scale_stks
+
+            ! for initial write of set of user adjustable parameters
+            subroutine write_user_params
+                type(oris) :: os
+                call os%new(1)
+                call os%set(1,'lpthresh',params%lpthresh)
+                call os%set(1,'ndev',    params%ndev)
+                call os%write(USER_PARAMS)
+                call os%kill
+            end subroutine write_user_params
+
+            ! updates current parameters with user input
+            subroutine update_user_params
+                type(oris) :: os
+                real       :: lpthresh, ndev
+                if( .not.file_exists(USER_PARAMS) ) return ! use of default/last update
+                lpthresh = params%lpthresh
+                ndev     = params%ndev
+                call os%new(1)
+                call os%read(USER_PARAMS)
+                if( os%isthere(1,'lpthresh') )then
+                    lpthresh = os%get(1,'lpthresh')
+                    if( abs(lpthresh-params%lpthresh) > 0.001 )then
+                        params%lpthresh = lpthresh
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION LPTHESH UPDATED TO: ',params%lpthresh
+                    endif
+                endif
+                if( os%isthere(1,'ndev') )then
+                    ndev = os%get(1,'ndev')
+                    if( abs(ndev-params%ndev) > 0.001 )then
+                        params%ndev = ndev
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION NDEV    UPDATED TO: ',params%ndev
+                    endif
+                endif
+                call os%kill
+            end subroutine update_user_params
 
     end subroutine exec_cluster2D_stream
 

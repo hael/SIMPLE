@@ -1013,7 +1013,7 @@ contains
         call cline_simatoms2%delete('moldiam')
         call cline_simatoms2%delete('lp')
         ! (6) REPROJECTION OF SIMULATED DETECTED ATOMS
-        call cline_reproject2%set('prg',   'reprojeband3_indct')
+        call cline_reproject2%set('prg',   'reproject')
         call cline_reproject2%set('outstk', DETECTED_PROJS)
         call cline_reproject2%set('smpd',   params%smpd)
         call cline_reproject2%set('msk',    params%msk)

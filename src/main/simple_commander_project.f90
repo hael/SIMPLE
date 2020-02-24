@@ -779,6 +779,7 @@ contains
         end select
         ! final full write
         call spproj%write(params%projfile)
+        call simple_end('**** SELECTION NORMAL STOP ****')
     end subroutine exec_selection
 
     subroutine exec_merge_stream_projects( self, cline )
