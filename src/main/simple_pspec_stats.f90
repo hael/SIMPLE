@@ -44,7 +44,7 @@ type :: pspec_stats
     integer :: ULim_Findex = 0              ! Fourier index corresponding to UP_LIM
 contains
     procedure          :: new => new_pspec_stats
-    procedure, private :: empty
+    ! procedure, private :: empty
     procedure, private :: calc_weighted_avg_sz_ccs   !score
     procedure, private :: calc_avg_curvature         !curvature
     procedure, private :: process_ps
@@ -158,43 +158,6 @@ contains
       real :: curvature
       curvature = self%avg_curvat
     end function get_curvature
-
-    !This subroutine is meant to discard fallacious power spectra images
-    !characterized by producing an 'empty' binarization.
-    !If after binarization the # of white pixels detected in the central
-    !zone of the image is less than 5% of the tot
-    !# of central pixels, than it returns yes, otherwhise no.
-    !The central zone is characterized by having res in [LOW_LIM,UP_LIM/2]
-    function empty(self) result(yes_no)
-        class(pspec_stats), intent(inout) :: self
-        logical             :: yes_no
-        real, allocatable   :: rmat(:,:,:)
-        real, parameter     :: PERCENT = 0.05
-        integer :: i, j
-        integer :: h, k, sh
-        integer :: cnt, cnt_white
-        integer :: uplim
-        uplim = self%ULim_Findex/2
-        yes_no = .false.
-        rmat = self%ps_bin%get_rmat()
-        if(any(rmat > 1.001) .or. any(rmat < -0.001)) THROW_HARD('Expected binary image in input; discard_ps')
-        !initialize
-        cnt       = 0
-        cnt_white = 0
-        do i = 1, BOX
-            do j = 1, BOX
-                h   = -int(BOX/2) + i - 1
-                k   = -int(BOX/2) + j - 1
-                sh  =  nint(hyp(real(h),real(k)))
-                if(sh < uplim .and. sh > self%LLim_Findex) then
-                    cnt = cnt + 1                                !number of pixels in the selected zone
-                    if(rmat(i,j,1) > TINY) cnt_white = cnt_white + 1 !number of white pixels in the selected zone
-                endif
-             enddo
-        enddo
-        if(real(cnt_white)/real(cnt)<PERCENT) yes_no = .true.; return
-        deallocate(rmat)
-    end function empty
 
     subroutine print_info(self)
         class(pspec_stats), intent(inout) :: self
@@ -492,8 +455,8 @@ contains
               call self%ps_bin%set([BOX,i,1],0.)
           enddo
           if(DEBUG_HERE) call self%ps_bin%write(PATH_HERE//basename(trim(self%fbody))//'_binarized.mrc')
-          self%fallacious =  self%empty() !check if the mic is fallacious
-          if(self%fallacious) write(logfhandle,*) basename(trim(self%fbody)), ' TO BE DISCARDED'
+          ! self%fallacious =  self%empty() !check if the mic is fallacious
+          ! if(self%fallacious) write(logfhandle,*) basename(trim(self%fbody)), ' TO BE DISCARDED'
       end subroutine binarize_ps
   end subroutine process_ps
 
@@ -521,6 +484,45 @@ contains
 end module simple_pspec_stats
 
 ! SUBROUTINES MIGHT BE USEFUL
+
+
+! !This subroutine is meant to discard fallacious power spectra images
+! !characterized by producing an 'empty' binarization.
+! !If after binarization the # of white pixels detected in the central
+! !zone of the image is less than 5% of the tot
+! !# of central pixels, than it returns yes, otherwhise no.
+! !The central zone is characterized by having res in [LOW_LIM,UP_LIM/2]
+! function empty(self) result(yes_no)
+!     class(pspec_stats), intent(inout) :: self
+!     logical             :: yes_no
+!     real, allocatable   :: rmat(:,:,:)
+!     real, parameter     :: PERCENT = 0.05
+!     integer :: i, j
+!     integer :: h, k, sh
+!     integer :: cnt, cnt_white
+!     integer :: uplim
+!     uplim = self%ULim_Findex/2
+!     yes_no = .false.
+!     rmat = self%ps_bin%get_rmat()
+!     if(any(rmat > 1.001) .or. any(rmat < -0.001)) THROW_HARD('Expected binary image in input; discard_ps')
+!     !initialize
+!     cnt       = 0
+!     cnt_white = 0
+!     do i = 1, BOX
+!         do j = 1, BOX
+!             h   = -int(BOX/2) + i - 1
+!             k   = -int(BOX/2) + j - 1
+!             sh  =  nint(hyp(real(h),real(k)))
+!             if(sh < uplim .and. sh > self%LLim_Findex) then
+!                 cnt = cnt + 1                                !number of pixels in the selected zone
+!                 if(rmat(i,j,1) > TINY) cnt_white = cnt_white + 1 !number of white pixels in the selected zone
+!             endif
+!          enddo
+!     enddo
+!     if(real(cnt_white)/real(cnt)<PERCENT) yes_no = .true.; return
+!     deallocate(rmat)
+! end function empty
+
 ! subroutine log_ps(self,img_out)
 !     class(pspec_stats), intent(inout) :: self
 !     type(image), optional :: img_out

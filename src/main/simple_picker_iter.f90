@@ -35,7 +35,6 @@ subroutine iterate( self, cline, moviename_intg, boxfile, nptcls_out, dir_out )
         write(logfhandle,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_intg))
     endif
     write(logfhandle,'(a,1x,a)') '>>> PICKING MICROGRAPH:', trim(adjustl(moviename_intg))
-    print *, 'params_glob%picker', params_glob%picker
     if(params_glob%picker .eq. 'old_school') then
         if( cline%defined('refs') .or. cline%defined('vol1') )then
             !template based picking
@@ -43,7 +42,8 @@ subroutine iterate( self, cline, moviename_intg, boxfile, nptcls_out, dir_out )
                 call init_picker(moviename_intg, params_glob%refs, params_glob%smpd, lp_in=params_glob%lp,&
                     &distthr_in=params_glob%thres, ndev_in=params_glob%ndev, dir_out=dir_out)
             else
-                call init_picker(moviename_intg, params_glob%refs, params_glob%smpd, lp_in=params_glob%lp, ndev_in=params_glob%ndev, dir_out=dir_out)
+                call init_picker(moviename_intg, params_glob%refs, params_glob%smpd, lp_in=params_glob%lp, &
+                    &ndev_in=params_glob%ndev, dir_out=dir_out)
             endif
             call exec_picker(boxfile, nptcls_out)
             call kill_picker
@@ -57,27 +57,31 @@ subroutine iterate( self, cline, moviename_intg, boxfile, nptcls_out, dir_out )
               call init_phasecorr_picker(moviename_intg, params_glob%refs, params_glob%smpd, lp_in=params_glob%lp,&
                   &distthr_in=params_glob%thres, ndev_in=params_glob%ndev, dir_out=dir_out)
           else
-              call init_phasecorr_picker(moviename_intg, params_glob%refs, params_glob%smpd, lp_in=params_glob%lp, ndev_in=params_glob%ndev, dir_out=dir_out)
+              call init_phasecorr_picker(moviename_intg, params_glob%refs, params_glob%smpd, lp_in=params_glob%lp, &
+                  &ndev_in=params_glob%ndev, dir_out=dir_out)
           endif
           call exec_phasecorr_picker(boxfile, nptcls_out)
           call kill_phasecorr_picker
         else
         ! phasecorrelation segmentation based
             if( cline%defined('thres') )then
-                call init_phasecorr_segpicker(moviename_intg, params_glob%min_rad, params_glob%max_rad, real(params_glob%stepsz),params_glob%elongated, params_glob%smpd, lp_in=params_glob%lp,&
+                call init_phasecorr_segpicker(moviename_intg, params_glob%min_rad, params_glob%max_rad, &
+                    &real(params_glob%stepsz),params_glob%elongated, params_glob%smpd, lp_in=params_glob%lp,&
                     &distthr_in=params_glob%thres, ndev_in=params_glob%ndev, dir_out=dir_out)
             else
-                call init_phasecorr_segpicker(moviename_intg, params_glob%min_rad, params_glob%max_rad, real(params_glob%stepsz),params_glob%elongated, params_glob%smpd, lp_in=params_glob%lp,&
+                call init_phasecorr_segpicker(moviename_intg, params_glob%min_rad, params_glob%max_rad, &
+                    &real(params_glob%stepsz),params_glob%elongated, params_glob%smpd, lp_in=params_glob%lp,&
                     &ndev_in=params_glob%ndev, dir_out=dir_out)
             endif
             call exec_phasecorr_segpicker(boxfile, nptcls_out,params_glob%center)
             call kill_phasecorr_segpicker
         endif
       elseif(params_glob%picker .eq. 'seg') then
-        print *, 'HERE RIGHT!!'
         ! segmetation based reference free picking
+        if( cline%defined('refs') .or. cline%defined('vol1') ) THROW_HARD('Picker by segmentation cannot have refs/vol1; picker_iterate')
         if(.not. cline%defined('elongated')) params_glob%elongated = ' no'
         if(.not. cline%defined('center'))    params_glob%center    = ' no'
+        if(.not. cline%defined('detector'))  params_glob%detector  = 'bin'
             if(.not. cline%defined('draw_color')) call cline%set('draw_color', 'white')
             if(cline%defined('thres')) then
                 call seg_picker%new(moviename_intg, params_glob%min_rad, params_glob%max_rad,&
