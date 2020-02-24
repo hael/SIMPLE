@@ -407,15 +407,30 @@ contains
             ! works out atoms_obj dimension
             msksq  = (params%moldiam/2.)**2.
             radius = atoms_obj%get_radius(1)
+            ! From Wheeler, D, 1925, Physical Review. 25 (6): 753–761. FCC only!
             select case(uppercase(trim(params%element)))
+                case('C')
+                    lfcc = 3.567 ! diamond
+                case('SI')
+                    lfcc = 5.431020511
+                case('GE')
+                    lfcc = 5.658
+                case('AL')
+                    lfcc = 4.046
+                case('NI')
+                    lfcc = 3.499
+                case('CU')
+                    lfcc = 3.597
                 case('PT')
-                    lfcc = 3.92
+                    lfcc = 3.912
                 case('AU')
                     lfcc = 4.065
                 case('AG')
-                    lfcc = 4.09
+                    lfcc = 4.079
                 case('PD')
-                    lfcc = 3.89
+                    lfcc = 3.859
+                case('PB')
+                    lfcc = 4.920
                 case DEFAULT
                     lfcc = 3.76
                     ! lfcc = 2.*sqrt(2.)*radius
