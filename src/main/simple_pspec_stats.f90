@@ -11,7 +11,7 @@ public :: pspec_stats
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG_HERE = .true.
+logical, parameter :: DEBUG_HERE = .false.
 integer, parameter :: BOX        = 512       ! ps size
 real,    parameter :: LOW_LIM    = 20.       ! 30 A, lower limit for resolution. Before that, we discard
 real,    parameter :: UP_LIM     = 8.        ! 8  A, upper limit for resolution in the entropy calculation. (it was 3. before)
@@ -218,7 +218,7 @@ contains
                 endif
             enddo
         enddo
-        call self%ps_bin%write(PATH_HERE//basename(trim(self%fbody))//'_binarized_polished.mrc') !if(DEBUG_HERE)
+        if(DEBUG_HERE) call self%ps_bin%write(PATH_HERE//basename(trim(self%fbody))//'_binarized_polished.mrc')
         call self%ps_bin%find_ccs(self%ps_ccs, update_imat = .true.)
         self%avg_curvat = self%calc_avg_curvature()
         !normalization
@@ -375,7 +375,6 @@ contains
   contains
 
       !Preprocessing steps: -) tv filtering
-      !                     -) elimination of central spot
       !                     -) scaling
       subroutine prepare_ps(self)
           use simple_tvfilter, only: tvfilter
@@ -383,61 +382,9 @@ contains
           type(tvfilter) :: tvf
           call tvf%new()
           call tvf%apply_filter(self%ps, LAMBDA)
-          call manage_central_spot(self)
+          ! call manage_central_spot(self)
           call self%ps%scale_pixels([1.,real(N_BINS)])
       end subroutine prepare_ps
-
-      ! This subroutine extract a circle from the central part of the
-      ! power spectrum, until LOW_LIM A and replace these gray values with
-      ! the weighted average of the gray values in the ps outside that circle.
-      ! The weight is the dist from the center. It's done to make it
-      ! smoother.
-      ! It is meant to reduce the influence of the central pixel.
-      subroutine manage_central_spot(self)
-          class(pspec_stats), intent(inout) :: self
-          real, allocatable :: rmat(:,:,:), rmat_dist(:,:,:)
-          real              :: avg
-          integer           :: lims(3,2), mh, mk
-          integer           :: i, j
-          integer           :: k, h, sh
-          integer           :: cnt
-          logical           :: lmsk(BOX,BOX,1)
-          lmsk = .true.
-          allocate(rmat     (BOX,BOX,1), source = self%ps%get_rmat())
-          allocate(rmat_dist(BOX,BOX,1), source = 0.)
-          lims = self%ps%loop_lims(3)
-          mh   = abs(lims(1,1))
-          mk   = abs(lims(2,1))
-          avg  = 0. !initialisations
-          cnt  = 0
-          do h=lims(1,1),lims(1,2)
-              do k=lims(2,1),lims(2,2)
-                  sh  = nint(hyp(real(h),real(k))) !shell to which px
-                  i = min(max(1,h+mh+1),BOX)
-                  j = min(max(1,k+mk+1),BOX)
-                  if(sh < self%LLim_Findex ) then
-                      lmsk(i,j,1) = .false.
-                  elseif(sh >= self%LLim_Findex .and. sh < self%LLim_Findex + 2) then
-                      avg = avg + rmat(i,j,1)
-                      cnt = cnt + 1
-                  endif
-              enddo
-          enddo
-          avg = avg / real(cnt)
-          do h=lims(1,1),lims(1,2)
-              do k=lims(2,1),lims(2,2)
-                  sh  = nint(hyp(real(h),real(k))) !shell to which px
-                  i = min(max(1,h+mh+1),BOX)
-                  j = min(max(1,k+mk+1),BOX)
-                  if(sh < self%LLim_Findex ) then
-                      rmat_dist(i,j,1) = sqrt(real((i-BOX/2-1)**2+(j-BOX/2-1)**2)) !dist between [i,j,1] and [BOX/2,BOX/2,1] (distance from the center)
-                  endif
-              enddo
-          enddo
-          rmat_dist = rmat_dist/maxval(rmat_dist)
-          where( .not.lmsk ) rmat = avg*rmat_dist
-          call self%ps%set_rmat(rmat)
-      end subroutine manage_central_spot
 
       ! This subroutine performs binarization of a ps image
       ! using Canny edge detection with automatic threshold
@@ -486,7 +433,57 @@ contains
 end module simple_pspec_stats
 
 ! SUBROUTINES MIGHT BE USEFUL
-
+! ! This subroutine extract a circle from the central part of the
+! ! power spectrum, until LOW_LIM A and replace these gray values with
+! ! the weighted average of the gray values in the ps outside that circle.
+! ! The weight is the dist from the center. It's done to make it
+! ! smoother.
+! ! It is meant to reduce the influence of the central pixel.
+! subroutine manage_central_spot(self)
+!     class(pspec_stats), intent(inout) :: self
+!     real, allocatable :: rmat(:,:,:), rmat_dist(:,:,:)
+!     real              :: avg
+!     integer           :: lims(3,2), mh, mk
+!     integer           :: i, j
+!     integer           :: k, h, sh
+!     integer           :: cnt
+!     logical           :: lmsk(BOX,BOX,1)
+!     lmsk = .true.
+!     allocate(rmat     (BOX,BOX,1), source = self%ps%get_rmat())
+!     allocate(rmat_dist(BOX,BOX,1), source = 0.)
+!     lims = self%ps%loop_lims(3)
+!     mh   = abs(lims(1,1))
+!     mk   = abs(lims(2,1))
+!     avg  = 0. !initialisations
+!     cnt  = 0
+!     do h=lims(1,1),lims(1,2)
+!         do k=lims(2,1),lims(2,2)
+!             sh  = nint(hyp(real(h),real(k))) !shell to which px
+!             i = min(max(1,h+mh+1),BOX)
+!             j = min(max(1,k+mk+1),BOX)
+!             if(sh < self%LLim_Findex ) then
+!                 lmsk(i,j,1) = .false.
+!             elseif(sh >= self%LLim_Findex .and. sh < self%LLim_Findex + 2) then
+!                 avg = avg + rmat(i,j,1)
+!                 cnt = cnt + 1
+!             endif
+!         enddo
+!     enddo
+!     avg = avg / real(cnt)
+!     do h=lims(1,1),lims(1,2)
+!         do k=lims(2,1),lims(2,2)
+!             sh  = nint(hyp(real(h),real(k))) !shell to which px
+!             i = min(max(1,h+mh+1),BOX)
+!             j = min(max(1,k+mk+1),BOX)
+!             if(sh < self%LLim_Findex ) then
+!                 rmat_dist(i,j,1) = sqrt(real((i-BOX/2-1)**2+(j-BOX/2-1)**2)) !dist between [i,j,1] and [BOX/2,BOX/2,1] (distance from the center)
+!             endif
+!         enddo
+!     enddo
+!     rmat_dist = rmat_dist/maxval(rmat_dist)
+!     where( .not.lmsk ) rmat = avg*rmat_dist
+!     call self%ps%set_rmat(rmat)
+! end subroutine manage_central_spot
 
 ! !This subroutine is meant to discard fallacious power spectra images
 ! !characterized by producing an 'empty' binarization.
