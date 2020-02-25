@@ -32,8 +32,6 @@ type :: pspec_stats
     type(image)           :: mic            ! micrograph
     type(image)           :: ps             ! power spectrum
     type(binimage)        :: ps_bin, ps_ccs ! its binary version, its connected components
-    type(parameters)      :: p
-    type(cmdline)         :: cline
     integer :: ldim_mic(3) = 0              ! dim of the mic
     integer :: ldim(3)     = 0              ! dim of the ps`
     real    :: smpd                         ! smpd
@@ -58,16 +56,17 @@ end type pspec_stats
 
 contains
 
-    subroutine new_pspec_stats(self, name, cline_smpd)
+    subroutine new_pspec_stats(self, name, smpd_in, ps)
         use simple_defs
-        class(pspec_stats), intent(inout) :: self
-        character(len=*),        intent(in)    :: name
-        real,                    intent(in)    :: cline_smpd
+        class(pspec_stats),    intent(inout) :: self
+        character(len=*),      intent(in)    :: name
+        real,                  intent(in)    :: smpd_in
+        type(image), optional, intent(in)    :: ps
         integer     :: nptcls
         real        :: smpd
         type(image) :: hist_stretch  !to perform histogram stretching (see Adiga s paper)
         !set parameters
-        self%smpd        = cline_smpd
+        self%smpd        = smpd_in
         self%micname     = name
         self%ULim_Findex = calc_fourier_index(max(2.*self%smpd,UP_LIM), BOX,self%smpd)! Everything at a resolution higher than UP_LIM A is discarded
         self%LLim_Findex = calc_fourier_index(LOW_LIM,BOX,self%smpd)                  ! Everything at a resolution lower than LOW_LIM A is discarded
@@ -81,7 +80,11 @@ contains
         call self%ps_bin%new_bimg(self%ldim, self%smpd)
         call self%ps_ccs%new_bimg(self%ldim, self%smpd)
         !power spectrum generation
-        call self%mic%mic2spec(BOX, 'sqrt',LOW_LIM, self%ps)
+        if(.not. present(ps)) then
+            call self%mic%mic2spec(BOX, 'sqrt',LOW_LIM, self%ps)
+        else
+            call self%ps%copy(ps)
+        endif
         if(DEBUG_HERE) call self%ps%write(PATH_HERE//basename(trim(self%fbody))//'_generated_ps.mrc')
     end subroutine new_pspec_stats
 
@@ -462,7 +465,6 @@ contains
 
   subroutine run(self)
       class(pspec_stats), intent(inout) :: self
-      call self%p%new(self%cline)
       write(logfhandle,*) '******> Processing PS ',basename(trim(self%fbody))
       call process_ps(self)
   end subroutine run

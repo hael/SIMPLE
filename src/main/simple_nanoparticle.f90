@@ -1668,14 +1668,14 @@ contains
         call self%img_cc%get_imat(imat_cc)
         allocate(imat_1clss(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
         do i = 1, ncls
-          imat_1clss = 0
-          do j = 1, dim
-            if(labels(j) == i) then
-              where(imat_cc == j) imat_1clss = i
-            endif
-          enddo
-          call img_1clss%set_imat(imat_1clss)
-          call img_1clss%write_bimg('ArClass'//int2str(i)//'.mrc')
+            imat_1clss = 0
+            do j = 1, dim
+                if(labels(j) == i) then
+                    where(imat_cc == j) imat_1clss = i
+                endif
+            enddo
+            call img_1clss%set_imat(imat_1clss)
+            call img_1clss%write_bimg('ArClass'//int2str(i)//'.mrc')
         enddo
         call img_1clss%kill_bimg
       endif
