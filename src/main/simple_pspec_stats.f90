@@ -4,7 +4,6 @@ include 'simple_lib.f08'
 use simple_image,      only: image
 use simple_binimage,   only: binimage
 use simple_cmdline,    only: cmdline
-use simple_parameters, only: parameters
 implicit none
 
 public :: pspec_stats
@@ -41,30 +40,28 @@ type :: pspec_stats
     integer :: LLim_Findex = 0              ! Fourier index corresponding to LOW_LIM
     integer :: ULim_Findex = 0              ! Fourier index corresponding to UP_LIM
 contains
-    procedure          :: new => new_pspec_stats
+    procedure, private :: new_pspec_stats1, new_pspec_stats2
+    generic            :: new => new_pspec_stats1, new_pspec_stats2
     ! procedure, private :: empty
     procedure, private :: calc_weighted_avg_sz_ccs   !score
     procedure, private :: calc_avg_curvature         !curvature
-    procedure, private :: process_ps
+    procedure          :: process_ps
     procedure, private :: print_info
     procedure          :: get_output
     procedure          :: get_score
     procedure          :: get_curvature
-    procedure          :: run
     procedure          :: kill => kill_pspec_stats
 end type pspec_stats
 
 contains
 
-    subroutine new_pspec_stats(self, name, smpd_in, ps)
+    subroutine new_pspec_stats1(self, name, smpd_in)
         use simple_defs
         class(pspec_stats),    intent(inout) :: self
         character(len=*),      intent(in)    :: name
         real,                  intent(in)    :: smpd_in
-        type(image), optional, intent(in)    :: ps
         integer     :: nptcls
         real        :: smpd
-        type(image) :: hist_stretch  !to perform histogram stretching (see Adiga s paper)
         !set parameters
         self%smpd        = smpd_in
         self%micname     = name
@@ -80,13 +77,33 @@ contains
         call self%ps_bin%new_bimg(self%ldim, self%smpd)
         call self%ps_ccs%new_bimg(self%ldim, self%smpd)
         !power spectrum generation
-        if(.not. present(ps)) then
-            call self%mic%mic2spec(BOX, 'sqrt',LOW_LIM, self%ps)
-        else
-            call self%ps%copy(ps)
-        endif
+        call self%mic%mic2spec(BOX, 'sqrt',LOW_LIM, self%ps)
         if(DEBUG_HERE) call self%ps%write(PATH_HERE//basename(trim(self%fbody))//'_generated_ps.mrc')
-    end subroutine new_pspec_stats
+    end subroutine new_pspec_stats1
+
+    subroutine new_pspec_stats2(self, mic, smpd_in)
+        use simple_defs
+        class(pspec_stats),    intent(inout) :: self
+        class(image),          intent(inout) :: mic
+        real,                  intent(in)    :: smpd_in
+        integer     :: nptcls
+        real        :: smpd
+        !set parameters
+        self%smpd        = smpd_in
+        self%ULim_Findex = calc_fourier_index(max(2.*self%smpd,UP_LIM), BOX,self%smpd)! Everything at a resolution higher than UP_LIM A is discarded
+        self%LLim_Findex = calc_fourier_index(LOW_LIM,BOX,self%smpd)                  ! Everything at a resolution lower than LOW_LIM A is discarded
+        self%mic         = mic
+        self%ldim_mic    = self%mic%get_ldim()
+        self%fbody   = 'ps_'
+        self%ldim(1) = BOX
+        self%ldim(2) = BOX
+        self%ldim(3) = 1
+        call self%ps_bin%new_bimg(self%ldim, self%smpd)
+        call self%ps_ccs%new_bimg(self%ldim, self%smpd)
+        !power spectrum generation
+        call self%mic%mic2spec(BOX, 'sqrt',LOW_LIM, self%ps)
+        if(DEBUG_HERE) call self%ps%write(PATH_HERE//basename(trim(self%fbody))//'_generated_ps.mrc')
+    end subroutine new_pspec_stats2
 
     ! Result of the combination of score and curvature.
     ! It states whether to keep or discard the mic.
@@ -263,17 +280,22 @@ contains
         use simple_binimage, only: binimage
         class(pspec_stats), intent(inout) :: self
         real    :: avg !average curvature
-        integer :: i
+        integer :: i, max_cc
         integer :: cc(1)
         integer, allocatable :: sz(:)
         sz = self%ps_ccs%size_ccs()
         avg = 0.
-        do i = 1,N_BIG_CCS
+        if(size(sz) < N_BIG_CCS) then
+            max_cc = size(sz)
+        else
+            max_cc = N_BIG_CCS
+        endif
+        do i = 1,max_cc
             cc(:) = maxloc(sz)
             avg = avg + estimate_curvature(self%ps_ccs,cc(1))
             sz(cc(1)) = 0 !discard
         enddo
-        avg = avg/N_BIG_CCS
+        avg = avg/max_cc
     contains
         ! This subroutine estimates the curvature of the connected
         ! component cc in the connected component image of the ps.
@@ -336,6 +358,7 @@ contains
                   endif
               enddo
           enddo
+          call img_aux%kill
         end function estimate_curvature
 
         !Circumference of radius r and center the center of the img.
@@ -364,11 +387,17 @@ contains
       real                 :: res
       integer              :: ind(1)
       integer              :: h, k, sh
-      integer              :: i, j
+      integer              :: i, j, n
       call prepare_ps(self)
       call binarize_ps(self)
       ! calculation of the weighted average size of the ccs ->  score
       call self%ps_bin%find_ccs(self%ps_ccs)
+      call self%ps_ccs%get_nccs(n)
+      if(n < 1) then
+          self%score = 0.
+          self%avg_curvat = 66.
+          return
+      endif
       sz = self%ps_ccs%size_ccs()
       call self%calc_weighted_avg_sz_ccs(sz)
       deallocate(sz)
@@ -384,6 +413,7 @@ contains
           call tvf%apply_filter(self%ps, LAMBDA)
           ! call manage_central_spot(self)
           call self%ps%scale_pixels([1.,real(N_BINS)])
+          call tvf%kill
       end subroutine prepare_ps
 
       ! This subroutine performs binarization of a ps image
@@ -410,12 +440,6 @@ contains
       end subroutine binarize_ps
   end subroutine process_ps
 
-  subroutine run(self)
-      class(pspec_stats), intent(inout) :: self
-      write(logfhandle,*) '******> Processing PS ',basename(trim(self%fbody))
-      call process_ps(self)
-  end subroutine run
-
   subroutine kill_pspec_stats(self)
       class(pspec_stats), intent(inout) :: self
       call self%mic%kill()
@@ -431,6 +455,7 @@ contains
       self%fallacious   = .false.
   end subroutine kill_pspec_stats
 end module simple_pspec_stats
+
 
 ! SUBROUTINES MIGHT BE USEFUL
 ! ! This subroutine extract a circle from the central part of the

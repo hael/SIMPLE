@@ -6,6 +6,7 @@ use simple_cmdline,      only: cmdline
 use simple_parameters,   only: params_glob
 use simple_ori,          only: ori
 use simple_stackops,     only: frameavg_stack
+use simple_pspec_stats,  only: pspec_stats
 use simple_motion_correct
 implicit none
 
@@ -24,9 +25,10 @@ real(timer_int_kind)    :: rt_postproc1
 type :: motion_correct_iter
     private
     ! these image objects are part of the instance to avoid excessive memory re-allocations
-    type(image) :: moviesum, moviesum_corrected
-    type(image) :: moviesum_ctf, pspec_sum, pspec_ctf, img_jpg
-    type(image) :: pspec_half_n_half, thumbnail
+    type(image)       :: moviesum, moviesum_corrected
+    type(image)       :: moviesum_ctf, pspec_sum, pspec_ctf, img_jpg
+    type(image)       :: pspec_half_n_half, thumbnail
+    type(pspec_stats) :: ps_stats
     ! these strings are part of the instance for reporting purposes
     character(len=STDLEN) :: moviename, moviename_intg
     character(len=STDLEN) :: moviename_forctf, moviename_thumb
@@ -158,6 +160,7 @@ contains
         scale = real(params_glob%pspecsz)/real(ldim(1))
         ldim_thumb(1:2) = round2even(real(ldim(1:2))*scale)
         ldim_thumb(3)   = 1
+        call orientation%set('smpd', ctfvars%smpd)
         call orientation%set('xdim', real(ldim(1)))
         call orientation%set('ydim', real(ldim(2)))
         call self%thumbnail%new(ldim_thumb, ctfvars%smpd)
@@ -167,8 +170,17 @@ contains
         ! jpeg output
         call self%pspec_half_n_half%collage(self%thumbnail, self%img_jpg)
         call self%img_jpg%write_jpg(self%moviename_thumb, norm=.true., quality=90)
+        ! power spectrum scoring
+        if( l_tseries )then
+            !
+        else
+            call self%ps_stats%new(self%moviesum_ctf, ctfvars%smpd)
+            call self%ps_stats%process_ps()
+            call orientation%set('CTF_ccscore',   self%ps_stats%get_score())
+            call orientation%set('CTF_curvature', self%ps_stats%get_curvature())
+            call self%ps_stats%kill
+        endif
         ! report to ori object
-        call orientation%set('smpd',   ctfvars%smpd)
         if( .not. l_tseries )then
             call make_relativepath(CWD_GLOB,self%moviename,rel_fname)
             call orientation%set('movie',  trim(rel_fname))
