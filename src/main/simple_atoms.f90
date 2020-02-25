@@ -44,7 +44,7 @@ type :: atoms
     procedure, private :: new_from_pdb
     generic            :: new => new_from_pdb, new_instance
     generic            :: assignment(=) => copy
-    procedure, private :: copy
+    procedure          :: copy
     ! GETTERS/SETTERS
     procedure          :: does_exist
     procedure          :: get_beta

@@ -15,6 +15,7 @@ type(nano_softmask_commander)          :: xnano_softmask
 type(geometry_analysis_commander)      :: xgeometry_analysis
 type(radial_sym_test_commander)        :: xrad_sym_tst
 type(plot_atom_commander)              :: xplot_atom
+type(dock_coords_commander)            :: xdock_coords
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: xarg, prg, entire_line
 type(cmdline)         :: cline
@@ -50,6 +51,8 @@ select case(prg)
         call xrad_sym_tst%execute(cline)
     case('plot_atom')
         call xplot_atom%execute(cline)
+    case('dock_coords')
+        call xdock_coords%execute(cline)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select

@@ -6,7 +6,8 @@ use simple_oris,           only: oris
 use simple_parameters,     only: parameters
 use simple_image,          only: image
 use simple_binimage,       only: binimage
-use simple_nanoparticle
+use simple_nanoparticle,   only: nanoparticle
+use simple_dock_coords,    only: dock_coords_init, dock_coords_minimize
 implicit none
 
 public :: detect_atoms_commander
@@ -17,6 +18,7 @@ public :: nano_softmask_commander
 public :: geometry_analysis_commander
 public :: radial_sym_test_commander
 public :: plot_atom_commander
+public :: dock_coords_commander
 
 private
 #include "simple_local_flags.inc"
@@ -25,6 +27,10 @@ type, extends(commander_base) :: detect_atoms_commander
   contains
     procedure :: execute      => exec_detect_atoms
 end type detect_atoms_commander
+type, extends(commander_base) :: dock_coords_commander
+  contains
+    procedure :: execute      => exec_dock_coords
+end type dock_coords_commander
 type, extends(commander_base) :: atoms_rmsd_commander
   contains
     procedure :: execute      => exec_atoms_rmsd
@@ -94,21 +100,55 @@ contains
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
 
+    subroutine exec_dock_coords(self, cline)
+      use simple_ori ! for generation of the rotation matrix
+      use simple_atoms, only : atoms
+      class(dock_coords_commander), intent(inout) :: self
+      class(cmdline),               intent(inout) :: cline !< command line input
+      type(parameters)       :: params
+      type(atoms)            :: a_ref, a_targ
+      real :: rot_trans(7) ! cost, rotation angles, shift
+      real :: rmat(3,3)
+      call params%new(cline)
+      if(.not. cline%defined('pdbfile')) then
+          THROW_HARD('ERROR! pdbfile needs to be present; exec_dock_coords')
+      endif
+      if(.not. cline%defined('pdbfile2')) then
+          THROW_HARD('ERROR! pdbfile2 needs to be present; exec_dock_coords')
+      endif
+      if(.not. cline%defined('thres')) then
+          THROW_HARD('ERROR! thres needs to be present; exec_dock_coords')
+      endif
+      call a_ref%new(basename(params%pdbfile))
+      call a_targ%new(basename(params%pdbfile2))
+      call dock_coords_init( a_ref, a_targ, params%thres )
+      rot_trans = dock_coords_minimize()
+      write(logfhandle, *) 'Docked coords have rmsd', rot_trans(1)
+      write(logfhandle, *) 'Rotation angles        ', rot_trans(2:4)
+      write(logfhandle, *) 'Translation vector     ', rot_trans(5:7)
+      ! now perform rotation and translation of the coords
+      ! and output rotshited coords
+      rmat = euler2m(rot_trans(2:4))
+      call a_targ%translate(-rot_trans(5:7))
+      call a_targ%writePDB('TranslatedCoords')
+      call a_targ%rotate(rmat)
+      call a_targ%writePDB('DockedCoords')
+      call a_ref%kill
+      call a_targ%kill
+    end subroutine exec_dock_coords
+
     ! Example of cline:
     ! simple_exec prg=dock_volpair lpstart=3 lpstop=1 smpd=0.358 vol1=vol_Nov26.mrc
     ! vol2=vol_Nov28_2.mrc  msk=40 nthr=8
     subroutine exec_atoms_rmsd( self, cline )
-        use simple_commander_volops, only: dock_volpair_commander
         use simple_ori,              only: ori
         use simple_atoms,            only: atoms
         use simple_nano_utils,       only: kabsch, read_pdb2matrix, write_matrix2pdb, find_couples
         class(atoms_rmsd_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline !< command line input
-        type(dock_volpair_commander) :: xdock_volpair
         character(len=STDLEN)  :: fname1, fname2
         type(parameters)       :: params
         type(nanoparticle)     :: nano1, nano2
-        type(cmdline)          :: cline_dock
         integer, parameter     :: D = 3 ! dimension of the space (3D)
         real(dp), allocatable  :: points_P(:,:), points_Q(:,:), P(:,:), Q(:,:)
         type(ori)   :: orientation
@@ -127,9 +167,6 @@ contains
         if( .not. cline%defined('vol2') )then
             THROW_HARD('ERROR! vol2 needs to be present; exec_atoms_rmsd')
         endif
-        if( .not. cline%defined('dock') )then
-            THROW_HARD('ERROR! dock needs to be present; exec_atoms_rmsd')
-        endif
         if(.not. cline%defined('element')) then
           THROW_HARD('ERROR! element needs to be present; exec_atoms_rmsd')
         endif
@@ -139,63 +176,7 @@ contains
         fname2 = get_fbody(trim(basename(params%vols(2))), trim(fname2ext(params%vols(2))))
         call nano1%set_atomic_coords(trim(fname1)//'_atom_centers.pdb')
         ! execute
-        if(params%dock .eq. 'yes') then
-            cline_dock = cline
-            if(.not. cline%defined('lpstart')) call cline_dock%set('lpstart', 1.)
-            if(.not. cline%defined('lpstop' )) call cline_dock%set('lpstop',  3.)
-            if(.not. cline%defined('msk')) THROW_HARD('If dock has to be performed, msk needs to be inserted; exec_atoms_rmsd')
-            call cline_dock%set('mkdir', 'no')
-            call cline_dock%set('nthr',0.)
-            call cline_dock%set('outfile', 'algndoc.txt')
-            call cline_dock%set('outvol', './'//trim(fname2)//'docked.mrc')
-            ! Initial estimation of the rot/transl performed on VOLUMES
-            call xdock_volpair%execute(cline_dock)
-            !1) Center the coords
-            call find_ldim_nptcls(params%vols(2),ldim, nptcls,smpd)
-            cxyz = (real(ldim)/2.)*smpd
-            call atom_coord%new(trim(fname2)//'_atom_centers.pdb')
-            call atom_coord%translate(-cxyz)
-            !2) Rotate the coords
-            call ori2read%new(1)
-            call ori2read%read('algndoc.txt')
-            call ori2read%get_ori(1,orientation)
-            call ori2read%kill
-            mat = orientation%get_mat()
-            call atom_coord%rotate(mat)
-            !3) Translate back
-            call atom_coord%translate(cxyz)
-            !4) Shift
-            shift = orientation%get_3Dshift()
-            shift = (shift)*params%smpd
-            call orientation%kill
-            call atom_coord%translate(-shift)
-            !5) Set new coords
-            call atom_coord%writePDB(    trim(fname2)//'_DockedVol_atom_centers')
-            call atom_coord%kill
-            call nano2%set_atomic_coords(trim(fname2)//'_DockedVol_atom_centers.pdb')
-            ! Refinement on the solution with Kabsch algorithm, performed on COORDS
-            ! read the coordinates in the pdb file and save them in matrixes
-            call read_pdb2matrix(trim(fname1)//'_atom_centers.pdb', points_P)
-            call read_pdb2matrix(trim(fname2)//'_DockedVol_atom_centers.pdb', points_Q)
-            ! Identify atom couples
-            call find_couples(points_P,points_Q,params%element,P,Q)
-            ! to remove after testing
-            call write_matrix2pdb(real(P,sp), trim(fname1)//'_FindCouples')
-            call write_matrix2pdb(real(Q,sp), trim(fname2)//'_FindCouples')
-            ! identify rotation matrix, translation vector and calculate RMSD
-            call kabsch(P,Q,U,r,lrms) !U: rot matrix, r: transl vec, lrms: RMSD
-            ! print *, 'Rotation matrix Kabsch: '
-            ! call vis_mat(real(U))
-            ! print *, 'translation vector: ',r
-            ! write(logfhandle,*) 'Calculated RMSD of the identified couples: ', lrms
-            call write_matrix2pdb(real(P,sp), trim(fname1)//'_Kabsch_atom_centers')
-            call write_matrix2pdb(real(Q,sp), trim(fname2)//'_Kabsch_atom_centers')
-           ! kabsh internally perfoms roation/translation
-           call nano1%set_atomic_coords(trim(fname1)//'_Kabsch_atom_centers.pdb')
-           call nano2%set_atomic_coords(trim(fname2)//'_Kabsch_atom_centers.pdb')
-        else ! no DOCKING
-            call nano2%set_atomic_coords(trim(fname2)//'_atom_centers.pdb')
-        endif
+        call nano2%set_atomic_coords(trim(fname2)//'_atom_centers.pdb')
         ! RMSD calculation
         call nano1%atoms_rmsd(nano2)
         ! kill
@@ -481,5 +462,4 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PLOT_ATOM NORMAL STOP ****')
       end subroutine exec_plot_atom
-
 end module simple_commander_quant

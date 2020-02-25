@@ -89,6 +89,7 @@ type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
 type(simple_program), target :: detect_atoms
+type(simple_program), target :: dock_coords
 type(simple_program), target :: dock_volpair
 type(simple_program), target :: estimate_diam
 type(simple_program), target :: export_relion
@@ -185,7 +186,6 @@ type(simple_input_param) :: detector
 type(simple_input_param) :: dferr
 type(simple_input_param) :: dfmax
 type(simple_input_param) :: dfmin
-type(simple_input_param) :: dock
 type(simple_input_param) :: draw_color
 type(simple_input_param) :: e1, e2, e3
 type(simple_input_param) :: element
@@ -301,6 +301,7 @@ contains
         call new_ctf_estimate
         call new_ctfops
         call new_detect_atoms
+        call new_dock_coords
         call new_dock_volpair
         call new_estimate_diam
         call new_extract
@@ -401,6 +402,7 @@ contains
         call push2prg_ptr_array(ctf_estimate)
         call push2prg_ptr_array(ctfops)
         call push2prg_ptr_array(detect_atoms)
+        call push2prg_ptr_array(dock_coords)
         call push2prg_ptr_array(dock_volpair)
         call push2prg_ptr_array(extract)
         call push2prg_ptr_array(export_relion)
@@ -525,6 +527,8 @@ contains
                 ptr2prg => ctfops
             case('detect_atoms')
                 ptr2prg => detect_atoms
+            case('dock_coords')
+                ptr2prg => dock_coords
             case('dock_volpair')
                 ptr2prg => dock_volpair
             case('estimate_diam')
@@ -700,6 +704,7 @@ contains
         write(logfhandle,'(A)') convert%name
         write(logfhandle,'(A)') ctf_estimate%name
         write(logfhandle,'(A)') ctfops%name
+        write(logfhandle,'(A)') dock_coords%name
         write(logfhandle,'(A)') dock_volpair%name
         write(logfhandle,'(A)') extract%name
         write(logfhandle,'(A)') export_relion%name
@@ -910,10 +915,9 @@ contains
         call set_param(wcrit,          'wcrit',        'multi',  'Correlation to weights conversion scheme', 'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|no){softmax}',  '(softmax|zscore|sum|cen|exp|inv|no){softmax}',  .false., 'softmax')
         call set_param(element,        'element',      'str',    'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
         call set_param(tseries,        'tseries',      'binary', 'Stack is time-series', 'Stack is time-series(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(max_rad,        'max_rad',      'num',    'Maximum radius in A', 'Maximum radius in A {12.}', '{12.}', .true., 12.)
-        call set_param(min_rad,        'min_rad',      'num',    'Minimum radius in A', 'Minimum radius in A {5.} ', '{5.}',  .true., 7.)
-        call set_param(stepsz,         'stepsz',       'num',    'Steps size in A', 'Step size in A {2.} ', '{2.}',  .true., 2.)
-        call set_param(dock,           'dock',         'binary', 'Volumes have to be docked', 'Volumes have to be docked(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(max_rad,        'max_rad',      'num',    'Maximum radius in A', 'Maximum radius in A {300.}', '{300.}', .true., 300.)
+        call set_param(min_rad,        'min_rad',      'num',    'Minimum radius in A', 'Minimum radius in A {50.} ', '{50.}',  .true., 50.)
+        call set_param(stepsz,         'stepsz',       'num',    'Steps size in A', 'Step size in A {10.} ', '{10.}',  .true., 10.)
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
         call set_param(mul,            'mul',          'num',    'Multiplication factor', 'Multiplication factor{1.}','{1.}',.false., 1.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
@@ -1000,7 +1004,7 @@ contains
         &'Compare two atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for comparing two atomic-resolution nanoparticle map by RMSD calculation',& ! descr long
         &'quant_exec',&                                     ! executable
-        &2, 1, 0, 1, 1, 1, 0, .false.)                       ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 1, 1, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
          call atoms_rmsd%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume 1', &
@@ -1012,8 +1016,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-         call atoms_rmsd%set_input('srch_ctrls', 1, 'dock', 'binary', 'Volumes have to be docked', 'Dock vol2 to vol1(yes|no){no}', &
-        & '(yes|no){no}', .true., 'no')
+        ! <empty>
         ! filter controls
          call atoms_rmsd%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition vol1  e.g. Pt', .true., '')
         ! mask controls
@@ -1546,6 +1549,32 @@ contains
         ! computer controls
         call detect_atoms%set_input('comp_ctrls', 1, nthr)
     end subroutine new_detect_atoms
+
+    subroutine new_dock_coords
+        ! PROGRAM SPECIFICATION
+        call dock_coords%new(&
+        &'dock_coords', &                              ! name
+        &'Dock two set of coords',&                     ! descr_short
+        &'is a program for docking two set of coords in a pdb file',& ! descr long
+        &'quant_exec',&                                ! executable
+        &0, 2, 0, 1, 0, 0, 0, .false.)                  ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call dock_coords%set_input('parm_ios', 1, 'pdbfile', 'file', 'PDB', 'Input coords file in PDB format of one set of coords', 'Input coords file in PDB format of one set of coords', .true., '')
+        call dock_coords%set_input('parm_ios', 2, 'pdbfile2', 'file', 'PDB', 'Input coords file in PDB format of another set of coords', 'Input coords file in PDB format of another set of coords', .true., '')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call dock_coords%set_input('srch_ctrls', 1, 'thres', 'num', 'Minimiser range for shift search','Minimiser range for shift search in A', 'in A', .true., 1.1)
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_dock_coords
 
     subroutine new_dock_volpair
         ! PROGRAM SPECIFICATION

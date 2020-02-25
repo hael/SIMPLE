@@ -1781,7 +1781,7 @@ contains
         integer :: N_min !min{nb atoms in nano1, nb atoms in nano2}
         integer :: N_max !max{nb atoms in nano1, nb atoms in nano2}
         integer :: cnt,cnt1,cnt2,cnt3,filnum,io_stat
-        real    :: sum, rmsd, coord(3)
+        real    :: sum, rmsd, rmsd_close, coord(3)
         real    :: avg, stdev, m(3), tmp_max, d !for statistics calculation
         type(atoms) :: centers_coupled1, centers_coupled2 !visualization purposes
         type(atoms) :: centers_close1, centers_close2
@@ -2037,9 +2037,18 @@ contains
         call centers_coupled2%kill
         call couples1%kill
         !RMSD
-        rmsd = sqrt(sum(dist_sq)/real(count(abs(dist_sq) > TINY)))
+        if(count(abs(dist_sq) > TINY) > 0) then
+            rmsd = sqrt(sum(dist_sq)/real(count(abs(dist_sq) > TINY)))
+        else
+            rmsd = 0.
+        endif
+        if(count(abs(dist_close) > TINY) > 0) then
+            rmsd_close = (sqrt(sum(dist_close)/real(count(dist_close > TINY))))
+        else
+            rmsd_close = 0.
+        endif
         write(unit = filnum, fmt = '(a,f6.3,a)') 'RMSD CALCULATED CONSIDERING ALL ATOMS = ', rmsd*nano1%smpd, ' A'
-        write(unit = filnum, fmt = '(a,f6.3,a)') 'RMSD ATOMS THAT CORRESPOND WITHIN 1 A = ', (sqrt(sum(dist_close)/real(count(dist_close > TINY))))*nano1%smpd, ' A'
+        write(unit = filnum, fmt = '(a,f6.3,a)') 'RMSD ATOMS THAT CORRESPOND WITHIN 1 A = ', rmsd_close*nano1%smpd, ' A'
         call fclose(filnum)
         dist_no_zero = pack(dist, dist>TINY)
         dist_no_zero = dist_no_zero*nano1%smpd ! report distances in Amstrongs
