@@ -124,7 +124,7 @@ contains
         integer, allocatable :: labels(:), target_positions(:,:)
         real,    allocatable :: target_corrs(:)
         real,    pointer     :: rmat_phasecorr(:,:,:)
-        type(image) :: mask_img
+        type(image)          :: mask_img
         logical, allocatable :: mask(:,:)
         real    :: ave, sdev, maxv, minv
         integer :: border
@@ -176,6 +176,8 @@ contains
                 peak_positions(npeaks,:) = target_positions(i,:)
             endif
         end do
+        ! cleanup
+        call mask_img%kill
     contains
         ! Reference generation and Phase Correlation calculation
         ! FORMULA: phasecorr = ifft2(fft2(field).*conj(fft2(reference)));

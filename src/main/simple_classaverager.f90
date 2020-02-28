@@ -894,7 +894,11 @@ contains
                 do j = 1,ldim(2)
                     dist(2) = pad_sc*(real(j)-center(2))
                     pid     = PI*sqrt(sum(dist**2.))
-                    sinc    = sin(pid) / pid
+                    if( pid < TINY )then
+                        sinc = 1.
+                    else
+                        sinc = sin(pid) / pid
+                    endif
                     call img%set([i,j,1], sinc*sinc)
                 enddo
             enddo

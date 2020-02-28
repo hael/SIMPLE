@@ -390,8 +390,9 @@ contains
     end function get_n_ccs
 
 
-    subroutine write_boxfile(self)
-        class(segpicker),  intent(inout) :: self
+    subroutine write_boxfile(self, boxfile)
+        class(segpicker),          intent(inout) :: self
+        character(len=LONGSTRLEN), intent(out)   :: boxfile
         integer :: funit, n_cc,iostat
         self%particles_coord = (real(SHRINK)*self%particles_coord)-self%orig_box/2.
         call fopen(funit, status='REPLACE', action='WRITE', file=self%boxname,iostat=iostat)
@@ -401,6 +402,8 @@ contains
             int(self%particles_coord(n_cc,2)), self%orig_box, self%orig_box, -3
         end do
         call fclose(funit,errmsg='picker; write_boxfile end')
+        ! returns absolute path
+        call make_relativepath(CWD_GLOB, self%boxname, boxfile)
     end subroutine write_boxfile
 
     subroutine kill(self)
