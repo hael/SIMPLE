@@ -277,20 +277,33 @@ contains
     ! and sets to 0 the cc which has size (# pixels) smaller than minmaxsz(1)
     ! or bigger than minmaxsz(2).
     ! It is created in order to prepare a micrograph for picking particles.
-    subroutine elim_ccs( self, minmaxsz )
-        class(binimage), intent(inout) :: self
-        integer,         intent(in)    :: minmaxsz(2)
-        integer, allocatable :: sz(:)
-        integer :: n_cc
+    subroutine elim_ccs( self, minmaxsz, min_nccs )
+        class(binimage),   intent(inout) :: self
+        integer,           intent(in)    :: minmaxsz(2)
+        integer, optional, intent(in)    :: min_nccs ! min number of ccs to have after elimination
+        integer, allocatable :: sz(:), bimat_copy(:,:,:)
+        integer              :: n_cc, cnt, minccs
         if(.not. any(self%bimat > 0)) THROW_HARD('Inputted non-existent cc; elim_ccs')
         sz = self%size_ccs()
+        allocate(bimat_copy(self%bldim(1), self%bldim(2), self%bldim(3)), source = self%bimat)
+        cnt = 0 ! number of remaining ccs
         do n_cc = 1, size(sz) ! for each cc
             if(sz(n_cc) < minmaxsz(1) .or. sz(n_cc) > minmaxsz(2)) then ! if the cc has size < min_sz or > max_sz
                 where(self%bimat == n_cc)  ! rmat == label
-                    self%bimat = 0         ! set to 0
+                    bimat_copy = 0         ! set to 0
                 endwhere
+            else
+                cnt = cnt + 1
             endif
         enddo
+        minccs = 1 ! default
+        if(present(min_nccs)) minccs = min_nccs
+        if(cnt < minccs) then ! if too many connected components have been removed
+            THROW_WARN('Connected components haven t been size-filtered, otherwise img would be empty; elim_ccs')
+            return
+        else
+            call self%set_imat(bimat_copy)
+        endif
         ! re-oder cc
         call self%order_ccs()
         ! update number of connected components
@@ -328,15 +341,16 @@ contains
     !                             < ave - 2.*stdev
     ! If present(minmax_rad(2)), it cleans up ccs more, also considering
     ! if the cc is supposed to be circular/elongated.
-    subroutine polish_ccs( self, minmax_rad, circular, elongated )
+    subroutine polish_ccs( self, minmax_rad, circular, elongated, min_nccs)
         class(binimage),            intent(inout) :: self
         real, optional,             intent(in)    :: minmax_rad(2)
         character(len=3), optional, intent(in)    :: circular, elongated
+        integer,          optional, intent(in)    :: min_nccs
         integer, allocatable :: sz(:)
         real    :: lt, ht     ! low and high thresh for ccs polising
         real    :: ave, stdev ! avg and stdev of the size od the ccs
         integer :: n_cc, thresh_down, thresh_up
-        character(len=3) :: ccircular, eelongated
+        character(len=3)   :: ccircular, eelongated
         if(.not. any(self%bimat > 0)) THROW_HARD('Inputted non-existent cc; polish_ccs')
         ! set default
         ccircular  = ' no'
@@ -356,7 +370,7 @@ contains
         ! In general case: the biggest possible area is when
         ! particle is circular (with rad 2*minmax_rad(2)), the smallest
         ! one is when the particle is rectangular
-        ! with lengths minmax_rad(1)/2 and minmax_rad(2)/2
+        ! with lengths minmax_rad(1)/2 and minmax_rad(1)/2
         ! In circular case: the biggest possible area is when
         ! particle is circular (with rad 2*minmax_rad(2)), the smallest
         ! one is when the particle is circular (with rad minmax_rad(2)/2),
@@ -369,17 +383,21 @@ contains
           thresh_up   = ceiling(ave+2.*stdev)
         else
           if(ccircular .eq. 'yes') then
-              thresh_down = int(max(2.*PI*(.5*minmax_rad(2))**2.,   ave-2.*stdev))
-              thresh_up   = int(min(2.*PI*(2.*minmax_rad(2))**2.,   ave+2.*stdev))
+              thresh_down = int(min(2.*PI*(.5*minmax_rad(1))**2.,   ave-2.*stdev))
+              thresh_up   = int(max(2.*PI*(2.*minmax_rad(2))**2.,   ave+2.*stdev))
           elseif(eelongated .eq. 'yes') then
-              thresh_down = int(max(minmax_rad(1)*minmax_rad(2)/4., ave-2.*stdev))
-              thresh_up   = int(min(minmax_rad(1)*minmax_rad(2)*4., ave+2.*stdev))
+              thresh_down = int(min(minmax_rad(1)*minmax_rad(1)/4., ave-2.*stdev))
+              thresh_up   = int(max(minmax_rad(2)*minmax_rad(2)*4., ave+2.*stdev))
           else
-              thresh_down = int(max(minmax_rad(1)*minmax_rad(2)/4., ave-2.*stdev))
-              thresh_up   = int(min(2.*PI*(2.*minmax_rad(2))**2.,   ave+2.*stdev))
+              thresh_down = int(min(minmax_rad(1)*minmax_rad(1)/4., ave-2.*stdev))
+              thresh_up   = int(max(2.*PI*(2.*minmax_rad(2))**2.,   ave+2.*stdev))
           endif
         endif
-        call self%elim_ccs([thresh_down,thresh_up])
+        if(present(min_nccs)) then
+            call self%elim_ccs([thresh_down,thresh_up], min_nccs)
+        else
+            call self%elim_ccs([thresh_down,thresh_up])
+        endif
         ! call img_cc%order_cc() is already done in the elim_cc subroutine
         ! update number of connected components
         self%nccs = maxval(self%bimat)

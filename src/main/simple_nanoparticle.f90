@@ -439,7 +439,7 @@ contains
         call one_atom%fft()
         call self%img%fft()
         call self%img%phase_corr(one_atom,phasecorr,1.)
-        call phasecorr%write(trim(self%fbody)//'CorrFiltered.mrc')
+        if(GENERATE_FIGS) call phasecorr%write(trim(self%fbody)//'CorrFiltered.mrc')
         call self%img%copy(phasecorr)
         call one_atom%kill()
         call phasecorr%kill()
@@ -2108,7 +2108,7 @@ contains
       real,                intent(in)    :: thresh
       integer, optional,   intent(in)    :: cs_thresh
       ! Nanoparticle binarization
-      call self%img%binarize(thres=thresh,self_out=self%img_bin)
+      call self%img%binarize(thres=thresh,self_out=self%img_bin) 
       call self%img_bin%set_imat()
       ! Find connected components
       call self%img_bin%find_ccs(self%img_cc)

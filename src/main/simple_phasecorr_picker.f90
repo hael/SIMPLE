@@ -208,7 +208,6 @@ contains
                 call aux%fft
             enddo
             call field%copy(phasecorr)
-            call field%neg() !The correlations are inverted because the references are white particles on black backgound
             if(DOWRITEIMGS) call field%write(PATH_HERE//basename(trim(micname))//'MaxValPhaseCorr.mrc')
             if(present(mask)) then
                 call mask%new(ldim_shrink, smpd_shrunken)

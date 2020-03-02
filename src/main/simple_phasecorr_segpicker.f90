@@ -15,9 +15,10 @@ integer,          parameter   :: DYNRANGE = 3
 integer,          parameter   :: SSCORE   = 4
 real,             parameter   :: PICKER_SHRINK_HERE   = 4.
 ! OTHER PARAMS
-integer,          parameter   :: NSTAT   = 4
-integer,          parameter   :: MAXKMIT = 20
-real,             parameter   :: BOXFRAC = 0.5
+integer,          parameter   :: NSTAT    = 4
+integer,          parameter   :: MAXKMIT  = 20
+integer,          parameter   :: MIN_NCCS = 5    ! minimum number of connected components to identify after size-filtering
+real,             parameter   :: BOXFRAC  = 0.5
 logical,          parameter   :: DOWRITEIMGS = .true.
 logical,          parameter   :: DOPRINT     = .true.
 
@@ -202,7 +203,7 @@ contains
                         rad_y = (min_rad + real(j)*step_sz)
                         if(rad_y <= max_rad) then
                              if(rad_y/rad_x >= 1.5) rotate_ref = .true.
-                             sigma_x = rad_x/(sqrt(log(2.))) ! FWHM = rad (see Wiki formula)
+                             sigma_x = rad_x/(sqrt(log(2.))) !FWHM = rad (see Wiki formula)
                              sigma_y = rad_y/(sqrt(log(2.))) !FWHM = rad (see Wiki formula)
                              nrefs = nrefs + 1
                              call refs(nrefs)%new(ldim_shrink,smpd_shrunken)
@@ -484,7 +485,7 @@ contains
       call micrograph_bin%copy(mic_shrunken) ! mic_shrunken is already binary
       call micrograph_bin%find_ccs(micrograph_cc)
       ! 6) cc filtering, based on the shape of the particle
-      call micrograph_cc%polish_ccs([min_rad,max_rad], circular=' no',elongated=elongated)
+      call micrograph_cc%polish_ccs([min_rad,max_rad], circular=' no',elongated=elongated, min_nccs = MIN_NCCS)
       call micrograph_cc%write_bimg('CcsElimin.mrc')
       call micrograph_cc%get_imat(imat_cc)
       allocate(imat_aux(ldim_shrink(1), ldim_shrink(2),1), source = 0)

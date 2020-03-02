@@ -11,9 +11,10 @@ implicit none
 
 ! module global constants
 real,    parameter :: SHRINK      = 4.
-logical, parameter :: DEBUG_HERE  = .true.
-logical, parameter :: DOWRITEIMGS = .true.
+logical, parameter :: DEBUG_HERE  = .false.
+logical, parameter :: DOWRITEIMGS = .false.
 integer, parameter :: N_ROT       = 18
+integer, parameter :: MIN_NCCS    = 5    ! minimum number of connected components to identify after size-filtering
 
 type :: segpicker
     private
@@ -53,9 +54,7 @@ contains
     procedure, private :: center_mass_cc ! center of mass
     ! preprocess mic prior picking
     procedure          :: preprocess_mic
-    ! setters/getters
-    procedure :: get_n_ccs !TO REMOVEEE
-    ! output
+    ! debugging output
     procedure          :: print_info
     procedure          :: output_identified_particle_positions
     ! kill
@@ -134,7 +133,7 @@ contains
         else if (detector .eq. 'otsu') then
             self%detector = 'otsu'
             call otsu_robust_fast(micrograph_shrunken, is2D=.true., noneg=.false., thresh=ttthresh)
-            call micrograph_shrunken%erode() !morphological erosion HEREE
+            call micrograph_shrunken%erode() !morphological erosion
         else
           ! default self%detector is bin
            self%detector = 'bin'
@@ -147,7 +146,7 @@ contains
         ! 5) Connected components (cc) identification
         call micrograph_shrunken%find_ccs(self%img_cc,update_imat=.true.)
         ! 6) cc filtering
-        call self%img_cc%polish_ccs([self%min_rad,self%max_rad],circular=' no',elongated=self%elongated)
+        call self%img_cc%polish_ccs([self%min_rad,self%max_rad],circular=' no',elongated=self%elongated, min_nccs = MIN_NCCS)
         if(DOWRITEIMGS) call self%img_cc%write_bimg('CcsElimin.mrc')
         call micrograph_shrunken%kill_bimg
     contains
@@ -230,8 +229,9 @@ contains
                 endif
             enddo
         enddo
+        ! TO CHECK IF NECESSARY
         call self%relative_intensity_filtering(msk)
-        print *, 'after  relative intensity filtering nb of particles is ', count(msk)
+        if(DEBUG_HERE) write(logfhandle,*) 'after  relative intensity filtering nb of particles is ', count(msk)
     end subroutine elimin_aggregation
 
     subroutine relative_intensity_filtering(self, selected_particle_positions)
@@ -259,14 +259,12 @@ contains
         stdev_level = sqrt(stdev_level/real(self%n_particles-1))
         ! Filter assuming gaussian distribution
         do n_cc = 1, self%n_particles
-            if( self%stdev_gray_level(n_cc) < avg_stdev - 1.5*stdev_level) then
+            if( self%stdev_gray_level(n_cc) < avg_stdev - 2.*stdev_level) then
               selected_particle_positions(n_cc) =  .false.
             else
               selected_particle_positions(n_cc) =  .true.
             endif
         enddo
-        print *, 'avg_stdev', avg_stdev, 'stdev_level', stdev_level
-        print *, 'thresh down ', avg_stdev - 1.5*stdev_level
     contains
         ! PUT IT TOGETHER WITH THE PREVIOUS FUNCTION
         subroutine calc_avgst_intensity_particle(mask,avg_gray_level,stdev_gray_level)
@@ -276,6 +274,11 @@ contains
             real,    allocatable :: rmat(:,:,:)
             integer :: i,j
             rmat = self%img%get_rmat()
+            if(count(mask) == 1) then
+                avg_gray_level = sum(rmat, mask) ! value of rmat in the mask
+                stdev_level    = 0.
+                return
+            endif
             avg_gray_level   = 0.
             stdev_gray_level = 0.
             avg_gray_level   = sum(rmat, mask)/real(count(mask))
@@ -313,7 +316,7 @@ contains
       enddo
       deallocate(imat_cc)
       self%n_particles = size(xyz_saved, dim = 1) ! first estimation
-      print *, 'before elimin aggregations: ', size(xyz_saved, dim=1)
+      if(DEBUG_HERE) write(logfhandle,*) 'before elimin aggregations: ', size(xyz_saved, dim=1)
       allocate(mask(size(xyz_saved, dim=1)), source = .true. )
       call self%elimin_aggregation(xyz_saved, mask)
       allocate(self%particles_coord(count(mask),2), source = 0.)
@@ -325,7 +328,7 @@ contains
           endif
       enddo
       self%n_particles = size(self%particles_coord, dim = 1) !update after elim aggregations
-      print *, 'after elimin aggregations: ', self%n_particles
+      if(DEBUG_HERE) write(logfhandle,*) 'after elimin aggregations: ', self%n_particles
       if(allocated(xyz_saved))       deallocate(xyz_saved)
     end subroutine identify_particle_positions
 
@@ -338,10 +341,10 @@ contains
         real    :: dev
         outside(:) = .false.
         cnt = 0
-        print *, 'self%n_particles inside outout particle position: ', self%n_particles
-        call imgwin_particle%new([self%orig_box,self%orig_box,1],self%smpd)
+        write(logfhandle,*) 'n_particles inside output particle position: ', self%n_particles
         open(unit = 23, file = basename(trim(self%fbody))//"Stdev.txt")
         write(unit = 23, fmt = "(a,f4.2)") basename(trim(self%fbody))
+        call imgwin_particle%new([self%orig_box,self%orig_box,1],self%smpd)
         call self%img%rmsd(dev)
         write(unit = 23, fmt = "(a,f4.2)") 'Stdev ', dev
         do n_cc = 1, self%n_particles
@@ -381,21 +384,12 @@ contains
         if(allocated(imat_cc)) deallocate(imat_cc)
     end function center_mass_cc
 
-    function get_n_ccs(self) result(ncc)
-        class(segpicker),  intent(inout) :: self
-        integer :: ncc
-        integer, allocatable :: imat(:,:,:)
-        imat = nint(self%img_cc%get_rmat())
-        ncc  = maxval(imat)
-    end function get_n_ccs
-
-
     subroutine write_boxfile(self, boxfile)
         class(segpicker),          intent(inout) :: self
         character(len=LONGSTRLEN), intent(out)   :: boxfile
         integer :: funit, n_cc,iostat
         self%particles_coord = (real(SHRINK)*self%particles_coord)-self%orig_box/2.
-        call fopen(funit, status='REPLACE', action='WRITE', file=self%boxname,iostat=iostat)
+        call fopen(funit, status='REPLACE', action='WRITE', file=self%boxname, iostat=iostat)
         call fileiochk('picker; write_boxfile ', iostat)
         do n_cc=1,self%n_particles
             write(funit,'(I7,I7,I7,I7,I7)') int(self%particles_coord(n_cc,1)),&

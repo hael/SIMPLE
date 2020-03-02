@@ -92,9 +92,7 @@ subroutine iterate( self, cline, moviename_intg, boxfile, nptcls_out, dir_out )
             endif
             call seg_picker%preprocess_mic(params_glob%detector)
             call seg_picker%identify_particle_positions()
-            call seg_picker%output_identified_particle_positions()
             call seg_picker%write_boxfile(boxfile)
-            call seg_picker%print_info()
             call seg_picker%kill
         else
             THROW_HARD('Invalid picker parameter!; iterate')
