@@ -1071,6 +1071,8 @@ contains
                call final_atoms%set_name(cnt_intersect,self%name(i))
                call final_atoms%set_element(cnt_intersect,self%element(i))
                call final_atoms%set_coord(cnt_intersect,(self%xyz(i,:3)))
+               call final_atoms%set_occupancy(cnt_intersect,self%occupancy(i))
+               call final_atoms%set_beta(cnt_intersect,self%beta(i))
            endif
        enddo
        call final_atoms%writePDB('AtomColumn')
@@ -1161,6 +1163,8 @@ contains
                 call final_atoms%set_name(cnt_intersect,self%name(i))
                 call final_atoms%set_element(cnt_intersect,self%element(i))
                 call final_atoms%set_coord(cnt_intersect,(self%xyz(i,:3)))
+                call final_atoms%set_occupancy(cnt_intersect,self%occupancy(i))
+                call final_atoms%set_beta(cnt_intersect,self%beta(i))
             endif
         enddo
         call final_atoms%writePDB('AtomPlane')
