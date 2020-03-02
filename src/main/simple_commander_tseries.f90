@@ -757,7 +757,7 @@ contains
     end subroutine exec_refine3D_nano_distr
 
     subroutine exec_tseries_graphene_subtr( self, cline )
-        use simple_nano_utils, only: remove_graphene_peaks2
+        use simple_nano_utils, only: remove_graphene_peaks
         class(tseries_graphene_subtr_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
         type(parameters) :: params
@@ -803,7 +803,7 @@ contains
             call build%img_copy%ft2img('sqrt', tmp)
             call ave_pre%add(tmp)
             ! subtraction
-            call remove_graphene_peaks2(build%img, build%img_tmp, ang)
+            call remove_graphene_peaks(build%img, build%img_tmp, ang)
             call build%img%write(params%outstk,iptcl)
             ! graphene subtracted average
             call build%img%norm()

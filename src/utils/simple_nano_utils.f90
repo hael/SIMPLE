@@ -7,7 +7,7 @@ module simple_nano_utils
   use simple_atoms,    only : atoms
   implicit none
 
-  public :: remove_graphene_peaks2, remove_graphene_peaks, kabsch, read_pdb2matrix, write_matrix2pdb, find_couples
+  public :: remove_graphene_peaks, kabsch, read_pdb2matrix, write_matrix2pdb, find_couples
   private
 
   interface kabsch
@@ -24,20 +24,21 @@ module simple_nano_utils
 
 contains
 
-    subroutine remove_graphene_peaks2(raw_img, spectrum, ang)
+    subroutine remove_graphene_peaks(raw_img, spectrum, ang)
         type(image), intent(inout) :: raw_img
         type(image), intent(inout) :: spectrum
         real,        intent(out)   :: ang ! estimated angle between both sheets
-        real, parameter :: GRAPHENE_BAND3 = 1.05
+        real, parameter :: GRAPHENE_BAND3  = 1.06
+        real, parameter :: REMOVAL_HWIDTH1 = 3.          ! pixels, obscuring half-width 1
+        real, parameter :: REMOVAL_HWIDTH2 = sqrt(6.)    ! obscuring half-width 2
+        real, parameter :: REMOVAL_HWIDTH3 = sqrt(3.)    ! obscuring half-width 3
         type(image)          :: spectrum_roavg
         real,    pointer     :: pspectrum_roavg(:,:,:)
         complex, pointer     :: pcmat(:,:,:)
         logical, allocatable :: msk(:,:)
-        real,    allocatable :: vals(:), vals_sel(:)
-        real    :: REMOVAL_HWIDTH, med_vals(3)
         real    :: smpd, first_ang, second_ang
         integer :: phys(3),cen(2), ldim(3), loc(2), h,k,i,j,l, sh, cnt
-        integer :: band_inds(3) ! respectively resolutions 2.14, 1.23, 1.05 angstroms
+        integer :: band_inds(3) ! respectively resolutions 2.14, 1.23, 1.06 angstroms
         ldim    = raw_img%get_ldim()
         ldim(3) = 1
         smpd    = raw_img%get_smpd()
@@ -45,12 +46,6 @@ contains
         band_inds(1) = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND1),ldim(1),smpd)
         band_inds(2) = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND2),ldim(1),smpd)
         band_inds(3) = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND3),ldim(1),smpd)
-        ! Empirical size of peak obscuring
-        if( ldim(1) >= 200 )then
-            REMOVAL_HWIDTH = 3. ! larger image, larger peak
-        else
-            REMOVAL_HWIDTH = 2.
-        endif
         ! calculate rotational avg of the spectrum
         call spectrum_roavg%new(ldim,smpd)
         call spectrum%roavg(60,spectrum_roavg)
@@ -67,34 +62,6 @@ contains
                 if( k < 0 ) cycle
                 if( sh >= band_inds(2)-1 .and. sh <= band_inds(2)+1 ) msk(i,j) = .true.
           enddo
-        enddo
-        ! calculate stats for each band
-        do l = 1,3
-            cnt = 0
-            do i = 1, ldim(1)
-                h  = -ldim(1)/2 + i - 1
-                do j = 1, ldim(2)
-                    k  = -ldim(2)/2 + j - 1
-                    sh =  nint(hyp(real(h),real(k)))
-                    if( sh >= band_inds(l)-1 .and. sh <= band_inds(l)+1 ) cnt = cnt+1
-              enddo
-            enddo
-            allocate(vals(cnt))
-            cnt = 0
-            do i = 1, ldim(1)
-                h  = -ldim(1)/2 + i - 1
-                do j = 1, ldim(2)
-                    k  = -ldim(2)/2 + j - 1
-                    sh =  nint(hyp(real(h),real(k)))
-                    if( sh >= band_inds(l)-1 .and. sh <= band_inds(l)+1 )then
-                        cnt = cnt+1
-                        phys = raw_img%comp_addr_phys(h,k,0)
-                        vals(cnt) = sqrt(csq(pcmat(phys(1),phys(2),1)))
-                    endif
-              enddo
-            enddo
-            med_vals(l) = median(vals)
-            deallocate(vals)
         enddo
         ! first sheet
         loc       = maxloc(pspectrum_roavg(1:ldim(1),1:ldim(2),1),mask=msk)
@@ -139,18 +106,18 @@ contains
                     Rm(2,:) = [-Rm(1,2), Rm(1,1)]
                     ! band 1 (=b1); resolution ~ 2.14 angs
                     rxy = matmul(Rm,b1) + real(cen)
-                    call obscure_peak(rxy, med_vals(1), REMOVAL_HWIDTH)
-                    ! 2. * band 1 (=2*b1); resolution ~ 1.06; generally a weaker peak
+                    call obscure_peak(rxy, REMOVAL_HWIDTH1)
+                    ! 2. * band 1 (=2*b1); resolution ~ 1.06; generally the weaker peak
                     rxy = matmul(Rm,2.*b1) + real(cen)
-                    call obscure_peak(rxy, med_vals(3), REMOVAL_HWIDTH-1.)
+                    call obscure_peak(rxy, REMOVAL_HWIDTH3)
                     ! band 2 (=b1+b2); resolution ~ 1.23
                     rxy = matmul(Rm,b1b2) + real(cen)
-                    call obscure_peak(rxy, med_vals(2), (REMOVAL_HWIDTH-1.)*sqrt(2.))
+                    call obscure_peak(rxy, REMOVAL_HWIDTH2)
                 enddo
             end subroutine remove_lattice
 
-            subroutine obscure_peak(vec, val, hwidth)
-                real, intent(in) :: vec(2), val, hwidth
+            subroutine obscure_peak(vec, hwidth)
+                real, intent(in) :: vec(2), hwidth
                 complex :: comp
                 real    :: dist, ang
                 integer :: i,j,x,y,h,k,lim,rx,ry,lims(2,2)
@@ -167,170 +134,12 @@ contains
                         h = i - cen(1)
                         k = j - cen(2)
                         phys = raw_img%comp_addr_phys(h,k,0)
-                        ang  = ran3()*TWOPI
-                        pcmat(phys(1),phys(2),1) = val * cmplx(cos(ang),sin(ang)) * dist**4.
+                        ! quartic kernel (Epanechnikov squared)
+                        pcmat(phys(1),phys(2),1) = pcmat(phys(1),phys(2),1) * (1.-(1.-dist**2.)**2.)
                     enddo
                 enddo
             end subroutine obscure_peak
-    end subroutine remove_graphene_peaks2
-
-  ! This subroutine generates a mask that identifies the graphene
-  ! peaks in the spectrum.
-  subroutine generate_peakmask(img_spec, msk)
-    type(image),          intent(inout) :: img_spec
-    integer, allocatable, intent(inout) :: msk(:,:,:)
-    type(binimage)       :: img_spec_roavg
-    integer, parameter   :: WIDTH   =2 ! width of the shell for peak identification
-    integer, parameter   :: N_LAYERS=1 ! nb of layers to grow
-    real,    pointer     :: rmat(:,:,:)
-    logical, allocatable :: lmsk(:)
-    real, allocatable    :: x(:),rmat_aux(:,:,:)
-    real                 :: thresh, smpd
-    integer              :: ldim(3),i,j,h,k,sh,cnt,UFlim,LFlim,lims(2),nyq
-    type(binimage)       :: img_mask
-    if(allocated(msk)) deallocate(msk)
-    ldim = img_spec%get_ldim()
-    ldim(3) = 1 ! stack
-    smpd = img_spec%get_smpd()
-    ! calculate rotational avg of the spectrum
-    call img_spec_roavg%new_bimg(ldim,smpd)
-    call img_spec%roavg(60,img_spec_roavg)
-    call img_spec_roavg%get_rmat_ptr(rmat)
-    allocate(rmat_aux(1:ldim(1),1:ldim(2),1), source= 0.)
-    rmat_aux(1:ldim(1),1:ldim(2),1)=rmat(1:ldim(1),1:ldim(2),1)
-    UFlim   = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND1),ldim(1),smpd)
-    lims(1) = UFlim-WIDTH
-    lims(2) = UFlim+WIDTH
-    cnt = 0
-    do i = 1, ldim(1)
-      do j = 1, ldim(2)
-        h   = -int(ldim(1)/2) + i - 1
-        k   = -int(ldim(2)/2) + j - 1
-        sh  =  nint(hyp(real(h),real(k)))
-        if(sh < lims(2) .and. sh > lims(1)) then
-          !do nothing
-        else
-          rmat_aux(i,j,1) = 0. ! set to zero everything outside the considered shell
-        endif
-      enddo
-    enddo
-    x = pack(rmat_aux, abs(rmat_aux) > TINY)
-    call otsu(x, thresh)
-    deallocate(x)
-    allocate(msk(ldim(1),ldim(2),1), source =0)
-    where(rmat(1:ldim(1),1:ldim(2),1)>=thresh .and. abs(rmat_aux(:,:,1)) > TINY)  msk(:,:,1) = 1
-    ! Do the same thing for the other band
-    ! reset
-    rmat_aux(:,:,1) = rmat(1:ldim(1),1:ldim(2),1)
-    LFlim   = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND2),ldim(1),smpd)
-    lims(1) = LFlim-WIDTH
-    lims(2) = LFlim+WIDTH
-    do i = 1, ldim(1)
-      do j = 1, ldim(2)
-        h   = -int(ldim(1)/2) + i - 1
-        k   = -int(ldim(2)/2) + j - 1
-        sh  =  nint(hyp(real(h),real(k)))
-        if(sh < lims(2) .and. sh > lims(1)) then
-          ! do nothing
-        else
-          rmat_aux(i,j,1) = 0.
-        endif
-      enddo
-    enddo
-    x = pack(rmat_aux, abs(rmat_aux) > 0.) ! pack where it's not 0
-    call otsu(x, thresh)
-    where(rmat(1:ldim(1),1:ldim(2),1)>=thresh  .and. abs(rmat_aux(:,:,1)) > TINY) msk(:,:,1) = 1
-    call img_mask%new_bimg(ldim, smpd)
-    call img_mask%set_imat(msk)
-    call img_mask%update_img_rmat()
-    call img_mask%get_rmat_ptr(rmat)
-    where(rmat<TINY)
-      rmat(:,:,:) = 0.
-    elsewhere
-      rmat(:,:,:) = 1.
-    endwhere
-    call img_mask%set_imat()
-    call img_mask%grow_bins(N_LAYERS)
-    call img_mask%get_imat(msk)
-    ! filter results with graphene-bands mask
-    lmsk = calc_graphene_mask( ldim(1), smpd )
-    nyq  = size(lmsk)
-    do i = 1, ldim(1)
-      do j = 1, ldim(2)
-        h   =  i - (ldim(1)/2 + 1)
-        k   =  j - (ldim(1)/2 + 1)
-        sh  =  nint(hyp(real(h),real(k)))
-        if( sh > nyq .or. sh == 0 ) then
-          cycle
-        else
-          if(lmsk(sh)) msk(i,j,1) = 0 ! reset
-        endif
-      enddo
-    enddo
-    call img_mask%kill_bimg
-    call img_spec_roavg%kill_bimg
-  end subroutine generate_peakmask
-
-
-  ! This subroutine operates on raw_img on the basis of the
-  ! provided logical mask. For each pxl in the msk, it subsitutes
-  ! its value with the avg value in the neighbours of the pxl that
-  ! do not belong to the msk. The neighbours are in a shpere of radius RAD.
-  subroutine filter_peaks(raw_img,msk)
-    type(image), intent(inout) :: raw_img
-    integer,     intent(in)    :: msk(:,:,:)
-    complex, pointer   :: cmat(:,:,:)
-    real,    parameter :: RAD = 4.
-    real        :: rabs, ang
-    integer     :: i,j,ii,jj,ldim(3),cnt,h,k,phys(3)
-    ldim  = raw_img%get_ldim()
-    call raw_img%norm()
-    call raw_img%fft()
-    call raw_img%get_cmat_ptr(cmat)
-    do i = ldim(1)/2+1, ldim(1)
-      do j = 1, ldim(2)
-        if(msk(i,j,1)>0) then
-          cnt = 0 ! number of pxls in the sphere that are not flagged by msk
-          rabs = 0.
-          do ii = 1, ldim(1)
-            h  = ii-(ldim(1)/2+1)
-            do jj = 1, ldim(2)
-              if(ii/=i .and. jj/=j) then
-                if(euclid(real([i,j]), real([ii,jj])) <= RAD) then
-                  if(msk(ii,jj,1)<1) then
-                    cnt = cnt + 1
-                    k = jj-(ldim(2)/2+1)
-                    phys = raw_img%comp_addr_phys(h,k,0)
-                    rabs = rabs + sqrt(csq(cmat(phys(1),phys(2),1))) ! magnitude
-                  endif
-                endif
-              endif
-            enddo
-          enddo
-          h = i-(ldim(1)/2+1)
-          k = j-(ldim(2)/2+1)
-          phys = raw_img%comp_addr_phys(h,k,0)
-          if(cnt == 0) then
-            ! random number
-            rabs = ran3()
-          else
-            rabs = rabs/real(cnt)
-          endif
-          ang = TWOPI*ran3()
-          cmat(phys(1),phys(2),1) = 0.! rabs * cmplx(cos(ang), sin(ang))
-        endif
-      enddo
-    enddo
-    call raw_img%ifft()
-  end subroutine filter_peaks
-
-  subroutine remove_graphene_peaks(raw_img, spectrum)
-    type(image), intent(inout) :: raw_img
-    type(image), intent(inout) :: spectrum
-    integer, allocatable       :: msk(:,:,:)
-    call generate_peakmask(spectrum, msk)
-    call filter_peaks(raw_img,msk)
-  end subroutine remove_graphene_peaks
+    end subroutine remove_graphene_peaks
 
   ! My implementation of the Matlab Kabsch algorithm
   ! source: https://au.mathworks.com/matlabcentral/fileexchange/25746-kabsch-algorithm
