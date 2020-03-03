@@ -546,6 +546,10 @@ contains
                         do k=1,ncubes
                             z  = real(k-1)*a; z1 = z+ha
                             if( sum(([x ,y ,z ]-center)**2.) <= msksq ) n = n+1
+                            if( sum(([x1,y1,z ]-center)**2.) <= msksq ) n = n+1
+                            if( sum(([x ,y1,z1]-center)**2.) <= msksq ) n = n+1
+                            if( sum(([x1,y ,z1]-center)**2.) <= msksq ) n = n+1
+                            if( sum(([x1,y1,z1]-center)**2.) <= msksq ) n = n+1
                             if( sum(([x1,y ,z ]-center)**2.) <= msksq ) n = n+1
                             if( sum(([x ,y1,z ]-center)**2.) <= msksq ) n = n+1
                             if( sum(([x ,y ,z1]-center)**2.) <= msksq ) n = n+1
@@ -560,31 +564,57 @@ contains
                   do j=1,ncubes
                       y  = real(j-1)*a; y1 = y+ha
                       do k=1,ncubes
-                          z  = real(k-1)*a; z1 = z+ha
-                          if( sum(([x ,y ,z ]-center)**2.) <= msksq )then
-                              n = n+1
-                              call atoms_obj%set_coord(n, [x,y,z])
-                              call atoms_obj%set_name(n,el1//'  ')
-                              call atoms_obj%set_element(n,el1)
-                          endif
-                          if( sum(([x1 ,y ,z]-center)**2.) <= msksq )then
-                              n = n+1
-                              call atoms_obj%set_coord(n, [x1 ,y ,z])
-                              call atoms_obj%set_name(n,el2//'  ')
-                              call atoms_obj%set_element(n,el2)
-                          endif
-                          if( sum(([x ,y1 ,z]-center)**2.) <= msksq )then
-                              n = n+1
-                              call atoms_obj%set_coord(n, [x ,y1 ,z])
-                              call atoms_obj%set_name(n,el2//'  ')
-                              call atoms_obj%set_element(n,el2)
-                          endif
-                          if( sum(([x ,y ,z1]-center)**2.) <= msksq )then
-                              n = n+1
-                              call atoms_obj%set_coord(n, [x ,y ,z1])
-                              call atoms_obj%set_name(n,el2//'  ')
-                              call atoms_obj%set_element(n,el2)
-                          endif
+                        z  = real(k-1)*a; z1 = z+ha
+                        ! element 1
+                        if( sum(([x ,y ,z ]-center)**2.) <= msksq )then
+                            n = n+1
+                            call atoms_obj%set_coord(n, [x,y,z])
+                            call atoms_obj%set_name(n,el1//'  ')
+                            call atoms_obj%set_element(n,el1)
+                        endif
+                        if( sum(([x1 ,y1 ,z ]-center)**2.) <= msksq )then
+                            n = n+1
+                            call atoms_obj%set_coord(n, [x1,y1,z])
+                            call atoms_obj%set_name(n,el1//'  ')
+                            call atoms_obj%set_element(n,el1)
+                        endif
+                        if( sum(([x ,y1 ,z1 ]-center)**2.) <= msksq )then
+                            n = n+1
+                            call atoms_obj%set_coord(n, [x,y1,z1])
+                            call atoms_obj%set_name(n,el1//'  ')
+                            call atoms_obj%set_element(n,el1)
+                        endif
+                        if( sum(([x1 ,y ,z1 ]-center)**2.) <= msksq )then
+                            n = n+1
+                            call atoms_obj%set_coord(n, [x1,y,z1])
+                            call atoms_obj%set_name(n,el1//'  ')
+                            call atoms_obj%set_element(n,el1)
+                        endif
+                        ! element 2
+                        if( sum(([x1 ,y1 ,z1]-center)**2.) <= msksq )then
+                            n = n+1
+                            call atoms_obj%set_coord(n, [x1 ,y1 ,z1])
+                            call atoms_obj%set_name(n,el2//'  ')
+                            call atoms_obj%set_element(n,el2)
+                        endif
+                        if( sum(([x1 ,y ,z]-center)**2.) <= msksq )then
+                            n = n+1
+                            call atoms_obj%set_coord(n, [x1 ,y ,z])
+                            call atoms_obj%set_name(n,el2//'  ')
+                            call atoms_obj%set_element(n,el2)
+                        endif
+                        if( sum(([x ,y1 ,z]-center)**2.) <= msksq )then
+                            n = n+1
+                            call atoms_obj%set_coord(n, [x ,y1 ,z])
+                            call atoms_obj%set_name(n,el2//'  ')
+                            call atoms_obj%set_element(n,el2)
+                        endif
+                        if( sum(([x ,y ,z1]-center)**2.) <= msksq )then
+                            n = n+1
+                            call atoms_obj%set_coord(n, [x ,y ,z1])
+                            call atoms_obj%set_name(n,el2//'  ')
+                            call atoms_obj%set_element(n,el2)
+                        endif
                       enddo
                   enddo
                 enddo
