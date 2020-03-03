@@ -420,7 +420,7 @@ contains
                             call corrfilt_imgfile(params%vols(1), params%outvol, params%smpd, params%sigma, lp=params%lp, isvol=.true.)
                             call build%vol%read(params%outvol)
                         elseif(cline%defined('element')) then
-                            call corrfilt_imgfile(params%vols(1), params%outvol, params%element, params%smpd, lp=params%lp)
+                            call corrfilt_imgfile(params%vols(1), params%outvol, params%element(1:2), params%smpd, lp=params%lp)
                             call build%vol%read(params%outvol)
                         else
                             call corrfilt_imgfile(params%vols(1),params%outvol, params%smpd, SIGMA_DEFAULT, lp=params%lp, isvol=.true.)

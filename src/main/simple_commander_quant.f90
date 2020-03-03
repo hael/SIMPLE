@@ -153,7 +153,6 @@ contains
         real(dp), allocatable  :: points_P(:,:), points_Q(:,:), P(:,:), Q(:,:)
         type(ori)   :: orientation
         type(oris)  :: ori2read
-        type(atoms) :: atom_coord
         real        :: smpd, cxyz(D), mat(D,D), shift(D)
         real(dp)    :: U(D,D), r(D), lrms
         integer     :: ldim(3), nptcls, i

@@ -179,7 +179,7 @@ type :: parameters
     character(len=STDLEN) :: executable=''        !< name of executable
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
     character(len=STDLEN) :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
-    character(len=2)      :: element ='  '        !< atom kind
+    character(len=4)      :: element ='    '      !< atom kind
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
     character(len=STDLEN) :: fbody=''             !< file body
     character(len=STDLEN) :: filter='no'          !< filter type{no}
@@ -428,7 +428,6 @@ type :: parameters
     logical :: l_focusmsk       = .false.
     logical :: l_frac_update    = .false.
     logical :: l_graphene       = .false.
-    logical :: l_has_element    = .false.
     logical :: l_innermsk       = .false.
     logical :: l_lpset          = .false.
     logical :: l_locres         = .false.
@@ -1384,16 +1383,10 @@ contains
                 endif
         end select
         ! atoms
-        self%l_has_element = .false.
         if( cline%defined('element') )then
-            call atoms_obj%new(1)
-            call atoms_obj%set_element(1,self%element)
-            if( atoms_obj%get_atomicnumber(1) == 0 )then
+            if( .not. atoms_obj%element_exists(self%element) )then
                 THROW_HARD('Element: '//trim(self%element)//' unsupported for for now')
-            else
-                self%l_has_element = .true.
             endif
-            call atoms_obj%kill
         endif
         ! local resolution for filtering or  not
         self%l_locres = .false.

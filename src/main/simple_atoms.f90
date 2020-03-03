@@ -45,11 +45,14 @@ type :: atoms
     generic            :: new => new_from_pdb, new_instance
     generic            :: assignment(=) => copy
     procedure          :: copy
+    ! CHECKER
+    procedure          :: element_exists
     ! GETTERS/SETTERS
     procedure          :: does_exist
     procedure          :: get_beta
     procedure          :: get_n
     procedure          :: get_name
+    procedure          :: get_element
     procedure          :: get_coord
     procedure          :: get_num
     procedure          :: get_atomicnumber
@@ -220,6 +223,38 @@ contains
         self%radius     = self_in%radius
     end subroutine copy
 
+    ! CHECKERS
+
+    logical function element_exists( self, element)
+        class(atoms),     intent(inout) :: self
+        character(len=*), intent(in)    :: element
+        select case(len_trim(element))
+        case(1)
+            element_exists = exists(element(1:1)//' ')
+        case(2)
+            element_exists = exists(element(1:2))
+        case(3)
+            element_exists = exists(element(1:1)//' ').and.exists(element(2:3))
+            if(.not.element_exists) element_exists = exists(element(2:3)).and.exists(element(3:3)//' ')
+        case(4)
+            element_exists = exists(element(1:2)).and.exists(element(3:4))
+        case DEFAULT
+            element_exists = .false.
+            THROW_WARN('Non complying format; atoms%element_exists : '//trim(element))
+        end select
+        if( .not.element_exists) THROW_WARN('Unknown element: '//trim(element))
+        contains
+
+            logical function exists(el)
+                character(len=2), intent(in) :: el
+                real    :: r
+                integer :: Z
+                call self%Z_and_radius_from_name(el//'  ', Z, r)
+                exists = Z /= 0
+            end function exists
+
+    end function element_exists
+
     ! GETTERS / SETTERS
 
     logical function does_exist( self )
@@ -258,8 +293,16 @@ contains
     character(len=4) function get_name( self, i )
         class(atoms), intent(in) :: self
         integer,      intent(in) :: i
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_name')
         get_name = self%name(i)
     end function get_name
+
+    character(len=2) function get_element( self, i )
+        class(atoms), intent(in) :: self
+        integer,      intent(in) :: i
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_element')
+        get_element = self%element(i)
+    end function get_element
 
     integer function get_atomicnumber( self, i )
         class(atoms), intent(in) :: self
@@ -305,7 +348,7 @@ contains
         integer,          intent(in)    :: i
         character(len=2), intent(in)    :: element
         if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_element')
-        self%element(i) = upperCase(element)
+        self%element(i) = upperCase(element(1:2))
         call self%guess_an_element(i)
     end subroutine set_element
 
@@ -366,42 +409,33 @@ contains
     subroutine writepdb( self, fbody )
         class(atoms),     intent(in) :: self
         character(len=*), intent(in) :: fbody
-        character(len=STDLEN) :: fname
-        integer               :: i, funit, io_stat
-        logical               :: long
+        character(len=LONGSTRLEN) :: fname
+        integer          :: i, funit, io_stat
+        logical          :: long
         fname = trim(adjustl(fbody)) // '.pdb'
         long  = self%n >= 99999
         if(.not.self%exists) THROW_HARD('Cannot write non existent atoms type; writePDB')
         call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=io_stat)
         call fileiochk('writepdb; simple_atoms opening '//trim(fname), io_stat)
         do i = 1, self%n
-            write(funit,'(A76)')pdbstr(i)
+            if(self%het(i))then
+                write(funit,pdbfmt)'HETATM',self%num(i),self%name(i),self%altloc(i),&
+                    self%resname(i),self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
+                    self%occupancy(i), self%beta(i),' '
+            else
+                if( long )then
+                    write(funit,pdbfmt_long)'ATOM ',self%num(i),self%name(i),self%altloc(i),&
+                        self%resname(i),self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
+                        self%occupancy(i), self%beta(i),self%element(i)
+                else
+                    write(funit,pdbfmt)'ATOM  ',self%num(i),self%name(i),self%altloc(i),&
+                        self%resname(i),self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
+                        self%occupancy(i), self%beta(i),self%element(i)
+                endif
+            endif
+
         enddo
         call fclose(funit, errmsg='writepdb; simple_atoms closing '//trim(fname))
-        contains
-
-            character(len=78) function pdbstr( ind )
-                integer,           intent(in)  :: ind
-                character(len=6) :: atom_field
-                if(self%het(ind))then
-                    atom_field(1:6) = 'HETATM'
-                    write(pdbstr,pdbfmt)atom_field,self%num(ind),self%name(ind),self%altloc(ind),&
-                        self%resname(ind),self%chain(ind), self%resnum(ind), self%icode(ind), self%xyz(ind,:),&
-                        self%occupancy(ind), self%beta(ind)
-                else
-                    if( long )then
-                        atom_field(1:5) = 'ATOM '
-                        write(pdbstr,pdbfmt_long)atom_field,self%num(ind),self%name(ind),self%altloc(ind),&
-                            self%resname(ind),self%chain(ind), self%resnum(ind), self%icode(ind), self%xyz(ind,:),&
-                            self%occupancy(ind), self%beta(ind),self%element(ind)
-                    else
-                        atom_field(1:6) = 'ATOM  '
-                        write(pdbstr,pdbfmt_long)atom_field,self%num(ind),self%name(ind),self%altloc(ind),&
-                            self%resname(ind),self%chain(ind), self%resnum(ind), self%icode(ind), self%xyz(ind,:),&
-                            self%occupancy(ind), self%beta(ind),self%element(ind)
-                    endif
-                endif
-            end function pdbstr
     end subroutine writepdb
 
     ! CALCULATORS
@@ -501,7 +535,6 @@ contains
             Z = 25; r = 1.39
         case('FE')
             Z = 26; r = 1.02
-            !Z = 26; r = 1.32
         case('CO')
             Z = 27; r = 1.26
         case('NI')
@@ -542,7 +575,6 @@ contains
             Z = 45; r = 1.42
         case('PD')
             Z = 46; r = 1.12
-            !Z = 46; r = 1.39
         case('AG')
             Z = 47; r = 1.45
         case('CD')
@@ -607,10 +639,8 @@ contains
             Z = 77; r = 1.41
         case('PT')
             Z = 78; r = 1.10
-            !Z = 78; r = 1.36
         case('AU')
             Z = 79; r = 1.23
-            !Z = 79; r = 1.36
         case('HG')
             Z = 80; r = 1.32
         case('TL')
@@ -669,13 +699,16 @@ contains
         real, parameter   :: C = 2132.79 ! eq B.6, conversion to eV
         real, parameter   :: fourpisq = 4.*PI*PI
         real, allocatable :: rmat(:,:,:)
-        real    :: a(5),b(5),aterm(5), xyz(3), smpd,r2,bfac,rjk2,cutoffsq
+        real    :: lp_here, a(5),b(5),aterm(5), xyz(3), smpd,r2,bfac,rjk2,cutoffsq,D,E
         integer :: bbox(3,2),ldim(3),pos(3),i,j,k,l,jj,kk,z,icutoff
         if( .not.vol%is_3d() .or. vol%is_ft() ) THROW_HARD('Only for real-space volumes')
-        smpd = vol%get_smpd()
-        ldim = vol%get_ldim()
-        bfac = (4.*2.*smpd)**2.
-        if( present(lp) ) bfac = max(bfac,(4.*lp)**2.)
+        smpd    = vol%get_smpd()
+        ldim    = vol%get_ldim()
+        lp_here = 2.*smpd
+        if( present(lp) ) lp_here = max(lp,lp_here)
+        bfac = (4.*lp_here)**2.
+        D    = sqrt(TWOPI) * 0.425 * lp_here
+        E    = 0.5 * lp_here*lp_here
         allocate(rmat(ldim(1),ldim(2),ldim(3)),source=0.)
         icutoff  = ceiling(cutoff/smpd)
         cutoffsq = cutoff*cutoff
@@ -993,7 +1026,6 @@ contains
                     if(rjk2 > cutoffsq) cycle
                     do l = bbox(3,1),bbox(3,2)
                         r2 = rjk2 + (smpd*(xyz(3)-real(l-1)))**2.
-                        if(r2 > cutoffsq) cycle
                         rmat(j,k,l) = rmat(j,k,l) + epot(r2,aterm,b)
                     enddo
                 enddo
@@ -1009,6 +1041,13 @@ contains
             epot = C * sum( aterm * exp(-fourpisq*r2/b) )
         end function epot
 
+        ! single gaussian convolution, unused
+        elemental real function egau(r2,zi)
+            real,    intent(in) :: r2
+            integer, intent(in) :: zi
+            egau = real(zi) / D * exp(-r2*E)
+        end function egau
+
     end subroutine convolve
 
     subroutine geometry_analysis_pdb(self, pdbfile, thresh)
@@ -1022,7 +1061,7 @@ contains
       real,    allocatable :: w(:),v(:,:),d(:),pointsTrans(:,:)
       logical, allocatable :: flag(:) ! flags the atoms belonging to the plane/column
       integer, parameter   :: N_DISCRET = 500
-      integer :: i, j, n, n_tot, t, s, filnum, io_stat, cnt_intersect, cnt, n_cc
+      integer :: i, n, n_tot, t, s, filnum, io_stat, cnt_intersect, cnt
       real    :: atom1(3), atom2(3), atom3(3), dir_1(3), dir_2(3), vec(3), m(3), dist_plane, dist_line
       real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator, centroid(3), prod(3), tthresh
       call init_atoms%new(pdbfile)

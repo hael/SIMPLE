@@ -95,8 +95,9 @@ contains
         class(nanoparticle),        intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         real,                       intent(in)    :: cline_smpd
-        character(len=2), optional, intent(inout) :: element
-        integer :: nptcls
+        character(len=*), optional, intent(in)    :: element
+        character(len=2) :: element_here
+        integer :: nptcls, l
         real    :: smpd
         call self%kill
         call self%set_partname(fname)
@@ -108,8 +109,12 @@ contains
             self%atom_name = ' PT '
             self%theoretical_radius = 1.1
         else
-            element = upperCase(element)
-            select case(element)
+            l = len_trim(element)
+            if( l > 2 )then
+                THROW_HARD('No composite element! new_nanoparticle')
+            endif
+            element_here = upperCase(element(1:l))
+            select case(trim(element_here))
                 case('PT')
                     self%element       = 'PT'
                     self%atom_name     = ' PT '
@@ -2108,7 +2113,7 @@ contains
       real,                intent(in)    :: thresh
       integer, optional,   intent(in)    :: cs_thresh
       ! Nanoparticle binarization
-      call self%img%binarize(thres=thresh,self_out=self%img_bin) 
+      call self%img%binarize(thres=thresh,self_out=self%img_bin)
       call self%img_bin%set_imat()
       ! Find connected components
       call self%img_bin%find_ccs(self%img_cc)
