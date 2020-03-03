@@ -12,8 +12,6 @@ private
 
 #include "simple_local_flags.inc"
 
-real, parameter :: hwidth_ang = 12. ! +/-, in degrees, < 180.
-
 type, extends(strategy2D) :: strategy2D_tseries
     type(strategy2D_srch) :: s
     type(strategy2D_spec) :: spec
@@ -34,15 +32,11 @@ contains
 
     subroutine srch_tseries( self )
         class(strategy2D_tseries), intent(inout) :: self
-        logical :: rotmask(self%s%nrots)
-        integer :: iref,inpl_ind,hwidth_rot
+        integer :: iref,inpl_ind
         real    :: corrs(self%s%nrots),inpl_corr,corr
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
-            corr       = -huge(corr)
-            hwidth_rot = max(1,floor(real(self%s%nrots)*hwidth_ang/360.))
-            rotmask    = .true.
-            rotmask(hwidth_rot+1:self%s%nrots-hwidth_rot) = .false.
+            corr = -huge(corr)
             ! previous best
             iref = self%s%prev_class
             call per_ref_srch
@@ -71,7 +65,7 @@ contains
             subroutine per_ref_srch
                 if( s2D%cls_pops(iref) == 0 )return
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs)
-                inpl_ind  = maxloc(corrs, dim=1, mask=rotmask)
+                inpl_ind  = maxloc(corrs, dim=1)
                 inpl_corr = corrs(inpl_ind)
                 if( inpl_corr >= corr )then
                     corr              = inpl_corr
