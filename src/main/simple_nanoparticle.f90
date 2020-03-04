@@ -4,7 +4,7 @@ module simple_nanoparticle
 include 'simple_lib.f08'
 use simple_image,     only : image
 use simple_binimage,  only : binimage
-use simple_atoms,     only : atoms
+use simple_atoms,     only : atoms, get_Z_and_radius_from_name
 implicit none
 
 public :: nanoparticle
@@ -14,7 +14,7 @@ private
 ! module global constants
 integer, parameter :: N_THRESH      = 20      ! number of thresholds for binarization
 logical, parameter :: DEBUG         = .false. ! for debugging purposes
-logical, parameter :: GENERATE_FIGS = .true.  ! for figures generation
+logical, parameter :: GENERATE_FIGS = .false. ! for figures generation
 integer, parameter :: SOFT_EDGE     = 6
 integer, parameter :: N_DISCRET     = 1000
 
@@ -95,48 +95,17 @@ contains
         class(nanoparticle),        intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         real,                       intent(in)    :: cline_smpd
-        character(len=*), optional, intent(in)    :: element
-        character(len=2) :: element_here
-        integer :: nptcls, l
+        character(len=2),           intent(inout) :: element
+        integer :: nptcls
+        integer :: Z ! atomic number
         real    :: smpd
         call self%kill
         call self%set_partname(fname)
         self%fbody = get_fbody(trim(basename(fname)), trim(fname2ext(fname)))
         self%smpd  = cline_smpd
-        ! CHIARA, the below should be in a defs module atom_constants or similar, discuss with C# please
-        if(.not. present(element)) then
-            self%element   = 'PT'  !default is pt
-            self%atom_name = ' PT '
-            self%theoretical_radius = 1.1
-        else
-            l = len_trim(element)
-            if( l > 2 )then
-                THROW_HARD('No composite element! new_nanoparticle')
-            endif
-            element_here = upperCase(element(1:l))
-            select case(trim(element_here))
-                case('PT')
-                    self%element       = 'PT'
-                    self%atom_name     = ' PT '
-                    self%theoretical_radius = 1.1
-                    ! thoretical radius is already set
-                case('PD')
-                    self%element       = 'PD'
-                    self%atom_name     = ' PD '
-                    self%theoretical_radius = 1.12
-                case('FE')
-                    self%element       = 'FE'
-                    self%atom_name     = ' FE '
-                    self%theoretical_radius = 1.02
-                case('AU')
-                    self%element       = 'AU'
-                    self%atom_name     = ' AU '
-                    self%theoretical_radius = 1.23
-                case default
-                    THROW_HARD('Unknown atom element; new_nanoparticle')
-           end select
-        endif
-        !self%sigma = 0.8*theoretical_radius/(2.*sqrt(2.*log(2.))*self%smpd) !0.8 not to have it too big (avoid connecting atoms)
+        self%atom_name = ' '//element
+        self%element = element
+        call get_Z_and_radius_from_name(self%atom_name, Z, self%theoretical_radius)
         call find_ldim_nptcls(self%partname,  self%ldim, nptcls, smpd)
         call self%img%new(self%ldim, self%smpd)
         call self%img_raw%new(self%ldim, self%smpd)
@@ -146,7 +115,7 @@ contains
         call self%img_raw%read(fname)
     end subroutine new_nanoparticle
 
-     subroutine get_ldim(self,ldim) !TO REMOVE??
+     subroutine get_ldim(self,ldim)
        class(nanoparticle), intent(in)  :: self
        integer,             intent(out) :: ldim(3)
        ldim = self%img%get_ldim()

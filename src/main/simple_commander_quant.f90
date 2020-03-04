@@ -208,11 +208,7 @@ contains
         step    = params%stepsz
         if(min_rad > max_rad) THROW_HARD('Minimum radius has to be smaller then maximum radius! exec_radial_dependent_stats')
         if(step > max_rad-min_rad) THROW_HARD('Inputted too big stepsz! exec_radial_dependent_stats')
-        if(cline%defined('element')) then
-            call nano%new(params%vols(1), params%smpd,params%element)
-        else
-            call nano%new(params%vols(1), params%smpd)
-        endif
+        call nano%new(params%vols(1), params%smpd,params%element)
         ! execute
         fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
         call nano%set_atomic_coords(trim(fname)//'_atom_centers.pdb')
@@ -246,7 +242,7 @@ contains
         if( .not. cline%defined('thres') )then
             THROW_HARD('ERROR! thres needs to be present; exec_atom_cluster_analysis')
         endif
-        call nano%new(params%vols(1), params%smpd)
+        call nano%new(params%vols(1), params%smpd, params%element)
         ! execute
         fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
         call nano%set_atomic_coords(trim(fname)//'_atom_centers.pdb')
@@ -289,11 +285,7 @@ contains
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_nano_softmask')
         endif
-        if(cline%defined('element')) then
-            call nano%new(params%vols(1), params%smpd,params%element)
-        else
-            call nano%new(params%vols(1), params%smpd)
-        endif
+        call nano%new(params%vols(1), params%smpd,params%element)
         ! fetch img_bin
         fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
         call nano%set_img(trim(fname)//'BIN.mrc','img_bin')
@@ -329,11 +321,7 @@ contains
           if(.not. cline%defined('vol1')) THROW_HARD('ERROR! pdbfile or vol1 need to be present; exec_geometry_analysis')
         endif
         if(cline%defined('vol1')) then
-          if(cline%defined('element')) then
-              call nano%new(params%vols(1), params%smpd,params%element)
-          else
-              call nano%new(params%vols(1), params%smpd)
-          endif
+          call nano%new(params%vols(1), params%smpd,params%element)
           ! fetch img_bin, img_cc and atomic positions
           fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
           call nano%set_img('../'//trim(fname)//'BIN.mrc','img_bin')
@@ -444,11 +432,7 @@ contains
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_plot_atom')
         endif
-        if(cline%defined('element')) then
-            call nano%new(params%vols(1), params%smpd,params%element)
-        else
-            call nano%new(params%vols(1), params%smpd)
-        endif
+        call nano%new(params%vols(1), params%smpd,params%element)
         ! fetch img_bin, img_cc and atomic positions
         fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
         call nano%set_atomic_coords('../'//trim(fname)//'_atom_centers.pdb')

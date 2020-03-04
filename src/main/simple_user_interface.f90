@@ -913,7 +913,7 @@ contains
         call set_param(envfsc,         'envfsc',       'binary', 'Envelope mask e/o maps for FSC', 'Envelope mask even/odd pairs prior to FSC calculation(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(graphene_filt,  'graphene_filt','binary', 'Omit graphene bands from corr calc', 'Omit graphene bands from corr calc(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(wcrit,          'wcrit',        'multi',  'Correlation to weights conversion scheme', 'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|no){softmax}',  '(softmax|zscore|sum|cen|exp|inv|no){softmax}',  .false., 'softmax')
-        call set_param(element,        'element',      'str',    'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
+        call set_param(element,        'element',      'str',    'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '  ')
         call set_param(tseries,        'tseries',      'binary', 'Stack is time-series', 'Stack is time-series(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(max_rad,        'max_rad',      'num',    'Maximum radius in A', 'Maximum radius in A {300.}', '{300.}', .true., 300.)
         call set_param(min_rad,        'min_rad',      'num',    'Minimum radius in A', 'Minimum radius in A {50.} ', '{50.}',  .true., 50.)
@@ -977,7 +977,7 @@ contains
         & Clusters with respect to aspect ratio, distances distribution, angle between a fixed &
         & vector and the direction of the longest dim of each atom, atoms intensities.',& ! descr long
         &'quant_exec',&                                     ! executable
-        &1, 1, 0, 2, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        &1, 1, 0, 2, 1, 0, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call atom_cluster_analysis%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume', &
@@ -990,7 +990,7 @@ contains
         call atom_cluster_analysis%set_input('srch_ctrls', 1, clustermode)
         call atom_cluster_analysis%set_input('srch_ctrls', 2, 'thres', 'num', 'Threshold for cluster merging','Threshold for cluster merging', 'in unit of measure of the feature', .false., 1.)
         ! filter controls
-        ! <empty>
+        call atom_cluster_analysis%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition vol1  e.g. Pt', .true., '  ')
         ! mask controls
         ! <empty>
         ! computer controls
@@ -1759,7 +1759,7 @@ contains
         ! search controls
         call geometry_analysis%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold','Distance filer (in A)', 'in A', .false., 1.1)
         ! filter controls
-        call geometry_analysis%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
+        call geometry_analysis%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
         ! <empty>
         ! computer controls
@@ -2487,7 +2487,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! filter controls
-        call nano_softmask%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
+        call nano_softmask%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
         ! <empty>
         ! computer controls
@@ -2631,7 +2631,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call plot_atom%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
+        call plot_atom%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
         ! <empty>
         ! computer controls
@@ -3892,7 +3892,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call radial_dependent_stats%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
+        call radial_dependent_stats%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
         ! <empty>
         ! computer controls
