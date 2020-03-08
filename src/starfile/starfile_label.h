@@ -420,6 +420,7 @@ enum EMDLabel
 
     EMDL_CTF_MODEL_DEFOCUSU,  ///< Polynomial coeeficients of x-defocus
     EMDL_CTF_MODEL_DEFOCUSV,
+    EMDL_MOVIE_FRAME_WEIGHT,
 
     EMDL_LAST_LABEL                       // **** NOTE ****: Do keep this label always at the end
     // it is here for looping purposes
@@ -854,8 +855,10 @@ private:
         EMDL::addLabel(EMDL_RESOLUTION_INVPIXEL, EMDL_DOUBLE, "rlnResolutionInversePixel", "Resolution (in 1/pixel, Nyquist = 0.5)");
         EMDL::addLabel(EMDL_SPECTRAL_IDX, EMDL_INT, "rlnSpectralIndex", "Spectral index (i.e. distance in pixels to the origin in Fourier space) ");
 
-        EMDL::addLabel(EMDL_CTF_MODEL_DEFOCUSU, EMDL_DOUBLE, "rlnCtfModelDefocusU", "Polynomial coeeficients for Defocus in U-direction");
-        EMDL::addLabel(EMDL_CTF_MODEL_DEFOCUSV, EMDL_DOUBLE, "rlnCtfModelDefocusV", "Polynomial coeeficients for Defocus in V-direction");
+        // Custom
+        EMDL::addLabel(EMDL_CTF_MODEL_DEFOCUSU, EMDL_DOUBLE, "rlnCtfModelDefocusU", "Polynomial coefficients for Defocus in U-direction");
+        EMDL::addLabel(EMDL_CTF_MODEL_DEFOCUSV, EMDL_DOUBLE, "rlnCtfModelDefocusV", "Polynomial coefficients for Defocus in V-direction");
+        EMDL::addLabel(EMDL_MOVIE_FRAME_WEIGHT, EMDL_DOUBLE, "rlnMovieFrameWeight", "Individual movie frame weight");
 
     }
 

@@ -6025,26 +6025,26 @@ contains
     subroutine shift2Dserial_1( self, shvec  )
         class(image), intent(inout) :: self
         real,         intent(in)    :: shvec(2)
-        real,allocatable :: hcos(:), hsin(:)
-        real             :: sh(2), arg, ck, sk
-        integer          :: h,k, hphys,kphys, lims(3,2)
+        real(dp),allocatable :: hcos(:), hsin(:)
+        real(dp) :: sh(2), arg, ck, sk
+        integer  :: h,k, hphys,kphys, lims(3,2)
         lims = self%fit%loop_lims(2)
-        sh   = shvec * self%shconst(1:2)
+        sh   = real(shvec * self%shconst(1:2),dp)
         allocate(hcos(lims(1,1):lims(1,2)),hsin(lims(1,1):lims(1,2)))
         do h=lims(1,1),lims(1,2)
-            arg = real(h)*sh(1)
-            hcos(h) = cos(arg)
-            hsin(h) = sin(arg)
+            arg = real(h,dp)*sh(1)
+            hcos(h) = dcos(arg)
+            hsin(h) = dsin(arg)
         enddo
         do k=lims(2,1),lims(2,2)
             kphys = k + 1 + merge(self%ldim(2),0,k<0)
-            arg = real(k)*sh(2)
-            ck  = cos(arg)
-            sk  = sin(arg)
+            arg = real(k,dp)*sh(2)
+            ck  = dcos(arg)
+            sk  = dsin(arg)
             do h=lims(1,1),lims(1,2)
                 hphys = h + 1
                 self%cmat(hphys,kphys,1) = self%cmat(hphys,kphys,1)&
-                    &* cmplx(ck*hcos(h)-sk*hsin(h), ck*hsin(h)+sk*hcos(h))
+                    &* cmplx(ck*hcos(h)-sk*hsin(h), ck*hsin(h)+sk*hcos(h),sp)
             end do
         end do
     end subroutine shift2Dserial_1
@@ -6052,26 +6052,26 @@ contains
     subroutine shift2Dserial_2( self, shvec, self_out )
         class(image), intent(inout) :: self, self_out
         real,         intent(in)    :: shvec(2)
-        real,allocatable :: hcos(:), hsin(:)
-        real             :: sh(2), arg, ck, sk
-        integer          :: h,k, hphys,kphys, lims(3,2)
+        real(dp),allocatable :: hcos(:), hsin(:)
+        real(dp) :: sh(2), arg, ck, sk
+        integer  :: h,k, hphys,kphys, lims(3,2)
         lims = self%fit%loop_lims(2)
-        sh   = shvec * self%shconst(1:2)
+        sh   = real(shvec * self%shconst(1:2),dp)
         allocate(hcos(lims(1,1):lims(1,2)),hsin(lims(1,1):lims(1,2)))
         do h=lims(1,1),lims(1,2)
-            arg = real(h)*sh(1)
-            hcos(h) = cos(arg)
-            hsin(h) = sin(arg)
+            arg = real(h,dp)*sh(1)
+            hcos(h) = dcos(arg)
+            hsin(h) = dsin(arg)
         enddo
         do k=lims(2,1),lims(2,2)
             kphys = k + 1 + merge(self%ldim(2),0,k<0)
-            arg = real(k)*sh(2)
-            ck  = cos(arg)
-            sk  = sin(arg)
+            arg = real(k,dp)*sh(2)
+            ck  = dcos(arg)
+            sk  = dsin(arg)
             do h=lims(1,1),lims(1,2)
                 hphys = h + 1
                 self_out%cmat(hphys,kphys,1) = self%cmat(hphys,kphys,1)&
-                    &* cmplx(ck*hcos(h)-sk*hsin(h), ck*hsin(h)+sk*hcos(h))
+                    &* cmplx(ck*hcos(h)-sk*hsin(h), ck*hsin(h)+sk*hcos(h),sp)
             end do
         end do
     end subroutine shift2Dserial_2

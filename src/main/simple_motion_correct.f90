@@ -462,6 +462,7 @@ contains
             call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
             call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, real(shift(1)/params_glob%scale, dp))
             call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, real(shift(2)/params_glob%scale, dp))
+            call starfile_table__setValue_double(mc_starfile, EMDL_MOVIE_FRAME_WEIGHT, real(frameweights(iframe), dp))
         end do
         call starfile_table__write_ofile(mc_starfile)
         if( writepoly )then
