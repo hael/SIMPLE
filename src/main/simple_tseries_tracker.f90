@@ -117,9 +117,8 @@ contains
         type(motion_align_nano)       :: aligner
         character(len=:), allocatable :: fname
         real,             allocatable :: opt_shifts(:,:)
-        integer :: first_pos(3), funit, io_stat, iframe, xind,yind, i, last_frame, cnt, nrange
+        integer :: first_pos(3), funit, io_stat, iframe, xind,yind, i, last_frame, cnt, nrange, noutside
         real    :: xyz(3), pos(2)
-        logical :: outside
         ! init neigh counter
         call frame_avg%zero_and_unflag_ft
         call reference%zero_and_flag_ft
@@ -136,7 +135,8 @@ contains
                 cnt = cnt + 1
                 call ptcls(cnt)%zero_and_unflag_ft
                 call frame_img%read(framenames(i),1)
-                call frame_img%window_slim(first_pos, params_glob%box, ptcls(cnt), outside)
+                noutside = 0
+                call frame_img%window(first_pos, params_glob%box, ptcls(cnt), noutside)
                 if( cnt==1 ) call frame_avg%add(frame_img,w=0.01)
             enddo
             ! prep images: norm, mask, filter, FFT
@@ -221,15 +221,21 @@ contains
         do iframe=1,nframes
             xind = nint(particle_locations(iframe,1))
             yind = nint(particle_locations(iframe,2))
+            ! slight shift of box for potential border effects
+            if( xind<0 .and. xind>-10 ) xind = 0
+            if( yind<0 .and. yind>-10 ) yind = 0
+            if( xind>ldim(1)-1 .and. xind<ldim(1)+10 ) xind = ldim(1)-1
+            if( yind>ldim(2)-1 .and. yind<ldim(2)+10 ) yind = ldim(2)-1
             ! read
             call frame_img%read(framenames(iframe),1)
-            ! box
-            write(funit,'(I7,I7,I7,I7,I7)') xind, yind, params_glob%box, params_glob%box, -3
             ! particle
-            call frame_img%window_slim([xind,yind,1], params_glob%box, ptcl_target, outside)
+            noutside = 0
+            call frame_img%window([xind,yind,1], params_glob%box, ptcl_target, noutside)
             call ptcl_target%norm
             if( l_neg ) call ptcl_target%neg()
             call ptcl_target%write(stkname, iframe)
+            ! box
+            write(funit,'(I7,I7,I7,I7,I7)') xind, yind, params_glob%box, params_glob%box, -3
             ! neighbors & spectrum
             call update_background_pspec(iframe, [xind,yind])
             call pspec%add(pspec_nn,w=1./real(nframes))
