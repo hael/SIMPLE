@@ -2717,7 +2717,7 @@ contains
         call preprocess%set_input('srch_ctrls', 3, dfmin)
         call preprocess%set_input('srch_ctrls', 4, dfmax)
         call preprocess%set_input('srch_ctrls', 5, astigtol)
-        call preprocess%set_input('srch_ctrls', 6, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in pixels)', 'in pixels', .false., 0.)
+        call preprocess%set_input('srch_ctrls', 6, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
         call preprocess%set_input('srch_ctrls', 7, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
         & 'Remove micrograph image outliers for picking(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call preprocess%set_input('srch_ctrls', 8, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
@@ -2793,7 +2793,7 @@ contains
         call preprocess_stream%set_input('srch_ctrls', 3, dfmin)
         call preprocess_stream%set_input('srch_ctrls', 4, dfmax)
         call preprocess_stream%set_input('srch_ctrls', 5, astigtol)
-        call preprocess_stream%set_input('srch_ctrls', 6, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in pixels)', 'in pixels', .false., 0.)
+        call preprocess_stream%set_input('srch_ctrls', 6, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in Angs)', 'in Angs{24.}', .false., 24.)
         call preprocess_stream%set_input('srch_ctrls', 7, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
         & 'Remove micrograph image outliers for picking(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call preprocess_stream%set_input('srch_ctrls', 8, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
