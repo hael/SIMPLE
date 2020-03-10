@@ -918,6 +918,7 @@ contains
         call set_param(max_rad,        'max_rad',      'num',    'Maximum radius in A', 'Maximum radius in A {300.}', '{300.}', .true., 300.)
         call set_param(min_rad,        'min_rad',      'num',    'Minimum radius in A', 'Minimum radius in A {50.} ', '{50.}',  .true., 50.)
         call set_param(stepsz,         'stepsz',       'num',    'Steps size in A', 'Step size in A {10.} ', '{10.}',  .true., 10.)
+        call set_param(picker,         'picker',       'str',    'Picking approach','Picking approach','(seg|phasecorr|old_school){phasecorr}', .false.,'phasecorr')
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
         call set_param(mul,            'mul',          'num',    'Multiplication factor', 'Multiplication factor{1.}','{1.}',.false., 1.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
@@ -2548,12 +2549,12 @@ contains
         ! parameter input/output
         call pick%set_input('parm_ios', 1, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
         call pick%set_input('parm_ios', 2, pcontrast)
-        call pick%set_input('parm_ios', 3, 'picker', 'str', 'Picking approach','Picking approach','(seg|phasecorr|old_school){phasecorr}', .true.,'phasecorr')
+        call pick%set_input('parm_ios', 3, picker)
         ! alternative inputs
         call pick%set_input('alt_ios', 1, 'refs', 'file', 'Stack of class-averages for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
         call pick%set_input('alt_ios', 2, 'vol1', 'file', 'Volume for picking', 'Volume for picking', 'e.g. vol.mrc file', .false., '')
         ! search controls
-        call pick%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold in A','Distance filer in A {24.}', '{24.}', .false., 24.)
+        call pick%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold in A','Distance filter in Angs {24}', '{24}', .false., 24.)
         call pick%set_input('srch_ctrls', 2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
         call pick%set_input('srch_ctrls', 3, pgrp)
         pick%srch_ctrls(3)%required = .false.
@@ -2599,7 +2600,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call pick_extract_stream%set_input('srch_ctrls',1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false., 0.)
+        call pick_extract_stream%set_input('srch_ctrls',1, 'thres', 'num', 'Distance threshold','Distance filter (in Angs)', 'in Angs{24}', .false., 24.)
         call pick_extract_stream%set_input('srch_ctrls',2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
         call pick_extract_stream%set_input('srch_ctrls', 3, pgrp)
         pick_extract_stream%srch_ctrls(3)%required = .false.
@@ -2688,7 +2689,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &3, 9, 0, 15, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &3, 10, 0, 15, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2705,6 +2706,7 @@ contains
         call preprocess%set_input('parm_ios', 7,  pspecsz)
         call preprocess%set_input('parm_ios', 8,  numlen)
         call preprocess%set_input('parm_ios', 9,  ctfpatch)
+        call preprocess%set_input('parm_ios',10, 'picker', 'str', 'Picking approach','Picking approach','(phasecorr|old_school){phasecorr}', .false.,'phasecorr')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2753,7 +2755,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                              ! executable
-        &5, 12, 0, 17, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 13, 0, 17, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
@@ -2780,6 +2782,7 @@ contains
         call preprocess_stream%set_input('parm_ios', 11, smpd)
         preprocess_stream%parm_ios(11)%required = .true.
         call preprocess_stream%set_input('parm_ios', 12,  ctfpatch)
+        call preprocess_stream%set_input('parm_ios', 13, 'picker', 'str', 'Picking approach','Picking approach','(phasecorr|old_school){phasecorr}', .false.,'phasecorr')
         ! alternative inputs
         ! <empty>
         ! search controls

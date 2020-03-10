@@ -124,7 +124,7 @@ contains
         integer, allocatable :: labels(:), target_positions(:,:), labels_tmp(:)
         real,    allocatable :: target_corrs(:), tmp(:)
         logical, allocatable :: mask(:,:)
-        real                 :: means(2), ave, sdev, maxv, minv, corr_thresh
+        real                 :: means(2), ave, sdev, maxv, minv
         integer              :: xind, yind, alloc_stat, i, border, j, l,r,u,d
         write(logfhandle,'(a)') '>>> EXTRACTING PEAKS'
         call gen_phase_correlation(mic_shrunken,mask_img)
