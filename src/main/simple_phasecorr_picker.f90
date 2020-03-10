@@ -13,12 +13,12 @@ private
 integer,          parameter   :: SDEV     = 2
 integer,          parameter   :: DYNRANGE = 3
 integer,          parameter   :: SSCORE   = 4
-real,             parameter   :: PICKER_SHRINK_HERE   = 2.
 ! OTHER PARAMS
 integer,          parameter   :: NSTAT   = 4
 integer,          parameter   :: MAXKMIT = 20
 real,             parameter   :: BOXFRAC = 0.5
-logical,          parameter   :: DOWRITEIMGS = .true.
+logical,          parameter   :: DOWRITEIMGS = .false.
+integer,          parameter   :: PICKER_OFFSET_HERE = 3, OFFSET_HWIN = 1
 
 ! VARS
 type(image)                   :: micrograph, mic_shrunken
@@ -64,18 +64,18 @@ contains
         ! find reference dimensions
         call find_ldim_nptcls(refsname, ldim_refs, nrefs)
         orig_box              = ldim_refs(1)
-        ! modify according to PICKER_SHRINK_HERE
-        ldim_refs(1)          = round2even(real(ldim_refs(1))/PICKER_SHRINK_HERE)
-        ldim_refs(2)          = round2even(real(ldim_refs(2))/PICKER_SHRINK_HERE)
+        ! modify according to PICKER_SHRINK
+        ldim_refs(1)          = round2even(real(ldim_refs(1))/PICKER_SHRINK)
+        ldim_refs(2)          = round2even(real(ldim_refs(2))/PICKER_SHRINK)
         ldim_refs(3)          = 1
-        ldim_shrink(1)        = round2even(real(ldim(1))/PICKER_SHRINK_HERE)
-        ldim_shrink(2)        = round2even(real(ldim(2))/PICKER_SHRINK_HERE)
+        ldim_shrink(1)        = round2even(real(ldim(1))/PICKER_SHRINK)
+        ldim_shrink(2)        = round2even(real(ldim(2))/PICKER_SHRINK)
         ldim_shrink(3)        = 1
-        smpd_shrunken         = PICKER_SHRINK_HERE*smpd
+        smpd_shrunken         = PICKER_SHRINK*smpd
         msk                   = real(ldim_refs(1)/2-5)
         msk                   = max(msk, real(ldim_refs(1)/2-2)) ! for tiny particles
         distthr               = BOXFRAC*real(ldim_refs(1))
-        if( present(distthr_in) ) distthr = distthr_in/PICKER_SHRINK_HERE
+        if( present(distthr_in) ) distthr = distthr_in/PICKER_SHRINK/smpd_shrunken ! pixels
         ! read and shrink references
         allocate( refs(nrefs), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk( "In: simple_picker :: init_picker, refs etc. ",alloc_stat)
@@ -112,28 +112,37 @@ contains
         call one_cluster_clustering
         nptcls_out = count(selected_peak_positions)
         ! bring back coordinates to original sampling
-        peak_positions = nint(PICKER_SHRINK_HERE*(real(peak_positions)))-orig_box/2
+        peak_positions = nint(PICKER_SHRINK*(real(peak_positions)))-orig_box/2
         call write_boxfile
         ! returns absolute path
         call make_relativepath(CWD_GLOB, boxname, boxname_out)
     end subroutine exec_phasecorr_picker
 
     subroutine extract_peaks
-        real    :: means(2)
-        integer :: xind, yind, alloc_stat, i
-        integer, allocatable :: labels(:), target_positions(:,:)
-        real,    allocatable :: target_corrs(:)
-        real,    pointer     :: rmat_phasecorr(:,:,:)
         type(image)          :: mask_img
+        real,    pointer     :: rmat_phasecorr(:,:,:)
+        integer, allocatable :: labels(:), target_positions(:,:), labels_tmp(:)
+        real,    allocatable :: target_corrs(:), tmp(:)
         logical, allocatable :: mask(:,:)
-        real    :: ave, sdev, maxv, minv
-        integer :: border
+        real                 :: means(2), ave, sdev, maxv, minv, corr_thresh
+        integer              :: xind, yind, alloc_stat, i, border, j, l,r,u,d
         write(logfhandle,'(a)') '>>> EXTRACTING PEAKS'
         call gen_phase_correlation(mic_shrunken,mask_img)
         call mic_shrunken%stats( ave=ave, sdev=sdev, maxv=maxv, minv=minv,mskimg=mask_img)
         call mic_shrunken%get_rmat_ptr(rmat_phasecorr)
         allocate(corrmat(1:ldim_shrink(1),1:ldim_shrink(2)))
         corrmat(1:ldim_shrink(1),1:ldim_shrink(2)) = rmat_phasecorr(1:ldim_shrink(1),1:ldim_shrink(2),1)
+        !$omp parallel do default(shared) private(xind,yind,l,r,u,d) proc_bind(close) schedule(static)
+        do xind=1,ldim_shrink(1),PICKER_OFFSET_HERE
+            l = max(1,xind-OFFSET_HWIN)
+            r = min(xind+ OFFSET_HWIN,ldim_shrink(1))
+            do yind=1,ldim_shrink(2),PICKER_OFFSET_HERE
+                u = max(1,yind- OFFSET_HWIN)
+                d = min(yind+OFFSET_HWIN,ldim_shrink(2))
+                corrmat(xind,yind) = maxval(rmat_phasecorr(l:r,u:d,1))
+            enddo
+        enddo
+        !$omp end parallel do
         call mic_shrunken%binarize(ave+.8*sdev)
         border = max(ldim_refs(1)/2,ldim_refs(2)/2)
         rmat_phasecorr(1:border,:,1) = 0. !set to zero the borders
@@ -144,8 +153,8 @@ contains
         allocate(mask(1:ldim_shrink(1), 1:ldim_shrink(2)), source = .false.)
         ntargets = 0
         !$omp parallel do collapse(2) default(shared) private(xind,yind) proc_bind(close) schedule(static) reduction(+:ntargets)
-        do xind=1,ldim_shrink(1),PICKER_OFFSET
-            do yind=1,ldim_shrink(2),PICKER_OFFSET
+        do xind=1,ldim_shrink(1),PICKER_OFFSET_HERE
+            do yind=1,ldim_shrink(2),PICKER_OFFSET_HERE
                 if(rmat_phasecorr(xind,yind,1) > 0.5) then
                     ntargets = ntargets + 1
                     mask(xind,yind) = .true.
@@ -155,17 +164,38 @@ contains
         !$omp end parallel do
         allocate( target_corrs(ntargets),target_positions(ntargets,2))
         ntargets = 0
-        do xind=1,ldim_shrink(1),PICKER_OFFSET
-            do yind=1,ldim_shrink(2),PICKER_OFFSET
+        do xind=1,ldim_shrink(1),PICKER_OFFSET_HERE
+            do yind=1,ldim_shrink(2),PICKER_OFFSET_HERE
                 if(mask(xind,yind)) then
                     ntargets = ntargets + 1
                     target_positions(ntargets,:) = [xind,yind]
+                    target_corrs(ntargets) = corrmat(xind,yind)
                 endif
             enddo
         enddo
-        target_corrs = pack(corrmat,mask)
-        call sortmeans(target_corrs, MAXKMIT, means, labels)  !TO IMPROVE
+        call sortmeans(target_corrs, MAXKMIT, means, labels)
         npeaks = count(labels == 2)
+        labels_tmp = labels
+        allocate(tmp(ntargets-npeaks))
+        j = 0
+        do i=1,ntargets
+            if(labels(i)==1)then
+                j = j+1
+                tmp(j) = target_corrs(i)
+            endif
+        enddo
+        ! second classification to account for ice/carbon
+        call sortmeans(tmp, MAXKMIT, means, labels)
+        j = 0
+        do i=1,ntargets
+            if(labels_tmp(i) == 1 )then
+                j = j+1
+                if( labels(j) == 2) labels_tmp(i) = 2
+            endif
+        enddo
+        labels = labels_tmp
+        npeaks = count(labels == 2)
+        ! get peak positions
         allocate( peak_positions(npeaks,2),  stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk( 'In: simple_picker :: gen_corr_peaks, 2',alloc_stat)
         peak_positions = 0
@@ -196,8 +226,6 @@ contains
             call field%fft
             do iref = 1, nrefs
                 call refs(iref)%pad(ref_ext, 0.) ! zero padding
-                ! call refs(iref)%fft ! WASSSAAP
-                ! call refs(iref)%bp(hp,lp)
                 call ref_ext%fft
                 call field%phase_corr(ref_ext,aux,lp,border=max(ldim_refs(1)/2,ldim_refs(2)/2)) !phase correlation
                 if(iref > 1) then

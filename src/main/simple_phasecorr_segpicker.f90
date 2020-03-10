@@ -19,8 +19,8 @@ integer,          parameter   :: NSTAT    = 4
 integer,          parameter   :: MAXKMIT  = 20
 integer,          parameter   :: MIN_NCCS = 5    ! minimum number of connected components to identify after size-filtering
 real,             parameter   :: BOXFRAC  = 0.5
-logical,          parameter   :: DOWRITEIMGS = .true.
-logical,          parameter   :: DOPRINT     = .true.
+logical,          parameter   :: DOWRITEIMGS = .false.
+logical,          parameter   :: DOPRINT     = .false.
 
 ! VARS
 type(image)                   :: micrograph, mic_shrunken

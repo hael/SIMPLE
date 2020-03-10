@@ -18,7 +18,6 @@ integer,          parameter   :: SSCORE   = 4
 integer,          parameter   :: NSTAT   = 4
 integer,          parameter   :: MAXKMIT = 20
 real,             parameter   :: BOXFRAC = 0.5
-logical,          parameter   :: WRITESHRUNKEN = .true., DOPRINT = .true.
 ! VARS
 type(image)                   :: micrograph, mic_shrunken, mic_shrunken_copy, mic_shrunken_refine, ptcl_target
 type(image),      allocatable :: refs(:), refs_refine(:)
@@ -86,7 +85,7 @@ contains
         msk_refine            = real(ldim_refs_refine(1)/2-5)
         msk_refine            = max(PICKER_SHRINK/PICKER_SHRINK_REFINE*real(ldim_refs(1)/2-2), msk_refine)
         distthr               = BOXFRAC*real(ldim_refs(1))
-        if( present(distthr_in) ) distthr = distthr_in/PICKER_SHRINK
+        if( present(distthr_in) ) distthr = distthr_in/PICKER_SHRINK/smpd_shrunken
         ! read and shrink references
         allocate( refs(nrefs), refs_refine(nrefs), sxx(nrefs), sxx_refine(nrefs), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk( "In: simple_picker :: init_picker, refs etc. ",alloc_stat)
