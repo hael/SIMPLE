@@ -1897,7 +1897,7 @@ contains
     subroutine new_initial_3Dmodel_nano
         ! PROGRAM SPECIFICATION
         call initial_3Dmodel_nano%new(&
-        &'initial_3Dmodel',&                                                         ! name
+        &'initial_3Dmodel_nano',&                                                         ! name
         &'3D ab initio model generation from time-series averages',&                 ! descr_short
         &'is a distributed workflow for generating an initial 3D model from tiem-series&
         & averages obtained with cluster2D_nano',&                                   ! descr_long
