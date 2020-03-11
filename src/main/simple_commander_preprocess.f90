@@ -124,7 +124,7 @@ contains
         class(preprocess_commander_stream), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                       :: params
-        integer,                   parameter   :: SHORTTIME = 60   ! folder watched every minute
+        integer,                   parameter   :: SHORTTIME = 30   ! folder watched every minute
         integer,                   parameter   :: LONGTIME  = 600  ! time lag after which a movie is processed
         class(cmdline),            allocatable :: completed_jobs_clines(:)
         type(qsys_env)                         :: qenv
@@ -137,7 +137,7 @@ contains
         character(len=LONGSTRLEN)              :: movie
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, icline
         integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev
-        logical                                :: l_pick
+        logical                                :: l_pick, l_movies_left
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',          'yes')
         ! mnotion correction
@@ -209,9 +209,10 @@ contains
         ! import previous runs
         call import_prev_streams
         ! start watching
-        prev_stacksz = 0
-        nmovies      = 0
-        iter         = 0
+        prev_stacksz  = 0
+        nmovies       = 0
+        iter          = 0
+        l_movies_left = .false.
         do
             if( file_exists(trim(TERM_STREAM)) )then
                 write(logfhandle,'(A)')'>>> TERMINATING PREPROCESS STREAM'
@@ -224,15 +225,18 @@ contains
                 call simple_sleep(SHORTTIME)
             enddo
             iter = iter + 1
-            call movie_buff%watch( nmovies, movies )
+            if( .not.l_movies_left ) call movie_buff%watch( nmovies, movies )
             ! append movies to processing stack
             if( nmovies > 0 )then
-                do imovie = 1, nmovies
+                do imovie = 1, min(params%nparts,nmovies)
                     movie = trim(adjustl(movies(imovie)))
                     if( .not.file_exists(movie) )cycle ! petty triple checking
                     call create_individual_project
                     call qenv%qscripts%add_to_streaming( cline )
+                    call qenv%qscripts%schedule_streaming( qenv%qdescr )
+                    call movie_buff%add2history( movies(imovie) )
                 enddo
+                l_movies_left = (imovie-1) .eq. nmovies
             endif
             ! stream scheduling
             call qenv%qscripts%schedule_streaming( qenv%qdescr )
@@ -283,7 +287,7 @@ contains
                 call spproj%write
             else
                 ! wait
-                call simple_sleep(SHORTTIME)
+                if( .not.l_movies_left ) call simple_sleep(SHORTTIME)
             endif
         end do
         ! termination

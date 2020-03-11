@@ -106,8 +106,6 @@ contains
                     &.and. (last_modified      > self%report_time)&
                     &.and. (last_status_change > self%report_time)&
                     &.and. is_closed ) is_new_movie(i) = .true.
-                if( is_new_movie(i) )write(logfhandle,'(A,A,A,A)')'>>> NEW MOVIE: ',&
-                    &trim(adjustl(farray(i))), '; ', cast_time_char(tnow)
             else
                 ! some error occured
                 fail_cnt = fail_cnt + 1
@@ -124,7 +122,7 @@ contains
                 if( is_new_movie(i) )then
                     cnt   = cnt + 1
                     fname = trim(adjustl(farray(i)))
-                    call self%add2history( fname )
+                    ! call self%add2history( fname )
                     movies(cnt) = trim(fname)
                 endif
             enddo
@@ -150,7 +148,7 @@ contains
         character(len=*),    intent(in)    :: fname
         character(len=LONGSTRLEN), allocatable :: tmp_farr(:)
         character(len=LONGSTRLEN)              :: abs_fname
-        integer :: n
+        integer :: n, tnow
         if( .not.file_exists(fname) )return ! petty triple checking
         if( .not.allocated(self%history) )then
             n = 0
@@ -170,6 +168,7 @@ contains
         abs_fname = simple_abspath(fname)
         self%history(n+1) = trim(adjustl(abs_fname))
         self%n_history    = self%n_history + 1
+        write(logfhandle,'(A,A,A,A)')'>>> NEW MOVIE ADDED: ',trim(adjustl(abs_fname)), '; ', cast_time_char(simple_gettime())
     end subroutine add2history_2
 
     !>  \brief  is for checking a file has already been reported
