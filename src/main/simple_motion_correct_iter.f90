@@ -174,11 +174,11 @@ contains
         if( l_tseries )then
             !
         else
-            call self%ps_stats%new(self%moviesum_ctf, ctfvars%smpd)
-            call self%ps_stats%process_ps()
-            call orientation%set('CTF_ccscore',   self%ps_stats%get_score())
-            call orientation%set('CTF_curvature', self%ps_stats%get_curvature())
-            call self%ps_stats%kill
+            ! call self%ps_stats%new(self%moviesum_ctf, ctfvars%smpd)
+            ! call self%ps_stats%process_ps()
+            ! call orientation%set('CTF_ccscore',   self%ps_stats%get_score())
+            ! call orientation%set('CTF_curvature', self%ps_stats%get_curvature())
+            ! call self%ps_stats%kill
         endif
         ! report to ori object
         if( .not. l_tseries )then

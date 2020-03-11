@@ -26,7 +26,7 @@ contains
     procedure, private :: add2history_1
     procedure, private :: add2history_2
     generic            :: add2history => add2history_1, add2history_2
-    procedure, private :: is_past
+    procedure          :: is_past
     ! destructor
     procedure          :: kill
 end type

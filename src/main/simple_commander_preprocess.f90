@@ -136,7 +136,7 @@ contains
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract, stream_spprojfile
         character(len=LONGSTRLEN)              :: movie
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, icline
-        integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev
+        integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev, cnt
         logical                                :: l_pick, l_movies_left
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',          'yes')
@@ -225,18 +225,24 @@ contains
                 call simple_sleep(SHORTTIME)
             enddo
             iter = iter + 1
-            if( .not.l_movies_left ) call movie_buff%watch( nmovies, movies )
+            call movie_buff%watch( nmovies, movies )
             ! append movies to processing stack
             if( nmovies > 0 )then
-                do imovie = 1, min(params%nparts,nmovies)
+                cnt = 0
+                do imovie = 1, nmovies
                     movie = trim(adjustl(movies(imovie)))
+                    if( movie_buff%is_past(movie) )cycle
                     if( .not.file_exists(movie) )cycle ! petty triple checking
                     call create_individual_project
                     call qenv%qscripts%add_to_streaming( cline )
                     call qenv%qscripts%schedule_streaming( qenv%qdescr )
                     call movie_buff%add2history( movies(imovie) )
+                    cnt = cnt+1
+                    if( cnt == min(params%nparts,nmovies) ) exit
                 enddo
-                l_movies_left = (imovie-1) .eq. nmovies
+                l_movies_left = cnt .ne. nmovies
+            else
+                l_movies_left = .false.
             endif
             ! stream scheduling
             call qenv%qscripts%schedule_streaming( qenv%qdescr )
