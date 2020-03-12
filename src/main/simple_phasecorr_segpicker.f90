@@ -128,8 +128,8 @@ contains
                         rad_y   = (min_rad + real(j)*step_sz)
                         if(rad_y <= max_rad) then
                              if(rad_y/rad_x >= 2.) then
-                                 sigma_x = 0.5*rad_x/(sqrt(log(2.))) ! FWHM = half rad (see Wiki formula)
-                                 sigma_y = 0.5*rad_y/(sqrt(log(2.))) ! FWHM = half rad (see Wiki formula)
+                                 sigma_x = rad_x/(2.*sqrt(2.*log(2.))) ! FWHM = rad (see Wiki formula)
+                                 sigma_y = rad_y/(2.*sqrt(2.*log(2.))) ! FWHM = rad (see Wiki formula)
                                  nrefs = nrefs + 1
                                  call refs(nrefs)%new(ldim_shrink,smpd_shrunken)
                                  call refs(nrefs)%gauimg2D(sigma_x,sigma_y,(rad_x+rad_y)/2.+5.) !five pxls cutoff
