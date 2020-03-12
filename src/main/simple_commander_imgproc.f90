@@ -561,14 +561,14 @@ contains
         nfiles = size(filenames)
         allocate(score(nfiles), source = 0.)
         ! print ouputs
-        open(unit = 13, access = 'sequential',file = 'Output.txt', form = 'formatted', iomsg = iom, iostat = status, position = 'append', status = 'replace')
+        ! open(unit = 13, access = 'sequential',file = 'Output.txt', form = 'formatted', iomsg = iom, iostat = status, position = 'append', status = 'replace')
         do n_mic = 1, nfiles
             call pspec%new(filenames(n_mic),params%smpd)
             call pspec%process_ps()
-            write(unit = 13, fmt = "(a,a,l1,a,f6.3,a,f6.3)") trim(filenames(n_mic)), ' keep: ', pspec%get_output(), '  CTF_ccscore: ', pspec%get_score(), '  CTF_curvature: ', pspec%get_curvature()
+            ! write(unit = 13, fmt = "(a,a,l1,a,f6.3,a,f6.3)") trim(filenames(n_mic)), ' keep: ', pspec%get_output(), '  CTF_ccscore: ', pspec%get_score(), '  CTF_curvature: ', pspec%get_curvature()
             call pspec%kill()
         enddo
-        close(13)
+        ! close(13)
         ! end gracefully
         call simple_end('**** SIMPLE_PSPEC_STATS NORMAL STOP ****')
     end subroutine exec_pspec_stats

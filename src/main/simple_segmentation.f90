@@ -272,7 +272,7 @@ contains
         call Gr%new(ldim,smpd)
         !STEP 1: SMOOTHING
         !Apply a lp to reduce noise (traditionally it would be Gaussian Filter)
-        llp = 10.
+        llp = 5.
         if(present(lp)) llp = lp
         call img_in%bp(0.,llp(1))   !threshold selected in order to facilitate particle picking
         call img_in%ifft()

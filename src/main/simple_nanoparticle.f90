@@ -914,7 +914,7 @@ contains
             write(unit = filnum, fmt = '(a,f9.5)') 'Maxval  int shell :', max_int
             write(unit = filnum, fmt = '(a,f9.5)') 'Average int shell :', avg_int
             write(unit = filnum, fmt = '(a,f9.5)') 'Stdev   int shell :', stdev_int
-            call self%distances_distribution(coords)
+            call self%distances_distribution(file=.false.,coords=coords)
             deallocate(coords)
             deallocate(avg_intensity)
             deallocate(max_intensity)
@@ -926,14 +926,15 @@ contains
         call fclose(filnum)
         deallocate(mask, imat_cc)
         call simulated_density%kill
-        call self%distances_distribution() ! across the whole nano
+        call self%distances_distribution(file=.false.) ! across the whole nano
         call self%atom_intensity_stats(.false.)
         call self%kill
         write(logfhandle, *) '****radial atom-to-atom distances estimation, completed'
    end subroutine radial_dependent_stats
 
-   subroutine distances_distribution(self,coords,volume)
+   subroutine distances_distribution(self,file,coords,volume)
        class(nanoparticle), intent(inout) :: self
+       logical,             intent(in)    :: file ! output on a file
        real,    optional,   intent(in)    :: coords(:,:)
        integer, optional,   intent(in)    :: volume
        real, allocatable :: dist(:)
@@ -945,7 +946,6 @@ contains
        stdev      = 0.
        n_discard  = 0
        if(present(coords)) then
-           call fopen(filnum, file='DistancesDistr.txt', iostat=io_stat)
            allocate(dist(size(coords,dim=2)), source = 0.)
            do i = 1, size(coords,dim=2)
                dist(i) =  pixels_dist(coords(:,i), self%centers(:,:), 'min', mask=mask) !I have to use all the atoms when
@@ -969,18 +969,21 @@ contains
              stdev = 0.
            endif
            med = median(dist)
-           if(present(volume)) then
-               write(unit = filnum, fmt = '(a,a,a,f6.3,a)') 'Average dist atoms vol ', trim(int2str(volume)),':', self%avg_dist_atoms*self%smpd, ' A'
-               write(unit = filnum, fmt = '(a,a,a,f6.3,a)') 'StDev   dist atoms vol ', trim(int2str(volume)),':', stdev*self%smpd, ' A'
-               write(unit = filnum, fmt = '(a,a,a,f6.3,a)') 'Median  dist atoms vol ', trim(int2str(volume)),':', med*self%smpd, ' A'
-           else
-               write(unit = filnum, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd, ' A'
-               write(unit = filnum, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
-               write(unit = filnum, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
+           if(file) then
+               call fopen(filnum, file='DistancesDistr.txt', iostat=io_stat)
+               if(present(volume)) then
+                   write(unit = filnum, fmt = '(a,a,a,f6.3,a)') 'Average dist atoms vol ', trim(int2str(volume)),':', self%avg_dist_atoms*self%smpd, ' A'
+                   write(unit = filnum, fmt = '(a,a,a,f6.3,a)') 'StDev   dist atoms vol ', trim(int2str(volume)),':', stdev*self%smpd, ' A'
+                   write(unit = filnum, fmt = '(a,a,a,f6.3,a)') 'Median  dist atoms vol ', trim(int2str(volume)),':', med*self%smpd, ' A'
+               else
+                   write(unit = filnum, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd, ' A'
+                   write(unit = filnum, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
+                   write(unit = filnum, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
+               endif
+               call fclose(filnum)
            endif
            deallocate(dist)
        else
-           call fopen(filnum, file='DistancesDistr.txt', iostat=io_stat)
            allocate(self%dists(size(self%centers, dim = 2)), source = 0.)
            do i = 1, size(self%centers, dim = 2)
                self%dists(i) =  pixels_dist(self%centers(:,i), self%centers(:,:), 'min', mask=mask) !Use all the atoms
@@ -1000,11 +1003,14 @@ contains
            enddo
            stdev = sqrt(stdev/real(size(self%centers, dim = 2)-1-n_discard))
            med = median(self%dists)
-           write(unit = filnum, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd, ' A'
-           write(unit = filnum, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
-           write(unit = filnum, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
+           if(file) then
+               call fopen(filnum, file='DistancesDistr.txt', iostat=io_stat)
+               write(unit = filnum, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd, ' A'
+               write(unit = filnum, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
+               write(unit = filnum, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
+               call fclose(filnum)
+           endif
        endif
-       call fclose(filnum)
    end subroutine distances_distribution
 
    subroutine aspect_ratios_estimation(self, print_ar)
@@ -1560,12 +1566,13 @@ contains
         enddo
         write(unit = filnum,fmt ='(a,f6.2,a,f6.2,a)') 'AVG among the classes: ', avg, ' degrees; STDEV among the classes: ', stdev, ' degrees'
         call fclose(filnum)
-        call fopen(filnum, file='Ang.csv', iostat=io_stat)
-        write(filnum,*) 'ang'
-        do i  = 1, self%n_cc
-          write(filnum,*) self%ang_var(i)
-        enddo
-        call fclose(filnum)
+        !!!! Already written in the search_polarization function
+        ! call fopen(filnum, file='Ang.csv', iostat=io_stat)
+        ! write(filnum,*) 'ang'
+        ! do i  = 1, self%n_cc
+        !   write(filnum,*) self%ang_var(i)
+        ! enddo
+        ! call fclose(filnum)
         if(allocated(stdev_within)) deallocate(stdev_within)
         deallocate(centroids, labels, populations)
       end subroutine cluster_ang
@@ -1668,7 +1675,7 @@ contains
         real                 :: avg, stdev
         ! Preparing for clustering
         ! need to recalculate self%dists
-        call self%distances_distribution()
+        call self%distances_distribution(file=.true.)
         ! Aspect ratios calculations
         dim = size(self%dists)
         ! pass from pixels to A

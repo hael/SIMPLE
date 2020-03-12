@@ -264,7 +264,11 @@ contains
         class(binimage), intent(in) :: self
         integer, allocatable :: sz(:)
         integer :: n_cc, imax
-        if(.not. any(self%bimat > 0)) THROW_HARD('Inputted non-existent cc; size_ccs')
+        if(.not. any(self%bimat > 0)) then
+          allocate(sz(1), source=0)
+          THROW_WARN('Inputted non-existent cc; size_ccs')
+          return
+        endif
         if( allocated(sz) ) deallocate( sz )
         imax = maxval(self%bimat)
         allocate(sz(imax), source = 0)
@@ -283,7 +287,10 @@ contains
         integer, optional, intent(in)    :: min_nccs ! min number of ccs to have after elimination
         integer, allocatable :: sz(:), bimat_copy(:,:,:)
         integer              :: n_cc, cnt, minccs
-        if(.not. any(self%bimat > 0)) THROW_HARD('Inputted non-existent cc; elim_ccs')
+        if(.not. any(self%bimat > 0)) then
+          THROW_WARN('Inputted non-existent cc; elim_ccs')
+          return
+        endif
         sz = self%size_ccs()
         allocate(bimat_copy(self%bldim(1), self%bldim(2), self%bldim(3)), source = self%bimat)
         cnt = 0 ! number of remaining ccs
@@ -320,12 +327,16 @@ contains
         class(binimage), intent(inout) :: self
         integer, allocatable :: imat_aux(:,:,:)
         integer :: cnt, i
-        if(.not. any(self%bimat > 0)) THROW_HARD('Inputted non-existent cc; order_ccs')
+        if(.not. any(self%bimat > 0)) then
+          THROW_WARN('Inputted non-existent cc; order_ccs')
+          return
+        endif
         cnt = 0
         allocate(imat_aux(self%bldim(1),self%bldim(2),self%bldim(3)), source = self%bimat)
         do i = 1, maxval(self%bimat)    ! for each cc
             if(any(imat_aux == i)) then ! there is cc labelled i
                 cnt = cnt + 1           ! increasing order cc
+                print *, 'i', i, 'cnt ', cnt
                 where(imat_aux == i) self%bimat = cnt
             endif
         enddo
@@ -351,7 +362,10 @@ contains
         real    :: ave, stdev ! avg and stdev of the size od the ccs
         integer :: n_cc, thresh_down, thresh_up
         character(len=3)   :: ccircular, eelongated
-        if(.not. any(self%bimat > 0)) THROW_HARD('Inputted non-existent cc; polish_ccs')
+        if(.not. any(self%bimat > 0)) then
+          THROW_WARN('Inputted non-existent cc; polish_ccs')
+          return
+        endif
         ! set default
         ccircular  = ' no'
         eelongated = ' no'
@@ -416,7 +430,11 @@ contains
         logical, allocatable :: msk(:)         ! For using function pixels_dist
         real  :: center_of_mass(3)             ! geometrical center of mass
         real  :: radius
-        if(.not. any(self%bimat > 0)) THROW_HARD('Inputted non-existent cc; diameter_cc')
+        if(.not. any(self%bimat > 0)) then
+            diam = 0.
+            THROW_WARN('Inputted non-existent cc; diameter_cc')
+            return
+        endif
         allocate(imat_cc(self%bldim(1),self%bldim(2),self%bldim(3)), source=self%bimat)
         where(imat_cc .ne. n_cc) imat_cc = 0   ! keep just the considered cc
         ! Find center of mass of the cc
@@ -483,7 +501,10 @@ contains
     subroutine cc2bin( self, n_cc )
         class(binimage), intent(inout) :: self  ! cc image
         integer,         intent(in)    :: n_cc  ! label of the cc to keep
-        if(.not. any(self%bimat > 0)) THROW_HARD('Inputted non-existent cc; cc2bin')
+        if(.not. any(self%bimat > 0)) then
+            THROW_WARN('Inputted non-existent cc; cc2bin')
+            return
+        endif
         where(self%bimat .ne. n_cc) self%bimat = 0
         where(self%bimat > 0)       self%bimat = 1
         self%bimat_is_set = .true.
@@ -549,7 +570,12 @@ contains
         if(present(label)) llabel = label
         ffour  = .false.
         if(present(four)) ffour = four
-        if(present(four) .and. self%bldim(3)==1) THROW_HARD('4-neighbours identification is not implemented for 2D images; border_mask')
+        if(present(four) .and. self%bldim(3)==1) then
+            if(four) then
+                ffour = .false.
+                THROW_WARN('4-neighbours identification is not implemented for 2D images; border_mask')
+            endif
+        endif
         if( allocated(border) ) deallocate(border)
         allocate(border(self%bldim(1),self%bldim(2),self%bldim(3)), source=.false.)
         if(self%bldim(3) == 1) then
@@ -602,7 +628,10 @@ contains
         type (binimage)      :: img_cc ! connected component image
         integer, allocatable :: imat_cc(:,:,:)
         integer :: seed
-        if(self%bldim(3) > 1) THROW_HARD('Not implemented for volumes! fill_holes')
+        if(self%bldim(3) > 1) then
+            THROW_WARN('Not implemented for volumes! fill_holes')
+            return
+        endif
         call self%find_ccs(img_cc, black=.true.) ! detect the connnected components in the background as well
         imat_cc = nint(img_cc%get_rmat())
         seed    = img_cc%bimat(1,1,1) ! the pxl (1,1,1) should belong to the background

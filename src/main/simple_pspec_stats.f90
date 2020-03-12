@@ -15,7 +15,7 @@ integer, parameter :: BOX        = 512       ! ps size
 real,    parameter :: LOW_LIM    = 20.       ! 30 A, lower limit for resolution. Before that, we discard
 real,    parameter :: UP_LIM     = 8.        ! 8  A, upper limit for resolution in the entropy calculation. (it was 3. before)
 integer, parameter :: N_BINS     = 64        ! number of bins for hist
-real,    parameter :: LAMBDA     = 1.        ! for tv filtering
+real,    parameter :: LAMBDA     = 5.        ! for tv filtering
 integer, parameter :: N_BIG_CCS  = 5         ! top N_BIG_CCS considered in the avg curvature calculation
 real,    parameter :: THR_SCORE_UP_UP = 1.3   ! threshold for keeping/discarding mic wrt score
 real,    parameter :: THR_SCORE_UP    = 0.4   ! threshold for keeping/discarding mic wrt score
@@ -211,17 +211,25 @@ contains
         integer :: i, j
         real    :: denom  !denominator of the formula
         real    :: a
+        real, allocatable :: rmat_bin(:,:,:)
         denom = 0.
-        ! call self%ps_ccs%write(PATH_HERE//basename(trim(self%fbody))//'BeforeElimCCs.mrc')
-        ! STILL TO DO?
-        call self%ps_ccs%elim_ccs([4,BOX*4]) !eliminate connected components with size one
+        ! call self%ps_ccs%elim_ccs([4,BOX*4]) !eliminate connected components with size one
         ! call self%ps_ccs%write(PATH_HERE//basename(trim(self%fbody))//'AfterElimCCs.mrc')
         imat = nint(self%ps_ccs%get_rmat())
         allocate(imat_sz(BOX,BOX,1), source = 0)
         sz = self%ps_ccs%size_ccs()
         call generate_mat_sz_ccs(imat,imat_sz,sz)
+        !discard border effects due to binarization
+        rmat_bin = self%ps_bin%get_rmat()
+        rmat_bin(1:3,:,1)       = 0.
+        rmat_bin(:,1:3,1)       = 0.
+        rmat_bin(BOX-2:BOX,:,1) = 0.
+        rmat_bin(:,BOX-2:BOX,1) = 0.
+        call self%ps_bin%set_rmat(rmat_bin)
+        call self%ps_bin%set_imat
+        ! score calculation
         self%score = 0.  !initialise
-        do i = 2, BOX-1  !discard border effects due to binarization
+        do i = 2, BOX-1
             do j = 2, BOX-1
                 if(imat(i,j,1) > 0) then
                     h   = -int(BOX/2) + i - 1
@@ -242,7 +250,9 @@ contains
         if(abs(denom) > TINY) then
             self%score = self%score/denom
         else
-            THROW_HARD('Denominator = 0! calc_weighted_avg_sz_ccs')
+            self%score = 0.
+            THROW_WARN('Denominator = 0! calc_weighted_avg_sz_ccs')
+            return
         endif
     contains
 
@@ -284,6 +294,12 @@ contains
         integer :: cc(1)
         integer, allocatable :: sz(:)
         sz = self%ps_ccs%size_ccs()
+        ! empty binarization
+        if(size(sz) == 1 .and. sz(1) == 0) then
+            avg = 66.
+            THROW_WARN('Empty cc image; calc_avg_curvature')
+            return
+        endif
         avg = 0.
         if(size(sz) < N_BIG_CCS) then
             max_cc = size(sz)
@@ -295,7 +311,7 @@ contains
             avg = avg + estimate_curvature(self%ps_ccs,cc(1))
             sz(cc(1)) = 0 !discard
         enddo
-        avg = avg/max_cc
+        avg = avg/real(max_cc)
     contains
         ! This subroutine estimates the curvature of the connected
         ! component cc in the connected component image of the ps.
@@ -342,7 +358,7 @@ contains
                       ymax = max(j,ymax)
                       ! Check if the cc is a segment
                       if(ymin == ymax .or. xmin == xmax) then
-                          print *, 'This cc is a segment, curvature is 0'
+                           if(DEBUG_HERE) write(logfhandle, *) 'This cc is a segment, curvature is 0'
                            c = 0.
                            return
                       endif
@@ -388,18 +404,21 @@ contains
       integer              :: ind(1)
       integer              :: h, k, sh
       integer              :: i, j, n
+      logical              :: empty
       call prepare_ps(self)
-      call binarize_ps(self)
+      call binarize_ps(self, empty)
+      if(empty) then
+          self%score = 0.
+          self%avg_curvat = 66.
+          if(DEBUG_HERE) write(logfhandle,*) 'Returning in process_ps'
+          return
+      endif
       ! calculation of the weighted average size of the ccs ->  score
       call self%ps_bin%find_ccs(self%ps_ccs)
       call self%ps_ccs%get_nccs(n)
-      if(n < 1) then
-          self%score = 0.
-          self%avg_curvat = 66.
-          return
-      endif
       sz = self%ps_ccs%size_ccs()
       call self%calc_weighted_avg_sz_ccs(sz)
+      if(DEBUG_HERE) write(logfhandle, *)'  CTF_ccscore: ', self%score, '  CTF_curvature: ', self%avg_curvat
       deallocate(sz)
   contains
 
@@ -419,15 +438,22 @@ contains
       ! This subroutine performs binarization of a ps image
       ! using Canny edge detection with automatic threshold
       ! selection.
-      subroutine binarize_ps(self)
+      subroutine binarize_ps(self, empty)
           use simple_segmentation, only : canny
           class(pspec_stats), intent(inout) :: self
+          logical,            intent(out)   :: empty
           real,    allocatable :: rmat_bin(:,:,:)
           integer     :: ldim(3),i
-          real        :: scale_range(2)
-          scale_range = [1.,real(BOX)]
           call canny(self%ps,self%ps_bin)
-          ! call canny(self%ps,self%ps_bin,scale_range = scale_range) !MODIFIED 30/09/19
+          ! Check if binarization was successful
+          call self%ps_bin%set_imat
+          call self%ps_bin%get_nccs(i)
+          empty = .false.
+          if(i < 1) then
+            empty = .true.
+            if(DEBUG_HERE) write(logfhandle,*)'Setting empty to true in binarize_ps'
+            return
+          endif
           do i=1,BOX  !get rid of border effects
               call self%ps_bin%set([i,1,1],0.)
               call self%ps_bin%set([i,BOX,1],0.)
@@ -435,8 +461,6 @@ contains
               call self%ps_bin%set([BOX,i,1],0.)
           enddo
           if(DEBUG_HERE) call self%ps_bin%write(PATH_HERE//basename(trim(self%fbody))//'_binarized.mrc')
-          ! self%fallacious =  self%empty() !check if the mic is fallacious
-          ! if(self%fallacious) write(logfhandle,*) basename(trim(self%fbody)), ' TO BE DISCARDED'
       end subroutine binarize_ps
   end subroutine process_ps
 
