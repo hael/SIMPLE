@@ -703,7 +703,7 @@ contains
         class(ctf_estimate_fit), intent(inout) :: self
         character(len=*),        intent(in)    :: diagfname
         logical,       optional, intent(in)    :: nano
-        type(image) :: pspec_half_n_half
+        type(image) :: pspec_half_n_half, tmp
         logical     :: l_msk(1:self%box,1:self%box,1), l_nano
         integer     :: i,logicen
         l_nano = .false.
@@ -724,7 +724,19 @@ contains
         enddo
         call self%pspec%before_after(self%pspec_ctf, pspec_half_n_half, l_msk)
         if( .not.l_nano ) call pspec_half_n_half%scale_pspec4viz
-        call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true., quality=96)
+        if( self%box > GUI_PSPECSZ )then
+            call pspec_half_n_half%fft
+            call pspec_half_n_half%clip_inplace([GUI_PSPECSZ,GUI_PSPECSZ,1])
+        else if( self%box < GUI_PSPECSZ )then
+            tmp = pspec_half_n_half
+            call pspec_half_n_half%zero_and_unflag_ft
+            call tmp%fft
+            call tmp%pad(pspec_half_n_half)
+            pspec_half_n_half = tmp
+            call tmp%kill
+        endif
+        call pspec_half_n_half%ifft
+        call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true., quality=92)
         call pspec_half_n_half%kill
     end subroutine write_diagnostic
 

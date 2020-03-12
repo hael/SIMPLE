@@ -101,7 +101,7 @@ contains
         endif
         ! execute the motion_correction
         call motion_correct_iso(self%moviename, ctfvars, bfac_here, self%moviesum, gainref_fname=gainref_fname)
-        call motion_correct_mic2spec(self%moviesum, params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)
+        call motion_correct_mic2spec(self%moviesum, GUI_PSPECSZ, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)
         call self%moviesum%kill
         ! shifts frames accordingly
         call motion_correct_iso_shift_frames
@@ -144,7 +144,7 @@ contains
         if( .not. l_tseries ) call motion_correct_write2star(star_fname, self%moviename, patch_success, gainref_fname)
         ! generate power-spectra
         if( L_BENCH ) t_postproc1 = tic()
-        call motion_correct_mic2spec(self%moviesum_ctf, params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_ctf)
+        call motion_correct_mic2spec(self%moviesum_ctf, GUI_PSPECSZ, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_ctf)
         call self%pspec_sum%before_after(self%pspec_ctf, self%pspec_half_n_half)
         if( l_tseries )then
             call self%pspec_half_n_half%scale_pspec4viz(rsmpd4viz=max(SMPD4VIZ_NANO,2.*ctfvars%smpd))
@@ -157,7 +157,7 @@ contains
         if( L_BENCH ) rt_postproc1 = toc(t_postproc1)
         ! generate thumbnail
         ldim  = self%moviesum_corrected%get_ldim()
-        scale = real(params_glob%pspecsz)/real(ldim(1))
+        scale = real(GUI_PSPECSZ)/maxval(ldim(1:2))
         ldim_thumb(1:2) = round2even(real(ldim(1:2))*scale)
         ldim_thumb(3)   = 1
         call orientation%set('smpd', ctfvars%smpd)
@@ -169,7 +169,7 @@ contains
         call self%thumbnail%ifft()
         ! jpeg output
         call self%pspec_half_n_half%collage(self%thumbnail, self%img_jpg)
-        call self%img_jpg%write_jpg(self%moviename_thumb, norm=.true., quality=90)
+        call self%img_jpg%write_jpg(self%moviename_thumb, norm=.true., quality=92)
         ! power spectrum scoring
         if( l_tseries )then
             !

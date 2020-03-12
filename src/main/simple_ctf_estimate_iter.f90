@@ -1,9 +1,10 @@
 ! ctf_estimate iterator
 module simple_ctf_estimate_iter
 include 'simple_lib.f08'
-use simple_parameters, only: params_glob
-use simple_image,      only: image
-use simple_pspec_score,only: pspec_score
+use simple_parameters,       only: params_glob
+use simple_image,            only: image
+use simple_pspec_score,      only: pspec_score
+use simple_ctf_estimate_fit, only: ctf_estimate_fit
 
 implicit none
 
@@ -14,15 +15,15 @@ private
 type :: ctf_estimate_iter
     type(image) :: micrograph, pspec, thumbnail, img_jpg, pspec4viz
   contains
-      procedure :: iterate
-      procedure :: kill
+      procedure          :: iterate
+      procedure, private :: gen_thumbnail
+      procedure          :: kill
 end type ctf_estimate_iter
 
 contains
 
     subroutine iterate( self, ctfvars, moviename_forctf, orientation, dir_out, l_gen_thumb )
-        use simple_ori,              only: ori
-        use simple_ctf_estimate_fit, only: ctf_estimate_fit
+        use simple_ori, only: ori
         class(ctf_estimate_iter), intent(inout) :: self
         class(ctfparams),         intent(inout) :: ctfvars
         character(len=*),         intent(in)    :: moviename_forctf
@@ -33,8 +34,8 @@ contains
         type(pspec_score)             :: pspecscore
         character(len=:), allocatable :: fname_diag
         character(len=LONGSTRLEN)     :: moviename_thumb, rel_moviename_thumb, rel_fname, epsname, docname, tmpl_fname
-        real                          :: ctfscore, scale
-        integer                       :: nframes, ldim(3), ldim_thumb(3)
+        real                          :: ctfscore
+        integer                       :: nframes, ldim(3)
         if( .not. file_exists(moviename_forctf) )&
         & write(logfhandle,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
         call find_ldim_nptcls(trim(adjustl(moviename_forctf)), ldim, nframes)
@@ -63,19 +64,7 @@ contains
         call ctffit%fit( ctfvars )
         ctfscore = ctffit%get_ctfscore()
         if( l_gen_thumb )then
-            ! generate thumbnail
-            scale         = real(params_glob%pspecsz)/real(ldim(1))
-            ldim_thumb(1) = round2even(real(ldim(1))*scale)
-            ldim_thumb(2) = round2even(real(ldim(2))*scale)
-            ldim_thumb(3) = 1
-            call self%thumbnail%new(ldim_thumb, ctfvars%smpd)
-            call self%micrograph%fft()
-            call self%micrograph%clip(self%thumbnail)
-            call self%thumbnail%ifft
-            ! jpeg output
-            call ctffit%get_pspec(self%pspec4viz)
-            call self%pspec4viz%scale_pspec4viz
-            call self%pspec4viz%collage(self%thumbnail, self%img_jpg)
+            call self%gen_thumbnail( ctffit )
             call self%img_jpg%write_jpg(moviename_thumb, norm=.true., quality=92)
             call make_relativepath(CWD_GLOB,moviename_thumb, rel_moviename_thumb)
             call orientation%set('thumb', trim(rel_moviename_thumb))
@@ -110,6 +99,43 @@ contains
         ! clean
         call ctffit%kill
     end subroutine iterate
+
+    ! generate thumbnail
+    subroutine gen_thumbnail( self, ctffit )
+        class(ctf_estimate_iter), intent(inout) :: self
+        class(ctf_estimate_fit),  intent(inout) :: ctffit
+        type(image) :: tmp
+        real        :: scale, smpd
+        integer     :: ldim(3), ldim_thumb(3)
+        ! thumbnail
+        smpd  = self%micrograph%get_smpd()
+        ldim  = self%micrograph%get_ldim()
+        scale = real(GUI_PSPECSZ)/real(maxval(ldim(1:2)))
+        ldim_thumb(1:2) = round2even(real(ldim(1:2))*scale)
+        ldim_thumb(3)   = 1
+        call self%thumbnail%new(ldim_thumb, smpd)
+        call self%micrograph%fft()
+        call self%micrograph%clip(self%thumbnail)
+        call self%thumbnail%ifft
+        ! spectrum
+        call ctffit%get_pspec(self%pspec4viz)
+        call self%pspec4viz%scale_pspec4viz
+        if( params_glob%pspecsz > GUI_PSPECSZ )then
+            call self%pspec4viz%fft
+            call self%pspec4viz%clip_inplace([GUI_PSPECSZ,GUI_PSPECSZ,1])
+        else if( params_glob%pspecsz < GUI_PSPECSZ )then
+            tmp = self%pspec4viz
+            call self%pspec4viz%zero_and_unflag_ft
+            call tmp%fft 
+            call tmp%pad(self%pspec4viz)
+            self%pspec4viz = tmp
+        endif
+        call self%pspec4viz%ifft
+        ! assembly
+        call self%pspec4viz%collage(self%thumbnail, self%img_jpg)
+        ! cleanup
+        call tmp%kill
+    end subroutine gen_thumbnail
 
     subroutine kill( self )
         class(ctf_estimate_iter), intent(inout) :: self

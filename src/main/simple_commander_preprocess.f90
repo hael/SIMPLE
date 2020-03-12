@@ -2487,7 +2487,7 @@ contains
                 integer     :: ldim_ref(3), ldim_target(3)
                 real        :: smpd_ref, scale
                 smpd_ref = refimg%get_smpd()
-                scale    = smpd_target / smpd_ref
+                scale    = smpd_target / smpd_ref / params%scale
                 if( is_equal(scale,1.) )then
                     ldim = ldim_here
                     return

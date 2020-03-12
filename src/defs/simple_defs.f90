@@ -115,6 +115,7 @@ integer(kind=kind(ENUM_STARTYPE)), parameter :: GENERIC_STAR = PTCL_STAR
 real,   parameter :: PRUNE_FRAC             = 0.3      !< fraction of particles after which a project is automatically pruned
 
 ! power spectrum related stuff
+integer, parameter :: GUI_PSPECSZ           = 512      !< hard-coded image size for gui
 real,    parameter :: SMPD4VIZ              = 1.25     !< default sampling distance for powerspectrum visualisation
 real,    parameter :: LP_PSPEC_BACKGR_SUBTR = 20.      !< default low-pass limit for power spectrum background subtraction
 
