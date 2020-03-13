@@ -230,16 +230,20 @@ contains
         ! score calculation
         self%score = 0.  !initialise
         do i = 2, BOX-1
+            h   = -int(BOX/2) + i - 1
             do j = 2, BOX-1
-                if(imat(i,j,1) > 0) then
-                    h   = -int(BOX/2) + i - 1
-                    k   = -int(BOX/2) + j - 1
-                    sh  =  nint(hyp(real(h),real(k)))
-                    a = (1.-real(sh)/real(self%ULim_Findex))
-                    denom = denom + a
-                    self%score = self%score + a*imat_sz(i,j,1)/(2.*PI*sh)
-                else
+                k   = -int(BOX/2) + j - 1
+                sh  =  nint(hyp(real(h),real(k)))
+                if( sh < self%LLim_Findex .or. sh > self%ULim_Findex)then
                     call self%ps_bin%set([i,j,1], 0.)
+                else
+                    if(imat(i,j,1) > 0) then
+                        a = (1.-real(sh)/real(self%ULim_Findex))
+                        denom = denom + a
+                        self%score = self%score + a*imat_sz(i,j,1)/(2.*PI*sh)
+                    else
+                        call self%ps_bin%set([i,j,1], 0.)
+                    endif
                 endif
             enddo
         enddo
