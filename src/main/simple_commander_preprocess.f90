@@ -686,13 +686,16 @@ contains
                 if( trim(params%stream) .eq. 'yes' )then
                     ! needs to write and re-read project at the end as extract overwrites it
                     call spproj%write_segment_inside(params%oritype)
-                    cline_extract = cline
-                    call cline_extract%set('dir', trim(output_dir_extract))
-                    call cline_extract%set('pcontrast', params%pcontrast)
-                    call cline_extract%delete('msk')
-                    if( cline%defined('box_extract') )call cline_extract%set('box', real(params%box_extract))
-                    call xextract%execute(cline_extract)
-                    call spproj%kill
+                    if( nptcls_out > 0 )then
+                        cline_extract = cline
+                        call cline_extract%set('smpd',      o_mov%get('smpd')) ! in case of scaling
+                        call cline_extract%set('dir',       trim(output_dir_extract))
+                        call cline_extract%set('pcontrast', params%pcontrast)
+                        call cline_extract%delete('msk')
+                        if( cline%defined('box_extract') )call cline_extract%set('box', real(params%box_extract))
+                        call xextract%execute(cline_extract)
+                        call spproj%kill
+                    endif
                 endif
             endif
         end do
