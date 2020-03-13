@@ -10,14 +10,14 @@ public :: init_phasecorr_picker, exec_phasecorr_picker, kill_phasecorr_picker
 private
 
 ! PEAK STATS INDICES
-integer,          parameter   :: SDEV     = 2
-integer,          parameter   :: DYNRANGE = 3
-integer,          parameter   :: SSCORE   = 4
+integer,          parameter   :: SDEV     = 1
+integer,          parameter   :: DYNRANGE = 2
+integer,          parameter   :: SSCORE   = 3
 ! OTHER PARAMS
-integer,          parameter   :: NSTAT   = 4
+integer,          parameter   :: NSTAT   = 3
 integer,          parameter   :: MAXKMIT = 20
 real,             parameter   :: BOXFRAC = 0.5
-logical,          parameter   :: DOWRITEIMGS = .false., DEBUG_HERE = .true.
+logical,          parameter   :: DOWRITEIMGS = .false., DEBUG_HERE = .false.
 integer,          parameter   :: PICKER_OFFSET_HERE = 3, OFFSET_HWIN = 1
 
 ! VARS
@@ -100,8 +100,8 @@ contains
         call micrograph%clip(mic_shrunken)
         hp = real(ldim_shrink(1) / 2) * smpd_shrunken
         call mic_shrunken%fft
-        call mic_shrunken%bp(hp, lp)
         mic_saved = mic_shrunken
+        call mic_shrunken%bp(hp, lp)
         call mic_saved%ifft
     end subroutine init_phasecorr_picker
 
@@ -141,7 +141,7 @@ contains
     end subroutine exec_phasecorr_picker
 
     subroutine extract_peaks
-        type(image)              :: mask_img, sdevimg, circ_mask
+        type(image)              :: mask_img, sdevimg, circ_mask, tmp_mic
         type(image), allocatable :: ptcls(:)
         real,    pointer         :: rmat_phasecorr(:,:,:)
         integer, allocatable     :: labels(:), target_positions(:,:),ref_inds(:,:)
@@ -176,7 +176,7 @@ contains
         rmat_phasecorr(ldim_shrink(1)-border:ldim_shrink(1),:,1) = 0. !set to zero the borders
         rmat_phasecorr(:,1:border,1) = 0. !set to zero the borders
         rmat_phasecorr(:,ldim_shrink(2)-border:ldim_shrink(2),1) = 0. !set to zero the borders
-        if(DOWRITEIMGS) call mic_shrunken%write(PATH_HERE//basename(trim(micname))//'_shrunken_bin.mrc')
+        if(DOWRITEIMGS) call mic_shrunken%write_jpg(PATH_HERE//basename(trim(micname))//'_shrunken_bin.jpg')
         allocate(mask(1:ldim_shrink(1), 1:ldim_shrink(2)), source = .false.)
         ! Select initial peaks
         ntargets = 0
@@ -215,18 +215,20 @@ contains
             sdevimg = mic_shrunken
             call sdevimg%zero_and_unflag_ft
         endif
+        tmp_mic = mic_saved
+        call tmp_mic%bp(hp,lp)
         !$omp parallel do default(shared) private(i,outside,xind,yind,ithr) proc_bind(close) schedule(static)
         do i = 1, ntargets
             ithr = omp_get_thread_num()+1
             xind = target_positions(i,1)
             yind = target_positions(i,2)
-            call mic_saved%window_slim([xind,yind]-ldim_refs(1)/2-1, ldim_refs(1), ptcls(ithr), outside)
+            call tmp_mic%window_slim([xind,yind]-ldim_refs(1)/2-1, ldim_refs(1), ptcls(ithr), outside)
             target_corrs(i) = ptcls(ithr)%real_corr(refs(ref_inds(xind,yind)),l_mask)
             if(DOWRITEIMGS) call sdevimg%set([xind,yind,1],target_corrs(i))
         enddo
         !$omp end parallel do
         if(DOWRITEIMGS) then
-            call sdevimg%write(PATH_HERE//basename(trim(micname))//'_corrs.mrc')
+            call sdevimg%write_jpg(PATH_HERE//basename(trim(micname))//'_corrs.jpg')
             call sdevimg%kill
         endif
         write(logfhandle,'(a)') '>>> PEAKS SELECTION'
@@ -249,6 +251,7 @@ contains
         end do
         ! cleanup
         call mask_img%kill
+        call tmp_mic%kill
         do i = 1, size(ptcls)
             call ptcls(i)%kill
         enddo
@@ -292,7 +295,7 @@ contains
                 call aux%fft
             enddo
             call field%copy(phasecorr)
-            if(DOWRITEIMGS) call field%write(PATH_HERE//basename(trim(micname))//'MaxValPhaseCorr.mrc')
+            if(DOWRITEIMGS) call field%write_jpg(PATH_HERE//basename(trim(micname))//'MaxValPhaseCorr.jpg')
             if(present(mask)) then
                 call mask%new(ldim_shrink, smpd_shrunken)
                 call mask%get_rmat_ptr(mask_rmat)
@@ -349,7 +352,7 @@ contains
         do ipeak=1,npeaks
             if( selected_peak_positions(ipeak) )then
                 cnt = cnt + 1
-                call mic_shrunken%window_slim(peak_positions(ipeak,:)-ldim_refs(1)/2,&
+                call mic_saved%window_slim(peak_positions(ipeak,:)-ldim_refs(1)/2,&
                     &ldim_refs(1), ptcl_target, outside)
                 call ptcl_target%spectrum('power', spec)
                 peak_stats(cnt,SSCORE) = sum(spec)/real(size(spec))

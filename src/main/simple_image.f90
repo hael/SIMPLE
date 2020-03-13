@@ -539,7 +539,7 @@ contains
         self%ft = self_in%ft
     end subroutine copy
 
-    !> mic2spec calculates the powerspectrum of the input image
+    !> img2spec calculates the powerspectrum of the input image
     !!          the resulting spectrum has dampened central cross and subtracted background
     subroutine img2spec( self, speckind, lp_backgr_subtr, img_out, postproc )
         class(image),      intent(inout) :: self
