@@ -3,7 +3,7 @@ module simple_picker_iter
 include 'simple_lib.f08'
 use simple_picker
 use simple_phasecorr_picker
-use simple_phasecorr_segpicker
+! use simple_phasecorr_segpicker
 use simple_segpicker,  only: segpicker
 use simple_parameters, only: params_glob
 implicit none
@@ -54,10 +54,10 @@ subroutine iterate( self, cline, moviename_intg, boxfile, nptcls_out, dir_out )
         ! phasecorrelation template based picker
         if( cline%defined('refs') .or. cline%defined('vol1') )then
           if( cline%defined('thres') )then
-              call init_phasecorr_picker(moviename_intg, params_glob%refs, params_glob%smpd, lp_in=params_glob%lp,&
+              call init_phasecorr_picker_refs(moviename_intg, params_glob%refs, params_glob%smpd, lp_in=params_glob%lp,&
                   &distthr_in=params_glob%thres, ndev_in=params_glob%ndev, dir_out=dir_out)
           else
-              call init_phasecorr_picker(moviename_intg, params_glob%refs, params_glob%smpd, lp_in=params_glob%lp, &
+              call init_phasecorr_picker_refs(moviename_intg, params_glob%refs, params_glob%smpd, lp_in=params_glob%lp, &
                   &ndev_in=params_glob%ndev, dir_out=dir_out)
           endif
           call exec_phasecorr_picker(boxfile, nptcls_out)
@@ -65,16 +65,16 @@ subroutine iterate( self, cline, moviename_intg, boxfile, nptcls_out, dir_out )
         else
         ! phasecorrelation segmentation based
             if( cline%defined('thres') )then
-                call init_phasecorr_segpicker(moviename_intg, params_glob%min_rad, params_glob%max_rad, &
+                call init_phasecorr_picker_gauss(moviename_intg, params_glob%min_rad, params_glob%max_rad, &
                     &real(params_glob%stepsz),params_glob%elongated, params_glob%smpd, lp_in=params_glob%lp,&
                     &distthr_in=params_glob%thres, ndev_in=params_glob%ndev, dir_out=dir_out)
             else
-                call init_phasecorr_segpicker(moviename_intg, params_glob%min_rad, params_glob%max_rad, &
+                call init_phasecorr_picker_gauss(moviename_intg, params_glob%min_rad, params_glob%max_rad, &
                     &real(params_glob%stepsz),params_glob%elongated, params_glob%smpd, lp_in=params_glob%lp,&
                     &ndev_in=params_glob%ndev, dir_out=dir_out)
             endif
-            call exec_phasecorr_segpicker(boxfile, nptcls_out,params_glob%center)
-            call kill_phasecorr_segpicker
+            call exec_phasecorr_picker(boxfile, nptcls_out)
+            call kill_phasecorr_picker
         endif
       elseif(params_glob%picker .eq. 'seg') then
         ! segmetation based reference free picking

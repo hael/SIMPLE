@@ -336,7 +336,6 @@ contains
         do i = 1, maxval(self%bimat)    ! for each cc
             if(any(imat_aux == i)) then ! there is cc labelled i
                 cnt = cnt + 1           ! increasing order cc
-                print *, 'i', i, 'cnt ', cnt
                 where(imat_aux == i) self%bimat = cnt
             endif
         enddo

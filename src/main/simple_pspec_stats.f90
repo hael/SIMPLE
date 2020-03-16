@@ -1,4 +1,4 @@
-!USAGE : simple_exec prg=pspec_stats smpd=1.41 filetab='sjhskl.mrc'
+!USAGE : simple_exec prg=pspec_stats smpd=1.41 filetab=sjhskl.txt
 module simple_pspec_stats
 include 'simple_lib.f08'
 use simple_image,      only: image
@@ -300,7 +300,7 @@ contains
         sz = self%ps_ccs%size_ccs()
         ! empty binarization
         if(size(sz) == 1 .and. sz(1) == 0) then
-            avg = 66.
+            avg = 10.
             THROW_WARN('Empty cc image; calc_avg_curvature')
             return
         endif
@@ -404,16 +404,13 @@ contains
     subroutine process_ps(self)
       class(pspec_stats), intent(inout) :: self
       integer, allocatable :: sz(:)
-      real                 :: res
-      integer              :: ind(1)
-      integer              :: h, k, sh
-      integer              :: i, j, n
+      integer              :: n
       logical              :: empty
       call prepare_ps(self)
       call binarize_ps(self, empty)
       if(empty) then
           self%score = 0.
-          self%avg_curvat = 66.
+          self%avg_curvat = 10.
           if(DEBUG_HERE) write(logfhandle,*) 'Returning in process_ps'
           return
       endif
@@ -446,8 +443,7 @@ contains
           use simple_segmentation, only : canny
           class(pspec_stats), intent(inout) :: self
           logical,            intent(out)   :: empty
-          real,    allocatable :: rmat_bin(:,:,:)
-          integer     :: ldim(3),i
+          integer           :: i
           call canny(self%ps,self%ps_bin)
           ! Check if binarization was successful
           call self%ps_bin%set_imat
