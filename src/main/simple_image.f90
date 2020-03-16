@@ -91,7 +91,6 @@ contains
     procedure          :: print_cmat
     procedure          :: print_rmat
     procedure          :: expand_ft
-    procedure          :: set_ldim
     procedure          :: set_smpd
     procedure          :: get_slice
     procedure          :: set_slice
@@ -1598,18 +1597,12 @@ contains
         endif
     end subroutine set_cmat
 
-    !> \brief  set_ldim replace image dimensions new 3D size
-    subroutine set_ldim( self, ldim )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: ldim(3)
-        self%ldim = ldim
-    end subroutine set_ldim
-
     !>  \brief set_smpd for setting smpd
     subroutine set_smpd( self, smpd )
         class(image), intent(inout) :: self
         real,         intent(in)    :: smpd
         self%smpd = smpd
+        call self%fit%new(self%ldim, self%smpd)
     end subroutine set_smpd
 
     !> \brief get_slice is for getting a slice from a volume

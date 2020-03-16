@@ -430,7 +430,7 @@ contains
         call starfile_table__setname(mc_starfile, "general")
         call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_X, ldim_orig(1))
         call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_Y, ldim_orig(2))
-        call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_Z, ldim_orig(3))
+        call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_Z, nframes)
         call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_MOVIE_NAME, simple_abspath(moviename))
         if (present(gainref_fname)) then
             call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_GAIN_NAME, trim(gainref_fname))
@@ -462,7 +462,7 @@ contains
             call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
             call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, real(shift(1)/params_glob%scale, dp))
             call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, real(shift(2)/params_glob%scale, dp))
-            call starfile_table__setValue_double(mc_starfile, EMDL_MOVIE_FRAME_WEIGHT, real(frameweights(iframe), dp))
+            ! call starfile_table__setValue_double(mc_starfile, EMDL_MOVIE_FRAME_WEIGHT, real(frameweights(iframe), dp))
         end do
         call starfile_table__write_ofile(mc_starfile)
         if( writepoly )then

@@ -1043,7 +1043,6 @@ contains
                             call bos%read_first_segment_record(STK_SEG, o)
                     end select
                     if( o%isthere('smpd') .and. .not. cline%defined('smpd') ) self%smpd = o%get('smpd')
-                    call bos%read_first_segment_record(STK_SEG, o)
                     if( o%isthere('box')  .and. .not. cline%defined('box')  ) self%box  = nint(o%get('box'))
                     call o%kill
                 endif
