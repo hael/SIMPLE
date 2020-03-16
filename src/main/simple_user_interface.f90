@@ -2542,7 +2542,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                             ! executable
-        &0, 3, 2, 10, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &0, 3, 2, 9, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2564,12 +2564,9 @@ contains
         call pick%set_input('srch_ctrls', 5, detector)
         pick%srch_ctrls(6)%required = .false.
         call pick%set_input('srch_ctrls', 6, draw_color)
-        pick%srch_ctrls(7)%required = .false.
-        call pick%set_input('srch_ctrls', 7, 'center', 'binary', 'Center particles', 'Center particles based on center of mass of the connected component &
-        &(yes|no){yes}', '(yes|no){yes}', .false., 'no')
-        call pick%set_input('srch_ctrls', 8, 'min_rad', 'num', 'Minimum radius in A', 'Minimum expected radius of the particles in A {50.} ',  '{50.}',  .true., 50.)
-        call pick%set_input('srch_ctrls', 9, 'max_rad', 'num', 'Maximum radius in A', 'Maximum expected radius of the particles in A {300.} ', '{300.}', .true., 300.)
-        call pick%set_input('srch_ctrls', 10, 'stepsz',  'num', 'Step size in A', 'Step size for gaussian reference generation in A {10.} ',    '{10.}',  .true., 10.)
+        call pick%set_input('srch_ctrls', 7, 'min_rad', 'num', 'Minimum radius in A', 'Minimum expected radius of the particles in A {50.} ',  '{50.}',  .true., 50.)
+        call pick%set_input('srch_ctrls', 8, 'max_rad', 'num', 'Maximum radius in A', 'Maximum expected radius of the particles in A {300.} ', '{300.}', .true., 300.)
+        call pick%set_input('srch_ctrls', 9, 'stepsz',  'num', 'Step size in A', 'Step size for gaussian reference generation in A {10.} ',    '{10.}',  .true., 10.)
         ! filter controls
         call pick%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
         ! mask controls
