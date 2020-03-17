@@ -286,7 +286,7 @@ contains
         type(ori)                     :: o
         type(ctfparams)               :: ctfvar
         character(len=:), allocatable :: stk
-        real                          :: smpd, smpd_self, dfx,dfy
+        real                          :: smpd, smpd_self, dfx,dfy,angast,phshift
         integer                       :: boxcoords(2),i,iptcl,cnt,n,n2append,nptcls,istate
         select case(trim(oritype))
             case('mic')
@@ -345,12 +345,20 @@ contains
                         call self%set_boxcoords(cnt, boxcoords)
                     endif
                     if( ctfvar%ctfflag /= CTFFLAG_NO )then
-                        dfx = proj%os_ptcl2D%get(iptcl, 'dfx')
-                        dfy = proj%os_ptcl2D%get(iptcl, 'dfy')
+                        dfx    = proj%os_ptcl2D%get(iptcl, 'dfx')
+                        dfy    = proj%os_ptcl2D%get(iptcl, 'dfy')
+                        angast = proj%os_ptcl2D%get(iptcl, 'angast')
                         call self%os_ptcl2D%set(cnt,'dfx',dfx)
                         call self%os_ptcl2D%set(cnt,'dfy',dfy)
                         call self%os_ptcl3D%set(cnt,'dfx',dfx)
                         call self%os_ptcl3D%set(cnt,'dfy',dfy)
+                        call self%os_ptcl2D%set(cnt,'angast',angast)
+                        call self%os_ptcl3D%set(cnt,'angast',angast)
+                        if( proj%os_ptcl2D%isthere(iptcl,'phshift') )then
+                            phshift = proj%os_ptcl2D%get(iptcl, 'phshift')
+                            call self%os_ptcl2D%set(cnt,'phshift',phshift)
+                            call self%os_ptcl3D%set(cnt,'phshift',phshift)
+                        endif
                     endif
                 enddo
         end select
@@ -2007,10 +2015,15 @@ contains
         nullify(ptcl_field)
         ! set field pointer
         select case(trim(oritype))
+            case('stk')
+                ptcl_field => self%os_stk
+                stkind = iptcl
             case('ptcl2D')
                 ptcl_field => self%os_ptcl2D
+                call self%map_ptcl_ind2stk_ind(oritype, iptcl, stkind, ind_in_stk)
             case('ptcl3D')
                 ptcl_field => self%os_ptcl3D
+                call self%map_ptcl_ind2stk_ind(oritype, iptcl, stkind, ind_in_stk)
             case('cls3D')
                 call self%get_imginfo_from_osout(smpd, box, ncls)
                 ctfvars%ctfflag = CTFFLAG_NO
@@ -2028,8 +2041,6 @@ contains
                 THROW_HARD('oritype: '//trim(oritype)//' not supported by get_ctfparams')
         end select
         ! extract the CTF parameters
-        ! do the index mapping
-        call self%map_ptcl_ind2stk_ind(oritype, iptcl, stkind, ind_in_stk)
         ! sampling distance
         if( self%os_stk%isthere(stkind, 'smpd') )then
             ctfvars%smpd = self%os_stk%get(stkind, 'smpd')
@@ -2842,8 +2853,7 @@ contains
     subroutine report_state2stk( self, states )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: states(:)
-        integer   :: iptcl, noris_ptcl3D, noris_ptcl2D, istk, fromp, top, nstks, nptcls
-        real      :: rstate
+        integer :: iptcl, noris_ptcl3D, noris_ptcl2D, istk, fromp, top, nstks, nptcls
         nstks = self%get_nstks()
         if( nstks == 0 )then
             THROW_WARN('empty STK field. Nothing to do; report_state2stk')
@@ -2864,17 +2874,22 @@ contains
             THROW_HARD('Inconsistent # number of 2D/3D particles; report_state2stk')
         else
             do istk=1,nstks
-                rstate = real(states(istk))
                 fromp  = nint(self%os_stk%get(istk,'fromp'))
                 top    = nint(self%os_stk%get(istk,'top'))
                 nptcls = nint(self%os_stk%get(istk,'nptcls'))
                 if(top-fromp+1 /= nptcls)then
                     THROW_HARD('Incorrect # number of particles in stack; report_state2stk')
                 endif
-                do iptcl=fromp,top
-                    call self%os_ptcl2D%set(iptcl, 'state', rstate)
-                    call self%os_ptcl3D%set(iptcl, 'state', rstate)
-                enddo
+                if( states(istk) > 0 )then
+                    ! preserve existing states
+                    cycle
+                else
+                    ! de-select
+                    do iptcl=fromp,top
+                        call self%os_ptcl2D%set(iptcl, 'state', 0.)
+                        call self%os_ptcl3D%set(iptcl, 'state', 0.)
+                    enddo
+                endif
             enddo
         endif
     end subroutine report_state2stk
