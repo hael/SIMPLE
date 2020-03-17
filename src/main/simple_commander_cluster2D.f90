@@ -408,7 +408,6 @@ contains
         ! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 60    ! 10mins, Frequency at which the original project file should be updated
         real,                 parameter    :: GREEDY_TARGET_LP   = 15.
         real                               :: SMPD_TARGET         = 4.    ! target sampling distance
-        character(len=STDLEN), parameter   :: MICS_SELECTION_FILE = 'stream2D_selection.txt'
         character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
         character(len=STDLEN), parameter   :: PROJFILE_BUFFER     = 'buffer.simple'
         character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'pool.simple'
@@ -422,8 +421,8 @@ contains
         type(ctfparams)                    :: ctfvars
         type(oris)                         :: os_stk
         type(ori)                          :: o_stk
-        character(LONGSTRLEN), allocatable :: spproj_list(:), stk_list(:)
-        character(len=:),      allocatable :: spproj_list_fname, orig_projfile, stk
+        character(LONGSTRLEN), allocatable :: spproj_list(:)
+        character(len=:),      allocatable :: spproj_list_fname, orig_projfile
         character(len=STDLEN)              :: str_iter, refs_glob, refs_glob_ranked
         character(len=LONGSTRLEN)          :: buffer_dir
         real    :: orig_smpd, msk, scale_factor, orig_msk, smpd, large_msk, lp_greedy
@@ -571,50 +570,8 @@ contains
         endif
         large_msk   = real(box/2)-COSMSKHALFWIDTH
         large_ring2 = round2even(0.8*large_msk)
-        ! FIRST IMPORT
-        allocate(stk_list(n_spprojs))
-        call os_stk%new(n_spprojs)
-        do iproj=1,n_spprojs
-            call stream_proj%read(spproj_list(iproj))
-            call stream_proj%os_stk%get_ori(1, o_stk)
-            ctfvars         = stream_proj%get_ctfparams('ptcl2D', 1)
-            ctfvars%smpd    = smpd
-            stk             = stream_proj%get_stkname(1)
-            stk_list(iproj) = trim(stk)
-            call o_stk%set_ctfvars(ctfvars)
-            call os_stk%set_ori(iproj, o_stk)
-        enddo
-        call stream_proj%kill
-        ! updates & scales stacks
-        call scale_stks( stk_list ) ! must come first as names updated
-        call pool_proj%add_stktab(stk_list, os_stk)
-        nptcls_glob = pool_proj%get_nptcls()
-        if( file_exists(MICS_SELECTION_FILE) )then
-            call flag_selection
-        else
-            do iproj=1,pool_proj%os_mic%get_noris()
-                call pool_proj%os_mic%set(iproj,'state',1.)
-            enddo
-            do iproj=1,pool_proj%os_stk%get_noris()
-                call pool_proj%os_stk%set(iproj,'state',1.)
-            enddo
-        endif
-        ! transfer picking coordinates
-        iptcl = 0
-        do iproj=1,n_spprojs
-            call stream_proj%read(spproj_list(iproj))
-            do i = 1,stream_proj%os_ptcl2D%get_noris()
-                iptcl = iptcl+1
-                if( iptcl > nptcls_glob ) THROW_HARD('picking coordinates indexing error 1')
-                if( stream_proj%has_boxcoords(i) )then
-                    call stream_proj%get_boxcoords(i,box_coords)
-                    call pool_proj%set_boxcoords(iptcl, box_coords)
-                endif
-            enddo
-            call stream_proj%kill
-        enddo
-        if( iptcl /= nptcls_glob ) THROW_HARD('picking coordinates indexing error 2')
-        ! first write
+        ! First import
+        call first_import
         call pool_proj%write
         ! generates buffer project
         buffer_ptcls_range = 0
@@ -678,7 +635,6 @@ contains
         enddo
         call qsys_cleanup
         ! updates original project
-        call add_leftovers_to_pool
         call update_orig_proj
         ! class averages at original sampling
         if( do_autoscale ) call rescale_cavgs
@@ -857,8 +813,76 @@ contains
                 if( debug_here ) print *,'end reject from_pool'; call flush(6)
             end subroutine reject_from_pool
 
+            subroutine first_import
+                character(LONGSTRLEN), allocatable :: stk_list(:)
+                logical,               allocatable :: stk_mask(:)
+                integer :: iproj,nptcls,nstks,cnt
+                if( debug_here ) print *,'start first_import'; call flush(6)
+                ! check for projects with particles
+                allocate(stk_mask(n_spprojs), source=.false.)
+                do iproj=1,n_spprojs
+                    call stream_proj%read_segment('mic', spproj_list(iproj))
+                    if( .not.stream_proj%os_mic%isthere('nptcls') ) cycle
+                    nptcls = nint(stream_proj%os_mic%get(1,'nptcls'))
+                    if( nptcls <= 0 ) cycle
+                    stk_mask(iproj) = .true.
+                enddo
+                call stream_proj%kill
+                nstks = count(stk_mask)
+                if( count(stk_mask) == 0 ) THROW_HARD('No particles found on first import')
+                ! prep import
+                allocate(stk_list(nstks))
+                call os_stk%new(nstks)
+                cnt = 0
+                do iproj=1,n_spprojs
+                    if( .not.stk_mask(iproj) ) cycle
+                    cnt = cnt + 1
+                    call stream_proj%read_segment('stk', spproj_list(iproj))
+                    call stream_proj%os_stk%get_ori(1, o_stk)
+                    stk_list(cnt) = trim(stream_proj%get_stkname(1))
+                    call o_stk%set('smpd', smpd) ! refers to scaled image
+                    call os_stk%set_ori(cnt, o_stk)
+                enddo
+                call stream_proj%kill
+                ! updates & scales stacks
+                call scale_stks( stk_list ) ! must come first as names updated
+                call pool_proj%add_stktab(stk_list, os_stk)
+                nptcls_glob = pool_proj%get_nptcls()
+                ! transfer picking coordinates & ctf parameters
+                iptcl = 0
+                do iproj=1,n_spprojs
+                    if( .not.stk_mask(iproj) ) cycle
+                    call stream_proj%read_segment('ptcl2D', spproj_list(iproj))
+                    do i = 1,stream_proj%os_ptcl2D%get_noris()
+                        iptcl = iptcl+1
+                        if( iptcl > nptcls_glob ) THROW_HARD('picking coordinates indexing error 1')
+                        if( stream_proj%has_boxcoords(i) )then
+                            call stream_proj%get_boxcoords(i,box_coords)
+                            call pool_proj%set_boxcoords(iptcl, box_coords)
+                        endif
+                        call pool_proj%os_ptcl2D%set(iptcl, 'dfx',   stream_proj%os_ptcl2D%get(i,'dfx'))
+                        call pool_proj%os_ptcl2D%set(iptcl, 'dfy',   stream_proj%os_ptcl2D%get(i,'dfy'))
+                        call pool_proj%os_ptcl2D%set(iptcl, 'angast',stream_proj%os_ptcl2D%get(i,'angast'))
+                        if( ctfvars%l_phaseplate )then
+                            call pool_proj%os_ptcl2D%set(iptcl, 'phshift',stream_proj%os_ptcl2D%get(i,'phshift'))
+                        endif
+                    enddo
+                enddo
+                if( iptcl /= nptcls_glob ) THROW_HARD('picking coordinates indexing error 2')
+                call stream_proj%kill
+                if( debug_here )then
+                    print *,'end first_import'; call flush(6)
+                    call pool_proj%write('first_import.simple')
+                endif
+            end subroutine first_import
+
+            ! adds newly detected particles to pool
             subroutine append_new_mics
-                integer :: i, n_spprojs_prev, n_new_spprojs, cnt, iptcl, n_new_ptcls
+                type(oris) :: os_stk
+                type(ori)  :: o_stk
+                character(LONGSTRLEN), allocatable :: stk_list(:)
+                logical,               allocatable :: stk_mask(:)
+                integer :: i, n_spprojs_prev, n_new_spprojs, cnt,cnt2, iptcl, n_new_ptcls, nptcls, nstks
                 if( debug_here ) print *,'in append_new_mics'; call flush(6)
                 if( .not.is_file_open(spproj_list_fname) )then
                     do_wait        = .false.
@@ -867,41 +891,63 @@ contains
                     n_new_spprojs  = n_spprojs - n_spprojs_prev
                     if( n_new_spprojs > 0 )then
                         ! fetch new stacks
-                        n_new_ptcls = 0
                         if(allocated(spproj_list))deallocate(spproj_list)
-                        if(allocated(stk_list))   deallocate(stk_list)
-                        allocate(stk_list(n_new_spprojs))
                         call read_filetable(spproj_list_fname, spproj_list)
+                        allocate(stk_mask(n_new_spprojs), source=.false.)
+                        ! gather new stacks
+                        n_new_ptcls = 0
                         cnt = 0
                         do iproj=n_spprojs_prev+1,n_spprojs
-                            cnt = cnt + 1
-                            call stream_proj%read(spproj_list(iproj))
-                            n_new_ptcls   = n_new_ptcls + stream_proj%get_nptcls()
-                            stk           = stream_proj%get_stkname(1)
-                            stk_list(cnt) = trim(stk)
+                            cnt = cnt+1
+                            call stream_proj%read_segment('mic',spproj_list(iproj))
+                            nptcls = nint(stream_proj%os_mic%get(1,'nptcls'))
+                            if( nptcls > 0 )then
+                                n_new_ptcls   = n_new_ptcls + nint(stream_proj%os_mic%get(1,'nptcls'))
+                                stk_mask(cnt) = .true.
+                            endif
                         enddo
                         if( n_new_ptcls > 0 )then
+                            nstks = count(stk_mask)
+                            allocate(stk_list(nstks))
+                            call os_stk%new(nstks)
+                            cnt  = 0
+                            cnt2 = 0
+                            do iproj=n_spprojs_prev+1,n_spprojs
+                                cnt = cnt+1
+                                if( .not.stk_mask(cnt) ) cycle
+                                cnt2 = cnt2 + 1
+                                call stream_proj%read_segment('stk',spproj_list(iproj))
+                                call stream_proj%os_stk%get_ori(1, o_stk)
+                                stk_list(cnt) = trim(stream_proj%get_stkname(1))
+                                call o_stk%set('smpd', smpd) ! refers to scaled image
+                                call os_stk%set_ori(cnt2, o_stk)
+                            enddo
                             call scale_stks( stk_list )
                             ! update project with new images
+                            call pool_proj%add_stktab(stk_list, os_stk)
                             cnt   = 0
                             iptcl = nptcls_glob
                             do iproj=n_spprojs_prev+1,n_spprojs
                                 cnt = cnt + 1
-                                call stream_proj%read(spproj_list(iproj))
-                                ctfvars      = stream_proj%get_ctfparams('ptcl2D', 1)
-                                ctfvars%smpd = smpd
-                                call pool_proj%add_stk(stk_list(cnt), ctfvars)
-                                ! transfer picking coordinates
+                                if( .not.stk_mask(cnt) ) cycle
+                                call stream_proj%read_segment('ptcl2D',spproj_list(iproj))
+                                ! transfer picking coordinates & ctf parameters
                                 do i = 1,stream_proj%os_ptcl2D%get_noris()
                                     iptcl = iptcl+1
                                     if( stream_proj%has_boxcoords(i) )then
                                         call stream_proj%get_boxcoords(i,box_coords)
                                         call pool_proj%set_boxcoords(iptcl, box_coords)
                                     endif
+                                    call pool_proj%os_ptcl2D%set(iptcl, 'dfx',   stream_proj%os_ptcl2D%get(i,'dfx'))
+                                    call pool_proj%os_ptcl2D%set(iptcl, 'dfy',   stream_proj%os_ptcl2D%get(i,'dfy'))
+                                    call pool_proj%os_ptcl2D%set(iptcl, 'angast',stream_proj%os_ptcl2D%get(i,'angast'))
+                                    if( ctfvars%l_phaseplate )then
+                                        call pool_proj%os_ptcl2D%set(iptcl, 'phshift',stream_proj%os_ptcl2D%get(i,'phshift'))
+                                    endif
                                 enddo
                             enddo
                             ! global number of particles update
-                            nptcls_glob = pool_proj%get_nptcls()
+                            nptcls_glob = iptcl
                             ! deactivate new particles by default
                             do iptcl=nptcls_glob-n_new_ptcls+1,nptcls_glob
                                 call pool_proj%os_ptcl2D%set(iptcl,'state',0.)
@@ -911,46 +957,14 @@ contains
                             call cline_cluster2D%delete('converged') ! reactivates pool classification
                         endif
                     endif
-                    ! updates pool with selection
-                    if( file_exists(MICS_SELECTION_FILE) ) call flag_selection
                 else
                     do_wait = .true.
                 endif
+                call o_stk%kill
+                call os_stk%kill
+                call stream_proj%kill
                 if( debug_here ) print *,'end append_new_mics'; call flush(6)
             end subroutine append_new_mics
-
-            !>  flags mics and stacks segements with selection
-            subroutine flag_selection
-                character(len=:), allocatable :: mic_name, mic_name_from_proj
-                type(oris)                    :: mics_sel
-                integer                       :: nmics, imic, iproj
-                logical                       :: included
-                nmics = nlines(MICS_SELECTION_FILE)
-                call mics_sel%new(nmics)
-                call mics_sel%read(MICS_SELECTION_FILE)
-                do iproj=1,pool_proj%os_mic%get_noris()
-                    if(.not.pool_proj%os_mic%isthere('intg'))cycle
-                    call pool_proj%os_mic%getter(iproj,'intg',mic_name_from_proj)
-                    ! check whether corresponding mic is selected
-                    included = .true.
-                    do imic=1,nmics
-                        call mics_sel%getter(imic,'intg',mic_name)
-                        if( trim(mic_name).eq.trim(mic_name_from_proj) )then
-                            included  = mics_sel%get_state(imic) == 1
-                            exit
-                        endif
-                    enddo
-                    if( included )then
-                        call pool_proj%os_mic%set(iproj,'state',1.)
-                        call pool_proj%os_stk%set(iproj,'state',1.)
-                    else
-                        write(logfhandle,'(A,A)')'>>> DESELECTING MICROGRAPH: ',trim(mic_name)
-                        call pool_proj%os_mic%set(iproj,'state',0.)
-                        call pool_proj%os_stk%set(iproj,'state',0.)
-                    endif
-                enddo
-                call mics_sel%kill
-            end subroutine flag_selection
 
             integer function calc_nparts(spproj, nptcls_in)
                 type(sp_project), intent(in) :: spproj
@@ -1288,18 +1302,9 @@ contains
             end subroutine transfer_buffer_to_pool
 
             subroutine read_mics
-                character(len=:), allocatable :: mic_name, mic_name_from_proj
-                type(oris)                    :: mics_sel
-                integer                       :: nptcls, nmics, imic
-                logical                       :: included, do_selection
+                integer :: nptcls
                 if( debug_here )print *,'in read_mics'; call flush(6)
-                do_selection = file_exists(MICS_SELECTION_FILE)
                 call read_filetable(spproj_list_fname, spproj_list)
-                if( do_selection )then
-                    nmics = nlines(MICS_SELECTION_FILE)
-                    call mics_sel%new(nmics)
-                    call mics_sel%read(MICS_SELECTION_FILE)
-                endif
                 ! determine number of particles
                 nptcls_glob_prev = nptcls_glob
                 nptcls_glob      = 0
@@ -1307,26 +1312,13 @@ contains
                     n_spprojs = size(spproj_list)
                     do iproj = 1,n_spprojs
                         call stream_proj%read(spproj_list(iproj))
-                        nptcls   = stream_proj%get_nptcls()
-                        included = .true. ! included by default
-                        if( do_selection )then
-                            call stream_proj%os_mic%getter(1,'intg',mic_name_from_proj)
-                            ! check whether corresponding mic is selected
-                            do imic=1,nmics
-                                call mics_sel%getter(imic,'intg',mic_name)
-                                if( trim(mic_name).eq.trim(mic_name_from_proj) )then
-                                    included  = mics_sel%get_state(imic) == 1
-                                    exit
-                                endif
-                            enddo
-                        endif
-                        if( included ) nptcls_glob = nptcls_glob + nptcls
+                        nptcls      = stream_proj%get_nptcls()
+                        nptcls_glob = nptcls_glob + nptcls
                     enddo
                     call stream_proj%kill
                 else
                     n_spprojs = 0
                 endif
-                if(do_selection)call mics_sel%kill
                 if( debug_here )print *,'end read_mics'; call flush(6)
             end subroutine read_mics
 
@@ -1334,14 +1326,11 @@ contains
             subroutine gen_buffer_from_pool
                 type(ctfparams) :: ctfparms
                 character(len=:), allocatable :: stkname
-                integer :: iptcl, stkind, ind_in_stk, imic, micind, nptcls_here
+                integer :: i, iptcl, stkind, ind_in_stk, imic, micind, nptcls_here, fromp_pool
                 integer :: fromp, top, istk, state, nmics_here, nptcls_tot, nptcls_per_buffer_here
                 if( debug_here )print *,'in gen_buffer_from_pool'; call flush(6)
                 buffer_exists = .false.
                 call buffer_proj%kill
-                ! to account for directory structure
-                call simple_rmdir('buffer2D') ! clean previous round
-                call simple_mkdir('buffer2D')
                 ! determines whether there are enough particles for a buffer
                 if( buffer_ptcls_range(2) > 0 )then
                     call pool_proj%map_ptcl_ind2stk_ind('ptcl2D', buffer_ptcls_range(2), stkind, ind_in_stk)
@@ -1361,14 +1350,14 @@ contains
                     top         = nint(pool_proj%os_stk%get(istk,'top'))
                     nptcls_here = nptcls_here + top-fromp+1
                 enddo
-                ! to allow most leftovers particles to be classified
-                if( nptcls_here >= 1.5*nptcls_per_buffer )then
+                ! whether to go ahead with buffer classification
+                if( nptcls_here >= nptcls_per_buffer )then
                     nptcls_per_buffer_here = nptcls_per_buffer
-                else if( nptcls_here >= nptcls_per_buffer )then
-                    nptcls_per_buffer_here = nptcls_here
                 else
                     return
                 endif
+                call simple_rmdir('buffer2D') ! clean previous round
+                call simple_mkdir('buffer2D')
                 call simple_chdir('buffer2D')
                 ! builds buffer if enough particles
                 buffer_proj%projinfo = pool_proj%projinfo
@@ -1388,13 +1377,23 @@ contains
                     ! to account for directory structure
                     if( stkname(1:1) /= '/') stkname = '../'//trim(stkname)
                     ! import
-                    ctfparms = pool_proj%os_stk%get_ctfvars(imic)
+                    ctfparms   = pool_proj%os_stk%get_ctfvars(imic)
+                    fromp_pool = nint(pool_proj%os_stk%get(imic,'fromp'))
                     call buffer_proj%add_stk(stkname, ctfparms)
                     fromp      = nint(buffer_proj%os_stk%get(istk,'fromp'))
                     top        = nint(buffer_proj%os_stk%get(istk,'top'))
                     call buffer_proj%os_stk%set(istk,'state',real(state))
+                    ! transfer state & CTF parameters
+                    i = fromp_pool-1
                     do iptcl=fromp,top
                         call buffer_proj%os_ptcl2D%set(iptcl,'state',real(state))
+                        i = i+1
+                        call buffer_proj%os_ptcl2D%set(iptcl, 'dfx',   pool_proj%os_ptcl2D%get(i,'dfx'))
+                        call buffer_proj%os_ptcl2D%set(iptcl, 'dfy',   pool_proj%os_ptcl2D%get(i,'dfy'))
+                        call buffer_proj%os_ptcl2D%set(iptcl, 'angast',pool_proj%os_ptcl2D%get(i,'angast'))
+                        if( ctfparms%l_phaseplate )then
+                            call buffer_proj%os_ptcl2D%set(iptcl, 'phshift',pool_proj%os_ptcl2D%get(i,'phshift'))
+                        endif
                     enddo
                     if( state == 0 ) cycle
                     nmics_here  = nmics_here+1
@@ -1408,49 +1407,6 @@ contains
                 buffer_exists = .true.
                 write(logfhandle,'(A,I4,A,I6,A)')'>>> BUILT NEW BUFFER WITH ', nmics_here, ' MICROGRAPHS, ',nptcls_here, ' PARTICLES'
             end subroutine gen_buffer_from_pool
-
-            !> add deactivated particles to the project that have not had a chance to be classified
-            subroutine add_leftovers_to_pool
-                character(len=:), allocatable :: stkname
-                integer, allocatable :: cls_pop(:)
-                integer :: iptcl, stkind, ind_in_stk, imic, micind, icls, fromp, top, istk, cnt, state
-                if( debug_here )print *,'in add_leftovers_to_project'; call flush(6)
-                ! determines whether there are leftovers
-                if( buffer_ptcls_range(2) > 0 )then
-                    call pool_proj%map_ptcl_ind2stk_ind('ptcl2D', buffer_ptcls_range(2), stkind, ind_in_stk)
-                else
-                    return
-                endif
-                cls_pop = nint(pool_proj%os_cls2D%get_all('pop'))
-                micind  = stkind + 1
-                cnt     = 0
-                do istk=micind,pool_proj%os_stk%get_noris()
-                    if(.not.pool_proj%os_stk%isthere(istk,'state'))then
-                        write(logfhandle,*)'error: missing state flag; add_leftovers_to_pool'
-                        stop
-                    endif
-                    state = pool_proj%os_stk%get_state(istk)
-                    if( state == 0 )cycle
-                    fromp       = nint(pool_proj%os_stk%get(istk,'fromp'))
-                    top         = nint(pool_proj%os_stk%get(istk,'top'))
-                    do iptcl = fromp,top
-                        cnt = cnt+1
-                        call pool_proj%os_ptcl2D%set(iptcl,'state',    1.)
-                        call pool_proj%os_ptcl2D%set(iptcl,'updatecnt',1.)
-                        call pool_proj%os_ptcl2D%set(iptcl,'w',        0.)
-                        call pool_proj%os_ptcl2D%set(iptcl,'specscore',0.001)
-                        call pool_proj%os_ptcl2D%set(iptcl,'eo',real(merge(0.,1.,is_even(iptcl))))
-                        icls = irnd_uni(ncls_glob)
-                        do while( cls_pop(icls)==0 )
-                            icls = irnd_uni(ncls_glob)
-                        enddo
-                        call pool_proj%os_ptcl2D%set(iptcl,'class', real(icls))
-                    enddo
-                enddo
-                buffer_ptcls_range(1) = buffer_ptcls_range(2)+1
-                buffer_ptcls_range(2) = buffer_ptcls_range(1)+top-1
-                write(logfhandle,'(A,I8,A)')'>>> ADDED ', cnt, ' UNCLASSIFIED PARTICLES TO THE PROJECT'
-            end subroutine add_leftovers_to_pool
 
             logical function is_timeout( time_now )
                 integer, intent(in) :: time_now
@@ -1469,56 +1425,67 @@ contains
             subroutine update_orig_proj
                 type(ori)                          :: o
                 type(oris)                         :: o_stks
-                type(ctfparams)                    :: ctfparms
-                character(LONGSTRLEN), allocatable :: stk_list(:), mic_list(:)
-                real                               :: rstate
-                integer                            :: nprev, n2append, cnt
-                logical                            :: has_mics
+                character(LONGSTRLEN), allocatable :: stk_list(:)
+                logical,               allocatable :: stk_mask(:)
+                integer                            :: iproj, nprev, n2append, cnt, cnt2, nstks, nptcls
                 write(logfhandle,'(A,A)')'>>> UPDATING PROJECT AT: ',cast_time_char(simple_gettime())
                 call orig_proj%read(orig_projfile)
-                nprev    = orig_proj%os_stk%get_noris()
-                n2append = n_spprojs-nprev
-                has_mics = .false.
+                nprev    = orig_proj%os_mic%get_noris()
+                n2append = n_spprojs - nprev
                 if( n2append > 0 )then
-                    allocate(stk_list(n2append),mic_list(n2append))
-                    call o_stks%new(n2append)
-                    cnt   = 0
-                    do iproj=nprev+1,n_spprojs
-                        cnt = cnt + 1
-                        ! stk
-                        call stream_proj%read(spproj_list(iproj))
-                        call stream_proj%os_stk%get_ori(1, o)
-                        stk_list(cnt) = trim(stream_proj%get_stkname(1))
-                        ctfparms      = stream_proj%get_ctfparams('ptcl2D', 1)
-                        call o%set_ctfvars(ctfparms)
-                        call o_stks%set_ori(cnt,o)
-                        ! mic
-                        if( stream_proj%get_nintgs() == 1 )then
-                            has_mics      = .true.
-                            ctfparms      = stream_proj%get_micparams(1)
-                            mic_list(cnt) = trim(stream_proj%os_mic%get_static(1,'intg'))
-                        endif
-                    enddo
-                    call orig_proj%add_stktab(stk_list, o_stks)
-                    if( has_mics )then
-                        call orig_proj%add_movies(mic_list, ctfparms)
+                    ! micrographs
+                    allocate(stk_mask(n2append), source=.false.)
+                    if( nprev == 0 )then
+                        call orig_proj%os_mic%new(n_spprojs)
+                    else
+                        call orig_proj%os_mic%reallocate(n_spprojs)
                     endif
+                    cnt = 0
                     do iproj=nprev+1,n_spprojs
-                        rstate = pool_proj%os_stk%get(iproj,'state')
-                        call orig_proj%os_stk%set(iproj,'state', rstate)
-                        if( has_mics )call orig_proj%os_mic%set(iproj,'state', rstate)
+                        call stream_proj%read_segment('mic',spproj_list(iproj))
+                        call stream_proj%os_mic%get_ori(1, o)
+                        nptcls = nint(o%get('nptcls'))
+                        if( nptcls > 0 )then
+                            cnt = cnt + 1
+                            stk_mask(cnt) = .true. ! flags stacks
+                        endif
+                        call orig_proj%os_mic%set_ori(iproj, o)
                     enddo
+                    call stream_proj%kill
+                    nstks = count(stk_mask)
+                    if( nstks > 0 )then
+                        ! stacks
+                        call o_stks%new(nstks)
+                        allocate(stk_list(nstks))
+                        cnt  = 0
+                        cnt2 = 0
+                        do iproj=nprev+1,n_spprojs
+                            cnt = cnt + 1
+                            if( .not.stk_mask(cnt) ) cycle
+                            cnt2 = cnt2+1
+                            call stream_proj%read_segment('stk',spproj_list(iproj))
+                            call stream_proj%os_stk%get_ori(1,o)
+                            call o_stks%set_ori(cnt2,o)
+                            stk_list(cnt2) = trim(stream_proj%get_stkname(1))
+                        enddo
+                        call stream_proj%kill
+                        call orig_proj%add_stktab(stk_list, o_stks)
+                    endif
                 endif
+                ! overwrite parameters less or updated particle & class fields
                 orig_proj%os_cls2D  = pool_proj%os_cls2D
                 orig_proj%os_ptcl2D = pool_proj%os_ptcl2D
                 if( do_autoscale ) call orig_proj%os_ptcl2D%mul_shifts( 1./scale_factor )
+                orig_proj%os_ptcl3D = pool_proj%os_ptcl2D
+                call orig_proj%os_ptcl3D%delete_3Dalignment
+                call orig_proj%os_ptcl3D%delete_2Dclustering
+                call orig_proj%os_ptcl3D%delete_entry('xpos')
+                call orig_proj%os_ptcl3D%delete_entry('ypos')
                 ! write
                 call orig_proj%write
                 ! cleanup
                 call o%kill
                 call o_stks%kill
-                if(allocated(mic_list))     deallocate(mic_list)
-                if(allocated(stk_list))     deallocate(stk_list)
                 if( debug_here )print *,'end update_orig_proj'; call flush(6)
             end subroutine update_orig_proj
 
