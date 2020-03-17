@@ -137,6 +137,8 @@ contains
         class(binoris), intent(inout) :: self !< instance
         integer :: io_stat
         if( self%l_open )then
+            io_stat = fsync(fnum(self%funit))
+            if( io_stat /= 0 ) write(logfhandle,'(a)')'FSYNC ERROR FILE UNIT: '//int2str(self%funit)
             call fclose(self%funit,io_stat,errmsg='binoris ; close ')
             self%l_open = .false.
         end if

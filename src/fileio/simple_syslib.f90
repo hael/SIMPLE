@@ -52,10 +52,14 @@ interface
         character(kind=c_char,len=1),dimension(*),intent(in) :: link_path
     end function symlink
 
-    !!  sync() causes all buffered modifications to file metadata and data to be
-    !!  written to the underlying filesystems.
-    subroutine sync () bind(c,name="sync")
-    end subroutine sync
+    ! !!  sync() causes all buffered modifications to file metadata and data to be
+    ! !!  written to the underlying filesystems.
+    function fsync (fd) bind(c,name="fsync")
+      use iso_c_binding, only: c_int
+        integer(c_int), value :: fd
+        integer(c_int) :: fsync
+    end function fsync
+
 
 end interface
 
@@ -889,7 +893,6 @@ contains
     subroutine print_compiler_info(file_unit)
         integer, intent (in), optional :: file_unit
         integer  :: file_unit_op
-        integer  :: status
         character(len=:), allocatable :: compilation_cmd, compiler_ver
         character(len=56)  :: str !! needed by intel
         if (present(file_unit)) then
