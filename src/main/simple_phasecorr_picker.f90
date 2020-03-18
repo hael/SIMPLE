@@ -515,32 +515,39 @@ contains
 
     subroutine distance_filter
         integer :: ipeak, jpeak, ipos(2), jpos(2), loc(1)
-        real    :: dist
+        real    :: dist, corr, dist_sq, distthr_sq
         logical, allocatable :: mask(:)
         real,    allocatable :: corrs(:)
         write(logfhandle,'(a)') '>>> DISTANCE FILTERING'
         allocate( mask(npeaks), corrs(npeaks), selected_peak_positions(npeaks), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk( 'In: simple_picker :: distance_filter',alloc_stat)
         selected_peak_positions = .true.
+        distthr_sq = nint(distthr*distthr)
+        !$omp parallel do schedule(static) default(shared) private(ipeak,jpeak,ipos,jpos,dist,mask,loc,corr) proc_bind(close)
         do ipeak=1,npeaks
             ipos = peak_positions(ipeak,:)
+            corr = -HUGE(corr)
             mask = .false.
-            !$omp parallel do schedule(static) default(shared) private(jpeak,jpos,dist) proc_bind(close)
             do jpeak=1,npeaks
                 jpos = peak_positions(jpeak,:)
-                dist = euclid(real(ipos),real(jpos))
-                if( dist < distthr ) mask(jpeak) = .true.
-                corrs(jpeak) = corrmat(jpos(1),jpos(2))
-            end do
-            !$omp end parallel do
-            ! find best match in the neigh
-            loc = maxloc(corrs, mask=mask)
+                ! dist = euclid(real(ipos),real(jpos))
+                dist_sq = sum((ipos-jpos)**2)
+                if( dist_sq < distthr_sq ) then
+                  mask(jpeak) = .true.
+                  ! find best match in the neigh
+                  if(corrmat(jpos(1),jpos(2)) > corr) then
+                    corr   = corrmat(jpos(1),jpos(2))
+                    loc(1) = jpeak
+                  endif
+                endif
+              end do
             ! eliminate all but the best
             mask(loc(1)) = .false.
             where( mask )
                 selected_peak_positions = .false.
             end where
         end do
+        !$omp end parallel do
         npeaks_sel = count(selected_peak_positions)
         if(DEBUG_HERE) write(logfhandle,'(a,1x,I7)') 'peak positions left after distance filtering: ', npeaks_sel
     end subroutine distance_filter
@@ -573,6 +580,10 @@ contains
         call ptcl_target%kill()
     end subroutine gather_stats
 
+
+    ! In the old school picker there are 4 stats. In picker there are 3.
+    ! The disregarded stat is the correlation (CC2REF). The effect it has, if put
+    ! back, is that the picking becomes more permissive.
     subroutine one_cluster_clustering
         real, allocatable :: dmat(:,:)
         integer           :: i_median, i, j, cnt, ipeak
@@ -634,3 +645,24 @@ contains
         endif
     end subroutine kill_phasecorr_picker
 end module simple_phasecorr_picker
+
+! IN distance filtering previous implementation of the loop
+! do ipeak=1,npeaks
+!     ipos = peak_positions(ipeak,:)
+!     mask = .false.
+!     !$omp parallel do schedule(static) default(shared) private(jpeak,jpos,dist) proc_bind(close)
+!     do jpeak=1,npeaks
+!         jpos = peak_positions(jpeak,:)
+!         dist_sq = sum((ipos-jpos)**2)
+!         if( dist_sq < distthr_sq ) mask(jpeak) = .true.
+!         corrs(jpeak) = corrmat(jpos(1),jpos(2))
+!     end do
+!     !$omp end parallel do
+!     ! find best match in the neigh
+!     loc = maxloc(corrs, mask=mask)
+!     ! eliminate all but the best
+!     mask(loc(1)) = .false.
+!     where( mask )
+!         selected_peak_positions = .false.
+!     end where
+! end do
