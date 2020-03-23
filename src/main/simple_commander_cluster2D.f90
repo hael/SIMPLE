@@ -402,7 +402,7 @@ contains
         class(cluster2D_commander_stream), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         integer,               parameter   :: WAIT_WATCHER       = 30    ! seconds prior to new stack detection
-        integer,               parameter   :: ORIGPROJ_WRITEFREQ = 1800  ! 30mins, Frequency at which the original project file should be updated
+        integer,               parameter   :: ORIGPROJ_WRITEFREQ = 3600  ! 30mins, Frequency at which the original project file should be updated
         integer,               parameter   :: MINBOXSZ           = 72    ! minimum boxsize for scaling
         ! dev settings
         ! integer,               parameter   :: ORIGPROJ_WRITEFREQ = 60    ! 10mins, Frequency at which the original project file should be updated
@@ -412,7 +412,7 @@ contains
         character(len=STDLEN), parameter   :: PROJFILE_BUFFER    = 'buffer.simple'
         character(len=STDLEN), parameter   :: PROJFILE_POOL      = 'pool.simple'
         character(len=STDLEN), parameter   :: SCALE_DIR          = './scaled_stks/'
-        logical,               parameter   :: debug_here = .true.
+        logical,               parameter   :: debug_here = .false.
         type(parameters)                   :: params
         type(rank_cavgs_commander)         :: xrank_cavgs
         type(cmdline)                      :: cline_cluster2D, cline_cluster2D_buffer, cline_rank_cavgs
