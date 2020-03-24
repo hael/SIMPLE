@@ -16,8 +16,7 @@ public :: ctf_estimate_fit
 private
 #include "simple_local_flags.inc"
 
-character(len=STDLEN), parameter :: SPECKIND      = 'sqrt'
-real,                  parameter :: TOL           = 1.e-5
+real,                  parameter :: TOL   = 1.e-5
 integer,               parameter :: IARES = 10, NSTEPS = 200, POLYDIM = 10
 logical,               parameter :: DEBUG_HERE = .false.
 logical,               parameter :: BENCH      = .false.
