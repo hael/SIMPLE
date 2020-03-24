@@ -34,7 +34,6 @@ contains
         type(pspec_score)             :: pspecscore
         character(len=:), allocatable :: fname_diag
         character(len=LONGSTRLEN)     :: moviename_thumb, rel_moviename_thumb, rel_fname, epsname, docname, tmpl_fname
-        real                          :: ctfscore
         integer                       :: nframes, ldim(3)
         if( .not. file_exists(moviename_forctf) )&
         & write(logfhandle,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
@@ -62,7 +61,6 @@ contains
         call ctffit%new(self%micrograph, params_glob%pspecsz, ctfvars, [params_glob%dfmin,params_glob%dfmax],&
             &[params_glob%hp,params_glob%lp], params_glob%astigtol)
         call ctffit%fit( ctfvars )
-        ctfscore = ctffit%get_ctfscore()
         if( l_gen_thumb )then
             call self%gen_thumbnail( ctffit )
             call self%img_jpg%write_jpg(moviename_thumb, norm=.true., quality=92)
@@ -93,7 +91,6 @@ contains
         call orientation%set('angast',         ctfvars%angast)
         call orientation%set('phshift',        ctfvars%phshift)
         call orientation%set('ctf_estimatecc', ctffit%get_ccfit())
-        call orientation%set('ctfscore',       ctfscore)
         call orientation%set('ctfres',         ctffit%get_ctfres())
         call orientation%set('ctfjpg',         rel_fname)
         ! clean
@@ -126,7 +123,7 @@ contains
         else if( params_glob%pspecsz < GUI_PSPECSZ )then
             tmp = self%pspec4viz
             call self%pspec4viz%zero_and_unflag_ft
-            call tmp%fft 
+            call tmp%fft
             call tmp%pad(self%pspec4viz)
             self%pspec4viz = tmp
         endif

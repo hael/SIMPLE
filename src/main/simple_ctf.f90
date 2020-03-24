@@ -33,6 +33,7 @@ type ctf
     generic            :: eval => eval_1, eval_2, eval_3, eval_4
     procedure, private :: eval_df
     procedure          :: nextrema
+    procedure          :: spafreqsqatnthzero
     procedure          :: apply
     procedure          :: ctf2img
     procedure          :: apply_serial
@@ -175,6 +176,39 @@ contains
         real,       intent(in) :: phshift     !< aditional phase shift (radians), for phase plate
         nextrema = abs(floor( 1. / PI * (self%evalPhSh(spaFreqSq, ang, phshift)+self%amp_contr_const) + 0.5))
     end function nextrema
+
+    !>  \brief  returns spatial frequency at some zero
+    real function SpaFreqSqAtNthZero( self, nzero, add_phshift, ang )
+        class(ctf), intent(in)  :: self
+        integer,    intent(in)  :: nzero
+        real,       intent(in)  :: add_phshift
+        real,       intent(in) :: ang
+        real :: phshift, A, B, C, determinant, one,two
+        phshift = real(nzero) * PI
+        A = -0.5 * PI * self%wl**3. * self%cs
+        B = PI * self%wl * self%eval_df(ang)
+        C = self%amp_contr_const + add_phshift
+        determinant = B**2. - 4.*A*(C-phshift)
+        if( abs(self%cs) < 0.0001 )then
+            SpaFreqSqAtNthZero = (phshift-C) / B
+        else
+            if( determinant < 0. )then
+                SpaFreqSqAtNthZero = 0.
+            else
+                one = (-B + sqrt(determinant)) / (2.0 * A)
+                two = (-B - sqrt(determinant)) / (2.0 * A)
+                if( one > 0. .and. two > 0. )then
+                    SpaFreqSqAtNthZero = one
+                else if( one > 0. )then
+                    SpaFreqSqAtNthZero = one
+                else if( two > 0. )then
+                    SpaFreqSqAtNthZero = two
+                else
+                    SpaFreqSqAtNthZero = 0.
+                endif
+            endif
+        endif
+    end function SpaFreqSqAtNthZero
 
     !>  \brief  is for applying CTF to an image
     subroutine apply( self, img, dfx, mode, dfy, angast, bfac, add_phshift )

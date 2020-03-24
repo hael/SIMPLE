@@ -656,49 +656,48 @@ contains
     !> \brief dampens the central cross of a powerspectrum by mean filtering
     subroutine dampen_pspec_central_cross( self )
         class(image), intent(inout) :: self
-        integer, parameter :: DAMPWINSZ=2
-        integer :: h,mh,k,mk,lims(3,2),ci,cj,i,j,ii,jj,cnt
+        integer, parameter :: HDAMPWINSZ=2
+        integer, parameter :: DAMPWINSZ =5
+        real :: medi(self%ldim(1)),medj(self%ldim(2)),vals(DAMPWINSZ**2)
+        integer :: h,mh,k,mk,lims(3,2),ci,cj,i,j,ii,jj,cnt,l,r,u,d,n
         real    :: sum
         if( self%ft )          THROW_HARD('not intended for FTs; dampen_pspec_central_cross')
         if( self%ldim(3) > 1 ) THROW_HARD('not intended for 3D imgs; dampen_pspec_central_cross')
         lims = self%loop_lims(3)
         mh   = abs(lims(1,1))
         mk   = abs(lims(2,1))
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                if( h == 0 .or. k == 0 )then
-                    ci = min(max(1,h+mh+1),self%ldim(1))
-                    cj = min(max(1,k+mk+1),self%ldim(2))
-                    cnt = 0
-                    sum = 0.
-                    do i=ci-DAMPWINSZ,ci+DAMPWINSZ
-                        if( i == ci )then
-                            cycle
-                        else if( i <= 0 )then
-                            ii = i+self%ldim(1)
-                        else if( i > self%ldim(1) )then
-                            ii = i-self%ldim(1)
-                        else
-                            ii = i
-                        endif
-                        do j=cj-DAMPWINSZ,cj+DAMPWINSZ
-                            if( j == cj )then
-                                cycle
-                            else if( j <= 0 )then
-                                jj = j+self%ldim(2)
-                            else if( j > self%ldim(2) )then
-                                jj = j-self%ldim(2)
-                            else
-                                jj = j
-                            endif
-                            cnt = cnt+1
-                            sum = sum + self%rmat(ii,jj,1)
-                        enddo
-                    enddo
-                    self%rmat(ci,cj,1) = sum / real(cnt)
-                endif
-            end do
-        end do
+        n    = DAMPWINSZ*DAMPWINSZ
+        ! along h
+        h = 0
+        i = min(max(1,h+mh+1),self%ldim(1))
+        l = min(max(1,h-HDAMPWINSZ+mh+1),self%ldim(1))
+        r = min(max(1,h+HDAMPWINSZ+mh+1),self%ldim(1))
+        do j=1,self%ldim(2)
+            d = max(1,j-HDAMPWINSZ)
+            u = min(d+DAMPWINSZ-1,self%ldim(2))
+            d = u-DAMPWINSZ+1
+            vals = reshape(self%rmat(l:r,d:u,1),(/n/))
+            medj(j) = median_nocopy(vals)
+        enddo
+        ! along k
+        k = 0
+        j = min(max(1,k+mk+1),self%ldim(2))
+        d = min(max(1,k-HDAMPWINSZ+mk+1),self%ldim(2))
+        u = min(max(1,k+HDAMPWINSZ+mk+1),self%ldim(2))
+        do i=1,self%ldim(1)
+            l = max(1,i-HDAMPWINSZ)
+            r = min(l+DAMPWINSZ-1,self%ldim(1))
+            l = r-DAMPWINSZ+1
+            vals = reshape(self%rmat(l:r,d:u,1),(/n/))
+            medi(i) = median_nocopy(vals)
+        enddo
+        ! replace
+        h = 0
+        i = min(max(1,h+mh+1),self%ldim(1))
+        self%rmat(i,1:self%ldim(2),1) = medj
+        k = 0
+        j = min(max(1,k+mk+1),self%ldim(2))
+        self%rmat(1:self%ldim(1),j,1) = medi
     end subroutine dampen_pspec_central_cross
 
     subroutine scale_pspec4viz( self, rsmpd4viz )

@@ -410,7 +410,7 @@ contains
         real                               :: SMPD_TARGET        = 4.    ! target sampling distance
         character(len=STDLEN), parameter   :: USER_PARAMS        = 'stream2D_user_params.txt'
         character(len=STDLEN), parameter   :: PROJFILE_BUFFER    = 'buffer.simple'
-        character(len=STDLEN), parameter   :: PROJFILE_POOL      = 'pool.simple'
+        character(len=STDLEN), parameter   :: PROJFILE_POOL      = 'cluster2D.simple'
         character(len=STDLEN), parameter   :: SCALE_DIR          = './scaled_stks/'
         logical,               parameter   :: debug_here = .false.
         type(parameters)                   :: params

@@ -18,8 +18,9 @@ private
 
 character(len=STDLEN), parameter :: SPECKIND      = 'sqrt'
 real,                  parameter :: TOL           = 1.e-5
-integer,               parameter :: IARES = 5, NSTEPS = 200, POLYDIM = 10
+integer,               parameter :: IARES = 10, NSTEPS = 200, POLYDIM = 10
 logical,               parameter :: DEBUG_HERE = .false.
+logical,               parameter :: BENCH      = .false.
 
 type ctf_estimate_fit
     private
@@ -28,8 +29,8 @@ type ctf_estimate_fit
     type(image), allocatable  :: pspec_patch(:,:)        ! patches micrograph powerspec
     type(image)               :: pspec                   ! all micrograph powerspec
     type(image)               :: pspec_ctf               ! CTF powerspec
-    type(image)               :: pspec_ctf_roavg         ! rotationally averaged CTF powerspec
     type(image)               :: pspec_roavg             ! rotationally averaged all micrograph powerspec
+    type(image)               :: pspec4ctfres            ! rotationally averaged all micrograph powerspec
     type(ctf)                 :: tfun                    ! transfer function object
     type(ctfparams)           :: parms                   ! for storing ctf parameters
     type(ctfparams), allocatable  :: parms_patch(:,:)    ! for storing patch ctf parameters
@@ -49,7 +50,6 @@ type ctf_estimate_fit
     real                      :: hp           = 0.       ! high-pass limit
     real                      :: lp           = 0.       ! low-pass limit
     real                      :: cc_fit       = -1.
-    real                      :: ctfscore     = -1.
     real                      :: ctfres       = -1.
     integer                   :: box          = 0        ! box size
     integer                   :: ntiles(2)    = 0        ! # tiles along x/y
@@ -61,7 +61,10 @@ type ctf_estimate_fit
     integer                   :: ldim_box(3)  = 0        ! box logical dimensions
     integer                   :: ldim_mic(3)  = 0        ! logical dimensions
     integer                   :: npix_msk     = 0        ! # pixels in non-redudant resolution mask
+    logical                   :: l_nano       = .false.
     logical                   :: exists       = .false.
+    integer(timer_int_kind)   :: t, t_tot
+    real(timer_int_kind)      :: rt_gen_tiles, rt_mic2spec, rt_1D, rt_2Dprep, rt_2D, rt_stats, rt_tot, rt_patch
 contains
     ! constructor
     procedure          :: new
@@ -69,7 +72,6 @@ contains
     procedure          :: fit_nano
     ! getters
     procedure          :: get_ccfit
-    procedure          :: get_ctfscore
     procedure          :: get_pspec
     procedure          :: get_ctfres
     procedure          :: get_parms
@@ -78,6 +80,7 @@ contains
     procedure, private :: gen_tiles
     procedure          :: fit
     procedure, private :: mic2spec
+    procedure, private :: ft2img
     procedure, private :: grid_srch
     procedure, private :: refine
     procedure          :: fit_patches
@@ -90,7 +93,6 @@ contains
     procedure          :: write_star
     procedure, private :: calc_ctfscore
     procedure, private :: calc_ctfres
-    procedure, private :: gen_ctf_extrema
     procedure          :: write_diagnostic
     procedure, private :: ctf2pspecimg
     procedure, private :: calc_tilt
@@ -114,6 +116,7 @@ contains
         real,                 intent(in)    :: astigtol_in !< tolerated astigmatism, 0.05 microns default
         integer :: i,j,sh
         call self%kill
+        if( BENCH ) self%t_tot = tic()
         ! set constants
         self%parms%smpd         = parms%smpd
         self%parms%cs           = parms%Cs
@@ -136,17 +139,18 @@ contains
         call self%pspec%new(self%ldim_box, self%smpd)
         call self%pspec_roavg%new(self%ldim_box, self%smpd)
         call self%pspec_ctf%new(self%ldim_box, self%smpd)
-        call self%pspec_ctf_roavg%new(self%ldim_box, self%smpd)
         self%flims      = self%pspec%loop_lims(3) ! redundant
         self%flims1d    = [0,maxval(abs(self%flims(1:2,:)))]
-        self%freslims1d = [self%pspec%get_find(self%hp),self%pspec%get_find(self%lp)]
+        self%freslims1d = [self%pspec%get_find(self%hp),min(self%pspec%get_find(self%lp),self%pspec%get_nyq())]
         allocate(self%roavg_spec1d(self%flims1d(1):self%flims1d(2)),source=0.)
         allocate(self%resmsk1D(self%flims1d(1):self%flims1d(2)), source=.false.)
         do sh = self%freslims1d(1),self%freslims1d(2)
             self%resmsk1D(sh) = .true.
         enddo
         ! generate windows
+        if( BENCH ) self%t = tic()
         call self%gen_tiles
+        if( BENCH ) self%rt_gen_tiles = toc(self%t)
         ! init patches power spectra images
         if( all(self%ntiles>2) )then
             if( is_even(self%ntiles(1)) )then
@@ -196,6 +200,7 @@ contains
         ! random seed
         call seed_rnd
         self%exists = .true.
+        if( BENCH ) self%rt_tot = toc(self%t_tot)
     end subroutine new
 
     ! constructs & fit
@@ -241,7 +246,6 @@ contains
         call self%pspec%new(self%ldim_box, self%smpd)
         call self%pspec_roavg%new(self%ldim_box, self%smpd)
         call self%pspec_ctf%new(self%ldim_box, self%smpd)
-        call self%pspec_ctf_roavg%new(self%ldim_box, self%smpd)
         self%flims      = self%pspec%loop_lims(3) ! redundant
         self%flims1d    = [0,maxval(abs(self%flims(1:2,:)))]
         self%freslims1d = [self%pspec%get_find(self%hp),self%pspec%get_find(self%lp)]
@@ -345,7 +349,7 @@ contains
                 call tmpimgs(ithr)%norm
                 call tmpimgs(ithr)%zero_edgeavg
                 call tmpimgs(ithr)%fft
-                call tmpimgs(ithr)%ft2img(SPECKIND, self%tiles(i,j))
+                call self%ft2img(tmpimgs(ithr), self%tiles(i,j))
             enddo
         enddo
         !$omp end parallel do
@@ -365,11 +369,6 @@ contains
         class(ctf_estimate_fit), intent(inout) :: self
         get_ccfit = self%cc_fit
     end function get_ccfit
-
-    real function get_ctfscore(self)
-        class(ctf_estimate_fit), intent(inout) :: self
-        get_ctfscore = self%ctfscore
-    end function get_ctfscore
 
     ! for visualization
     subroutine get_pspec(self, pspec_out)
@@ -402,6 +401,7 @@ contains
         class(image),  optional, intent(inout) :: spec
         logical,       optional, intent(in)    :: nano
         logical :: l_nano
+        if( BENCH ) self%t_tot = tic()
         l_nano = .false.
         if( present(nano) ) l_nano = nano
         if( present(spec) )then
@@ -412,27 +412,38 @@ contains
             call self%pspec%copy(spec)
         else
             ! generate spectrum from tiles
+            if( BENCH ) self%t = tic()
             call self%mic2spec(self%pspec)
+            if( BENCH ) self%rt_mic2spec = toc(self%t)
         endif
+        self%pspec4ctfres = self%pspec
+        if( BENCH ) self%t = tic()
         ! generate & normalize 1D spectrum
         call self%gen_roavspec1d
         ! 1D grid search with rotational average
         call self%grid_srch
+        if( BENCH ) self%rt_1D = toc(self%t)
+        if( BENCH ) self%t = tic()
         ! prepare rotationally averaged power spectra & CTF power spectrum
         call self%pspec%roavg(IARES, self%pspec_roavg, 180)
         ! normalize 2D spectrum with respect to resolution range
         call self%norm_pspec(self%pspec)
+        if( BENCH ) self%rt_2Dprep = toc(self%t)
         ! 3/4D refinement of grid solution
+        if( BENCH ) self%t = tic()
         call self%refine
+        if( BENCH ) self%rt_2D = toc(self%t)
         ! calculate CTF stats
-        call self%calc_ctfscore
+        if( BENCH ) self%t = tic()
         call self%calc_ctfres
+        if( BENCH ) self%rt_stats = toc(self%t)
         ! output
         parms%dfx          = self%parms%dfx
         parms%dfy          = self%parms%dfy
         parms%angast       = self%parms%angast
         parms%phshift      = self%parms%phshift
         parms%l_phaseplate = self%parms%l_phaseplate
+        if( BENCH )self%rt_tot = self%rt_tot+toc(self%t_tot)
     end subroutine fit
 
     !>  Performs patch based refinement
@@ -441,6 +452,7 @@ contains
         type(ctf_estimate_cost4Dcont) :: costcont_patch(self%npatches(1),self%npatches(2))
         real    :: limits(2,2), cc, sumw, w, dist
         integer :: pi,pj,i,j
+        if( BENCH )self%t = tic()
         if( self%ntotpatch <= 0 ) return
         limits(1,1) = max(self%df_lims(1),self%parms%dfx-1.)
         limits(1,2) = min(self%df_lims(2),self%parms%dfx+1.)
@@ -486,6 +498,19 @@ contains
         enddo
         !$omp end parallel do
         call self%fit_polynomial
+        if( BENCH )then
+            self%rt_patch = toc(self%t)
+            self%rt_tot = self%rt_tot+self%rt_patch
+            print *,'TIMING '
+            print *,'gen_tiles: ', self%rt_gen_tiles
+            print *,'mic2spec:  ', self%rt_mic2spec
+            print *,'1D:        ', self%rt_1D
+            print *,'2Dprep:    ', self%rt_2Dprep
+            print *,'2D:        ', self%rt_2D
+            print *,'stats:     ', self%rt_stats
+            print *,'patch:     ', self%rt_patch
+            print *,'total:     ', self%rt_tot
+        endif
     end subroutine fit_patches
 
     !> mic2spec calculates the average powerspectrum over a micrograph
@@ -523,7 +548,6 @@ contains
         sdev = dsqrt(sdev/real(self%npix_msk,dp))
         if(sdev <= TINY) sdev = 1.d0
         prmat(1:self%box,1:self%box,1) = prmat(1:self%box,1:self%box,1)/real(sdev)
-        nullify(prmat)
     end subroutine norm_pspec
 
     !>  \brief  Generates and normalize 1D rotational average spectrum
@@ -540,10 +564,10 @@ contains
         cnt   = 0
         shlim = nint(sqrt(real(self%flims1d(1)**2+self%flims1d(2)**2)))
         do h=self%flims(1,1),self%flims(1,2)
+            i = min(max(1,h+mh+1),self%ldim_box(1))
             do k=self%flims(2,1),self%flims(2,2)
                 sh = nint(sqrt(real(h*h+k*k)))
                 if( sh > shlim )  cycle
-                i = min(max(1,h+mh+1),self%ldim_box(1))
                 j = min(max(1,k+mk+1),self%ldim_box(2))
                 self%roavg_spec1d(sh) = self%roavg_spec1d(sh)+prmat(i,j,1)
                 cnt(sh) = cnt(sh)+1
@@ -572,9 +596,10 @@ contains
     subroutine gen_resmsk( self )
         class(ctf_estimate_fit), intent(inout) :: self
         type(image) :: imgmsk
-        integer     :: h,k, i,j, cnt, mh,mk, sh
+        integer     :: h,k, i,j, cnt, mh,mk, sh, cenbox
         mh = abs(self%flims(1,1))
         mk = abs(self%flims(2,1))
+        cenbox = self%box/2+1
         ! resolution mask
         call imgmsk%new(self%ldim_box, self%smpd)
         call imgmsk%resmsk(self%hp, self%lp)
@@ -584,12 +609,16 @@ contains
         self%cc_msk(:,self%box/2+1,1) = .false.
         ! takes into acount 1D resolution mask
         do h=self%flims(1,1),self%flims(1,2)
-            i  = min(max(1,h+mh+1),self%ldim_box(1))
+            i  = min(max(1,h+mh+1),self%box)
             do k=self%flims(2,1),self%flims(2,2)
-                j  = min(max(1,k+mk+1),self%ldim_box(2))
+                j  = min(max(1,k+mk+1),self%box)
                 if( self%cc_msk(i,j,1) )then
                     sh = nint(sqrt(real(h*h+k*k)))
-                    self%cc_msk(i,j,1) = self%resmsk1D(sh)
+                    if( sh > self%flims1d(2) )then
+                        self%cc_msk(i,j,1) = .false.
+                    else
+                        self%cc_msk(i,j,1) = self%resmsk1D(sh)
+                    endif
                 endif
             enddo
         enddo
@@ -597,12 +626,12 @@ contains
         self%npix_msk = count(self%cc_msk)
         allocate(self%inds_msk(2,self%npix_msk))
         cnt = 0
-        do h=self%flims(1,1),self%flims(1,2)
-            i = min(max(1,h+mh+1),self%ldim_box(1))
-            do k=self%flims(2,1),self%flims(2,2)
-                j = min(max(1,k+mk+1),self%ldim_box(2))
+        do i = 1,self%box
+            h = i-cenbox
+            do j = 1,self%box
                 if( self%cc_msk(i,j,1) )then
                     cnt = cnt + 1
+                    k   = j-cenbox
                     self%inds_msk(:,cnt) = [h,k]
                 endif
             enddo
@@ -614,21 +643,24 @@ contains
     ! calculate CTF score diagnostic
     subroutine calc_ctfscore( self )
         class(ctf_estimate_fit), intent(inout) :: self
+        type(image)       :: pspec_ctf_roavg
         real, allocatable :: corrs(:)
         real              :: df_avg
         integer           :: filtsz, hpfind, lpfind
+        call pspec_ctf_roavg%new(self%ldim_box, self%smpd)
         df_avg = (self%parms%dfx + self%parms%dfy) / 2.0
-        call self%ctf2pspecimg(self%pspec_ctf_roavg, df_avg, df_avg, 0.)
+        call self%ctf2pspecimg(pspec_ctf_roavg, df_avg, df_avg, 0.)
         hpfind = self%pspec_roavg%get_find(self%hp)
         lpfind = self%pspec_roavg%get_find(max(2.5,2.*self%smpd))
         filtsz = self%pspec_roavg%get_filtsz()
         call self%pspec_roavg%mask(real(lpfind), 'soft', inner=real(hpfind))
-        call self%pspec_ctf_roavg%mask(real(lpfind), 'soft', inner=real(hpfind))
+        call pspec_ctf_roavg%mask(real(lpfind), 'soft', inner=real(hpfind))
         call self%pspec_roavg%norm_bin
-        call self%pspec_ctf_roavg%norm_bin
+        call pspec_ctf_roavg%norm_bin
         allocate(corrs(filtsz))
-        call self%pspec_roavg%frc_pspec(self%pspec_ctf_roavg, corrs)
-        self%ctfscore = real(count(corrs(hpfind:lpfind) > 0.)) / real(lpfind-hpfind+1)
+        call self%pspec_roavg%frc_pspec(pspec_ctf_roavg, corrs)
+        !self%ctfscore = real(count(corrs(hpfind:lpfind) > 0.)) / real(lpfind-hpfind+1)
+        call pspec_ctf_roavg%kill
     end subroutine calc_ctfscore
 
     ! calculate micrograph tilt
@@ -714,13 +746,12 @@ contains
             call self%ctf2pspecimg(self%pspec_ctf, self%parms%dfx, self%parms%dfy, self%parms%angast)
         endif
         call self%pspec_ctf%norm()
-        call self%norm_pspec(self%pspec)
         l_msk = self%cc_msk
         ! putting back central cross for display
         logicen = self%box/2+1
-        l_msk(logicen:min(self%box,logicen+self%freslims1d(2)),logicen,1) = .true.
+        l_msk(logicen+self%freslims1d(1):min(self%box,logicen+self%freslims1d(2)),logicen,1) = .true.
         do i = self%freslims1d(1),self%freslims1d(2)
-            l_msk(logicen+i,logicen,1) = self%resmsk1D(i)
+            l_msk(min(self%box,logicen+i),logicen,1) = self%resmsk1D(i)
         enddo
         call self%pspec%before_after(self%pspec_ctf, pspec_half_n_half, l_msk)
         if( .not.l_nano ) call pspec_half_n_half%scale_pspec4viz
@@ -813,31 +844,36 @@ contains
         class(ctf_estimate_fit), intent(inout) :: self
         class(image),            intent(inout) :: img
         real, pointer :: prmat(:,:,:)
-        real(dp)      :: rn, rsum
-        real          :: rplane(self%box,self%box)
-        integer       :: winsz, hwinsz, i, j, s, ss, t, tt
+        real          :: backgr(self%box,self%box), hp_rad, hp_radsq, radsq
+        integer       :: conv_box,hconv_box,cenbox, i,j,l,r,d,u,ni,nj,rjsq
         call img%get_rmat_ptr(prmat)
-        hwinsz = nint(real(self%box/2)*self%smpd / self%hp / sqrt(2.))
-        winsz  = 2*hwinsz + 1
-        rn     = real(winsz*winsz,dp)
-        rplane = 0.
-        !$omp parallel do collapse(2) default(shared) private(i,j,s,ss,t,tt,rsum)&
+        hp_rad   = real(self%box)*self%smpd/self%hp
+        hp_radsq = floor(hp_rad*hp_rad)
+        conv_box = nint(hp_rad*sqrt(2.))
+        if(is_even(conv_box)) conv_box = conv_box + 1
+        hconv_box = (conv_box-1)/2
+        cenbox    = self%box/2+1 ! is the pixel address of central spot
+        !$omp parallel do default(shared) private(i,j,ni,nj,l,r,u,d,radsq,rjsq)&
         !$omp schedule(static) proc_bind(close)
-        do i=1,self%box
-            do j=1,self%box
-                rsum = 0.d0
-                do s=i-hwinsz,i+hwinsz
-                    ss = cyci_1d_static(self%box, s)
-                    do t=j-hwinsz,j+hwinsz
-                        tt   = cyci_1d_static(self%box, t)
-                        rsum = rsum + real(prmat(ss,tt,1),dp)
-                    end do
-                end do
-                rplane(i,j) = real(rsum/rn)
+        do j=1,self%box
+            d    = max(1,j-hconv_box)
+            u    = min(self%box,j+hconv_box)
+            nj   = u-d+1
+            rjsq = (j-cenbox)**2
+            do i=1,self%box
+                radsq = (i-cenbox)**2+rjsq
+                if( radsq <= hp_radsq )then
+                    backgr(i,j) = prmat(i,j,1)
+                else
+                    l  = max(1,i-hconv_box)
+                    r  = min(self%box,i+hconv_box)
+                    ni = r-l+1
+                    backgr(i,j) = sum(prmat(l:r,d:u,1)) / real(ni*nj)
+                endif
             end do
         end do
         !$omp end parallel do
-        prmat(1:self%box,1:self%box,1) = prmat(1:self%box,1:self%box,1) - rplane(:,:)
+        prmat(1:self%box,1:self%box,1) = prmat(1:self%box,1:self%box,1) - backgr(:,:)
     end subroutine subtr_backgr
 
     !>  \brief  is for making a |CTF| spectrum image
@@ -873,67 +909,139 @@ contains
                 spaFreqSq = hinv * hinv + kinv * kinv
                 ang       = atan2(real(k),real(h))
                 tval      = self%tfun%eval(spaFreqSq, ang, aadd_phshift)
-                tval      = min(1.,max(tval * tval,0.0001))
+                tval      = min(1.,max(tval * tval,0.000001))
                 prmat(i,j,1) = sqrt(tval)
             end do
         end do
         !$omp end parallel do
     end subroutine ctf2pspecimg
 
+    !> \brief ft2img  generates images for visualization of a Fourier transform
+    subroutine ft2img( self, img, img_out )
+        class(ctf_estimate_fit), intent(inout) :: self
+        class(image),            intent(inout) :: img, img_out
+        real, pointer :: prmat(:,:,:)
+        integer :: h,mh,k,mk,i,j,lims(3,2)
+        if( .not.img%is_ft() ) THROW_HARD('Fted images only! ft2img')
+        call img_out%zero_and_unflag_ft
+        call img_out%get_rmat_ptr(prmat)
+        lims = img%loop_lims(3)
+        mh   = abs(lims(1,1))
+        mk   = abs(lims(2,1))
+        do k=lims(2,1),lims(2,2)
+            j = min(max(1,k+mk+1),self%box)
+            do h=lims(1,1),lims(1,2)
+                i = min(max(1,h+mh+1),self%box)
+                prmat(i,j,1) = sqrt(csq(img%get_fcomp2D(h,k)))
+            end do
+        end do
+    end subroutine ft2img
+
     ! as per CTFFIND4.1.9
     subroutine calc_ctfres( self )
         class(ctf_estimate_fit), intent(inout) :: self
-        real,     parameter  :: min_angdist = 10.
-        type(image)          :: extrema, ctf, specimg
-        real,    allocatable :: spec1d(:), spec1d_fit(:), spec1d_rank(:)
-        real,    allocatable :: ctf1d(:), nextrema1d(:), frc(:), frc_sig(:)
+        real,    parameter   :: target_smpd     = 1.40       ! Angs
+        real,    parameter   :: min_angdist     = 10.        ! degrees
+        integer, parameter   :: cross_halfwidth = 10         ! pixels
+        real,    pointer     :: ppspec(:,:,:)
+        type(ctf)            :: tfun
+        type(image)          :: padded_pspec, pspec
+        real,    allocatable :: spec1d(:),spec1d_fit(:),spec1d_rank(:),ctf1d(:),nextrema1d(:),frc(:),frc_sig(:)
         integer, allocatable :: nvals1d(:)
-        real    :: mid_angast,mid_angast_rad,hinv, angdist_axes, spaFreqSq, phshift
-        integer :: ish, ldim(3),nrlims(3,2),rlims(3,2), mh,mk, sh, n, h,k, i,j, nshells, mhr
-        ! init
-        ldim = [self%box,self%box,1]
-        call ctf%new(ldim,self%smpd)
-        call extrema%new(ldim,self%smpd)
-        call specimg%new(ldim,self%smpd)
-        nrlims  = ctf%loop_lims(2) ! non-redundant limits
-        rlims   = ctf%loop_lims(3) ! redundant limits
-        mhr     = abs(rlims(1,1))  ! redundant
-        mh      = abs(nrlims(1,1)) ! non-redundant
-        mk      = abs(nrlims(2,1)) ! non-redundant
-        nshells = floor(sqrt(real(maxval(abs(rlims(1,:)))**2.+maxval(abs(rlims(2,:))**2.)))) ! shell of furthest pixel in corner
+        real    :: ave, sdev, start, end, end_rad,start_rad,phshift, smpd_fit, hp_rad, lp_rad
+        real    :: mid_angast,mid_angast_rad, angdist_axes, spaFreq,spaFreqSq
+        integer :: ish,sh,n,nshells,tmp_box,cenbox
+        cenbox  = self%box/2+1
         phshift = merge(self%parms%phshift, 0. ,self%parms%l_phaseplate)
+        pspec   = self%pspec4ctfres
+        ! resampling, it is assumed the central spot has already been dealt with
+        if( self%smpd < target_smpd )then
+            ! downsampling
+            tmp_box  = round2even(real(self%box) / self%smpd * target_smpd)
+            smpd_fit = self%smpd * real(tmp_box) / real(self%box)
+            if( tmp_box /= self%box )then
+                call pspec%zero_edgeavg
+                call pspec%fft
+                call padded_pspec%new([tmp_box,tmp_box,1],smpd_fit)
+                call padded_pspec%zero_and_flag_ft
+                call pspec%pad(padded_pspec)
+                call padded_pspec%ifft
+                call pspec%zero_and_unflag_ft
+                call padded_pspec%clip(pspec)
+                call padded_pspec%kill
+            else
+                ! done
+            endif
+        else
+            ! upsampling
+            smpd_fit = self%smpd
+        endif
+        call pspec%set_smpd(smpd_fit)
+        call pspec%get_rmat_ptr(ppspec)
+        hp_rad = real(self%box)*smpd_fit/self%hp
+        lp_rad = real(self%box)*smpd_fit/self%lp
+        if( DEBUG_HERE )then
+            call pspec%write('pspec_resampled.mrc')
+            print *,'smpd fit ',smpd_fit
+            print *,'hp_rad   ', hp_rad
+            print *,'lp_rad   ', lp_rad
+        endif
+        ! re-re-normalization
+        call pspec%zero_edgeavg
+        tfun = ctf(smpd_fit, self%parms%kV, self%parms%Cs, self%parms%fraca)
+        call tfun%init(self%parms%dfx, self%parms%dfy, self%parms%angast)
+        start = sqrt(tfun%SpaFreqSqAtNthZero(3, phshift, 0.))
+        end   = sqrt(tfun%SpaFreqSqAtNthZero(4, phshift, 0.))
+        start_rad = start*real(self%box)
+        end_rad   = end  *real(self%box)
+        if(  start_rad < hp_rad .or. start_rad > lp_rad .or.&
+            &end_rad   < hp_rad .or. end_rad   < lp_rad )then
+            end_rad   = lp_rad
+            start_rad = max(0.5*end_rad, hp_rad)
+        endif
+        if( DEBUG_HERE )then
+            print *,'start     ',start
+            print *,'end       ',end
+            print *,'start_rad ',start_rad
+            print *,'end_rad   ',end_rad
+        endif
+        if( end_rad-start_rad > 2. )then
+            call calc_pspec_stats(start_rad,end_rad, ave,sdev)
+            call mask_central_disc(hp_rad, ave)
+            ! un-necessary as we do not have a central cross issue
+            ! where( ppspec(cenbox,:,1) > ave ) ppspec(cenbox,:,1) = ave
+            ! where( ppspec(:,cenbox,1) > ave ) ppspec(:,cenbox,1) = ave
+            where( ppspec > ave+4.*sdev ) ppspec = ave+4.*sdev
+            where( ppspec < ave-4.*sdev ) ppspec = ave-4.*sdev
+            call calc_pspec_stats(start_rad,end_rad, ave,sdev)
+            call pspec%subtr(ave)
+            if( sdev < TINY )sdev = 1.
+            call pspec%mul(1./sdev)
+            call pspec%add(ave)
+            if( DEBUG_HERE ) call pspec%write('pspec_prepped.mrc')
+        endif
+        ! builds 1D/2D profiles
+        nshells = nint(sqrt(real(self%box*self%box/2))) ! shell of furthest pixel
         allocate(spec1d(0:nshells),spec1d_fit(0:nshells),frc(0:nshells),frc_sig(0:nshells),&
             &spec1d_rank(0:nshells),ctf1d(0:nshells),nextrema1d(0:nshells), source=0.)
         allocate(nvals1d(0:nshells),source=0)
-        ! normalize spectrum
-        call specimg%copy(self%pspec)
-        call norm2dspec
-        ! calculate number of extrema & ctf values
-        call self%gen_ctf_extrema(ctf, extrema)
         ! midway astigmatism & ensuring it has not been zeroed by central cross dampening
         mid_angast   = self%parms%angast + 45.
         angdist_axes = mod(mid_angast, 90.)
         if( abs(angdist_axes) <     min_angdist ) mid_angast = sign(min_angdist ,angdist_axes)
         if( abs(angdist_axes) > 90.-min_angdist ) mid_angast = sign(90.-min_angdist, angdist_axes)
-        mid_angast_rad = deg2rad(mid_angast)
+        mid_angast_rad = deg2rad(mid_angast) !- PIO2
+        if( DEBUG_HERE ) print *,'mid_angast_rad ', mid_angast_rad
         ! theoretical 1D spectrum & number of extrema
-        do h = 0,nshells
-            hinv          = real(h) / real(self%box)
-            spaFreqSq     = hinv * hinv
-            ctf1d(h)      = -self%tfun%eval(spaFreqSq, mid_angast_rad, add_phshift=phshift)
-            nextrema1d(h) = real(self%tfun%nextrema(spaFreqSq, mid_angast_rad, phshift))
+        do sh = 0,nshells
+            spaFreq        = real(sh) / real(self%box)
+            spaFreqSq      = spaFreq*spaFreq
+            ctf1d(sh)      = -tfun%eval(spaFreqSq, mid_angast_rad, add_phshift=phshift)
+            nextrema1d(sh) = real(tfun%nextrema(spaFreqSq, mid_angast_rad, phshift))
         enddo
-        ! 1D spectrum
-        do k=rlims(2,1),rlims(2,2)
-            j = min(max(1,k+mk+1),ldim(2))
-            do h=rlims(1,1),rlims(1,2)
-                i  = min(max(1,h+mhr+1),ldim(1))
-                sh = get_shell(ctf%get([i,j,1]), extrema%get([i,j,1])) ! ReturnSpectrumBinNumber
-                nvals1d(sh) = nvals1d(sh)+ 1
-                spec1d(sh)  = spec1d(sh) + specimg%get([i,j,1])
-            end do
-        end do
-        where( nvals1d > 0 ) spec1d = spec1d / real(nvals1d)
+        ! CTF & calculate #of astigmatism extrema & 1D spectra
+        call gen_profiles
+        ! more 1D spectra
         spec1d_fit  = abs(ctf1d)
         spec1d_rank = spec1d
         ! 1D spectrum ranking
@@ -943,18 +1051,53 @@ contains
         ! skip aliasing identification
         ! abracadabra
         sh = max(1, ctfres_shell())
-        self%ctfres = specimg%get_lp(sh)
+        self%ctfres = max(2*smpd_fit,min(pspec%get_lp(sh), self%hp))
+        if( DEBUG_HERE ) print *,'self%ctfres ',self%ctfres
+        self%pspec4ctfres = pspec
         ! cleanup
-        call extrema%kill
-        call ctf%kill
-        call specimg%kill
+        call pspec%kill
         contains
 
+            integer function ctfres_shell()
+                real, parameter :: low_threshold  = 0.1
+                real, parameter :: high_threshold = 0.66
+                real, parameter :: significance_threshold = 0.5
+                integer :: h, n_abovelow, n_abovehigh, n_abovesig, hstart
+                logical :: whereitsat
+                n_abovelow   = 0
+                n_abovehigh  = 0
+                n_abovesig   = 0
+                ctfres_shell = -1
+                hstart = nint(sqrt(tfun%SpaFreqSqAtNthZero(1, phshift, 0.)))
+                do h = hstart,nshells
+                    whereitsat = ((n_abovelow>3)  .and. (frc(h)<low_threshold))&
+                            &.or.((n_abovehigh>3) .and. (frc(h)<significance_threshold))
+                    if( whereitsat )then
+                        ctfres_shell = h
+                        exit
+                    endif
+                    if( frc(h) > low_threshold )          n_abovelow  = n_abovelow+1
+                    if( frc(h) > significance_threshold ) n_abovesig  = n_abovesig+1
+                    if( frc(h) > high_threshold )         n_abovehigh = n_abovehigh+1
+                enddo
+                if( n_abovesig == 0 ) ctfres_shell = 1
+                ctfres_shell = max(0,min(ctfres_shell,nshells))
+            end function ctfres_shell
+
             subroutine calc_frc
-                integer, allocatable :: winhalfwidth(:)
+                real    :: spafreqs(1:nshells)
+                integer :: winhalfwidth(0:nshells)
                 real    :: spec_avg,spec_sdev,fit_avg,fit_sdev,product
-                integer :: nh,h,sh,sh_prev,lefth,righth,min_winhalfwidth
-                allocate(winhalfwidth(0:nshells),source=0)
+                integer :: nh,h,sh,sh_prev,lefth,righth,min_winhalfwidth,hp_ind
+                winhalfwidth = 0
+                do sh = 1,nshells
+                    spafreqs(sh) = real(sh)*smpd_fit
+                enddo
+                hp_ind = 0
+                do sh = 1,nshells
+                    hp_ind = sh
+                    if( spafreqs(sh) >= self%hp )exit
+                enddo
                 ! FRC window sizes
                 min_winhalfwidth = nint(real(nshells)/40.)
                 sh_prev = 0
@@ -972,15 +1115,15 @@ contains
                 winhalfwidth(sh_prev:nshells) = winhalfwidth(sh_prev-1) ! check for sh_prev here
                 ! FRC
                 frc(:) = 1.
-                do h = self%freslims1d(1),nshells
+                do h = hp_ind,nshells
                     spec_avg  = 0.
                     spec_sdev = 0.
                     fit_avg   = 0.
                     fit_sdev  = 0.
                     lefth  = h-winhalfwidth(h)
                     righth = h+winhalfwidth(h)
-                    if( lefth < self%freslims1d(1) )then
-                        lefth  = self%freslims1d(1)
+                    if( lefth < hp_ind )then
+                        lefth  = hp_ind
                         righth = lefth + 2*winhalfwidth(h)+1
                     endif
                     if( righth > nshells )then
@@ -1004,53 +1147,12 @@ contains
                 enddo
             end subroutine
 
-            subroutine norm2dspec
-                integer       :: h,k,i,j
-                real, pointer :: prmat(:,:,:)
-                real          :: avg, sdev
-                call specimg%get_rmat_ptr(prmat)
-                ! zero edges
-                call specimg%zero_edgeavg
-                ! stats
-                avg  = sum(prmat(:self%box,:self%box,1:1),mask=self%cc_msk) / real(self%npix_msk)
-                sdev = sqrt( sum((prmat(:self%box,:self%box,1:1)-avg)**2.,mask=self%cc_msk) / real(self%npix_msk) )
-                ! zero center
-                do h = rlims(1,1),rlims(1,2)
-                    do k = rlims(2,1),rlims(2,2)
-                        i = min(max(1,h+mhr+1),self%box)
-                        j = min(max(1,k+mk+1),self%box)
-                        sh = nint(sqrt(real(h*h+k*k)))
-                        if( sh <= self%freslims1d(1) ) prmat(i,j,1) = 0. ! to update to s<self%freslims1d(1)
-                    enddo
-                enddo
-                ! dampens central cross again
-                do h = rlims(1,1),rlims(1,2)
-                    do k = rlims(2,1),rlims(2,2)
-                        if( h/=0 .and. k/=0 ) cycle
-                        i = min(max(1,h+mhr+1),ldim(1))
-                        j = min(max(1,k+mk+1),ldim(2))
-                        prmat(i,j,1) = min(prmat(i,j,1), avg)
-                    enddo
-                enddo
-                ! threshold
-                where( prmat >  avg+4.*sdev ) prmat  =  avg+4.*sdev
-                where( prmat <  avg-4.*sdev ) prmat  =  avg-4.*sdev
-                ! stats encore
-                avg  = sum(prmat(:self%box,:self%box,1:1),mask=self%cc_msk) / real(self%npix_msk)
-                sdev = sqrt( sum((prmat(:self%box,:self%box,1:1)-avg)**2.,mask=self%cc_msk) / real(self%npix_msk) )
-                ! normalize
-                call specimg%subtr(avg)
-                call specimg%div(sdev)
-                call specimg%add(avg)
-            end subroutine norm2dspec
-
             subroutine rank_spec
-                real,    allocatable :: vec(:), rankvec(:)
-                integer, allocatable :: inds(:)
-                real    :: rmin, rmax, areal
-                integer :: sh, sh_prev, h, sh_zero, ind
-                allocate(rankvec(0:nshells),vec(0:nshells), source=0.)
-                allocate(inds(0:nshells),source=0)
+                real    :: vec(0:nshells), rankvec(0:nshells), rmin, rmax, areal
+                integer :: inds(0:nshells), sh, sh_prev, h, sh_zero, ind
+                vec     = 0.
+                rankvec = 0.
+                inds    = 0
                 sh_prev = 0
                 sh      = 0
                 do h=1,nshells
@@ -1130,72 +1232,94 @@ contains
                         endif
                     endif
                 enddo
-                if( get_shell < 0 )THROW_HARD('no shell found')
+                if( get_shell < 0 )THROW_WARN('no shell found')
             end function get_shell
 
-            integer function ctfres_shell()
-                ! empirical thesholds
-                real, parameter :: low_threshold  = 0.1
-                real, parameter :: high_threshold = 0.66
-                real, parameter :: significance_threshold = 0.5
-                integer :: h, n_abovelow, n_abovehigh, n_abovesig
-                logical :: whereitsat
-                n_abovelow   = 0
-                n_abovehigh  = 0
-                n_abovesig   = 0
-                ctfres_shell = -1
-                do h = 0,nshells
-                    whereitsat = (n_abovelow>3) .and. (frc(h)<low_threshold) .and. (n_abovehigh>3) .and. (frc(h)<significance_threshold)
-                    if( whereitsat )then
-                        ctfres_shell = h
-                        exit
-                    endif
-                    if( frc(h) > low_threshold )          n_abovelow  = n_abovelow+1
-                    if( frc(h) > significance_threshold ) n_abovesig  = n_abovesig+1
-                    if( frc(h) > high_threshold )         n_abovehigh = n_abovehigh+1
+            ! for making a CTF & calculate #of astigmatism extrema
+            subroutine gen_profiles
+                real          :: ang, spaFreqSq, hinv, kinv, inv_box, ctf, nextr
+                integer       :: h,k,i,j,sh
+                nvals1d = 0
+                spec1d  = 0.
+                inv_box = 1./real(self%box)
+                !$omp parallel do collapse(2) default(shared) private(ctf,nextr,h,hinv,k,kinv,i,j,spaFreqSq,ang,sh) &
+                !$omp schedule(static) proc_bind(close) reduction(+:spec1d,nvals1d)
+                do j=1,self%box
+                    do i=1,self%box
+                        h         = pix2logical(i)
+                        k         = pix2logical(j)
+                        ang       = atan2(real(k),real(h))
+                        hinv      = real(h) * inv_box
+                        kinv      = real(k) * inv_box
+                        spaFreqSq = hinv*hinv + kinv*kinv
+                        ! # of extrema
+                        nextr = real(tfun%nextrema(spaFreqSq, ang, phshift))
+                        ! # CTF
+                        ctf  = -tfun%eval(spaFreqSq, ang, phshift)
+                        ! # 1D
+                        sh = get_shell(ctf, nextr)
+                        nvals1d(sh) = nvals1d(sh)+ 1
+                        spec1d(sh)  = spec1d(sh) + ppspec(i,j,1)
+                    enddo
                 enddo
-                n_abovesig = min(n_abovesig,nshells)
-                if( n_abovesig == 0 ) ctfres_shell = 1
-                ctfres_shell = max(0,min(ctfres_shell,nshells))
-            end function ctfres_shell
+                !$omp end parallel do
+                where( nvals1d > 0 ) spec1d = spec1d / real(nvals1d)
+            end subroutine gen_profiles
+
+            subroutine mask_central_disc( radius, val )
+                real, intent(in) :: radius, val
+                real    :: shsq, radiussq
+                integer :: i,j,h,k
+                radiussq = radius*radius
+                do j = 1,self%box
+                    k = pix2logical(j)
+                    do i = 1,self%box
+                        h = pix2logical(i)
+                        shsq = real(h*h+k*k)
+                        if( shsq < radiussq ) ppspec(i,j,1) = val
+                    enddo
+                enddo
+            end subroutine mask_central_disc
+
+            subroutine calc_pspec_stats( minsh, maxsh, ave, sdev )
+                real, intent(in)  :: minsh, maxsh
+                real, intent(out) :: ave,sdev
+                real    :: hsq,shsq,v,sumsq,sum,minshsq,maxshsq,cross_halfwidthsq,ksq
+                integer :: i,j,h,k,n
+                minshsq = minsh*minsh
+                maxshsq = maxsh*maxsh
+                cross_halfwidthsq = cross_halfwidth*cross_halfwidth
+                n     = 0
+                sum   = 0.
+                sumsq = 0.
+                do j = 1,self%box
+                    k   = pix2logical(j)
+                    ksq = real(k*k)
+                    if( ksq <= cross_halfwidth )cycle
+                    if( ksq >= maxshsq )        cycle
+                    do i = 1,self%box
+                        h   = pix2logical(i)
+                        hsq = real(h*h)
+                        if( hsq <= cross_halfwidth )cycle
+                        shsq = hsq+ksq
+                        if( shsq >= maxshsq ) cycle
+                        if( shsq <= minshsq ) cycle
+                        v = ppspec(i,j,1)
+                        sum   = sum+ v
+                        sumsq = sumsq + v*v
+                        n = n + 1
+                    enddo
+                enddo
+                ave  = sum / real(n)
+                sdev = sqrt(sumsq/real(n) - ave*ave)
+            end subroutine calc_pspec_stats
+
+            elemental integer function pix2logical( i )
+                integer, intent(in) :: i
+                pix2logical = i-cenbox
+            end function pix2logical
 
     end subroutine calc_ctfres
-
-    !>  \brief  is for making a CTF & calculate #of astigmatism extrema
-    subroutine gen_ctf_extrema( self, ctf, extrema )
-        class(ctf_estimate_fit), intent(inout) :: self
-        class(image),            intent(inout) :: ctf, extrema
-        real, pointer :: pctf(:,:,:), pextr(:,:,:)
-        real    :: ang, spaFreqSq, hinv, phshift, kinv, inv_ldim(3)
-        integer :: lims(3,2),h,mh,k,mk,ldim(3), i,j
-        call ctf%get_rmat_ptr(pctf)
-        call extrema%get_rmat_ptr(pextr)
-        pctf     = 0.
-        pextr    = 0.
-        ldim     = ctf%get_ldim()
-        lims     = ctf%loop_lims(3)
-        mh       = abs(lims(1,1))
-        mk       = abs(lims(2,1))
-        inv_ldim = 1./real(ldim)
-        call self%tfun%init(self%parms%dfx, self%parms%dfy, self%parms%angast)
-        phshift = 0.
-        if( self%parms%l_phaseplate ) phshift = self%parms%phshift
-        !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,i,j,spaFreqSq,ang) &
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                i         = min(max(1,h+mh+1),ldim(1))
-                j         = min(max(1,k+mk+1),ldim(2))
-                ang       = atan2(real(k),real(h))
-                hinv      = real(h) * inv_ldim(1)
-                kinv      = real(k) * inv_ldim(2)
-                spaFreqSq = hinv * hinv + kinv * kinv
-                pextr(i,j,1) = real(self%tfun%nextrema(spaFreqSq, ang, phshift))
-                pctf(i,j,1)  = -self%tfun%eval(spaFreqSq, ang, phshift) ! dbl check sign change
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine gen_ctf_extrema
 
     ! fit dfx/y to 2 polynomials
     subroutine fit_polynomial( self )
@@ -1367,7 +1491,6 @@ contains
         call os%set(1,'xdim',    real(self%ldim_mic(1)))
         call os%set(1,'ydim',    real(self%ldim_mic(2)))
         call os%set(1,'ctfres',  self%ctfres)
-        call os%set(1,'ctfscore',self%ctfscore)
         call os%set(1,'ctfcc',   self%cc_fit)
         call os%set(1,'npatch',  real(self%ntotpatch))
         if( self%parms%l_phaseplate )then
@@ -1448,13 +1571,12 @@ contains
         class(ctf_estimate_fit), intent(inout) :: self
         integer :: i,j
         self%cc_fit       = -1.
-        self%ctfscore     = -1.
         self%ctfres       = -1.
         nullify(self%micrograph)
         call self%pspec%kill
         call self%pspec_ctf%kill
-        call self%pspec_ctf_roavg%kill
         call self%pspec_roavg%kill
+        call self%pspec4ctfres%kill
         call self%cost2D%kill
         if( allocated(self%roavg_spec1d) ) deallocate(self%roavg_spec1d)
         if( allocated(self%cc_msk) )       deallocate(self%cc_msk)
