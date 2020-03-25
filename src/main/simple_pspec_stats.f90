@@ -12,8 +12,8 @@ private
 
 logical, parameter :: DEBUG_HERE = .false.
 integer, parameter :: BOX        = 512       ! ps size
-real,    parameter :: LOW_LIM    = 20.       ! 30 A, lower limit for resolution. Before that, we discard
-real,    parameter :: UP_LIM     = 8.        ! 8  A, upper limit for resolution in the entropy calculation. (it was 3. before)
+real,    parameter :: LOW_LIM    = 20.       ! 20 A, lower limit for resolution. (it was 30 before)
+real,    parameter :: UP_LIM     = 5.        ! 5  A, upper limit for resolution. (it was 3 before)
 integer, parameter :: N_BINS     = 64        ! number of bins for hist
 real,    parameter :: LAMBDA     = 5.        ! for tv filtering
 integer, parameter :: N_BIG_CCS  = 5         ! top N_BIG_CCS considered in the avg curvature calculation
