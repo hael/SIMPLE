@@ -121,26 +121,31 @@ contains
 
     subroutine exec_preprocess_stream( self, cline )
         use simple_moviewatcher, only: moviewatcher
+        use simple_timer
         class(preprocess_commander_stream), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                       :: params
-        integer,                   parameter   :: SHORTTIME = 30   ! folder watched every minute
-        integer,                   parameter   :: LONGTIME  = 600  ! time lag after which a movie is processed
+        integer,                   parameter   :: SHORTTIME       = 30   ! folder watched every minute
+        integer,                   parameter   :: LONGTIME        = 600  ! time lag after which a movie is processed
+        integer,                   parameter   :: PROJ_UPDATETIME = 3600 ! time lag for whole project update
+        logical,                   parameter   :: DEBUG_HERE = .false.
         class(cmdline),            allocatable :: completed_jobs_clines(:)
         type(qsys_env)                         :: qenv
         type(cmdline)                          :: cline_make_pickrefs
         type(moviewatcher)                     :: movie_buff
         type(sp_project)                       :: spproj, stream_spproj
-        character(len=LONGSTRLEN), allocatable :: movies(:)
+        character(len=LONGSTRLEN), allocatable :: movies(:), completed_fnames(:)
         character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
-        character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract, stream_spprojfile
+        character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract
         character(len=LONGSTRLEN)              :: movie
-        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, icline
-        integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev, cnt
+        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, tnow, n_completed
+        integer                                :: nptcls, cnt, last_project_update_time, n_imported, iproj
         logical                                :: l_pick, l_movies_left
+        integer(timer_int_kind) :: t0, t1, t2
+        real(timer_int_kind)    :: rt_whole, rt_append, rt_write
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',          'yes')
-        ! mnotion correction
+        ! motion correction
         if( .not. cline%defined('trs')             ) call cline%set('trs',              10.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           8.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            5.)
@@ -209,9 +214,13 @@ contains
         ! import previous runs
         call import_prev_streams
         ! start watching
+        rt_whole = 0.; rt_append=0.; rt_write=0.
+        last_project_update_time = simple_gettime()
         prev_stacksz  = 0
         nmovies       = 0
         iter          = 0
+        n_completed   = 0
+        n_imported    = 0
         l_movies_left = .false.
         do
             if( file_exists(trim(TERM_STREAM)) )then
@@ -221,7 +230,7 @@ contains
             do while( file_exists(trim(PAUSE_STREAM)) )
                 if( file_exists(trim(TERM_STREAM)) ) exit
                 call write_singlelineoftext(PAUSE_STREAM, 'PAUSED')
-                write(logfhandle,'(A,A)')'>>> PREPROCES STREAM PAUSED ',cast_time_char(simple_gettime())
+                write(logfhandle,'(A,A)')'>>> PREPROCESS STREAM PAUSED ',cast_time_char(simple_gettime())
                 call simple_sleep(SHORTTIME)
             enddo
             iter = iter + 1
@@ -245,40 +254,38 @@ contains
                 l_movies_left = .false.
             endif
             ! stream scheduling
-            call qenv%qscripts%schedule_streaming( qenv%qdescr )
-            stacksz = qenv%qscripts%get_stacksz()
-            if( stacksz .ne. prev_stacksz )then
-                prev_stacksz = stacksz
-                write(logfhandle,'(A,I5)')'>>> MOVIES/MICROGRAPHS TO PROCESS: ', stacksz
-            endif
-            ! completed jobs update the current project
+            call submit_jobs
+            ! fetch completed jobs list & updates of cluster2D_stream
             if( qenv%qscripts%get_done_stacksz() > 0 )then
-                ! append new processed movies to project
                 call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
-                nptcls_prev = spproj%get_nptcls()
-                nmovs_prev  = spproj%os_mic%get_noris()
-                do icline=1,size(completed_jobs_clines)
-                    stream_spprojfile = completed_jobs_clines(icline)%get_carg('projfile')
-                    call stream_spproj%read( stream_spprojfile )
-                    call spproj%append_project(stream_spproj, 'mic')
-                    if( l_pick )then
-                        call spproj%append_project(stream_spproj, 'stk')
-                    endif
-                    call stream_spproj%kill()
-                    deallocate(stream_spprojfile)
-                enddo
-                nptcls = spproj%get_nptcls()
-                nmovs  = spproj%os_mic%get_noris()
-                write(logfhandle,'(A,I5)')'>>> # MOVIES PROCESSED:    ',nmovs
-                if( l_pick )then
-                    write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED: ',nptcls
-                endif
-                ! update for 2d streaming
-                call update_projects_list
+                call update_projects_list( completed_fnames, n_completed )
+                write(logfhandle,'(A,I5)')'>>> # MOVIES PROCESSED:               ',n_completed
                 deallocate(completed_jobs_clines)
+            endif
+            ! project update
+            n_imported = spproj%os_mic%get_noris() ! # of projects already added
+            tnow       = simple_gettime()
+            if( (n_completed-n_imported > 0) .and. (tnow-last_project_update_time > PROJ_UPDATETIME) )then
+                t0 = tic()
+                ! append projects
+                t1 = t0
+                do iproj=n_imported+1,n_completed
+                    call stream_spproj%read( completed_fnames(iproj) )
+                    call spproj%append_project(stream_spproj, 'mic')
+                    if( l_pick ) call spproj%append_project(stream_spproj, 'stk')
+                    call submit_jobs ! as appending can be slow
+                enddo
+                call stream_spproj%kill
+                n_imported = spproj%os_mic%get_noris()
+                write(logfhandle,'(A,I5)')'>>> # MOVIES PROCESSED & IMPORTED:    ',n_imported
+                if( l_pick )then
+                    nptcls = spproj%os_ptcl2D%get_noris()
+                    write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',spproj%os_ptcl2D%get_noris()
+                endif
+                rt_append = rt_append + toc(t1)
                 ! exit for trial runs
                 if( cline%defined('nmovies_trial') )then
-                    if( nmovs  >= params%nmovies_trial )then
+                    if( n_imported  >= params%nmovies_trial )then
                         write(logfhandle,'(A)')'>>> TRIAL # OF MOVIES REACHED'
                         exit
                     endif
@@ -289,15 +296,39 @@ contains
                         exit
                     endif
                 endif
-                ! write
+                ! write project
+                t2 = tic()
+                write(logfhandle,'(A)')'>>> UPDATING PROJECT'
                 call spproj%write
+                last_project_update_time = simple_gettime()
+                ! benchmark
+                if( DEBUG_HERE )then
+                    rt_write = rt_write + toc(t2)
+                    rt_whole = rt_whole + toc(t0)
+                    print *,'rt_append : ', rt_append
+                    print *,'rt_write  : ', rt_write
+                    print *,'rt_whole  : ', rt_whole; call flush(6)
+                endif
             else
                 ! wait
                 if( .not.l_movies_left ) call simple_sleep(SHORTTIME)
             endif
         end do
         ! termination
-        call spproj%write
+        write(logfhandle,'(A)')'>>> LAST PROJECT UPDATE'
+        call update_projects_list( completed_fnames, n_completed )
+        n_imported = spproj%os_mic%get_noris()
+        if( n_completed > n_imported )then
+            do iproj=n_imported+1,n_completed
+                call stream_spproj%read( completed_fnames(iproj) )
+                call spproj%append_project(stream_spproj, 'mic')
+                if( l_pick ) call spproj%append_project(stream_spproj, 'stk')
+            enddo
+            write(logfhandle,'(A,I5)')'>>> # MOVIES PROCESSED & IMPORTED:    ',spproj%os_mic%get_noris()
+            if( l_pick ) write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',spproj%os_ptcl2D%get_noris()
+            call stream_spproj%kill
+            if( n_imported /= n_completed ) call spproj%write
+        endif
         call spproj%kill
         ! cleanup
         call qsys_cleanup
@@ -305,38 +336,52 @@ contains
         call simple_end('**** SIMPLE_PREPROCESS_STREAM NORMAL STOP ****')
         contains
 
-            subroutine update_projects_list
-                type(cmdline) :: cline_mov
+            subroutine submit_jobs
+                call qenv%qscripts%schedule_streaming( qenv%qdescr )
+                stacksz = qenv%qscripts%get_stacksz()
+                if( stacksz .ne. prev_stacksz )then
+                    prev_stacksz = stacksz
+                    write(logfhandle,'(A,I5)')'>>> MOVIES TO PROCESS:                ', stacksz
+                endif
+            end subroutine submit_jobs
+
+            ! returns list of completed jobs + updates for cluster2D_stream
+            subroutine update_projects_list( completed_fnames, n_completed )
+                character(len=LONGSTRLEN), allocatable, intent(inout) :: completed_fnames(:)
+                integer,                                intent(inout) :: n_completed
                 character(len=:),          allocatable :: fname, abs_fname
-                character(len=LONGSTRLEN), allocatable :: old_fnames(:), fnames(:)
-                integer :: i, n_spprojs, n_old
+                character(len=LONGSTRLEN), allocatable :: old_fnames(:)
+                type(cmdline) :: cline_mov
+                integer       :: i, n_spprojs, n_old
+                n_completed = 0
+                if( allocated(completed_fnames) ) deallocate(completed_fnames)
                 n_spprojs = size(completed_jobs_clines)
                 if( n_spprojs == 0 )return
                 if( file_exists(STREAM_SPPROJFILES) )then
                     ! append
                     call read_filetable(STREAM_SPPROJFILES, old_fnames)
-                    n_old = size(old_fnames)
-                    allocate(fnames(n_spprojs+n_old))
-                    fnames(1:n_old) = old_fnames(:)
+                    n_old       = size(old_fnames)
+                    n_completed = n_spprojs+n_old
+                    allocate(completed_fnames(n_completed))
+                    completed_fnames(1:n_old) = old_fnames(:)
                     do i=1,n_spprojs
                         cline_mov = completed_jobs_clines(i)
                         fname     = trim(cline_mov%get_carg('projfile'))
                         abs_fname = simple_abspath(fname, errmsg='preprocess_stream :: update_projects_list 1')
-                        fnames(n_old+i) = trim(abs_fname)
-                        deallocate(abs_fname)
+                        completed_fnames(n_old+i) = trim(abs_fname)
                     enddo
                 else
                     ! first write
-                    allocate(fnames(n_spprojs))
-                    do i=1,n_spprojs
+                    n_completed = n_spprojs
+                    allocate(completed_fnames(n_completed))
+                    do i=1,n_completed
                         cline_mov = completed_jobs_clines(i)
                         fname     = trim(cline_mov%get_carg('projfile'))
                         abs_fname = simple_abspath(fname, errmsg='preprocess_stream :: update_projects_list 2')
-                        fnames(i) = trim(abs_fname)
-                        deallocate(abs_fname)
+                        completed_fnames(i) = trim(abs_fname)
                     enddo
                 endif
-                call write_filetable(STREAM_SPPROJFILES, fnames)
+                call write_filetable(STREAM_SPPROJFILES, completed_fnames)
             end subroutine update_projects_list
 
             subroutine create_individual_project
@@ -370,7 +415,8 @@ contains
             !>  import previous run to the current project based on past single project files
             subroutine import_prev_streams
                 use simple_ori, only: ori
-                type(ori) :: o, o_stk
+                type(sp_project) :: stream_spproj
+                type(ori)        :: o, o_stk
                 character(len=LONGSTRLEN), allocatable :: sp_files(:)
                 character(len=:), allocatable :: mic, mov
                 logical,          allocatable :: spproj_mask(:)
@@ -430,7 +476,6 @@ contains
                     cnt = cnt + 1
                     spproj_mask(iproj) = .true.
                     ! cleanup
-                    call stream_spproj%kill
                 enddo
                 if( cnt > 0 )then
                     ! updating STREAM_SPPROJFILES for Cluster2D_stream
@@ -442,11 +487,12 @@ contains
                             call completed_jobs_clines(cnt)%set('projfile',basename(sp_files(iproj)))
                         endif
                     enddo
-                    call update_projects_list
+                    call update_projects_list(completed_fnames, n_completed)
                     deallocate(completed_jobs_clines)
                 endif
                 call o%kill
                 call o_stk%kill
+                call stream_spproj%kill
                 write(*,'(A,I3)')'>>> IMPORTED PREVIOUS PROCESSED MOVIES: ', cnt
             end subroutine import_prev_streams
 

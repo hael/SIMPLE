@@ -7,9 +7,12 @@ implicit none
 public :: moviewatcher
 private
 
+character(len=STDLEN), parameter :: stream_dirs = 'SIMPLE_STREAM_DIRS'
+
 type moviewatcher
     private
     character(len=LONGSTRLEN), allocatable :: history(:)         !< history of movies detected
+    character(len=LONGSTRLEN), allocatable :: watch_dirs(:)      !< directories to watch
     character(len=LONGSTRLEN)          :: cwd            = ''    !< CWD
     character(len=LONGSTRLEN)          :: watch_dir      = ''    !< movies directory to watch
     character(len=STDLEN)              :: ext            = ''    !< target directory
@@ -23,10 +26,13 @@ type moviewatcher
 contains
     ! doers
     procedure          :: watch
+    procedure, private :: watchdirs
     procedure, private :: add2history_1
     procedure, private :: add2history_2
     generic            :: add2history => add2history_1, add2history_2
     procedure          :: is_past
+    procedure, private :: add2watchdirs
+    procedure, private :: check4dirs
     ! destructor
     procedure          :: kill
 end type
@@ -54,6 +60,7 @@ contains
         self%report_time = report_time
         self%ext         = trim(adjustl(params_glob%ext))
         self%fbody       = trim(adjustl(params_glob%fbody))
+        call self%add2watchdirs(self%watch_dir)
     end function constructor
 
     !>  \brief  is the watching procedure
@@ -61,7 +68,6 @@ contains
         class(moviewatcher),           intent(inout) :: self
         integer,                       intent(out)   :: n_movies
         character(len=*), allocatable, intent(out)   :: movies(:)
-        character(len=:),          allocatable :: list_glob
         character(len=LONGSTRLEN), allocatable :: farray(:)
         integer,                   allocatable :: fileinfo(:)
         logical,                   allocatable :: is_new_movie(:)
@@ -79,14 +85,9 @@ contains
         if(allocated(movies))deallocate(movies)
         n_movies = 0
         fail_cnt = 0
-        ! builds files array
-        list_glob = trim(self%watch_dir)//PATH_SEPARATOR//'*.mrc'
-        list_glob = trim(list_glob)//' '//trim(self%watch_dir)//PATH_SEPARATOR//'*.mrcs'
-#ifdef USING_TIFF
-        list_glob = trim(list_glob)//' '//trim(self%watch_dir)//PATH_SEPARATOR//'*.tif'
-        list_glob = trim(list_glob)//' '//trim(self%watch_dir)//PATH_SEPARATOR//'*.tiff'
-#endif
-        call simple_list_files(list_glob, farray)
+        ! get file list
+        call self%check4dirs
+        call self%watchdirs(farray)
         if( .not.allocated(farray) )return ! nothing to report
         n_lsfiles = size(farray)
         ! identifies closed & untouched files
@@ -148,7 +149,7 @@ contains
         character(len=*),    intent(in)    :: fname
         character(len=LONGSTRLEN), allocatable :: tmp_farr(:)
         character(len=LONGSTRLEN)              :: abs_fname
-        integer :: n, tnow
+        integer :: n
         if( .not.file_exists(fname) )return ! petty triple checking
         if( .not.allocated(self%history) )then
             n = 0
@@ -187,6 +188,98 @@ contains
             enddo
         endif
     end function is_past
+
+    subroutine check4dirs( self )
+        class(moviewatcher), intent(inout) :: self
+        character(len=LONGSTRLEN), allocatable :: farr(:)
+        integer :: i,n
+        if( .not.file_exists(stream_dirs))return
+        n = nlines(stream_dirs)
+        if( n == 0 ) return
+        call read_filetable(stream_dirs, farr)
+        n = size(farr)
+        do i=1,n
+            if( trim(self%watch_dir) .ne. trim(farr(i)) ) call self%add2watchdirs(farr(i))
+        enddo
+    end subroutine check4dirs
+
+    !>  \brief  is for adding a directory to watch
+    subroutine add2watchdirs( self, fname )
+        class(moviewatcher), intent(inout) :: self
+        character(len=*),    intent(in)    :: fname
+        character(len=LONGSTRLEN), allocatable :: tmp_farr(:)
+        character(len=LONGSTRLEN)              :: abs_fname
+        integer :: i,n
+        logical :: new
+        if( .not.file_exists(fname) )then
+            write(logfhandle,'(A)')'>>> Directory does not exist: '//trim(fname)
+            return
+        endif
+        new = .true.
+        abs_fname = simple_abspath(fname)
+        if( .not.allocated(self%watch_dirs) )then
+            allocate(self%watch_dirs(1))
+            self%watch_dirs(1) = trim(adjustl(abs_fname))
+        else
+            n = size(self%watch_dirs)
+            do i = 1,n
+                if( trim(abs_fname).eq.trim(self%watch_dirs(i)) )then
+                    new = .false.
+                    exit
+                endif
+            enddo
+            if( new )then
+                allocate(tmp_farr(n), source=self%watch_dirs)
+                deallocate(self%watch_dirs)
+                allocate(self%watch_dirs(n+1))
+                self%watch_dirs(:n) = tmp_farr(:)
+                self%watch_dirs(n+1) = trim(adjustl(abs_fname))
+            endif
+        endif
+        if( new )then
+            write(logfhandle,'(A,A,A,A)')'>>> NEW DIRECTORY ADDED: ',trim(adjustl(abs_fname)), '; ', cast_time_char(simple_gettime())
+        endif
+    end subroutine add2watchdirs
+
+    !>  \brief  is for watching directories
+    subroutine watchdirs( self, farray )
+        class(moviewatcher),                    intent(inout) :: self
+        character(len=LONGSTRLEN), allocatable, intent(inout) :: farray(:)
+        character(len=:),          allocatable :: list_glob
+        character(len=LONGSTRLEN), allocatable :: tmp_farr(:), tmp_farr2(:)
+        character(len=LONGSTRLEN)              :: abs_fname, dir
+        integer :: idir,ndirs,n_newfiles,nfiles
+        if( allocated(farray) ) deallocate(farray)
+        if( .not.allocated(self%watch_dirs) ) return
+        ndirs = size(self%watch_dirs)
+        do idir = 0,ndirs
+            if( idir == 0 )then
+                dir = trim(self%watch_dir)
+            else
+                dir = trim(self%watch_dirs(idir))
+            endif
+            list_glob = trim(dir)//PATH_SEPARATOR//'*.mrc'
+            list_glob = trim(list_glob)//' '//trim(dir)//PATH_SEPARATOR//'*.mrcs'
+#ifdef USING_TIFF
+            list_glob = trim(list_glob)//' '//trim(dir)//PATH_SEPARATOR//'*.tif'
+            list_glob = trim(list_glob)//' '//trim(dir)//PATH_SEPARATOR//'*.tiff'
+#endif
+            if(allocated(tmp_farr)) deallocate(tmp_farr)
+            call simple_list_files(list_glob, tmp_farr)
+            if( .not.allocated(tmp_farr) ) cycle
+            if( allocated(farray) )then
+                n_newfiles = size(tmp_farr)
+                nfiles     = size(farray)
+                tmp_farr2  = farray(:)
+                deallocate(farray)
+                allocate(farray(nfiles+n_newfiles))
+                farray(1:nfiles) = tmp_farr2(:)
+                farray(nfiles+1:n_newfiles) = tmp_farr
+            else
+                farray = tmp_farr
+            endif
+        enddo
+    end subroutine watchdirs
 
     !>  \brief  is a destructor
     subroutine kill( self )
