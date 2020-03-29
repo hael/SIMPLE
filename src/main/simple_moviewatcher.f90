@@ -274,7 +274,7 @@ contains
                 deallocate(farray)
                 allocate(farray(nfiles+n_newfiles))
                 farray(1:nfiles) = tmp_farr2(:)
-                farray(nfiles+1:n_newfiles) = tmp_farr
+                farray(nfiles+1:nfiles+n_newfiles) = tmp_farr
             else
                 farray = tmp_farr
             endif
