@@ -10,20 +10,15 @@ public :: pspec_stats
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG_HERE = .false.
-integer, parameter :: BOX        = 512       ! ps size
-real,    parameter :: LOW_LIM    = 20.       ! 20 A, lower limit for resolution. (it was 30 before)
-real,    parameter :: UP_LIM     = 5.        ! 5  A, upper limit for resolution. (it was 3 before)
-integer, parameter :: N_BINS     = 64        ! number of bins for hist
-real,    parameter :: LAMBDA     = 5.        ! for tv filtering
-integer, parameter :: N_BIG_CCS  = 5         ! top N_BIG_CCS considered in the avg curvature calculation
-real,    parameter :: THR_SCORE_UP_UP = 1.3   ! threshold for keeping/discarding mic wrt score
-real,    parameter :: THR_SCORE_UP    = 0.4   ! threshold for keeping/discarding mic wrt score
-real,    parameter :: THR_SCORE_DOWN  = 0.25  ! threshold for keeping/discarding mic wrt score
-real,    parameter :: THR_CURVAT_UPUP = 6.    ! threshold for keeping/discarding mic wrt average curvature
-real,    parameter :: THR_CURVAT_UP   = 4.1   ! threshold for keeping/discarding mic wrt average curvature
-real,    parameter :: THR_CURVAT_DOWN = 2.6   ! threshold for keeping/discarding mic wrt average curvature
-
+logical, parameter :: DEBUG_HERE  = .false.
+integer, parameter :: BOX         = 512       ! ps size
+real,    parameter :: LOW_LIM     = 30.       ! 30 A, lower limit for resolution.
+real,    parameter :: UP_LIM      = 7.        ! 5  A, upper limit for resolution. (it was 3 before)
+integer, parameter :: N_BINS      = 64        ! number of bins for hist
+real,    parameter :: LAMBDA      = 30.       ! for tv filtering
+integer, parameter :: N_BIG_CCS   = 3         ! top N_BIG_CCS considered in the avg curvature calculation
+real,    parameter :: THRESHOLD   = 3.
+real,    parameter :: THRES_SCORE = 1.
 type :: pspec_stats
     private
     character(len=STDLEN) :: micname  = ''
@@ -36,6 +31,7 @@ type :: pspec_stats
     real    :: smpd                         ! smpd
     real    :: score       = 0.             ! score, to keep/discard the mic
     real    :: avg_curvat  = 0.
+    real    :: value       = 0.
     logical :: fallacious  = .false.        ! whether the mic has to be discarded or not
     integer :: LLim_Findex = 0              ! Fourier index corresponding to LOW_LIM
     integer :: ULim_Findex = 0              ! Fourier index corresponding to UP_LIM
@@ -50,6 +46,7 @@ contains
     procedure          :: get_output
     procedure          :: get_score
     procedure          :: get_curvature
+    procedure          :: get_value
     procedure          :: kill => kill_pspec_stats
 end type pspec_stats
 
@@ -95,7 +92,6 @@ contains
         self%mic         = mic
         self%ldim_mic    = self%mic%get_ldim()
         self%fbody   = 'ps_'
-        self%ldim(1) = BOX
         self%ldim(2) = BOX
         self%ldim(3) = 1
         call self%ps_bin%new_bimg(self%ldim, self%smpd)
@@ -105,67 +101,31 @@ contains
         if(DEBUG_HERE) call self%ps%write(PATH_HERE//basename(trim(self%fbody))//'_generated_ps.mrc')
     end subroutine new_pspec_stats2
 
-    ! Result of the combination of score and curvature.
-    ! It states whether to keep or discard the mic.
-    ! Notation: L <-> low;
-    !           M <-> medium;
-    !           H <-> high;
-    !           S <-> score;
-    !           C <-> curvature.
-    ! H.S        --> keep
-    ! H.C        --> discard
-    ! L.S + L.C  --> keep
-    ! L.S + M.C  --> discard
-    ! M.S + M.C  --> discard
-    ! M.S + L.C  --> keep
-    function get_output(self) result(keep_mic)
+    subroutine get_output(self,output)
         class(pspec_stats), intent(inout) :: self
+        logical, optional,  intent(inout) :: output
         logical :: keep_mic
-        ! print *,'THR_SCORE_UP', THR_SCORE_UP
-        ! print *,'THR_SCORE_DOWN', THR_SCORE_DOWN
-        ! print *,'THR_CURVAT_UPUP', THR_CURVAT_UPUP
-        ! print *,'THR_CURVAT_UP', THR_CURVAT_UP
-        ! print *,'THR_CURVAT_DOWN', THR_CURVAT_DOWN
-        if(DEBUG_HERE) write(logfhandle,*) 'score = ',self%score, 'avg_curvat = ', self%avg_curvat
-        if(self%score > THR_SCORE_UP_UP) then
+        if(self%score > THRES_SCORE) then
+          keep_mic = .true.
+          if(DEBUG_HERE) write(logfhandle, *) trim(self%fbody), ' KEEP!', 'self%score: ', self%score
+          return
+        endif
+        if(abs(self%avg_curvat)>TINY) then
+            self%value = 1./(2.*self%score) + 0.5*self%avg_curvat !score weights more than the curvature
+        else
+            self%value = 1./self%score
+        endif
+        if(self%value <= THRESHOLD) then
             keep_mic = .true.
-            print *, 'keep because score very high'
-            return
-        elseif(self%score >= THR_SCORE_UP .and. self%score < THR_SCORE_UP_UP) then
-            if(self%avg_curvat > THR_CURVAT_UPUP) then
-                keep_mic = .false.
-                print *, 'discard: score high but curvature also high'
-                return
-            else
-                keep_mic = .true.
-                print *, 'keep: high score and curvature not high'
-                return
-            endif
-        elseif(self%score >= THR_SCORE_DOWN .and. self%score < THR_SCORE_UP) then
-            if(self%avg_curvat > THR_CURVAT_UP) then
-                keep_mic = .false.
-                print *, 'discard: low score but curvature not so low'
-                return
-            else
-                keep_mic = .true.
-                print *, 'keep:  low score and low curvature'
-                return
-            endif
-        elseif(self%score < THR_SCORE_DOWN) then
-            if(self%avg_curvat > THR_CURVAT_DOWN) then
-                keep_mic = .false.
-                print *, 'discard: low score'
-                return
-            else
-                keep_mic = .true.
-                print *, 'keep:  low score and low curvature'
-                return
-            endif
+            if(DEBUG_HERE) write(logfhandle, *) trim(self%fbody), ' KEEP!', 'self%value: ', self%value
         else
             keep_mic = .false.
-            THROW_WARN('This case has not been considered')
+            if(DEBUG_HERE) write(logfhandle, *) trim(self%fbody), ' DISCARD!','self%value: ', self%value
         endif
-    end function get_output
+        if(DEBUG_HERE) write(logfhandle,*) '*********'
+        if(present(output)) output = keep_mic
+    end subroutine get_output
+
 
     function get_score(self) result(score)
       class(pspec_stats), intent(inout) :: self
@@ -178,6 +138,12 @@ contains
       real :: curvature
       curvature = self%avg_curvat
     end function get_curvature
+
+    function get_value(self) result(value)
+      class(pspec_stats), intent(inout) :: self
+      real :: value
+      value = self%value
+    end function get_value
 
     subroutine print_info(self)
         class(pspec_stats), intent(inout) :: self
@@ -206,15 +172,13 @@ contains
    ! This is the SCORE.
     subroutine calc_weighted_avg_sz_ccs(self, sz)
         class(pspec_stats), intent(inout) :: self
+        real,    allocatable :: rmat_bin(:,:,:)
         integer, allocatable :: imat(:,:,:), imat_sz(:,:,:), sz(:)
-        integer :: h,k,sh
-        integer :: i, j
+        integer :: h,k,sh,i,j,label
         real    :: denom  !denominator of the formula
         real    :: a
-        real, allocatable :: rmat_bin(:,:,:)
         denom = 0.
-        ! call self%ps_ccs%elim_ccs([4,BOX*4]) !eliminate connected components with size one
-        ! call self%ps_ccs%write(PATH_HERE//basename(trim(self%fbody))//'AfterElimCCs.mrc')
+        call self%ps_ccs%elim_ccs([10,BOX*4]) !eliminate connected components with size one
         imat = nint(self%ps_ccs%get_rmat())
         allocate(imat_sz(BOX,BOX,1), source = 0)
         sz = self%ps_ccs%size_ccs()
@@ -234,10 +198,11 @@ contains
             do j = 2, BOX-1
                 k   = -int(BOX/2) + j - 1
                 sh  =  nint(hyp(real(h),real(k)))
+                label = imat(i,j,1)
                 if( sh < self%LLim_Findex .or. sh > self%ULim_Findex)then
                     call self%ps_bin%set([i,j,1], 0.)
                 else
-                    if(imat(i,j,1) > 0) then
+                    if(label > 0) then
                         a = (1.-real(sh)/real(self%ULim_Findex))
                         denom = denom + a
                         self%score = self%score + a*imat_sz(i,j,1)/(2.*PI*sh)
@@ -431,6 +396,7 @@ contains
           type(tvfilter) :: tvf
           call tvf%new()
           call tvf%apply_filter(self%ps, LAMBDA)
+          if(DEBUG_HERE) call self%ps%write(PATH_HERE//basename(trim(self%fbody))//'_tvfiltered.mrc')
           ! call manage_central_spot(self)
           call self%ps%scale_pixels([1.,real(N_BINS)])
           call tvf%kill
@@ -476,6 +442,7 @@ contains
       self%smpd         = 0.
       self%score        = 0.
       self%avg_curvat   = 0.
+      self%value        = 0.
       self%fallacious   = .false.
   end subroutine kill_pspec_stats
 end module simple_pspec_stats
