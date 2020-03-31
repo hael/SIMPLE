@@ -29,9 +29,7 @@ option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples" ON)
 option(BUILD_SHARED_LIBS "Build the simple library as shared or static (default)" OFF)
 option(BUILD_DOCS "Enable the generation of PDF manuals and doxygen API documentation" OFF)
 option(USE_SYSTEM_JPEG_SQLite "Compile libjpeg9 and sqlite3 from source (default) or use system libraries." OFF)
-option(GUI "Install the GUI" OFF)
-option(BUILD_GUI "Compile the GUI" OFF)
-option(MULTIUSER_GUI "Compile the GUI for multiuser" OFF)
+option(GUI "Install the GUI" ON)
 # We probably don't want these to run on every build.
 option(COVERALLS "Generate coveralls data" OFF) #coveralls.io
 OPTION(USE_CODE_COVERAGE "Added code coverage flags" OFF)

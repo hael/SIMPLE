@@ -327,7 +327,7 @@ class SimpleView {
       canvas.height = ydim
       var rect = document.getElementById('thumbnails').getBoundingClientRect()
       var mindim = (rect.width < rect.height) ? rect.width : rect.height
-      canvas.style.width = mindim + 'px'
+      //canvas.style.width = mindim + 'px'
       canvas.style.height = mindim + 'px'
       this.currentmic = selector.options[selector.selectedIndex].value
 	  this.background = new Image()
