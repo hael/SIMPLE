@@ -290,6 +290,35 @@ contains
         allocate(values(self%hash_index), source=self%values(:self%hash_index))
     end function get_values
 
+    !>  \brief  convert hash to string, slighlty faster
+    ! pure function hash2str( self ) result( str )
+    !     use simple_strings, only: removesp
+    !     class(hash),intent(in)    :: self
+    !     character(len=LONGSTRLEN) :: str
+    !     character(len=:),allocatable :: str1!,tmpstr
+    !     character(len=48) :: tmpstr
+    !     integer :: i!, len
+    !     if( self%hash_index > 0 )then
+    !         if( self%hash_index == 1 )then
+    !             str = trim(self%keys(1)%str)//'='//trim(real2str(self%values(1)))
+    !             return
+    !         endif
+    !         write(tmpstr,*)self%keys(1)%str,'=',self%values(1)
+    !         call removesp(tmpstr)
+    !         str1 = trim(tmpstr)
+    !         if( self%hash_index > 2 )then
+    !             do i=2,self%hash_index - 1
+    !                 write(tmpstr,*)self%keys(i)%str,'=',self%values(i)
+    !                 call removesp(tmpstr)
+    !                 str1 = str1//' '//trim(tmpstr)
+    !             end do
+    !         endif
+    !         write(tmpstr,*)self%keys(self%hash_index)%str,'=',self%values(self%hash_index)
+    !         call removesp(tmpstr)
+    !         str = str1//' '//trim(tmpstr)
+    !     endif
+    ! end function hash2str
+
     !>  \brief  convert hash to string
     pure function hash2str( self ) result( str )
         class(hash),intent(in)    :: self

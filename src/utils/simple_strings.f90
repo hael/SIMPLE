@@ -23,26 +23,21 @@ public
 
 contains
 
-    function spaces( n ) result( str )
+    pure function spaces( n ) result( str )
         integer, intent(in) :: n
-        character(len=:), allocatable :: str,  str_copy
-        character(len=1) :: space = ' '
+        character(len=:), allocatable :: str
         if( n <= 0 ) return
-        allocate(str, source=space)
-        do while( len(str) < n )
-            allocate( str_copy, source=str )
-            deallocate( str )
-            allocate( str, source=str_copy//space )
-            deallocate(str_copy)
-        end do
+        allocate(character(len=n) :: str)
+        str(:) = ' '
     end function spaces
 
     !> \brief  assesses whether a string represents a filename
-    function str2format( str ) result( format )
-        character(len=*), intent(in)  :: str
-        character(len=:), allocatable :: format
-        integer :: iostat, ivar, i
-        real    :: rvar
+    subroutine str2format( str, format, rvar, ivar )
+        character(len=*),              intent(in)  :: str
+        character(len=:), allocatable, intent(out) :: format
+        real,                          intent(out) :: rvar
+        integer,                       intent(out) :: ivar
+        integer :: iostat, i
         logical :: str_is_file
         i = index(str, '.')
         ! check if first symbol after . is a character
@@ -75,7 +70,7 @@ contains
         endif
         ! char is last resort
         allocate( format, source='char' )
-    end function str2format
+    end subroutine str2format
 
     function str2latex( str2convert ) result( str_latex )
         character(len=*), intent(in)  :: str2convert

@@ -16,8 +16,9 @@ contains
         class(chash),     intent(inout)    :: chtab
         character(len=32),     allocatable :: keys(:)
         character(len=STDLEN), allocatable :: vals(:)
-        character(len=:),      allocatable :: line_trimmed
+        character(len=:),      allocatable :: line_trimmed, form
         character(len=STDLEN) :: args(128), args_pair(2)
+        real    :: rval
         integer :: nargs, iarg, ival, io_stat
         allocate(line_trimmed, source=trim(line))
         call parsestr(line_trimmed,' ', args, nargs)
@@ -28,13 +29,13 @@ contains
             call split_str(args_pair(2), '=', args_pair(1))
             keys(iarg) = trim(args_pair(1))
             vals(iarg) = args_pair(2)
-            select case(str2format(vals(iarg)))
+            call str2format(vals(iarg),form,rval,ival)
+            select case(form)
                 case( 'real' )
-                    call htab%set(keys(iarg), str2real(trim(vals(iarg))))
+                    call htab%set(keys(iarg), rval)
                 case( 'file', 'dir', 'char' )
                     call chtab%set(trim(keys(iarg)), trim(vals(iarg)))
                 case( 'int'  )
-                    call str2int(trim(vals(iarg)), io_stat, ival)
                     call htab%set(keys(iarg), real(ival))
             end select
         end do
@@ -45,9 +46,10 @@ contains
         character(len=*), intent(inout) :: line
         class(hash),      intent(inout) :: htab
         class(chash),     intent(inout) :: chtab
+        character(len=:), allocatable :: form
         character(len=32)     :: keys(128)
         character(len=STDLEN) :: args(128), vals(128), val
-        real                  :: rvals(128)
+        real                  :: rvals(128), rval
         logical               :: real_mask(128)
         integer               :: nargs, iarg, ival, io_stat, lenstr, ipos, ipos_prev, nreals
         call compact(line)
@@ -74,22 +76,22 @@ contains
             if(ipos==0)cycle
             keys(iarg) = adjustl(trim(val(1:ipos-1)))
             val  = adjustl(val(ipos+1:))
-            select case(str2format(val))
+            call str2format(val,form,rval,ival)
+            select case(form)
                 case('real')
-                    rvals(iarg) = str2real(val)
+                    rvals(iarg) = rval
                     nreals      = nreals + 1
                 case('file', 'dir', 'char')
                     real_mask(iarg) = .false.
                     vals(iarg)      = val
                 case('int')
-                    call str2int(val, io_stat, ival)
                     rvals(iarg) = real(ival)
                     nreals      = nreals + 1
             end select
         end do
         ! alloc
         if(nreals > 0) call htab%new(nreals)
-        if(nreals /= nargs) call chtab%new(nargs-nreals)
+        if(nreals /= nargs ) call chtab%new(nargs-nreals)
         ! fill
         do iarg=1,nargs
             if(real_mask(iarg))then

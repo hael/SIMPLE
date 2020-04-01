@@ -296,7 +296,8 @@ contains
         character(len=*), intent(in)    :: arg
         class(args),      intent(in)    :: allowed_args
         character(len=:), allocatable :: form
-        integer :: pos1, io_stat, ri
+        real    :: rval
+        integer :: pos1, io_stat, ival
         pos1 = index(arg, '=') ! position of '='
         ! parse everyting containing '='
         if( pos1 /= 0 )then
@@ -306,16 +307,16 @@ contains
                 write(logfhandle,'(a)') 'Perhaps you have misspelled?'
                 call exit(EXIT_FAILURE4)
             endif
-            form = str2format(arg(pos1+1:))
+            call str2format(arg(pos1+1:), form, rval, ival)
             select case(form)
                 case('file', 'dir', 'char')
                     self%cmds(i)%carg = adjustl(arg(pos1+1:))
                 case('real')
-                    self%cmds(i)%rarg = str2real(adjustl(arg(pos1+1:)))
+                    self%cmds(i)%rarg = rval
                 case('int')
-                    call str2int(adjustl(arg(pos1+1:)), io_stat, ri )
+                    call str2int(adjustl(arg(pos1+1:)), io_stat, ival )
                     if( io_stat == 0 )then
-                        self%cmds(i)%rarg = real(ri)
+                        self%cmds(i)%rarg = real(ival)
                     else
                         self%cmds(i)%carg = adjustl(arg(pos1+1:))
                     endif
