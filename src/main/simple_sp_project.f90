@@ -88,6 +88,7 @@ contains
     procedure          :: get_sp_oris
     procedure          :: ptr2oritype
     procedure          :: is_virgin_field
+    procedure          :: get_mic2stk_inds
     ! modifiers
     procedure          :: split_stk
     procedure          :: set_sp_oris
@@ -1351,6 +1352,10 @@ contains
         character(len=4) :: ext_out
         integer :: imic, nmics
         nmics = self%os_stk%get_noris()
+        if(present(dir))then
+            call simple_mkdir(trim(dir),errmsg="sp_project::add_scale_tag")
+            abs_dir = simple_abspath(dir,'sp_project :: add_scale_tag')
+        endif
         do imic=1,nmics
             call self%os_stk%getter(imic, 'stk', stkname)
             ext = fname2ext(trim(stkname))
@@ -1364,8 +1369,6 @@ contains
                     THROW_HARD('This file format is not supported by SIMPLE; add_scale_tag')
             end select
             if(present(dir))then
-                call simple_mkdir(trim(dir),errmsg="sp_project::add_scale_tag")
-                abs_dir = simple_abspath(dir,'sp_project :: add_scale_tag')
                 nametmp = basename(add2fbody(stkname, '.'//trim(ext), trim(SCALE_SUFFIX)))
                 newname = filepath(trim(abs_dir), trim(nametmp))
             else
@@ -2216,6 +2219,60 @@ contains
         enddo
         is_virgin_field = .true.
     end function is_virgin_field
+
+    subroutine get_mic2stk_inds( self, mic2stk_inds, stk2mic_inds )
+        class(sp_project),    intent(inout) :: self
+        integer, allocatable, intent(inout) :: mic2stk_inds(:), stk2mic_inds(:)
+        integer :: imic,istk,nmics,nstks,nptcls_mic,nptcls_stk,state_mic,state_stk
+        if(allocated(mic2stk_inds))deallocate(mic2stk_inds)
+        if(allocated(stk2mic_inds))deallocate(stk2mic_inds)
+        nmics = self%os_mic%get_noris()
+        nstks = self%os_stk%get_noris()
+        if( nmics==0 .or. nstks==0 )then
+            THROW_WARN('Empty fields! Fields need be populated; get_mic2stk_inds')
+        endif
+        if( nmics < nstks )then
+            THROW_HARD('MIC & STK fileds indexing error 1! get_mic2stk_inds')
+        endif
+        allocate(mic2stk_inds(nmics),stk2mic_inds(nstks),source=0)
+        if( nmics == nstks )then
+            do imic = 1,nmics
+                mic2stk_inds(imic) = imic
+                stk2mic_inds(imic) = imic
+            enddo
+        else
+            istk = 0
+            do imic = 1,nmics
+                nptcls_mic = nint(self%os_mic%get(imic,'nptcls'))
+                if( nptcls_mic > 0 )then
+                    istk = istk+1
+                    if( istk > nstks ) THROW_HARD('Too many stacks!  get_mic2stk_inds')
+                else
+                    ! micrographs without particles have no stack
+                    cycle
+                endif
+                mic2stk_inds(imic) = istk
+                stk2mic_inds(imic) = imic
+            enddo
+            if( any(mic2stk_inds==0) .or. any(stk2mic_inds==0) )then
+                THROW_HARD('MIC & STK fileds indexing error 2! get_mic2stk_inds')
+            endif
+        endif
+        ! state consistency
+        do imic = 1,nmics
+            istk = mic2stk_inds(imic)
+            nptcls_mic = nint(self%os_mic%get(imic,'nptcls'))
+            nptcls_stk = nint(self%os_stk%get(istk,'nptcls'))
+            if( nptcls_mic /= nptcls_stk )then
+                 THROW_HARD('Inconsistent number of particles!  get_mic2stk_inds')
+            endif
+            state_mic = self%os_mic%get_state(imic)
+            state_stk = self%os_stk%get_state(istk)
+            if( state_mic /= state_stk )then
+                THROW_HARD('Inconsistent state!  get_mic2stk_inds')
+            endif
+        enddo
+    end subroutine get_mic2stk_inds
 
     ! modifiers
 
