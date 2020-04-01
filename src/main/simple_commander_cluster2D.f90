@@ -1473,15 +1473,15 @@ contains
             call spproj%write_segment_inside(params%oritype)
         endif
         ! automated pruning
-        nptcls_sel = spproj%os_ptcl2D%get_noris(consider_state=.true.)
-        if( nptcls_sel < nint(PRUNE_FRAC*real(spproj%os_ptcl2D%get_noris())) )then
-            write(logfhandle,'(A)')'>>> AUTO-PRUNING PROJECT FILE'
-            call spproj%kill
-            cline_prune_project = cline
-            call xprune_project%execute(cline_prune_project)
-            call spproj%read(params%projfile)
-            params%nptcls = nptcls_sel
-        endif
+        ! nptcls_sel = spproj%os_ptcl2D%get_noris(consider_state=.true.)
+        ! if( nptcls_sel < nint(PRUNE_FRAC*real(spproj%os_ptcl2D%get_noris())) )then
+        !     write(logfhandle,'(A)')'>>> AUTO-PRUNING PROJECT FILE'
+        !     call spproj%kill
+        !     cline_prune_project = cline
+        !     call xprune_project%execute(cline_prune_project)
+        !     call spproj%read(params%projfile)
+        !     params%nptcls = nptcls_sel
+        ! endif
         ! refinement flag
         if(.not.cline%defined('refine')) call cline%set('refine','snhc')
         ! splitting
