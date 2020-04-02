@@ -97,6 +97,7 @@ type :: ori
     generic            :: operator(.euldist.)     => euldist
     generic            :: operator(.inplrotdist.) => inplrotdist
     ! DESTRUCTORS
+    procedure          :: kill_hash
     procedure          :: kill_chash
     procedure          :: kill
 end type ori
@@ -1009,6 +1010,12 @@ contains
     end function inplrotdist
 
     ! DESTRUCTORS
+
+    !>  \brief  is a destructor
+    subroutine kill_hash( self )
+        class(ori), intent(inout) :: self
+        call self%htab%kill
+    end subroutine kill_hash
 
     !>  \brief  is a destructor
     subroutine kill_chash( self )

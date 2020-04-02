@@ -91,6 +91,7 @@ type :: oris
     procedure, private :: set_2
     generic            :: set => set_1, set_2
     procedure          :: set_ori
+    procedure          :: transfer_ori
     procedure, private :: set_all_1
     procedure, private :: set_all_2
     generic            :: set_all => set_all_1, set_all_2
@@ -127,6 +128,7 @@ type :: oris
     procedure          :: str2ori_ctfparams_state_eo
     procedure          :: set_ctfvars
     procedure          :: set_boxfile
+    procedure          :: reset
     ! I/O
     procedure          :: read
     procedure          :: read_ctfparams_state_eo
@@ -446,7 +448,6 @@ contains
         class(oris), intent(in) :: self
         integer :: i
         max_ori_strlen_trim = 0
-        ! cannot be threaded because of allocatables within loop
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)&
         !$omp reduction(max:max_ori_strlen_trim)
         do i=1,self%n
@@ -1442,6 +1443,14 @@ contains
         self%o(i) = o
     end subroutine set_ori
 
+    !> transfer external j-th ori j to self at i-th position
+    subroutine transfer_ori( self, i, self2transfer, i2transfer )
+        class(oris), intent(inout) :: self
+        class(oris), intent(in)    :: self2transfer
+        integer,     intent(in)    :: i, i2transfer
+        self%o(i) = self2transfer%o(i2transfer)
+    end subroutine transfer_ori
+
     subroutine set_all_1( self, which, vals )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
@@ -1972,6 +1981,15 @@ contains
         integer, optional, intent(in)    :: nptcls
         call self%o(i)%set_boxfile(boxfname, nptcls)
     end subroutine set_boxfile
+
+    subroutine reset( self )
+        class(oris), intent(inout) :: self
+        integer :: i
+        do i = 1,self%n
+            call self%o(i)%kill_hash
+            call self%o(i)%kill_chash
+        enddo
+    end subroutine reset
 
     ! I/O
 

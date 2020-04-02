@@ -2935,7 +2935,8 @@ contains
                 top    = nint(self%os_stk%get(istk,'top'))
                 nptcls = nint(self%os_stk%get(istk,'nptcls'))
                 if(top-fromp+1 /= nptcls)then
-                    THROW_HARD('Incorrect # number of particles in stack; report_state2stk')
+                    call self%os_stk%print_(istk)
+                    THROW_HARD('Incorrect # number of particles in stack '//int2str(istk)//'; report_state2stk')
                 endif
                 if( states(istk) > 0 )then
                     ! preserve existing states

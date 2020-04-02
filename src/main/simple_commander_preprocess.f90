@@ -127,8 +127,9 @@ contains
         type(parameters)                       :: params
         integer,                   parameter   :: SHORTTIME       = 30   ! folder watched every minute
         integer,                   parameter   :: LONGTIME        = 600  ! time lag after which a movie is processed
-        integer,                   parameter   :: PROJ_UPDATETIME = 3600 ! time lag for whole project update
-        logical,                   parameter   :: DEBUG_HERE = .false.
+        integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for write project file
+        logical,                   parameter   :: DEBUG_HERE      = .false.
+        character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
         class(cmdline),            allocatable :: completed_jobs_clines(:)
         type(qsys_env)                         :: qenv
         type(cmdline)                          :: cline_make_pickrefs
@@ -138,11 +139,11 @@ contains
         character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract
         character(len=LONGSTRLEN)              :: movie
-        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, tnow, n_completed
-        integer                                :: nptcls, cnt, last_project_update_time, n_imported, iproj
-        logical                                :: l_pick, l_movies_left
-        integer(timer_int_kind) :: t0, t1, t2
-        real(timer_int_kind)    :: rt_whole, rt_append, rt_write
+        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, n_completed, last_injection
+        integer                                :: nptcls, cnt, n_imported, iproj, nptcls_glob
+        logical                                :: l_pick, l_movies_left, l_haschanged
+        integer(timer_int_kind) :: t0
+        real(timer_int_kind)    :: rt_write
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',          'yes')
         ! motion correction
@@ -212,16 +213,17 @@ contains
         ! movie watcher init
         movie_buff = moviewatcher(LONGTIME)
         ! import previous runs
+        nptcls_glob = 0
         call import_prev_streams
         ! start watching
-        rt_whole = 0.; rt_append=0.; rt_write=0.
-        last_project_update_time = simple_gettime()
+        last_injection = simple_gettime()
         prev_stacksz  = 0
         nmovies       = 0
         iter          = 0
         n_completed   = 0
         n_imported    = 0
         l_movies_left = .false.
+        l_haschanged  = .false.
         do
             if( file_exists(trim(TERM_STREAM)) )then
                 write(logfhandle,'(A)')'>>> TERMINATING PREPROCESS STREAM'
@@ -264,25 +266,25 @@ contains
             endif
             ! project update
             n_imported = spproj%os_mic%get_noris() ! # of projects already added
-            tnow       = simple_gettime()
-            if( (n_completed-n_imported > 0) .and. (tnow-last_project_update_time > PROJ_UPDATETIME) )then
-                t0 = tic()
+            ! tnow       = simple_gettime()
+            if( n_completed-n_imported > 0 )then
                 ! append projects
-                t1 = t0
+                nptcls = 0
                 do iproj=n_imported+1,n_completed
-                    call stream_spproj%read( completed_fnames(iproj) )
+                    call stream_spproj%read_segment('mic', completed_fnames(iproj))
                     call spproj%append_project(stream_spproj, 'mic')
-                    if( l_pick ) call spproj%append_project(stream_spproj, 'stk')
+                    if( l_pick ) nptcls = nptcls + nint(stream_spproj%os_mic%get(1,'nptcls'))
                     call submit_jobs ! as appending can be slow
                 enddo
                 call stream_spproj%kill
+                ! total number of micrographs
                 n_imported = spproj%os_mic%get_noris()
                 write(logfhandle,'(A,I5)')'>>> # MOVIES PROCESSED & IMPORTED:    ',n_imported
                 if( l_pick )then
-                    nptcls = spproj%os_ptcl2D%get_noris()
-                    write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',spproj%os_ptcl2D%get_noris()
+                    ! total number of particles
+                    nptcls_glob = nptcls_glob + nptcls
+                    write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',nptcls_glob
                 endif
-                rt_append = rt_append + toc(t1)
                 ! exit for trial runs
                 if( cline%defined('nmovies_trial') )then
                     if( n_imported  >= params%nmovies_trial )then
@@ -291,50 +293,136 @@ contains
                     endif
                 endif
                 if( cline%defined('nptcls_trial') )then
-                    if( l_pick .and. (nptcls >= params%nptcls_trial) )then
+                    if( l_pick .and. (nptcls_glob >= params%nptcls_trial) )then
                         write(logfhandle,'(A)')'>>> TRIAL # OF PARTICLES REACHED'
                         exit
                     endif
                 endif
                 ! write project
-                t2 = tic()
-                write(logfhandle,'(A)')'>>> UPDATING PROJECT'
-                call spproj%write
-                last_project_update_time = simple_gettime()
-                ! benchmark
-                if( DEBUG_HERE )then
-                    rt_write = rt_write + toc(t2)
-                    rt_whole = rt_whole + toc(t0)
-                    print *,'rt_append : ', rt_append
-                    print *,'rt_write  : ', rt_write
-                    print *,'rt_whole  : ', rt_whole; call flush(6)
-                endif
+                call spproj%write(micspproj_fname)
+                last_injection = simple_gettime()
+                l_haschanged   = .true.
             else
                 ! wait
-                if( .not.l_movies_left ) call simple_sleep(SHORTTIME)
+                if( .not.l_movies_left )then
+                    if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
+                        ! write project when inactive...
+                        call write_project(final_check=.false.)
+                        l_haschanged = .false.
+                    else
+                        ! ...or wait
+                        call simple_sleep(SHORTTIME)
+                    endif
+                endif
             endif
         end do
         ! termination
-        write(logfhandle,'(A)')'>>> LAST PROJECT UPDATE'
-        call update_projects_list( completed_fnames, n_completed )
-        n_imported = spproj%os_mic%get_noris()
-        if( n_completed > n_imported )then
-            do iproj=n_imported+1,n_completed
-                call stream_spproj%read( completed_fnames(iproj) )
-                call spproj%append_project(stream_spproj, 'mic')
-                if( l_pick ) call spproj%append_project(stream_spproj, 'stk')
-            enddo
-            write(logfhandle,'(A,I5)')'>>> # MOVIES PROCESSED & IMPORTED:    ',spproj%os_mic%get_noris()
-            if( l_pick ) write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',spproj%os_ptcl2D%get_noris()
-            call stream_spproj%kill
-            if( n_imported /= n_completed ) call spproj%write
-        endif
+        call write_project(final_check=.true.)
         call spproj%kill
         ! cleanup
         call qsys_cleanup
+        call del_file(micspproj_fname)
         ! end gracefully
         call simple_end('**** SIMPLE_PREPROCESS_STREAM NORMAL STOP ****')
         contains
+
+            subroutine write_project( final_check )
+                logical, intent(in)  :: final_check
+                logical, allocatable :: stk_mask(:)
+                integer              :: iproj,nptcls,istk,fromp,top,i,iptcl,nstks,n
+                write(logfhandle,'(A)')'>>> PROJECT UPDATE'
+                if( final_check )then
+                    if( qenv%qscripts%get_done_stacksz() > 0 )then
+                        call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
+                        call update_projects_list( completed_fnames, n_completed )
+                    endif
+                    n_imported = spproj%os_mic%get_noris()
+                    if( n_completed > n_imported )then
+                        ! micrographs
+                        do iproj=n_imported+1,n_completed
+                            call stream_spproj%read_segment('mic', completed_fnames(iproj))
+                            call spproj%append_project(stream_spproj, 'mic')
+                        enddo
+                        call stream_spproj%kill
+                        write(logfhandle,'(A,I5)')'>>> # MOVIES PROCESSED & IMPORTED:    ',spproj%os_mic%get_noris()
+                    endif
+                endif
+                n_imported = spproj%os_mic%get_noris()
+                call spproj%write_segment_inside('mic', params%projfile)
+                if( l_pick )then
+                    if( DEBUG_HERE ) t0 = tic()
+                    ! stacks
+                    allocate(stk_mask(n_imported))
+                    do iproj = 1,n_imported
+                        stk_mask(iproj) = nint(spproj%os_mic%get(iproj,'nptcls')) > 0
+                    enddo
+                    nstks = count(stk_mask)
+                    call spproj%os_stk%new(nstks)
+                    nptcls = 0
+                    istk   = 0
+                    fromp  = 0
+                    top    = 0
+                    do iproj = 1,n_imported
+                        if( .not.stk_mask(iproj) ) cycle
+                        istk = istk+1
+                        call stream_spproj%read_segment('stk', completed_fnames(iproj))
+                        n      = nint(stream_spproj%os_stk%get(1,'nptcls'))
+                        fromp  = nptcls + 1
+                        nptcls = nptcls + n
+                        top    = nptcls
+                        call spproj%os_stk%transfer_ori(istk,stream_spproj%os_stk,1)
+                        call spproj%os_stk%set(istk, 'fromp',real(fromp))
+                        call spproj%os_stk%set(istk, 'top',  real(top))
+                    enddo
+                    call spproj%write_segment_inside('stk', params%projfile)
+                    call spproj%os_stk%reset
+                    call spproj%os_ptcl2D%new(nptcls)
+                    call spproj%os_ptcl3D%new(nptcls)
+                    ! particles 2D
+                    istk   = 0
+                    iptcl  = 0
+                    do iproj = 1,n_imported
+                        if( .not.stk_mask(iproj) ) cycle
+                        istk = istk+1
+                        call stream_spproj%read_segment('ptcl2D', completed_fnames(iproj))
+                        nptcls = stream_spproj%os_ptcl2D%get_noris()
+                        do i = 1,nptcls
+                            iptcl = iptcl + 1
+                            call spproj%os_ptcl2D%transfer_ori(iptcl,stream_spproj%os_ptcl2D,i)
+                            call spproj%os_ptcl2D%set(iptcl, 'stkind', real(istk))
+                        enddo
+                        call stream_spproj%kill
+                    enddo
+                    call spproj%write_segment_inside('ptcl2D', params%projfile)
+                    call spproj%os_ptcl2D%reset
+                    ! particles 3D
+                    istk   = 0
+                    iptcl  = 0
+                    do iproj = 1,n_imported
+                        if( .not.stk_mask(iproj) ) cycle
+                        istk = istk+1
+                        call stream_spproj%read_segment('ptcl3D', completed_fnames(iproj))
+                        nptcls = stream_spproj%os_ptcl3D%get_noris()
+                        do i = 1,nptcls
+                            iptcl = iptcl + 1
+                            call spproj%os_ptcl3D%transfer_ori(iptcl,stream_spproj%os_ptcl3D,i)
+                            call spproj%os_ptcl3D%set(iptcl, 'stkind', real(istk))
+                        enddo
+                        call stream_spproj%kill
+                    enddo
+                    call spproj%write_segment_inside('ptcl3D', params%projfile)
+                    write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',spproj%os_ptcl2D%get_noris()
+                endif
+                ! cleanup, we preserve os_mic
+                call spproj%os_stk%kill
+                call spproj%os_ptcl2D%kill
+                call spproj%os_ptcl3D%kill
+                ! benchmark
+                if( DEBUG_HERE )then
+                    rt_write = toc(t0)
+                    print *,'rt_write  : ', rt_write; call flush(6)
+                endif
+            end subroutine write_project
 
             subroutine submit_jobs
                 call qenv%qscripts%schedule_streaming( qenv%qdescr )
@@ -420,7 +508,7 @@ contains
                 character(len=LONGSTRLEN), allocatable :: sp_files(:)
                 character(len=:), allocatable :: mic, mov
                 logical,          allocatable :: spproj_mask(:)
-                integer :: iproj,nprojs,cnt
+                integer :: iproj,nprojs,cnt,nptcls
                 logical :: err
                 if( .not.cline%defined('dir_prev') ) return
                 call simple_list_files(trim(params%dir_prev)//'/preprocess_*.simple', sp_files)
@@ -428,9 +516,10 @@ contains
                 if( nprojs < 1 ) return
                 allocate(spproj_mask(nprojs),source=.false.)
                 cnt    = 0
+                nptcls = 0
                 do iproj = 1,nprojs
                     err = .false.
-                    call stream_spproj%read( sp_files(iproj) )
+                    call stream_spproj%read(sp_files(iproj) )
                     if( stream_spproj%os_mic%get_noris() /= 1 )then
                         THROW_WARN('Ignoring previous project'//trim(sp_files(iproj)))
                         cycle
@@ -458,10 +547,8 @@ contains
                             if( stream_spproj%os_stk%get_noris() == 1 )then
                                 call stream_spproj%os_stk%get_ori(1, o_stk)
                                 call movefile2folder('stk', output_dir_extract, o_stk, err)
-                                if( .not.err )then
-                                    call stream_spproj%os_stk%set_ori(1, o_stk)
-                                    call spproj%append_project(stream_spproj, 'stk')
-                                endif
+                                call stream_spproj%os_stk%set_ori(1, o_stk)
+                                if( .not.err ) nptcls = nptcls + nint(o_stk%get('nptcls'))
                             endif
                         endif
                     endif
@@ -477,6 +564,8 @@ contains
                     spproj_mask(iproj) = .true.
                     ! cleanup
                 enddo
+                ! update total number of particles
+                nptcls_glob = nptcls_glob + nptcls
                 if( cnt > 0 )then
                     ! updating STREAM_SPPROJFILES for Cluster2D_stream
                     allocate(completed_jobs_clines(cnt))
@@ -497,7 +586,6 @@ contains
             end subroutine import_prev_streams
 
             subroutine movefile2folder(key, folder, o, err)
-                use simple_ori, only: ori
                 character(len=*), intent(in)    :: key, folder
                 class(ori),       intent(inout) :: o
                 logical,          intent(out)   :: err
@@ -520,6 +608,7 @@ contains
                     THROW_WARN('Ignoring '//trim(src))
                     return
                 endif
+                iostat = rename(src,reldest)
                 call make_relativepath(CWD_GLOB,dest,reldest)
                 call o%set(key,reldest)
             end subroutine movefile2folder
