@@ -13,7 +13,7 @@ integer, parameter :: BUFFSZ_DEFAULT = 10
 
 !> hash stuct
 type :: hash
-    private
+    ! private
     type(str4arr), allocatable :: keys(:)   !< hash keys
     real,          allocatable :: values(:) !< hash values
     integer :: buffsz     = BUFFSZ_DEFAULT  !< size of first buffer and subsequent allocation increments
@@ -290,94 +290,44 @@ contains
         allocate(values(self%hash_index), source=self%values(:self%hash_index))
     end function get_values
 
-    ! !>  \brief  convert hash to string, ~2x faster
-    ! pure function hash2str( self ) result( str )
-    !     class(hash),intent(in)    :: self
-    !     character(len=LONGSTRLEN) :: str, tmpstr
-    !     integer :: i,cnt, len
-    !     if( self%hash_index > 0 )then
-    !         write(tmpstr,*)(self%keys(i)%str,'=', self%values(i),'/', i=1,self%hash_index)
-    !         cnt = 0
-    !         do i=1,len_trim(tmpstr)
-    !             if( tmpstr(i:i) == '/' )then
-    !                 cnt = cnt+1
-    !                 str(cnt:cnt) = ' '
-    !             else if( tmpstr(i:i) == ' ' )then
-    !                 !
-    !             else
-    !                 cnt = cnt+1
-    !                 str(cnt:cnt) = tmpstr(i:i)
-    !             endif
-    !         enddo
-    !         str(cnt:cnt) = char(0)
-    !     endif
-    ! end function hash2str
-
-    !>  \brief  convert hash to string
+    !>  \brief  convert hash to string, ~2x faster
     pure function hash2str( self ) result( str )
-        class(hash),intent(in)    :: self
-        character(len=LONGSTRLEN) :: str
-        integer :: i, len
+        class(hash),intent(in)     :: self
+        character(len=LONGSTRLEN)  :: str
+        character(len=XLONGSTRLEN) :: tmpstr
+        integer :: i,cnt
+        str = repeat(' ',LONGSTRLEN)
         if( self%hash_index > 0 )then
-            if( self%hash_index == 1 )then
-                str = trim(self%keys(1)%str)//'='//trim(real2str(self%values(1)))
-                return
-            endif
-            str = trim(self%keys(1)%str)//'='//trim(real2str(self%values(1)))//' '
-            if( self%hash_index > 2 )then
-                do i=2,self%hash_index - 1
-                    len = len_trim(str)
-                    str = str(1:len+1)//trim(self%keys(i)%str)//'='//trim(real2str(self%values(i)))//' '
-                end do
-            endif
-            len = len_trim(str)
-            str = trim(str(1:len+1)//trim(self%keys(self%hash_index)%str)&
-                &//'='//trim(real2str(self%values(self%hash_index))))
+            write(tmpstr,*)(self%keys(i)%str,'=',self%values(i),'/', i=1,self%hash_index)
+            cnt = 0
+            do i=1,len_trim(tmpstr)
+                if( tmpstr(i:i) == ' ' ) cycle
+                cnt = cnt+1
+                str(cnt:cnt) = tmpstr(i:i)
+            enddo
+            do i=4,cnt
+                if( str(i:i) == '/' ) str(i:i) = ' '
+            enddo
+            str = trim(str)
         endif
     end function hash2str
 
     !>  \brief  convert hash to string
     pure integer function hash_strlen( self )
-        class(hash),intent(in)    :: self
+        class(hash),intent(in)     :: self
+        character(len=XLONGSTRLEN) :: tmpstr
         integer :: i
         hash_strlen = 0
-        if( self%hash_index == 0 )then
-            return
-        elseif( self%hash_index == 1 )then
-            hash_strlen = len_trim(self%keys(1)%str)+len_trim(real2str(self%values(1)))
-            hash_strlen = hash_strlen + 1 ! for '=' separator
-        else
-            do i=1,self%hash_index
-                hash_strlen = hash_strlen+len_trim(self%keys(i)%str)+len_trim(real2str(self%values(i)))
-            end do
-            hash_strlen = hash_strlen + self%hash_index ! for '=' separator
+        if( self%hash_index > 0 )then
+            write(tmpstr,*)(self%keys(i)%str, self%values(i), i=1,self%hash_index)
+            do i=1,len_trim(tmpstr)
+                if( tmpstr(i:i) == ' ' ) cycle
+                hash_strlen = hash_strlen + 1
+            enddo
+            hash_strlen = hash_strlen + self%hash_index   ! for '=' separator
             hash_strlen = hash_strlen + self%hash_index-1 ! for ' ' separator
         endif
     end function hash_strlen
-
-    ! !>  \brief  convert hash to string, 2x faster
-    ! pure integer function hash_strlen( self )
-    !     use simple_strings, only: removesp
-    !     class(hash),intent(in)    :: self
-    !     character(len=LONGSTRLEN) :: string
-    !     integer :: i
-    !     hash_strlen = 0
-    !     if( self%hash_index == 0 )then
-    !         return
-    !     elseif( self%hash_index == 1 )then
-    !         hash_strlen = len_trim(self%keys(1)%str)+len_trim(real2str(self%values(1)))
-    !         hash_strlen = hash_strlen + 1 ! for '=' separator
-    !     else
-    !         write(string,*)self%values(1:self%hash_index)
-    !         call removesp(string)
-    !         hash_strlen = len_trim(string)
-    !         do i=1,self%hash_index
-    !             hash_strlen = hash_strlen+len_trim(self%keys(i)%str)
-    !         end do
-    !         hash_strlen = hash_strlen + self%hash_index ! for '=' separator
-    !         hash_strlen = hash_strlen + self%hash_index-1 ! for ' ' separator
-    !     endif
-    ! end function hash_strlen
 
     !>  \brief  returns size of hash
     pure integer function size_of( self )

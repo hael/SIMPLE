@@ -93,10 +93,7 @@ contains
 
     logical function char_is_a_letter( c )
         character(len=1), intent(in) :: c
-        integer :: itst1, itst2
-        itst1 = scan(LOWER_CASE_LETTERS,c)
-        itst2 = scan(UPPER_CASE_LETTERS,c)
-        char_is_a_letter = itst1 > 0 .or. itst2 > 0
+        char_is_a_letter = (scan(LOWER_CASE_LETTERS,c)>0) .or. (scan(UPPER_CASE_LETTERS,c)>0)
     end function char_is_a_letter
 
     logical function char_is_a_number( c )
