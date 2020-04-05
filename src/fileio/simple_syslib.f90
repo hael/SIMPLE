@@ -792,6 +792,46 @@ contains
         endif
     end subroutine simple_list_files
 
+    subroutine simple_list_files_regexp( dir, regexp, list )
+        use simple_strings, only: int2str
+        character(len=*),                       intent(in)    :: dir
+        character(len=*),                       intent(in)    :: regexp
+        character(len=LONGSTRLEN), allocatable, intent(inout) :: list(:)
+        character(len=LONGSTRLEN) :: cmd
+        character(len=LONGSTRLEN) :: tmpfile
+        character(len=1) :: junk
+        integer :: sz, funit, ios, i, nlines
+        if( len_trim(adjustl(regexp)) == 0) return
+        tmpfile = '__simple_filelist_'//int2str(part_glob)//'__'
+        ! builds command
+        cmd = 'ls -rt '//adjustl(trim(dir))//' | grep -E '''//adjustl(trim(regexp))//''' > '//trim(tmpfile)
+        call exec_cmdline( cmd, suppress_errors=.true.)
+        inquire(file=trim(tmpfile), size=sz)
+        if( allocated(list) ) deallocate(list)
+        if( sz > 0 )then
+            open(newunit=funit, file=trim(tmpfile))
+            nlines = 0
+            do
+                read(funit,*,iostat=ios) junk
+                if(ios /= 0)then
+                    exit
+                else
+                    nlines = nlines + 1
+                endif
+            end do
+            rewind(funit)
+            allocate( list(nlines) )
+            do i=1,nlines
+                read(funit, '(a)') list(i)
+                list(i) = adjustl(trim(dir))//'/'//trim(list(i))
+            enddo
+            close(funit, status='delete')
+        else
+            open(newunit=funit, file=trim(tmpfile))
+            close(funit, status='delete')
+        endif
+    end subroutine simple_list_files_regexp
+
     !> \brief  is for deleting a file
     subroutine del_file( file )
         character(len=*), intent(in) :: file !< input filename

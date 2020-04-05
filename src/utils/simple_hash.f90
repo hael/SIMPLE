@@ -13,7 +13,7 @@ integer, parameter :: BUFFSZ_DEFAULT = 10
 
 !> hash stuct
 type :: hash
-    ! private
+    private
     type(str4arr), allocatable :: keys(:)   !< hash keys
     real,          allocatable :: values(:) !< hash values
     integer :: buffsz     = BUFFSZ_DEFAULT  !< size of first buffer and subsequent allocation increments
@@ -290,7 +290,7 @@ contains
         allocate(values(self%hash_index), source=self%values(:self%hash_index))
     end function get_values
 
-    !>  \brief  convert hash to string, ~2x faster
+    !>  \brief  convert hash to string
     pure function hash2str( self ) result( str )
         class(hash),intent(in)     :: self
         character(len=LONGSTRLEN)  :: str

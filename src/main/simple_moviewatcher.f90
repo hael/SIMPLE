@@ -17,6 +17,7 @@ type moviewatcher
     character(len=LONGSTRLEN)          :: watch_dir      = ''    !< movies directory to watch
     character(len=STDLEN)              :: ext            = ''    !< target directory
     character(len=STDLEN)              :: fbody          = ''    !< template name
+    character(len=STDLEN)              :: regexp         = ''    !< movies extensions
     integer                            :: n_history      = 0     !< history of movies detected
     integer                            :: report_time    = 600   !< time ellapsed prior to processing
     integer                            :: starttime      = 0     !< time of first watch
@@ -60,7 +61,10 @@ contains
         self%report_time = report_time
         self%ext         = trim(adjustl(params_glob%ext))
         self%fbody       = trim(adjustl(params_glob%fbody))
-        call self%add2watchdirs(self%watch_dir)
+        self%regexp = '\.mrc$|\.mrcs$'
+#ifdef USING_TIFF
+        self%regexp = '\.mrc$|\.mrcs$|\.tif$|\.tiff$'
+#endif
     end function constructor
 
     !>  \brief  is the watching procedure
@@ -74,7 +78,6 @@ contains
         integer                   :: tnow, last_accessed, last_modified, last_status_change ! in seconds
         integer                   :: i, io_stat, n_lsfiles, cnt, fail_cnt
         character(len=LONGSTRLEN) :: fname
-        logical                   :: is_closed
         ! init
         self%n_watch = self%n_watch + 1
         tnow = simple_gettime()
@@ -97,7 +100,6 @@ contains
             is_new_movie(i) = .not. self%is_past(fname)
             if( .not.is_new_movie(i) )cycle
             call simple_file_stat(fname, io_stat, fileinfo, doprint=.false.)
-            is_closed = .not. is_file_open(fname)
             if( io_stat.eq.0 )then
                 ! new movie
                 last_accessed      = tnow - fileinfo( 9)
@@ -105,8 +107,7 @@ contains
                 last_status_change = tnow - fileinfo(11)
                 if(        (last_accessed      > self%report_time)&
                     &.and. (last_modified      > self%report_time)&
-                    &.and. (last_status_change > self%report_time)&
-                    &.and. is_closed ) is_new_movie(i) = .true.
+                    &.and. (last_status_change > self%report_time) ) is_new_movie(i) = .true.
             else
                 ! some error occured
                 fail_cnt = fail_cnt + 1
@@ -123,7 +124,6 @@ contains
                 if( is_new_movie(i) )then
                     cnt   = cnt + 1
                     fname = trim(adjustl(farray(i)))
-                    ! call self%add2history( fname )
                     movies(cnt) = trim(fname)
                 endif
             enddo
@@ -245,27 +245,20 @@ contains
     subroutine watchdirs( self, farray )
         class(moviewatcher),                    intent(inout) :: self
         character(len=LONGSTRLEN), allocatable, intent(inout) :: farray(:)
-        character(len=:),          allocatable :: list_glob
         character(len=LONGSTRLEN), allocatable :: tmp_farr(:), tmp_farr2(:)
-        character(len=LONGSTRLEN)              :: abs_fname, dir
+        character(len=LONGSTRLEN)              :: dir
         integer :: idir,ndirs,n_newfiles,nfiles
         if( allocated(farray) ) deallocate(farray)
-        if( .not.allocated(self%watch_dirs) ) return
-        ndirs = size(self%watch_dirs)
+        ndirs = 0
+        if( allocated(self%watch_dirs) ) ndirs = size(self%watch_dirs)
         do idir = 0,ndirs
             if( idir == 0 )then
                 dir = trim(self%watch_dir)
             else
                 dir = trim(self%watch_dirs(idir))
             endif
-            list_glob = trim(dir)//PATH_SEPARATOR//'*.mrc'
-            list_glob = trim(list_glob)//' '//trim(dir)//PATH_SEPARATOR//'*.mrcs'
-#ifdef USING_TIFF
-            list_glob = trim(list_glob)//' '//trim(dir)//PATH_SEPARATOR//'*.tif'
-            list_glob = trim(list_glob)//' '//trim(dir)//PATH_SEPARATOR//'*.tiff'
-#endif
             if(allocated(tmp_farr)) deallocate(tmp_farr)
-            call simple_list_files(list_glob, tmp_farr)
+            call simple_list_files_regexp(dir, self%regexp, tmp_farr)
             if( .not.allocated(tmp_farr) ) cycle
             if( allocated(farray) )then
                 n_newfiles = size(tmp_farr)
@@ -274,9 +267,9 @@ contains
                 deallocate(farray)
                 allocate(farray(nfiles+n_newfiles))
                 farray(1:nfiles) = tmp_farr2(:)
-                farray(nfiles+1:nfiles+n_newfiles) = tmp_farr
+                farray(nfiles+1:nfiles+n_newfiles) = tmp_farr(:)
             else
-                farray = tmp_farr
+                farray = tmp_farr(:)
             endif
         enddo
     end subroutine watchdirs

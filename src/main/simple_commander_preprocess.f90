@@ -268,13 +268,17 @@ contains
             n_imported = spproj%os_mic%get_noris() ! # of projects already added
             ! tnow       = simple_gettime()
             if( n_completed-n_imported > 0 )then
-                ! append projects
+                ! batch append
+                if( n_imported == 0 )then
+                    call spproj%os_mic%new(n_completed)
+                else
+                    call spproj%os_mic%reallocate(n_completed)
+                endif
                 nptcls = 0
                 do iproj=n_imported+1,n_completed
                     call stream_spproj%read_segment('mic', completed_fnames(iproj))
-                    call spproj%append_project(stream_spproj, 'mic')
+                    call spproj%os_mic%transfer_ori(iproj, stream_spproj%os_mic, 1)
                     if( l_pick ) nptcls = nptcls + nint(stream_spproj%os_mic%get(1,'nptcls'))
-                    call submit_jobs ! as appending can be slow
                 enddo
                 call stream_spproj%kill
                 ! total number of micrographs
@@ -509,48 +513,58 @@ contains
                 character(len=:), allocatable :: mic, mov
                 logical,          allocatable :: spproj_mask(:)
                 integer :: iproj,nprojs,cnt,nptcls
-                logical :: err
+                logical :: err, l_err
                 if( .not.cline%defined('dir_prev') ) return
-                call simple_list_files(trim(params%dir_prev)//'/preprocess_*.simple', sp_files)
+                call simple_list_files_regexp(params%dir_prev,'^preprocess_.*\.simple$',sp_files)
                 nprojs = size(sp_files)
                 if( nprojs < 1 ) return
                 allocate(spproj_mask(nprojs),source=.false.)
-                cnt    = 0
                 nptcls = 0
                 do iproj = 1,nprojs
                     err = .false.
-                    call stream_spproj%read(sp_files(iproj) )
+                    call stream_spproj%read_segment('mic', sp_files(iproj) )
                     if( stream_spproj%os_mic%get_noris() /= 1 )then
                         THROW_WARN('Ignoring previous project'//trim(sp_files(iproj)))
                         cycle
                     endif
+                    if( .not. stream_spproj%os_mic%isthere(1,'intg') )cycle
+                    spproj_mask(iproj) = .true.
+                enddo
+                if( count(spproj_mask) == 0 )then
+                    nptcls_glob = 0
+                    return
+                endif
+                call spproj%os_mic%new(count(spproj_mask))
+                cnt = 0
+                do iproj = 1,nprojs
+                    if( .not.spproj_mask(iproj) )cycle
+                    call stream_spproj%read_segment('mic',sp_files(iproj))
                     call stream_spproj%os_mic%get_ori(1, o)
                     ! import mic segment
-                    call movefile2folder('intg', output_dir_motion_correct, o, err)
-                    if( err ) cycle
-                    call movefile2folder('forctf', output_dir_motion_correct, o, err)
-                    call movefile2folder('thumb', output_dir_motion_correct, o, err)
+                    call movefile2folder('intg',        output_dir_motion_correct, o, err)
+                    call movefile2folder('forctf',      output_dir_motion_correct, o, err)
+                    call movefile2folder('thumb',       output_dir_motion_correct, o, err)
                     call movefile2folder('mc_starfile', output_dir_motion_correct, o, err)
-                    call movefile2folder('mceps', output_dir_motion_correct, o, err)
-                    call movefile2folder('ctfjpg', output_dir_ctf_estimate, o, err)
-                    call movefile2folder('ctfdoc', output_dir_ctf_estimate, o, err)
-                    if( .not.l_pick )then
-                        ! import mic segment
-                        call stream_spproj%os_mic%set_ori(1, o)
-                        call spproj%append_project(stream_spproj, 'mic')
-                    else
-                        ! import mic & stk segment
+                    call movefile2folder('mceps',       output_dir_motion_correct, o, err)
+                    call movefile2folder('ctfjpg',      output_dir_ctf_estimate,   o, err)
+                    call movefile2folder('ctfdoc',      output_dir_ctf_estimate,   o, err)
+                    call movefile2folder('ctfeps',      output_dir_ctf_estimate,   o, err)
+                    if( l_pick )then
+                        ! import mic & updates stk segment
                         call movefile2folder('boxfile', output_dir_picker, o, err)
+                        nptcls = nptcls + nint(o%get('nptcls'))
                         call stream_spproj%os_mic%set_ori(1, o)
-                        call spproj%append_project(stream_spproj, 'mic')
                         if( .not.err )then
+                            call stream_spproj%read(sp_files(iproj))
                             if( stream_spproj%os_stk%get_noris() == 1 )then
                                 call stream_spproj%os_stk%get_ori(1, o_stk)
                                 call movefile2folder('stk', output_dir_extract, o_stk, err)
                                 call stream_spproj%os_stk%set_ori(1, o_stk)
-                                if( .not.err ) nptcls = nptcls + nint(o_stk%get('nptcls'))
                             endif
                         endif
+                    else
+                        ! import mic segment
+                        call stream_spproj%os_mic%set_ori(1, o)
                     endif
                     ! add to history
                     call o%getter('movie', mov)
@@ -561,9 +575,10 @@ contains
                     call stream_spproj%write(basename(sp_files(iproj)))
                     ! count
                     cnt = cnt + 1
-                    spproj_mask(iproj) = .true.
-                    ! cleanup
+                    call spproj%os_mic%set_ori(cnt, o)
                 enddo
+                ! updates online records
+                call spproj%write(micspproj_fname)
                 ! update total number of particles
                 nptcls_glob = nptcls_glob + nptcls
                 if( cnt > 0 )then
@@ -1463,7 +1478,7 @@ contains
             endif
             params%dir_box = simple_abspath(params%dir_box)
             if( file_exists(params%dir_box) )then
-                call simple_list_files(trim(params%dir_box)//'/*.box', boxfiles)
+                call simple_list_files_regexp(params%dir_box,'\.box$', boxfiles)
                 if(.not.allocated(boxfiles))then
                     write(logfhandle,*)'No box file found in ', trim(params%dir_box), '; simple_commander_preprocess::exec_extract 1'
                     THROW_HARD('No box file found; exec_extract, 1')
