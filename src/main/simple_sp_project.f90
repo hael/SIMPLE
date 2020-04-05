@@ -945,15 +945,9 @@ contains
         endif
         ! path
         call make_relativepath(CWD_GLOB, stk_abspath, stk_relpath)
-
-        ! print *, 'stk_abspath: ', trim(stk_abspath)
-        ! print *, 'stk_relpath: ', trim(stk_relpath)
-
         ! records
         call self%os_stk%new(1)
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!BUG AS SEEN ABOVE
-        ! call self%os_stk%set(1, 'stk',     trim(stk_relpath))
-        call self%os_stk%set(1, 'stk',     trim(stk_abspath))
+        call self%os_stk%set(1, 'stk',     trim(stk_relpath))
         call self%os_stk%set(1, 'box',     real(ldim(1)))
         call self%os_stk%set(1, 'nptcls',  real(nptcls))
         call self%os_stk%set(1, 'fromp',   1.0)
