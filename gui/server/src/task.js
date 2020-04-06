@@ -152,6 +152,15 @@ class Task{
 	  })
   }
   
+  stop(arg){
+	  console.log("stopping")
+	  return sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Stopping' WHERE id=" + arg['id'])
+	  .then(() => {
+		  return fs.ensureFile(arg['folder'] + "/SIMPLE_TERM_STREAM")
+	  })
+  }
+  
+  
   delete(arg){
  //   var query = "DELETE FROM " + arg['history'] + " WHERE id=" + arg['jobid']
 	var query = "UPDATE " + arg['history'] + " SET pid='null',status='Deleted' WHERE id=" + arg['jobid']

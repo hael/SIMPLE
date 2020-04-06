@@ -218,7 +218,11 @@ class Project {
 		var viewimage = document.createElement('img')
 		viewimage.src = "img/view-out.png"
 		viewimage.title = "View Output"
-		viewimage.onclick = (() => {project.viewSimple(element.folder + "/" + project.selectedname + ".simple")})
+		if(element.type == 'preprocess_stream'){
+			viewimage.onclick = (() => {project.viewSimple(element.folder + "/streamdata.simple")})
+		}else{
+			viewimage.onclick = (() => {project.viewSimple(element.folder + "/" + project.selectedname + ".simple")})
+		}
 		buttonline.appendChild(viewimage)
 		
 		var viewfiles = document.createElement('img')
@@ -244,10 +248,12 @@ class Project {
 			killjob.src = "img/kill.png"
 			if(element.type == 'preprocess_stream'){
 				killjob.title = "Stop Job"
+				killjob.onclick = (() => {project.stopJob(element)})
 			}else{
 				killjob.title = "Kill Job"
+				killjob.onclick = (() => {project.killJob(element)})
 			}
-			killjob.onclick = (() => {project.killJob(element)})
+			
 			buttonline.appendChild(killjob)
 		}
 		var viewlog = document.createElement('img')
@@ -608,6 +614,23 @@ class Project {
 		  fnc : "kill",
 		  arg : {
 			 pid:element.pid,
+			 id:element.id,
+			 projecttable:this.selectedtable
+		  }
+		}
+		fetcher.fetchJSON(request)
+		.then(response => response.json())
+		.then (json => {
+			this.refreshHistory()
+		})  
+	}
+	
+	stopJob(element){
+		var request = {
+		  cls : "task",
+		  fnc : "stop",
+		  arg : {
+			 folder:element.folder,
 			 id:element.id,
 			 projecttable:this.selectedtable
 		  }
