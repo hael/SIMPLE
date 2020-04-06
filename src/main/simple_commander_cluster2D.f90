@@ -426,7 +426,7 @@ contains
         integer :: nptcls_per_buffer, nmics_imported, nstks_imported ! target number of particles per buffer, # of projects & stacks in pool
         integer :: n_buffer_spprojs, n_buffer_stks, n_buffer_ptcls   ! # of projects, stacks & particles, in new buffer
         integer :: n_rejected, n_transfers, ncls_glob, last_injection, max_ncls
-        integer :: iter, orig_box, box,n_spprojs, pool_iter, origproj_time
+        integer :: iter, orig_box, box,n_spprojs, pool_iter, origproj_time, i
         logical :: do_autoscale, l_maxed, buffer_exists, do_wait, l_greedy, l_more_spprojs
         if( cline%defined('refine') )then
             if( trim(cline%get_carg('refine')).ne.'greedy' )then
@@ -540,10 +540,18 @@ contains
         call pool_proj%projinfo%delete_entry('projfile')
         call pool_proj%update_projinfo(cline_cluster2D)
         ! getting general parameters from the first sp_project
-        call stream_proj%read(trim(spproj_list(1)))
-        orig_box  = stream_proj%get_box()
-        orig_smpd = stream_proj%get_smpd()
-        orig_msk  = params%msk
+        orig_msk = params%msk
+        orig_box = 0
+        do i=1,size(spproj_list)
+            call stream_proj%read_segment('mic',spproj_list(i))
+            if( stream_proj%os_mic%get(1,'nptcls') > 0.5 )then
+                call stream_proj%read_segment('stk',spproj_list(i))
+                orig_box  = stream_proj%get_box()
+                orig_smpd = stream_proj%get_smpd()
+                exit
+            endif
+        enddo
+        if( orig_box == 0 ) THROW_HARD('FATAL ERROR')
         call stream_proj%kill
         params%smpd_targets2D(1) = max(orig_smpd, params%lp*LP2SMPDFAC)
         if( do_autoscale )then
