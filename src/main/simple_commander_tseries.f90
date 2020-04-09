@@ -325,8 +325,8 @@ contains
         type(tvfilter)            :: tvfilt
         type(image)               :: img_intg
         integer :: i, nframes, frame_counter, ldim(3), ifoo
-        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',     7.)
-        if( .not. cline%defined('mpatch')     ) call cline%set('mcpatch',     'yes')
+        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    10.)
+        if( .not. cline%defined('mcpatch')     ) call cline%set('mcpatch',    'yes')
         if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',        3.)
         if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',        3.)
         if( .not. cline%defined('trs')        ) call cline%set('trs',           10.)
@@ -336,6 +336,7 @@ contains
         if( .not. cline%defined('groupframes')) call cline%set('groupframes',  'no')
         if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',   'softmax')
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',       'yes')
+        call cline%set('mcconvention','relion') ! ensures alignment to first frame
         call params%new(cline)
         call spproj%read(params%projfile)
         nframes  = spproj%get_nframes()
@@ -367,7 +368,13 @@ contains
         ctfvars%smpd  = params%smpd
         frame_counter = 0
         ! motion corr
-        call mciter%iterate(cline_mcorr, ctfvars, o, '', frame_counter, 'frames2align.mrc', './')
+        if( cline%defined('gainref') )then
+            call mciter%iterate(cline_mcorr, ctfvars, o, 'frames2align', frame_counter,&
+                &'frames2align.mrc', './', gainref_fname=params%gainref, tseries='yes')
+        else
+            call mciter%iterate(cline_mcorr, ctfvars, o, 'frames2align', frame_counter,&
+                &'frames2align.mrc', './', tseries='yes')
+        endif
         call o%kill
         ! apply TV filter for de-noising
         call find_ldim_nptcls('frames2align_intg.mrc',ldim,ifoo)
@@ -707,8 +714,7 @@ contains
         type(ctf_estimate_fit)        :: ctffit
         type(ctfparams)               :: ctfvars
         character(len=:), allocatable :: fname_diag, tmpl_fname, docname
-        integer :: nmics
-        call cline%set('oritype','mic')
+        ! call cline%set('oritype','mic')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('hp')      ) call cline%set('hp', 5.)
         if( .not. cline%defined('lp')      ) call cline%set('lp', 1.)
@@ -717,11 +723,25 @@ contains
         if( .not. cline%defined('astigtol')) call cline%set('astigtol', 0.001)
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         ! prep
-        nmics      = build%spproj%os_mic%get_noris()
         tmpl_fname = trim(get_fbody(basename(trim(params%stk)), params%ext, separator=.false.))
         fname_diag = filepath('./',trim(adjustl(tmpl_fname))//'_ctf_estimate_diag'//trim(JPG_EXT))
         docname    = filepath('./',trim(adjustl(tmpl_fname))//'_ctf'//trim(TXT_EXT))
-        ctfvars    = build%spproj_field%get_ctfvars(1)
+        if( build%spproj%os_mic%get_noris() /= 0 )then
+            ctfvars = build%spproj%os_mic%get_ctfvars(1)
+        else if( build%spproj%os_stk%get_noris() /= 0 )then
+            ctfvars = build%spproj%os_stk%get_ctfvars(1)
+        else
+            THROW_HARD('Insufficient information found in the project')
+        endif
+        ! command-line override
+        if( cline%defined('cs').or.cline%defined('kv').or.cline%defined('fraca') )then
+            if( .not.(cline%defined('cs').and.cline%defined('kv').and.cline%defined('fraca')) )then
+                THROW_HARD('Insufficient number of CTF parameters')
+            endif
+            ctfvars%cs    = params%cs
+            ctfvars%kv    = params%kv
+            ctfvars%fraca = params%fraca
+        endif
         ctfvars%ctfflag = CTFFLAG_YES
         ! fitting
         call ctffit%fit_nano(params%stk, params%box, ctfvars, [params%dfmin,params%dfmax], [params%hp,params%lp], params%astigtol)

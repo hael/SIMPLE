@@ -1183,17 +1183,17 @@ contains
         call calc_stats(diams, diamstats)
         ! output
         med_diam = median(diams)
-        write(logfhandle,'(A,F6.1)') '>>> AVG    DIAMETER (IN A): ', diamstats%avg
-        write(logfhandle,'(A,F6.1)') '>>> SDEV   DIAMETER (IN A): ', diamstats%sdev
-        write(logfhandle,'(A,F6.1)') '>>> MEDIAN DIAMETER (IN A): ', med_diam
-        write(logfhandle,'(A,F6.1)') '>>> MAX    DIAMETER (IN A): ', diamstats%maxv
-        write(logfhandle,'(A,F6.1)') '>>> MIN    DIAMETER (IN A): ', diamstats%minv
+        write(logfhandle,'(A,2F6.1)') '>>> AVG    DIAMETER (IN A/pix): ', diamstats%avg,  diamstats%avg/params%smpd
+        write(logfhandle,'(A,2F6.1)') '>>> SDEV   DIAMETER (IN A/pix): ', diamstats%sdev, diamstats%sdev/params%smpd
+        write(logfhandle,'(A,2F6.1)') '>>> MEDIAN DIAMETER (IN A/pix): ', med_diam,       med_diam/params%smpd
+        write(logfhandle,'(A,2F6.1)') '>>> MAX    DIAMETER (IN A/pix): ', diamstats%maxv, diamstats%maxv/params%smpd
+        write(logfhandle,'(A,2F6.1)') '>>> MIN    DIAMETER (IN A/pix): ', diamstats%minv, diamstats%minv/params%smpd
         call fopen(funit, file='diameter_stats.txt', status='replace')
-        write(funit,     '(A,F6.1)') '>>> AVG    DIAMETER (IN A): ', diamstats%avg
-        write(funit,     '(A,F6.1)') '>>> SDEV   DIAMETER (IN A): ', diamstats%sdev
-        write(funit,     '(A,F6.1)') '>>> MEDIAN DIAMETER (IN A): ', med_diam
-        write(funit,     '(A,F6.1)') '>>> MAX    DIAMETER (IN A): ', diamstats%maxv
-        write(funit,     '(A,F6.1)') '>>> MIN    DIAMETER (IN A): ', diamstats%minv
+        write(funit,     '(A,2F6.1)') '>>> AVG    DIAMETER (IN A/pix): ', diamstats%avg,  diamstats%avg/params%smpd
+        write(funit,     '(A,2F6.1)') '>>> SDEV   DIAMETER (IN A/pix): ', diamstats%sdev, diamstats%sdev/params%smpd
+        write(funit,     '(A,2F6.1)') '>>> MEDIAN DIAMETER (IN A/pix): ', med_diam,       med_diam/params%smpd
+        write(funit,     '(A,2F6.1)') '>>> MAX    DIAMETER (IN A/pix): ', diamstats%maxv, diamstats%maxv/params%smpd
+        write(funit,     '(A,2F6.1)') '>>> MIN    DIAMETER (IN A/pix): ', diamstats%minv, diamstats%minv/params%smpd
         call fclose(funit)
         ! destruct
         do i=1,size(imgs)

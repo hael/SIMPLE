@@ -4087,7 +4087,7 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call tseries_make_pickavg%set_input('parm_ios', 1, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{5}', '{5}', .false., 5.)
+        call tseries_make_pickavg%set_input('parm_ios', 1, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{10}', '{10}', .false., 10.)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -4104,9 +4104,9 @@ contains
         tseries_make_pickavg%srch_ctrls(5)%descr_placeholder = '# x-patches{3}'
         ! filter controls
         call tseries_make_pickavg%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment (in Angstroms){8}', 'in Angstroms{5}', .false., 5.)
+        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
         call tseries_make_pickavg%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
-        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{3}', .false., 3.)
+        &iterations of movie alignment (in Angstroms){3}', 'in Angstroms{3}', .false., 3.)
         call tseries_make_pickavg%set_input('filt_ctrls', 3, wcrit)
         ! mask controls
         ! <empty>
@@ -4144,7 +4144,7 @@ contains
         tseries_track%filt_ctrls(1)%rval_default = 2.3
         tseries_track%filt_ctrls(1)%descr_placeholder = 'Low-pass limit in Angstroms{2.3}'
         call tseries_track%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{7}', .false., 7.)
+        &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{5}', .false., 5.)
         call tseries_track%set_input('filt_ctrls', 3, 'filter', 'multi','Alternative filter for particle tracking',&
             &'Alternative filter for particle tracking(no|tv|nlmean){tv}', '(no|tv|nlmean){tv}', .false., 'tv')
         call tseries_track%set_input('filt_ctrls', 4, hp)
@@ -4166,8 +4166,10 @@ contains
         ! image input/output
         call tseries_graphene_subtr%set_input('img_ios', 1, stk)
         tseries_graphene_subtr%img_ios(1)%required = .true.
+        tseries_graphene_subtr%img_ios(1)%descr_placeholder = 'Input tracked particles, eg NP_X.mrc'
         call tseries_graphene_subtr%set_input('img_ios', 2, stk2)
         tseries_graphene_subtr%img_ios(2)%required = .true.
+        tseries_graphene_subtr%img_ios(2)%descr_placeholder = 'Input background power spectra stack, eg NP_X_background_pspec.mrc'
         call tseries_graphene_subtr%set_input('img_ios', 3, outstk)
         tseries_graphene_subtr%img_ios(3)%required = .true.
         ! parameter input/output

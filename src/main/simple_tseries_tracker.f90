@@ -9,7 +9,7 @@ use simple_image,      only: image
 use simple_tvfilter
 implicit none
 
-public :: init_tracker, track_particle, tracker_get_nnn, detect_outliers
+public :: init_tracker, track_particle, tracker_get_nnn
 public :: tracker_get_nnfname, tracker_get_stkname, kill_tracker
 private
 #include "simple_local_flags.inc"
@@ -93,23 +93,6 @@ contains
         particle_locations(:,1) = real(boxcoord(1))
         particle_locations(:,2) = real(boxcoord(2))
     end subroutine init_tracker
-
-    subroutine detect_outliers
-        logical, allocatable :: outliers(:,:)
-        integer              :: deadhot(2), iframe, cnt, ncured
-        write(logfhandle,'(a)') ">>> DETECTING OUTLIERS"
-        call frame_avg%zero_and_unflag_ft
-        cnt = 0
-        do iframe = 1,nframes,10
-            cnt = cnt + 1
-            call frame_img%read(framenames(iframe),1)
-            call frame_avg%add(frame_img,w=0.01)
-        enddo
-        call frame_avg%div(0.01*real(cnt))
-        call frame_avg%cure_outliers(ncured, 6., deadhot, outliers)
-        write(logfhandle,'(a,1x,i7)') '>>> # DEAD PIXELS:', deadhot(1)
-        write(logfhandle,'(a,1x,i7)') '>>> # HOT  PIXELS:', deadhot(2)
-    end subroutine detect_outliers
 
     subroutine track_particle( fname_forctf )
         use simple_motion_align_nano, only: motion_align_nano
@@ -208,6 +191,10 @@ contains
             enddo
             particle_locations(last_frame+1:,1) = particle_locations(last_frame,1)
             particle_locations(last_frame+1:,2) = particle_locations(last_frame,2)
+            if( mod(iframe-1,5*track_freq) == 0 )then
+                write(logfhandle,'(A,A,A,I6,A)') ">>> ",trim(fbody)," : ",iframe," FRAMES PROCESSED"
+                call flush(6)
+            endif
         enddo
         call aligner%kill
         write(logfhandle,'(a)') ">>> WRITING PARTICLES, NEIGHBOURS & SPECTRUM"
