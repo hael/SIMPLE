@@ -16,26 +16,29 @@ implicit none
 #include "simple_local_flags.inc"
 
 ! PROJECT MANAGEMENT PROGRAMS
-type(new_project_commander)                  :: xnew_project
-type(tseries_import_commander)               :: xtseries_import
-type(import_particles_commander)             :: ximport_particles
-type(tseries_import_particles_commander)     :: xtseries_import_particles
-type(prune_project_commander_distr)          :: xprune_project
+type(new_project_commander)                   :: xnew_project
+type(update_project_commander)                :: xupdate_project
+type(print_project_info_commander)            :: xprint_project_info
+type(print_project_field_commander)           :: xprint_project_field
+type(tseries_import_commander)                :: xtseries_import
+type(import_particles_commander)              :: ximport_particles
+type(tseries_import_particles_commander)      :: xtseries_import_particles
+type(prune_project_commander_distr)           :: xprune_project
 
 ! RECONSTRUCTION PROGRAMS
-type(tseries_ctf_estimate_commander)         :: xtseries_ctf_estimate
-type(tseries_make_pickavg_commander)         :: xtseries_make_pickavg
-type(tseries_motion_correct_commander_distr) :: xmcorr_distr
-type(tseries_track_commander_distr)          :: xtrack_distr
-type(tseries_graphene_subtr_commander)       :: xgraphene_subtr
-type(center2D_nano_commander_distr)          :: xcenter2D_distr
-type(cluster2D_nano_commander_hlev)          :: xcluster2D_distr
-type(map_cavgs_selection_commander)          :: xmap_cavgs_selection
-type(estimate_diam_commander)                :: xestimate_diam
-type(simulate_atoms_commander)               :: xsimulate_atoms
-type(random_rec_commander_distr)             :: xrndrec
-type(refine3D_nano_commander_distr)          :: xrefine3D_distr
-type(initial_3Dmodel_nano_commander_distr)   :: xinitial_3Dmodel_nano_distr
+type(tseries_ctf_estimate_commander)          :: xtseries_ctf_estimate
+type(tseries_make_pickavg_commander)          :: xtseries_make_pickavg
+type(tseries_motion_correct_commander_distr)  :: xmcorr_distr
+type(tseries_track_particles_commander_distr) :: xtrack_distr
+type(graphene_subtr_commander)                :: xgraphene_subtr
+type(center2D_nano_commander_distr)           :: xcenter2D_distr
+type(cluster2D_nano_commander_hlev)           :: xcluster2D_distr
+type(map_cavgs_selection_commander)           :: xmap_cavgs_selection
+type(estimate_diam_commander)                 :: xestimate_diam
+type(simulate_atoms_commander)                :: xsimulate_atoms
+type(random_rec_commander_distr)              :: xrndrec
+type(refine3D_nano_commander_distr)           :: xrefine3D_distr
+type(initial_3Dmodel_nano_commander_distr)    :: xinitial_3Dmodel_nano_distr
 
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: args, prg, entire_line
@@ -62,6 +65,12 @@ select case(prg)
     ! PROJECT MANAGEMENT PROGRAMS
     case( 'new_project' )
         call xnew_project%execute(cline)
+    case( 'update_project' )
+        call xupdate_project%execute(cline)
+    case( 'print_project_info' )
+        call xprint_project_info%execute(cline)
+    case( 'print_project_field' )
+        call xprint_project_field%execute(cline)
     case( 'tseries_import' )
         call xtseries_import%execute(cline)
     case( 'tseries_import_particles' )
@@ -78,9 +87,9 @@ select case(prg)
         call xtseries_ctf_estimate%execute(cline)
     case( 'tseries_motion_correct' )
         call xmcorr_distr%execute( cline )
-    case( 'tseries_track' )
+    case( 'tseries_track_particles' )
         call xtrack_distr%execute( cline )
-    case( 'tseries_graphene_subtr' )
+    case( 'graphene_subtr' )
         call xgraphene_subtr%execute( cline )
     case( 'center2D_nano' )
         call xcenter2D_distr%execute(cline)

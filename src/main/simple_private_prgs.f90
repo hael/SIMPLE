@@ -726,8 +726,8 @@ contains
         call private_prgs(23)%push_opt_key('groupframes')
         call private_prgs(23)%push_opt_key('wcrit')
 
-        ! TSERIES_TRACK
-        call private_prgs(24)%set_name('tseries_track')
+        ! tseries_track_particles
+        call private_prgs(24)%set_name('tseries_track_particles')
         ! required keys
         call private_prgs(24)%push_req_key('nthr')
         call private_prgs(24)%push_req_key('projfile')

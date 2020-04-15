@@ -19,13 +19,13 @@ public :: tseries_import_particles_commander
 public :: tseries_make_pickavg_commander
 public :: tseries_motion_correct_commander_distr
 public :: tseries_motion_correct_commander
-public :: tseries_track_commander_distr
-public :: tseries_track_commander
+public :: tseries_track_particles_commander_distr
+public :: tseries_track_particles_commander
 public :: center2D_nano_commander_distr
 public :: cluster2D_nano_commander_hlev
 public :: tseries_ctf_estimate_commander
 public :: refine3D_nano_commander_distr
-public :: tseries_graphene_subtr_commander
+public :: graphene_subtr_commander
 public :: initial_3Dmodel_nano_commander_distr
 private
 #include "simple_local_flags.inc"
@@ -50,14 +50,14 @@ type, extends(commander_base) :: tseries_make_pickavg_commander
   contains
     procedure :: execute      => exec_tseries_make_pickavg
 end type tseries_make_pickavg_commander
-type, extends(commander_base) :: tseries_track_commander_distr
+type, extends(commander_base) :: tseries_track_particles_commander_distr
   contains
-    procedure :: execute      => exec_tseries_track_distr
-end type tseries_track_commander_distr
-type, extends(commander_base) :: tseries_track_commander
+    procedure :: execute      => exec_tseries_track_particles_distr
+end type tseries_track_particles_commander_distr
+type, extends(commander_base) :: tseries_track_particles_commander
   contains
-    procedure :: execute      => exec_tseries_track
-end type tseries_track_commander
+    procedure :: execute      => exec_tseries_track_particles
+end type tseries_track_particles_commander
 type, extends(commander_base) :: center2D_nano_commander_distr
   contains
     procedure :: execute      => exec_center2D_nano_distr
@@ -78,10 +78,10 @@ type, extends(commander_base) :: refine3D_nano_commander_distr
   contains
     procedure :: execute      => exec_refine3D_nano_distr
 end type refine3D_nano_commander_distr
-type, extends(commander_base) :: tseries_graphene_subtr_commander
+type, extends(commander_base) :: graphene_subtr_commander
   contains
-    procedure :: execute      => exec_tseries_graphene_subtr
-end type tseries_graphene_subtr_commander
+    procedure :: execute      => exec_graphene_subtr
+end type graphene_subtr_commander
 type, extends(commander_base) :: initial_3Dmodel_nano_commander_distr
   contains
     procedure :: execute      => exec_initial_3Dmodel_nano
@@ -388,9 +388,9 @@ contains
         call simple_end('**** SIMPLE_GEN_INI_TSERIES_AVG NORMAL STOP ****')
     end subroutine exec_tseries_make_pickavg
 
-    subroutine exec_tseries_track_distr( self, cline )
+    subroutine exec_tseries_track_particles_distr( self, cline )
         use simple_nrtxtfile, only: nrtxtfile
-        class(tseries_track_commander_distr), intent(inout) :: self
+        class(tseries_track_particles_commander_distr), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters)              :: params
         type(qsys_env)                :: qenv
@@ -415,7 +415,7 @@ contains
             ndatlines = boxfile%get_ndatalines()
             numlen    = len(int2str(ndatlines))
             allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('In: simple_commander_tseries :: exec_tseries_track', alloc_stat)
+            if(alloc_stat.ne.0)call allocchk('In: simple_commander_tseries :: exec_tseries_track_particles', alloc_stat)
             do j=1,ndatlines
                 call boxfile%readNextDataLine(boxdata(j,:))
                 orig_box = nint(boxdata(j,3))
@@ -424,7 +424,7 @@ contains
                 endif
             end do
         else
-            THROW_HARD('inputted boxfile is empty; exec_tseries_track')
+            THROW_HARD('inputted boxfile is empty; exec_tseries_track_particles')
         endif
         call boxfile%kill
         params%nptcls  = ndatlines
@@ -455,14 +455,14 @@ contains
         call qenv%gen_scripts_and_schedule_jobs( job_descr, part_params=part_params)
         call qsys_cleanup
         ! end gracefully
-        call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
-    end subroutine exec_tseries_track_distr
+        call simple_end('**** SIMPLE_tseries_track_particles NORMAL STOP ****')
+    end subroutine exec_tseries_track_particles_distr
 
-    subroutine exec_tseries_track( self, cline )
-        use simple_tseries_tracker
+    subroutine exec_tseries_track_particles( self, cline )
+        use simple_tseries_track_particles
         use simple_qsys_funs,        only: qsys_job_finished
         use simple_sp_project,       only: sp_project
-        class(tseries_track_commander), intent(inout) :: self
+        class(tseries_track_particles_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(sp_project)                       :: spproj
         type(parameters)                       :: params
@@ -475,12 +475,12 @@ contains
         orig_box = params%box
         ! coordinates input
         if( cline%defined('xcoord') .and. cline%defined('ycoord') )then
-            if( .not. cline%defined('box') ) THROW_HARD('need box to be part of command line for this mode of execution; exec_tseries_track')
+            if( .not. cline%defined('box') ) THROW_HARD('need box to be part of command line for this mode of execution; exec_tseries_track_particles')
             allocate( boxdata(1,2) )
             boxdata(1,1) = real(params%xcoord)
             boxdata(1,2) = real(params%ycoord)
         else
-            THROW_HARD('need xcoord/ycoord to be part of command line; exec_tseries_track')
+            THROW_HARD('need xcoord/ycoord to be part of command line; exec_tseries_track_particles')
         endif
         ! frames input
         call spproj%read(params%projfile)
@@ -505,10 +505,10 @@ contains
         ! clean tracker
         call kill_tracker
         ! end gracefully
-        call qsys_job_finished('simple_commander_tseries :: exec_tseries_track')
+        call qsys_job_finished('simple_commander_tseries :: exec_tseries_track_particles')
         call spproj%kill
-        call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
-    end subroutine exec_tseries_track
+        call simple_end('**** SIMPLE_tseries_track_particles NORMAL STOP ****')
+    end subroutine exec_tseries_track_particles
 
     subroutine exec_center2D_nano_distr( self, cline )
         use simple_commander_cluster2D, only: make_cavgs_commander_distr,cluster2D_commander_distr
@@ -780,9 +780,9 @@ contains
         call xrefine3D_distr%execute(cline)
     end subroutine exec_refine3D_nano_distr
 
-    subroutine exec_tseries_graphene_subtr( self, cline )
+    subroutine exec_graphene_subtr( self, cline )
         use simple_nano_utils, only: remove_graphene_peaks
-        class(tseries_graphene_subtr_commander), intent(inout) :: self
+        class(graphene_subtr_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
@@ -847,8 +847,8 @@ contains
         call ave_pre%kill
         call ave_post%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_TSERIES_GRAPHENE_SUBTR NORMAL STOP ****')
-    end subroutine exec_tseries_graphene_subtr
+        call simple_end('**** SIMPLE_GRAPHENE_SUBTR NORMAL STOP ****')
+    end subroutine exec_graphene_subtr
 
     !> for generation of an initial 3d model from class averages
     subroutine exec_initial_3Dmodel_nano( self, cline )

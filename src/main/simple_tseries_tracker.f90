@@ -1,5 +1,5 @@
 ! time series tracker intended for movies of nanoparticles spinning in solution
-module simple_tseries_tracker
+module simple_tseries_track_particles
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
@@ -426,4 +426,4 @@ contains
         call pspec_nn%kill
     end subroutine kill_tracker
 
-end module simple_tseries_tracker
+end module simple_tseries_track_particles

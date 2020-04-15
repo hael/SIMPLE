@@ -1,5 +1,6 @@
 module simple_user_interface
 include 'simple_lib.f08'
+use simple_ansi_ctrls
 implicit none
 
 public :: simple_program, make_user_interface, get_prg_ptr, list_simple_prgs_in_ui
@@ -163,8 +164,8 @@ type(simple_program), target :: tseries_import_particles
 type(simple_program), target :: tseries_ctf_estimate
 type(simple_program), target :: tseries_make_pickavg
 type(simple_program), target :: tseries_motion_correct
-type(simple_program), target :: tseries_track
-type(simple_program), target :: tseries_graphene_subtr
+type(simple_program), target :: tseries_track_particles
+type(simple_program), target :: graphene_subtr
 type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
 type(simple_program), target :: volops
@@ -375,8 +376,8 @@ contains
         call new_tseries_ctf_estimate
         call new_tseries_motion_correct
         call new_tseries_make_pickavg
-        call new_tseries_track
-        call new_tseries_graphene_subtr
+        call new_tseries_track_particles
+        call new_graphene_subtr
         call new_update_project
         call new_vizoris
         call new_volops
@@ -474,8 +475,8 @@ contains
         call push2prg_ptr_array(tseries_ctf_estimate)
         call push2prg_ptr_array(tseries_make_pickavg)
         call push2prg_ptr_array(tseries_motion_correct)
-        call push2prg_ptr_array(tseries_track)
-        call push2prg_ptr_array(tseries_graphene_subtr)
+        call push2prg_ptr_array(tseries_track_particles)
+        call push2prg_ptr_array(graphene_subtr)
         call push2prg_ptr_array(update_project)
         call push2prg_ptr_array(vizoris)
         call push2prg_ptr_array(volops)
@@ -675,10 +676,10 @@ contains
                 ptr2prg => tseries_make_pickavg
             case('tseries_motion_correct')
                 ptr2prg => tseries_motion_correct
-            case('tseries_track')
-                ptr2prg => tseries_track
-            case('tseries_graphene_subtr')
-                ptr2prg => tseries_graphene_subtr
+            case('tseries_track_particles')
+                ptr2prg => tseries_track_particles
+            case('graphene_subtr')
+                ptr2prg => graphene_subtr
             case('update_project')
                 ptr2prg => update_project
             case('vizoris')
@@ -773,19 +774,32 @@ contains
     end subroutine list_simple_prgs_in_ui
 
     subroutine list_single_prgs_in_ui
-        write(logfhandle,'(A)') center2D_nano%name
-        write(logfhandle,'(A)') cluster2D_nano%name
-        write(logfhandle,'(A)') estimate_diam%name
-        write(logfhandle,'(A)') refine3D_nano%name
-        write(logfhandle,'(A)') initial_3Dmodel_nano%name
-        write(logfhandle,'(A)') simulate_atoms%name
-        write(logfhandle,'(A)') tseries_ctf_estimate%name
+        write(logfhandle,'(A)') format_str('PROJECT MANAGEMENT PROGRAMS:', C_UNDERLINED)
+        write(logfhandle,'(A)') new_project%name
         write(logfhandle,'(A)') tseries_import%name
         write(logfhandle,'(A)') tseries_import_particles%name
-        write(logfhandle,'(A)') tseries_make_pickavg%name
+        write(logfhandle,'(A)') import_particles%name
+        write(logfhandle,'(A)') update_project%name
+        write(logfhandle,'(A)') print_project_field%name
+        write(logfhandle,'(A)') print_project_info%name
+        write(logfhandle,'(A)') prune_project%name
+        write(logfhandle,'(A)') ''
+        write(logfhandle,'(A)') format_str('TIME-SERIES PRE-PROCESSING PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') tseries_motion_correct%name
-        write(logfhandle,'(A)') tseries_track%name
-        write(logfhandle,'(A)') tseries_graphene_subtr%name
+        write(logfhandle,'(A)') tseries_ctf_estimate%name
+        write(logfhandle,'(A)') tseries_make_pickavg%name
+        write(logfhandle,'(A)') tseries_track_particles%name
+        write(logfhandle,'(A)') ''
+        write(logfhandle,'(A)') format_str('PARTICLE 3D RECONSTRUCTION PROGRAMS:', C_UNDERLINED)
+        write(logfhandle,'(A)') graphene_subtr%name
+        write(logfhandle,'(A)') center2D_nano%name
+        write(logfhandle,'(A)') cluster2D_nano%name
+        write(logfhandle,'(A)') map_cavgs_selection%name
+        write(logfhandle,'(A)') estimate_diam%name
+        write(logfhandle,'(A)') simulate_atoms%name
+        write(logfhandle,'(A)') random_rec%name
+        write(logfhandle,'(A)') initial_3Dmodel_nano%name
+        write(logfhandle,'(A)') refine3D_nano%name
     end subroutine list_single_prgs_in_ui
 
     subroutine list_quant_prgs_in_ui
@@ -1466,7 +1480,7 @@ contains
         &'ctf_estimate', &                                              ! name
         &'CTF parameter fitting',&                                      ! descr_short
         &'is a distributed SIMPLE workflow for CTF parameter fitting',& ! descr_long
-        &'simple_exec',&                                          ! executable
+        &'simple_exec',&                                                ! executable
         &0, 2, 0, 3, 2, 0, 2, .true.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3936,7 +3950,7 @@ contains
     subroutine new_tseries_import
         ! PROGRAM SPECIFICATION
         call tseries_import%new(&
-        &'tseries_import',&                               ! name
+        &'tseries_import',&                                ! name
         &'Imports time-series datasets',&                 ! descr_short
         &'is a workflow for importing time-series data',& ! descr_long
         &'single_exec',&                                  ! executable
@@ -3965,7 +3979,7 @@ contains
     subroutine new_tseries_import_particles
         ! PROGRAM SPECIFICATION
         call tseries_import_particles%new(&
-        &'tseries_import_particles',&                               ! name
+        &'tseries_import_particles',&                     ! name
         &'Imports time-series particles stack',&          ! descr_short
         &'is a workflow for importing time-series data',& ! descr_long
         &'single_exec',&                                  ! executable
@@ -4077,7 +4091,7 @@ contains
     subroutine new_tseries_make_pickavg
         ! PROGRAM SPECIFICATION
         call tseries_make_pickavg%new(&
-        &'tseries_make_pickavg',&                                                         ! name
+        &'tseries_make_pickavg',&                                                                ! name
         &'Align & average the first few frames of the time-series',&                     ! descr_short
         &'is a program for aligning & averaging the first few frames of the time-series&
         & to accomplish SNR enhancement for particle identification',&                   ! descr_long
@@ -4114,10 +4128,10 @@ contains
         call tseries_make_pickavg%set_input('comp_ctrls', 1, nthr)
     end subroutine new_tseries_make_pickavg
 
-    subroutine new_tseries_track
+    subroutine new_tseries_track_particles
         ! PROGRAM SPECIFICATION
-        call tseries_track%new(&
-        &'tseries_track',&                                                       ! name
+        call tseries_track_particles%new(&
+        &'tseries_track_particles',&                                                       ! name
         &'Track particles in time-series',&                                      ! descr_short
         &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
         &'single_exec',&                                                   ! executable
@@ -4126,52 +4140,52 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call tseries_track%set_input('parm_ios', 1, 'fbody', 'string', 'Template output tracked series',&
+        call tseries_track_particles%set_input('parm_ios', 1, 'fbody', 'string', 'Template output tracked series',&
         &'Template output tracked series', 'e.g. tracked_ptcl', .true., '')
-        call tseries_track%set_input('parm_ios', 2, 'boxfile', 'file', 'List of particle coordinates',&
+        call tseries_track_particles%set_input('parm_ios', 2, 'boxfile', 'file', 'List of particle coordinates',&
         &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
-        call tseries_track%set_input('parm_ios', 3, 'neg', 'binary', 'Invert contrast', 'Invert image contrast(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call tseries_track_particles%set_input('parm_ios', 3, 'neg', 'binary', 'Invert contrast', 'Invert image contrast(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         ! alternative inputs
         ! <empty>
         ! search controls
-        call tseries_track%set_input('srch_ctrls', 1, 'offset', 'num', 'Shift half-width search bound', 'Shift half-width search bound(in pixels)',&
+        call tseries_track_particles%set_input('srch_ctrls', 1, 'offset', 'num', 'Shift half-width search bound', 'Shift half-width search bound(in pixels)',&
         'e.g. pixels window halfwidth', .false., 10.)
-        call tseries_track%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{30}', '{30}', .false., 30.)
+        call tseries_track_particles%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{30}', '{30}', .false., 30.)
         ! <empty>
         ! filter controls
-        call tseries_track%set_input('filt_ctrls', 1, lp)
-        tseries_track%filt_ctrls(1)%required     = .false.
-        tseries_track%filt_ctrls(1)%rval_default = 2.3
-        tseries_track%filt_ctrls(1)%descr_placeholder = 'Low-pass limit in Angstroms{2.3}'
-        call tseries_track%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        call tseries_track_particles%set_input('filt_ctrls', 1, lp)
+        tseries_track_particles%filt_ctrls(1)%required     = .false.
+        tseries_track_particles%filt_ctrls(1)%rval_default = 2.3
+        tseries_track_particles%filt_ctrls(1)%descr_placeholder = 'Low-pass limit in Angstroms{2.3}'
+        call tseries_track_particles%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{5}', .false., 5.)
-        call tseries_track%set_input('filt_ctrls', 3, 'filter', 'multi','Alternative filter for particle tracking',&
+        call tseries_track_particles%set_input('filt_ctrls', 3, 'filter', 'multi','Alternative filter for particle tracking',&
             &'Alternative filter for particle tracking(no|tv|nlmean){tv}', '(no|tv|nlmean){tv}', .false., 'tv')
-        call tseries_track%set_input('filt_ctrls', 4, hp)
+        call tseries_track_particles%set_input('filt_ctrls', 4, hp)
         ! mask controls
         ! <empty>
         ! computer controls
-        call tseries_track%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_tseries_track
+        call tseries_track_particles%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_tseries_track_particles
 
-    subroutine new_tseries_graphene_subtr
+    subroutine new_graphene_subtr
         ! PROGRAM SPECIFICATION
-        call tseries_graphene_subtr%new(&
-        &'tseries_graphene_subtr',&                        ! name
+        call graphene_subtr%new(&
+        &'graphene_subtr',&                        ! name
         &'Removes graphene Fourier peaks in time-series',& ! descr_short
         &'Removes graphene Fourier peaks in time-series',& ! descr_long
         &'single_exec',&                                   ! executable
         &3, 0, 0, 0, 0, 0, 1, .true.)                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call tseries_graphene_subtr%set_input('img_ios', 1, stk)
-        tseries_graphene_subtr%img_ios(1)%required = .true.
-        tseries_graphene_subtr%img_ios(1)%descr_placeholder = 'Input tracked particles, eg NP_X.mrc'
-        call tseries_graphene_subtr%set_input('img_ios', 2, stk2)
-        tseries_graphene_subtr%img_ios(2)%required = .true.
-        tseries_graphene_subtr%img_ios(2)%descr_placeholder = 'Input background power spectra stack, eg NP_X_background_pspec.mrc'
-        call tseries_graphene_subtr%set_input('img_ios', 3, outstk)
-        tseries_graphene_subtr%img_ios(3)%required = .true.
+        call graphene_subtr%set_input('img_ios', 1, stk)
+        graphene_subtr%img_ios(1)%required = .true.
+        graphene_subtr%img_ios(1)%descr_placeholder = 'Input tracked particles, eg NP_X.mrc'
+        call graphene_subtr%set_input('img_ios', 2, stk2)
+        graphene_subtr%img_ios(2)%required = .true.
+        graphene_subtr%img_ios(2)%descr_placeholder = 'Input background power spectra stack, eg NP_X_background_pspec.mrc'
+        call graphene_subtr%set_input('img_ios', 3, outstk)
+        graphene_subtr%img_ios(3)%required = .true.
         ! parameter input/output
         ! <empty>
         ! alternative inputs
@@ -4183,8 +4197,8 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        call tseries_graphene_subtr%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_tseries_graphene_subtr
+        call graphene_subtr%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_graphene_subtr
 
     subroutine new_update_project
         ! PROGRAM SPECIFICATION
@@ -4467,7 +4481,6 @@ contains
     end subroutine set_input_3
 
     subroutine print_ui( self )
-        use simple_ansi_ctrls
         class(simple_program), intent(in) :: self
         type(chash) :: ch
         write(logfhandle,'(a)') ''

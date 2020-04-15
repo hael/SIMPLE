@@ -79,12 +79,12 @@ type(tseries_rotrate_commander)       :: xtseries_rotrate
 type(prune_project_commander)         :: xprune_project
 
 ! TIME-SERIES ANALYSIS PROGRAMS
-type(tseries_track_commander)          :: xtseries_track
-type(tseries_motion_correct_commander) :: xtseries_mcorr
-type(pspec_int_rank_commander)         :: xpspec_int_rank
+type(tseries_track_particles_commander) :: xtseries_track_particles
+type(tseries_motion_correct_commander)  :: xtseries_mcorr
+type(pspec_int_rank_commander)          :: xpspec_int_rank
 
 ! PARALLEL PROCESSING PROGRAMS
-type(split_commander)                 :: xsplit
+type(split_commander)                   :: xsplit
 
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: xarg, prg
@@ -209,8 +209,8 @@ select case(prg)
     ! TIME-SERIES ANALYSIS PROGRAMS
     case( 'tseries_motion_correct' )
         call xtseries_mcorr%execute(cline)
-    case( 'tseries_track' )
-        call xtseries_track%execute(cline)
+    case( 'tseries_track_particles' )
+        call xtseries_track_particles%execute(cline)
     case( 'pspec_int_rank' )
         call xpspec_int_rank%execute(cline)
 
