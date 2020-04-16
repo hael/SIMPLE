@@ -2252,7 +2252,7 @@ contains
                     cycle
                 endif
                 mic2stk_inds(imic) = istk
-                stk2mic_inds(imic) = imic
+                stk2mic_inds(istk) = imic
             enddo
             if( any(mic2stk_inds==0) .or. any(stk2mic_inds==0) )then
                 THROW_HARD('MIC & STK fileds indexing error 2! get_mic2stk_inds')
