@@ -317,7 +317,7 @@ contains
         integer   :: icls, pop, pop_even, pop_odd, imatch, batchsz_max
         logical   :: do_center, has_been_searched
         ! create the polarft_corrcalc object
-        call pftcc%new(params_glob%ncls, [params_glob%fromp,params_glob%top],&
+        call pftcc%new(params_glob%ncls, [params_glob%fromp,params_glob%top], ptcl_mask,&
             &eoarr=nint(build_glob%spproj_field%get_all('eo',[params_glob%fromp,params_glob%top])))
         ! prepare the polarizer images
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
@@ -371,7 +371,7 @@ contains
         end do
         !$omp end parallel do
         ! PREPARATION OF PARTICLES IN PFTCC
-        call build_pftcc_particles( pftcc, batchsz_max, match_imgs)
+        call build_pftcc_particles( pftcc, batchsz_max, match_imgs, ptcl_mask)
         ! DESTRUCT
         do imatch=1,batchsz_max
             call match_imgs(imatch)%kill_polarizer
