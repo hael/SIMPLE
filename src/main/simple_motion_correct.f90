@@ -35,6 +35,8 @@ logical                          :: didupdateres
 ! data structures for patch-based motion correction
 type(motion_patched)     :: motion_patch
 real(dp),    allocatable :: patched_polyn(:)              !< polynomial from patched-based correction
+real(dp),    allocatable :: patched_shifts(:,:,:,:)       !< shifts from patched-based correction
+real(dp),    allocatable :: patched_centers(:,:,:)        !< patch centers
 
 ! data structures used by both isotropic & patch-based correction
 real,        allocatable :: shifts_toplot(:,:)            !< shifts for plotting & parsing
@@ -58,6 +60,7 @@ real    :: dose_rate      = 0.                            !< dose rate
 logical :: do_scale                    = .false.          !< scale or not
 logical :: motion_correct_with_patched = .false.          !< run patch-based aniso or not
 character(len=:), allocatable :: patched_shift_fname      !< file name for shift plot for patched-based alignment
+integer,          allocatable :: pos_outliers(:,:)        !< positions of defects & hot pixels
 
 ! module global constants
 real,    parameter :: NSIGMAS                       = 6.       !< Number of standard deviations for outliers detection
@@ -67,7 +70,6 @@ logical, parameter :: ISO_UNCONSTR_AFTER            = .false.   !< run a unconst
 logical, parameter :: DO_PATCHED_POLYN              = .false.   !< run polynomially constrained motion correction for patch-based motion correction
 logical, parameter :: DO_PATCHED_POLYN_DIRECT_AFTER = .false.   !< run a direct polynomial optimization for patch-based motion correction as the second step (at highest resolution)
 logical, parameter :: DO_OPT_WEIGHTS                = .false.   !< continuously optimize weights after alignment
-
 ! benchmarking
 logical                 :: L_BENCH = .false.
 integer(timer_int_kind) :: t_read, t_cure, t_forctf, t_mic, t_fft_clip, t_patched, t_patched_forctf, t_patched_mic
@@ -419,9 +421,12 @@ contains
         logical,                    intent(in) :: writepoly
         character(len=*), optional, intent(in) :: gainref_fname
         type(starfile_table_type) :: mc_starfile
-        real(dp) :: u,v,poly_coeffs(size(patched_polyn,1))
+        real(dp) :: u,v,poly_coeffs(size(patched_polyn,1)),dpscale
         real     :: shift(2), doserateperframe
-        integer  :: iframe, n
+        integer  :: i,iframe, n, ndeadpixels, motion_model
+        motion_model = 0
+        if( writepoly ) motion_model = 1
+        dpscale = real(params_glob%scale,dp)
         call starfile_table__new(mc_starfile)
         call starfile_table__open_ofile(mc_starfile, mc_starfile_fname)
         ! global fields
@@ -435,7 +440,7 @@ contains
         if (present(gainref_fname)) then
             call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_GAIN_NAME, trim(gainref_fname))
         end if
-        call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_BINNING, real(1./params_glob%scale,dp))
+        call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_BINNING, 1.d0/dpscale)
         call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, real(smpd, dp))
         doserateperframe = 0.
         if( params_glob%l_dose_weight )then
@@ -446,11 +451,7 @@ contains
         call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_PRE_EXPOSURE, 0.0_dp)
         call starfile_table__setValue_double(mc_starfile, EMDL_CTF_VOLTAGE, real(params_glob%kv, dp))
         call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_START_FRAME, 1)
-        if( writepoly )then
-            call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_MOTION_MODEL_VERSION, 1)
-        else
-            call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_MOTION_MODEL_VERSION, 0)
-        endif
+        call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_MOTION_MODEL_VERSION, motion_model)
         call starfile_table__write_ofile(mc_starfile)
         ! isotropic shifts
         call starfile_table__clear(mc_starfile)
@@ -460,8 +461,8 @@ contains
             shift = shifts_toplot(iframe,:) - shifts_toplot(1,:)
             call starfile_table__addObject(mc_starfile)
             call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
-            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, real(shift(1)/params_glob%scale, dp))
-            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, real(shift(2)/params_glob%scale, dp))
+            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, real(shift(1),dp)/dpscale)
+            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, real(shift(2),dp)/dpscale)
             ! call starfile_table__setValue_double(mc_starfile, EMDL_MOVIE_FRAME_WEIGHT, real(frameweights(iframe), dp))
         end do
         call starfile_table__write_ofile(mc_starfile)
@@ -470,8 +471,8 @@ contains
             n = size(patched_polyn,1)
             poly_coeffs = patched_polyn
             if( do_scale )then
-                u = 1.d0 / real(params_glob%scale,dp)
-                v = real(params_glob%scale,dp)
+                u = 1.d0 / dpscale
+                v = dpscale
                 poly_coeffs(    1:n/2) = patched_polyn(    1:n/2) * [u,u,u,1.d0,1.d0,1.d0,v,v,v,1.d0,1.d0,1.d0,v,v,v,v,v,v]
                 poly_coeffs(n/2+1:n)   = patched_polyn(n/2+1:n)   * [u,u,u,1.d0,1.d0,1.d0,v,v,v,1.d0,1.d0,1.d0,v,v,v,v,v,v]
             endif
@@ -485,6 +486,38 @@ contains
             end do
             call starfile_table__write_ofile(mc_starfile)
         endif
+        ! Defects & hot pixels
+        if( allocated(pos_outliers) )then
+            call starfile_table__clear(mc_starfile)
+            call starfile_table__setIsList(mc_starfile, .false.)
+            call starfile_table__setName(mc_starfile, "hot_pixels")
+            ndeadpixels = size(pos_outliers,dim=2)
+            do i = 1, ndeadpixels
+                call starfile_table__addObject(mc_starfile)
+                call starfile_table__setValue_double(mc_starfile, EMDL_IMAGE_COORD_X, real(pos_outliers(1,i)-1,dp))
+                call starfile_table__setValue_double(mc_starfile, EMDL_IMAGE_COORD_y, real(pos_outliers(2,i)-1,dp))
+            end do
+            call starfile_table__write_ofile(mc_starfile)
+        endif
+        !! Patches shifts,  Unused for now
+        ! if( writepoly )then
+        !     call starfile_table__clear(mc_starfile)
+        !     call starfile_table__setIsList(mc_starfile, .false.)
+        !     call starfile_table__setName(mc_starfile, "local_shift")
+        !     do i = 1, params_glob%nxpatch
+        !         do j = 1, params_glob%nypatch
+        !             do iframe = 1, nframes
+        !                 call starfile_table__addObject(mc_starfile)
+        !                 call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
+        !                 call starfile_table__setValue_double(mc_starfile, EMDL_IMAGE_COORD_X, patched_centers(i,j,1)/dpscale)
+        !                 call starfile_table__setValue_double(mc_starfile, EMDL_IMAGE_COORD_Y, patched_centers(i,j,2)/dpscale)
+        !                 call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, patched_shifts(1,iframe,i,j)/dpscale)
+        !                 call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, patched_shifts(2,iframe,i,j)/dpscale)
+        !             enddo
+        !         enddo
+        !     enddo
+        !     call starfile_table__write_ofile(mc_starfile)
+        ! endif
         call starfile_table__close_ofile(mc_starfile)
         call starfile_table__delete(mc_starfile)
     end subroutine motion_correct_write2star
@@ -528,7 +561,7 @@ contains
             call motion_patch%correct(hp, resstep, movie_frames_scaled, patched_shift_fname, shifts_toplot)
             rmsd = motion_patch%get_polyfit_rmsd()
         end if
-        call motion_patch%get_poly4star(patched_polyn)
+        call motion_patch%get_poly4star(patched_polyn, patched_shifts, patched_centers)
         if( L_BENCH )then
             rt_patched = toc(t_patched)
             print *,'rt_patched:      ',rt_patched
@@ -649,6 +682,7 @@ contains
         if( allocated(frameweights)       ) deallocate(frameweights)
         if( allocated(acc_doses)          ) deallocate(acc_doses)
         if( allocated(cmat_sum)           ) deallocate(cmat_sum)
+        if( allocated(pos_outliers)       ) deallocate(pos_outliers)
         if( allocated(movie_frames_scaled) )then
             do iframe=1,size(movie_frames_scaled)
                 call movie_frames_scaled(iframe)%kill
@@ -714,7 +748,6 @@ contains
         type(image)          :: gainref
         real,        pointer :: prmat(:,:,:)
         real,    allocatable :: rsum(:,:), vals(:), new_vals(:,:)
-        integer, allocatable :: pos_outliers(:,:)
         real    :: ave, sdev, var, lthresh, uthresh
         integer :: iframe, noutliers, l,r,b,u,i,j,k, nvals, winsz
         logical :: outliers(ldim(1),ldim(2)), err

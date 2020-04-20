@@ -317,17 +317,20 @@ contains
     end subroutine plot_shifts
 
     ! produces shifts for 'polishing' close to relion 3 convention
-    subroutine get_poly4star( self, polycoeffs )
+    subroutine get_poly4star( self, polycoeffs, patch_shifts, patch_centers )
         class(motion_patched), intent(inout) :: self
-        real(dp), allocatable, intent(inout) :: polycoeffs(:)
+        real(dp), allocatable, intent(inout) :: polycoeffs(:), patch_shifts(:,:,:,:), patch_centers(:,:,:)
         real(dp) :: yx(self%nframes*params_glob%nxpatch*params_glob%nypatch)      ! along x
         real(dp) :: yy(self%nframes*params_glob%nxpatch*params_glob%nypatch)      ! along y
         real(dp) :: x(3,self%nframes*params_glob%nxpatch*params_glob%nypatch)     ! x,y,t
         real(dp) :: sig(self%nframes*params_glob%nxpatch*params_glob%nypatch)
         real(dp) :: v(PATCH_PDIM,PATCH_PDIM), w(PATCH_PDIM), chisq
         integer  :: idx, iframe, i, j
-        if( allocated(polycoeffs) ) deallocate(polycoeffs)
-        allocate(polycoeffs(2*PATCH_PDIM),source=0.d0)
+        if( allocated(polycoeffs) )    deallocate(polycoeffs)
+        if( allocated(patch_shifts) )  deallocate(patch_shifts)
+        if( allocated(patch_centers) ) deallocate(patch_centers)
+        allocate(polycoeffs(2*PATCH_PDIM),patch_shifts(2,self%nframes,params_glob%nxpatch,params_glob%nypatch),&
+            &patch_centers(params_glob%nxpatch,params_glob%nypatch,2),source=0.d0)
         idx = 0
         do iframe = 1, self%nframes
             do i = 1, params_glob%nxpatch
@@ -338,6 +341,9 @@ contains
                     call self%pix2polycoords(real(self%patch_centers(i,j,1),dp),&
                                             &real(self%patch_centers(i,j,2),dp),x(1,idx),x(2,idx))
                     x(3,idx) = real(iframe-1,dp)
+                    patch_shifts(1,iframe,i,j) = yx(idx)
+                    patch_shifts(2,iframe,i,j) = yy(idx)
+                    patch_centers(i,j,:)       = real(self%patch_centers(i,j,:),dp)
                 end do
             end do
         end do
