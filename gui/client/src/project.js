@@ -218,7 +218,7 @@ class Project {
 		var viewimage = document.createElement('img')
 		viewimage.src = "img/view-out.png"
 		viewimage.title = "View Output"
-		if(element.type == 'preprocess_stream'){
+		if(element.type == 'preprocess_stream' && element.status == 'running'){
 			viewimage.onclick = (() => {project.viewSimple(element.folder + "/streamdata.simple")})
 		}else{
 			viewimage.onclick = (() => {project.viewSimple(element.folder + "/" + project.selectedname + ".simple")})
