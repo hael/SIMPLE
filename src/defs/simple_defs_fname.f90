@@ -72,6 +72,7 @@ character(len=*), parameter :: DIR_EXTRACT          = 'extract/'
 character(len=*), parameter :: DIR_PICKER           = 'picker/'
 character(len=*), parameter :: DIR_PREPROC          = './'
 ! STREAMING
+character(len=*), parameter :: PREPROCESS_PREFIX    = 'preprocess_'
 character(len=*), parameter :: STREAM_SPPROJFILES   = './stream_spprojfiles.txt'
 character(len=*), parameter :: STREAM_SELMICS       = './stream_selected_mics.txt'
 character(len=*), parameter :: TERM_STREAM          = './SIMPLE_TERM_STREAM'
