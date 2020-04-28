@@ -53,7 +53,6 @@ logical                        :: l_hard_assign = .true.        !< npeaks == 1 o
 logical                        :: l_bilinear    = .true.        !< whether to use bilinear or convolution interpolation
 logical                        :: exists        = .false.       !< to flag instance existence
 
-integer, parameter      :: BATCHTHRSZ   = 50
 logical, parameter      :: L_BENCH      = .false.
 integer(timer_int_kind) :: t_batch_loop, t_gridding, t_tot
 real(timer_int_kind)    :: rt_batch_loop, rt_gridding, rt_tot
@@ -352,11 +351,10 @@ contains
         integer :: alloc_stat, wdim, h, k, l, m, ll, mm, incr, icls, iptcl, batchsz_max, interp_shlim, interp_shlim_sq
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
+        call init_cavgs_sums
         if( do_frac_update )then
             call cavger_readwrite_partial_sums( 'read' )
             call cavger_apply_weights( 1. - params_glob%update_frac )
-        else
-            call init_cavgs_sums
         endif
         kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
         wdim   = kbwin%get_wdim()
