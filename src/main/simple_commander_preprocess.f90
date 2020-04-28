@@ -1981,14 +1981,13 @@ contains
         type(sp_project),           allocatable :: spproj_parts(:)
         type(qsys_env)                          :: qenv
         type(chash)                             :: job_descr
-        type(ori)                               :: o_mic, o, o_tmp
+        type(ori)                               :: o_mic, o
         type(oris)                              :: os_stk
         type(chash),                allocatable :: part_params(:)
         character(len=LONGSTRLEN),  allocatable :: boxfiles(:), stktab(:), parts_fname(:)
         character(len=:),           allocatable :: mic_name, imgkind
         integer,                    allocatable :: parts(:,:)
-        integer :: boxcoords(2)
-        integer :: imic,i,nmics_tot,numlen,nmics,cnt,state,istk,nstks,ipart
+        integer :: imic,i,nmics_tot,numlen,nmics,cnt,state,istk,nstks,ipart,stkind,nptcls
         if( cline%defined('ctf') )then
             if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
                 THROW_HARD('Only CTF=NO/FLIP are allowed')
@@ -2070,8 +2069,7 @@ contains
             do ipart = 1,params%nparts
                 do imic = 1,spproj_parts(ipart)%os_mic%get_noris()
                     cnt = cnt + 1
-                    call spproj_parts(ipart)%os_mic%get_ori(imic,o_tmp)
-                    call spproj%os_mic%set_ori(cnt,o_tmp)
+                    call spproj%os_mic%transfer_ori(cnt, spproj_parts(ipart)%os_mic, imic)
                 enddo
                 call spproj_parts(ipart)%kill
                 call spproj_parts(ipart)%read_segment('stk',parts_fname(ipart))
@@ -2085,42 +2083,33 @@ contains
             do ipart = 1,params%nparts
                 do istk = 1,spproj_parts(ipart)%os_stk%get_noris()
                     cnt = cnt + 1
-                    call spproj_parts(ipart)%os_stk%get_ori(istk, o_tmp)
-                    call os_stk%set_ori(cnt,o_tmp)
+                    call os_stk%transfer_ori(cnt, spproj_parts(ipart)%os_stk, istk)
                     stktab(cnt) = os_stk%get_static(cnt,'stk')
                 enddo
                 call spproj_parts(ipart)%kill
             enddo
             ! import stacks into project
             call spproj%add_stktab(stktab,os_stk)
-            ! transfer 2D parameters
+            call os_stk%kill
+            ! 2D/3D parameters, transfer everything but stack index
             cnt = 0
             do ipart = 1,params%nparts
                 call spproj_parts(ipart)%read_segment('ptcl2D',parts_fname(ipart))
-                do i = 1,spproj_parts(ipart)%os_ptcl2D%get_noris()
-                    cnt = cnt + 1
-                    ! particles coordinates
-                    call spproj_parts(ipart)%get_boxcoords(i, boxcoords)
-                    call spproj%set_boxcoords(cnt, boxcoords)
-                    ! search history & parameters
-                    call spproj_parts(ipart)%os_ptcl2D%get_ori(i, o)
-                    call spproj%os_ptcl2D%transfer_2Dparams(cnt, o)
-                enddo
-                call spproj_parts(ipart)%kill
-            enddo
-            ! transfer 3D parameters
-            cnt = 0
-            do ipart = 1,params%nparts
                 call spproj_parts(ipart)%read_segment('ptcl3D',parts_fname(ipart))
-                do i = 1,spproj_parts(ipart)%os_ptcl3D%get_noris()
-                    cnt = cnt + 1
-                    call spproj_parts(ipart)%os_ptcl3D%get_ori(i, o)
-                    call spproj%os_ptcl3D%transfer_3Dparams(cnt, o)
+                nptcls = spproj_parts(ipart)%os_ptcl2D%get_noris()
+                if( nptcls /= spproj_parts(ipart)%os_ptcl3D%get_noris())then
+                    THROW_HARD('Inconsistent number of particles')
+                endif
+                do i = 1,nptcls
+                    cnt    = cnt + 1
+                    stkind = nint(spproj%os_ptcl2D%get(cnt,'stkind'))
+                    call spproj%os_ptcl2D%transfer_ori(cnt, spproj_parts(ipart)%os_ptcl2D, i)
+                    call spproj%os_ptcl3D%transfer_ori(cnt, spproj_parts(ipart)%os_ptcl3D, i)
+                    call spproj%os_ptcl2D%set(cnt,'stkind',real(stkind))
+                    call spproj%os_ptcl3D%set(cnt,'stkind',real(stkind))
                 enddo
                 call spproj_parts(ipart)%kill
             enddo
-            ! clean-up
-            call os_stk%kill
         endif
         ! final write
         call spproj%write
@@ -2130,8 +2119,6 @@ contains
         deallocate(spproj_parts,part_params)
         call o_mic%kill
         call o%kill
-        call o_tmp%kill
-        call os_stk%kill
         ! end gracefully
         call simple_end('**** SIMPLE_REEXTRACT_DISTR NORMAL STOP ****')
         contains
@@ -2159,7 +2146,7 @@ contains
         type(parameters)              :: params
         type(sp_project)              :: spproj, spproj_in
         type(image)                   :: micrograph, img, mskimg
-        type(ori)                     :: o_mic, o_stk, o_tmp
+        type(ori)                     :: o_mic, o_stk
         type(ctf)                     :: tfun
         type(ctfparams)               :: ctfparms
         character(len=:), allocatable :: mic_name, imgkind
@@ -2362,11 +2349,9 @@ contains
         do imic = params%fromp,params%top
             if( .not.mic_mask(imic) )cycle
             cnt = cnt+1
-            call spproj_in%os_mic%get_ori(imic, o_tmp)
-            call spproj%os_mic%set_ori(cnt, o_tmp)
+            call spproj%os_mic%transfer_ori(cnt, spproj_in%os_mic, imic)
             stk_ind = mic2stk_inds(imic)
-            call spproj_in%os_stk%get_ori(stk_ind, o_tmp)
-            call spproj%os_stk%set_ori(cnt, o_tmp)
+            call spproj%os_stk%transfer_ori(cnt, spproj_in%os_stk, stk_ind)
         enddo
         ! transfer particles
         nptcls = count(ptcl_mask)
@@ -2376,10 +2361,8 @@ contains
         do iptcl = 1,size(ptcl_mask)
             if( .not.ptcl_mask(iptcl) )cycle
             cnt = cnt+1
-            call spproj_in%os_ptcl2D%get_ori(iptcl, o_tmp)
-            call spproj%os_ptcl2D%set_ori(cnt, o_tmp)
-            call spproj_in%os_ptcl3D%get_ori(iptcl, o_tmp)
-            call spproj%os_ptcl3D%set_ori(cnt, o_tmp)
+            call spproj%os_ptcl2D%transfer_ori(cnt, spproj_in%os_ptcl2D, iptcl)
+            call spproj%os_ptcl3D%transfer_ori(cnt, spproj_in%os_ptcl3D, iptcl)
         enddo
         call spproj_in%kill
         ! final write
@@ -2389,7 +2372,6 @@ contains
         call qsys_job_finished('simple_commander_preprocess :: exec_reextract')
         call o_mic%kill
         call o_stk%kill
-        call o_tmp%kill
         call simple_end('**** SIMPLE_REEXTRACT NORMAL STOP ****')
 
         contains
