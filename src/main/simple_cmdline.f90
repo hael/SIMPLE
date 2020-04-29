@@ -50,6 +50,7 @@ contains
     procedure          :: get_rarg
     procedure          :: get_carg
     procedure          :: gen_job_descr
+    final              :: kill
 end type cmdline
 
 contains
@@ -640,6 +641,15 @@ contains
         end do
         if( present(prg) ) call hash%set('prg', trim(prg))
     end subroutine gen_job_descr
+
+    subroutine kill( self )
+        type(cmdline) :: self
+        integer       :: icmd
+        do icmd=1,MAX_CMDARGS
+            if( allocated(self%cmds(icmd)%key) ) deallocate(self%cmds(icmd)%key)
+            if( allocated(self%cmds(icmd)%carg) ) deallocate(self%cmds(icmd)%carg)
+        end do
+    end subroutine kill
 
     ! EXCEPTION-HANDLING
 

@@ -165,6 +165,7 @@ integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iteration
 integer, parameter :: STREAM_SRCHLIM       = 15        !< maximum # of systematic iterations for streaming 2D pool
 integer, parameter :: MC_NPATCH            = 5         !< number of patches in x/y-direction for motion correction
 integer, parameter :: MIN_ITERS_SHC        = 5         !< minimum number of iterations of stochastic search
+integer, parameter :: BATCHTHRSZ           = 50        !< # of images per thread
 
 ! orientation weighting scheme
 real,             parameter :: RANKW_EXP            = 2.0    !< Exponent for exponential rank orientation weights

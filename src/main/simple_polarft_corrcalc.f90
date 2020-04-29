@@ -71,7 +71,7 @@ type heap_vars
 end type heap_vars
 
 type :: polarft_corrcalc
-    !private
+    private
     integer                          :: nptcls     = 1        !< the total number of particles in partition (logically indexded [fromp,top])
     integer                          :: nrefs      = 1        !< the number of references (logically indexded [1,nrefs])
     integer                          :: nrots      = 0        !< number of in-plane rotations for one pft (determined by radius of molecule)
@@ -111,6 +111,7 @@ type :: polarft_corrcalc
     ! CONSTRUCTOR
     procedure          :: new
     ! SETTERS
+    procedure          :: reallocate_ptcls
     procedure          :: set_ref_pft
     procedure          :: set_ptcl_pft
     procedure          :: set_ref_fcomp
@@ -122,6 +123,7 @@ type :: polarft_corrcalc
     procedure          :: cp_even_ref2ptcl
     procedure          :: cp_refs
     procedure          :: swap_ptclsevenodd
+    procedure          :: set_eo
     procedure          :: set_eos
     procedure          :: assign_sigma2_noise
     ! GETTERS
@@ -517,6 +519,61 @@ contains
         self%iseven = .not.self%iseven
     end subroutine swap_ptclsevenodd
 
+    subroutine reallocate_ptcls( self, nptcls, pinds )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: nptcls
+        integer,                 intent(in)    :: pinds(nptcls)
+        integer :: i,iptcl,ik
+        self%pfromto(1) = minval(pinds)
+        self%pfromto(2) = maxval(pinds)
+        if( allocated(self%pinds) ) deallocate(self%pinds)
+        if( self%nptcls == nptcls )then
+            ! just need to update particles indexing
+        else
+            ! re-index & reallocate
+            self%nptcls = nptcls
+            if( allocated(self%sqsums_ptcls) ) deallocate(self%sqsums_ptcls)
+            if( allocated(self%iseven) )       deallocate(self%iseven)
+            if( allocated(self%pfts_ptcls) )   deallocate(self%pfts_ptcls)
+            if( allocated(self%fftdat_ptcls) )then
+                do i = 1, self%nptcls
+                    do ik = params_glob%kfromto(1),params_glob%kfromto(2)
+                        call fftwf_free(self%fftdat_ptcls(i,ik)%p_re)
+                        call fftwf_free(self%fftdat_ptcls(i,ik)%p_im)
+                    end do
+                end do
+                deallocate(self%fftdat_ptcls)
+            endif
+            allocate( self%pfts_ptcls(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls),&
+                      &self%sqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls),&
+                      &self%fftdat_ptcls(1:self%nptcls,params_glob%kfromto(1):params_glob%kfromto(2)),stat=alloc_stat)
+            if(alloc_stat.ne.0)call allocchk('shared arrays; reallocate_ptcls 1; simple_polarft_corrcalc')
+            do i = 1,self%nptcls
+                do ik = params_glob%kfromto(1),params_glob%kfromto(2)
+                    self%fftdat_ptcls(i,ik)%p_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+                    self%fftdat_ptcls(i,ik)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+                    call c_f_pointer(self%fftdat_ptcls(i,ik)%p_re, self%fftdat_ptcls(i,ik)%re, [self%pftsz])
+                    call c_f_pointer(self%fftdat_ptcls(i,ik)%p_im, self%fftdat_ptcls(i,ik)%im, [self%pftsz])
+                end do
+            end do
+         endif
+         self%pfts_ptcls   = zero
+         self%sqsums_ptcls = 0.
+         self%iseven       = .true.
+         allocate(self%pinds(self%pfromto(1):self%pfromto(2)), source=0)
+         do i = 1,self%nptcls
+             iptcl = pinds(i)
+             self%pinds( iptcl ) = i
+         enddo
+    end subroutine reallocate_ptcls
+
+    subroutine set_eo( self, iptcl, is_even )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iptcl
+        logical,                 intent(in)    :: is_even
+        self%iseven(self%pinds(iptcl)) = is_even
+    end subroutine set_eo
+
     subroutine set_eos( self, eoarr )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: eoarr(self%nptcls)
@@ -835,7 +892,7 @@ contains
         !$omp end parallel do
     end subroutine memoize_ffts
 
-    ! memoize particle fft, serial only
+    ! memoize particle fft, serial only, private use
     subroutine memoize_fft( self, i )
         class(polarft_corrcalc), intent(inout) :: self
         integer  :: i, ik, ithr
@@ -854,7 +911,6 @@ contains
     subroutine setup_pxls_p_shell( self )
         class(polarft_corrcalc), intent(inout) :: self
         integer :: h,k,sh
-        character(len=:), allocatable :: fname
         if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
         allocate(self%pxls_p_shell(params_glob%kfromto(1):params_glob%kfromto(2)))
         self%pxls_p_shell = 0.
@@ -895,8 +951,8 @@ contains
         ppfromto = self%pfromto
         if( present_pfromto ) ppfromto = pfromto
         if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
-        allocate(self%ctfmats(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In: simple_polarft_corrcalc :: create_polar_ctfmats, 2",alloc_stat)
+        allocate(self%ctfmats(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls), source=0., stat=alloc_stat)
+        if(alloc_stat.ne.0)call allocchk("In: simple_polarft_corrcalc :: create_polar_absctfmats",alloc_stat)
         inv_ldim = 1./real(self%ldim)
         !$omp parallel do default(shared) private(i,iptcl,ctfmatind,ithr,irot,k,hinv,kinv,spaFreqSq,ang)&
         !$omp schedule(static) proc_bind(close)
@@ -2373,7 +2429,7 @@ contains
                     &self%heap_vars(ithr)%fdf_T2_8)
             end do
             do i = 1, self%nptcls
-                do ik = params_glob%kfromto(1),params_glob%kstop
+                do ik = params_glob%kfromto(1),params_glob%kfromto(2)
                     call fftwf_free(self%fftdat_ptcls(i,ik)%p_re)
                     call fftwf_free(self%fftdat_ptcls(i,ik)%p_im)
                 end do

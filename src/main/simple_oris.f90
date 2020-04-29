@@ -79,7 +79,8 @@ type :: oris
     procedure          :: delete_entry_2
     procedure          :: delete_2Dclustering
     procedure          :: delete_3Dalignment
-    procedure          :: transfer_2Dparams
+    procedure, private :: transfer_2Dparams_1, transfer_2Dparams_2
+    generic            :: transfer_2Dparams => transfer_2Dparams_1, transfer_2Dparams_2
     procedure          :: transfer_3Dparams
     procedure          :: set_euler
     procedure          :: set_shift
@@ -1593,12 +1594,19 @@ contains
         end do
     end subroutine rnd_oris
 
-    subroutine transfer_2Dparams( self, i, o_in )
+    subroutine transfer_2Dparams_1( self, i, o_in )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         type(ori),   intent(in)    :: o_in
         call self%o(i)%transfer_2Dparams(o_in)
-    end subroutine transfer_2Dparams
+    end subroutine transfer_2Dparams_1
+
+    subroutine transfer_2Dparams_2( self, i, os_in, i_in )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i, i_in
+        class(oris), intent(in)    :: os_in
+        call self%o(i)%transfer_2Dparams(os_in%o(i_in))
+    end subroutine transfer_2Dparams_2
 
     subroutine transfer_3Dparams( self, i, o_in )
         class(oris), intent(inout) :: self

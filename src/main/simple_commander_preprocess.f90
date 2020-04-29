@@ -130,6 +130,7 @@ contains
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for write project file
         logical,                   parameter   :: DEBUG_HERE      = .false.
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
+        character(len=STDLEN),     parameter   :: selection_fname = './STREAM_SELECTION'
         class(cmdline),            allocatable :: completed_jobs_clines(:)
         type(qsys_env)                         :: qenv
         type(cmdline)                          :: cline_make_pickrefs
@@ -177,12 +178,9 @@ contains
         if( cline%defined('dir_prev') .and. .not.file_exists(params%dir_prev) )then
             THROW_HARD('Directory '//trim(params%dir_prev)//' does not exist!')
         endif
-        ! read in movies
+        ! master project file
         call spproj%read( params%projfile )
-        ! sanity check
-        if( spproj%os_mic%get_noris() /= 0 )then
-            THROW_HARD('PREPROCESS_STREAM must always start from an empty project (eg from root proejct folder)')
-        endif
+        if( spproj%os_mic%get_noris() /= 0 ) THROW_HARD('PREPROCESS_STREAM must start from an empty project (eg from root project folder)')
         ! picking
         l_pick = .false.
         if( cline%defined('refs') .or. cline%defined('vol1') ) l_pick = .true.
@@ -225,6 +223,9 @@ contains
         l_movies_left = .false.
         l_haschanged  = .false.
         do
+            ! applying selection produced from the gui
+            call report_selection
+            ! termination & pausing
             if( file_exists(trim(TERM_STREAM)) )then
                 write(logfhandle,'(A)')'>>> TERMINATING PREPROCESS STREAM'
                 exit
@@ -261,12 +262,10 @@ contains
             if( qenv%qscripts%get_done_stacksz() > 0 )then
                 call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
                 call update_projects_list( completed_fnames, n_completed )
-                write(logfhandle,'(A,I5)')'>>> # MOVIES PROCESSED:               ',n_completed
                 deallocate(completed_jobs_clines)
             endif
             ! project update
             n_imported = spproj%os_mic%get_noris() ! # of projects already added
-            ! tnow       = simple_gettime()
             if( n_completed-n_imported > 0 )then
                 ! batch append
                 if( n_imported == 0 )then
@@ -303,6 +302,7 @@ contains
                     endif
                 endif
                 ! write project
+                call report_selection
                 call spproj%write(micspproj_fname)
                 last_injection = simple_gettime()
                 l_haschanged   = .true.
@@ -311,6 +311,7 @@ contains
                 if( .not.l_movies_left )then
                     if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
                         ! write project when inactive...
+                        call report_selection
                         call write_project(final_check=.false.)
                         l_haschanged = .false.
                     else
@@ -321,6 +322,7 @@ contains
             endif
         end do
         ! termination
+        call report_selection
         call write_project(final_check=.true.)
         call spproj%kill
         ! cleanup
@@ -330,9 +332,72 @@ contains
         call simple_end('**** SIMPLE_PREPROCESS_STREAM NORMAL STOP ****')
         contains
 
+            ! reports GUI-generated selection to project & individual projects
+            ! snaphot project will be updated at writing time for safety
+            subroutine report_selection
+                type(sp_project)          :: stream_proj
+                integer, allocatable      :: states(:)
+                character(len=STDLEN)     :: ext
+                character(len=LONGSTRLEN) :: movie, projfile
+                integer :: i, nsel, funit, nmics, n, nptcls
+                if( DEBUG_HERE ) print *,'in report_selection'; call flush(6)
+                ! sanity checks
+                nmics = spproj%os_mic%get_noris()
+                if( nmics == 0 )                        return
+                if( .not.file_exists(selection_fname) ) return
+                nsel = nlines(selection_fname)
+                if( nsel > nmics )then
+                    THROW_WARN('Inconsistent selection size, skipping')
+                    return
+                endif
+                write(logfhandle,'(A)')'>>> APPLYING SELECTION...'
+                ! read
+                allocate(states(nsel),source=0)
+                call fopen(funit, FILE=selection_fname, STATUS='OLD', action='READ')
+                do i = 1,nsel
+                    read(funit,*) states(i)
+                end do
+                call fclose(funit)
+                n = count(states==0)
+                if( n+count(states==1) /= nsel )then
+                    THROW_WARN('Inconsistent selection flags, skipping')
+                    return
+                endif
+                ! report selection to global project
+                do i = 1,nsel
+                    call spproj%os_mic%set(i,'state',real(states(i)))
+                end do
+                ! report selection to individual projects
+                do i = 1,nsel
+                    movie    = basename(spproj%os_mic%get_static(i,'movie'))
+                    ext      = fname2ext(movie)
+                    projfile = trim(PREPROCESS_PREFIX)//trim(get_fbody(movie,ext))//trim(METADATA_EXT)
+                    call stream_proj%read_segment('mic', projfile)
+                    if( stream_proj%os_mic%isthere(1,'intg') .and. stream_proj%os_mic%get_state(1) /= states(i) )then
+                        call stream_proj%os_mic%set(1,'state',0.)
+                        nptcls = nint(stream_proj%os_mic%get(1,'nptcls'))
+                        if( l_pick .and. nptcls>0 )then
+                            call stream_proj%read(projfile)
+                            call stream_proj%os_stk%set(1,'state',0.)
+                            call stream_proj%os_ptcl2D%set_all2single('state',0.)
+                            call stream_proj%os_ptcl3D%set_all2single('state',0.)
+                            call stream_proj%write(projfile)
+                        else
+                            call stream_proj%write_segment_inside('mic', projfile)
+                        endif
+                    endif
+                    call stream_proj%kill
+                end do
+                call del_file(selection_fname)
+                call spproj%write(micspproj_fname)
+                write(logfhandle,'(A,I6,A)')'>>> DE-SELECTED ',n,' MICROGRAPHS'
+                if( DEBUG_HERE ) print *,'end report_selection'; call flush(6)
+            end subroutine report_selection
+
             subroutine write_project( final_check )
                 logical, intent(in)  :: final_check
                 logical, allocatable :: stk_mask(:)
+                integer, allocatable :: states(:)
                 integer              :: iproj,nptcls,istk,fromp,top,i,iptcl,nstks,n
                 write(logfhandle,'(A)')'>>> PROJECT UPDATE'
                 if( final_check )then
@@ -357,8 +422,10 @@ contains
                     if( DEBUG_HERE ) t0 = tic()
                     ! stacks
                     allocate(stk_mask(n_imported))
+                    allocate(states(n_imported))
                     do iproj = 1,n_imported
                         stk_mask(iproj) = nint(spproj%os_mic%get(iproj,'nptcls')) > 0
+                        states(iproj)   = spproj%os_mic%get_state(iproj)
                     enddo
                     nstks = count(stk_mask)
                     call spproj%os_stk%new(nstks)
@@ -370,6 +437,7 @@ contains
                         if( .not.stk_mask(iproj) ) cycle
                         istk = istk+1
                         call stream_spproj%read_segment('stk', completed_fnames(iproj))
+                        call stream_spproj%os_stk%set(1, 'state', real(states(iproj)))
                         n      = nint(stream_spproj%os_stk%get(1,'nptcls'))
                         fromp  = nptcls + 1
                         nptcls = nptcls + n
@@ -394,6 +462,7 @@ contains
                             iptcl = iptcl + 1
                             call spproj%os_ptcl2D%transfer_ori(iptcl,stream_spproj%os_ptcl2D,i)
                             call spproj%os_ptcl2D%set(iptcl, 'stkind', real(istk))
+                            call spproj%os_ptcl2D%set(iptcl, 'state',  real(states(iproj)))
                         enddo
                         call stream_spproj%kill
                     enddo
@@ -411,6 +480,7 @@ contains
                             iptcl = iptcl + 1
                             call spproj%os_ptcl3D%transfer_ori(iptcl,stream_spproj%os_ptcl3D,i)
                             call spproj%os_ptcl3D%set(iptcl, 'stkind', real(istk))
+                            call spproj%os_ptcl3D%set(iptcl, 'state',  real(states(iproj)))
                         enddo
                         call stream_spproj%kill
                     enddo
@@ -484,7 +554,7 @@ contains
                 character(len=LONGSTRLEN)     :: projname, projfile
                 movie_here = basename(trim(movie))
                 ext        = fname2ext(trim(movie_here))
-                projname   = 'preprocess_'//trim(get_fbody(trim(movie_here), trim(ext)))
+                projname   = trim(PREPROCESS_PREFIX)//trim(get_fbody(trim(movie_here), trim(ext)))
                 projfile   = trim(projname)//trim(METADATA_EXT)
                 call cline_here%set('projname', trim(projname))
                 call cline_here%set('projfile', trim(projfile))
@@ -513,9 +583,9 @@ contains
                 character(len=:), allocatable :: mic, mov
                 logical,          allocatable :: spproj_mask(:)
                 integer :: iproj,nprojs,cnt,nptcls
-                logical :: err, l_err
+                logical :: err
                 if( .not.cline%defined('dir_prev') ) return
-                call simple_list_files_regexp(params%dir_prev,'^preprocess_.*\.simple$',sp_files)
+                call simple_list_files_regexp(params%dir_prev,'^'//trim(PREPROCESS_PREFIX)//'.*\.simple$',sp_files)
                 nprojs = size(sp_files)
                 if( nprojs < 1 ) return
                 allocate(spproj_mask(nprojs),source=.false.)
@@ -1911,14 +1981,13 @@ contains
         type(sp_project),           allocatable :: spproj_parts(:)
         type(qsys_env)                          :: qenv
         type(chash)                             :: job_descr
-        type(ori)                               :: o_mic, o, o_tmp
+        type(ori)                               :: o_mic, o
         type(oris)                              :: os_stk
         type(chash),                allocatable :: part_params(:)
         character(len=LONGSTRLEN),  allocatable :: boxfiles(:), stktab(:), parts_fname(:)
         character(len=:),           allocatable :: mic_name, imgkind
         integer,                    allocatable :: parts(:,:)
-        integer :: boxcoords(2)
-        integer :: imic,i,nmics_tot,numlen,nmics,cnt,state,istk,nstks,ipart
+        integer :: imic,i,nmics_tot,numlen,nmics,cnt,state,istk,nstks,ipart,stkind,nptcls
         if( cline%defined('ctf') )then
             if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
                 THROW_HARD('Only CTF=NO/FLIP are allowed')
@@ -2000,8 +2069,7 @@ contains
             do ipart = 1,params%nparts
                 do imic = 1,spproj_parts(ipart)%os_mic%get_noris()
                     cnt = cnt + 1
-                    call spproj_parts(ipart)%os_mic%get_ori(imic,o_tmp)
-                    call spproj%os_mic%set_ori(cnt,o_tmp)
+                    call spproj%os_mic%transfer_ori(cnt, spproj_parts(ipart)%os_mic, imic)
                 enddo
                 call spproj_parts(ipart)%kill
                 call spproj_parts(ipart)%read_segment('stk',parts_fname(ipart))
@@ -2015,42 +2083,33 @@ contains
             do ipart = 1,params%nparts
                 do istk = 1,spproj_parts(ipart)%os_stk%get_noris()
                     cnt = cnt + 1
-                    call spproj_parts(ipart)%os_stk%get_ori(istk, o_tmp)
-                    call os_stk%set_ori(cnt,o_tmp)
+                    call os_stk%transfer_ori(cnt, spproj_parts(ipart)%os_stk, istk)
                     stktab(cnt) = os_stk%get_static(cnt,'stk')
                 enddo
                 call spproj_parts(ipart)%kill
             enddo
             ! import stacks into project
             call spproj%add_stktab(stktab,os_stk)
-            ! transfer 2D parameters
+            call os_stk%kill
+            ! 2D/3D parameters, transfer everything but stack index
             cnt = 0
             do ipart = 1,params%nparts
                 call spproj_parts(ipart)%read_segment('ptcl2D',parts_fname(ipart))
-                do i = 1,spproj_parts(ipart)%os_ptcl2D%get_noris()
-                    cnt = cnt + 1
-                    ! particles coordinates
-                    call spproj_parts(ipart)%get_boxcoords(i, boxcoords)
-                    call spproj%set_boxcoords(cnt, boxcoords)
-                    ! search history & parameters
-                    call spproj_parts(ipart)%os_ptcl2D%get_ori(i, o)
-                    call spproj%os_ptcl2D%transfer_2Dparams(cnt, o)
-                enddo
-                call spproj_parts(ipart)%kill
-            enddo
-            ! transfer 3D parameters
-            cnt = 0
-            do ipart = 1,params%nparts
                 call spproj_parts(ipart)%read_segment('ptcl3D',parts_fname(ipart))
-                do i = 1,spproj_parts(ipart)%os_ptcl3D%get_noris()
-                    cnt = cnt + 1
-                    call spproj_parts(ipart)%os_ptcl3D%get_ori(i, o)
-                    call spproj%os_ptcl3D%transfer_3Dparams(cnt, o)
+                nptcls = spproj_parts(ipart)%os_ptcl2D%get_noris()
+                if( nptcls /= spproj_parts(ipart)%os_ptcl3D%get_noris())then
+                    THROW_HARD('Inconsistent number of particles')
+                endif
+                do i = 1,nptcls
+                    cnt    = cnt + 1
+                    stkind = nint(spproj%os_ptcl2D%get(cnt,'stkind'))
+                    call spproj%os_ptcl2D%transfer_ori(cnt, spproj_parts(ipart)%os_ptcl2D, i)
+                    call spproj%os_ptcl3D%transfer_ori(cnt, spproj_parts(ipart)%os_ptcl3D, i)
+                    call spproj%os_ptcl2D%set(cnt,'stkind',real(stkind))
+                    call spproj%os_ptcl3D%set(cnt,'stkind',real(stkind))
                 enddo
                 call spproj_parts(ipart)%kill
             enddo
-            ! clean-up
-            call os_stk%kill
         endif
         ! final write
         call spproj%write
@@ -2060,8 +2119,6 @@ contains
         deallocate(spproj_parts,part_params)
         call o_mic%kill
         call o%kill
-        call o_tmp%kill
-        call os_stk%kill
         ! end gracefully
         call simple_end('**** SIMPLE_REEXTRACT_DISTR NORMAL STOP ****')
         contains
@@ -2089,7 +2146,7 @@ contains
         type(parameters)              :: params
         type(sp_project)              :: spproj, spproj_in
         type(image)                   :: micrograph, img, mskimg
-        type(ori)                     :: o_mic, o_stk, o_tmp
+        type(ori)                     :: o_mic, o_stk
         type(ctf)                     :: tfun
         type(ctfparams)               :: ctfparms
         character(len=:), allocatable :: mic_name, imgkind
@@ -2292,11 +2349,9 @@ contains
         do imic = params%fromp,params%top
             if( .not.mic_mask(imic) )cycle
             cnt = cnt+1
-            call spproj_in%os_mic%get_ori(imic, o_tmp)
-            call spproj%os_mic%set_ori(cnt, o_tmp)
+            call spproj%os_mic%transfer_ori(cnt, spproj_in%os_mic, imic)
             stk_ind = mic2stk_inds(imic)
-            call spproj_in%os_stk%get_ori(stk_ind, o_tmp)
-            call spproj%os_stk%set_ori(cnt, o_tmp)
+            call spproj%os_stk%transfer_ori(cnt, spproj_in%os_stk, stk_ind)
         enddo
         ! transfer particles
         nptcls = count(ptcl_mask)
@@ -2306,10 +2361,8 @@ contains
         do iptcl = 1,size(ptcl_mask)
             if( .not.ptcl_mask(iptcl) )cycle
             cnt = cnt+1
-            call spproj_in%os_ptcl2D%get_ori(iptcl, o_tmp)
-            call spproj%os_ptcl2D%set_ori(cnt, o_tmp)
-            call spproj_in%os_ptcl3D%get_ori(iptcl, o_tmp)
-            call spproj%os_ptcl3D%set_ori(cnt, o_tmp)
+            call spproj%os_ptcl2D%transfer_ori(cnt, spproj_in%os_ptcl2D, iptcl)
+            call spproj%os_ptcl3D%transfer_ori(cnt, spproj_in%os_ptcl3D, iptcl)
         enddo
         call spproj_in%kill
         ! final write
@@ -2319,7 +2372,6 @@ contains
         call qsys_job_finished('simple_commander_preprocess :: exec_reextract')
         call o_mic%kill
         call o_stk%kill
-        call o_tmp%kill
         call simple_end('**** SIMPLE_REEXTRACT NORMAL STOP ****')
 
         contains

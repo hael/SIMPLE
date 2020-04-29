@@ -38,7 +38,6 @@ contains
             call self%s%prep4srch
             corr = -huge(corr)
             do iref=1,self%s%nrefs
-                if( s2D%cls_chunk(iref) /= self%s%chunk_id )cycle
                 if( s2D%cls_pops(iref) == 0 )cycle
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs)
                 inpl_ind  = maxloc(corrs, dim=1)

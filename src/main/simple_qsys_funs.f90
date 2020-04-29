@@ -12,13 +12,13 @@ integer, parameter :: SHORTTIME = 3
 
 contains
 
-    subroutine qsys_cleanup( flag  )
+    subroutine qsys_cleanup( keep2D  )
         use simple_parameters, only: params_glob
-        logical, optional, intent(in) :: flag
+        logical, optional, intent(in) :: keep2D
         integer, parameter :: NUMLEN_STATE = 2, NUMLEN_ITER = 3
-        logical :: nokeep
-        nokeep=.true.
-        if(present(flag))nokeep=flag
+        logical :: l_keep2D
+        l_keep2D = .true.
+        if(present(keep2D)) l_keep2D = keep2D
         ! single files
         call del_file('FOO')
         call del_file('fort.0')
@@ -27,13 +27,20 @@ contains
         call del_file('SYMSRCH')
         call del_file(SIMPLE_SUBPROC_OUT)
         ! state numbered files
-        call del_files('VOLASSEMBLE_FINISHED_STATE',     params_glob%nstates, numlen=NUMLEN_STATE)
-        if(nokeep)call del_files('simple_script_state',  params_glob%nstates, numlen=NUMLEN_STATE)
+        call del_files('VOLASSEMBLE_FINISHED_STATE', params_glob%nstates, numlen=NUMLEN_STATE)
+        call del_files('simple_script_state',        params_glob%nstates, numlen=NUMLEN_STATE)
         ! part numbered files
         call del_files('OUT',                            params_glob%nparts)
         call del_files('algndoc_',                       params_glob%nparts, ext=trim(METADATA_EXT))
         call del_files('JOB_FINISHED_',                  params_glob%nparts)
-        if(nokeep)call del_files('distr_simple_script_', params_glob%nparts)
+        call del_files('distr_simple_script_', params_glob%nparts)
+        ! optionally deletes 2D classification temporary files
+        if( .not.l_keep2D )then
+            call del_files('cavgs_even_part',     params_glob%nparts, ext=params_glob%ext)
+            call del_files('cavgs_odd_part',      params_glob%nparts, ext=params_glob%ext)
+            call del_files('ctfsqsums_even_part', params_glob%nparts, ext=params_glob%ext)
+            call del_files('ctfsqsums_odd_part',  params_glob%nparts, ext=params_glob%ext)
+        endif
         ! flush the log filehandle to avoid delayed printing
         call flush(logfhandle)
     end subroutine qsys_cleanup
