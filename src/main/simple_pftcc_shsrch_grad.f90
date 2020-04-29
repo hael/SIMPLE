@@ -50,9 +50,10 @@ contains
         logical,          optional, intent(in)    :: opt_angle      !< optimise in-plane angle with callback flag
         logical,          optional, intent(in)    :: coarse_init    !< coarse inital search
         type(opt_factory) :: opt_fact
+        call self%kill
         ! flag the barrier constraint
         self%shbarr = .true.
-        if( present(shbarrier) )then
+        if( present(shbarrier) )then 
             if( shbarrier .eq. 'no' ) self%shbarr = .false.
         endif
         self%maxits = 100
@@ -296,6 +297,7 @@ contains
     subroutine grad_shsrch_kill( self )
         class(pftcc_shsrch_grad), intent(inout) :: self
         if( associated(self%nlopt) )then
+            call self%ospec%kill
             call self%nlopt%kill
             nullify(self%nlopt)
         end if

@@ -587,7 +587,7 @@ contains
         do iter = 1,9999
             str_iter  = int2str_pad(iter,3)
             pool_iter = min(999,pool_iter)
-            write(logfhandle,'(A,I3)')'>>> WAIT CYCLE ',iter
+            write(logfhandle,'(A,I4)')'>>> WAIT CYCLE ',iter
             if( is_timeout(simple_gettime()) )exit
             if( buffer_exists )then
                 ! ten iterations of the buffer

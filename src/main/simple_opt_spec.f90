@@ -222,7 +222,7 @@ contains
         if(present(mode))        self%str_mode  = mode
         if(present(npop))        self%npop      = npop
         if(present(ldim))        self%ldim      = ldim
-        if(present(ftol))        self%ftol      = ftol        
+        if(present(ftol))        self%ftol      = ftol
         if(present(gtol))        self%gtol      = gtol
         if(present(factr))       self%factr     = factr
         if(present(pgtol))       self%pgtol     = pgtol

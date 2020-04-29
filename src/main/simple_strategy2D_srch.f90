@@ -16,9 +16,8 @@ private
 
 type strategy2D_spec
     real    :: stoch_bound = 0.
-    integer :: iptcl       = 0
-    integer :: iptcl_map   = 0
-    integer :: chunk_id    = 0
+    integer :: iptcl       = 0  ! global particle index
+    integer :: iptcl_map   = 0  ! maps to index in batch
 end type strategy2D_spec
 
 type strategy2D_srch
@@ -29,19 +28,14 @@ type strategy2D_srch
     integer                 :: prev_class    =  0   !< previous class index
     integer                 :: best_class    =  0   !< best class index found by search
     integer                 :: best_rot      =  0   !< best in-plane rotation found by search
-    integer                 :: fromp         =  1   !< from particle index
-    integer                 :: top           =  1   !< to particle index
     integer                 :: nnn           =  0   !< # nearest neighbors
     integer                 :: iptcl         =  0   !< global particle index
-    integer                 :: iptcl_map     =  0   !< index in pre-allocated arrays
-    integer                 :: chunk_id      =  0   !< index to chunk
-    real                    :: trs           =  0.  !< shift range parameter [-trs,trs]
+    integer                 :: iptcl_map     =  0   !< index in pre-allocated batch array
     real                    :: prev_shvec(2) =  0.  !< previous origin shift vector
     real                    :: best_shvec(2) =  0.  !< best shift vector found by search
     real                    :: prev_corr     = -1.  !< previous best correlation
     real                    :: best_corr     = -1.  !< best corr found by search
     real                    :: specscore     =  0.  !< spectral score
-    logical                 :: doshift    = .true.  !< origin shift search indicator
   contains
     procedure :: new
     procedure :: prep4srch
@@ -60,13 +54,9 @@ contains
         ! set constants
         self%iptcl      =  spec%iptcl
         self%iptcl_map  =  spec%iptcl_map
-        self%chunk_id   =  spec%chunk_id
         self%nrefs      =  params_glob%ncls
         self%nrots      =  round2even(twopi*real(params_glob%ring2))
         self%nrefs_eval =  0
-        self%trs        =  params_glob%trs
-        self%fromp      =  params_glob%fromp
-        self%top        =  params_glob%top
         self%nnn        =  params_glob%nnn
         ! construct composites
         lims(:,1)       = -params_glob%trs
