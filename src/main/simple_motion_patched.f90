@@ -70,8 +70,8 @@ contains
     procedure, private                  :: gen_patch
     procedure, private                  :: set_patches
     procedure, private                  :: det_shifts
-    procedure, private                  :: det_shifts_polyn
     procedure, private                  :: det_shifts_direct
+    procedure, private                  :: det_shifts_polyn_refine
     procedure, private                  :: fit_polynomial
     procedure, private                  :: get_local_shift
     procedure, private                  :: plot_shifts
@@ -92,7 +92,7 @@ contains
     procedure                           :: get_polyfit_rmsd
     procedure                           :: polytransfo
     procedure                           :: correct         => motion_patched_correct
-    procedure                           :: correct_polyn   => motion_patched_correct_polyn
+    procedure                           :: correct_direct  => motion_patched_correct_direct
     procedure                           :: kill            => motion_patched_kill
 end type motion_patched
 
@@ -701,7 +701,7 @@ contains
         call ftexp_transfmat_kill
     end subroutine det_shifts
 
-    subroutine det_shifts_polyn( self, frames )
+    subroutine det_shifts_direct( self, frames )
         class(motion_patched), target, intent(inout) :: self
         type(image),      allocatable, intent(inout) :: frames(:)
         real, allocatable :: opt_shifts(:,:)
@@ -732,7 +732,7 @@ contains
                 call self%align_iso_polyn_direct(i,j)%set_ftol_gtol(TOL, TOL)
                 call self%align_iso_polyn_direct(i,j)%set_coords(i,j)
                 call self%align_iso_polyn_direct(i,j)%set_callback(motion_patched_polyn_callback_wrapper)
-                call self%align_iso_polyn_direct(i,j)%align_polyn(self)
+                call self%align_iso_polyn_direct(i,j)%align_direct(self)
                 corr_avg = corr_avg + self%align_iso_polyn_direct(i,j)%get_corr()
                 call self%align_iso_polyn_direct(i,j)%get_opt_shifts(opt_shifts)
                 do iframe = 1, self%nframes
@@ -757,9 +757,9 @@ contains
             self%shifts_patches_for_fit(2,iframe,:,:) = self%shifts_patches(2,iframe,:,:) + 0.5*self%shifts_patches(2,1,:,:)
         enddo
         deallocate( self%align_iso_polyn_direct )
-    end subroutine det_shifts_polyn
+    end subroutine det_shifts_direct
 
-    subroutine det_shifts_direct( self, frames )
+    subroutine det_shifts_polyn_refine( self, frames )
         class(motion_patched), target, intent(inout) :: self
         type(image), allocatable,      intent(inout) :: frames(:)
         type(opt_factory)         :: ofac
@@ -817,7 +817,7 @@ contains
             end do
         end do
         deallocate( self%align_iso_polyn_direct )
-    end subroutine det_shifts_direct
+   end subroutine det_shifts_polyn_refine
 
     subroutine cleanup_polyn( self )
         class(motion_patched), intent(inout) :: self
@@ -973,12 +973,12 @@ contains
         shift_fname = trim(self%shift_fname) // C_NULL_CHAR
     end subroutine motion_patched_correct
 
-    subroutine motion_patched_correct_polyn( self, hp, resstep, frames, shift_fname, refine_direct, global_shifts )
+    subroutine motion_patched_correct_direct( self, hp, resstep, frames, shift_fname, refine_polyn, global_shifts )
         class(motion_patched),           intent(inout) :: self
         real,                            intent(in)    :: hp, resstep
         type(image),        allocatable, intent(inout) :: frames(:)
         character(len=:),   allocatable, intent(inout) :: shift_fname
-        logical,                         intent(in)    :: refine_direct
+        logical,                         intent(in)    :: refine_polyn
         real,     optional, allocatable, intent(in)    :: global_shifts(:,:)
         integer :: ldim_frames(3)
         integer :: i
@@ -1010,18 +1010,18 @@ contains
         ! determines patch geometry
         call self%set_size_frames_ref()
         ! determine shifts for patches
-        call self%det_shifts_polyn(frames)
+        call self%det_shifts_direct(frames)
         ! fit the polynomial model against determined shifts
         call self%fit_polynomial()
         write (*,*) '^^^^^^^^^^^^^^^^^^^^^^^ fitted polynomial; poly_coeffs(:, 1)=', self%poly_coeffs(:,1), 'poly_coeffs(:, 2)=', self%poly_coeffs(:,2)
-        if ( refine_direct ) then
+        if ( refine_polyn ) then
             write (*,*) '^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ patched direct ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ '
-            call self%det_shifts_direct(frames)
+            call self%det_shifts_polyn_refine(frames)
         end if
         ! report visual results
         call self%plot_shifts()
         shift_fname = trim(self%shift_fname) // C_NULL_CHAR
-    end subroutine motion_patched_correct_polyn
+    end subroutine motion_patched_correct_direct
 
     subroutine motion_patched_kill( self )
         class(motion_patched), intent(inout) :: self

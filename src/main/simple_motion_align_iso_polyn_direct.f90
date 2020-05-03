@@ -78,7 +78,7 @@ contains
     procedure                                         :: create_ftexp_dR_s
     procedure                                         :: refine_direct        => motion_align_iso_polyn_direct_refine_direct
     procedure                                         :: new                  => motion_align_iso_polyn_direct_new
-    procedure                                         :: align_polyn          => motion_align_iso_polyn_direct_align_polyn
+    procedure                                         :: align_direct          => motion_align_iso_polyn_direct_align_direct
     procedure                                         :: kill                 => motion_align_iso_polyn_direct_kill
     procedure                                         :: set_frames           => motion_align_iso_polyn_direct_set_frames
     procedure                                         :: set_hp_lp            => motion_align_iso_polyn_direct_set_hp_lp
@@ -136,7 +136,7 @@ contains
         self%existence             = .true.
     end subroutine motion_align_iso_polyn_direct_new
 
-    subroutine motion_align_iso_polyn_direct_align_polyn( self, callback_ptr )
+    subroutine motion_align_iso_polyn_direct_align_direct( self, callback_ptr )
         use simple_opt_factory, only: opt_factory
         class(motion_align_iso_polyn_direct), intent(inout) :: self
         class(*),                             intent(inout) :: callback_ptr  !< callback pointer to be passed as first argument
@@ -204,7 +204,7 @@ contains
         call self%calc_weights
         if (associated(nlopt)) call nlopt%kill
         deallocate(nlopt)
-    end subroutine motion_align_iso_polyn_direct_align_polyn
+      end subroutine motion_align_iso_polyn_direct_align_direct
 
     subroutine motion_align_iso_polyn_direct_kill( self )
         class(motion_align_iso_polyn_direct), intent(inout) :: self

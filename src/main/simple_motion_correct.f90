@@ -65,10 +65,9 @@ integer,          allocatable :: pos_outliers(:,:)        !< positions of defect
 ! module global constants
 real,    parameter :: NSIGMAS                       = 6.       !< Number of standard deviations for outliers detection
 logical, parameter :: FITSHIFTS                     = .true.
-logical, parameter :: ISO_POLYN_DIRECT              = .false.   !< use polynomial constraint for isotropic motion correction
-logical, parameter :: ISO_UNCONSTR_AFTER            = .false.   !< run a unconstrained (direct) as the second step (at highest resolution)
-logical, parameter :: DO_PATCHED_POLYN              = .false.   !< run polynomially constrained motion correction for patch-based motion correction
-logical, parameter :: DO_PATCHED_POLYN_DIRECT_AFTER = .false.   !< run a direct polynomial optimization for patch-based motion correction as the second step (at highest resolution)
+logical, parameter :: DO_ISO_DIRECT                 = .false.   !< use direct minimization for isotropic motion correction
+logical, parameter :: DO_PATCHED_DIRECT             = .false.   !< run direct method for patch-based motion correction
+logical, parameter :: DO_PATCHED_POLYN_AFTER        = .false.   !< run a direct polynomial optimization for patch-based motion correction as the second step (at highest resolution)
 logical, parameter :: DO_OPT_WEIGHTS                = .false.   !< continuously optimize weights after alignment
 ! benchmarking
 logical                 :: L_BENCH = .false.
@@ -245,7 +244,7 @@ contains
         class(*), pointer                   :: callback_ptr
         callback_ptr => null()
         ! initialise
-        if (ISO_POLYN_DIRECT) then
+        if (DO_ISO_DIRECT) then
             call align_iso_polyn_direct%new
         end if
         if( l_BENCH ) t_correct_iso_init = tic()
@@ -256,16 +255,13 @@ contains
         call ftexp_transfmat_init(movie_frames_scaled(1), params_glob%lpstop)
         if( l_BENCH ) rt_correct_iso_transfmat = toc(t_correct_iso_transfmat)
         if( l_BENCH ) t_correct_iso_align = tic()
-        if (ISO_POLYN_DIRECT) then
+        if (DO_ISO_DIRECT) then
             call align_iso_polyn_direct%set_frames(movie_frames_scaled, nframes)
             call align_iso_polyn_direct%set_hp_lp(hp,lp)
             updateres = 0
             call align_iso_polyn_direct%set_callback( motion_correct_iso_polyn_direct_callback )
             call align_iso_polyn_direct%set_group_frames(trim(params_glob%groupframes).eq.'yes')
-            call align_iso_polyn_direct%align_polyn(callback_ptr)
-            if (ISO_UNCONSTR_AFTER) then
-                call align_iso_polyn_direct%refine_direct
-            end if
+            call align_iso_polyn_direct%align_direct(callback_ptr)
             corr = align_iso_polyn_direct%get_corr()
             if( corr < 0. )then
                 write(logfhandle,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
@@ -547,10 +543,10 @@ contains
         write(logfhandle,'(A,I2,A3,I2,A1)') '>>> PATCH-BASED REFINEMENT (',&
             &params_glob%nxpatch,' x ',params_glob%nypatch,')'
         PRINT_NEVALS = .false.
-        if (DO_PATCHED_POLYN) then
+        if (DO_PATCHED_DIRECT) then
             call motion_patch%set_bfactor(bfac)
-            call motion_patch%correct_polyn( hp, resstep, movie_frames_scaled,&
-                &patched_shift_fname, DO_PATCHED_POLYN_DIRECT_AFTER, shifts_toplot)
+            call motion_patch%correct_direct( hp, resstep, movie_frames_scaled,&
+                &patched_shift_fname, DO_PATCHED_POLYN_AFTER, shifts_toplot)
             rmsd = 0.
         else
             call motion_patch%set_fitshifts(FITSHIFTS)
