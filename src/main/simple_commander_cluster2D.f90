@@ -315,6 +315,11 @@ contains
         call cline_cluster2D1%set('lp',     lp1)
         call cline_cluster2D2%set('msk',    msk)
         call cline_cluster2D2%set('lp',     lp2)
+        if( trim(params%pssnr).eq.'yes' )then
+            call cline_cluster2D2%set('match_filt', 'yes')
+            call cline_cluster2D2%set('pssnr', 'yes')
+            call cline_cluster2D2%delete('lp')
+        endif
         ! execution 1
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A,F6.1)') '>>> STAGE 1, LOW-PASS LIMIT: ',lp1

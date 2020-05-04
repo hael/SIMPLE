@@ -358,7 +358,7 @@ contains
     !>  \brief  prepares one cluster centre image for alignment
     subroutine prep2Dref( pftcc, img_in, img_out, icls, center, xyz_in, xyz_out )
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_estimate_ssnr,    only: fsc2optlp_sub, subsample_optlp
+        use simple_estimate_ssnr,    only: fsc2optlp_sub, subsample_optlp, subsample_filter
         use simple_polarizer,        only: polarizer
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(image),            intent(inout) :: img_in
@@ -370,7 +370,9 @@ contains
         real    :: frc(build_glob%projfrcs%get_filtsz()), filter(build_glob%projfrcs%get_filtsz())
         real    :: subfilter(build_glob%img_match%get_filtsz())
         real    :: xyz(3), sharg
+        integer :: filtsz
         logical :: do_center
+        filtsz    = build_glob%projfrcs%get_filtsz()
         do_center = (params_glob%center .eq. 'yes')
         ! centering only performed if params_glob%center.eq.'yes'
         if( present(center) ) do_center = do_center .and. center
@@ -395,16 +397,21 @@ contains
             endif
         endif
         ! filter
-        call build_glob%projfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-        if( any(frc > 0.143) )then
-            call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
-            if( params_glob%l_match_filt )then
-                call subsample_optlp(build_glob%projfrcs%get_filtsz(),&
-                    &build_glob%img_match%get_filtsz(), filter, subfilter)
-                call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
-            else
-                call img_in%fft() ! needs to be here in case the shift was never applied (above)
-                call img_in%apply_filter_serial(filter)
+        if( params_glob%l_pssnr )then
+            call build_glob%projpssnrs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, filter)
+            call subsample_filter(filtsz, build_glob%img_match%get_filtsz(), filter, subfilter)
+            call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
+        else
+            call build_glob%projfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+            if( any(frc > 0.143) )then
+                call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
+                if( params_glob%l_match_filt )then
+                    call subsample_optlp(filtsz, build_glob%img_match%get_filtsz(), filter, subfilter)
+                    call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
+                else
+                    call img_in%fft() ! needs to be here in case the shift was never applied (above)
+                    call img_in%apply_filter_serial(filter)
+                endif
             endif
         endif
         ! ensure we are in real-space before clipping
@@ -562,18 +569,18 @@ contains
             if( params_glob%l_match_filt )then
                 ! stores filters in pftcc
                 if( params_glob%l_pssnr )then
-                    if( iseven )then
-                        allocate(fname_vol_filter, source=PSSNR_FBODY//int2str_pad(s,2)//'_even'//BIN_EXT)
-                    else
-                        allocate(fname_vol_filter, source=PSSNR_FBODY//int2str_pad(s,2)//'_odd'//BIN_EXT)
-                    endif
-                    if( any(build_glob%fsc(s,:) > 0.143) .and. file_exists(fname_vol_filter))then
-                        pssnr = file2rarr(fname_vol_filter)
-                        call subsample_filter(filtsz, subfiltsz, pssnr, subfilter)
-                    else
-                        subfilter = 1.
-                    endif
-                    call pftcc%set_pssnr_filt(subfilter(params_glob%kfromto(1):params_glob%kstop), iseven)
+                    ! if( iseven )then
+                    !     allocate(fname_vol_filter, source=PSSNR_FBODY//int2str_pad(s,2)//'_even'//BIN_EXT)
+                    ! else
+                    !     allocate(fname_vol_filter, source=PSSNR_FBODY//int2str_pad(s,2)//'_odd'//BIN_EXT)
+                    ! endif
+                    ! if( any(build_glob%fsc(s,:) > 0.143) .and. file_exists(fname_vol_filter))then
+                    !     pssnr = file2rarr(fname_vol_filter)
+                    !     call subsample_filter(filtsz, subfiltsz, pssnr, subfilter)
+                    ! else
+                    !     subfilter = 1.
+                    ! endif
+                    ! call pftcc%set_pssnr_filt(subfilter(params_glob%kfromto(1):params_glob%kstop), iseven)
                 else
                     ! stores filters in pftcc
                     if( file_exists(params_glob%frcs) )then

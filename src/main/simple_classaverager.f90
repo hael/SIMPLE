@@ -640,13 +640,11 @@ contains
         type(image), allocatable     :: even_imgs(:), odd_imgs(:)
         real,        allocatable     :: frc(:)
         integer :: icls, find, find_plate
-        ! serial code for allocation/copy
         allocate(even_imgs(ncls), odd_imgs(ncls), frc(filtsz))
         do icls=1,ncls
             call even_imgs(icls)%copy(cavgs_even(icls))
             call odd_imgs(icls)%copy(cavgs_odd(icls))
         end do
-        ! parallel loop to do the job
         !$omp parallel do default(shared) private(icls,frc,find,find_plate) schedule(static) proc_bind(close)
         do icls=1,ncls
             if( params_glob%l_innermsk )then
@@ -677,6 +675,8 @@ contains
         !$omp end parallel do
         ! write FRCs
         call build_glob%projfrcs%write(fname)
+        ! SSNR
+        call cavger_calc_and_write_pssnr
         ! destruct
         do icls=1,ncls
             call even_imgs(icls)%kill
@@ -684,6 +684,29 @@ contains
         end do
         deallocate(even_imgs, odd_imgs, frc)
     end subroutine cavger_calc_and_write_frcs_and_eoavg
+
+    subroutine cavger_calc_and_write_pssnr
+        use simple_estimate_ssnr, only: subsample_filter, fsc2ssnr
+        real, allocatable :: pad_inv_ctfsq_avg(:), frc(:), inv_ctfsq_avg(:), ssnr(:)
+        real              :: fptcl
+        integer           :: icls
+        allocate(inv_ctfsq_avg(filtsz),frc(filtsz),ssnr(filtsz))
+        fptcl = (params_glob%msk/real(params_glob%box))**2. ! empirical
+        !$omp parallel do default(shared) private(icls,pad_inv_ctfsq_avg,frc,inv_ctfsq_avg,ssnr)&
+        !$omp schedule(static) proc_bind(close)
+        do icls=1,ncls
+            call ctfsqsums_merged(icls)%spectrum('real', pad_inv_ctfsq_avg, norm=.true.)
+            pad_inv_ctfsq_avg = 1. / pad_inv_ctfsq_avg
+            call subsample_filter(size(pad_inv_ctfsq_avg),filtsz, pad_inv_ctfsq_avg, inv_ctfsq_avg)
+            frc = build_glob%projfrcs%get_frc(icls, params_glob%box, 1)
+            ! Eq 19, Sindelar et al., JSB, 2011
+            ssnr = fptcl * inv_ctfsq_avg * fsc2ssnr(frc)
+            call build_glob%projpssnrs%set_frc(icls, ssnr, 1)
+        end do
+        !$omp end parallel do
+        ! write PSSNRs
+        call build_glob%projpssnrs%write(trim(PSSNR_FBODY)//int2str_pad(1,2)//BIN_EXT)
+    end subroutine cavger_calc_and_write_pssnr
 
     ! I/O
 
