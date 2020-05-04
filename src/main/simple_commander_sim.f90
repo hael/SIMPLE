@@ -397,7 +397,13 @@ contains
             THROW_HARD('BOX must be even')
         endif
         call vol%new([params%box,params%box,params%box], params%smpd)
-        if( cline%defined('element') )then
+        if( cline%defined('pdbfile') )then
+            if( .not.file_exists(params%pdbfile) )then
+                THROW_HARD('Could not find: '//trim(params%pdbfile))
+            endif
+            call atoms_obj%new(params%pdbfile)
+            cutoff = 12.*params%smpd
+        else if( cline%defined('element') )then
             ! Some cubic crystal systems
             if( .not.cline%defined('moldiam') )then
                 THROW_HARD('MOLDIAM must be provided for FCC lattice!')
@@ -629,12 +635,6 @@ contains
             call atoms_obj%writePDB(params%outvol)
             ! for convolution
             cutoff = 3.*a
-        else if( cline%defined('pdbfile') )then
-            if( .not.file_exists(params%pdbfile) )then
-                THROW_HARD('Could not find: '//trim(params%pdbfile))
-            endif
-            call atoms_obj%new(params%pdbfile)
-            cutoff = 12.*params%smpd
         endif
         if( cline%defined('lp') )then
             cutoff = max(cutoff,4.*params%lp)

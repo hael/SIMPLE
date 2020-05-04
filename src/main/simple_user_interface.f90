@@ -3549,6 +3549,7 @@ contains
         call simulate_atoms%set_input('parm_ios',  1, smpd)
         call simulate_atoms%set_input('parm_ios',  2, box)
         call simulate_atoms%set_input('parm_ios',  3, element)
+        simulate_atoms%parm_ios(3)%required = .false.
         call simulate_atoms%set_input('parm_ios',  4, moldiam)
         ! alternative inputs
         ! <empty>
