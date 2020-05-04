@@ -635,6 +635,8 @@ contains
             call atoms_obj%writePDB(params%outvol)
             ! for convolution
             cutoff = 3.*a
+        else
+            THROW_HARD('A PDB file or ELEMENT & MOLDIAM must be defined!')
         endif
         if( cline%defined('lp') )then
             cutoff = max(cutoff,4.*params%lp)
