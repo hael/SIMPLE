@@ -507,7 +507,7 @@ contains
         ! end gracefully
         call qsys_job_finished('simple_commander_tseries :: exec_tseries_track_particles')
         call spproj%kill
-        call simple_end('**** SIMPLE_tseries_track_particles NORMAL STOP ****')
+        call simple_end('**** SIMPLE_TSERIES_TRACK_PARTICLES NORMAL STOP ****')
     end subroutine exec_tseries_track_particles
 
     subroutine exec_center2D_nano_distr( self, cline )
@@ -608,8 +608,8 @@ contains
         call cline%set('autoscale',      'no')
         call cline%set('tseries',       'yes')
         call cline%set('refine',     'greedy')
-        call cline%set('graphene_filt',  'no')
         ! dynamic parameters
+        if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt','yes')
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',        15.0)
         if( .not. cline%defined('lpstart')        ) call cline%set('lpstart',        1.0)
         if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',         1.0)
@@ -920,7 +920,7 @@ contains
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         ! static parameters
         call cline%set('match_filt', 'no')
-        call cline%set('ninplpeaks', 1.0)
+        call cline%set('ninplpeaks',  1.0)
         call cline%set('objfun',     'cc')
         ! dynamic parameters
         if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
