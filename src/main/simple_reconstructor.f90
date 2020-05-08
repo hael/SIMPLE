@@ -762,43 +762,31 @@ contains
         deallocate(ssnr,optlp)
     end subroutine add_invtausq2rho
 
-    subroutine calc_pssnr3d( self, fsc, pssnr)
-        use simple_estimate_ssnr, only: fsc2ssnr
+    subroutine calc_pssnr3d( self, ctfsq_vec, cnt_vec)
         class(reconstructor), intent(inout) :: self
-        real,                 intent(in)    :: fsc(:)
-        real,    allocatable, intent(out)   :: pssnr(:)
-        real    :: ctfsqsumvec(self%nyq), frac
-        integer :: cntvec(self%nyq), phys(3), h,k,m, sh, kk, sz
-        sz = size(fsc)
-        ! ssnr
-        if( allocated(pssnr) ) deallocate(pssnr)
-        ! need to use Rosenthal & Henderson corrected FSC here
-        pssnr = fsc2ssnr(fsc)
-        ! padded #voxels & CTF2 sum
+        real,    allocatable, intent(out)   :: ctfsq_vec(:), cnt_vec(:)
+        real(dp) :: sumvec(0:self%nyq)
+        integer  :: cntvec(0:self%nyq), phys(3), h,k,m, sh
         cntvec = 0
-        ctfsqsumvec = 0.
+        sumvec = 0.d0
         !$omp parallel do collapse(3) default(shared) schedule(static)&
-        !$omp private(h,k,m,phys,sh) proc_bind(close) reduction(+:cntvec,ctfsqsumvec)
+        !$omp private(h,k,m,phys,sh) proc_bind(close) reduction(+:cntvec,sumvec)
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
                 do m = self%lims(3,1),self%lims(3,2)
                     sh = nint(sqrt(real(h*h + k*k + m*m)))
                     if( sh > self%nyq ) cycle
                     phys = self%comp_addr_phys(h, k, m)
-                    cntvec(sh)      = cntvec(sh) + 1
-                    ctfsqsumvec(sh) = ctfsqsumvec(sh) + self%rho(phys(1),phys(2),phys(3))
+                    cntvec(sh) = cntvec(sh) + 1
+                    sumvec(sh) = sumvec(sh) + real(self%rho(phys(1),phys(2),phys(3)),dp)
                 enddo
             enddo
         enddo
         !$omp end parallel do
-        ! volume & area fraction
-        frac = 5. ! empirical
-        ! pssnr3D
-        do k = 1,sz
-            kk = nint(real(k*self%nyq)/real(sz))
-            kk = min(max(1,kk),self%nyq)
-            pssnr(k) = pssnr(k) * (real(cntvec(kk)) / ctfsqsumvec(kk)) * frac
-        enddo
+        if( allocated(ctfsq_vec) ) deallocate(ctfsq_vec)
+        if( allocated(cnt_vec) )   deallocate(cnt_vec)
+        allocate(ctfsq_vec(0:self%nyq),source=real(sumvec))
+        allocate(cnt_vec(0:self%nyq),source=real(cntvec))
     end subroutine calc_pssnr3d
 
     ! DESTRUCTORS

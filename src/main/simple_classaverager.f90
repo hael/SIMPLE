@@ -688,10 +688,11 @@ contains
     subroutine cavger_calc_and_write_pssnr
         use simple_estimate_ssnr, only: subsample_filter, fsc2ssnr
         real, allocatable :: pad_inv_ctfsq_avg(:), frc(:), inv_ctfsq_avg(:), ssnr(:)
-        real              :: fptcl
+        real              :: ratio
         integer           :: icls
         allocate(inv_ctfsq_avg(filtsz),frc(filtsz),ssnr(filtsz))
-        fptcl = (params_glob%msk/real(params_glob%box))**2. ! empirical
+        ratio = real(params_glob%box**2) / (PI*params_glob%msk**2.) ! for ssnr of spherically masked particle image
+        ! ratio = real(params_glob%box**2) / (0.4 * PI*params_glob%msk**2.) ! for ssnr of particle within spherically masked particle image
         !$omp parallel do default(shared) private(icls,pad_inv_ctfsq_avg,frc,inv_ctfsq_avg,ssnr)&
         !$omp schedule(static) proc_bind(close)
         do icls=1,ncls
@@ -700,7 +701,7 @@ contains
             call subsample_filter(size(pad_inv_ctfsq_avg),filtsz, pad_inv_ctfsq_avg, inv_ctfsq_avg)
             frc = build_glob%projfrcs%get_frc(icls, params_glob%box, 1)
             ! Eq 19, Sindelar et al., JSB, 2011
-            ssnr = fptcl * inv_ctfsq_avg * fsc2ssnr(frc)
+            ssnr = ratio * inv_ctfsq_avg * fsc2ssnr(frc)
             call build_glob%projpssnrs%set_frc(icls, ssnr, 1)
         end do
         !$omp end parallel do

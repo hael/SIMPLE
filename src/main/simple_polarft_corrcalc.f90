@@ -764,13 +764,14 @@ contains
         class(polarft_corrcalc), intent(in)    :: self
         integer,                 intent(in)    :: iptcl, iref
         complex(sp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
-        real    :: pw, w
+        real    :: pw, w, ssnr
         integer :: k
         ! looks like an enumeration and case selection needs to happen here
         if( params_glob%l_pssnr )then
             do k=params_glob%kfromto(1),params_glob%kstop
-                pw = real(sum(csq(dcmplx(pft(:,k)))) / real(self%pftsz,dp))
-                w  = sqrt(real(k))
+                ssnr = self%ref_optlp(k,iref)
+                pw   = real(sum(csq(dcmplx(pft(:,k)))) / real(self%pftsz,dp))
+                w    = sqrt(ssnr * real(k))
                 if( pw > 1.e-12 ) w = w / sqrt(pw)
                 pft(:,k) = w * pft(:,k)
             enddo
@@ -790,12 +791,13 @@ contains
         class(polarft_corrcalc), intent(in)    :: self
         integer,                 intent(in)    :: iptcl, iref
         complex(dp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
-        real(dp) :: pw, w
+        real(dp) :: pw, w, ssnr
         integer  :: k
         if( params_glob%l_pssnr )then
             do k=params_glob%kfromto(1),params_glob%kstop
-                pw = sum(csq(pft(:,k))) / real(self%pftsz,dp)
-                w  = dsqrt(real(k,dp))
+                ssnr = real(self%ref_optlp(k,iref),dp)
+                pw   = sum(csq(pft(:,k))) / real(self%pftsz,dp)
+                w    = dsqrt(ssnr * real(k,dp))
                 if( pw > 1.d-12 ) w = w / dsqrt(pw)
                 pft(:,k) = w * pft(:,k)
             enddo
@@ -816,12 +818,13 @@ contains
         integer,                 intent(in)    :: iptcl, iref
         complex(dp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         complex(dp),             intent(inout) :: dpft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),3)
-        real(dp) :: w, pw
+        real(dp) :: w, pw, ssnr
         integer  :: k
         if( params_glob%l_pssnr )then
             do k=params_glob%kfromto(1),params_glob%kstop
-                pw = sum(csq(pft(:,k))) / real(self%pftsz,dp)
-                w  = dsqrt(real(k,dp))
+                ssnr = real(self%ref_optlp(k,iref),dp)
+                pw   = sum(csq(pft(:,k))) / real(self%pftsz,dp)
+                w    = dsqrt(ssnr * real(k,dp))
                 if( pw > 1.d-12 ) w = w / dsqrt(pw)
                 pft(:,k)    = w * pft(:,k)
                 dpft(:,k,:) = w * dpft(:,k,:)
@@ -965,7 +968,7 @@ contains
         integer,                 intent(in)    :: kstop
         complex(sp),             intent(out)   :: pft_ref(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         real(sp),                intent(out)   :: sqsum_ref
-        integer :: i,k
+        integer :: i
         i = self%pinds(iptcl)
         ! copy
         if( self%iseven(i) )then
@@ -1008,15 +1011,14 @@ contains
             do k=params_glob%kfromto(1),params_glob%kstop
                 ! particle power spectrum
                 pw_ptcl = real(sum(csq(dcmplx(pft_ptcl(:,k)))) / real(self%pftsz,dp))
-                ! shell normalization
-                w = sqrt(real(k))
-                if( pw_ptcl > 1.e-12 ) w = w / sqrt(pw_ptcl)
-                ! actual shell weighting
+                ! shell weighting
                 ssnr = self%ref_optlp(k,iref)
+                w    = sqrt(real(k))
+                if( pw_ptcl > 1.e-12 ) w = w / sqrt(pw_ptcl)
                 if( self%with_ctf )then
-                    pft_ptcl(:,k) = pft_ptcl(:,k) * w * sqrt(ssnr + ssnr*ssnr*self%ctfmats(:,k,i)**2.)
+                    pft_ptcl(:,k) = pft_ptcl(:,k) * w * sqrt(1. + ssnr*self%ctfmats(:,k,i)**2.)
                 else
-                    pft_ptcl(:,k) = pft_ptcl(:,k) * w * sqrt(ssnr + ssnr*ssnr)
+                    pft_ptcl(:,k) = pft_ptcl(:,k) * w * sqrt(1. + ssnr)
                 endif
             enddo
         else
