@@ -4175,7 +4175,7 @@ contains
         &'Removes graphene Fourier peaks in time-series',& ! descr_short
         &'Removes graphene Fourier peaks in time-series',& ! descr_long
         &'single_exec',&                                   ! executable
-        &3, 0, 0, 0, 0, 0, 1, .true.)                      ! # entries in each group, requires sp_project
+        &3, 1, 0, 0, 0, 0, 1, .false.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call graphene_subtr%set_input('img_ios', 1, stk)
@@ -4185,8 +4185,9 @@ contains
         graphene_subtr%img_ios(2)%required = .true.
         graphene_subtr%img_ios(2)%descr_placeholder = 'Input background power spectra stack, eg NP_X_background_pspec.mrc'
         call graphene_subtr%set_input('img_ios', 3, outstk)
-        graphene_subtr%img_ios(3)%required = .true.
         ! parameter input/output
+        call graphene_subtr%set_input('parm_ios', 1, smpd)
+        graphene_subtr%parm_ios(1)%required = .false.
         ! <empty>
         ! alternative inputs
         ! <empty>

@@ -789,30 +789,29 @@ contains
         type(image)      :: ave_pre, ave_post, tmp
         real             :: smpd, w, ang
         integer          :: iptcl, ldim_ptcl(3), ldim(3), n, nptcls
-        call cline%set('oritype','mic')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-        ! snaity checks
+        ! sanity checks & dimensions
         call find_ldim_nptcls(params%stk,ldim_ptcl,nptcls,smpd=smpd)
+        if( .not.cline%defined('smpd') )then
+            if( smpd < 1.e-4 ) THROW_HARD('Please provide SMPD!')
+            params%smpd = smpd
+        endif
         ldim_ptcl(3) = 1
-        if( abs(smpd-params%smpd) > 1.e-4 )then
-            THROW_HARD('Inconsistent sampling distances between project & input')
-        endif
-        call find_ldim_nptcls(params%stk2,ldim,n,smpd=smpd)
+        call find_ldim_nptcls(params%stk2,ldim,n)
         ldim(3) = 1
-        if( abs(smpd-params%smpd) > 1.e-4 )then
-            THROW_HARD('Inconsistent sampling distances between project & input')
-        endif
         if( any(ldim-ldim_ptcl/=0) )THROW_HARD('Inconsistent dimensions between stacks')
         if( n /= nptcls )THROW_HARD('Inconsistent number of images between stacks')
+        if( .not.cline%defined('outstk') )then
+            params%outstk = add2fbody(basename(params%stk),params%ext,'_subtr')
+        endif
         ! init images
-        ldim(3) = 1
         w = 1./real(nptcls)
-        call build%img%new(ldim,smpd)       ! particle
-        call build%img_tmp%new(ldim,smpd)   ! nn background
-        call build%img_copy%new(ldim,smpd)
-        call tmp%new(ldim,smpd)
-        call ave_pre%new(ldim,smpd)
-        call ave_post%new(ldim,smpd)
+        call build%img%new(ldim,params%smpd)       ! particle
+        call build%img_tmp%new(ldim,params%smpd)   ! nn background
+        call build%img_copy%new(ldim,params%smpd)
+        call tmp%new(ldim,params%smpd)
+        call ave_pre%new(ldim,params%smpd)
+        call ave_post%new(ldim,params%smpd)
         ave_pre  = 0.
         ave_post = 0.
         ! read, subtract & write
@@ -842,7 +841,6 @@ contains
         call ave_post%write('subtr_ave_pspec.mrc')
         ! cleanup
         call build%kill_general_tbox
-        call build%spproj%kill
         call tmp%kill
         call ave_pre%kill
         call ave_post%kill
@@ -906,7 +904,7 @@ contains
         ! other variables
         character(len=:), allocatable :: stk
         integer,          allocatable :: states(:)
-        real,             allocatable :: real_corrs(:), corrs_msk(:), tmp(:)
+        real,             allocatable :: real_corrs(:), corrs_msk(:)
         logical,          allocatable :: lmsk(:,:,:), msk(:)
         character(len=2)              :: str_state
         type(parameters)      :: params

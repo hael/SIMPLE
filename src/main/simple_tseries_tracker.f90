@@ -100,7 +100,7 @@ contains
         type(motion_align_nano)       :: aligner
         character(len=:), allocatable :: fname
         real,             allocatable :: opt_shifts(:,:)
-        integer :: first_pos(3), funit, io_stat, iframe, xind,yind, i, last_frame, cnt, nrange, noutside
+        integer :: first_pos(3), funit2, funit, io_stat, iframe, xind,yind, i, last_frame, cnt, nrange, noutside
         real    :: xyz(3), pos(2)
         ! init neigh counter
         call frame_avg%zero_and_unflag_ft
@@ -204,6 +204,9 @@ contains
         fname = trim(dir)//'/'//trim(fbody)//'.box'
         call fopen(funit, status='REPLACE', action='WRITE', file=fname,iostat=io_stat)
         call fileiochk("tseries tracker ; write_tracked_series ", io_stat)
+        fname = trim(dir)//'/'//trim(fbody)//'.xy'
+        call fopen(funit2, status='REPLACE', action='WRITE', file=fname,iostat=io_stat)
+        call fileiochk("tseries tracker ; write_tracked_series ", io_stat)
         stkname = trim(dir)//'/'//trim(fbody)//'.mrc'
         do iframe=1,nframes
             xind = nint(particle_locations(iframe,1))
@@ -223,12 +226,14 @@ contains
             call ptcl_target%write(stkname, iframe)
             ! box
             write(funit,'(I7,I7,I7,I7,I7)') xind, yind, params_glob%box, params_glob%box, -3
+            write(funit2,'(2F12.6)') particle_locations(iframe,1:2) * params_glob%smpd ! in angstroms
             ! neighbors & spectrum
             call update_background_pspec(iframe, [xind,yind])
             call pspec%add(pspec_nn,w=1./real(nframes))
             call pspec_nn%write(trim(dir)//'/'//trim(fbody)//'_background_pspec.mrc',iframe)
         end do
         call fclose(funit, errmsg="tseries tracker ; write_tracked_series end")
+        call fclose(funit2, errmsg="tseries tracker ; write_tracked_series end")
         ! average and write power spectrum for CTF estimation
         fname_forctf = trim(dir)//'/'//trim(fbody)//'_pspec4ctf_estimation.mrc'
         call pspec%dampen_pspec_central_cross
