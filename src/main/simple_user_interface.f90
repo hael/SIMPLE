@@ -1716,8 +1716,9 @@ contains
         call filter%set_input('filt_ctrls',11, 'filter', 'multi', 'Filter type(tv|nlmean|corr|no){no}', 'Filter type(tv|nlmean|corr|no){no}', '(tv|nlmean|corr|no){no}', .false., 'no')
         call filter%set_input('filt_ctrls',12, 'lambda', 'num', 'Tv filter lambda', 'Strength of noise reduction', '{0.5}', .false., 0.5)
         call filter%set_input('filt_ctrls',13, envfsc)
-        call filter%set_input('filt_ctrls', 14, element)
-        call filter%set_input('filt_ctrls', 15, 'sigma', 'num', 'sigma, for Gaussian generation', 'sigma, for Gaussian generation(in pixels)', &
+        call filter%set_input('filt_ctrls',14, element)
+        filter%filt_ctrls(14)%required = .false.
+        call filter%set_input('filt_ctrls',15, 'sigma', 'num', 'sigma, for Gaussian generation', 'sigma, for Gaussian generation(in pixels)', &
         & '{1.}', .false., 1.0)
         ! mask controls
         ! <empty>

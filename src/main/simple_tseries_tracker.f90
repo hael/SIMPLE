@@ -29,6 +29,7 @@ type(image)               :: frame_avg      ! average over time window
 type(image)               :: reference, ptcl_target, pspec, pspec_nn
 type(image)               :: neigh_imgs(NNN), backgr_imgs(NNN), tmp_imgs(NNN)
 character(len=LONGSTRLEN) :: neighstknames(NNN), stkname
+real                      :: msk
 integer                   :: ldim(3), nframes, track_freq
 logical                   :: l_neg
 
@@ -70,6 +71,7 @@ contains
             write(logfhandle,*) 'nframes: ', n
             THROW_HARD('init_tracker; assumes one frame per file')
         endif
+        msk = real(params_glob%box/2) - COSMSKHALFWIDTH
         ! construct
         allocate(particle_locations(nframes,2), source=0.)
         call frame_img%new(ldim, params_glob%smpd)
@@ -136,7 +138,7 @@ contains
                 end select
                 call ptcls_saved(i)%copy(ptcls(i))
                 call ptcls_saved(i)%fft
-                call ptcls(i)%mask(real(params_glob%box/2)-3.,'soft')
+                call ptcls(i)%mask(msk,'soft')
                 call ptcls(i)%fft
             enddo
             !$omp end parallel do
@@ -179,7 +181,7 @@ contains
             end select
             call reference%shift(xyz)
             call reference%ifft
-            call reference%mask(real(params_glob%box/2)-3.,'soft')
+            call reference%mask(msk,'soft')
             call reference%fft
             ! updates shifts
             pos = particle_locations(iframe,:)
