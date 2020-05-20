@@ -1716,8 +1716,9 @@ contains
         call filter%set_input('filt_ctrls',11, 'filter', 'multi', 'Filter type(tv|nlmean|corr|no){no}', 'Filter type(tv|nlmean|corr|no){no}', '(tv|nlmean|corr|no){no}', .false., 'no')
         call filter%set_input('filt_ctrls',12, 'lambda', 'num', 'Tv filter lambda', 'Strength of noise reduction', '{0.5}', .false., 0.5)
         call filter%set_input('filt_ctrls',13, envfsc)
-        call filter%set_input('filt_ctrls', 14, element)
-        call filter%set_input('filt_ctrls', 15, 'sigma', 'num', 'sigma, for Gaussian generation', 'sigma, for Gaussian generation(in pixels)', &
+        call filter%set_input('filt_ctrls',14, element)
+        filter%filt_ctrls(14)%required = .false.
+        call filter%set_input('filt_ctrls',15, 'sigma', 'num', 'sigma, for Gaussian generation', 'sigma, for Gaussian generation(in pixels)', &
         & '{1.}', .false., 1.0)
         ! mask controls
         ! <empty>
@@ -3549,6 +3550,7 @@ contains
         call simulate_atoms%set_input('parm_ios',  1, smpd)
         call simulate_atoms%set_input('parm_ios',  2, box)
         call simulate_atoms%set_input('parm_ios',  3, element)
+        simulate_atoms%parm_ios(3)%required = .false.
         call simulate_atoms%set_input('parm_ios',  4, moldiam)
         ! alternative inputs
         ! <empty>
@@ -4174,7 +4176,7 @@ contains
         &'Removes graphene Fourier peaks in time-series',& ! descr_short
         &'Removes graphene Fourier peaks in time-series',& ! descr_long
         &'single_exec',&                                   ! executable
-        &3, 0, 0, 0, 0, 0, 1, .true.)                      ! # entries in each group, requires sp_project
+        &3, 1, 0, 0, 0, 0, 1, .false.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call graphene_subtr%set_input('img_ios', 1, stk)
@@ -4184,8 +4186,9 @@ contains
         graphene_subtr%img_ios(2)%required = .true.
         graphene_subtr%img_ios(2)%descr_placeholder = 'Input background power spectra stack, eg NP_X_background_pspec.mrc'
         call graphene_subtr%set_input('img_ios', 3, outstk)
-        graphene_subtr%img_ios(3)%required = .true.
         ! parameter input/output
+        call graphene_subtr%set_input('parm_ios', 1, smpd)
+        graphene_subtr%parm_ios(1)%required = .false.
         ! <empty>
         ! alternative inputs
         ! <empty>

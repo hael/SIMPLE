@@ -315,6 +315,11 @@ contains
         call cline_cluster2D1%set('lp',     lp1)
         call cline_cluster2D2%set('msk',    msk)
         call cline_cluster2D2%set('lp',     lp2)
+        if( trim(params%pssnr).eq.'yes' )then
+            call cline_cluster2D2%set('match_filt', 'yes')
+            call cline_cluster2D2%set('pssnr', 'yes')
+            call cline_cluster2D2%delete('lp')
+        endif
         ! execution 1
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A,F6.1)') '>>> STAGE 1, LOW-PASS LIMIT: ',lp1
@@ -1399,8 +1404,10 @@ contains
                 type(oris)       :: os
                 type(cmdline)    :: cline_scale
                 integer          :: istk, n
+                logical          :: err
                 if( .not.do_autoscale )return
                 if( .not.allocated(stk_fnames) )return
+                err = .false.
                 call simple_mkdir(SCALE_DIR, errmsg= "commander_stream_wflows:: cluster2D_stream scale_stks")
                 n = size(stk_fnames)
                 ! command-line
@@ -1410,7 +1417,7 @@ contains
                 call cline_scale%set('smpd',       orig_smpd)
                 call cline_scale%set('box',        real(orig_box))
                 call cline_scale%set('newbox',     real(box))
-                call cline_scale%set('nthr',       real(params%nparts))
+                call cline_scale%set('nparts',     real(params%nparts))
                 call cline_scale%set('nthr',       real(params%nthr))
                 call cline_scale%set('mkdir',      'no')
                 call cline_scale%set('dir_target', trim(SCALE_DIR))
@@ -1435,14 +1442,22 @@ contains
                 call dummy_proj%write('forscale.simple')
                 ! execution
                 call xscale_distr%execute(cline_scale)
-                call qsys_cleanup
                 do istk = 1,dummy_proj%os_stk%get_noris()
                     fname = add2fbody(stk_fnames(istk), params%ext, SCALE_SUFFIX)
                     stk_fnames(istk) = filepath(trim(SCALE_DIR), basename(fname))
+                    if( .not.file_exists(stk_fnames(istk)))then
+                        write(logfhandle,*)'stack does not exists: ',n,istk,trim(stk_fnames(istk))
+                        err = .true.
+                    endif
                 enddo
                 call os%kill
                 call dummy_proj%kill
-                call del_file('forscale.simple')
+                if( err )then
+                    THROW_HARD('CWD: '//trim(CWD_GLOB))
+                else
+                    call qsys_cleanup
+                    call del_file('forscale.simple')
+                endif
             end subroutine scale_stks
 
             !> for initial write of set of user adjustable parameters

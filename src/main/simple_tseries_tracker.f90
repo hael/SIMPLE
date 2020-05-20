@@ -29,6 +29,7 @@ type(image)               :: frame_avg      ! average over time window
 type(image)               :: reference, ptcl_target, pspec, pspec_nn
 type(image)               :: neigh_imgs(NNN), backgr_imgs(NNN), tmp_imgs(NNN)
 character(len=LONGSTRLEN) :: neighstknames(NNN), stkname
+real                      :: msk
 integer                   :: ldim(3), nframes, track_freq
 logical                   :: l_neg
 
@@ -70,6 +71,7 @@ contains
             write(logfhandle,*) 'nframes: ', n
             THROW_HARD('init_tracker; assumes one frame per file')
         endif
+        msk = real(params_glob%box/2) - COSMSKHALFWIDTH
         ! construct
         allocate(particle_locations(nframes,2), source=0.)
         call frame_img%new(ldim, params_glob%smpd)
@@ -100,7 +102,7 @@ contains
         type(motion_align_nano)       :: aligner
         character(len=:), allocatable :: fname
         real,             allocatable :: opt_shifts(:,:)
-        integer :: first_pos(3), funit, io_stat, iframe, xind,yind, i, last_frame, cnt, nrange, noutside
+        integer :: first_pos(3), funit2, funit, io_stat, iframe, xind,yind, i, last_frame, cnt, nrange, noutside
         real    :: xyz(3), pos(2)
         ! init neigh counter
         call frame_avg%zero_and_unflag_ft
@@ -136,7 +138,7 @@ contains
                 end select
                 call ptcls_saved(i)%copy(ptcls(i))
                 call ptcls_saved(i)%fft
-                call ptcls(i)%mask(real(params_glob%box/2)-3.,'soft')
+                call ptcls(i)%mask(msk,'soft')
                 call ptcls(i)%fft
             enddo
             !$omp end parallel do
@@ -179,7 +181,7 @@ contains
             end select
             call reference%shift(xyz)
             call reference%ifft
-            call reference%mask(real(params_glob%box/2)-3.,'soft')
+            call reference%mask(msk,'soft')
             call reference%fft
             ! updates shifts
             pos = particle_locations(iframe,:)
@@ -204,6 +206,9 @@ contains
         fname = trim(dir)//'/'//trim(fbody)//'.box'
         call fopen(funit, status='REPLACE', action='WRITE', file=fname,iostat=io_stat)
         call fileiochk("tseries tracker ; write_tracked_series ", io_stat)
+        fname = trim(dir)//'/'//trim(fbody)//'.xy'
+        call fopen(funit2, status='REPLACE', action='WRITE', file=fname,iostat=io_stat)
+        call fileiochk("tseries tracker ; write_tracked_series ", io_stat)
         stkname = trim(dir)//'/'//trim(fbody)//'.mrc'
         do iframe=1,nframes
             xind = nint(particle_locations(iframe,1))
@@ -223,12 +228,14 @@ contains
             call ptcl_target%write(stkname, iframe)
             ! box
             write(funit,'(I7,I7,I7,I7,I7)') xind, yind, params_glob%box, params_glob%box, -3
+            write(funit2,'(2F12.6)') particle_locations(iframe,1:2) * params_glob%smpd ! in angstroms
             ! neighbors & spectrum
             call update_background_pspec(iframe, [xind,yind])
             call pspec%add(pspec_nn,w=1./real(nframes))
             call pspec_nn%write(trim(dir)//'/'//trim(fbody)//'_background_pspec.mrc',iframe)
         end do
         call fclose(funit, errmsg="tseries tracker ; write_tracked_series end")
+        call fclose(funit2, errmsg="tseries tracker ; write_tracked_series end")
         ! average and write power spectrum for CTF estimation
         fname_forctf = trim(dir)//'/'//trim(fbody)//'_pspec4ctf_estimation.mrc'
         call pspec%dampen_pspec_central_cross

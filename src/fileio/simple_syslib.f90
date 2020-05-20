@@ -1082,7 +1082,7 @@ contains
         logical,          optional,    intent(in)  :: check_exists
         type(c_ptr)                          :: cstring
         character(len=LINE_MAX_LEN), target  :: fstr
-        character(kind=c_char,len=STDLEN)    :: infilename_c
+        character(kind=c_char,len=LONGSTRLEN):: infilename_c
         character(kind=c_char,len=LONGSTRLEN):: outfilename_c
         integer :: lengthin,  lengthout, status_here
         logical :: check_exists_here
@@ -1090,6 +1090,7 @@ contains
         if( present(check_exists) )check_exists_here = check_exists
         if( check_exists_here )then
             if( .not.file_exists(trim(infile)) )then
+                write(logfhandle,*)' cwd: '//trim(CWD_GLOB)
                 THROW_ERROR('file: '//trim(infile)//' does not exist')
             endif
         endif

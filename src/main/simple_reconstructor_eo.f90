@@ -323,14 +323,16 @@ contains
 
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, find4eoavg )
+        use simple_estimate_ssnr, only: subsample_filter, fsc2ssnr
         class(reconstructor_eo), intent(inout) :: self                  !< instance
         integer,                 intent(in)    :: state                 !< state
         character(len=*),        intent(in)    :: fname_even, fname_odd !< even/odd filenames
         integer,                 intent(out)   :: find4eoavg            !< Fourier index for eo averaging
         type(image)           :: even, odd
         complex,  allocatable :: cmat(:,:,:)
-        real,     allocatable :: res(:), corrs(:), pssnr(:), fsc_t(:), fsc_n(:)
-        real                  :: lp_rand
+        real,     allocatable :: res(:), corrs(:), ssnr(:), pssnr(:), fsc_t(:), fsc_n(:)
+        real,     allocatable :: ctfsqsum_pad(:), inv_ctfsqsum_pad(:), tmp(:), inv_ctfsqsum(:), cntvec(:)
+        real                  :: lp_rand, Ab,Am,Ap,Vb,Vm
         integer               :: k,k_rand, find_plate, filtsz
         if( (params_glob%cc_objfun==OBJFUN_EUCLID) .or. params_glob%l_needs_sigma .or. params_glob%l_pssnr )then
             ! even
@@ -370,21 +372,37 @@ contains
             call even%fft()
             call odd%fft()
             ! calculate FSC
-            res = even%get_res()
-            allocate(corrs(even%get_filtsz()))
+            res    = even%get_res()
+            filtsz = even%get_filtsz()
+            allocate(corrs(filtsz))
             call even%fsc(odd, corrs)
             call even%kill
             call odd%kill
             if( params_glob%l_pssnr )then
+                ! CTF2
+                call self%even%calc_pssnr3d(ctfsqsum_pad, cntvec)
+                call self%odd%calc_pssnr3d(tmp, cntvec)
+                ctfsqsum_pad     = ctfsqsum_pad + tmp
+                inv_ctfsqsum_pad = cntvec / ctfsqsum_pad
+                call subsample_filter(size(ctfsqsum_pad),filtsz+1,inv_ctfsqsum_pad,tmp)
+                inv_ctfsqsum = tmp(1:filtsz)
+                ! ssnr
+                ssnr = fsc2ssnr(corrs)
+                ! areas & volumes
+                Ab = real(params_glob%box**2)
+                Am = PI * params_glob%msk**2.
+                Ap = Am * 0.4 ! empirical
+                Vb = real(params_glob%box**3)
+                Vm = 4.*PI*params_glob%msk**3./3.
                 ! pssnr
-                call self%even%calc_pssnr3d(corrs, pssnr)
-                call arr2file(pssnr, PSSNR_FBODY//int2str_pad(state,2)//'_even'//BIN_EXT)
-                call self%odd%calc_pssnr3d(corrs, pssnr)
-                call arr2file(pssnr, PSSNR_FBODY//int2str_pad(state,2)//'_odd'//BIN_EXT)
+                ! pssnr = Ab/Am * Vm/Vb * inv_ctfsqsum * ssnr ! average ssnr in masked image
+                pssnr = Ab/Ap * Vm/Vb * inv_ctfsqsum * ssnr ! average ssnr in masked particle
+                call arr2file(pssnr, trim(PSSNR_FBODY)//int2str_pad(state,2)//BIN_EXT)
+            else
+                ! regularization for objfun = euclid
+                call self%even%add_invtausq2rho(corrs, 1)
+                call self%odd %add_invtausq2rho(corrs, 2)
             endif
-            ! regularization for objfun = euclid
-            call self%even%add_invtausq2rho(corrs, 1)
-            call self%odd %add_invtausq2rho(corrs, 2)
             ! correct for the uneven sampling density
             call self%even%sampl_dens_correct
             call self%odd%sampl_dens_correct
