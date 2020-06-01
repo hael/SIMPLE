@@ -427,7 +427,6 @@ contains
         call cmd_dict%push('refine',        'refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym|cont_single){no}')
         call cmd_dict%push('refs',          'initial2Dreferences.ext')
         call cmd_dict%push('remap_cls',     'remove empty and renumber and/or expand # clusters(yes|no){no}')
-        call cmd_dict%push('rm_outliers',   'remove outliers{yes}')
         call cmd_dict%push('rnd',           'random(yes|no){no}')
         call cmd_dict%push('rrate',         'randomization rate{0.8}')
         call cmd_dict%push('scale',         'image scale factor{1}')

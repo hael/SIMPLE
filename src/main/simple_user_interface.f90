@@ -2700,7 +2700,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &3, 10, 0, 15, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &3, 10, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2729,17 +2729,15 @@ contains
         call preprocess%set_input('srch_ctrls', 4, dfmax)
         call preprocess%set_input('srch_ctrls', 5, astigtol)
         call preprocess%set_input('srch_ctrls', 6, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
-        call preprocess%set_input('srch_ctrls', 7, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
-        & 'Remove micrograph image outliers for picking(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call preprocess%set_input('srch_ctrls', 8, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
-        call preprocess%set_input('srch_ctrls', 9, pgrp)
-        preprocess%srch_ctrls(9)%required = .false.
-        call preprocess%set_input('srch_ctrls', 10, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
-        call preprocess%set_input('srch_ctrls', 11, mcpatch)
-        call preprocess%set_input('srch_ctrls', 12, nxpatch)
-        call preprocess%set_input('srch_ctrls', 13, nypatch)
-        call preprocess%set_input('srch_ctrls', 14, mcconvention)
-        call preprocess%set_input('srch_ctrls', 15, groupframes)
+        call preprocess%set_input('srch_ctrls', 7, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        call preprocess%set_input('srch_ctrls', 8, pgrp)
+        preprocess%srch_ctrls(8)%required = .false.
+        call preprocess%set_input('srch_ctrls', 9, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
+        call preprocess%set_input('srch_ctrls',10, mcpatch)
+        call preprocess%set_input('srch_ctrls',11, nxpatch)
+        call preprocess%set_input('srch_ctrls',12, nypatch)
+        call preprocess%set_input('srch_ctrls',13, mcconvention)
+        call preprocess%set_input('srch_ctrls',14, groupframes)
         ! filter controls
         call preprocess%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -2766,7 +2764,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                              ! executable
-        &5, 13, 0, 17, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 13, 0, 16, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
@@ -2805,19 +2803,17 @@ contains
         call preprocess_stream%set_input('srch_ctrls', 4, dfmax)
         call preprocess_stream%set_input('srch_ctrls', 5, astigtol)
         call preprocess_stream%set_input('srch_ctrls', 6, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in Angs)', 'in Angs{24.}', .false., 24.)
-        call preprocess_stream%set_input('srch_ctrls', 7, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
-        & 'Remove micrograph image outliers for picking(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call preprocess_stream%set_input('srch_ctrls', 8, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
-        call preprocess_stream%set_input('srch_ctrls', 9, pgrp)
-        preprocess_stream%srch_ctrls(9)%required = .false.
-        call preprocess_stream%set_input('srch_ctrls',10, 'nptcls_trial', 'num', '# of particles after which streaming stops', '# of extracted particles to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
-        call preprocess_stream%set_input('srch_ctrls',11, 'nmovies_trial', 'num', '# of movies after which streaming stops', '# of processed movies to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
-        call preprocess_stream%set_input('srch_ctrls',12, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
-        call preprocess_stream%set_input('srch_ctrls',13, mcpatch)
-        call preprocess_stream%set_input('srch_ctrls',14, nxpatch)
-        call preprocess_stream%set_input('srch_ctrls',15, nypatch)
-        call preprocess_stream%set_input('srch_ctrls',16, mcconvention)
-        call preprocess_stream%set_input('srch_ctrls',17, groupframes)
+        call preprocess_stream%set_input('srch_ctrls', 7, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        call preprocess_stream%set_input('srch_ctrls', 8, pgrp)
+        preprocess_stream%srch_ctrls(8)%required = .false.
+        call preprocess_stream%set_input('srch_ctrls', 9, 'nptcls_trial', 'num', '# of particles after which streaming stops', '# of extracted particles to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
+        call preprocess_stream%set_input('srch_ctrls',10, 'nmovies_trial', 'num', '# of movies after which streaming stops', '# of processed movies to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
+        call preprocess_stream%set_input('srch_ctrls',11, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
+        call preprocess_stream%set_input('srch_ctrls',12, mcpatch)
+        call preprocess_stream%set_input('srch_ctrls',13, nxpatch)
+        call preprocess_stream%set_input('srch_ctrls',14, nypatch)
+        call preprocess_stream%set_input('srch_ctrls',15, mcconvention)
+        call preprocess_stream%set_input('srch_ctrls',16, groupframes)
         ! filter controls
         call preprocess_stream%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
