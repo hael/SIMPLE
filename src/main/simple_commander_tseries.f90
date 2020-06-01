@@ -781,14 +781,16 @@ contains
     end subroutine exec_refine3D_nano_distr
 
     subroutine exec_graphene_subtr( self, cline )
-        use simple_nano_utils, only: remove_graphene_peaks
+        use simple_tseries_graphene_subtr
         class(graphene_subtr_commander), intent(inout) :: self
-        class(cmdline),                          intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        type(image)      :: ave_pre, ave_post, tmp
-        real             :: smpd, w, ang
-        integer          :: iptcl, ldim_ptcl(3), ldim(3), n, nptcls
+        class(cmdline),                  intent(inout) :: cline
+        type(parameters)   :: params
+        type(builder)      :: build
+        type(image)        :: ave_pre, ave_post, tmp
+        real,  allocatable :: angles1(:), angles2(:)
+        real               :: smpd, ave,var,sdev
+        integer            :: iptcl, ldim_ptcl(3), ldim(3), n, nptcls
+        logical            :: err
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         ! sanity checks & dimensions
         call find_ldim_nptcls(params%stk,ldim_ptcl,nptcls,smpd=smpd)
@@ -804,8 +806,10 @@ contains
         if( .not.cline%defined('outstk') )then
             params%outstk = add2fbody(basename(params%stk),params%ext,'_subtr')
         endif
+        ! initialize subtracter
+        allocate(angles1(nptcls),angles2(nptcls),source=0.)
+        call init_graphene_subtr(params%box,params%smpd)
         ! init images
-        w = 1./real(nptcls)
         call build%img%new(ldim,params%smpd)       ! particle
         call build%img_tmp%new(ldim,params%smpd)   ! nn background
         call build%img_copy%new(ldim,params%smpd)
@@ -816,31 +820,47 @@ contains
         ave_post = 0.
         ! read, subtract & write
         do iptcl = 1,nptcls
+            if( mod(iptcl,50)==0 ) call progress(iptcl,nptcls)
+            ! particle
             call build%img%read(params%stk,iptcl)
+            call build%img%norm()
+            ! neighbours background
             call build%img_tmp%read(params%stk2,iptcl)
+            ! detection
+            call calc_peaks(build%img_tmp, angles1(iptcl), angles2(iptcl))
             ! pre-subtraction average
-            build%img_copy = build%img
-            call build%img_copy%norm()
+            call build%img_copy%copy(build%img)
             call build%img_copy%zero_edgeavg
             call build%img_copy%fft()
             call build%img_copy%ft2img('sqrt', tmp)
             call ave_pre%add(tmp)
             ! subtraction
-            call remove_graphene_peaks(build%img, build%img_tmp, ang)
-            call build%img%write(params%outstk,iptcl)
-            ! graphene subtracted average
+            call remove_lattices(build%img, angles1(iptcl), angles2(iptcl))
             call build%img%norm()
+            call build%img%write(params%outstk, iptcl)
+            ! graphene subtracted average
             call build%img%zero_edgeavg
             call build%img%fft()
             call build%img%ft2img('sqrt', tmp)
             call ave_post%add(tmp)
         enddo
+        call progress(iptcl,nptcls)
         call ave_pre%div(real(nptcls))
         call ave_post%div(real(nptcls))
         call ave_pre%write('pre_subtr_ave_pspec.mrc')
         call ave_post%write('subtr_ave_pspec.mrc')
+        ! stats
+        call moment(angles1, ave, sdev, var, err)
+        write(logfhandle,'(A,F6.2,A2,F6.2,A1)')'>>> POSITION GRAPHENE SHEET 1 (DEGREES): ',ave,' (',sdev,')'
+        call moment(angles2, ave, sdev, var, err)
+        write(logfhandle,'(A,F6.2,A2,F6.2,A1)')'>>> POSITION GRAPHENE SHEET 2 (DEGREES): ',ave,' (',sdev,')'
+        angles1 = angles2 - angles1
+        where(angles1>30.) angles1 = -(angles1 - 60.)
+        call moment(angles1, ave, sdev, var, err)
+        write(logfhandle,'(A,F6.2,A2,F6.2,A1)')'>>> RELATIVE ROTATION (DEGREES): ',ave,' (',sdev,')'
         ! cleanup
         call build%kill_general_tbox
+        call kill_graphene_subtr
         call tmp%kill
         call ave_pre%kill
         call ave_post%kill

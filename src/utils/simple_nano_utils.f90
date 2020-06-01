@@ -7,8 +7,11 @@ module simple_nano_utils
   use simple_atoms,    only : atoms
   implicit none
 
-  public :: remove_graphene_peaks, kabsch, read_pdb2matrix, write_matrix2pdb, find_couples
+  public :: kabsch, read_pdb2matrix, write_matrix2pdb, find_couples
+  ! public :: remove_graphene_peaks, kabsch, read_pdb2matrix, write_matrix2pdb, find_couples
   private
+
+  integer :: index = 0
 
   interface kabsch
       module procedure kabsch_sp, kabsch_dp
@@ -24,122 +27,126 @@ module simple_nano_utils
 
 contains
 
-    subroutine remove_graphene_peaks(raw_img, spectrum, ang)
-        type(image), intent(inout) :: raw_img
-        type(image), intent(inout) :: spectrum
-        real,        intent(out)   :: ang ! estimated angle between both sheets
-        real, parameter :: GRAPHENE_BAND3  = 1.06
-        real, parameter :: REMOVAL_HWIDTH1 = 3.          ! pixels, obscuring half-width 1
-        real, parameter :: REMOVAL_HWIDTH2 = sqrt(6.)    ! obscuring half-width 2
-        real, parameter :: REMOVAL_HWIDTH3 = sqrt(3.)    ! obscuring half-width 3
-        type(image)          :: spectrum_roavg
-        real,    pointer     :: pspectrum_roavg(:,:,:)
-        complex, pointer     :: pcmat(:,:,:)
-        logical, allocatable :: msk(:,:)
-        real    :: smpd, first_ang, second_ang
-        integer :: phys(3),cen(2), ldim(3), loc(2), h,k,i,j,l, sh, cnt
-        integer :: band_inds(3) ! respectively resolutions 2.14, 1.23, 1.06 angstroms
-        ldim    = raw_img%get_ldim()
-        ldim(3) = 1
-        smpd    = raw_img%get_smpd()
-        cen     = ldim(1:2)/2 + 1
-        band_inds(1) = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND1),ldim(1),smpd)
-        band_inds(2) = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND2),ldim(1),smpd)
-        band_inds(3) = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND3),ldim(1),smpd)
-        ! calculate rotational avg of the spectrum
-        call spectrum_roavg%new(ldim,smpd)
-        call spectrum%roavg(60,spectrum_roavg)
-        call spectrum_roavg%get_rmat_ptr(pspectrum_roavg)
-        call raw_img%fft
-        call raw_img%get_cmat_ptr(pcmat)
-        ! build peak detection mask
-        allocate(msk(ldim(1),ldim(2)),source=.false.)
-        do i = 1, ldim(1)
-            h  = -ldim(1)/2 + i - 1
-            do j = 1, ldim(2)
-                k  = -ldim(2)/2 + j - 1
-                sh =  nint(hyp(real(h),real(k)))
-                if( k < 0 ) cycle
-                if( sh >= band_inds(2)-1 .and. sh <= band_inds(2)+1 ) msk(i,j) = .true.
-          enddo
-        enddo
-        ! first sheet
-        loc       = maxloc(pspectrum_roavg(1:ldim(1),1:ldim(2),1),mask=msk)
-        first_ang = atan2(real(loc(2)-cen(2)),real(loc(1)-cen(1))) ! radians
-        ! remove first sheet
-        call remove_lattice(first_ang)
-        ! second sheet
-        loc        = maxloc(pspectrum_roavg(1:ldim(1),1:ldim(2),1),mask=msk)
-        second_ang = atan2(real(loc(2)-cen(2)),real(loc(1)-cen(1))) ! radians
-        ! angle between sheets
-        ang = abs(rad2deg(second_ang - first_ang))
-        do while( ang > 60. )
-            ang = ang-60.
-        end do
-        ang = min(ang,abs(ang-60.))
-        ! remove second sheet
-        if( ang > 2. )then
-            call remove_lattice(second_ang)
-        endif
-        ! back to real space
-        call raw_img%ifft
-        ! cleanup
-        call spectrum_roavg%kill
-        contains
-
-            subroutine remove_lattice(ang)
-                real, intent(in) :: ang
-                real, parameter :: pionsix   = PI/6.
-                real, parameter :: pionthree = PI/3.
-                real :: b1(2), b1b2(2), rp, r, ang1, rot, rxy(2), Rm(2,2)
-                integer :: ind, rot_ind
-                rp   = real(band_inds(2))
-                r    = rp / (2.*cos(pionsix))
-                ang1 = ang+pionsix
-                b1b2 = rp*[cos(ang),sin(ang)]
-                ! lattice parameters (eg, band 1)
-                b1   = r*[cos(ang1),sin(ang1)]
-                ! remove peaks
-                do rot_ind = 0,6
-                    rot = real(rot_ind)*pionthree
-                    Rm(1,:) = [cos(rot), -sin(rot)]
-                    Rm(2,:) = [-Rm(1,2), Rm(1,1)]
-                    ! band 1 (=b1); resolution ~ 2.14 angs
-                    rxy = matmul(Rm,b1) + real(cen)
-                    call obscure_peak(rxy, REMOVAL_HWIDTH1)
-                    ! 2. * band 1 (=2*b1); resolution ~ 1.06; generally the weaker peak
-                    rxy = matmul(Rm,2.*b1) + real(cen)
-                    call obscure_peak(rxy, REMOVAL_HWIDTH3)
-                    ! band 2 (=b1+b2); resolution ~ 1.23
-                    rxy = matmul(Rm,b1b2) + real(cen)
-                    call obscure_peak(rxy, REMOVAL_HWIDTH2)
-                enddo
-            end subroutine remove_lattice
-
-            subroutine obscure_peak(vec, hwidth)
-                real, intent(in) :: vec(2), hwidth
-                complex :: comp
-                real    :: dist, ang
-                integer :: i,j,x,y,h,k,lim,rx,ry,lims(2,2)
-                lims(:,1) = floor(vec-hwidth)
-                lims(:,2) = ceiling(vec+hwidth)
-                do i=lims(1,1),lims(1,2)
-                    if( i <  1 .or. i > ldim(1) )cycle
-                    do j=lims(2,1),lims(2,2)
-                        if( j < 1 .or. j > ldim(2) )cycle
-                        msk(i,j) = .false. ! needs to mask out complex conjugate
-                        if( i < cen(1) ) cycle
-                        dist = sqrt(sum((real([i,j])-vec)**2.)) / hwidth
-                        if( dist > 1. ) cycle
-                        h = i - cen(1)
-                        k = j - cen(2)
-                        phys = raw_img%comp_addr_phys(h,k,0)
-                        ! quartic kernel (Epanechnikov squared)
-                        pcmat(phys(1),phys(2),1) = pcmat(phys(1),phys(2),1) * (1.-(1.-dist**2.)**2.)
-                    enddo
-                enddo
-            end subroutine obscure_peak
-    end subroutine remove_graphene_peaks
+    ! subroutine remove_graphene_peaks(raw_img, spectrum, ang)
+    !     type(image), intent(inout) :: raw_img
+    !     type(image), intent(inout) :: spectrum
+    !     real,        intent(out)   :: ang ! estimated angle between both sheets
+    !     real, parameter :: GRAPHENE_BAND3  = 1.06
+    !     ! real, parameter :: REMOVAL_HWIDTH1 = 3.          ! pixels, obscuring half-width 1
+    !     ! real, parameter :: REMOVAL_HWIDTH2 = sqrt(6.)    ! obscuring half-width 2
+    !     ! real, parameter :: REMOVAL_HWIDTH3 = sqrt(3.)    ! obscuring half-width 3
+    !     real, parameter :: REMOVAL_HWIDTH1 = 4.          ! pixels, obscuring half-width 1
+    !     real, parameter :: REMOVAL_HWIDTH2 = sqrt(8.)    ! obscuring half-width 2
+    !     real, parameter :: REMOVAL_HWIDTH3 = sqrt(4.)    ! obscuring half-width 3
+    !     type(image)          :: spectrum_roavg
+    !     real,    pointer     :: pspectrum_roavg(:,:,:)
+    !     complex, pointer     :: pcmat(:,:,:)
+    !     logical, allocatable :: msk(:,:)
+    !     real    :: smpd, first_ang, second_ang
+    !     integer :: phys(3),cen(2), ldim(3), loc(2), h,k,i,j,l, sh, cnt
+    !     integer :: band_inds(3) ! respectively resolutions 2.14, 1.23, 1.06 angstroms
+    !     ldim    = raw_img%get_ldim()
+    !     ldim(3) = 1
+    !     smpd    = raw_img%get_smpd()
+    !     cen     = ldim(1:2)/2 + 1
+    !     band_inds(1) = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND1),ldim(1),smpd)
+    !     band_inds(2) = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND2),ldim(1),smpd)
+    !     band_inds(3) = calc_fourier_index(max(2.*smpd,GRAPHENE_BAND3),ldim(1),smpd)
+    !     ! calculate rotational avg of the spectrum
+    !     call spectrum_roavg%new(ldim,smpd)
+    !     call spectrum%roavg(60,spectrum_roavg)
+    !     call spectrum_roavg%get_rmat_ptr(pspectrum_roavg)
+    !     call raw_img%fft
+    !     call raw_img%get_cmat_ptr(pcmat)
+    !     ! build peak detection mask
+    !     allocate(msk(ldim(1),ldim(2)),source=.false.)
+    !     do i = 1, ldim(1)
+    !         h  = -ldim(1)/2 + i - 1
+    !         do j = 1, ldim(2)
+    !             k  = -ldim(2)/2 + j - 1
+    !             sh =  nint(hyp(real(h),real(k)))
+    !             if( k < 0 ) cycle
+    !             if( sh >= band_inds(2)-1 .and. sh <= band_inds(2)+1 ) msk(i,j) = .true.
+    !       enddo
+    !     enddo
+    !     ! first sheet
+    !     loc       = maxloc(pspectrum_roavg(1:ldim(1),1:ldim(2),1),mask=msk)
+    !     first_ang = atan2(real(loc(2)-cen(2)),real(loc(1)-cen(1))) ! radians
+    !     ! remove first sheet
+    !     call remove_lattice(first_ang)
+    !     ! second sheet
+    !     loc        = maxloc(pspectrum_roavg(1:ldim(1),1:ldim(2),1),mask=msk)
+    !     second_ang = atan2(real(loc(2)-cen(2)),real(loc(1)-cen(1))) ! radians
+    !     ! angle between sheets
+    !     ang = abs(rad2deg(second_ang - first_ang))
+    !     do while( ang > 60. )
+    !         ang = ang-60.
+    !     end do
+    !     ang = min(ang,abs(ang-60.))
+    !     index = index + 1
+    !     ! remove second sheet
+    !     if( ang > 2. )then
+    !         call remove_lattice(second_ang)
+    !     endif
+    !     ! back to real space
+    !     call raw_img%ifft
+    !     ! cleanup
+    !     call spectrum_roavg%kill
+    !     contains
+    !
+    !         subroutine remove_lattice(ang)
+    !             real, intent(in) :: ang
+    !             real, parameter :: pionsix   = PI/6.
+    !             real, parameter :: pionthree = PI/3.
+    !             real :: b1(2), b1b2(2), rp, r, ang1, rot, rxy(2), Rm(2,2)
+    !             integer :: ind, rot_ind
+    !             rp   = real(band_inds(2))
+    !             r    = rp / (2.*cos(pionsix))
+    !             ang1 = ang+pionsix
+    !             b1b2 = rp*[cos(ang),sin(ang)]
+    !             ! lattice parameters (eg, band 1)
+    !             b1   = r*[cos(ang1),sin(ang1)]
+    !             ! remove peaks
+    !             do rot_ind = 0,6
+    !                 rot = real(rot_ind)*pionthree
+    !                 Rm(1,:) = [cos(rot), -sin(rot)]
+    !                 Rm(2,:) = [-Rm(1,2), Rm(1,1)]
+    !                 ! band 1 (=b1); resolution ~ 2.14 angs
+    !                 rxy = matmul(Rm,b1) + real(cen)
+    !                 call obscure_peak(rxy, REMOVAL_HWIDTH1)
+    !                 ! 2. * band 1 (=2*b1); resolution ~ 1.06; generally the weaker peak
+    !                 rxy = matmul(Rm,2.*b1) + real(cen)
+    !                 call obscure_peak(rxy, REMOVAL_HWIDTH3)
+    !                 ! band 2 (=b1+b2); resolution ~ 1.23
+    !                 rxy = matmul(Rm,b1b2) + real(cen)
+    !                 call obscure_peak(rxy, REMOVAL_HWIDTH2)
+    !             enddo
+    !         end subroutine remove_lattice
+    !
+    !         subroutine obscure_peak(vec, hwidth)
+    !             real, intent(in) :: vec(2), hwidth
+    !             complex :: comp
+    !             real    :: dist, ang
+    !             integer :: i,j,x,y,h,k,lim,rx,ry,lims(2,2)
+    !             lims(:,1) = floor(vec-hwidth)
+    !             lims(:,2) = ceiling(vec+hwidth)
+    !             do i=lims(1,1),lims(1,2)
+    !                 if( i <  1 .or. i > ldim(1) )cycle
+    !                 do j=lims(2,1),lims(2,2)
+    !                     if( j < 1 .or. j > ldim(2) )cycle
+    !                     msk(i,j) = .false. ! needs to mask out complex conjugate
+    !                     if( i < cen(1) ) cycle
+    !                     dist = sqrt(sum((real([i,j])-vec)**2.)) / hwidth
+    !                     if( dist > 1. ) cycle
+    !                     h = i - cen(1)
+    !                     k = j - cen(2)
+    !                     phys = raw_img%comp_addr_phys(h,k,0)
+    !                     ! quartic kernel (Epanechnikov squared)
+    !                     pcmat(phys(1),phys(2),1) = pcmat(phys(1),phys(2),1) * (1.-(1.-dist**2.)**2.)
+    !                 enddo
+    !             enddo
+    !         end subroutine obscure_peak
+    ! end subroutine remove_graphene_peaks
 
   ! My implementation of the Matlab Kabsch algorithm
   ! source: https://au.mathworks.com/matlabcentral/fileexchange/25746-kabsch-algorithm
