@@ -586,7 +586,7 @@ contains
     ! identifies interpolated shifts within search range, frame destroyed on exit
     subroutine calc_shifts( self, iframe )
         class(motion_align_hybrid), intent(inout) :: self
-        integer,                    intent(inout) :: iframe
+        integer,                    intent(in)    :: iframe
         real,    pointer :: pcorrs(:,:,:)
         complex, pointer :: pcmat(:,:,:), pcref(:,:,:)
         real     :: sqsum_ref,sqsum_frame

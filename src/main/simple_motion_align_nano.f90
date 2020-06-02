@@ -203,7 +203,7 @@ contains
 
     subroutine calc_shifts( self, iframe )
         class(motion_align_nano), intent(inout) :: self
-        integer,                  intent(inout) :: iframe
+        integer,                  intent(in)    :: iframe
         real,    pointer :: pcorrs(:,:,:)
         complex, pointer :: pcmat(:,:,:), pcref(:,:,:)
         real     :: dshift(2),alpha,beta,gamma,weight
