@@ -92,11 +92,16 @@ contains
             call build%spproj_field%rnd_inpls(params%sherr)
         else
             call build%spproj_field%rnd_oris(params%sherr)
+            call build%pgrpsyms%rotall_to_asym(build%spproj_field)
             if( params%doprint .eq. 'yes' )then
                 call build%spproj_field%print_matrices
             endif
         endif
-        if( params%nstates > 1 ) call build%spproj_field%rnd_states(params%nstates)
+        if( params%nstates > 1 )then
+            call build%spproj_field%rnd_states(params%nstates)
+        else
+            call build%spproj_field%set_all2single('state',1.)
+        endif
         call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, [1,build%spproj_field%get_noris()])
         call orientation%kill
         call os_even%kill
@@ -591,8 +596,16 @@ contains
              if(io_stat/=0)call fileiochk("simple_commander_oris::exec_vizoris fopen failed ", io_stat)
             write(funit,'(A)')".translate 0.0 0.0 0.0"
             write(funit,'(A)')".scale 1"
+            write(funit,'(A)')".sphere 0 0 0 0.1"
+            write(funit,'(A)')".color 1 0 0"
+            write(funit,'(A)')".arrow 1.2 0 0 1.3 0 0 0.05 0.1 0.3"
+            write(funit,'(A)')".color 1 1 0"
+            write(funit,'(A)')".arrow 0 1.2 0 0 1.3 0 0.05 0.1 0.3"
+            write(funit,'(A)')".color 0 0 1"
+            write(funit,'(A)')".arrow 0 0 1.2 0 0 1.3 0.05 0.1 0.3" ! North pole in blue
             do i = 1, n
                 call build%spproj_field%get_ori(i, o)
+                if( o%e2get() > 90. ) call o%mirror2d()
                 xyz = o%get_normal()
                 col = real(i-1)/real(n-1)
                 write(funit,'(A,F6.2,F6.2)')".color 1.0 ", col, col
@@ -602,8 +615,6 @@ contains
                     vec = xyz - xyz_start
                     if( sqrt(dot_product(vec, vec)) > 0.01 )then
                         write(funit,'(A,F7.3,F7.3,F7.3,A)')".sphere ", xyz, " 0.02"
-                        !write(funit,'(A,F7.3,F7.3,F7.3,F7.3,F7.3,F7.3,F6.3)')&
-                        !&'.cylinder ', xyz_start, xyz, radius
                     endif
                 endif
                 xyz_start = xyz

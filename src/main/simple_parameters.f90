@@ -84,7 +84,6 @@ type :: parameters
     character(len=3)      :: remap_cls='no'
     character(len=3)      :: restart='no'
     character(len=3)      :: rnd='no'             !< random(yes|no){no}
-    character(len=3)      :: rm_outliers='yes'    !< remove outliers{yes}
     character(len=3)      :: roalgn='no'
     character(len=3)      :: round='no'
     character(len=3)      :: shalgn='no'          !< do 2D shift alignment(yes|no){no}
@@ -580,7 +579,6 @@ contains
         call check_carg('refine',         self%refine)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('restart',        self%restart)
-        call check_carg('rm_outliers',    self%rm_outliers)
         call check_carg('rnd',            self%rnd)
         call check_carg('roalgn',         self%roalgn)
         call check_carg('roavg',          self%roavg)

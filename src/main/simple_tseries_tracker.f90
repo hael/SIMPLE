@@ -4,7 +4,6 @@ module simple_tseries_track_particles
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_parameters, only: params_glob
-use simple_nano_utils, only: remove_graphene_peaks
 use simple_image,      only: image
 use simple_tvfilter
 implicit none
