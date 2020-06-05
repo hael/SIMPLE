@@ -130,7 +130,7 @@ enum EMDLabel
     EMDL_IMAGE_STATS_SKEW,
     EMDL_IMAGE_STATS_KURT,
     EMDL_IMAGE_WEIGHT,
-
+    
     EMDL_MATRIX_1_1,
     EMDL_MATRIX_1_2,
     EMDL_MATRIX_1_3,
@@ -421,7 +421,11 @@ enum EMDLabel
     EMDL_CTF_MODEL_DEFOCUSU,  ///< Polynomial coeeficients of x-defocus
     EMDL_CTF_MODEL_DEFOCUSV,
     EMDL_MOVIE_FRAME_WEIGHT,
-
+    
+    EMDL_IMAGE_OPTICS_GROUP, ///Added by Joe
+	EMDL_IMAGE_OPTICS_GROUP_NAME, ///Added by Joe
+	EMDL_IMAGE_PIXEL_SIZE, ///Added by Joe
+	
     EMDL_LAST_LABEL                       // **** NOTE ****: Do keep this label always at the end
     // it is here for looping purposes
 };//close enum Label
@@ -859,6 +863,11 @@ private:
         EMDL::addLabel(EMDL_CTF_MODEL_DEFOCUSU, EMDL_DOUBLE, "rlnCtfModelDefocusU", "Polynomial coefficients for Defocus in U-direction");
         EMDL::addLabel(EMDL_CTF_MODEL_DEFOCUSV, EMDL_DOUBLE, "rlnCtfModelDefocusV", "Polynomial coefficients for Defocus in V-direction");
         EMDL::addLabel(EMDL_MOVIE_FRAME_WEIGHT, EMDL_DOUBLE, "rlnMovieFrameWeight", "Individual movie frame weight");
+        
+		// Added by Joe for Relion 3.1 export
+		EMDL::addLabel(EMDL_IMAGE_OPTICS_GROUP, EMDL_INT, "rlnOpticsGroup", "Group of particles with identical optical properties");
+		EMDL::addLabel(EMDL_IMAGE_OPTICS_GROUP_NAME, EMDL_STRING, "rlnOpticsGroupName", "The name of a group of particles with identical optical properties");
+		EMDL::addLabel(EMDL_IMAGE_PIXEL_SIZE, EMDL_DOUBLE, "rlnImagePixelSize", "Pixel size (in Angstrom)");
 
     }
 

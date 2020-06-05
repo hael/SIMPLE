@@ -365,6 +365,10 @@
         enumerator :: EMDL_CTF_MODEL_DEFOCUSU                          = 345 !/<
         enumerator :: EMDL_CTF_MODEL_DEFOCUSV                          = 346 !/<
         enumerator :: EMDL_MOVIE_FRAME_WEIGHT                          = 347
+        
+        enumerator :: EMDL_IMAGE_OPTICS_GROUP                          = 348
+        enumerator :: EMDL_IMAGE_OPTICS_GROUP_NAME                     = 349
+        enumerator :: EMDL_IMAGE_PIXEL_SIZE                            = 350
 
-        enumerator :: EMDL_LAST_LABEL                                  = 348 ! **** NOTE ****: Do keep this label always at the end
+        enumerator :: EMDL_LAST_LABEL                                  = 351 ! **** NOTE ****: Do keep this label always at the end
     end enum

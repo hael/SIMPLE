@@ -29,6 +29,7 @@ contains
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('eputiltgroups') ) call cline%set('eputiltgroups', 'no')
         if( .not. cline%defined('reliongroups') ) call cline%set('reliongroups', 'no')
+        if( .not. cline%defined('relion3.1') ) call cline%set('relion3.1', 'yes')
         call params%new(cline)
         if( file_exists(params%projfile) )then
             call spproj%read(params%projfile)

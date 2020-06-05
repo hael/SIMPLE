@@ -41,7 +41,6 @@ type :: parameters
     character(len=3)      :: doprint='no'
     character(len=3)      :: dorec='yes'
     character(len=3)      :: elongated='no'       !< elongated particles(yes|no){no}
-    character(len=3)      :: eputiltgroups='no'   !< generate relion tilt classes from epu filenames (yes|no){no}
     character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
     character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
@@ -77,10 +76,10 @@ type :: parameters
     character(len=3)      :: projstats='no'
     character(len=3)      :: projw='no'           !< correct for uneven orientation distribution
     character(len=3)      :: pssnr='no'           !< correct for uneven orientation distribution
-    character(len=3)      :: reliongroups='no'    !< export relion groupings
     character(len=3)      :: roavg='no'           !< rotationally average images in stack
     character(len=3)      :: clsfrcs='no'
     character(len=3)      :: readwrite='no'
+    character(len=3)      :: relion31='yes'
     character(len=3)      :: remap_cls='no'
     character(len=3)      :: restart='no'
     character(len=3)      :: rnd='no'             !< random(yes|no){no}
@@ -166,6 +165,7 @@ type :: parameters
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)      :: automatic='no'       !< automatic thres for edge detect (yes|no) {no}
     character(len=4)      :: automsk='no'
+    character(len=STDLEN) :: tiltgroups='no'   !< 
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|no){sum}
     character(len=STDLEN) :: clustermode = 'ar'   !< feature used for clustering (ar|dist|ang|maxint){ar}
@@ -297,7 +297,7 @@ type :: parameters
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
     integer :: ptcl=1
     integer :: recl_cgrid=-1
-    integer :: reliongroups_count=0
+    integer :: reliongroups=0
     integer :: ring1=2
     integer :: ring2=0
     integer :: rndfac=0            !< randomness factor in stochastic search, the higher the greedier

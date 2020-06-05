@@ -2147,12 +2147,13 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call export_relion%set_input('parm_ios', 1, 'eputiltgroups', 'binary', 'Generate beamtilt classes from EPU filenames',&
-            'Generate beamtilt classes from EPU filenames', '(yes|no){no}', .false., 'no')
-        call export_relion%set_input('parm_ios', 2, 'reliongroups', 'binary', 'Generate Relion groups based on defocus values',&
-            'Generate Relion groups based on defocus values', '(yes|no){no}', .false., 'no')
-        call export_relion%set_input('parm_ios', 3, 'reliongroups_count', 'num', 'Number Relion groups based on defocus',&
+        call export_relion%set_input('parm_ios', 1, 'tiltgroups', 'multi', 'Generate beamtilt classes', &
+			'Generate beamtilt groups (no|epu|xml){no}', '(no|epu|xml){no}', .false., 'no')
+        call export_relion%set_input('parm_ios', 2, 'reliongroups', 'num', 'Number Relion groups based on defocus', &
             'Divide particles into X groups based on defocus for relion', '# micrographs', .false., 0.0)
+        call export_relion%set_input('parm_ios', 3, 'relion31', 'binary', 'Generate Relion 3.1 compatible STAR files',&
+            'Create Relion 3.1 STAR files', '(yes|no){yes}', .false., 'yes')
+
         ! <empty>
         ! search controls
         ! <empty>
