@@ -18,8 +18,9 @@ integer,          parameter   :: SSCORE   = 4
 integer,          parameter   :: NSTAT   = 4
 integer,          parameter   :: MAXKMIT = 20
 real,             parameter   :: BOXFRAC = 0.5
+logical,          parameter   :: DOWRITEIMGS = .true.
 ! VARS
-type(image)                   :: micrograph, mic_shrunken, mic_shrunken_copy, mic_shrunken_refine, ptcl_target
+type(image)                   :: micrograph, mic_shrunken, mic_shrunken_copy, mic_shrunken_refine, ptcl_target, mic_saved
 type(image),      allocatable :: refs(:), refs_refine(:)
 logical,          allocatable :: selected_peak_positions(:)
 real,             allocatable :: sxx(:), sxx_refine(:), corrmat(:,:), peak_stats(:,:)
@@ -116,20 +117,43 @@ contains
         hp = real(ldim_shrink(1) / 2) * smpd_shrunken
         call mic_shrunken%bp(hp, lp)
         hp = real(ldim_shrink_refine(1) / 2) * smpd_shrunken_refine
+        mic_saved = mic_shrunken
         call mic_shrunken_refine%bp(hp, lp)
         call mic_shrunken%ifft()
+        call mic_saved%ifft()
         call mic_shrunken_refine%ifft()
     end subroutine init_picker
 
     subroutine exec_picker( boxname_out, nptcls_out )
         character(len=LONGSTRLEN), intent(out) :: boxname_out
         integer,                   intent(out) :: nptcls_out
+        real, pointer :: prmat(:,:,:)
+        integer       :: i
+        real          :: maxv
         call extract_peaks
         call distance_filter
         call refine_positions
         call gather_stats
         call one_cluster_clustering
         nptcls_out = count(selected_peak_positions)
+        if(DOWRITEIMGS) then
+            call mic_saved%get_rmat_ptr(prmat)
+            maxv = 5.*maxval(prmat)
+            do i=1,size(selected_peak_positions)
+                if(.not.selected_peak_positions(i))cycle
+                call mic_saved%set([peak_positions(i,1)-1,peak_positions_refined(i,2)-1,1],maxv)
+                call mic_saved%set([peak_positions(i,1)-1,peak_positions_refined(i,2),1],maxv)
+                call mic_saved%set([peak_positions(i,1)-1,peak_positions_refined(i,2)+1,1],maxv)
+                call mic_saved%set([peak_positions(i,1),  peak_positions_refined(i,2)-1,1],maxv)
+                call mic_saved%set([peak_positions(i,1),  peak_positions_refined(i,2),1],maxv)
+                call mic_saved%set([peak_positions(i,1),  peak_positions_refined(i,2)+1,1],maxv)
+                call mic_saved%set([peak_positions(i,1)+1,peak_positions_refined(i,2)-1,1],maxv)
+                call mic_saved%set([peak_positions(i,1)+1,peak_positions_refined(i,2),1],maxv)
+                call mic_saved%set([peak_positions(i,1)+1,peak_positions_refined(i,2)+1,1],maxv)
+            enddo
+            call mic_saved%write(PATH_HERE//basename(trim(micname))//'_picked.mrc')
+        endif
+        call mic_saved%kill
         ! bring back coordinates to original sampling
         peak_positions_refined = nint(PICKER_SHRINK_REFINE)*peak_positions_refined
         call write_boxfile

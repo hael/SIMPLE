@@ -28,6 +28,7 @@ type :: nanoparticle
     real           :: nanop_mass_cen(3)  = 0. !coordinates of the center of mass of the nanoparticle
     real           :: avg_dist_atoms     = 0.
     real           :: theoretical_radius = 0. !theoretical atom radius
+    real           :: net_dipole(3)      = 0. !sum of all the directions of polarization
     integer        :: n_cc               = 0  !number of atoms (connected components)
     real,    allocatable  :: centers(:,:)
     real,    allocatable  :: ratios(:)
@@ -536,7 +537,7 @@ contains
         class(nanoparticle), intent(inout) :: self
         integer, optional,   intent(in)    :: cs_thresh ! threshold for discard outliers based on contact score
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
-        integer, parameter   :: PERCENT_DISCARD = 5/100
+        real,    parameter   :: PERCENT_DISCARD = 5./100.
         integer, allocatable :: contact_scores(:)
         logical, allocatable :: mask(:)
         real    :: dist
@@ -567,7 +568,7 @@ contains
         if(present(cs_thresh)) then
           n_discard = count(contact_scores<cs_thresh) !unnecessary
         else
-          n_discard = self%n_cc*PERCENT_DISCARD
+          n_discard = nint(self%n_cc*PERCENT_DISCARD)
         endif
         allocate(self%contact_scores(self%n_cc-n_discard), source = 0)
         call self%img_cc%get_imat(imat_cc)
@@ -1384,7 +1385,7 @@ contains
         class(nanoparticle), intent(inout) :: self
         real    :: loc_ld_real(3,self%n_cc)
         real    :: vec_fixed(3)     !vector indentifying z direction
-        real    :: theta, mod_1, mod_2, dot_prod
+        real    :: theta, mod_1, mod_2, dot_prod, m_adjusted(3)
         integer :: k, i, filnum, io_stat
         integer, allocatable :: sz(:)
         if(allocated(self%ang_var)) deallocate(self%ang_var)
@@ -1399,14 +1400,21 @@ contains
         vec_fixed(2) = 0.
         vec_fixed(3) = 1.
         write(logfhandle,*)'>>>>>>>>>>>>>>>> calculating angles wrt the vector [0,0,1]'
+        self%net_dipole(1:3) = 0. !inizialization
         do k = 1, self%n_cc
             if(sz(k) > 2) then
                 self%ang_var(k) = ang3D_vecs(vec_fixed(:),loc_ld_real(:,k))
+                self%net_dipole(:) = self%net_dipole(:) + loc_ld_real(:,k)
             else
                 self%ang_var(k) = 0. ! If the cc is too small it doesn't make sense
             endif
             if(DEBUG) write(logfhandle,*) 'ATOM ', k, 'angle between direction longest dim and vec [0,0,1] ', self%ang_var(k)
         enddo
+        m_adjusted = sum(self%centers(:,:)-1.,dim=2)*self%smpd/real(self%n_cc)
+        self%net_dipole = (self%net_dipole-1.)*self%smpd + m_adjusted
+        call fopen(filnum, file='NetDipole.bild', iostat=io_stat)
+        write (filnum,'(a6,6i4)') trim('.arrow '), nint(m_adjusted), nint(self%net_dipole)
+        call fclose(filnum)
         call fopen(filnum, file='AnglesLongestDims.csv', iostat=io_stat)
         write (filnum,*) 'ang'
         do k = 1, self%n_cc
@@ -1519,6 +1527,8 @@ contains
         integer, allocatable :: labels(:), populations(:)
         integer              :: i, j, ncls, dim, filnum, io_stat, cnt
         real                 :: avg, stdev
+        type(binimage)       :: img_1clss
+        integer, allocatable :: imat_cc(:,:,:), imat_1clss(:,:,:)
         ! Preparing for clustering
         ! Aspect ratios and loc_longest dist estimation
         call self%aspect_ratios_estimation(print_ar=.false.) ! it's needed to identify the dir of longest dim
@@ -1573,6 +1583,23 @@ contains
         !   write(filnum,*) self%ang_var(i)
         ! enddo
         ! call fclose(filnum)
+        ! Generate one figure for each class
+        if(GENERATE_FIGS) then
+          call img_1clss%new_bimg(self%ldim, self%smpd)
+          call self%img_cc%get_imat(imat_cc)
+          allocate(imat_1clss(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
+          do i = 1, ncls
+              imat_1clss = 0
+              do j = 1, dim
+                  if(labels(j) == i) then
+                      where(imat_cc == j) imat_1clss = i
+                  endif
+              enddo
+              call img_1clss%set_imat(imat_1clss)
+              call img_1clss%write_bimg('AngClass'//int2str(i)//'.mrc')
+          enddo
+          call img_1clss%kill_bimg
+        endif
         if(allocated(stdev_within)) deallocate(stdev_within)
         deallocate(centroids, labels, populations)
       end subroutine cluster_ang
@@ -1673,6 +1700,8 @@ contains
         real,    allocatable :: stdev_within(:)
         integer              :: i, j, ncls, dim, filnum, io_stat, cnt
         real                 :: avg, stdev
+        type(binimage)       :: img_1clss
+        integer, allocatable :: imat_cc(:,:,:), imat_1clss(:,:,:)
         ! Preparing for clustering
         ! need to recalculate self%dists
         call self%distances_distribution(file=.true.)
@@ -1729,6 +1758,23 @@ contains
           write(filnum,*) self%dists(i)
         enddo
         call fclose(filnum)
+        ! Generate one figure for each class
+        if(GENERATE_FIGS) then
+          call img_1clss%new_bimg(self%ldim, self%smpd)
+          call self%img_cc%get_imat(imat_cc)
+          allocate(imat_1clss(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
+          do i = 1, ncls
+              imat_1clss = 0
+              do j = 1, dim
+                  if(labels(j) == i) then
+                      where(imat_cc == j) imat_1clss = i
+                  endif
+              enddo
+              call img_1clss%set_imat(imat_1clss)
+              call img_1clss%write_bimg('DistClass'//int2str(i)//'.mrc')
+          enddo
+          call img_1clss%kill_bimg
+        endif
         if(allocated(stdev_within)) deallocate(stdev_within)
         deallocate(centroids, labels, populations)
       end subroutine cluster_interdist
@@ -1736,8 +1782,8 @@ contains
     subroutine make_soft_mask(self) !change the name
         class(nanoparticle), intent(inout) :: self
         type(binimage) :: simulated_density
-        type(image)   :: img_cos
-        type(atoms)   :: atomic_pos
+        type(image)    :: img_cos
+        type(atoms)    :: atomic_pos
         call simulated_density%new_bimg(self%ldim, self%smpd)
         call atomic_pos%new(trim(self%fbody)//'_atom_centers.pdb')
         call atomic_pos%convolve(simulated_density, cutoff=8.*self%smpd)

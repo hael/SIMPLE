@@ -381,7 +381,7 @@ contains
         rmat_phasecorr(ldim_shrink(1)-border:ldim_shrink(1),:,1) = 0. !set to zero the borders
         rmat_phasecorr(:,1:border,1) = 0. !set to zero the borders
         rmat_phasecorr(:,ldim_shrink(2)-border:ldim_shrink(2),1) = 0. !set to zero the borders
-        if(DOWRITEIMGS) call mic_shrunken%write_jpg(PATH_HERE//basename(trim(micname))//'_shrunken_bin.jpg')
+        if(DOWRITEIMGS) call mic_shrunken%write(PATH_HERE//basename(trim(micname))//'_shrunken_bin.mrc')
         allocate(mask(1:ldim_shrink(1), 1:ldim_shrink(2)), source = .false.)
         ! Select initial peaks
         ntargets = 0
@@ -433,7 +433,7 @@ contains
         enddo
         !$omp end parallel do
         if(DOWRITEIMGS) then
-            call sdevimg%write_jpg(PATH_HERE//basename(trim(micname))//'_corrs.jpg')
+            call sdevimg%write(PATH_HERE//basename(trim(micname))//'_corrs.mrc')
             call sdevimg%kill
         endif
         write(logfhandle,'(a)') '>>> PEAKS SELECTION'
@@ -501,7 +501,7 @@ contains
             enddo
             if(.not. template_based) call phasecorr%neg()
             call field%copy(phasecorr)
-            if(DOWRITEIMGS) call field%write_jpg(PATH_HERE//basename(trim(micname))//'MaxValPhaseCorr.jpg')
+            if(DOWRITEIMGS) call field%write(PATH_HERE//basename(trim(micname))//'MaxValPhaseCorr.mrc')
             if(present(mask)) then
                 call mask%new(ldim_shrink, smpd_shrunken)
                 call mask%get_rmat_ptr(mask_rmat)

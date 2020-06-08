@@ -122,7 +122,7 @@ contains
         call tvf%new()
         call tvf%apply_filter(micrograph_shrunken, self%lambda)
         call tvf%kill
-        if(DOWRITEIMGS) call micrograph_shrunken%write('tvfiltered.mrc')
+        if(DOWRITEIMGS) call micrograph_shrunken%write(PATH_HERE//basename(trim(self%fbody))//'_tvfiltered.mrc')
         ! 2.2) Negative image, to obtain a binarization with white particles
         call micrograph_shrunken%neg() !TO REMOVE IN CASE OF NEGATIVE STAINING
         call micrograph_shrunken%stats( ave=ave, sdev=sdev, maxv=maxv, minv=minv)
@@ -139,15 +139,15 @@ contains
            self%detector = 'bin'
            call micrograph_shrunken%binarize(ave+.8*sdev)
         endif
-        if( DOWRITEIMGS ) call micrograph_shrunken%write('bin.mrc')
+        if( DOWRITEIMGS ) call micrograph_shrunken%write(PATH_HERE//basename(trim(self%fbody))//'_bin.mrc')
         self%winsz = int(self%min_rad+self%max_rad)/4 !half of the avg between the dimensions of the particles
         call micrograph_shrunken%real_space_filter(self%winsz,'median') !median filtering allows easy calculation of cc
-        if(DOWRITEIMGS) call micrograph_shrunken%write('bin_median.mrc')
+        if(DOWRITEIMGS) call micrograph_shrunken%write(PATH_HERE//basename(trim(self%fbody))//'_bin_median.mrc')
         ! 5) Connected components (cc) identification
         call micrograph_shrunken%find_ccs(self%img_cc,update_imat=.true.)
         ! 6) cc filtering
         call self%img_cc%polish_ccs([self%min_rad,self%max_rad],circular=' no',elongated=self%elongated, min_nccs = MIN_NCCS)
-        if(DOWRITEIMGS) call self%img_cc%write_bimg('CcsElimin.mrc')
+        if(DOWRITEIMGS) call self%img_cc%write_bimg(PATH_HERE//basename(trim(self%fbody))//'_CcsElimin.mrc')
         call micrograph_shrunken%kill_bimg
     contains
 
@@ -363,7 +363,7 @@ contains
             endif
         end do
         call imgwin_particle%kill
-        if(DEBUG_HERE) call self%img%write('picked_particles.mrc')
+        if(DOWRITEIMGS) call self%img%write(PATH_HERE//basename(trim(self%fbody))//'_picked_particles.mrc')
     end subroutine output_identified_particle_positions
 
     ! This function returns the index of a pixel (assuming to have a 2D)

@@ -273,7 +273,7 @@ contains
 
     subroutine exec_nano_softmask( self, cline )
         class(nano_softmask_commander), intent(inout) :: self
-        class(cmdline),                         intent(inout) :: cline !< command line input
+        class(cmdline),                 intent(inout) :: cline !< command line input
         character(len=STDLEN)  :: fname
         type(parameters)       :: params
         type(nanoparticle) :: nano
