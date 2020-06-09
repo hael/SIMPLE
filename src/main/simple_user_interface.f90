@@ -2144,18 +2144,21 @@ contains
         &'Export project to relion ',&                                  ! descr_short
         &'is a program to export simple project to relion',&
         &'simple_exec',&                                                ! executable
-        &0, 3, 0, 0, 0, 0, 0, .true.)                                   ! # entries in each group, requires sp_project
+        &0, 5, 0, 0, 0, 0, 0, .true.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call export_relion%set_input('parm_ios', 1, 'tiltgroups', 'multi', 'Generate beamtilt classes', &
 			'Generate beamtilt groups (no|epu|xml){no}', '(no|epu|xml){no}', .false., 'no')
-        call export_relion%set_input('parm_ios', 2, 'reliongroups', 'num', 'Number Relion groups based on defocus', &
+        call export_relion%set_input('parm_ios', 2, 'tiltcount', 'num', 'Expected number of beamtilt clusters', &
+            'Cluster beamtilts into tiltcount clusters using k-means', '# clusters', .false., 0.0)
+        call export_relion%set_input('parm_ios', 3, 'tiltgroupmax', 'num', 'Max movies in a tilt/optics group', &
+            'Sub-divide beamtilt/optics groups', '0', .false., 0.0)
+        call export_relion%set_input('parm_ios', 4, 'reliongroups', 'num', 'Number of Relion groups based on defocus', &
             'Divide particles into X groups based on defocus for relion', '# micrographs', .false., 0.0)
-        call export_relion%set_input('parm_ios', 3, 'relion31', 'binary', 'Generate Relion 3.1 compatible STAR files',&
-            'Create Relion 3.1 STAR files', '(yes|no){yes}', .false., 'yes')
-
+        call export_relion%set_input('parm_ios', 5, 'xmlloc', 'file', 'Pathname of EPU XML files',&
+            'Pathname of EPU XML files ', 'e.g. /data/xml', .false., 'NONE')
         ! <empty>
         ! search controls
         ! <empty>

@@ -79,7 +79,6 @@ type :: parameters
     character(len=3)      :: roavg='no'           !< rotationally average images in stack
     character(len=3)      :: clsfrcs='no'
     character(len=3)      :: readwrite='no'
-    character(len=3)      :: relion31='yes'
     character(len=3)      :: remap_cls='no'
     character(len=3)      :: restart='no'
     character(len=3)      :: rnd='no'             !< random(yes|no){no}
@@ -161,6 +160,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: vols_odd(MAXS)=''
     character(len=LONGSTRLEN) :: voltab=''            !< table (text file) of volume files(.txt)
     character(len=LONGSTRLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt)
+    character(len=LONGSTRLEN) :: xmlloc=''
     ! other character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)      :: automatic='no'       !< automatic thres for edge detect (yes|no) {no}
@@ -406,6 +406,8 @@ type :: parameters
     real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
     real    :: thres_low=0.        !< lower threshold for canny edge detection
     real    :: thres_up=1.         !< upper threshold for canny edge detection
+    real    :: tiltcount=0
+    real    :: tiltgroupmax=0
     real    :: time_per_image=200.
     real    :: time_per_frame=0.
     real    :: trs=0.              !< maximum halfwidth shift(in pixels)

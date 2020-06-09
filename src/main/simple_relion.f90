@@ -3,15 +3,17 @@ include 'simple_lib.f08'
 use simple_starfile_wrappers
 use simple_sp_project,          only: sp_project
 use simple_cmdline,             only: cmdline
+use FoX_dom
 implicit none
 private
 public :: relion_project
 #include "simple_local_flags.inc"
 
 type relion_project
-    character(len=20),      allocatable     :: tiltgroups(:)
-
-
+    integer                                 :: opticsgroups
+    character(len=128),     allocatable     :: movienames(:)
+    integer,                allocatable     :: moviegroup(:)
+    
 contains
 
     procedure :: create
@@ -19,8 +21,10 @@ contains
     procedure :: write_micrographs_star
     procedure :: write_particles2D_star
     procedure :: generate_epu_tiltgroups
-    
-    !procedure :: write_particles3D_star
+    procedure :: generate_xml_tiltgroups
+    procedure :: find_movienames
+    procedure :: allocate_opticsgroups
+    procedure :: generate_single_tiltgroup
 
 end type relion_project
 
@@ -43,7 +47,7 @@ contains
         logical                                 :: kv           = .FALSE.
         logical                                 :: cs           = .FALSE.
         logical                                 :: fraca        = .FALSE.
-        logical                                 :: tiltgroup    = .FALSE.
+        logical                                 :: opticsgroup  = .FALSE.
         
         if(spproj%os_mic%get_noris() == 0) then
             return
@@ -71,42 +75,27 @@ contains
         kv          = spproj%os_mic%isthere(i, 'kv')
         cs          = spproj%os_mic%isthere(i, 'cs')
         fraca       = spproj%os_mic%isthere(i, 'fraca')
-        tiltgroup   = spproj%os_mic%isthere(i, 'tiltgroup')
+        opticsgroup = spproj%os_mic%isthere(i, 'opticsgroup')
         
-        if(cline%get_carg('relion31') .eq. 'yes') then
-            call starfile_table__new(startable)
-            call starfile_table__setName(startable, "optics")
-            if(tiltgroup) then
-                do j=1, size(self%tiltgroups)
-                    if(self%tiltgroups(j) .ne. '') then
-                        call starfile_table__addObject(startable)
-                        call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, j)
-                        call starfile_table__setValue_string(startable, EMDL_IMAGE_OPTICS_GROUP_NAME, 'opticsgroup' // trim(int2str(int(j, 4))))
-                        if(fraca) call starfile_table__setValue_double(startable, EMDL_CTF_Q0, real(spproj%os_mic%get(i, 'fraca'), dp))
-                        if(cs) call starfile_table__setValue_double(startable, EMDL_CTF_CS, real(spproj%os_mic%get(i, 'cs'), dp))
-                        if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_mic%get(i, 'kv'), dp))
-                        if(smpd) call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_mic%get(i, 'smpd'), dp))
-                    endif
-                  
-                end do
-            else
-                call starfile_table__addObject(startable)
-                call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, 1)
-                call starfile_table__setValue_string(startable, EMDL_IMAGE_OPTICS_GROUP_NAME, 'opticsgroup1')
-                if(fraca) call starfile_table__setValue_double(startable, EMDL_CTF_Q0, real(spproj%os_mic%get(i, 'fraca'), dp))
-                if(cs) call starfile_table__setValue_double(startable, EMDL_CTF_CS, real(spproj%os_mic%get(i, 'cs'), dp))
-                if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_mic%get(i, 'kv'), dp))
-                if(smpd) call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_mic%get(i, 'smpd'), dp))
-            endif
-            call starfile_table__open_ofile(startable, 'micrographs_corrected.star', 0)
-            call starfile_table__write_ofile(startable)
-            call starfile_table__close_ofile(startable)
-            call starfile_table__delete(startable)
-            call starfile_table__new(startable)
-            call starfile_table__setName(startable, "micrographs")
-        else
-            call starfile_table__new(startable)
-        endif
+        call starfile_table__new(startable)
+        call starfile_table__setName(startable, "optics")
+        
+        do j=1, self%opticsgroups
+            call starfile_table__addObject(startable)
+            call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, j)
+            call starfile_table__setValue_string(startable, EMDL_IMAGE_OPTICS_GROUP_NAME, 'opticsgroup' // trim(int2str(int(j, 4))))
+            if(fraca) call starfile_table__setValue_double(startable, EMDL_CTF_Q0, real(spproj%os_mic%get(i, 'fraca'), dp))
+            if(cs) call starfile_table__setValue_double(startable, EMDL_CTF_CS, real(spproj%os_mic%get(i, 'cs'), dp))
+            if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_mic%get(i, 'kv'), dp))
+            if(smpd) call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_mic%get(i, 'smpd'), dp))
+        end do
+    
+        call starfile_table__open_ofile(startable, 'micrographs_corrected.star', 0)
+        call starfile_table__write_ofile(startable)
+        call starfile_table__close_ofile(startable)
+        call starfile_table__delete(startable)
+        call starfile_table__new(startable)
+        call starfile_table__setName(startable, "micrographs")
         
         !STAR data
         do i=1, spproj%os_mic%get_noris()
@@ -135,21 +124,7 @@ contains
                     endif
                 endif
                 
-                if(cline%get_carg('relion31') .eq. 'no') then
-                    if(fraca) call starfile_table__setValue_double(startable, EMDL_CTF_Q0, real(spproj%os_mic%get(i, 'fraca'), dp))
-                    if(cs) call starfile_table__setValue_double(startable, EMDL_CTF_CS, real(spproj%os_mic%get(i, 'cs'), dp))
-                    if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_mic%get(i, 'kv'), dp))
-                    if(smpd) then
-                        call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_mic%get(i, 'smpd'), dp))
-                        call starfile_table__setValue_double(startable, EMDL_CTF_MAGNIFICATION, real(10000, dp))
-                    endif
-                else
-                    if(tiltgroup) then
-                        call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_mic%get(i, 'tiltgroup')))
-                    else
-                        call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, 1)
-                    endif
-                endif
+                if(opticsgroup) call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_mic%get(i, 'opticsgroup')))
                 
             endif
         end do
@@ -186,7 +161,7 @@ contains
         logical                                 :: dfy          = .FALSE.
         logical                                 :: angast       = .FALSE.
         logical                                 :: fraca        = .FALSE.
-        logical                                 :: tiltgroup    = .FALSE.
+        logical                                 :: opticsgroup    = .FALSE.
         
         if(spproj%os_mic%get_noris() == 0) then
             return
@@ -218,43 +193,28 @@ contains
         dfy         = spproj%os_mic%isthere(i, 'dfy')
         angast      = spproj%os_mic%isthere(i, 'angast')
         fraca       = spproj%os_mic%isthere(i, 'fraca')
-        tiltgroup   = spproj%os_mic%isthere(i, 'tiltgroup')
+        opticsgroup = spproj%os_mic%isthere(i, 'opticsgroup')
         
+
+        call starfile_table__new(startable)
+        call starfile_table__setName(startable, "optics")
         
-        if(cline%get_carg('relion31') .eq. 'yes') then
-            call starfile_table__new(startable)
-            call starfile_table__setName(startable, "optics")
-            if(tiltgroup) then
-                do j=1, size(self%tiltgroups)
-                    if(self%tiltgroups(j) .ne. '') then
-                        call starfile_table__addObject(startable)
-                        call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, j)
-                        call starfile_table__setValue_string(startable, EMDL_IMAGE_OPTICS_GROUP_NAME, 'opticsgroup' // trim(int2str(int(j, 4))))
-                        if(fraca) call starfile_table__setValue_double(startable, EMDL_CTF_Q0, real(spproj%os_mic%get(i, 'fraca'), dp))
-                        if(cs) call starfile_table__setValue_double(startable, EMDL_CTF_CS, real(spproj%os_mic%get(i, 'cs'), dp))
-                        if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_mic%get(i, 'kv'), dp))
-                        if(smpd) call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_mic%get(i, 'smpd'), dp))
-                    endif
-                  
-                end do
-            else
-                call starfile_table__addObject(startable)
-                call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, 1)
-                call starfile_table__setValue_string(startable, EMDL_IMAGE_OPTICS_GROUP_NAME, 'opticsgroup1')
-                if(fraca) call starfile_table__setValue_double(startable, EMDL_CTF_Q0, real(spproj%os_mic%get(i, 'fraca'), dp))
-                if(cs) call starfile_table__setValue_double(startable, EMDL_CTF_CS, real(spproj%os_mic%get(i, 'cs'), dp))
-                if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_mic%get(i, 'kv'), dp))
-                if(smpd) call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_mic%get(i, 'smpd'), dp))
-            endif
-            call starfile_table__open_ofile(startable, 'micrographs.star', 0)
-            call starfile_table__write_ofile(startable)
-            call starfile_table__close_ofile(startable)
-            call starfile_table__delete(startable)
-            call starfile_table__new(startable)
-            call starfile_table__setName(startable, "micrographs")
-        else
-            call starfile_table__new(startable)
-        endif
+        do j=1, self%opticsgroups
+            call starfile_table__addObject(startable)
+            call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, j)
+            call starfile_table__setValue_string(startable, EMDL_IMAGE_OPTICS_GROUP_NAME, 'opticsgroup' // trim(int2str(int(j, 4))))
+            if(fraca) call starfile_table__setValue_double(startable, EMDL_CTF_Q0, real(spproj%os_mic%get(i, 'fraca'), dp))
+            if(cs) call starfile_table__setValue_double(startable, EMDL_CTF_CS, real(spproj%os_mic%get(i, 'cs'), dp))
+            if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_mic%get(i, 'kv'), dp))
+            if(smpd) call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_mic%get(i, 'smpd'), dp))               
+        end do
+
+        call starfile_table__open_ofile(startable, 'micrographs.star', 0)
+        call starfile_table__write_ofile(startable)
+        call starfile_table__close_ofile(startable)
+        call starfile_table__delete(startable)
+        call starfile_table__new(startable)
+        call starfile_table__setName(startable, "micrographs")
         
         !STAR data
         do i=1, spproj%os_mic%get_noris()
@@ -295,21 +255,7 @@ contains
                 
                 if(angast) call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_mic%get(i, 'angast'), dp))
                 
-                if(cline%get_carg('relion31') .eq. 'no') then
-                    if(fraca) call starfile_table__setValue_double(startable, EMDL_CTF_Q0, real(spproj%os_mic%get(i, 'fraca'), dp))
-                    if(cs) call starfile_table__setValue_double(startable, EMDL_CTF_CS, real(spproj%os_mic%get(i, 'cs'), dp))
-                    if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_mic%get(i, 'kv'), dp))
-                    if(smpd) then
-                        call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_mic%get(i, 'smpd'), dp))
-                        call starfile_table__setValue_double(startable, EMDL_CTF_MAGNIFICATION, real(10000, dp))
-                    endif
-                else
-                    if(tiltgroup) then
-                        call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_mic%get(i, 'tiltgroup')))
-                    else
-                        call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, 1)
-                    endif
-                endif
+                if(opticsgroup) call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_mic%get(i, 'opticsgroup')))
                 
             endif
         end do
@@ -353,7 +299,7 @@ contains
         logical                                 :: ypos         = .FALSE.
         logical                                 :: stk          = .FALSE.
         logical                                 :: box          = .FALSE.
-        logical                                 :: tiltgroup    = .FALSE.
+        logical                                 :: opticsgroup  = .FALSE.
         real                                    :: dfxmin
         real                                    :: dfxmax
         real                                    :: dfxstep
@@ -411,45 +357,29 @@ contains
         cs          = spproj%os_stk%isthere(i, 'cs')
         fraca       = spproj%os_stk%isthere(i, 'fraca') 
         stk         = spproj%os_stk%isthere(i, 'stk')
-        tiltgroup   = spproj%os_stk%isthere(i, 'tiltgroup')
+        opticsgroup = spproj%os_stk%isthere(i, 'opticsgroup')
         
-        if(cline%get_carg('relion31') .eq. 'yes') then
-            call starfile_table__new(startable)
-            call starfile_table__setName(startable, "optics")
-            if(tiltgroup) then
-                do j=1, size(self%tiltgroups)
-                    if(self%tiltgroups(j) .ne. '') then
-                        call starfile_table__addObject(startable)
-                        call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, j)
-                        call starfile_table__setValue_string(startable, EMDL_IMAGE_OPTICS_GROUP_NAME, 'opticsgroup' // trim(int2str(int(j, 4))))
-                        if(fraca) call starfile_table__setValue_double(startable, EMDL_CTF_Q0, real(spproj%os_stk%get(i, 'fraca'), dp))
-                        if(cs) call starfile_table__setValue_double(startable, EMDL_CTF_CS, real(spproj%os_stk%get(i, 'cs'), dp))
-                        if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_stk%get(i, 'kv'), dp))
-                        if(smpd) call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_stk%get(i, 'smpd'), dp))
-                        if(box) call starfile_table__setValue_int(startable, EMDL_IMAGE_SIZE, int(spproj%os_stk%get(i, 'box')))
-                        call starfile_table__setValue_int(startable, EMDL_IMAGE_DIMENSIONALITY, 2)
-                        
-                    endif
-                  
-                end do
-            else
-                call starfile_table__addObject(startable)
-                call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, 1)
-                call starfile_table__setValue_string(startable, EMDL_IMAGE_OPTICS_GROUP_NAME, 'opticsgroup1')
-                if(fraca) call starfile_table__setValue_double(startable, EMDL_CTF_Q0, real(spproj%os_stk%get(i, 'fraca'), dp))
-                if(cs) call starfile_table__setValue_double(startable, EMDL_CTF_CS, real(spproj%os_stk%get(i, 'cs'), dp))
-                if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_stk%get(i, 'kv'), dp))
-                if(smpd) call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_stk%get(i, 'smpd'), dp))
-            endif
-            call starfile_table__open_ofile(startable, 'particles2D.star', 0)
-            call starfile_table__write_ofile(startable)
-            call starfile_table__close_ofile(startable)
-            call starfile_table__delete(startable)
-            call starfile_table__new(startable)
-            call starfile_table__setName(startable, "particles")
-        else
-            call starfile_table__new(startable)
-        endif
+        call starfile_table__new(startable)
+        call starfile_table__setName(startable, "optics")
+        
+        do j=1, self%opticsgroups
+            call starfile_table__addObject(startable)
+            call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, j)
+            call starfile_table__setValue_string(startable, EMDL_IMAGE_OPTICS_GROUP_NAME, 'opticsgroup' // trim(int2str(int(j, 4))))
+            if(fraca) call starfile_table__setValue_double(startable, EMDL_CTF_Q0, real(spproj%os_stk%get(i, 'fraca'), dp))
+            if(cs) call starfile_table__setValue_double(startable, EMDL_CTF_CS, real(spproj%os_stk%get(i, 'cs'), dp))
+            if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_stk%get(i, 'kv'), dp))
+            if(smpd) call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_stk%get(i, 'smpd'), dp))
+            if(box) call starfile_table__setValue_int(startable, EMDL_IMAGE_SIZE, int(spproj%os_stk%get(i, 'box')))
+            call starfile_table__setValue_int(startable, EMDL_IMAGE_DIMENSIONALITY, 2)    
+        end do
+        
+        call starfile_table__open_ofile(startable, 'particles2D.star', 0)
+        call starfile_table__write_ofile(startable)
+        call starfile_table__close_ofile(startable)
+        call starfile_table__delete(startable)
+        call starfile_table__new(startable)
+        call starfile_table__setName(startable, "particles")
         
         if(cline%get_rarg('reliongroups') > 0 .AND. dfx) then
             call spproj%os_stk%minmax('dfx', dfxmin, dfxmax)
@@ -497,23 +427,8 @@ contains
                             call starfile_table__setValue_string(startable, EMDL_MLMODEL_GROUP_NAME, trim(adjustl(groupname)))
                         endif
                         
-                        if(cline%get_carg('relion31') .eq. 'no') then
-                            if(fraca) call starfile_table__setValue_double(startable, EMDL_CTF_Q0, real(spproj%os_stk%get(stkindex, 'fraca'), dp))
-                            if(cs) call starfile_table__setValue_double(startable, EMDL_CTF_CS, real(spproj%os_stk%get(stkindex, 'cs'), dp))
-                            if(kv) call starfile_table__setValue_double(startable, EMDL_CTF_VOLTAGE, real(spproj%os_stk%get(stkindex, 'kv'), dp))
-                            if(smpd) then
-                                call starfile_table__setValue_double(startable, EMDL_IMAGE_PIXEL_SIZE, real(spproj%os_stk%get(stkindex, 'smpd'), dp))
-                                call starfile_table__setValue_double(startable, EMDL_CTF_MAGNIFICATION, real(10000, dp))
-                            endif
-                            if(tiltgroup) call starfile_table__setValue_int(startable, EMDL_PARTICLE_BEAM_TILT_CLASS, int(spproj%os_stk%get(stkindex, 'tiltgroup')))
-                        else
-                            if(tiltgroup) then
-                                call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_stk%get(stkindex, 'tiltgroup')))
-                            else
-                                call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, 1)
-                            endif
-                        endif
-                                
+                        if(opticsgroup) call starfile_table__setValue_int(startable, EMDL_IMAGE_OPTICS_GROUP, int(spproj%os_stk%get(stkindex, 'opticsgroup')))
+                        
                     endif
                 endif
             endif
@@ -529,6 +444,46 @@ contains
 
     end subroutine write_particles2D_star
     
+    subroutine find_movienames(self, cline, spproj)
+    
+        class(relion_project),  intent(inout)   :: self
+        class(sp_project),      intent(inout)   :: spproj
+        class(cmdline),         intent(inout)   :: cline
+        integer                                 :: moviecount, i
+        logical                                 :: micsource
+        character (len=:),      allocatable     :: moviename
+        
+        if (spproj%os_mic%get_noris() .gt. 0) then
+            moviecount = spproj%os_mic%get_noris()
+            micsource = .TRUE.
+        else if (spproj%os_stk%get_noris() .gt. 0) then
+            moviecount = spproj%os_stk%get_noris()
+            micsource = .FALSE.
+        else
+            THROW_HARD('no micrographs or stacks in project file')
+        endif
+    
+        if(.NOT. allocated(self%movienames)) then
+            allocate(self%movienames(moviecount))
+        end if
+        
+        if(.NOT. allocated(self%moviegroup)) then
+            allocate(self%moviegroup(moviecount))
+        end if
+                
+        do i=1, moviecount
+            if(micsource) then
+                moviename = trim(adjustl(basename(spproj%os_mic%get_static(i, 'intg'))))
+                moviename = moviename(:len_trim(moviename)-9)
+            else
+                moviename = trim(adjustl(basename(spproj%os_stk%get_static(i, 'stk'))))
+                moviename = moviename(12:len_trim(moviename)-9)
+            endif
+            self%movienames(i) = moviename
+        end do
+        
+    end subroutine find_movienames
+    
     subroutine generate_epu_tiltgroups(self, cline, spproj)
     
         class(relion_project),  intent(inout)   :: self
@@ -536,78 +491,352 @@ contains
         class(cmdline),         intent(inout)   :: cline
         integer                                 :: i,j,k
         character (len=:),      allocatable     :: tiltname
-
-        if(.NOT. allocated(self%tiltgroups)) then
-            allocate(self%tiltgroups(50))            ! Max 50 groups set here
+        character(len=20),      allocatable     :: tiltgroups(:)
+        
+        if(.NOT. allocated(tiltgroups)) then
+            allocate(tiltgroups(50))            ! Max 50 raw groups set here(ie per stage movement)
         end if
         
-        do i=1, size(self%tiltgroups) 
-            self%tiltgroups(i) = ''
+        do i=1, size(tiltgroups) 
+            tiltgroups(i) = ''
         end do
         
         j = 1
         
-        do i=1, spproj%os_stk%get_noris()
-            tiltname = trim(adjustl(basename(spproj%os_stk%get_static(i, 'stk'))))
+        do i=1, size(self%movienames)
+            tiltname = trim(adjustl(self%movienames(i)))
             tiltname = tiltname(index(tiltname,'Data_') + 5:)
             tiltname = tiltname(:index(tiltname,'_')-1)
-            if(.NOT. any(self%tiltgroups .eq. tiltname)) then
-                self%tiltgroups(j) = tiltname
-                call spproj%os_stk%set(i, 'tiltgroup', float(j))
+            
+            if(.NOT. any(tiltgroups .eq. tiltname)) then
+                tiltgroups(j) = tiltname
+                self%moviegroup(i) = j
                 j = j+1
             else
-                do k=1, size(self%tiltgroups)
-                    if(self%tiltgroups(k) .eq. tiltname) then
+                do k=1, size(tiltgroups)
+                    if(tiltgroups(k) .eq. tiltname) then
                         exit
                     endif
                 end do
-                call spproj%os_stk%set(i, 'tiltgroup', float(k))
-            endif
-        end do
-       
-        do i=1, spproj%os_mic%get_noris()
-            tiltname = trim(adjustl(basename(spproj%os_mic%get_static(i, 'intg'))))
-            tiltname = tiltname(index(tiltname,'Data_') + 5:)
-            tiltname = tiltname(:index(tiltname,'_')-1)
-            if(.NOT. any(self%tiltgroups .eq. tiltname)) then
-                self%tiltgroups(j) = tiltname
-                call spproj%os_mic%set(i, 'tiltgroup', float(j))
-                j = j+1
-            else
-                do k=1, size(self%tiltgroups)
-                    if(self%tiltgroups(k) .eq. tiltname) then
-                        exit
-                    endif
-                end do
-                call spproj%os_mic%set(i, 'tiltgroup', float(k))
+                self%moviegroup(i) = k
             endif
         end do
         
+        self%opticsgroups = j - 1
+        
         if(allocated(tiltname))deallocate(tiltname)
+        if(allocated(tiltgroups))deallocate(tiltgroups)
         
     end subroutine generate_epu_tiltgroups
 
+    subroutine generate_single_tiltgroup(self, cline, spproj)
+    
+        class(relion_project),  intent(inout)   :: self
+        class(sp_project),      intent(inout)   :: spproj
+        class(cmdline),         intent(inout)   :: cline
+        integer                                 :: i
+        
+        do i=1, size(self%movienames)
+            self%moviegroup(i) = 1
+        end do
+        
+        self%opticsgroups = 1
+        
+    end subroutine generate_single_tiltgroup
+
+    subroutine generate_xml_tiltgroups(self, cline, spproj)
+    
+        class(relion_project),  intent(inout)   :: self
+        class(sp_project),      intent(inout)   :: spproj
+        class(cmdline),         intent(inout)   :: cline
+        integer                                 :: i,j,k
+        character (len=:),      allocatable     :: tiltname
+        type(Node),             pointer         :: xmldoc, beamtiltnode, beamtiltnodex, beamtiltnodey
+        real                                    :: beamtiltx, beamtilty
+        real, allocatable                       :: tilts(:,:)
+        real, allocatable                       :: clustercentres(:,:)
+        real, allocatable                       :: work(:) 
+        logical                                 :: exists
+        integer                                 :: fault
+        
+        write(logfhandle, *) "Parsing movie XML files ... "
+        
+        if(cline%get_carg('xmlloc') .eq. '') then
+            THROW_HARD('xmlloc is not set')
+        endif
+        
+        if(cline%get_rarg('tiltcount') .le. 0) then
+            THROW_HARD('tiltcount is not set')
+        endif
+        
+        inquire(file=trim(adjustl(cline%get_carg('xmlloc'))), exist=exists)
+      
+        if(.NOT. exists) then
+            THROW_HARD('xmlloc does not exist')
+        endif
+        
+        if(.NOT. allocated(tilts)) then
+            allocate(tilts(2, size(self%movienames)))
+        end if
+        
+        if(.NOT. allocated(clustercentres)) then
+            allocate(clustercentres(2, int(cline%get_rarg('tiltcount'))))  
+        end if
+        
+        if(.NOT. allocated(work)) then
+            allocate(work(size(self%movienames)))  
+        end if
+        
+        do i=1, size(self%movienames)
+           
+            inquire(file=trim(adjustl(cline%get_carg('xmlloc'))) // "/" // int2str(i) //".xml", exist=exists)
+            if(.NOT. exists) then
+                THROW_HARD(trim(adjustl(cline%get_carg('xmlloc'))) // "/" // int2str(i) //".xml" // ' does not exist')
+            endif
+            
+            xmldoc => parseFile(trim(adjustl(cline%get_carg('xmlloc'))) // "/" // int2str(i) //".xml")
+            beamtiltnode => item(getElementsByTagname(xmldoc, "BeamTilt"), 0) 
+            beamtiltnodex => item(getElementsByTagname(beamtiltnode, "a:_x"), 0)
+            beamtiltnodey => item(getElementsByTagname(beamtiltnode, "a:_y"), 0)
+            beamtiltx = str2real(getTextContent(beamtiltnodex))
+            beamtilty = str2real(getTextContent(beamtiltnodey))
+             write(logfhandle, *) i, size(self%movienames), beamtiltx, beamtilty
+            tilts(1, i) = beamtiltx
+            tilts(2, i) = beamtilty
+            
+            call destroy(xmldoc)
+        end do
+
+        call KMPP(tilts, 2, spproj%os_stk%get_noris(), int(cline%get_rarg('tiltcount')), clustercentres, self%moviegroup, work, fault)
+        
+        self%opticsgroups = int(cline%get_rarg('tiltcount'))
+        
+        if(allocated(tiltname))deallocate(tiltname)
+        if(allocated(tilts))deallocate(tilts)
+        if(allocated(clustercentres))deallocate(clustercentres)
+        if(allocated(work))deallocate(work)
+        
+    end subroutine generate_xml_tiltgroups
+
+    SUBROUTINE KMPP (X, P, N, K, C, Z, WORK, IFAULT)
+ 
+       IMPLICIT NONE
+       INTEGER P, N, K, Z, IFAULT
+       REAL X, C, WORK
+       DIMENSION X(P,N), C(P,K), Z(N), WORK(N)
+       INTEGER ITER                 ! maximum iterations
+       REAL BIG                     ! arbitrary large number
+       PARAMETER (ITER = 1000, BIG = 1E33)
+ 
+     INTEGER         H          ! count iterations
+     INTEGER         I          ! count points
+     INTEGER         I1         ! point marked as initial center
+     INTEGER         J          ! count dimensions
+     INTEGER         L          ! count clusters
+     INTEGER         L0         ! present cluster ID
+     INTEGER         L1          ! new cluster ID
+ 
+     REAL      BEST                 ! shortest distance to a center
+     REAL      D2                   ! squared distance
+     REAL      TOT                  ! a total
+     REAL      W                     ! temp scalar
+ 
+       LOGICAL CHANGE             ! whether any points have been reassigned
+ 
+
+       IFAULT = 0
+       IF (K < 1 .OR. K > N) THEN       ! K out of bounds
+         IFAULT = 3
+         RETURN
+       END IF
+       DO I = 1, N                       ! clear Z
+         Z(I) = 0
+       END DO
+ 
+
+       DO I = 1, N
+         WORK(I) = BIG
+       END DO
+ 
+       CALL RANDOM_NUMBER (W)
+       I1 = MIN(INT(W * FLOAT(N)) + 1, N)  ! choose first center at random
+       DO J = 1, P
+         C(J,1) = X(J,I1)
+       END DO
+ 
+       DO L = 2, K                    ! initialize other centers
+         TOT = 0.
+         DO I = 1, N                     ! measure from each point
+           BEST = WORK(I)
+           D2 = 0.                         ! to prior center
+           DO J = 1, P
+             D2 = D2 + (X(J,I) - C(J,L-1)) **2  ! Squared Euclidean distance
+             IF (D2 .GE. BEST) GO TO 10               ! needless to add to D2
+           END DO                          ! next J
+           IF (D2 < BEST) BEST = D2          ! shortest squared distance 
+           WORK(I) = BEST 
+     10      TOT = TOT + BEST             ! cumulative squared distance
+         END DO                      ! next data point
+ 
+
+         CALL RANDOM_NUMBER (W)
+         W = W * TOT    ! uniform at random over cumulative distance
+         TOT = 0.
+         DO I = 1, N
+           I1 = I
+           TOT = TOT + WORK(I)
+           IF (TOT > W) GO TO 20
+         END DO                ! next I
+     20  CONTINUE
+         DO J = 1, P         ! assign center
+           C(J,L) = X(J,I1)
+         END DO
+       END DO               ! next center to initialize
+
+       DO H = 1, ITER
+         CHANGE = .FALSE.
+ 
+         DO I = 1, N
+           L0 = Z(I)
+           L1 = 0
+           BEST = BIG
+           DO L = 1, K
+             D2 = 0.
+             DO J = 1, P
+               D2 = D2 + (X(J,I) - C(J,L)) **2
+               IF (D2 .GE. BEST) GO TO 30
+             END DO
+     30      CONTINUE
+             IF (D2 < BEST) THEN           ! new nearest center
+               BEST = D2
+               L1 = L
+             END IF             
+           END DO        ! next L
+ 
+           IF (L0 .NE. L1) THEN
+             Z(I) = L1                   !  reassign point 
+             CHANGE = .TRUE.
+           END IF
+         END DO         ! next I
+         IF (.NOT. CHANGE) RETURN      ! success
+ 
+         DO L = 1, K              ! zero population
+           WORK(L) = 0.
+         END DO
+         DO L = 1, K               ! zero centers
+           DO J = 1, P
+             C(J,L) = 0.
+           END DO
+         END DO
+ 
+         DO I = 1, N
+           L = Z(I)
+           WORK(L) = WORK(L) + 1.             ! count
+           DO J = 1, P
+             C(J,L) = C(J,L) + X(J,I)         ! add
+           END DO
+         END DO
+ 
+         DO L = 1, K
+           IF (WORK(L) < 0.5) THEN          ! empty cluster check
+             IFAULT = 1                     ! fatal error
+             RETURN
+           END IF
+           W = 1. / WORK(L)
+           DO J = 1, P
+             C(J,L) = C(J,L) * W     ! multiplication is faster than division
+           END DO
+         END DO
+ 
+       END DO                   ! next H
+       IFAULT = 2                ! too many iterations
+       RETURN
+ 
+      END  ! of KMPP
+
+    subroutine allocate_opticsgroups(self, cline, spproj)
+        
+        class(relion_project),  intent(inout) :: self
+        class(sp_project),      intent(inout) :: spproj
+        class(cmdline),         intent(inout) :: cline
+        character (len=:),      allocatable   :: moviename
+        integer                               :: i, j
+        integer, allocatable                  :: opticsgroupmap(:,:)
+        real                                  :: tiltgroupmax
+        
+        tiltgroupmax = cline%get_rarg('tiltgroupmax')
+        
+        if(.NOT. allocated(opticsgroupmap)) then
+            allocate(opticsgroupmap(2, self%opticsgroups)) !1:count, 2: current mapped cluster id
+        end if
+        
+        do i=1, self%opticsgroups
+            opticsgroupmap(1,i) = 0
+            opticsgroupmap(2,i) = i
+        end do
+        
+        do i=1, size(self%movienames)
+            opticsgroupmap(1,self%moviegroup(i)) = opticsgroupmap(1,self%moviegroup(i)) + 1
+            if(tiltgroupmax > 0 .AND. opticsgroupmap(1,self%moviegroup(i)) .gt. tiltgroupmax) then
+                self%opticsgroups = self%opticsgroups + 1
+                opticsgroupmap(2,self%moviegroup(i)) = self%opticsgroups
+                opticsgroupmap(1,self%moviegroup(i)) = 1
+            end if
+            self%moviegroup(i) = opticsgroupmap(2,self%moviegroup(i)) 
+        end do
+        
+        do i=1, spproj%os_mic%get_noris()
+            moviename = trim(adjustl(basename(spproj%os_mic%get_static(i, 'intg'))))
+            moviename = moviename(:len_trim(moviename)-9)
+            do j=1, size(self%movienames)
+                if(self%movienames(j) .eq. moviename) then
+                    exit
+                end if
+            end do
+            call spproj%os_mic%set(i, 'opticsgroup', float(self%moviegroup(j))) 
+        end do
+        
+        do i=1, spproj%os_stk%get_noris()
+            moviename = trim(adjustl(basename(spproj%os_stk%get_static(i, 'stk'))))
+            moviename = moviename(12:len_trim(moviename)-9)
+            do j=1, size(self%movienames)
+                if(self%movienames(j) .eq. moviename) then
+                    exit
+                end if
+            end do
+            call spproj%os_stk%set(i, 'opticsgroup', float(self%moviegroup(j))) 
+        end do
+        
+        if(allocated(moviename)) deallocate(moviename)
+    
+    end subroutine allocate_opticsgroups
+    
     subroutine create(self, cline, spproj)
 
         class(relion_project),  intent(inout) :: self
         class(sp_project),      intent(inout) :: spproj
         class(cmdline),         intent(inout) :: cline
 
-        if(cline%get_carg('relion31') .eq. 'yes') then
-            write(logfhandle, *) 'Writing Relion 3.1 compatible STAR files'
-        else
-            write(logfhandle, *) 'Writing Relion 3.0 compatible STAR files'
-        endif
+        write(logfhandle, *) 'Writing Relion 3.1 compatible STAR files'
+        
+        call self%find_movienames(cline, spproj)
         
         if(cline%get_carg('tiltgroups') .eq. 'epu') then
             call self%generate_epu_tiltgroups(cline, spproj)
+        else if(cline%get_carg('tiltgroups') .eq. 'xml') then
+            call self%generate_xml_tiltgroups(cline, spproj)
+        else
+            call self%generate_single_tiltgroup(cline, spproj)
         endif
         
+        call self%allocate_opticsgroups(cline, spproj)
         call self%write_corrected_micrographs_star(cline, spproj)
         call self%write_micrographs_star(cline, spproj)
         call self%write_particles2D_star(cline, spproj)
-       ! call self%write_particles3D_star(spproj) !Disabled as not fully tested
-        if(allocated(self%tiltgroups))deallocate(self%tiltgroups)
+  
+        if(allocated(self%movienames)) deallocate(self%movienames)
+        if(allocated(self%moviegroup)) deallocate(self%moviegroup)
+        
     end subroutine create
 
 end module simple_relion
