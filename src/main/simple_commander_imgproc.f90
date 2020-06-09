@@ -1133,31 +1133,31 @@ contains
         class(cmdline),                 intent(inout) :: cline
         ! constants
         character(len=*), parameter :: FILT   = 'nlmean_filtered.mrc'
-        character(len=*), parameter :: BINARY = 'binarised.mrc'
+        character(len=*), parameter :: MASKED = 'masked.mrc'
         ! varables
         type(parameters)            :: params
-        type(binimage), allocatable :: imgs(:)      ! images
-        type(image)                 :: cc_img       ! connected components image
+        type(binimage), allocatable :: imgs_mask(:) ! images mask
+        type(image),    allocatable :: imgs(:)      ! images
         type(stats_struct)          :: diamstats    ! stats struct
-        integer,        allocatable :: ccsizes(:)   ! connected component sizes
         real,           allocatable :: diams(:)     ! diameters
         integer :: funit, i, loc(1)
         real    :: med_diam, thresh(3), msk_rad
-        if( .not. cline%defined('lp')    ) call cline%set('lp',     5.0)
+        if( .not. cline%defined('lp')    ) call cline%set('lp',     7.0)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir','yes')
         call params%new(cline)
         ! set radius for hard mask of binary image
         if(cline%defined('msk') )  then
             msk_rad = params%msk
         else
-            msk_rad = 0.4*params%box
+            msk_rad = 0.45*params%box
         endif
         ! allocate & read cavgs
-        allocate(imgs(params%nptcls), diams(params%nptcls))
+        allocate(imgs_mask(params%nptcls),diams(params%nptcls),imgs(params%nptcls))
         diams = 0.
         do i=1,params%nptcls
-            call imgs(i)%new_bimg([params%box,params%box,1],  params%smpd)
-            call imgs(i)%read(params%stk, i)
+            call imgs_mask(i)%new_bimg([params%box,params%box,1],params%smpd)
+            call imgs_mask(i)%read(params%stk, i)
+            call imgs(i)%copy(imgs_mask(i))
         end do
         ! prepare thread safe images in image class
         call imgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
@@ -1165,17 +1165,22 @@ contains
         call fopen(funit, file='diameters_in_Angstroms.txt', status='replace')
         do i=1,params%nptcls
             call progress(i,params%nptcls)
+            call imgs_mask(i)%zero_edgeavg
+            call imgs_mask(i)%bp(0.,params%lp)
             ! non-local mneans filter for denoising
-            call imgs(i)%NLmean
-            call imgs(i)%write(FILT, i)
+            call imgs_mask(i)%NLmean
+            call imgs_mask(i)%write(FILT, i)
             ! binarise with Otsu
-            call otsu_robust_fast(imgs(i), is2D=.false., noneg=.false., thresh=thresh)
+            call otsu_robust_fast(imgs_mask(i), is2D=.true., noneg=.false., thresh=thresh)
             ! hard mask for removing noise, default diameter 80% of the box size
-            call imgs(i)%mask(msk_rad,'hard')
-            call imgs(i)%set_imat ! integer matrix set in binimage instance
-            call imgs(i)%write(BINARY, i)
+            call imgs_mask(i)%mask(msk_rad,'hard')
+            call imgs_mask(i)%set_imat     ! integer matrix set in binimage instance
+            call imgs_mask(i)%grow_bins(9) ! to compensate low-pass erosion/binarization
+            call imgs_mask(i)%update_img_rmat
+            call imgs_mask(i)%diameter_bin(diams(i))
+            call imgs(i)%mul(imgs_mask(i))
+            call imgs(i)%write(MASKED, i)
             ! estimate diameter
-            call imgs(i)%diameter_bin(diams(i))
             diams(i) = diams(i) * params%smpd
             write(funit,'(F6.1)') diams(i)
         end do
@@ -1197,11 +1202,11 @@ contains
         call fclose(funit)
         ! destruct
         do i=1,size(imgs)
+            call imgs_mask(i)%kill
+            call imgs_mask(i)%kill_bimg
             call imgs(i)%kill
         end do
-        call cc_img%kill
-        if( allocated(ccsizes) ) deallocate(ccsizes)
-        deallocate(imgs, diams)
+        deallocate(imgs, diams, imgs_mask)
         ! end gracefully
         call simple_end('**** SIMPLE_ESTIMATE_DIAM NORMAL STOP ****')
     end subroutine exec_estimate_diam

@@ -1644,6 +1644,8 @@ contains
         ! <empty>
         ! filter controls
         call estimate_diam%set_input('filt_ctrls', 1, lp)
+        estimate_diam%filt_ctrls(1)%descr_short  = 'low-pass limit in Angstroms{7.}'
+        estimate_diam%filt_ctrls(1)%rval_default = 7.
         ! mask controls
         call estimate_diam%set_input('mask_ctrls', 1, 'msk','num','Mask radius','Mask radius in pixels for application of a hard circular mask to remove background noise', 'mask radius in pixels', .false., 75.)
         ! computer controls
