@@ -760,7 +760,12 @@ contains
         end subroutine split_atom
     end subroutine validate_atomic_positions
 
-    ! This subroutine calculates the histogram of the within-atoms
+    ! This subroutine calculates some basic stats in the nanoparticle.
+    ! In particular it reports the diameter of the nanocrystal
+    !(the longest distance between any two atoms) and the overall
+    ! atomic density (nr of atoms per volume unit A^3) and the
+    ! atomic density with radial dependency
+    ! Moreover, this subroutine calculates the histogram of the within-atoms
     ! distances distribution within the nanoparticle nano.
     ! To each atom the distance assigned is the min distance
     ! to the other atoms. There is a threshold (3.*self%theoretical_radius) for
@@ -779,12 +784,24 @@ contains
         real,    allocatable :: max_intensity(:), avg_intensity(:), stdev_intensity(:), ratios(:)
         real,    pointer     :: rmat(:,:,:)
         integer, allocatable :: imat_cc(:,:,:)
+        real    :: nano_diameter, temp_diameter !for the diameter of the nanoparticle
         real    :: m(3)    !mass center of c3 map
         real    :: d       !distance atoms from the center
         real    :: radius  !radius of the sphere to consider
         real    :: avg_int, max_int, stdev_int, cutoff
-        integer :: cnt, cnt_just, cnt_all, filnum, io_stat
+        real    :: volume, density ! to calculate the atomic density
+        integer :: cnt, cnt_just, cnt_all, filnum, io_stat, filnum2
         integer :: nsteps, i, j, k, l, cc
+        logical :: mask_diameter(self%n_cc)
+        nano_diameter = 0.
+        mask_diameter(:) = .true.
+        do i = 1, self%n_cc
+          temp_diameter = pixels_dist(self%centers(:,i), self%centers, 'max', mask_diameter)
+          if(temp_diameter > nano_diameter) nano_diameter = temp_diameter
+        enddo
+        nano_diameter = nano_diameter*self%smpd ! in A
+        volume = 4./3.*pi*(nano_diameter/2.*self%smpd)**3
+        cnt_all  = 0
         cutoff = 8.*self%smpd
         ! min_step and max_step is in A
         self%n_cc = size(self%centers, dim = 2)
@@ -795,6 +812,9 @@ contains
         call simple_mkdir('./'//'/RadialDependentStat',errmsg="simple_nanoparticles :: radial_dependent_stats, simple_mkdir; ")
         call simple_chdir('./'//'/RadialDependentStat',errmsg="simple_nanoparticles :: radial_dependent_stats, simple_chdir; ")
         call fopen(filnum, file='RadialDependentStat.txt', iostat=io_stat)
+        call fopen(filnum2, file='SimpleStat.txt', iostat=io_stat)
+        write(unit = filnum2, fmt = '(a,f6.3)')  'Nanoparticle Diameter: ', nano_diameter
+        write(unit = filnum2, fmt = '(a,f6.3)')  'Overall density:       ', real(self%n_cc)/volume
         allocate(mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = .false.)
         call simulated_density%new(self%ldim,self%smpd)
         do l = 1, nsteps
@@ -815,6 +835,12 @@ contains
             enddo
             call radial_atoms_just%new(cnt_just, dummy=.true.)
             call radial_atoms_all%new (cnt_all,  dummy=.true.)
+            if(radius < nano_diameter/2.)  then
+                volume = 4./3.*pi*(radius*self%smpd)**3
+            else
+                volume = 4./3.*pi*(nano_diameter/2.*self%smpd)**3
+            endif
+            write(unit = filnum2, fmt = '(a,f4.1,a,f6.3)')  'Radius: ', radius, ' Density: ', real(cnt_all)/volume
             cnt_all  = 0
             cnt_just = 0
             ! Save coords
@@ -925,6 +951,7 @@ contains
             call radial_atoms_just%kill
         enddo
         call fclose(filnum)
+        call fclose(filnum2)
         deallocate(mask, imat_cc)
         call simulated_density%kill
         call self%distances_distribution(file=.false.) ! across the whole nano
@@ -1123,6 +1150,7 @@ contains
       if(present(ld)) ld=longest_dist
       deallocate(imat_cc, border, pos, mask_dist)
    end subroutine calc_aspect_ratio
+
 
     ! This subroutine calculates some statistics (min,max,avg,stdev)
     ! in the intensity gray level value of the nanoparticle
