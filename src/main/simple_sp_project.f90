@@ -932,8 +932,8 @@ contains
         self%os_ptcl3D = os
         call self%os_ptcl2D%set_all2single('stkind', 1.)
         call self%os_ptcl3D%set_all2single('stkind', 1.)
-        call self%os_ptcl2D%set_all2single('state',  1.) ! default on import
-        call self%os_ptcl3D%set_all2single('state',  1.) ! default on import
+        if( .not. self%os_ptcl2D%isthere('state') ) call self%os_ptcl2D%set_all2single('state',  1.) ! default on import
+        if( .not. self%os_ptcl3D%isthere('state') ) call self%os_ptcl3D%set_all2single('state',  1.) ! default on import
         ! full path and existence check
         stk_abspath = simple_abspath(stk,'sp_project :: add_single_stk')
         ! find dimension of inputted stack
@@ -1098,7 +1098,7 @@ contains
         integer,  allocatable :: nptcls_arr(:)
         type(ori)             :: o_ptcl, o_stk
         character(LONGSTRLEN) :: stk_relpath
-        integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk
+        integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk, istate
         integer   :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind, pind
         nstks = size(stkfnames)
         n_os  = os%get_noris()
@@ -1195,7 +1195,9 @@ contains
                 pind = fromp+i-1
                 call os%get_ori(pind, o_ptcl)
                 call o_ptcl%set('stkind', real(stk_ind))
-                call o_ptcl%set('state',  1.)
+                istate = 1
+                if( o_ptcl%isthere('state') ) istate = o_ptcl%get_state()
+                call o_ptcl%set('state',  real(istate))
                 select case(ctfvars%ctfflag)
                     case(CTFFLAG_YES,CTFFLAG_FLIP)
                         if( .not.o_ptcl%isthere('dfx') )then
