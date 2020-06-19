@@ -83,7 +83,7 @@ contains
         type(parameters) :: params
         type(binimage)   :: img_or_vol
         integer :: igrow, iptcl
-        logical :: is2D
+        logical :: is2D, otsu
         ! error check
         if( .not. cline%defined('stk') .and. .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! stk or vol1 needs to be present; simple_binarise')
@@ -100,15 +100,17 @@ contains
             call img_or_vol%new_bimg([params%box,params%box,1], params%smpd)
             do iptcl=1,params%nptcls
                 call img_or_vol%read(params%stk, iptcl)
-                call doit
+                call doit(otsu)
                 call img_or_vol%write(params%outstk, iptcl)
             end do
+            if(otsu) write(logfhandle,*) 'Method applied for binarisation: OTSU algorithm'
         else if( cline%defined('vol1') )then
             is2D = .false.
             call img_or_vol%new_bimg([params%box,params%box,params%box], params%smpd)
             call img_or_vol%read(params%vols(1))
-            call doit
+            call doit(otsu)
             call img_or_vol%write(params%outvol)
+            if(otsu) write(logfhandle,*) 'Method applied for binarisation: OTSU algorithm'
         endif
         call img_or_vol%kill
         ! end gracefully
@@ -116,9 +118,11 @@ contains
 
         contains
 
-            subroutine doit
-                type(image) :: cos_img
+            subroutine doit(otsu)
+                type(binimage) :: cos_img
                 real :: ave, sdev, maxv, minv, thresh(3)
+                logical, optional, intent(inout) :: otsu
+                otsu =  .false.
                 if( cline%defined('thres') )then
                     call img_or_vol%binarize(params%thres)
                 else if( cline%defined('npix') )then
@@ -128,13 +132,16 @@ contains
                     call img_or_vol%binarize(ave + params%ndev * sdev)
                 else
                     call otsu_robust_fast(img_or_vol, is2D, noneg=.false., thresh=thresh)
+                    otsu = .true.
                 endif
                 write(logfhandle,'(a,1x,i9)') '# FOREGROUND PIXELS:', img_or_vol%nforeground()
                 write(logfhandle,'(a,1x,i9)') '# BACKGROUND PIXELS:', img_or_vol%nbackground()
                 if( cline%defined('grow') ) call img_or_vol%grow_bins(params%grow)
-                if( cline%defined('edge') ) call img_or_vol%cos_edge(params%edge,cos_img)
-                call img_or_vol%copy(cos_img)
-                call cos_img%kill
+                if( cline%defined('edge') ) then
+                    call img_or_vol%cos_edge(params%edge,cos_img)
+                    call img_or_vol%copy_bimg(cos_img)
+                    call cos_img%kill
+                endif
                 if( cline%defined('neg')  ) call img_or_vol%bin_inv
             end subroutine doit
 

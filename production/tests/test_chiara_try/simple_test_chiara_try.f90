@@ -431,6 +431,137 @@ module simple_test_chiara_try_mod
    !    call img_spec%write('graphene.mrc')
    !    call img_spec%kill
    ! end subroutine filter_peaks
+
+   subroutine fcc_lattice(element,moldiam,box,smpd,m)
+     use simple_atoms, only: atoms
+     character(len=4), intent(inout) :: element
+     integer,          intent(in)    :: box
+     real,             intent(in)    :: moldiam,smpd
+     real,             intent(inout) :: m(3) ! center of mass of the generated fcc
+     type(image)      :: vol
+     type(atoms)      :: atoms_obj
+     character(len=2) :: el1, el2
+     character(len=8) :: crystal_system
+     real             :: center(3),ha,x,x1,x2,x3,y,y1,y2,y3,z,z1,z2,z3,msksq,cutoff
+     real             :: a ! lattice parameter
+     integer          :: i,j,k,n,ncubes
+     if(.not.is_even(box))then
+         print *, 'BOX must be even'
+         stop
+     endif
+     el1 = element(1:2)
+     el2 = element(3:4)
+     msksq = (moldiam/2.)**2.
+     m = 0.
+     call vol%new([box,box,box], smpd)
+     select case(uppercase(trim(element)))
+         case('C')
+             a = 3.567 ! diamond
+         case('SI')
+             a = 5.431020511
+         case('GE')
+             a = 5.658
+         case('AL')
+             a = 4.046
+         case('NI')
+             a = 3.499
+         case('CU')
+             a = 3.597
+         case('PT')
+             a = 3.912
+         case('AU')
+             a = 4.065
+         case('AG')
+             a = 4.079
+         case('PD')
+             a = 3.859
+         case('PB')
+             a = 4.920
+         case('FE')
+             a = 2.856; crystal_system = 'bcc     '
+         case('MO')
+             a = 3.142; crystal_system = 'bcc     '
+         case('W')
+             a = 3.155; crystal_system = 'bcc     '
+         case('PBSE')
+             a = 6.12;  crystal_system = 'rocksalt'
+         case DEFAULT
+             a = 3.76
+     end select
+     ha = a/2.
+     ncubes = floor(real(box) * smpd / a)
+     ! atoms at edges
+     n = 0
+     center = (real([box,box,box]/2 + 1)-1.)*smpd
+      ! count
+      do i=1,ncubes
+          x  = real(i-1)*a
+          x1 = x+ha; x2 = x; x3 = x+ha
+          do j=1,ncubes
+              y  = real(j-1)*a
+              y1 = y+ha; y2 = y+ha; y3 = y
+              do k=1,ncubes
+                  z  = real(k-1)*a
+                  z1 = z; z2 = z+ha; z3 = z+ha
+                  ! edge
+                  if( sum(([x ,y ,z ]-center)**2.) <= msksq ) n = n+1
+                  ! faces
+                  if( sum(([x1,y1,z1]-center)**2.) <= msksq ) n = n+1
+                  if( sum(([x2,y2,z2]-center)**2.) <= msksq ) n = n+1
+                  if( sum(([x3,y3,z3]-center)**2.) <= msksq ) n = n+1
+              enddo
+          enddo
+      enddo
+      ! generate atoms object
+      call atoms_obj%new(n)
+      do i = 1,n
+          call atoms_obj%set_name(i,element//'  ')
+          call atoms_obj%set_element(i,el1)
+      enddo
+      ! generate all coordinates
+      n = 0
+      do i=1,ncubes
+          x  = real(i-1)*a ;x1 = x+ha; x2 = x; x3 = x+ha
+          do j=1,ncubes
+              y  = real(j-1)*a; y1 = y+ha; y2 = y+ha; y3 = y
+              do k=1,ncubes
+                  z  = real(k-1)*a; z1 = z; z2 = z+ha; z3 = z+ha
+                  ! edge
+                  if( sum(([x ,y ,z ]-center)**2.) <= msksq )then
+                       n = n+1; call atoms_obj%set_coord(n, [x,y,z])
+                       m = m + [x,y,z]
+                  endif
+                  ! faces
+                  if( sum(([x1,y1,z1]-center)**2.) <= msksq )then
+                      n = n+1; call atoms_obj%set_coord(n, [x1,y1,z1])
+                      m = m + [x1,y1,z1]
+                  endif
+                  if( sum(([x2,y2,z2]-center)**2.) <= msksq )then
+                      n = n+1; call atoms_obj%set_coord(n, [x2,y2,z2])
+                      m = m + [x2,y2,z2]
+                  endif
+                  if( sum(([x3,y3,z3]-center)**2.) <= msksq )then
+                      n = n+1; call atoms_obj%set_coord(n, [x3,y3,z3])
+                      m = m + [x3,y3,z3]
+                  endif
+              enddo
+          enddo
+      enddo
+      ! center of gravity
+      m = m/real(n)
+      ! write PDB
+      do i=1,n
+          call atoms_obj%set_num(i,i)
+          call atoms_obj%set_resnum(i,i)
+          call atoms_obj%set_chain(i,'A')
+          call atoms_obj%set_occupancy(i,1.)
+      enddo
+      call atoms_obj%writePDB('FccLattice')
+      ! for convolution
+      cutoff = 3.*a
+      call atoms_obj%convolve(vol,cutoff)
+      call vol%write('FccLattice.mrc')
+   end subroutine fcc_lattice
 end module simple_test_chiara_try_mod
 
     program simple_test_chiara_try
@@ -440,58 +571,108 @@ end module simple_test_chiara_try_mod
        use simple_binimage, only : binimage
        use simple_test_chiara_try_mod
        use simple_nano_utils
-       real,    allocatable :: points1(:,:), points2(:,:), ppoints1(:,:), dist(:), dist_sq(:),dist_close(:)
-       logical, allocatable :: mask(:)
-       integer :: i, j, N_min, N_max
+       use simple_atoms, only : atoms
+       real,    allocatable :: points1(:,:), points2(:,:), ppoints1(:,:),ppoints2(:,:), dist(:), dist_sq(:),dist_close(:)
+       logical, allocatable :: mask(:), mask_1(:), mask_2(:)
+       integer :: i, j, N_min, N_max, n_1, n_2
        integer :: cnt, cnt2, cnt3, location(1)
        real    :: smpd, theoretical_radius, rmsd!,avg, m(3), tmp_max
        real, parameter :: CLOSE_THRESH = 1.
-       real :: U(3,3), r(3), lrms
-       theoretical_radius = 1.1
-       smpd = 1.
-       N_min = 5
-       N_max = 7
-       allocate(points1(3,N_max), points2(3,N_min), source  = 0.)
-       do i = 1, N_max
-         points1(:,i) = [0.8*real(i),2.*real(i)+0.1,real(i)+0.2]
-         if(i <= N_min) points2(:3,i) = [0.77*real(i),2.*real(i)+0.02,real(i)+0.54]
+       real :: U(3,3), r(3), lrms, m_1(3), m_2(3), t(3)
+       character(len=4) :: element
+       type(atoms) :: atom_1, atom_2
+
+       element = 'PT  '
+       call fcc_lattice(element,25.,160,0.358,m_1)
+       call atom_2%new('recvol_state01UPDATED_atom_centers.pdb')
+       call atom_1%new('FccLattice.pdb')
+       n_1 = atom_1%get_n()
+       n_2 = atom_2%get_n()
+       ! calculate center of mass
+       m_2 = 0.
+       do i = 1, n_2
+         m_2 = m_2 + atom_2%get_coord(i)
        enddo
+       m_2 = m_2/real(n_2)
+       t = m_2 - m_1
+       call atom_2%translate(-t)
+       call atom_2%writePDB('atom_centers_translated')
+       ! Kabasch
+       ! theoretical_radius = 1.1
+       if(n_1 < n_2) then
+           N_min = n_1
+           N_max = n_2
+           allocate(points1(3,N_min), points2(3,N_max), source  = 0.)
+           do i = 1, N_max
+             points2(:,i) = atom_2%get_coord(i)
+             if(i <= N_min) points1(:3,i) = atom_1%get_coord(i)
+           enddo
+         else
+           N_min = n_2
+           N_max = n_1
+           allocate(points1(3,N_max), points2(3,N_min), source  = 0.)
+           do i = 1, N_max
+             points1(:,i) = atom_1%get_coord(i)
+             if(i <= N_min) points2(:3,i) = atom_2%get_coord(i)
+           enddo
+       endif
        allocate(dist(N_max), dist_sq(N_max), source = 0.)
        allocate(dist_close(N_max), source = 0.) ! there are going to be unused entry of the vector
-       allocate(mask(N_min), source = .true.)
+       allocate(mask(N_min), source = .false.)
+       allocate(mask_1(n_1), mask_2(n_2),source = .false.)
        cnt  = 0
        cnt2 = 0
        cnt3 = 0
-       do i = 1, N_max !compare based on centers1
-           if(cnt2+cnt3+1 <=N_min) then ! just N_min couples, starting from 0
-               dist(i) = pixels_dist(points1(:,i),points2(:,:),'min',mask,location, keep_zero = .true.)
-               if(dist(i)*smpd > 2.*theoretical_radius) then
-                   dist(i) = 0.
-                   cnt = cnt + 1
-               elseif(dist(i)*smpd <= CLOSE_THRESH) then
-                   cnt3 = cnt3 + 1
-                   dist_close(i) = dist(i)**2
-               elseif(dist(i)*smpd > CLOSE_THRESH .and. dist(i)*smpd<=2.*theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,2*theoretical_radius] pm
-                   cnt2 = cnt2 + 1
-                   mask(location(1)) = .false. ! not to consider the same atom more than once
-               endif
-               dist_sq(i) = dist(i)**2 !formula wants them square
-            endif
-       enddo
+       if(n_1 > n_2) then  !compare based on centers1
+           do i = 1, N_max
+               if(cnt2+cnt3+1 <=N_min) then ! just N_min couples, starting from 0
+                   dist(i) = pixels_dist(points1(:,i),points2(:,:),'min',mask,location, keep_zero = .true.)
+                   ! too far
+                   if(dist(i)*smpd > 2.*theoretical_radius) then
+                       dist(i) = 0.
+                       cnt = cnt + 1
+                   ! very close
+                   elseif(dist(i)*smpd <= CLOSE_THRESH) then
+                       cnt3 = cnt3 + 1
+                       dist_close(i) = dist(i)**2
+                       mask_1(i) = .true.
+                       mask_2(location(1)) = .true.
+                   ! correspondent
+                   elseif(dist(i)*smpd > CLOSE_THRESH .and. dist(i)*smpd<=2.*theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,2*theoretical_radius] pm
+                       cnt2 = cnt2 + 1
+                       mask(location(1)) = .false. ! not to consider the same atom more than once
+                       mask_1(i) = .true.
+                       mask_2(location(1)) = .true.
+                   endif
+                   dist_sq(i) = dist(i)**2 !formula wants them square
+                endif
+           enddo
+       else
+         ! TO COMPLETE
+
+       endif
        rmsd = sqrt(sum(dist_sq)/real(count(abs(dist_sq) > TINY)))
        write(*,*) 'RMSD CALCULATED CONSIDERING ALL ATOMS = ', rmsd*smpd, ' A'
        write(*,*) 'RMSD ATOMS THAT CORRESPOND WITHIN 1 A = ', (sqrt(sum(dist_close)/real(count(dist_close > TINY))))*smpd, ' A'
+       ! debug
+       print *, 'count(mask_1)', count(mask_1), 'count(mask_2)', count(mask_2), 'SHOULD BE SAME'
        ! Kabsch testing
-       allocate(ppoints1(3,5), source = points1(:3,:5))
-       call kabsch(ppoints1,points2,U,r,lrms)
+       ! do 1 =
+       ! GENERATE PPOINTS! and PPOINTS 2
+       ! ppoints1 = pack(points1, mask_1)
+       ! ppoints2 = pack(points2, mask_2)
+
+      ! enndo
+
+       call kabsch(ppoints1,ppoints2,U,r,lrms)
        print *, 'Rotation matrix: '
        call vis_mat(U)
        print *, 'Translation vec: ', r
        print *, 'RMSD: ', lrms
-       print *, 'coords after kabsch, ppoints1'
-       call vis_mat(ppoints1)
-       print *, 'points2'
-       call vis_mat(points2)
+       ! print *, 'coords after kabsch, ppoints1'
+       ! call vis_mat(ppoints1)
+       ! print *, 'points2'
+       ! call vis_mat(points2)
 
        ! test function find_couples
        ! real :: P(3,6), Q(3,8), U(3,3), r(3), lrms

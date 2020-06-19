@@ -1725,9 +1725,9 @@ contains
         real,    intent(in)  :: thresh ! threshold for class definition, user inputted
         real,    allocatable :: centroids(:)
         integer, allocatable :: labels(:), populations(:)
-        real,    allocatable :: stdev_within(:)
+        real,    allocatable :: stdev_within(:), avg_dist_cog(:)
         integer              :: i, j, ncls, dim, filnum, io_stat, cnt
-        real                 :: avg, stdev
+        real                 :: avg, stdev, cog(3)
         type(binimage)       :: img_1clss
         integer, allocatable :: imat_cc(:,:,:), imat_1clss(:,:,:)
         ! Preparing for clustering
@@ -1743,12 +1743,19 @@ contains
         ! Stats calculations
         ncls = maxval(labels)
         allocate(stdev_within(ncls), source = 0.)
+        allocate(avg_dist_cog(ncls), source = 0.)
+        cog = self%nanopart_masscen()
         ! stdev within the same class
+        ! avg dist to the center of gravity of each class
         do i = 1, ncls
             do j = 1, dim
-                if(labels(j) == i) stdev_within(i) = stdev_within(i) + (self%dists(j)-centroids(i))**2
+                if(labels(j) == i) then
+                   stdev_within(i) = stdev_within(i) + (self%dists(j)-centroids(i))**2
+                   avg_dist_cog(i) = avg_dist_cog(i) + euclid(cog,self%centers(:,j))
+                endif
             enddo
         enddo
+        avg_dist_cog = (avg_dist_cog*self%smpd)/real(populations) ! in A
         where (populations>1)
             stdev_within = sqrt(stdev_within/(real(populations)-1.))
         elsewhere
@@ -1777,6 +1784,9 @@ contains
         write(unit = filnum,fmt ='(a)') 'CLASS STATISTICS '
         do i = 1, ncls
           write(unit = filnum,fmt ='(a,i3,a,i3,a,f6.2,a,f6.2,a)') 'class: ', i, '; cardinality: ', populations(i), '; centroid: ', centroids(i), ' A; stdev within the class: ', stdev_within(i), ' A'
+        enddo
+        do i = 1, ncls
+          write(unit = filnum,fmt ='(a,i3,a,f6.2,a)') 'class: ', i, '; average distance to the center of gravity: ', avg_dist_cog(i), ' A'
         enddo
         write(unit = filnum,fmt ='(a,f6.2,a,f6.2,a)') 'AVG among the classes: ', avg, ' A; STDEV among the classes: ', stdev, ' A'
         call fclose(filnum)
