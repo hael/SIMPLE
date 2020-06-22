@@ -1906,28 +1906,16 @@ contains
     subroutine partition_eo( self, tseries )
         class(oris),       intent(inout) :: self    !< instance
         logical, optional, intent(in)    :: tseries !< logical tseries flag
-        type(ran_tabu)       :: rt
-        integer, allocatable :: eopart(:)
-        logical              :: ttseries
-        integer              :: i, i_incr
-        ttseries = .false.
-        if( present(tseries) ) ttseries = tseries
-        allocate(eopart(self%n))
-        if( ttseries )then
-            do i=1,self%n,2
-                eopart(i) = 1
-                i_incr = i + 1
-                if(i_incr > self%n) exit
-                eopart(i_incr) = 2
-            end do
+        integer              :: i
+        do i = 1, self%n-1, 2
+            call self%set(i,  'eo', 0.)
+            call self%set(i+1,'eo', 1.)
+        end do
+        if(is_even(self%n))then
+            call self%set(self%n,'eo',1.)
         else
-            rt = ran_tabu(self%n)
-            call rt%balanced(2, eopart)
-            call rt%kill
+            call self%set(self%n,'eo',0.)
         endif
-        eopart = eopart - 1 ! 0 is even 1 is odd
-        call self%set_all('eo', real(eopart))
-        deallocate(eopart)
     end subroutine partition_eo
 
     ! pinds is particle indices
