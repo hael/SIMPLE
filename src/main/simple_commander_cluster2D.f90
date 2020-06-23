@@ -131,7 +131,7 @@ contains
                 THROW_HARD('# class averages (ncls) need to be part of command line when tseries=yes')
             endif
             call build%spproj_field%ini_tseries(params%ncls, 'class')
-            call build%spproj_field%partition_eo(tseries=.true.)
+            call build%spproj_field%partition_eo
         else if( params%proj_is_class.eq.'yes' )then
             call build%spproj_field%proj2class
         endif
@@ -1843,11 +1843,7 @@ contains
         endif
         ! deal with eo partitioning
         if( build%spproj_field%get_nevenodd() == 0 )then
-            if( params%tseries .eq. 'yes' )then
-                call build%spproj_field%partition_eo(tseries=.true.)
-            else
-                call build%spproj_field%partition_eo
-            endif
+            call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype)
         endif
         ! main loop

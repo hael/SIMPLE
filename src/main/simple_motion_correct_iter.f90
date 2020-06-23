@@ -17,10 +17,6 @@ private
 real,             parameter :: PATCH_FIT_THRESHOLD = 4.0 ! threshold for polynomial fitting in pixels
 real,             parameter :: SMPD4VIZ_NANO = 0.9
 character(len=*), parameter :: speckind = 'sqrt'
-! benchmarking
-logical                 :: L_BENCH = .false.
-integer(timer_int_kind) :: t_postproc1
-real(timer_int_kind)    :: rt_postproc1
 
 type :: motion_correct_iter
     private
@@ -143,7 +139,6 @@ contains
         ! STAR output
         if( .not. l_tseries ) call motion_correct_write2star(star_fname, self%moviename, patch_success, gainref_fname)
         ! generate power-spectra
-        if( L_BENCH ) t_postproc1 = tic()
         call motion_correct_mic2spec(self%moviesum_ctf, GUI_PSPECSZ, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_ctf)
         call self%pspec_sum%before_after(self%pspec_ctf, self%pspec_half_n_half)
         if( l_tseries )then
@@ -154,7 +149,6 @@ contains
         ! write output
         call self%moviesum_corrected%write(self%moviename_intg)
         if( .not. l_tseries ) call self%moviesum_ctf%write(self%moviename_forctf)
-        if( L_BENCH ) rt_postproc1 = toc(t_postproc1)
         ! generate thumbnail
         ldim  = self%moviesum_corrected%get_ldim()
         scale = real(GUI_PSPECSZ)/maxval(ldim(1:2))
@@ -199,9 +193,6 @@ contains
             call orientation%set('mceps', rel_fname)
         endif
         call motion_correct_kill_common
-        if( L_BENCH )then
-            print *,'rt_postproc1: ',rt_postproc1
-        endif
     end subroutine iterate
 
     function get_moviename( self, which ) result( moviename )

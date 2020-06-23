@@ -190,11 +190,7 @@ contains
         if( l_switch2euclid ) call cline_volassemble%set('objfun','euclid')
         ! E/O PARTITIONING
         if( build%spproj_field%get_nevenodd() == 0 )then
-            if( params%tseries .eq. 'yes' )then
-                call build%spproj_field%partition_eo(tseries=.true.)
-            else
-                call build%spproj_field%partition_eo
-            endif
+            call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype)
         endif
         ! GENERATE INITIAL NOISE POWER ESTIMATES

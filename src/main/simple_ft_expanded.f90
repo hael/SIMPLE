@@ -55,9 +55,9 @@ type :: ft_expanded
     procedure          :: shift_and_add
     procedure          :: normalize_mat
     ! calculators
-    procedure, private :: calc_sumsq
     procedure          :: corr
     procedure          :: corr_unnorm
+    procedure          :: corr_unnorm_serial
     procedure          :: gen_grad
     procedure          :: gen_grad_noshift
     procedure, private :: corr_normalize_sp
@@ -159,7 +159,7 @@ contains
                 end if
             end do
         end do
-        if( fetch_comps )call self%calc_sumsq
+        if( fetch_comps ) self%sumsq = self%corr_unnorm(self)
         if( didft ) call img%ifft()
         ! allocate class variables
         self%existence = .true.
@@ -215,11 +215,11 @@ contains
 
     ! SETTERS
 
-    pure subroutine set_cmat( self, cmat )
+    subroutine set_cmat( self, cmat )
         class(ft_expanded), intent(inout) :: self
         complex,            intent(in) :: cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2))
         self%cmat = cmat
-        call self%calc_sumsq
+        self%sumsq = self%corr_unnorm(self)
     end subroutine set_cmat
 
     pure subroutine zero( self )
@@ -241,6 +241,7 @@ contains
         self%sumsq = self2copy%sumsq
         self%cmat  = self2copy%cmat
         self%bandmsk = self2copy%bandmsk
+        self%existence = self%existence
     end subroutine copy
 
     ! ARITHMETICS
@@ -249,21 +250,26 @@ contains
         class(ft_expanded), intent(inout) :: self
         class(ft_expanded), intent(in)    :: self2add
         real, optional,     intent(in)    :: w
-        real :: ww
-        ww =1.0
-        if( present(w) ) ww = w
-        if( ww > 0. ) self%cmat = self%cmat + self2add%cmat*ww
-        call self%calc_sumsq
+        if( present(w) )then
+             if( w > 0. )then
+                 self%cmat  = self%cmat + self2add%cmat*w
+                 self%sumsq = self%corr_unnorm(self)
+             endif
+        else
+            self%cmat  = self%cmat + self2add%cmat
+            self%sumsq = self%corr_unnorm(self)
+        endif
     end subroutine add
 
     subroutine add_uncond( self, self2add, w )
         class(ft_expanded), intent(inout) :: self
         class(ft_expanded), intent(in)    :: self2add
         real, optional,     intent(in)    :: w
-        real :: ww
-        ww =1.0
-        if( present(w) ) ww = w
-        self%cmat = self%cmat + self2add%cmat*ww
+        if( present(w) )then
+             self%cmat = self%cmat + self2add%cmat*w
+        else
+            self%cmat = self%cmat + self2add%cmat
+        endif
     end subroutine add_uncond
 
     subroutine subtr( self, self2subtr, w )
@@ -274,23 +280,24 @@ contains
         ww = 1.0
         if( present(w) ) ww = w
         if( ww > 0. ) self%cmat = self%cmat-ww*self2subtr%cmat
-        call self%calc_sumsq
+        self%sumsq = self%corr_unnorm(self)
     end subroutine subtr
 
-    pure subroutine div( self, val )
+    subroutine div( self, val )
         class(ft_expanded), intent(inout) :: self
         real,               intent(in)    :: val
         if( abs(val) < TINY ) return
-        self%cmat = self%cmat / val
-        call self%calc_sumsq
+        self%cmat  = self%cmat / val
+        self%sumsq = self%corr_unnorm(self)
     end subroutine div
 
     ! MODIFIERS
 
-    subroutine shift( self, shvec, self_out )
+    subroutine shift( self, shvec, self_out, calc_sumsq )
         class(ft_expanded), intent(in)    :: self
         real,               intent(in)    :: shvec(2)
         class(ft_expanded), intent(inout) :: self_out
+        logical,  optional, intent(in)    :: calc_sumsq
         integer :: hind,kind,kind_shift,kkind
         real    :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
         real    :: argh,argk,ck,sk
@@ -311,7 +318,11 @@ contains
                 endif
             end do
         end do
-        call self_out%calc_sumsq
+        if( present(calc_sumsq) )then
+            if( calc_sumsq ) self_out%sumsq = self_out%corr_unnorm(self)
+        else
+            self_out%sumsq = self_out%corr_unnorm(self_out)
+        endif
     end subroutine shift
 
     subroutine shift_and_add( self, shvec, w, self_out )
@@ -338,7 +349,7 @@ contains
                 endif
             end do
         end do
-        call self_out%calc_sumsq
+        self_out%sumsq = self_out%corr_unnorm(self_out)
     end subroutine shift_and_add
 
     subroutine normalize_mat( self )
@@ -355,14 +366,7 @@ contains
         !$omp end parallel do
     end subroutine normalize_mat
 
-
     ! CALCULATORS
-
-    pure subroutine calc_sumsq( self )
-        class(ft_expanded), intent(inout) :: self
-        self%sumsq =                 sum(csq(self%cmat(                1,:)), mask=self%bandmsk(1,:))
-        self%sumsq = self%sumsq + 2.*sum(csq(self%cmat(2:self%flims(1,2),:)), mask=self%bandmsk(2:self%flims(1,2),:))
-    end subroutine calc_sumsq
 
     function corr( self1, self2 ) result( r )
         class(ft_expanded), intent(inout) :: self1, self2
@@ -399,15 +403,21 @@ contains
         r = r + 2._dp * tmp
     end function corr_unnorm
 
+    ! unnormalized correlations, i.e. only the numerator term
+    pure function corr_unnorm_serial( self1, self2 ) result( r )
+        class(ft_expanded), intent(in) :: self1, self2
+        real(dp) :: r
+        integer  :: hind, kind
+        r = sum(real(self1%cmat(1,:)*conjg(self2%cmat(1,:))), mask=self1%bandmsk(1,:))
+        r = r + 2.d0*sum(real(self1%cmat(2:self1%flims(1,2),:)*conjg(self2%cmat(2:self1%flims(1,2),:))), mask=self1%bandmsk(2:self1%flims(1,2),:) )
+    end function corr_unnorm_serial
+
     subroutine gen_grad( self, shvec, self_gradx, self_grady )
         class(ft_expanded), intent(in)    :: self
         real(dp),           intent(in)    :: shvec(2)
         class(ft_expanded), intent(inout) :: self_gradx, self_grady
         real             :: transf_vec(2),arg
         integer          :: hind,kind,kind_shift
-        complex, pointer :: cmat_gradx(:,:), cmat_grady(:,:)
-        call self_gradx%get_cmat_ptr( cmat_gradx )
-        call self_grady%get_cmat_ptr( cmat_grady )
         kind_shift = self%get_kind_shift()
         !$omp parallel do collapse(2) default(shared) private(kind,hind,transf_vec,arg) proc_bind(close) schedule(static)
         do kind=self%flims(2,1),self%flims(2,2)
@@ -415,8 +425,8 @@ contains
                 if( self%bandmsk(hind,kind) )then
                     transf_vec = ftexp_transfmat(hind,kind+kind_shift,:)
                     arg        = dot_product(shvec, transf_vec)
-                    cmat_gradx(hind,kind) = self%cmat(hind,kind) * exp(JJ * arg) * JJ * transf_vec(1)
-                    cmat_grady(hind,kind) = self%cmat(hind,kind) * exp(JJ * arg) * JJ * transf_vec(2)
+                    self_gradx%cmat(hind,kind) = self%cmat(hind,kind) * exp(JJ * arg) * JJ * transf_vec(1)
+                    self_grady%cmat(hind,kind) = self%cmat(hind,kind) * exp(JJ * arg) * JJ * transf_vec(2)
                 end if
             end do
         end do
@@ -428,17 +438,14 @@ contains
         class(ft_expanded), intent(inout) :: self_gradx, self_grady
         real             :: transf_vec(2)
         integer          :: hind,kind,kind_shift
-        complex, pointer :: cmat_gradx(:,:), cmat_grady(:,:)
-        call self_gradx%get_cmat_ptr( cmat_gradx )
-        call self_grady%get_cmat_ptr( cmat_grady )
         kind_shift = self%get_kind_shift()
         !$omp parallel do collapse(2) default(shared) private(kind,hind,transf_vec) proc_bind(close) schedule(static)
         do kind=self%flims(2,1),self%flims(2,2)
             do hind=self%flims(1,1),self%flims(1,2)
                 if( self%bandmsk(hind,kind) )then
                     transf_vec = ftexp_transfmat(hind,kind+kind_shift,:)
-                    cmat_gradx(hind,kind) = self%cmat(hind,kind) * JJ * transf_vec(1)
-                    cmat_grady(hind,kind) = self%cmat(hind,kind) * JJ * transf_vec(2)
+                    self_gradx%cmat(hind,kind) = self%cmat(hind,kind) * JJ * transf_vec(1)
+                    self_grady%cmat(hind,kind) = self%cmat(hind,kind) * JJ * transf_vec(2)
                 end if
             end do
         end do

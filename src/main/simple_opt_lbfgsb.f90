@@ -17,7 +17,7 @@ real(dp), parameter :: big=1.0d+10
 real(dp), parameter :: xtol_lbfgsb=0.1d0
 real(dp), parameter :: two=2.0d0,three=3.0d0
 !real(dp), parameter :: factr  = 1.0d+7, pgtol  = 1.0d-5
- 
+
 type, extends(optimizer) :: opt_lbfgsb
     private
     character(len=60)      :: task, csave

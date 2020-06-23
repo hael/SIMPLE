@@ -1903,10 +1903,9 @@ contains
     end subroutine clean_updatecnt
 
     !>  \brief  for balanced assignment of even/odd partitions
-    subroutine partition_eo( self, tseries )
+    subroutine partition_eo( self )
         class(oris),       intent(inout) :: self    !< instance
-        logical, optional, intent(in)    :: tseries !< logical tseries flag
-        integer              :: i
+        integer :: i
         do i = 1, self%n-1, 2
             call self%set(i,  'eo', 0.)
             call self%set(i+1,'eo', 1.)
