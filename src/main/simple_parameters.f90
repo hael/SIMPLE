@@ -43,6 +43,7 @@ type :: parameters
     character(len=3)      :: elongated='no'       !< elongated particles(yes|no){no}
     character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
     character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
+    character(len=3)      :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)      :: for3D='yes'          !< for 3D analysis(yes|no){yes}
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
@@ -136,7 +137,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: outstk=''            !< output image stack
     character(len=LONGSTRLEN) :: outvol=''            !< output volume{outvol.ext}
     character(len=LONGSTRLEN) :: pdbfile=''           !< PDB file
-    character(len=LONGSTRLEN) :: pdbfile2=''           !< PDB file, another one
+    character(len=LONGSTRLEN) :: pdbfile2=''          !< PDB file, another one
     character(len=LONGSTRLEN) :: pdfile='pdfile.bin'
     character(len=LONGSTRLEN) :: plaintexttab=''      !< plain text file of input parameters
     character(len=LONGSTRLEN) :: projfile=''          !< SIMPLE *.simple project file
@@ -165,7 +166,7 @@ type :: parameters
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)      :: automatic='no'       !< automatic thres for edge detect (yes|no) {no}
     character(len=4)      :: automsk='no'
-    character(len=STDLEN) :: tiltgroups='no'   !< 
+    character(len=STDLEN) :: tiltgroups='no'   !<
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|no){sum}
     character(len=STDLEN) :: clustermode = 'ar'   !< feature used for clustering (ar|dist|ang|maxint){ar}
@@ -523,6 +524,7 @@ contains
         call check_carg('exp_doc',        self%exp_doc)
         call check_carg('startype',       self%startype)
         call check_carg('fbody',          self%fbody)
+        call check_carg('fill_holes',     self%fill_holes)
         call check_carg('filter',         self%filter)
         call check_carg('for3D',          self%for3D)
         call check_carg('groupframes',    self%groupframes)

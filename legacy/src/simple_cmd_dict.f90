@@ -98,6 +98,7 @@ contains
         call chdict%push('extr_init',     'initial extremal ratio(0-1){0.5}')
         call chdict%push('ext',           'file extension{.mrc}')
         call chdict%push('fbody',         'file body')
+        call chdict%push('fill_holes',    'fill holes post binarisation(yes|no){no}')
         call chdict%push('filetab',       'list of files(.txt)')
         call chdict%push('filter',        'filter type{no}')
         call chdict%push('find',          'Fourier index')

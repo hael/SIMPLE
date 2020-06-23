@@ -9,6 +9,7 @@ implicit none
 #include "simple_local_flags.inc"
 type(detect_atoms_commander)           :: xdetect_atoms
 type(atoms_rmsd_commander)             :: xatoms_rmsd
+type(atoms_mask_commander)             :: xatoms_mask
 type(radial_dependent_stats_commander) :: xradial_dependent_stats
 type(atom_cluster_analysis_commander)  :: xatom_cluster_analysis
 type(nano_softmask_commander)          :: xnano_softmask
@@ -41,6 +42,8 @@ select case(prg)
         call xradial_dependent_stats%execute(cline)
     case( 'atom_cluster_analysis' )
         call xatom_cluster_analysis%execute(cline)
+    case( 'atoms_mask' )
+        call xatoms_mask%execute(cline)
     case( 'nano_softmask' )
         call xnano_softmask%execute(cline)
     case('geometry_analysis')

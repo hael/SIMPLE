@@ -75,6 +75,7 @@ type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
 ! declare simple_exec and simple_exec program specifications here
 type(simple_program), target :: atom_cluster_analysis
+type(simple_program), target :: atoms_mask
 type(simple_program), target :: atoms_rmsd
 type(simple_program), target :: calc_pspec
 type(simple_program), target :: center
@@ -287,6 +288,7 @@ contains
         call set_common_params
         call set_prg_ptr_array
         call new_atom_cluster_analysis
+        call new_atoms_mask
         call new_atoms_rmsd
         call new_calc_pspec
         call new_center
@@ -388,6 +390,7 @@ contains
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0
         call push2prg_ptr_array(atom_cluster_analysis)
+        call push2prg_ptr_array(atoms_mask)
         call push2prg_ptr_array(atoms_rmsd)
         call push2prg_ptr_array(calc_pspec)
         call push2prg_ptr_array(center)
@@ -498,6 +501,8 @@ contains
         select case(trim(which_program))
             case('atom_cluster_analysis')
                 ptr2prg => atom_cluster_analysis
+            case('atoms_mask')
+                ptr2prg => atoms_mask
             case('atoms_rmsd')
                 ptr2prg => atoms_rmsd
             case('calc_pspec')
@@ -804,6 +809,7 @@ contains
 
     subroutine list_quant_prgs_in_ui
         write(logfhandle,'(A)') atom_cluster_analysis%name
+        write(logfhandle,'(A)') atoms_mask%name
         write(logfhandle,'(A)') atoms_rmsd%name
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') geometry_analysis%name
@@ -1011,6 +1017,33 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_atom_cluster_analysis
+
+    subroutine new_atoms_mask
+        ! PROGRAM SPECIFICATION
+        call atoms_mask%new(&
+        &'atoms_mask', &                             ! name
+        &'Remove the atoms outside a given radius',& ! descr_short
+        &'is a program that takes a pdb file input, removes all atoms beyond a given diameter, &
+        & outputs a new pdb file with the coordinates removed and reports how many atoms were removed.',& ! descr long
+        &'quant_exec',&                 ! executable
+        &0, 2, 0, 0, 0, 1, 0, .false.)  ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call atoms_mask%set_input('parm_ios', 1, 'pdbfile',  'file', 'PDB', 'Input coords file in PDB format',  'Input coords file in PDB format', .true., '')
+        call atoms_mask%set_input('parm_ios', 2, 'pdbfile2', 'file', 'PDB', 'Output coords file in PDB format', 'Output coords file in PDB format', .true., '')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call atoms_mask%set_input('mask_ctrls', 1, 'max_rad', 'num', 'Maximum radius in A', 'Atoms outside a shell with this radius will be removed{20.} ', '{20.}', .true., 20.)
+        ! computer controls
+        ! <empty>
+    end subroutine new_atoms_mask
 
     subroutine new_atoms_rmsd
         ! PROGRAM SPECIFICATION

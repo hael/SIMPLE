@@ -7,7 +7,7 @@ module simple_nano_utils
   use simple_atoms,    only : atoms
   implicit none
 
-  public :: kabsch, read_pdb2matrix, write_matrix2pdb, find_couples
+  public :: kabsch, read_pdb2matrix, write_matrix2pdb, find_couples, atoms_mask
   private
 
 
@@ -431,5 +431,62 @@ contains
        endif
        deallocate(mask, points_P_out, points_Q_out)
   end subroutine find_couples_dp
+
+  ! This subrouine takes a pdb file input, removes all atoms beyond
+  ! a given diameter, outputs a new pdb file with the coordinates
+  ! removed and reports how many atoms were removed
+  subroutine atoms_mask(pdb_file_in, max_rad, pdb_file_out, nremoved)
+    use simple_fileio
+    character(len=*), intent(in)    :: pdb_file_in
+    character(len=*), intent(inout) :: pdb_file_out
+    real,             intent(in)    :: max_rad
+    integer,          intent(inout) :: nremoved
+    real, allocatable    :: points_in(:,:)
+    logical, allocatable :: mask(:)
+    type(atoms) :: atoms_in, atoms_out
+    real        :: m(3), dist
+    integer     :: n, i, cnt
+    character(len=STDLEN)         :: fbody
+    character(len=:), allocatable :: ext
+    call atoms_in%new(pdb_file_in)
+    n = atoms_in%get_n()
+    allocate(points_in(3,n), source = 0.)
+    allocate(mask(n), source = .false.)
+    ! center of mass of the input atoms
+    m = 0.
+    do i = 1,n
+        points_in(:,i) = atoms_in%get_coord(i)
+        m = m + points_in(:,i)
+    enddo
+    m = m/real(n)
+    ! distance to the center of gravity
+    do i = 1, n
+        dist = euclid(m,points_in(:,i))
+        if(dist <= max_rad) then
+            mask(i) = .true.
+        endif
+    enddo
+    ! save in the output pdb file
+    call atoms_out%new(count(mask),dummy=.true.)
+    cnt = 0
+    do i = 1, n
+        if(mask(i)) then
+            cnt = cnt + 1
+            call atoms_out%set_coord(cnt, points_in(:,i))
+            ! set element and name one by one in case of biatomic nanos
+            call atoms_out%set_element(cnt, atoms_in%get_element(i))
+            call atoms_out%set_name(cnt, atoms_in%get_name(i))
+        endif
+    enddo
+    ! remove the extension if present
+    ext   = fname2ext(trim(pdb_file_out))
+    fbody = get_fbody(trim(pdb_file_out), ext)
+    call atoms_out%writePDB(fbody)
+    nremoved = n - cnt
+    ! kill
+    deallocate(mask, points_in)
+    call atoms_in%kill
+    call atoms_out%kill
+  end subroutine atoms_mask
 
 end module simple_nano_utils

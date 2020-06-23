@@ -299,6 +299,7 @@ contains
         call cmd_dict%push('extr_init',     'initial extremal ratio(0-1){0.5}')
         call cmd_dict%push('ext',           'file extension{.mrc}')
         call cmd_dict%push('fbody',         'file body')
+        call cmd_dict%push('fill_holes',    'fill holes(yes|no){no}')
         call cmd_dict%push('filetab',       'list of files(.txt)')
         call cmd_dict%push('filter',        'filter type{no}')
         call cmd_dict%push('find',          'Fourier index')
@@ -527,6 +528,7 @@ contains
         call private_prgs(2)%push_opt_key('neg')
         call private_prgs(2)%push_opt_key('outvol')
         call private_prgs(2)%push_opt_key('outstk')
+        call private_prgs(2)%push_opt_key('fill_holes')
 
         ! CAVGASSEMBLE, for assembling class averages
         call private_prgs(3)%set_name('cavgassemble')

@@ -83,7 +83,7 @@ contains
         type(parameters) :: params
         type(binimage)   :: img_or_vol
         integer :: igrow, iptcl
-        logical :: is2D, otsu
+        logical :: is2D, otsu, fill_holes
         ! error check
         if( .not. cline%defined('stk') .and. .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! stk or vol1 needs to be present; simple_binarise')
@@ -95,12 +95,22 @@ contains
             THROW_HARD('either thres-based or npix-based binarisation; both keys cannot be present; simple_binarise')
         endif
         call params%new(cline)
+        if( cline%defined('fill_holes') )then
+          if(params%fill_holes .eq. 'yes') then
+            fill_holes = .true.
+          else
+            fill_holes = .false.
+          endif
+        endif
         if( cline%defined('stk') )then
             is2D = .true.
             call img_or_vol%new_bimg([params%box,params%box,1], params%smpd)
             do iptcl=1,params%nptcls
                 call img_or_vol%read(params%stk, iptcl)
                 call doit(otsu)
+                if(fill_holes) then
+                  call img_or_vol%fill_holes
+                endif
                 call img_or_vol%write(params%outstk, iptcl)
             end do
             if(otsu) write(logfhandle,*) 'Method applied for binarisation: OTSU algorithm'

@@ -19,6 +19,7 @@ public :: geometry_analysis_commander
 public :: radial_sym_test_commander
 public :: plot_atom_commander
 public :: dock_coords_commander
+public :: atoms_mask_commander
 
 private
 #include "simple_local_flags.inc"
@@ -47,6 +48,10 @@ type, extends(commander_base) :: nano_softmask_commander
   contains
     procedure :: execute      => exec_nano_softmask
 end type nano_softmask_commander
+type, extends(commander_base) :: atoms_mask_commander
+  contains
+    procedure :: execute      => exec_atoms_mask
+end type atoms_mask_commander
 type, extends(commander_base) :: geometry_analysis_commander
   contains
     procedure :: execute      => exec_geometry_analysis
@@ -296,6 +301,29 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_NANO_SOFTMASK NORMAL STOP ****')
     end subroutine exec_nano_softmask
+
+    subroutine exec_atoms_mask( self, cline )
+        use simple_nano_utils, only : atoms_mask
+        class(atoms_mask_commander), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline !< command line input
+        type(parameters) :: params
+        integer          :: nremoved
+        call params%new(cline)
+        if( .not. cline%defined('pdbfile') )then
+            THROW_HARD('ERROR! pdbfile needs to be present; exec_atoms_mask')
+        endif
+        if( .not. cline%defined('pdbfile2') )then
+            THROW_HARD('ERROR! pdbfile2 needs to be present; exec_atoms_mask')
+        endif
+        if( .not. cline%defined('max_rad') )then
+            THROW_HARD('ERROR! max_rad needs to be present; exec_atoms_mask')
+        endif
+        ! execute
+        call atoms_mask(params%pdbfile,params%max_rad,params%pdbfile2,nremoved)
+        write(logfhandle,*) 'REMOVED ', nremoved, 'ATOMS FROM THE PDBFILE'
+        ! end gracefully
+        call simple_end('**** SIMPLE_ATOMS_MASK NORMAL STOP ****')
+    end subroutine exec_atoms_mask
 
     subroutine exec_geometry_analysis( self, cline )
         use simple_atoms, only : atoms

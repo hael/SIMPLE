@@ -581,94 +581,111 @@ end module simple_test_chiara_try_mod
        real :: U(3,3), r(3), lrms, m_1(3), m_2(3), t(3)
        character(len=4) :: element
        type(atoms) :: atom_1, atom_2
+       character(len = 100) :: pdb_in, pdb_out
+       real    :: radius
+       integer :: nremoved
 
-       element = 'PT  '
-       call fcc_lattice(element,25.,160,0.358,m_1)
-       call atom_2%new('recvol_state01UPDATED_atom_centers.pdb')
-       call atom_1%new('FccLattice.pdb')
-       n_1 = atom_1%get_n()
-       n_2 = atom_2%get_n()
-       ! calculate center of mass
-       m_2 = 0.
-       do i = 1, n_2
-         m_2 = m_2 + atom_2%get_coord(i)
-       enddo
-       m_2 = m_2/real(n_2)
-       t = m_2 - m_1
-       call atom_2%translate(-t)
-       call atom_2%writePDB('atom_centers_translated')
-       ! Kabasch
-       ! theoretical_radius = 1.1
-       if(n_1 < n_2) then
-           N_min = n_1
-           N_max = n_2
-           allocate(points1(3,N_min), points2(3,N_max), source  = 0.)
-           do i = 1, N_max
-             points2(:,i) = atom_2%get_coord(i)
-             if(i <= N_min) points1(:3,i) = atom_1%get_coord(i)
-           enddo
-         else
-           N_min = n_2
-           N_max = n_1
-           allocate(points1(3,N_max), points2(3,N_min), source  = 0.)
-           do i = 1, N_max
-             points1(:,i) = atom_1%get_coord(i)
-             if(i <= N_min) points2(:3,i) = atom_2%get_coord(i)
-           enddo
-       endif
-       allocate(dist(N_max), dist_sq(N_max), source = 0.)
-       allocate(dist_close(N_max), source = 0.) ! there are going to be unused entry of the vector
-       allocate(mask(N_min), source = .false.)
-       allocate(mask_1(n_1), mask_2(n_2),source = .false.)
-       cnt  = 0
-       cnt2 = 0
-       cnt3 = 0
-       if(n_1 > n_2) then  !compare based on centers1
-           do i = 1, N_max
-               if(cnt2+cnt3+1 <=N_min) then ! just N_min couples, starting from 0
-                   dist(i) = pixels_dist(points1(:,i),points2(:,:),'min',mask,location, keep_zero = .true.)
-                   ! too far
-                   if(dist(i)*smpd > 2.*theoretical_radius) then
-                       dist(i) = 0.
-                       cnt = cnt + 1
-                   ! very close
-                   elseif(dist(i)*smpd <= CLOSE_THRESH) then
-                       cnt3 = cnt3 + 1
-                       dist_close(i) = dist(i)**2
-                       mask_1(i) = .true.
-                       mask_2(location(1)) = .true.
-                   ! correspondent
-                   elseif(dist(i)*smpd > CLOSE_THRESH .and. dist(i)*smpd<=2.*theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,2*theoretical_radius] pm
-                       cnt2 = cnt2 + 1
-                       mask(location(1)) = .false. ! not to consider the same atom more than once
-                       mask_1(i) = .true.
-                       mask_2(location(1)) = .true.
-                   endif
-                   dist_sq(i) = dist(i)**2 !formula wants them square
-                endif
-           enddo
-       else
-         ! TO COMPLETE
+       pdb_out = 'pdb_out.pdb'
+       pdb_in = 'recvol_state01UPDATED_atom_centers.pdb'
+       radius = 10.
+       call atoms_mask(pdb_in,radius,pdb_out,nremoved)
+       print *, 'nremoved : ', nremoved
+      ! *********************************
+      !  element = 'PT  '
+      !  call fcc_lattice(element,25.,160,0.358,m_1)
+      !  call atom_2%new('recvol_state01UPDATED_atom_centers.pdb')
+      !  call atom_1%new('FccLattice.pdb')
+      !  n_1 = atom_1%get_n()
+      !  n_2 = atom_2%get_n()
+      !  ! calculate center of mass
+      !  m_2 = 0.
+      !  do i = 1, n_2
+      !    m_2 = m_2 + atom_2%get_coord(i)
+      !  enddo
+      !  m_2 = m_2/real(n_2)
+      !  t = m_2 - m_1
+      !  call atom_2%translate(-t)
+      !  call atom_2%writePDB('atom_centers_translated')
+      !  ! Kabasch
+      !  ! theoretical_radius = 1.1
+      !  if(n_1 < n_2) then
+      !      N_min = n_1
+      !      N_max = n_2
+      !      allocate(points1(3,N_min), points2(3,N_max), source  = 0.)
+      !      do i = 1, N_max
+      !        points2(:,i) = atom_2%get_coord(i)
+      !        if(i <= N_min) points1(:3,i) = atom_1%get_coord(i)
+      !      enddo
+      !    else
+      !      N_min = n_2
+      !      N_max = n_1
+      !      allocate(points1(3,N_max), points2(3,N_min), source  = 0.)
+      !      do i = 1, N_max
+      !        points1(:,i) = atom_1%get_coord(i)
+      !        if(i <= N_min) points2(:3,i) = atom_2%get_coord(i)
+      !      enddo
+      !  endif
+      !  allocate(dist(N_max), dist_sq(N_max), source = 0.)
+      !  allocate(dist_close(N_max), source = 0.) ! there are going to be unused entry of the vector
+      !  allocate(mask(N_min), source = .false.)
+      !  allocate(mask_1(n_1), mask_2(n_2),source = .false.)
+      !  cnt  = 0
+      !  cnt2 = 0
+      !  cnt3 = 0
+      !  if(n_1 > n_2) then  !compare based on centers1
+      !      do i = 1, N_max
+      !          if(cnt2+cnt3+1 <=N_min) then ! just N_min couples, starting from 0
+      !              dist(i) = pixels_dist(points1(:,i),points2(:,:),'min',mask,location, keep_zero = .true.)
+      !              ! too far
+      !              if(dist(i)*smpd > 2.*theoretical_radius) then
+      !                  dist(i) = 0.
+      !                  cnt = cnt + 1
+      !              ! very close
+      !              elseif(dist(i)*smpd <= CLOSE_THRESH) then
+      !                  cnt3 = cnt3 + 1
+      !                  dist_close(i) = dist(i)**2
+      !                  mask_1(i) = .true.
+      !                  mask_2(location(1)) = .true.
+      !              ! correspondent
+      !              elseif(dist(i)*smpd > CLOSE_THRESH .and. dist(i)*smpd<=2.*theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,2*theoretical_radius] pm
+      !                  cnt2 = cnt2 + 1
+      !                  mask(location(1)) = .false. ! not to consider the same atom more than once
+      !                  mask_1(i) = .true.
+      !                  mask_2(location(1)) = .true.
+      !              endif
+      !              dist_sq(i) = dist(i)**2 !formula wants them square
+      !           endif
+      !      enddo
+      !  else
+      !    ! TO COMPLETE
+      !
+      !  endif
+      !  rmsd = sqrt(sum(dist_sq)/real(count(abs(dist_sq) > TINY)))
+      !  write(*,*) 'RMSD CALCULATED CONSIDERING ALL ATOMS = ', rmsd*smpd, ' A'
+      !  write(*,*) 'RMSD ATOMS THAT CORRESPOND WITHIN 1 A = ', (sqrt(sum(dist_close)/real(count(dist_close > TINY))))*smpd, ' A'
+      !  ! debug
+      !  print *, 'count(mask_1)', count(mask_1), 'count(mask_2)', count(mask_2), 'SHOULD BE SAME'
+      !  ! Kabsch testing
+      !  ! do 1 =
+      !  ! GENERATE PPOINTS! and PPOINTS 2
+      !  ! ppoints1 = pack(points1, mask_1)
+      !  ! ppoints2 = pack(points2, mask_2)
+      !
+      ! ! enndo
+      !
+      !  call kabsch(ppoints1,ppoints2,U,r,lrms)
+      !  print *, 'Rotation matrix: '
+      !  call vis_mat(U)
+      !  print *, 'Translation vec: ', r
+      !  print *, 'RMSD: ', lrms
+       !***********************************
 
-       endif
-       rmsd = sqrt(sum(dist_sq)/real(count(abs(dist_sq) > TINY)))
-       write(*,*) 'RMSD CALCULATED CONSIDERING ALL ATOMS = ', rmsd*smpd, ' A'
-       write(*,*) 'RMSD ATOMS THAT CORRESPOND WITHIN 1 A = ', (sqrt(sum(dist_close)/real(count(dist_close > TINY))))*smpd, ' A'
-       ! debug
-       print *, 'count(mask_1)', count(mask_1), 'count(mask_2)', count(mask_2), 'SHOULD BE SAME'
-       ! Kabsch testing
-       ! do 1 =
-       ! GENERATE PPOINTS! and PPOINTS 2
-       ! ppoints1 = pack(points1, mask_1)
-       ! ppoints2 = pack(points2, mask_2)
 
-      ! enndo
 
-       call kabsch(ppoints1,ppoints2,U,r,lrms)
-       print *, 'Rotation matrix: '
-       call vis_mat(U)
-       print *, 'Translation vec: ', r
-       print *, 'RMSD: ', lrms
+
+
+
+
        ! print *, 'coords after kabsch, ppoints1'
        ! call vis_mat(ppoints1)
        ! print *, 'points2'
