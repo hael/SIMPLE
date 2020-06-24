@@ -1155,6 +1155,7 @@ contains
         type(parameters)            :: params
         type(binimage), allocatable :: imgs_mask(:) ! images mask
         type(image),    allocatable :: imgs(:)      ! images
+        type(image)                 :: roavg        ! rotational average
         type(stats_struct)          :: diamstats    ! stats struct
         real,           allocatable :: diams(:)     ! diameters
         integer :: funit, i, loc(1)
@@ -1176,6 +1177,7 @@ contains
             call imgs_mask(i)%read(params%stk, i)
             call imgs(i)%copy(imgs_mask(i))
         end do
+        call roavg%new([params%box,params%box,1],params%smpd)
         ! prepare thread safe images in image class
         call imgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
         write(logfhandle,'(A)') '>>> ESTIMATING DIAMETERS THROUGH BINARY IMAGE PROCESSING'
@@ -1187,9 +1189,14 @@ contains
             ! non-local mneans filter for denoising
             call imgs_mask(i)%NLmean
             call imgs_mask(i)%write(FILT, i)
+            ! rotational averaging
+            if( params%roavg .eq. 'yes' )then
+                call imgs_mask(i)%roavg(params%angstep, roavg)
+                call imgs_mask(i)%copy(roavg)
+            endif
             ! binarise with Otsu
             call otsu_robust_fast(imgs_mask(i), is2D=.true., noneg=.false., thresh=thresh)
-            ! hard mask for removing noise, default diameter 80% of the box size
+            ! hard mask for removing noise, default diameter 90% of the box size
             call imgs_mask(i)%mask(msk_rad,'hard')
             call imgs_mask(i)%set_imat     ! integer matrix set in binimage instance
             call imgs_mask(i)%grow_bins(9) ! to compensate low-pass erosion/binarization
@@ -1223,6 +1230,7 @@ contains
             call imgs_mask(i)%kill_bimg
             call imgs(i)%kill
         end do
+        call roavg%kill
         deallocate(imgs, diams, imgs_mask)
         ! end gracefully
         call simple_end('**** SIMPLE_ESTIMATE_DIAM NORMAL STOP ****')

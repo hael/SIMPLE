@@ -1664,13 +1664,14 @@ contains
         &'Estimation of a suitable mask radius for nanoparticle time-series',&                                        ! descr_short
         &'is a program for estimation of a suitable mask radius for spherical masking of nanoparticle time-series ',& ! descr_long
         &'single_exec',&                                                                                              ! executable
-        &1, 1, 0, 0, 1, 1, 1, .false.)                                               ! # entries in each group, requires sp_project
+        &1, 2, 0, 0, 1, 1, 1, .false.)                                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call estimate_diam%set_input('img_ios', 1, stk)
         estimate_diam%img_ios(1)%required = .true.
         ! parameter input/output
         call estimate_diam%set_input('parm_ios', 1, smpd)
+        call estimate_diam%set_input('parm_ios', 2, 'roavg', 'binary', 'Rotationally average', 'Rotationally average before diam estimate(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
         ! <empty>
         ! search controls
