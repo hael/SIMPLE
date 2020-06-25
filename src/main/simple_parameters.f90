@@ -1132,7 +1132,7 @@ contains
         self%split_mode = 'even'
         nparts_set      = .false.
         if( cline%defined('nparts') ) nparts_set  = .true.
-        ! set lenght of number string for zero padding
+        ! set length of number string for zero padding
         if( .not. cline%defined('numlen') )then
             if( nparts_set ) self%numlen = len(int2str(self%nparts))
         endif
@@ -1438,7 +1438,7 @@ contains
             self%nypatch = 0
         endif
         select case(trim(self%mcconvention))
-        case('simple','unblur','motioncorr','relion')
+        case('simple','unblur','motioncorr','relion','first','central')
         case DEFAULT
             THROW_HARD('Invalid entry for MCCONVENTION='//trim(self%mcconvention))
         end select

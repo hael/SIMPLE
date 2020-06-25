@@ -343,6 +343,7 @@ contains
         call cmd_dict%push('lpstart',       'start low-pass limit(in A){15}')
         call cmd_dict%push('lpstop',        'stop low-pass limit(in A){8}')
         call cmd_dict%push('lpthresh',      'resolution rejection limit(in A){30}')
+        call cmd_dict%push('makemovie',     'produces files to generate a movie with ffmpeg(yes|no){no}')
         call cmd_dict%push('masscen',       'center using binarisation and mass centering(yes|no){no}')
         call cmd_dict%push('match_filt',    'matched filter on (yes|no){yes}')
         call cmd_dict%push('maxits',        'maximum # iterations')
