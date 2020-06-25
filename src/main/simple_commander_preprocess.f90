@@ -1613,7 +1613,9 @@ contains
                 cnt = cnt + 1
                 call spproj_part%os_mic%get_ori(imic, o_mic)
                 call spproj%os_mic%set_ori(cnt,o_mic)
-                if( nint(o_mic%get('nptcls')) > 0 ) nstks = nstks + 1
+                if( o_mic%isthere('nptcls') )then
+                    if( nint(o_mic%get('nptcls')) > 0 ) nstks = nstks + 1
+                endif
             enddo
             call spproj_part%kill
         enddo
@@ -1815,7 +1817,11 @@ contains
             ! main loop
             iptcl_glob = 0 ! extracted particle index among ALL stacks
             do imic = 1,nmics_here
-                if( .not.mics_mask(imic) )cycle
+                if( .not.mics_mask(imic) )then
+                    call build%spproj_field%set(imic, 'nptcls', 0.)
+                    call build%spproj_field%set(imic, 'state', 0.)
+                    cycle
+                endif
                 ! fetch micrograph
                 call build%spproj_field%get_ori(imic, o_mic)
                 call o_mic%getter('imgkind', imgkind)
@@ -1972,8 +1978,6 @@ contains
     end subroutine exec_extract
 
     subroutine exec_reextract_distr( self, cline )
-        use simple_oris,  only: oris
-        use simple_ori,   only: ori
         class(reextract_commander_distr), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
         type(parameters)                        :: params
