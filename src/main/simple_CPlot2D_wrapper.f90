@@ -212,4 +212,97 @@ contains
         call C_CDataPoint__delete(this%object)
         this%object = C_NULL_PTR
     end subroutine CDataPoint__delete
+
+    subroutine CDataSet_addpoint(this, x, y)
+        type(CDataSet_type), intent(inout) :: this
+        real,                  intent(in)    :: x,y
+        type(CDataPoint_type) :: point
+        call CDataPoint__new2( real(x, c_double), real(y, c_double), point)
+        call CDataSet__AddDataPoint(this, point)
+        call CDataPoint__delete(point)
+    end subroutine CDataSet_addpoint
+
+    subroutine test_CPlot2D
+        include 'simple_lib.f08'
+        ! use CPlot2D_wrapper_module
+        type(str4arr)             :: title
+        type(CPlot2D_type)        :: plot2D
+        type(CDataSet_type)       :: dataSet
+        character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, ps2jpeg_cmd, fname_jpeg, fname_eps
+        real    :: vals1(50,2), vals2(50,2), left, right, up, down, xdim,ydim
+        integer :: l, i, iostat
+        call seed_rnd
+        do i =1,50
+            vals1(i,:) = [ran3(), ran3()]
+            vals2(i,:) = [ran3(), ran3()]
+        enddo
+        call CPlot2D__new(plot2D, 'some name'//C_NULL_CHAR)
+        call CPlot2D__SetXAxisSize(plot2D, 400.0_c_double)
+        call CPlot2D__SetYAxisSize(plot2D, 400.0_c_double)
+        call CPlot2D__SetDrawXAxisGridLines(plot2D, C_TRUE)
+        call CPlot2D__SetDrawYAxisGridLines(plot2D, C_TRUE)
+        call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
+        call CPlot2D__SetFlipY(plot2D, C_TRUE)
+        ! #0 dummy points for padding, arbitrary
+        left  = min(minval(vals1(:,1)),minval(vals2(:,1)))
+        right = max(maxval(vals1(:,1)),maxval(vals2(:,1)))
+        down  = min(minval(vals1(:,2)),minval(vals2(:,2)))
+        up    = max(maxval(vals1(:,2)),maxval(vals2(:,2)))
+        xdim  = right-left
+        ydim  = up-down
+        left  = left  - 0.1*xdim; right = right + 0.1*xdim
+        up    = up    + 0.1*ydim; down  = down  - 0.1*ydim
+        call CDataSet__new(dataSet)
+        call CDataSet__SetDrawMarker(dataSet, C_FALSE)
+        call CDataSet__SetDatasetColor(dataSet, 1.0_c_double, 1.0_c_double, 1.0_c_double)
+        call CDataSet_addpoint(dataSet, left, down)
+        call CDataSet_addpoint(dataSet, right,down)
+        call CDataSet_addpoint(dataSet, right,up)
+        call CDataSet_addpoint(dataSet, left, up)
+        call CPlot2D__AddDataSet(plot2D, dataset)
+        call CDataSet__delete(dataset)
+        ! #1, line, no marker, one dataset
+        call CDataSet__new(dataSet)
+        call CDataSet__SetDrawMarker(dataSet, C_FALSE) ! turn to C_TRUE for markers
+        call CDataSet__SetDatasetColor(dataSet, 0.0_c_double, 0.0_c_double, 1.0_c_double)
+        do i = 1,50
+            call CDataSet_addpoint(dataSet, vals1(i,1), vals1(i,2))
+        enddo
+        call CPlot2D__AddDataSet(plot2D, dataset)
+        call CDataSet__delete(dataset)
+        ! #2, markers, no line, each point is a dataset
+        do i = 1,50
+            call CDataSet__new(dataSet)
+            call CDataSet__SetDrawMarker(dataSet, C_TRUE)
+            call CDataSet__SetMarkerSize(dataSet, real(max(5.,real(i)/2.),c_double))
+            call CDataSet__SetDatasetColor(dataSet, 1.0_c_double, real(real(i)/100.+0.5,c_double), 0.0_c_double)
+            call CDataSet_addpoint(dataSet, vals2(i,1), vals2(i,2))
+            call CPlot2D__AddDataSet(plot2D, dataset)
+            call CDataSet__delete(dataset)
+        enddo
+        ! legend
+        title%str = 'X axis legend'//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(plot2D, title%str)
+        title%str = 'Y axis legend'//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(plot2D, title%str)
+        ! output
+        fname_eps = 'test.eps'//C_NULL_CHAR
+        call CPlot2D__OutputPostScriptPlot(plot2D, fname_eps)
+        call CPlot2D__delete(plot2D)
+        l = len_trim(fname_eps)
+        fname_eps = fname_eps(:l-1) ! removing trailing C NULL character
+        ! conversion to JPEG
+        fname_jpeg  = trim(get_fbody(fname_eps,'eps'))//'.jpeg'
+        ps2jpeg_cmd = 'gs -q -sDEVICE=jpeg -dJPEGQ=96 -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=512 -dDEVICEHEIGHTPOINTS=512 -sOutputFile='&
+            //trim(fname_jpeg)//' '//trim(fname_eps)
+        call exec_cmdline(trim(adjustl(ps2jpeg_cmd)), suppress_errors=.true., exitstat=iostat)
+        ! conversion to PDF
+        fname_pdf  = trim(get_fbody(fname_eps,'eps'))//'.pdf'
+        ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=512 -dDEVICEHEIGHTPOINTS=512 -sOutputFile='&
+            //trim(fname_pdf)//' '//trim(fname_eps)
+        call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+        ! remove eps
+        if( iostat == 0 ) call del_file(fname_eps)
+    end subroutine test_CPlot2D
+
 end module CPlot2D_wrapper_module
