@@ -1115,34 +1115,36 @@ contains
         real, intent(in)           :: ang
         integer, intent(in)        :: choice
         real :: r(3,3)
-        real :: ang_in_rad
-        ang_in_rad = ang*pi/180.
+        real :: ang_in_rad, cosang, sinang
+        ang_in_rad = deg2rad(ang)
+        cosang = cos( ang_in_rad )
+        sinang = sin( ang_in_rad )
         if ( choice == 1 ) then
             r( 1,1 ) = 1.
             r( 1,2 ) = 0.
             r( 1,3 ) = 0.
             r( 2,1 ) = 0.
-            r( 2,2 ) = cos( ang_in_rad )
-            r( 2,3 ) =-sin( ang_in_rad )
+            r( 2,2 ) = cosang
+            r( 2,3 ) =-sinang
             r( 3,1 ) = 0.
-            r( 3,2 ) = sin( ang_in_rad )
-            r( 3,3 ) = cos( ang_in_rad )
+            r( 3,2 ) = sinang
+            r( 3,3 ) = cosang
         elseif ( choice == 2 ) then
-            r( 1,1 ) = cos( ang_in_rad )
+            r( 1,1 ) = cosang
             r( 1,2 ) = 0.
-            r( 1,3 ) = -sin( ang_in_rad )
+            r( 1,3 ) = -sinang
             r( 2,1 ) = 0.
             r( 2,2 ) = 1.
             r( 2,3 ) = 0.
-            r( 3,1 ) = sin( ang_in_rad )
+            r( 3,1 ) = sinang
             r( 3,2 ) = 0.
-            r( 3,3 ) = cos( ang_in_rad )
+            r( 3,3 ) = cosang
         elseif ( choice == 3 ) then
-            r( 1,1 ) = cos( ang_in_rad )
-            r( 1,2 ) = sin( ang_in_rad )
+            r( 1,1 ) = cosang
+            r( 1,2 ) = sinang
             r( 1,3 ) = 0.
-            r( 2,1 ) = -sin( ang_in_rad )
-            r( 2,2 ) = cos( ang_in_rad )
+            r( 2,1 ) = -sinang
+            r( 2,2 ) = cosang
             r( 2,3 ) = 0.
             r( 3,1 ) = 0.
             r( 3,2 ) = 0.
@@ -1157,34 +1159,36 @@ contains
         real, intent(in)           :: ang
         integer, intent(in)        :: choice
         real :: r(3,3)
-        real :: ang_in_rad
-        ang_in_rad = ang*pi/180.
+        real :: ang_in_rad, cosang, sinang
+        ang_in_rad = deg2rad(ang)
+        cosang = cos( ang_in_rad )
+        sinang = sin( ang_in_rad )
         if ( choice == 1 ) then
             r( 1,1 ) = 0.
             r( 1,2 ) = 0.
             r( 1,3 ) = 0.
             r( 2,1 ) = 0.
-            r( 2,2 ) = -sin( ang_in_rad )
-            r( 2,3 ) = -cos( ang_in_rad )
+            r( 2,2 ) = -sinang
+            r( 2,3 ) = -cosang
             r( 3,1 ) = 0.
-            r( 3,2 ) =  cos( ang_in_rad )
-            r( 3,3 ) = -sin( ang_in_rad )
+            r( 3,2 ) =  cosang
+            r( 3,3 ) = -sinang
         elseif ( choice == 2 ) then
-            r( 1,1 ) = -sin( ang_in_rad )
+            r( 1,1 ) = -sinang
             r( 1,2 ) = 0.
-            r( 1,3 ) = -cos( ang_in_rad )
+            r( 1,3 ) = -cosang
             r( 2,1 ) = 0.
             r( 2,2 ) = 0.
             r( 2,3 ) = 0.
-            r( 3,1 ) =  cos( ang_in_rad )
+            r( 3,1 ) =  cosang
             r( 3,2 ) = 0.
-            r( 3,3 ) = -sin( ang_in_rad )
+            r( 3,3 ) = -sinang
         elseif ( choice == 3 ) then
-            r( 1,1 ) = -sin( ang_in_rad )
-            r( 1,2 ) =  cos( ang_in_rad )
+            r( 1,1 ) = -sinang
+            r( 1,2 ) =  cosang
             r( 1,3 ) = 0.
-            r( 2,1 ) = -cos( ang_in_rad )
-            r( 2,2 ) = -sin( ang_in_rad )
+            r( 2,1 ) = -cosang
+            r( 2,2 ) = -sinang
             r( 2,3 ) = 0.
             r( 3,1 ) = 0.
             r( 3,2 ) = 0.
