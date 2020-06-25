@@ -5,7 +5,7 @@ use simple_image,   only: image
 use simple_oris,    only: oris
 implicit none
 
-public :: make_pattern_stack
+public :: make_pattern_stack, prep_imgfile4movie
 public :: acf_stack, make_avg_stack, stats_imgfile, frameavg_stack
 private
 
@@ -200,4 +200,34 @@ contains
         end do
         call img%kill
     end subroutine stats_imgfile
+
+    !>  \brief  is for calculating image statistics
+    subroutine prep_imgfile4movie( fname, smpd )
+        character(len=*), intent(in) :: fname
+        real,             intent(in) :: smpd
+        character(len=:), allocatable :: fname_out
+        type(image)       :: img
+        integer           :: i, n, ldim(3), numlen, funit, iostat, nptcls
+        call find_ldim_nptcls(fname, ldim, nptcls)
+        ldim(3) = 1
+        call img%new(ldim, smpd)
+        ! jpeg output
+        numlen = len(int2str(nptcls))
+        do i=1,nptcls
+            call progress(i, nptcls)
+            fname_out = fname_new_ext(basename(fname), int2str_pad(i,numlen)//'.jpg')
+            call img%read(fname, i)
+            call img%write_jpg(fname_out, quality=100, norm=.false.)
+        end do
+        call img%kill
+        ! script ouput
+        call fopen(funit, status='replace', action='write', file='makemovie.script',iostat=iostat)
+        write(funit,*)'# Increase the argument to the first occurence of argument -r:v for a faster movie'
+        write(funit,*)'cat '//trim(fname_new_ext(basename(fname),'*.jpg'))//' | ffmpeg -y -f image2pipe -vcodec mjpeg -r:v 3 '&
+            &//'-i - -vcodec:v libx264 -preset veryslow -r:v 25 '//fname_new_ext(basename(fname),'mp4')
+        call fclose(funit)
+        iostat = simple_chmod('makemovie.script','+x')
+        write(logfhandle,'(A)')'>>> Execute the generated script: ./makemovie.script'
+    end subroutine prep_imgfile4movie
+
 end module simple_stackops

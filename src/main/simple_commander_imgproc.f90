@@ -1061,6 +1061,10 @@ contains
             call subtr_backgr_imgfile(params%stk, params%outstk, params%smpd, params%lp)
             goto 999
         endif
+        if( params%makemovie .eq. 'yes' )then
+            call prep_imgfile4movie(params%stk, params%smpd)
+            goto 999
+        endif
         ! default
         write(logfhandle,*)'Nothing to do!'
         ! end gracefully

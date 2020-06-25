@@ -115,8 +115,6 @@ contains
             ! directory
             if( index(str, PATH_SEPARATOR) /= 0 ) return
             ! real
-            ! read(str,*,iostat=iostat) rvar
-            ! isreal = (iostat == 0)
             isreal = sscanf(str(1:l)//C_NULL_CHAR,"%f"//C_NULL_CHAR,rvar) /= 0
         end subroutine str2real_local
 
