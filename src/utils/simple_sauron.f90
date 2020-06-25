@@ -6,6 +6,7 @@ use simple_strings, only: str2format, str2real, str2int, parsestr, split_str, co
 use simple_error,   only: allocchk
 use simple_hash,    only: hash
 use simple_chash,   only: chash
+use simple_syslib,  only: sscanf
 implicit none
 
 contains
@@ -103,18 +104,20 @@ contains
             character(len=*), intent(in)  :: str
             logical         , intent(out) :: isreal
             real,             intent(out) :: rvar
-            integer :: iostat, i
+            integer :: i, l
             isreal = .false.
-            i      = index(str, '.')
+            i = index(str, '.')
+            l = len_trim(str)
             ! file name
-            if( i /= 0 .and. i < len_trim(str)  )then
+            if( i /= 0 .and. i < l )then
                 if( char_is_a_letter(str(i+1:i+1)) ) return
             endif
             ! directory
             if( index(str, PATH_SEPARATOR) /= 0 ) return
             ! real
-            read(str,*,iostat=iostat) rvar
-            isreal = (iostat == 0)
+            ! read(str,*,iostat=iostat) rvar
+            ! isreal = (iostat == 0)
+            isreal = sscanf(str(1:l)//C_NULL_CHAR,"%f"//C_NULL_CHAR,rvar) /= 0
         end subroutine str2real_local
 
     end subroutine sauron_ori_parser
