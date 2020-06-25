@@ -1592,7 +1592,7 @@ contains
         ! filter controls
         call detect_atoms%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
-        call detect_atoms%set_input('mask_ctrls', 1, 'msk','num','Mask radius','Mask radius in pixels for application of a soft circular mask', 'mask radius in pixels', .false., 75.)
+        call detect_atoms%set_input('mask_ctrls', 1, 'msk','num','Mask radius','Mask radius in pixels for application of a soft circular mask', 'mask radius in pixels', .true., 75.)
         ! computer controls
         call detect_atoms%set_input('comp_ctrls', 1, nthr)
     end subroutine new_detect_atoms

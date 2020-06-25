@@ -54,6 +54,7 @@ type :: parameters
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
     character(len=3)      :: locres='no'          !< filter based on local resolution or not(yes|no){no}
+    character(len=3)      :: makemovie='no'
     character(len=3)      :: masscen='no'         !< center to center of gravity(yes|no){no}
     character(len=3)      :: match_filt='yes'     !< matched filter on (yes|no){yes}
     character(len=3)      :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
@@ -541,6 +542,7 @@ contains
         call check_carg('label',          self%label)
         call check_carg('local',          self%local)
         call check_carg('locres',         self%locres)
+        call check_carg('makemovie',      self%makemovie)
         call check_carg('masscen',        self%masscen)
         call check_carg('match_filt',     self%match_filt)
         call check_carg('mcpatch',        self%mcpatch)
