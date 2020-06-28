@@ -451,7 +451,7 @@ contains
         class(cmdline),         intent(inout)   :: cline
         integer                                 :: moviecount, i
         logical                                 :: micsource
-        character (len=:),      allocatable     :: moviename
+        character (len=:),      allocatable     :: moviename, tmpname
         
         if (spproj%os_mic%get_noris() .gt. 0) then
             moviecount = spproj%os_mic%get_noris()
@@ -474,12 +474,12 @@ contains
         do i=1, moviecount
             if(micsource) then
                 moviename = trim(adjustl(basename(spproj%os_mic%get_static(i, 'intg'))))
-                moviename = moviename(:len_trim(moviename)-9)
+                tmpname   = moviename(:len_trim(moviename)-9)
             else
                 moviename = trim(adjustl(basename(spproj%os_stk%get_static(i, 'stk'))))
-                moviename = moviename(12:len_trim(moviename)-9)
+                tmpname   = moviename(12:len_trim(moviename)-9)
             endif
-            self%movienames(i) = moviename
+            self%movienames(i) = tmpname
         end do
         
     end subroutine find_movienames
@@ -490,7 +490,7 @@ contains
         class(sp_project),      intent(inout)   :: spproj
         class(cmdline),         intent(inout)   :: cline
         integer                                 :: i,j,k
-        character (len=:),      allocatable     :: tiltname
+        character (len=:),      allocatable     :: tiltname, tmpname
         character(len=20),      allocatable     :: tiltgroups(:)
         
         if(.NOT. allocated(tiltgroups)) then
@@ -505,8 +505,8 @@ contains
         
         do i=1, size(self%movienames)
             tiltname = trim(adjustl(self%movienames(i)))
-            tiltname = tiltname(index(tiltname,'Data_') + 5:)
-            tiltname = tiltname(:index(tiltname,'_')-1)
+            tmpname  = tiltname(index(tiltname,'Data_')+5:)
+            tiltname = tmpname(:index(tmpname,'_')-1)
             
             if(.NOT. any(tiltgroups .eq. tiltname)) then
                 tiltgroups(j) = tiltname
@@ -752,7 +752,7 @@ contains
        IFAULT = 2                ! too many iterations
        RETURN
  
-      END  ! of KMPP
+      END SUBROUTINE KMPP ! of KMPP
 
     subroutine allocate_opticsgroups(self, cline, spproj)
         
