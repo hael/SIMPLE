@@ -5,7 +5,7 @@ use simple_error, only: simple_exception
 use simple_defs
 implicit none
 
-public :: find_larger_magic_box, find_magic_box, find_boxmatch
+public :: find_larger_magic_box, find_magic_box, find_boxmatch, magic_pftsz
 public :: print_magic_box_range, find_magic_boxes4scale, autoscale
 private
 #include "simple_local_flags.inc"
@@ -20,6 +20,21 @@ integer :: boxsizes(NSZS) = [32, 36, 40, 48, 52, 56, 64, 66, 70, 72, 80, 84, 88,
 
 
 contains
+
+    !>  For finding fftw-friendly dimension for polar representation
+    integer function magic_pftsz( ring2 )
+        integer, intent(in) :: ring2
+        real    :: a
+        integer :: pftsz, pftsz_old
+        a = PI*real(ring2)
+        pftsz_old   = round2even(a)
+        pftsz       = find_magic_box(nint(a))
+        magic_pftsz = pftsz
+        if( real(abs(pftsz-pftsz_old))/real(pftsz_old) > 0.1 )then
+            ! defaults to original logic when relative size difference > 10%
+            magic_pftsz = pftsz_old
+        endif
+    end function magic_pftsz
 
     function find_larger_magic_box( trial_box ) result( best_box )
         integer, intent(in) :: trial_box

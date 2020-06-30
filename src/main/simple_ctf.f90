@@ -470,7 +470,7 @@ contains
         real,           intent(in)    :: dfy         !< defocus y-axis
         real,           intent(in)    :: angast      !< angle of astigmatism
         real,           intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
-        integer :: ldim(3),logi(3),h,k,phys(3),sh
+        integer :: ldim(3),logi(3),h,k,phys(3)
         real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3)
         real    :: rh,rk
         ! initialize
@@ -478,12 +478,11 @@ contains
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
         do h=lims(1,1),lims(1,2)
+            rh   = real(h)
+            hinv = rh * inv_ldim(1)
             do k=lims(2,1),lims(2,2)
-                rh    = real(h)
                 rk    = real(k)
-                sh     = nint(sqrt(real(h*h+k*k)))
                 ! calculate CTF and CTF**2.0 values
-                hinv      = rh * inv_ldim(1)
                 kinv      = rk * inv_ldim(2)
                 spaFreqSq = hinv*hinv + kinv*kinv
                 ang       = atan2(rh,rk)
@@ -491,7 +490,7 @@ contains
                 if( imode <  3 ) tval = self%eval(spaFreqSq, ang, add_phshift)
                 rho(h,k) = tval * tval
                 if( imode == 1 ) tval = abs(tval)
-                ! multiply image with tval & weight
+                ! multiply image with tval
                 logi   = [h,k,0]
                 phys   = img%comp_addr_phys(logi)
                 call img%mul_cmat_at(phys(1),phys(2),phys(3), tval)

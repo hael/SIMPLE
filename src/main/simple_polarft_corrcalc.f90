@@ -255,9 +255,9 @@ contains
         else
             self%nptcls  = self%pfromto(2) - self%pfromto(1) + 1       !< the total number of particles in partition
         endif
-        self%nrefs       = nrefs                                       !< the number of references (logically indexded [1,nrefs])
-        self%nrots       = round2even(twopi * real(params_glob%ring2)) !< number of in-plane rotations for one pft  (determined by radius of molecule)
-        self%pftsz       = self%nrots / 2                              !< size of reference (nrots/2) (number of vectors used for matching)
+        self%nrefs = nrefs                          !< the number of references (logically indexded [1,nrefs])
+        self%pftsz = magic_pftsz(params_glob%ring2) !< size of reference (number of vectors used for matching,determined by radius of molecule)
+        self%nrots = 2 * self%pftsz                 !< number of in-plane rotations for one pft  (pftsz*2)
         ! allocate optimal low-pass filter if matched filter is on
         if( params_glob%l_match_filt )then
             allocate(self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,self%nrefs),source=1.)
@@ -919,7 +919,9 @@ contains
         integer, optional,         intent(in)    :: pfromto(2)
         type(ctfparams) :: ctfparms(nthr_glob)
         type(ctf)       :: tfuns(nthr_glob)
-        real(sp)        :: inv_ldim(3),hinv,kinv,spaFreqSq,ang
+        real(sp)        :: spaFreqSq_mat(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
+        real(sp)        :: ang_mat(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
+        real(sp)        :: inv_ldim(3),hinv,kinv
         integer         :: i,irot,k,iptcl,ithr,ppfromto(2),ctfmatind
         logical         :: present_pfromto
         present_pfromto = present(pfromto)
@@ -929,8 +931,17 @@ contains
         allocate(self%ctfmats(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls), source=0., stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: simple_polarft_corrcalc :: create_polar_absctfmats",alloc_stat)
         inv_ldim = 1./real(self%ldim)
-        !$omp parallel do default(shared) private(i,iptcl,ctfmatind,ithr,irot,k,hinv,kinv,spaFreqSq,ang)&
-        !$omp schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(irot,k,hinv,kinv) schedule(static) proc_bind(close)
+        do irot=1,self%pftsz
+            do k=params_glob%kfromto(1),params_glob%kfromto(2)
+                hinv = self%polar(irot,k) * inv_ldim(1)
+                kinv = self%polar(irot+self%nrots,k) * inv_ldim(2)
+                spaFreqSq_mat(irot,k) = hinv*hinv+kinv*kinv
+                ang_mat(irot,k)       = atan2(self%polar(irot+self%nrots,k),self%polar(irot,k))
+            end do
+        end do
+        !$omp end parallel do
+        !$omp parallel do default(shared) private(i,iptcl,ctfmatind,ithr) schedule(static) proc_bind(close)
         do i=ppfromto(1),ppfromto(2)
             if( .not. present_pfromto )then
                 iptcl     = i
@@ -944,19 +955,11 @@ contains
                 ctfparms(ithr) = spproj%get_ctfparams(trim(oritype), iptcl)
                 tfuns(ithr)    = ctf(ctfparms(ithr)%smpd, ctfparms(ithr)%kv, ctfparms(ithr)%cs, ctfparms(ithr)%fraca)
                 call tfuns(ithr)%init(ctfparms(ithr)%dfx, ctfparms(ithr)%dfy, ctfparms(ithr)%angast)
-                do irot=1,self%pftsz
-                    do k=params_glob%kfromto(1),params_glob%kfromto(2)
-                        hinv           = self%polar(irot,k)*inv_ldim(1)
-                        kinv           = self%polar(irot+self%nrots,k)*inv_ldim(2)
-                        spaFreqSq      = hinv*hinv+kinv*kinv
-                        ang            = atan2(self%polar(irot+self%nrots,k),self%polar(irot,k))
-                        if( ctfparms(ithr)%l_phaseplate )then
-                            self%ctfmats(irot,k,self%pinds(ctfmatind)) = abs( tfuns(ithr)%eval(spaFreqSq, ang, ctfparms(ithr)%phshift) )
-                        else
-                            self%ctfmats(irot,k,self%pinds(ctfmatind)) = abs( tfuns(ithr)%eval(spaFreqSq, ang) )
-                        endif
-                    end do
-                end do
+                if( ctfparms(ithr)%l_phaseplate )then
+                    self%ctfmats(:,:,self%pinds(ctfmatind)) = abs(tfuns(ithr)%eval(spaFreqSq_mat(:,:), ang_mat(:,:), ctfparms(ithr)%phshift) )
+                else
+                    self%ctfmats(:,:,self%pinds(ctfmatind)) = abs(tfuns(ithr)%eval(spaFreqSq_mat(:,:), ang_mat(:,:)))
+                endif
             endif
         end do
         !$omp end parallel do
