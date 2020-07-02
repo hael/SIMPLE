@@ -116,6 +116,11 @@ interface csq
     module procedure csq_2
 end interface
 
+interface csq_fast
+    module procedure csq_fast_1
+    module procedure csq_fast_2
+end interface
+
 interface sqwin_1d
     module procedure sqwin_1d_1
     module procedure sqwin_1d_2
@@ -807,6 +812,18 @@ contains
         endif
         phase = atan(nom/denom)
     end function phase_angle
+
+    ! faster unsafe complex magnitude, single precision
+    real(sp) elemental function csq_fast_1( comp )
+        complex(sp), intent(in) :: comp
+        csq_fast_1 = real(comp*conjg(comp))
+    end function csq_fast_1
+
+    ! faster unsafe complex magnitude, double precision
+    real(dp) elemental function csq_fast_2( comp )
+        complex(dp), intent(in) :: comp
+        csq_fast_2 = real(comp*conjg(comp),dp)
+    end function csq_fast_2
 
     !>   is for complex squaring
     elemental function csq_1( a ) result( sq )

@@ -123,10 +123,10 @@ contains
         call cline%set('box',      real(box))
         call cline%set('boxmatch', real(box))
         call cline%set('nthr',     1.)
-        call cline%set('ring2',    360./TWOPI)
         call cline%set('match_filt','no')
         call cline%set('ctf',      'no')
         call params%new(cline, silent=.true.)
+        params_glob%ring2      = nint(0.4*real(box))
         params_glob%kfromto(1) = 5
         params_glob%kfromto(2) = nyq-1
         params_glob%kstop      = params_glob%kfromto(2)
