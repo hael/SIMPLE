@@ -255,109 +255,6 @@ module simple_test_chiara_try_mod
             write(*,*) 'AVG/VAR 2:', avgs(2), vars(2)
         end subroutine
 
-        ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10
-        subroutine hierarc_clust(vec,thresh,labels)
-          real,    intent(in)  :: vec(:)    ! input vector
-          real,    intent(in)  :: thresh    ! threshold for class merging
-          integer, intent(out) :: labels(:) ! labels of the elements in vec
-          real, allocatable :: mat(:,:)     ! matrix that contains the distances
-          integer :: N                      ! number of data points
-          real    :: d
-          integer :: i, j, index(1), loc1(1), loc2(1), cnt, ncls
-          logical, allocatable :: mask(:), outliers(:)
-          real,    allocatable :: centroids(:)
-          N = size(vec)
-          ! 1) calc all the couples of distances, using euclid dist
-          allocate(mat(N,N), source = 0.)
-          do i = 1, N-1
-            do j = i+1, N
-              mat(i,j) = abs(vec(i)-vec(j))
-              mat(j,i) = mat(i,j)
-            enddo
-          enddo
-          ! print *, 'mat: '
-          ! call vis_mat(mat)
-          ! 2) Generate binary clusters
-          allocate(mask(N),source = .true. )
-          allocate(outliers(N), source = .false.)
-          ncls = 0
-          do i = 1, N ! fin the class for vec(i)
-            if(mask(i)) then ! if it's not already been clustered
-              mask(i) = .false.
-              ! find the index of the couple
-              d = minval(mat(i,:), mask)
-              index(:) = minloc(mat(i,:), mask)
-              ncls = ncls + 1
-              ! assign lavels
-              labels(i) = ncls
-              if(d <= thresh) then ! if it's not an outlier (it has a couple)
-                labels(index(1)) = labels(i)
-                mask(index(1)) = .false. ! index(1) has already been clustered
-              else
-                outliers(i) = .true.
-              endif
-            endif
-          enddo
-          print *, 'vec:     ', nint(vec)
-          print *, 'labels:  ', labels
-          print *, 'outliers: ', outliers
-          ! 3) Calculate centroids
-          allocate(centroids(ncls), source = 0.)
-          mask = .true. ! reset
-          do i = 1, ncls
-            ! find the first member of the class
-            loc1(:) = minloc(abs(labels-i))
-            if(.not. outliers(loc1(1))) then
-              mask(loc1(1)) = .false.
-              ! find the second member of the class
-              loc2(:) = minloc(abs(labels-i), mask)
-              mask(loc2(1)) = .false.
-              centroids(i) = (vec(loc1(1)) + vec(loc2(1)))/2.
-            else ! the class has just one element
-              loc1(:) = minloc(abs(labels-i))
-              centroids(i) = vec(loc1(1))
-              mask(loc1(1)) = .false.
-            endif
-          enddo
-          print *, 'centroids: ', centroids
-          mask  = .true. ! reset
-          ! 4) merge classes
-          do i = 1, ncls-1
-            do j = i+1, ncls
-              if(abs(centroids(i)-centroids(j)) <= thresh) then ! merge classes
-                ! update labels
-                where(labels == j) labels = i
-              endif
-            enddo
-          enddo
-          print *, 'after merging labels:', labels
-          ! 5) Reoder labels
-          cnt = 0
-          do i = 1, ncls
-             if(any(labels== i)) then !there is a class labelled i
-                cnt = cnt + 1                  !increasin order cc
-                where(labels == i) labels = cnt
-              endif
-          enddo
-          print *, 'after ordering labels:', labels
-          ! 6) recalculate centroids
-          deallocate(centroids)
-          ncls = maxval(labels) ! the nb of classes is maxval(labels)
-          allocate(centroids(ncls), source = 0.)
-          mask = .true. ! reset
-          do i = 1, ncls
-            cnt = count(labels == i) ! counts the nb of elements in the class
-            ! find the all the cnt member of the class and update the centroids
-            do j = 1, cnt
-              loc1(:) = minloc(abs(labels-i), mask)
-              mask(loc1(1)) = .false. ! do not consider this member of the class anymore
-              centroids(i) = centroids(i)+ vec(loc1(1))
-            enddo
-            centroids(i) = centroids(i)/real(cnt)
-          enddo
-          print *, 'final centroids: ', centroids
-        end subroutine hierarc_clust
-
    !  ! This subroutine performs laplacian filtering on the input image.
    !  subroutine laplacian_filt(self)
    !      type(image), intent(inout) :: self
@@ -562,6 +459,22 @@ module simple_test_chiara_try_mod
       call atoms_obj%convolve(vol,cutoff)
       call vol%write('FccLattice.mrc')
    end subroutine fcc_lattice
+
+   subroutine read_table( fname, vals )
+    character(len=*),  intent(in)  :: fname    !< input filename
+    real, allocatable, intent(out) :: vals(:,:) !< array of values
+    integer :: nl, funit, iline,io_stat
+    nl = nlines(trim(fname))
+    call fopen(funit,fname,'old','unknown',io_stat)
+    call fileiochk("read_table failed to open file "//trim(fname),io_stat )
+    allocate( vals(nl,2), stat=alloc_stat )
+    if(alloc_stat /= 0) call allocchk ('In: read_filetable; simple_fileio  ', alloc_stat)
+    do iline=1,nl
+        read(funit,*) vals(iline,1), vals(iline,2)
+    end do
+    call fclose(funit,io_stat)
+    call fileiochk("read_filetable failed to close",io_stat)
+end subroutine read_table
 end module simple_test_chiara_try_mod
 
     program simple_test_chiara_try
@@ -572,6 +485,7 @@ end module simple_test_chiara_try_mod
        use simple_test_chiara_try_mod
        use simple_nano_utils
        use simple_atoms, only : atoms
+       use simple_relion, only : relion_project
        real,    allocatable :: points1(:,:), points2(:,:), ppoints1(:,:),ppoints2(:,:), dist(:), dist_sq(:),dist_close(:)
        logical, allocatable :: mask(:), mask_1(:), mask_2(:)
        integer :: i, j, N_min, N_max, n_1, n_2
@@ -582,14 +496,22 @@ end module simple_test_chiara_try_mod
        character(len=4) :: element
        type(atoms) :: atom_1, atom_2
        character(len = 100) :: pdb_in, pdb_out
-       real    :: radius
+       real    :: x_data(27), y_data(27)
        integer :: nremoved
+       real, allocatable :: array(:)
+       real, parameter :: thresh = 0.05
+       integer, allocatable :: labels(:)
+       real, allocatable :: centroids(:,:)
+       integer, allocatable :: populations(:)
+       real, allocatable :: vals(:,:)
+       type(relion_project) :: rp
 
-       pdb_out = 'pdb_out.pdb'
-       pdb_in = 'recvol_state01UPDATED_atom_centers.pdb'
-       radius = 10.
-       call atoms_mask(pdb_in,radius,pdb_out,nremoved)
-       print *, 'nremoved : ', nremoved
+       ! hierarchical clustering for Oxford project
+       ! call read_table('ArrayFile', vals)
+       call read_table('ArrayComplete', vals)
+       allocate(labels(size(vals, dim =1)))
+       call rp%h_clust(vals,thresh,labels,centroids,populations)
+
       ! *********************************
       !  element = 'PT  '
       !  call fcc_lattice(element,25.,160,0.358,m_1)

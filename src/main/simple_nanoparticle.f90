@@ -451,6 +451,7 @@ contains
         call simulated_distrib%new(self%ldim,self%smpd)
         call pc%new(self%ldim,self%smpd)
         call self%img%fft ! for pc calculation
+        t = 1
         do i = 1, N_THRESH/2-1
             call progress(i, N_THRESH/2-1)
             call img_bin_thresh(i)%new_bimg(self%ldim, self%smpd)
