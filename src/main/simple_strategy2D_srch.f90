@@ -55,7 +55,7 @@ contains
         self%iptcl      =  spec%iptcl
         self%iptcl_map  =  spec%iptcl_map
         self%nrefs      =  params_glob%ncls
-        self%nrots      =  round2even(twopi*real(params_glob%ring2))
+        self%nrots      =  pftcc_glob%get_nrots()
         self%nrefs_eval =  0
         self%nnn        =  params_glob%nnn
         ! construct composites
