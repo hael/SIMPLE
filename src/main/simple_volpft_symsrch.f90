@@ -14,9 +14,8 @@ public :: volpft_symsrch_init, volpft_srch4symaxis
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: NPROJ = 6000
-integer, parameter :: NBEST = 20
-logical, parameter :: SCOREFUN_JACOB = .false.
+integer, parameter :: NPROJ = 1000
+integer, parameter :: NBEST = 10
 
 type opt4openMP
     type(opt_spec)            :: ospec              !< optimizer specification object
@@ -95,16 +94,12 @@ contains
         type(ori)  :: symaxis
         type(oris) :: espace, cand_axes
         integer    :: fromto(2), ntot, iproj, iproj_best
-        integer    :: istop, ithr, iloc,iinpl_idx
-        integer, parameter :: Ninpl_idx = 10
-        integer    :: Ncorrs, idx, iii
-        real       :: eul(3), corr_best, cost, lims(3,2), best_cost, best_x(3), dInpl_deg, inpl_corr
-        integer, allocatable :: coarse_srch_best_inpl(:)
-        ! For inplane angle
-        dInpl_deg = 360./10./real(Ninpl_idx)
+        integer    :: istop, ithr, iloc
+        real       :: eul(3), corr_best, cost
         ! set range
         fromto(1) = 1
         fromto(2) = NPROJ
+        ntot      = fromto(2) - fromto(1) + 1
         ! container for candidate symmetry axes
         call cand_axes%new(NPROJ)
         call cand_axes%set_all2single('corr', -1.0) ! for later ordering
@@ -118,46 +113,30 @@ contains
                 exit
             end if
         end do
-        ntot   = fromto(2) - fromto(1) + 1
-        Ncorrs = ntot*Ninpl_idx
-        allocate(coarse_srch_best_inpl(fromto(1):fromto(2)))
-        coarse_srch_best_inpl = -1
         ! allocate
-        allocate(rmats(Ncorrs,3,3),corrs(Ncorrs))
+        allocate(rmats(fromto(1):fromto(2),3,3),corrs(fromto(1):fromto(2)))
         ! fill-in the rotation matrices
         do iproj=fromto(1),fromto(2)
-            do iinpl_idx=1,Ninpl_idx
-                eul    = espace%get_euler(iproj)
-                eul(3) = (iinpl_idx-1)*dInpl_deg
-                idx    = (iproj-1)*Ninpl_idx+iinpl_idx
-                rmats(iproj,:,:) = euler2m(eul)
-            enddo
+            eul = espace%get_euler(iproj)
+            rmats(iproj,:,:) = euler2m(eul)
         end do
         ! grid search using the spiral geometry
         corrs = -1.
-        !$omp parallel do schedule(static) default(shared) private(iproj,idx) collapse(2) proc_bind(close)
+        !$omp parallel do schedule(static) default(shared) private(iproj) proc_bind(close)
         do iproj=fromto(1),fromto(2)
-            do iinpl_idx=1,Ninpl_idx
-                idx     = (iproj-1)*Ninpl_idx+iinpl_idx
-                corrs(iproj) = volpft_symsrch_scorefun(rmats(idx,:,:))
-            enddo
+            corrs(iproj) = volpft_symsrch_scorefun(rmats(iproj,:,:))
         end do
         !$omp end parallel do
         ! identify the best candidates (serial code)
         corr_best  = -1.0
         iproj_best = 0
         do iproj=fromto(1),fromto(2)
-            inpl_corr = -HUGE(inpl_corr)
-            do iinpl_idx = 1, Ninpl_idx
-                idx = (iproj-1)*Ninpl_idx+iinpl_idx
-                if( corrs(idx)  > inpl_corr ) then
-                    ! for each solid angle, keep just the best inplane angle
-                    coarse_srch_best_inpl(iproj) = iinpl_idx
-                    inpl_corr = corrs(idx)
-                endif
-            enddo
-            call espace%get_ori(iproj, symaxis)
-            call symaxis%set('corr', inpl_corr)
+            if( corrs(iproj) > corr_best )then
+                corr_best  = corrs(iproj)
+                iproj_best = iproj
+            endif
+            call espace%get_ori(iproj_best, symaxis)
+            call symaxis%set('corr', corr_best)
             call cand_axes%set_ori(iproj,symaxis)
         end do
         ! refine local optima
@@ -165,30 +144,13 @@ contains
         order = cand_axes%order_corr()
         ! determine end of range
         istop = min(fromto(2) - fromto(1) + 1,NBEST)
-        nrestarts=10
-        !$omp parallel do schedule(static) default(shared) private(best_x,iinpl_idx,iii,best_cost,iloc,ithr,cost,lims) proc_bind(close)
+        !$omp parallel do schedule(static) default(shared) private(iloc,ithr,cost) proc_bind(close)
         do iloc=1,istop
-            if( iloc == 1 ) cycle
             ithr = omp_get_thread_num() + 1
-            best_cost = 10.
             opt_symaxes(ithr)%ospec%x = cand_axes%get_euler(order(iloc))
-            opt_symaxes(ithr)%ospec%x(3) = (coarse_srch_best_inpl(order(iloc)) - 1) * dInpl_deg
-            lims(1,:) = [opt_symaxes(ithr)%ospec%x(1)-10.,opt_symaxes(ithr)%ospec%x(1)+10.]
-            lims(2,:) = [opt_symaxes(ithr)%ospec%x(2)-10.,opt_symaxes(ithr)%ospec%x(2)+10.]
-            lims(3,:) = [opt_symaxes(ithr)%ospec%x(3)-dInpl_deg/3.,opt_symaxes(ithr)%ospec%x(3)+dInpl_deg/3.]
-            ! optimiser spec
-            call opt_symaxes(ithr)%ospec%specify("simplex",ndim=3,limits=lims,nrestarts=nrestarts,ftol=1e-7,maxits=200)
-            ! point to costfun
-            call opt_symaxes(ithr)%ospec%set_costfun(volpft_symsrch_costfun)
-            opt_symaxes(ithr)%ospec%niter = 0
             call opt_symaxes(ithr)%nlopt%minimize(opt_symaxes(ithr)%ospec, fun_self, cost)
-            if( cost < best_cost )then
-                best_cost = cost
-                best_x =  opt_symaxes(ithr)%ospec%x
-            end if
-            !end do
-            call cand_axes%set_euler(order(iloc), best_x)!opt_symaxes(ithr)%ospec%x)
-            call cand_axes%set(order(iloc), 'corr', -best_cost)
+            call cand_axes%set_euler(order(iloc), opt_symaxes(ithr)%ospec%x)
+            call cand_axes%set(order(iloc), 'corr', -cost)
         end do
         !$omp end parallel do
         ! order the local optima according to correlation
@@ -225,12 +187,6 @@ contains
             ! this is the correct order
             rmat = matmul(sym_rmats(isym,:,:), rmat_symaxis)
             call vpftcc%extract_target(rmat, sym_targets(isym,:,:), sqsum_targets(isym))
-            if( SCOREFUN_JACOB )then
-                do k = kfromto(1),kfromto(2)
-                    sym_targets(isym,k,:) = sym_targets(isym,k,:) * real(k)
-                end do
-                sqsum_targets(isym) = sum(csq(sym_targets(isym,:,:)))
-            end if
             sum_of_sym_targets = sum_of_sym_targets + sym_targets(isym,:,:)
         end do
         ! correlate with the average to score the symmetry axis
