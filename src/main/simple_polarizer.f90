@@ -125,15 +125,13 @@ contains
         logical,                 intent(in)    :: isptcl  !< is ptcl (or reference)
         logical,                 intent(in)    :: iseven  !< is even (or odd)
         logical, optional,       intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
-        integer :: logi(3), phys(3), i, k, l, m, addr_l
+        integer :: i, k, l, m, addr_l
         do i=1,self%pdim(1)
             do k=self%pdim(2),self%pdim(3)
                 do l=1,self%wdim
                     addr_l = self%polcyc1_mat(i,k,l)
                     do m=1,self%wdim
-                        logi = [addr_l,self%polcyc2_mat(i,k,m),0]
-                        phys = self%comp_addr_phys(logi)
-                        self%comps(l,m) = self%get_fcomp(logi,phys)
+                        self%comps(l,m) = self%get_fcomp2D(addr_l,self%polcyc2_mat(i,k,m))
                     enddo
                 enddo
                 self%pft(i,k) = dot_product(self%polweights_mat(i,k,:), reshape(self%comps,(/self%wlen/)))

@@ -10,8 +10,31 @@ implicit none
 private
 #include "simple_local_flags.inc"
 public ::  split_nobjs_even,split_pairs_in_parts,merge_similarities_from_parts,&
-&merge_rmat_from_parts,merge_nnmat_from_parts, approx_balanced_partitioning
+&merge_rmat_from_parts,merge_nnmat_from_parts, approx_balanced_partitioning,&
+&split_nobjs_timeskewed
 contains
+
+    !>  \brief  for generating skewed decreasing partitions of nobjs objects
+    function split_nobjs_timeskewed( nobjs, nparts ) result( parts )
+        integer,           intent(in)  :: nobjs, nparts
+        integer, allocatable :: parts(:,:)
+        real    :: n
+        integer :: parts_contrib(nparts), i, ii, j, k, nblocks
+        allocate(parts(nparts,2), source=0, stat=alloc_stat)
+        k       = 2
+        nblocks = (2*k+1)*nparts*(nparts+1)/2
+        n       = real(nobjs) / real(nblocks)
+        do i = 1,nparts
+            parts_contrib(nparts-i+1) = nint(real(k*(nparts+1) + i) * n)
+        enddo
+        parts(1,1) = 1
+        parts(1,2) = parts_contrib(1)
+        do i = 2,nparts
+            parts(i,2) = parts(i-1,2) + parts_contrib(i)
+            parts(i,1) = parts(i-1,2) + 1
+        enddo
+        parts(nparts,2) = nobjs
+    end function split_nobjs_timeskewed
 
     !>  \brief  for generating balanced partitions of nobjs objects
     function split_nobjs_even( nobjs, nparts, szmax ) result( parts )
