@@ -542,7 +542,7 @@ contains
                 use simple_projection_frcs, only: projection_frcs
                 type(projection_frcs) :: projfrcs, projfrcs_sc
                 call projfrcs%read(frcs_fname)
-                call projfrcs%downscale(box, projfrcs_sc)
+                call projfrcs%downsample(box, projfrcs_sc)
                 frcs_fname = trim(FRCS_FILE)
                 call projfrcs_sc%write(frcs_fname)
                 call cline_refine3D_refine%set('frcs',frcs_fname)

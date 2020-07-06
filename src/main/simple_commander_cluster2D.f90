@@ -171,6 +171,7 @@ contains
         use simple_commander_project, only: scale_project_commander_distr
         use simple_procimgfile,       only: random_selection_from_imgfile, random_cls_from_imgfile
         use simple_commander_imgproc, only: scale_commander
+        use simple_projection_frcs,   only: projection_frcs
         class(cleanup2D_commander_hlev), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
@@ -184,6 +185,7 @@ contains
         ! other variables
         type(parameters)                    :: params
         type(sp_project)                    :: spproj, spproj_sc
+        type(projection_frcs)               :: frcs, frcs_sc
         character(len=:),       allocatable :: projfile, orig_projfile
         character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
         real                                :: scale_factor, smpd, msk, ring2, lp1, lp2
@@ -355,6 +357,12 @@ contains
             cavgs = add2fbody(finalcavgs,params%ext,'_odd')
             call rescale_cavgs(cavgs)
             call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
+            call frcs_sc%read(FRCS_FILE)
+            call frcs_sc%upsample(params%smpd, params%box, frcs)
+            call frcs%write(FRCS_FILE)
+            call spproj%add_frcs2os_out(FRCS_FILE, 'frc2D')
+            call frcs%kill
+            call frcs_sc%kill
             spproj%os_ptcl2D = spproj_sc%os_ptcl2D
             spproj%os_cls2D  = spproj_sc%os_cls2D
             ! restores original project and deletes backup & scaled
@@ -619,7 +627,7 @@ contains
             else if( mod(iter,5) /= 0 )then
                 do_wait = .true.
             endif
-            call write_snapshot(.false.,refs_glob)
+            call write_snapshot(.false.,refs_glob, 'frcs')
             ! termination and/or pause
             do while( file_exists(trim(PAUSE_STREAM)) )
                 if( file_exists(trim(TERM_STREAM)) ) exit
@@ -637,7 +645,7 @@ contains
             if( do_wait ) call simple_sleep(WAIT_WATCHER)
             ! update original project
             if( simple_gettime()-origproj_time > ORIGPROJ_WRITEFREQ )then
-                call write_snapshot(.true.,'cavgs_current'//trim(params%ext))
+                call write_snapshot(.true., 'cavgs_current'//trim(params%ext), 'frcs_current'//BIN_EXT)
                 origproj_time = simple_gettime()
             endif
             ! updates pool with new projects
@@ -647,7 +655,7 @@ contains
         enddo
         call qsys_cleanup(keep2D=.false.)
         ! updates original project
-        call write_snapshot(.true.,refs_glob)
+        call write_snapshot(.true.,refs_glob, FRCS_FILE)
         ! ranking
         refs_glob_ranked = add2fbody(refs_glob,params%ext,'_ranked')
         call cline_rank_cavgs%set('projfile', orig_projfile)
@@ -1345,11 +1353,12 @@ contains
             end function is_timeout
 
             !> produces consolidated project at original scale
-            subroutine write_snapshot( force, cavgs )
+            subroutine write_snapshot( force, cavgs, frcs_fname )
                 logical,           intent(in) :: force
-                character(len=*),  intent(in) :: cavgs
+                character(len=*),  intent(in) :: cavgs, frcs_fname
+                type(projection_frcs)         :: frcs, frcs_sc
                 type(oris)                    :: os_backup1, os_backup2, os_backup3
-                character(len=:), allocatable :: projfname, cavgsfname, suffix
+                character(len=:), allocatable :: projfname, cavgsfname, suffix, frcsfname
                 integer :: istk
                 if( debug_here ) print *,'in write_snapshot'; call flush(6)
                 projfname  = get_fbody(orig_projfile, METADATA_EXT, separator=.false.)
@@ -1360,6 +1369,9 @@ contains
                     suffix     = '_'//trim(int2str(pool_proj%os_ptcl2D%get_noris()))//'nptcls'
                     projfname  = trim(projfname)//trim(suffix)
                     cavgsfname = trim(cavgsfname)//trim(suffix)
+                    frcsfname  = trim(frcs_fname)//trim(suffix)//BIN_EXT
+                else
+                    frcsfname  = trim(frcs_fname)
                 endif
                 projfname  = trim(projfname)//trim(METADATA_EXT)
                 cavgsfname = trim(cavgsfname)//trim(params%ext)
@@ -1374,7 +1386,13 @@ contains
                     call pool_proj%add_cavgs2os_out(cavgsfname, orig_smpd, 'cavg')
                     pool_proj%os_cls2D = os_backup3
                     call os_backup3%kill
-                    ! call pool_proj%add_frcs2os_out(FRCS_FILE, 'frc2D')
+                    ! rescale frcs
+                    call frcs_sc%read(FRCS_FILE)
+                    call frcs_sc%upsample(orig_smpd, orig_box, frcs)
+                    call frcs%write(frcsfname)
+                    call frcs%kill
+                    call frcs_sc%kill
+                    call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
                     ! project updates to original scale
                     call pool_proj%os_stk%set_all2single('box', real(orig_box))
                     call pool_proj%os_stk%set_all2single('smpd',orig_smpd)
@@ -1387,8 +1405,8 @@ contains
                 if( do_autoscale )then
                     ! preserve down-scaling
                     pool_proj%os_ptcl2D = os_backup1
-                    pool_proj%os_stk    = os_backup2
                     call os_backup1%kill
+                    pool_proj%os_stk    = os_backup2
                     call os_backup2%kill
                 endif
                 if( debug_here ) print *,'end write_snapshot'; call flush(6)
