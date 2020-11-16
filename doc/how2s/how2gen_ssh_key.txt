@@ -1,0 +1,11 @@
+The first step is to create the key pair on the client machine (there is a good chance that this will just be your computer):
+
+$ ssh-keygen -t rsa
+
+Make a copy of your public key
+
+$ cp id_rsa.pub id_rsa.pub_new_mac
+
+Transfer it to the server that you want to connect to and append it to ~/.ssh/authorized_keys
+
+$ cat id_rsa.pub_new_mac >> ~/.ssh/authorized_keys

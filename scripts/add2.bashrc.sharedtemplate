@@ -1,0 +1,11 @@
+# make sure LD_LIBRARY_PATH is set
+LD_LIBRARY_PATH=${LD_LIBRARY_PATH?""}
+export SIMPLE_EMAIL="my.name@uni.edu"
+export SIMPLE_QSYS="local"
+export SIMPLE_PATH=@CMAKE_INSTALL_PREFIX@
+export PATH=${SIMPLE_PATH}/scripts:${SIMPLE_PATH}/bin:${PATH}
+if [[ "$OSTYPE" == "darwin"* ]];then
+  export DYLD_LIBRARY_PATH=${SIMPLE_PATH}/lib:$DYLD_LIBRARY_PATH
+else
+  export LD_LIBRARY_PATH=${SIMPLE_PATH}/lib:$LD_LIBRARY_PATH
+fi     

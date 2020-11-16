@@ -1,0 +1,13 @@
+----------------------------------------------
+Creating tutorials
+----------------------------------------------
+
+Tutorials are found in $SIMPLE_PATH/tutorials. These files have an extension of .tut and the filename is interpreted as the tutorial name in the tutorial window launched from the gui.
+
+The contents of the .tut files is in JSON format and is self explanatory from the examples. Create elements within the pages array with title, description and html tags.
+
+To generate the html :
+1) in the running gui, generate the view that you want. shift-click will highlight and important elements with a red border.
+2) ctrl-x
+3) in the .tut file, paste the contents of the clipboard into the html tag. Will be a filename eg. 12345.html
+

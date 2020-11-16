@@ -1,0 +1,187 @@
+% Document layout
+\documentclass[a4paper,11pt]{article}
+\usepackage[a4paper, inner=2.5cm , outer=2.5cm, top=2cm, bottom=2cm]{geometry}
+\usepackage[usenames,dvipsnames]{color}
+% Referencing & fonts
+\usepackage[sort&compress]{natbib}
+\setlength{\bibsep}{0.0pt}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage[OT2,T1]{fontenc}
+% Set formats for each heading level
+\usepackage{sectsty}
+\allsectionsfont{\usefont{OT1}{phv}{bc}{n}\selectfont}
+\sectionfont{\color{MidnightBlue}} % sets colour of sections
+\subsectionfont{\color{MidnightBlue}}  % sets colour of subsections
+\subsubsectionfont{\color{MidnightBlue}}  % sets colour of subsections
+% Other shit
+\usepackage{algorithm}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{bbm}
+\usepackage{booktabs}
+\usepackage{epsfig}
+\usepackage{float}
+\usepackage[font=normalsize]{caption}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{lineno}
+\usepackage{mathtools}
+\usepackage{sidecap}
+\usepackage{sectsty}
+\usepackage{verbatim}
+\usepackage{wrapfig}
+\usepackage{xcolor}
+% Declarations
+\DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
+\DeclareSymbolFont{cyrletters}{OT2}{wncyr}{m}{n}
+\DeclareMathSymbol{\Sha}{\mathalpha}{cyrletters}{"58}
+\DeclareMathSymbol{\sha}{\mathalpha}{cyrletters}{"57}
+% Defined commands
+ \newcommand{\prgname}[1]{\textcolor{NavyBlue}{\texttt{#1}}}
+ \newcommand{\linkfont}[1]{\textcolor{BurntOrange}{\textbf{#1}}}
+\newcommand{\shellcmd}[1]{\\\indent\indent\texttt{\$ #1}}
+\newcommand{\shellctd}[1]{\\\indent\indent\texttt{#1}}
+\newcommand{\ra}[1]{\renewcommand{\arraystretch}{#1}}
+\begin{document}
+
+\section{Command Line Dictionary}
+\begin{tabular}{ll}
+\texttt{acf}&{yes|no\{no\}}\\
+\texttt{amsklp}&{automask low-pass limit(in \AA{})}\\
+\texttt{angerr}&{angular error(in degrees)}\\
+\texttt{append}&{yes|no\{no\}}\\
+\texttt{astigerr}&{astigmatism error(in degrees)}\\
+\texttt{avg}&{yes|no}\\
+\texttt{bfac}&{bfactor}\\
+\texttt{bfacerr}&{bfactor error}\\
+\texttt{bin}&{binarize\{no\}}\\
+\texttt{box}&{image size(in pixels)}\\
+\texttt{boxtab}&{boxfiles.txt}\\
+\texttt{center}&{yes|no\{no\}}\\
+\texttt{chunksz}&{chunk size}\\
+\texttt{class}&{cluster2extract}\\
+\texttt{clip}&{clip2box\{256\}}\\
+\texttt{clustvalid}&{yes|homo|no|\{no\}}\\
+\texttt{comlindoc}&{shc\_clustering\_nclsX.txt}\\
+\texttt{compare}&{yes|no\{no\}}\\
+\texttt{corner}&{corner size(in pixels)}\\
+\texttt{countvox}&{yes|no\{no\}}\\
+\texttt{cs}&{spherical aberration constant(in mm)\{2.7\}}\\
+\texttt{ctf}&{yes|no|flip|mul\{no\}}\\
+\texttt{ctfsq}&{yes|no\{no\}}\\
+\texttt{ctfstats}&{yes|no\{no\}}\\
+\texttt{cube}&{cube side(in pixels)}\\
+\texttt{deferr}&{defocus error(in microns)}\\
+\texttt{defocus}&{defocus(in microns)}\\
+\texttt{deftab}&{text file with CTF info}\\
+\texttt{dens}&{density}\\
+\texttt{dir}&{directory}\\
+\texttt{discrete}&{yes|no\{no\}}\\
+\texttt{diversify}&{yes|no\{yes\}}\\
+\texttt{doclist}&{list of oritabs}\\
+\texttt{dynlp}&{yes|no\{yes\}}\\
+\texttt{e1}&{1st Euler angle}\\
+\texttt{e2}&{2nd Euler angle}\\
+\texttt{e3}&{3d Euler angle}\\
+\texttt{edge}&{edge size(in pixels)}\\
+\texttt{eo}&{yes|no\{yes\}}\\
+\texttt{errify}&{yes|no\{no\}}\\
+\texttt{even}&{yes|no\{no\}}\\
+\texttt{fbody}&{body of file}\\
+\texttt{filetab}&{movies.txt}\\
+\texttt{find}&{Fourier index}\\
+\texttt{fname}&{filename}\\
+\texttt{frac}&{fraction}\\
+\texttt{fraca}&{fraction of amplitude contrast\{0.07\}}\\
+\texttt{fromp}&{from particle index}\\
+\end{tabular}
+
+\begin{tabular}{ll}
+\texttt{fsc}&{fsc\_state1.bin}\\
+\texttt{ft2img}&{yes|no\{no\}}\\
+\texttt{guinier}&{yes|no\{no\}}\\
+\texttt{hfun}&{sigm|tanh|lin\{sigm\}}\\
+\texttt{hist}&{var2plot}\\
+\texttt{hp}&{high-pass limit(in \AA{})}\\
+\texttt{inner}&{inner mask radius(in pixels)}\\
+\texttt{kv}&{acceleration voltage\{300\}}\\
+\texttt{label}&{class|state|subclass\{class\}}\\
+\texttt{lp}&{low-pass limit(in \AA{})\{20\}}\\
+\texttt{lpstart}&{starting low-pass limit}\\
+\texttt{lpstop}&{stay at this low-pass limit}\\
+\texttt{masscen}&{yes|no\{no\}}\\
+\texttt{maxits}&{maximum number of iterations\{500\}}\\
+\texttt{minp}&{minimum cluster population}\\
+\texttt{mirr}&{no|2d|3d\{no\}}\\
+\texttt{moldiam}&{molecular diameter(in \AA{})}\\
+\texttt{msk}&{mask radius(in pixels)}\\
+\texttt{mskfile}&{mask.ext}\\
+\texttt{msktype}&{hard|soft\{soft\}}\\
+\texttt{mul}&{shift multiplication factor}\\
+\texttt{mw}&{molecular weight(in kDa)}\\
+\texttt{ncls}&{nr of clusters}\\
+\texttt{ndiscrete}&{nr of discrete oris}\\
+\texttt{ndocs}&{nr of documents}\\
+\texttt{neg}&{yes|no}\\
+\texttt{newbox}&{new box size(in pixles)}\\
+\texttt{nframes}&{nr of movie frames }\\
+\texttt{noise}&{yes|no\{no\}}\\
+\texttt{noise\_norm}&{yes|no}\\
+\texttt{norm}&{yes|no\{no\}}\\
+\texttt{npart}&{nr of partitions(nodes)}\\
+\texttt{npeaks}&{nr of correlation peaks}\\
+\texttt{nptcls}&{nr of particles}\\
+\texttt{nran}&{size of random sample}\\
+\texttt{nspace}&{nr of orientations in discrete space}\\
+\texttt{nstates}&{nr of conformational states}\\
+\texttt{nthr}&{nr of threads (CPUs within a socket)}\\
+\texttt{nvox}&{nr of voxels}\\
+\texttt{odd}&{yes|no\{no\}}\\
+\texttt{oritab}&{orientations}\\
+\texttt{oritab2}&{orientations}\\
+\texttt{outfile}&{output text file}\\
+\texttt{outstk}&{output image stack}\\
+\texttt{outvol}&{outvol.ext}\\
+\texttt{pgrp}&{cn|dn|t|o|i\{c1\}}\\
+\texttt{phrand}&{yes|no\{no\}}\\
+\texttt{plot}&{yes|no\{no\}}\\
+\texttt{pspecsz}&{box size of power spectrum}\\
+\texttt{refine}&{no|shc\{no\}}\\
+\end{tabular}
+
+\begin{tabular}{ll}
+\texttt{refs}&{initial\_references.ext}\\
+\texttt{rnd}&{yes|no\{no\}}\\
+\texttt{round}&{yes|no\{no\}}\\
+\texttt{scale}&{scale factor}\\
+\texttt{shalgn}&{yes|no\{no\}}\\
+\texttt{sherr}&{shift error(in pixels)}\\
+\texttt{smpd}&{sampling distance(in \AA{})}\\
+\texttt{snr}&{signal2noise ratio}\\
+\texttt{soften}&{yes|no\{no\}}\\
+\texttt{split}&{nr of partitions to split into}\\
+\texttt{srch\_inpl}&{yes|no\{yes\}}\\
+\texttt{startit}&{start iteration nr}\\
+\texttt{state}&{state index}\\
+\texttt{stats}&{yes|no|print\{no\}}\\
+\texttt{stk}&{input particle stack}\\
+\texttt{stk2}&{input particle stack nr 2}\\
+\texttt{stk3}&{input particle stack nr 3}\\
+\texttt{thres}&{threshold}\\
+\texttt{top}&{stop particle index}\\
+\texttt{trs}&{origin shift range[-trs,trs](in pixels)}\\
+\texttt{vis}&{yes|no\{no\}}\\
+\texttt{vol1}&{invol.ext}\\
+\texttt{vol2}&{invol2.ext}\\
+\texttt{which\_iter}&{iteration number}\\
+\texttt{width}&{pixels width}\\
+\texttt{xdim}&{nr of pixels in x-dim}\\
+\texttt{xsh}&{x shift(in pixels)}\\
+\texttt{ydim}&{nr of pixels in y-dim}\\
+\texttt{ysh}&{y shift(in pixels)}\\
+\texttt{zero}&{yes|no\{no\}}\\
+\texttt{zsh}&{z shift(in pixels)}\\
+\end{tabular}
+
+\end{document}

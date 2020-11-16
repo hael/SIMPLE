@@ -1,0 +1,72 @@
+div.browserheader
+  img#simplepagelogo(
+    src="img/square_logo_small.png"
+  )
+  h="File Selector"
+  img#closebutton(
+    src="img/close.png"
+    onclick="browser.hide()"
+  )
+
+div.inputline
+  p.inputlabel="Folder"
+  input#sourcefolder(type="text" value=path)
+
+div.inputline
+  p.inputlabel="Filter"
+  input#filter(
+    type="text"
+    value=filter
+  )
+  
+table
+  tr(
+    onclick="browser.stepUp(\'" + path + "\')"
+  )
+    td
+      img.folderimage(
+        src="img/folder.png"
+      )
+    td=".."
+  each folder in folders
+    tr(
+      onclick="browser.stepDown(\'" + path + "/" + folder + "\')"
+    )
+      td
+        img.folderimage(src="img/folder.png")
+      td(
+        data-path=path + "/" + folder
+        style="width:100%"
+      )=folder
+
+  each file in files
+    tr.filerow(
+      onclick="browser.select(\'" + path + "/" + file + "\', this)"
+    )
+      td
+      td(
+        style="width:100%"
+      )=file
+
+div.inputline
+  if(newfolder)
+    p.inputlabel="Create Folder"
+    input#newfoldername(
+      type="text"
+    )
+    img(
+      src="img/plus.png"
+      onclick="browser.createFolder()"
+    )
+  else
+    p.inputlabel
+
+div.buttons
+  each button in buttons
+    if (button['name'] == "view2d")
+      div(onclick=button['action'])="View 2D"
+    if (button['name'] == "view3d")
+      div(onclick=button['action'])="View 3D"
+    if (button['name'] == "select")
+      div(onclick="browser.hide();" + button['action']+"()")="Select"
+

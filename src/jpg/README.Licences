@@ -1,0 +1,26 @@
+
+## Disclaimer
+
+stb_image - v2.19
+http://nothings.org/stb
+Public domain image loader no warranty implied; use at your own risk
+
+FFTW
+http://www.fftw.org/
+The FFTW package was developed at MIT by Matteo Frigo and Steven G. Johnson under the terms of the GNU General Public License.
+Copyright (c) 2003, 2007-14 Matteo Frigo
+Copyright (c) 2003, 2007-14 Massachusetts Institute of Technology
+
+LibJPEG 9c
+http://www.ijg.org/
+This software is copyright © 1994-2013, Thomas G. Lane, Guido Vollbeding. All Rights Reserved.
+
+LibPNG 1.6.35
+http://www.libpng.org/
+This software is copyright © 1998-2015 Glenn Randers-Pehrson. All Rights Reserved.
+
+
+LibTIFF 4.0.9
+http://www.simplesystems.org/libtiff/
+Copyright © 1988-1997 Sam Leffler
+Copyright © 1991-1997 Silicon Graphics, Inc.

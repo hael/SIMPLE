@@ -1,0 +1,300 @@
+.simpleview {
+	width: 90vw;
+	height: 90vh;
+	left: 5vw;
+	top: 5vh;
+	display:flex;
+	flex-flow:column;
+}
+
+.simpleview #bottombar {
+  height: 35px;
+  background-color: #f4f4f4;
+	display: flex;
+	justify-content: space-evenly;
+}
+
+.simpleview .viewtype {
+    display: flex;
+	align-items: center;
+	width:75px;
+	padding:5px;
+	justify-content:center;
+}
+
+.simpleview .viewtype[data-selected=true] {
+    background-color:#58585a;
+    color:#f4f4f4;
+}
+
+.simpleview .viewtype:hover{
+    transform: scale(1.2);
+}
+
+.simpleview .centerview {
+flex:1;
+display:flex;
+height: 100%;
+}
+
+.simpleview #mainpane {
+height:100%;
+width: 100%;
+display:flex;
+flex-direction:column;
+overflow: auto;
+}
+
+.simpleview #sidebar {
+width: 35px;
+display: flex;
+flex-direction: column;
+justify-content: space-evenly;
+}
+
+.simpleview #sidebar div[data-selected=true]{
+background-color:#f4f4f4;
+}
+
+.simpleview #sidebar div{
+display : flex;
+justify-content:center;
+align-items:center;
+}
+
+.simpleview #sidebar img{
+width:20px; 
+padding: 5px;
+}
+
+.simpleview #sidebar div:hover{
+  transform: scale(1.2);
+  background-color: transparent;
+}
+
+.simpleview .loader{
+        border: 6px solid #f3f3f3;
+        border-top: 6px solid #a11616;
+        border-radius: 50%;
+        width: 34px;
+        height: 34px;
+        margin-top: calc(50% - 17px);
+        margin-left: calc(50% - 17px);
+        animation: spin 2s linear infinite;
+}
+
+.simpleview .miniloader{
+        width: 40px;
+        height: 40px;
+        margin-top: calc(50% - 20px);
+        margin-left: calc(50% - 20px);
+        background-image : url('img/loading.png');
+}
+
+.simpleview #thumbnails{
+	display:flex;
+	flex-wrap:wrap;
+	flex:1;
+	overflow:auto;
+	align-content:flex-start;
+}
+
+.simpleview .thumbnail{
+padding: 3px;
+margin: 3px;
+background-repeat: no-repeat;
+background-position: center;
+display: flex;
+background-color: #f3f3f3;   
+height: fit-content;
+}
+
+.simpleview .thumbnailcontainer{
+display:flex;
+overflow:hidden;
+}
+
+.simpleview .thumbnail[data-state='0'] img{
+	display:none;
+}
+
+.simpleview .thumbnail[data-state='1'] img{
+	display:block;
+}
+
+.simpleview .thumbnail[data-state='0']{
+	display:flex;
+	background-image : url('img/cancel.png');
+}
+
+.simpleview .controlpane{
+min-height:200px;
+display:none;
+padding:10px;
+}
+
+.simpleview .controlbody{
+padding:5px;
+}
+
+.simpleview .controlbodylabel{
+font-weight:bold;
+}
+
+.simpleview .controlbodyelements{
+display:flex;
+flex-wrap:wrap;    
+padding-bottom: 20px;
+}
+
+.simpleview .controlbodyelements div{
+width: 130px;
+display:flex;
+flex-direction:column;
+padding:5px;
+}
+
+.simpleview .viewmaster h{
+	font-size: 12px !important;
+}
+
+.simpleview .viewmaster .count{
+	float:right;
+	margin-right:35px;
+}
+
+.simpleview .viewpanel{
+	display:flex;
+	flex:1;
+}
+
+.simpleview #reprojections{
+height:100%;
+}
+
+
+.simpleview .viewpanel #thumbnails{
+	flex:none !important;
+	display:none;
+} 
+
+.simpleview .viewptcls{
+	position:relative;
+	height:20px;
+	left: -25px;
+}
+
+.simpleview .viewptcls:hover{
+  transform: scale(1.2);
+  background-color: transparent;
+}
+
+.simpleview .viewpanel #litemol{
+	flex:1;
+} 
+
+.simpleview .lm-plugin {
+	position: relative;
+	height: calc(90vh - 325px); 
+}
+	
+.simpleview .lm-layout-right {
+	display: none;
+}
+
+.simpleview .lm-layout-left {
+	display: none;
+}
+
+.simpleview .lm-layout-top {
+	display: none;
+}
+
+.simpleview .lm-layout-bottom {
+	display: none;
+}
+
+.simpleview .lm-viewport-controls {
+	display: none;
+}
+
+.simpleview #resolution img{
+width:10px;
+padding-left:10px
+}
+
+.simpleview #resolution img:hover{
+ transform: scale(1.2);
+}
+
+.simpleview #reprojections{
+ display:none;
+}
+
+.simpleview #reprojectionlabels{
+ display:flex;
+ justify-content:space-evenly;
+}
+
+.simpleview #reprojectionlabels div{
+width:80px;
+}
+
+.simpleview #reprojections #thumbnails{
+height: calc(100% - 20px);
+}
+
+.simpleview select{
+border: none;
+background-color: #f3f3f3;
+padding: 3px;
+margin-left: 5px;
+}
+
+.simpleview .viewmaster{
+display:flex;
+align-items:center;
+}
+
+.simpleview .viewmaster .buttons{
+margin-left: 0% !important;
+margin-right: 0% !important;
+}
+
+.simpleview #particlecounter{
+	margin-left:20vw;
+}
+
+.simpleview #pickingcanvas {}
+ 
+.simpleview .navarrows {
+	display: flex;
+	align-items: center;
+	margin-left: 50px;
+}
+
+.simpleview .navarrows img {
+	height: 24px;
+}
+
+.simpleview #trackviewerimg{
+	position: fixed;
+	top: calc(50vh - 380px);
+	left: calc(50vw - 380px);
+ }
+ 
+  .simpleview .thumbnailbutton{
+	padding:5px;
+	position:absolute;
+ }
+ 
+ .simpleview .motiontracksicon{
+	height:20px;
+ }
+ 
+@keyframes spin {
+0% { transform: rotate(0deg); }
+100% { transform: rotate(360deg); }
+}
+
+

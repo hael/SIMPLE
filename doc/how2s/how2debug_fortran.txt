@@ -1,0 +1,98 @@
+How to debug Fortran code
+-------------------------
+
+
+Using gcc:
+
+
+Front-ends known to work:
+- gdb (command-line)
+- ddd
+- gdbgui (https://github.com/cs01/gdbgui/)
+- Codeblocks (attach only)
+
+On using Codeblocks:
+Create a new Fortran project, then import all source files you anticipate to debug, then select 'attach to process' (see below)
+
+
+
+How to compile in debug mode:
+cmake .. -DCMAKE_BUILD_TYPE=Debug
+
+
+
+How to attach debugger to running program:
+First, create an infinite loop where you want to attach a debugger.
+Do it in the following way:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+integer, volatile :: cond_var = 1
+
+.......
+
+write (*,*) 'attach debugger now'
+do while (cond_var == 1)
+   call sleep(1)
+end do
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Make sure your condition variable (cond_var) is volatile, otherwise it will be optimized out.
+Then find out the process-id and attach your debugger. If you are using gdb, this is simply 'attach <pid>'.
+Note that on many systems, this will not work due to issues with permission. If that is the case,
+run the command
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+sudo chmod +s /usr/bin/gdb
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+to fix this issue.
+
+Now that your debugger is attached, you want to change the condition variable to anything other than 1.
+For that, make sure you are in the correct call stack first.
+In ddd, this is "status->backtrace". In gdb, this is simply "frame", then "bt <frame-nr>".
+Most likely, you will have to go 1 or 2 frames higher.
+Now that you are in the correct call stack, change the value of cond_var via
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+set variable cond_var = 0
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Then step a few times and you are out of the infinite loop.
+
+
+
+How to inspect derived-type member variables:
+Most likely, you will spend most of your debugging inside of derived-type procedures
+(what would be member functions in C++-type languages). If you now want to inspect derived-type member variables,
+you need to do it in the following way:
+
+Non-array variables:
+Say you are in the module 'simple_polarizer' inside the subroutine 'polarize' and you want to inspect the variable self%wdim.
+In that case, the command you are looking for is
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+print (polarizer*)self%wdim
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Note that in you can also make it a watched expression in ddd, gdbgui, codeblocks, etc.
+
+Allocatable array variables:
+If the derived-type member variable you want to inspect is an array, you need to do it in the following way:
+Say you are in the module simple_bfgs2_opt, in the subroutine bfgs2_minimize and you want to inspect the variable self%gradient
+(which you know already has 2 elements).
+Then the command you are looking for is:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+print *(real_8*)((bfgs2_opt*)self%gradient)@2
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Note that "real_8" is used if your array is double precision, otherwise you use "real".
+If your array is multidimensional, is will be displayed as if it were one-dimensional (in column-major order).
+Local arrays, one- or multidimensional, in contrast, are printed in a sensible way. All it takes is
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+print local_variable
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+They might, however, be optimized out, in which case it is necessary to make them volatile to inspect them.
+

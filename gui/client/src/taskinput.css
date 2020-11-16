@@ -1,0 +1,115 @@
+.taskinput {
+	width: 60vw;
+	height: 70vh;
+	left: 20vw;
+	top: 15vh;
+}
+
+.taskinput .taskheader{
+	height: 30px;
+	background-color: #f4f4f4;
+}
+
+.taskinput #tasktitle{
+	margin-left: 35px;
+	padding-top: 7px;
+	display: inline-block;
+}
+
+.taskinput .inputpage{
+	padding: 5px;
+}
+
+.taskinput td{
+	padding-left: 10px;
+}
+
+.taskinput td:nth-child(1){
+	width:200px;
+}
+
+.taskinput td:nth-child(2){
+	width:300px;
+}
+
+.taskinput p{
+	display: inline-block;
+	font-weight: bold;
+}
+
+.taskinput .inputheader h{
+	margin-left: 0px !important;
+	padding-top: 0px !important;
+}
+
+.taskinput input{
+	width: 100%;
+	padding: 6px 10px;
+	margin: 5px 0;
+	box-sizing: border-box;
+	border-style: solid;
+	border-width: 1px;
+	border-color: grey;
+}
+
+.taskinput textarea{
+	width: 100%;
+	padding: 6px 10px;
+	margin: 5px 0;
+	box-sizing: border-box;
+	border-style: solid;
+	border-width: 1px;
+	border-color: grey;
+	height:100px;
+}
+
+.taskinput .advanced{
+	display: none;
+}
+
+.taskinput .bold{
+	font-weight:bold;
+}
+
+
+.taskinput #taskhelp{
+	display: none;
+}
+
+.taskinput .taskhelp{
+	position: fixed;
+	width: 50vw;
+	margin: auto;
+	left: 25vw;
+	background-color: white;
+	height: 500px;
+	top: 230px;
+}
+
+.taskinput .inputaccordion{
+	height: calc(70vh - 70px);
+	overflow-y: auto;
+}
+
+.taskinput .advancedbutton{
+	float: right;
+	padding-right: 10px;
+}
+
+.taskinput .inputheader{
+	background-color: #f4f4f4;
+	padding: 5px;
+	margin: 3px;
+}
+
+.taskinput .widget{
+	height: 16px;
+}
+
+.taskinput #text{
+	padding: 10px;
+}
+
+.taskinput .taskfoldericon{
+	height: 22px;
+}
