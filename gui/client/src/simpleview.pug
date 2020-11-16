@@ -1,0 +1,52 @@
+div.viewheader
+	img#simplepagelogo(
+		src="img/square_logo_small.png"
+	)
+	h#simpleviewtitle(
+		title="Viewing " + projfile
+	)="View"
+	img#closebutton(
+		src="img/close.png"
+		onclick="taskselector.hide()"
+	)
+
+div.centerview
+	div#sidebar
+	div#mainpane
+div#bottombar
+	if manualpick
+		div.viewtype(
+			onclick="simpleview.toggleViewtype(this); simpleview.getManualPick('" + projfile + "')"
+		)="Manual Picking"
+	else if autopick
+		div.viewtype(
+			onclick="simpleview.toggleViewtype(this); simpleview.getAutoPick('" + projfile + "')"
+		)="Auto Picking"
+	else
+		if micrographs
+			div.viewtype(
+				onclick="simpleview.toggleViewtype(this); simpleview.getMicrographs('" + projfile + "')"
+			)="Micrographs"
+		if particles
+			div.viewtype(
+				onclick="simpleview.toggleViewtype(this); simpleview.getParticles('" + projfile + "')"
+			)="Particles"
+		if cls2d
+			div.viewtype(
+				onclick="simpleview.toggleViewtype(this); simpleview.getCluster2D('" + projfile + "')"
+			)="2D Clusters"
+		if ini3d
+			div.viewtype(
+				onclick="simpleview.toggleViewtype(this); simpleview.getIni3D('" + projfile + "')"
+			)="Initial 3D Model"
+		if refine3d
+			div.viewtype(
+				onclick="simpleview.toggleViewtype(this); simpleview.getRefine3D('" + projfile + "')"
+			)="3D Refinement"
+		if postprocess
+			div.viewtype(
+				onclick="simpleview.toggleViewtype(this); simpleview.getPostprocess('" + projfile + "')"
+			)="Postprocessing"
+		div.viewtype(
+			onclick="simpleview.toggleViewtype(this); simpleview.getRaw('" + projfile + "')"
+		)="Raw"

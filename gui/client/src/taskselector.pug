@@ -1,0 +1,28 @@
+div.viewheader
+	img#simplepagelogo(
+		src="img/square_logo_small.png"
+	)
+	h="Task Selector"
+	img#closebutton(
+		src="img/close.png"
+		onclick="taskselector.hide()"
+	)
+
+div.inputline
+	div
+		div.tasklist
+			b.tasklisttitle="Task"
+			div.tasklisttasks
+				each task in tasks
+					div.taskdisplay(
+						data-task=task['name']
+						data-description=task['descr_short']
+						onclick="taskselector.select(this)"
+					)=task['name']
+	div.inputlabel
+		p="Description"
+		div#taskdescription
+	div.buttons
+		div(
+			onclick="tasksetup.show()"
+		)="Select"
