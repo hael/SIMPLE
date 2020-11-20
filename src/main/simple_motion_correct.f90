@@ -894,11 +894,12 @@ contains
     ! gain correction, calculate image sum and identify outliers
     subroutine cure_outliers( frames )
         class(image), intent(inout) :: frames(nframes)
-        integer, parameter   :: hwinsz = 6
+        integer, parameter   :: hwinsz = 5
         real,        pointer :: prmat(:,:,:)
-        real,    allocatable :: rsum(:,:), vals(:), new_vals(:,:)
-        real    :: ave, sdev, var, lthresh, uthresh
-        integer :: iframe, noutliers, l,r,b,u,i,j,k, nvals, winsz
+        real,    allocatable :: rsum(:,:), new_vals(:,:), vals(:)
+        integer, allocatable :: pos_outliers_here(:,:)
+        real    :: ave, sdev, var, lthresh,uthresh,local_sdev, l,u
+        integer :: iframe, noutliers, i,j,k,ii,jj, nvals, winsz, n
         logical :: outliers(ldim(1),ldim(2)), err
         allocate(rsum(ldim(1),ldim(2)),source=0.)
         if( l_BENCH ) t_cure = tic()
@@ -910,6 +911,7 @@ contains
             rsum(:,:) = rsum(:,:) + prmat(:ldim(1),:ldim(2),1)
             !$omp end parallel workshare
         enddo
+        nullify(prmat)
         ! outliers detection
         call moment( rsum, ave, sdev, var, err )
         if( sdev<TINY )return
@@ -923,25 +925,15 @@ contains
         end where
         !$omp end workshare
         deallocate(rsum)
-        ! eer defects from gain reference, sould be done prior to theshold determination?
-        if( l_eer .and. gain_img%exists() )then
-            call gain_img%get_rmat_ptr(prmat)
-            !$omp workshare
-            where( is_zero(prmat(:ldim(1),:ldim(2),1)) )
-                outliers = .true.
-            end where
-            !$omp end workshare
-        endif
-        nullify(prmat)
         ! cure
         noutliers = count(outliers)
         if( noutliers > 0 )then
-            write(logfhandle,'(a,1x,i7)') '>>> # DEAD/HOT PIXELS:', noutliers
+            write(logfhandle,'(a,1x,i8)') '>>> # DEAD/HOT PIXELS:', noutliers
             write(logfhandle,'(a,1x,2f8.3)') '>>> AVERAGE (STDEV):  ', ave, sdev
             winsz = 2*HWINSZ+1
             nvals = winsz*winsz
-            allocate(new_vals(noutliers,nframes),pos_outliers(2,noutliers),vals(nvals))
-            ! gather positions
+            allocate(pos_outliers(2,noutliers))
+            ! gather positions for star output only
             k = 0
             do j = 1,ldim(2)
                 do i = 1,ldim(1)
@@ -951,27 +943,78 @@ contains
                     endif
                 enddo
             enddo
-            !$omp parallel do default(shared) private(iframe,k,i,j,l,r,b,u,vals,prmat)&
+            ! add eer gain defects for curation but not star output
+            if( l_eer .and. gain_img%exists() )then
+                call gain_img%get_rmat_ptr(prmat)
+                where( is_zero(prmat(:ldim(1),:ldim(2),1)) )
+                    outliers = .true.
+                end where
+                nullify(prmat)
+                noutliers = count(outliers)
+                if( noutliers > 0 )then
+                    write(logfhandle,'(a,1x,i8)') '>>> # DEAD/HOT PIXELS + EER GAIN DEFFECTS:', noutliers
+                    ! gather defect positions again for curation
+                    allocate(pos_outliers_here(2,noutliers),source=-1)
+                    k = 0
+                    do j = 1,ldim(2)
+                        do i = 1,ldim(1)
+                            if( outliers(i,j) )then
+                                k = k + 1
+                                pos_outliers_here(:,k) = [i,j]
+                            endif
+                        enddo
+                    enddo
+                else
+                    ! nothing to do
+                    return
+                endif
+            else
+                pos_outliers_here = pos_outliers
+            endif
+            allocate(new_vals(noutliers,nframes),vals(nvals))
+            ave  = ave / real(nframes)
+            sdev = sdev / real(nframes)
+            uthresh = uthresh / real(nframes)
+            lthresh = lthresh / real(nframes)
+            !$omp parallel do default(shared) private(iframe,k,i,j,n,ii,jj,vals,prmat,l,u)&
             !$omp proc_bind(close) schedule(static)
             do iframe=1,nframes
                 call frames(iframe)%get_rmat_ptr(prmat)
                 ! calulate new values
                 do k = 1,noutliers
-                    i = pos_outliers(1,k)
-                    j = pos_outliers(2,k)
-                    l = max(i-HWINSZ,1)
-                    r = min(ldim(1),l+winsz-1)
-                    l = r-winsz+1
-                    b = max(j-HWINSZ,1)
-                    u = min(ldim(2),b+winsz-1)
-                    b = u-winsz+1
-                    vals = reshape(prmat(l:r,b:u,1),(/nvals/))
-                    new_vals(k,iframe) = median_nocopy(vals)
+                    i = pos_outliers_here(1,k)
+                    j = pos_outliers_here(2,k)
+                    n = 0
+                    do jj = j-HWINSZ,j+HWINSZ
+                        if( jj < 1 .or. jj > ldim(2) ) cycle
+                        do ii = i-HWINSZ,i+HWINSZ
+                            if( ii < 1 .or. ii > ldim(1) ) cycle
+                            if( outliers(ii,jj) ) cycle
+                            n = n + 1
+                            vals(n) = prmat(ii,jj,1)
+                        enddo
+                    enddo
+                    if( n > 1 )then
+                        if( real(n)/real(nvals) < 0.85 )then
+                            ! high defect area
+                            l = max(lthresh, minval(vals(:n)))
+                            u = max(uthresh, maxval(vals(:n)))
+                            if( l > u )then
+                                new_vals(k,iframe) = gasdev(ave, sdev, [lthresh,uthresh])
+                            else
+                                new_vals(k,iframe) = gasdev(ave, sdev, [l,u])
+                            endif
+                        else
+                            new_vals(k,iframe) = median_nocopy(vals(:n))
+                        endif
+                    else
+                        new_vals(k,iframe) = gasdev(ave, sdev, [lthresh,uthresh])
+                    endif
                 enddo
                 ! substitute
                 do k = 1,noutliers
-                    i = pos_outliers(1,k)
-                    j = pos_outliers(2,k)
+                    i = pos_outliers_here(1,k)
+                    j = pos_outliers_here(2,k)
                     prmat(i,j,1) = new_vals(k,iframe)
                 enddo
             enddo
