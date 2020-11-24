@@ -32,7 +32,9 @@ contains
     ! I/O
     procedure          :: read_part
     procedure          :: read_groups
-    procedure          :: calc_and_write_sigmas
+    procedure          :: calc_sigma2
+    procedure          :: write_sigma2
+    procedure          :: write_model
     procedure, private :: read_groups_starfile
     ! destructor
     procedure          :: kill_ptclsigma2
@@ -102,47 +104,38 @@ contains
     end subroutine read_groups
 
     !>  For soft assignment
-    subroutine calc_and_write_sigmas( self, os, o_peaks, ptcl_mask )
-        class(euclid_sigma2),              intent(inout) :: self
-        class(oris),                      intent(inout) :: os
-        type(oris),          allocatable, intent(inout) :: o_peaks(:)
-        logical,             allocatable, intent(in)    :: ptcl_mask(:)
-        integer              :: iptcl, ipeak, iref, npeaks, irot, funit
-        real                 :: sigmas_tmp(self%kfromto(1):self%kfromto(2))
-        real                 :: sigma_contrib(self%kfromto(1):self%kfromto(2))
-        real                 :: ptcl_sumsq(self%kfromto(1):self%kfromto(2))
-        real                 :: ref_sumsq(self%kfromto(1):self%kfromto(2))
+    subroutine calc_sigma2( self, os, iptcl, o_peaks )
+        class(euclid_sigma2), intent(inout) :: self
+        class(oris),          intent(inout) :: os, o_peaks
+        integer,              intent(in)    :: iptcl
+        integer              :: ipeak, iref, npeaks, irot
+        real                 :: sigmas_tmp(self%kfromto(1):self%kfromto(2)), sigma_contrib(self%kfromto(1):self%kfromto(2))
         real                 :: shvec(2), weight, weightnorm
-        logical              :: success
-        type(sigma2_binfile) :: binfile
-!        !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-!        !$omp private(iref,iptcl,ipeak,weight,shvec,irot,npeaks,sigmas_tmp,sigma_contrib,ptcl_sumsq,ref_sumsq)
-        do iptcl = params_glob%fromp,params_glob%top
-            if (.not. ptcl_mask(iptcl)) cycle
-            if ( os%get_state(iptcl)==0 ) cycle
-            sigmas_tmp = 0.
-            npeaks = o_peaks(iptcl)%get_noris()
-            weightnorm = 0.
-            do ipeak = 1,npeaks
-                weight = o_peaks(iptcl)%get(ipeak, 'ow')
-                if (weight < TINY) cycle
-                weightnorm = weightnorm + weight
-            end do
-            do ipeak = 1,npeaks
-                weight = o_peaks(iptcl)%get(ipeak, 'ow')
-                if (weight < TINY) cycle
-                iref   = nint(o_peaks(iptcl)%get(ipeak, 'proj'))
-                shvec  = o_peaks(iptcl)%get_2Dshift(ipeak)
-                irot   = pftcc_glob%get_roind(360. - o_peaks(iptcl)%e3get(ipeak))
-                call pftcc_glob%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib, ptcl_sumsq, ref_sumsq)
-                sigmas_tmp = sigmas_tmp + weight / weightnorm * sigma_contrib
-            end do
-            self%sigma2_part(:,iptcl) = sigmas_tmp
+        if ( os%get_state(iptcl)==0 ) return
+        sigmas_tmp = 0.
+        npeaks     = o_peaks%get_noris()
+        weightnorm = 0.
+        do ipeak = 1,npeaks
+            weight = o_peaks%get(ipeak, 'ow')
+            if (weight < TINY) cycle
+            weightnorm = weightnorm + weight
+            iref       = nint(o_peaks%get(ipeak, 'proj'))
+            shvec      = o_peaks%get_2Dshift(ipeak)
+            irot       = pftcc_glob%get_roind(360. - o_peaks%e3get(ipeak))
+            call pftcc_glob%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
+            sigmas_tmp = sigmas_tmp + weight * sigma_contrib
         end do
-        !        !$omp end parallel do
+        self%sigma2_part(:,iptcl) = sigmas_tmp / weightnorm
+    end subroutine calc_sigma2
+
+    !>  
+    subroutine write_sigma2( self )
+        class(euclid_sigma2), intent(inout) :: self
+        type(sigma2_binfile)                :: binfile
         call binfile%new_from_file(self%binfname)
         call binfile%write(self%sigma2_part)
-    end subroutine calc_and_write_sigmas
+        call binfile%kill
+    end subroutine write_sigma2
 
     ! destructor
 
@@ -165,6 +158,86 @@ contains
             eucl_sigma2_glob  => null()
         endif
     end subroutine kill
+
+    subroutine write_model( self, os, fromto, o_peaks, o_refs, iter )
+        class(euclid_sigma2), intent(in)    :: self
+        class(oris),          intent(inout) :: os, o_refs
+        integer,              intent(in)    :: fromto(2), iter
+        class(oris),          intent(inout) :: o_peaks(fromto(1):fromto(2))
+        character(len=:), allocatable :: fname, string
+        real(dp),         allocatable :: projdir_wsum(:,:)
+        type(starfile_table_type)     :: star
+        integer  :: iptcl, ipeak, npeaks, eo, n_projdirs, proj
+        real     :: shift(2), w, ow, pw, psigma2
+        real(dp) :: sigma2_shift(2), wsum(2), sigma_shift
+        ! projection directions
+        n_projdirs = o_refs%get_noris()
+        allocate(projdir_wsum(2,n_projdirs),source=0.d0)
+        ! shifts
+        sigma2_shift = 0.d0
+        wsum         = 0.d0
+        !$omp parallel do default(shared) schedule(static) reduction(+:wsum,sigma2_shift,projdir_wsum)&
+        !$omp private(iptcl,ipeak,pw,w,ow,eo,npeaks,shift,psigma2,proj) proc_bind(close)
+        do iptcl = fromto(1),fromto(2)
+            if( os%get(iptcl,'state') < 0.5 ) cycle
+            w = os%get(iptcl,'w')
+            if( w < TINY ) cycle
+            eo      = nint(os%get(iptcl,'eo'))+1
+            pw      = 0.
+            psigma2 = 0.
+            npeaks  = o_peaks(iptcl)%get_noris()
+            do ipeak = 1,npeaks
+                ow = o_peaks(iptcl)%get(ipeak,'ow')
+                if( ow <= TINY ) cycle
+                ow      = w*ow
+                pw      = pw + ow
+                shift   = o_peaks(iptcl)%get_2Dshift(ipeak)
+                psigma2 = psigma2 + ow*sum(shift*shift)
+                proj    = nint(o_peaks(iptcl)%get(ipeak,'proj'))
+                projdir_wsum(eo,proj) = projdir_wsum(eo,proj) + real(ow,dp)
+            enddo
+            wsum(eo) = wsum(eo) + real(pw,dp)
+            sigma2_shift(eo) = sigma2_shift(eo) + real(psigma2,dp)
+        enddo
+        !$omp end parallel do
+        ! shifts output
+        fname = 'model_iter'//int2str_pad(iter,3)//'_part'//int2str(params_glob%part)//'.star'
+        call starfile_table__new(star)
+        call starfile_table__open_ofile(star, fname)
+        call starfile_table__clear(star)
+        call starfile_table__setComment(star, 'even/odd sigma2 shift')
+        call starfile_table__setName(star, 'pdf_shift')
+        call starfile_table__setIsList(star, .false.)
+        do eo = 1,2
+            sigma_shift = sqrt(sigma2_shift(eo)) / wsum(eo) ! in pixels
+            call starfile_table__addObject(star)
+            call starfile_table__setValue_int(star, EMDL_SPECTRAL_IDX, eo)
+            call starfile_table__setValue_double(star, EMDL_MLMODEL_SIGMA_OFFSET, sigma_shift)
+            call starfile_table__setValue_double(star, EMDL_IMAGE_WEIGHT, wsum(eo))
+        enddo
+        call starfile_table__write_ofile(star)
+        ! projection directions
+        do eo = 1,2
+            call starfile_table__clear(star)
+            if( eo==1 )then
+                call starfile_table__setComment(star, 'even projection directions')
+                call starfile_table__setName(star, 'even_pdf_projdir')
+            else
+                call starfile_table__setComment(star, 'odd projection directions')
+                call starfile_table__setName(star, 'odd_pdf_projdir')
+            endif
+            call starfile_table__setIsList(star, .false.)
+            do proj = 1,n_projdirs
+                call starfile_table__addObject(star)
+                call starfile_table__setValue_int(star, EMDL_SPECTRAL_IDX, proj)
+                call starfile_table__setValue_double(star, EMDL_BODY_SIGMA_ROT, projdir_wsum(eo,proj))
+            enddo
+            call starfile_table__write_ofile(star)
+        enddo
+        ! finalize
+        call starfile_table__close_ofile(star)
+        call starfile_table__delete(star)
+    end subroutine write_model
 
     subroutine write_groups_starfile( fname, group_pspecs, ngroups )
         character(len=:), allocatable, intent(in) :: fname

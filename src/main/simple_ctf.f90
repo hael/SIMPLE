@@ -528,6 +528,7 @@ contains
         class(ctf), intent(in)    :: self
         real,       intent(inout) :: dfx,dfy,angast
         real :: tmp
+        if( angast < 0. ) angast = angast+180.
         if( dfx < dfy )then
             tmp = dfy
             dfy = dfx

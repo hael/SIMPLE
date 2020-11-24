@@ -180,6 +180,7 @@ type :: polarft_corrcalc
     procedure, private :: gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
     procedure          :: gencorrs_mir
+    procedure          :: gencorr_for_rot
     procedure          :: gencorr_for_rot_8
     procedure          :: gencorr_grad_for_rot_8
     procedure          :: gencorr_grad_only_for_rot_8
@@ -1776,18 +1777,29 @@ contains
         end select
     end subroutine gencorrs_mir
 
-    function gencorr_for_rot_8( self, iref, iptcl, shvec, irot ) result( cc )
+    real function gencorr_for_rot( self, iref, iptcl, shvec, irot )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real    ,                intent(in)    :: shvec(2)
+        integer,                 intent(in)    :: irot
+        select case(params_glob%cc_objfun)
+            case(OBJFUN_CC)
+                gencorr_for_rot = self%gencorr_cc_for_rot( iref, iptcl, shvec, irot )
+            case(OBJFUN_EUCLID)
+                gencorr_for_rot = self%gencorr_euclid_for_rot( iref, iptcl, shvec, irot )
+        end select
+    end function gencorr_for_rot
+
+    real(dp) function gencorr_for_rot_8( self, iref, iptcl, shvec, irot )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
-        real(dp)                               :: cc
-        cc = 0.d0
         select case(params_glob%cc_objfun)
             case(OBJFUN_CC)
-                cc = self%gencorr_cc_for_rot_8( iref, iptcl, shvec, irot )
+                gencorr_for_rot_8 = self%gencorr_cc_for_rot_8( iref, iptcl, shvec, irot )
             case(OBJFUN_EUCLID)
-                cc = self%gencorr_euclid_for_rot_8( iref, iptcl, shvec, irot )
+                gencorr_for_rot_8 = self%gencorr_euclid_for_rot_8( iref, iptcl, shvec, irot )
         end select
     end function gencorr_for_rot_8
 
@@ -2148,13 +2160,12 @@ contains
         endif
     end subroutine gencorr_cc_grad_only_for_rot_8
 
-    function gencorr_euclid_for_rot( self, iref, iptcl, shvec, irot ) result( cc )
+    real(sp) function gencorr_euclid_for_rot( self, iref, iptcl, shvec, irot )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
-        real(sp) :: cc
         integer  :: ithr
         ithr    =  omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref
@@ -2170,16 +2181,15 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        cc = self%calc_euclid_for_rot(pft_ref, iptcl, self%pinds(iptcl), irot)
+        gencorr_euclid_for_rot = self%calc_euclid_for_rot(pft_ref, iptcl, self%pinds(iptcl), irot)
     end function gencorr_euclid_for_rot
 
-    function gencorr_euclid_for_rot_8( self, iref, iptcl, shvec, irot ) result( cc )
+    real(dp) function gencorr_euclid_for_rot_8( self, iref, iptcl, shvec, irot )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(dp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         complex(dp), pointer :: pft_ref(:,:), shmat(:,:)
-        real(dp) :: cc
         integer  :: ithr
         ithr    =  omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref_8
@@ -2195,7 +2205,7 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        cc = self%calc_euclid_for_rot_8(pft_ref, iptcl, self%pinds(iptcl), irot)
+        gencorr_euclid_for_rot_8 = self%calc_euclid_for_rot_8(pft_ref, iptcl, self%pinds(iptcl), irot)
     end function gencorr_euclid_for_rot_8
 
     function gencorr_cont_grad_euclid_for_rot_8( self, iref, iptcl, shvec, irot, dcc ) result( cc )

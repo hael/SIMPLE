@@ -332,7 +332,7 @@ contains
         complex,  allocatable :: cmat(:,:,:)
         real,     allocatable :: res(:), corrs(:), ssnr(:), pssnr(:), fsc_t(:), fsc_n(:)
         real,     allocatable :: ctfsqsum_pad(:), inv_ctfsqsum_pad(:), tmp(:), inv_ctfsqsum(:), cntvec(:)
-        real                  :: lp_rand, Ab,Am,Ap,Vb,Vm
+        real                  :: lp_rand, Ab,Am,Ap,Vb,Vm, msk
         integer               :: k,k_rand, find_plate, filtsz
         if( (params_glob%cc_objfun==OBJFUN_EUCLID) .or. params_glob%l_needs_sigma .or. params_glob%l_pssnr )then
             ! even
@@ -352,6 +352,10 @@ contains
             call odd%ifft()
             call odd%clip_inplace([self%box,self%box,self%box])
             ! masking
+            msk = self%msk
+            if( (params_glob%cc_objfun==OBJFUN_EUCLID) .or. params_glob%l_needs_sigma )then
+                msk = self%box / 2 - COSMSKHALFWIDTH - 1.
+            endif
             if( self%automsk )then
                 ! mask provided
                 call even%zero_env_background(self%envmask)
@@ -361,11 +365,11 @@ contains
             else
                 ! spherical masking
                 if( self%inner > 1. )then
-                    call even%mask(self%msk, 'soft', inner=self%inner, width=self%width)
-                    call odd%mask(self%msk, 'soft', inner=self%inner, width=self%width)
+                    call even%mask(msk, 'soft', inner=self%inner, width=self%width)
+                    call odd%mask(msk, 'soft', inner=self%inner, width=self%width)
                 else
-                    call even%mask(self%msk, 'soft')
-                    call odd%mask(self%msk, 'soft')
+                    call even%mask(msk, 'soft')
+                    call odd%mask(msk, 'soft')
                 endif
             endif
             ! forward FT
@@ -404,8 +408,8 @@ contains
                 call self%odd %add_invtausq2rho(corrs, 2)
             endif
             ! correct for the uneven sampling density
-            call self%even%sampl_dens_correct
-            call self%odd%sampl_dens_correct
+            call self%even%sampl_dens_correct(do_gridcorr=.false.)
+            call self%odd%sampl_dens_correct(do_gridcorr=.false.)
             ! reverse FT
             call self%even%ifft()
             call self%odd%ifft()

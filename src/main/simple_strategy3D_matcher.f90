@@ -336,6 +336,12 @@ contains
                 call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
                 ! cleanup
                 call strategy3Dsrch(iptcl_batch)%ptr%kill
+                ! calculate sigma2 for ML-based refinement
+                if ( params_glob%l_needs_sigma ) then
+                    if( params_glob%which_iter > 1 )then
+                        call eucl_sigma%calc_sigma2(build_glob%spproj_field, iptcl, s3D%o_peaks(iptcl))
+                    endif
+                end if
             enddo ! Particles loop
             !$omp end parallel do
             if( L_BENCH ) rt_align = rt_align + toc(t_align)
@@ -346,11 +352,11 @@ contains
         end do
         deallocate(strategy3Dsrch,strategy3Dspecs,batches)
 
-        ! CALCULATE AND WRITE SIGMAS FOR ML-BASED REFINEMENT
+        ! WRITE SIGMAS FOR ML-BASED REFINEMENT
         if ( params_glob%l_needs_sigma ) then
-            if( params_glob%which_iter > 1 )then
-                call eucl_sigma%calc_and_write_sigmas(build_glob%spproj_field, s3D%o_peaks, ptcl_mask)
-            end if
+            call eucl_sigma%write_sigma2
+            ! call eucl_sigma%write_model(build_glob%spproj_field, [params_glob%fromp,params_glob%top],&
+            !     &s3D%o_peaks, build_glob%eulspace, which_iter)
         end if
 
         ! UPDATE PARTICLE STATS

@@ -9,6 +9,19 @@ implicit none
 public :: s3D, clean_strategy3D, prep_strategy3D, prep_strategy3D_thread
 private
 
+integer, parameter :: NTRS_PEAKS = 25
+
+type inpl_peaks
+    integer              :: n    = 0        ! # of peaks
+    integer              :: ntrs = 0        ! # of shift peaks per psi
+    real,    allocatable :: ccs(:,:)        ! score
+    real,    allocatable :: shifts(:,:,:)   ! shifts
+    integer, allocatable :: eulinds(:,:,:)  ! indices to euler set: projection direction & in-plane
+    contains
+    procedure :: allocate
+    procedure :: deallocate
+end type inpl_peaks
+
 type strategy3D_alloc
     ! per-ptcl/ref allocation
     type(oris),       allocatable :: o_peaks(:)                           !< solution objects
@@ -17,6 +30,7 @@ type strategy3D_alloc
     logical,          allocatable :: state_exists(:)                      !< indicates state existence
     integer,          allocatable :: proj_mirror_idx(:)                   !< indices of mirrored projection directions
     ! per thread allocation
+    type(inpl_peaks),    public :: inplpeaks
     type(ran_tabu), allocatable :: rts(:)                                 !< stochastic search order generators
     real,           allocatable :: proj_space_euls(:,:,:,:)               !< euler angles
     real,           allocatable :: proj_space_shift(:,:,:,:)              !< shift vectors
@@ -191,5 +205,28 @@ contains
         endif
         srch_order_allocated = .false.
     end subroutine clean_strategy3D
+
+    subroutine allocate( self, nprojdirs, npsis, nshifts, nthr )
+        class(inpl_peaks), intent(inout) :: self
+        integer,           intent(in)    :: nprojdirs, npsis, nshifts, nthr
+        integer :: alloc_stat
+        call self%deallocate
+        self%ntrs = nshifts
+        self%n    = nprojdirs * npsis * self%ntrs
+        allocate(self%ccs(self%n,nthr),self%shifts(2,self%n,nthr),self%eulinds(2,self%n,nthr),stat=alloc_stat)
+        if(alloc_stat/=0)call allocchk("inpl_peaks%allocate failed")
+        self%ccs     = -1.
+        self%shifts  = 0.
+        self%eulinds = 0
+    end subroutine allocate
+
+    subroutine deallocate( self )
+        class(inpl_peaks), intent(inout) :: self
+        if( allocated(self%ccs) )then
+            deallocate(self%ccs,self%eulinds,self%shifts)
+            self%n    = 0
+            self%ntrs = 0
+        endif
+    end subroutine deallocate
 
 end module simple_strategy3D_alloc

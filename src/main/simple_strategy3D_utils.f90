@@ -83,38 +83,58 @@ contains
             best_corr = corrs(best_loc(1))
             ! calculate weights
             call calc_ori_weights_here(s%npeaks, corrs, ws)
-            ! define a threshold using Otsu's algorithm
-            ws_nonzero = pack(ws, mask=ws > TINY)
-            call otsu(ws_nonzero, thres)
-            s%npeaks_eff = max(1,count(ws_nonzero > thres))
-            ! limit the number of peaks
-            if( s%npeaks_eff > MAXNPEAKS )then
-                call hpsort(ws_nonzero)
-                call reverse(ws_nonzero) ! largest first
-                thres = ws_nonzero(MAXNPEAKS + 1)
-                s%npeaks_eff = MAXNPEAKS
-            endif
-            ! zero weights below the threshold and re-normalize
-            if( s%npeaks_eff == 1 )then
-                where(ws < maxval(ws) ) ws = 0. ! always one nonzero weight
+            if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
+                ! define a threshold using Otsu's algorithm
+                ws_nonzero = pack(ws, mask=ws > TINY)
+                call otsu(ws_nonzero, thres)
+                s%npeaks_eff = max(1,count(ws_nonzero > thres))
+                ! limit the number of peaks
+                if( s%npeaks_eff > MAXNPEAKS )then
+                    call hpsort(ws_nonzero)
+                    call reverse(ws_nonzero) ! largest first
+                    thres = ws_nonzero(MAXNPEAKS + 1)
+                    s%npeaks_eff = MAXNPEAKS
+                endif
+                ! zero weights below the threshold and re-normalize
+                if( s%npeaks_eff == 1 )then
+                    where(ws < maxval(ws) ) ws = 0. ! always one nonzero weight
+                else
+                    where(ws <= thres) ws = 0.
+                endif
+                wsum = sum(ws)
+                if( wsum > TINY )then
+                    ws = ws / wsum
+                else
+                    ws = 0.
+                endif
+                select case(params_glob%wcrit_enum)
+                    case(RANK_SUM_CRIT,RANK_CEN_CRIT,RANK_EXP_CRIT,RANK_INV_CRIT)
+                        if( params_glob%wcrit_enum == RANK_EXP_CRIT )then
+                            call conv2rank_weights(s%npeaks, ws, params_glob%wcrit_enum, RANKW_EXP)
+                        else
+                            call conv2rank_weights(s%npeaks, ws, params_glob%wcrit_enum)
+                        endif
+                end select
             else
-                where(ws <= thres) ws = 0.
+                s%npeaks_eff = max(1,count(ws > TINY))
+                ! limit the number of peaks
+                if( s%npeaks_eff > MAXNPEAKS )then
+                    ws_nonzero   = pack(ws, mask=ws > TINY)
+                    call hpsort(ws_nonzero)
+                    call reverse(ws_nonzero) ! largest first
+                    thres = ws_nonzero(MAXNPEAKS + 1)
+                    where(ws <= thres) ws = 0.
+                else if( s%npeaks_eff == 1 )then
+                    ws = 0.
+                    ws((best_loc(1))) = 1.
+                endif
+                ! wsum = sum(ws)
+                ! if( wsum > TINY )then
+                !     ws = ws / wsum
+                ! else
+                !     ws = 0.
+                ! endif
             endif
-            wsum = sum(ws)
-            if( wsum > TINY )then
-                ws = ws / wsum
-            else
-                ws = 0.
-            endif
-            select case(params_glob%wcrit_enum)
-                case(RANK_SUM_CRIT,RANK_CEN_CRIT,RANK_EXP_CRIT,RANK_INV_CRIT)
-                    if( params_glob%wcrit_enum == RANK_EXP_CRIT )then
-                        call conv2rank_weights(s%npeaks, ws, params_glob%wcrit_enum, RANKW_EXP)
-                    else
-                        call conv2rank_weights(s%npeaks, ws, params_glob%wcrit_enum)
-                    endif
-            end select
-            deallocate(ws_nonzero)
         endif
         ! update npeaks individual weights
         call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
@@ -137,7 +157,7 @@ contains
         real    :: wsum
         if( params_glob%cc_objfun == OBJFUN_EUCLID )then
             ! subtracts minimum distance
-            dists = corrs! / params_glob%sigma2_fudge
+            dists = corrs / params_glob%sigma2_fudge
             dists = dists - maxval(dists)
             ! exponential weights
             ws = exp(dists)
