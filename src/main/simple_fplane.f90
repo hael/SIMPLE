@@ -89,7 +89,7 @@ contains
             call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
             invldim = 1./real(self%ldim(1:2))
         endif
-        use_sigmas        = ((params_glob%l_needs_sigma) .and. present(iptcl))
+        use_sigmas = ((params_glob%l_needs_sigma) .and. present(iptcl) .and. params_glob%cc_objfun==OBJFUN_EUCLID )
         if( use_sigmas )then
             sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
             sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)

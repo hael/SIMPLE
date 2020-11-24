@@ -1117,12 +1117,6 @@ contains
         if(present(status))status = status_here
     end function simple_abspath
 
-    subroutine simple_write( msg )
-        character(len=*), intent(in) :: msg
-
-
-    end subroutine simple_write
-
     integer function RE_match(source, regex)
         character(len=*),              intent(in)  :: source,regex
         integer(c_int) :: res
