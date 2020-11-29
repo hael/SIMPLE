@@ -364,6 +364,7 @@ contains
         type(ori)                :: o_tmp
         integer                  :: state, iptcl, nstates, single_state, ncls, istk, nstks
         logical                  :: l_singlestate, cavgs_import, fall_over
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call params%new(cline)
         ! set mkdir to no
