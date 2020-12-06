@@ -1141,7 +1141,7 @@ contains
             if( fsc(h) >= corr )then
                 cycle
             else
-                k = h
+                k = h - 1
                 exit
             endif
         end do
@@ -1151,14 +1151,14 @@ contains
     integer pure function calc_fourier_index( res, box, smpd )
         real, intent(in)    :: res, smpd
         integer, intent(in) :: box
-        calc_fourier_index = nint((real(box-1)*smpd)/res)
+        calc_fourier_index = nint((real(box)*smpd)/res)
     end function calc_fourier_index
 
     !>   returns the Fourier index of res
     real pure function calc_lowpass_lim( find, box, smpd )
         integer, intent(in) :: find, box !< box size
         real, intent(in)    :: smpd      !< smpd pixel size \f$ (\si{\angstrom}) \f$
-        calc_lowpass_lim = (real(box-1)*smpd)/real(find)
+        calc_lowpass_lim = real(box)*smpd/real(find)
     end function calc_lowpass_lim
 
     !>  \brief get array of resolution steps
