@@ -469,6 +469,7 @@ contains
         call cmd_dict%push('tomoseries',    'filetable of filetables of tomograms')
         call cmd_dict%push('top',           'stop particle index')
         call cmd_dict%push('trs',           'maximum halfwidth shift(in pixels)')
+        call cmd_dict%push('trspeaks',      'whether to use soft 3D shift peaks(yes|no){no}')
         call cmd_dict%push('trsstats',      'provide origin shift statistics(yes|no){no}')
         call cmd_dict%push('tseries',       'images represent a time-series(yes|no){no}')
         call cmd_dict%push('unidoc',        'unified resources and orientations doc')
