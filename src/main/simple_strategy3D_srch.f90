@@ -60,6 +60,7 @@ type strategy3D_srch
     procedure :: new
     procedure :: prep4srch
     procedure :: inpl_srch
+    procedure :: inpl_srch_dev
     procedure :: store_solution
     procedure :: kill
 end type strategy3D_srch
@@ -171,6 +172,7 @@ contains
         self%prev_roind = pftcc_glob%get_roind(360.-o_prev%e3get())         ! in-plane angle index
         self%prev_shvec = o_prev%get_2Dshift()                              ! shift vector
         self%prev_proj  = build_glob%eulspace%find_closest_proj(o_prev)     ! previous projection direction
+        call build_glob%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
         self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj  ! previous reference
         ! projection direction neighbourhood based on 3D of class average
         if( params_glob%l_clsneigh )then
@@ -287,6 +289,52 @@ contains
             endif
         endif
     end subroutine inpl_srch
+
+    subroutine inpl_srch_dev( self )
+        class(strategy3D_srch), intent(inout) :: self
+        integer, parameter :: halfwin = 4
+        real    :: rotmat(2,2), cxy(3), shvec(2), ang, a, shift_incr
+        integer :: i,j,k, iref, irot, ind
+        if( self%doshift )then
+            a = sqrt(real(params_glob%boxmatch/2))
+            shift_incr = a / (a+real(params_glob%kstop))
+            if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+                s3D%inplpeaks%ccs(:,self%ithr) = -huge(a)
+            else
+                s3D%inplpeaks%ccs(:,self%ithr) = -1.
+            endif
+            ind = 0
+            do i=self%nrefsmaxinpl,self%nrefsmaxinpl-self%npeaks+1,-1
+                iref = s3D%proj_space_refinds_sorted(self%ithr, i)
+                if(.not. s3D%proj_space_corrs_srchd(self%ithr,iref) ) cycle ! must have seen the reference before
+                j    = s3D%proj_space_inplinds_sorted(self%ithr, i)
+                irot = s3D%proj_space_inplinds(self%ithr, iref, j)
+                ang  = pftcc_glob%get_rot(irot)
+                call self%grad_shsrch_obj%set_indices(iref, self%iptcl)
+                cxy  = self%grad_shsrch_obj%minimize(irot=irot)
+                if( irot == 0 )then
+                    irot = s3D%proj_space_inplinds(self%ithr, iref, j)
+                    cxy = 0.
+                else
+                    call rotmat2d(360.-ang, rotmat)
+                    cxy(2:3) = matmul(cxy(2:3), rotmat)
+                endif
+                call rotmat2d(ang, rotmat)
+                ! coarse evaluations
+                do j = -halfwin,halfwin
+                    shvec(1) = cxy(2) + real(j)*shift_incr
+                    do k = -halfwin,halfwin
+                        shvec(2) = cxy(3) + real(k)*shift_incr
+                        !if( sqrt(sum(shvec*shvec)) > params_glob%trs )cycle
+                        ind = ind + 1
+                        s3D%inplpeaks%eulinds(:,ind,self%ithr) = [iref, irot]
+                        s3D%inplpeaks%shifts(:,ind,self%ithr)  = matmul(shvec, rotmat)
+                        s3D%inplpeaks%ccs(ind,self%ithr) = pftcc_glob%gencorr_for_rot(iref, self%iptcl, shvec, irot)
+                    enddo
+                enddo
+            end do
+        endif
+    end subroutine inpl_srch_dev
 
     subroutine store_solution( self, ref, inpl_inds, corrs, searched )
         class(strategy3D_srch), intent(inout) :: self

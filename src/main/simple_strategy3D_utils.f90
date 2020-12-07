@@ -7,7 +7,7 @@ use simple_parameters,       only: params_glob
 use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
-public :: extract_peaks, calc_ori_weights, update_softmax_weights
+public :: extract_peaks, extract_peaks_dev, calc_ori_weights, update_softmax_weights
 public :: states_reweight, estimate_ang_spread, estimate_shift_increment
 public :: set_state_overlap, sort_corrs
 private
@@ -61,6 +61,80 @@ contains
             call s3D%o_peaks(s%iptcl)%set_shift_incr(ipeak, shvec_incr)
         enddo
     end subroutine extract_peaks
+
+    subroutine extract_peaks_dev( s, corrs, multistates )
+        class(strategy3D_srch), intent(inout) :: s
+        real,                   intent(out)   :: corrs(s%npeaks)
+        logical, optional,      intent(in)    :: multistates
+        integer :: order(s3D%inplpeaks%n), ipeak, iref, inpl, state, ind, i,j
+        real    :: euls(3), shvec(2), shvec_incr(2)
+        logical :: l_multistates
+        if( present(multistates) )then
+            l_multistates = multistates
+        else
+            l_multistates = .false.
+        endif
+        if( l_multistates ) THROW_HARD('extract_peaks_dev: unsupported multi-states')
+        do i = 1,s3D%inplpeaks%n
+            order(i) = i
+        enddo
+        call hpsort(s3D%inplpeaks%ccs(:,s%ithr), order)
+        ! stash best s%npeaks
+        ipeak = 0
+        do i = s3D%inplpeaks%n,s3D%inplpeaks%n-s%npeaks+1,-1
+            ind   = order(i)
+            ipeak = ipeak + 1
+            ! euler angles
+            iref = s3D%inplpeaks%eulinds(1,ind,s%ithr)
+            if( iref < 1 .or. iref > s%nrefs )then
+                print *,'iptcl i ind ithr: ',s%iptcl, i, ind, s%ithr
+                print *,'eulinds: ',s3D%inplpeaks%eulinds(:,ind,s%ithr)
+                print *,'shifts:  ',s3D%inplpeaks%shifts(:,ind,s%ithr)
+                do j = 1,s3D%inplpeaks%n
+                    ind = order(j)
+                    print *,j,s3D%inplpeaks%ccs(j,s%ithr),order(j),s3D%inplpeaks%eulinds(:,ind,s%ithr),s3D%inplpeaks%shifts(:,ind,s%ithr),s3D%inplpeaks%ccs(j,s%ithr)
+                enddo
+                ! do j = params_glob%kfromto(1),params_glob%kstop
+                !     print *,j,csq_fast(pftcc_glob%heap_vars(s%ithr)%pft_ref(:,j)),pftcc_glob%heap_vars(s%ithr)%pft_ref(:,j)
+                ! enddo
+                ind = pftcc_glob%pinds(s%iptcl)
+                do j = params_glob%kfromto(1),params_glob%kstop
+                    print *,j,sum(csq_fast(pftcc_glob%pfts_ptcls(:,j,ind))),pftcc_glob%pfts_ptcls(:,j,ind)
+                enddo
+                THROW_HARD('ref index: '//int2str(iref)//' out of bound; extract_peaks_dev')
+            endif
+            if( l_multistates )then
+                state = s3D%proj_space_state(iref)
+                if( .not. s3D%state_exists(state) ) THROW_HARD('empty state: '//int2str(state)//'; extract_peaks')
+            endif
+            euls    = build_glob%eulspace%get_euler(s3D%proj_space_proj(iref))
+            inpl    = s3D%inplpeaks%eulinds(2,ind,s%ithr)
+            euls(3) = 360. - pftcc_glob%get_rot(inpl)
+            ! add shift
+            shvec = s%prev_shvec
+            shvec_incr = 0.
+            if( s%doshift ) then
+                shvec_incr = s3D%inplpeaks%shifts(:,ind,s%ithr)
+                shvec      = shvec + shvec_incr
+            end if
+            ! transfer to solution set
+            corrs(ipeak) = s3D%inplpeaks%ccs(i,s%ithr)
+            if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
+                if( corrs(ipeak) < 0. ) corrs(ipeak) = 0.
+            end if
+            if( l_multistates )then
+                call s3D%o_peaks(s%iptcl)%set(ipeak, 'state', real(state))
+            else
+                call s3D%o_peaks(s%iptcl)%set(ipeak, 'state', 1.)
+            endif
+            call s3D%o_peaks(s%iptcl)%set(ipeak, 'proj',  real(s3D%proj_space_proj(iref)))
+            call s3D%o_peaks(s%iptcl)%set(ipeak, 'inpl',  real(inpl))
+            call s3D%o_peaks(s%iptcl)%set(ipeak, 'corr',  corrs(ipeak))
+            call s3D%o_peaks(s%iptcl)%set_euler(ipeak, euls)
+            call s3D%o_peaks(s%iptcl)%set_shift(ipeak, shvec)
+            call s3D%o_peaks(s%iptcl)%set_shift_incr(ipeak, shvec_incr)
+        enddo
+    end subroutine extract_peaks_dev
 
     ! (1) Calculate normalised softmax weights per particle
     ! (2) Use Otsu's algorithm to detect correlation peaks
