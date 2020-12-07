@@ -100,6 +100,7 @@ type :: parameters
     character(len=3)      :: tomo='no'            !< tomography mode(yes|no){no}
     character(len=3)      :: tophat='no'          !< tophat filter(yes|no){no}
     character(len=3)      :: time='no'
+    character(len=3)      :: trspeaks='no'        !< whther to use soft 3D translational peaks(yes|no){no}
     character(len=3)      :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)      :: tseries='no'         !< images represent a time-series(yes|no){no}
     character(len=3)      :: vis='no'             !< visualise(yes|no)
@@ -317,7 +318,6 @@ type :: parameters
     integer :: tofny=0
     integer :: top=1
     integer :: tos=1
-    integer :: trsstep=1
     integer :: update=1000
     integer :: which_iter=0        !< iteration nr
     integer :: xcoord=0            !< x coordinate{0}
@@ -613,6 +613,7 @@ contains
         call check_carg('tomoseries',     self%tomoseries)
         call check_carg('tophat',         self%tophat)
         call check_carg('trsstats',       self%trsstats)
+        call check_carg('trspeaks',       self%trspeaks)
         call check_carg('tseries',        self%tseries)
         call check_carg('vis',            self%vis)
         call check_carg('wcrit',          self%wcrit)
@@ -744,7 +745,6 @@ contains
         call check_iarg('time_inactive',  self%time_inactive)
         call check_iarg('top',            self%top)
         call check_iarg('tos',            self%tos)
-        call check_iarg('trsstep',        self%trsstep)
         call check_iarg('update',         self%update)
         call check_iarg('which_iter',     self%which_iter)
         call check_iarg('xdim',           self%xdim)

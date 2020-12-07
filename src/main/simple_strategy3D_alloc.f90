@@ -9,7 +9,7 @@ implicit none
 public :: s3D, clean_strategy3D, prep_strategy3D, prep_strategy3D_thread
 private
 
-integer, parameter :: NTRS_PEAKS = 25
+integer, parameter :: NTRS_PEAKS = 81
 
 type inpl_peaks
     integer              :: n    = 0        ! # of peaks
@@ -50,7 +50,7 @@ logical                :: srch_order_allocated = .false.
 
 contains
 
-    subroutine prep_strategy3D(  ptcl_mask, npeaks )
+    subroutine prep_strategy3D( ptcl_mask, npeaks )
         logical, target, intent(in) :: ptcl_mask(params_glob%fromp:params_glob%top)
         integer,         intent(in) :: npeaks
         real    :: eul(3)
@@ -78,6 +78,9 @@ contains
             &s3D%proj_space_inplinds(nthr_glob,nrefs,params_glob%ninplpeaks),&
             &s3D%proj_space_proj(nrefs),&
             &s3D%proj_mirror_idx(nrefs), stat=alloc_stat )
+        if( trim(params_glob%trspeaks).eq.'yes' )then
+            call s3D%inplpeaks%allocate(params_glob%npeaks, params_glob%ninplpeaks, NTRS_PEAKS, nthr_glob)
+        endif
         if(alloc_stat/=0)call allocchk("strategy3D_alloc failed")
         ! states existence
         if( .not.build_glob%spproj%is_virgin_field(params_glob%oritype) )then
@@ -197,6 +200,7 @@ contains
         if( allocated(s3D%proj_space_inplinds_sorted)       ) deallocate(s3D%proj_space_inplinds_sorted)
         if( allocated(s3D%proj_space_refinds_sorted_highest)) deallocate(s3D%proj_space_refinds_sorted_highest)
         if( allocated(s3D%proj_mirror_idx)                  ) deallocate(s3D%proj_mirror_idx)
+        call s3D%inplpeaks%deallocate
         if( allocated(s3D%rts) )then
             do ithr=1,nthr_glob
                 call s3D%rts(ithr)%kill
