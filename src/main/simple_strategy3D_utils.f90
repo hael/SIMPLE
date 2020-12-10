@@ -97,9 +97,9 @@ contains
                 ! do j = params_glob%kfromto(1),params_glob%kstop
                 !     print *,j,csq_fast(pftcc_glob%heap_vars(s%ithr)%pft_ref(:,j)),pftcc_glob%heap_vars(s%ithr)%pft_ref(:,j)
                 ! enddo
-                ind = pftcc_glob%pinds(s%iptcl)
+                ! ind = pftcc_glob%pinds(s%iptcl)
                 do j = params_glob%kfromto(1),params_glob%kstop
-                    print *,j,sum(csq_fast(pftcc_glob%pfts_ptcls(:,j,ind))),pftcc_glob%pfts_ptcls(:,j,ind)
+                    ! print *,j,sum(csq_fast(pftcc_glob%pfts_ptcls(:,j,ind))),pftcc_glob%pfts_ptcls(:,j,ind)
                 enddo
                 THROW_HARD('ref index: '//int2str(iref)//' out of bound; extract_peaks_dev')
             endif
