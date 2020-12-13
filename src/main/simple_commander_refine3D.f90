@@ -158,6 +158,8 @@ contains
                 write(logfhandle,*)'Unsupported ORITYPE; simple_commander_refine3D :: exec_refine3D_distr'
         end select
         if( fall_over ) THROW_HARD('no particles found! :exec_refine3D_distr')
+        if(       l_multistates .and. params%nstates <= 1 ) THROW_HARD('nstates must be > 1 for multi refine modes!')
+        if( .not. l_multistates .and. params%nstates >  1 ) THROW_HARD('nstates > 1 but refine mode is single')
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
