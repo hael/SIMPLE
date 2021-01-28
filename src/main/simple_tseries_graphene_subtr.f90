@@ -21,7 +21,7 @@ real, parameter :: REMOVAL_HWIDTH3 = sqrt(3.)    ! obscuring half-width 3
 
 type(polarft_corrcalc) :: pftcc
 type(polarizer)        :: pspec_img
-type(image)            :: filter_img, tmp_img
+type(image)            :: filter_img
 type(parameters)       :: params
 real                   :: angstep
 integer                :: nrots
@@ -93,7 +93,6 @@ contains
             enddo
         enddo
         call pspec_img%new([box,box,1],smpd)
-        call tmp_img%new([box,box,1],smpd)
         call img%ft2img('sqrt', pspec_img)
         ! resolutions mask & filter
         call filter_img%new([box,box,1],smpd)
@@ -147,8 +146,9 @@ contains
     subroutine calc_peaks( img_in, ang1, ang2 )
         class(image), intent(inout) :: img_in
         real,         intent(out)   :: ang1, ang2
-        real    :: corrs(nrots), ang, corr, rot
-        integer :: i,j
+        real    :: corrs(nrots), ang, corr, rot, diffang
+        logical :: corrs_mask(nrots)
+        integer :: i,j,il,ir
         ! rotational average
         call img_in%roavg(60,pspec_img)
         ! bands filtering
@@ -159,6 +159,18 @@ contains
         ! rotational correlations
         call pftcc%prep_matchfilt(1,1,1)
         call pftcc%gencorrs(1,1,corrs)
+        ! mask out non peak-shape values
+        do i = 1,nrots
+            il = i-1
+            ir = i+1
+            if( il < 1 ) il = il+nrots
+            if( ir > nrots ) ir = ir-nrots
+            if( corrs(il) < corrs(i) .and. corrs(ir) < corrs(i) )then
+                corrs_mask(i) = .true.
+            else
+                corrs_mask(i) = .false.
+            endif
+        enddo
         ! First spectral peak interpolation
         call interp_peak(ang1, corr)
         do while( ang1 > 60. )
@@ -169,9 +181,17 @@ contains
             rot = 360.-pftcc%get_rot(i)
             do j = 0,5
                 ang = ang1 + real(j)*60.
-                if( abs(rot-ang) < angular_threshold )corrs(i) = -1.
+                diffang = abs(rot-ang)
+                if( diffang > 180. ) diffang = 360.- diffang
+                if( diffang < angular_threshold ) corrs_mask(i) = .false.
             enddo
         enddo
+        if( count(corrs_mask) == 0 )then
+            ! could not find second peak within angular threshold
+            call range_convention(ang1)
+            ang2 = ang1
+            return
+        endif
         ! Second spectral peak interpolation
         call interp_peak(ang2, corr)
         ! angular convention
@@ -200,7 +220,7 @@ contains
                 real, intent(out) :: ang, corr
                 real    :: denom, alpha, beta, gamma, drot
                 integer :: maxind, ind
-                maxind = maxloc(corrs,dim=1)
+                maxind = maxloc(corrs,dim=1,mask=corrs_mask)
                 beta   = corrs(maxind)
                 ind    = merge(nrots, maxind-1, maxind==1)
                 alpha  = corrs(ind)
@@ -328,7 +348,6 @@ contains
         call pftcc%kill
         call pspec_img%kill
         call filter_img%kill
-        call tmp_img%kill
         angstep = 0.
         nrots   = 0
     end subroutine kill_graphene_subtr
