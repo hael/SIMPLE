@@ -32,6 +32,7 @@ contains
     procedure :: new         => grad_shsrch_new
     procedure :: set_indices => grad_shsrch_set_indices
     procedure :: minimize    => grad_shsrch_minimize
+    procedure :: minimize_exhaustive
     procedure :: kill        => grad_shsrch_kill
     procedure :: does_opt_angle
     procedure :: coarse_search
@@ -153,6 +154,97 @@ contains
         self%reference = ref
         self%particle  = ptcl
     end subroutine grad_shsrch_set_indices
+
+    !> exhaustive in-plane minimisation routine
+    function minimize_exhaustive( self, irot, halfrot ) result( cxy )
+        class(pftcc_shsrch_grad), intent(inout) :: self
+        integer,                  intent(out)   :: irot
+        real, optional,           intent(in)    :: halfrot ! within +/- x degrees of irot
+        integer, parameter :: STEP=2 ! shift step in pixel, even
+        logical  :: rotmask(self%nrots)
+        real     :: corrs(self%nrots), rotmat(2,2), cxy(3), coarse_shift(2), new_lims(2,2)
+        real     :: cc, optcc, dang, lowest_cost, lowest_cost_overall, sx,sy
+        integer  :: loc, i, ix,iy, j
+        if( irot <= 0 ) irot = pftcc_glob%get_roind(0.)
+        ! rotation mask
+        rotmask = .true.
+        if( present(halfrot) )then
+            if(halfrot >= 180.0 .or. halfrot < 0. .or. halfrot < abs(pftcc_glob%get_rot(2)-pftcc_glob%get_rot(1)) )then
+                THROW_HARD('Invalid rotation boundary')
+            endif
+            do i = 1,self%nrots
+                dang = abs(pftcc_glob%get_rot(i)-pftcc_glob%get_rot(irot))
+                if( dang > 180. ) dang = abs(dang-360.)
+                rotmask(i) = dang <= halfrot
+            enddo
+        endif
+        ! Coarse search
+        coarse_shift = 0.
+        optcc        = -huge(optcc)
+        do ix = round2even(real(floor(self%ospec%limits(1,1)))),round2even(real(ceiling(self%ospec%limits(1,2)))),STEP
+            do iy = round2even(real(floor(self%ospec%limits(2,1)))),round2even(real(ceiling(self%ospec%limits(2,2)))),STEP
+                call pftcc_glob%gencorrs(self%reference, self%particle, real([ix,iy]), corrs)
+                loc = maxloc(corrs,dim=1,mask=rotmask)
+                cc  = corrs(loc)
+                if (cc > optcc) then
+                    irot  = loc
+                    optcc = cc
+                    coarse_shift = real([ix,iy])
+                end if
+            end do
+        end do
+        do i = -1,1
+            sx = coarse_shift(1) + real(i*STEP)/2.
+            do j = -1,1
+                if( i==0 .and. j==0 )cycle
+                sy = coarse_shift(2) + real(j*STEP)/2.
+                call pftcc_glob%gencorrs(self%reference, self%particle, real([sx,sy]), corrs)
+                loc = maxloc(corrs,dim=1,mask=rotmask)
+                cc  = corrs(loc)
+                if (cc > optcc) then
+                    irot  = loc
+                    optcc = cc
+                    coarse_shift = [sx,sy]
+                end if
+            end do
+        end do
+        do i = -1,1
+            sx = coarse_shift(1) + real(i*STEP)/4.
+            do j = -1,1
+                if( i==0 .and. j==0 )cycle
+                sy = coarse_shift(2) + real(j*STEP)/4.
+                call pftcc_glob%gencorrs(self%reference, self%particle, real([sx,sy]), corrs)
+                loc = maxloc(corrs,dim=1,mask=rotmask)
+                cc  = corrs(loc)
+                if (cc > optcc) then
+                    irot  = loc
+                    optcc = cc
+                    coarse_shift = [sx,sy]
+                end if
+            end do
+        end do
+        self%cur_inpl_idx = irot
+        self%ospec%x      = coarse_shift
+        self%ospec%x_8    = real(self%ospec%x,dp)
+        ! refinement
+        lowest_cost_overall = -pftcc_glob%gencorr_for_rot(self%reference, self%particle, self%ospec%x, self%cur_inpl_idx)
+        new_lims(1,:) = [self%ospec%x(1)-real(STEP/2),self%ospec%x(1)+real(STEP/2)]
+        new_lims(2,:) = [self%ospec%x(2)-real(STEP/2),self%ospec%x(2)+real(STEP/2)]
+        call self%ospec%set_limits(new_lims)
+        call self%nlopt%minimize(self%ospec, self, lowest_cost)
+        if( lowest_cost < lowest_cost_overall )then
+            ! refinement solution
+            lowest_cost_overall = lowest_cost
+            cxy(2:3) = self%ospec%x
+        else
+            ! coarse solution
+            cxy(2:3) = coarse_shift
+        endif
+        cxy(1) = -lowest_cost_overall
+        ! rotate the shift vector to the frame of reference
+        call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
+        cxy(2:) = matmul(cxy(2:), rotmat)
+    end function minimize_exhaustive
 
     !> minimisation routine
     function grad_shsrch_minimize( self, irot ) result( cxy )
