@@ -199,8 +199,7 @@ type :: polarft_corrcalc
     procedure          :: gencorr_sigma_contrib
     procedure, private :: genfrc
     procedure, private :: calc_frc
-    procedure, private :: specscore_1
-    procedure, private :: specscore_2
+    procedure, private :: specscore_1, specscore_2
     generic            :: specscore => specscore_1, specscore_2
     procedure          :: calc_roinv_corrmat
     ! DESTRUCTOR
