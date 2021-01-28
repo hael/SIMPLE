@@ -22,6 +22,7 @@ public :: tseries_motion_correct_commander_distr
 public :: tseries_motion_correct_commander
 public :: tseries_track_particles_commander_distr
 public :: tseries_track_particles_commander
+public :: motion_refine_nano_commander
 public :: center2D_nano_commander_distr
 public :: cluster2D_nano_commander_hlev
 public :: tseries_ctf_estimate_commander
@@ -60,6 +61,10 @@ type, extends(commander_base) :: tseries_track_particles_commander
   contains
     procedure :: execute      => exec_tseries_track_particles
 end type tseries_track_particles_commander
+type, extends(commander_base) :: motion_refine_nano_commander
+  contains
+    procedure :: execute      => exec_motion_refine_nano
+end type motion_refine_nano_commander
 type, extends(commander_base) :: center2D_nano_commander_distr
   contains
     procedure :: execute      => exec_center2D_nano_distr
@@ -516,6 +521,76 @@ contains
         call spproj%kill
         call simple_end('**** SIMPLE_TSERIES_TRACK_PARTICLES NORMAL STOP ****')
     end subroutine exec_tseries_track_particles
+
+    subroutine exec_motion_refine_nano( self, cline )
+        use simple_ori,              only: ori
+        use simple_sp_project,       only: sp_project
+        use simple_motion_refine_nano
+        class(motion_refine_nano_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(sp_project)                       :: spproj, spproj_frames
+        type(parameters)                       :: params
+        type(motion_refine_nano)               :: motion_correcter
+        type(nrtxtfile)                        :: boxfile
+        type(ori)                              :: o
+        character(len=:),          allocatable :: refs_stk
+        real,                      allocatable :: boxdata(:,:)
+        character(len=LONGSTRLEN)              :: new_ptcl_stk, stkfname
+        real    :: smpd
+        integer :: ncavgs, nptcls, iptcl
+        call cline%set('match_filt','no')
+        call cline%set('ctf',       'no')
+        if( .not. cline%defined('lp')        ) call cline%set('lp',       1.3)
+        if( .not. cline%defined('trs')       ) call cline%set('trs',      15.)
+        if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp',5.)
+        call cline%set('oritype','ptcl2D')
+        call params%new(cline)
+        params_glob%boxmatch = params_glob%box
+        params_glob%ring2    = max(115,nint(1.25*real(params%box)/2.)) ! sets rotational accuracy > ~0.5 degrees
+        if( cline%defined('outstk') )then
+            new_ptcl_stk = trim(params%outstk)
+        else
+            new_ptcl_stk = 'NP_mc_corrected.mrc'
+        endif
+        ! ptcl2D, cls2D & 2D references
+        call spproj%read(params%projfile)
+        call spproj%get_cavgs_stk(refs_stk, ncavgs, smpd)
+        ! frames
+        call spproj_frames%read(params%projfile_target)
+        ! transfer particles coordinates in frames to ptcl2D
+        call boxfile%new(params%boxfile, 1)
+        nptcls = boxfile%get_ndatalines()
+        allocate( boxdata(nptcls,boxfile%get_nrecs_per_line()), stat=alloc_stat)
+        do iptcl = 1,nptcls
+            call boxfile%readNextDataLine(boxdata(iptcl,:))
+            call spproj%os_ptcl2D%set(iptcl,'xpos',boxdata(iptcl,1))
+            call spproj%os_ptcl2D%set(iptcl,'ypos',boxdata(iptcl,2))
+        enddo
+        call boxfile%kill
+        ! correction
+        call motion_correcter%new(spproj%os_ptcl2D, spproj%os_cls2D, spproj_frames%os_mic, refs_stk)
+        call motion_correcter%correct(new_ptcl_stk)
+        call motion_correcter%kill
+        ! book-keeping
+        call make_relativepath(CWD_GLOB,new_ptcl_stk,stkfname)
+        if( spproj%os_stk%get_noris() > 1 )then
+            call spproj%os_stk%get_ori(1,o)
+            call spproj%os_stk%kill
+            call spproj%os_stk%new(1)
+            call spproj%os_stk%set_ori(1,o)
+            call spproj%os_ptcl2D%set_all2single('stkind',1.)
+            call spproj%os_ptcl3D%set_all2single('stkind',1.)
+            call spproj%os_stk%set(1,'fromp',1.)
+            call spproj%os_stk%set(1,'top',real(nptcls))
+            call spproj%os_stk%set(1,'nptcls',real(nptcls))
+            call spproj%os_stk%set(1,'stkkind','single')
+        endif
+        call spproj%os_ptcl2D%delete_entry('inpl')
+        call spproj%os_ptcl2D%set_all2single('lp',params_glob%lp)
+        call spproj%os_stk%set(1,'stk',stkfname)
+        call spproj%write(params%projfile)
+        call simple_end('**** SIMPLE_MOTION_REFINE_NANO NORMAL STOP ****')
+    end subroutine exec_motion_refine_nano
 
     subroutine exec_center2D_nano_distr( self, cline )
         use simple_commander_cluster2D, only: make_cavgs_commander_distr,cluster2D_commander_distr

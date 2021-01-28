@@ -73,7 +73,7 @@ integer, parameter   :: NMAX_PTRS  = 200
 integer              :: n_prg_ptrs = 0
 type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
-! declare simple_exec and simple_exec program specifications here
+! declare simple_exec and single_exec program specifications here
 type(simple_program), target :: atom_cluster_analysis
 type(simple_program), target :: atoms_mask
 type(simple_program), target :: atoms_rmsd
@@ -119,6 +119,7 @@ type(simple_program), target :: mkdir_
 type(simple_program), target :: merge_stream_projects
 type(simple_program), target :: motion_correct
 type(simple_program), target :: motion_correct_tomo
+type(simple_program), target :: motion_refine_nano
 type(simple_program), target :: nano_softmask
 type(simple_program), target :: new_project
 type(simple_program), target :: normalize_
@@ -335,6 +336,7 @@ contains
         call new_merge_stream_projects
         call new_mkdir_
         call new_motion_correct
+        call new_motion_refine_nano
         call new_motion_correct_tomo
         call new_nano_softmask
         call new_new_project
@@ -435,6 +437,7 @@ contains
         call push2prg_ptr_array(mask)
         call push2prg_ptr_array(mkdir_)
         call push2prg_ptr_array(motion_correct)
+        call push2prg_ptr_array(motion_refine_nano)
         call push2prg_ptr_array(motion_correct_tomo)
         call push2prg_ptr_array(nano_softmask)
         call push2prg_ptr_array(new_project)
@@ -591,6 +594,8 @@ contains
                 ptr2prg => mkdir_
             case('motion_correct')
                 ptr2prg => motion_correct
+            case('motion_refine_nano')
+                ptr2prg => motion_refine_nano
             case('motion_correct_tomo')
                 ptr2prg => motion_correct_tomo
             case('nano_softmask')
@@ -802,6 +807,7 @@ contains
         write(logfhandle,'(A)') graphene_subtr%name
         write(logfhandle,'(A)') center2D_nano%name
         write(logfhandle,'(A)') cluster2D_nano%name
+        write(logfhandle,'(A)') motion_refine_nano%name
         write(logfhandle,'(A)') map_cavgs_selection%name
         write(logfhandle,'(A)') estimate_diam%name
         write(logfhandle,'(A)') simulate_atoms%name
@@ -2487,6 +2493,39 @@ contains
         call motion_correct%set_input('comp_ctrls', 1, nparts)
         call motion_correct%set_input('comp_ctrls', 2, nthr)
     end subroutine new_motion_correct
+
+    subroutine new_motion_refine_nano
+        ! PROGRAM SPECIFICATION
+        call motion_refine_nano%new(&
+        &'motion_refine_nano', &                                                      ! name
+        &'Beam-induced motion correction of nano-particles',&                         ! descr_short
+        &'is a distributed workflow for  motion correction .',&                       ! descr_long
+        &'single_exec',&                                                    ! executable
+        &1, 2, 0, 2, 2, 1, 1, .true.)                                       ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call motion_refine_nano%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
+        ! parameter input/output
+        call motion_refine_nano%set_input('parm_ios', 1, projfile_target)
+        call motion_refine_nano%set_input('parm_ios', 2, 'boxfile', 'file', 'List of particle coordinates',&
+        &'.txt file with EMAN-convention particle coordinates', 'e.g. coords.box', .true., '')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call motion_refine_nano%set_input('srch_ctrls', 1, trs)
+        motion_refine_nano%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{15}'
+        motion_refine_nano%srch_ctrls(1)%rval_default      = 15.
+        call motion_refine_nano%set_input('srch_ctrls', 2, 'nframesgrp', 'num', '# frames in time moving time window', '# frames in time moving time window subjected to correction', '{5}', .false., 5.)
+        ! call motion_refine_nano%set_input('srch_ctrls', 3, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{30}', .false., 50.)
+        ! filter controls
+        call motion_refine_nano%set_input('filt_ctrls', 1, hp)
+        motion_refine_nano%srch_ctrls(1)%rval_default = 30.
+        call motion_refine_nano%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms{1.5}', .false., 1.3)
+        ! mask controls
+        call motion_refine_nano%set_input('mask_ctrls', 1, msk)
+        ! computer controls
+        call motion_refine_nano%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_motion_refine_nano
 
     subroutine new_motion_correct_tomo
         ! PROGRAM SPECIFICATION
