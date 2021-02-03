@@ -160,11 +160,10 @@ contains
         class(pftcc_shsrch_grad), intent(inout) :: self
         integer,                  intent(out)   :: irot
         real, optional,           intent(in)    :: halfrot ! within +/- x degrees of irot
-        integer, parameter :: STEP=2 ! shift step in pixel, even
         logical  :: rotmask(self%nrots)
-        real     :: corrs(self%nrots), rotmat(2,2), cxy(3), coarse_shift(2), new_lims(2,2)
-        real     :: cc, optcc, dang, lowest_cost, lowest_cost_overall, sx,sy
-        integer  :: loc, i, ix,iy, j
+        real     :: corrs(self%nrots), rotmat(2,2), cxy(3), shift(2), coarse_shift(2)
+        real     :: cc, optcc, dang, lowest_cost, lowest_cost_overall, sx,sy, stepx,stepy
+        integer  :: loc, i, j, nstepx, nstepy
         if( irot <= 0 ) irot = pftcc_glob%get_roind(0.)
         ! rotation mask
         rotmask = .true.
@@ -179,58 +178,62 @@ contains
             enddo
         endif
         ! Coarse search
-        coarse_shift = 0.
-        optcc        = -huge(optcc)
-        do ix = round2even(real(floor(self%ospec%limits(1,1)))),round2even(real(ceiling(self%ospec%limits(1,2)))),STEP
-            do iy = round2even(real(floor(self%ospec%limits(2,1)))),round2even(real(ceiling(self%ospec%limits(2,2)))),STEP
-                call pftcc_glob%gencorrs(self%reference, self%particle, real([ix,iy]), corrs)
+        nstepx = max(1,floor((self%ospec%limits(1,2)-self%ospec%limits(1,1))/4.))
+        nstepy = max(1,floor((self%ospec%limits(2,2)-self%ospec%limits(2,1))/4.))
+        stepx  = (self%ospec%limits(1,2)-self%ospec%limits(1,1))/real(2*nstepx+1)
+        stepy  = (self%ospec%limits(2,2)-self%ospec%limits(2,1))/real(2*nstepy+1)
+        do i = -nstepx,nstepx
+            sx = real(i)*stepx
+            do j = -nstepy,nstepy
+                sy = real(j)*stepy
+                call pftcc_glob%gencorrs(self%reference, self%particle, [sx,sy], corrs)
                 loc = maxloc(corrs,dim=1,mask=rotmask)
                 cc  = corrs(loc)
                 if (cc > optcc) then
-                    irot  = loc
-                    optcc = cc
-                    coarse_shift = real([ix,iy])
-                end if
-            end do
-        end do
-        do i = -1,1
-            sx = coarse_shift(1) + real(i*STEP)/2.
-            do j = -1,1
-                if( i==0 .and. j==0 )cycle
-                sy = coarse_shift(2) + real(j*STEP)/2.
-                call pftcc_glob%gencorrs(self%reference, self%particle, real([sx,sy]), corrs)
-                loc = maxloc(corrs,dim=1,mask=rotmask)
-                cc  = corrs(loc)
-                if (cc > optcc) then
-                    irot  = loc
-                    optcc = cc
+                    irot         = loc
+                    optcc        = cc
                     coarse_shift = [sx,sy]
                 end if
-            end do
-        end do
+            enddo
+        enddo
+        shift = coarse_shift
         do i = -1,1
-            sx = coarse_shift(1) + real(i*STEP)/4.
+            sx = coarse_shift(1) + real(i)*stepx/2.
             do j = -1,1
                 if( i==0 .and. j==0 )cycle
-                sy = coarse_shift(2) + real(j*STEP)/4.
-                call pftcc_glob%gencorrs(self%reference, self%particle, real([sx,sy]), corrs)
+                sy = coarse_shift(2) + real(j)*stepy/2.
+                call pftcc_glob%gencorrs(self%reference, self%particle, [sx,sy], corrs)
                 loc = maxloc(corrs,dim=1,mask=rotmask)
                 cc  = corrs(loc)
                 if (cc > optcc) then
                     irot  = loc
                     optcc = cc
-                    coarse_shift = [sx,sy]
+                    shift = [sx,sy]
                 end if
-            end do
-        end do
+            enddo
+        enddo
+        coarse_shift = shift
+        do i = -1,1
+            sx = coarse_shift(1) + real(i)*stepx/4.
+            do j = -1,1
+                if( i==0 .and. j==0 )cycle
+                sy = coarse_shift(2) + real(j)*stepy/4.
+                call pftcc_glob%gencorrs(self%reference, self%particle, [sx,sy], corrs)
+                loc = maxloc(corrs,dim=1,mask=rotmask)
+                cc  = corrs(loc)
+                if (cc > optcc) then
+                    irot  = loc
+                    optcc = cc
+                    shift = [sx,sy]
+                end if
+            enddo
+        enddo
+        coarse_shift      = shift
         self%cur_inpl_idx = irot
         self%ospec%x      = coarse_shift
         self%ospec%x_8    = real(self%ospec%x,dp)
         ! refinement
         lowest_cost_overall = -pftcc_glob%gencorr_for_rot(self%reference, self%particle, self%ospec%x, self%cur_inpl_idx)
-        new_lims(1,:) = [self%ospec%x(1)-real(STEP/2),self%ospec%x(1)+real(STEP/2)]
-        new_lims(2,:) = [self%ospec%x(2)-real(STEP/2),self%ospec%x(2)+real(STEP/2)]
-        call self%ospec%set_limits(new_lims)
         call self%nlopt%minimize(self%ospec, self, lowest_cost)
         if( lowest_cost < lowest_cost_overall )then
             ! refinement solution
@@ -243,7 +246,7 @@ contains
         cxy(1) = -lowest_cost_overall
         ! rotate the shift vector to the frame of reference
         call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
-        cxy(2:) = matmul(cxy(2:), rotmat)
+        cxy(2:3) = matmul(cxy(2:3), rotmat)
     end function minimize_exhaustive
 
     !> minimisation routine
