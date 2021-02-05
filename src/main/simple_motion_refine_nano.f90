@@ -18,6 +18,7 @@ public :: motion_refine_nano
 
 logical, parameter :: DEBUG   = .true.
 real,    parameter :: HALFROT = 12.
+integer, parameter :: MAXNFRAMESPERPTCL = 50
 
 type image_ptr
     real,    public, pointer :: rmat(:,:,:)
@@ -97,10 +98,10 @@ contains
         class(motion_refine_nano), intent(inout) :: self
         character(len=*),          intent(in)    :: new_stk_fname
         type(image)              :: tmpimg, ave, neighbour_imgs(9), tmpimgs(9)
-        real,    allocatable :: corrs(:)
+        real,    allocatable :: corrs(:), corrmat(:,:), weights(:),ranked_weights(:)
         logical, allocatable :: lmsk(:,:,:), ptcl_mask(:), ptcl_cls_mask(:)
         integer, allocatable :: pinds(:), ptcl_pos(:,:)
-        real    :: shift(2), lims(2,2), lims_init(2,2), ang, sdev_noise, angstep, cxy(3), graphene_pos(2)
+        real    :: shift(2), lims(2,2), lims_init(2,2), ang, sdev_noise, angstep, cxy(3), graphene_pos(2),threshold,wsum
         integer :: fromto(2),i, j, k, icls, iptcl,pop,noutside, irot, hn,npop,ithr, ix,iy, cnt
         integer :: iring2, ikfromto(2), ikstop, inthr_glob
         logical :: valid_neighbour(9)
@@ -290,38 +291,120 @@ contains
                 call self%padded_imgs(i)%shift2Dserial(-self%shifts_sub(i,:))
             enddo
             !$omp end parallel do
-            !$omp parallel do default(shared) private(i,iptcl,ithr,fromto,j,ang) schedule(static) proc_bind(close)
-            do i = 1,npop
-                iptcl = pinds(i)
-                if( .not.ptcl_cls_mask(iptcl) )cycle
-                ithr   = omp_get_thread_num() + 1
-                fromto = [i-hn, i+hn]
-                if(fromto(1) < 1   ) fromto = [1, params_glob%nframesgrp]
-                if(fromto(2) > npop) fromto = [npop-params_glob%nframesgrp+1,npop]
-                call self%rot_imgs(ithr)%zero_and_flag_ft
-                do j = fromto(1),fromto(2)
-                    if( j == i )then
-                        call self%rot_imgs(ithr)%add(self%padded_imgs(i))
-                    else
-                        ! rotation relative to frame #i
-                        ang = self%e3(j) - self%e3(i)
-                        if( ang > 180. ) ang = ang - 360.
-                        if( abs(ang) > 0.001 )then
-                            call self%rotate_and_add(self%padded_imgs(j),ang)
+            ! WEIGHING FORK
+            if( trim(params_glob%wcrit).ne.'no' )then
+                ! user inputted weighing scheme
+                ! re-fill pftcc for weights determination
+                allocate(corrmat(npop,npop), source=-1.)
+                call self%pftcc%new(npop,[1,npop])
+                !$omp parallel do default(shared) private(i,ithr) schedule(static) proc_bind(close)
+                do i = 1,npop
+                    ithr = omp_get_thread_num() + 1
+                    call self%ptcl_polarizers(ithr)%copy(self%particles(i))
+                    call self%ptcl_polarizers(ithr)%noise_norm(lmsk, sdev_noise)
+                    call self%ptcl_polarizers(ithr)%mask(params_glob%msk, 'soft', backgr=0.)
+                    call self%ptcl_polarizers(ithr)%fft
+                    call self%ptcl_polarizers(ithr)%polarize(self%pftcc,i,.true., .true.,mask=self%lresmsk)
+                    call self%ptcl_polarizers(ithr)%polarize(self%pftcc,i,.false.,.true.,mask=self%lresmsk)
+                enddo
+                !$omp end parallel do
+                call self%pftcc%memoize_ffts
+                ! correlations for weights
+                !$omp parallel do default(shared) private(i,j,corrs) schedule(static) proc_bind(close)
+                do i = 1,npop
+                    corrmat(i,i) = 1.
+                    do j = i+1,npop
+                        call self%pftcc%prep_matchfilt(i, j, 1)
+                        call self%pftcc%gencorrs(i,j,corrs)
+                        corrmat(i,j) = maxval(corrs)
+                        corrmat(j,i) = corrmat(i,j)
+                    enddo
+                enddo
+                !$omp end parallel do
+                call self%pftcc%kill
+                !$omp parallel do default(shared) private(i,iptcl,ithr,j,ang,weights,threshold,ranked_weights,wsum)&
+                !$omp schedule(static) proc_bind(close)
+                do i = 1,npop
+                    iptcl = pinds(i)
+                    if( .not.ptcl_cls_mask(iptcl) )cycle
+                    ithr   = omp_get_thread_num() + 1
+                    ! weights
+                    weights = corrs2weights(corrmat(:,i), params_glob%wcrit_enum)
+                    if( npop > MAXNFRAMESPERPTCL )then
+                        ranked_weights = weights
+                        call hpsort(ranked_weights)
+                        call reverse(ranked_weights) ! largest first
+                        threshold = ranked_weights(MAXNFRAMESPERPTCL + 1)
+                        where(weights <= threshold) weights = 0.
+                        wsum = sum(weights)
+                        if( wsum > TINY )then
+                            weights = weights / wsum
                         else
-                            call self%rot_imgs(ithr)%add(self%padded_imgs(j))
+                            weights = 0.
                         endif
                     endif
+                    ! rotation and summation
+                    call self%rot_imgs(ithr)%zero_and_flag_ft
+                    do j = 1,npop
+                        if( j == i )then
+                            call self%rot_imgs(ithr)%add(self%padded_imgs(i), weights(i))
+                        else
+                            if( weights(j) < 0.000001 ) cycle
+                            ! rotation relative to frame #i
+                            ang = self%e3(j) - self%e3(i)
+                            if( ang > 180. ) ang = ang - 360.
+                            if( abs(ang) > 0.001 )then
+                                call self%rotate_and_add(self%padded_imgs(j),ang,weights(j))
+                            else
+                                call self%rot_imgs(ithr)%add(self%padded_imgs(j),weights(j))
+                            endif
+                        endif
+                    enddo
+                    ! prep new particle
+                    call self%rot_imgs(ithr)%ifft
+                    call self%kernel_correction(self%rot_imgs(ithr))
+                    call self%particles(i)%zero_and_unflag_ft
+                    call self%rot_imgs(ithr)%clip(self%particles(i))
+                    call self%particles(i)%subtr_backgr_ramp(lmsk)
+                    call self%particles(i)%noise_norm(lmsk,sdev_noise)
                 enddo
-                ! prep new particle
-                call self%rot_imgs(ithr)%ifft
-                call self%kernel_correction(self%rot_imgs(ithr))
-                call self%particles(i)%zero_and_unflag_ft
-                call self%rot_imgs(ithr)%clip(self%particles(i))
-                call self%particles(i)%subtr_backgr_ramp(lmsk)
-                call self%particles(i)%noise_norm(lmsk,sdev_noise)
-            enddo
-            !$omp end parallel do
+                !$omp end parallel do
+                deallocate(corrmat)
+            else
+                ! Defaults to original uniform weights average with nframesgrp frames
+                !$omp parallel do default(shared) private(i,iptcl,ithr,fromto,j,ang) schedule(static) proc_bind(close)
+                do i = 1,npop
+                    iptcl = pinds(i)
+                    if( .not.ptcl_cls_mask(iptcl) )cycle
+                    ithr   = omp_get_thread_num() + 1
+                    fromto = [i-hn, i+hn]
+                    if(fromto(1) < 1   ) fromto = [1, params_glob%nframesgrp]
+                    if(fromto(2) > npop) fromto = [npop-params_glob%nframesgrp+1,npop]
+                    call self%rot_imgs(ithr)%zero_and_flag_ft
+                    do j = fromto(1),fromto(2)
+                        if( j == i )then
+                            call self%rot_imgs(ithr)%add(self%padded_imgs(i))
+                        else
+                            ! rotation relative to frame #i
+                            ang = self%e3(j) - self%e3(i)
+                            if( ang > 180. ) ang = ang - 360.
+                            if( abs(ang) > 0.001 )then
+                                call self%rotate_and_add(self%padded_imgs(j),ang)
+                            else
+                                call self%rot_imgs(ithr)%add(self%padded_imgs(j))
+                            endif
+                        endif
+                    enddo
+                    ! prep new particle
+                    call self%rot_imgs(ithr)%ifft
+                    call self%kernel_correction(self%rot_imgs(ithr))
+                    call self%particles(i)%zero_and_unflag_ft
+                    call self%rot_imgs(ithr)%clip(self%particles(i))
+                    call self%particles(i)%subtr_backgr_ramp(lmsk)
+                    call self%particles(i)%noise_norm(lmsk,sdev_noise)
+                enddo
+                !$omp end parallel do
+            endif
             ! write new particles
             do i = 1,npop
                 iptcl = pinds(i)
@@ -368,20 +451,23 @@ contains
         enddo
     end subroutine correct
 
-    subroutine rotate_and_add( self, img, ang )
+    subroutine rotate_and_add( self, img, ang, w )
         use simple_kbinterpol
         class(motion_refine_nano), intent(inout) :: self
         class(image),              intent(inout) :: img
         real,                      intent(in)    :: ang
+        real,            optional, intent(in)    :: w
         type(image_ptr)          :: pimg
         ! type(kbinterpol)         :: kbwin
         ! real, allocatable        :: w(:,:)
         ! integer, allocatable     :: cyc1(:), cyc2(:)
         complex :: fcomp
-        real    :: loc(2), mat(2,2), dist(2)
+        real    :: loc(2), mat(2,2), dist(2), w_here
         integer :: lims(3,2), cyc_lims(3,2), cyc_limsR(2,3), phys_cmat(3), win_corner(2)
         integer :: h,k,l,ll,mm,m, ithr!, iwinsz,wdim,incr
         ithr = omp_get_thread_num() + 1
+        w_here = 1.
+        if( present(w) ) w_here = w
         call self%rot_imgs(ithr)%get_cmat_ptr(pimg%cmat)
         lims       = self%rot_imgs(ithr)%loop_lims(2)
         cyc_lims   = self%rot_imgs(ithr)%loop_lims(3)
@@ -430,7 +516,7 @@ contains
                 ! end do
                 ! addition
                 phys_cmat = img%comp_addr_phys([h,k,0])
-                pimg%cmat(phys_cmat(1),phys_cmat(2),1) = pimg%cmat(phys_cmat(1),phys_cmat(2),1) + fcomp
+                pimg%cmat(phys_cmat(1),phys_cmat(2),1) = pimg%cmat(phys_cmat(1),phys_cmat(2),1) + w_here*fcomp
             end do
         end do
     end subroutine rotate_and_add

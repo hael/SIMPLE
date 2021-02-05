@@ -2501,7 +2501,7 @@ contains
         &'Beam-induced motion correction of nano-particles',&                         ! descr_short
         &'is a distributed workflow for  motion correction .',&                       ! descr_long
         &'single_exec',&                                                    ! executable
-        &1, 2, 0, 2, 2, 1, 1, .true.)                                       ! # entries in each group, requires sp_project
+        &1, 2, 0, 2, 3, 1, 1, .true.)                                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call motion_refine_nano%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2519,8 +2519,11 @@ contains
         ! call motion_refine_nano%set_input('srch_ctrls', 3, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{30}', .false., 50.)
         ! filter controls
         call motion_refine_nano%set_input('filt_ctrls', 1, hp)
-        motion_refine_nano%srch_ctrls(1)%rval_default = 30.
-        call motion_refine_nano%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms{1.5}', .false., 1.3)
+        motion_refine_nano%filt_ctrls(1)%rval_default = 30.
+        call motion_refine_nano%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms{1.3}', .false., 1.3)
+        call motion_refine_nano%set_input('filt_ctrls', 3, wcrit)
+        motion_refine_nano%filt_ctrls(3)%descr_placeholder = '(softmax|zscore|sum|cen|exp|inv|no){no}'
+        motion_refine_nano%filt_ctrls(3)%cval_default = 'no'
         ! mask controls
         call motion_refine_nano%set_input('mask_ctrls', 1, msk)
         ! computer controls
