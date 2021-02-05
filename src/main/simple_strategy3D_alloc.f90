@@ -28,7 +28,6 @@ type strategy3D_alloc
     integer,          allocatable :: proj_space_state(:)                  !< states
     integer,          allocatable :: proj_space_proj(:)                   !< projection directions (1 state assumed)
     logical,          allocatable :: state_exists(:)                      !< indicates state existence
-    integer,          allocatable :: proj_mirror_idx(:)                   !< indices of mirrored projection directions
     ! per thread allocation
     type(inpl_peaks),    public :: inplpeaks
     type(ran_tabu), allocatable :: rts(:)                                 !< stochastic search order generators
@@ -76,8 +75,7 @@ contains
             &s3D%proj_space_inplinds_sorted(nthr_glob,nrefs*params_glob%ninplpeaks),&
             &s3D%proj_space_corrs_srchd(nthr_glob,nrefs), s3D%proj_space_corrs_calcd(nthr_glob,nrefs),&
             &s3D%proj_space_inplinds(nthr_glob,nrefs,params_glob%ninplpeaks),&
-            &s3D%proj_space_proj(nrefs),&
-            &s3D%proj_mirror_idx(nrefs), stat=alloc_stat )
+            &s3D%proj_space_proj(nrefs), stat=alloc_stat )
         if( trim(params_glob%trspeaks).eq.'yes' )then
             call s3D%inplpeaks%allocate(params_glob%npeaks, params_glob%ninplpeaks, NTRS_PEAKS, nthr_glob)
         endif
@@ -107,11 +105,6 @@ contains
                 do inpl=1,params_glob%ninplpeaks
                     master_proj_space_euls(cnt,inpl,:) = eul
                 end do
-                ! mirror references indices
-                if (iproj .le. params_glob%nspace/2) then
-                    s3D%proj_mirror_idx(cnt)                      = (params_glob%nstates-1)*params_glob%nspace + params_glob%nspace/2 + iproj
-                    s3D%proj_mirror_idx(cnt+params_glob%nspace/2) = (params_glob%nstates-1)*params_glob%nspace + iproj
-                end if
             enddo
         enddo
         s3D%proj_space_shift                  = 0.
@@ -199,7 +192,6 @@ contains
         if( allocated(s3D%proj_space_refinds_sorted)        ) deallocate(s3D%proj_space_refinds_sorted)
         if( allocated(s3D%proj_space_inplinds_sorted)       ) deallocate(s3D%proj_space_inplinds_sorted)
         if( allocated(s3D%proj_space_refinds_sorted_highest)) deallocate(s3D%proj_space_refinds_sorted_highest)
-        if( allocated(s3D%proj_mirror_idx)                  ) deallocate(s3D%proj_mirror_idx)
         call s3D%inplpeaks%deallocate
         if( allocated(s3D%rts) )then
             do ithr=1,nthr_glob

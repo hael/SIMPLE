@@ -51,11 +51,9 @@ type heap_vars
     complex(sp), pointer :: pft_ref_tmp(:,:)    => null()
     complex(sp), pointer :: pft_dref(:,:,:)     => null()
     real,        pointer :: corrs_over_k(:)     => null()
-    real,        pointer :: corrs_mir_over_k(:) => null()
     real(dp),    pointer :: argvec(:)           => null()
     complex(sp), pointer :: shmat(:,:)          => null()
     real,        pointer :: kcorrs(:)           => null()
-    real,        pointer :: kcorrs_mir(:)       => null()
     complex(dp), pointer :: pft_ref_8(:,:)      => null()
     complex(dp), pointer :: pft_ref_tmp_8(:,:)  => null()
     complex(dp), pointer :: pft_dref_8(:,:,:)   => null()
@@ -156,12 +154,8 @@ type :: polarft_corrcalc
     procedure          :: prep_matchfilt
     procedure, private :: gen_shmat
     procedure, private :: gen_shmat_8
-    procedure, private :: calc_corrs_over_k_1
-    procedure, private :: calc_corrs_over_k_2
-    generic            :: calc_corrs_over_k => calc_corrs_over_k_1, calc_corrs_over_k_2
-    procedure, private :: calc_k_corrs_1
-    procedure, private :: calc_k_corrs_2
-    generic            :: calc_k_corrs => calc_k_corrs_1, calc_k_corrs_2
+    procedure          :: calc_corrs_over_k
+    procedure          :: calc_k_corrs
     procedure, private :: calc_corr_for_rot
     procedure, private :: calc_corr_for_rot_8
     procedure, private :: calc_T1_T2_for_rot_8
@@ -172,14 +166,11 @@ type :: polarft_corrcalc
     procedure, private :: calc_euclidk_for_rot
     procedure, private :: gencorrs_cc_1
     procedure, private :: gencorrs_cc_2
-    procedure, private :: gencorrs_cc_mir
     procedure, private :: gencorrs_euclid_1
     procedure, private :: gencorrs_euclid_2
-    procedure, private :: gencorrs_euclid_mir
     procedure, private :: gencorrs_1
     procedure, private :: gencorrs_2
     generic            :: gencorrs => gencorrs_1, gencorrs_2
-    procedure          :: gencorrs_mir
     procedure          :: gencorr_for_rot
     procedure          :: gencorr_for_rot_8
     procedure          :: gencorr_grad_for_rot_8
@@ -340,12 +331,10 @@ contains
                 &self%heap_vars(ithr)%pft_ref_tmp(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2)),&
                 &self%heap_vars(ithr)%pft_dref(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),3),&
                 &self%heap_vars(ithr)%corrs_over_k(self%nrots),&
-                &self%heap_vars(ithr)%corrs_mir_over_k(self%nrots),&
                 &self%heap_vars(ithr)%argvec(self%pftsz),&
                 &self%heap_vars(ithr)%shvec(self%pftsz),&
                 &self%heap_vars(ithr)%shmat(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2)),&
                 &self%heap_vars(ithr)%kcorrs(self%nrots),&
-                &self%heap_vars(ithr)%kcorrs_mir(self%nrots),&
                 &self%heap_vars(ithr)%pft_ref_8(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2)),&
                 &self%heap_vars(ithr)%pft_ref_tmp_8(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2)),&
                 &self%heap_vars(ithr)%pft_dref_8(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),3),&
@@ -1140,7 +1129,7 @@ contains
         shmat = cmplx(self%heap_vars(ithr)%shmat_8)
     end subroutine gen_shmat
 
-    subroutine calc_corrs_over_k_1( self, pft_ref, i, kfromto, corrs_over_k)
+    subroutine calc_corrs_over_k( self, pft_ref, i, kfromto, corrs_over_k)
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: i, kfromto(2)
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
@@ -1170,56 +1159,9 @@ contains
         end do
         ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
         corrs_over_k = corrs_over_k  / real(self%nrots * 2)
-    end subroutine calc_corrs_over_k_1
+    end subroutine calc_corrs_over_k
 
-    subroutine calc_corrs_over_k_2( self, pft_ref, i, kfromto, corrs_over_k, corrs_mir_over_k )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: i, kfromto(2)
-        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
-        real,                    intent(out)   :: corrs_over_k(self%nrots)
-        real,                    intent(out)   :: corrs_mir_over_k(self%nrots)
-        integer :: ithr, ik
-        ! get thread index
-        ithr = omp_get_thread_num() + 1
-        ! sum up correlations over k-rings
-        corrs_over_k     = 0.
-        corrs_mir_over_k = 0.
-        do ik = kfromto(1),kfromto(2)
-            ! move reference into Fourier Fourier space (particles are memoized)
-            self%fftdat(ithr)%ref_re(:) =  real(pft_ref(:,ik))
-            self%fftdat(ithr)%ref_im(:) = aimag(pft_ref(:,ik)) * self%fft_factors
-            call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
-            call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
-            ! correlate
-            self%fftdat(ithr)%ref_fft_re_2 =       self%fftdat(ithr)%ref_fft_re  * self%fftdat_ptcls(i,ik)%re
-            self%fftdat(ithr)%ref_fft_im_2 =       self%fftdat(ithr)%ref_fft_im  * self%fftdat_ptcls(i,ik)%im
-            self%fftdat(ithr)%ref_fft_re   = conjg(self%fftdat(ithr)%ref_fft_re) * self%fftdat_ptcls(i,ik)%re
-            self%fftdat(ithr)%ref_fft_im   = conjg(self%fftdat(ithr)%ref_fft_im) * self%fftdat_ptcls(i,ik)%im
-            self%fftdat(ithr)%product_fft(1:1 + 2 * int(self%pftsz / 2):2) = &
-                4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
-            self%fftdat(ithr)%product_fft(2:2 + 2 * int(self%pftsz / 2):2) = &
-                4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz / 2) + 1)
-            ! back transform
-            call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
-            ! accumulate corrs
-            corrs_over_k = corrs_over_k + self%fftdat(ithr)%backtransf
-            ! TODO: use fftw_plan_many_dft_c2r interface
-            ! correlate
-            self%fftdat(ithr)%product_fft(1:1 + 2 * int(self%pftsz / 2):2) = &
-                4. * self%fftdat(ithr)%ref_fft_re(1:1+int(self%pftsz/2))
-            self%fftdat(ithr)%product_fft(2:2 + 2 * int(self%pftsz / 2):2) = &
-                4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz / 2) + 1)
-            ! back transform
-            call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
-            ! accumulate corrs
-            corrs_mir_over_k = corrs_mir_over_k + self%fftdat(ithr)%backtransf
-        end do
-        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
-        corrs_over_k     = corrs_over_k     / real(self%nrots * 2)
-        corrs_mir_over_k = corrs_mir_over_k / real(self%nrots * 2)
-    end subroutine calc_corrs_over_k_2
-
-    subroutine calc_k_corrs_1( self, pft_ref, i, k, kcorrs )
+    subroutine calc_k_corrs( self, pft_ref, i, k, kcorrs )
         class(polarft_corrcalc), intent(inout) :: self
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         integer,                 intent(in)    :: i, k
@@ -1243,46 +1185,7 @@ contains
         call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
         ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
         kcorrs = self%fftdat(ithr)%backtransf / real(self%nrots * 2)
-    end subroutine calc_k_corrs_1
-
-    subroutine calc_k_corrs_2( self, pft_ref, i, k, kcorrs, kcorrs_mir )
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
-        integer,                 intent(in)    :: i, k
-        real,                    intent(out)   :: kcorrs(self%nrots)
-        real,                    intent(out)   :: kcorrs_mir(self%nrots)
-        integer :: ithr
-        ! get thread index
-        ithr = omp_get_thread_num() + 1
-        ! move reference into Fourier Fourier space (particles are memoized)
-        self%fftdat(ithr)%ref_re(:) =  real(pft_ref(:,k))
-        self%fftdat(ithr)%ref_im(:) = aimag(pft_ref(:,k)) * self%fft_factors
-        call fftwf_execute_dft_r2c(self%plan_fwd_1, self%fftdat(ithr)%ref_re, self%fftdat(ithr)%ref_fft_re)
-        call fftwf_execute_dft    (self%plan_fwd_2, self%fftdat(ithr)%ref_im, self%fftdat(ithr)%ref_fft_im)
-        ! correlate FFTs
-        self%fftdat(ithr)%ref_fft_re_2 =       self%fftdat(ithr)%ref_fft_re  * self%fftdat_ptcls(i,k)%re
-        self%fftdat(ithr)%ref_fft_im_2 =       self%fftdat(ithr)%ref_fft_im  * self%fftdat_ptcls(i,k)%im
-        self%fftdat(ithr)%ref_fft_re   = conjg(self%fftdat(ithr)%ref_fft_re) * self%fftdat_ptcls(i,k)%re
-        self%fftdat(ithr)%ref_fft_im   = conjg(self%fftdat(ithr)%ref_fft_im) * self%fftdat_ptcls(i,k)%im
-        self%fftdat(ithr)%product_fft(1:1 + 2 * int(self%pftsz / 2):2) = &
-            4. * self%fftdat(ithr)%ref_fft_re(1:1 + int(self%pftsz / 2))
-        self%fftdat(ithr)%product_fft(2:2 + 2 * int(self%pftsz / 2):2) = &
-            4. * self%fftdat(ithr)%ref_fft_im(1:int(self%pftsz / 2) + 1)
-        ! back transform
-        call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
-        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
-        kcorrs = self%fftdat(ithr)%backtransf / real(self%nrots * 2)
-        ! correlate FFTs
-        self%fftdat(ithr)%product_fft(1:1 + 2 * int(self%pftsz / 2):2) = &
-            4. * self%fftdat(ithr)%ref_fft_re_2(1:1 + int(self%pftsz / 2))
-        self%fftdat(ithr)%product_fft(2:2 + 2 * int(self%pftsz / 2):2) = &
-            4. * self%fftdat(ithr)%ref_fft_im_2(1:int(self%pftsz / 2) + 1)
-        ! back transform
-        call fftwf_execute_dft_c2r(self%plan_bwd, self%fftdat(ithr)%product_fft, self%fftdat(ithr)%backtransf)
-        ! fftw3 routines are not properly normalized, hence division by self%nrots * 2
-        kcorrs_mir = self%fftdat(ithr)%backtransf / real(self%nrots * 2)
-        ! TODO: use fftw_plan_many_dft_c2r interface
-    end subroutine calc_k_corrs_2
+    end subroutine calc_k_corrs
 
     function calc_corr_for_rot( self, pft_ref, i, irot )result( corr )
         class(polarft_corrcalc), intent(inout) :: self
@@ -1630,27 +1533,6 @@ contains
         cc = corrs_over_k  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
     end subroutine gencorrs_cc_2
 
-    subroutine gencorrs_cc_mir( self, iref, iptcl, cc, cc_mir )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl
-        real,                    intent(out)   :: cc(self%nrots)
-        real,                    intent(out)   :: cc_mir(self%nrots)
-        complex(sp), pointer :: pft_ref(:,:)
-        real(sp),    pointer :: corrs_over_k(:)
-        real(sp),    pointer :: corrs_mir_over_k(:)
-        real(sp) :: sqsum_ref
-        integer  :: ithr
-        ithr             =  omp_get_thread_num() + 1
-        pft_ref          => self%heap_vars(ithr)%pft_ref
-        corrs_over_k     => self%heap_vars(ithr)%corrs_over_k
-        corrs_mir_over_k => self%heap_vars(ithr)%corrs_mir_over_k
-        call self%prep_ref4corr(iref, iptcl, pft_ref, sqsum_ref, params_glob%kstop)
-        call self%calc_corrs_over_k(pft_ref, self%pinds(iptcl), [params_glob%kfromto(1),params_glob%kstop], corrs_over_k, &
-            corrs_mir_over_k)
-        cc     = corrs_over_k     / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
-        cc_mir = corrs_mir_over_k / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
-    end subroutine gencorrs_cc_mir
-
     subroutine gencorrs_euclid_1( self, iref, iptcl, euclids )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1709,35 +1591,6 @@ contains
         end do
     end subroutine gencorrs_euclid_2
 
-    subroutine gencorrs_euclid_mir( self, iref, iptcl, euclids, euclids_mir )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl
-        real(sp),                intent(out)   :: euclids(self%nrots)
-        real(sp),                intent(out)   :: euclids_mir(self%nrots)
-        complex(sp), pointer :: pft_ref(:,:)
-        real(sp),    pointer :: keuclids(:)
-        real(sp),    pointer :: keuclids_mir(:)
-        real(sp) :: sumsqref, sumsqptcl
-        integer  :: k, ithr, i
-        ithr         =  omp_get_thread_num() + 1
-        i            =  self%pinds(iptcl)
-        pft_ref      => self%heap_vars(ithr)%pft_ref
-        keuclids     => self%heap_vars(ithr)%kcorrs     ! can be reused
-        keuclids_mir => self%heap_vars(ithr)%kcorrs_mir ! can be reused
-        call self%prep_ref4corr(iref, iptcl, pft_ref, sumsqref, params_glob%kstop)
-        euclids(:)     = 0.
-        euclids_mir(:) = 0.
-        do k=params_glob%kfromto(1),params_glob%kstop
-            call self%calc_k_corrs(pft_ref, i, k, keuclids, keuclids_mir)
-            sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
-            sumsqref  = sum(csq_fast(pft_ref(:,k)))
-            euclids     = euclids     + real(k) * (2.*keuclids     - sumsqptcl - sumsqref ) / &
-                (2. * self%sigma2_noise(k,iptcl))
-            euclids_mir = euclids_mir + real(k) * (2.*keuclids_mir - sumsqptcl - sumsqref ) / &
-                (2. * self%sigma2_noise(k,iptcl))
-        end do
-    end subroutine gencorrs_euclid_mir
-
     subroutine gencorrs_1( self, iref, iptcl, cc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1762,19 +1615,6 @@ contains
                 call self%gencorrs_euclid_2(iref, iptcl, shvec, cc)
         end select
     end subroutine gencorrs_2
-
-    subroutine gencorrs_mir( self, iref, iptcl, cc, cc_mir )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iref, iptcl
-        real(sp),                intent(out)   :: cc(self%nrots)
-        real(sp),                intent(out)   :: cc_mir(self%nrots)
-        select case(params_glob%cc_objfun)
-            case(OBJFUN_CC)
-                call self%gencorrs_cc_mir(iref, iptcl, cc, cc_mir)
-            case(OBJFUN_EUCLID)
-                call self%gencorrs_euclid_mir(iref, iptcl, cc, cc_mir)
-        end select
-    end subroutine gencorrs_mir
 
     real function gencorr_for_rot( self, iref, iptcl, shvec, irot )
         class(polarft_corrcalc), intent(inout) :: self
@@ -2409,9 +2249,8 @@ contains
                 deallocate(self%heap_vars(ithr)%pft_ref,self%heap_vars(ithr)%pft_ref_tmp,&
                     &self%heap_vars(ithr)%pft_dref,&
                     &self%heap_vars(ithr)%argvec, self%heap_vars(ithr)%shvec,&
-                    &self%heap_vars(ithr)%corrs_over_k, self%heap_vars(ithr)%corrs_mir_over_k,&
+                    &self%heap_vars(ithr)%corrs_over_k,&
                     &self%heap_vars(ithr)%shmat,self%heap_vars(ithr)%kcorrs,&
-                    &self%heap_vars(ithr)%kcorrs_mir,&
                     &self%heap_vars(ithr)%pft_ref_8,self%heap_vars(ithr)%pft_ref_tmp_8,&
                     &self%heap_vars(ithr)%pft_dref_8,&
                     &self%heap_vars(ithr)%shmat_8,self%heap_vars(ithr)%argmat_8,&
