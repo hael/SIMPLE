@@ -543,6 +543,7 @@ contains
         if( .not. cline%defined('lp')        ) call cline%set('lp',       1.3)
         if( .not. cline%defined('trs')       ) call cline%set('trs',      15.)
         if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp',5.)
+        if( .not. cline%defined('wcrit')     ) call cline%set('wcrit','no')
         call cline%set('oritype','ptcl2D')
         call params%new(cline)
         params_glob%boxmatch = params_glob%box
