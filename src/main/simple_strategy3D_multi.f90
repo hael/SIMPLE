@@ -39,7 +39,6 @@ contains
         integer,                 intent(in)    :: ithr
         integer :: iref,isample,nrefs
         real    :: inpl_corrs(self%s%nrots)
-        real    :: inpl_corrs_mir(self%s%nrots)
         ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -77,32 +76,12 @@ contains
         subroutine per_ref_srch
             real    :: best_inpl_corr
             integer :: loc(params_glob%ninplpeaks)
-            integer :: loc_mir(params_glob%ninplpeaks)
-            integer :: iref_mir
-            real    :: best_inpl_corr_mir
             if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
-                if (mir_projns) then
-                    if (s3D%proj_space_corrs_calcd(self%s%ithr,iref)) then
-                        best_inpl_corr = s3D%proj_space_corrs(self%s%ithr,iref,1)
-                        s3D%proj_space_corrs_srchd(self%s%ithr,iref) = .true.
-                    else
-                        call pftcc_glob%gencorrs_mir(iref, self%s%iptcl, inpl_corrs, inpl_corrs_mir)
-                        ! identify the params_glob%ninplpeaks top scoring in-planes
-                        loc                = maxnloc(inpl_corrs,     params_glob%ninplpeaks)
-                        loc_mir            = maxnloc(inpl_corrs_mir, params_glob%ninplpeaks)
-                        best_inpl_corr     = inpl_corrs(loc(1))
-                        best_inpl_corr_mir = inpl_corrs_mir(loc_mir(1))
-                        iref_mir           = s3D%proj_mirror_idx(iref)
-                        call self%s%store_solution(iref,     loc,     inpl_corrs(loc),         .true. )
-                        call self%s%store_solution(iref_mir, loc_mir, inpl_corrs_mir(loc_mir), .false.)
-                    end if
-                else
-                    ! identify the params_glob%ninplpeaks top scoring in-planes
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    loc            = maxnloc(inpl_corrs, params_glob%ninplpeaks)
-                    best_inpl_corr = inpl_corrs(loc(1))
-                    call self%s%store_solution(iref, loc, inpl_corrs(loc), .true.)
-                end if
+                ! identify the params_glob%ninplpeaks top scoring in-planes
+                call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
+                loc            = maxnloc(inpl_corrs, params_glob%ninplpeaks)
+                best_inpl_corr = inpl_corrs(loc(1))
+                call self%s%store_solution(iref, loc, inpl_corrs(loc), .true.)
                 ! update nbetter to keep track of how many improving solutions we have identified
                 if( self%s%npeaks == 1 )then
                     if( best_inpl_corr > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
@@ -125,7 +104,6 @@ contains
         real      :: wcorr, frac, ang_spread, dist_inpl, euldist
         real      :: shwmean, shwstdev
         integer   :: best_loc(1), neff_states, state
-        logical   :: included(self%s%npeaks)
         ! extract peak info
         call extract_peaks(self%s, corrs, multistates=.true.)
         call calc_ori_weights(self%s, corrs, ws, best_loc, wcorr) ! stochastic weights
