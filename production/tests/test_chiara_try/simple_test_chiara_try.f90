@@ -483,7 +483,7 @@ program simple_test_chiara_try
    use simple_nano_utils
    use simple_atoms, only : atoms
    use simple_lattice_fitting, only : test_lattice_fit
-   use simple_lapacksgels, only : sgels
+   ! use simple_lapacksgels, only : sgels
 
 
    ! call test_lattice_fit()
