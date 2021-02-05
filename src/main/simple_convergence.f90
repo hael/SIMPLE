@@ -56,6 +56,7 @@ contains
         call os%stats('dist_inpl', self%dist_inpl, mask=mask)
         call os%stats('frac',      self%frac_srch, mask=mask)
         call os%stats('w',         self%pw,        mask=mask)
+        call os%stats('shwmean',   self%shwmean,   mask=mask)
         self%mi_class  = os%get_avg('mi_class',  mask=mask)
         write(logfhandle,601) '>>> CLASS OVERLAP:                          ', self%mi_class
         write(logfhandle,601) '>>> # PARTICLE UPDATES     AVG:             ', avg_updatecnt
@@ -69,6 +70,8 @@ contains
         &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
         write(logfhandle,604) '>>> SPECSCORE              AVG/SDEV/MIN/MAX:',&
         &self%specscore%avg, self%specscore%sdev, self%specscore%minv, self%specscore%maxv
+        write(logfhandle,604) '>>> AVG  SHIFT INCR PEAKS  AVG/SDEV/MIN/MAX:',&
+        &self%shwmean%avg, self%shwmean%sdev, self%shwmean%minv, self%shwmean%maxv
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. params_glob%trs <  MINSHIFT )then
@@ -92,6 +95,8 @@ contains
             endif
             if( params_glob%refine.eq.'fast' )then
                 converged = converged .and. (params_glob%which_iter > 4*FAST2D_ITER_BATCH)
+            else if( params_glob%refine.eq.'inpl' )then
+                converged = self%dist_inpl%avg < 0.1
             endif
             if( converged )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
