@@ -19,7 +19,7 @@ module simple_lattice_fitting
 contains
 
 subroutine fit_lattice(model)
-  use simple_lapacksgels, only : sgels
+  ! use simple_lapacksgels, only : sgels
   real, intent(inout) :: model(:,:)
   real, parameter     :: xRes0=1e6, yRes0=1e6,zRes0=1e6
   integer, parameter  :: NITER = 30
@@ -35,88 +35,88 @@ subroutine fit_lattice(model)
   real, allocatable :: work(:)
   integer :: info, lwork
   character(len=1) :: trans
-  ! sanity check
-  if(size(model,dim=1) /=3 ) then
-    write(logfhandle,*) 'Wrong input coordinates! fit_lattice'
-    stop
-  endif
-  natoms=size(model,dim=2)
-  cMin = minval(model,dim=2)
-  cMax = maxval(model,dim=2)
-  cMid = (cMax-cMin)/2.+cMin
-  print *, 'cMin, cMax, cMid', cMin, cMax,cMid
-  distsq_temp = HUGE(distsq_temp)
-  centerAtom = 0
-  do iatom=1,natoms
-      distsq = sum((model(:,iatom)-cMid(:))**2)
-      if(distsq < distsq_temp) then
-          centerAtom = iatom
-          distsq_temp = distsq
-      endif
-  enddo
-  centerAtomCoords =  model(:,centerAtom)
-  print *, 'closest atom to the center: ',centerAtomCoords
-  rMaxsq= 3.5*3.5
-  areNearest = .false.
-  avgNNRR = 0.
-  do iatom=1,natoms
-      distsq = sum((model(:,iatom)-centerAtomCoords(:))**2)
-      if(distsq < rMaxsq) then
-        areNearest(iatom) = .true.
-        print *, 'CoordNearest ', model(:,iatom)
-        avgNNRR = avgNNRR + sqrt(distsq)
-      endif
-  enddo
-  areNearest(centerAtom) = .false. ! do not count center Atom
-  avgNNRR = avgNNRR/real(count(areNearest))
-  print *, 'avgNNRR', avgNNRR
-  avgD = sqrt(avgNNRR**2/2.)
-  print *, 'avgD ', avgD
-  p0      = model ! copy of the original model
-  origin0 = centerAtomCoords
-  subK    = 0.5
-  k       = avgD/subK
-  print *, 'k: ', k
-  u0 = [k,0.,0.]
-  v0 = [0.,k,0.]
-  w0 = [0.,0.,k]
-  print *, 'u0,v0,w0 before: ', u0,v0,w0
-  u0 = u0*subK
-  v0 = v0*subK
-  w0 = w0*subK
-  print *, 'u0,v0,w0 after: ', u0,v0,w0
-  ! keep copies
-  u      = u0
-  v      = v0
-  w      = w0
-  origin = origin0
-  print *, 'u,v,w before loop', u,v,w
-  print *, 'origin before loop', origin
-  ! translate and scale now to facilitate the call in sgels
-  do iatom = 1,natoms
-    p0(:,iatom) = (p0(:,iatom)-origin(:))/subK
-  enddo
-  ! variables to be used in sgels
-  allocate(work(natoms), source=-1.)
-  trans = 'T'
-  lwork =3*3+natoms
-  ! LOOP
-   !do iloop =1, NITER
-     ! compute a,b,c values by finding points p0 in basis {u,v,w} from {i,j,k}
-      uvw(1,:) = u
-      uvw(2,:) = v
-      uvw(3,:) = w
-
-      call sgels(trans,3,3,natoms,uvw,3,p0,natoms,w,lwork,info)
-      ! call sgels(	TRANS,M,N,NRHS,A,LDA,B,LDB,WORK,LWORK,INFO)
-
-  !   abc = abc*subK
-  !   ! Refine lattice
-  !   A      = 1.
-  !   A(:,1) = round(abc(1,:))
-  !   A(:,1) = round(abc(1,:))
-  !   A(:,1) = round(abc(1,:))
+  ! ! sanity check
+  ! if(size(model,dim=1) /=3 ) then
+  !   write(logfhandle,*) 'Wrong input coordinates! fit_lattice'
+  !   stop
+  ! endif
+  ! natoms=size(model,dim=2)
+  ! cMin = minval(model,dim=2)
+  ! cMax = maxval(model,dim=2)
+  ! cMid = (cMax-cMin)/2.+cMin
+  ! print *, 'cMin, cMax, cMid', cMin, cMax,cMid
+  ! distsq_temp = HUGE(distsq_temp)
+  ! centerAtom = 0
+  ! do iatom=1,natoms
+  !     distsq = sum((model(:,iatom)-cMid(:))**2)
+  !     if(distsq < distsq_temp) then
+  !         centerAtom = iatom
+  !         distsq_temp = distsq
+  !     endif
   ! enddo
+  ! centerAtomCoords =  model(:,centerAtom)
+  ! print *, 'closest atom to the center: ',centerAtomCoords
+  ! rMaxsq= 3.5*3.5
+  ! areNearest = .false.
+  ! avgNNRR = 0.
+  ! do iatom=1,natoms
+  !     distsq = sum((model(:,iatom)-centerAtomCoords(:))**2)
+  !     if(distsq < rMaxsq) then
+  !       areNearest(iatom) = .true.
+  !       print *, 'CoordNearest ', model(:,iatom)
+  !       avgNNRR = avgNNRR + sqrt(distsq)
+  !     endif
+  ! enddo
+  ! areNearest(centerAtom) = .false. ! do not count center Atom
+  ! avgNNRR = avgNNRR/real(count(areNearest))
+  ! print *, 'avgNNRR', avgNNRR
+  ! avgD = sqrt(avgNNRR**2/2.)
+  ! print *, 'avgD ', avgD
+  ! p0      = model ! copy of the original model
+  ! origin0 = centerAtomCoords
+  ! subK    = 0.5
+  ! k       = avgD/subK
+  ! print *, 'k: ', k
+  ! u0 = [k,0.,0.]
+  ! v0 = [0.,k,0.]
+  ! w0 = [0.,0.,k]
+  ! print *, 'u0,v0,w0 before: ', u0,v0,w0
+  ! u0 = u0*subK
+  ! v0 = v0*subK
+  ! w0 = w0*subK
+  ! print *, 'u0,v0,w0 after: ', u0,v0,w0
+  ! ! keep copies
+  ! u      = u0
+  ! v      = v0
+  ! w      = w0
+  ! origin = origin0
+  ! print *, 'u,v,w before loop', u,v,w
+  ! print *, 'origin before loop', origin
+  ! ! translate and scale now to facilitate the call in sgels
+  ! do iatom = 1,natoms
+  !   p0(:,iatom) = (p0(:,iatom)-origin(:))/subK
+  ! enddo
+  ! ! variables to be used in sgels
+  ! allocate(work(natoms), source=-1.)
+  ! trans = 'T'
+  ! lwork =3*3+natoms
+  ! ! LOOP
+  !  !do iloop =1, NITER
+  !    ! compute a,b,c values by finding points p0 in basis {u,v,w} from {i,j,k}
+  !     uvw(1,:) = u
+  !     uvw(2,:) = v
+  !     uvw(3,:) = w
+  !
+  !     call sgels(trans,3,3,natoms,uvw,3,p0,natoms,w,lwork,info)
+  !     ! call sgels(	TRANS,M,N,NRHS,A,LDA,B,LDB,WORK,LWORK,INFO)
+  !
+  ! !   abc = abc*subK
+  ! !   ! Refine lattice
+  ! !   A      = 1.
+  ! !   A(:,1) = round(abc(1,:))
+  ! !   A(:,1) = round(abc(1,:))
+  ! !   A(:,1) = round(abc(1,:))
+  ! ! enddo
 end subroutine fit_lattice
 
 subroutine test_lattice_fit
