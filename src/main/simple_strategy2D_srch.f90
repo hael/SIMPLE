@@ -14,6 +14,9 @@ private
 
 #include "simple_local_flags.inc"
 
+real, parameter :: HALFROT = 15. ! half rotational range for in-plane refinement
+
+
 type strategy2D_spec
     real    :: stoch_bound = 0.
     integer :: iptcl       = 0  ! global particle index
@@ -36,6 +39,7 @@ type strategy2D_srch
     real                    :: prev_corr     = -1.  !< previous best correlation
     real                    :: best_corr     = -1.  !< best corr found by search
     real                    :: specscore     =  0.  !< spectral score
+    real                    :: trs           =  0.  !< shift boundary
   contains
     procedure :: new
     procedure :: prep4srch
@@ -59,6 +63,7 @@ contains
         self%nrefs_eval =  0
         self%nnn        =  params_glob%nnn
         ! construct composites
+        self%trs        = params_glob%trs
         lims(:,1)       = -params_glob%trs
         lims(:,2)       =  params_glob%trs
         lims_init(:,1)  = -SHC_INPL_TRSHWDTH
@@ -80,6 +85,7 @@ contains
         self%prev_class = nint(build_glob%spproj_field%get(self%iptcl,'class'))                ! class index
         prev_roind      = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl)) ! in-plane angle index
         self%prev_shvec = build_glob%spproj_field%get_2Dshift(self%iptcl)                      ! shift vector
+        self%best_shvec = 0.
         if( self%prev_class > 0 )then
             if( s2D%cls_pops(self%prev_class) > 0 )then
                 ! all done
@@ -121,11 +127,16 @@ contains
         if( s2D%do_inplsrch(self%iptcl_map) )then
             ! BFGS
             call self%grad_shsrch_obj%set_indices(self%best_class, self%iptcl)
-            if( .not.self%grad_shsrch_obj%does_opt_angle() )then
-                ! shift-only optimization
+            if( trim(params_glob%refine) == 'inpl' )then
                 irot = self%best_rot
+                cxy  = self%grad_shsrch_obj%minimize_exhaustive(irot=irot, halfrot=HALFROT)
+            else
+                if( .not.self%grad_shsrch_obj%does_opt_angle() )then
+                    ! shift-only optimization
+                    irot = self%best_rot
+                endif
+                cxy = self%grad_shsrch_obj%minimize(irot=irot)
             endif
-            cxy = self%grad_shsrch_obj%minimize(irot=irot)
             if( irot > 0 )then
                 self%best_corr  = cxy(1)
                 self%best_rot   = irot
@@ -162,6 +173,7 @@ contains
         ! update parameters
         call build_glob%spproj_field%e3set(self%iptcl,e3)
         call build_glob%spproj_field%set_shift(self%iptcl, self%prev_shvec + self%best_shvec)
+        call build_glob%spproj_field%set(self%iptcl, 'shwmean',    arg(self%best_shvec))
         call build_glob%spproj_field%set(self%iptcl, 'inpl',       real(self%best_rot))
         call build_glob%spproj_field%set(self%iptcl, 'class',      real(self%best_class))
         call build_glob%spproj_field%set(self%iptcl, 'corr',       self%best_corr)
