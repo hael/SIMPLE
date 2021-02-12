@@ -58,7 +58,11 @@ contains
         endif
         if( l_alloc ) allocate(s2D%do_inplsrch(1:nptcls), s2D%srch_order(1:nptcls, params_glob%ncls))
         ! in plane search
-        s2D%do_inplsrch = params_glob%l_doshift .and. which_iter>2
+        if( trim(params_glob%refine).eq.'inpl' )then
+            s2D%do_inplsrch = params_glob%l_doshift
+        else
+            s2D%do_inplsrch = params_glob%l_doshift .and. which_iter>2
+        endif
         ! stochastic search order
         s2D%srch_order = 0
         rt = ran_tabu(params_glob%ncls)

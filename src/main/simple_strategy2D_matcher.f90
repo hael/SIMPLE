@@ -278,13 +278,23 @@ contains
                     else
                         ! offline mode, based on iteration
                         if( l_greedy .or. (.not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt==1) )then
-                            if( trim(params_glob%tseries).eq.'yes' .and. l_np_cls_defined )then
-                                allocate(strategy2D_tseries :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
+                            if( trim(params_glob%tseries).eq.'yes' )then
+                                if( l_np_cls_defined )then
+                                    allocate(strategy2D_tseries :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
+                                else if( trim(params_glob%refine).eq.'inpl' )then
+                                    allocate(strategy2D_inpl  :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
+                                else
+                                    allocate(strategy2D_greedy  :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
+                                endif
                             else
                                 allocate(strategy2D_greedy  :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
                             endif
                         else
-                            allocate(strategy2D_snhc :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
+                            if( trim(params_glob%tseries).eq.'yes' .and. trim(params_glob%refine).eq.'inpl' )then
+                                allocate(strategy2D_inpl  :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
+                            else
+                                allocate(strategy2D_snhc :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
+                            endif
                         endif
                     endif
                     if(alloc_stat/=0)call allocchk("In strategy2D_matcher:: cluster2D_exec strategy2Dsrch object")

@@ -1858,7 +1858,7 @@ contains
             THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cluster2D_autoscale')
         endif
         ! delete any previous solution
-        if( .not. spproj%is_virgin_field(params%oritype) )then
+        if( .not. spproj%is_virgin_field(params%oritype) .and. trim(params%refine).ne.'inpl' )then
             ! removes previous cluster2D solution (states are preserved)
             call spproj%os_ptcl2D%delete_2Dclustering
             call spproj%write_segment_inside(params%oritype)
@@ -2114,7 +2114,18 @@ contains
                         call cline_make_cavgs%set('refs', params%refs)
                         call xmake_cavgs%execute(cline_make_cavgs)
                     else
-                        call selection_from_tseries_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                        if( trim(params%refine).eq.'inpl' )then
+                            params%ncls = build%spproj%os_ptcl2D%get_n('class')
+                            call job_descr%set('ncls',int2str(params%ncls))
+                            call cline%set('ncls', real(params%ncls))
+                            call cline_make_cavgs%set('ncls', real(params%ncls))
+                            call cline_make_cavgs%delete('tseries')
+                            call cline_cavgassemble%set('ncls', real(params%ncls))
+                            call cline_make_cavgs%set('refs', params%refs)
+                            call xmake_cavgs%execute(cline_make_cavgs)
+                        else
+                            call selection_from_tseries_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                        endif
                     endif
                 else
                     call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)

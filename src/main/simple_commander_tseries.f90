@@ -540,10 +540,10 @@ contains
         integer :: ncavgs, nptcls, iptcl
         call cline%set('match_filt','no')
         call cline%set('ctf',       'no')
-        if( .not. cline%defined('lp')        ) call cline%set('lp',       1.3)
+        if( .not. cline%defined('lp')        ) call cline%set('lp',        1.)
         if( .not. cline%defined('trs')       ) call cline%set('trs',      15.)
         if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp',5.)
-        if( .not. cline%defined('wcrit')     ) call cline%set('wcrit','no')
+        if( .not. cline%defined('wcrit')     ) call cline%set('wcrit',   'no')
         call cline%set('oritype','ptcl2D')
         call params%new(cline)
         params_glob%boxmatch = params_glob%box
@@ -690,14 +690,26 @@ contains
         call cline%set('center',        'yes')
         call cline%set('autoscale',      'no')
         call cline%set('tseries',       'yes')
-        call cline%set('refine',     'greedy')
         ! dynamic parameters
+        if( .not. cline%defined('refine') )then
+            call cline%set('refine','greedy')
+        endif
+        select case(trim(cline%get_carg('refine')))
+        case('no','greedy')
+            call cline%set('refine','greedy')
+            if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls', 35.)
+            if( .not. cline%defined('maxits')         ) call cline%set('maxits',        15.0)
+        case('inpl')
+            call cline%set('center','no')
+            if( .not. cline%defined('maxits')         ) call cline%set('maxits',         5.0)
+        case DEFAULT
+            THROW_HARD('Unsupported refinement mode!')
+        end select
+        if( cline%defined('center')               ) call cline%set('center',       'yes')
         if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt','yes')
-        if( .not. cline%defined('maxits')         ) call cline%set('maxits',        15.0)
         if( .not. cline%defined('lpstart')        ) call cline%set('lpstart',        1.0)
         if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',         1.0)
         if( .not. cline%defined('lp')             ) call cline%set('lp',             1.0)
-        if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls', 35.)
         if( .not. cline%defined('winsz')          ) call cline%set('winsz',           3.)
         if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',           5.)
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.)

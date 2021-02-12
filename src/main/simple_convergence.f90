@@ -96,7 +96,7 @@ contains
             if( params_glob%refine.eq.'fast' )then
                 converged = converged .and. (params_glob%which_iter > 4*FAST2D_ITER_BATCH)
             else if( params_glob%refine.eq.'inpl' )then
-                converged = self%dist_inpl%avg < 0.1
+                converged = self%dist_inpl%avg < 0.02
             endif
             if( converged )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
