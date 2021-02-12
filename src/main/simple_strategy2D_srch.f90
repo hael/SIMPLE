@@ -14,7 +14,7 @@ private
 
 #include "simple_local_flags.inc"
 
-real, parameter :: HALFROT = 15. ! half rotational range for in-plane refinement
+real, parameter :: HALFROT = 30. ! half rotational range for in-plane refinement
 
 
 type strategy2D_spec

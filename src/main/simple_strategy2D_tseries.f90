@@ -12,7 +12,7 @@ private
 
 #include "simple_local_flags.inc"
 
-integer, parameter :: TRSSTEP = 1
+integer, parameter :: TRSSTEP = 2
 
 type, extends(strategy2D) :: strategy2D_tseries
     type(strategy2D_srch) :: s
