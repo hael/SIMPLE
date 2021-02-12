@@ -147,10 +147,7 @@ contains
         integer :: i,j, tilesz
         real    :: cen, dist
         tilesz = ceiling(maxval(real(self%ldim(1:2)) / real([self%nxpatch,self%nypatch])))
-        print *,'tilesz 1: ',tilesz
         self%tilesz = find_larger_magic_box(tilesz)
-        print *,'tilesz 2: ',self%tilesz
-
         allocate(self%lims_tiles(self%nxpatch,self%nypatch,2,2),source=0)
         allocate(self%tile_centers(self%nxpatch,self%nypatch,2),&
             &self%patch_pos(self%nxpatch,self%nypatch,2),&

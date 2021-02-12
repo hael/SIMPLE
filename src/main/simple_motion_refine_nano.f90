@@ -209,7 +209,7 @@ contains
                 ! update parameters & prep for re-extraction
                 shift                = real(ptcl_pos(i,:)) - self%shifts(i,:)
                 ptcl_pos(i,:)        = nint(shift)
-                self%shifts_sub(i,:) = shift - real(ptcl_pos(i,:))
+                self%shifts_sub(i,:) = real(ptcl_pos(i,:)) - shift
                 call self%particles(i)%zero_and_unflag_ft
             enddo
             !$omp end parallel do
@@ -300,6 +300,9 @@ contains
                 !$omp parallel do default(shared) private(i,ithr) schedule(static) proc_bind(close)
                 do i = 1,npop
                     ithr = omp_get_thread_num() + 1
+                    call self%particles(i)%fft
+                    call self%particles(i)%shift2Dserial(-self%shifts_sub(i,:))
+                    call self%particles(i)%ifft
                     call self%ptcl_polarizers(ithr)%copy(self%particles(i))
                     call self%ptcl_polarizers(ithr)%noise_norm(lmsk, sdev_noise)
                     call self%ptcl_polarizers(ithr)%mask(params_glob%msk, 'soft', backgr=0.)
