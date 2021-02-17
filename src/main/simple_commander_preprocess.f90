@@ -151,6 +151,7 @@ contains
         if( .not. cline%defined('mcconvention')    ) call cline%set('mcconvention','simple')
         if( .not. cline%defined('eer_fraction')    ) call cline%set('eer_fraction',     20.)
         if( .not. cline%defined('eer_upsampling')  ) call cline%set('eer_upsampling',    1.)
+        if( .not. cline%defined('algorithm')       ) call cline%set('algorithm',    'patch')
         ! ctf estimation
         if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
         if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
@@ -721,6 +722,7 @@ contains
         if( .not. cline%defined('mcconvention')    ) call cline%set('mcconvention','simple')
         if( .not. cline%defined('eer_fraction')    ) call cline%set('eer_fraction',     20.)
         if( .not. cline%defined('eer_upsampling')  ) call cline%set('eer_upsampling',    1.)
+        if( .not. cline%defined('algorithm')       ) call cline%set('algorithm',    'patch')
         ! ctf estimation
         if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
         if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
@@ -955,6 +957,7 @@ contains
         if( .not. cline%defined('wcrit')         ) call cline%set('wcrit',   'softmax')
         if( .not. cline%defined('eer_fraction')  ) call cline%set('eer_fraction',  20.)
         if( .not. cline%defined('eer_upsampling')) call cline%set('eer_upsampling', 1.)
+        if( .not. cline%defined('algorithm')     ) call cline%set('algorithm', 'patch')
         call cline%set('oritype', 'mic')
         call params%new(cline)
         call cline%set('numlen', real(params%numlen))

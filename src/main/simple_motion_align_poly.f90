@@ -51,7 +51,7 @@ type :: motion_align_poly
     real                           :: smpd           = 0.               !< sampling distance
     real                           :: smpd_tile      = 0.               !< sampling distance
     real                           :: scale_factor   = 1.               !< local frame scaling
-    real                           :: trs            = 15.              !< half correlation disrete search bound
+    real                           :: trs            = 20.              !< half correlation disrete search bound
     integer                        :: tilesz         = 768
     integer                        :: nthr           = 1
     integer                        :: nxpatch = 0, nypatch = 0
@@ -62,10 +62,6 @@ type :: motion_align_poly
     integer                        :: fixed_frame    = 1                !< reference frame for interpolation
     logical                        :: l_aniso_success  = .false.
     logical                        :: existence        = .false.
-    ! benchmarking
-    logical                 :: L_BENCH = .false.
-    integer(timer_int_kind) :: t_init,   t_coarse,  t_cont,  t_tot, t_initftexp, t, t_minimize
-    real(timer_int_kind)    :: rt_init, rt_coarse, rt_cont, rt_tot, rt_initftexp, rt_calc_shift, rt_minimize, rt_genref, rt_shift
 
 contains
     ! Constructor
@@ -319,13 +315,15 @@ contains
             call self%align_iso
             aniso_success    = .false.
             self%poly_coeffs = 0.d0
-        case('patch_classic')
+        case('wpatch')
             call self%align_iso
             call self%align_aniso(poly_rmsd, aniso_success)
-        case('patch_dev')
+        case('poly')
             call self%align_iso
             call self%align_aniso(poly_rmsd, aniso_success)
             if( aniso_success ) call self%refine_poly
+        case DEFAULT
+            THROW_HARD('Unsupported algorithm: '//trim(algorithm))
         end select
         if(allocated(poly_coeffs)) deallocate(poly_coeffs)
         allocate(poly_coeffs(2*POLYDIM), source=0.d0)
@@ -1144,13 +1142,13 @@ contains
         self%lp      = -1.
         self%bfactor = -1.
         self%scale_factor = 1.
-        self%corr = -1.
-        self%trs = 15.
-        self%smpd    = 0.
-        self%smpd_tile = 0.
-        self%nthr = 1
-        self%ldim    = 0
-        self%ldim_sc = 0
+        self%corr        = -1.
+        self%trs         = 20.
+        self%smpd        = 0.
+        self%smpd_tile   = 0.
+        self%nthr        = 1
+        self%ldim        = 0
+        self%ldim_sc     = 0
         self%fixed_frame = 1
         self%align_frame = 1
         self%fit_poly_coeffs = 0.d0
@@ -1181,14 +1179,6 @@ contains
         if(allocated(self%frameweights))    deallocate(self%frameweights)
         self%existence = .false.
     end subroutine kill
-
-    ! integer                        :: nxpatch = 0, nypatch = 0
-    ! integer                        :: ldim_tile(3)   = 0
-    ! integer                        :: nframes        = 0                !< number of frames
-    ! logical                        :: l_aniso_success  = .false.
-    ! logical                        :: existence        = .false.
-
-
 
     ! DIRECT CONTINUOUS POLYNOMIAL REFINEMENT
 

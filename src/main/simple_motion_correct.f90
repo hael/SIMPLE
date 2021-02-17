@@ -6,7 +6,6 @@ include 'simple_lib.f08'
 use simple_ft_expanded,                   only: ftexp_transfmat_init, ftexp_transfmat_kill
 use simple_motion_patched,                only: motion_patched
 use simple_motion_align_hybrid,           only: motion_align_hybrid
-use simple_motion_align_iso_polyn_direct, only: motion_align_iso_polyn_direct
 use simple_opt_image_weights,             only: opt_image_weights
 use simple_image,                         only: image
 use simple_eer_factory,                   only: eer_decoder
@@ -70,9 +69,6 @@ integer,          allocatable :: pos_outliers(:,:)        !< positions of defect
 ! module global constants
 real,    parameter :: NSIGMAS                       = 6.       !< Number of standard deviations for outliers detection
 logical, parameter :: FITSHIFTS                     = .true.
-logical, parameter :: DO_ISO_DIRECT                 = .false.   !< use direct minimization for isotropic motion correction
-logical, parameter :: DO_PATCHED_DIRECT             = .false.   !< run direct method for patch-based motion correction
-logical, parameter :: DO_PATCHED_POLYN_AFTER        = .false.   !< run a direct polynomial optimization for patch-based motion correction as the second step (at highest resolution)
 logical, parameter :: DO_OPT_WEIGHTS                = .false.   !< continuously optimize weights after alignment
 ! benchmarking
 logical                 :: L_BENCH = .false.
@@ -229,45 +225,6 @@ contains
         endif
     end subroutine motion_correct_init
 
-    subroutine motion_correct_iso_polyn_direct_callback( aPtr, align_iso_polyn_direct, converged )
-        class(*), pointer,                    intent(inout) :: aPtr
-        class(motion_align_iso_polyn_direct), intent(inout) :: align_iso_polyn_direct
-        logical,                              intent(out)   :: converged
-        logical :: didupdateres
-        didupdateres = .false.
-        select case(updateres)
-        case(0)
-            call update_res( updateres )
-        case(1)
-            call update_res( updateres )
-        case(2)
-            call update_res( updateres )
-            call align_iso_polyn_direct%set_factr_pgtol(1d+6, 1d-6)
-        case DEFAULT
-            ! nothing to do
-        end select
-        if( updateres > 2 .and. .not. didupdateres) then
-            call align_iso_polyn_direct%reset_tols
-            converged = .true.
-        else
-            converged = .false.
-        end if
-
-    contains
-
-        subroutine update_res( which_update )
-            integer, intent(in) :: which_update
-            lp = lp - resstep
-            call align_iso_polyn_direct%set_hp_lp(hp, lp)
-            write(logfhandle,'(a,1x,f7.4)') '>>> LOW-PASS LIMIT UPDATED TO:', lp
-            ! need to indicate that we updated resolution limit
-            updateres  = updateres + 1
-            ! indicate that reslim was updated
-            didupdateres = .true.
-        end subroutine update_res
-
-    end subroutine motion_correct_iso_polyn_direct_callback
-
     !> isotropic motion_correction of DDD movie
     subroutine motion_correct_iso( movie_stack_fname, ctfvars, bfactor, movie_sum, gainref_fname )
         character(len=*),           intent(in)    :: movie_stack_fname !< input filename of stack
@@ -278,7 +235,7 @@ contains
         real                                :: ave, sdev, var, minw, maxw, corr
         logical                             :: err, err_stat
         type(motion_align_hybrid)           :: hybrid_srch
-        type(motion_align_iso_polyn_direct) :: align_iso_polyn_direct
+        ! type(motion_align_iso_polyn_direct) :: align_iso_polyn_direct
         class(*), pointer                   :: callback_ptr
         callback_ptr => null()
         ! initialise
@@ -290,35 +247,35 @@ contains
         call ftexp_transfmat_init(movie_frames_scaled(1), params_glob%lpstop)
         if( l_BENCH ) rt_correct_iso_transfmat = toc(t_correct_iso_transfmat)
         if( l_BENCH ) t_correct_iso_align = tic()
-        if (DO_ISO_DIRECT) then
-            call align_iso_polyn_direct%new
-            call align_iso_polyn_direct%set_frames(movie_frames_scaled, nframes)
-            call align_iso_polyn_direct%set_hp_lp(hp,lp)
-            updateres = 0
-            call align_iso_polyn_direct%set_callback( motion_correct_iso_polyn_direct_callback )
-            call align_iso_polyn_direct%set_group_frames(trim(params_glob%groupframes).eq.'yes')
-            call align_iso_polyn_direct%align_direct(callback_ptr)
-            corr = align_iso_polyn_direct%get_corr()
-            call align_iso_polyn_direct%get_opt_shifts(opt_shifts)
-            call align_iso_polyn_direct%get_weights(frameweights)
-            call align_iso_polyn_direct%get_shifts_toplot(shifts_toplot)
-            call align_iso_polyn_direct%kill
-        else
-            call hybrid_srch%new(movie_frames_scaled)
-            call hybrid_srch%set_group_frames(.false.)
-            call hybrid_srch%set_reslims(hp, params_glob%lpstart, params_glob%lpstop)
-            call hybrid_srch%set_bfactor(bfactor)
-            call hybrid_srch%set_trs(params_glob%scale*params_glob%trs)
-            call hybrid_srch%set_rand_init_shifts(.true.)
-            call hybrid_srch%set_fitshifts(FITSHIFTS)
-            call hybrid_srch%set_fixed_frame(fixed_frame)
-            call hybrid_srch%align
-            call hybrid_srch%get_weights(frameweights)
-            corr = hybrid_srch%get_corr()
-            call hybrid_srch%get_opt_shifts(opt_shifts)
-            call hybrid_srch%get_shifts_toplot(shifts_toplot)
-            call hybrid_srch%kill
-        end if
+        ! if (DO_ISO_DIRECT) then
+        !     call align_iso_polyn_direct%new
+        !     call align_iso_polyn_direct%set_frames(movie_frames_scaled, nframes)
+        !     call align_iso_polyn_direct%set_hp_lp(hp,lp)
+        !     updateres = 0
+        !     call align_iso_polyn_direct%set_callback( motion_correct_iso_polyn_direct_callback )
+        !     call align_iso_polyn_direct%set_group_frames(trim(params_glob%groupframes).eq.'yes')
+        !     call align_iso_polyn_direct%align_direct(callback_ptr)
+        !     corr = align_iso_polyn_direct%get_corr()
+        !     call align_iso_polyn_direct%get_opt_shifts(opt_shifts)
+        !     call align_iso_polyn_direct%get_weights(frameweights)
+        !     call align_iso_polyn_direct%get_shifts_toplot(shifts_toplot)
+        !     call align_iso_polyn_direct%kill
+        ! else
+        call hybrid_srch%new(movie_frames_scaled)
+        call hybrid_srch%set_group_frames(.false.)
+        call hybrid_srch%set_reslims(hp, params_glob%lpstart, params_glob%lpstop)
+        call hybrid_srch%set_bfactor(bfactor)
+        call hybrid_srch%set_trs(params_glob%scale*params_glob%trs)
+        call hybrid_srch%set_rand_init_shifts(.true.)
+        call hybrid_srch%set_fitshifts(FITSHIFTS)
+        call hybrid_srch%set_fixed_frame(fixed_frame)
+        call hybrid_srch%align
+        call hybrid_srch%get_weights(frameweights)
+        corr = hybrid_srch%get_corr()
+        call hybrid_srch%get_opt_shifts(opt_shifts)
+        call hybrid_srch%get_shifts_toplot(shifts_toplot)
+        call hybrid_srch%kill
+        ! end if
         if( corr < 0. )then
            write(logfhandle,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
            THROW_WARN('OPTIMAL CORRELATION < 0.0')
@@ -573,25 +530,18 @@ contains
         end do
         !$omp end parallel do
         rmsd = huge(rmsd(1))
-        call motion_patch%new(motion_correct_ftol = params_glob%motion_correctftol, &
-            motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale*params_glob%trs)
+        call motion_patch%new(params_glob%scale*params_glob%trs)
         write(logfhandle,'(A,I2,A3,I2,A1)') '>>> PATCH-BASED REFINEMENT (',&
             &params_glob%nxpatch,' x ',params_glob%nypatch,')'
         PRINT_NEVALS = .false.
-        if (DO_PATCHED_DIRECT) then
-            call motion_patch%set_bfactor(bfac)
-            call motion_patch%correct_direct( hp, resstep, movie_frames_scaled,&
-                &patched_shift_fname, DO_PATCHED_POLYN_AFTER, shifts_toplot)
-            rmsd = 0.
-        else
-            call motion_patch%set_fitshifts(FITSHIFTS)
-            call motion_patch%set_frameweights(frameweights)
-            call motion_patch%set_fixed_frame(fixed_frame)
-            call motion_patch%set_interp_fixed_frame(fixed_frame)
-            call motion_patch%set_bfactor(bfac)
-            call motion_patch%correct(hp, resstep, movie_frames_scaled, patched_shift_fname, shifts_toplot)
-            rmsd = motion_patch%get_polyfit_rmsd()
-        end if
+        call motion_patch%set_fitshifts(FITSHIFTS)
+        call motion_patch%set_frameweights(frameweights)
+        call motion_patch%set_fixed_frame(fixed_frame)
+        call motion_patch%set_interp_fixed_frame(fixed_frame)
+        call motion_patch%set_bfactor(bfac)
+        call motion_patch%correct(hp, resstep, movie_frames_scaled, patched_shift_fname, shifts_toplot)
+        rmsd = motion_patch%get_polyfit_rmsd()
+        ! end if
         call motion_patch%get_poly4star(patched_polyn, patched_shifts, patched_centers)
         if( L_BENCH )then
             rt_patched = toc(t_patched)
@@ -715,7 +665,7 @@ contains
         if( params_glob%l_dose_weight ) dose_per_frame = params_glob%exp_time*params_glob%dose_rate/real(nframes)
         if( aniso_success )then
             ! dummy init to access interpolation routine
-            call motion_patch%new(0.,0.,0.)
+            call motion_patch%new(0.)
             call motion_patch%set_nframes(nframes)
             call motion_patch%set_fixed_frame(fixed_frame)
             call motion_patch%set_interp_fixed_frame(fixed_frame)
@@ -898,7 +848,7 @@ contains
         real,        pointer :: prmat(:,:,:)
         real,    allocatable :: rsum(:,:), new_vals(:,:), vals(:)
         integer, allocatable :: pos_outliers_here(:,:)
-        real    :: ave, sdev, var, lthresh,uthresh,local_sdev, l,u
+        real    :: ave, sdev, var, lthresh,uthresh, l,u
         integer :: iframe, noutliers, i,j,k,ii,jj, nvals, winsz, n
         logical :: outliers(ldim(1),ldim(2)), err
         allocate(rsum(ldim(1),ldim(2)),source=0.)
