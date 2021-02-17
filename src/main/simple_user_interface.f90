@@ -957,7 +957,7 @@ contains
         call set_param(picker,         'picker',       'multi',  'Picking approach','Picking approach(seg|phasecorr|old_school){phasecorr}','(seg|phasecorr|old_school){phasecorr}', .false.,'phasecorr')
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
         call set_param(mul,            'mul',          'num',    'Multiplication factor', 'Multiplication factor{1.}','{1.}',.false., 1.)
-        call set_param(algorithm,      'algorithm',    'multi',  'Algorithm','Algorithm for motion correction(patch_classic|patch_dev){patch_classic}','(patch_classic|patch_dev){patch_classic}', .false.,'patch_classic')
+        call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(patch|wpatch|poly){patch}','(patch|wpatch|poly){patch}', .false.,'patch')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -2455,7 +2455,7 @@ contains
         & the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will&
         & be pre-averaged in the given chunk size (Falcon 3 movies).',&     ! descr_long
         &'simple_exec',&                                                    ! executable
-        &1, 8, 0, 7, 3, 0, 2, .true.)                                       ! # entries in each group, requires sp_project
+        &1, 8, 0, 8, 3, 0, 2, .true.)                                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call motion_correct%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2481,6 +2481,7 @@ contains
         call motion_correct%set_input('srch_ctrls', 5, nxpatch)
         call motion_correct%set_input('srch_ctrls', 6, nypatch)
         call motion_correct%set_input('srch_ctrls', 7, mcconvention)
+        call motion_correct%set_input('srch_ctrls', 8, algorithm)
         ! filter controls
         call motion_correct%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment (in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -2761,7 +2762,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &3, 13, 0, 13, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &3, 13, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2801,6 +2802,7 @@ contains
         call preprocess%set_input('srch_ctrls',11, nxpatch)
         call preprocess%set_input('srch_ctrls',12, nypatch)
         call preprocess%set_input('srch_ctrls',13, mcconvention)
+        call preprocess%set_input('srch_ctrls',14, algorithm)
         ! filter controls
         call preprocess%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -2827,7 +2829,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                              ! executable
-        &5, 16, 0, 15, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 16, 0, 16, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
@@ -2879,6 +2881,7 @@ contains
         call preprocess_stream%set_input('srch_ctrls',13, nxpatch)
         call preprocess_stream%set_input('srch_ctrls',14, nypatch)
         call preprocess_stream%set_input('srch_ctrls',15, mcconvention)
+        call preprocess_stream%set_input('srch_ctrls',16, algorithm)
         ! filter controls
         call preprocess_stream%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -4116,7 +4119,7 @@ contains
         & If dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly&
         & (dose-weighting strategy).',&                                    ! descr_long
         &'single_exec',&                                             ! executable
-        &0, 0, 0, 6, 3, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &0, 0, 0, 7, 3, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -4137,6 +4140,7 @@ contains
         call tseries_motion_correct%set_input('srch_ctrls', 6, nypatch)
         tseries_motion_correct%srch_ctrls(6)%descr_placeholder = '# y-patches{3}'
         tseries_motion_correct%srch_ctrls(6)%rval_default = 3.
+        call tseries_motion_correct%set_input('srch_ctrls', 7, algorithm)
         ! filter controls
         call tseries_motion_correct%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{5}', .false., 5.)

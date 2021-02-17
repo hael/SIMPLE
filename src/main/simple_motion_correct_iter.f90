@@ -97,7 +97,7 @@ contains
         motion_correct_with_patched = (params_glob%mcpatch.eq.'yes') .and. (params_glob%nxpatch*params_glob%nypatch > 1)
         ! ALIGNEMENT
         select case(params_glob%algorithm)
-        case('iso','patch_dev')
+        case('iso','wpatch','poly')
             if( params_glob%tomo.eq.'yes' ) THROW_HARD('TOMO unsupported')
             write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
             call motion_correct_dev(self%moviename, ctfvars, self%moviesum, self%moviesum_corrected,&
