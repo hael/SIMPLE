@@ -706,7 +706,7 @@ contains
         case DEFAULT
             THROW_HARD('Unsupported refinement mode!')
         end select
-        if( cline%defined('center')               ) call cline%set('center',       'yes')
+        if( .not. cline%defined('center')               ) call cline%set('center',       'yes')
         if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt','yes')
         if( .not. cline%defined('lpstart')        ) call cline%set('lpstart',        1.0)
         if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',         1.0)
