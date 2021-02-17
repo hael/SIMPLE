@@ -178,6 +178,7 @@ contains
             enddo
         endif
         ! Coarse search
+        optcc = -huge(optcc)
         nstepx = max(1,floor((self%ospec%limits(1,2)-self%ospec%limits(1,1))/4.))
         nstepy = max(1,floor((self%ospec%limits(2,2)-self%ospec%limits(2,1))/4.))
         stepx  = (self%ospec%limits(1,2)-self%ospec%limits(1,1))/real(2*nstepx+1)
