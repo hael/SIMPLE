@@ -2473,8 +2473,8 @@ contains
         ! <empty>
         ! search controls
         call motion_correct%set_input('srch_ctrls', 1, trs)
-        motion_correct%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{10}'
-        motion_correct%srch_ctrls(1)%rval_default      = 10.
+        motion_correct%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{0}'
+        motion_correct%srch_ctrls(1)%rval_default      = 20.
         call motion_correct%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3){0}', '{0}', .false., 0.)
         call motion_correct%set_input('srch_ctrls', 3, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
         call motion_correct%set_input('srch_ctrls', 4, mcpatch)
@@ -2787,8 +2787,8 @@ contains
         ! <empty>
         ! search controls
         call preprocess%set_input('srch_ctrls', 1, trs)
-        preprocess%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{10}'
-        preprocess%srch_ctrls(1)%rval_default      = 10.
+        preprocess%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
+        preprocess%srch_ctrls(1)%rval_default      = 20.
         call preprocess%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3){0}', '{0}', .false., 0.)
         call preprocess%set_input('srch_ctrls', 3, dfmin)
         call preprocess%set_input('srch_ctrls', 4, dfmax)
@@ -2864,8 +2864,8 @@ contains
         ! <empty>
         ! search controls
         call preprocess_stream%set_input('srch_ctrls', 1, trs)
-        preprocess_stream%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{10}'
-        preprocess_stream%srch_ctrls(1)%rval_default      = 10.
+        preprocess_stream%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
+        preprocess_stream%srch_ctrls(1)%rval_default      = 20.
         call preprocess_stream%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3){0}', '{0}', .false., 0.)
         call preprocess_stream%set_input('srch_ctrls', 3, dfmin)
         call preprocess_stream%set_input('srch_ctrls', 4, dfmax)

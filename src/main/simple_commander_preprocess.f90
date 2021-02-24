@@ -143,7 +143,7 @@ contains
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',          'yes')
         ! motion correction
-        if( .not. cline%defined('trs')             ) call cline%set('trs',              10.)
+        if( .not. cline%defined('trs')             ) call cline%set('trs',              20.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           8.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            5.)
         if( .not. cline%defined('bfac')            ) call cline%set('bfac',             50.)
@@ -714,7 +714,7 @@ contains
         if( .not. cline%defined('stream')          ) call cline%set('stream',          'no')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',          'yes')
         ! mnotion correction
-        if( .not. cline%defined('trs')             ) call cline%set('trs',              10.)
+        if( .not. cline%defined('trs')             ) call cline%set('trs',              20.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           8.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            5.)
         if( .not. cline%defined('bfac')            ) call cline%set('bfac',             50.)
@@ -948,7 +948,7 @@ contains
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
         if( .not. cline%defined('mkdir')         ) call cline%set('mkdir',       'yes')
-        if( .not. cline%defined('trs')           ) call cline%set('trs',           10.)
+        if( .not. cline%defined('trs')           ) call cline%set('trs',           20.)
         if( .not. cline%defined('lpstart')       ) call cline%set('lpstart',        8.)
         if( .not. cline%defined('lpstop')        ) call cline%set('lpstop',         5.)
         if( .not. cline%defined('bfac')          ) call cline%set('bfac',          50.)
