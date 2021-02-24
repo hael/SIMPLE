@@ -319,7 +319,7 @@ contains
         call self%update_img_rmat
     end subroutine elim_ccs
 
-    ! This function is reorders the connected components (cc:s)
+    ! This function is reorders the connected components (ccs)
     ! after some of them have been eliminated, so that they have contiguous
     ! labelling (1,2,3..) withouty absenses (NOT 1,2,5..).
     ! Self is should be a connected component image.

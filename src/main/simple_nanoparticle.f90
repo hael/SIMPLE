@@ -5,6 +5,8 @@ include 'simple_lib.f08'
 use simple_image,     only : image
 use simple_binimage,  only : binimage
 use simple_atoms,     only : atoms, get_Z_and_radius_from_name
+use simple_lattice_fitting,        only : fit_lattice, find_radius_for_coord_number
+use simple_np_coordination_number, only : run_coord_number_analysis
 implicit none
 
 public :: nanoparticle
@@ -36,10 +38,11 @@ type :: nanoparticle
     real,    allocatable  :: dists(:)
     integer, allocatable  :: loc_longest_dist(:,:)   ! for indentific of the vxl that determins the longest dim of the atom
     integer, allocatable  :: contact_scores(:)
+    integer, allocatable  :: cn(:)                   ! coordination number
     character(len=2)      :: element     = ' '
     character(len=4)      :: atom_name   = '    '
-    character(len=STDLEN) :: partname    = ''     ! fname
-    character(len=STDLEN) :: fbody       = ''     ! fbody
+    character(len=STDLEN) :: partname    = ''        ! fname
+    character(len=STDLEN) :: fbody       = ''        ! fbody
   contains
     ! constructor
     procedure          :: new => new_nanoparticle
@@ -56,6 +59,7 @@ type :: nanoparticle
     procedure          :: aspect_ratios_estimation
     procedure          :: calc_aspect_ratio
     procedure          :: discard_outliers
+    procedure          :: discard_outliers_cn
     procedure          :: atom_intensity_stats
     procedure          :: validate_atomic_positions
     procedure          :: distances_distribution
@@ -294,7 +298,7 @@ contains
                 call self%centers_pdb%set_name(cc,self%atom_name)
                 call self%centers_pdb%set_element(cc,self%element)
                 call self%centers_pdb%set_coord(cc,(self%centers(:,cc)-1.)*self%smpd)
-                call self%centers_pdb%set_beta(cc,real(self%contact_scores(cc)))
+                call self%centers_pdb%set_beta(cc,real(self%cn(cc)))
                 call self%centers_pdb%set_resnum(cc,cc)
             enddo
         endif
@@ -526,6 +530,83 @@ contains
          end subroutine otsu_nano
     end subroutine binarize_nano
 
+
+    ! This subroutine discard outliers that resisted binarization.
+    ! It calculates the coordination number (cn) of each atom and discards
+    ! the atoms with cn < cn_thresh
+    ! It modifies the img_bin and img_cc instances deleting the
+    ! identified outliers.
+    subroutine discard_outliers_cn(self, cn_thresh)
+        class(nanoparticle), intent(inout) :: self
+        integer,             intent(in)    :: cn_thresh ! threshold for discard outliers based on contact score
+        integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
+        logical, allocatable :: mask(:)
+        real, allocatable    :: centers_ang(:,:) ! coordinates of the atoms in ANGSTROMS
+        real    :: dist
+        real    :: radius  !radius of the sphere to consider for cn calculation
+        real    :: a(3)    !lattice parameter
+        integer :: cn(self%n_cc)
+        integer :: cc, new_cc
+        integer :: cnt     !contact_score
+        integer :: loc(1)
+        integer :: n_discard
+        integer :: label(1), filnum, filnum1, filnum2, i
+        write(logfhandle, *) '****outliers discarding cn, init'
+        allocate(centers_ang(3,self%n_cc), source=(self%centers-1.)*self%smpd)! -1?? TO FIX
+        ! In order to find radius for cn calculation, FccLattice
+        ! has to be fit.
+        if(DEBUG) then
+          call fopen(filnum, file='CentersAngCN.txt')
+          do i = 1, size(centers_ang,2)
+            write(filnum,*) centers_ang(:,i)
+          enddo
+          call fclose(filnum)
+          call fopen(filnum1, file='CentersPxlsCN.txt')
+          do i = 1, size(self%centers,2)
+            write(filnum1,*) self%centers(:,i)
+          enddo
+          call fclose(filnum1)
+        endif
+        call fit_lattice(centers_ang,a)
+        call find_radius_for_coord_number(a,radius)
+        if(DEBUG ) write(logfhandle,*) 'Radius for coord numb calcolation ', radius
+        call run_coord_number_analysis(centers_ang,radius,cn)
+        if(DEBUG) then
+          call fopen(filnum2, file='CoordNumberBeforeOutliers.txt')
+          write(filnum2,*) cn
+          call fclose(filnum2)
+        endif
+        if(DEBUG) write(logfhandle, *) 'Before outliers discarding cn is'
+        if(DEBUG) write(logfhandle, *)  cn
+        allocate(mask(self%n_cc), source = .true.)
+        where(cn < cn_thresh) mask = .false. ! false where atom has to be discarded
+        n_discard = count(cn<cn_thresh)
+        write(logfhandle, *) 'Numbers of atoms discarded because of low cn ', n_discard
+        ! Allocate and then update variable self%cn
+        allocate(self%cn(self%n_cc-n_discard), source = 0)
+        call self%img_cc%get_imat(imat_cc)
+        call self%img_bin%get_imat(imat_bin)
+        ! Removing outliers from the binary image and the connected components image
+        do cc = 1, self%n_cc
+          if(cn(cc)<cn_thresh) then
+              where(imat_cc == cc) imat_bin = 0
+          endif
+        enddo
+        call self%img_bin%set_imat(imat_bin)
+        call self%img_bin%find_ccs(self%img_cc)
+        ! update number of connected components
+        call self%img_cc%get_nccs(self%n_cc)
+        call self%find_centers()
+        deallocate(centers_ang)
+        allocate(centers_ang(3,self%n_cc), source = (self%centers-1.)*self%smpd)! -1?? TO FIX
+        call run_coord_number_analysis(centers_ang,radius,self%cn)
+        ! ATTENTION: you will see low coord numbers because they are UPDATED, after elimination
+        ! of the atoms with low cn. It is like this in order to be consistent with the figure.
+        if(DEBUG) write(logfhandle, *) 'After outliers discarding cn is'
+        if(DEBUG) write(logfhandle, *)  self%cn
+        write(logfhandle, *) '****outliers discarding cn, completed'
+    end subroutine discard_outliers_cn
+
     ! This subroutine discard outliers that resisted binarization.
     ! It calculates the contact score of each atom and discards the bottom
     ! PERCENT_DISCARD% of the atoms according to the contact score.
@@ -546,9 +627,14 @@ contains
         integer :: cc
         integer :: cnt     !contact_score
         integer :: loc(1)
-        integer :: n_discard
+        integer :: n_discard,filnum1
         integer :: label(1)
         write(logfhandle, *) '****outliers discarding, init'
+
+        call fopen(filnum1, file='AtomsCoordInPxls.txt')
+        write(filnum1,*) self%centers
+        call fclose(filnum1)
+
         ! Update number of connected components?
         ! Outliers removal using contact score
         radius = 2.*(2.*self%theoretical_radius)/self%smpd ! In pixels
@@ -624,12 +710,13 @@ contains
         integer :: n_cc, cnt
         integer :: rank, m(1)
         real    :: new_centers(3,2*self%n_cc)   !will pack it afterwards if it has too many elements
-        real    :: new_contact_scores(2*self%n_cc)   !will pack it afterwards if it has too many elements
+        real    :: new_coordination_number(2*self%n_cc)   !will pack it afterwards if it has too many elements
         real    :: pc
         call self%img%get_rmat_ptr(rmat_pc)     !now img contains the phase correlation
         call self%img_cc%get_imat(imat_cc)        !to pass to the subroutine split_atoms
         allocate(imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = imat_cc)
         cnt = 0
+        if(.not. allocated(self%cn)) allocate(self%cn(size(self%contact_scores)), source = self%contact_scores)
         ! Remember to update the centers
         do n_cc =1, self%n_cc !for each cc check if the center corresponds with the local max of the phase corr
             pc = rmat_pc(nint(self%centers(1,n_cc)),nint(self%centers(2,n_cc)),nint(self%centers(3,n_cc)))
@@ -643,8 +730,8 @@ contains
                 call split_atom(new_centers,cnt)
             else
                 cnt = cnt + 1 !new number of centers deriving from splitting
-                new_centers(:,cnt)      = self%centers(:,n_cc)
-                new_contact_scores(cnt) = self%contact_scores(n_cc)
+                new_centers(:,cnt)           = self%centers(:,n_cc)
+                new_coordination_number(cnt) = self%cn(n_cc)
             endif
         enddo
         deallocate(self%centers)
@@ -654,11 +741,11 @@ contains
         do n_cc =1, cnt
             self%centers(:,n_cc) = new_centers(:,n_cc)
         enddo
-        deallocate(self%contact_scores)
-        allocate(self%contact_scores(cnt), source = 0)
+        deallocate(self%cn)
+        allocate(self%cn(cnt), source = 0)
         ! update contact scores
         do n_cc =1, cnt
-            self%contact_scores(n_cc) = new_contact_scores(n_cc)
+            self%cn(n_cc) = new_coordination_number(n_cc)
         enddo
         call self%img_bin%get_imat(imat_bin)
         if(DEBUG) call self%img_bin%write_bimg(trim(self%fbody)//'BINbeforeValidation.mrc')
@@ -669,18 +756,19 @@ contains
             imat_bin = 0
         endwhere
         call self%img_bin%set_imat(imat_bin)
+        call self%img_bin%update_img_rmat()
         call self%img_bin%write_bimg(trim(self%fbody)//'BIN.mrc')
         call self%img_bin%find_ccs(self%img_cc)
         call self%img_cc%write_bimg(trim(self%fbody)//'CC.mrc')
         ! update number of ccs
-        call self%update_self_ncc()
+        call self%update_self_ncc(self%img_cc)
         ! update and write centers
         call self%find_centers()
         call self%write_centers()
     contains
         subroutine split_atom(new_centers,cnt)
             real,    intent(inout) :: new_centers(:,:)  !updated coordinates of the centers
-            integer, intent(inout) :: cnt               !atom counter, to u pdate the center coords
+            integer, intent(inout) :: cnt               !atom counter, to update the center coords
             integer :: new_center1(3),new_center2(3),new_center3(3)
             integer :: i, j, k
             logical :: mask(self%ldim(1),self%ldim(2),self%ldim(3)) !false in the layer of connection of the atom to be split
@@ -689,7 +777,7 @@ contains
             new_center1 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), imat == n_cc)
             cnt = cnt + 1
             new_centers(:,cnt) = real(new_center1)
-            new_contact_scores(cnt) = self%contact_scores(n_cc)
+            new_coordination_number(cnt) = self%cn(n_cc)
             do i = 1, self%ldim(1)
                 do j = 1, self%ldim(2)
                     do k = 1, self%ldim(3)
@@ -712,8 +800,8 @@ contains
                     else
                       cnt = cnt + 1
                       new_centers(:,cnt) = real(new_center2)
-                      new_contact_scores(cnt)   = self%contact_scores(n_cc) + 1
-                      new_contact_scores(cnt-1) = new_contact_scores(cnt)
+                      new_coordination_number(cnt)   = self%cn(n_cc) + 1
+                      new_coordination_number(cnt-1) = new_coordination_number(cnt)
                       !In the case two merged atoms, build the second atom
                       do i = 1, self%ldim(1)
                           do j = 1, self%ldim(2)
@@ -740,9 +828,9 @@ contains
                           else
                             cnt = cnt + 1
                             new_centers(:,cnt) = real(new_center3)
-                            new_contact_scores(cnt)   = self%contact_scores(n_cc) + 2
-                            new_contact_scores(cnt-1) = new_contact_scores(cnt)
-                            new_contact_scores(cnt-2) = new_contact_scores(cnt)
+                            new_coordination_number(cnt)   = self%cn(n_cc) + 2
+                            new_coordination_number(cnt-1) = new_coordination_number(cnt)
+                            new_coordination_number(cnt-2) = new_coordination_number(cnt)
                             !In the case two merged atoms, build the second atom
                             do i = 1, self%ldim(1)
                                 do j = 1, self%ldim(2)
@@ -2146,16 +2234,16 @@ contains
     ! Detect atoms. User does NOT input threshold for binarization..
     ! User might have inputted threshold for outliers
     ! removal based on contact score.
-    subroutine identify_atomic_pos(self, cs_thresh)
+    subroutine identify_atomic_pos(self, cn_thresh)
       class(nanoparticle), intent(inout) :: self
-      integer, optional,   intent(in)    :: cs_thresh
+      integer, optional,   intent(in)    :: cn_thresh
       ! Phase correlations approach
       call self%phasecorrelation_nano_gaussian()
       ! Nanoparticle binarization
       call self%binarize_nano()
       ! Outliers discarding
-      if(present(cs_thresh)) then
-        call self%discard_outliers(cs_thresh)
+      if(present(cn_thresh)) then
+        call self%discard_outliers_cn(cn_thresh)
       else
         call self%discard_outliers()
       endif
@@ -2169,10 +2257,10 @@ contains
     ! No phasecorrelation filter is applied.
     ! User might have inputted threshold for outliers
     ! removal based on contact score.
-    subroutine identify_atomic_pos_thresh(self, thresh, cs_thresh)
+    subroutine identify_atomic_pos_thresh(self, thresh, cn_thresh)
       class(nanoparticle), intent(inout) :: self
       real,                intent(in)    :: thresh
-      integer, optional,   intent(in)    :: cs_thresh
+      integer, optional,   intent(in)    :: cn_thresh
       ! Nanoparticle binarization
       call self%img%binarize(thres=thresh,self_out=self%img_bin)
       call self%img_bin%set_imat()
@@ -2182,8 +2270,8 @@ contains
       ! Find atom centers
       call self%find_centers(self%img_bin, self%img_cc)
       ! Outliers discarding
-      if(present(cs_thresh)) then
-        call self%discard_outliers(cs_thresh)
+      if(present(cn_thresh)) then
+        call self%discard_outliers_cn(cn_thresh)
       else
         call self%discard_outliers()
       endif
