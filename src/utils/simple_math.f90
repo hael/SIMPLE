@@ -9,6 +9,8 @@ private :: ludcmp, lubksb
 interface is_a_number
     module procedure is_a_number_1
     module procedure is_a_number_2
+    module procedure is_a_number_3
+    module procedure is_a_number_4
 end interface
 
 interface is_zero
@@ -207,6 +209,18 @@ interface pixels_dist
    module procedure pixels_dist_1
    module procedure pixels_dist_2
 end interface
+
+interface eigsrt
+    module procedure eigsrt_sp, eigsrt_dp
+end interface eigsrt
+
+interface jacobi
+    module procedure jacobi_sp, jacobi_dp
+end interface jacobi
+
+interface matinv
+    module procedure matinv_sp, matinv_dp
+end interface matinv
 
 contains
 
@@ -437,7 +451,6 @@ contains
      !>   checking for is_a_number
     pure logical function is_a_number_3( number )
         real(dp), intent(in) :: number  !< input variable for checking
-
         is_a_number_3 = .true.
         if( number > 0. )then
         else if( number <= 0. )then
@@ -1205,7 +1218,7 @@ contains
     !!         reference : algorithm explained at:
     !!         http://math.uww.edu/~mcfarlat/inverse.htm
     !!         http://www.tutor.ms.unimelb.edu.au/matrix/matrix_inverse.html
-    subroutine matinv(matrix, inverse, n, errflg)
+    subroutine matinv_sp(matrix, inverse, n, errflg)
         integer, intent(in)  :: n       !< size of square matrix
         integer, intent(out) :: errflg  !< return error status. -1 for error, 0 for normal
         real, intent(in), dimension(n,n)  :: matrix  !< input matrix
@@ -1283,7 +1296,87 @@ contains
             end do
         end do
         errflg = 0
-    end subroutine matinv
+    end subroutine matinv_sp
+
+    subroutine matinv_dp(matrix, inverse, n, errflg)
+        integer, intent(in)  :: n       !< size of square matrix
+        integer, intent(out) :: errflg  !< return error status. -1 for error, 0 for normal
+        real(dp), intent(in), dimension(n,n)  :: matrix  !< input matrix
+        real(dp), intent(out), dimension(n,n) :: inverse !< inverted matrix
+        logical :: flag = .true.
+        integer :: i, j, k
+        real(dp) :: m
+        real(dp), dimension(n,2*n) :: augmatrix !< augmented matrix
+        ! augment input matrix with an identity matrix
+        do i=1,n
+            do j=1,2*n
+                if(j <= n )then
+                    augmatrix(i,j) = matrix(i,j)
+                else if((i+n) == j)then
+                    augmatrix(i,j) = 1.d0
+                else
+                    augmatrix(i,j) = 0.d0
+                endif
+            end do
+        end do
+        ! reduce augmented matrix to upper traingular form
+        do k=1,n-1
+              if( is_zero(augmatrix(k,k)) )then
+                 flag = .false.
+                do i=k+1,n
+                    if( augmatrix(i,k) > 0.d0 )then
+                        do j=1,2*n
+                            augmatrix(k,j) = augmatrix(k,j)+augmatrix(i,j)
+                        end do
+                        flag = .true.
+                        exit
+                    endif
+                    if(flag .eqv. .false.)then
+                        inverse = 0.d0
+                        errflg = -1
+                        return
+                    endif
+                end do
+            endif
+            do j=k+1, n
+                m = augmatrix(j,k)/augmatrix(k,k)
+                do i=k,2*n
+                    augmatrix(j,i) = augmatrix(j,i)-m*augmatrix(k,i)
+                end do
+            end do
+        end do
+        ! test for invertibility
+        do i=1,n
+            if( is_zero(augmatrix(i,i)) )then
+                inverse = 0.d0
+                errflg = -1
+                return
+            endif
+        end do
+        ! make diagonal elements as 1
+        do i=1,n
+            m = augmatrix(i,i)
+            do j=i,2*n
+                augmatrix(i,j) = augmatrix(i,j)/m
+            end do
+        end do
+        ! reduced right side half of augmented matrix to identity matrix
+        do k=n-1,1,-1
+            do i=1,k
+                m = augmatrix(i,k+1)
+                do j = k,2*n
+                    augmatrix(i,j) = augmatrix(i,j)-augmatrix(k+1,j)*m
+                end do
+            end do
+        end do
+        ! store answer
+        do i=1,n
+            do j=1,n
+                inverse(i,j) = augmatrix(i,j+n)
+            end do
+        end do
+        errflg = 0
+    end subroutine matinv_dp
 
     !>   least squares straight line fit, from Sjors, he took it from
     !!         http://mathworld.wolfram.com/LeastSquaresFitting.html
@@ -3530,5 +3623,239 @@ contains
         prod1 = matmul(prod_inv,transpose(M))
         sol   = matmul(prod1,b)
     end function plane_from_points
+
+    !> \brief jacobi SVD, NR
+    subroutine jacobi_sp( a, n, np, d, v, nrot)
+        integer, intent(in)    :: n,np
+        real,    intent(inout) :: a(np,np), v(np,np), d(np)
+        integer, intent(inout) :: nrot
+        real                   :: c,g,h,s,sm,t,tau,theta,tresh,b(n), z(n)
+        integer                :: i,j,ip,iq
+        v = 0.
+        do i=1,n
+            v(i,i) = 1.
+            b(i)   = a(i,i)
+        enddo
+        d    = b
+        z    = 0.
+        nrot = 0
+        do i=1,50
+            sm=0.
+            do ip=1,n-1 
+                do iq=ip+1,n
+                    sm=sm+abs(a(ip,iq))
+                enddo
+            enddo
+            if(sm.eq.0.)return
+            if(i.lt.4)then
+                tresh=0.2*sm/n**2 
+            else
+                tresh=0.
+            endif
+            do ip=1,n-1
+                do iq=ip+1,n
+                    g=100.*abs(a(ip,iq))
+                    if((i.gt.4).and.(abs(d(ip))+g.eq.abs(d(ip))) &
+                        .and.(abs(d(iq))+g.eq.abs(d(iq))))then
+                        a(ip,iq)=0.
+                    else if(abs(a(ip,iq)).gt.tresh)then
+                        h=d(iq)-d(ip)
+                        if(abs(h)+g.eq.abs(h))then
+                            t=a(ip,iq)/h
+                        else
+                            theta=0.5*h/a(ip,iq)
+                            t=1./(abs(theta)+sqrt(1.+theta**2))
+                            if(theta.lt.0.)t=-t
+                        endif
+                        c=1./sqrt(1+t**2)
+                        s=t*c
+                        tau=s/(1.+c)
+                        h=t*a(ip,iq)
+                        z(ip)=z(ip)-h
+                        z(iq)=z(iq)+h
+                        d(ip)=d(ip)-h
+                        d(iq)=d(iq)+h
+                        a(ip,iq)=0.
+                        do j=1,ip-1
+                            g=a(j,ip)
+                            h=a(j,iq)
+                            a(j,ip)=g-s*(h+g*tau)
+                            a(j,iq)=h+s*(g-h*tau)
+                        enddo
+                        do j=ip+1,iq-1
+                            g=a(ip,j)
+                            h=a(j,iq)
+                            a(ip,j)=g-s*(h+g*tau)
+                            a(j,iq)=h+s*(g-h*tau)
+                        enddo
+                        do j=iq+1,n
+                            g=a(ip,j)
+                            h=a(iq,j)
+                            a(ip,j)=g-s*(h+g*tau)
+                            a(iq,j)=h+s*(g-h*tau)
+                        enddo
+                        do j=1,n
+                            g=v(j,ip)
+                            h=v(j,iq)
+                            v(j,ip)=g-s*(h+g*tau)
+                            v(j,iq)=h+s*(g-h*tau)
+                        enddo
+                        nrot=nrot+1
+                    endif
+                enddo
+            enddo
+            do ip=1,n
+                b(ip)=b(ip)+z(ip)
+                d(ip)=b(ip) 
+                z(ip)=0. 
+            enddo
+        enddo
+        write(*,*)' Too many iterations in Jacobi'
+    end subroutine jacobi_sp      
+
+!> \brief jacobi SVD, NR
+    subroutine jacobi_dp( a, n, np, d, v, nrot )
+        integer,  intent(in)    :: n,np
+        real(dp), intent(inout) :: a(np,np), v(np,np), d(np)
+        integer,  intent(inout) :: nrot
+        real(dp) :: c,g,h,s,sm,t,tau,theta,tresh,b(n), z(n)
+        integer  :: i,j,ip,iq
+        v = 0.
+        do i=1,n
+            v(i,i) = 1.
+            b(i)   = a(i,i)
+        enddo
+        d    = b
+        z    = 0.
+        nrot = 0
+        do i=1,50
+            sm=0.
+            do ip=1,n-1 
+                do iq=ip+1,n
+                    sm=sm+abs(a(ip,iq))
+                enddo
+            enddo
+            if(sm.eq.0.)return
+            if(i.lt.4)then
+                tresh=0.2*sm/n**2 
+            else
+                tresh=0.
+            endif
+            do ip=1,n-1
+                do iq=ip+1,n
+                    g=100.*abs(a(ip,iq))
+                    if((i.gt.4).and.(abs(d(ip))+g.eq.abs(d(ip))) &
+                        .and.(abs(d(iq))+g.eq.abs(d(iq))))then
+                        a(ip,iq)=0.
+                    else if(abs(a(ip,iq)).gt.tresh)then
+                        h=d(iq)-d(ip)
+                        if(abs(h)+g.eq.abs(h))then
+                            t=a(ip,iq)/h
+                        else
+                            theta=0.5*h/a(ip,iq)
+                            t=1./(abs(theta)+sqrt(1.+theta**2))
+                            if(theta.lt.0.)t=-t
+                        endif
+                        c=1./sqrt(1+t**2)
+                        s=t*c
+                        tau=s/(1.+c)
+                        h=t*a(ip,iq)
+                        z(ip)=z(ip)-h
+                        z(iq)=z(iq)+h
+                        d(ip)=d(ip)-h
+                        d(iq)=d(iq)+h
+                        a(ip,iq)=0.
+                        do j=1,ip-1
+                            g=a(j,ip)
+                            h=a(j,iq)
+                            a(j,ip)=g-s*(h+g*tau)
+                            a(j,iq)=h+s*(g-h*tau)
+                        enddo
+                        do j=ip+1,iq-1
+                            g=a(ip,j)
+                            h=a(j,iq)
+                            a(ip,j)=g-s*(h+g*tau)
+                            a(j,iq)=h+s*(g-h*tau)
+                        enddo
+                        do j=iq+1,n
+                            g=a(ip,j)
+                            h=a(iq,j)
+                            a(ip,j)=g-s*(h+g*tau)
+                            a(iq,j)=h+s*(g-h*tau)
+                        enddo
+                        do j=1,n
+                            g=v(j,ip)
+                            h=v(j,iq)
+                            v(j,ip)=g-s*(h+g*tau)
+                            v(j,iq)=h+s*(g-h*tau)
+                        enddo
+                        nrot=nrot+1
+                    endif
+                enddo
+            enddo
+            do ip=1,n
+                b(ip)=b(ip)+z(ip)
+                d(ip)=b(ip) 
+                z(ip)=0. 
+            enddo
+        enddo
+        write(*,*)' Too many iterations in Jacobi'
+    end subroutine jacobi_dp
+
+    !>  \brief sorts eigenvalues and eigenvectors from jacobi routine in descending order
+    subroutine eigsrt_sp(d,v,n,np)
+        integer, intent(in)    :: n,np
+        real,    intent(inout) :: d(np),v(np,np)
+        ! Given the eigenvalues d and eigenvectors v as output from jacobi (§11.1) or tqli (§11.3),
+        ! this routine sorts the eigenvalues into descending order, 
+        ! and rearranges the columns of v correspondingly. The method is straight insertion.
+        integer             :: i,j,k
+        real                :: p
+        do i=1,n-1
+            k = i
+            p = d(i)
+            do j=i+1,n
+                if(d(j)>p)then
+                    k = j
+                    p = d(j)
+                endif
+            enddo
+            if(k.ne.i)then
+                d(k) = d(i)
+                d(i) = p
+                do j=1,n
+                    p      = v(j,i)
+                    v(j,i) = v(j,k)
+                    v(j,k) = p
+                enddo
+            endif
+        enddo
+    end subroutine eigsrt_sp
+
+    subroutine eigsrt_dp(d,v,n,np)
+        integer,  intent(in)    :: n,np
+        real(dp), intent(inout) :: d(np),v(np,np)
+        integer  :: i,j,k
+        real(dp) :: p
+        do i=1,n-1
+            k = i
+            p = d(i)
+            do j=i+1,n
+                if(d(j)>p)then
+                    k = j
+                    p = d(j)
+                endif
+            enddo
+            if(k.ne.i)then
+                d(k) = d(i)
+                d(i) = p
+                do j=1,n
+                    p      = v(j,i)
+                    v(j,i) = v(j,k)
+                    v(j,k) = p
+                enddo
+            endif
+        enddo
+    end subroutine eigsrt_dp
 
 end module simple_math
