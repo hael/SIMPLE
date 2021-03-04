@@ -32,6 +32,7 @@ type ppca
     procedure          :: get_loadings_ptr
     procedure          :: get_evals
     procedure          :: generate_cumul
+    procedure          :: calc_pc_corrs
     procedure          :: generate_featavg
     procedure, private :: rotation
     procedure, private :: generate_1
@@ -172,6 +173,30 @@ contains
         allocate(dat(self%D), source=tmp(:,1))
         if( present(AVG) ) dat = dat+AVG
     end function generate_cumul
+
+
+    subroutine calc_pc_corrs( self, avg, corrs ) 
+        class(ppca),       intent(inout) :: self
+        real,              intent(in)    :: AVG(self%D)
+        real, allocatable, intent(out)   :: corrs(:)
+        real(dp) :: ccs(self%Q), x(self%D), y(self%D), normsq
+        integer  :: i,j
+        if(allocated(corrs)) deallocate(corrs)
+        allocate(corrs(self%Q),source=0.)
+        ccs = 0.d0
+        !$omp parallel do proc_bind(close) private(i,j,x,y,normsq) reduction(+:ccs)
+        do j = 1,self%N
+            x      = real(self%ptr_Dmat(j,:),dp)
+            y      = real(avg,dp)
+            normsq = sum(x*x)
+            do i = 1,self%Q
+                y      = y + self%E_zn(j,i,1) * self%W(:,i)
+                ccs(i) = ccs(i) + sum(x*y) / sqrt(sum(y*y)*normsq)
+            enddo
+        enddo
+        !$omp end parallel do
+        corrs = real(ccs / real(self%N,dp))
+    end subroutine calc_pc_corrs
 
     !>  \brief  is for sampling the generative model at a given image index
     function generate_1( self, i, AVG ) result( dat ) 
