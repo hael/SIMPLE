@@ -42,6 +42,7 @@ type :: motion_align_poly
     real,              allocatable :: patch_shifts(:,:,:,:)             !< anisotropic shifts for display only
     real,              allocatable :: frameweights(:)                   !< array of frameweights
     real,              allocatable :: corrs(:)                          !< per-frame correlations
+    logical,           allocatable :: tiles_mask(:,:)
     logical,           allocatable :: resolution_mask(:,:,:)
     real(dp)                       :: fit_poly_coeffs(POLYDIM,2)        !< fitted polynomial coefficients
     real(dp)                       :: poly_coeffs(POLYDIM,2)            !< optimized polynomial coefficients
@@ -101,7 +102,7 @@ end type image_ptr
 contains
 
     subroutine new( self, frames_ptr, fixed_frame )
-        class(motion_align_poly),          intent(inout) :: self
+        class(motion_align_poly),         intent(inout) :: self
         type(image), allocatable, target, intent(in)    :: frames_ptr(:)
         integer,                          intent(in)    :: fixed_frame
         call self%kill
@@ -124,7 +125,8 @@ contains
         self%l_aniso_success = .false.
         allocate(self%corrs(self%nframes), source=-1., stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('new; simple_motion_align_poly')
-        self%existence        = .true.
+        allocate(self%tiles_mask(self%nxpatch,self%nypatch), source=.true., stat=alloc_stat)
+        self%existence   = .true.
     end subroutine new
 
     subroutine alloc_tmp_objs( self )
@@ -193,14 +195,15 @@ contains
         enddo
     end subroutine gen_patches_dimensions
 
-    subroutine gen_tiles( self )
+    subroutine gen_tiles( self, boxdata )
         class(motion_align_poly), intent(inout) :: self
+        real, optional,           intent(in)    :: boxdata(:,:)
         type(image)            :: tmp_imgs(self%nthr)
         type(image_ptr)        :: ptmp_imgs(self%nthr), pframes(self%nframes), ptiles(self%nthr)
         real, allocatable      :: bfac_weights(:,:)
         real          :: spafreqsq, spafreqh, spafreqk, shsq, sumsq, w, sumw, d, sigma
-        integer       :: nr_lims(3,2),phys(3),cdim(3),find,magic_ldim,hplim,lplim,hplimsq,lplimsq,ithr
-        integer       :: pi,pj,i,j,t,h,k
+        integer       :: nr_lims(3,2),phys(3),cdim(3),find,magic_ldim,hplim,lplim,hplimsq,lplimsq
+        integer       :: pi,pj,i,j,t,h,k,n,x,y,ithr,l_sq,d_sq
         allocate(self%tiles(self%nframes,self%nxpatch,self%nypatch),&
                 &self%tiles_sh(self%nframes,self%nxpatch,self%nypatch))
         ! generates FFT images for alignement
@@ -296,6 +299,24 @@ contains
         enddo
         !$omp end do
         !$omp end parallel
+        if( present(boxdata) )then
+            ! deals with tiles mask
+            self%tiles_mask = .false.
+            n = size(boxdata,1)
+            do i = 1,n
+                x = nint(boxdata(i,1)+boxdata(i,3)/2.)
+                y = nint(boxdata(i,2)+boxdata(i,4)/2.)
+                l_sq = nint(2.5*maxval(boxdata(i,3:4)))**2
+                do pi = 1,self%nxpatch
+                    do pj = 1,self%nypatch
+                        d_sq = (nint(self%tile_centers(pi,pj,1))-x)**2 + (nint(self%tile_centers(pi,pj,2))-y)**2
+                        if( d_sq < l_sq ) self%tiles_mask(pi,pj) = .true.
+                    enddo
+                enddo
+            enddo
+            write(logfhandle,'(A,I3,A3,I3)') '>>> TILES SELECTED: ',count(self%tiles_mask),' / ',self%nxpatch*self%nypatch
+            if( count(self%tiles_mask) < 4 ) THROW_HARD('Insufficient number of tiles for polynomial refinement')
+        endif
     end subroutine gen_tiles
 
     ! Alignment routines
@@ -307,9 +328,8 @@ contains
         logical,                 intent(inout) :: aniso_success
         real(dp),   allocatable, intent(inout) :: poly_coeffs(:)
         real(dp),                intent(out)   :: poly_coeffs_star(2*POLYDIM)
-        ! real(dp) :: global_shifts(self%nxpatch,self%nypatch,self%nframes,2)
         real(dp) :: dt
-        integer  :: i,j!,t
+        integer  :: i,j
         select case(trim(algorithm))
         case('iso')
             call self%align_iso
@@ -357,40 +377,6 @@ contains
         else
             poly_coeffs_star = poly_coeffs
         endif
-        !!!!!!!!!!!! DEBUG
-        ! self%align_frame = self%fixed_frame
-        ! call self%calc_shifts(self%align_frame, global_shifts)
-        ! ! global_shifts = self%iso_shifts + global_shifts
-        ! print *,'----------- ISO X'
-        ! do t=1,self%nframes
-        !     write(*,'(I6)',advance='no')t
-        !     do i = 1,1
-        !         do j = 1,1
-        !             write(*,'(2F12.6)',advance='no')self%iso_shifts(i,j,t,:)
-        !         enddo
-        !     enddo
-        !     write(*,*)
-        ! enddo
-        ! print *,'----------- POLY X'
-        ! do t=1,self%nframes
-        !     write(*,'(I6)',advance='no')t
-        !     do i = 1,1
-        !         do j = 1,1
-        !             write(*,'(2F12.6)',advance='no')self%aniso_shifts(i,j,t,:)
-        !         enddo
-        !     enddo
-        !     write(*,*)
-        ! enddo
-        ! print *,'----------- GLOBAL X'
-        ! do t=1,self%nframes
-        !     write(*,'(I6)',advance='no')t
-        !     do i = 1,1
-        !         do j = 1,1
-        !             write(*,'(2F12.6)',advance='no')global_shifts(i,j,t,:)
-        !         enddo
-        !     enddo
-        !     write(*,*)
-        ! enddo
     end subroutine align
 
     ! Calculate all correlations images
@@ -672,40 +658,43 @@ contains
         type(opt_factory)         :: ofac
         type(opt_spec)            :: ospec
         class(optimizer), pointer :: nlopt
-        ! DEBUG VARIABLES
-        ! real(dp) :: tmp_shifts(self%nxpatch,self%nypatch,self%nframes,2)
-        ! real(dp) :: poly_coeffs(POLYDIM,2), dt
-        ! real     :: minrmsd
-        ! integer  :: align_frame
         real(dp) :: ini_shifts_dp(self%nxpatch,self%nypatch,self%nframes,2), shifts(self%nxpatch,self%nypatch,self%nframes,2)
         real(dp) :: prev_shifts(self%nxpatch,self%nypatch,self%nframes,2)
         real     :: iso_shifts(self%nxpatch,self%nypatch,self%nframes,2), ini_shifts(self%nxpatch,self%nypatch,self%nframes,2)
         real     :: opt_lims(POLYDIM*2,2), lowest_cost, rmsd_cumul, rmsd
-        integer  :: t, i, j, iter, ithr
+        integer  :: t, i, j, iter, ithr, ntot, itmp(2)
+        ntot       = count(self%tiles_mask)*self%nframes 
         iso_shifts = self%iso_shifts
         call self%center_shifts_to_frame(iso_shifts, self%align_frame)
         allocate(self%ftexp_tiles(self%nframes,self%nxpatch,self%nypatch),&
                 &self%ftexp_tiles_sh(self%nframes,self%nthr), self%ftexp_R(self%nthr),&
                 &self%ftexp_dR(self%nthr,2), self%ftexp_Rhat(self%nthr), self%ftexp_dRhat(self%nthr,2),&
                 &self%ftexp_Rhat2(self%nthr))
+        itmp = 0
         !$omp parallel default(shared) private(i,j,t,ithr) proc_bind(close)
         !$omp do collapse(3) schedule(static)
         do t = 1,self%nframes
             do i = 1, self%nxpatch
                 do j = 1, self%nypatch
-                    call self%tiles(t,i,j)%set_smpd(self%smpd_tile) !!
-                    call self%ftexp_tiles(t,i,j)%new(self%tiles(t,i,j), [self%tilesz,self%tilesz], self%hp, self%lp, .true., bfac=0.)
-                    call self%ftexp_tiles(t,i,j)%shift(-real(iso_shifts(i,j,t,:),dp))
-                    call self%ftexp_tiles(t,i,j)%normalize_mat
-                    call self%tiles(t,i,j)%kill
-                    call self%tiles_sh(t,i,j)%kill
+                    if( self%tiles_mask(i,j) )then
+                        call self%tiles(t,i,j)%set_smpd(self%smpd_tile) !!
+                        call self%ftexp_tiles(t,i,j)%new(self%tiles(t,i,j), [self%tilesz,self%tilesz], self%hp, self%lp, .true., bfac=0.)
+                        call self%ftexp_tiles(t,i,j)%shift(-real(iso_shifts(i,j,t,:),dp))
+                        call self%ftexp_tiles(t,i,j)%normalize_mat
+                        call self%tiles(t,i,j)%kill
+                        call self%tiles_sh(t,i,j)%kill
+                        if( itmp(1) == 0 )itmp = [i,j]
+                    endif
                 enddo
             enddo
         enddo
         !$omp end do nowait
+        ! $omp end parallel
+        ! print *,itmp
+        ! $omp parallel default(shared) private(i,j,t,ithr) proc_bind(close)
         !$omp do schedule(static)
         do ithr = 1,self%nthr
-            call self%ftexp_R(ithr)%copy( self%ftexp_tiles(1,1,1) )
+            call self%ftexp_R(ithr)%copy( self%ftexp_tiles(1, itmp(1),itmp(2)))
             call self%ftexp_R(ithr)%zero
             call self%ftexp_dR(ithr,1)%copy( self%ftexp_R(ithr) )
             call self%ftexp_dR(ithr,2)%copy( self%ftexp_R(ithr) )
@@ -725,25 +714,6 @@ contains
         call self%fit_polynomial(self%align_frame, ini_shifts, rmsd)
         call self%calc_shifts(self%align_frame, ini_shifts_dp)
         shifts = ini_shifts_dp
-        !!!!!!!!!!!!!!!!!! gradients check
-        ! vec(:polydim)   = self%poly_coeffs(:,1)
-        ! vec(polydim+1:) = self%poly_coeffs(:,2)
-        ! call self%poly_refine_fdf(vec, cc, grad)
-        ! do i=1,2*POLYDIM
-        !     vec(:polydim)   = self%poly_coeffs(:,1)
-        !     vec(polydim+1:) = self%poly_coeffs(:,2)
-        !     vec(i) = vec(i) - 1.d-6
-        !     ccm    = self%poly_refine_f(vec)
-        !     vec(:polydim)   = self%poly_coeffs(:,1)
-        !     vec(polydim+1:) = self%poly_coeffs(:,2)
-        !     vec(i) = vec(i) + 1.d-6
-        !     ccp    = self%poly_refine_f(vec)
-        !     vec(:polydim)   = self%poly_coeffs(:,1)
-        !     vec(polydim+1:) = self%poly_coeffs(:,2)
-        !     print *,i, vec(i), grad(i), (ccp-ccm)/2.d-6, ccm, cc, ccp, (ccp-ccm)/2.d-6/grad(i)
-        ! enddo
-        ! stop 'gradients check'
-        !!!!!!!!!!!!!!!!!!!
         ! Optimization
         ini_shifts = real(ini_shifts_dp)
         do iter = 1,MAXITS
@@ -753,7 +723,7 @@ contains
             ! convergence
             rmsd       = calc_rmsd(real(prev_shifts), real(shifts))
             rmsd_cumul = calc_rmsd(ini_shifts,        real(shifts))
-            self%corr  = -lowest_cost / real(self%nxpatch*self%nypatch*self%nframes)
+            self%corr  = -lowest_cost / real(ntot)
             ! print *,'poly iter rmsd rmsdcumul corr: ', iter,rmsd,rmsd_cumul,self%corr
             if( iter>=2 .and. rmsd<RMSD_THRESHOLD_POLY ) exit
         enddo
@@ -819,12 +789,21 @@ contains
             real function calc_rmsd( sh1, sh2 )
                 real, intent(in) :: sh1(self%nxpatch,self%nypatch,self%nframes,2)
                 real, intent(in) :: sh2(self%nxpatch,self%nypatch,self%nframes,2)
-                calc_rmsd = sum((sh1-sh2)**2.)
-                calc_rmsd = sqrt(calc_rmsd/real(self%nxpatch*self%nypatch*self%nframes))
+                integer :: i,j
+                calc_rmsd = 0.
+                do i = 1,self%nxpatch
+                    do j = 1,self%nypatch
+                        if( self%tiles_mask(i,j) )then
+                            calc_rmsd = calc_rmsd + sum((sh1(i,j,:,:)-sh2(i,j,:,:))**2.)
+                        endif
+                    enddo
+                enddo
+                calc_rmsd = sqrt(calc_rmsd/real(ntot))
             end function calc_rmsd
 
     end subroutine refine_poly
 
+    ! polynomial model -> tiles shifts
     subroutine calc_shifts( self, iframe, sh )
         class(motion_align_poly), intent(in)  :: self
         integer,                 intent(in)  :: iframe
@@ -943,13 +922,15 @@ contains
                     cx = self%patch_pos(i,j,1)
                     cy = self%patch_pos(i,j,2)
                     ! patch position
-                    call CDataSet__new(dataSet)
-                    call CDataSet__SetDrawMarker(dataSet,C_TRUE)
-                    call CDataSet__SetMarkerSize(dataSet,5.0_c_double)
-                    call CDataSet__SetDatasetColor(dataSet,1.d0,0.d0,0.d0)
-                    call CDataSet_addpoint(dataSet, cx, cy)
-                    call CPlot2D__AddDataSet(plot2D, dataSet)
-                    call CDataSet__delete(dataSet)
+                    if( self%tiles_mask(i,j) )then
+                        call CDataSet__new(dataSet)
+                        call CDataSet__SetDrawMarker(dataSet,C_TRUE)
+                        call CDataSet__SetMarkerSize(dataSet,5.0_c_double)
+                        call CDataSet__SetDatasetColor(dataSet,1.d0,0.d0,0.d0)
+                        call CDataSet_addpoint(dataSet, cx, cy)
+                        call CPlot2D__AddDataSet(plot2D, dataSet)
+                        call CDataSet__delete(dataSet)
+                    endif
                     ! trajectory
                     call CDataSet__new(dataset)
                     call CDataSet__SetDrawMarker(dataset, C_FALSE)
@@ -1176,6 +1157,7 @@ contains
         if(allocated(self%patch_shifts))    deallocate(self%patch_shifts)
         if(allocated(self%aniso_shifts))    deallocate(self%aniso_shifts)
         if(allocated(self%corrs))           deallocate(self%corrs)
+        if(allocated(self%tiles_mask))      deallocate(self%tiles_mask)
         if(allocated(self%frameweights))    deallocate(self%frameweights)
         self%existence = .false.
     end subroutine kill
@@ -1236,28 +1218,30 @@ contains
         !$omp proc_bind(close) schedule(static) reduction(+:ccs)
         do i = 1, self%nxpatch
             do j = 1, self%nypatch
-                ithr = omp_get_thread_num() + 1
-                x    = self%patch_coords(i,j,1)
-                y    = self%patch_coords(i,j,2)
-                call self%ftexp_R(ithr)%zero
-                do t = 1,self%nframes
-                    rt = real(t-self%align_frame, dp)
-                    sx = apply_patch_poly_dp(vec(1:POLYDIM),  x,y, rt)
-                    sy = apply_patch_poly_dp(vec(POLYDIM+1:), x,y, rt)
-                    call self%ftexp_tiles(t,i,j)%shift(-[sx,sy], self%ftexp_tiles_sh(t,ithr))
-                    call self%ftexp_R(ithr)%add( self%ftexp_tiles_sh(t,ithr) )
-                end do
-                do t = 1, self%nframes
-                    Es(t) = self%ftexp_R(ithr)%corr_unnorm( self%ftexp_tiles_sh(t,ithr) )
-                end do
-                RR  = sum(Es)
-                Ds  = sqrt(RR - 2.d0 * Es + 1.d0)
-                ccs = ccs + (Es-1.d0)/Ds
+                if( self%tiles_mask(i,j) )then
+                    ithr = omp_get_thread_num() + 1
+                    x    = self%patch_coords(i,j,1)
+                    y    = self%patch_coords(i,j,2)
+                    call self%ftexp_R(ithr)%zero
+                    do t = 1,self%nframes
+                        rt = real(t-self%align_frame, dp)
+                        sx = apply_patch_poly_dp(vec(1:POLYDIM),  x,y, rt)
+                        sy = apply_patch_poly_dp(vec(POLYDIM+1:), x,y, rt)
+                        call self%ftexp_tiles(t,i,j)%shift(-[sx,sy], self%ftexp_tiles_sh(t,ithr))
+                        call self%ftexp_R(ithr)%add( self%ftexp_tiles_sh(t,ithr) )
+                    end do
+                    do t = 1, self%nframes
+                        Es(t) = self%ftexp_R(ithr)%corr_unnorm( self%ftexp_tiles_sh(t,ithr) )
+                    end do
+                    RR  = sum(Es)
+                    Ds  = sqrt(RR - 2.d0 * Es + 1.d0)
+                    ccs = ccs + (Es-1.d0)/Ds
+                endif
             end do
         end do
         !$omp end parallel do
         poly_refine_f = -sum(ccs)
-        self%corrs = real(ccs) / real(self%nxpatch*self%nypatch)
+        self%corrs = real(ccs) / real(count(self%tiles_mask))
     end function poly_refine_f
 
     subroutine poly_refine_fdf( self, vec, f, grads )
@@ -1274,56 +1258,58 @@ contains
         !$omp proc_bind(close) schedule(static) reduction(+:ccs,grads)
         do i = 1,self%nxpatch
             do j = 1,self%nypatch
-                ithr = omp_get_thread_num() + 1
-                x    = self%patch_coords(i,j,1)
-                y    = self%patch_coords(i,j,2)
-                call self%ftexp_R(ithr)%zero
-                do t = 1,self%nframes
-                    rt = real(t-self%align_frame, dp)
-                    sx = apply_patch_poly_dp(vec(1:POLYDIM),  x,y, rt)
-                    sy = apply_patch_poly_dp(vec(POLYDIM+1:), x,y, rt)
-                    call self%ftexp_tiles(t,i,j)%shift( -[sx,sy], self%ftexp_tiles_sh(t,ithr) )
-                    call self%ftexp_R(ithr)%add( self%ftexp_tiles_sh(t,ithr) )
-                end do
-                do t = 1,self%nframes
-                    Es(t) = self%ftexp_R( ithr )%corr_unnorm( self%ftexp_tiles_sh(t,ithr) )
-                end do
-                RR   = sum(Es)
-                Ds   = sqrt(RR - 2.d0 * Es + 1.d0)
-                Fs   = (Es - 1.d0) / Ds**3.d0
-                sumF = sum(Fs)
-                ccs  = ccs + (Es-1.d0) / Ds
-                call self%ftexp_Rhat(ithr)%zero
-                do t = 1,self%nframes
-                    call self%ftexp_Rhat(ithr)%add( self%ftexp_tiles_sh(t,ithr), w=1.d0/Ds(t) )
-                end do
-                ! calc gradient of Rhat, R
-                call self%ftexp_Rhat(ithr)%gen_grad_noshift(self%ftexp_dRhat(ithr,1), self%ftexp_dRhat(ithr,2))
-                call self%ftexp_R(ithr)%gen_grad_noshift(   self%ftexp_dR(ithr,1),    self%ftexp_dR(ithr,2))
-                do p = 1,3
-                    call self%ftexp_Rhat2(ithr)%zero
+                if( self%tiles_mask(i,j) )then
+                    ithr = omp_get_thread_num() + 1
+                    x    = self%patch_coords(i,j,1)
+                    y    = self%patch_coords(i,j,2)
+                    call self%ftexp_R(ithr)%zero
                     do t = 1,self%nframes
-                        if( t == self%align_frame ) cycle  ! w = 0.
-                        w = real(t-self%align_frame,dp)**p
-                        call self%ftexp_Rhat2(ithr)%add( self%ftexp_tiles_sh(t,ithr), w=w)
+                        rt = real(t-self%align_frame, dp)
+                        sx = apply_patch_poly_dp(vec(1:POLYDIM),  x,y, rt)
+                        sy = apply_patch_poly_dp(vec(POLYDIM+1:), x,y, rt)
+                        call self%ftexp_tiles(t,i,j)%shift( -[sx,sy], self%ftexp_tiles_sh(t,ithr) )
+                        call self%ftexp_R(ithr)%add( self%ftexp_tiles_sh(t,ithr) )
                     end do
-                    g(p)   = self%ftexp_dRhat(ithr,1)%corr_unnorm( self%ftexp_Rhat2(ithr) )
-                    g(3+p) = self%ftexp_dRhat(ithr,2)%corr_unnorm( self%ftexp_Rhat2(ithr) )
-                    call self%ftexp_Rhat2(ithr)%zero
                     do t = 1,self%nframes
-                        if( t == self%align_frame ) cycle  ! w = 0.
-                        w = real(t-self%align_frame,dp)**p * (sumF - Fs(t) - 1.d0 / Ds(t))
-                        call self%ftexp_Rhat2(ithr)%add( self%ftexp_tiles_sh(t,ithr), w=w)
+                        Es(t) = self%ftexp_R( ithr )%corr_unnorm( self%ftexp_tiles_sh(t,ithr) )
                     end do
-                    g(p)   = g(p)   - self%ftexp_dR(ithr,1)%corr_unnorm( self%ftexp_Rhat2(ithr) )
-                    g(3+p) = g(3+p) - self%ftexp_dR(ithr,2)%corr_unnorm( self%ftexp_Rhat2(ithr) )
-                end do
-                grads( 1:18) = grads( 1:18) - [g(1:3), x*g(1:3), x*x*g(1:3), y*g(1:3), y*y*g(1:3), x*y*g(1:3)]
-                grads(19:36) = grads(19:36) - [g(4:6), x*g(4:6), x*x*g(4:6), y*g(4:6), y*y*g(4:6), x*y*g(4:6)]
+                    RR   = sum(Es)
+                    Ds   = sqrt(RR - 2.d0 * Es + 1.d0)
+                    Fs   = (Es - 1.d0) / Ds**3.d0
+                    sumF = sum(Fs)
+                    ccs  = ccs + (Es-1.d0) / Ds
+                    call self%ftexp_Rhat(ithr)%zero
+                    do t = 1,self%nframes
+                        call self%ftexp_Rhat(ithr)%add( self%ftexp_tiles_sh(t,ithr), w=1.d0/Ds(t) )
+                    end do
+                    ! calc gradient of Rhat, R
+                    call self%ftexp_Rhat(ithr)%gen_grad_noshift(self%ftexp_dRhat(ithr,1), self%ftexp_dRhat(ithr,2))
+                    call self%ftexp_R(ithr)%gen_grad_noshift(   self%ftexp_dR(ithr,1),    self%ftexp_dR(ithr,2))
+                    do p = 1,3
+                        call self%ftexp_Rhat2(ithr)%zero
+                        do t = 1,self%nframes
+                            if( t == self%align_frame ) cycle  ! w = 0.
+                            w = real(t-self%align_frame,dp)**p
+                            call self%ftexp_Rhat2(ithr)%add( self%ftexp_tiles_sh(t,ithr), w=w)
+                        end do
+                        g(p)   = self%ftexp_dRhat(ithr,1)%corr_unnorm( self%ftexp_Rhat2(ithr) )
+                        g(3+p) = self%ftexp_dRhat(ithr,2)%corr_unnorm( self%ftexp_Rhat2(ithr) )
+                        call self%ftexp_Rhat2(ithr)%zero
+                        do t = 1,self%nframes
+                            if( t == self%align_frame ) cycle  ! w = 0.
+                            w = real(t-self%align_frame,dp)**p * (sumF - Fs(t) - 1.d0 / Ds(t))
+                            call self%ftexp_Rhat2(ithr)%add( self%ftexp_tiles_sh(t,ithr), w=w)
+                        end do
+                        g(p)   = g(p)   - self%ftexp_dR(ithr,1)%corr_unnorm( self%ftexp_Rhat2(ithr) )
+                        g(3+p) = g(3+p) - self%ftexp_dR(ithr,2)%corr_unnorm( self%ftexp_Rhat2(ithr) )
+                    end do
+                    grads( 1:18) = grads( 1:18) - [g(1:3), x*g(1:3), x*x*g(1:3), y*g(1:3), y*y*g(1:3), x*y*g(1:3)]
+                    grads(19:36) = grads(19:36) - [g(4:6), x*g(4:6), x*x*g(4:6), y*g(4:6), y*y*g(4:6), x*y*g(4:6)]
+                endif
             end do
         end do
         !$omp end parallel do
-        self%corrs = real(ccs) / real(self%nxpatch*self%nypatch)
+        self%corrs = real(ccs) / real(count(self%tiles_mask))
         f = -sum(ccs)
     end subroutine poly_refine_fdf
 

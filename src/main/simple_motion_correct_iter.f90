@@ -44,10 +44,12 @@ contains
         character(len=*),           intent(in)    :: moviename, fbody, dir_out
         character(len=*), optional, intent(in)    :: gainref_fname
         character(len=*), optional, intent(in)    :: tseries
+        type(nrtxtfile)               :: boxfile
+        real,             allocatable :: boxdata(:,:)
         character(len=:), allocatable :: fbody_here, ext, star_fname
         character(len=LONGSTRLEN)     :: rel_fname
         real    :: ldim4patch(2), goodnessoffit(2), scale, bfac_here
-        integer :: ldim(3), ldim_thumb(3)
+        integer :: ldim(3), ldim_thumb(3), iptcl
         logical :: patch_success, l_tseries
         patch_success = .false.
         l_tseries = .false.
@@ -100,8 +102,23 @@ contains
         case('iso','wpatch','poly')
             if( params_glob%tomo.eq.'yes' ) THROW_HARD('TOMO unsupported')
             write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
-            call motion_correct_dev(self%moviename, ctfvars, self%moviesum, self%moviesum_corrected,&
-                &self%moviesum_ctf, patch_success, goodnessoffit(1), gainref=gainref_fname)
+            if( cline%defined('boxfile') )then
+                if( file_exists(params_glob%boxfile) )then
+                    if( nlines(params_glob%boxfile) > 0 )then
+                        call boxfile%new(params_glob%boxfile, 1)
+                        allocate( boxdata(boxfile%get_ndatalines(),boxfile%get_nrecs_per_line()))
+                        do iptcl=1,boxfile%get_ndatalines()
+                            call boxfile%readNextDataLine(boxdata(iptcl,:))
+                        end do
+                        call boxfile%kill
+                    endif
+                endif
+                call motion_correct_dev(self%moviename, ctfvars, self%moviesum, self%moviesum_corrected,&
+                    &self%moviesum_ctf, patch_success, goodnessoffit(1), gainref=gainref_fname, boxdata=boxdata)
+            else
+                call motion_correct_dev(self%moviename, ctfvars, self%moviesum, self%moviesum_corrected,&
+                    &self%moviesum_ctf, patch_success, goodnessoffit(1), gainref=gainref_fname)
+            endif
             ! STAR output
             if( .not. l_tseries ) call motion_correct_write2star(star_fname, self%moviename, patch_success, gainref_fname)
             call motion_correct_iso_kill
