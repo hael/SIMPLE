@@ -10,7 +10,6 @@ use simple_opt_image_weights,             only: opt_image_weights
 use simple_image,                         only: image
 use simple_eer_factory,                   only: eer_decoder
 use simple_parameters,                    only: params_glob
-use simple_opt_lbfgsb,                    only: PRINT_NEVALS
 implicit none
 
 ! Stage drift
@@ -153,6 +152,23 @@ contains
             if( .not.file_exists(gainref) )then
                 THROW_HARD('gain reference: '//trim(gainref)//' not found; motion_correct_init')
             endif
+        endif
+        if( L_BENCH )then
+            rt_read = 0.
+            rt_cure = 0.
+            rt_forctf = 0.
+            rt_mic = 0.
+            rt_fft_clip = 0.
+            rt_patched = 0.
+            rt_patched_forctf = 0.
+            rt_patched_mic = 0.
+            rt_aniso_align = 0.
+            rt_correct_iso_init = 0.
+            rt_correct_iso_transfmat = 0.
+            rt_correct_iso_align = 0.
+            rt_dose = 0.
+            rt_new = 0.
+            rt_align_poly = 0.
         endif
         ! allocate & read frames
         if( l_eer )then
@@ -533,7 +549,6 @@ contains
         call motion_patch%new(params_glob%scale*params_glob%trs)
         write(logfhandle,'(A,I2,A3,I2,A1)') '>>> PATCH-BASED REFINEMENT (',&
             &params_glob%nxpatch,' x ',params_glob%nypatch,')'
-        PRINT_NEVALS = .false.
         call motion_patch%set_fitshifts(FITSHIFTS)
         call motion_patch%set_frameweights(frameweights)
         call motion_patch%set_fixed_frame(fixed_frame)
@@ -600,7 +615,7 @@ contains
     !!!!!!!!!!!!!!!!!!!!!!!!!
     !> motion_correction of DDD movie
     subroutine motion_correct_dev( movie_stack_fname, ctfvars, movie_sum, movie_sum_corrected,&
-            &movie_sum_ctf, aniso_success, poly_rmsd, gainref )
+            &movie_sum_ctf, aniso_success, poly_rmsd, gainref, boxdata )
         use simple_motion_align_poly, only: motion_align_poly
         character(len=*),           intent(in)    :: movie_stack_fname  !< input filename of stack
         type(ctfparams),            intent(inout) :: ctfvars            !< CTF params
@@ -608,6 +623,7 @@ contains
         logical,                    intent(out)   :: aniso_success
         real,                       intent(out)   :: poly_rmsd
         character(len=*), optional, intent(in)    :: gainref            !< gain reference filename
+        real,             optional, intent(in)    :: boxdata(:,:)
         type(motion_align_poly)    :: align_obj
         real, allocatable         :: iso_shifts(:,:)
         real(dp)                  :: star_polyn(36)
@@ -630,10 +646,9 @@ contains
         enddo
         !$omp end parallel do
         if( err ) return
-        if( L_BENCH ) t_correct_iso_init = tic()
         call align_obj%new(movie_frames_scaled, fixed_frame)
         call align_obj%gen_patches_dimensions
-        call align_obj%gen_tiles
+        call align_obj%gen_tiles(boxdata)
         if( l_BENCH ) rt_correct_iso_init = toc(t_correct_iso_init)
         if( L_BENCH ) t_ = tic()
         call align_obj%align(params_glob%algorithm, poly_rmsd, aniso_success, patched_polyn, star_polyn)
@@ -683,9 +698,7 @@ contains
         call align_obj%kill
         if( L_BENCH )then
             print *,'rt_iso_init   : ',rt_correct_iso_init
-            print *,'rt_iso_align  : ',rt_correct_iso_align
             print *,'rt_aniso_align: ',rt_aniso_align
-            print *,'rt_align_poly : ',rt_align_poly
         endif
     end subroutine motion_correct_dev
 
