@@ -483,10 +483,10 @@ program simple_test_chiara_try
    use simple_nano_utils
    use simple_atoms, only : atoms
    use simple_lattice_fitting, only : test_lattice_fit
-   !use simple_strain_mapping,  only : test_strain_analysis
+   use simple_strain_mapping,  only : test_strain_analysis
 
-   call test_lattice_fit()
-   !call test_strain_analysis()
+   ! call test_lattice_fit()
+   call test_strain_analysis()
 
 end program simple_test_chiara_try
 
