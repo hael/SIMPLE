@@ -19,36 +19,32 @@ contains
 
 ! ATTENTION: input coords of model have to be in ANGSTROMS.
 subroutine strain_analysis(model,a)
-  real, intent(inout) :: model(:,:)
-  real, intent(inout) :: a(3)        ! fitted lattice parameter
-  real, parameter     :: H = 2.      ! for Weighted KDE differentiation
-  real, parameter     :: Pt_a = 3.92 ! ideal
-  integer, parameter  :: NITER = 30
+  real, intent(inout)  :: model(:,:)
+  real, intent(inout)  :: a(3)        ! fitted lattice parameter
+  real, parameter      :: H = 2.      ! for Weighted KDE differentiation
+  real, parameter      :: Pt_a = 3.92 ! ideal
+  integer, parameter   :: NITER = 30
+  integer, allocatable :: modelCstart(:)
+  real, allocatable :: abc(:,:), modelFromABC(:,:), modelC(:,:), modelCS(:,:), modelU(:,:), modelU_spherical(:,:)
+  real, allocatable :: eXX(:),eYY(:),eZZ(:),eXY(:),eYZ(:),eXZ(:),list_displacement(:,:)
+  real, allocatable :: list_eXX(:,:),list_eYY(:,:),list_eZZ(:,:),list_eXY(:,:),list_eYZ(:,:),list_eXZ(:,:)
+  real, allocatable :: list_eRR(:,:), list_Ux(:,:), list_Uy(:,:), list_Uz(:,:)
+  real, allocatable :: r_CS(:),r_C(:), theta_CS(:),theta_C(:),phi_CS(:),phi_C(:), eRR(:)
   real (kind = 8) p0(3, size(model,dim=2))
   real    :: cMin(3), cMax(3), cMid(3), centerAtomCoords(3),origin0(3), origin(3)
-  real    :: dist, dist_temp
-  real    :: avgNNRR, avgD, subK, k
-  real    :: rMax, rMin
-  real    :: u0(3),v0(3),w0(3),u(3),v(3),w(3),uN(3),vN(3),wN(3),xyzbeta(4,3)
-  integer :: iloop,natoms,iatom,centerAtom,i,ii,filnum,n
-  logical :: areNearest(size(model,dim=2))
-  real    :: angleUV, angleUW, angleVW, xRes0, yRes0, zRes0
-  ! New variables
-  real, allocatable :: abc(:,:), modelFromABC(:,:), modelC(:,:), modelCS(:,:), modelU(:,:), list_displacement(:,:)
-  real :: dx, dy, dz, x_local, y_local, z_local, x2_local, y2_local, z2_local, Ux_local, Uy_local, Uz_local
-  real :: uvwN0(3,3)
-  integer, allocatable :: modelCstart(:)
-  ! qr solve
-  real (kind = 8) , allocatable :: A_matrix(:,:), x2(:),x2_ref(:)
-  real (kind = 8) b(3), uvw(3,3)
-  ! big loop, core code
-  real, allocatable :: eXX(:),eYY(:),eZZ(:),eXY(:),eYZ(:),eXZ(:),list_eXX(:,:),list_eYY(:,:),list_eZZ(:,:),list_eXY(:,:),list_eYZ(:,:),list_eXZ(:,:)
-  real    :: coord(3), ref(3), Strain_local
+  real    :: dist, dist_temp, avgNNRR, avgD, subK, k, rMax, rMin
+  real    :: u0(3),v0(3),w0(3),u(3),v(3),w(3)
+  real    :: dx, dy, dz, x_local, y_local, z_local, x2_local, y2_local, z2_local, Ux_local, Uy_local, Uz_local
+  real    :: uvwN0(3,3),coord(3), ref(3), Strain_local, r_local
   real    :: plusx_local, plusy_local, plusz_local, minusx_local, minusy_local, minusz_local
+  real    :: plusR_local, minusR_local, plust_local, minust_local, plusp_local, minusp_local
   real    :: Ux_plusx_local, Ux_minusx_local, Ux_plusy_local, Ux_minusy_local, Ux_plusz_local, Ux_minusz_local
   real    :: Uy_plusx_local, Uy_minusx_local, Uy_plusy_local, Uy_minusy_local, Uy_plusz_local, Uy_minusz_local
   real    :: Uz_plusx_local, Uz_minusx_local, Uz_plusy_local, Uz_minusy_local, Uz_plusz_local, Uz_minusz_local
-  real    :: K1, K2, K3, K4, K5, K6
+  real    :: UR_plusR_local, UR_minusR_local, Ut_plusR_local, Ut_minusR_local, Up_plusR_local, Up_minusR_local
+  real    :: K1, K2, K3, K4, K5, K6, dR, dR_final
+  integer :: natoms,iatom,centerAtom,i,ii,filnum,n
+  logical :: areNearest(size(model,dim=2))
   logical :: plusx_surface, minusx_surface, plusy_surface, minusy_surface, plusz_surface, minusz_surface
   ! sanity check
   if(size(model,dim=1) /=3 ) then
@@ -56,15 +52,13 @@ subroutine strain_analysis(model,a)
     stop
   endif
   natoms=size(model,dim=2)
+  !Supercell size
   cMin = minval(model,dim=2)
   cMax = maxval(model,dim=2)
   cMid = (cMax-cMin)/2.+cMin
-  print *, 'natoms ', natoms
-  print *, 'cMin ', cMin
-  print *, 'cMax ', cMax
-  print *, 'cMid ', cMid
   dist_temp = HUGE(dist_temp)
   centerAtom = 0
+  !Find the center atom
   do iatom=1,natoms
       dist = euclid(model(:,iatom), cMid)
       if(dist < dist_temp) then
@@ -73,7 +67,7 @@ subroutine strain_analysis(model,a)
       endif
   enddo
   centerAtomCoords =  model(:,centerAtom)
-  print *, 'centerAtom ', centerAtom, 'centerAtomCoords ', centerAtomCoords
+  ! Find the nearest neighbors of the center atom
   rMax = 3.5
   rMin = 0.
   areNearest = .false.
@@ -87,22 +81,17 @@ subroutine strain_analysis(model,a)
   enddo
   avgNNRR = avgNNRR/real(count(areNearest))
   avgD = sqrt(avgNNRR**2/2.)
-  print *, 'avgNNRR ',avgNNRR ,'avgD ', avgD
   p0      = model ! copy of the original model
   origin0 = centerAtomCoords
   subK    = 0.5
+  !Find the value to plug into u0,v0 and w0
   k       = avgD/subK
-  print *, 'k ', k
   u0 = [k,0.,0.]
   v0 = [0.,k,0.]
   w0 = [0.,0.,k]
   u0 = u0*subK
   v0 = v0*subK
   w0 = w0*subK
-
-  xRes0=1e6
-  yRes0=1e6
-  zRes0=1e6
 
   ! keep copies
   origin = origin0
@@ -114,7 +103,6 @@ subroutine strain_analysis(model,a)
   abc(1,:) = (model(1,:)-origin(1))/(a(1)/2.)
   abc(2,:) = (model(2,:)-origin(2))/(a(2)/2.)
   abc(3,:) = (model(3,:)-origin(3))/(a(3)/2.)
-  print *, 'abc(1:3,1:3): ', abc(1,1:3), 'abc(1,natoms-3:natoms): ', abc(1,natoms-3:natoms)
 
   dx = a(1)
   dy = a(2)
@@ -122,10 +110,9 @@ subroutine strain_analysis(model,a)
 
   ! Expected Pt FCC lattice parameters as uvw matrix
   uvwN0 = 0.
-  uvwN0(1,1) = Pt_a/2. ! times 3????
+  uvwN0(1,1) = Pt_a/2.
   uvwN0(2,2) = Pt_a/2.
   uvwN0(3,3) = Pt_a/2.
-  print *, 'uvwN0: ', uvwN0
   allocate(modelFromABC(natoms,3), modelC(natoms,3), modelCS(natoms,3), modelU(natoms,3))
   ! Use perfect Pt FCC lattice and remove bad points
   modelFromABC = matmul(transpose(nint(abc)),uvwN0) ! create real positions from the fit; centered at the center atom
@@ -152,37 +139,18 @@ subroutine strain_analysis(model,a)
     list_displacement(i,6) = Uz_local
   enddo
 
-
-  ! print *, 'List displacements: ', list_displacement
-
   call fopen(filnum, file='displacement.txt')
   do i = 1, natoms
     write(filnum,*) list_displacement(i,:)
   enddo
   call fclose(filnum)
-
   ! Start of lattice
   allocate(modelCstart(1), source = 0)
   modelCstart(:) = minloc(sqrt(sum(modelC**2, dim=2)))
-
   write(logfhandle,*) 'Origin for strain calculation, atom #', modelCstart, 'at ', modelC(modelCstart,:)
   write(logfhandle,*) 'Origin Strain ', modelU(modelCstart, :)
-
-  ! VERIFIED IT IS CORRECT UP TO HERE
-  ! modelFromABC, modelC, modelCS and modelU are CORRECT!
-  ! do iatom = 1, 3
-  !   print *, modelFromABC(iatom,:)
-  !   print *, ' // '
-  ! enddo
-  ! print *, '...'
-  ! do iatom = natoms-2, natoms
-  !   print *, modelFromABC(iatom,:)
-  !   print *, ' // '
-  ! enddo
-
   !allocation
   allocate(eXX(natoms), eYY(natoms), eZZ(natoms), eXY(natoms), eYZ(natoms), eXZ(natoms), source = 0.)
-  print *, '**********************************************************'
   ! main loop
   do i = 1, natoms
     dx=a(1)
@@ -234,7 +202,6 @@ subroutine strain_analysis(model,a)
       y2_local = modelCS(ii,2)
       z2_local = modelCS(ii,3)
 
-
       coord(:) = [x2_local,y2_local,z2_local]
       ref(:)   = [x_local+dx/2.,y_local,z_local]
       call gaussian_kernel(coord,ref,h,K1)
@@ -243,8 +210,6 @@ subroutine strain_analysis(model,a)
       Uz_plusx_local = Uz_plusx_local + modelU(ii,3)*K1
       plusx_local    = plusx_local + K1
 
-
-      coord(:) = [x2_local,y2_local,z2_local]
       ref(:)   = [x_local-dx/2.,y_local,z_local]
       call gaussian_kernel(coord,ref,h,K2)
       Ux_minusx_local = Ux_minusx_local + modelU(ii,1)*K2
@@ -333,7 +298,6 @@ subroutine strain_analysis(model,a)
 
   allocate(list_eXX(natoms,4),list_eYY(natoms,4),list_eZZ(natoms,4),list_eXY(natoms,4),list_eYZ(natoms,4),list_eXZ(natoms,4))
   n = 0
-
   do i = 1,natoms
     x_local = modelCS(i,1) + origin(1)
     y_local = modelCS(i,2) + origin(2)
@@ -358,14 +322,94 @@ subroutine strain_analysis(model,a)
       endif
     enddo
   enddo
-  print *, 'list_eXX(1:3,:)',list_eXX(1:3,:)
-  print *, 'list_eYY(1:3,:)',list_eYY(1:3,:)
-  print *, 'list_eZZ(1:3,:)',list_eZZ(1:3,:)
-  print *, 'list_eXY(1:3,:)',list_eXY(1:3,:)
-  print *, 'list_eYZ(1:3,:)',list_eYZ(1:3,:)
-  print *, 'list_eXZ(1:3,:)',list_eXZ(1:3,:)
-  write(logfhandle,*) n
   ! Calculate displacements
+  allocate(r_CS(natoms),r_C(natoms),theta_CS(natoms),theta_C(natoms),phi_CS(natoms),phi_C(natoms),source = 0.)
+  r_CS     = ((modelCS(:,1)**2+modelCS(:,2)**2+modelCS(:,3)**2)**0.5)+10.**(-10.)
+  r_C      = ((modelC(:,1)**2+modelC(:,2)**2+modelC(:,3)**2)**0.5)+10.**(-10.)
+  theta_CS = acos(modelCS(:,3)/r_CS)
+  theta_C  = acos(modelC(:,3)/r_C)
+  phi_CS   = atan(modelCS(:,1),modelCS(:,2)) ! in radians
+  phi_C    = atan(modelC(:,1),modelC(:,2))
+
+  allocate(modelU_spherical(natoms,3), source = 0.)
+  modelU_spherical(:,1) = r_CS-r_C
+  modelU_spherical(:,2) = theta_CS-theta_C
+  modelU_spherical(:,3) = phi_CS-phi_C
+  ! This uses the change in u and distance
+  dR = 2.
+  allocate(eRR(natoms), source = 0.)
+  do i = 1, natoms
+    x_local     = modelCS(i,1)
+    y_local     = modelCS(i,2)
+    z_local     = modelCS(i,3)
+    r_local     = r_CS(i)
+    plusR_local = 0.
+    minusR_local = 0.
+    plust_local = 0.
+    minust_local = 0.
+    plusp_local = 0.
+    minusp_local = 0.
+    UR_plusR_local = 0.
+    UR_minusR_local = 0.
+    do ii = 1, natoms
+      x2_local = modelCS(ii,1)
+      y2_local = modelCS(ii,2)
+      z2_local = modelCS(ii,3)
+
+      coord(:) = [x2_local,y2_local,z2_local]
+      ref(:)   = [x_local*(1.+dR/(2.*r_local)),y_local*(1.+dR/(2.*r_local)),z_local*(1.+dR/(2.*r_local))]
+      call gaussian_kernel(coord,ref,h,K1)
+      UR_plusR_local = UR_plusR_local + modelU_spherical(ii,1)*K1
+      Ut_plusR_local = Ut_plusR_local + modelU_spherical(ii,2)*K1
+      Up_plusR_local = Up_plusR_local + modelU_spherical(ii,3)*K1
+      plusR_local    = plusR_local + K1
+
+      ref(:)   = [x_local*(1.-dR/(2.*r_local)),y_local*(1.-dR/(2.*r_local)),z_local*(1.-dR/(2.*r_local))]
+      call gaussian_kernel(coord,ref,h,K2)
+      UR_minusR_local = UR_minusR_local + modelU_spherical(ii,1)*K2
+      Ut_minusR_local = Ut_minusR_local + modelU_spherical(ii,2)*K2
+      Up_minusR_local = Up_minusR_local + modelU_spherical(ii,3)*K2
+      minusR_local    = minusR_local + K2
+    enddo
+    dR_final = dR
+    eRR(i) = ((UR_plusR_local/plusR_local-UR_minusR_local/minusR_local)/dR_final)
+  enddo
+
+  allocate(list_eRR(natoms,4), source = 0.)
+  n = 0
+  do i = 1,natoms
+    x_local = modelCS(i,1) + origin(1)
+    y_local = modelCS(i,2) + origin(2)
+    z_local = modelCS(i,3) + origin(3)
+    ref = [x_local, y_local, z_local]
+    do ii = 1, natoms
+      coord = model(:,ii)
+      if(euclid(coord,ref) <0.1) then
+        n = n + 1
+        Strain_local   = eRR(i)*100.
+        list_eRR(i,:) = [x_local,y_local,z_local,Strain_local]
+        endif
+      enddo
+  enddo
+
+  allocate(list_Ux(natoms,4), list_Uy(natoms,4), list_Uz(natoms,4), source = 0.)
+  n = 0
+  do i = 1, natoms
+    x_local = modelCS(i,1) + origin(1)
+    y_local = modelCS(i,2) + origin(2)
+    z_local = modelCS(i,3) + origin(3)
+    ref = [x_local, y_local, z_local]
+    do ii = 1, natoms
+      coord = model(:,ii)
+      if(euclid(coord,ref) <0.1) then
+        n = n + 1
+        list_Ux(i,:) = [x_local,y_local,z_local,modelU(i,1)]
+        list_Uy(i,:) = [x_local,y_local,z_local,modelU(i,2)]
+        list_Uz(i,:) = [x_local,y_local,z_local,modelU(i,3)]
+        endif
+      enddo
+  enddo
+
 contains
 
   subroutine gaussian_kernel(coord, ref, h, K)
@@ -376,29 +420,13 @@ contains
     u = euclid(coord,ref)/h
     K = exp(-0.5*(u**2))
   end subroutine gaussian_kernel
-
-    ! subroutine D(coord,coord2,D2)
-    !   real, intent(inout) :: coord(:), coord2(3) !input
-    !   real, intent(inout) :: D2                  !output
-    !   integer :: dimension, i
-    !   real    :: x
-    !   coord2(:) = 0. ! set value, for this scope
-    !   dimension = minval(size(coord), size(coord2))
-    !   D2 = 0. ! initialise
-    !   do i = 1, dimension
-    !     x = coord(i) - coord2(i)
-    !     D2 = D2 + x**2
-    !   enddo
-    !   D2 = sqrt(D2) ! return
-    ! end subroutine D
 end subroutine strain_analysis
 
 
 subroutine test_strain_analysis()
   real, allocatable  :: model(:,:)
-  integer            :: i
   character(len=100) :: fname
-  real :: a(3), d
+  real :: a(3)
 
   ! In my laptop's folder Desktop/Nanoparticles/StrainAnalysis/Code_Packages_for_Chiara
   fname='model_coordinates_strain_mapping.txt'
@@ -408,7 +436,6 @@ subroutine test_strain_analysis()
   a(2) = 3.970
   a(3) = 3.968
   call strain_analysis(model,a)
-
 
 contains
 
