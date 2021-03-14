@@ -8,7 +8,7 @@
 module simple_strain_mapping
   use simple_fileio
   use simple_math
-  use simple_atoms,    only : atoms
+  use simple_atoms,only : atoms
   use simple_lattice_fitting
   implicit none
 
@@ -46,6 +46,10 @@ subroutine strain_analysis(model,a)
   integer :: natoms,iatom,centerAtom,i,ii,filnum,n
   logical :: areNearest(size(model,dim=2))
   logical :: plusx_surface, minusx_surface, plusy_surface, minusy_surface, plusz_surface, minusz_surface
+  type(atoms) :: Exx_strain,Eyy_strain,Ezz_strain,Exy_strain,Eyz_strain,Exz_strain, Err_strain
+  type(atoms) :: Ux_atoms, Uy_atoms, Uz_atoms
+  character(len=4), parameter :: ATOM_NAME = ' Pt '
+  character(len=2), parameter :: ELEMENT= 'Pt'
   ! sanity check
   if(size(model,dim=1) /=3 ) then
     write(logfhandle,*) 'Wrong input coordinates! fit_lattice'
@@ -297,6 +301,13 @@ subroutine strain_analysis(model,a)
   enddo
 
   allocate(list_eXX(natoms,4),list_eYY(natoms,4),list_eZZ(natoms,4),list_eXY(natoms,4),list_eYZ(natoms,4),list_eXZ(natoms,4))
+  ! Type atoms to write down pdb files
+  call Exx_strain%new(natoms, dummy=.true.)
+  call Eyy_strain%new(natoms, dummy=.true.)
+  call Ezz_strain%new(natoms, dummy=.true.)
+  call Exy_strain%new(natoms, dummy=.true.)
+  call Eyz_strain%new(natoms, dummy=.true.)
+  call Exz_strain%new(natoms, dummy=.true.)
   n = 0
   do i = 1,natoms
     x_local = modelCS(i,1) + origin(1)
@@ -321,7 +332,57 @@ subroutine strain_analysis(model,a)
         list_eXZ(i,:)  = [x_local,y_local,z_local,Strain_local]
       endif
     enddo
+    ! Write down on a pdb file
+    ! Exx strain
+    call Exx_strain%set_name(i,ATOM_NAME)
+    call Exx_strain%set_element(i,ELEMENT)
+    call Exx_strain%set_coord(i,list_eXX(i,1:3))
+    call Exx_strain%set_beta(i,list_eXX(i,4))
+    call Exx_strain%set_resnum(i,i)
+    ! Eyy strain
+    call Eyy_strain%set_name(i,ATOM_NAME)
+    call Eyy_strain%set_element(i,ELEMENT)
+    call Eyy_strain%set_coord(i,list_eYY(i,1:3))
+    call Eyy_strain%set_beta(i,list_eYY(i,4))
+    call Eyy_strain%set_resnum(i,i)
+    ! Ezz strain
+    call Ezz_strain%set_name(i,ATOM_NAME)
+    call Ezz_strain%set_element(i,ELEMENT)
+    call Ezz_strain%set_coord(i,list_eZZ(i,1:3))
+    call Ezz_strain%set_beta(i,list_eZZ(i,4))
+    call Ezz_strain%set_resnum(i,i)
+    ! Exy strain
+    call Exy_strain%set_name(i,ATOM_NAME)
+    call Exy_strain%set_element(i,ELEMENT)
+    call Exy_strain%set_coord(i,list_eXY(i,1:3))
+    call Exy_strain%set_beta(i,list_eXY(i,4))
+    call Exy_strain%set_resnum(i,i)
+    ! Eyz strain
+    call Eyz_strain%set_name(i,ATOM_NAME)
+    call Eyz_strain%set_element(i,ELEMENT)
+    call Eyz_strain%set_coord(i,list_eYZ(i,1:3))
+    call Eyz_strain%set_beta(i,list_eYZ(i,4))
+    call Eyz_strain%set_resnum(i,i)
+    ! Exz strain
+    call Exz_strain%set_name(i,ATOM_NAME)
+    call Exz_strain%set_element(i,ELEMENT)
+    call Exz_strain%set_coord(i,list_eXZ(i,1:3))
+    call Exz_strain%set_beta(i,list_eXZ(i,4))
+    call Exz_strain%set_resnum(i,i)
   enddo
+  call Exx_strain%writepdb('Exx_strain')
+  call Eyy_strain%writepdb('Eyy_strain')
+  call Ezz_strain%writepdb('Ezz_strain')
+  call Exy_strain%writepdb('Exy_strain')
+  call Eyz_strain%writepdb('Eyz_strain')
+  call Exz_strain%writepdb('Exz_strain')
+  ! kill
+  call Exx_strain%kill
+  call Eyy_strain%kill
+  call Ezz_strain%kill
+  call Exy_strain%kill
+  call Eyz_strain%kill
+  call Exz_strain%kill
   ! Calculate displacements
   allocate(r_CS(natoms),r_C(natoms),theta_CS(natoms),theta_C(natoms),phi_CS(natoms),phi_C(natoms),source = 0.)
   r_CS     = ((modelCS(:,1)**2+modelCS(:,2)**2+modelCS(:,3)**2)**0.5)+10.**(-10.)
@@ -376,6 +437,7 @@ subroutine strain_analysis(model,a)
   enddo
 
   allocate(list_eRR(natoms,4), source = 0.)
+  call Err_strain%new(natoms, dummy=.true.)
   n = 0
   do i = 1,natoms
     x_local = modelCS(i,1) + origin(1)
@@ -390,9 +452,20 @@ subroutine strain_analysis(model,a)
         list_eRR(i,:) = [x_local,y_local,z_local,Strain_local]
         endif
       enddo
+      ! Write down on a pdb file
+      ! Err strain
+      call Err_strain%set_name(i,ATOM_NAME)
+      call Err_strain%set_element(i,ELEMENT)
+      call Err_strain%set_coord(i,list_eRR(i,1:3))
+      call Err_strain%set_beta(i,list_eRR(i,4))
+      call Err_strain%set_resnum(i,i)
   enddo
-
+  call Err_strain%writepdb('Err_strain')
+  call Err_strain%kill
   allocate(list_Ux(natoms,4), list_Uy(natoms,4), list_Uz(natoms,4), source = 0.)
+  call Ux_atoms%new(natoms, dummy=.true.)
+  call Uy_atoms%new(natoms, dummy=.true.)
+  call Uz_atoms%new(natoms, dummy=.true.)
   n = 0
   do i = 1, natoms
     x_local = modelCS(i,1) + origin(1)
@@ -408,8 +481,33 @@ subroutine strain_analysis(model,a)
         list_Uz(i,:) = [x_local,y_local,z_local,modelU(i,3)]
         endif
       enddo
+      ! Write down on a pdb file
+      ! Ux
+      call Ux_atoms%set_name(i,ATOM_NAME)
+      call Ux_atoms%set_element(i,ELEMENT)
+      call Ux_atoms%set_coord(i,list_Ux(i,1:3))
+      call Ux_atoms%set_beta(i,list_Ux(i,4))
+      call Ux_atoms%set_resnum(i,i)
+      ! Uy
+      call Uy_atoms%set_name(i,ATOM_NAME)
+      call Uy_atoms%set_element(i,ELEMENT)
+      call Uy_atoms%set_coord(i,list_Uy(i,1:3))
+      call Uy_atoms%set_beta(i,list_Uy(i,4))
+      call Uy_atoms%set_resnum(i,i)
+      ! Uz
+      call Uz_atoms%set_name(i,ATOM_NAME)
+      call Uz_atoms%set_element(i,ELEMENT)
+      call Uz_atoms%set_coord(i,list_Uz(i,1:3))
+      call Uz_atoms%set_beta(i,list_Uz(i,4))
+      call Uz_atoms%set_resnum(i,i)
   enddo
-
+  call Ux_atoms%writepdb('Ux')
+  call Uy_atoms%writepdb('Uy')
+  call Uz_atoms%writepdb('Uz')
+  ! kill
+  call Ux_atoms%kill
+  call Uy_atoms%kill
+  call Uz_atoms%kill
 contains
 
   subroutine gaussian_kernel(coord, ref, h, K)
