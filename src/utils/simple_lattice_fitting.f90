@@ -14,7 +14,7 @@ module simple_lattice_fitting
   use simple_np_coordination_number, only : run_coord_number_analysis
   implicit none
 
-  public :: test_lattice_fit, find_radius_for_coord_number, fit_lattice
+  public :: test_lattice_fit1, test_lattice_fit, find_radius_for_coord_number, fit_lattice
   private
 
   logical, parameter :: DEBUG = .false.
@@ -44,7 +44,6 @@ contains
 subroutine fit_lattice(model,a)
   real, intent(inout) :: model(:,:)
   real, intent(inout) :: a(3) ! fitted lattice parameter
-  integer, parameter  :: NITER = 30
   real (kind = 8) p0(3, size(model,dim=2))
   real    :: cMin(3), cMax(3), cMid(3), centerAtomCoords(3),origin0(3), origin(3)
   real    :: dist, dist_temp, avgNNRR, avgD, subK, k
@@ -86,7 +85,7 @@ subroutine fit_lattice(model,a)
   areNearest = .false.
   avgNNRR = 0.
   do iatom=1,natoms
-    ! dist = euclid(model(:,iatom),centerAtomCoords(:))
+       ! dist = euclid(model(:,iatom),centerAtomCoords(:))
       dist = euclid(model(:,iatom),cMid(:)) ! ALREADY CHANGED
       if(dist < rMax .and. dist > rMin) then ! >rMin not to count the atom itself
         areNearest(iatom) = .true.
@@ -116,29 +115,27 @@ subroutine fit_lattice(model,a)
   if(DEBUG) write(logfhandle,*) 'u v w ', u, v, w
   if(DEBUG) write(logfhandle,*) 'origin ', origin
   ! LOOP
-   do iloop =1,NITER+1 !indexes start from 0 in Python
-      uvw(1,:) = u
-      uvw(2,:) = v
-      uvw(3,:) = w
-      do iatom = 1,natoms
-        b(:) = (p0(:,iatom)-origin(:))/subK
-        call qr(uvw,b,x2)
-        x2 = x2 * subK
-        !A_matrix(iatom,1)= 1. for initiation
-        A_matrix(iatom,2) = nint(x2(1))
-        A_matrix(iatom,3) = nint(x2(2))
-        A_matrix(iatom,4) = nint(x2(3))
-      enddo
-      ! Refine lattice
-      do i = 1, size(p0,1) ! 3
-          call qr(A_matrix,p0(i,:),x2_ref)
-          xyzbeta(:,i) = x2_ref
-      enddo
-      origin = xyzbeta(1,:)
-      u = xyzbeta(2,:)
-      v = xyzbeta(3,:)
-      w = xyzbeta(4,:)
-   enddo
+  uvw(1,:) = u
+  uvw(2,:) = v
+  uvw(3,:) = w
+  do iatom = 1,natoms
+    b(:) = (p0(:,iatom)-origin(:))/subK
+    call qr(uvw,b,x2)
+    x2 = x2 * subK
+    !A_matrix(iatom,1)= 1. for initiation
+    A_matrix(iatom,2) = nint(x2(1))
+    A_matrix(iatom,3) = nint(x2(2))
+    A_matrix(iatom,4) = nint(x2(3))
+  enddo
+  ! Refine lattice
+  do i = 1, size(p0,1) ! 3
+      call qr(A_matrix,p0(i,:),x2_ref)
+      xyzbeta(:,i) = x2_ref
+  enddo
+  origin = xyzbeta(1,:)
+  u = xyzbeta(2,:)
+  v = xyzbeta(3,:)
+  w = xyzbeta(4,:)
    ! normalize vectors
    uN = u/norm2(u)
    vN = v/norm2(v)
@@ -164,7 +161,43 @@ subroutine fit_lattice(model,a)
    a(3) = 2.*norm2(w)
 end subroutine fit_lattice
 
-subroutine test_lattice_fit()
+subroutine test_lattice_fit(pdbfile)
+  character(len=*), intent(inout) :: pdbfile ! file containing the atomic positions
+  real, allocatable  :: model(:,:)
+  integer            :: i, n
+  real :: a(3), d
+  type(atoms) :: atomic_pos
+  call atomic_pos%new(pdbfile)
+  n = atomic_pos%get_n() ! number of atoms
+  allocate(model(3,n), source = 0.)
+  do i = 1,n
+    model(:,i) = atomic_pos%get_coord(i)
+  enddo
+  call fit_lattice(model,a)
+  call find_radius_for_coord_number(a,d)
+  call run_coord_number_analysis(model, d)
+  call atomic_pos%kill
+
+contains
+
+  subroutine read_3Dcoord( fname, vals )
+         character(len=*),  intent(in)  :: fname    !< input filename
+         real, allocatable, intent(out) :: vals(:,:) !< array of values
+         integer :: nl, funit, iline,io_stat
+         nl = nlines(trim(fname))
+         call fopen(funit,fname,'old','unknown',io_stat)
+         call fileiochk("read_table failed to open file "//trim(fname),io_stat )
+         allocate( vals(3,nl), stat=alloc_stat )
+         if(alloc_stat /= 0) call allocchk ('In: read_filetable; simple_fileio  ', alloc_stat)
+         do iline=1,nl
+             read(funit,*) vals(1,iline), vals(2,iline), vals(3,iline)
+         end do
+         call fclose(funit,io_stat)
+         call fileiochk("read_filetable failed to close",io_stat)
+     end subroutine read_3Dcoord
+end subroutine test_lattice_fit
+
+subroutine test_lattice_fit1()
   real, allocatable  :: model(:,:)
   integer            :: i
   character(len=100) :: fname
@@ -193,7 +226,7 @@ contains
          call fclose(funit,io_stat)
          call fileiochk("read_filetable failed to close",io_stat)
      end subroutine read_3Dcoord
-end subroutine test_lattice_fit
+end subroutine test_lattice_fit1
 
 ! CN of an atom is calculated as the number of neighboring atoms within specific distance d
 ! 	d=(d_1+d_2)/2, where
