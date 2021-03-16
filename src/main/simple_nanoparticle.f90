@@ -629,7 +629,11 @@ contains
         integer :: loc(1)
         integer :: n_discard,filnum1
         integer :: label(1)
-        write(logfhandle, *) '****outliers discarding, init'
+        if(present(cs_thresh)) then
+          write(logfhandle, *) '****outliers discarding cs, init'
+        else
+          write(logfhandle, *) '****outliers discarding, init'
+        endif
 
         call fopen(filnum1, file='AtomsCoordInPxls.txt')
         write(filnum1,*) self%centers
@@ -656,6 +660,11 @@ contains
           n_discard = count(contact_scores<cs_thresh) !unnecessary
         else
           n_discard = nint(self%n_cc*PERCENT_DISCARD)
+        endif
+        if(present(cs_thresh)) then
+           write(logfhandle, *) 'Numbers of atoms discarded because of low cs ', n_discard
+        else
+          write(logfhandle, *) 'Numbers of atoms discarded because outliers ', n_discard
         endif
         allocate(self%contact_scores(self%n_cc-n_discard), source = 0)
         call self%img_cc%get_imat(imat_cc)
@@ -697,7 +706,11 @@ contains
             enddo
             self%contact_scores(cc) = cnt - 1 !-1 because while loop counts one extra before exiting
         enddo
-        write(logfhandle, *) '****outliers discarding, completed'
+        if(present(cs_thresh)) then
+          write(logfhandle, *) '****outliers discarding cs, completed'
+        else
+          write(logfhandle, *) '****outliers discarding, completed'
+        endif
     end subroutine discard_outliers
 
     ! This subrouitne validates the identified atomic positions
@@ -2234,16 +2247,21 @@ contains
     ! Detect atoms. User does NOT input threshold for binarization..
     ! User might have inputted threshold for outliers
     ! removal based on contact score.
-    subroutine identify_atomic_pos(self, cn_thresh)
+    subroutine identify_atomic_pos(self, csn_thresh, cn_cs )
       class(nanoparticle), intent(inout) :: self
-      integer, optional,   intent(in)    :: cn_thresh
+      integer,             intent(in)    :: csn_thresh
+      character(len=2),    intent(in)    :: cn_cs ! use contact score or coordination number?
       ! Phase correlations approach
       call self%phasecorrelation_nano_gaussian()
       ! Nanoparticle binarization
       call self%binarize_nano()
       ! Outliers discarding
-      if(present(cn_thresh)) then
-        call self%discard_outliers_cn(cn_thresh)
+      if(csn_thresh > 0) then
+        if(cn_cs .eq. 'cn') then
+          call self%discard_outliers_cn(csn_thresh)
+        else
+          call self%discard_outliers(csn_thresh)
+        endif
       else
         call self%discard_outliers()
       endif
@@ -2257,10 +2275,11 @@ contains
     ! No phasecorrelation filter is applied.
     ! User might have inputted threshold for outliers
     ! removal based on contact score.
-    subroutine identify_atomic_pos_thresh(self, thresh, cn_thresh)
+    subroutine identify_atomic_pos_thresh(self, thresh, csn_thresh, cn_cs)
       class(nanoparticle), intent(inout) :: self
       real,                intent(in)    :: thresh
-      integer, optional,   intent(in)    :: cn_thresh
+      integer,             intent(in)    :: csn_thresh
+      character(len=2),    intent(in)    :: cn_cs ! use contact score or coordination number?
       ! Nanoparticle binarization
       call self%img%binarize(thres=thresh,self_out=self%img_bin)
       call self%img_bin%set_imat()
@@ -2270,8 +2289,12 @@ contains
       ! Find atom centers
       call self%find_centers(self%img_bin, self%img_cc)
       ! Outliers discarding
-      if(present(cn_thresh)) then
-        call self%discard_outliers_cn(cn_thresh)
+      if(csn_thresh>0) then
+        if(cn_cs .eq. 'cn') then
+          call self%discard_outliers_cn(csn_thresh)
+        else
+          call self%discard_outliers(csn_thresh)
+        endif
       else
         call self%discard_outliers()
       endif

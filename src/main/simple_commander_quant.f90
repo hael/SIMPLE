@@ -74,6 +74,8 @@ contains
         class(cmdline),                intent(inout) :: cline !< command line input
         type(parameters)   :: params
         type(nanoparticle) :: nano
+        character(len=2)   :: cn_cs
+        integer            :: csn_thresh
         if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
@@ -86,17 +88,29 @@ contains
         ! volume soft-edge masking
         call nano%mask(params%msk)
         ! execute
-        if(cline%defined('thres')) then
+        if(cline%defined('thres')) then      ! threshold for binarization
           if(cline%defined('cs_thres')) then ! contact score threshold for outliers removal
-              call nano%identify_atomic_pos_thresh(params%thres, nint(params%cs_thres))
+              cn_cs = 'cs'
+              call nano%identify_atomic_pos_thresh(params%thres, nint(params%cs_thres), cn_cs)
+          elseif(cline%defined('cn_thres')) then
+              cn_cs = 'cn'
+              call nano%identify_atomic_pos_thresh(params%thres, nint(params%cn_thres), cn_cs)
           else
-              call nano%identify_atomic_pos_thresh(params%thres)
+              cn_cs = 'na'
+              csn_thresh = 0
+              call nano%identify_atomic_pos_thresh(params%thres, csn_thresh, cn_cs)
           endif
         else
           if(cline%defined('cs_thres')) then ! contact score threshold for outliers removal
-              call nano%identify_atomic_pos(nint(params%cs_thres))
+              cn_cs = 'cs'
+              call nano%identify_atomic_pos(nint(params%cs_thres), cn_cs)
+          elseif(cline%defined('cn_thres')) then
+              cn_cs = 'cn'
+              call nano%identify_atomic_pos(nint(params%cn_thres), cn_cs)
           else
-              call nano%identify_atomic_pos()
+              cn_cs = 'na'
+              csn_thresh = 0
+              call nano%identify_atomic_pos(csn_thresh,cn_cs)
           endif
         endif
         ! kill
