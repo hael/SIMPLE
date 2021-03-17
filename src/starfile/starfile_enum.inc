@@ -372,6 +372,10 @@
 
         enumerator :: EMDL_MICROGRAPH_EER_UPSAMPLING                   = 351
         enumerator :: EMDL_MICROGRAPH_EER_GROUPING                     = 352
+        enumerator :: EMDL_ORIENT_ORIGIN_X_ANGSTROM                    = 353
+        enumerator :: EMDL_ORIENT_ORIGIN_Y_ANGSTROM                    = 354
+        enumerator :: EMDL_ORIENT_ORIGIN_Z_ANGSTROM                    = 355
+        enumerator :: EMDL_MICROGRAPH_PIXEL_SIZE                       = 356
 
-        enumerator :: EMDL_LAST_LABEL                                  = 353 ! **** NOTE ****: Do keep this label always at the end
+        enumerator :: EMDL_LAST_LABEL                                  = 357 ! **** NOTE ****: Do keep this label always at the end
     end enum
