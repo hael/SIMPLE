@@ -482,14 +482,15 @@ program simple_test_chiara_try
    use simple_image, only : image
    use simple_nano_utils
    use simple_atoms, only : atoms
-   use simple_lattice_fitting, only : test_lattice_fit
+   use simple_lattice_fitting, only : run_lattice_fit
    use simple_strain_mapping,  only : test_strain_analysis
    character(len=100) :: pdbfile
+   real, allocatable :: model(:,:)
+   real :: a(3)
    ! In /Users/chiara/Desktop/Nanoparticles/StrainAnalysis/TestLatticeFit
    pdbfile= 'ptcl1new_atom_centers.pdb'
-   call test_lattice_fit(pdbfile)
-
-   ! call test_strain_analysis()
+   call run_lattice_fit(pdbfile, model,a)
+   ! call strain_analysis(model,a)
 
 end program simple_test_chiara_try
 
