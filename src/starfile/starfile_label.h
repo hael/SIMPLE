@@ -428,6 +428,10 @@ enum EMDLabel
 
     EMDL_MICROGRAPH_EER_UPSAMPLING,
     EMDL_MICROGRAPH_EER_GROUPING,
+    EMDL_ORIENT_ORIGIN_X_ANGSTROM,
+    EMDL_ORIENT_ORIGIN_Y_ANGSTROM,
+    EMDL_ORIENT_ORIGIN_Z_ANGSTROM,
+    EMDL_MICROGRAPH_PIXEL_SIZE,
 
     EMDL_LAST_LABEL                       // **** NOTE ****: Do keep this label always at the end
     // it is here for looping purposes
@@ -874,6 +878,10 @@ private:
 
         EMDL::addLabel(EMDL_MICROGRAPH_EER_UPSAMPLING, EMDL_INT, "rlnEERUpsampling", "EER upsampling ratio (1 = 4K, 2 = 8K)");
         EMDL::addLabel(EMDL_MICROGRAPH_EER_GROUPING, EMDL_INT, "rlnEERGrouping", "The number of hardware frames to group");
+        EMDL::addLabel(EMDL_ORIENT_ORIGIN_X_ANGSTROM, EMDL_DOUBLE, "rlnOriginXAngst", "X-coordinate (in Angstrom) for the origin of rotation");
+		EMDL::addLabel(EMDL_ORIENT_ORIGIN_Y_ANGSTROM, EMDL_DOUBLE, "rlnOriginYAngst", "Y-coordinate (in Angstrom) for the origin of rotation");
+		EMDL::addLabel(EMDL_ORIENT_ORIGIN_Z_ANGSTROM, EMDL_DOUBLE, "rlnOriginZAngst", "Z-coordinate (in Angstrom) for the origin of rotation");
+		EMDL::addLabel(EMDL_MICROGRAPH_PIXEL_SIZE, EMDL_DOUBLE, "rlnMicrographPixelSize", "Pixel size of (averaged) micrographs after binning in Angstrom/pixel.");
 
     }
 
