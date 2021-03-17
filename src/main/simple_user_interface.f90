@@ -157,6 +157,7 @@ type(simple_program), target :: simulate_particles
 type(simple_program), target :: simulate_subtomogram
 type(simple_program), target :: stack
 type(simple_program), target :: stackops
+type(simple_program), target :: strain_analysis
 type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
@@ -375,6 +376,7 @@ contains
         call new_simulate_subtomogram
         call new_stack
         call new_stackops
+        call new_strain_analysis
         call new_symaxis_search
         call new_symmetrize_map
         call new_symmetry_test
@@ -476,6 +478,7 @@ contains
         call push2prg_ptr_array(simulate_subtomogram)
         call push2prg_ptr_array(stack)
         call push2prg_ptr_array(stackops)
+        call push2prg_ptr_array(strain_analysis)
         call push2prg_ptr_array(symaxis_search)
         call push2prg_ptr_array(symmetrize_map)
         call push2prg_ptr_array(symmetry_test)
@@ -672,6 +675,8 @@ contains
                 ptr2prg => stack
             case('stackops')
                 ptr2prg => stackops
+            case('strain_analysis')
+                ptr2prg => strain_analysis
             case('symaxis_search')
                 ptr2prg => symaxis_search
             case('symmetrize_map')
@@ -777,6 +782,7 @@ contains
         write(logfhandle,'(A)') scale_project%name
         write(logfhandle,'(A)') stack%name
         write(logfhandle,'(A)') stackops%name
+        write(logfhandle,'(A)') strain_analysis%name
         write(logfhandle,'(A)') symaxis_search%name
         write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
@@ -3845,6 +3851,31 @@ contains
         ! computer controls
         call stackops%set_input('comp_ctrls', 1, nthr)
     end subroutine new_stackops
+
+    subroutine new_strain_analysis
+        ! PROGRAM SPECIFICATION
+        call strain_analysis%new(&
+        &'strain_analysis', &                                      ! name
+        &'strain_analysis perform the strain mapping of a model with the atomic positions in pdbfile',& ! descr_short
+        &'is a program for estimating the strain on a nanoparticle map with atomic positions in pdb file. Fit lattice,Generate ideal atoms,Calculate displacements,Use kernel density estimation,Differentiate continuous displacement field. ',& ! descr long
+        &'quant_exec',&                                        ! executable
+        &0, 1, 0, 0, 0, 0, 0, .false.)                          ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call strain_analysis%set_input('parm_ios', 1, 'pdbfile',  'file', 'PDB', 'Input coords file in PDB format',  'Input coords file in PDB format', .true., '')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_strain_analysis
 
     subroutine new_symaxis_search
         ! PROGRAM SPECIFICATION

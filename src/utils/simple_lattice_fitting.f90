@@ -14,7 +14,7 @@ module simple_lattice_fitting
   use simple_np_coordination_number, only : run_coord_number_analysis
   implicit none
 
-  public :: test_lattice_fit1, test_lattice_fit, find_radius_for_coord_number, fit_lattice
+  public :: test_lattice_fit1, run_lattice_fit, find_radius_for_coord_number, fit_lattice
   private
 
   logical, parameter :: DEBUG = .false.
@@ -161,11 +161,12 @@ subroutine fit_lattice(model,a)
    a(3) = 2.*norm2(w)
 end subroutine fit_lattice
 
-subroutine test_lattice_fit(pdbfile)
-  character(len=*), intent(inout) :: pdbfile ! file containing the atomic positions
-  real, allocatable  :: model(:,:)
+subroutine run_lattice_fit(pdbfile,model,a)
+  character(len=*),  intent(inout) :: pdbfile ! file containing the atomic positions
+  real,              intent(inout) :: a(3)    ! fitted lattice parameters
+  real, allocatable, intent(inout)  :: model(:,:)
   integer            :: i, n
-  real :: a(3), d
+  real :: d
   type(atoms) :: atomic_pos
   call atomic_pos%new(pdbfile)
   n = atomic_pos%get_n() ! number of atoms
@@ -174,28 +175,10 @@ subroutine test_lattice_fit(pdbfile)
     model(:,i) = atomic_pos%get_coord(i)
   enddo
   call fit_lattice(model,a)
-  call find_radius_for_coord_number(a,d)
-  call run_coord_number_analysis(model, d)
+  ! call find_radius_for_coord_number(a,d)
+  ! call run_coord_number_analysis(model, d)
   call atomic_pos%kill
-
-contains
-
-  subroutine read_3Dcoord( fname, vals )
-         character(len=*),  intent(in)  :: fname    !< input filename
-         real, allocatable, intent(out) :: vals(:,:) !< array of values
-         integer :: nl, funit, iline,io_stat
-         nl = nlines(trim(fname))
-         call fopen(funit,fname,'old','unknown',io_stat)
-         call fileiochk("read_table failed to open file "//trim(fname),io_stat )
-         allocate( vals(3,nl), stat=alloc_stat )
-         if(alloc_stat /= 0) call allocchk ('In: read_filetable; simple_fileio  ', alloc_stat)
-         do iline=1,nl
-             read(funit,*) vals(1,iline), vals(2,iline), vals(3,iline)
-         end do
-         call fclose(funit,io_stat)
-         call fileiochk("read_filetable failed to close",io_stat)
-     end subroutine read_3Dcoord
-end subroutine test_lattice_fit
+end subroutine run_lattice_fit
 
 subroutine test_lattice_fit1()
   real, allocatable  :: model(:,:)

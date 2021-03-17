@@ -16,6 +16,7 @@ type(nano_softmask_commander)          :: xnano_softmask
 type(geometry_analysis_commander)      :: xgeometry_analysis
 type(radial_sym_test_commander)        :: xrad_sym_tst
 type(plot_atom_commander)              :: xplot_atom
+type(strain_analysis_commander)        :: xstrain_analysis
 type(dock_coords_commander)            :: xdock_coords
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: xarg, prg, entire_line
@@ -55,6 +56,8 @@ select case(prg)
         call xrad_sym_tst%execute(cline)
     case('plot_atom')
         call xplot_atom%execute(cline)
+    case('strain_analysis')
+        call xstrain_analysis%execute(cline)
     case('dock_coords')
         call xdock_coords%execute(cline)
     case DEFAULT
