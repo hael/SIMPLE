@@ -1324,7 +1324,7 @@ contains
     !>  \brief is for gettign a part of the info in a SPIDER image header
     subroutine get_spifile_info( fname, ldim, iform, maxim, smpd, conv, doprint )
         character(len=*),              intent(in)  :: fname
-        integer,                       intent(out) :: ldim(3), maxim, iform
+        integer,                       intent(out) :: ldim(3), iform, maxim
         real,                          intent(out) :: smpd
         character(len=:), allocatable, intent(out) :: conv
         logical,                       intent(in)  :: doprint
@@ -1459,7 +1459,7 @@ contains
         logical,          optional, intent(in)  :: doprint    !< do print or not
         character(len=1), optional, intent(in)  :: formatchar !< input format
         real                          :: smpd_here
-        integer                       :: iform, maxim
+        integer                       :: iform
         character(len=:), allocatable :: conv
         character(len=1)              :: form
         logical                       :: ddoprint
@@ -1476,8 +1476,7 @@ contains
                 call get_mrcfile_info(fname, ldim, form, smpd_here, ddoprint )
                 nptcls = ldim(3)
             case('S')
-                call get_spifile_info(fname, ldim, iform, maxim, smpd_here, conv, ddoprint)
-                nptcls = maxim
+               call get_spifile_info(fname, ldim, iform, nptcls, smpd_here, conv, ddoprint)
 #ifdef USING_TIFF
             case('J')
                 call get_tiffile_info(fname, ldim, nptcls, smpd_here, ddoprint)
