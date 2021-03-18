@@ -39,6 +39,7 @@ type :: nanoparticle
     integer, allocatable  :: loc_longest_dist(:,:)   ! for indentific of the vxl that determins the longest dim of the atom
     integer, allocatable  :: contact_scores(:)
     integer, allocatable  :: cn(:)                   ! coordination number
+    real,    allocatable  :: cn_gen(:)               ! generalised coordination number
     character(len=2)      :: element     = ' '
     character(len=4)      :: atom_name   = '    '
     character(len=STDLEN) :: partname    = ''        ! fname
@@ -162,7 +163,6 @@ contains
     subroutine update_self_ncc(self, img_cc)
         class(nanoparticle),      intent(inout) :: self
         type(binimage), optional, intent(inout) :: img_cc
-        integer, allocatable :: imat_cc(:,:,:)
         if(present(img_cc)) then
           call img_cc%get_nccs(self%n_cc)
         else
@@ -181,7 +181,7 @@ contains
         integer       :: i, j
         integer       :: x, y
         real :: vec(2), vec1(2)
-        real :: ang1, ang2
+        real :: ang1
         rmat1 = self%img%get_rmat()
         rmat2 = self%img%get_rmat()
         rmat3 = self%img%get_rmat()
@@ -298,7 +298,7 @@ contains
                 call self%centers_pdb%set_name(cc,self%atom_name)
                 call self%centers_pdb%set_element(cc,self%element)
                 call self%centers_pdb%set_coord(cc,(self%centers(:,cc)-1.)*self%smpd)
-                call self%centers_pdb%set_beta(cc,real(self%cn(cc)))
+                call self%centers_pdb%set_beta(cc,self%cn_gen(cc)) ! use generalised coordination number
                 call self%centers_pdb%set_resnum(cc,cc)
             enddo
         endif
@@ -332,8 +332,7 @@ contains
      function nanopart_masscen(self) result(m)
          class(nanoparticle), intent(inout) :: self
          real    :: m(3)  !mass center coords
-         integer :: i, j, k
-          m = sum(self%centers(:,:), dim=2) /real(self%n_cc)
+         m = sum(self%centers(:,:), dim=2) /real(self%n_cc)
      end function nanopart_masscen
 
     ! This subroutine takes in input 2 2D vectors, centered in the origin
@@ -406,7 +405,7 @@ contains
         class(nanoparticle), intent(inout) :: self
         type(image) :: one_atom, phasecorr
         type(atoms) :: atom
-        real :: cutoff, o_t
+        real :: cutoff
         call phasecorr%new(self%ldim, self%smpd)
         call phasecorr%set_ft(.true.)
         call one_atom%new(self%ldim,self%smpd)
@@ -441,7 +440,7 @@ contains
         real,    allocatable :: x_mat(:)  !vectorization of the volume
         real,    allocatable :: coords(:,:)
         real,    allocatable :: rmat(:,:,:)
-        integer :: i, cc, t
+        integer :: i, t
         real    :: otsu_thresh
         real    :: x_thresh(N_THRESH/2-1)
         real    :: step, maximum, mm(2)
@@ -456,6 +455,7 @@ contains
         call pc%new(self%ldim,self%smpd)
         call self%img%fft ! for pc calculation
         t = 1
+        maximum = 0.
         do i = 1, N_THRESH/2-1
             call progress(i, N_THRESH/2-1)
             call img_bin_thresh(i)%new_bimg(self%ldim, self%smpd)
@@ -532,8 +532,8 @@ contains
 
 
     ! This subroutine discard outliers that resisted binarization.
-    ! It calculates the coordination number (cn) of each atom and discards
-    ! the atoms with cn < cn_thresh
+    ! It calculates the generalised coordination number (cn_gen) of each atom and discards
+    ! the atoms with cn_gen < cn_thresh
     ! It modifies the img_bin and img_cc instances deleting the
     ! identified outliers.
     subroutine discard_outliers_cn(self, cn_thresh)
@@ -542,15 +542,13 @@ contains
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
         logical, allocatable :: mask(:)
         real, allocatable    :: centers_ang(:,:) ! coordinates of the atoms in ANGSTROMS
-        real    :: dist
         real    :: radius  !radius of the sphere to consider for cn calculation
         real    :: a(3)    !lattice parameter
+        real    :: cn_gen(self%n_cc)
         integer :: cn(self%n_cc)
-        integer :: cc, new_cc
-        integer :: cnt     !contact_score
-        integer :: loc(1)
+        integer :: cc
         integer :: n_discard
-        integer :: label(1), filnum, filnum1, filnum2, i
+        integer :: filnum, filnum1, filnum2, i
         write(logfhandle, *) '****outliers discarding cn, init'
         allocate(centers_ang(3,self%n_cc), source=(self%centers-1.)*self%smpd)! -1?? TO FIX
         ! In order to find radius for cn calculation, FccLattice
@@ -570,25 +568,26 @@ contains
         call fit_lattice(centers_ang,a)
         call find_radius_for_coord_number(a,radius)
         if(DEBUG ) write(logfhandle,*) 'Radius for coord numb calcolation ', radius
-        call run_coord_number_analysis(centers_ang,radius,cn)
+        call run_coord_number_analysis(centers_ang,radius,cn,cn_gen)
         if(DEBUG) then
-          call fopen(filnum2, file='CoordNumberBeforeOutliers.txt')
-          write(filnum2,*) cn
+          call fopen(filnum2, file='CoordNumberGenBeforeOutliers.txt')
+          write(filnum2,*) cn_gen
           call fclose(filnum2)
         endif
-        if(DEBUG) write(logfhandle, *) 'Before outliers discarding cn is'
-        if(DEBUG) write(logfhandle, *)  cn
+        if(DEBUG) write(logfhandle, *) 'Before outliers discarding cn gen is'
+        if(DEBUG) write(logfhandle, *)  cn_gen
         allocate(mask(self%n_cc), source = .true.)
-        where(cn < cn_thresh) mask = .false. ! false where atom has to be discarded
-        n_discard = count(cn<cn_thresh)
+        where(cn_gen < cn_thresh) mask = .false. ! false where atom has to be discarded
+        n_discard = count(cn_gen<cn_thresh)
         write(logfhandle, *) 'Numbers of atoms discarded because of low cn ', n_discard
         ! Allocate and then update variable self%cn
-        allocate(self%cn(self%n_cc-n_discard), source = 0)
+        allocate(self%cn    (self%n_cc-n_discard), source = 0)
+        allocate(self%cn_gen(self%n_cc-n_discard), source = 0.)
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
         ! Removing outliers from the binary image and the connected components image
         do cc = 1, self%n_cc
-          if(cn(cc)<cn_thresh) then
+          if(cn_gen(cc)<cn_thresh) then
               where(imat_cc == cc) imat_bin = 0
           endif
         enddo
@@ -599,11 +598,15 @@ contains
         call self%find_centers()
         deallocate(centers_ang)
         allocate(centers_ang(3,self%n_cc), source = (self%centers-1.)*self%smpd)! -1?? TO FIX
-        call run_coord_number_analysis(centers_ang,radius,self%cn)
+        call run_coord_number_analysis(centers_ang,radius,self%cn,self%cn_gen)
         ! ATTENTION: you will see low coord numbers because they are UPDATED, after elimination
         ! of the atoms with low cn. It is like this in order to be consistent with the figure.
-        if(DEBUG) write(logfhandle, *) 'After outliers discarding cn is'
-        if(DEBUG) write(logfhandle, *)  self%cn
+        if(DEBUG) then
+           write(logfhandle, *) 'After outliers discarding cn is'
+           write(logfhandle, *)  self%cn
+           write(logfhandle, *) 'And generalised cn is'
+           write(logfhandle, *)  self%cn_gen
+        endif
         write(logfhandle, *) '****outliers discarding cn, completed'
     end subroutine discard_outliers_cn
 
@@ -722,14 +725,16 @@ contains
         integer, parameter   :: RANK_THRESH = 4
         integer :: n_cc, cnt
         integer :: rank, m(1)
-        real    :: new_centers(3,2*self%n_cc)   !will pack it afterwards if it has too many elements
-        real    :: new_coordination_number(2*self%n_cc)   !will pack it afterwards if it has too many elements
+        real    :: new_centers(3,2*self%n_cc)                 !will pack it afterwards if it has too many elements
+        integer :: new_coordination_number(2*self%n_cc)       !will pack it afterwards if it has too many elements
+        real    :: new_coordination_number_gen(2*self%n_cc)   !will pack it afterwards if it has too many elements
         real    :: pc
-        call self%img%get_rmat_ptr(rmat_pc)     !now img contains the phase correlation
+        call self%img%get_rmat_ptr(rmat_pc)       !now img contains the phase correlation
         call self%img_cc%get_imat(imat_cc)        !to pass to the subroutine split_atoms
         allocate(imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = imat_cc)
         cnt = 0
-        if(.not. allocated(self%cn)) allocate(self%cn(size(self%contact_scores)), source = self%contact_scores)
+        if(.not. allocated(self%cn))     allocate(self%cn(size(self%contact_scores)),     source = self%contact_scores)
+        if(.not. allocated(self%cn_gen)) allocate(self%cn_gen(size(self%contact_scores)), source = real(self%contact_scores))
         ! Remember to update the centers
         do n_cc =1, self%n_cc !for each cc check if the center corresponds with the local max of the phase corr
             pc = rmat_pc(nint(self%centers(1,n_cc)),nint(self%centers(2,n_cc)),nint(self%centers(3,n_cc)))
@@ -743,8 +748,9 @@ contains
                 call split_atom(new_centers,cnt)
             else
                 cnt = cnt + 1 !new number of centers deriving from splitting
-                new_centers(:,cnt)           = self%centers(:,n_cc)
-                new_coordination_number(cnt) = self%cn(n_cc)
+                new_centers(:,cnt)               = self%centers(:,n_cc)
+                new_coordination_number(cnt)     = self%cn(n_cc)
+                new_coordination_number_gen(cnt) = self%cn_gen(n_cc)
             endif
         enddo
         deallocate(self%centers)
@@ -755,10 +761,13 @@ contains
             self%centers(:,n_cc) = new_centers(:,n_cc)
         enddo
         deallocate(self%cn)
+        deallocate(self%cn_gen)
         allocate(self%cn(cnt), source = 0)
+        allocate(self%cn_gen(cnt), source = 0.)
         ! update contact scores
         do n_cc =1, cnt
-            self%cn(n_cc) = new_coordination_number(n_cc)
+          self%cn(n_cc)     = new_coordination_number(n_cc)
+          self%cn_gen(n_cc) = new_coordination_number_gen(n_cc)
         enddo
         call self%img_bin%get_imat(imat_bin)
         if(DEBUG) call self%img_bin%write_bimg(trim(self%fbody)//'BINbeforeValidation.mrc')
@@ -790,7 +799,8 @@ contains
             new_center1 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), imat == n_cc)
             cnt = cnt + 1
             new_centers(:,cnt) = real(new_center1)
-            new_coordination_number(cnt) = self%cn(n_cc)
+            new_coordination_number(cnt)     = self%cn(n_cc)
+            new_coordination_number_gen(cnt) = self%cn_gen(n_cc)
             do i = 1, self%ldim(1)
                 do j = 1, self%ldim(2)
                     do k = 1, self%ldim(3)
@@ -813,8 +823,10 @@ contains
                     else
                       cnt = cnt + 1
                       new_centers(:,cnt) = real(new_center2)
-                      new_coordination_number(cnt)   = self%cn(n_cc) + 1
-                      new_coordination_number(cnt-1) = new_coordination_number(cnt)
+                      new_coordination_number(cnt)       = self%cn(n_cc) + 1
+                      new_coordination_number(cnt-1)     = new_coordination_number(cnt)
+                      new_coordination_number_gen(cnt)   = self%cn_gen(n_cc) + 1.
+                      new_coordination_number_gen(cnt-1) = new_coordination_number_gen(cnt)
                       !In the case two merged atoms, build the second atom
                       do i = 1, self%ldim(1)
                           do j = 1, self%ldim(2)
@@ -844,6 +856,9 @@ contains
                             new_coordination_number(cnt)   = self%cn(n_cc) + 2
                             new_coordination_number(cnt-1) = new_coordination_number(cnt)
                             new_coordination_number(cnt-2) = new_coordination_number(cnt)
+                            new_coordination_number_gen(cnt)   = self%cn_gen(n_cc) + 2.
+                            new_coordination_number_gen(cnt-1) = new_coordination_number_gen(cnt)
+                            new_coordination_number_gen(cnt-2) = new_coordination_number_gen(cnt)
                             !In the case two merged atoms, build the second atom
                             do i = 1, self%ldim(1)
                                 do j = 1, self%ldim(2)
@@ -891,7 +906,7 @@ contains
         real    :: d       !distance atoms from the center
         real    :: radius  !radius of the sphere to consider
         real    :: avg_int, max_int, stdev_int, cutoff
-        real    :: volume, density ! to calculate the atomic density
+        real    :: volume ! to calculate the atomic density
         integer :: cnt, cnt_just, cnt_all, filnum, io_stat, filnum2
         integer :: nsteps, i, j, k, l, cc
         logical :: mask_diameter(self%n_cc)
@@ -1069,7 +1084,7 @@ contains
        integer, optional,   intent(in)    :: volume
        real, allocatable :: dist(:)
        real    :: stdev, med
-       integer :: i, j, n_discard, filnum, io_stat
+       integer :: i, n_discard, filnum, io_stat
        logical :: mask(self%n_cc)
        ! Initialisations
        mask       = .true.
@@ -1206,7 +1221,6 @@ contains
        logical, allocatable :: border(:,:,:)
        logical, allocatable :: mask_dist(:) !for min and max dist calculation
        integer :: location(1) !location of the farest vxls of the atom from its center
-       integer :: i
        real    :: shortest_dist, longest_dist
        call self%img_cc%get_imat(imat_cc)
        call self%img_cc%border_mask(border, label, .true.) !use 4neigh instead of 8neigh
@@ -1223,7 +1237,7 @@ contains
            shortest_dist = 0.
            longest_dist  = shortest_dist
            ratio = 1.
-           if(lld) self%loc_longest_dist(:3, label) = self%centers(:,label)
+           if(lld) self%loc_longest_dist(:3, label) = nint(self%centers(:,label))
            if(present(print_ar) .and. (print_ar .eqv. .true.)) then
                 write(logfhandle,*) 'ATOM #          ', label
                 write(logfhandle,*) 'shortest dist = ', shortest_dist
@@ -1515,7 +1529,7 @@ contains
         class(nanoparticle), intent(inout) :: self
         real    :: loc_ld_real(3,self%n_cc)
         real    :: vec_fixed(3)     !vector indentifying z direction
-        real    :: theta, mod_1, mod_2, dot_prod, m_adjusted(3)
+        real    :: m_adjusted(3)
         integer :: k, i, filnum, io_stat
         integer, allocatable :: sz(:)
         if(allocated(self%ang_var)) deallocate(self%ang_var)
@@ -1564,7 +1578,7 @@ contains
       real,    allocatable :: mat(:,:)        ! matrix that contains the distances
       logical, allocatable :: mask(:), outliers(:)
       real    :: d
-      integer :: N, i, j, index(1), loc1(1), loc2(1), cnt, ncls, filnum, io_stat
+      integer :: N, i, j, index(1), loc1(1), loc2(1), cnt, ncls
       N = size(vec) ! number of data points
       ! 1) calc all the couples of distances, using euclid dist
       allocate(mat(N,N), source = 0.)
@@ -1655,7 +1669,7 @@ contains
         real,    intent(in)  :: thresh ! threshold for class definition, user inputted
         real,    allocatable :: stdev_within(:), centroids(:)
         integer, allocatable :: labels(:), populations(:)
-        integer              :: i, j, ncls, dim, filnum, io_stat, cnt
+        integer              :: i, j, ncls, dim, filnum, io_stat
         real                 :: avg, stdev
         type(binimage)       :: img_1clss
         integer, allocatable :: imat_cc(:,:,:), imat_1clss(:,:,:)
@@ -1741,7 +1755,7 @@ contains
       real,    allocatable :: centroids(:)
       integer, allocatable :: labels(:), populations(:)
       real,    allocatable :: stdev_within(:)
-      integer              :: i, j, ncls, dim, filnum, io_stat, cnt
+      integer              :: i, j, ncls, dim, filnum, io_stat
       real                 :: avg, stdev
       type(binimage)       :: img_1clss
       integer, allocatable :: imat_cc(:,:,:), imat_1clss(:,:,:)
@@ -1828,7 +1842,7 @@ contains
         real,    allocatable :: centroids(:)
         integer, allocatable :: labels(:), populations(:)
         real,    allocatable :: stdev_within(:), avg_dist_cog(:)
-        integer              :: i, j, ncls, dim, filnum, io_stat, cnt
+        integer              :: i, j, ncls, dim, filnum, io_stat
         real                 :: avg, stdev, cog(3)
         type(binimage)       :: img_1clss
         integer, allocatable :: imat_cc(:,:,:), imat_1clss(:,:,:)
@@ -1944,7 +1958,7 @@ contains
         logical, allocatable :: mask(:)
         real,    allocatable :: dist(:), dist_sq(:), dist_no_zero(:), dist_close(:), radii(:), deviation(:)
         real,    parameter   :: CLOSE_THRESH = 1. ! 1 Amstrong
-        integer :: location(1), i, j
+        integer :: location(1), i
         integer :: N_min !min{nb atoms in nano1, nb atoms in nano2}
         integer :: N_max !max{nb atoms in nano1, nb atoms in nano2}
         integer :: cnt,cnt1,cnt2,cnt3,filnum,io_stat
@@ -2394,7 +2408,7 @@ contains
       integer, allocatable  :: imat_cc(:,:,:), imat(:,:,:)
       real,    allocatable  :: line(:,:), plane(:,:,:),points(:,:),distances_totheplane(:),pointsTrans(:,:)
       real,    allocatable  :: radii(:),max_intensity(:),int_intensity(:),w(:),v(:,:),d(:),distances_totheline(:)
-      integer :: i, j, n, t, s, filnum, io_stat, cnt_intersect, cnt, n_cc
+      integer :: i, n, t, s, filnum, io_stat, cnt_intersect, cnt
       logical :: flag(self%n_cc)
       real    :: atom1(3), atom2(3), atom3(3), dir_1(3), dir_2(3), vec(3), m(3), dist_plane, dist_line
       real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator, prod(3), centroid(3), tthresh
@@ -2744,6 +2758,8 @@ contains
         if(allocated(self%loc_longest_dist)) deallocate(self%loc_longest_dist)
         if(allocated(self%contact_scores))   deallocate(self%contact_scores)
         if(allocated(self%ang_var))          deallocate(self%ang_var)
+        if(allocated(self%cn))               deallocate(self%cn)
+        if(allocated(self%cn_gen))           deallocate(self%cn_gen)
     end subroutine kill_nanoparticle
 
 end module simple_nanoparticle

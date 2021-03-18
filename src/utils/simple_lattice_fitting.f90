@@ -49,7 +49,7 @@ subroutine fit_lattice(model,a)
   real    :: dist, dist_temp, avgNNRR, avgD, subK, k
   real    :: rMaxsq, rMax, rMin, angleUV, angleUW, angleVW
   real    :: u0(3),v0(3),w0(3),u(3),v(3),w(3),uN(3),vN(3),wN(3),xyzbeta(4,3)
-  integer :: iloop,natoms,iatom, centerAtom,i
+  integer :: natoms,iatom, centerAtom,i
   logical :: areNearest(size(model,dim=2))
   ! qr solve
   real (kind = 8) , allocatable :: A_matrix(:,:), x2(:),x2_ref(:)
@@ -166,7 +166,6 @@ subroutine run_lattice_fit(pdbfile,model,a)
   real,              intent(inout) :: a(3)    ! fitted lattice parameters
   real, allocatable, intent(inout)  :: model(:,:)
   integer            :: i, n
-  real :: d
   type(atoms) :: atomic_pos
   call atomic_pos%new(pdbfile)
   n = atomic_pos%get_n() ! number of atoms
@@ -181,16 +180,21 @@ subroutine run_lattice_fit(pdbfile,model,a)
 end subroutine run_lattice_fit
 
 subroutine test_lattice_fit1()
-  real, allocatable  :: model(:,:)
-  integer            :: i
-  character(len=100) :: fname
+  real, allocatable    :: model(:,:)
+  integer              :: natoms
+  character(len=100)   :: fname
+  integer, allocatable :: cn(:)
+  real, allocatable    :: cn_gen(:)
   real :: a(3), d
 
+  natoms = size(model, dim =2)
+  allocate(cn(natoms),     source = 0)
+  allocate(cn_gen(natoms), source = 0.)
   fname='model_coordinates.txt'
   call read_3Dcoord(fname,model)
   call fit_lattice(model,a)
   call find_radius_for_coord_number(a,d)
-  call run_coord_number_analysis(model, d)
+  call run_coord_number_analysis(model,d,cn,cn_gen)
 
 contains
 
