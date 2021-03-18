@@ -174,13 +174,6 @@ contains
         character(len=STDLEN)  :: fname1, fname2
         type(parameters)       :: params
         type(nanoparticle)     :: nano1, nano2
-        integer, parameter     :: D = 3 ! dimension of the space (3D)
-        real(dp), allocatable  :: points_P(:,:), points_Q(:,:), P(:,:), Q(:,:)
-        type(ori)   :: orientation
-        type(oris)  :: ori2read
-        real        :: smpd, cxyz(D), mat(D,D), shift(D)
-        real(dp)    :: U(D,D), r(D), lrms
-        integer     :: ldim(3), nptcls, i
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_atoms_rmsd')
@@ -218,8 +211,6 @@ contains
         character(len=STDLEN)  :: fname
         type(parameters)       :: params
         type(nanoparticle) :: nano
-        integer :: ldim(3), nptcls
-        real    :: smpd
         real    :: min_rad, max_rad, step
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
@@ -252,8 +243,6 @@ contains
         character(len=STDLEN)  :: fname
         type(parameters)       :: params
         type(nanoparticle)     :: nano
-        real, allocatable      :: max_intensity(:)
-        real    :: smpd
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_atom_cluster_analysis')
@@ -302,7 +291,6 @@ contains
         character(len=STDLEN)  :: fname
         type(parameters)       :: params
         type(nanoparticle) :: nano
-        real  :: smpd
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_nano_softmask')
@@ -353,7 +341,6 @@ contains
         type(parameters)       :: params
         type(nanoparticle)     :: nano
         type(atoms)            :: a
-        real    :: smpd
         call cline%set('mkdir', 'yes')
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
@@ -406,7 +393,6 @@ contains
         type(symmetry_test_commander) :: symtstcmd
         type(parameters)       :: params
         character(len=STDLEN)  :: fname
-        character(len=3)       :: pgrp
         type(nanoparticle) :: nano
         type(atoms) :: atom
         type(image) :: simulated_distrib
@@ -415,7 +401,6 @@ contains
         integer     :: i, ldim(3)
         real        :: radius
         character(len=100) :: fname_conv
-        character(len=100) :: out_pdbfile
         if( .not. cline%defined('lp'))    call cline%set('lp', 1.)
         if( .not. cline%defined('cenlp')) call cline%set('cenlp', 5.)
         if( .not. cline%defined('mkdir')) call cline%set('mkdir','yes')
