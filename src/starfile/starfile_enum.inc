@@ -376,6 +376,7 @@
         enumerator :: EMDL_ORIENT_ORIGIN_Y_ANGSTROM                    = 354
         enumerator :: EMDL_ORIENT_ORIGIN_Z_ANGSTROM                    = 355
         enumerator :: EMDL_MICROGRAPH_PIXEL_SIZE                       = 356
+        enumerator :: EMDL_POSTPROCESS_FSC_PART_FRACMASK               = 357
 
-        enumerator :: EMDL_LAST_LABEL                                  = 357 ! **** NOTE ****: Do keep this label always at the end
+        enumerator :: EMDL_LAST_LABEL                                  = 358 ! **** NOTE ****: Do keep this label always at the end
     end enum
