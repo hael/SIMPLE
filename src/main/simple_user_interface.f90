@@ -119,7 +119,6 @@ type(simple_program), target :: mkdir_
 type(simple_program), target :: merge_stream_projects
 type(simple_program), target :: motion_correct
 type(simple_program), target :: motion_correct_tomo
-type(simple_program), target :: motion_refine_nano
 type(simple_program), target :: nano_softmask
 type(simple_program), target :: new_project
 type(simple_program), target :: normalize_
@@ -166,6 +165,8 @@ type(simple_program), target :: tseries_import_particles
 type(simple_program), target :: tseries_ctf_estimate
 type(simple_program), target :: tseries_make_pickavg
 type(simple_program), target :: tseries_motion_correct
+type(simple_program), target :: tseries_swap_stack
+type(simple_program), target :: tseries_denoise_particles
 type(simple_program), target :: tseries_track_particles
 type(simple_program), target :: graphene_subtr
 type(simple_program), target :: update_project
@@ -337,7 +338,6 @@ contains
         call new_merge_stream_projects
         call new_mkdir_
         call new_motion_correct
-        call new_motion_refine_nano
         call new_motion_correct_tomo
         call new_nano_softmask
         call new_new_project
@@ -385,6 +385,8 @@ contains
         call new_tseries_ctf_estimate
         call new_tseries_motion_correct
         call new_tseries_make_pickavg
+        call new_tseries_swap_stack
+        call new_tseries_denoise_particles
         call new_tseries_track_particles
         call new_graphene_subtr
         call new_update_project
@@ -439,7 +441,6 @@ contains
         call push2prg_ptr_array(mask)
         call push2prg_ptr_array(mkdir_)
         call push2prg_ptr_array(motion_correct)
-        call push2prg_ptr_array(motion_refine_nano)
         call push2prg_ptr_array(motion_correct_tomo)
         call push2prg_ptr_array(nano_softmask)
         call push2prg_ptr_array(new_project)
@@ -487,6 +488,8 @@ contains
         call push2prg_ptr_array(tseries_ctf_estimate)
         call push2prg_ptr_array(tseries_make_pickavg)
         call push2prg_ptr_array(tseries_motion_correct)
+        call push2prg_ptr_array(tseries_swap_stack)
+        call push2prg_ptr_array(tseries_denoise_particles)
         call push2prg_ptr_array(tseries_track_particles)
         call push2prg_ptr_array(graphene_subtr)
         call push2prg_ptr_array(update_project)
@@ -597,8 +600,6 @@ contains
                 ptr2prg => mkdir_
             case('motion_correct')
                 ptr2prg => motion_correct
-            case('motion_refine_nano')
-                ptr2prg => motion_refine_nano
             case('motion_correct_tomo')
                 ptr2prg => motion_correct_tomo
             case('nano_softmask')
@@ -693,6 +694,10 @@ contains
                 ptr2prg => tseries_make_pickavg
             case('tseries_motion_correct')
                 ptr2prg => tseries_motion_correct
+            case('tseries_denoise_particles')
+                ptr2prg => tseries_denoise_particles
+            case('tseries_swap_stack')
+                ptr2prg => tseries_swap_stack
             case('tseries_track_particles')
                 ptr2prg => tseries_track_particles
             case('graphene_subtr')
@@ -807,13 +812,14 @@ contains
         write(logfhandle,'(A)') tseries_motion_correct%name
         write(logfhandle,'(A)') tseries_ctf_estimate%name
         write(logfhandle,'(A)') tseries_make_pickavg%name
+        write(logfhandle,'(A)') tseries_denoise_particles%name
+        write(logfhandle,'(A)') tseries_swap_stack%name
         write(logfhandle,'(A)') tseries_track_particles%name
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('PARTICLE 3D RECONSTRUCTION PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') graphene_subtr%name
         write(logfhandle,'(A)') center2D_nano%name
         write(logfhandle,'(A)') cluster2D_nano%name
-        write(logfhandle,'(A)') motion_refine_nano%name
         write(logfhandle,'(A)') map_cavgs_selection%name
         write(logfhandle,'(A)') estimate_diam%name
         write(logfhandle,'(A)') simulate_atoms%name
@@ -2502,42 +2508,6 @@ contains
         call motion_correct%set_input('comp_ctrls', 2, nthr)
     end subroutine new_motion_correct
 
-    subroutine new_motion_refine_nano
-        ! PROGRAM SPECIFICATION
-        call motion_refine_nano%new(&
-        &'motion_refine_nano', &                                                      ! name
-        &'Beam-induced motion correction of nano-particles',&                         ! descr_short
-        &'is a distributed workflow for  motion correction .',&                       ! descr_long
-        &'single_exec',&                                                    ! executable
-        &1, 2, 0, 2, 3, 1, 1, .true.)                                       ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call motion_refine_nano%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
-        ! parameter input/output
-        call motion_refine_nano%set_input('parm_ios', 1, projfile_target)
-        call motion_refine_nano%set_input('parm_ios', 2, 'boxfile', 'file', 'List of particle coordinates',&
-        &'.txt file with EMAN-convention particle coordinates', 'e.g. coords.box', .true., '')
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call motion_refine_nano%set_input('srch_ctrls', 1, trs)
-        motion_refine_nano%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{15}'
-        motion_refine_nano%srch_ctrls(1)%rval_default      = 15.
-        call motion_refine_nano%set_input('srch_ctrls', 2, 'nframesgrp', 'num', '# frames in time moving time window', '# frames in time moving time window subjected to correction', '{5}', .false., 5.)
-        ! call motion_refine_nano%set_input('srch_ctrls', 3, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{30}', .false., 50.)
-        ! filter controls
-        call motion_refine_nano%set_input('filt_ctrls', 1, hp)
-        motion_refine_nano%filt_ctrls(1)%rval_default = 30.
-        call motion_refine_nano%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms{1.3}', .false., 1.3)
-        call motion_refine_nano%set_input('filt_ctrls', 3, wcrit)
-        motion_refine_nano%filt_ctrls(3)%descr_placeholder = '(softmax|zscore|sum|cen|exp|inv|no){no}'
-        motion_refine_nano%filt_ctrls(3)%cval_default = 'no'
-        ! mask controls
-        call motion_refine_nano%set_input('mask_ctrls', 1, msk)
-        ! computer controls
-        call motion_refine_nano%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_motion_refine_nano
-
     subroutine new_motion_correct_tomo
         ! PROGRAM SPECIFICATION
         call motion_correct_tomo%new(&
@@ -4150,14 +4120,14 @@ contains
         &'is a distributed workflow for anisotropic motion correction of time-series (movies) of nanoparticles.&
         & If dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly&
         & (dose-weighting strategy).',&                                    ! descr_long
-        &'single_exec',&                                             ! executable
-        &0, 0, 0, 7, 3, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &'single_exec',&                                                   ! executable
+        &0, 1, 0, 7, 3, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        ! <empty>
-        ! alternative inputs
+        call tseries_motion_correct%set_input('parm_ios', 1, 'boxfile', 'file', 'List of particle coordinates',&
+        &'.txt file with EMAN-convention particle coordinates', 'e.g. coords.box', .false., '')        ! alternative inputs
         ! <empty>
         ! search controls
         call tseries_motion_correct%set_input('srch_ctrls', 1, trs)
@@ -4225,6 +4195,59 @@ contains
         ! computer controls
         call tseries_make_pickavg%set_input('comp_ctrls', 1, nthr)
     end subroutine new_tseries_make_pickavg
+
+    subroutine new_tseries_denoise_particles
+        ! PROGRAM SPECIFICATION
+        call tseries_denoise_particles%new(&
+        &'tseries_denoise_particles',&                          ! name
+        &'PPCA-based particles denoising',&                     ! descr_short
+        &'is a program for PPCA-based particles denoising',&    ! descr_long
+        &'single_exec',&                                        ! executable
+        &2, 1, 0, 0, 0, 0, 1, .false.)                           ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call tseries_denoise_particles%set_input('img_ios', 1, stk)
+        tseries_denoise_particles%img_ios(1)%required = .true.
+        call tseries_denoise_particles%set_input('img_ios', 2, outstk)
+        ! parameter input/output
+        call tseries_denoise_particles%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call tseries_denoise_particles%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_tseries_denoise_particles
+
+    subroutine new_tseries_swap_stack
+        ! PROGRAM SPECIFICATION
+        call tseries_swap_stack%new(&
+        &'tseries_swap_stack',&                                                          ! name
+        &'Substitutes stack into an existing project',&                                  ! descr_short
+        &'is a program for substituting stack into an existing project',&                ! descr_long
+        &'single_exec',&                                                                 ! executable
+        &1, 0, 0, 0, 0, 0, 0, .true.)                                                    ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call tseries_swap_stack%set_input('img_ios', 1, stk)
+        tseries_swap_stack%img_ios(1)%required = .true.
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_tseries_swap_stack
 
     subroutine new_tseries_track_particles
         ! PROGRAM SPECIFICATION

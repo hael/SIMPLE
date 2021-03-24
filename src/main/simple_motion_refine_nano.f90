@@ -258,7 +258,7 @@ contains
             !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
             do i = 1,npop
                 call self%particles(i)%neg
-                call self%particles(i)%subtr_backgr_ramp(lmsk)
+                call self%particles(i)%norm
             enddo
             !$omp end parallel do
             ! graphene background subtraction
