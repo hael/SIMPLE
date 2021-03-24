@@ -21,13 +21,13 @@ integer, parameter :: NNN      = 8
 type(image),               allocatable :: ptcls(:), ptcls_saved(:)
 type(tvfilter),            allocatable :: tv(:)
 real,                      allocatable :: particle_locations(:,:)
-character(len=LONGSTRLEN), pointer     :: framenames(:)
-character(len=:),          allocatable :: dir, fbody
+character(len=LONGSTRLEN), pointer     :: intg_names(:), frame_names(:)
+character(len=:),          allocatable :: dir, fbody, fbody_raw
 type(image)               :: frame_img      ! individual frame image
 type(image)               :: frame_avg      ! average over time window
 type(image)               :: reference, ptcl_target, pspec, pspec_nn
 type(image)               :: neigh_imgs(NNN), backgr_imgs(NNN), tmp_imgs(NNN)
-character(len=LONGSTRLEN) :: neighstknames(NNN), stkname
+character(len=LONGSTRLEN) :: neighstknames(NNN), stkname, stkframes_name
 real                      :: msk
 integer                   :: ldim(3), nframes, track_freq
 logical                   :: l_neg
@@ -36,15 +36,16 @@ integer :: cnt4debug = 0
 
 contains
 
-    subroutine init_tracker( boxcoord, fnames, dir_in, fbody_in )
+    subroutine init_tracker( boxcoord, intg_fnames, frame_fnames, dir_in, fbody_in )
         integer,                           intent(in) :: boxcoord(2)
-        character(len=LONGSTRLEN), target, intent(in) :: fnames(:)
-        character(len=*),                  intent(in)  :: dir_in, fbody_in
+        character(len=LONGSTRLEN), target, intent(in) :: intg_fnames(:), frame_fnames(:)
+        character(len=*),                  intent(in) :: dir_in, fbody_in
         character(len=:), allocatable :: fname
         integer :: n, i
         ! set constants
-        dir    = trim(dir_in)
-        fbody  = trim(fbody_in)
+        dir       = trim(dir_in)
+        fbody     = trim(fbody_in)
+        fbody_raw = trim(fbody_in)//'_frames'
         l_neg  = .false.
         track_freq = max(1,nint(real(params_glob%nframesgrp/2)))
         if( trim(params_glob%neg) .eq. 'yes' ) l_neg = .true.
@@ -60,9 +61,10 @@ contains
                 THROW_HARD('Unsupported filter in init_tracker!')
         end select
         ! names & dimensions
-        nframes = size(fnames)
-        framenames => fnames(:)
-        call find_ldim_nptcls(framenames(1),ldim,n)
+        nframes = size(intg_fnames)
+        intg_names  => intg_fnames(:)
+        frame_names => frame_fnames(:)
+        call find_ldim_nptcls(intg_names(1),ldim,n)
         if( n == 1 .and. ldim(3) == 1 )then
             ! all ok
         else
@@ -118,7 +120,7 @@ contains
             do i=iframe,last_frame
                 cnt = cnt + 1
                 call ptcls(cnt)%zero_and_unflag_ft
-                call frame_img%read(framenames(i),1)
+                call frame_img%read(intg_names(i),1)
                 noutside = 0
                 call frame_img%window(first_pos, params_glob%box, ptcls(cnt), noutside)
                 if( cnt==1 ) call frame_avg%add(frame_img,w=0.01)
@@ -209,6 +211,7 @@ contains
         call fopen(funit2, status='REPLACE', action='WRITE', file=fname,iostat=io_stat)
         call fileiochk("tseries tracker ; write_tracked_series ", io_stat)
         stkname = trim(dir)//'/'//trim(fbody)//'.mrc'
+        stkframes_name = trim(dir)//'/'//trim(fbody_raw)//'.mrc'
         do iframe=1,nframes
             xind = nint(particle_locations(iframe,1))
             yind = nint(particle_locations(iframe,2))
@@ -217,8 +220,8 @@ contains
             if( yind<0 .and. yind>-10 ) yind = 0
             if( xind>ldim(1)-1 .and. xind<ldim(1)+10 ) xind = ldim(1)-1
             if( yind>ldim(2)-1 .and. yind<ldim(2)+10 ) yind = ldim(2)-1
-            ! read
-            call frame_img%read(framenames(iframe),1)
+            ! read intg
+            call frame_img%read(intg_names(iframe),1)
             ! particle
             noutside = 0
             call frame_img%window([xind,yind,1], params_glob%box, ptcl_target, noutside)
@@ -232,6 +235,13 @@ contains
             call update_background_pspec(iframe, [xind,yind])
             call pspec%add(pspec_nn,w=1./real(nframes))
             call pspec_nn%write(trim(dir)//'/'//trim(fbody)//'_background_pspec.mrc',iframe)
+            ! read frame & write particle frame
+            call frame_img%read(frame_names(iframe),1)
+            noutside = 0
+            call frame_img%window([xind,yind,1], params_glob%box, ptcl_target, noutside)
+            call ptcl_target%norm
+            if( l_neg ) call ptcl_target%neg()
+            call ptcl_target%write(stkframes_name, iframe)
         end do
         call fclose(funit, errmsg="tseries tracker ; write_tracked_series end")
         call fclose(funit2, errmsg="tseries tracker ; write_tracked_series end")
@@ -411,7 +421,8 @@ contains
 
     subroutine kill_tracker
         integer :: i
-        framenames => null()
+        intg_names => null()
+        frame_names => null()
         do i=1,NNN
             call neigh_imgs(i)%kill
             call tmp_imgs(i)%kill

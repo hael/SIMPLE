@@ -1,6 +1,5 @@
 module simple_ppca
-use simple_defs
-use simple_math
+include 'simple_lib.f08'
 implicit none
 
 public :: ppca
@@ -13,8 +12,8 @@ type ppca
     integer              :: Q           !< nr of components in each latent vec
     integer              :: funit       !< file handle data stack
     real, pointer        :: ptr_Dmat(:,:) => null()
-    real(dp), allocatable :: evals(:)
-    real(dp), allocatable :: W(:,:)      !< principal subspace, defined by the W columns
+    real(dp), allocatable, public :: evals(:)
+    real(dp), allocatable, public :: W(:,:)      !< principal subspace, defined by the W columns
     real(dp), allocatable :: E_zn(:,:,:) !< expectations (feature vecs)
     real(dp), allocatable :: W_1(:,:), W_2(:,:), W_3(:,:), Wt(:,:)
     real(dp), allocatable :: M(:,:), Minv(:,:), MinvWt(:,:), E_znzn(:,:)
@@ -279,7 +278,7 @@ contains
                 k = 0 
                 cycle
             endif
-            write(*,"(1X,A,1X,I3,1X,A,1X,F10.1)") 'Iteration:', k, 'Squared error:', p
+            write(*,"(A,1X,I3,1X,A,1X,F10.1)") '>>> Iteration:', k, 'Squared error:', p
             if( (abs(p-p_prev) < 0.1d0) .or. k == maxpcaits ) exit
         end do
         ! write features to disk
@@ -336,7 +335,7 @@ contains
         integer,     intent(out)   :: err
         real(dp),    intent(out)   :: p
         integer                    :: i
-        real(dp)                   :: tmp(self%D,1), x(self%D,1), tE_zn(1,self%Q)
+        real(dp)                   :: tmp(self%D,1), x(self%D,1), tE_zn(1,self%Q), E_zn(self%Q,1)
         ! E-STEP
         !$omp parallel proc_bind(close)
         !$omp workshare 
@@ -358,26 +357,26 @@ contains
                 !$omp workshare 
                 x(:,1) = real(self%ptr_Dmat(i,:),dp)
                 ! Expectation step (calculate expectations using the old W)
-                self%E_zn(i,:,:) = matmul(self%MinvWt, x)
-                tE_zn            = transpose(self%E_zn(i,:,:))
-                self%E_znzn      = matmul(self%E_zn(i,:,:), tE_zn)
+                E_zn = matmul(self%MinvWt, x)
+                self%E_zn(i,:,:) = E_zn
+                tE_zn            = transpose(E_zn)
                 ! Prepare for update of W (M-step)
-                self%W_1 = self%W_1 + matmul(x, tE_zn)
-                self%W_2 = self%W_2 + self%E_znzn
+                self%W_1 = self%W_1 + matmul(   x, tE_zn)
+                self%W_2 = self%W_2 + matmul(E_zn, tE_zn)
                 !$omp end workshare
             end do
             !$omp end parallel
         else
             do i=1,self%N
                 read(self%funit, rec=i) self%X(:,1) ! read from file
-                !$omp parallel workshare 
+                !!$omp parallel workshare
                 ! Expectation step (calculate expectations using the old W)
                 self%E_zn(i,:,:) = matmul(self%MinvWt,real(self%X,dp))
                 self%E_znzn = matmul(self%E_zn(i,:,:),transpose(self%E_zn(i,:,:)))
                 ! Prepare for update of W (M-step)
                 self%W_1 = self%W_1+matmul(real(self%X,dp),transpose(self%E_zn(i,:,:)))
                 self%W_2 = self%W_2+self%E_znzn
-                !$omp end parallel workshare 
+                !!$omp end parallel workshare 
             end do
         endif
         ! M-STEP
@@ -404,9 +403,9 @@ contains
             do i=1,self%N
                 ! read data vec
                 read(self%funit, rec=i) self%X(:,1)
-                !$omp parallel workshare default(shared)
+                !!$omp parallel workshare default(shared) does not compile on all platforms for some reason
                 tmp = matmul(self%W,self%E_zn(i,:,:))
-                !$omp end parallel workshare
+                !!$omp end parallel workshare
                 p = p+sqrt(sum((real(self%X(:,1),dp)-tmp(:,1))**2.d0))
             end do
         endif

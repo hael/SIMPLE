@@ -22,7 +22,6 @@ public :: tseries_motion_correct_commander_distr
 public :: tseries_motion_correct_commander
 public :: tseries_track_particles_commander_distr
 public :: tseries_track_particles_commander
-public :: motion_refine_nano_commander
 public :: center2D_nano_commander_distr
 public :: cluster2D_nano_commander_hlev
 public :: tseries_ctf_estimate_commander
@@ -30,6 +29,8 @@ public :: refine3D_nano_commander_distr
 public :: graphene_subtr_commander
 public :: initial_3Dmodel_nano_commander_distr
 public :: validate_nano_commander
+public :: tseries_denoise_particles_commander
+public :: tseries_swap_stack_commander
 private
 #include "simple_local_flags.inc"
 
@@ -61,10 +62,6 @@ type, extends(commander_base) :: tseries_track_particles_commander
   contains
     procedure :: execute      => exec_tseries_track_particles
 end type tseries_track_particles_commander
-type, extends(commander_base) :: motion_refine_nano_commander
-  contains
-    procedure :: execute      => exec_motion_refine_nano
-end type motion_refine_nano_commander
 type, extends(commander_base) :: center2D_nano_commander_distr
   contains
     procedure :: execute      => exec_center2D_nano_distr
@@ -97,6 +94,14 @@ type, extends(commander_base) :: validate_nano_commander
   contains
     procedure :: execute      => exec_validate_nano
 end type validate_nano_commander
+type, extends(commander_base) :: tseries_denoise_particles_commander
+  contains
+    procedure :: execute      => exec_tseries_denoise_particles
+end type tseries_denoise_particles_commander
+type, extends(commander_base) :: tseries_swap_stack_commander
+  contains
+    procedure :: execute      => exec_tseries_swap_stack
+end type tseries_swap_stack_commander
 
 contains
 
@@ -208,6 +213,9 @@ contains
         if( .not. cline%defined('algorithm')  ) call cline%set('algorithm','patch')
         call params%new(cline)
         call cline%set('numlen', real(params%numlen))
+        if( cline%defined('boxfile') )then
+            if( .not.file_exists(params%boxfile) ) THROW_HARD('BOXFILE not found!')
+        endif
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
         nframes = spproj%get_nframes()
@@ -480,7 +488,7 @@ contains
         type(sp_project)                       :: spproj
         type(parameters)                       :: params
         character(len=:),          allocatable :: dir, forctf
-        character(len=LONGSTRLEN), allocatable :: framenames(:)
+        character(len=LONGSTRLEN), allocatable :: intg_names(:), frame_names(:)
         real,                      allocatable :: boxdata(:,:)
         integer :: i, iframe, orig_box, nframes
         call cline%set('oritype','mic')
@@ -498,22 +506,19 @@ contains
         ! frames input
         call spproj%read(params%projfile)
         nframes = spproj%get_nframes()
-        allocate(framenames(nframes))
+        allocate(intg_names(nframes),frame_names(nframes))
         iframe = 0
         do i = 1,spproj%os_mic%get_noris()
             if( spproj%os_mic%isthere(i,'frame') )then
                 iframe = iframe + 1
-                if( spproj%os_mic%isthere(i,'intg') )then
-                    framenames(iframe) = trim(spproj%os_mic%get_static(i,'intg'))
-                else
-                    framenames(iframe) = trim(spproj%os_mic%get_static(i,'frame'))
-                endif
+                intg_names(iframe)  = trim(spproj%os_mic%get_static(i,'intg'))
+                frame_names(iframe) = trim(spproj%os_mic%get_static(i,'frame'))
             endif
         enddo
         ! actual tracking
         dir = trim(params%fbody)
         call simple_mkdir(dir)
-        call init_tracker( nint(boxdata(1,1:2)), framenames, dir, params%fbody)
+        call init_tracker( nint(boxdata(1,1:2)), intg_names, frame_names, dir, params%fbody)
         call track_particle( forctf )
         ! clean tracker
         call kill_tracker
@@ -522,77 +527,6 @@ contains
         call spproj%kill
         call simple_end('**** SIMPLE_TSERIES_TRACK_PARTICLES NORMAL STOP ****')
     end subroutine exec_tseries_track_particles
-
-    subroutine exec_motion_refine_nano( self, cline )
-        use simple_ori,              only: ori
-        use simple_sp_project,       only: sp_project
-        use simple_motion_refine_nano
-        class(motion_refine_nano_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        type(sp_project)                       :: spproj, spproj_frames
-        type(parameters)                       :: params
-        type(motion_refine_nano)               :: motion_correcter
-        type(nrtxtfile)                        :: boxfile
-        type(ori)                              :: o
-        character(len=:),          allocatable :: refs_stk
-        real,                      allocatable :: boxdata(:,:)
-        character(len=LONGSTRLEN)              :: new_ptcl_stk, stkfname
-        real    :: smpd
-        integer :: ncavgs, nptcls, iptcl
-        call cline%set('match_filt','no')
-        call cline%set('ctf',       'no')
-        if( .not. cline%defined('lp')        ) call cline%set('lp',        1.)
-        if( .not. cline%defined('trs')       ) call cline%set('trs',      15.)
-        if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp',5.)
-        if( .not. cline%defined('wcrit')     ) call cline%set('wcrit',   'no')
-        call cline%set('oritype','ptcl2D')
-        call params%new(cline)
-        params_glob%boxmatch = params_glob%box
-        params_glob%ring2    = max(115,nint(1.25*real(params%box)/2.)) ! sets rotational accuracy > ~0.5 degrees
-        if( cline%defined('outstk') )then
-            new_ptcl_stk = trim(params%outstk)
-        else
-            new_ptcl_stk = 'NP_mc_corrected.mrc'
-        endif
-        ! ptcl2D, cls2D & 2D references
-        call spproj%read(params%projfile)
-        call spproj%get_cavgs_stk(refs_stk, ncavgs, smpd)
-        ! frames
-        call spproj_frames%read(params%projfile_target)
-        ! transfer particles coordinates in frames to ptcl2D
-        call boxfile%new(params%boxfile, 1)
-        nptcls = boxfile%get_ndatalines()
-        allocate( boxdata(nptcls,boxfile%get_nrecs_per_line()), stat=alloc_stat)
-        do iptcl = 1,nptcls
-            call boxfile%readNextDataLine(boxdata(iptcl,:))
-            call spproj%os_ptcl2D%set(iptcl,'xpos',boxdata(iptcl,1))
-            call spproj%os_ptcl2D%set(iptcl,'ypos',boxdata(iptcl,2))
-        enddo
-        call boxfile%kill
-        ! correction
-        call motion_correcter%new(spproj%os_ptcl2D, spproj%os_cls2D, spproj_frames%os_mic, refs_stk)
-        call motion_correcter%correct(new_ptcl_stk)
-        call motion_correcter%kill
-        ! book-keeping
-        call make_relativepath(CWD_GLOB,new_ptcl_stk,stkfname)
-        if( spproj%os_stk%get_noris() > 1 )then
-            call spproj%os_stk%get_ori(1,o)
-            call spproj%os_stk%kill
-            call spproj%os_stk%new(1)
-            call spproj%os_stk%set_ori(1,o)
-            call spproj%os_ptcl2D%set_all2single('stkind',1.)
-            call spproj%os_ptcl3D%set_all2single('stkind',1.)
-            call spproj%os_stk%set(1,'fromp',1.)
-            call spproj%os_stk%set(1,'top',real(nptcls))
-            call spproj%os_stk%set(1,'nptcls',real(nptcls))
-            call spproj%os_stk%set(1,'stkkind','single')
-        endif
-        call spproj%os_ptcl2D%delete_entry('inpl')
-        call spproj%os_ptcl2D%set_all2single('lp',params_glob%lp)
-        call spproj%os_stk%set(1,'stk',stkfname)
-        call spproj%write(params%projfile)
-        call simple_end('**** SIMPLE_MOTION_REFINE_NANO NORMAL STOP ****')
-    end subroutine exec_motion_refine_nano
 
     subroutine exec_center2D_nano_distr( self, cline )
         use simple_commander_cluster2D, only: make_cavgs_commander_distr,cluster2D_commander_distr
@@ -1382,5 +1316,107 @@ contains
         & nohup.out oris.txt recvol_state01_even.spi recvol_state01_odd.spi&
         & *pproc* *part* RESOLUTION* *filelist* reproject_oris.txt')
     end subroutine exec_validate_nano
+
+    subroutine exec_tseries_denoise_particles( self, cline )
+        use simple_strategy2D3D_common, only: read_img
+        use simple_ppca,                only: ppca
+        class(tseries_denoise_particles_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        character(len=STDLEN), parameter :: STK_DENOISED = 'particles_denoised.mrc'
+        integer,               parameter :: Q = 200, QMIN = 21
+        type(image)          :: img
+        type(parameters)     :: params
+        type(ppca)           :: ppca_obj
+        real,    allocatable :: eigenvals(:),avg(:), dat(:,:), vec_sum(:), vec(:), vec_ref(:), vec_ptcl(:)
+        logical, allocatable :: l_mask(:,:,:)
+        real    :: threshold
+        integer :: ldim(3),R,i, iptcl, D,N, recsz, nimgs
+        call params%new(cline)
+        call find_ldim_nptcls(params%stk, ldim, nimgs)
+        ldim(3) = 1
+        if(.not.cline%defined('outstk')) params%outstk = trim(STK_DENOISED)
+        ! init
+        N = nimgs
+        allocate(l_mask(ldim(1),ldim(2),1),source=.true.)
+        D = product(ldim)
+        allocate(avg(D),dat(N,D),vec(D),vec_ref(D),vec_sum(D),source=0.)
+        inquire(iolength=recsz) avg
+        ! PPCA prep
+        call img%new(ldim,params%smpd)
+        call img%zero_and_unflag_ft
+        do iptcl = 1,N
+            call img%read(params%stk,iptcl)
+            call img%norm
+            vec = img%serialize(l_mask)
+            dat(iptcl,:) = vec(:)
+            avg = avg + vec
+            deallocate(vec)
+        enddo
+        avg = avg/real(N)
+        do i = 1,N
+            dat(i,:) = dat(i,:) - avg
+        enddo
+        ! pefrorm ppca
+        call ppca_obj%new(N, D, Q, dat, dorot=.true.)
+        call ppca_obj%master('data.dat', recsz ,'feat_stk.dat', 10)
+        deallocate(dat)
+        allocate(eigenvals(Q))
+        eigenvals = ppca_obj%get_evals()
+        ! find threshold
+        call otsu( eigenvals(QMIN:), threshold )
+        do i = QMIN,Q
+            if( eigenvals(i) < threshold )exit
+        enddo
+        R = i-1
+        write(logfhandle,'(A,I3)')'>>> # OF LATENT VECTORS USED: ',R
+        ! generate new particles
+        do iptcl=1,N
+            vec_ptcl = ppca_obj%generate_cumul(iptcl, [1,R], avg)
+            call img%unserialize(l_mask,vec_ptcl)
+            call img%norm
+            call img%write(params%outstk,iptcl)
+        enddo
+        ! cleanup
+        call ppca_obj%kill
+        call img%kill
+        call simple_end('**** SINGLE_TSERIES_DENOSIE_PARTICLES NORMAL STOP ****')
+    end subroutine exec_tseries_denoise_particles
+
+    subroutine exec_tseries_swap_stack( self, cline )
+        use simple_commander_project
+        class(tseries_swap_stack_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(sp_project) :: spproj, spproj_tmp
+        type(parameters) :: params
+        type(ctfparams)  :: ctfparms
+        integer :: ldim(3), nimgs, nstks
+        call cline%set('oritype','stk')
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        call spproj%read(params%projfile)
+        nstks = spproj%os_stk%get_noris()
+        if( nstks < 1 ) THROW_HARD('No stack could be detected in the project!')
+        call find_ldim_nptcls(params%stk, ldim, nimgs)
+        ldim(3) = 1
+        if( spproj%get_box() /= ldim(1) .or. spproj%get_box() /= ldim(2))then
+            THROW_HARD('Incompatible dimensions between stacks')
+        endif
+        if( nimgs /= spproj%os_ptcl2D%get_noris() ) THROW_HARD('Incompatible number of images and orientation parameters!')
+        ctfparms = spproj%get_ctfparams(params%oritype, 1)
+        call spproj_tmp%read(params%projfile)
+        call spproj%os_stk%kill
+        call spproj%os_ptcl2D%kill
+        call spproj%os_ptcl3D%kill
+        call spproj%add_stk(params%stk, ctfparms)
+        spproj%os_ptcl2D = spproj_tmp%os_ptcl2D
+        spproj%os_ptcl3D = spproj_tmp%os_ptcl3D
+        call spproj_tmp%kill
+        if( nstks > 1 )then
+            call spproj%os_ptcl2D%set_all2single('stkind',1.)
+            call spproj%os_ptcl3D%set_all2single('stkind',1.)
+        endif
+        call spproj%write(params%projfile)
+        call simple_end('**** SINGLE_TSERIES_SWAP_STACK NORMAL STOP ****')
+    end subroutine exec_tseries_swap_stack
 
   end module simple_commander_tseries

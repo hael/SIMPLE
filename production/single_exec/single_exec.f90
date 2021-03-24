@@ -25,14 +25,15 @@ type(tseries_import_commander)                :: xtseries_import
 type(import_particles_commander)              :: ximport_particles
 type(tseries_import_particles_commander)      :: xtseries_import_particles
 type(prune_project_commander_distr)           :: xprune_project
+type(tseries_swap_stack_commander)            :: xtseries_swap_stack
 
 ! RECONSTRUCTION PROGRAMS
 type(tseries_ctf_estimate_commander)          :: xtseries_ctf_estimate
 type(tseries_make_pickavg_commander)          :: xtseries_make_pickavg
 type(tseries_motion_correct_commander_distr)  :: xmcorr_distr
 type(tseries_track_particles_commander_distr) :: xtrack_distr
-type(motion_refine_nano_commander)            :: xmotion_refine
 type(graphene_subtr_commander)                :: xgraphene_subtr
+type(tseries_denoise_particles_commander)     :: xtseries_denoise_particles
 type(center2D_nano_commander_distr)           :: xcenter2D_distr
 type(cluster2D_nano_commander_hlev)           :: xcluster2D_distr
 type(map_cavgs_selection_commander)           :: xmap_cavgs_selection
@@ -85,6 +86,8 @@ select case(prg)
         call ximport_particles%execute(cline)
     case( 'prune_project' )
         call xprune_project%execute( cline )
+    case( 'tseries_swap_stack')
+        call xtseries_swap_stack%execute(cline)
 
     ! RECONSTRUCTION PROGRAMS
     case( 'tseries_make_pickavg')
@@ -95,10 +98,10 @@ select case(prg)
         call xmcorr_distr%execute( cline )
     case( 'tseries_track_particles' )
         call xtrack_distr%execute( cline )
-    case( 'motion_refine_nano' )
-        call xmotion_refine%execute( cline )
     case( 'graphene_subtr' )
         call xgraphene_subtr%execute( cline )
+    case( 'tseries_denoise_particles' )
+        call xtseries_denoise_particles%execute( cline )
     case( 'center2D_nano' )
         call xcenter2D_distr%execute(cline)
     case( 'cluster2D_nano' )
