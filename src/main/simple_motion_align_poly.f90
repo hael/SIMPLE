@@ -688,10 +688,7 @@ contains
                 enddo
             enddo
         enddo
-        !$omp end do nowait
-        ! $omp end parallel
-        ! print *,itmp
-        ! $omp parallel default(shared) private(i,j,t,ithr) proc_bind(close)
+        !$omp end do
         !$omp do schedule(static)
         do ithr = 1,self%nthr
             call self%ftexp_R(ithr)%copy( self%ftexp_tiles(1, itmp(1),itmp(2)))
