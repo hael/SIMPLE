@@ -29,7 +29,7 @@ public :: refine3D_nano_commander_distr
 public :: graphene_subtr_commander
 public :: initial_3Dmodel_nano_commander_distr
 public :: validate_nano_commander
-public :: tseries_denoise_particles_commander
+public :: tseries_denoise_trajectory_commander
 public :: tseries_swap_stack_commander
 private
 #include "simple_local_flags.inc"
@@ -94,10 +94,10 @@ type, extends(commander_base) :: validate_nano_commander
   contains
     procedure :: execute      => exec_validate_nano
 end type validate_nano_commander
-type, extends(commander_base) :: tseries_denoise_particles_commander
+type, extends(commander_base) :: tseries_denoise_trajectory_commander
   contains
-    procedure :: execute      => exec_tseries_denoise_particles
-end type tseries_denoise_particles_commander
+    procedure :: execute      => exec_tseries_denoise_trajectory
+end type tseries_denoise_trajectory_commander
 type, extends(commander_base) :: tseries_swap_stack_commander
   contains
     procedure :: execute      => exec_tseries_swap_stack
@@ -1317,10 +1317,10 @@ contains
         & *pproc* *part* RESOLUTION* *filelist* reproject_oris.txt')
     end subroutine exec_validate_nano
 
-    subroutine exec_tseries_denoise_particles( self, cline )
+    subroutine exec_tseries_denoise_trajectory( self, cline )
         use simple_strategy2D3D_common, only: read_img
         use simple_ppca,                only: ppca
-        class(tseries_denoise_particles_commander), intent(inout) :: self
+        class(tseries_denoise_trajectory_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         character(len=STDLEN), parameter :: STK_DENOISED = 'particles_denoised.mrc'
         integer,               parameter :: Q = 200, QMIN = 21
@@ -1380,7 +1380,7 @@ contains
         call ppca_obj%kill
         call img%kill
         call simple_end('**** SINGLE_TSERIES_DENOSIE_PARTICLES NORMAL STOP ****')
-    end subroutine exec_tseries_denoise_particles
+    end subroutine exec_tseries_denoise_trajectory
 
     subroutine exec_tseries_swap_stack( self, cline )
         use simple_commander_project
