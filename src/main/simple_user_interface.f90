@@ -4203,7 +4203,7 @@ contains
         &'PPCA-based particles denoising',&                     ! descr_short
         &'is a program for PPCA-based particles denoising',&    ! descr_long
         &'single_exec',&                                        ! executable
-        &2, 1, 0, 0, 0, 0, 1, .false.)                           ! # entries in each group, requires sp_project
+        &2, 2, 0, 0, 0, 0, 1, .false.)                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call tseries_denoise_trajectory%set_input('img_ios', 1, stk)
@@ -4211,6 +4211,7 @@ contains
         call tseries_denoise_trajectory%set_input('img_ios', 2, outstk)
         ! parameter input/output
         call tseries_denoise_trajectory%set_input('parm_ios', 1, smpd)
+        call tseries_denoise_trajectory%set_input('parm_ios', 2, 'winsz', 'num', 'Time window size', 'Time window size(frames)', 'winsz in # frames', .false., 500.0)
         ! alternative inputs
         ! <empty>
         ! search controls
