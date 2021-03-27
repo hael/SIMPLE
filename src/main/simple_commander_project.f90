@@ -143,6 +143,7 @@ contains
         class(cmdline),                      intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
+        call cline%set('mkdir', 'no')
         call params%new(cline, silent=.true.)
         call spproj%print_info(params%projfile)
         call spproj%kill
