@@ -3641,14 +3641,14 @@ contains
         nrot = 0
         do i=1,50
             sm=0.
-            do ip=1,n-1 
+            do ip=1,n-1
                 do iq=ip+1,n
                     sm=sm+abs(a(ip,iq))
                 enddo
             enddo
             if(sm.eq.0.)return
             if(i.lt.4)then
-                tresh=0.2*sm/n**2 
+                tresh=0.2*sm/n**2
             else
                 tresh=0.
             endif
@@ -3706,14 +3706,14 @@ contains
             enddo
             do ip=1,n
                 b(ip)=b(ip)+z(ip)
-                d(ip)=b(ip) 
-                z(ip)=0. 
+                d(ip)=b(ip)
+                z(ip)=0.
             enddo
         enddo
         write(*,*)' Too many iterations in Jacobi'
-    end subroutine jacobi_sp      
+    end subroutine jacobi_sp
 
-!> \brief jacobi SVD, NR
+    !> \brief jacobi SVD, NR
     subroutine jacobi_dp( a, n, np, d, v, nrot )
         integer,  intent(in)    :: n,np
         real(dp), intent(inout) :: a(np,np), v(np,np), d(np)
@@ -3730,14 +3730,14 @@ contains
         nrot = 0
         do i=1,50
             sm=0.
-            do ip=1,n-1 
+            do ip=1,n-1
                 do iq=ip+1,n
                     sm=sm+abs(a(ip,iq))
                 enddo
             enddo
             if(sm.eq.0.)return
             if(i.lt.4)then
-                tresh=0.2*sm/n**2 
+                tresh=0.2*sm/n**2
             else
                 tresh=0.
             endif
@@ -3795,8 +3795,8 @@ contains
             enddo
             do ip=1,n
                 b(ip)=b(ip)+z(ip)
-                d(ip)=b(ip) 
-                z(ip)=0. 
+                d(ip)=b(ip)
+                z(ip)=0.
             enddo
         enddo
         write(*,*)' Too many iterations in Jacobi'
@@ -3807,7 +3807,7 @@ contains
         integer, intent(in)    :: n,np
         real,    intent(inout) :: d(np),v(np,np)
         ! Given the eigenvalues d and eigenvectors v as output from jacobi (§11.1) or tqli (§11.3),
-        ! this routine sorts the eigenvalues into descending order, 
+        ! this routine sorts the eigenvalues into descending order,
         ! and rearranges the columns of v correspondingly. The method is straight insertion.
         integer             :: i,j,k
         real                :: p

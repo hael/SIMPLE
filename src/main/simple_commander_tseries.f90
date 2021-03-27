@@ -1319,18 +1319,21 @@ contains
 
     subroutine exec_tseries_denoise_trajectory( self, cline )
         use simple_strategy2D3D_common, only: read_img
-        use simple_ppca,                only: ppca
+        use simple_ppca_serial,         only: ppca_serial
+        !$ use omp_lib
+        !$ use omp_lib_kinds
         class(tseries_denoise_trajectory_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        character(len=STDLEN), parameter :: STK_DENOISED = 'particles_denoised.mrc'
-        integer,               parameter :: Q = 200, QMIN = 21
+        class(cmdline),                              intent(inout) :: cline
+        character(len=STDLEN), parameter :: STK_DENOISED = 'trajectory_denoised.mrc'
+        integer,               parameter :: Q = 60, QMIN = 11, WINSZ_DEFAULT = 500, MAXPPCAITS = 10
         type(image)          :: img
         type(parameters)     :: params
-        type(ppca)           :: ppca_obj
+        type(ppca_serial), allocatable :: ppca_objs(:)
         real,    allocatable :: eigenvals(:),avg(:), dat(:,:), vec_sum(:), vec(:), vec_ref(:), vec_ptcl(:)
         logical, allocatable :: l_mask(:,:,:)
+        integer, allocatable :: R(:)
         real    :: threshold
-        integer :: ldim(3),R,i, iptcl, D,N, recsz, nimgs
+        integer :: ldim(3),i,j,iptcl,D,N,recsz,nimgs,iwinsz,ito,ifrom,jfrom,jto,nppcas,nthr,nthr_max,cnt
         call params%new(cline)
         call find_ldim_nptcls(params%stk, ldim, nimgs)
         ldim(3) = 1
@@ -1339,7 +1342,7 @@ contains
         N = nimgs
         allocate(l_mask(ldim(1),ldim(2),1),source=.true.)
         D = product(ldim)
-        allocate(avg(D),dat(N,D),vec(D),vec_ref(D),vec_sum(D),source=0.)
+        allocate(avg(D),dat(N,D),vec(D),vec_ref(D),vec_sum(D),eigenvals(Q),source=0.)
         inquire(iolength=recsz) avg
         ! PPCA prep
         call img%new(ldim,params%smpd)
@@ -1356,30 +1359,65 @@ contains
         do i = 1,N
             dat(i,:) = dat(i,:) - avg
         enddo
-        ! pefrorm ppca
-        call ppca_obj%new(N, D, Q, dat, dorot=.true.)
-        call ppca_obj%master('data.dat', recsz ,'feat_stk.dat', 10)
+        iwinsz = WINSZ_DEFAULT
+        if( cline%defined('winsz') ) iwinsz = int(params%winsz)
+        nppcas = 0
+        do i = 1,N,iwinsz
+            nppcas = nppcas + 1
+        end do
+        allocate( ppca_objs(nppcas), R(nppcas) )
+        nppcas = 0
+        do i = 1,N,iwinsz
+            ifrom  = i
+            ito    = min(N,i + iwinsz - 1)
+            nppcas = nppcas + 1
+            call ppca_objs(nppcas)%new(ito - ifrom + 1, D, Q, dat(ifrom:ito,:), doprint=.false.)
+        end do
+        write(logfhandle,'(a)') '>>> DOING '//int2str(nppcas)//' PPCAS IN PARALLEL'
+        !$ nthr_max= omp_get_max_threads()
+        if( nthr_max >= nppcas )then
+            nthr = nppcas
+        else
+            nthr = nthr_max
+        endif
+        !$ call omp_set_num_threads(nthr)
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+        do i = 1,nppcas
+            call ppca_objs(i)%master(recsz, MAXPPCAITS)
+        end do
+        !$omp end parallel do
         deallocate(dat)
-        allocate(eigenvals(Q))
-        eigenvals = ppca_obj%get_evals()
-        ! find threshold
-        call otsu( eigenvals(QMIN:), threshold )
-        do i = QMIN,Q
-            if( eigenvals(i) < threshold )exit
-        enddo
-        R = i-1
-        write(logfhandle,'(A,I3)')'>>> # OF LATENT VECTORS USED: ',R
+        ! find thresholds
+        do i = 1,nppcas
+            eigenvals = ppca_objs(i)%get_evals()
+            call otsu( eigenvals(QMIN:), threshold )
+            do j = QMIN,Q
+                if( eigenvals(j) < threshold )exit
+            enddo
+            R(i) = j-1
+            write(logfhandle,'(A,I3)')'>>> # OF LATENT VECTORS USED: ',R(i)
+        end do
+        nppcas = 0
         ! generate new particles
-        do iptcl=1,N
-            vec_ptcl = ppca_obj%generate_cumul(iptcl, [1,R], avg)
-            call img%unserialize(l_mask,vec_ptcl)
-            call img%norm
-            call img%write(params%outstk,iptcl)
-        enddo
+        do i = 1,N,iwinsz
+            jfrom  = i
+            jto    = min(N,i + iwinsz - 1)
+            nppcas = nppcas + 1
+            cnt = 0
+            do j=jfrom,jto
+                cnt = cnt + 1
+                vec_ptcl = ppca_objs(nppcas)%generate_cumul(cnt, [1,R(nppcas)], avg)
+                call img%unserialize(l_mask,vec_ptcl)
+                call img%norm
+                call img%write(params%outstk,j)
+            end do
+        end do
         ! cleanup
-        call ppca_obj%kill
+        do i = 1,nppcas
+            call ppca_objs(i)%kill
+        end do
         call img%kill
-        call simple_end('**** SINGLE_TSERIES_DENOSIE_PARTICLES NORMAL STOP ****')
+        call simple_end('**** SINGLE_TSERIES_DENOSIE_TRAJECTORY NORMAL STOP ****')
     end subroutine exec_tseries_denoise_trajectory
 
     subroutine exec_tseries_swap_stack( self, cline )
