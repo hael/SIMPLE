@@ -510,6 +510,7 @@ contains
             end select
             if( iter >= params%maxits ) converged = .true.
             if( converged )then
+                if(trim(params%oritype).eq.'cls3D') call build%spproj%map2ptcls
                 ! safest to write the whole thing here as multiple fields updated
                 call build%spproj%write
                 exit ! main loop
