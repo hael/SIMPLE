@@ -164,7 +164,7 @@ end subroutine fit_lattice
 subroutine run_lattice_fit(pdbfile,model,a)
   character(len=*),  intent(inout) :: pdbfile ! file containing the atomic positions
   real,              intent(inout) :: a(3)    ! fitted lattice parameters
-  real, allocatable, intent(inout)  :: model(:,:)
+  real, allocatable, intent(inout) :: model(:,:)
   integer            :: i, n
   type(atoms) :: atomic_pos
   call atomic_pos%new(pdbfile)
