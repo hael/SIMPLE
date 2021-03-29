@@ -167,6 +167,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: xmlloc=''
     ! other character variables in ascending alphabetical order
     character(len=STDLEN) :: algorithm=''         !< algorithm to be used
+    character(len=STDLEN) :: cn_type='cn_gen'     !< generalised coordination number (cn_gen) or stardard (cn_std)
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)      :: automatic='no'       !< automatic thres for edge detect (yes|no) {no}
     character(len=4)      :: automsk='no'
@@ -340,7 +341,6 @@ type :: parameters
     real    :: cenlp=20.           !< low-pass limit for binarisation in centering(in A){30 A}
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
     real    :: cn_thres=5.         !< threshold (outliers removal based on coordination number)
-    real    :: cs_thres=5.         !< threshold (outliers removal based on contact score)
     real    :: ctfreslim=8.
     real    :: dcrit_rel=0.5       !< critical distance relative to box(0-1){0.5}
     real    :: deflim=4.
@@ -505,6 +505,7 @@ contains
         call check_carg('classtats',      self%classtats)
         call check_carg('clustermode',    self%clustermode)
         call check_carg('clustvalid',     self%clustvalid)
+        call check_carg('cn_type',        self%cn_type)
         call check_carg('compare',        self%compare)
         call check_carg('continue',       self%continue)
         call check_carg('corr_filt',      self%continue)
@@ -767,7 +768,6 @@ contains
         call check_rarg('cenlp',          self%cenlp)
         call check_rarg('cs',             self%cs)
         call check_rarg('cn_thres',       self%cn_thres)
-        call check_rarg('cs_thres',       self%cs_thres)
         call check_rarg('ctfreslim',      self%ctfreslim)
         call check_rarg('dcrit_rel',      self%dcrit_rel)
         call check_rarg('deflim',         self%deflim)

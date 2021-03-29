@@ -1617,7 +1617,7 @@ contains
         ! <empty>
         ! search controls
         call detect_atoms%set_input('srch_ctrls', 1, 'thres', 'num', 'Threshold for binarization','Threshold for volume binarization', 'number', .false., 1.)
-        call detect_atoms%set_input('srch_ctrls', 2, 'cs_thres', 'num', 'Threshold for outlier discarding based on contact score','Threshold for outlier discarding based on contact score', 'number', .false., 5.)
+        call detect_atoms%set_input('srch_ctrls', 2, 'cn_type', 'str', 'Generalised coordination number (cn_gen) or standard one (cn_std) for outliers elimination','Generalised cn (cn_gen) or standard (cn_std)', 'cn type e.g. cn_gen or cn_std', .false., 'cn_gen')
         call detect_atoms%set_input('srch_ctrls', 3, 'cn_thres', 'num', 'Threshold for outlier discarding based on coordination number','Threshold for outlier discarding based on coordination number', 'number', .false., 5.)
         ! filter controls
         call detect_atoms%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')

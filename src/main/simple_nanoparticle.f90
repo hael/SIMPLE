@@ -532,13 +532,18 @@ contains
 
 
     ! This subroutine discard outliers that resisted binarization.
+    ! If generalised is true
     ! It calculates the generalised coordination number (cn_gen) of each atom and discards
     ! the atoms with cn_gen < cn_thresh
+    ! If generalised is false
+    ! It calculates the standard coordination number (cn) of each atom and discards
+    ! the atoms with cn < cn_thresh
     ! It modifies the img_bin and img_cc instances deleting the
     ! identified outliers.
-    subroutine discard_outliers_cn(self, cn_thresh)
+    subroutine discard_outliers_cn(self, cn_thresh,generalised)
         class(nanoparticle), intent(inout) :: self
-        integer,             intent(in)    :: cn_thresh ! threshold for discard outliers based on contact score
+        integer,             intent(in)    :: cn_thresh   ! threshold for discard outliers based on coordination number
+        logical,             intent(in)    :: generalised ! use cn_gen or cn standard?
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
         logical, allocatable :: mask(:)
         real, allocatable    :: centers_ang(:,:) ! coordinates of the atoms in ANGSTROMS
@@ -574,11 +579,24 @@ contains
           write(filnum2,*) cn_gen
           call fclose(filnum2)
         endif
-        if(DEBUG) write(logfhandle, *) 'Before outliers discarding cn gen is'
-        if(DEBUG) write(logfhandle, *)  cn_gen
         allocate(mask(self%n_cc), source = .true.)
-        where(cn_gen < cn_thresh) mask = .false. ! false where atom has to be discarded
-        n_discard = count(cn_gen<cn_thresh)
+        if(generalised .eqv. .true.) then
+          if(DEBUG) then
+            write(logfhandle, *) 'Before outliers discarding cn gen is'
+            write(logfhandle, *)  cn_gen
+          endif
+          write(logfhandle, *) 'Using GENERALISED cn'
+          where(cn_gen < cn_thresh) mask = .false. ! false where atom has to be discarded
+          n_discard = count(cn_gen<cn_thresh)
+        else
+          if(DEBUG) then
+            write(logfhandle, *) 'Before outliers discarding cn standard is'
+            write(logfhandle, *)  cn
+          endif
+          write(logfhandle, *) 'Using STANDARD cn'
+          where(cn < cn_thresh) mask = .false. ! false where atom has to be discarded
+          n_discard = count(cn<cn_thresh)
+        endif
         write(logfhandle, *) 'Numbers of atoms discarded because of low cn ', n_discard
         ! Allocate and then update variable self%cn
         allocate(self%cn    (self%n_cc-n_discard), source = 0)
@@ -586,18 +604,26 @@ contains
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
         ! Removing outliers from the binary image and the connected components image
-        do cc = 1, self%n_cc
-          if(cn_gen(cc)<cn_thresh) then
-              where(imat_cc == cc) imat_bin = 0
-          endif
-        enddo
+        if(generalised .eqv. .true.) then
+          do cc = 1, self%n_cc
+            if(cn_gen(cc)<cn_thresh) then
+                where(imat_cc == cc) imat_bin = 0
+            endif
+          enddo
+        else
+          do cc = 1, self%n_cc
+            if(cn(cc)<cn_thresh) then
+                where(imat_cc == cc) imat_bin = 0
+            endif
+          enddo
+        endif
         call self%img_bin%set_imat(imat_bin)
         call self%img_bin%find_ccs(self%img_cc)
         ! update number of connected components
         call self%img_cc%get_nccs(self%n_cc)
         call self%find_centers()
         deallocate(centers_ang)
-        allocate(centers_ang(3,self%n_cc), source = (self%centers-1.)*self%smpd)! -1?? TO FIX
+        allocate(centers_ang(3,self%n_cc), source = (self%centers-1.)*self%smpd)
         call run_coord_number_analysis(centers_ang,radius,self%cn,self%cn_gen)
         ! ATTENTION: you will see low coord numbers because they are UPDATED, after elimination
         ! of the atoms with low cn. It is like this in order to be consistent with the figure.
@@ -611,109 +637,84 @@ contains
     end subroutine discard_outliers_cn
 
     ! This subroutine discard outliers that resisted binarization.
-    ! It calculates the contact score of each atom and discards the bottom
+    ! It calculates the generalised coordination number of each atom and discards the bottom
     ! PERCENT_DISCARD% of the atoms according to the contact score.
     ! It modifies the img_bin and img_cc instances deleting the
     ! identified outliers.
-    ! Contact score: fix a radius and an atom A. Count the number N of atoms
-    ! in the sphere centered in A of that radius. Define contact score of A
-    ! equal to N. Do it for each atom.
-    subroutine discard_outliers(self, cs_thresh)
+    subroutine discard_outliers(self)
         class(nanoparticle), intent(inout) :: self
-        integer, optional,   intent(in)    :: cs_thresh ! threshold for discard outliers based on contact score
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
         real,    parameter   :: PERCENT_DISCARD = 5./100.
         integer, allocatable :: contact_scores(:)
         logical, allocatable :: mask(:)
-        real    :: dist
+        real, allocatable    :: centers_ang(:,:) ! coordinates of the atoms in ANGSTROMS
+        real    :: cn_gen(self%n_cc)
+        integer :: cn(self%n_cc)
+        real    :: a(3),dist
         real    :: radius  !radius of the sphere to consider
         integer :: cc
-        integer :: cnt     !contact_score
         integer :: loc(1)
-        integer :: n_discard,filnum1
+        integer :: n_discard,filnum1,filnum,i
         integer :: label(1)
-        if(present(cs_thresh)) then
-          write(logfhandle, *) '****outliers discarding cs, init'
-        else
-          write(logfhandle, *) '****outliers discarding, init'
+        write(logfhandle, *) '****outliers discarding default, init'
+        allocate(centers_ang(3,self%n_cc), source=(self%centers-1.)*self%smpd)! -1?? TO FIX
+        ! In order to find radius for cn calculation, FccLattice
+        ! has to be fit.
+        if(DEBUG) then
+          call fopen(filnum, file='CentersAngCN.txt')
+          do i = 1, size(centers_ang,2)
+            write(filnum,*) centers_ang(:,i)
+          enddo
+          call fclose(filnum)
+          call fopen(filnum1, file='CentersPxlsCN.txt')
+          do i = 1, size(self%centers,2)
+            write(filnum1,*) self%centers(:,i)
+          enddo
+          call fclose(filnum1)
         endif
-
-        call fopen(filnum1, file='AtomsCoordInPxls.txt')
-        write(filnum1,*) self%centers
-        call fclose(filnum1)
-
-        ! Update number of connected components?
-        ! Outliers removal using contact score
-        radius = 2.*(2.*self%theoretical_radius)/self%smpd ! In pixels
+        if(DEBUG) then
+          call fopen(filnum1, file='AtomsCoordInPxls.txt')
+          write(filnum1,*) self%centers
+          call fclose(filnum1)
+        endif
+        call fit_lattice(centers_ang,a)
+        call find_radius_for_coord_number(a,radius)
+        if(DEBUG ) write(logfhandle,*) 'Radius for coord numb calcolation ', radius
+        call run_coord_number_analysis(centers_ang,radius,cn,cn_gen)
         allocate(mask(self%n_cc), source = .true.)
-        allocate(contact_scores(self%n_cc), source = 0)
-        do cc = 1, self%n_cc !fix the atom
-            dist = 0.
-            mask = .true.
-            cnt = 0
-            mask(cc)  = .false.
-            do while(dist < radius)
-                dist = pixels_dist(self%centers(:,cc), self%centers,'min', mask, loc)
-                mask(loc) = .false.
-                cnt = cnt + 1
-            enddo
-            contact_scores(cc) = cnt - 1 !-1 because while loop counts one extra before exiting
-        enddo
-        if(present(cs_thresh)) then
-          n_discard = count(contact_scores<cs_thresh) !unnecessary
-        else
-          n_discard = nint(self%n_cc*PERCENT_DISCARD)
-        endif
-        if(present(cs_thresh)) then
-           write(logfhandle, *) 'Numbers of atoms discarded because of low cs ', n_discard
-        else
-          write(logfhandle, *) 'Numbers of atoms discarded because outliers ', n_discard
-        endif
-        allocate(self%contact_scores(self%n_cc-n_discard), source = 0)
+        n_discard = nint(self%n_cc*PERCENT_DISCARD)
+        write(logfhandle, *) 'Numbers of atoms discarded because outliers ', n_discard
+        ! Allocate and then update variable self%cn
+        allocate(self%cn    (self%n_cc-n_discard), source = 0)
+        allocate(self%cn_gen(self%n_cc-n_discard), source = 0.)
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
         ! Removing outliers from the binary image and the connected components image
-        if(present(cs_thresh)) then
-          do cc = 1, self%n_cc
-            if(contact_scores(cc)<cs_thresh) then
-                where(imat_cc == cc) imat_bin = 0
-            endif
-          enddo
-        else
-          mask(1:self%n_cc) = .true. ! reset
-          do cc = 1, n_discard
-              label = minloc(contact_scores, mask)
-              where(imat_cc == label(1))
-                 imat_bin = 0
-              endwhere
-              mask(label(1)) = .false.
-          enddo
-        endif
+        mask(1:self%n_cc) = .true. ! reset
+        do cc = 1, n_discard
+            label = minloc(cn_gen, mask)
+            where(imat_cc == label(1))
+               imat_bin = 0
+            endwhere
+            mask(label(1)) = .false.
+        enddo
         call self%img_bin%set_imat(imat_bin)
         call self%img_bin%find_ccs(self%img_cc)
         ! update number of connected components
         call self%img_cc%get_nccs(self%n_cc)
         call self%find_centers()
-        ! fill in self%contact_scores (I have to recalculate it to be consistent with the indexes of the ccs)
-        if(allocated(mask)) deallocate(mask)
-        allocate(mask(self%n_cc), source = .true.)
-        do cc = 1, self%n_cc !fix the atom
-            dist = 0.
-            mask = .true.
-            cnt = 0
-            mask(cc)  = .false.
-            do while(dist < radius)
-                dist = pixels_dist(self%centers(:,cc), self%centers,'min', mask, loc)
-                mask(loc) = .false.
-                cnt = cnt + 1
-            enddo
-            self%contact_scores(cc) = cnt - 1 !-1 because while loop counts one extra before exiting
-        enddo
-        if(present(cs_thresh)) then
-          write(logfhandle, *) '****outliers discarding cs, completed'
-        else
-          write(logfhandle, *) '****outliers discarding, completed'
+        deallocate(centers_ang)
+        allocate(centers_ang(3,self%n_cc), source = (self%centers-1.)*self%smpd)
+        call run_coord_number_analysis(centers_ang,radius,self%cn,self%cn_gen)
+        ! ATTENTION: you will see low coord numbers because they are UPDATED, after elimination
+        ! of the atoms with low cn. It is like this in order to be consistent with the figure.
+        if(DEBUG) then
+           write(logfhandle, *) 'After outliers discarding cn is'
+           write(logfhandle, *)  self%cn
+           write(logfhandle, *) 'And generalised cn is'
+           write(logfhandle, *)  self%cn_gen
         endif
+        write(logfhandle, *) '****outliers discarding default, completed'
     end subroutine discard_outliers
 
     ! This subrouitne validates the identified atomic positions
@@ -2261,20 +2262,23 @@ contains
     ! Detect atoms. User does NOT input threshold for binarization..
     ! User might have inputted threshold for outliers
     ! removal based on contact score.
-    subroutine identify_atomic_pos(self, csn_thresh, cn_cs )
+    subroutine identify_atomic_pos(self, cn_thresh, cn_type )
       class(nanoparticle), intent(inout) :: self
-      integer,             intent(in)    :: csn_thresh
-      character(len=2),    intent(in)    :: cn_cs ! use contact score or coordination number?
+      integer,             intent(in)    :: cn_thresh
+      character(len=6),    intent(in)    :: cn_type ! use generalised cn or standard?
       ! Phase correlations approach
       call self%phasecorrelation_nano_gaussian()
       ! Nanoparticle binarization
       call self%binarize_nano()
       ! Outliers discarding
-      if(csn_thresh > 0) then
-        if(cn_cs .eq. 'cn') then
-          call self%discard_outliers_cn(csn_thresh)
+      if(cn_thresh > 0) then
+        if(cn_type .eq. 'cn_gen') then
+          call self%discard_outliers_cn(cn_thresh, .true.)
+        elseif(cn_type .eq. 'cn_std') then
+          call self%discard_outliers_cn(cn_thresh, .false.)
         else
-          call self%discard_outliers(csn_thresh)
+          write(logfhandle,*) 'Invalid cn_type, proceeding with cn_gen'
+          call self%discard_outliers_cn(cn_thresh, .true.)
         endif
       else
         call self%discard_outliers()
@@ -2289,11 +2293,11 @@ contains
     ! No phasecorrelation filter is applied.
     ! User might have inputted threshold for outliers
     ! removal based on contact score.
-    subroutine identify_atomic_pos_thresh(self, thresh, csn_thresh, cn_cs)
+    subroutine identify_atomic_pos_thresh(self, thresh, cn_thresh, cn_type)
       class(nanoparticle), intent(inout) :: self
       real,                intent(in)    :: thresh
-      integer,             intent(in)    :: csn_thresh
-      character(len=2),    intent(in)    :: cn_cs ! use contact score or coordination number?
+      integer,             intent(in)    :: cn_thresh
+      character(len=2),    intent(in)    :: cn_type ! use generalised or standard coord number?
       ! Nanoparticle binarization
       call self%img%binarize(thres=thresh,self_out=self%img_bin)
       call self%img_bin%set_imat()
@@ -2303,11 +2307,14 @@ contains
       ! Find atom centers
       call self%find_centers(self%img_bin, self%img_cc)
       ! Outliers discarding
-      if(csn_thresh>0) then
-        if(cn_cs .eq. 'cn') then
-          call self%discard_outliers_cn(csn_thresh)
+      if(cn_thresh>0) then
+        if(cn_type .eq. 'cn_gen') then
+          call self%discard_outliers_cn(cn_thresh, .true.)
+        elseif(cn_type .eq. 'cn_std') then
+          call self%discard_outliers_cn(cn_thresh, .false.)
         else
-          call self%discard_outliers(csn_thresh)
+          write(logfhandle,*) 'Invalid cn_type, proceeding with cn_gen'
+          call self%discard_outliers_cn(cn_thresh, .true.)
         endif
       else
         call self%discard_outliers()

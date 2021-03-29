@@ -1066,7 +1066,7 @@ contains
         ! (4) DETECT ATOMS, produces DETECTED_ATOMS_PDB
         call cline_detect_atoms%set('prg',      'detect_atoms')
         call cline_detect_atoms%set('smpd',     real(params%smpd))
-        call cline_detect_atoms%set('cs_thres', 5.)
+        call cline_detect_atoms%set('cn_type', 'cn_gen') !cn_gen or cn_std
         call cline_detect_atoms%set('cn_thres', 5.)
         call cline_detect_atoms%set('vol1',     trim(STAGE1_VOL)//params%ext)
         call cline_detect_atoms%set('nthr',     real(params%nthr))
