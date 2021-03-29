@@ -51,7 +51,7 @@ contains
         type(qsys_env)   :: qenv
         type(cmdline)    :: cline_volassemble
         type(chash)      :: job_descr
-        integer          :: state, ipart
+        integer          :: state, ipart, sz_list
         logical          :: fall_over
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs', 5.) ! to assure that shifts are being used
@@ -73,10 +73,16 @@ contains
         if( params%l_rec_soft )then
             call make_relativepath(CWD_GLOB,params%dir_refine,refine_path)
             call simple_list_files(trim(refine_path)//'/'//trim(O_PEAKS_FBODY)//'*', list)
-            if( size(list) == 0 )then
+            sz_list = size(list)
+            if( sz_list == 0 )then
                 THROW_HARD('No opeaks can be found in '//trim(params%dir_refine))
-            elseif( size(list) /= params%nparts )then
-                THROW_HARD('# partitions not consistent with that in '//trim(params%dir_refine))
+            elseif( sz_list /= params%nparts )then
+                if( sz_list == 1 )then
+                    ! assume stack has been swapped, so split again
+                    call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
+                else
+                    THROW_HARD('# partitions not consistent with that in '//trim(params%dir_refine))
+                endif
             endif
             ! copy the orientation peak distributions
             if( trim(params%dir_refine).eq.trim(CWD_GLOB) )then
