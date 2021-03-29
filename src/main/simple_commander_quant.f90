@@ -80,8 +80,7 @@ contains
         class(cmdline),                intent(inout) :: cline !< command line input
         type(parameters)   :: params
         type(nanoparticle) :: nano
-        character(len=2)   :: cn_cs
-        integer            :: csn_thresh
+        integer            :: cn_thresh
         if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
@@ -95,28 +94,32 @@ contains
         call nano%mask(params%msk)
         ! execute
         if(cline%defined('thres')) then      ! threshold for binarization
-          if(cline%defined('cs_thres')) then ! contact score threshold for outliers removal
-              cn_cs = 'cs'
-              call nano%identify_atomic_pos_thresh(params%thres, nint(params%cs_thres), cn_cs)
-          elseif(cline%defined('cn_thres')) then
-              cn_cs = 'cn'
-              call nano%identify_atomic_pos_thresh(params%thres, nint(params%cn_thres), cn_cs)
+          if(cline%defined('cn_thres')) then ! contact score threshold for outliers removal
+            if(.not. cline%defined('cn_type')) then
+              THROW_HARD('ERROR! cn_type needs to be specified when cn_thres is used; exec_detect_atoms')
+            else if (params%cn_type .ne. 'cn_gen' .and. params%cn_type .ne. 'cn_std') then
+              THROW_WARN('Unvalid cn_type, proceeding with generalised coordination number (cn_gen)')
+              call cline%set('cn_type', 'cn_gen')
+            endif
+              call nano%identify_atomic_pos_thresh(params%thres, nint(params%cn_thres), params%cn_type)
           else
-              cn_cs = 'na'
-              csn_thresh = 0
-              call nano%identify_atomic_pos_thresh(params%thres, csn_thresh, cn_cs)
+              call cline%set('cn_type', 'cn_nan')
+              cn_thresh = 0
+              call nano%identify_atomic_pos_thresh(params%thres, cn_thresh, params%cn_type)
           endif
         else
-          if(cline%defined('cs_thres')) then ! contact score threshold for outliers removal
-              cn_cs = 'cs'
-              call nano%identify_atomic_pos(nint(params%cs_thres), cn_cs)
-          elseif(cline%defined('cn_thres')) then
-              cn_cs = 'cn'
-              call nano%identify_atomic_pos(nint(params%cn_thres), cn_cs)
+          if(cline%defined('cn_thres')) then
+            if(.not. cline%defined('cn_type')) then
+              THROW_HARD('ERROR! cn_type needs to be specified when cn_thres is used; exec_detect_atoms')
+            elseif (params%cn_type .ne. 'cn_gen' .and. params%cn_type .ne. 'cn_std') then
+              THROW_WARN('Unvalid cn_type, proceeding with generalised coordination number (cn_gen)')
+              call cline%set('cn_type', 'cn_gen')
+            endif
+            call nano%identify_atomic_pos(nint(params%cn_thres), params%cn_type)
           else
-              cn_cs = 'na'
-              csn_thresh = 0
-              call nano%identify_atomic_pos(csn_thresh,cn_cs)
+            call cline%set('cn_type', 'cn_nan')
+              cn_thresh = 0
+              call nano%identify_atomic_pos(cn_thresh,params%cn_type)
           endif
         endif
         ! kill
