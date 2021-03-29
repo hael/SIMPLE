@@ -48,7 +48,6 @@ contains
             call self%s%prep4srch
             nrefs = self%s%nrefs
             if( params_glob%l_clsneigh )then ! neighbours defined by projection direction of class average
-                ! call build_glob%eulspace%nearest_proj_neighbors(self%s%o_cls, params_glob%athres, lnns)
                 call build_glob%eulspace%nearest_proj_neighbors(build_glob%spproj%os_cls3D, self%s%class,&
                 &params_glob%nnn, build_glob%nnmat, params_glob%athres, lnns)
             else                             ! neighbours defined based on previous particle 3D
