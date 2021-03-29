@@ -480,17 +480,30 @@ end module simple_test_chiara_try_mod
 program simple_test_chiara_try
    include 'simple_lib.f08'
    use simple_image, only : image
-   use simple_nano_utils
+   use simple_nano_utils, only : dock_nanosPDB, test_dockPDB
    use simple_atoms, only : atoms
+   use simple_dock_coords
    use simple_lattice_fitting, only : run_lattice_fit
    use simple_strain_mapping,  only : test_strain_analysis
-   character(len=100) :: pdbfile
+   character(len=100) :: pdbfile1, pdbfile2, pdbfile_out1, pdbfile_out2, pdbfile
    real, allocatable :: model(:,:)
-   real :: a(3)
+   real :: theta,t(3),a(3), trs_in, rot_trans(7), U(3,3), r(3), r_com(3)
+   type(atoms) :: a_ref, a_targ
+   integer :: i, n
+
+
    ! In /Users/chiara/Desktop/Nanoparticles/StrainAnalysis/TestLatticeFit
-   pdbfile= 'ptcl1new_atom_centers.pdb'
-   call run_lattice_fit(pdbfile, model,a)
-   ! call strain_analysis(model,a)
+   pdbfile1= 'vol_Nov26_atom_centers.pdb'
+   pdbfile2= 'vol_Nov28_atom_centers.pdb'
+   pdbfile_out1 = 'vol_26Nov_atom_centers_docked'
+   pdbfile_out2 = 'vol_28Nov_atom_centers_docked'
+   !In /Users/chiara/Desktop/Nanoparticles/MapsToDOCK/TestDockPDBFiles
+   ! pdbfile1= 'particle1_atom_centers.pdb'
+   ! pdbfile2= 'particle1_c3sym_atom_centers.pdb'
+   ! pdbfile_out1 = 'particle1_atom_centers_docked'
+   ! pdbfile_out2 = 'particle1_c3sym_atom_centers_docked'
+   call dock_nanosPDB(pdbfile1,pdbfile2,pdbfile_out1,pdbfile_out2)
+
 
 end program simple_test_chiara_try
 
@@ -510,7 +523,7 @@ end program simple_test_chiara_try
  !  t = m_2 - m_1
  !  call atom_2%translate(-t)
  !  call atom_2%writePDB('atom_centers_translated')
- !  ! Kabasch
+ !  ! Kabsch
  !  ! theoretical_radius = 1.1
  !  if(n_1 < n_2) then
  !      N_min = n_1
@@ -648,8 +661,6 @@ end program simple_test_chiara_try
  ! real, pointer :: rmat(:,:,:)
  ! real, allocatable :: rmat_aux(:,:,:)
  ! integer, allocatable :: lmsk(:,:,:), lmat(:,:,:)
-
-
 ! GRAPHENE PEAKS
 ! real, parameter :: UP_LIM=2.14, L_LIM = 1.23
 ! call img_spec%new([BOX,BOX,1], smpd)
