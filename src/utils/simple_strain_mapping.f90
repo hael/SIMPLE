@@ -19,6 +19,7 @@ contains
 
 ! ATTENTION: input coords of model have to be in ANGSTROMS.
 subroutine strain_analysis(model,a)
+  use simple_strings
   real, intent(inout)  :: model(:,:)
   real, intent(inout)  :: a(3)        ! fitted lattice parameter
   real, parameter      :: H = 2.      ! for Weighted KDE differentiation
@@ -43,7 +44,7 @@ subroutine strain_analysis(model,a)
   real    :: Uz_plusx_local, Uz_minusx_local, Uz_plusy_local, Uz_minusy_local, Uz_plusz_local, Uz_minusz_local
   real    :: UR_plusR_local, UR_minusR_local, Ut_plusR_local, Ut_minusR_local, Up_plusR_local, Up_minusR_local
   real    :: K1, K2, K3, K4, K5, K6, dR, dR_final
-  integer :: natoms,iatom,centerAtom,i,ii,filnum,n
+  integer :: natoms,iatom,centerAtom,i,ii,filnum,n,io_stat
   logical :: areNearest(size(model,dim=2))
   logical :: plusx_surface, minusx_surface, plusy_surface, minusy_surface, plusz_surface, minusz_surface
   type(atoms) :: Exx_strain,Eyy_strain,Ezz_strain,Exy_strain,Eyz_strain,Exz_strain, Err_strain
@@ -370,12 +371,50 @@ subroutine strain_analysis(model,a)
     call Exz_strain%set_beta(i,list_eXZ(i,4))
     call Exz_strain%set_resnum(i,i)
   enddo
+  ! Output PDB files
   call Exx_strain%writepdb('Exx_strain')
   call Eyy_strain%writepdb('Eyy_strain')
   call Ezz_strain%writepdb('Ezz_strain')
   call Exy_strain%writepdb('Exy_strain')
   call Eyz_strain%writepdb('Eyz_strain')
   call Exz_strain%writepdb('Exz_strain')
+  ! CSV files
+  call fopen(filnum, file='Exx.csv', iostat=io_stat)
+  write (filnum,*) 'exx'
+  do i = 1, natoms
+      write (filnum,'(A)', advance='yes') trim(real2str(list_eXX(i,4)))
+  end do
+  call fclose(filnum)
+  call fopen(filnum, file='Eyy.csv', iostat=io_stat)
+  write (filnum,*) 'eyy'
+  do i = 1, natoms
+      write (filnum,'(A)', advance='yes') trim(real2str(list_eYY(i,4)))
+  end do
+  call fclose(filnum)
+  call fopen(filnum, file='Ezz.csv', iostat=io_stat)
+  write (filnum,*) 'ezz'
+  do i = 1, natoms
+      write (filnum,'(A)', advance='yes') trim(real2str(list_eZZ(i,4)))
+  end do
+  call fclose(filnum)
+  call fopen(filnum, file='Exy.csv', iostat=io_stat)
+  write (filnum,*) 'exy'
+  do i = 1, natoms
+      write (filnum,'(A)', advance='yes') trim(real2str(list_eXY(i,4)))
+  end do
+  call fclose(filnum)
+  call fopen(filnum, file='Eyz.csv', iostat=io_stat)
+  write (filnum,*) 'eyz'
+  do i = 1, natoms
+      write (filnum,'(A)', advance='yes') trim(real2str(list_eYZ(i,4)))
+  end do
+  call fclose(filnum)
+  call fopen(filnum, file='Exz.csv', iostat=io_stat)
+  write (filnum,*) 'exz'
+  do i = 1, natoms
+      write (filnum,'(A)', advance='yes') trim(real2str(list_eXZ(i,4)))
+  end do
+  call fclose(filnum)
   ! kill
   call Exx_strain%kill
   call Eyy_strain%kill
@@ -460,8 +499,16 @@ subroutine strain_analysis(model,a)
       call Err_strain%set_beta(i,list_eRR(i,4))
       call Err_strain%set_resnum(i,i)
   enddo
+  ! PDB file
   call Err_strain%writepdb('Err_strain')
   call Err_strain%kill
+  ! CSV file
+  call fopen(filnum, file='Err.csv', iostat=io_stat)
+  write (filnum,*) 'err'
+  do i = 1, natoms
+      write (filnum,'(A)', advance='yes') trim(real2str(list_eRR(i,4)))
+  end do
+  call fclose(filnum)
   allocate(list_Ux(natoms,4), list_Uy(natoms,4), list_Uz(natoms,4), source = 0.)
   call Ux_atoms%new(natoms, dummy=.true.)
   call Uy_atoms%new(natoms, dummy=.true.)
@@ -501,6 +548,7 @@ subroutine strain_analysis(model,a)
       call Uz_atoms%set_beta(i,list_Uz(i,4))
       call Uz_atoms%set_resnum(i,i)
   enddo
+  ! PDB files
   call Ux_atoms%writepdb('Ux')
   call Uy_atoms%writepdb('Uy')
   call Uz_atoms%writepdb('Uz')
@@ -508,6 +556,25 @@ subroutine strain_analysis(model,a)
   call Ux_atoms%kill
   call Uy_atoms%kill
   call Uz_atoms%kill
+  ! CSV files
+  call fopen(filnum, file='Ux.csv', iostat=io_stat)
+  write (filnum,*) 'ux'
+  do i = 1, natoms
+      write (filnum,'(A)', advance='yes') trim(real2str(list_Ux(i,4)))
+  end do
+  call fclose(filnum)
+  call fopen(filnum, file='Uy.csv', iostat=io_stat)
+  write (filnum,*) 'uy'
+  do i = 1, natoms
+      write (filnum,'(A)', advance='yes') trim(real2str(list_Uy(i,4)))
+  end do
+  call fclose(filnum)
+  call fopen(filnum, file='Uz.csv', iostat=io_stat)
+  write (filnum,*) 'uz'
+  do i = 1, natoms
+      write (filnum,'(A)', advance='yes') trim(real2str(list_Uz(i,4)))
+  end do
+  call fclose(filnum)
 contains
 
   subroutine gaussian_kernel(coord, ref, h, K)

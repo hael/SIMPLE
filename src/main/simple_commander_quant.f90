@@ -12,7 +12,7 @@ implicit none
 
 public :: detect_atoms_commander
 public :: atoms_rmsd_commander
-public :: radial_dependent_stats_commander
+public :: atoms_stats_commander
 public :: atom_cluster_analysis_commander
 public :: nano_softmask_commander
 public :: geometry_analysis_commander
@@ -37,10 +37,10 @@ type, extends(commander_base) :: atoms_rmsd_commander
   contains
     procedure :: execute      => exec_atoms_rmsd
 end type atoms_rmsd_commander
-type, extends(commander_base) :: radial_dependent_stats_commander
+type, extends(commander_base) :: atoms_stats_commander
   contains
-    procedure :: execute      => exec_radial_dependent_stats
-end type radial_dependent_stats_commander
+    procedure :: execute      => exec_atoms_stats
+end type atoms_stats_commander
 type, extends(commander_base) :: atom_cluster_analysis_commander
   contains
     procedure :: execute      => exec_atom_cluster_analysis
@@ -81,13 +81,13 @@ contains
         type(parameters)   :: params
         type(nanoparticle) :: nano
         integer            :: cn_thresh
-        if( .not.cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
         endif
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
         endif
+        call cline%set('mkdir', 'yes')
         call params%new(cline)
         call nano%new(params%vols(1), params%smpd, params%element)
         ! volume soft-edge masking
@@ -208,37 +208,38 @@ contains
 
     ! Calculates distances distribution across the whole nanoparticle
     ! and radial dependent statistics.
-    subroutine exec_radial_dependent_stats( self, cline )
-        class(radial_dependent_stats_commander), intent(inout) :: self
+    subroutine exec_atoms_stats( self, cline )
+        class(atoms_stats_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline !< command line input
         character(len=STDLEN)  :: fname
         type(parameters)       :: params
         type(nanoparticle) :: nano
         real    :: min_rad, max_rad, step
+        call cline%set('mkdir', 'yes')
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_radial_dependent_stats')
+            THROW_HARD('ERROR! smpd needs to be present; exec_atoms_stats')
         endif
         if( .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! vol1 needs to be present; exec_radial_dependent_stats')
+            THROW_HARD('ERROR! vol1 needs to be present; exec_atoms_stats')
         endif
         min_rad = params%min_rad
         max_rad = params%max_rad
         step    = params%stepsz
-        if(min_rad > max_rad) THROW_HARD('Minimum radius has to be smaller then maximum radius! exec_radial_dependent_stats')
-        if(step > max_rad-min_rad) THROW_HARD('Inputted too big stepsz! exec_radial_dependent_stats')
+        if(min_rad > max_rad) THROW_HARD('Minimum radius has to be smaller then maximum radius! exec_atoms_stats')
+        if(abs(max_rad-min_rad)>TINY .and. step > max_rad-min_rad) THROW_HARD('Inputted too big stepsz! exec_atoms_stats')
         call nano%new(params%vols(1), params%smpd,params%element)
         ! execute
         fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
-        call nano%set_atomic_coords(trim(fname)//'_atom_centers.pdb')
-        call nano%set_img(trim(fname)//'CC.mrc', 'img_cc')
+        call nano%set_atomic_coords('../'//trim(fname)//'_atom_centers.pdb')
+        call nano%set_img('../'//trim(fname)//'CC.mrc', 'img_cc')
         call nano%update_self_ncc()
         call nano%radial_dependent_stats(min_rad,max_rad,step)
         ! kill
         call nano%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_RADIAL_DEPENDENT_STATS NORMAL STOP ****')
-    end subroutine exec_radial_dependent_stats
+        call simple_end('**** SIMPLE_ATOMS_STATS NORMAL STOP ****')
+    end subroutine exec_atoms_stats
 
     subroutine exec_atom_cluster_analysis( self, cline )
         class(atom_cluster_analysis_commander), intent(inout) :: self
@@ -273,10 +274,10 @@ contains
             case('ang')
               call nano%cluster_ang(params%thres)
             case('maxint')
-              call nano%atom_intensity_stats(.false.)
+              call nano%atoms_stats(.false.)
               call nano%cluster_atom_maxint()
             case('intint')
-              call nano%atom_intensity_stats(.false.)
+              call nano%atoms_stats(.false.)
               call nano%cluster_atom_intint()
             case DEFAULT
                 write(logfhandle,*) 'clustermode: ', trim(params%clustermode)
