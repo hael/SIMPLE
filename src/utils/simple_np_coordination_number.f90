@@ -7,6 +7,8 @@ module simple_np_coordination_number
   public :: run_coord_number_analysis
   private
 
+  logical, parameter :: PRINT_FILES = .false.
+
 contains
 
   ! This function calculates the coordination number for each atom
@@ -19,12 +21,14 @@ contains
     real,                 intent(inout) :: coord_numbers_gen(size(model,2))
     integer :: filnum, io_stat, natoms, iatom
     natoms = size(model, 2)
-    call fopen(filnum, file='CN.txt', iostat=io_stat)
     call calc_cn(coord_numbers,coord_numbers_gen)
-    do iatom  = 1, natoms
-      write(filnum,*) coord_numbers(iatom)
-    enddo
-    call fclose(filnum)
+    if(PRINT_FILES) then
+      call fopen(filnum, file='CN.txt', iostat=io_stat)
+      do iatom  = 1, natoms
+        write(filnum,*) coord_numbers(iatom)
+      enddo
+      call fclose(filnum)
+    endif
 
   contains
     subroutine calc_cn(coordination_numbers,coordination_numbers_gen)

@@ -10,7 +10,7 @@ implicit none
 type(detect_atoms_commander)           :: xdetect_atoms
 type(atoms_rmsd_commander)             :: xatoms_rmsd
 type(atoms_mask_commander)             :: xatoms_mask
-type(radial_dependent_stats_commander) :: xradial_dependent_stats
+type(atoms_stats_commander)            :: xatoms_stats
 type(atom_cluster_analysis_commander)  :: xatom_cluster_analysis
 type(nano_softmask_commander)          :: xnano_softmask
 type(geometry_analysis_commander)      :: xgeometry_analysis
@@ -40,8 +40,8 @@ select case(prg)
     case( 'detect_atoms' )
         call cline%set('mkdir', 'no')
         call xdetect_atoms%execute(cline)
-    case( 'radial_dependent_stats' )
-        call xradial_dependent_stats%execute(cline)
+    case( 'atoms_stats' )
+        call xatoms_stats%execute(cline)
     case( 'atom_cluster_analysis' )
         call xatom_cluster_analysis%execute(cline)
     case( 'atoms_mask' )

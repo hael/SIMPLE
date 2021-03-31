@@ -135,7 +135,7 @@ type(simple_program), target :: print_project_field
 type(simple_program), target :: print_project_info
 type(simple_program), target :: prune_project
 type(simple_program), target :: pspec_stats
-type(simple_program), target :: radial_dependent_stats
+type(simple_program), target :: atoms_stats
 type(simple_program), target :: radial_sym_test
 type(simple_program), target :: random_rec
 type(simple_program), target :: reconstruct3D
@@ -355,7 +355,7 @@ contains
         call new_print_project_field
         call new_prune_project
         call new_pspec_stats
-        call new_radial_dependent_stats
+        call new_atoms_stats
         call new_radial_sym_test
         call new_reproject
         call new_random_rec
@@ -458,7 +458,7 @@ contains
         call push2prg_ptr_array(print_project_field)
         call push2prg_ptr_array(prune_project)
         call push2prg_ptr_array(pspec_stats)
-        call push2prg_ptr_array(radial_dependent_stats)
+        call push2prg_ptr_array(atoms_stats)
         call push2prg_ptr_array(radial_sym_test)
         call push2prg_ptr_array(reproject)
         call push2prg_ptr_array(random_rec)
@@ -634,8 +634,8 @@ contains
                 ptr2prg => prune_project
             case('pspec_stats')
                 ptr2prg => pspec_stats
-            case('radial_dependent_stats')
-                ptr2prg => radial_dependent_stats
+            case('atoms_stats')
+                ptr2prg => atoms_stats
             case('radial_sym_test')
                   ptr2prg => radial_sym_test
             case('reproject')
@@ -836,10 +836,12 @@ contains
         write(logfhandle,'(A)') atom_cluster_analysis%name
         write(logfhandle,'(A)') atoms_mask%name
         write(logfhandle,'(A)') atoms_rmsd%name
+        write(logfhandle,'(A)') atoms_stats%name
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') geometry_analysis%name
         write(logfhandle,'(A)') nano_softmask%name
-        write(logfhandle,'(A)') radial_dependent_stats%name
+        write(logfhandle,'(A)') plot_atom%name
+        write(logfhandle,'(A)') strain_analysis%name
         write(logfhandle,'(A)') radial_sym_test%name
     end subroutine list_quant_prgs_in_ui
 
@@ -3951,34 +3953,34 @@ contains
         call symmetry_test%set_input('comp_ctrls', 1, nthr)
     end subroutine new_symmetry_test
 
-    subroutine new_radial_dependent_stats
+    subroutine new_atoms_stats
         ! PROGRAM SPECIFICATION
-        call radial_dependent_stats%new(&
-        &'radial_dependent_stats',&                                                                                           ! name
+        call atoms_stats%new(&
+        &'atoms_stats',&                                                                                           ! name
         &'Statistical test for radial dependent symmetry',&                                                                           ! descr_short
         &'is a program that generates statistics at different radii and across the whold nano map.',& ! descr long
         &'quant_exec',&                                                                                             ! executable
         &1, 4, 0, 0, 1, 0, 0, .false.)                                                                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call radial_dependent_stats%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry of', 'C1 Volume to identify symmetry of', &
+        call atoms_stats%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry of', 'C1 Volume to identify symmetry of', &
         & 'input volume e.g. vol_C1.mrc', .true., '')
         ! parameter input/output
-        call radial_dependent_stats%set_input('parm_ios', 1, smpd)
-        call radial_dependent_stats%set_input('parm_ios', 2, 'min_rad', 'num', 'Minimum radius in A', 'Minimum radius in A {5.} ', '{5.}',  .true., 10.)
-        call radial_dependent_stats%set_input('parm_ios', 3, 'max_rad', 'num', 'Maximum radius in A', 'Maximum radius in A {12.} ', '{12.}',  .true., 100.)
-        call radial_dependent_stats%set_input('parm_ios', 4, 'stepsz',  'num', 'Step size in A', 'Steps size in A {2.} ', '{2.}',  .true., 10.)
+        call atoms_stats%set_input('parm_ios', 1, smpd)
+        call atoms_stats%set_input('parm_ios', 2, 'min_rad', 'num', 'Minimum radius in A', 'Minimum radius in A {5.} ', '{5.}',  .true., 10.)
+        call atoms_stats%set_input('parm_ios', 3, 'max_rad', 'num', 'Maximum radius in A', 'Maximum radius in A {12.} ', '{12.}',  .true., 100.)
+        call atoms_stats%set_input('parm_ios', 4, 'stepsz',  'num', 'Step size in A', 'Steps size in A {2.} ', '{2.}',  .true., 10.)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call radial_dependent_stats%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        call atoms_stats%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
         ! <empty>
         ! computer controls
-        ! call radial_dependent_stats%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_radial_dependent_stats
+        ! call atoms_stats%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_atoms_stats
 
     subroutine new_radial_sym_test
         ! PROGRAM SPECIFICATION
