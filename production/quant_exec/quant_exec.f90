@@ -14,7 +14,6 @@ type(atoms_stats_commander)            :: xatoms_stats
 type(atom_cluster_analysis_commander)  :: xatom_cluster_analysis
 type(nano_softmask_commander)          :: xnano_softmask
 type(geometry_analysis_commander)      :: xgeometry_analysis
-type(radial_sym_test_commander)        :: xrad_sym_tst
 type(plot_atom_commander)              :: xplot_atom
 type(strain_analysis_commander)        :: xstrain_analysis
 type(dock_coords_commander)            :: xdock_coords
@@ -52,8 +51,6 @@ select case(prg)
           call xgeometry_analysis%execute(cline)
     case('atoms_rmsd')
         call xatoms_rmsd%execute(cline)
-    case('radial_sym_test')
-        call xrad_sym_tst%execute(cline)
     case('plot_atom')
         call xplot_atom%execute(cline)
     case('strain_analysis')
