@@ -218,6 +218,12 @@ contains
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_atoms_stats')
         endif
+        if(cline%defined('cn_min') .and. .not. cline%defined('cn_max')) then
+          THROW_HARD('ERROR! define cn_max too!; exec_atoms_stats')
+        endif
+        if(cline%defined('cn_max') .and. .not. cline%defined('cn_min')) then
+          THROW_HARD('ERROR! define cn_min too!; exec_atoms_stats')
+        endif
         min_rad = params%min_rad
         max_rad = params%max_rad
         step    = params%stepsz
@@ -229,7 +235,11 @@ contains
         call nano%set_atomic_coords('../'//trim(fname)//'_atom_centers.pdb')
         call nano%set_img('../'//trim(fname)//'CC.mrc', 'img_cc')
         call nano%update_self_ncc()
-        call nano%radial_dependent_stats(min_rad,max_rad,step)
+        if(cline%defined('cn_min')) then
+          call nano%radial_dependent_stats(min_rad,max_rad,step,params%cn_min,params%cn_max)
+        else
+          call nano%radial_dependent_stats(min_rad,max_rad,step)
+        endif
         ! kill
         call nano%kill
         ! end gracefully
