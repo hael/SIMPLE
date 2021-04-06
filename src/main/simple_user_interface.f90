@@ -182,6 +182,7 @@ type(simple_input_param) :: bfac
 type(simple_input_param) :: box
 type(simple_input_param) :: clip
 type(simple_input_param) :: clustermode
+type(simple_input_param) :: cn
 type(simple_input_param) :: cn_min
 type(simple_input_param) :: cn_max
 type(simple_input_param) :: cs
@@ -963,7 +964,8 @@ contains
         call set_param(tseries,        'tseries',      'binary', 'Stack is time-series', 'Stack is time-series(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(max_rad,        'max_rad',      'num',    'Maximum radius in A', 'Maximum radius in A {300.}', '{300.}', .true., 300.)
         call set_param(min_rad,        'min_rad',      'num',    'Minimum radius in A', 'Minimum radius in A {50.} ', '{50.}',  .true., 50.)
-        call set_param(cn_min,         'cn_min',       'num',    'Minimum std coordination number', 'Minimum std cn to consider ', '5',  .false., 5.)
+        call set_param(cn,             'cn',           'num',    'Fixed std coordination number', 'Minimum std cn to consider for dipole calc ', '8',  .false., 8.)
+        call set_param(cn_min,         'cn_min',       'num',    'Minimum std coordination number', 'Minimum std cn to consider ', '4',  .false., 4.)
         call set_param(cn_max,         'cn_max',       'num',    'Maximum std coordination number', 'Maximum std cn to consider ', '12', .false., 12.)
         call set_param(stepsz,         'stepsz',       'num',    'Steps size in A', 'Step size in A {10.} ', '{10.}',  .true., 10.)
         call set_param(picker,         'picker',       'multi',  'Picking approach','Picking approach(seg|phasecorr|old_school){phasecorr}','(seg|phasecorr|old_school){phasecorr}', .false.,'phasecorr')
@@ -3958,7 +3960,7 @@ contains
         &'Statistical test for radial dependent symmetry',&                                                                           ! descr_short
         &'is a program that generates statistics at different radii and across the whold nano map.',& ! descr long
         &'quant_exec',&                                                                                             ! executable
-        &1, 6, 0, 0, 1, 0, 0, .false.)                                                                               ! # entries in each group, requires sp_project
+        &1, 7, 0, 0, 1, 0, 0, .false.)                                                                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call atoms_stats%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry of', 'C1 Volume to identify symmetry of', &
@@ -3968,8 +3970,9 @@ contains
         call atoms_stats%set_input('parm_ios', 2, 'min_rad', 'num', 'Minimum radius in A', 'Minimum radius in A {5.} ', '{5.}',  .true., 10.)
         call atoms_stats%set_input('parm_ios', 3, 'max_rad', 'num', 'Maximum radius in A', 'Maximum radius in A {12.} ', '{12.}',  .true., 100.)
         call atoms_stats%set_input('parm_ios', 4, 'stepsz',  'num', 'Step size in A', 'Steps size in A {2.} ', '{2.}',  .true., 10.)
-        call atoms_stats%set_input('parm_ios', 5, 'cn_min',  'num', 'Minimum std coordination number ', 'Minimum std cn for stats calculation', '5',  .false., 5.)
+        call atoms_stats%set_input('parm_ios', 5, 'cn_min',  'num', 'Minimum std coordination number ', 'Minimum std cn for stats calculation', '4',  .false., 4.)
         call atoms_stats%set_input('parm_ios', 6, 'cn_max',  'num', 'Maximum std coordination number ', 'Maximum std cn for stats calculation', '12', .false., 12.)
+        call atoms_stats%set_input('parm_ios', 7, 'cn',      'num', 'Fixed std coordination number ',   'Fixed std cn for dipole calculation',  '8',  .false., 8.)
         ! alternative inputs
         ! <empty>
         ! search controls

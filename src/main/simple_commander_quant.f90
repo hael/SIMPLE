@@ -236,9 +236,17 @@ contains
         call nano%set_img('../'//trim(fname)//'CC.mrc', 'img_cc')
         call nano%update_self_ncc()
         if(cline%defined('cn_min')) then
-          call nano%radial_dependent_stats(min_rad,max_rad,step,params%cn_min,params%cn_max)
+          if(cline%defined('cn')) then
+            call nano%radial_dependent_stats(min_rad,max_rad,step,params%cn_min,params%cn_max,params%cn)
+          else
+            call nano%radial_dependent_stats(min_rad,max_rad,step,params%cn_min,params%cn_max)
+          endif
         else
-          call nano%radial_dependent_stats(min_rad,max_rad,step)
+          if(cline%defined('cn')) then
+            call nano%radial_dependent_stats(min_rad,max_rad,step,cn=params%cn)
+          else
+            call nano%radial_dependent_stats(min_rad,max_rad,step)
+          endif
         endif
         ! kill
         call nano%kill
