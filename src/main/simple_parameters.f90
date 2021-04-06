@@ -233,8 +233,9 @@ type :: parameters
     integer :: chunksz=0           !< # images/orientations in chunk
     integer :: class=1             !< cluster identity
     integer :: clip=0              !< clipped image box size(in pixels)
+    integer :: cn=8                !< fixed std coord number for atoms in nanos
     integer :: cn_max=12           !< max std coord number for atoms in nanos
-    integer :: cn_min=5            !< min std coord number for atoms in nanos
+    integer :: cn_min=4            !< min std coord number for atoms in nanos
     integer :: cn_stop=10          !< rotational symmetry order stop index{10}
     integer :: corner=0            !< corner size(in pixels){0}
     integer :: cube=0              !< side size(in pixels){0}
@@ -681,6 +682,7 @@ contains
         call check_iarg('box_extract',    self%box_extract)
         call check_iarg('chunksz',        self%chunksz)
         call check_iarg('clip',           self%clip)
+        call check_iarg('cn',             self%cn)
         call check_iarg('cn_max',         self%cn_max)
         call check_iarg('cn_min',         self%cn_min)
         call check_iarg('cn_stop',        self%cn_stop)

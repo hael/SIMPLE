@@ -900,10 +900,11 @@ contains
     ! distance between the atoms with centers in coords.
     ! At the same time, it calculated statistics in a radial-dependent
     ! way, and save the result on a file.
-    subroutine radial_dependent_stats(self,min_rad, max_rad, step, cn_min, cn_max)
+    subroutine radial_dependent_stats(self,min_rad, max_rad, step, cn_min, cn_max, cn)
         class(nanoparticle), intent(inout) :: self
         real,                intent(in)    :: min_rad, max_rad, step
         integer, optional,   intent(in)    :: cn_min, cn_max
+        integer, optional,   intent(in)    :: cn
         type(atoms)          :: radial_atoms_just,  radial_atoms_all
         type(image)          :: simulated_density
         logical, allocatable :: mask(:,:,:)
@@ -1069,7 +1070,7 @@ contains
                  endif
               enddo
               if(cnt_all == 0) then ! first selected radius, no atoms belonging to it
-                write(logfhandle, *) 'No atoms in radius ', nint(radius)
+                write(logfhandle, *) 'WARNING! No atoms in radius ', nint(radius)
                 cycle
               endif
               call radial_atoms_just%new(cnt_just, dummy=.true.)
@@ -1197,10 +1198,19 @@ contains
         call self%distances_distribution(file=.false.) ! across the whole nano
         if(present(cn_min)) then
           write(logfhandle,*) 'Calculating stats for atoms with std cn in range ', cn_min, '-', cn_max
-          call self%atoms_stats(.true.,cn_min,cn_max)
+          if(present(cn)) then
+            call self%atoms_stats(.true.,cn_min=cn_min,cn_max=cn_max,cn=cn)
+          else
+            call self%atoms_stats(.true.,cn_min=cn_min,cn_max=cn_max)
+          endif
         else
           write(logfhandle,*) 'Calculating stats for all the atoms '
-          call self%atoms_stats(.true.)
+          if(present(cn)) then
+            write(logfhandle,*) 'Fixing cn to ', cn, ' for dipole calculation'
+            call self%atoms_stats(.true.,cn=cn)
+          else
+            call self%atoms_stats(.true.)
+          endif
         endif
         ! Kill
         call self%kill
@@ -1216,10 +1226,11 @@ contains
    ! map in each atom. It is likely that these statistics
    ! are going to be able to distinguish between the different
    ! atom compositions in heterogeneous nanoparticles.
-   subroutine atoms_stats(self,print_file,cn_min,cn_max)
+   subroutine atoms_stats(self,print_file,cn_min,cn_max,cn)
        class(nanoparticle), intent(inout) :: self
        logical,             intent(in)    :: print_file    ! whether to print on a file all the calc stats
        integer, optional,   intent(in)    :: cn_min,cn_max ! min/max cn standard for calculation of stats in range
+       integer, optional,   intent(in)    :: cn            ! given fixed std cn for dipole calculation
        real,    pointer     :: rmat(:,:,:), rmat_corr(:,:,:)
        logical, allocatable :: mask(:,:,:), cn_mask(:)
        integer, allocatable :: imat_cc(:,:,:), sz(:)
@@ -1257,7 +1268,11 @@ contains
        ! Aspect Ratios and Diameters
        call self%aspect_ratios_estimation(print_ar=.false.,ar=ar,diameter=diameter)
        ! Polarization angles
-       call self%search_polarization(output_files=.false.)
+       if(present(cn)) then
+         call self%search_polarization(output_files=.true.,cn=cn)
+       else
+         call self%search_polarization(output_files=.true.)
+       endif
        ! Write on a file
        if(print_file) then
           call fopen(filnum, file ='AllAtomsStats.txt', iostat=io_stat)
@@ -1755,14 +1770,36 @@ contains
     ! longest dim of the atom.
     ! This is done for each of the atoms and then there is a search
     ! of the similarity between the calculated angles.
-    subroutine search_polarization(self, output_files)
+    subroutine search_polarization(self, output_files, cn)
         class(nanoparticle), intent(inout) :: self
         logical,             intent(in)    :: output_files
+        integer, optional,   intent(in)    :: cn ! calculate net polarization for given std cn
         real    :: loc_ld_real(3,self%n_cc)
         real    :: vec_fixed(3)     !vector indentifying z direction
-        real    :: m_adjusted(3)
+        real    :: m_adjusted(3), radius, a(3)
         integer :: k, i, filnum, io_stat
         integer, allocatable :: sz(:)
+        real,    allocatable :: centers_ang(:,:)
+        logical :: cn_mask(self%n_cc)
+        ! Calculate cn and cn_gen
+        allocate(centers_ang(3,self%n_cc), source = (self%centers-1.)*self%smpd)
+        call fit_lattice(centers_ang,a)
+        call find_radius_for_coord_number(a,radius)
+        if(.not. allocated(self%cn)) allocate(self%cn(self%n_cc), source = 0)
+        if(.not. allocated(self%cn_gen)) allocate(self%cn_gen(self%n_cc), source = 0.)
+        call run_coord_number_analysis(centers_ang,radius,self%cn,self%cn_gen)
+        deallocate(centers_ang)
+        ! Generate mask for cn
+        if(present(cn)) then
+          where(self%cn .ne. cn)
+            cn_mask = .false.
+          elsewhere
+            cn_mask = .true.
+          endwhere
+          write(logfhandle,*) count(cn_mask), ' atoms out of ', self%n_cc, ' have cn ', cn
+        else
+          cn_mask(:) = .true.
+        endif
         if(allocated(self%ang_var)) deallocate(self%ang_var)
            allocate (self%ang_var(self%n_cc), source = 0.)
         sz = self%img_cc%size_ccs()
@@ -1779,16 +1816,28 @@ contains
         do k = 1, self%n_cc
             if(sz(k) > 2) then
                 self%ang_var(k) = ang3D_vecs(vec_fixed(:),loc_ld_real(:,k))
-                self%net_dipole(:) = self%net_dipole(:) + loc_ld_real(:,k)
+                if(cn_mask(k)) self%net_dipole(:) = self%net_dipole(:) + loc_ld_real(:,k)
             else
                 self%ang_var(k) = 0. ! If the cc is too small it doesn't make sense
             endif
             if(DEBUG) write(logfhandle,*) 'ATOM ', k, 'angle between direction longest dim and vec [0,0,1] ', self%ang_var(k)
         enddo
-        m_adjusted = sum(self%centers(:,:)-1.,dim=2)*self%smpd/real(self%n_cc)
-        self%net_dipole = (self%net_dipole-1.)*self%smpd + m_adjusted
+        if(count(cn_mask) == 0) then
+          write(logfhandle,*) 'No atoms with cn ', cn
+          m_adjusted = 0.
+          self%net_dipole = 0.
+        else
+          ! m_adjusted = sum(self%centers(:,:)-1.,dim=2,mask=sum_mask)*self%smpd/real(count(cn_mask))
+          m_adjusted = sum(self%centers(:,:)-1.,dim=2)*self%smpd/real(self%n_cc)
+          self%net_dipole = (self%net_dipole-1.)*self%smpd + m_adjusted
+        endif
         if(output_files) then
-          call fopen(filnum, file='NetDipole.bild', iostat=io_stat)
+          if(present(cn)) then
+            write(logfhandle, *) 'Generating output dipole file for fixed cn ', cn
+            call fopen(filnum, file='NetDipole'//int2str(cn)//'.bild', iostat=io_stat)
+          else
+            call fopen(filnum, file='NetDipole.bild', iostat=io_stat)
+          endif
           write (filnum,'(a6,6i4)') trim('.arrow '), nint(m_adjusted), nint(self%net_dipole)
           call fclose(filnum)
           call fopen(filnum, file='AnglesLongestDims.csv', iostat=io_stat)
@@ -1909,7 +1958,7 @@ contains
         ! Preparing for clustering
         ! Aspect ratios and loc_longest dist estimation
         call self%aspect_ratios_estimation(print_ar=.false.) ! it's needed to identify the dir of longest dim
-        call self%search_polarization(output_files = .true.)
+        call self%search_polarization(output_files =.false.)
         dim = size(self%ang_var)
         allocate(labels(dim), source = 0)
         call self%hierarc_clust(self%ang_var,thresh,labels,centroids,populations)
