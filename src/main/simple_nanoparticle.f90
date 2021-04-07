@@ -2031,16 +2031,26 @@ contains
       end subroutine cluster_ang
 
   ! Cluster the atoms wrt to the aspect ratio
+  ! Additionally, calculate the median std cn
+  ! (coordination number) in each class
   subroutine cluster_ar(self, thresh)
       class(nanoparticle), intent(inout) :: self
       real,    intent(in)  :: thresh ! threshold for class definition, user inputted
       real,    allocatable :: centroids(:)
       integer, allocatable :: labels(:), populations(:)
-      real,    allocatable :: stdev_within(:)
-      integer              :: i, j, ncls, dim, filnum, io_stat
-      real                 :: avg, stdev
+      real,    allocatable :: stdev_within(:), centers_ang(:,:), cn_cls(:), median_cn(:)
+      integer              :: i, j, ncls, dim, filnum, io_stat, cnt
+      real                 :: avg, stdev, radius_cn, a(3)
       type(binimage)       :: img_1clss
       integer, allocatable :: imat_cc(:,:,:), imat_1clss(:,:,:)
+      ! Calculate cn and cn_gen
+      allocate(centers_ang(3,self%n_cc), source = (self%centers-1.)*self%smpd)
+      call fit_lattice(centers_ang,a)
+      call find_radius_for_coord_number(a,radius_cn)
+      if(.not. allocated(self%cn)) allocate(self%cn(self%n_cc), source = 0)
+      if(.not. allocated(self%cn_gen)) allocate(self%cn_gen(self%n_cc), source = 0.)
+      call run_coord_number_analysis(centers_ang,radius_cn,self%cn,self%cn_gen)
+      deallocate(centers_ang)
       if(thresh > 1. .or. thresh < 0.) THROW_HARD('Invalid input threshold! AR is in [0,1]; cluster_ar')
       ! Preparing for clustering
       ! Aspect ratios calculations
@@ -2076,6 +2086,20 @@ contains
         enddo
         stdev = sqrt(stdev/(real(ncls)-1.))
       endif
+      ! median std cn on each class
+      allocate(median_cn(ncls), source = 0.)
+      do i = 1, ncls
+        if(allocated(cn_cls)) deallocate(cn_cls)
+        allocate(cn_cls(populations(i)), source = 0.)
+        cnt = 0
+        do j = 1, dim
+            if(labels(j) == i) then
+              cnt = cnt + 1
+              cn_cls(cnt) = self%cn(j)
+            endif
+        enddo
+        median_cn(i) = median(cn_cls)
+      enddo
       ! Output on a file
       call fopen(filnum, file='ClusterARThresh'//trim(real2str(thresh))//'.txt', iostat=io_stat)
       write(unit = filnum,fmt ='(a,i2,a,f6.2)') 'NR OF IDENTIFIED CLUSTERS:', ncls, ' SELECTED THRESHOLD: ',  thresh
@@ -2085,7 +2109,7 @@ contains
       enddo
       write(unit = filnum,fmt ='(a)') 'CLASS STATISTICS '
       do i = 1, ncls
-        write(unit = filnum,fmt ='(a,i3,a,i3,a,f6.2,a,f6.2)') 'class: ', i, '; cardinality: ', populations(i), '; centroid: ', centroids(i), '; stdev within the class: ', stdev_within(i)
+        write(unit = filnum,fmt ='(a,i3,a,i3,a,f6.2,a,f6.2,a,f6.2)') 'class: ', i, '; cardinality: ', populations(i), '; centroid: ', centroids(i), '; stdev within the class: ', stdev_within(i), '; median std cn: ', median_cn(i)
       enddo
       write(unit = filnum,fmt ='(a,f6.2,a,f6.2)') 'AVG among the classes: ', avg, '; STDEV among the classes: ', stdev
       call fclose(filnum)
