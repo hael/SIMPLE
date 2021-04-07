@@ -151,6 +151,9 @@ type :: parameters
     character(len=LONGSTRLEN) :: refs_odd=''
     character(len=LONGSTRLEN) :: star_datadir=''      !< STAR-generated data directory
     character(len=LONGSTRLEN) :: starfile=''          !< STAR-formatted EM file (proj.star)
+    character(len=LONGSTRLEN) :: star_mic=''          !< STAR-formatted EM file (micrographs.star)
+    character(len=LONGSTRLEN) :: star_model=''        !< STAR-formatted EM file (model.star)
+    character(len=LONGSTRLEN) :: star_ptcl=''         !< STAR-formatted EM file (data.star)
     character(len=LONGSTRLEN) :: stk=''               !< particle stack with all images(ptcls.ext)
     character(len=LONGSTRLEN) :: stktab=''            !< list of per-micrograph stacks
     character(len=LONGSTRLEN) :: stk2=''              !< 2nd stack(in selection map: selected(cavgs).ext)
@@ -652,6 +655,9 @@ contains
         call check_file('projfile_target',self%projfile_target,'O')
         call check_file('refs',           self%refs,         notAllowed='T')
         call check_file('starfile',       self%starfile,     'R')  ! R for relion, S taken by SPIDER
+        call check_file('star_mic',       self%star_mic,     'R')  ! R for relion, S taken by SPIDER
+        call check_file('star_model',     self%star_model,   'R')  ! R for relion, S taken by SPIDER
+        call check_file('star_ptcl',      self%star_ptcl,    'R')  ! R for relion, S taken by SPIDER
         call check_file('stk',            self%stk,          notAllowed='T')
         call check_file('stktab',         self%stktab,       'T')
         call check_file('stk2',           self%stk2,         notAllowed='T')
