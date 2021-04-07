@@ -141,6 +141,7 @@ type(simple_program), target :: reconstruct3D
 type(simple_program), target :: reextract
 type(simple_program), target :: refine3D
 type(simple_program), target :: refine3D_nano
+type(simple_program), target :: remoc
 type(simple_program), target :: replace_project_field
 type(simple_program), target :: selection
 type(simple_program), target :: reproject
@@ -268,6 +269,9 @@ type(simple_input_param) :: sigma2_fudge
 type(simple_input_param) :: smpd
 type(simple_input_param) :: star_datadir
 type(simple_input_param) :: starfile
+type(simple_input_param) :: star_mic
+type(simple_input_param) :: star_model
+type(simple_input_param) :: star_ptcl
 type(simple_input_param) :: startit
 type(simple_input_param) :: startype
 type(simple_input_param) :: stk
@@ -364,6 +368,7 @@ contains
         call new_reextract
         call new_refine3D
         call new_refine3D_nano
+        call new_remoc
         call new_replace_project_field
         call new_selection
         call new_scale
@@ -648,6 +653,8 @@ contains
                 ptr2prg => refine3D
             case('refine3D_nano')
                 ptr2prg => refine3D_nano
+            case('remoc')
+                ptr2prg => remoc
             case('replace_project_field')
                 ptr2prg => replace_project_field
             case('selection')
@@ -772,6 +779,7 @@ contains
         write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') refine3D%name
         write(logfhandle,'(A)') refine3D_nano%name
+        write(logfhandle,'(A)') remoc%name
         write(logfhandle,'(A)') replace_project_field%name
         write(logfhandle,'(A)') selection%name
         write(logfhandle,'(A)') reproject%name
@@ -866,7 +874,7 @@ contains
         &'.simple|.txt parameter file', .false., 'outfile'//trim(METADATA_EXT))
         call set_param(startit,       'startit',       'num',    'First iteration', 'Index of first iteration when starting from a previous run', 'start iterations from here', .false., 1.0)
         call set_param(trs,           'trs',           'num',    'Maximum translational shift', 'Maximum half-width for bund-constrained search of rotational origin shifts',&
-        &'max shift per iteration in pixels{5}', .false., 0.0)
+        &'max shift per iteration in pixels{5}', .false., 5.0)
         call set_param(maxits,        'maxits',        'num',    'Max iterations', 'Maximum number of iterations', 'Max # iterations', .false., 100.)
         call set_param(hp,            'hp',            'num',    'High-pass limit', 'High-pass resolution limit', 'high-pass limit in Angstroms', .false., 100.)
         call set_param(lp,            'lp',            'num',    'Low-pass limit', 'Low-pass resolution limit', 'low-pass limit in Angstroms', .false., 20.)
@@ -952,7 +960,10 @@ contains
         call set_param(focusmsk,       'focusmsk',     'num',    'Mask radius in focused refinement', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false., 0.)
         call set_param(nrestarts,      'nrestarts',    'num',    'Number of restarts', 'Number of program restarts to execute{1}', '# restarts{1}', .false., 1.0)
         call set_param(star_datadir,   'star_datadir', 'file',   'STAR project data directory', 'Pathname of STAR image/data files', 'e.g. Micrographs', .false., '')
-        call set_param(starfile,       'starfile',     'file',   'STAR-format file name', 'File name of STAR-formatted file', 'e.g. proj.star', .false., '')
+        call set_param(starfile,       'starfile',     'file',   'STAR-format file name', 'STAR-formatted filename', 'e.g. proj.star', .false., '')
+        call set_param(star_mic,       'star_mic',     'file',   'Micrographs STAR file name', 'Micrographs STAR-formatted filename', 'e.g. micrographs.star', .true., '')
+        call set_param(star_model,     'star_model',   'file',   'Model STAR file name', 'Model STAR-formatted filename', 'e.g. model.star', .true., '')
+        call set_param(star_ptcl,      'star_ptcl',    'file',   'Particles STAR file name', 'Particles STAR-formatted filename', 'e.g. particles.star', .true., '')
         call set_param(startype,       'startype',     'str',    'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
         call set_param(scale_movies,   'scale',        'num',    'Down-scaling factor(0-1)', 'Down-scaling factor to apply to the movies(0-1){1.}', '{1.}', .false., 1.0)
         call set_param(sigma2_fudge,   'sigma2_fudge', 'num',    'Sigma2-fudge factor', 'Fudge factor for sigma2_noise{100.}', '{100.}', .false., 100.)
@@ -2488,7 +2499,7 @@ contains
         ! <empty>
         ! search controls
         call motion_correct%set_input('srch_ctrls', 1, trs)
-        motion_correct%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{0}'
+        motion_correct%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
         motion_correct%srch_ctrls(1)%rval_default      = 20.
         call motion_correct%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3){0}', '{0}', .false., 0.)
         call motion_correct%set_input('srch_ctrls', 3, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
@@ -3396,6 +3407,39 @@ contains
         call refine3D_nano%set_input('comp_ctrls', 1, nparts)
         call refine3D_nano%set_input('comp_ctrls', 2, nthr)
     end subroutine new_refine3D_nano
+
+    subroutine new_remoc
+        ! PROGRAM SPECIFICATION
+        call remoc%new(&
+        &'remoc', &                             ! name
+        &'Regularized motion correction of movies',&     ! descr_short
+        &'Regularized motion correction of movies',&     ! descr_long
+        &'simple_exec',&                                                    ! executable
+        &0, 3, 0, 1, 2, 0, 1, .false.)                                       ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call remoc%set_input('parm_ios', 1, star_ptcl)
+        call remoc%set_input('parm_ios', 2, star_mic)
+        call remoc%set_input('parm_ios', 3, star_model)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call remoc%set_input('srch_ctrls', 1, trs)
+        remoc%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
+        remoc%srch_ctrls(1)%rval_default      = 20.
+        ! call motion_correct%set_input('srch_ctrls', 2, mcconvention)
+        ! filter controls
+        call remoc%set_input('filt_ctrls', 1, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
+        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
+        call remoc%set_input('filt_ctrls', 2, wcrit)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! call motion_correct%set_input('comp_ctrls', 1, nparts)
+        call remoc%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_remoc
 
     subroutine new_replace_project_field
         ! PROGRAM SPECIFICATION
