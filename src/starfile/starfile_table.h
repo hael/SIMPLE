@@ -417,6 +417,7 @@ extern "C"
   void StarFileTable__setComment(StarFileTable* This, char* acomment);
   void StarFileTable__getComment(StarFileTable* This, void** str, int* alen);
   bool StarFileTable__hasComment(StarFileTable* This);
+  bool StarFileTable__hasLabel(StarFileTable* This, int EMDL_id);
   long StarFileTable__firstObject(StarFileTable* This);
   long StarFileTable__numberOfObjects(StarFileTable* This);
   long StarFileTable__nextObject(StarFileTable* This);

@@ -1758,6 +1758,12 @@ bool StarFileTable__hasComment(StarFileTable* This)
   return This->containsComment();
 }
 
+bool StarFileTable__hasLabel(StarFileTable* This, int EMDL_id)
+{
+	EMDLabel emdLabel = (EMDLabel)EMDL_id;
+	return This->containsLabel(emdLabel);
+}
+
 long StarFileTable__firstObject(StarFileTable* This)
 {
   return This->firstObject();

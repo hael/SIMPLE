@@ -183,6 +183,13 @@ module simple_starfile_wrappers
             logical(C_bool) :: ares
         end function C_starfile_table__hascomment
 
+        function C_starfile_table__hasLabel(this, EMDL_id) result(ares) bind(C, name="StarFileTable__hasLabel")
+            import
+            type(C_ptr),                value :: this
+            integer(C_int), intent(in), value :: EMDL_id
+            logical(C_bool) :: ares
+        end function C_starfile_table__haslabel
+
         function C_starfile_table__firstobject(this) result(ares) bind(C, name="StarFileTable__firstObject")
             import
             type(C_ptr), value :: this
@@ -492,6 +499,15 @@ contains
         ares2 = C_starfile_table__hascomment(this%object)
         ares = ares2
     end function starfile_table__hascomment
+
+    function starfile_table__haslabel(this, emdl_id) result(ares)
+        type(starfile_table_type), intent(inout) :: this
+        integer(C_int),            intent(in)    :: EMDL_id
+        logical :: ares
+        logical(C_bool) :: ares2
+        ares2 = C_starfile_table__hasLabel(this%object,emdl_id)
+        ares  = ares2
+    end function starfile_table__haslabel
 
     function starfile_table__firstobject(this) result(ares)
         type(starfile_table_type), intent(inout) :: this
