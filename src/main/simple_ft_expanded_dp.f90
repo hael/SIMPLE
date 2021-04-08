@@ -44,9 +44,7 @@ type :: ft_expanded_dp
     procedure          :: corr
     procedure          :: corr_unnorm
     procedure          :: gen_grad_noshift
-    procedure          :: f
-    ! procedure          :: df3
-    procedure          :: fdf
+    procedure          :: f_noselfsubtr, fdf_noselfsubtr
     ! destructor
     procedure          :: kill
 end type ft_expanded_dp
@@ -360,22 +358,50 @@ contains
         endif
     end function  f
 
-    ! gradients of correlations with respect to shifts, self is assumed pre-normalized to 1.
-    ! selfR is destroyed on exit
-    subroutine fdf( selfR, self, shift, f, g )
-        class(ft_expanded_dp), intent(inout) :: selfR
-        class(ft_expanded_dp), intent(in)    :: self
-        real(dp),            intent(in)   :: shift(2)
-        real(dp),            intent(out)   :: f, g(2)
-        complex(dp) :: fcomp, fcompI
-        real(dp)    :: g0(2), mag, denom, magR0, magR, f0, transfh, transfk
+    ! correlation with respect to shifts, self is assumed pre-normalized to 1.
+    subroutine f_noselfsubtr( selfR, self, shift, f )
+        class(ft_expanded_dp), intent(in)  :: selfR, self
+        real(dp),              intent(in)  :: shift(2)
+        real(dp),              intent(out) :: f
+        complex(dp) :: fcomp
+        real(dp)    :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2)),f0,argh,argk,ck,sk
         integer     :: h,k
-        real(dp) :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2))
-        real(dp) :: argh,argk,ck,sk
+        f0    = 0.d0
+        f     = 0.d0
+        do h = self%flims(1,1),self%flims(1,2)
+            argh  = real(h,dp) * shift(1) * self%shconst(1)
+            ch(h) = cos(argh)
+            sh(h) = sin(argh)
+        enddo
+        do k = self%flims(2,1),self%flims(2,2)
+            argk  = real(k,dp) * shift(2) * self%shconst(2)
+            ck    = cos(argk)
+            sk    = sin(argk)
+            do h = self%flims(1,1),self%flims(1,2)
+                if( self%bandmsk(h,k) )then
+                    fcomp = (selfR%cmat(h,k) * conjg(self%cmat(h,k))) * dcmplx(ck*ch(h)-sk*sh(h), (sk*ch(h)+ck*sh(h)))
+                    if( h == 0 )then
+                        f0 = f0 + real(fcomp)
+                    else
+                        f  = f  + real(fcomp)
+                    endif
+                endif
+            end do
+        enddo
+        f = (f0 + 2.d0*f)
+    end subroutine f_noselfsubtr
+
+    ! gradients of correlations with respect to shifts, self is assumed pre-normalized to 1.
+    subroutine fdf_noselfsubtr( selfR, self, shift, f, g )
+        class(ft_expanded_dp), intent(in) :: selfR, self
+        real(dp),              intent(in)   :: shift(2)
+        real(dp),              intent(out)   :: f, g(2)
+        complex(dp) :: fcomp
+        real(dp)    :: ch(self%flims(1,1):self%flims(1,2)),sh(self%flims(1,1):self%flims(1,2)),g0(2), f0, transfh, transfk
+        real(dp)    :: argh,argk,ck,sk
+        integer     :: h,k
         g0    = 0.d0
         g     = 0.d0
-        magR0 = 0.d0
-        magR  = 0.d0
         f0    = 0.d0
         f     = 0.d0
         do h = self%flims(1,1),self%flims(1,2)
@@ -390,33 +416,21 @@ contains
             sk    = sin(argk)
             do h = self%flims(1,1),self%flims(1,2)
                 if( self%bandmsk(h,k) )then
-                    fcompI = self%cmat(h,k)
-                    fcomp  = selfR%cmat(h,k) - fcompI
-                    mag    = csq_fast(fcomp)
                     transfh = real(h,dp) * self%shconst(1)
-                    fcomp  = (fcomp * conjg(fcompI)) * dcmplx(ck*ch(h)-sk*sh(h), (sk*ch(h)+ck*sh(h)))
+                    fcomp   = (selfR%cmat(h,k) * conjg(self%cmat(h,k))) * dcmplx(ck*ch(h)-sk*sh(h), (sk*ch(h)+ck*sh(h)))
                     if( h == 0 )then
-                        f0    = f0    + real(fcomp)
-                        g0    = g0    + dimag(fcomp) * [transfh, transfk]
-                        magR0 = magR0 + mag
+                        f0 = f0    + real(fcomp)
+                        g0 = g0    + dimag(fcomp) * [transfh, transfk]
                     else
-                        f       = f    + real(fcomp)
-                        g       = g    + dimag(fcomp) * [transfh, transfk]
-                        magR    = magR + mag
+                        f  = f    + real(fcomp)
+                        g  = g    + dimag(fcomp) * [transfh, transfk]
                     endif
                 endif
             end do
         enddo
-        denom = (magR0 + 2.d0*magR)
-        if( denom > 0.d0 )then
-            denom = dsqrt(denom)
-            f = (f0 + 2.d0*f) / denom
-            g = (g0 + 2.d0*g) / denom
-        else
-            f = 0.d0
-            g = 0.d0
-        endif
-    end subroutine fdf
+        f = (f0 + 2.d0*f)
+        g = (g0 + 2.d0*g)
+    end subroutine fdf_noselfsubtr
 
     ! DESTRUCTOR
 
