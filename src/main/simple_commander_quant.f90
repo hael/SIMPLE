@@ -160,16 +160,12 @@ contains
       call a_targ%kill
     end subroutine exec_dock_coords
 
-    ! Example of cline:
-    ! simple_exec prg=dock_volpair lpstart=3 lpstop=1 smpd=0.358 vol1=vol_Nov26.mrc
-    ! vol2=vol_Nov28_2.mrc  msk=40 nthr=8
+
     subroutine exec_atoms_rmsd( self, cline )
-        use simple_ori,              only: ori
-        use simple_atoms,            only: atoms
-        use simple_nano_utils,       only: kabsch, read_pdb2matrix, write_matrix2pdb, find_couples
+        use simple_nano_utils,       only: dock_nanosPDB
         class(atoms_rmsd_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline !< command line input
-        character(len=STDLEN)  :: fname1, fname2
+        character(len=STDLEN)  :: fname1, fname2, pdbfile_in1, pdbfile_in2, pdbfile_out1, pdbfile_out2
         type(parameters)       :: params
         type(nanoparticle)     :: nano1, nano2
         call params%new(cline)
@@ -192,6 +188,16 @@ contains
         call nano1%set_atomic_coords(trim(fname1)//'_atom_centers.pdb')
         ! execute
         call nano2%set_atomic_coords(trim(fname2)//'_atom_centers.pdb')
+        ! optional atomic position docking
+        pdbfile_in1  = trim(fname1)//'_atom_centers.pdb'
+        pdbfile_in2  = trim(fname2)//'_atom_centers.pdb'
+        pdbfile_out1 = trim(fname1)//'_registered_atom_centeres'
+        pdbfile_out2 = trim(fname2)//'_registered_atom_centeres'
+        if(cline%defined('dodock') .and. params%dodock .eq. 'yes') then
+          call dock_nanosPDB(pdbfile_in1,pdbfile_in2,pdbfile_out1,pdbfile_out2)
+          call nano1%set_atomic_coords(trim(fname1)//'_registered_atom_centeres.pdb')
+          call nano2%set_atomic_coords(trim(fname2)//'_registered_atom_centeres.pdb')
+        endif
         ! RMSD calculation
         call nano1%atoms_rmsd(nano2)
         ! kill

@@ -1094,7 +1094,7 @@ contains
         &'Compare two atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for comparing two atomic-resolution nanoparticle map by RMSD calculation',& ! descr long
         &'quant_exec',&                                     ! executable
-        &2, 1, 0, 0, 1, 1, 0, .false.)                       ! # entries in each group, requires sp_project
+        &2, 1, 0, 1, 1, 1, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
          call atoms_rmsd%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume 1', &
@@ -1106,7 +1106,8 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        ! <empty>
+         call atoms_rmsd%set_input('srch_ctrls', 1, 'dodock', 'binary', 'Register atomic positions', 'Perform docking of the atomic positions &
+         &by using the kabsch algorithm (yes|no){yes}', '(yes|no){no}', .true., 'no')
         ! filter controls
          call atoms_rmsd%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition vol1  e.g. Pt', .true., '')
         ! mask controls
