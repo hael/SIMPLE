@@ -2256,6 +2256,8 @@ contains
         call atomic_pos%kill
     end subroutine make_soft_mask
 
+    ! This subroutine does not perform volume registration.
+    ! Input nanos need to be registered already.
     subroutine atoms_rmsd(nano1,nano2,r)
         use simple_atoms, only : atoms
         use gnufor2

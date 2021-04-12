@@ -38,6 +38,7 @@ type :: parameters
     character(len=3)      :: discrete='no'        !< be discrete(yes|no){no}
     character(len=3)      :: diverse='no'         !< diverse or not flag (yes|no){no}
     character(len=3)      :: doalign='yes'
+    character(len=3)      :: dodock='no'          !< perform atomic position registration (yes|no){no}
     character(len=3)      :: dopca='yes'
     character(len=3)      :: doprint='no'
     character(len=3)      :: dorec='yes'
@@ -527,6 +528,7 @@ contains
         call check_carg('diverse',        self%diverse)
         call check_carg('doalign',        self%doalign)
         call check_carg('dockmode',       self%dockmode)
+        call check_carg('dodock',         self%dodock)
         call check_carg('dorec',          self%dorec)
         call check_carg('dev',            self%dev)
         call check_carg('dihedral',       self%dihedral)
