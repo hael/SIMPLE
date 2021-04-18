@@ -818,16 +818,16 @@ contains
         write(logfhandle,'(A)') tseries_motion_correct%name
         write(logfhandle,'(A)') tseries_ctf_estimate%name
         write(logfhandle,'(A)') tseries_make_pickavg%name
+        write(logfhandle,'(A)') tseries_track_particles%name
+        write(logfhandle,'(A)') graphene_subtr%name
         write(logfhandle,'(A)') tseries_denoise_trajectory%name
         write(logfhandle,'(A)') tseries_swap_stack%name
-        write(logfhandle,'(A)') tseries_track_particles%name
-        write(logfhandle,'(A)') ''
-        write(logfhandle,'(A)') format_str('PARTICLE 3D RECONSTRUCTION PROGRAMS:', C_UNDERLINED)
-        write(logfhandle,'(A)') graphene_subtr%name
         write(logfhandle,'(A)') center2D_nano%name
         write(logfhandle,'(A)') cluster2D_nano%name
         write(logfhandle,'(A)') map_cavgs_selection%name
         write(logfhandle,'(A)') estimate_diam%name
+        write(logfhandle,'(A)') ''
+        write(logfhandle,'(A)') format_str('PARTICLE 3D RECONSTRUCTION PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') simulate_atoms%name
         write(logfhandle,'(A)') random_rec%name
         write(logfhandle,'(A)') initial_3Dmodel_nano%name
