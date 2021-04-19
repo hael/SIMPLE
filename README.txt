@@ -122,7 +122,7 @@ In order to use this mode, a file must be created at $SIMPLE_PATH/gui_data/users
 
 All GUI associated data is stored in $SIMPLE_PATH/gui_data/ so this directory may want to be backed up regularly. 
 
-Once the login information has been entered, the GUI server can be started using the command 'simple_multiuser'. Alternatively, the process can be run in the background using the command 'nohup simple_multiuser &'. 
+Once the login information has been entered, the GUI server can be started using the command 'simple_multiuser start'. Alternatively, the process can be run in the background using the command 'nohup simple_multiuser start &'. 
 
 The GUI can now be accessed from any modern web browser by navigating to http://<address of node on which server is running>:8095. 
 
