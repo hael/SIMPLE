@@ -1234,9 +1234,9 @@ contains
        real,    pointer     :: rmat(:,:,:), rmat_corr(:,:,:)
        logical, allocatable :: mask(:,:,:), cn_mask(:)
        integer, allocatable :: imat_cc(:,:,:), sz(:)
-       real,    allocatable :: ar(:),diameter(:)
+       real,    allocatable :: ar(:),diameter(:),avg_gr(:),stdev_gr(:)
        type(image)          :: phasecorr
-       integer :: i, j, k,n_atom, filnum, io_stat
+       integer :: i, j, k,n_atom, filnum, io_stat, min_cn, max_cn
        real    :: max_intensity(self%n_cc), avg_intensity(self%n_cc), max_corr(self%n_cc), int_corr(self%n_cc)
        real    :: stdev_intensity(self%n_cc), radii(self%n_cc), int_intensity(self%n_cc) ! integrated intensity
        real    :: avg_int, stdev_int, max_int, radius
@@ -1348,69 +1348,132 @@ contains
        if(print_file) call fclose(filnum)
        ! print one by one the stats anyway
        ! call fopen(filnum, file='../'//'RadialPos.csv', iostat=io_stat)
-       call fopen(filnum, file='RadialPos.csv', iostat=io_stat)
+       ! Avg intensity value and std deviation within each cn group.
+       min_cn = minval(self%cn, cn_mask)
+       max_cn = maxval(self%cn, cn_mask)
+       allocate(avg_gr(max_cn-min_cn+1),stdev_gr(max_cn-min_cn+1),source=0.)
+       call cn_analysis(avg_gr, stdev_gr)
+       ! Report on a file
+       call fopen(filnum, file='RadialPos.csv', action='readwrite', iostat=io_stat)
        write (filnum,*) 'radius'
        do n_atom = 1, self%n_cc
            if(cn_mask(n_atom)) write (filnum,'(A)', advance='yes') trim(real2str(radii(n_atom)))
        end do
        call fclose(filnum)
-       call fopen(filnum, file='MaxIntensity.csv', iostat=io_stat)
+       call fopen(filnum, file='MaxIntensity.csv', action='readwrite', iostat=io_stat)
        write (filnum,*) 'maxint'
        do n_atom = 1, self%n_cc
            if(cn_mask(n_atom)) write (filnum,'(A)', advance='yes') trim(real2str(max_intensity(n_atom)))
        end do
        call fclose(filnum)
-       call fopen(filnum, file='MaxCorr.csv', iostat=io_stat)
+       call fopen(filnum, file='MaxCorr.csv', action='readwrite', iostat=io_stat)
        write (filnum,*) 'maxcorr'
        do n_atom = 1, self%n_cc
            if(cn_mask(n_atom)) write (filnum,'(A)', advance='yes') trim(real2str(max_corr(n_atom)))
        end do
        call fclose(filnum)
-       call fopen(filnum, file='AvgIntensity.csv', iostat=io_stat)
+       call fopen(filnum, file='AvgIntensity.csv', action='readwrite', iostat=io_stat)
        write (filnum,*) 'avgint'
        do n_atom = 1, self%n_cc
            if(cn_mask(n_atom)) write (filnum,'(A)', advance='yes') trim(real2str(avg_intensity(n_atom)))
        end do
        call fclose(filnum)
-       call fopen(filnum, file='IntIntensity.csv', iostat=io_stat)
+       call fopen(filnum, file='IntIntensity.csv', action='readwrite', iostat=io_stat)
        write (filnum,*) 'intint'
        do n_atom = 1, self%n_cc
            if(cn_mask(n_atom)) write (filnum,'(A)', advance='yes') trim(real2str(int_intensity(n_atom)))
        end do
        call fclose(filnum)
-       call fopen(filnum, file='IntCorr.csv', iostat=io_stat)
+       call fopen(filnum, file='IntCorr.csv', action='readwrite', iostat=io_stat)
        write (filnum,*) 'intcorr'
        do n_atom = 1, self%n_cc
            if(cn_mask(n_atom)) write (filnum,'(A)', advance='yes') trim(real2str(int_corr(n_atom)))
        end do
        call fclose(filnum)
-       call fopen(filnum, file='Size.csv', iostat=io_stat)
+       call fopen(filnum, file='Size.csv', action='readwrite', iostat=io_stat)
        write (filnum,*) 'sz'
        do n_atom = 1, self%n_cc
            if(cn_mask(n_atom)) write (filnum,'(A)', advance='yes') trim(int2str(sz(n_atom)))
        end do
        call fclose(filnum)
-       call fopen(filnum, file='AspectRatio.csv', iostat=io_stat)
+       call fopen(filnum, file='AspectRatio.csv', action='readwrite', iostat=io_stat)
        write (filnum,*) 'ar'
        do n_atom = 1, self%n_cc
            if(cn_mask(n_atom)) write (filnum,'(A)', advance='yes') trim(real2str(ar(n_atom)))
        end do
        call fclose(filnum)
-       call fopen(filnum, file='Diameter.csv', iostat=io_stat)
+       call fopen(filnum, file='Diameter.csv', action='readwrite', iostat=io_stat)
        write (filnum,*) 'diam'
        do n_atom = 1, self%n_cc
            if(cn_mask(n_atom)) write (filnum,'(A)', advance='yes') trim(real2str(diameter(n_atom)))
        end do
        call fclose(filnum)
-       call fopen(filnum, file='PolarizationAngle.csv', iostat=io_stat)
+       call fopen(filnum, file='PolarizationAngle.csv', action='readwrite', iostat=io_stat)
        write (filnum,*) 'polar_ang'
        do n_atom = 1, self%n_cc
            if(cn_mask(n_atom)) write (filnum,'(A)', advance='yes') trim(real2str(self%ang_var(n_atom)))
        end do
        call fclose(filnum)
+       call fopen(filnum, file='CnStd.csv', action='readwrite', iostat=io_stat)
+       write (filnum,*) 'cn_std'
+       do n_atom = 1, self%n_cc
+           if(cn_mask(n_atom)) write (filnum,'(A)', advance='yes') trim(int2str(self%cn(n_atom)))
+       end do
+       call fclose(filnum)
+       call fopen(filnum, file='CnGen.csv', action='readwrite', iostat=io_stat)
+       write (filnum,*) 'cn_gen'
+       do n_atom = 1, self%n_cc
+           if(cn_mask(n_atom)) write (filnum,'(A)', advance='yes') trim(real2str(self%cn_gen(n_atom)))
+       end do
+       call fclose(filnum)
        deallocate(sz,ar,diameter)
        call phasecorr%kill()
        write(logfhandle,*)'**atoms intensity statistics calculations completed'
+     contains
+
+       subroutine cn_analysis(avg_gr,stdev_gr)
+         real, intent(inout) :: avg_gr(:)   ! avg intensity value per cn group
+         real, intent(inout) :: stdev_gr(:) ! standard deviation per cn group
+         integer :: i,cn,cnt,cnt_gr,filnum1,filnum2,filnum3
+         cnt_gr = 0
+         do cn = min_cn,max_cn
+           cnt = 0  ! number of atoms with coord number = cn
+           cnt_gr = cnt_gr + 1 ! number of groups of coordination number
+           do i = 1, self%n_cc
+             if(cn_mask(i) .and. self%cn(i)==cn) then
+               cnt    = cnt + 1
+               avg_gr(cnt_gr) = avg_gr(cnt_gr) + max_intensity(i)
+             endif
+           enddo
+           avg_gr(cnt_gr) = avg_gr(cnt_gr)/real(cnt)
+         enddo
+         ! standard deviation of the max intensity values in the coordination number group
+         call fopen(filnum1, file='AvgMaxIntCnGroup.csv', iostat=io_stat)
+         call fopen(filnum2, file='StdevMaxIntCnGroup.csv', iostat=io_stat)
+         call fopen(filnum3, file='CnGroup.csv', iostat=io_stat)
+         write (filnum1,*) 'avg_max_int'
+         write (filnum2,*) 'stdev_max_int'
+         write (filnum3,*) 'cn'
+         cnt_gr = 0
+         do cn = min_cn,max_cn
+           cnt = 0  ! number of atoms with coord number = cn
+           cnt_gr = cnt_gr + 1 ! number of groups of coordination number
+           do i = 1, self%n_cc
+             if(cn_mask(i) .and. self%cn(i)==cn) then
+               cnt    = cnt + 1
+               stdev_gr(cnt_gr) = stdev_gr(cnt_gr) + (max_intensity(i)-avg_gr(cnt_gr))**2
+             endif
+           enddo
+           stdev_gr(cnt_gr) = sqrt(stdev_gr(cnt_gr)/real(cnt))
+           print *, 'cn: ', cn, 'nb of elements in the group ', cnt, 'avg_gr ', avg_gr(cnt_gr), 'cnt_gr ', cnt_gr, 'stdev_gr ', stdev_gr(cnt_gr)
+           write (filnum1,'(A)', advance='yes') trim(real2str(avg_gr(cnt_gr)))
+           write (filnum2,'(A)', advance='yes') trim(real2str(stdev_gr(cnt_gr)))
+           write (filnum3,'(A)', advance='yes') trim(int2str(cn))
+         enddo
+         call fclose(filnum1)
+         call fclose(filnum2)
+         call fclose(filnum3)
+       end subroutine cn_analysis
    end subroutine atoms_stats
 
    subroutine distances_distribution(self,file,coords,volume)
@@ -1534,7 +1597,7 @@ contains
        endif
        if(print_ar) then
          call fopen(filnum, file='AspectRatio.csv', iostat=io_stat)
-         write (filnum,*) 'AR'
+         write (filnum,*) 'ar'
          do label = 1, size(self%ratios)
            write (filnum,'(A)', advance='yes') trim(real2str(self%ratios(label)))
          end do
@@ -1735,7 +1798,7 @@ contains
       class(nanoparticle), intent(inout) :: self
       real    :: max_intensity(self%n_cc)
       integer :: i, io_stat, filnum
-      call fopen(filnum, file='MaxIntensity.csv', iostat=io_stat)
+      call fopen(filnum, file='MaxIntensity.csv', action='readwrite', iostat=io_stat)
       if( io_stat .ne. 0 ) then
         THROW_HARD('Unable to read file MaxIntensity.csv Did you run atoms_stats?; cluster_atom_maxint')
       endif
@@ -1753,7 +1816,7 @@ contains
       class(nanoparticle), intent(inout) :: self
       real    :: int_intensity(self%n_cc)
       integer :: i, io_stat, filnum
-      call fopen(filnum, file='IntIntensity.csv', iostat=io_stat)
+      call fopen(filnum, file='IntIntensity.csv', action='readwrite', iostat=io_stat)
       if( io_stat .ne. 0 ) then
         THROW_HARD('Unable to read file IntIntensity.csv Did you run atoms_stats?; cluster_atom_intint')
       endif
@@ -1840,12 +1903,12 @@ contains
           endif
           write (filnum,'(a6,6i4)') trim('.arrow '), nint(m_adjusted), nint(self%net_dipole)
           call fclose(filnum)
-          call fopen(filnum, file='AnglesLongestDims.csv', iostat=io_stat)
-          write (filnum,*) 'ang'
-          do k = 1, self%n_cc
-              write (filnum,'(A)', advance='yes') trim(real2str(self%ang_var(k)))
-          end do
-          call fclose(filnum)
+          ! call fopen(filnum, file='AnglesLongestDims.csv', iostat=io_stat)
+          ! write (filnum,*) 'ang'
+          ! do k = 1, self%n_cc
+          !     write (filnum,'(A)', advance='yes') trim(real2str(self%ang_var(k)))
+          ! end do
+          ! call fclose(filnum)
         endif
     end subroutine search_polarization
 
@@ -1955,6 +2018,7 @@ contains
         real                 :: avg, stdev
         type(binimage)       :: img_1clss
         integer, allocatable :: imat_cc(:,:,:), imat_1clss(:,:,:)
+        character(len=4)     :: str_thres
         ! Preparing for clustering
         ! Aspect ratios and loc_longest dist estimation
         call self%aspect_ratios_estimation(print_ar=.false.) ! it's needed to identify the dir of longest dim
@@ -1990,7 +2054,8 @@ contains
           stdev = sqrt(stdev/(real(ncls)-1.))
         endif
         ! Output on a file
-        call fopen(filnum, file='ClusterAngThresh'//trim(real2str(thresh))//'.txt', iostat=io_stat)
+        str_thres = trim(real2str(thresh))
+        call fopen(filnum, file='ClusterAngThresh'//str_thres//'.txt', iostat=io_stat)
         write(unit = filnum,fmt ='(a,i2,a,f6.2)') 'NR OF IDENTIFIED CLUSTERS:', ncls, ' SELECTED THRESHOLD: ',  thresh
         write(unit = filnum,fmt ='(a)') 'CLASSIFICATION '
         do i = 1, dim
@@ -2002,14 +2067,13 @@ contains
         enddo
         write(unit = filnum,fmt ='(a,f6.2,a,f6.2,a)') 'AVG among the classes: ', avg, ' degrees; STDEV among the classes: ', stdev, ' degrees'
         call fclose(filnum)
-        !!!! Already written in the search_polarization function
-        ! call fopen(filnum, file='Ang.csv', iostat=io_stat)
-        ! write(filnum,*) 'ang'
-        ! do i  = 1, self%n_cc
-        !   write(filnum,*) self%ang_var(i)
-        ! enddo
-        ! call fclose(filnum)
-        ! Generate one figure for each class
+        call fopen(filnum, file='Ang.csv', iostat=io_stat)
+        write(filnum,*) 'ang'
+        do i  = 1, self%n_cc
+          write(filnum,*) self%ang_var(i)
+        enddo
+        call fclose(filnum)
+        !Generate one figure for each class
         if(GENERATE_FIGS) then
           call img_1clss%new_bimg(self%ldim, self%smpd)
           call self%img_cc%get_imat(imat_cc)
@@ -2043,6 +2107,7 @@ contains
       real                 :: avg, stdev, radius_cn, a(3)
       type(binimage)       :: img_1clss
       integer, allocatable :: imat_cc(:,:,:), imat_1clss(:,:,:)
+      character(len=4)     :: str_thres
       ! Calculate cn and cn_gen
       allocate(centers_ang(3,self%n_cc), source = (self%centers-1.)*self%smpd)
       call fit_lattice(centers_ang,a)
@@ -2101,7 +2166,8 @@ contains
         median_cn(i) = median(cn_cls)
       enddo
       ! Output on a file
-      call fopen(filnum, file='ClusterARThresh'//trim(real2str(thresh))//'.txt', iostat=io_stat)
+      str_thres = trim(real2str(thresh))
+      call fopen(filnum, file='ClusterARThresh'//str_thres//'.txt', iostat=io_stat)
       write(unit = filnum,fmt ='(a,i2,a,f6.2)') 'NR OF IDENTIFIED CLUSTERS:', ncls, ' SELECTED THRESHOLD: ',  thresh
       write(unit = filnum,fmt ='(a)') 'CLASSIFICATION '
       do i = 1, dim
@@ -2114,7 +2180,7 @@ contains
       write(unit = filnum,fmt ='(a,f6.2,a,f6.2)') 'AVG among the classes: ', avg, '; STDEV among the classes: ', stdev
       call fclose(filnum)
       ! Generate file that contains the calculater AR, that can be read afterwards
-      call fopen(filnum, file='Ar.csv', iostat=io_stat)
+      call fopen(filnum, file='AspectRatio.csv', iostat=io_stat)
       write(filnum,*) 'ar'
       do i  = 1, self%n_cc
         write(filnum,*) self%ratios(i)
@@ -2152,6 +2218,7 @@ contains
         real                 :: avg, stdev, cog(3)
         type(binimage)       :: img_1clss
         integer, allocatable :: imat_cc(:,:,:), imat_1clss(:,:,:)
+        character(len=4)     :: str_thres
         ! Preparing for clustering
         ! need to recalculate self%dists
         call self%distances_distribution(file=.true.)
@@ -2197,7 +2264,8 @@ contains
           stdev = sqrt(stdev/(real(ncls)-1.))
         endif
         ! Output on a file
-        call fopen(filnum, file='ClusterInterDistThresh'//trim(real2str(thresh))//'.txt', iostat=io_stat)
+        str_thres = trim(real2str(thresh))
+        call fopen(filnum, file='ClusterInterDistThresh'//str_thres//'.txt', iostat=io_stat)
         write(unit = filnum,fmt ='(a,i2,a,f6.2)') 'NR OF IDENTIFIED CLUSTERS:', ncls, ' SELECTED THRESHOLD: ',  thresh
         write(unit = filnum,fmt ='(a)') 'CLASSIFICATION '
         do i = 1, dim
@@ -2719,9 +2787,10 @@ contains
       real,             optional, intent(in)    :: thresh    ! for belonging/not belonging to the plane/column
       type(atoms)           :: init_atoms, final_atoms
       type(binimage)        :: img_out
+      character(len=3)      :: aux_var
       integer, allocatable  :: imat_cc(:,:,:), imat(:,:,:)
       real,    allocatable  :: line(:,:), plane(:,:,:),points(:,:),distances_totheplane(:),pointsTrans(:,:)
-      real,    allocatable  :: radii(:),max_intensity(:),int_intensity(:),w(:),v(:,:),d(:),distances_totheline(:)
+      real,    allocatable  :: radii(:),max_intensity(:),w(:),v(:,:),d(:),distances_totheline(:)
       integer :: i, n, t, s, filnum, io_stat, cnt_intersect, cnt
       logical :: flag(self%n_cc)
       real    :: atom1(3), atom2(3), atom3(3), dir_1(3), dir_2(3), vec(3), m(3), dist_plane, dist_line
@@ -2833,9 +2902,9 @@ contains
           call fclose(filnum)
           ! Read ratios, ang_var, dists, max_intensity
           if(.not. allocated(self%ratios)) allocate(self%ratios(self%n_cc))
-          call fopen(filnum, file='../'//'Ar.csv', iostat=io_stat)
+          call fopen(filnum, file='../'//'../'//'AspectRatio.csv', action='readwrite',iostat=io_stat)
           if( io_stat .ne. 0 ) then
-            THROW_HARD('Unable to read file Ar.csv Did you run cluster_analysis?; geometry_analysis')
+            THROW_HARD('Unable to read file AspectRatio.csv Did you run cluster_analysis?; geometry_analysis')
           endif
           read(filnum,*) ! first line is variable name
           do i = 1, self%n_cc
@@ -2843,7 +2912,7 @@ contains
           enddo
           call fclose(filnum)
           if(.not. allocated(self%ang_var)) allocate(self%ang_var(self%n_cc))
-          call fopen(filnum, file='../'//'Ang.csv', iostat=io_stat)
+          call fopen(filnum, file='../'//'../'//'Ang.csv', action='readwrite', iostat=io_stat)
           if( io_stat .ne. 0 ) then
             THROW_HARD('Unable to read file Ang.csv Did you run cluster_analysis?; geometry_analysis')
           endif
@@ -2853,7 +2922,7 @@ contains
           enddo
           call fclose(filnum)
           if(.not. allocated(self%dists)) allocate(self%dists(self%n_cc))
-          call fopen(filnum, file='../'//'Dist.csv', iostat=io_stat)
+          call fopen(filnum, file='../'//'../'//'Dist.csv', action='readwrite', iostat=io_stat)
           if( io_stat .ne. 0 ) then
             THROW_HARD('Unable to read file Dist.csv Did you run cluster_analysis?; geometry_analysis')
           endif
@@ -2863,33 +2932,23 @@ contains
           enddo
           call fclose(filnum)
           allocate(max_intensity(self%n_cc))
-          call fopen(filnum, file='../'//'MaxIntensity.csv', iostat=io_stat)
-          if( io_stat .ne. 0 ) then
-            THROW_HARD('Unable to read file MaxIntensity.csv Did you run atoms_stats?; geometry_analysis')
-          endif
+          call fopen(filnum, file='../'//'../'//'MaxIntensity.csv', action='readwrite', iostat=io_stat)
+          ! if( io_stat .ne. 0 ) then
+          !   THROW_HARD('Unable to read file MaxIntensity.csv Did you run atoms_stats?; geometry_analysis')
+          ! endif
           read(filnum,*)
           do i = 1, self%n_cc
             read(filnum,*) max_intensity(i)
           enddo
           call fclose(filnum)
-          allocate(int_intensity(self%n_cc))
-          call fopen(filnum, file='../'//'IntIntensity.csv', iostat=io_stat)
-          if( io_stat .ne. 0 ) then
-            THROW_HARD('Unable to read file IntIntensity.csv Did you run atoms_stats?; geometry_analysis')
-          endif
-          read(filnum,*)
-          do i = 1, self%n_cc
-            read(filnum,*) int_intensity(i)
-          enddo
-          call fclose(filnum)
           ! Output on Excel file all the stats on the atoms belonging to the plane
           cnt = 0
           call fopen(filnum, file='AtomColumnInfo.txt',iostat=io_stat)
-          write (filnum,*) '        Atom #    ','   Ar        ','       Dist     ','         Ang     ','         MaxInt     ', '       IntInt     '
+          write (filnum,*) '        Atom #    ','   Ar        ','       Dist     ','         Ang     ','         MaxInt     '
           do i = 1, self%n_cc
             if(flag(i)) then
               cnt = cnt + 1
-              write (filnum,*) i, '   ', self%ratios(i), self%dists(i), self%ang_var(i), max_intensity(i), int_intensity(i)
+              write (filnum,*) i, '   ', self%ratios(i), self%dists(i), self%ang_var(i), max_intensity(i)
             endif
           end do
           call fclose(filnum)
@@ -2962,13 +3021,13 @@ contains
             endif
           enddo
           distances_totheplane = (distances_totheplane)*self%smpd
-          call fopen(filnum, file='Radii.csv', iostat=io_stat)
+          call fopen(filnum, file='Radii.csv', action='readwrite', iostat=io_stat)
           write (filnum,*) 'r'
           do i = 1, cnt
             write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
           end do
           call fclose(filnum)
-          call fopen(filnum, file='DistancesToThePlane.csv',iostat=io_stat)
+          call fopen(filnum, file='DistancesToThePlane.csv', action='readwrite',iostat=io_stat)
           write (filnum,*) 'd'
           do i = 1, cnt
             write (filnum,'(A)', advance='yes') trim(real2str(distances_totheplane(i)))
@@ -2976,17 +3035,17 @@ contains
           call fclose(filnum)
           ! Read ratios, ang_var, dists, max_intensity
           if(.not. allocated(self%ratios)) allocate(self%ratios(self%n_cc))
-          call fopen(filnum, file='../'//'Ar.csv', iostat=io_stat)
+          call fopen(filnum, file='../'//'../'//'AspectRatio.csv', action='readwrite', iostat=io_stat)
           if( io_stat .ne. 0 ) then
-            THROW_HARD('Unable to read file Ar.csv Did you run cluster_analysis?; geometry_analysis')
+            THROW_HARD('Unable to read file AspectRatio.csv Did you run cluster_analysis?; geometry_analysis')
           endif
-          read(filnum,*) ! first line is variable name
+          read(filnum,*)  ! first line is variable name
           do i = 1, self%n_cc
             read(filnum,*) self%ratios(i)
           enddo
           call fclose(filnum)
           if(.not. allocated(self%ang_var)) allocate(self%ang_var(self%n_cc))
-          call fopen(filnum, file='../'//'Ang.csv', iostat=io_stat)
+          call fopen(filnum, file='../'//'../'//'Ang.csv', action='readwrite', iostat=io_stat)
           if( io_stat .ne. 0 ) then
             THROW_HARD('Unable to read file Ang.csv Did you run cluster_analysis?; geometry_analysis')
           endif
@@ -2996,7 +3055,7 @@ contains
           enddo
           call fclose(filnum)
           if(.not. allocated(self%dists)) allocate(self%dists(self%n_cc))
-          call fopen(filnum, file='../'//'Dist.csv', iostat=io_stat)
+          call fopen(filnum, file='../'//'../'//'Dist.csv', action='readwrite', iostat=io_stat)
           if( io_stat .ne. 0 ) then
             THROW_HARD('Unable to read file Dist.csv Did you run cluster_analysis?; geometry_analysis')
           endif
@@ -3006,7 +3065,7 @@ contains
           enddo
           call fclose(filnum)
           allocate(max_intensity(self%n_cc))
-          call fopen(filnum, file='../'//'MaxIntensity.csv', iostat=io_stat)
+          call fopen(filnum, file='../'//'../'//'MaxIntensity.csv', action='readwrite', iostat=io_stat)
           if( io_stat .ne. 0 ) then
             THROW_HARD('Unable to read file MaxIntensity.csv Did you run atoms_stats?; geometry_analysis')
           endif
@@ -3015,24 +3074,14 @@ contains
             read(filnum,*) max_intensity(i)
           enddo
           call fclose(filnum)
-          allocate(int_intensity(self%n_cc))
-          call fopen(filnum, file='../'//'IntIntensity.csv', iostat=io_stat)
-          if( io_stat .ne. 0 ) then
-            THROW_HARD('Unable to read file IntIntensity.csv Did you run atoms_stats?; geometry_analysis')
-          endif
-          read(filnum,*)
-          do i = 1, self%n_cc
-            read(filnum,*) int_intensity(i)
-          enddo
-          call fclose(filnum)
-          ! Output on Excel file all the stats on the atoms belonging to the plane
+          ! Output on txt file all the stats on the atoms belonging to the plane
           cnt = 0
-          call fopen(filnum, file='AtomPlaneInfo.txt',iostat=io_stat)
-          write (filnum,*) '        Atom #    ','   Ar        ','       Dist     ','         Ang     ','      MaxInt     ','       IntInt     '
+          call fopen(filnum, file='AtomPlaneInfo.txt',action='write',iostat=io_stat)
+          write (filnum,*) '        Atom #    ','   Ar        ','       Dist     ','         Ang     ','      MaxInt     '
           do i = 1, self%n_cc
             if(flag(i)) then
               cnt = cnt + 1
-              write (filnum,*) i, '   ', self%ratios(i), self%dists(i), self%ang_var(i), max_intensity(i), int_intensity(i)
+              write (filnum,*) i, '   ', self%ratios(i), self%dists(i), self%ang_var(i), max_intensity(i)
             endif
           end do
           call fclose(filnum)

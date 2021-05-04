@@ -382,9 +382,9 @@ contains
           call nano%new(params%vols(1), params%smpd,params%element)
           ! fetch img_bin, img_cc and atomic positions
           fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
-          call nano%set_img('../'//trim(fname)//'BIN.mrc','img_bin')
-          call nano%set_atomic_coords('../'//trim(fname)//'_atom_centers.pdb')
-          call nano%set_img('../'//trim(fname)//'CC.mrc', 'img_cc')
+          call nano%set_img('../../'//trim(fname)//'BIN.mrc','img_bin')
+          call nano%set_atomic_coords('../../'//trim(fname)//'_atom_centers.pdb')
+          call nano%set_img('../../'//trim(fname)//'CC.mrc', 'img_cc')
           call nano%update_self_ncc()
           ! execute
           if(cline%defined('thres')) then
