@@ -76,7 +76,6 @@ type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 ! declare simple_exec and single_exec program specifications here
 type(simple_program), target :: atom_cluster_analysis
 type(simple_program), target :: atoms_mask
-type(simple_program), target :: atoms_rmsd
 type(simple_program), target :: calc_pspec
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
@@ -302,7 +301,6 @@ contains
         call set_prg_ptr_array
         call new_atom_cluster_analysis
         call new_atoms_mask
-        call new_atoms_rmsd
         call new_calc_pspec
         call new_center
         call new_cleanup2D
@@ -407,7 +405,6 @@ contains
         n_prg_ptrs = 0
         call push2prg_ptr_array(atom_cluster_analysis)
         call push2prg_ptr_array(atoms_mask)
-        call push2prg_ptr_array(atoms_rmsd)
         call push2prg_ptr_array(calc_pspec)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
@@ -521,8 +518,6 @@ contains
                 ptr2prg => atom_cluster_analysis
             case('atoms_mask')
                 ptr2prg => atoms_mask
-            case('atoms_rmsd')
-                ptr2prg => atoms_rmsd
             case('calc_pspec')
                 ptr2prg => calc_pspec
             case('center')
@@ -841,7 +836,6 @@ contains
     subroutine list_quant_prgs_in_ui
         write(logfhandle,'(A)') atom_cluster_analysis%name
         write(logfhandle,'(A)') atoms_mask%name
-        write(logfhandle,'(A)') atoms_rmsd%name
         write(logfhandle,'(A)') atoms_stats%name
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') geometry_analysis%name
@@ -1087,43 +1081,14 @@ contains
         ! <empty>
     end subroutine new_atoms_mask
 
-    subroutine new_atoms_rmsd
-        ! PROGRAM SPECIFICATION
-        call atoms_rmsd%new(&
-        &'atoms_rmsd', &                                   ! name
-        &'Compare two atomic-resolution nanoparticle map',& ! descr_short
-        &'is a program for comparing two atomic-resolution nanoparticle map by RMSD calculation',& ! descr long
-        &'quant_exec',&                                     ! executable
-        &2, 1, 0, 1, 1, 1, 0, .false.)                       ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-         call atoms_rmsd%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume 1', &
-        & 'input volume e.g. vol1.mrc', .true., '')
-         call atoms_rmsd%set_input('img_ios', 2, 'vol2', 'file', 'Volume', 'Nanoparticle volume 2', &
-        & 'input volume e.g. vol2.mrc', .true., '')
-        ! parameter input/output
-         call atoms_rmsd%set_input('parm_ios', 1, smpd)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-         call atoms_rmsd%set_input('srch_ctrls', 1, 'dodock', 'binary', 'Register atomic positions', 'Perform docking of the atomic positions &
-         &by using the kabsch algorithm (yes|no){yes}', '(yes|no){no}', .true., 'no')
-        ! filter controls
-         call atoms_rmsd%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition vol1  e.g. Pt', .true., '')
-        ! mask controls
-        call atoms_rmsd%set_input('mask_ctrls', 1, 'msk', 'num', 'Mask radius', 'Mask radius in pixels', 'mask radius in pixels', .false., 50.)
-        ! computer controls
-        ! <empty>
-    end subroutine new_atoms_rmsd
-
     subroutine new_calc_pspec
         ! PROGRAM SPECIFICATION
         call calc_pspec%new(&
-        &'calc_pspec',&                                                          ! name
-        &'Calculate individual particles power spectra; internal use oly',&               ! descr_long
-        &'Calculate individual particles power spectra; internal use oly',&               ! descr_long
-        &'simple_exec',&                                                  ! executable
-        &0, 0, 0, 0, 0, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &'calc_pspec',&                                                     ! name
+        &'Calculate individual particles power spectra; internal use oly',& ! descr_long
+        &'Calculate individual particles power spectra; internal use oly',& ! descr_long
+        &'simple_exec',&                                                    ! executable
+        &0, 0, 0, 0, 0, 0, 2, .true.)                                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>

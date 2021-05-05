@@ -646,6 +646,101 @@ contains
         deallocate(dat_sorted, mask)
     end subroutine sortmeans
 
+    ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10
+    subroutine hac_1d( vec, thresh,labels, centroids, populations )
+        real,    intent(in)  :: vec(:)       ! input vector
+        real,    intent(in)  :: thresh       ! threshold for class merging
+        integer, intent(out) :: labels(:)    ! labels of the elements in vec
+        real,    allocatable, intent(out) :: centroids(:)   ! centroids of the classes
+        integer, allocatable, intent(out) :: populations(:) ! number of elements belonging to each class
+        real,    allocatable :: mat(:,:)     ! matrix that contains the distances
+        logical, allocatable :: mask(:), outliers(:)
+        real    :: d
+        integer :: N, i, j, index(1), loc1(1), loc2(1), cnt, ncls
+        N = size(vec) ! number of data points
+        ! 1) calc all the couples of distances, using euclid dist
+        allocate(mat(N,N), source = 0.)
+        do i = 1, N-1
+            do j = i+1, N
+                mat(i,j) = abs(vec(i)-vec(j))
+                mat(j,i) = mat(i,j)
+            enddo
+        enddo
+        ! 2) Generate binary clusters
+        allocate(mask(N),source = .true. )
+        allocate(outliers(N), source = .false.)
+        ncls = 0
+        do i = 1, N ! find the class for vec(i)
+            if(mask(i)) then ! if it's not already been clustered
+                mask(i) = .false.
+                ! find the index of the couple
+                d = minval(mat(i,:), mask)
+                index(:) = minloc(mat(i,:), mask)
+                ncls = ncls + 1
+                ! assign labels
+                labels(i) = ncls
+                if(d <= thresh) then ! if it's not an outlier (it has a couple)
+                    labels(index(1)) = labels(i)
+                    mask(index(1)) = .false. ! index(1) has already been clustered
+                else
+                    outliers(i) = .true.
+                endif
+            endif
+        enddo
+        ! 3) Calculate centroids
+        allocate(centroids(ncls), source = 0.)
+        mask = .true. ! reset
+        do i = 1, ncls
+            ! find the first member of the class
+            loc1(:) = minloc(abs(labels-i))
+            if(.not. outliers(loc1(1))) then
+                mask(loc1(1)) = .false.
+                ! find the second member of the class
+                loc2(:) = minloc(abs(labels-i), mask)
+                mask(loc2(1)) = .false.
+                centroids(i) = (vec(loc1(1)) + vec(loc2(1)))/2.
+            else ! the class has just one element
+                loc1(:) = minloc(abs(labels-i))
+                centroids(i) = vec(loc1(1))
+                mask(loc1(1)) = .false.
+            endif
+        enddo
+        mask  = .true. ! reset
+        ! 4) merge classes
+        do i = 1, ncls-1
+            do j = i+1, ncls
+                if(abs(centroids(i)-centroids(j)) <= thresh) then ! merge classes
+                    ! change label to class j
+                    where(labels == j) labels = i
+                endif
+            enddo
+        enddo
+        ! 5) Reorder labels
+        cnt = 0
+        do i = 1, ncls
+            if(any(labels== i)) then ! there is a class labelled i
+                cnt = cnt + 1        ! increasing order
+                where(labels == i) labels = cnt
+            endif
+        enddo
+        ! 6) recalculate centroids
+        deallocate(centroids)
+        ncls = maxval(labels) ! the nr of classes is maxval(labels)
+        allocate(centroids(ncls),   source = 0.)
+        allocate(populations(ncls), source = 0 )
+        mask = .true. ! reset
+        do i = 1, ncls
+            populations(i) = count(labels == i) ! counts the nr of elements in the class
+            ! find all cnt member of the class and update the centroids
+            do j = 1, populations(i)
+                loc1(:) = minloc(abs(labels-i), mask)
+                mask(loc1(1)) = .false. ! do not consider this member of the class anymore
+                centroids(i) = centroids(i)+ vec(loc1(1))
+            enddo
+            centroids(i) = centroids(i)/real(populations(i))
+        enddo
+    end subroutine hac_1d
+
     !>   one-dimensional cyclic index generation
     !! \param lims limits
     pure function cyci_1d( lims, i ) result( ind )
