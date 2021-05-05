@@ -11,7 +11,6 @@ use simple_dock_coords,    only: dock_coords_init, dock_coords_minimize
 implicit none
 
 public :: detect_atoms_commander
-public :: atoms_rmsd_commander
 public :: atoms_stats_commander
 public :: atom_cluster_analysis_commander
 public :: nano_softmask_commander
@@ -32,10 +31,6 @@ type, extends(commander_base) :: dock_coords_commander
   contains
     procedure :: execute      => exec_dock_coords
 end type dock_coords_commander
-type, extends(commander_base) :: atoms_rmsd_commander
-  contains
-    procedure :: execute      => exec_atoms_rmsd
-end type atoms_rmsd_commander
 type, extends(commander_base) :: atoms_stats_commander
   contains
     procedure :: execute      => exec_atoms_stats
@@ -159,53 +154,6 @@ contains
       call a_ref%kill
       call a_targ%kill
     end subroutine exec_dock_coords
-
-
-    subroutine exec_atoms_rmsd( self, cline )
-        use simple_nano_utils,       only: dock_nanosPDB
-        class(atoms_rmsd_commander), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline !< command line input
-        character(len=STDLEN)  :: fname1, fname2, pdbfile_in1, pdbfile_in2, pdbfile_out1, pdbfile_out2
-        type(parameters)       :: params
-        type(nanoparticle)     :: nano1, nano2
-        call params%new(cline)
-        if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_atoms_rmsd')
-        endif
-        if( .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! vol1 needs to be present; exec_atoms_rmsd')
-        endif
-        if( .not. cline%defined('vol2') )then
-            THROW_HARD('ERROR! vol2 needs to be present; exec_atoms_rmsd')
-        endif
-        if(.not. cline%defined('element')) then
-          THROW_HARD('ERROR! element needs to be present; exec_atoms_rmsd')
-        endif
-        call nano1%new(params%vols(1), params%smpd,params%element)
-        call nano2%new(params%vols(2), params%smpd,params%element)
-        fname1 = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
-        fname2 = get_fbody(trim(basename(params%vols(2))), trim(fname2ext(params%vols(2))))
-        call nano1%set_atomic_coords(trim(fname1)//'_atom_centers.pdb')
-        ! execute
-        call nano2%set_atomic_coords(trim(fname2)//'_atom_centers.pdb')
-        ! optional atomic position docking
-        pdbfile_in1  = trim(fname1)//'_atom_centers.pdb'
-        pdbfile_in2  = trim(fname2)//'_atom_centers.pdb'
-        pdbfile_out1 = trim(fname1)//'_registered_atom_centeres'
-        pdbfile_out2 = trim(fname2)//'_registered_atom_centeres'
-        if(cline%defined('dodock') .and. params%dodock .eq. 'yes') then
-          call dock_nanosPDB(pdbfile_in1,pdbfile_in2,pdbfile_out1,pdbfile_out2)
-          call nano1%set_atomic_coords(trim(fname1)//'_registered_atom_centeres.pdb')
-          call nano2%set_atomic_coords(trim(fname2)//'_registered_atom_centeres.pdb')
-        endif
-        ! RMSD calculation
-        call nano1%atoms_rmsd(nano2)
-        ! kill
-        call nano1%kill
-        call nano2%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_ATOMS_RMSD NORMAL STOP ****')
-    end subroutine exec_atoms_rmsd
 
     ! Calculates distances distribution across the whole nanoparticle
     ! and radial dependent statistics.
