@@ -237,7 +237,7 @@ contains
             case('ar')
               call nano%cluster_ar(params%thres)
             case('dist')
-              call nano%cluster_interdist(params%thres)
+              call nano%cluster_bondl(params%thres)
             case('ang')
               call nano%cluster_ang(params%thres)
             case('maxint')

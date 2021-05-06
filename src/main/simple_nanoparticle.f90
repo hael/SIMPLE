@@ -22,21 +22,20 @@ integer, parameter :: N_DISCRET     = 1000
 
 ! container for per-atom statistics
 type :: atom_stats
-    integer :: size            = 0  ! number of voxels in connected component
-    integer :: cc_ind          = 0  ! index of the connected component
-    integer :: cn_std          = 0  ! standard coordination number
+    integer :: cc_ind          = 0  ! index of the connected component        **filled-in**
+    integer :: size            = 0  ! number of voxels in connected component **filled-in**
+    integer :: cn_std          = 0  ! standard coordination number            **filled-in**
     integer :: loc_ldist(3)         ! for indentific of the vxl that determins the longest dim of the atom
     real    :: bondl           = 0. ! (dists)
-    real    :: longest_dist    = 0. ! longest atom distance
-    real    :: cn_gen          = 0. ! generalized coordination number
-    real    :: center(3)            ! atom center (centers)
-    real    :: aspect_ratio    = 0. ! (ratios)
+    real    :: cn_gen          = 0. ! generalized coordination number         **filled-in**
+    real    :: center(3)            ! atom center (centers)                   **filled-in**
+    real    :: aspect_ratio    = 0. ! (ratios)                                **filled-in**
     real    :: polar_angle     = 0. ! polarization angle (ang_var)
     real    :: diam            = 0. ! atom diameter
-    real    :: avg_int         = 0. ! average grey level intensity across the connected component
-    real    :: max_int         = 0. ! maximum grey level intensity across the connected component
-    real    :: sdev_int        = 0. ! standard deviation of the grey level intensity across the connected component
-    real    :: dist_from_NPcen = 0. ! distance from the centre of mass of the nanoparticle
+    real    :: avg_int         = 0. ! average grey level intensity across the connected component **filled-in**
+    real    :: max_int         = 0. ! maximum            -"-                                      **filled-in**
+    real    :: sdev_int        = 0. ! standard deviation -"-                                      **filled-in**
+    real    :: dist_from_NPcen = 0. ! distance from the centre of mass of the nanoparticle        **filled-in**
     real    :: strain          = 0. ! tensile strain in %
 end type atom_stats
 
@@ -45,18 +44,18 @@ type :: nanoparticle
     type(atoms)    :: centers_pdb
     type(image)    :: img,img_raw
     type(binimage) :: img_bin, img_cc
-    integer        :: ldim(3)            = 0  ! logical dimension of image
-    integer        :: n_cc               = 0  ! number of atoms (connected components)
-    real           :: smpd               = 0. ! sampling distance
-    real           :: NPcen(3)           = 0. ! coordinates of the center of mass of the nanoparticle
-    real           :: NPdiam             = 0. ! diameter of the nanoparticle
+    integer        :: ldim(3)            = 0  ! logical dimension of image             **filled-in**
+    integer        :: n_cc               = 0  ! number of atoms (connected components) **filled-in**
+    real           :: smpd               = 0. ! sampling distance                      **filled-in**
+    real           :: NPcen(3)           = 0. ! coordinates of the center of mass of the nanoparticle **filled-in**
+    real           :: NPdiam             = 0. ! diameter of the nanoparticle           **filled-in**
     real           :: avg_bondl          = 0. ! average bond length in A
     real           :: max_bondl          = 0. ! maximum bond length in A
     real           :: min_bondl          = 0. ! minimum bond length in A
-    real           :: sdev_bondl         = 0. ! standard deviation of  bond length
-    real           :: theoretical_radius = 0. ! theoretical atom radius
+    real           :: sdev_bondl         = 0. ! standard deviation of  bond length in A
+    real           :: med_bondl          = 0. ! median bond length in A
+    real           :: theoretical_radius = 0. ! theoretical atom radius               **filled-in**
     real           :: net_dipole(3)      = 0. ! sum of all the directions of polarization
-    real           :: natoms_per_sqA     = 0. ! number of atoms per A**2
     type(atom_stats), allocatable :: atominfo(:)
     character(len=2)      :: element     = ' '
     character(len=4)      :: atom_name   = '    '
@@ -79,25 +78,26 @@ type :: nanoparticle
     procedure, private :: find_centers
     procedure, private :: masscen
     procedure, private :: est_aspect_ratios
-    procedure          :: calc_aspect_ratio
-    procedure          :: discard_outliers
-    procedure          :: discard_outliers_cn
-    procedure          :: validate_atomic_positions
-    procedure          :: distances_distribution
+    procedure, private :: calc_aspect_ratio
+    procedure, private :: discard_outliers
+    procedure, private :: discard_outliers_cn
+    procedure, private :: validate_atomic_positions
+    procedure, private :: distances_distribution
     ! phase correlation
-    procedure          :: phasecorrelation_nano_gaussian
+    procedure, private :: phasecorr_one_atom
     ! clustering
     procedure, private :: cluster_atom_intensity
-    procedure          :: cluster_ang
-    procedure          :: cluster_ar
-    procedure          :: cluster_interdist
     procedure          :: cluster_atom_maxint
     procedure          :: cluster_atom_intint
-    procedure          :: search_polarization
+    procedure, private :: search_polarization
+    procedure          :: cluster_ang
+    procedure          :: cluster_ar
+    procedure          :: cluster_bondl
     procedure          :: geometry_analysis
     ! execution
     procedure          :: identify_atomic_pos
     procedure          :: identify_atomic_pos_thresh
+    procedure          :: fillin_atominfo
     procedure          :: radial_dependent_stats
     procedure          :: atoms_stats
     procedure          :: make_soft_mask
@@ -106,8 +106,8 @@ type :: nanoparticle
     procedure          :: print_atoms
     ! others
     procedure          :: update_self_ncc
-    procedure          :: keep_atomic_pos_at_radius
-    procedure          :: center_on_atom
+    procedure, private :: keep_atomic_pos_at_radius
+    procedure, private :: center_on_atom
     procedure          :: mask
     ! kill
     procedure          :: kill => kill_nanoparticle
@@ -343,11 +343,11 @@ contains
     end function masscen
 
     ! FORMULA: phasecorr = ifft2(fft2(field).*conj(fft2(reference)));
-    subroutine phasecorrelation_nano_gaussian(self, out_img)
+    subroutine phasecorr_one_atom(self, out_img)
         use simple_segmentation
-        class(nanoparticle),   intent(inout) :: self
-        type(image),           intent(inout) :: out_img  ! where to save the correlation values
-        type(image) :: one_atom,img_copy,phasecorr
+        class(nanoparticle), intent(inout) :: self
+        type(image),         intent(inout) :: out_img  ! where to save the correlation values
+        type(image) :: one_atom, img_copy, phasecorr
         type(atoms) :: atom
         real :: cutoff
         call img_copy%new(self%ldim, self%smpd)
@@ -363,7 +363,7 @@ contains
         call one_atom%fft()
         call img_copy%fft()
         call img_copy%phase_corr(one_atom,phasecorr,1.)
-        if(GENERATE_FIGS) call phasecorr%write(trim(self%fbody)//'CorrFiltered.mrc')
+        if( GENERATE_FIGS ) call phasecorr%write(trim(self%fbody)//'CorrFiltered.mrc')
         ! Save Output
         call out_img%kill() ! if it exists already
         call out_img%new(self%ldim, self%smpd)
@@ -371,7 +371,7 @@ contains
         call out_img%copy(phasecorr)
         call one_atom%kill()
         call phasecorr%kill()
-    end subroutine phasecorrelation_nano_gaussian
+    end subroutine phasecorr_one_atom
 
     ! This subrotuine takes in input a nanoparticle and
     ! binarizes it by thresholding. The gray level histogram is split
@@ -480,88 +480,84 @@ contains
          end subroutine otsu_nano
     end subroutine binarize
 
-    ! This subroutine discard outliers that resisted binarization.
+    ! This subroutine discards outliers that resisted binarization.
     ! If generalised is true
     ! It calculates the generalised coordination number (cn_gen) of each atom and discards
     ! the atoms with cn_gen < cn_thresh
     ! If generalised is false
     ! It calculates the standard coordination number (cn) of each atom and discards
-    ! the atoms with cn < cn_thresh
+    ! the atoms with cn_std < cn_thresh
     ! It modifies the img_bin and img_cc instances deleting the
     ! identified outliers.
-    subroutine discard_outliers_cn(self, cn_thresh,generalised)
+    subroutine discard_outliers_cn(self, cn_thresh, generalised)
         class(nanoparticle), intent(inout) :: self
         integer,             intent(in)    :: cn_thresh   ! threshold for discard outliers based on coordination number
         logical,             intent(in)    :: generalised ! use cn_gen or cn standard?
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
         logical, allocatable :: mask(:)
         real, allocatable    :: centers_A(:,:) ! coordinates of the atoms in ANGSTROMS
-        real    :: radius  !radius of the sphere to consider for cn calculation
-        real    :: a(3)    !lattice parameter
+        real    :: radius  ! radius of the sphere to consider for cn calculation
+        real    :: a(3)    ! lattice parameter
         real    :: cn_gen(self%n_cc)
-        integer :: cn(self%n_cc)
-        integer :: cc
-        integer :: n_discard
-        integer :: filnum, filnum1, filnum2, i
+        integer :: cn(self%n_cc), cc, n_discard, filnum, filnum1, filnum2, i
         write(logfhandle, *) '****outliers discarding cn, init'
         centers_A = self%atominfo2centers_A()
-        ! In order to find radius for cn calculation, FccLattice
-        ! has to be fit.
+        ! In order to find radius for cn calculation, FCC Lattice has to be fit.
         if(DEBUG) then
-          call fopen(filnum, file='CentersAngCN.txt')
-          do i = 1, size(centers_A,2)
-            write(filnum,*) centers_A(:,i)
-          enddo
-          call fclose(filnum)
-          call fopen(filnum1, file='CentersPxlsCN.txt')
-          do i = 1, size(self%atominfo)
-            write(filnum1,*) self%atominfo(i)%center(:)
-          enddo
-          call fclose(filnum1)
+            call fopen(filnum, file='CentersAngCN.txt')
+            do i = 1, size(centers_A,2)
+                write(filnum,*) centers_A(:,i)
+            enddo
+            call fclose(filnum)
+            call fopen(filnum1, file='CentersPxlsCN.txt')
+            do i = 1, size(self%atominfo)
+                write(filnum1,*) self%atominfo(i)%center(:)
+            enddo
+            call fclose(filnum1)
         endif
         call fit_lattice(centers_A,a)
         call find_radius_for_coord_number(a,radius)
-        if(DEBUG ) write(logfhandle,*) 'Radius for coord numb calcolation ', radius
+        if( DEBUG ) write(logfhandle,*) 'Radius for coord nr calculation ', radius
         call run_coord_number_analysis(centers_A,radius,cn,cn_gen)
-        if(DEBUG) then
-          call fopen(filnum2, file='CoordNumberGenBeforeOutliers.txt')
-          write(filnum2,*) cn_gen
-          call fclose(filnum2)
+        if( DEBUG )then
+            call fopen(filnum2, file='CoordNumberGenBeforeOutliers.txt')
+            write(filnum2,*) cn_gen
+            call fclose(filnum2)
         endif
         allocate(mask(self%n_cc), source = .true.)
-        if(generalised .eqv. .true.) then
-          if(DEBUG) then
-            write(logfhandle, *) 'Before outliers discarding cn gen is'
-            write(logfhandle, *)  cn_gen
-          endif
-          write(logfhandle, *) 'Using GENERALISED cn'
-          where(cn_gen < cn_thresh) mask = .false. ! false where atom has to be discarded
-          n_discard = count(cn_gen<cn_thresh)
+        if( generalised .eqv. .true. )then
+            if( DEBUG )then
+                write(logfhandle, *) 'Before outliers discarding cn_gen is'
+                write(logfhandle, *)  cn_gen
+            endif
+            write(logfhandle, *) 'Using GENERALISED cn'
+            where(cn_gen < cn_thresh) mask = .false. ! false where atom has to be discarded
+            n_discard = count(cn_gen < cn_thresh)
         else
-          if(DEBUG) then
-            write(logfhandle, *) 'Before outliers discarding cn standard is'
-            write(logfhandle, *)  cn
-          endif
-          write(logfhandle, *) 'Using STANDARD cn'
-          where(cn < cn_thresh) mask = .false. ! false where atom has to be discarded
-          n_discard = count(cn<cn_thresh)
+            if(DEBUG) then
+                write(logfhandle, *) 'Before outliers discarding cn standard is'
+                write(logfhandle, *)  cn
+            endif
+            write(logfhandle, *) 'Using STANDARD cn'
+            where(cn < cn_thresh) mask = .false. ! false where atom has to be discarded
+            n_discard = count(cn < cn_thresh)
         endif
         write(logfhandle, *) 'Numbers of atoms discarded because of low cn ', n_discard
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
         ! Removing outliers from the binary image and the connected components image
-        if(generalised .eqv. .true.) then
-          do cc = 1, self%n_cc
-            if(cn_gen(cc)<cn_thresh) then
-                where(imat_cc == cc) imat_bin = 0
-            endif
-          enddo
+        if( generalised .eqv. .true. )then
+            do cc = 1, self%n_cc
+                if(cn_gen(cc)<cn_thresh) then
+                    where(imat_cc == cc) imat_bin = 0
+                endif
+            enddo
         else
-          do cc = 1, self%n_cc
-            if(cn(cc)<cn_thresh) then
-                where(imat_cc == cc) imat_bin = 0
-            endif
-          enddo
+            do cc = 1, self%n_cc
+                if(cn(cc)<cn_thresh) then
+                    where(imat_cc == cc) imat_bin = 0
+                endif
+            enddo
         endif
         call self%img_bin%set_imat(imat_bin)
         call self%img_bin%find_ccs(self%img_cc)
@@ -582,45 +578,40 @@ contains
         write(logfhandle, *) '****outliers discarding cn, completed'
     end subroutine discard_outliers_cn
 
-    ! This subroutine discard outliers that resisted binarization.
+    ! This subroutine discards outliers that resisted binarization.
     ! It calculates the generalised coordination number of each atom and discards the bottom
     ! PERCENT_DISCARD% of the atoms according to the contact score.
     ! It modifies the img_bin and img_cc instances deleting the
     ! identified outliers.
-    subroutine discard_outliers(self)
+    subroutine discard_outliers( self )
         class(nanoparticle), intent(inout) :: self
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
         real,    parameter   :: PERCENT_DISCARD = 5./100.
         logical, allocatable :: mask(:)
-        real, allocatable    :: centers_A(:,:) ! coordinates of the atoms in ANGSTROMS
-        real    :: cn_gen(self%n_cc)
+        real,    allocatable :: centers_A(:,:) ! coordinates of the atoms in ANGSTROMS
+        real    :: cn_gen(self%n_cc), a(3), dist
         integer :: cn(self%n_cc)
-        real    :: a(3),dist
-        real    :: radius  !radius of the sphere to consider
-        integer :: cc
-        integer :: loc(1)
-        integer :: n_discard,filnum1,filnum,i
-        integer :: label(1)
+        real    :: radius ! radius of the sphere to consider
+        integer :: cc, loc(1), n_discard, filnum1, filnum, i, label(1)
         write(logfhandle, *) '****outliers discarding default, init'
-        centers_A = self%atominfo2centers_A()
-        ! In order to find radius for cn calculation, FccLattice
-        ! has to be fit.
-        if(DEBUG) then
-          call fopen(filnum, file='CentersAngCN.txt')
-          do i = 1, size(centers_A,2)
-            write(filnum,*) centers_A(:,i)
-          enddo
-          call fclose(filnum)
-          call fopen(filnum1, file='CentersPxlsCN.txt')
-          do i = 1, size(self%atominfo)
-            write(filnum1,*) self%atominfo(i)%center(:)
-          enddo
-          call fclose(filnum1)
+        centers_A = self%atominfo2centers_A() ! atom centers in A
+        ! In order to find radius for cn calculation, FCC Lattice has to be fit.
+        if( DEBUG )then
+            call fopen(filnum, file='CentersAngCN.txt')
+            do i = 1, size(centers_A,2)
+                write(filnum,*) centers_A(:,i)
+            enddo
+            call fclose(filnum)
+            call fopen(filnum1, file='CentersPxlsCN.txt')
+            do i = 1, size(self%atominfo)
+                write(filnum1,*) self%atominfo(i)%center(:)
+            enddo
+            call fclose(filnum1)
         endif
         call fit_lattice(centers_A,a)
         call find_radius_for_coord_number(a,radius)
-        if(DEBUG ) write(logfhandle,*) 'Radius for coord numb calcolation ', radius
-        call run_coord_number_analysis(centers_A,radius,cn,cn_gen)
+        if( DEBUG ) write(logfhandle,*) 'Radius for coord nr calculation ', radius
+        call run_coord_number_analysis(centers_A, radius, cn, cn_gen)
         allocate(mask(self%n_cc), source = .true.)
         n_discard = nint(self%n_cc*PERCENT_DISCARD)
         write(logfhandle, *) 'Numbers of atoms discarded because outliers ', n_discard
@@ -642,10 +633,10 @@ contains
         call self%find_centers()
         deallocate(centers_A)
         centers_A = self%atominfo2centers_A()
-        call run_coord_number_analysis(centers_A,radius,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+        call run_coord_number_analysis(centers_A, radius, self%atominfo(:)%cn_std, self%atominfo(:)%cn_gen)
         ! ATTENTION: you will see low coord numbers because they are UPDATED, after elimination
         ! of the atoms with low cn. It is like this in order to be consistent with the figure.
-        if(DEBUG) then
+        if( DEBUG )then
            write(logfhandle, *) 'After outliers discarding cn is'
            write(logfhandle, *)  self%atominfo(:)%cn_std
            write(logfhandle, *) 'And generalised cn is'
@@ -655,56 +646,56 @@ contains
     end subroutine discard_outliers
 
     ! This subrouitne validates the identified atomic positions
-    subroutine validate_atomic_positions(self)
+    subroutine validate_atomic_positions( self )
         class(nanoparticle), intent(inout) :: self
         real,    allocatable :: x(:)
         real,    pointer     :: rmat_pc(:,:,:)
         integer, allocatable :: imat(:,:,:), imat_cc(:,:,:), imat_bin(:,:,:)
         integer, parameter   :: RANK_THRESH = 4
-        integer :: n_cc, cnt
+        integer :: icc, cnt
         integer :: rank, m(1)
-        real    :: new_centers(3,2*self%n_cc)                 !will pack it afterwards if it has too many elements
-        integer :: new_coordination_number(2*self%n_cc)       !will pack it afterwards if it has too many elements
-        real    :: new_coordination_number_gen(2*self%n_cc)   !will pack it afterwards if it has too many elements
+        real    :: new_centers(3,2*self%n_cc)               ! will pack it afterwards if it has too many elements
+        integer :: new_coordination_number(2*self%n_cc)     ! will pack it afterwards if it has too many elements
+        real    :: new_coordination_number_gen(2*self%n_cc) ! will pack it afterwards if it has too many elements
         real    :: pc
-        call self%img%get_rmat_ptr(rmat_pc)       !now img contains the phase correlation
-        call self%img_cc%get_imat(imat_cc)        !to pass to the subroutine split_atoms
+        call self%img%get_rmat_ptr(rmat_pc) ! now img contains the phase correlation
+        call self%img_cc%get_imat(imat_cc)  ! to pass to the subroutine split_atoms
         allocate(imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = imat_cc)
         cnt = 0
         ! Remember to update the centers
-        do n_cc =1, self%n_cc !for each cc check if the center corresponds with the local max of the phase corr
-            pc = rmat_pc(nint(self%atominfo(n_cc)%center(1)),nint(self%atominfo(n_cc)%center(2)),nint(self%atominfo(n_cc)%center(3)))
-            !calculate the rank
-            x = pack(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) == n_cc)
+        do icc =1, self%n_cc ! for each cc check if the center corresponds with the local max of the phase corr
+            pc = rmat_pc(nint(self%atominfo(icc)%center(1)),nint(self%atominfo(icc)%center(2)),nint(self%atominfo(icc)%center(3)))
+            ! calculate the rank
+            x = pack(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) == icc)
             call hpsort(x)
-            m(:) = minloc(abs(x-pc))
-            rank = size(x)-m(1)
+            m(:) = minloc(abs(x - pc))
+            rank = size(x) - m(1)
             deallocate(x)
-            if(rank > RANK_THRESH) then
+            if( rank > RANK_THRESH )then
                 call split_atom(new_centers,cnt)
             else
-                cnt = cnt + 1 !new number of centers deriving from splitting
-                new_centers(:,cnt)               = self%atominfo(n_cc)%center(:)
-                new_coordination_number(cnt)     = self%atominfo(n_cc)%cn_std
-                new_coordination_number_gen(cnt) = self%atominfo(n_cc)%cn_gen
+                cnt = cnt + 1 ! new number of centers derived from splitting
+                new_centers(:,cnt)               = self%atominfo(icc)%center(:)
+                new_coordination_number(cnt)     = self%atominfo(icc)%cn_std
+                new_coordination_number_gen(cnt) = self%atominfo(icc)%cn_gen
             endif
         enddo
         deallocate(self%atominfo)
-        self%n_cc = cnt !update
+        self%n_cc = cnt ! update
         allocate(self%atominfo(cnt))
         ! update centers
-        do n_cc =1, cnt
-            self%atominfo(n_cc)%center(:) = new_centers(:,n_cc)
+        do icc = 1, cnt
+            self%atominfo(icc)%center(:) = new_centers(:,icc)
         enddo
         ! update contact scores
-        do n_cc =1, cnt
-          self%atominfo(n_cc)%cn_std = new_coordination_number(n_cc)
-          self%atominfo(n_cc)%cn_gen = new_coordination_number_gen(n_cc)
+        do icc = 1, cnt
+            self%atominfo(icc)%cn_std = new_coordination_number(icc)
+            self%atominfo(icc)%cn_gen = new_coordination_number_gen(icc)
         enddo
         call self%img_bin%get_imat(imat_bin)
-        if(DEBUG) call self%img_bin%write_bimg(trim(self%fbody)//'BINbeforeValidation.mrc')
+        if( DEBUG ) call self%img_bin%write_bimg(trim(self%fbody)//'BINbeforeValidation.mrc')
         ! update binary image
-        where(imat_cc > 0)
+        where( imat_cc > 0 )
             imat_bin = 1
         elsewhere
             imat_bin = 0
@@ -723,94 +714,177 @@ contains
     contains
 
         subroutine split_atom(new_centers,cnt)
-            real,    intent(inout) :: new_centers(:,:)  !updated coordinates of the centers
-            integer, intent(inout) :: cnt               !atom counter, to update the center coords
-            integer :: new_center1(3),new_center2(3),new_center3(3)
+            real,    intent(inout) :: new_centers(:,:)  ! updated coordinates of the centers
+            integer, intent(inout) :: cnt               ! atom counter, to update the center coords
+            integer :: new_center1(3), new_center2(3), new_center3(3)
             integer :: i, j, k
-            logical :: mask(self%ldim(1),self%ldim(2),self%ldim(3)) !false in the layer of connection of the atom to be split
-            mask = .false.  !initialization
+            logical :: mask(self%ldim(1),self%ldim(2),self%ldim(3)) ! false in the layer of connection of the atom to be split
+            mask = .false.  ! initialization
             ! Identify first new center
-            new_center1 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), imat == n_cc)
+            new_center1 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), imat == icc)
             cnt = cnt + 1
-            new_centers(:,cnt) = real(new_center1)
-            new_coordination_number(cnt)     = self%atominfo(n_cc)%cn_std
-            new_coordination_number_gen(cnt) = self%atominfo(n_cc)%cn_gen
+            new_centers(:,cnt)               = real(new_center1)
+            new_coordination_number(cnt)     = self%atominfo(icc)%cn_std
+            new_coordination_number_gen(cnt) = self%atominfo(icc)%cn_gen
             do i = 1, self%ldim(1)
                 do j = 1, self%ldim(2)
                     do k = 1, self%ldim(3)
                         if(((real(i-new_center1(1)))**2 + (real(j-new_center1(2)))**2 + &
                         &   (real(k-new_center1(3)))**2)*self%smpd  <=  (0.9*self%theoretical_radius)**2) then
-                            if(imat(i,j,k) == n_cc) mask(i,j,k) = .true.
+                            if(imat(i,j,k) == icc) mask(i,j,k) = .true.
                         endif
                     enddo
                 enddo
             enddo
             ! Second likely center.
-                new_center2 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), &
-                              & (imat == n_cc) .and. .not. mask)
-                if(any(new_center2 > 0)) then !if anything was found
-                    !Validate second center (check if it's 2 merged atoms, or one pointy one)
-                    if(sum(real(new_center2-new_center1)**2.)*self%smpd <= 2.*self%theoretical_radius) then
-                        ! Set the merged cc back to 0
-                        where(imat_cc == n_cc .and. (.not.mask) ) imat_cc = 0
-                        return
-                    else
-                      cnt = cnt + 1
-                      new_centers(:,cnt) = real(new_center2)
-                      new_coordination_number(cnt)       = self%atominfo(n_cc)%cn_std + 1
-                      new_coordination_number(cnt-1)     = new_coordination_number(cnt)
-                      new_coordination_number_gen(cnt)   = self%atominfo(n_cc)%cn_gen + 1.
-                      new_coordination_number_gen(cnt-1) = new_coordination_number_gen(cnt)
-                      !In the case two merged atoms, build the second atom
-                      do i = 1, self%ldim(1)
-                          do j = 1, self%ldim(2)
-                              do k = 1, self%ldim(3)
-                                  if(((real(i-new_center2(1)))**2 + (real(j-new_center2(2)))**2 + (real(k-new_center2(3)))**2)*self%smpd < &
-                                    & (0.9*self%theoretical_radius)**2) then
-                                      if(imat(i,j,k) == n_cc)   mask(i,j,k) = .true.
-                                  endif
-                              enddo
-                          enddo
-                      enddo
-                    endif
-                  endif
-                  ! Third likely center.
-                      new_center3 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), &
-                      & (imat == n_cc) .and. .not. mask)
-                      if(any(new_center3 > 0)) then !if anything was found
-                          !Validate third center
-                          if(sum(real(new_center3-new_center1)**2.)*self%smpd <= 2.*self%theoretical_radius .or. &
-                          &  sum(real(new_center3-new_center2)**2.)*self%smpd <= 2.*self%theoretical_radius ) then
-                              ! Set the merged cc back to 0
-                              where( imat_cc == n_cc .and. (.not.mask) ) imat_cc = 0
-                              return
-                          else
-                            cnt = cnt + 1
-                            new_centers(:,cnt) = real(new_center3)
-                            new_coordination_number(cnt)   = self%atominfo(n_cc)%cn_std + 2
-                            new_coordination_number(cnt-1) = new_coordination_number(cnt)
-                            new_coordination_number(cnt-2) = new_coordination_number(cnt)
-                            new_coordination_number_gen(cnt)   = self%atominfo(n_cc)%cn_gen + 2.
-                            new_coordination_number_gen(cnt-1) = new_coordination_number_gen(cnt)
-                            new_coordination_number_gen(cnt-2) = new_coordination_number_gen(cnt)
-                            !In the case two merged atoms, build the second atom
-                            do i = 1, self%ldim(1)
-                                do j = 1, self%ldim(2)
-                                    do k = 1, self%ldim(3)
-                                        if(((real(i-new_center3(1)))**2 + (real(j-new_center3(2)))**2 + (real(k-new_center3(3)))**2)*self%smpd < (0.9*self%theoretical_radius)**2) then ! a little smaller to be sure
-                                            if(imat(i,j,k) == n_cc)   mask(i,j,k) = .true.
-                                        endif
-                                    enddo
-                                enddo
+            new_center2 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), (imat == icc) .and. .not. mask)
+            if( any(new_center2 > 0) )then ! if anything was found
+                ! Validate second center (check if it's 2 merged atoms, or one pointy one)
+                if(sum(real(new_center2-new_center1)**2.)*self%smpd <= 2.*self%theoretical_radius) then
+                    ! Set the merged cc back to 0
+                    where(imat_cc == icc .and. (.not.mask) ) imat_cc = 0
+                    return
+                else
+                    cnt                                = cnt + 1
+                    new_centers(:,cnt)                 = real(new_center2)
+                    new_coordination_number(cnt)       = self%atominfo(icc)%cn_std + 1
+                    new_coordination_number(cnt-1)     = new_coordination_number(cnt)
+                    new_coordination_number_gen(cnt)   = self%atominfo(icc)%cn_gen + 1.
+                    new_coordination_number_gen(cnt-1) = new_coordination_number_gen(cnt)
+                    ! In the case two merged atoms, build the second atom
+                    do i = 1, self%ldim(1)
+                        do j = 1, self%ldim(2)
+                            do k = 1, self%ldim(3)
+                                if(((real(i-new_center2(1)))**2 + (real(j-new_center2(2)))**2 + (real(k-new_center2(3)))**2)*self%smpd < &
+                                & (0.9*self%theoretical_radius)**2) then
+                                    if(imat(i,j,k) == icc)   mask(i,j,k) = .true.
+                                endif
                             enddo
-                          endif
-                        endif
+                        enddo
+                    enddo
+                endif
+            endif
+            ! Third likely center.
+            new_center3 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), &
+            & (imat == icc) .and. .not. mask)
+            if(any(new_center3 > 0)) then ! if anything was found
+                ! Validate third center
+                if(sum(real(new_center3-new_center1)**2.)*self%smpd <= 2.*self%theoretical_radius .or. &
+                &  sum(real(new_center3-new_center2)**2.)*self%smpd <= 2.*self%theoretical_radius ) then
+                    ! Set the merged cc back to 0
+                    where( imat_cc == icc .and. (.not.mask) ) imat_cc = 0
+                    return
+                else
+                    cnt = cnt + 1
+                    new_centers(:,cnt) = real(new_center3)
+                    new_coordination_number(cnt)   = self%atominfo(icc)%cn_std + 2
+                    new_coordination_number(cnt-1) = new_coordination_number(cnt)
+                    new_coordination_number(cnt-2) = new_coordination_number(cnt)
+                    new_coordination_number_gen(cnt)   = self%atominfo(icc)%cn_gen + 2.
+                    new_coordination_number_gen(cnt-1) = new_coordination_number_gen(cnt)
+                    new_coordination_number_gen(cnt-2) = new_coordination_number_gen(cnt)
+                    ! In the case two merged atoms, build the second atom
+                    do i = 1, self%ldim(1)
+                        do j = 1, self%ldim(2)
+                            do k = 1, self%ldim(3)
+                                if(((real(i-new_center3(1)))**2 + (real(j-new_center3(2)))**2 + &
+                                &(real(k-new_center3(3)))**2)*self%smpd < (0.9*self%theoretical_radius)**2) then ! a little smaller to be sure
+                                    if(imat(i,j,k) == icc)   mask(i,j,k) = .true.
+                                endif
+                            enddo
+                        enddo
+                    enddo
+                endif
+            endif
             ! Set the merged cc back to 0
-            where(imat_cc == n_cc .and. (.not.mask) ) imat_cc = 0
+            where(imat_cc == icc .and. (.not.mask) ) imat_cc = 0
             call self%img_cc%set_imat(imat_cc)
         end subroutine split_atom
 
     end subroutine validate_atomic_positions
+
+    subroutine fillin_atominfo( self )
+        class(nanoparticle), intent(inout) :: self
+        logical, allocatable :: mask(:,:,:)
+        real,    allocatable :: centers_A(:,:), tmpcens(:,:)
+        real,    pointer     :: rmat(:,:,:)
+        integer, allocatable :: imat_cc(:,:,:)
+        real    :: tmp_diam, a(3), radius_cn
+        logical :: cc_mask(self%n_cc)
+        integer :: i, j, k, cc
+        ! calc cn and cn_gen
+        centers_A = self%atominfo2centers_A()
+        call fit_lattice(centers_A,a)
+        call find_radius_for_coord_number(a,radius_cn)
+        call run_coord_number_analysis(centers_A,radius_cn,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+        deallocate(centers_A)
+        ! calc NPdiam & NPcen
+        tmpcens     = self%atominfo2centers()
+        cc_mask     = .true.
+        self%NPdiam = 0.
+        do i = 1, self%n_cc
+            tmp_diam = pixels_dist(self%atominfo(i)%center(:), tmpcens, 'max', cc_mask)
+            if( tmp_diam > self%NPdiam ) self%NPdiam = tmp_diam
+        enddo
+        deallocate(tmpcens)
+        self%NPdiam = self%NPdiam * self%smpd ! in A
+        self%NPcen  = self%masscen()
+        ! extract atominfo
+        allocate(mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = .false.)
+        call self%img%get_rmat_ptr(rmat)
+        call self%img_cc%get_imat(imat_cc)
+        ! type :: atom_stats
+        !     integer :: cc_ind          = 0  ! index of the connected component        **filled-in**
+        !     integer :: size            = 0  ! number of voxels in connected component **filled-in**
+        !     integer :: cn_std          = 0  ! standard coordination number            **filled-in**
+        !     integer :: loc_ldist(3)         ! for indentific of the vxl that determins the longest dim of the atom
+        !     real    :: bondl           = 0. ! (dists)
+        !     real    :: cn_gen          = 0. ! generalized coordination number         **filled-in**
+        !     real    :: center(3)            ! atom center (centers)                   **filled-in**
+        !     real    :: aspect_ratio    = 0. ! (ratios)                                **filled-in**
+        !     real    :: polar_angle     = 0. ! polarization angle (ang_var)
+        !     real    :: diam            = 0. ! atom diameter
+        !     real    :: avg_int         = 0. ! average grey level intensity across the connected component **filled-in**
+        !     real    :: max_int         = 0. ! maximum            -"-                                      **filled-in**
+        !     real    :: sdev_int        = 0. ! standard deviation -"-                                      **filled-in**
+        !     real    :: dist_from_NPcen = 0. ! distance from the centre of mass of the nanoparticle        **filled-in**
+        !     real    :: strain          = 0. ! tensile strain in %
+        ! end type atom_stats
+        do cc = 1, self%n_cc
+            ! index of the connected component
+            self%atominfo(cc)%cc_ind = cc
+            ! number of voxels in connected component
+            where( imat_cc == cc ) mask = .true.
+            self%atominfo(cc)%size = count(mask)
+            ! distance from the centre of mass of the nanoparticle
+            self%atominfo(cc)%dist_from_NPcen = euclid(self%atominfo(cc)%center(:), self%NPcen) * self%smpd
+            ! atom aspect ratio
+            call self%calc_aspect_ratio(cc, self%atominfo(cc)%aspect_ratio, lld=.false., print_ar=.false.)
+            ! maximum grey level intensity across the connected component
+            self%atominfo(cc)%max_int = maxval(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
+            ! average grey level intensity across the connected component
+            self%atominfo(cc)%avg_int = sum(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
+            self%atominfo(cc)%avg_int = self%atominfo(cc)%avg_int / real(count(mask))
+            ! standard deviation of the grey level intensity across the connected component
+            self%atominfo(cc)%sdev_int = 0.
+            do i = 1, self%ldim(1)
+                do j = 1, self%ldim(2)
+                    do k = 1, self%ldim(3)
+                        if( mask(i,j,k) ) self%atominfo(cc)%sdev_int = &
+                        &self%atominfo(cc)%sdev_int + (rmat(i,j,k) - self%atominfo(cc)%avg_int)**2.
+                    enddo
+                enddo
+            enddo
+            if( count(mask) > 1 )then
+                self%atominfo(cc)%sdev_int = sqrt(self%atominfo(cc)%sdev_int / real(count(mask)-1))
+            else ! atom composed by one voxel
+                self%atominfo(cc)%sdev_int = 0.
+            endif
+            mask = .false. ! reset mask
+        end do
+        deallocate(mask, imat_cc)
+        call self%distances_distribution(file=.false.) ! across the whole nano
+   end subroutine fillin_atominfo
 
     ! This subroutine calculates some basic stats in the nanoparticle.
     ! In particular it reports the diameter of the nanocrystal
@@ -971,7 +1045,7 @@ contains
           write(unit = filnum, fmt = '(a,f9.5)') 'Maxval  int shell :', max_int
           write(unit = filnum, fmt = '(a,f9.5)') 'Average int shell :', avg_int
           write(unit = filnum, fmt = '(a,f9.5)') 'Stdev   int shell :', stdev_int
-          call self%distances_distribution(file=.false.,coords=coords)
+          call self%distances_distribution(file=.false., coords=coords)
           deallocate(coords)
           deallocate(avg_intensity)
           deallocate(max_intensity)
@@ -1107,7 +1181,7 @@ contains
               write(unit = filnum, fmt = '(a,f9.5)') 'Maxval  int shell :', max_int
               write(unit = filnum, fmt = '(a,f9.5)') 'Average int shell :', avg_int
               write(unit = filnum, fmt = '(a,f9.5)') 'Stdev   int shell :', stdev_int
-              call self%distances_distribution(file=.false.,coords=coords)
+              call self%distances_distribution(file=.false., coords=coords)
               deallocate(coords)
               deallocate(avg_intensity)
               deallocate(max_intensity)
@@ -1168,7 +1242,7 @@ contains
        real    :: avg_int, stdev_int, max_int, radius
        real    :: a(3),m(3) ! center of mass of the nanoparticle
        write(logfhandle,*)'**atoms intensity statistics calculations init'
-       call self%phasecorrelation_nano_gaussian(phasecorr)
+       call self%phasecorr_one_atom(phasecorr)
        call phasecorr%get_rmat_ptr(rmat_corr)
        call self%img%get_rmat_ptr(rmat)
        call self%img_cc%get_imat(imat_cc)
@@ -1396,7 +1470,7 @@ contains
        end subroutine cn_analysis
    end subroutine atoms_stats
 
-   subroutine distances_distribution(self,file,coords,volume)
+   subroutine distances_distribution( self, file, coords, volume )
        class(nanoparticle), intent(inout) :: self
        logical,             intent(in)    :: file ! output on a file
        real,    optional,   intent(in)    :: coords(:,:)
@@ -1409,41 +1483,45 @@ contains
        mask       = .true.
        stdev      = 0.
        n_discard  = 0
-       if(present(coords)) then
+       if( present(coords) )then
            allocate(dist(size(coords,dim=2)), source = 0.)
            tmpcens = self%atominfo2centers()
            do i = 1, size(coords,dim=2)
-               dist(i) =  pixels_dist(coords(:,i), tmpcens, 'min', mask=mask) !I have to use all the atoms when
+               dist(i) =  pixels_dist(coords(:,i), tmpcens, 'min', mask=mask)      ! Use all the atoms
                mask(:) = .true. ! restore
-               !Discard outliers
-               if(dist(i)*self%smpd > 3.*self%theoretical_radius ) then      !maximum interatomic distance
-                   dist(i) = 0.
+               ! Discard outliers
+               if( dist(i) * self%smpd > 3. * self%theoretical_radius ) then       ! maximum interatomic distance
+                   dist(i)   = 0.
                    n_discard = n_discard + 1
-               else if(dist(i)*self%smpd < 1.5*self%theoretical_radius ) then ! minimum interatomic distance
-                   dist(i) = 0.
+               else if( dist(i) * self%smpd < 1.5 * self%theoretical_radius ) then ! minimum interatomic distance
+                   dist(i)   = 0.
                    n_discard = n_discard + 1
                endif
            enddo
-           self%avg_bondl = sum(dist)/real(size(coords,dim=2)-n_discard)
+           self%avg_bondl = (sum(dist) / real(size(coords,dim=2) - n_discard)) * self%smpd
+           self%max_bondl = maxval(dist) * self%smpd
+           self%min_bondl = minval(dist) * self%smpd
            do i = 1, size(coords,dim=2)
-               if(dist(i)*self%smpd <=3.*self%theoretical_radius) stdev = stdev + (dist(i)-self%avg_bondl)**2
+               if( dist(i) * self%smpd <= 3. * self%theoretical_radius) stdev = stdev + (dist(i) - self%avg_bondl)**2.
            enddo
-           if(size(coords,dim=2)-1-n_discard > 0) then
-             stdev = sqrt(stdev/real(size(coords,dim=2)-1-n_discard))
+           if( size(coords,dim=2) - 1 - n_discard > 0 )then
+               stdev = sqrt(stdev / real(size(coords,dim=2) - 1 - n_discard))
            else
-             stdev = 0.
+               stdev = 0.
            endif
-           med = median(dist)
-           if(file) then
+           med             = median(dist)
+           self%sdev_bondl = stdev * self%smpd
+           self%med_bondl  = med   * self%smpd
+           if( file )then
                call fopen(filnum, file='DistancesDistr.txt', iostat=io_stat)
-               if(present(volume)) then
-                   write(unit = filnum, fmt = '(a,a,a,f6.3,a)') 'Average dist atoms vol ', trim(int2str(volume)),':', self%avg_bondl*self%smpd, ' A'
-                   write(unit = filnum, fmt = '(a,a,a,f6.3,a)') 'StDev   dist atoms vol ', trim(int2str(volume)),':', stdev*self%smpd, ' A'
-                   write(unit = filnum, fmt = '(a,a,a,f6.3,a)') 'Median  dist atoms vol ', trim(int2str(volume)),':', med*self%smpd, ' A'
+               if( present(volume) )then
+                   write(unit = filnum, fmt = '(a,a,a,f6.3,a)') 'Average dist atoms vol ', trim(int2str(volume)),':', self%avg_bondl,  ' A'
+                   write(unit = filnum, fmt = '(a,a,a,f6.3,a)') 'StDev   dist atoms vol ', trim(int2str(volume)),':', self%sdev_bondl, ' A'
+                   write(unit = filnum, fmt = '(a,a,a,f6.3,a)') 'Median  dist atoms vol ', trim(int2str(volume)),':', self%med_bondl,  ' A'
                else
-                   write(unit = filnum, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_bondl*self%smpd, ' A'
-                   write(unit = filnum, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
-                   write(unit = filnum, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
+                   write(unit = filnum, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_bondl,  ' A'
+                   write(unit = filnum, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', self%sdev_bondl, ' A'
+                   write(unit = filnum, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', self%med_bondl,  ' A'
                endif
                call fclose(filnum)
            endif
@@ -1454,26 +1532,30 @@ contains
                self%atominfo(i)%bondl = pixels_dist(self%atominfo(i)%center(:), tmpcens, 'min', mask=mask) ! Use all the atoms
                mask(:) = .true. ! restore
                ! Discard outliers
-               if(self%atominfo(i)%bondl*self%smpd > 3.*self%theoretical_radius ) then
+               if( self%atominfo(i)%bondl * self%smpd > 3. * self%theoretical_radius )then                 ! maximum interatomic distance
                    self%atominfo(i)%bondl = 0.
-                   n_discard = n_discard + 1
-               else if(self%atominfo(i)%bondl*self%smpd < 1.5*self%theoretical_radius ) then
+                   n_discard              = n_discard + 1
+               else if( self%atominfo(i)%bondl * self%smpd < 1.5 * self%theoretical_radius ) then          ! minimum interatomic distance
                    self%atominfo(i)%bondl = 0.
-                   n_discard = n_discard + 1
+                   n_discard              = n_discard + 1
                endif
            enddo
-           self%avg_bondl = sum(self%atominfo(:)%bondl)/real(size(self%atominfo)-n_discard)
+           self%avg_bondl = (sum(self%atominfo(:)%bondl)/real(size(self%atominfo)-n_discard)) * self%smpd
+           self%max_bondl = maxval(self%atominfo(:)%bondl) * self%smpd
+           self%min_bondl = minval(self%atominfo(:)%bondl) * self%smpd
            do i = 1, size(self%atominfo)
                if(self%atominfo(i)%bondl * self%smpd <= 3. * self%theoretical_radius)&
                &stdev = stdev + (self%atominfo(i)%bondl-self%avg_bondl)**2.
            enddo
            stdev = sqrt(stdev/real(size(self%atominfo)-1-n_discard))
-           med = median(self%atominfo(:)%bondl)
+           med   = median(self%atominfo(:)%bondl)
+           self%sdev_bondl = stdev * self%smpd
+           self%med_bondl  = med   * self%smpd
            if(file) then
                call fopen(filnum, file='DistancesDistr.txt', iostat=io_stat)
-               write(unit = filnum, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_bondl*self%smpd, ' A'
-               write(unit = filnum, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
-               write(unit = filnum, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
+               write(unit = filnum, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_bondl, ' A'
+               write(unit = filnum, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', self%sdev_bondl, ' A'
+               write(unit = filnum, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', self%med_bondl, ' A'
                call fclose(filnum)
            endif
            deallocate(tmpcens)
@@ -1484,7 +1566,6 @@ contains
        class(nanoparticle), intent(inout) :: self
        logical, optional,   intent(in)    :: print_ar !print longest/shortest dim and ratio
        real, allocatable, optional, intent(inout) :: ar(:), diameter(:)
-       real,    allocatable :: longest_dist(:)
        integer, allocatable :: imat_cc(:,:,:)
        integer              :: label, filnum, io_stat
        real                 :: avg_diameter, median_diameter, min_diameter, max_diameter, stdev_diameter
@@ -1500,21 +1581,21 @@ contains
        endif
        call self%find_centers()
        do label = 1, self%n_cc
-           call self%calc_aspect_ratio(label, self%atominfo(label)%aspect_ratio, lld=.true., ld=self%atominfo(label)%longest_dist, print_ar=print_ar)
+           call self%calc_aspect_ratio(label, self%atominfo(label)%aspect_ratio, lld=.true., ld=self%atominfo(label)%diam, print_ar=print_ar)
        enddo
-       self%atominfo(:)%longest_dist = 2.*self%atominfo(:)%longest_dist ! radius --> diameter
-       min_diameter = minval(self%atominfo(:)%longest_dist)
-       max_diameter = maxval(self%atominfo(:)%longest_dist)
-       median_diameter = median(self%atominfo(:)%longest_dist)
-       avg_diameter    = sum(self%atominfo(:)%longest_dist)/real(self%n_cc)
+       self%atominfo(:)%diam = 2.*self%atominfo(:)%diam ! radius --> diameter
+       min_diameter = minval(self%atominfo(:)%diam)
+       max_diameter = maxval(self%atominfo(:)%diam)
+       median_diameter = median(self%atominfo(:)%diam)
+       avg_diameter    = sum(self%atominfo(:)%diam)/real(self%n_cc)
        stdev_diameter = 0.
        do label = 1, self%n_cc
-           stdev_diameter = stdev_diameter + (avg_diameter-self%atominfo(label)%longest_dist)**2
+           stdev_diameter = stdev_diameter + (avg_diameter-self%atominfo(label)%diam)**2
        enddo
        stdev_diameter = sqrt(stdev_diameter/real(self%n_cc-1))
        if(present(ar) .and. present(diameter))then
          allocate(ar(self%n_cc),       source = self%atominfo(:)%aspect_ratio)
-         allocate(diameter(self%n_cc), source = self%atominfo(:)%longest_dist)
+         allocate(diameter(self%n_cc), source = self%atominfo(:)%diam)
        endif
        if(DEBUG) then
            write(logfhandle,*) 'minimum  value diameter ', min_diameter, 'A'
@@ -1535,14 +1616,14 @@ contains
    end subroutine est_aspect_ratios
 
    ! This subroutine takes in input a connected component (cc) image
-   ! and the label of one of its ccs and calculates its aspect ratio, which
-   ! is defined as the ratio of the width and the height.
+   ! and the label of one of its ccs and calculates the aspect ratio of the cc,
+   ! defined as the ratio of the width and the height.
    ! The idea behind this is that the center of the cc is calculated,
-   ! than everything is deleted except the borders of the cc. Finally,
+   ! then everything is deleted except the borders of the cc. Finally,
    ! in order to calculate the width and the height, the min/max
    ! distances between the center and the borders are calculated. The
    ! aspect ratio is the ratio of those 2 distances.
-   subroutine calc_aspect_ratio(self,label,ratio,lld, ld,print_ar)
+   subroutine calc_aspect_ratio( self, label, ratio, lld, ld, print_ar )
        class(nanoparticle), intent(inout) :: self
        integer,             intent(in)    :: label
        real,                intent(out)   :: ratio
@@ -1552,60 +1633,63 @@ contains
        integer, allocatable :: pos(:,:)
        integer, allocatable :: imat_cc(:,:,:)
        logical, allocatable :: border(:,:,:)
-       logical, allocatable :: mask_dist(:) !for min and max dist calculation
-       integer :: location(1) !location of the farest vxls of the atom from its center
+       logical, allocatable :: mask_dist(:) ! for min and max dist calculation
+       integer :: location(1)               ! location of vxls of the atom farthest from its center
        real    :: shortest_dist, longest_dist
        call self%img_cc%get_imat(imat_cc)
-       call self%img_cc%border_mask(border, label, .true.) !use 4neigh instead of 8neigh
+       call self%img_cc%border_mask(border, label, .true.) ! use 4neigh instead of 8neigh
        where(border .eqv. .true.)
            imat_cc = 1
        elsewhere
            imat_cc = 0
        endwhere
-       call get_pixel_pos(imat_cc,pos)   !pxls positions of the shell
-       if(allocated(mask_dist)) deallocate(mask_dist)
-       allocate(mask_dist(size(pos, dim = 2)), source = .true. )
-       shortest_dist = pixels_dist(self%atominfo(label)%center(:), real(pos),'min', mask_dist, location)
-       if(size(pos,2) == 1) then !if the connected component has size 1 (just 1 vxl)
+       call get_pixel_pos( imat_cc, pos ) ! pxls positions of the shell
+       allocate(mask_dist(size(pos, dim=2)), source = .true.)
+       shortest_dist = pixels_dist(self%atominfo(label)%center(:), real(pos), 'min', mask_dist, location)
+       if(size(pos,2) == 1) then ! if the connected component has size 1 (just 1 vxl)
            shortest_dist = 0.
            longest_dist  = shortest_dist
-           ratio = 1.
-           if(lld) self%atominfo(label)%loc_ldist(:) = nint(self%atominfo(label)%center(:))
-           if(present(print_ar) .and. (print_ar .eqv. .true.)) then
-                write(logfhandle,*) 'ATOM #          ', label
-                write(logfhandle,*) 'shortest dist = ', shortest_dist
-                write(logfhandle,*) 'longest  dist = ', longest_dist
-                write(logfhandle,*) 'RATIO         = ', ratio
+           ratio         = 1.
+           if( lld ) self%atominfo(label)%loc_ldist(:) = nint(self%atominfo(label)%center(:))
+           if( present(print_ar) )then
+               if( print_ar .eqv. .true. ) then
+                   write(logfhandle,*) 'ATOM #          ', label
+                   write(logfhandle,*) 'shortest dist = ', shortest_dist
+                   write(logfhandle,*) 'longest  dist = ', longest_dist
+                   write(logfhandle,*) 'RATIO         = ', ratio
+               endif
            endif
            return
        else
            longest_dist  = pixels_dist(self%atominfo(label)%center(:), real(pos),'max', mask_dist, location)
-           if(lld) self%atominfo(label)%loc_ldist(:) =  pos(:,location(1))
+           if( lld ) self%atominfo(label)%loc_ldist(:) =  pos(:,location(1))
        endif
-       if(abs(longest_dist) > TINY .and. size(pos,2) > 1) then
+       if( abs(longest_dist) > TINY .and. size(pos,2) > 1 )then
            ratio = shortest_dist/longest_dist
        else
             ratio = 0.
-            if(DEBUG) write(logfhandle,*) 'cc ', label, 'LONGEST DIST = 0'
+            if( DEBUG ) write(logfhandle,*) 'cc ', label, 'LONGEST DIST = 0'
        endif
-       longest_dist  = longest_dist*self%smpd  !in A
-       shortest_dist = shortest_dist*self%smpd
-      if(present(print_ar) .and. (print_ar .eqv. .true.)) then
-           write(logfhandle,*) 'ATOM #          ', label
-           write(logfhandle,*) 'shortest dist = ', shortest_dist
-           write(logfhandle,*) 'longest  dist = ', longest_dist
-           write(logfhandle,*) 'RATIO         = ', ratio
-      endif
-      if(present(ld)) ld=longest_dist
-      deallocate(imat_cc, border, pos, mask_dist)
+       longest_dist  = longest_dist  * self%smpd  ! in A
+       shortest_dist = shortest_dist * self%smpd
+       if( present(print_ar) )then
+           if( print_ar .eqv. .true. )then
+               write(logfhandle,*) 'ATOM #          ', label
+               write(logfhandle,*) 'shortest dist = ', shortest_dist
+               write(logfhandle,*) 'longest  dist = ', longest_dist
+               write(logfhandle,*) 'RATIO         = ', ratio
+           endif
+       endif
+       if( present(ld) ) ld = longest_dist
+       deallocate(imat_cc, border, pos, mask_dist)
    end subroutine calc_aspect_ratio
 
     ! This subroutine clusters the atoms with respect to the maximum intensity
     ! or the integrated density (according to the values contained in feature)
-    ! using kmean algorithm for 2 classes. The initial guess fo the centers
+    ! using kmeans algorithm with 2 classes. The initial guess fo the centers
     ! is intentionally biased. It supposes there are two distinguished classes
     ! with different avgs (proved with simulated data).
-    subroutine cluster_atom_intensity(self, feature)
+    subroutine cluster_atom_intensity( self, feature )
         use gnufor2
         use simple_nanoML, only : nanoML
         class(nanoparticle), intent(inout) :: self
@@ -1615,10 +1699,10 @@ contains
         real, pointer        :: rmat1(:,:,:), rmat2(:,:,:)
         type(image)          :: class1, class2
         type(nanoML)         :: emfit
-        real    :: centers_kmeans(2) !output of k-means
-        real    :: avgs(2),  vars(2), gammas(self%n_cc,2) !output of ML
+        real    :: centers_kmeans(2) ! output of k-means
+        real    :: avgs(2),  vars(2), gammas(self%n_cc,2) ! output of ML
         integer :: i, cnt1, cnt2, filnum, io_stat
-        feature = feature/maxval(feature)*10. !normalise with maxval 10
+        feature = feature/maxval(feature)*10. ! normalise with maxval*10
         call hist(feature, 20)
         write(logfhandle,*) '****clustering wrt maximum intensity, init'
         ! Report clusters on images in dedicated directory
@@ -1635,9 +1719,9 @@ contains
         call emfit%new(self%n_cc,2)
         call emfit%set_data(feature)
         call emfit%fit(MAX_IT,centers_kmeans)
-        avgs = emfit%get_avgs()
-        vars = emfit%get_vars()
-        gammas  = emfit%get_gammas()
+        avgs   = emfit%get_avgs()
+        vars   = emfit%get_vars()
+        gammas = emfit%get_gammas()
         write(filnum,*) 'AVG/VAR 1:', avgs(1), vars(1)
         write(filnum,*) 'AVG/VAR 2:', avgs(2), vars(2)
         cnt2 = 0
@@ -1669,6 +1753,7 @@ contains
         deallocate(imat_cc)
         ! come back to root directory
         write(logfhandle,*) '****clustering wrt maximum intensity, completed'
+
     contains
 
         subroutine initialise_centers(data,cen1,cen2)
@@ -1717,45 +1802,46 @@ contains
                 val2           = 1
             endif
         end subroutine update_centers
+
     end subroutine cluster_atom_intensity
 
     ! Cluster the atoms wrt the maximum intensity
     ! k-means 2 classes + ML
-    subroutine cluster_atom_maxint(self)
-      class(nanoparticle), intent(inout) :: self
-      real    :: max_intensity(self%n_cc)
-      integer :: i, io_stat, filnum
-      call fopen(filnum, file='MaxIntensity.csv', action='readwrite', iostat=io_stat)
-      if( io_stat .ne. 0 ) then
-        THROW_HARD('Unable to read file MaxIntensity.csv Did you run atoms_stats?; cluster_atom_maxint')
-      endif
-      read(filnum,*) ! first line is variable name
-      do i = 1, self%n_cc
-        read(filnum,*) max_intensity(i)
-      enddo
-      call fclose(filnum)
-      call self%cluster_atom_intensity(max_intensity)
+    subroutine cluster_atom_maxint( self )
+        class(nanoparticle), intent(inout) :: self
+        real    :: max_intensity(self%n_cc)
+        integer :: i, io_stat, filnum
+        call fopen(filnum, file='MaxIntensity.csv', action='readwrite', iostat=io_stat)
+        if( io_stat .ne. 0 ) then
+            THROW_HARD('Unable to read file MaxIntensity.csv Did you run atoms_stats?; cluster_atom_maxint')
+        endif
+        read(filnum,*) ! first line is variable name
+        do i = 1, self%n_cc
+            read(filnum,*) max_intensity(i)
+        enddo
+        call fclose(filnum)
+        call self%cluster_atom_intensity(max_intensity)
     end subroutine cluster_atom_maxint
 
     ! Cluster the atoms wrt the integrated density
     ! k-means 2 classes + ML
-    subroutine cluster_atom_intint(self)
-      class(nanoparticle), intent(inout) :: self
-      real    :: int_intensity(self%n_cc)
-      integer :: i, io_stat, filnum
-      call fopen(filnum, file='IntIntensity.csv', action='readwrite', iostat=io_stat)
-      if( io_stat .ne. 0 ) then
-        THROW_HARD('Unable to read file IntIntensity.csv Did you run atoms_stats?; cluster_atom_intint')
-      endif
-      read(filnum,*) ! first line is variable name
-      do i = 1, self%n_cc
-        read(filnum,*) int_intensity(i)
-      enddo
-      call fclose(filnum)
-      call self%cluster_atom_intensity(int_intensity)
+    subroutine cluster_atom_intint( self )
+        class(nanoparticle), intent(inout) :: self
+        real    :: int_intensity(self%n_cc)
+        integer :: i, io_stat, filnum
+        call fopen(filnum, file='IntIntensity.csv', action='readwrite', iostat=io_stat)
+        if( io_stat .ne. 0 ) then
+            THROW_HARD('Unable to read file IntIntensity.csv Did you run atoms_stats?; cluster_atom_intint')
+        endif
+        read(filnum,*) ! first line is variable name
+        do i = 1, self%n_cc
+            read(filnum,*) int_intensity(i)
+        enddo
+        call fclose(filnum)
+        call self%cluster_atom_intensity(int_intensity)
     end subroutine cluster_atom_intint
 
-    ! Polarization search via angle variance. The considered angle is
+    ! Polarization search. The considered angle is
     ! the angle between the vector [0,0,1] and the direction of the
     ! longest dim of the atom.
     ! This is done for each of the atoms and then there is a search
@@ -1765,7 +1851,7 @@ contains
         logical,             intent(in)    :: output_files
         integer, optional,   intent(in)    :: cn ! calculate net polarization for given std cn
         real    :: loc_ld_real(3,self%n_cc)
-        real    :: vec_fixed(3)     !vector indentifying z direction
+        real    :: vec_fixed(3)                  ! vector indentifying z direction
         real    :: m_adjusted(3), radius, a(3)
         integer :: k, i, filnum, io_stat
         integer, allocatable :: sz(:)
@@ -1778,15 +1864,15 @@ contains
         call run_coord_number_analysis(centers_A,radius,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
         deallocate(centers_A)
         ! Generate mask for cn
-        if(present(cn)) then
-          where(self%atominfo(:)%cn_std .ne. cn)
-            cn_mask = .false.
-          elsewhere
-            cn_mask = .true.
-          endwhere
-          write(logfhandle,*) count(cn_mask), ' atoms out of ', self%n_cc, ' have cn ', cn
+        if( present(cn) )then
+            where(self%atominfo(:)%cn_std .ne. cn)
+                cn_mask = .false.
+            elsewhere
+                cn_mask = .true.
+            endwhere
+            write(logfhandle,*) count(cn_mask), ' atoms out of ', self%n_cc, ' have cn ', cn
         else
-          cn_mask(:) = .true.
+            cn_mask(:) = .true.
         endif
         self%atominfo(:)%polar_angle = 0.
         sz = self%img_cc%size_ccs()
@@ -1799,35 +1885,35 @@ contains
         vec_fixed(2) = 0.
         vec_fixed(3) = 1.
         write(logfhandle,*)'>>>>>>>>>>>>>>>> calculating angles wrt the vector [0,0,1]'
-        self%net_dipole(1:3) = 0. !inizialization
+        self%net_dipole(1:3) = 0. ! inizialization
         do k = 1, self%n_cc
             if(sz(k) > 2) then
                 self%atominfo(k)%polar_angle = ang3D_vecs(vec_fixed(:),loc_ld_real(:,k))
-                if(cn_mask(k)) self%net_dipole(:) = self%net_dipole(:) + loc_ld_real(:,k)
+                if( cn_mask(k) ) self%net_dipole(:) = self%net_dipole(:) + loc_ld_real(:,k)
             else
                 self%atominfo(k)%polar_angle = 0. ! If the cc is too small it doesn't make sense
             endif
-            if(DEBUG) write(logfhandle,*) 'ATOM ', k, 'angle between direction longest dim and vec [0,0,1] ', self%atominfo(k)%polar_angle
+            if( DEBUG ) write(logfhandle,*) 'ATOM ', k, 'angle between direction longest dim and vec [0,0,1] ', self%atominfo(k)%polar_angle
         enddo
         if(count(cn_mask) == 0) then
-          write(logfhandle,*) 'No atoms with cn ', cn
-          m_adjusted = 0.
-          self%net_dipole = 0.
+            write(logfhandle,*) 'No atoms with cn ', cn
+            m_adjusted = 0.
+            self%net_dipole = 0.
         else
-          tmpcens = self%atominfo2centers()
-          m_adjusted = sum(tmpcens(:,:)-1.,dim=2)*self%smpd/real(self%n_cc)
-          self%net_dipole = (self%net_dipole-1.)*self%smpd + m_adjusted
-          deallocate(tmpcens)
+            tmpcens = self%atominfo2centers()
+            m_adjusted = sum(tmpcens(:,:)-1.,dim=2)*self%smpd/real(self%n_cc)
+            self%net_dipole = (self%net_dipole-1.)*self%smpd + m_adjusted
+            deallocate(tmpcens)
         endif
-        if(output_files) then
-          if(present(cn)) then
-            write(logfhandle, *) 'Generating output dipole file for fixed cn ', cn
-            call fopen(filnum, file='NetDipole'//int2str(cn)//'.bild', iostat=io_stat)
-          else
-            call fopen(filnum, file='NetDipole.bild', iostat=io_stat)
-          endif
-          write (filnum,'(a6,6i4)') trim('.arrow '), nint(m_adjusted), nint(self%net_dipole)
-          call fclose(filnum)
+        if( output_files )then
+            if( present(cn) )then
+                write(logfhandle, *) 'Generating output dipole file for fixed cn ', cn
+                call fopen(filnum, file='NetDipole'//int2str(cn)//'.bild', iostat=io_stat)
+            else
+                call fopen(filnum, file='NetDipole.bild', iostat=io_stat)
+            endif
+            write (filnum,'(a6,6i4)') trim('.arrow '), nint(m_adjusted), nint(self%net_dipole)
+            call fclose(filnum)
         endif
 
         contains
@@ -1836,8 +1922,8 @@ contains
             ! and it gives as an output the angle between them, IN DEGREES.
             function ang3D_vecs( vec1, vec2 ) result( ang )
                 real, intent(inout) :: vec1(3), vec2(3)
-                real :: ang        !output angle
-                real :: ang_rad    !angle in radians
+                real :: ang        ! output angle
+                real :: ang_rad    ! angle in radians
                 real :: mod1, mod2
                 real :: dot_prod
                 mod1 = sqrt(vec1(1)**2+vec1(2)**2+vec1(3)**2)
@@ -2064,7 +2150,7 @@ contains
     end subroutine cluster_ar
 
     ! Cluster the atoms wrt to the interatomic distances
-    subroutine cluster_interdist(self, thresh)
+    subroutine cluster_bondl(self, thresh)
         class(nanoparticle), intent(inout) :: self
         real,    intent(in)  :: thresh ! threshold for class definition, user inputted
         real,    allocatable :: centroids(:)
@@ -2158,7 +2244,7 @@ contains
         endif
         if(allocated(stdev_within)) deallocate(stdev_within)
         deallocate(centroids, labels, populations)
-      end subroutine cluster_interdist
+      end subroutine cluster_bondl
 
     subroutine make_soft_mask(self) !change the name
         class(nanoparticle), intent(inout) :: self
@@ -2185,7 +2271,7 @@ contains
       integer,             intent(in)    :: cn_thresh
       character(len=6),    intent(in)    :: cn_type ! use generalised cn or standard?
       ! Phase correlations approach
-      call self%phasecorrelation_nano_gaussian(self%img)
+      call self%phasecorr_one_atom(self%img)
       ! Nanoparticle binarization
       call self%binarize()
       ! Outliers discarding
@@ -2627,6 +2713,7 @@ contains
       if(allocated(line))  deallocate(line)
       if(allocated(plane)) deallocate(plane)
       deallocate(imat_cc, imat)
+
     contains
 
       ! Compute the cross product of 2 3D real vectors
@@ -2637,6 +2724,7 @@ contains
           c(2) = a(3) * b(1) - a(1) * b(3)
           c(3) = a(1) * b(2) - a(2) * b(1)
       end function cross
+
     end subroutine geometry_analysis
 
     subroutine kill_nanoparticle(self)
