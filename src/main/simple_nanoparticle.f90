@@ -14,33 +14,37 @@ private
 #include "simple_local_flags.inc"
 
 ! module global constants
-integer, parameter :: N_THRESH      = 20      ! number of thresholds for binarization
-logical, parameter :: DEBUG         = .false. ! for debugging purposes
-logical, parameter :: GENERATE_FIGS = .false. ! for figures generation
-integer, parameter :: SOFT_EDGE     = 6
-integer, parameter :: N_DISCRET     = 1000
-integer, parameter :: CNMIN         = 4
-integer, parameter :: CNMAX         = 12
+integer, parameter          :: N_THRESH        = 20      ! number of thresholds for binarization
+logical, parameter          :: DEBUG           = .false. ! for debugging purposes
+logical, parameter          :: GENERATE_FIGS   = .false. ! for figures generation
+integer, parameter          :: SOFT_EDGE       = 6
+integer, parameter          :: N_DISCRET       = 1000
+integer, parameter          :: CNMIN           = 4
+integer, parameter          :: CNMAX           = 12
+character(len=3), parameter :: CSV_DELIM       = ' , '
+character(len=*), parameter :: ATOM_STATS_FILE = 'atom_stats.csv'
+character(len=*), parameter :: NP_STATS_FILE   = 'nanoparticle_stats.csv'
+character(len=*), parameter :: CN_STATS_FILE   = 'cn_dependent_stats.csv'
 
 ! container for per-atom statistics
 type :: atom_stats
-    integer :: cc_ind          = 0  ! index of the connected component
-    integer :: size            = 0  ! number of voxels in connected component
-    integer :: cn_std          = 0  ! standard coordination number
-    integer :: loc_ldist(3)    = 0  ! for indentific of the vxl that determins the longest dim of the atom
-    real    :: bondl           = 0. ! nearest neighbour bond lenght
-    real    :: cn_gen          = 0. ! generalized coordination number
-    real    :: center(3)       = 0. ! atom center
-    real    :: aspect_ratio    = 0. !
+    integer :: cc_ind          = 0  ! index of the connected component                            INDEX
+    integer :: size            = 0  ! number of voxels in connected component                     NVOX
+    integer :: cn_std          = 0  ! standard coordination number                                CN_STD
+    integer :: loc_ldist(3)    = 0  ! vxl that determins the longest dim of the atom
+    real    :: bondl           = 0. ! nearest neighbour bond lenght                               NN_BONDL
+    real    :: cn_gen          = 0. ! generalized coordination number                             CN_GEN
+    real    :: center(3)       = 0. ! atom center                                                 X Y Z
+    real    :: aspect_ratio    = 0. !                                                             ASPECT_RATIO
     real    :: polar_vec(3)    = 0. ! polarization vector
-    real    :: polar_angle     = 0. ! polarization angle
-    real    :: diam            = 0. ! atom diameter
-    real    :: avg_int         = 0. ! average grey level intensity across the connected component
-    real    :: max_int         = 0. ! maximum            -"-
-    real    :: sdev_int        = 0. ! standard deviation -"-
-    real    :: dist_from_NPcen = 0. ! distance from the centre of mass of the nanoparticle
-    real    :: corr_max        = 0. ! maximum atom correlation within the connected component
-    real    :: strain          = 0. ! tensile strain in %                               **NOT FILLED-IN**
+    real    :: polar_angle     = 0. ! polarization angle                                          POLAR_ANGLE
+    real    :: diam            = 0. ! atom diameter                                               DIAM
+    real    :: avg_int         = 0. ! average grey level intensity across the connected component AVG_INT
+    real    :: max_int         = 0. ! maximum            -"-                                      MAX_INT
+    real    :: sdev_int        = 0. ! standard deviation -"-                                      SDEV_INT
+    real    :: dist_from_NPcen = 0. ! distance from the centre of mass of the nanoparticle        RADIAL_POS
+    real    :: max_corr        = 0. ! maximum atom correlation within the connected component     MAX_CORR
+    real    :: strain          = 0. ! tensile strain in %                   **NOT FILLED-IN**     STRAIN
 end type atom_stats
 
 type :: nanoparticle
@@ -48,27 +52,53 @@ type :: nanoparticle
     type(atoms)    :: centers_pdb
     type(image)    :: img,img_raw
     type(binimage) :: img_bin, img_cc
-    integer        :: ldim(3)                       = 0  ! logical dimension of image
-    integer        :: n_cc                          = 0  ! number of atoms (connected components)
-    real           :: smpd                          = 0. ! sampling distance
-    real           :: NPcen(3)                      = 0. ! coordinates of the center of mass of the nanoparticle
-    real           :: NPdiam                        = 0. ! diameter of the nanoparticle
-    real           :: theoretical_radius            = 0. ! theoretical atom radius
-    real           :: net_dipole(3)                 = 0. ! sum of all the directions of polarization
-    real           :: net_dipole_cns(3,CNMIN:CNMAX) = 0. ! net dipole as function of cn_std
-    real           :: polar_angle_cns(CNMIN:CNMAX)  = 0. ! polarization as function of cn_std
+    integer        :: ldim(3)                        = 0  ! logical dimension of image
+    integer        :: n_cc                           = 0  ! number of atoms (connected components)                NATOMS
+    real           :: smpd                           = 0. ! sampling distance
+    real           :: NPcen(3)                       = 0. ! coordinates of the center of mass of the nanoparticle
+    real           :: NPdiam                         = 0. ! diameter of the nanoparticle                          DIAM
+    real           :: theoretical_radius             = 0. ! theoretical atom radius
+    ! dipole stats
+    real           :: net_dipole(3)                  = 0. ! sum of all the directions of polarization             X_POLAR Y_POLAR Z_POLAR
+    real           :: net_dipole_mag                 = 0. ! net dipole magnitude                                  POLAR_MAG
     ! bond-lenght stats
-    real           :: avg_bondl                     = 0. ! average bond length in A
-    real           :: max_bondl                     = 0. ! maximum            -"-
-    real           :: min_bondl                     = 0. ! minimum            -"-
-    real           :: sdev_bondl                    = 0. ! standard deviation -"-
-    real           :: med_bondl                     = 0. ! median             -"-
+    real           :: avg_bondl                      = 0. ! average bond length in A                              AVG_BONDL
+    real           :: max_bondl                      = 0. ! maximum            -"-                                MAX_BONDL
+    real           :: min_bondl                      = 0. ! minimum            -"-                                MIN_BONDL
+    real           :: sdev_bondl                     = 0. ! standard deviation -"-                                SDEV_BONDL
+    real           :: med_bondl                      = 0. ! median             -"-                                MED_BONDL
     ! atom diameter stats
-    real           :: avg_diam                      = 0. ! average atomic diameter in A
-    real           :: max_diam                      = 0. ! maximum            -"-
-    real           :: min_diam                      = 0. ! minimum            -"-
-    real           :: sdev_diam                     = 0. ! standard deviation -"-
-    real           :: med_diam                      = 0. ! median             -"-
+    real           :: avg_diam                       = 0. ! average atomic diameter in A                          AVG_DIAM
+    real           :: max_diam                       = 0. ! maximum            -"-                                MAX_DIAM
+    real           :: min_diam                       = 0. ! minimum            -"-                                MIN_DIAM
+    real           :: sdev_diam                      = 0. ! standard deviation -"-                                SDEV_DIAM
+    real           :: med_diam                       = 0. ! median             -"-                                MED_DIAM
+    ! cn-dependent stats
+    ! -- dipole
+    real           :: net_dipole_cns(3,CNMIN:CNMAX)  = 0. ! net dipole as function of cn_std
+    real           :: polar_angle_cns(CNMIN:CNMAX)   = 0. ! polarization angle as function of cn_std              POLAR_ANGLE
+    real           :: polar_mag_cns(CNMIN:CNMAX)     = 0. ! polarization magnitude as function of cn_std          POLAR_MAG
+    ! -- intensity
+    real           :: avg_max_int_cns(CNMIN:CNMAX)   = 0. ! avg max grey level intensity as function of cn_std    AVG_MAX_INT
+    real           :: sdev_max_int_cns(CNMIN:CNMAX)  = 0. ! standard deviation -"-                                SDEV_MAX_INT
+    ! -- correlation
+    real           :: avg_max_corr_cns(CNMIN:CNMAX)  = 0. ! avg max atom correlation as function of cn_std        AVG_MAX_CORR
+    real           :: sdev_max_corr_cns(CNMIN:CNMAX) = 0. ! standard deviation -"-                                SDEV_MAX_CORR
+    ! -- bond length
+    real           :: avg_bondl_cns(CNMIN:CNMAX)     = 0. ! average bond length in A as function of cn_std        AVG_BONDL
+    real           :: max_bondl_cns(CNMIN:CNMAX)     = 0. ! maximum            -"-                                MAX_BONDL
+    real           :: min_bondl_cns(CNMIN:CNMAX)     = 0. ! minimum            -"-                                MIN_BONDL
+    real           :: sdev_bondl_cns(CNMIN:CNMAX)    = 0. ! standard deviation -"-                                SDEV_BONDL
+    ! -- atom size
+    real           :: avg_size_cns(CNMIN:CNMAX)      = 0. ! average atom size (#vxls) as function of cn_std       AVG_NVOX
+    real           :: max_size_cns(CNMIN:CNMAX)      = 0. ! maximum            -"-                                MAX_NVOX
+    real           :: min_size_cns(CNMIN:CNMAX)      = 0. ! minimum            -"-                                MIN_NVOX
+    real           :: sdev_size_cns(CNMIN:CNMAX)     = 0. ! standard deviation -"-                                SDEV_NVOX
+    ! -- atom diameter
+    real           :: avg_diam_cns(CNMIN:CNMAX)      = 0. ! average atomic diameter in A as function of cn_std    AVG_DIAM
+    real           :: max_diam_cns(CNMIN:CNMAX)      = 0. ! maximum            -"-                                MAX_DIAM
+    real           :: min_diam_cns(CNMIN:CNMAX)      = 0. ! minimum            -"-                                MIN_DIAM
+    real           :: sdev_diam_cns(CNMIN:CNMAX)     = 0. ! standard deviation -"-                                SDEV_DIAM
     ! per-atom statistics
     type(atom_stats), allocatable :: atominfo(:)
     character(len=2)      :: element     = ' '
@@ -839,7 +869,6 @@ contains
         call phasecorr%get_rmat_ptr(rmat_corr)
         call self%img%get_rmat_ptr(rmat)
         call self%img_cc%get_imat(imat_cc)
-        ! end type atom_stats
         do cc = 1, self%n_cc
             ! index of the connected component
             self%atominfo(cc)%cc_ind = cc
@@ -872,7 +901,7 @@ contains
                 self%atominfo(cc)%sdev_int = 0.
             endif
             ! atom correlation maximum within the connected component
-            self%atominfo(cc)%corr_max = maxval(rmat_corr(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),mask)
+            self%atominfo(cc)%max_corr = maxval(rmat_corr(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),mask)
             ! vector and angle of polarization
             if( self%atominfo(cc)%size > 2 )then
                 self%atominfo(cc)%polar_vec   = real(self%atominfo(cc)%loc_ldist) - self%atominfo(cc)%center
@@ -883,15 +912,15 @@ contains
             endif
             ! bond length of nearest neighbour...
             self%atominfo(cc)%bondl = pixels_dist(self%atominfo(cc)%center(:), tmpcens, 'min', mask=cc_mask) ! Use all the atoms
-            cc_mask = .true. ! restore
             ! ...discard outliers
             if( self%atominfo(cc)%bondl * self%smpd > 3. * self%theoretical_radius )then        ! maximum interatomic distance
                 self%atominfo(cc)%bondl = 0.
             else if( self%atominfo(i)%bondl * self%smpd < 1.5 * self%theoretical_radius ) then ! minimum interatomic distance
                 self%atominfo(cc)%bondl = 0.
             endif
-            ! reset mask
-            mask = .false.
+            ! reset masks
+            mask    = .false.
+            cc_mask = .true.
         end do
         ! set atom diameter stats
         self%min_diam  = minval(self%atominfo(:)%diam)
@@ -916,13 +945,21 @@ contains
             endif
         enddo
         self%sdev_bondl = sqrt(self%sdev_bondl/real(n_nozero - 1)) * self%smpd
-        tmparr = pack(self%atominfo(:)%bondl, mask=self%atominfo(:)%bondl > self%theoretical_radius)
+        tmparr          = pack(self%atominfo(:)%bondl, mask=self%atominfo(:)%bondl > self%theoretical_radius)
         self%med_bondl  = median(tmparr) * self%smpd
-        ! calculate net dipoles and polarization angles per cn_std
-        self%net_dipole = calc_net_dipole()
+        ! global dipole
+        self%net_dipole     = calc_net_dipole()
+        self%net_dipole_mag = arg(self%net_dipole)
+        ! calculate cn-dependent stats
         do cn = CNMIN, CNMAX
+            ! net dipole
             self%net_dipole_cns(:,cn) = calc_net_dipole(cn)
+            ! polarization angle
             self%polar_angle_cns(cn)  = ang3D_zvec(self%net_dipole_cns(:,cn))
+            ! polarization magnitude
+            self%polar_mag_cns(cn)    = arg(self%net_dipole_cns(:,cn))
+            ! avg max_int and sdev max_int
+            call calc_cn_stats( cn )
         end do
         ! destruct
         deallocate(mask, imat_cc, tmparr)
@@ -964,22 +1001,72 @@ contains
                     elsewhere
                         cn_mask = .true.
                     endwhere
-                    write(logfhandle,*) count(cn_mask), ' atoms out of ', self%n_cc, ' have cn ', cn
                 else
                     cn_mask(:) = .true.
                 endif
                 net_dipole = 0. ! inizialization
+                if( count(cn_mask) == 0 ) return
                 do i = 1, self%n_cc
                     if( cn_mask(i) ) net_dipole = net_dipole + self%atominfo(i)%polar_vec
                 enddo
-                if( count(cn_mask) == 0 )then
-                    write(logfhandle,*) 'No atoms with cn ', cn
-                    net_dipole = 0.
-                else
-                    m_adjusted = sum(tmpcens(:,:)-1.,dim=2) * self%smpd / real(count(cn_mask))
-                    net_dipole = (net_dipole - 1.) * self%smpd + m_adjusted
-                endif
+                m_adjusted = sum(tmpcens(:,:)-1.,dim=2) * self%smpd / real(count(cn_mask))
+                net_dipole = (net_dipole - 1.) * self%smpd + m_adjusted
             end function calc_net_dipole
+
+            subroutine calc_cn_stats( cn )
+                integer, intent(in)  :: cn ! calculate stats for given std cn
+                integer :: cc, sz
+                logical :: cn_mask(self%n_cc)
+                ! Generate mask for cn
+                where( self%atominfo(:)%cn_std .ne. cn )
+                    cn_mask = .false.
+                elsewhere
+                    cn_mask = .true.
+                endwhere
+                self%avg_max_int_cns(cn)   = 0.
+                self%sdev_max_int_cns(cn)  = 0.
+                self%avg_max_corr_cns(cn)  = 0.
+                self%sdev_max_corr_cns(cn) = 0.
+                self%avg_bondl_cns(cn)     = 0.
+                self%max_bondl_cns(cn)     = 0.
+                self%min_bondl_cns(cn)     = 0.
+                self%sdev_bondl_cns(cn)    = 0.
+                self%avg_size_cns(cn)      = 0.
+                self%max_size_cns(cn)      = 0.
+                self%min_size_cns(cn)      = 0.
+                self%sdev_size_cns(cn)     = 0.
+                self%avg_diam_cns(cn)      = 0.
+                self%max_diam_cns(cn)      = 0.
+                self%min_diam_cns(cn)      = 0.
+                self%sdev_diam_cns(cn)     = 0.
+                sz = count(cn_mask)
+                if( sz == 0 ) return
+                self%avg_max_int_cns(cn)  = sum(self%atominfo(:)%max_int,  mask=cn_mask) / real(sz)
+                self%avg_max_corr_cns(cn) = sum(self%atominfo(:)%max_corr, mask=cn_mask) / real(sz)
+                self%avg_bondl_cns(cn)    = sum(self%atominfo(:)%bondl,    mask=cn_mask) / real(sz)
+                self%max_bondl_cns(cn)    = maxval(self%atominfo(:)%bondl, mask=cn_mask)
+                self%min_bondl_cns(cn)    = minval(self%atominfo(:)%bondl, mask=cn_mask)
+                self%avg_size_cns(cn)     = sum(self%atominfo(:)%size,     mask=cn_mask) / real(sz)
+                self%max_size_cns(cn)     = maxval(self%atominfo(:)%size,  mask=cn_mask)
+                self%min_size_cns(cn)     = minval(self%atominfo(:)%size,  mask=cn_mask)
+                self%avg_diam_cns(cn)     = sum(self%atominfo(:)%diam,     mask=cn_mask) / real(sz)
+                self%max_diam_cns(cn)     = maxval(self%atominfo(:)%diam,  mask=cn_mask)
+                self%min_diam_cns(cn)     = minval(self%atominfo(:)%diam,  mask=cn_mask)
+                do cc = 1, self%n_cc
+                    if( cn_mask(cc) )then
+                        self%sdev_max_int_cns(cn)  = self%sdev_max_int_cns(cn)  + (self%avg_max_int_cns(cn)  - self%atominfo(cc)%max_int) **2.
+                        self%sdev_max_corr_cns(cn) = self%sdev_max_corr_cns(cn) + (self%avg_max_corr_cns(cn) - self%atominfo(cc)%max_corr)**2.
+                        self%sdev_bondl_cns(cn)    = self%sdev_bondl_cns(cn)    + (self%avg_bondl_cns(cn)    - self%atominfo(cc)%bondl)   **2.
+                        self%sdev_size_cns(cn)     = self%sdev_size_cns(cn)     + (self%avg_size_cns(cn)     - self%atominfo(cc)%size)    **2.
+                        self%sdev_diam_cns(cn)     = self%sdev_diam_cns(cn)     + (self%avg_diam_cns(cn)     - self%atominfo(cc)%diam)    **2.
+                    endif
+                enddo
+                self%sdev_max_int_cns(cn)  = sqrt(self%sdev_max_int_cns(cn)  / real(sz-1))
+                self%sdev_max_corr_cns(cn) = sqrt(self%sdev_max_corr_cns(cn) / real(sz-1))
+                self%sdev_bondl_cns(cn)    = sqrt(self%sdev_bondl_cns(cn)    / real(sz-1))
+                self%sdev_size_cns(cn)     = sqrt(self%sdev_size_cns(cn)     / real(sz-1))
+                self%sdev_diam_cns(cn)     = sqrt(self%sdev_diam_cns(cn)     / real(sz-1))
+            end subroutine calc_cn_stats
 
    end subroutine fillin_atominfo
 
