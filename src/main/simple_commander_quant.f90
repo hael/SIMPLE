@@ -70,47 +70,29 @@ contains
         class(cmdline),                intent(inout) :: cline !< command line input
         type(parameters)   :: params
         type(nanoparticle) :: nano
-        integer            :: cn_thresh
+        integer, parameter :: CN_THRESH_DEFAULT = 3
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
         endif
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
         endif
-        call cline%set('mkdir', 'yes')
         call params%new(cline)
         call nano%new(params%vols(1), params%smpd, params%element)
         ! volume soft-edge masking
         call nano%mask(params%msk)
         ! execute
-        if(cline%defined('thres')) then      ! threshold for binarization
-          if(cline%defined('cn_thres')) then ! contact score threshold for outliers removal
-            if(.not. cline%defined('cn_type')) then
-              THROW_HARD('ERROR! cn_type needs to be specified when cn_thres is used; exec_detect_atoms')
-            else if (params%cn_type .ne. 'cn_gen' .and. params%cn_type .ne. 'cn_std') then
-              THROW_WARN('Unvalid cn_type, proceeding with generalised coordination number (cn_gen)')
-              call cline%set('cn_type', 'cn_gen')
-            endif
-              call nano%identify_atomic_pos_thresh(params%thres, nint(params%cn_thres), params%cn_type)
+        if(cline%defined('cn_thres')) then
+              if(.not. cline%defined('cn_type')) then
+                  THROW_HARD('ERROR! cn_type needs to be specified when cn_thres is used; exec_detect_atoms')
+              elseif( params%cn_type .ne. 'cn_gen' .and. params%cn_type .ne. 'cn_std' )then
+                  THROW_WARN('Unvalid cn_type, proceeding with standard coordination number (cn_std)')
+                  call cline%set('cn_type', 'cn_std')
+              endif
+              call nano%identify_atomic_pos(nint(params%cn_thres), params%cn_type)
           else
-              call cline%set('cn_type', 'cn_nan')
-              cn_thresh = 0
-              call nano%identify_atomic_pos_thresh(params%thres, cn_thresh, params%cn_type)
-          endif
-        else
-          if(cline%defined('cn_thres')) then
-            if(.not. cline%defined('cn_type')) then
-              THROW_HARD('ERROR! cn_type needs to be specified when cn_thres is used; exec_detect_atoms')
-            elseif (params%cn_type .ne. 'cn_gen' .and. params%cn_type .ne. 'cn_std') then
-              THROW_WARN('Unvalid cn_type, proceeding with generalised coordination number (cn_gen)')
-              call cline%set('cn_type', 'cn_gen')
-            endif
-            call nano%identify_atomic_pos(nint(params%cn_thres), params%cn_type)
-          else
-            call cline%set('cn_type', 'cn_nan')
-              cn_thresh = 0
-              call nano%identify_atomic_pos(cn_thresh,params%cn_type)
-          endif
+              call cline%set('cn_type', 'cn_std')
+              call nano%identify_atomic_pos(CN_THRESH_DEFAULT,params%cn_type)
         endif
         ! kill
         call nano%kill
@@ -159,49 +141,28 @@ contains
     ! and radial dependent statistics.
     subroutine exec_atoms_stats( self, cline )
         class(atoms_stats_commander), intent(inout) :: self
-        class(cmdline),                          intent(inout) :: cline !< command line input
-        character(len=STDLEN)  :: fname
-        type(parameters)       :: params
-        type(nanoparticle) :: nano
-        real    :: min_rad, max_rad, step
-        call cline%set('mkdir', 'yes')
+        class(cmdline),               intent(inout) :: cline !< command line input
+        character(len=STDLEN) :: fname
+        type(parameters)      :: params
+        type(nanoparticle)    :: nano
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_atoms_stats')
         endif
         if( .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! vol1 needs to be present; exec_atoms_stats')
+            THROW_HARD('ERROR! vol1 (raw map) needs to be present; exec_atoms_stats')
         endif
-        if(cline%defined('cn_min') .and. .not. cline%defined('cn_max')) then
-          THROW_HARD('ERROR! define cn_max too!; exec_atoms_stats')
+        if( .not. cline%defined('vol2') )then
+            THROW_HARD('ERROR! vol2 (connected components map *CC.mrc) needs to be present; exec_atoms_stats')
         endif
-        if(cline%defined('cn_max') .and. .not. cline%defined('cn_min')) then
-          THROW_HARD('ERROR! define cn_min too!; exec_atoms_stats')
+        if( .not. cline%defined('pdbfile') )then
+            THROW_HARD('ERROR! pdbfile needs to be present; exec_atoms_stats')
         endif
-        min_rad = params%min_rad
-        max_rad = params%max_rad
-        step    = params%stepsz
-        if(min_rad > max_rad) THROW_HARD('Minimum radius has to be smaller then maximum radius! exec_atoms_stats')
-        if(abs(max_rad-min_rad)>TINY .and. step > max_rad-min_rad) THROW_HARD('Inputted too big stepsz! exec_atoms_stats')
-        call nano%new(params%vols(1), params%smpd,params%element)
-        ! execute
-        fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
-        call nano%set_atomic_coords('../'//trim(fname)//'_atom_centers.pdb')
-        call nano%set_img('../'//trim(fname)//'CC.mrc', 'img_cc')
-        call nano%update_self_ncc()
-        if(cline%defined('cn_min')) then
-          if(cline%defined('cn')) then
-            call nano%radial_dependent_stats(min_rad,max_rad,step,params%cn_min,params%cn_max,params%cn)
-          else
-            call nano%radial_dependent_stats(min_rad,max_rad,step,params%cn_min,params%cn_max)
-          endif
-        else
-          if(cline%defined('cn')) then
-            call nano%radial_dependent_stats(min_rad,max_rad,step,cn=params%cn)
-          else
-            call nano%radial_dependent_stats(min_rad,max_rad,step)
-          endif
-        endif
+        call nano%new(params%vols(1), params%smpd, params%element)
+        call nano%set_atomic_coords(params%pdbfile)
+        call nano%set_img(params%vols(2), 'img_cc')
+        call nano%update_ncc()
+        call nano%fillin_atominfo
         ! kill
         call nano%kill
         ! end gracefully
@@ -232,7 +193,7 @@ contains
         fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
         call nano%set_atomic_coords(trim(fname)//'_atom_centers.pdb')
         call nano%set_img(trim(fname)//'CC.mrc', 'img_cc')
-        call nano%update_self_ncc()
+        call nano%update_ncc()
         select case(trim(params%clustermode))
             case('ar')
               call nano%cluster_ar(params%thres)
@@ -241,10 +202,10 @@ contains
             case('ang')
               call nano%cluster_ang(params%thres)
             case('maxint')
-              call nano%atoms_stats(.false.)
+              ! call nano%atoms_stats(.false.)
               call nano%cluster_atom_maxint()
             case('intint')
-              call nano%atoms_stats(.false.)
+              ! call nano%atoms_stats(.false.)
               call nano%cluster_atom_intint()
             case DEFAULT
                 write(logfhandle,*) 'clustermode: ', trim(params%clustermode)
@@ -333,7 +294,7 @@ contains
           call nano%set_img('../../'//trim(fname)//'BIN.mrc','img_bin')
           call nano%set_atomic_coords('../../'//trim(fname)//'_atom_centers.pdb')
           call nano%set_img('../../'//trim(fname)//'CC.mrc', 'img_cc')
-          call nano%update_self_ncc()
+          call nano%update_ncc()
           ! execute
           if(cline%defined('thres')) then
               call nano%geometry_analysis(trim(params%pdbfile2), params%thres)
@@ -374,9 +335,9 @@ contains
         fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
         call nano%set_atomic_coords('../'//trim(fname)//'_atom_centers.pdb')
         call nano%set_img('../'//trim(fname)//'CC.mrc', 'img_cc')
-        call nano%update_self_ncc()
+        call nano%update_ncc()
         ! execute
-        call nano%print_atoms()
+        call nano%write_atoms()
         ! kill
         call nano%kill
         ! end gracefully
