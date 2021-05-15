@@ -1585,7 +1585,7 @@ contains
         &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-comp map',& ! descr long
         &'quant_exec',&                                        ! executable
-        &1, 1, 0, 3, 1, 1, 1, .false.)                          ! # entries in each group, requires sp_project
+        &1, 1, 0, 2, 1, 1, 1, .false.)                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
@@ -1595,11 +1595,10 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call detect_atoms%set_input('srch_ctrls', 1, 'thres', 'num', 'Threshold for binarization','Threshold for volume binarization', 'number', .false., 1.)
-        call detect_atoms%set_input('srch_ctrls', 2, 'cn_type', 'str', 'Generalised coordination number (cn_gen) or standard one (cn_std) for outliers elimination','Generalised cn (cn_gen) or standard (cn_std)', 'cn type e.g. cn_gen or cn_std', .false., 'cn_gen')
-        call detect_atoms%set_input('srch_ctrls', 3, 'cn_thres', 'num', 'Threshold for outlier discarding based on coordination number','Threshold for outlier discarding based on coordination number', 'number', .false., 5.)
+        call detect_atoms%set_input('srch_ctrls', 1, 'cn_type', 'str', 'Generalised coordination number (cn_gen) or standard one (cn_std) for outliers elimination','Generalised cn (cn_gen) or standard (cn_std)', 'cn type e.g. cn_gen or cn_std', .false., 'cn_gen')
+        call detect_atoms%set_input('srch_ctrls', 2, 'cn_thres', 'num', 'Threshold for outlier discarding based on coordination number','Threshold for outlier discarding based on coordination number', 'number', .false., 3.)
         ! filter controls
-        call detect_atoms%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        call detect_atoms%set_input('filt_ctrls', 1, 'element', 'str', 'Atom name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
         call detect_atoms%set_input('mask_ctrls', 1, 'msk','num','Mask radius','Mask radius in pixels for application of a soft circular mask', 'mask radius in pixels', .true., 75.)
         ! computer controls
