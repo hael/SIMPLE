@@ -101,44 +101,42 @@ contains
     end subroutine exec_detect_atoms
 
     subroutine exec_dock_coords(self, cline)
-      use simple_ori ! for generation of the rotation matrix
-      use simple_atoms, only : atoms
-      class(dock_coords_commander), intent(inout) :: self
-      class(cmdline),               intent(inout) :: cline !< command line input
-      type(parameters)       :: params
-      type(atoms)            :: a_ref, a_targ
-      real :: rot_trans(7) ! cost, rotation angles, shift
-      real :: rmat(3,3)
-      call params%new(cline)
-      if(.not. cline%defined('pdbfile')) then
-          THROW_HARD('ERROR! pdbfile needs to be present; exec_dock_coords')
-      endif
-      if(.not. cline%defined('pdbfile2')) then
-          THROW_HARD('ERROR! pdbfile2 needs to be present; exec_dock_coords')
-      endif
-      if(.not. cline%defined('thres')) then
-          THROW_HARD('ERROR! thres needs to be present; exec_dock_coords')
-      endif
-      call a_ref%new(basename(params%pdbfile))
-      call a_targ%new(basename(params%pdbfile2))
-      call dock_coords_init( a_ref, a_targ, params%thres )
-      rot_trans = dock_coords_minimize()
-      write(logfhandle, *) 'Docked coords have rmsd', rot_trans(1)
-      write(logfhandle, *) 'Rotation angles        ', rot_trans(2:4)
-      write(logfhandle, *) 'Translation vector     ', rot_trans(5:7)
-      ! now perform rotation and translation of the coords
-      ! and output rotshited coords
-      rmat = euler2m(rot_trans(2:4))
-      call a_targ%translate(-rot_trans(5:7))
-      call a_targ%writePDB('TranslatedCoords')
-      call a_targ%rotate(rmat)
-      call a_targ%writePDB('DockedCoords')
-      call a_ref%kill
-      call a_targ%kill
+        use simple_ori ! for generation of the rotation matrix
+        use simple_atoms, only : atoms
+        class(dock_coords_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline !< command line input
+        type(parameters)       :: params
+        type(atoms)            :: a_ref, a_targ
+        real :: rot_trans(7) ! cost, rotation angles, shift
+        real :: rmat(3,3)
+        call params%new(cline)
+        if(.not. cline%defined('pdbfile')) then
+            THROW_HARD('ERROR! pdbfile needs to be present; exec_dock_coords')
+        endif
+        if(.not. cline%defined('pdbfile2')) then
+            THROW_HARD('ERROR! pdbfile2 needs to be present; exec_dock_coords')
+        endif
+        if(.not. cline%defined('thres')) then
+            THROW_HARD('ERROR! thres needs to be present; exec_dock_coords')
+        endif
+        call a_ref%new(basename(params%pdbfile))
+        call a_targ%new(basename(params%pdbfile2))
+        call dock_coords_init( a_ref, a_targ, params%thres )
+        rot_trans = dock_coords_minimize()
+        write(logfhandle, *) 'Docked coords have rmsd', rot_trans(1)
+        write(logfhandle, *) 'Rotation angles        ', rot_trans(2:4)
+        write(logfhandle, *) 'Translation vector     ', rot_trans(5:7)
+        ! now perform rotation and translation of the coords
+        ! and output rotshited coords
+        rmat = euler2m(rot_trans(2:4))
+        call a_targ%translate(-rot_trans(5:7))
+        call a_targ%writePDB('TranslatedCoords')
+        call a_targ%rotate(rmat)
+        call a_targ%writePDB('DockedCoords')
+        call a_ref%kill
+        call a_targ%kill
     end subroutine exec_dock_coords
 
-    ! Calculates distances distribution across the whole nanoparticle
-    ! and radial dependent statistics.
     subroutine exec_atoms_stats( self, cline )
         class(atoms_stats_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline !< command line input
@@ -163,6 +161,7 @@ contains
         call nano%set_img(params%vols(2), 'img_cc')
         call nano%update_ncc()
         call nano%fillin_atominfo
+        call nano%write_csv_files
         ! kill
         call nano%kill
         ! end gracefully

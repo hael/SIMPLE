@@ -3965,23 +3965,20 @@ contains
     subroutine new_atoms_stats
         ! PROGRAM SPECIFICATION
         call atoms_stats%new(&
-        &'atoms_stats',&                                                                                           ! name
-        &'Statistical test for radial dependent symmetry',&                                                                           ! descr_short
+        &'atoms_stats',&                                                                              ! name
+        &'Statistical test for radial dependent symmetry',&                                           ! descr_short
         &'is a program that generates statistics at different radii and across the whold nano map.',& ! descr long
-        &'quant_exec',&                                                                                             ! executable
-        &1, 7, 0, 0, 1, 0, 0, .false.)                                                                               ! # entries in each group, requires sp_project
+        &'quant_exec',&                                                                               ! executable
+        &2, 2, 0, 0, 1, 0, 0, .false.)                                                                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call atoms_stats%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry of', 'C1 Volume to identify symmetry of', &
-        & 'input volume e.g. vol_C1.mrc', .true., '')
+        call atoms_stats%set_input('img_ios', 1, 'vol1', 'file', 'Raw volume', 'Raw volume of grey valued pixel intensities', &
+        & 'input volume e.g. vol.mrc', .true., '')
+        call atoms_stats%set_input('img_ios', 2, 'vol2', 'file', 'Connected components volume', 'Connected components volume produced by detect atoms', &
+        & 'input volume e.g. *CC.mrc', .true., '')
         ! parameter input/output
         call atoms_stats%set_input('parm_ios', 1, smpd)
-        call atoms_stats%set_input('parm_ios', 2, 'min_rad', 'num', 'Minimum radius in A', 'Minimum radius in A {5.} ', '{5.}',  .true., 10.)
-        call atoms_stats%set_input('parm_ios', 3, 'max_rad', 'num', 'Maximum radius in A', 'Maximum radius in A {12.} ', '{12.}',  .true., 100.)
-        call atoms_stats%set_input('parm_ios', 4, 'stepsz',  'num', 'Step size in A', 'Steps size in A {2.} ', '{2.}',  .true., 10.)
-        call atoms_stats%set_input('parm_ios', 5, 'cn_min',  'num', 'Minimum std coordination number ', 'Minimum std cn for stats calculation', '4',  .false., 4.)
-        call atoms_stats%set_input('parm_ios', 6, 'cn_max',  'num', 'Maximum std coordination number ', 'Maximum std cn for stats calculation', '12', .false., 12.)
-        call atoms_stats%set_input('parm_ios', 7, 'cn',      'num', 'Fixed std coordination number ',   'Fixed std cn for dipole calculation',  '8',  .false., 8.)
+        call atoms_stats%set_input('parm_ios', 2, 'pdbfile', 'file', 'PDB', 'Input coords file in PDB format',  'Input coords file in PDB format', .true., '')
         ! alternative inputs
         ! <empty>
         ! search controls
