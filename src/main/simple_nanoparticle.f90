@@ -21,7 +21,7 @@ integer, parameter          :: SOFT_EDGE       = 6
 integer, parameter          :: N_DISCRET       = 1000
 integer, parameter          :: CNMIN           = 4
 integer, parameter          :: CNMAX           = 12
-character(len=3), parameter :: CSV_DELIM       = ' , '
+character(len=3), parameter :: CSV_DELIM       = ', '
 character(len=*), parameter :: ATOM_STATS_FILE = 'atom_stats.csv'
 character(len=*), parameter :: NP_STATS_FILE   = 'nanoparticle_stats.csv'
 character(len=*), parameter :: CN_STATS_FILE   = 'cn_dependent_stats.csv'
@@ -30,11 +30,12 @@ character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV
 &CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//CSV_DELIM//'MAX_INT'//CSV_DELIM//'SDEV_INT'//CSV_DELIM//'RADIAL_POS'//&
 &CSV_DELIM//'MAX_CORR'//CSV_DELIM//'STRAIN'
 character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//CSV_DELIM//'X_POLAR'//CSV_DELIM//'Y_POLAR'//&
-&CSV_DELIM//'Z_POLAR'//CSV_DELIM//'POLAR_MAG'//CSV_DELIM//'AVG_BONDL'//CSV_DELIM//'MAX_BONDL'//CSV_DELIM//'MIN_BONDL'//&
-&CSV_DELIM//'SDEV_BONDL'//CSV_DELIM//'MED_BONDL'//CSV_DELIM//'AVG_DIAM'//CSV_DELIM//'MAX_DIAM'//CSV_DELIM//'MIN_DIAM'//&
-&CSV_DELIM//'SDEV_DIAM'//CSV_DELIM//'MED_DIAM'
-character(len=*), parameter :: CN_STATS_HEAD = 'CN'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'POLAR_MAG'//CSV_DELIM//'AVG_MAX_INT'//&
-&CSV_DELIM//'SDEV_MAX_INT'//CSV_DELIM//'AVG_BONDL'//CSV_DELIM//'MAX_BONDL'//CSV_DELIM//'MIN_BONDL'//CSV_DELIM//'SDEV_BONDL'//&
+&CSV_DELIM//'Z_POLAR'//CSV_DELIM//'POLAR_MAG'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'AVG_BONDL'//CSV_DELIM//'MAX_BONDL'//&
+&CSV_DELIM//'MIN_BONDL'//CSV_DELIM//'SDEV_BONDL'//CSV_DELIM//'MED_BONDL'//CSV_DELIM//'AVG_DIAM'//CSV_DELIM//'MAX_DIAM'//&
+CSV_DELIM//'MIN_DIAM'//CSV_DELIM//'SDEV_DIAM'//CSV_DELIM//'MED_DIAM'
+character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'POLAR_MAG'//&
+&CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//CSV_DELIM//'AVG_MAX_CORR'//CSV_DELIM//'SDEV_MAX_CORR'//&
+&CSV_DELIM//'AVG_BONDL'//CSV_DELIM//'MAX_BONDL'//CSV_DELIM//'MIN_BONDL'//CSV_DELIM//'SDEV_BONDL'//&
 &CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MAX_NVOX'//CSV_DELIM//'MIN_NVOX'//CSV_DELIM//'SDEV_NVOX'//CSV_DELIM//'AVG_DIAM'//&
 &CSV_DELIM//'MAX_DIAM'//CSV_DELIM//'MIN_DIAM'//CSV_DELIM//'SDEV_DIAM'
 
@@ -44,7 +45,7 @@ type :: atom_stats
     integer :: size            = 0  ! number of voxels in connected component                     NVOX
     integer :: cn_std          = 0  ! standard coordination number                                CN_STD
     integer :: loc_ldist(3)    = 0  ! vxl that determins the longest dim of the atom
-    real    :: bondl           = 0. ! nearest neighbour bond lenght                               NN_BONDL
+    real    :: bondl           = 0. ! nearest neighbour bond lenght in A                          NN_BONDL
     real    :: cn_gen          = 0. ! generalized coordination number                             CN_GEN
     real    :: center(3)       = 0. ! atom center                                                 X Y Z
     real    :: aspect_ratio    = 0. !                                                             ASPECT_RATIO
@@ -69,10 +70,11 @@ type :: nanoparticle
     real           :: smpd                           = 0. ! sampling distance
     real           :: NPcen(3)                       = 0. ! coordinates of the center of mass of the nanoparticle
     real           :: NPdiam                         = 0. ! diameter of the nanoparticle                          DIAM
-    real           :: theoretical_radius             = 0. ! theoretical atom radius
+    real           :: theoretical_radius             = 0. ! theoretical atom radius in A
     ! dipole stats
     real           :: net_dipole(3)                  = 0. ! sum of all the directions of polarization             X_POLAR Y_POLAR Z_POLAR
     real           :: net_dipole_mag                 = 0. ! net dipole magnitude                                  POLAR_MAG
+    real           :: net_dipole_ang                 = 0. ! net dipole angle                                      POLAR_ANGLE
     ! bond-lenght stats
     real           :: avg_bondl                      = 0. ! average bond length in A                              AVG_BONDL
     real           :: max_bondl                      = 0. ! maximum            -"-                                MAX_BONDL
@@ -815,8 +817,9 @@ contains
         real,    pointer     :: rmat(:,:,:), rmat_corr(:,:,:)
         integer, allocatable :: imat_cc(:,:,:)
         real    :: tmp_diam, a(3), radius_cn
-        logical :: cc_mask(self%n_cc)
-        integer :: i, j, k, cc, n_nozero, cn
+        logical :: cc_mask(self%n_cc), diam_mask(self%n_cc)
+        integer :: i, j, k, cc, cn, n
+        write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         ! calc cn and cn_gen
         centers_A = self%atominfo2centers_A()
         call fit_lattice(centers_A,a)
@@ -832,9 +835,10 @@ contains
             if( tmp_diam > self%NPdiam ) self%NPdiam = tmp_diam
         enddo
         cc_mask     = .true. ! restore
-        deallocate(tmpcens)
         self%NPdiam = self%NPdiam * self%smpd ! in A
+        write(logfhandle,*) 'nanoparticle diameter (A): ', self%NPdiam
         self%NPcen  = self%masscen()
+        write(logfhandle,*) 'nanoparticle mass center: ', self%NPcen
         ! extract atominfo
         allocate(mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = .false.)
         call self%phasecorr_one_atom(phasecorr)
@@ -842,6 +846,7 @@ contains
         call self%img%get_rmat_ptr(rmat)
         call self%img_cc%get_imat(imat_cc)
         do cc = 1, self%n_cc
+            call progress(cc, self%n_cc)
             ! index of the connected component
             self%atominfo(cc)%cc_ind = cc
             ! number of voxels in connected component
@@ -884,44 +889,39 @@ contains
             endif
             ! bond length of nearest neighbour...
             self%atominfo(cc)%bondl = pixels_dist(self%atominfo(cc)%center(:), tmpcens, 'min', mask=cc_mask) ! Use all the atoms
-            ! ...discard outliers
-            if( self%atominfo(cc)%bondl * self%smpd > 3. * self%theoretical_radius )then        ! maximum interatomic distance
-                self%atominfo(cc)%bondl = 0.
-            else if( self%atominfo(i)%bondl * self%smpd < 1.5 * self%theoretical_radius ) then ! minimum interatomic distance
-                self%atominfo(cc)%bondl = 0.
-            endif
+            self%atominfo(cc)%bondl = self%atominfo(cc)%bondl * self%smpd ! convert to A
             ! reset masks
             mask    = .false.
             cc_mask = .true.
         end do
         ! set atom diameter stats
-        self%min_diam  = minval(self%atominfo(:)%diam)
-        self%max_diam  = maxval(self%atominfo(:)%diam)
-        self%med_diam  = median(self%atominfo(:)%diam)
-        self%avg_diam  = sum(self%atominfo(:)%diam)/real(self%n_cc)
-        self%sdev_diam = 0.
+        diam_mask       = self%atominfo(:)%diam > self%theoretical_radius
+        n               = count(diam_mask)
+        self%min_diam   = minval(self%atominfo(:)%diam, mask=diam_mask)
+        self%max_diam   = maxval(self%atominfo(:)%diam)
+        tmparr          = pack(self%atominfo(:)%diam, mask=diam_mask)
+        self%med_diam   = median_nocopy(tmparr)
+        self%avg_diam   = sum(self%atominfo(:)%diam, mask=diam_mask) / real(n)
+        self%sdev_diam  = 0.
         do cc = 1, self%n_cc
-            self%sdev_diam = self%sdev_diam + (self%avg_diam - self%atominfo(cc)%diam)**2.
+            if( diam_mask(cc) )&
+            &self%sdev_diam = self%sdev_diam + (self%avg_diam - self%atominfo(cc)%diam)**2.
         enddo
-        self%sdev_diam = sqrt(self%sdev_diam / real(self%n_cc-1))
+        self%sdev_diam  = sqrt(self%sdev_diam / real(n-1))
         ! set bond lenght stats
-        n_nozero        = count(self%atominfo(:)%bondl > self%theoretical_radius)
-        self%avg_bondl  = (sum(self%atominfo(:)%bondl)/real(n_nozero)) * self%smpd
-        self%max_bondl  = maxval(self%atominfo(:)%bondl) * self%smpd
-        self%min_bondl  = minval(self%atominfo(:)%bondl, mask = self%atominfo(:)%bondl > self%theoretical_radius) * self%smpd
+        self%avg_bondl  = sum(self%atominfo(:)%bondl) / real(self%n_cc)
+        self%max_bondl  = maxval(self%atominfo(:)%bondl)
+        self%min_bondl  = minval(self%atominfo(:)%bondl)
         self%sdev_bondl = 0.
         do i = 1, size(self%atominfo)
-            if( self%atominfo(i)%bondl > self%theoretical_radius )then
-                if(self%atominfo(i)%bondl * self%smpd <= 3. * self%theoretical_radius)&
-                &self%sdev_bondl = self%sdev_bondl + (self%atominfo(i)%bondl-self%avg_bondl)**2.
-            endif
+            self%sdev_bondl = self%sdev_bondl + (self%atominfo(i)%bondl-self%avg_bondl)**2.
         enddo
-        self%sdev_bondl = sqrt(self%sdev_bondl/real(n_nozero - 1)) * self%smpd
-        tmparr          = pack(self%atominfo(:)%bondl, mask=self%atominfo(:)%bondl > self%theoretical_radius)
-        self%med_bondl  = median(tmparr) * self%smpd
+        self%sdev_bondl = sqrt(self%sdev_bondl / real(self%n_cc-1))
+        self%med_bondl  = median(self%atominfo(:)%bondl)
         ! global dipole
         self%net_dipole     = calc_net_dipole()
         self%net_dipole_mag = arg(self%net_dipole)
+        self%net_dipole_ang = ang3D_zvec(self%net_dipole)
         ! calculate cn-dependent stats
         do cn = CNMIN, CNMAX
             ! net dipole
@@ -934,8 +934,9 @@ contains
             call calc_cn_stats( cn )
         end do
         ! destruct
-        deallocate(mask, imat_cc, tmparr)
+        deallocate(mask, imat_cc, tmpcens, tmparr)
         call phasecorr%kill
+        write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS, COMPLETED'
 
         contains
 
@@ -977,24 +978,30 @@ contains
                     cn_mask(:) = .true.
                 endif
                 net_dipole = 0. ! inizialization
+                m_adjusted = 0.
                 if( count(cn_mask) == 0 ) return
                 do i = 1, self%n_cc
-                    if( cn_mask(i) ) net_dipole = net_dipole + self%atominfo(i)%polar_vec
+                    if( cn_mask(i) )then
+                        net_dipole = net_dipole + self%atominfo(i)%polar_vec
+                        m_adjusted = m_adjusted + (tmpcens(:,i) - 1.) * self%smpd
+                    endif
                 enddo
-                m_adjusted = sum(tmpcens(:,:)-1.,dim=2) * self%smpd / real(count(cn_mask))
+                m_adjusted = m_adjusted / real(count(cn_mask))
                 net_dipole = (net_dipole - 1.) * self%smpd + m_adjusted
             end function calc_net_dipole
 
             subroutine calc_cn_stats( cn )
                 integer, intent(in)  :: cn ! calculate stats for given std cn
-                integer :: cc, sz
-                logical :: cn_mask(self%n_cc)
-                ! Generate mask for cn
-                where( self%atominfo(:)%cn_std .ne. cn )
-                    cn_mask = .false.
-                elsewhere
-                    cn_mask = .true.
-                endwhere
+                integer :: cc, n, n_size, n_diam
+                logical :: cn_mask(self%n_cc), size_mask(self%n_cc), diam_mask(self%n_cc)
+                ! Generate masks
+                cn_mask   = self%atominfo(:)%cn_std == cn
+                size_mask = self%atominfo(:)%size > 2 .and. cn_mask
+                diam_mask = self%atominfo(:)%diam > self%theoretical_radius .and. cn_mask
+                n         = count(cn_mask)
+                n_size    = count(size_mask)
+                n_diam    = count(diam_mask)
+                ! Init
                 self%avg_max_int_cns(cn)   = 0.
                 self%sdev_max_int_cns(cn)  = 0.
                 self%avg_max_corr_cns(cn)  = 0.
@@ -1011,33 +1018,32 @@ contains
                 self%max_diam_cns(cn)      = 0.
                 self%min_diam_cns(cn)      = 0.
                 self%sdev_diam_cns(cn)     = 0.
-                sz = count(cn_mask)
-                if( sz == 0 ) return
-                self%avg_max_int_cns(cn)  = sum   (self%atominfo(:)%max_int,  mask=cn_mask) / real(sz)
-                self%avg_max_corr_cns(cn) = sum   (self%atominfo(:)%max_corr, mask=cn_mask) / real(sz)
-                self%avg_bondl_cns(cn)    = sum   (self%atominfo(:)%bondl,    mask=cn_mask) / real(sz)
+                if( n == 0 ) return
+                self%avg_max_int_cns(cn)  = sum   (self%atominfo(:)%max_int,  mask=cn_mask)   / real(n)
+                self%avg_max_corr_cns(cn) = sum   (self%atominfo(:)%max_corr, mask=cn_mask)   / real(n)
+                self%avg_bondl_cns(cn)    = sum   (self%atominfo(:)%bondl,    mask=cn_mask)   / real(n)
                 self%max_bondl_cns(cn)    = maxval(self%atominfo(:)%bondl,    mask=cn_mask)
                 self%min_bondl_cns(cn)    = minval(self%atominfo(:)%bondl,    mask=cn_mask)
-                self%avg_size_cns(cn)     = sum   (self%atominfo(:)%size,     mask=cn_mask) / real(sz)
+                self%avg_size_cns(cn)     = sum   (self%atominfo(:)%size,     mask=size_mask) / real(n_size)
                 self%max_size_cns(cn)     = maxval(self%atominfo(:)%size,     mask=cn_mask)
-                self%min_size_cns(cn)     = minval(self%atominfo(:)%size,     mask=cn_mask)
-                self%avg_diam_cns(cn)     = sum   (self%atominfo(:)%diam,     mask=cn_mask) / real(sz)
+                self%min_size_cns(cn)     = minval(self%atominfo(:)%size,     mask=size_mask)
+                self%avg_diam_cns(cn)     = sum   (self%atominfo(:)%diam,     mask=diam_mask) / real(n_diam)
                 self%max_diam_cns(cn)     = maxval(self%atominfo(:)%diam,     mask=cn_mask)
-                self%min_diam_cns(cn)     = minval(self%atominfo(:)%diam,     mask=cn_mask)
+                self%min_diam_cns(cn)     = minval(self%atominfo(:)%diam,     mask=diam_mask)
                 do cc = 1, self%n_cc
                     if( cn_mask(cc) )then
                         self%sdev_max_int_cns(cn)  = self%sdev_max_int_cns(cn)  + (self%avg_max_int_cns(cn)  - self%atominfo(cc)%max_int) **2.
                         self%sdev_max_corr_cns(cn) = self%sdev_max_corr_cns(cn) + (self%avg_max_corr_cns(cn) - self%atominfo(cc)%max_corr)**2.
                         self%sdev_bondl_cns(cn)    = self%sdev_bondl_cns(cn)    + (self%avg_bondl_cns(cn)    - self%atominfo(cc)%bondl)   **2.
-                        self%sdev_size_cns(cn)     = self%sdev_size_cns(cn)     + (self%avg_size_cns(cn)     - self%atominfo(cc)%size)    **2.
-                        self%sdev_diam_cns(cn)     = self%sdev_diam_cns(cn)     + (self%avg_diam_cns(cn)     - self%atominfo(cc)%diam)    **2.
                     endif
+                    if( size_mask(cc) ) self%sdev_size_cns(cn) = self%sdev_size_cns(cn) + (self%avg_size_cns(cn) - self%atominfo(cc)%size)**2.
+                    if( diam_mask(cc) ) self%sdev_diam_cns(cn) = self%sdev_diam_cns(cn) + (self%avg_diam_cns(cn) - self%atominfo(cc)%diam)**2.
                 enddo
-                self%sdev_max_int_cns(cn)  = sqrt(self%sdev_max_int_cns(cn)  / real(sz-1))
-                self%sdev_max_corr_cns(cn) = sqrt(self%sdev_max_corr_cns(cn) / real(sz-1))
-                self%sdev_bondl_cns(cn)    = sqrt(self%sdev_bondl_cns(cn)    / real(sz-1))
-                self%sdev_size_cns(cn)     = sqrt(self%sdev_size_cns(cn)     / real(sz-1))
-                self%sdev_diam_cns(cn)     = sqrt(self%sdev_diam_cns(cn)     / real(sz-1))
+                self%sdev_max_int_cns(cn)  = sqrt(self%sdev_max_int_cns(cn)  / real(n-1))
+                self%sdev_max_corr_cns(cn) = sqrt(self%sdev_max_corr_cns(cn) / real(n-1))
+                self%sdev_bondl_cns(cn)    = sqrt(self%sdev_bondl_cns(cn)    / real(n-1))
+                self%sdev_size_cns(cn)     = sqrt(self%sdev_size_cns(cn)     / real(n_size-1))
+                self%sdev_diam_cns(cn)     = sqrt(self%sdev_diam_cns(cn)     / real(n_diam-1))
             end subroutine calc_cn_stats
 
     end subroutine fillin_atominfo
@@ -1196,8 +1202,8 @@ contains
     subroutine write_atominfo( self, cc, funit )
         class(nanoparticle), intent(in) :: self
         integer,             intent(in) :: cc, funit
-        601 format(F7.2,A3)
-        602 format(F7.2)
+        601 format(F7.3,A3)
+        602 format(F7.3)
         write(funit,601,advance='no') real(self%atominfo(cc)%cc_ind),    CSV_DELIM ! INDEX
         write(funit,601,advance='no') real(self%atominfo(cc)%size),      CSV_DELIM ! NVOX
         write(funit,601,advance='no') real(self%atominfo(cc)%cn_std),    CSV_DELIM ! CN_STD
@@ -1220,12 +1226,15 @@ contains
     subroutine write_np_stats( self, funit )
         class(nanoparticle), intent(in) :: self
         integer,             intent(in) :: funit
-        601 format(F7.2,A3)
-        602 format(F7.2)
+        601 format(F7.3,A3)
+        602 format(F7.3)
+        write(funit,601,advance='no') real(self%n_cc),     CSV_DELIM ! NATOMS
+        write(funit,601,advance='no') self%NPdiam,         CSV_DELIM ! DIAM
         write(funit,601,advance='no') self%net_dipole(1),  CSV_DELIM ! X_POLAR
         write(funit,601,advance='no') self%net_dipole(2),  CSV_DELIM ! Y_POLAR
         write(funit,601,advance='no') self%net_dipole(3),  CSV_DELIM ! Z_POLAR
         write(funit,601,advance='no') self%net_dipole_mag, CSV_DELIM ! POLAR_MAG
+        write(funit,601,advance='no') self%net_dipole_ang, CSV_DELIM ! POLAR_ANGLE
         write(funit,601,advance='no') self%avg_bondl,      CSV_DELIM ! AVG_BONDL
         write(funit,601,advance='no') self%max_bondl,      CSV_DELIM ! MAX_BONDL
         write(funit,601,advance='no') self%min_bondl,      CSV_DELIM ! MIN_BONDL
@@ -1241,8 +1250,9 @@ contains
     subroutine write_cn_stats( self, cn, funit )
         class(nanoparticle), intent(in) :: self
         integer,             intent(in) :: cn, funit
-        601 format(F7.2,A3)
-        602 format(F7.2)
+        601 format(F7.3,A3)
+        602 format(F7.3)
+        write(funit,601,advance='no') real(cn)                              ! CN_STD
         ! -- dipole
         write(funit,601,advance='no') self%polar_angle_cns(cn),   CSV_DELIM ! POLAR_ANGLE
         write(funit,601,advance='no') self%polar_mag_cns(cn),     CSV_DELIM ! POLAR_MAG
@@ -1258,10 +1268,10 @@ contains
         write(funit,601,advance='no') self%min_bondl_cns(cn),     CSV_DELIM ! MIN_BONDL
         write(funit,601,advance='no') self%sdev_bondl_cns(cn),    CSV_DELIM ! SDEV_BONDL
         ! -- atom size
-        write(funit,601,advance='no') self%avg_size_cns(cn),      CSV_DELIM ! AVG_SIZE
-        write(funit,601,advance='no') self%max_size_cns(cn),      CSV_DELIM ! MAX_SIZE
-        write(funit,601,advance='no') self%min_size_cns(cn),      CSV_DELIM ! MIN_SIZE
-        write(funit,601,advance='no') self%sdev_size_cns(cn),     CSV_DELIM ! SDEV_SIZE
+        write(funit,601,advance='no') self%avg_size_cns(cn),      CSV_DELIM ! AVG_NVOX
+        write(funit,601,advance='no') self%max_size_cns(cn),      CSV_DELIM ! MAX_NVOX
+        write(funit,601,advance='no') self%min_size_cns(cn),      CSV_DELIM ! MIN_NVOX
+        write(funit,601,advance='no') self%sdev_size_cns(cn),     CSV_DELIM ! SDEV_NVOX
         ! -- atom diameter
         write(funit,601,advance='no') self%avg_diam_cns(cn),      CSV_DELIM ! AVG_DIAM
         write(funit,601,advance='no') self%max_diam_cns(cn),      CSV_DELIM ! MAX_DIAM
@@ -1636,10 +1646,8 @@ contains
         integer, allocatable :: imat_cc(:,:,:), imat_1clss(:,:,:)
         character(len=4)     :: str_thres
         ! Preparing for clustering
-        ! call self%bondl_distribution(file=.true.)
         dim = size(self%atominfo)
         allocate(labels(dim), source = 0)
-        self%atominfo(:)%bondl = self%atominfo(:)%bondl * self%smpd   ! pass from pixels to A
         ! classify
         call hac_1d(self%atominfo(:)%bondl, thresh, labels, centroids, populations)
         ! Stats calculations
@@ -2042,11 +2050,6 @@ contains
 
     subroutine kill_nanoparticle(self)
         class(nanoparticle), intent(inout) :: self
-        self%ldim(3)         = 0
-        self%smpd            = 0.
-        self%NPcen(3)        = 0.
-        self%avg_bondl = 0.
-        self%n_cc            = 0
         call self%img%kill()
         call self%img_raw%kill
         call self%img_bin%kill_bimg()
