@@ -167,6 +167,7 @@ type(simple_program), target :: tseries_motion_correct
 type(simple_program), target :: tseries_swap_stack
 type(simple_program), target :: tseries_denoise_trajectory
 type(simple_program), target :: tseries_track_particles
+type(simple_program), target :: tseries_reconstruct3D
 type(simple_program), target :: graphene_subtr
 type(simple_program), target :: update_project
 type(simple_program), target :: validate_nano
@@ -700,6 +701,8 @@ contains
                 ptr2prg => tseries_swap_stack
             case('tseries_track_particles')
                 ptr2prg => tseries_track_particles
+            case('tseries_reconstruct3D')
+                ptr2prg => tseries_reconstruct3D
             case('graphene_subtr')
                 ptr2prg => graphene_subtr
             case('update_project')
@@ -827,6 +830,7 @@ contains
         write(logfhandle,'(A)') random_rec%name
         write(logfhandle,'(A)') initial_3Dmodel_nano%name
         write(logfhandle,'(A)') refine3D_nano%name
+        write(logfhandle,'(A)') tseries_reconstruct3D%name
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('VALIDATION PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') vizoris%name
@@ -3380,7 +3384,7 @@ contains
         &'Regularized motion correction of movies',&     ! descr_short
         &'Regularized motion correction of movies',&     ! descr_long
         &'simple_exec',&                                                    ! executable
-        &0, 3, 0, 1, 2, 0, 1, .false.)                                       ! # entries in each group, requires sp_project
+        &0, 4, 0, 1, 2, 0, 2, .true.)                                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3388,6 +3392,8 @@ contains
         call remoc%set_input('parm_ios', 1, star_ptcl)
         call remoc%set_input('parm_ios', 2, star_mic)
         call remoc%set_input('parm_ios', 3, star_model)
+        call remoc%set_input('parm_ios', 4, star_datadir)
+        remoc%parm_ios(4)%required = .true.
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3402,8 +3408,8 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        ! call motion_correct%set_input('comp_ctrls', 1, nparts)
-        call remoc%set_input('comp_ctrls', 1, nthr)
+        call remoc%set_input('comp_ctrls', 1, nparts)
+        call remoc%set_input('comp_ctrls', 2, nthr)
     end subroutine new_remoc
 
     subroutine new_replace_project_field
@@ -4266,6 +4272,37 @@ contains
         ! computer controls
         call tseries_track_particles%set_input('comp_ctrls', 1, nthr)
     end subroutine new_tseries_track_particles
+
+    subroutine new_tseries_reconstruct3D
+        ! PROGRAM SPECIFICATION
+        call reconstruct3D%new(&
+        &'tseries_reconstruct3D',&                                                     ! name
+        &'3D reconstruction from oriented particles',&                         ! descr_long
+        &'is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks,&
+        & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
+        & with a Kaiser-Bessel (KB) interpolation kernel',&
+        &'simple_exec',&                                                 ! executable
+        &0, 2, 0, 1, 0, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call tseries_reconstruct3D%set_input('parm_ios', 1, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to separate',&
+        '# states to separate', .true., 8.0)
+        call tseries_reconstruct3D%set_input('parm_ios', 2, stepsz)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call tseries_reconstruct3D%set_input('srch_ctrls', 1, pgrp)
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call tseries_reconstruct3D%set_input('mask_ctrls', 1, msk)
+        call tseries_reconstruct3D%set_input('mask_ctrls', 2, mskfile)
+        ! computer controls
+        call tseries_reconstruct3D%set_input('comp_ctrls', 1, nparts)
+        call tseries_reconstruct3D%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_tseries_reconstruct3D
 
     subroutine new_graphene_subtr
         ! PROGRAM SPECIFICATION

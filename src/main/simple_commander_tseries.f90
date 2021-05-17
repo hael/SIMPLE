@@ -31,6 +31,7 @@ public :: initial_3Dmodel_nano_commander_distr
 public :: validate_nano_commander
 public :: tseries_denoise_trajectory_commander
 public :: tseries_swap_stack_commander
+public :: tseries_reconstruct3D_distr
 private
 #include "simple_local_flags.inc"
 
@@ -102,6 +103,10 @@ type, extends(commander_base) :: tseries_swap_stack_commander
   contains
     procedure :: execute      => exec_tseries_swap_stack
 end type tseries_swap_stack_commander
+type, extends(commander_base) :: tseries_reconstruct3D_distr
+  contains
+    procedure :: execute      => exec_tseries_reconstruct3D_distr
+end type tseries_reconstruct3D_distr
 
 contains
 
@@ -1456,5 +1461,172 @@ contains
         call spproj%write(params%projfile)
         call simple_end('**** SINGLE_TSERIES_SWAP_STACK NORMAL STOP ****')
     end subroutine exec_tseries_swap_stack
+
+    subroutine exec_tseries_reconstruct3D_distr( self, cline )
+        real, parameter :: LP_LIST(5) = [1.5,3.0,5.0,10.0,15.0]
+        class(tseries_reconstruct3D_distr), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        character(len=LONGSTRLEN), allocatable :: list(:)
+        character(len=:),          allocatable :: target_name
+        character(len=STDLEN),     allocatable :: state_assemble_finished(:), vol_fnames(:)
+        real,                      allocatable :: ccs(:,:,:), fsc(:)
+        character(len=LONGSTRLEN) :: fname
+        character(len=STDLEN)     :: volassemble_output, str_state, fsc_file, optlp_file
+        type(parameters) :: params
+        type(builder)    :: build
+        type(qsys_env)   :: qenv
+        type(cmdline)    :: cline_volassemble
+        type(chash)      :: job_descr
+        type(image)      :: vol1, vol2
+        integer, allocatable :: parts(:,:)
+        real             :: w, sumw
+        integer          :: state, ipart, sz_list, istate, iptcl, cnt, nptcls, nptcls_per_state
+        integer          :: funit, nparts, i, ind, nlps, ilp, iostat
+        logical          :: fall_over
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('ptclw')   ) call cline%set('ptclw', 'no') ! to assure that shifts are being used
+        if( .not. cline%defined('trs')     ) call cline%set('trs', 5.) ! to assure that shifts are being used
+        if( .not. cline%defined('stepsz')  ) call cline%set('stepsz', 500.)
+        if( .not. cline%defined('nstates') ) call cline%set('nstates', 8.)
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        call cline%delete('refine')
+        call build%init_params_and_build_spproj(cline, params)
+        ! sanity check
+        fall_over = .false.
+        select case(trim(params%oritype))
+            case('ptcl3D')
+                fall_over = build%spproj%get_nptcls() == 0
+            case('cls3D')
+                fall_over = build%spproj%os_out%get_noris() == 0
+        case DEFAULT
+            THROW_HARD('unsupported ORITYPE')
+        end select
+        if( fall_over ) THROW_HARD('No images found!')
+        ! states/stepz
+        nptcls = build%spproj_field%get_noris(consider_state=.true.)
+        nparts = ceiling(real(nptcls)/real(params%stepsz))
+        print *,'STEPSZ: ',params%stepsz
+        print *,'NPTCLS: ',nptcls
+        parts  = split_nobjs_even(nptcls, nparts)
+        print *,'NPARTS: ',nparts, parts(:,1)
+        istate = 1
+        cnt    = 0
+        nptcls_per_state = parts(istate,2) - parts(istate,1) + 1
+        do iptcl = 1,build%spproj_field%get_noris()
+            if( build%spproj_field%get_state(iptcl) == 0 ) cycle
+            cnt = cnt+1
+            if(cnt>nptcls_per_state)then
+                istate = istate + 1
+                if(istate>nparts) exit
+                nptcls_per_state = parts(istate,2) - parts(istate,1) + 1
+                cnt = 1
+            endif
+            call build%spproj_field%set(iptcl, 'state', real(istate))
+            call build%spproj_field%set(iptcl, 'w',     1.)
+        enddo
+        call build%spproj%write_segment_inside(params%oritype)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
+        ! setup the environment for distributed execution
+        call qenv%new(params%nparts)
+        call cline%gen_job_descr(job_descr)
+        call job_descr%set('prg','reconstruct3D')
+        call job_descr%set('nstates',int2str(nparts))
+        ! splitting
+        if( trim(params%oritype).eq.'ptcl3D' )then
+            call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        endif
+        ! eo partitioning
+        if( build%spproj_field%get_nevenodd() == 0 )then
+            call build%spproj_field%partition_eo
+            call build%spproj%write_segment_inside(params%oritype)
+        endif
+        ! schedule
+        call qenv%gen_scripts_and_schedule_jobs(job_descr)
+        ! assemble volumes
+        allocate(state_assemble_finished(nparts), vol_fnames(nparts))
+        do state = 1, nparts
+            state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
+        enddo
+        cline_volassemble = cline
+        call cline_volassemble%set('prg', 'volassemble')
+        do state = 1,nparts,params%nparts
+            do istate = state,min(nparts,state+params%nparts-1)
+                str_state = int2str_pad(istate,2)
+                volassemble_output = 'RESOLUTION_STATE'//trim(str_state)
+                call cline_volassemble%set( 'state', real(istate) )
+                call cline_volassemble%set( 'nstates', real(nparts) )
+                if( nparts>1 )call cline_volassemble%set('part', real(istate))
+                call qenv%exec_simple_prg_in_queue_async(cline_volassemble,'simple_script_state'//trim(str_state), trim(volassemble_output))
+                vol_fnames(istate) = trim(VOL_FBODY)//trim(str_state)//trim(params%ext)
+            enddo
+            call qsys_watcher(state_assemble_finished(state:min(nparts,state+params%nparts-1)))
+            do istate = state,min(nparts,state+params%nparts-1)
+                str_state = int2str_pad(istate,2)
+                do ipart = 1,params%nparts
+                    call del_file(trim(VOL_FBODY)//trim(str_state)//'_part'//trim(int2str(ipart))//'_even'//trim(params%ext))
+                    call del_file(trim(VOL_FBODY)//trim(str_state)//'_part'//trim(int2str(ipart))//'_odd'//trim(params%ext))
+                    call del_file('rho_'//trim(VOL_FBODY)//trim(str_state)//'_part'//trim(int2str(ipart))//'_even'//trim(params%ext))
+                    call del_file('rho_'//trim(VOL_FBODY)//trim(str_state)//'_part'//trim(int2str(ipart))//'_odd'//trim(params%ext))
+                    call del_file(ANISOLP_FBODY//trim(str_state)//trim(params%ext))
+                enddo
+            enddo
+        end do
+        ! Assemble states
+        call vol1%new([params%box,params%box,params%box],params%smpd)
+        call vol2%new([params%box,params%box,params%box],params%smpd)
+        do state = 1,nparts
+            call vol1%zero_and_unflag_ft
+            sumw = 0.
+            do istate = max(1,state-6),min(nparts,state+6)
+                w    = exp(-real(istate-state)**2. / 16.0)
+                sumw = sumw + w
+                call vol2%zero_and_unflag_ft
+                call vol2%read(vol_fnames(istate))
+                call vol1%add(vol2,w)
+            enddo
+            call vol1%div(sumw)
+            call vol1%fft
+            call vol1%bp(0.,params%lp)
+            call vol1%ifft
+            call vol1%mask(params%msk,'soft')
+            call vol1%write('state_'// int2str_pad(state,2)//'.mrc')
+        enddo
+        ! Calculate correlation matrices
+        nlps = size(LP_LIST)
+        allocate(fsc(fdim(params%box)-1),ccs(nlps,nparts,nparts))
+        ccs = 1.
+        do state = 1,nparts-1
+            call vol1%zero_and_unflag_ft
+            call vol1%read(vol_fnames(state))
+            call vol1%fft
+            do istate = state+1,nparts
+                call vol2%zero_and_unflag_ft
+                call vol2%read(vol_fnames(istate))
+                call vol2%fft
+                call vol1%fsc(vol2,fsc)
+                do ilp = 1,nlps
+                    ind = calc_fourier_index(LP_LIST(ilp), params%box, params_glob%smpd)
+                    ccs(ilp,state,istate) = sum(fsc(:ind)) / real(ind)
+                    ccs(ilp,istate,state) = ccs(ilp,state,istate)
+                enddo
+            enddo
+        enddo
+        do ilp = 1,nlps
+            fname = 'ccmat_lp'//trim(real2str(LP_LIST(ilp)))//'.txt'
+            call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=iostat)
+            do istate = 1,nparts
+                do i = 1,nparts-1
+                    write(funit,'(F8.3)',advance='no') ccs(ilp,istate,i)
+                enddo
+                write(funit,'(F8.3)',advance='yes') ccs(ilp,istate,nparts)
+            enddo
+            call fclose(funit)
+        enddo
+        ! termination
+        call qsys_cleanup
+        call build%spproj_field%kill
+        call simple_end('**** SIMPLE_TSERIES_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_tseries_reconstruct3D_distr
 
   end module simple_commander_tseries
