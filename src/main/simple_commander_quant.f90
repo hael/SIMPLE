@@ -18,7 +18,6 @@ public :: geometry_analysis_commander
 public :: plot_atom_commander
 public :: dock_coords_commander
 public :: atoms_mask_commander
-public :: strain_analysis_commander
 
 private
 #include "simple_local_flags.inc"
@@ -55,11 +54,6 @@ type, extends(commander_base) :: plot_atom_commander
   contains
     procedure :: execute      => exec_plot_atom
 end type plot_atom_commander
-type, extends(commander_base) :: strain_analysis_commander
-  contains
-    procedure :: execute      => exec_strain_analysis
-end type strain_analysis_commander
-
 
 contains
 
@@ -242,7 +236,7 @@ contains
     end subroutine exec_nano_softmask
 
     subroutine exec_atoms_mask( self, cline )
-        use simple_nano_utils, only : atoms_mask
+        use simple_nanoparticle_utils, only: atoms_mask
         class(atoms_mask_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline !< command line input
         type(parameters) :: params
@@ -341,25 +335,6 @@ contains
         call nano%kill
         ! end gracefully
         call simple_end('**** SIMPLE_PLOT_ATOM NORMAL STOP ****')
-      end subroutine exec_plot_atom
-
-      subroutine exec_strain_analysis( self, cline )
-          use simple_lattice_fitting, only: run_lattice_fit
-          use simple_strain_mapping,  only: strain_analysis
-          class(strain_analysis_commander), intent(inout) :: self
-          class(cmdline),                   intent(inout) :: cline !< command line input
-          type(parameters)       :: params
-          real                   :: a(3) ! fitted lattice parameters
-          real, allocatable      :: model(:,:)
-          call cline%set('mkdir', 'yes')
-          call params%new(cline)
-          if( .not. cline%defined('pdbfile') )then
-              THROW_HARD('ERROR! pdbfile needs to be present; exec_strain_analysis')
-          endif
-          call run_lattice_fit(params%pdbfile,model,a)
-          call strain_analysis(model, a)
-          ! end gracefully
-          call simple_end('**** SIMPLE_STRAIN_ANALYSIS NORMAL STOP ****')
-        end subroutine exec_strain_analysis
+    end subroutine exec_plot_atom
 
 end module simple_commander_quant
