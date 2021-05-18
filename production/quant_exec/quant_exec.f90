@@ -14,7 +14,6 @@ type(atom_cluster_analysis_commander) :: xatom_cluster_analysis
 type(nano_softmask_commander)         :: xnano_softmask
 type(geometry_analysis_commander)     :: xgeometry_analysis
 type(plot_atom_commander)             :: xplot_atom
-type(strain_analysis_commander)       :: xstrain_analysis
 type(dock_coords_commander)           :: xdock_coords
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: xarg, prg, entire_line
@@ -51,9 +50,6 @@ select case(prg)
         call xgeometry_analysis%execute(cline)
     case('plot_atom')
         call xplot_atom%execute(cline)
-    case('strain_analysis')
-        call cline%set('mkdir', 'yes')
-        call xstrain_analysis%execute(cline)
     case('dock_coords')
         call xdock_coords%execute(cline)
     case DEFAULT

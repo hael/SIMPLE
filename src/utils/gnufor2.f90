@@ -121,12 +121,6 @@ contains
         end if
 
         ierror=0
-        ! call get_unit(file_unit)
-        ! if (file_unit==0) then
-        !  ierror=1
-        !  print *,'write_vector_date - fatal error! Could not get a free FORTRAN unit.'
-        !  stop
-        ! end if
         open (newunit=file_unit, file=data_file_name, status='replace', iostat=ios)
         if (ios/=0) then
             ierror=2
