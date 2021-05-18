@@ -484,7 +484,7 @@ program simple_test_chiara_try
    use simple_atoms, only : atoms
    use simple_dock_coords
    use simple_lattice_fitting, only : run_lattice_fit
-   use simple_strain_mapping,  only : test_strain_analysis
+   ! use simple_strain_mapping,  only : test_strain_analysis
    character(len=100) :: pdbfile1, pdbfile2, pdbfile_out1, pdbfile_out2, pdbfile
    real, allocatable :: model(:,:)
    real :: theta,t(3),a(3), trs_in, rot_trans(7), U(3,3), r(3), r_com(3)

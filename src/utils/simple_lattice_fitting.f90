@@ -174,8 +174,6 @@ subroutine run_lattice_fit(pdbfile,model,a)
     model(:,i) = atomic_pos%get_coord(i)
   enddo
   call fit_lattice(model,a)
-  ! call find_radius_for_coord_number(a,d)
-  ! call run_coord_number_analysis(model, d)
   call atomic_pos%kill
 end subroutine run_lattice_fit
 

@@ -343,10 +343,9 @@ contains
         call simple_end('**** SIMPLE_PLOT_ATOM NORMAL STOP ****')
       end subroutine exec_plot_atom
 
-
       subroutine exec_strain_analysis( self, cline )
-          use simple_lattice_fitting, only : run_lattice_fit
-          use simple_strain_mapping,  only : strain_analysis
+          use simple_lattice_fitting, only: run_lattice_fit
+          use simple_strain_mapping,  only: strain_analysis
           class(strain_analysis_commander), intent(inout) :: self
           class(cmdline),                   intent(inout) :: cline !< command line input
           type(parameters)       :: params
@@ -362,4 +361,5 @@ contains
           ! end gracefully
           call simple_end('**** SIMPLE_STRAIN_ANALYSIS NORMAL STOP ****')
         end subroutine exec_strain_analysis
+
 end module simple_commander_quant
