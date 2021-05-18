@@ -1463,6 +1463,7 @@ contains
     end subroutine exec_tseries_swap_stack
 
     subroutine exec_tseries_reconstruct3D_distr( self, cline )
+        use gnufor2
         real, parameter :: LP_LIST(5) = [1.5,3.0,5.0,10.0,15.0]
         class(tseries_reconstruct3D_distr), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
@@ -1487,7 +1488,6 @@ contains
         if( .not. cline%defined('ptclw')   ) call cline%set('ptclw', 'no') ! to assure that shifts are being used
         if( .not. cline%defined('trs')     ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('stepsz')  ) call cline%set('stepsz', 500.)
-        if( .not. cline%defined('nstates') ) call cline%set('nstates', 8.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call cline%delete('refine')
         call build%init_params_and_build_spproj(cline, params)
@@ -1505,10 +1505,7 @@ contains
         ! states/stepz
         nptcls = build%spproj_field%get_noris(consider_state=.true.)
         nparts = ceiling(real(nptcls)/real(params%stepsz))
-        print *,'STEPSZ: ',params%stepsz
-        print *,'NPTCLS: ',nptcls
         parts  = split_nobjs_even(nptcls, nparts)
-        print *,'NPARTS: ',nparts, parts(:,1)
         istate = 1
         cnt    = 0
         nptcls_per_state = parts(istate,2) - parts(istate,1) + 1
@@ -1622,6 +1619,8 @@ contains
                 write(funit,'(F8.3)',advance='yes') ccs(ilp,istate,nparts)
             enddo
             call fclose(funit)
+            fname = 'lp'//trim(real2str(LP_LIST(ilp)))//'.txt'
+            call gnufor_image(ccs(ilp,:,:),palette='gray',filename=fname,persist='persist')
         enddo
         ! termination
         call qsys_cleanup
