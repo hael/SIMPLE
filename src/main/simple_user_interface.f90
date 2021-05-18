@@ -4276,20 +4276,16 @@ contains
     subroutine new_tseries_reconstruct3D
         ! PROGRAM SPECIFICATION
         call reconstruct3D%new(&
-        &'tseries_reconstruct3D',&                                                     ! name
-        &'3D reconstruction from oriented particles',&                         ! descr_long
-        &'is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks,&
-        & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
-        & with a Kaiser-Bessel (KB) interpolation kernel',&
-        &'simple_exec',&                                                 ! executable
-        &0, 2, 0, 1, 0, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &'tseries_reconstruct3D',&                                       ! name
+        &'Time windowed 3D reconstruction from oriented particles',&     ! descr_long
+        &'Time windowed 3D reconstruction from oriented particles',&
+        &'single_exec',&                                                 ! executable
+        &0, 1, 0, 1, 0, 2, 2, .true.)                                    ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call tseries_reconstruct3D%set_input('parm_ios', 1, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to separate',&
-        '# states to separate', .true., 8.0)
-        call tseries_reconstruct3D%set_input('parm_ios', 2, stepsz)
+        call tseries_reconstruct3D%set_input('parm_ios', 1, stepsz)
         ! alternative inputs
         ! <empty>
         ! search controls
