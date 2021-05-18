@@ -7,6 +7,7 @@ use simple_binimage,               only: binimage
 use simple_atoms,                  only: atoms, get_Z_and_radius_from_name
 use simple_lattice_fitting,        only: fit_lattice, find_radius_for_coord_number
 use simple_np_coordination_number, only: run_coord_number_analysis
+use simple_strain_mapping,         only: strain_analysis
 implicit none
 
 public :: nanoparticle
@@ -21,6 +22,7 @@ integer, parameter          :: SOFT_EDGE       = 6
 integer, parameter          :: N_DISCRET       = 1000
 integer, parameter          :: CNMIN           = 4
 integer, parameter          :: CNMAX           = 12
+integer, parameter          :: NSTRAIN_COMPS   = 7
 character(len=3), parameter :: CSV_DELIM       = ', '
 character(len=*), parameter :: ATOM_STATS_FILE = 'atom_stats.csv'
 character(len=*), parameter :: NP_STATS_FILE   = 'nanoparticle_stats.csv'
@@ -28,7 +30,8 @@ character(len=*), parameter :: CN_STATS_FILE   = 'cn_dependent_stats.csv'
 character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//'CN_STD'//CSV_DELIM//'NN_BONDL'//&
 &CSV_DELIM//'CN_GEN'//CSV_DELIM//'X'//CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'ASPECT_RATIO'//CSV_DELIM//'POLAR_ANGLE'//&
 &CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//CSV_DELIM//'MAX_INT'//CSV_DELIM//'SDEV_INT'//CSV_DELIM//'RADIAL_POS'//&
-&CSV_DELIM//'MAX_CORR'//CSV_DELIM//'STRAIN'
+&CSV_DELIM//'MAX_CORR'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//'EXY_STRAIN'//&
+&CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'
 character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//CSV_DELIM//'X_POLAR'//CSV_DELIM//'Y_POLAR'//&
 &CSV_DELIM//'Z_POLAR'//CSV_DELIM//'POLAR_MAG'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'AVG_BONDL'//CSV_DELIM//'MAX_BONDL'//&
 &CSV_DELIM//'MIN_BONDL'//CSV_DELIM//'SDEV_BONDL'//CSV_DELIM//'MED_BONDL'//CSV_DELIM//'AVG_DIAM'//CSV_DELIM//'MAX_DIAM'//&
@@ -57,7 +60,13 @@ type :: atom_stats
     real    :: sdev_int        = 0. ! standard deviation -"-                                      SDEV_INT
     real    :: dist_from_NPcen = 0. ! distance from the centre of mass of the nanoparticle        RADIAL_POS
     real    :: max_corr        = 0. ! maximum atom correlation within the connected component     MAX_CORR
-    real    :: strain          = 0. ! tensile strain in %                   **NOT FILLED-IN**     STRAIN
+    real    :: exx_strain      = 0. ! tensile strain in %                                         EXX_STRAIN
+    real    :: eyy_strain      = 0. ! -"-                                                         EYY_STRAIN
+    real    :: ezz_strain      = 0. ! -"-                                                         EZZ_STRAIN
+    real    :: exy_strain      = 0. ! -"-                                                         EXY_STRAIN
+    real    :: eyz_strain      = 0. ! -"-                                                         EYZ_STRAIN
+    real    :: exz_strain      = 0. ! -"-                                                         EXZ_STRAIN
+    real    :: radial_strain   = 0. ! -"-                                                         RADIAL_STRAIN
 end type atom_stats
 
 type :: nanoparticle
@@ -813,7 +822,7 @@ contains
         class(nanoparticle), intent(inout) :: self
         type(image)          :: phasecorr
         logical, allocatable :: mask(:,:,:)
-        real,    allocatable :: centers_A(:,:), tmpcens(:,:), tmparr(:)
+        real,    allocatable :: centers_A(:,:), tmpcens(:,:), tmparr(:), strain_array(:,:)
         real,    pointer     :: rmat(:,:,:), rmat_corr(:,:,:)
         integer, allocatable :: imat_cc(:,:,:)
         real    :: tmp_diam, a(3), radius_cn
@@ -822,10 +831,12 @@ contains
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         ! calc cn and cn_gen
         centers_A = self%atominfo2centers_A()
-        call fit_lattice(centers_A,a)
-        call find_radius_for_coord_number(a,radius_cn)
+        call fit_lattice(centers_A, a)
+        call find_radius_for_coord_number(a, radius_cn)
         call run_coord_number_analysis(centers_A,radius_cn,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
-        deallocate(centers_A)
+        ! calc strain
+        allocate(strain_array(self%n_cc,NSTRAIN_COMPS), source=0.)
+        call strain_analysis(centers_A, a, strain_array)
         ! calc NPdiam & NPcen
         tmpcens     = self%atominfo2centers()
         cc_mask     = .true.
@@ -890,6 +901,14 @@ contains
             ! bond length of nearest neighbour...
             self%atominfo(cc)%bondl = pixels_dist(self%atominfo(cc)%center(:), tmpcens, 'min', mask=cc_mask) ! Use all the atoms
             self%atominfo(cc)%bondl = self%atominfo(cc)%bondl * self%smpd ! convert to A
+            ! set strain values
+            self%atominfo(cc)%exx_strain    = strain_array(cc,1)
+            self%atominfo(cc)%eyy_strain    = strain_array(cc,2)
+            self%atominfo(cc)%ezz_strain    = strain_array(cc,3)
+            self%atominfo(cc)%exy_strain    = strain_array(cc,4)
+            self%atominfo(cc)%eyz_strain    = strain_array(cc,5)
+            self%atominfo(cc)%exz_strain    = strain_array(cc,6)
+            self%atominfo(cc)%radial_strain = strain_array(cc,7)
             ! reset masks
             mask    = .false.
             cc_mask = .true.
@@ -934,7 +953,7 @@ contains
             call calc_cn_stats( cn )
         end do
         ! destruct
-        deallocate(mask, imat_cc, tmpcens, tmparr)
+        deallocate(mask, imat_cc, tmpcens, tmparr, strain_array, centers_A)
         call phasecorr%kill
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS, COMPLETED'
 
@@ -1220,7 +1239,13 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%sdev_int,        CSV_DELIM ! SDEV_INT
         write(funit,601,advance='no') self%atominfo(cc)%dist_from_NPcen, CSV_DELIM ! RADIAL_POS
         write(funit,601,advance='no') self%atominfo(cc)%max_corr,        CSV_DELIM ! MAX_CORR
-        write(funit,602)              self%atominfo(cc)%strain                     ! STRAIN
+        write(funit,601,advance='no') self%atominfo(cc)%exx_strain,      CSV_DELIM ! EXX_STRAIN
+        write(funit,601,advance='no') self%atominfo(cc)%eyy_strain,      CSV_DELIM ! EYY_STRAIN
+        write(funit,601,advance='no') self%atominfo(cc)%ezz_strain,      CSV_DELIM ! EZZ_STRAIN
+        write(funit,601,advance='no') self%atominfo(cc)%exy_strain,      CSV_DELIM ! EXY_STRAIN
+        write(funit,601,advance='no') self%atominfo(cc)%eyz_strain,      CSV_DELIM ! EYZ_STRAIN
+        write(funit,601,advance='no') self%atominfo(cc)%exz_strain,      CSV_DELIM ! EXZ_STRAIN
+        write(funit,602)              self%atominfo(cc)%radial_strain              ! RADIAL_STRAIN
     end subroutine write_atominfo
 
     subroutine write_np_stats( self, funit )
