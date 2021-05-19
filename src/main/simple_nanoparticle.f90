@@ -47,29 +47,40 @@ character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'POLAR_ANGLE
 
 ! container for per-atom statistics
 type :: atom_stats
-    integer :: cc_ind          = 0  ! index of the connected component                            INDEX
-    integer :: size            = 0  ! number of voxels in connected component                     NVOX
-    integer :: cn_std          = 0  ! standard coordination number                                CN_STD
-    integer :: loc_ldist(3)    = 0  ! vxl that determins the longest dim of the atom
-    real    :: bondl           = 0. ! nearest neighbour bond lenght in A                          NN_BONDL
-    real    :: cn_gen          = 0. ! generalized coordination number                             CN_GEN
-    real    :: center(3)       = 0. ! atom center                                                 X Y Z
-    real    :: aspect_ratio    = 0. !                                                             ASPECT_RATIO
-    real    :: polar_vec(3)    = 0. ! polarization vector
-    real    :: polar_angle     = 0. ! polarization angle                                          POLAR_ANGLE
-    real    :: diam            = 0. ! atom diameter                                               DIAM
-    real    :: avg_int         = 0. ! average grey level intensity across the connected component AVG_INT
-    real    :: max_int         = 0. ! maximum            -"-                                      MAX_INT
-    real    :: sdev_int        = 0. ! standard deviation -"-                                      SDEV_INT
-    real    :: cendist         = 0. ! distance from the centre of mass of the nanoparticle        RADIAL_POS
-    real    :: max_corr        = 0. ! maximum atom correlation within the connected component     MAX_CORR
-    real    :: exx_strain      = 0. ! tensile strain in %                                         EXX_STRAIN
-    real    :: eyy_strain      = 0. ! -"-                                                         EYY_STRAIN
-    real    :: ezz_strain      = 0. ! -"-                                                         EZZ_STRAIN
-    real    :: exy_strain      = 0. ! -"-                                                         EXY_STRAIN
-    real    :: eyz_strain      = 0. ! -"-                                                         EYZ_STRAIN
-    real    :: exz_strain      = 0. ! -"-                                                         EXZ_STRAIN
-    real    :: radial_strain   = 0. ! -"-                                                         RADIAL_STRAIN
+    ! various per-atom parameters
+    integer :: cc_ind            = 0  ! index of the connected component                            INDEX
+    integer :: size              = 0  ! number of voxels in connected component                     NVOX
+    integer :: cn_std            = 0  ! standard coordination number                                CN_STD
+    integer :: loc_ldist(3)      = 0  ! vxl that determins the longest dim of the atom
+    real    :: bondl             = 0. ! nearest neighbour bond lenght in A                          NN_BONDL
+    real    :: cn_gen            = 0. ! generalized coordination number                             CN_GEN
+    real    :: center(3)         = 0. ! atom center                                                 X Y Z
+    real    :: aspect_ratio      = 0. !                                                             ASPECT_RATIO
+    real    :: polar_vec(3)      = 0. ! polarization vector
+    real    :: polar_angle       = 0. ! polarization angle                                          POLAR_ANGLE
+    real    :: diam              = 0. ! atom diameter                                               DIAM
+    real    :: avg_int           = 0. ! average grey level intensity across the connected component AVG_INT
+    real    :: max_int           = 0. ! maximum            -"-                                      MAX_INT
+    real    :: sdev_int          = 0. ! standard deviation -"-                                      SDEV_INT
+    real    :: cendist           = 0. ! distance from the centre of mass of the nanoparticle        RADIAL_POS
+    real    :: max_corr          = 0. ! maximum atom correlation within the connected component     MAX_CORR
+    ! strain
+    real    :: exx_strain        = 0. ! tensile strain in %                                         EXX_STRAIN
+    real    :: eyy_strain        = 0. ! -"-                                                         EYY_STRAIN
+    real    :: ezz_strain        = 0. ! -"-                                                         EZZ_STRAIN
+    real    :: exy_strain        = 0. ! -"-                                                         EXY_STRAIN
+    real    :: eyz_strain        = 0. ! -"-                                                         EYZ_STRAIN
+    real    :: exz_strain        = 0. ! -"-                                                         EXZ_STRAIN
+    real    :: radial_strain     = 0. ! -"-                                                         RADIAL_STRAIN
+    ! cluster assignments
+    integer :: size_cls          = 0  !                                                             NVOX_CLASS
+    integer :: bondl_cls         = 0  !                                                             NN_BONDL_CLASS
+    integer :: aspect_ratio_cls  = 0  !                                                             ASPECT_RATIO_CLASS
+    integer :: polar_angle_cls   = 0  !                                                             POLAR_ANGLE_CLASS
+    integer :: diam_cls          = 0  !                                                             DIAM_CLASS
+    integer :: max_int_cls       = 0  !                                                             MAX_INT_CLASS
+    integer :: max_corr_cls      = 0  !                                                             MAX_CORR_CLASS
+    integer :: radial_strain_cls = 0  !                                                             RADIAL_STRAIN_CLASS
 end type atom_stats
 
 type :: nanoparticle
@@ -176,6 +187,7 @@ type :: nanoparticle
     procedure, private :: write_np_stats
     procedure, private :: write_cn_stats
     ! clustering
+    procedure, private :: bicluster_otsu
     procedure, private :: cluster_atom_intensity
     procedure          :: cluster_atom_maxint
     procedure          :: cluster_atom_intint
@@ -508,7 +520,7 @@ contains
          subroutine otsu_nano(img, scaled_thresh)
              use simple_math, only : otsu
              type(image),    intent(inout) :: img
-             real,           intent(out)   :: scaled_thresh !returns the threshold in the correct range
+             real,           intent(out)   :: scaled_thresh ! returns the threshold in the correct range
              real, pointer     :: rmat(:,:,:)
              real, allocatable :: x(:)
              call img%get_rmat_ptr(rmat)
@@ -1375,6 +1387,82 @@ contains
         write(funit,601,advance='no') self%min_rad_strain_cns(cn), CSV_DELIM ! MIN_RADIAL_STRAIN
         write(funit,602) self%sdev_rad_strain_cns(cn)                        ! SDEV_RADIAL_STRAIN
     end subroutine write_cn_stats
+
+    subroutine bicluster_otsu( self, which )
+        class(nanoparticle), intent(inout) :: self
+        character(len=*),    intent(in)    :: which
+        real, allocatable :: vals4otsu(:)
+        integer :: n
+        real    :: thresh
+        select case(which)
+            case('size')
+                vals4otsu = pack(self%atominfo(:)%size, mask = self%atominfo(:)%size > 3)
+                call otsu(vals4otsu, thresh)
+                where( self%atominfo(:)%size > thresh )
+                    self%atominfo(:)%size_cls = 1
+                elsewhere
+                    self%atominfo(:)%size_cls = 2
+                endwhere
+            case('bondl')
+                vals4otsu = pack(self%atominfo(:)%bondl, mask = self%atominfo(:)%bondl > 0.)
+                call otsu(vals4otsu, thresh)
+                where( self%atominfo(:)%bondl > thresh )
+                    self%atominfo(:)%bondl_cls = 1
+                elsewhere
+                    self%atominfo(:)%bondl_cls = 2
+                endwhere
+            case('aspect_ratio')
+                vals4otsu = pack(self%atominfo(:)%aspect_ratio, mask = self%atominfo(:)%aspect_ratio > 0.)
+                call otsu(vals4otsu, thresh)
+                where( self%atominfo(:)%aspect_ratio > thresh )
+                    self%atominfo(:)%aspect_ratio_cls = 1
+                elsewhere
+                    self%atominfo(:)%aspect_ratio_cls = 2
+                endwhere
+            case('polar_angle')
+                allocate(vals4otsu(size(self%atominfo)), source = self%atominfo(:)%polar_angle)
+                call otsu(vals4otsu, thresh)
+                where( self%atominfo(:)%polar_angle > thresh )
+                    self%atominfo(:)%polar_angle_cls = 1
+                elsewhere
+                    self%atominfo(:)%polar_angle_cls = 2
+                endwhere
+            case('diam')
+                vals4otsu = pack(self%atominfo(:)%diam, mask = self%atominfo(:)%diam > 0.)
+                call otsu(vals4otsu, thresh)
+                where( self%atominfo(:)%diam > thresh )
+                    self%atominfo(:)%diam_cls = 1
+                elsewhere
+                    self%atominfo(:)%diam_cls = 2
+                endwhere
+            case('max_int')
+                allocate(vals4otsu(size(self%atominfo)), source = self%atominfo(:)%max_int)
+                call otsu(vals4otsu, thresh)
+                where( self%atominfo(:)%max_int > thresh )
+                    self%atominfo(:)%max_int_cls = 1
+                elsewhere
+                    self%atominfo(:)%max_int_cls = 2
+                endwhere
+            case('max_corr')
+                allocate(vals4otsu(size(self%atominfo)), source = self%atominfo(:)%max_corr)
+                call otsu(vals4otsu, thresh)
+                where( self%atominfo(:)%max_corr > thresh )
+                    self%atominfo(:)%max_corr_cls = 1
+                elsewhere
+                    self%atominfo(:)%max_corr_cls = 2
+                endwhere
+            case('radial_strain')
+                allocate(vals4otsu(size(self%atominfo)), source = self%atominfo(:)%radial_strain)
+                call otsu(vals4otsu, thresh)
+                where( self%atominfo(:)%radial_strain > thresh )
+                    self%atominfo(:)%radial_strain_cls = 1
+                elsewhere
+                    self%atominfo(:)%radial_strain_cls = 2
+                endwhere
+        case DEFAULT
+            THROW_HARD('unsupported parameter for bicluster_otsu')
+        end select
+    end subroutine bicluster_otsu
 
     ! This subroutine clusters the atoms with respect to the maximum intensity
     ! or the integrated density (according to the values contained in feature)
