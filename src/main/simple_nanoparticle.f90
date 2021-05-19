@@ -30,12 +30,17 @@ character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV
 &CSV_DELIM//'CN_GEN'//CSV_DELIM//'X'//CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'ASPECT_RATIO'//CSV_DELIM//'POLAR_ANGLE'//&
 &CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//CSV_DELIM//'MAX_INT'//CSV_DELIM//'SDEV_INT'//CSV_DELIM//'RADIAL_POS'//&
 &CSV_DELIM//'MAX_CORR'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//'EXY_STRAIN'//&
-&CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'
+&CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'//CSV_DELIM//'NVOX_CLASS'//&
+&CSV_DELIM//'NN_BONDL_CLASS'//CSV_DELIM//'ASPECT_RATIO_CLASS'//CSV_DELIM//'POLAR_ANGLE_CLASS'//CSV_DELIM//'DIAM_CLASS'//&
+&CSV_DELIM//'MAX_INT_CLASS'//CSV_DELIM//'MAX_CORR_CLASS'//CSV_DELIM//'RADIAL_STRAIN_CLASS'
 
 character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//CSV_DELIM//'X_POLAR'//CSV_DELIM//'Y_POLAR'//&
 &CSV_DELIM//'Z_POLAR'//CSV_DELIM//'POLAR_MAG'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'AVG_BONDL'//CSV_DELIM//'MAX_BONDL'//&
-&CSV_DELIM//'MIN_BONDL'//CSV_DELIM//'SDEV_BONDL'//CSV_DELIM//'MED_BONDL'//CSV_DELIM//'AVG_DIAM'//CSV_DELIM//'MAX_DIAM'//&
-CSV_DELIM//'MIN_DIAM'//CSV_DELIM//'SDEV_DIAM'//CSV_DELIM//'MED_DIAM'
+&CSV_DELIM//'MIN_BONDL'//CSV_DELIM//'SDEV_BONDL'//CSV_DELIM//'MED_BONDL'//CSV_DELIM//'MAX_ASPECT_RATIO'//&
+&CSV_DELIM//'MIN_ASPECT_RATIO'//CSV_DELIM//'MAX_POLAR_ANGLE'//CSV_DELIM//'MIN_POLAR_ANGLE'//CSV_DELIM//'AVG_DIAM'//&
+&CSV_DELIM//'MAX_DIAM'//CSV_DELIM//'MIN_DIAM'//CSV_DELIM//'SDEV_DIAM'//CSV_DELIM//'MED_DIAM'//CSV_DELIM//'MAX_AVG_INT'//&
+&CSV_DELIM//'MIN_AVG_INT'//CSV_DELIM//'MAX_SDEV_INT'//CSV_DELIM//'MIN_SDEV_INT'//CSV_DELIM//'MAX_MAX_CORR'//CSV_DELIM//&
+&'MIN_MAX_CORR'//CSV_DELIM//'MAX_RADIAL_STRAIN'//CSV_DELIM//'MIN_RADIAL_STRAIN'
 
 character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'POLAR_MAG'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//CSV_DELIM//'MAX_RADIAL_POS'//CSV_DELIM//'MIN_RADIAL_POS'//&
@@ -104,12 +109,30 @@ type :: nanoparticle
     real           :: min_bondl                        = 0. ! minimum            -"-                                MIN_BONDL
     real           :: sdev_bondl                       = 0. ! standard deviation -"-                                SDEV_BONDL
     real           :: med_bondl                        = 0. ! median             -"-                                MED_BONDL
+    ! max/min aspect ratio
+    real           :: max_aspect_ratio                 = 0. ! maximum aspect ratio                                  MAX_ASPECT_RATIO
+    real           :: min_aspect_ratio                 = 0. ! minimum            -"-                                MIN_ASPECT_RATIO
+    ! max/min polarization angle
+    real           :: max_polar_angle                  = 0. ! maximum polarization angle                            MAX_POLAR_ANGLE
+    real           :: min_polar_angle                  = 0. ! minimum            -"-                                MIN_POLAR_ANGLE
     ! atom diameter stats
     real           :: avg_diam                         = 0. ! average atomic diameter in A                          AVG_DIAM
     real           :: max_diam                         = 0. ! maximum            -"-                                MAX_DIAM
     real           :: min_diam                         = 0. ! minimum            -"-                                MIN_DIAM
     real           :: sdev_diam                        = 0. ! standard deviation -"-                                SDEV_DIAM
     real           :: med_diam                         = 0. ! median             -"-                                MED_DIAM
+    ! max/min average intensity
+    real           :: max_avg_int                      = 0. ! maximum average grey level intensity                  MAX_AVG_INT
+    real           :: min_avg_int                      = 0. ! minimum            -"-                                MIN_AVG_INT
+    ! max/min standard deviation of intensity
+    real           :: max_sdev_int                     = 0. ! maximum standard deviation grey level intensity       MAX_SDEV_INT
+    real           :: min_sdev_int                     = 0. ! minimum            -"-                                MIN_SDEV_INT
+    ! max/min maximum correlation
+    real           :: max_max_corr                     = 0. ! maximum maximum correlation                           MAX_MAX_CORR
+    real           :: min_max_corr                     = 0. ! minimum            -"-                                MIN_MAX_CORR
+    ! max/min radial strain
+    real           :: max_radial_strain                = 0. ! maximum radial strain                                 MAX_RADIAL_STRAIN
+    real           :: min_radial_strain                = 0. ! minimum            -"-                                MIN_RADIAL_STRAIN
     ! cn-dependent stats
     ! -- dipole
     real           :: net_dipole_cns(3,CNMIN:CNMAX)    = 0. ! net dipole as function of cn_std
@@ -851,7 +874,7 @@ contains
         real,    pointer     :: rmat(:,:,:), rmat_corr(:,:,:)
         integer, allocatable :: imat_cc(:,:,:)
         real    :: tmp_diam, a(3), radius_cn
-        logical :: cc_mask(self%n_cc), diam_mask(self%n_cc)
+        logical :: cc_mask(self%n_cc), param_mask(self%n_cc)
         integer :: i, j, k, cc, cn, n
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         ! calc cn and cn_gen
@@ -875,6 +898,7 @@ contains
         write(logfhandle,*) 'nanoparticle diameter (A): ', self%NPdiam
         self%NPcen  = self%masscen()
         write(logfhandle,*) 'nanoparticle mass center: ', self%NPcen
+        ! CALCULATE PER-ATOM PARAMETERS
         ! extract atominfo
         allocate(mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = .false.)
         call self%phasecorr_one_atom(phasecorr)
@@ -938,35 +962,53 @@ contains
             mask    = .false.
             cc_mask = .true.
         end do
-        ! set atom diameter stats
-        diam_mask       = self%atominfo(:)%diam > self%theoretical_radius
-        n               = count(diam_mask)
-        self%min_diam   = minval(self%atominfo(:)%diam, mask=diam_mask)
-        self%max_diam   = maxval(self%atominfo(:)%diam)
-        tmparr          = pack(self%atominfo(:)%diam, mask=diam_mask)
-        self%med_diam   = median_nocopy(tmparr)
-        self%avg_diam   = sum(self%atominfo(:)%diam, mask=diam_mask) / real(n)
-        self%sdev_diam  = 0.
-        do cc = 1, self%n_cc
-            if( diam_mask(cc) )&
-            &self%sdev_diam = self%sdev_diam + (self%avg_diam - self%atominfo(cc)%diam)**2.
-        enddo
-        self%sdev_diam  = sqrt(self%sdev_diam / real(n-1))
-        ! set bond lenght stats
-        self%avg_bondl  = sum(self%atominfo(:)%bondl) / real(self%n_cc)
-        self%max_bondl  = maxval(self%atominfo(:)%bondl)
-        self%min_bondl  = minval(self%atominfo(:)%bondl)
-        self%sdev_bondl = 0.
-        do i = 1, size(self%atominfo)
-            self%sdev_bondl = self%sdev_bondl + (self%atominfo(i)%bondl-self%avg_bondl)**2.
-        enddo
-        self%sdev_bondl = sqrt(self%sdev_bondl / real(self%n_cc-1))
-        self%med_bondl  = median(self%atominfo(:)%bondl)
+        ! CALCULATE GLOBAL NP PARAMETERS
         ! global dipole
-        self%net_dipole     = calc_net_dipole()
-        self%net_dipole_mag = arg(self%net_dipole)
-        self%net_dipole_ang = ang3D_zvec(self%net_dipole)
-        ! calculate cn-dependent stats
+        self%net_dipole        = calc_net_dipole()
+        self%net_dipole_mag    = arg(self%net_dipole)
+        self%net_dipole_ang    = ang3D_zvec(self%net_dipole)
+        ! set bond lenght stats
+        self%avg_bondl         = sum(self%atominfo(:)%bondl) / real(self%n_cc)
+        self%max_bondl         = maxval(self%atominfo(:)%bondl)
+        self%min_bondl         = minval(self%atominfo(:)%bondl)
+        self%sdev_bondl        = 0.
+        do i = 1, size(self%atominfo)
+            self%sdev_bondl    = self%sdev_bondl + (self%atominfo(i)%bondl-self%avg_bondl)**2.
+        enddo
+        self%sdev_bondl        = sqrt(self%sdev_bondl / real(self%n_cc-1))
+        self%med_bondl         = median(self%atominfo(:)%bondl)
+        ! set max/min aspect ratio
+        self%max_aspect_ratio  = maxval(self%atominfo(:)%aspect_ratio)
+        self%min_aspect_ratio  = minval(self%atominfo(:)%aspect_ratio, mask=self%atominfo(:)%aspect_ratio > TINY)
+        ! max/min polarization angle
+        self%max_polar_angle   = maxval(self%atominfo(:)%polar_angle)
+        self%min_polar_angle   = minval(self%atominfo(:)%polar_angle)
+        ! set atom diameter stats
+        param_mask             = self%atominfo(:)%diam > self%theoretical_radius
+        n                      = count(param_mask)
+        self%min_diam          = minval(self%atominfo(:)%diam, mask=param_mask)
+        self%max_diam          = maxval(self%atominfo(:)%diam)
+        tmparr                 = pack(self%atominfo(:)%diam, mask=param_mask)
+        self%med_diam          = median_nocopy(tmparr)
+        self%avg_diam          = sum(self%atominfo(:)%diam, mask=param_mask) / real(n)
+        self%sdev_diam         = 0.
+        do cc = 1, self%n_cc
+            if( param_mask(cc) ) self%sdev_diam = self%sdev_diam + (self%avg_diam - self%atominfo(cc)%diam)**2.
+        enddo
+        self%sdev_diam         = sqrt(self%sdev_diam / real(n-1))
+        ! max/min average intensity
+        self%max_avg_int       = maxval(self%atominfo(:)%avg_int)
+        self%min_avg_int       = minval(self%atominfo(:)%avg_int)
+        ! max/min standard deviation of intensity
+        self%max_sdev_int      = maxval(self%atominfo(:)%sdev_int)
+        self%min_sdev_int      = minval(self%atominfo(:)%sdev_int, self%atominfo(:)%sdev_int > TINY)
+        ! max/min maximum correlation
+        self%max_max_corr      = maxval(self%atominfo(:)%max_corr)
+        self%min_max_corr      = minval(self%atominfo(:)%max_corr)
+        ! max/min radial strain
+        self%max_radial_strain = maxval(self%atominfo(:)%radial_strain)
+        self%min_radial_strain = minval(self%atominfo(:)%radial_strain)
+        ! CALCULATE CN-DEPENDENT PARAMETERS
         do cn = CNMIN, CNMAX
             ! net dipole
             self%net_dipole_cns(:,cn) = calc_net_dipole(cn)
@@ -977,6 +1019,15 @@ contains
             ! avg max_int and sdev max_int
             call calc_cn_stats( cn )
         end do
+        ! BINARY CLUSTERING OF RELEVANT PARAMETERS
+        call self%bicluster_otsu('size')
+        call self%bicluster_otsu('bondl')
+        call self%bicluster_otsu('aspect_ratio')
+        call self%bicluster_otsu('polar_angle')
+        call self%bicluster_otsu('diam')
+        call self%bicluster_otsu('max_int')
+        call self%bicluster_otsu('max_corr')
+        call self%bicluster_otsu('radial_strain')
         ! destruct
         deallocate(mask, imat_cc, tmpcens, tmparr, strain_array, centers_A)
         call phasecorr%kill
@@ -1297,29 +1348,40 @@ contains
         integer,             intent(in) :: cc, funit
         601 format(F8.4,A3)
         602 format(F8.4)
-        write(funit,601,advance='no') real(self%atominfo(cc)%cc_ind),    CSV_DELIM ! INDEX
-        write(funit,601,advance='no') real(self%atominfo(cc)%size),      CSV_DELIM ! NVOX
-        write(funit,601,advance='no') real(self%atominfo(cc)%cn_std),    CSV_DELIM ! CN_STD
-        write(funit,601,advance='no') self%atominfo(cc)%bondl,           CSV_DELIM ! NN_BONDL
-        write(funit,601,advance='no') self%atominfo(cc)%cn_gen,          CSV_DELIM ! CN_GEN
-        write(funit,601,advance='no') self%atominfo(cc)%center(1),       CSV_DELIM ! X
-        write(funit,601,advance='no') self%atominfo(cc)%center(2),       CSV_DELIM ! Y
-        write(funit,601,advance='no') self%atominfo(cc)%center(3),       CSV_DELIM ! Z
-        write(funit,601,advance='no') self%atominfo(cc)%aspect_ratio,    CSV_DELIM ! ASPECT_RATIO
-        write(funit,601,advance='no') self%atominfo(cc)%polar_angle,     CSV_DELIM ! POLAR_ANGLE
-        write(funit,601,advance='no') self%atominfo(cc)%diam,            CSV_DELIM ! DIAM
-        write(funit,601,advance='no') self%atominfo(cc)%avg_int,         CSV_DELIM ! AVG_INT
-        write(funit,601,advance='no') self%atominfo(cc)%max_int,         CSV_DELIM ! MAX_INT
-        write(funit,601,advance='no') self%atominfo(cc)%sdev_int,        CSV_DELIM ! SDEV_INT
-        write(funit,601,advance='no') self%atominfo(cc)%cendist,         CSV_DELIM ! RADIAL_POS
-        write(funit,601,advance='no') self%atominfo(cc)%max_corr,        CSV_DELIM ! MAX_CORR
-        write(funit,601,advance='no') self%atominfo(cc)%exx_strain,      CSV_DELIM ! EXX_STRAIN
-        write(funit,601,advance='no') self%atominfo(cc)%eyy_strain,      CSV_DELIM ! EYY_STRAIN
-        write(funit,601,advance='no') self%atominfo(cc)%ezz_strain,      CSV_DELIM ! EZZ_STRAIN
-        write(funit,601,advance='no') self%atominfo(cc)%exy_strain,      CSV_DELIM ! EXY_STRAIN
-        write(funit,601,advance='no') self%atominfo(cc)%eyz_strain,      CSV_DELIM ! EYZ_STRAIN
-        write(funit,601,advance='no') self%atominfo(cc)%exz_strain,      CSV_DELIM ! EXZ_STRAIN
-        write(funit,602)              self%atominfo(cc)%radial_strain              ! RADIAL_STRAIN
+        ! various per-atom parameters
+        write(funit,601,advance='no') real(self%atominfo(cc)%cc_ind),           CSV_DELIM ! INDEX
+        write(funit,601,advance='no') real(self%atominfo(cc)%size),             CSV_DELIM ! NVOX
+        write(funit,601,advance='no') real(self%atominfo(cc)%cn_std),           CSV_DELIM ! CN_STD
+        write(funit,601,advance='no') self%atominfo(cc)%bondl,                  CSV_DELIM ! NN_BONDL
+        write(funit,601,advance='no') self%atominfo(cc)%cn_gen,                 CSV_DELIM ! CN_GEN
+        write(funit,601,advance='no') self%atominfo(cc)%center(1),              CSV_DELIM ! X
+        write(funit,601,advance='no') self%atominfo(cc)%center(2),              CSV_DELIM ! Y
+        write(funit,601,advance='no') self%atominfo(cc)%center(3),              CSV_DELIM ! Z
+        write(funit,601,advance='no') self%atominfo(cc)%aspect_ratio,           CSV_DELIM ! ASPECT_RATIO
+        write(funit,601,advance='no') self%atominfo(cc)%polar_angle,            CSV_DELIM ! POLAR_ANGLE
+        write(funit,601,advance='no') self%atominfo(cc)%diam,                   CSV_DELIM ! DIAM
+        write(funit,601,advance='no') self%atominfo(cc)%avg_int,                CSV_DELIM ! AVG_INT
+        write(funit,601,advance='no') self%atominfo(cc)%max_int,                CSV_DELIM ! MAX_INT
+        write(funit,601,advance='no') self%atominfo(cc)%sdev_int,               CSV_DELIM ! SDEV_INT
+        write(funit,601,advance='no') self%atominfo(cc)%cendist,                CSV_DELIM ! RADIAL_POS
+        write(funit,601,advance='no') self%atominfo(cc)%max_corr,               CSV_DELIM ! MAX_CORR
+        ! strain
+        write(funit,601,advance='no') self%atominfo(cc)%exx_strain,             CSV_DELIM ! EXX_STRAIN
+        write(funit,601,advance='no') self%atominfo(cc)%eyy_strain,             CSV_DELIM ! EYY_STRAIN
+        write(funit,601,advance='no') self%atominfo(cc)%ezz_strain,             CSV_DELIM ! EZZ_STRAIN
+        write(funit,601,advance='no') self%atominfo(cc)%exy_strain,             CSV_DELIM ! EXY_STRAIN
+        write(funit,601,advance='no') self%atominfo(cc)%eyz_strain,             CSV_DELIM ! EYZ_STRAIN
+        write(funit,601,advance='no') self%atominfo(cc)%exz_strain,             CSV_DELIM ! EXZ_STRAIN
+        write(funit,601,advance='no') self%atominfo(cc)%radial_strain,          CSV_DELIM ! RADIAL_STRAIN
+        ! cluster assignments
+        write(funit,601,advance='no') real(self%atominfo(cc)%size_cls),         CSV_DELIM ! NVOX_CLASS
+        write(funit,601,advance='no') real(self%atominfo(cc)%bondl_cls),        CSV_DELIM ! NN_BONDL_CLASS
+        write(funit,601,advance='no') real(self%atominfo(cc)%aspect_ratio_cls), CSV_DELIM ! ASPECT_RATIO_CLASS
+        write(funit,601,advance='no') real(self%atominfo(cc)%polar_angle_cls),  CSV_DELIM ! POLAR_ANGLE_CLASS
+        write(funit,601,advance='no') real(self%atominfo(cc)%diam_cls),         CSV_DELIM ! DIAM_CLASS
+        write(funit,601,advance='no') real(self%atominfo(cc)%max_int_cls),      CSV_DELIM ! MAX_INT_CLASS
+        write(funit,601,advance='no') real(self%atominfo(cc)%max_corr_cls),     CSV_DELIM ! MAX_CORR_CLASS
+        write(funit,602)              real(self%atominfo(cc)%radial_strain_cls)           ! RADIAL_STRAIN_CLASS
     end subroutine write_atominfo
 
     subroutine write_np_stats( self, funit )
@@ -1327,23 +1389,35 @@ contains
         integer,             intent(in) :: funit
         601 format(F8.4,A3)
         602 format(F8.4)
-        write(funit,601,advance='no') real(self%n_cc),     CSV_DELIM ! NATOMS
-        write(funit,601,advance='no') self%NPdiam,         CSV_DELIM ! DIAM
-        write(funit,601,advance='no') self%net_dipole(1),  CSV_DELIM ! X_POLAR
-        write(funit,601,advance='no') self%net_dipole(2),  CSV_DELIM ! Y_POLAR
-        write(funit,601,advance='no') self%net_dipole(3),  CSV_DELIM ! Z_POLAR
-        write(funit,601,advance='no') self%net_dipole_mag, CSV_DELIM ! POLAR_MAG
-        write(funit,601,advance='no') self%net_dipole_ang, CSV_DELIM ! POLAR_ANGLE
-        write(funit,601,advance='no') self%avg_bondl,      CSV_DELIM ! AVG_BONDL
-        write(funit,601,advance='no') self%max_bondl,      CSV_DELIM ! MAX_BONDL
-        write(funit,601,advance='no') self%min_bondl,      CSV_DELIM ! MIN_BONDL
-        write(funit,601,advance='no') self%sdev_bondl,     CSV_DELIM ! SDEV_BONDL
-        write(funit,601,advance='no') self%med_bondl,      CSV_DELIM ! MED_BONDL
-        write(funit,601,advance='no') self%avg_diam,       CSV_DELIM ! AVG_DIAM
-        write(funit,601,advance='no') self%max_diam,       CSV_DELIM ! MAX_DIAM
-        write(funit,601,advance='no') self%min_diam,       CSV_DELIM ! MIN_DIAM
-        write(funit,601,advance='no') self%sdev_diam,      CSV_DELIM ! SDEV_DIAM
-        write(funit,602)              self%med_diam                  ! MED_DIAM
+        write(funit,601,advance='no') real(self%n_cc),        CSV_DELIM ! NATOMS
+        write(funit,601,advance='no') self%NPdiam,            CSV_DELIM ! DIAM
+        write(funit,601,advance='no') self%net_dipole(1),     CSV_DELIM ! X_POLAR
+        write(funit,601,advance='no') self%net_dipole(2),     CSV_DELIM ! Y_POLAR
+        write(funit,601,advance='no') self%net_dipole(3),     CSV_DELIM ! Z_POLAR
+        write(funit,601,advance='no') self%net_dipole_mag,    CSV_DELIM ! POLAR_MAG
+        write(funit,601,advance='no') self%net_dipole_ang,    CSV_DELIM ! POLAR_ANGLE
+        write(funit,601,advance='no') self%avg_bondl,         CSV_DELIM ! AVG_BONDL
+        write(funit,601,advance='no') self%max_bondl,         CSV_DELIM ! MAX_BONDL
+        write(funit,601,advance='no') self%min_bondl,         CSV_DELIM ! MIN_BONDL
+        write(funit,601,advance='no') self%sdev_bondl,        CSV_DELIM ! SDEV_BONDL
+        write(funit,601,advance='no') self%med_bondl,         CSV_DELIM ! MED_BONDL
+        write(funit,601,advance='no') self%max_aspect_ratio,  CSV_DELIM ! MAX_ASPECT_RATIO
+        write(funit,601,advance='no') self%min_aspect_ratio,  CSV_DELIM ! MIN_ASPECT_RATIO
+        write(funit,601,advance='no') self%max_polar_angle,   CSV_DELIM ! MAX_POLAR_ANGLE
+        write(funit,601,advance='no') self%min_polar_angle,   CSV_DELIM ! MIN_POLAR_ANGLE
+        write(funit,601,advance='no') self%avg_diam,          CSV_DELIM ! AVG_DIAM
+        write(funit,601,advance='no') self%max_diam,          CSV_DELIM ! MAX_DIAM
+        write(funit,601,advance='no') self%min_diam,          CSV_DELIM ! MIN_DIAM
+        write(funit,601,advance='no') self%sdev_diam,         CSV_DELIM ! SDEV_DIAM
+        write(funit,601,advance='no') self%med_diam,          CSV_DELIM ! MED_DIAM
+        write(funit,601,advance='no') self%max_avg_int,       CSV_DELIM ! MAX_AVG_INT
+        write(funit,601,advance='no') self%min_avg_int,       CSV_DELIM ! MIN_AVG_INT
+        write(funit,601,advance='no') self%max_sdev_int,      CSV_DELIM ! MAX_SDEV_INT
+        write(funit,601,advance='no') self%min_sdev_int,      CSV_DELIM ! MIN_SDEV_INT
+        write(funit,601,advance='no') self%max_max_corr,      CSV_DELIM ! MAX_MAX_CORR
+        write(funit,601,advance='no') self%min_max_corr,      CSV_DELIM ! MIN_MAX_CORR
+        write(funit,601,advance='no') self%max_radial_strain, CSV_DELIM ! MAX_RADIAL_STRAIN
+        write(funit,602)              self%min_radial_strain            ! MIN_RADIAL_STRAIN
     end subroutine write_np_stats
 
     subroutine write_cn_stats( self, cn, funit )
