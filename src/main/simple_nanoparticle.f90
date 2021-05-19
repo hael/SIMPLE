@@ -42,7 +42,9 @@ character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'POLAR_ANGLE
 &CSV_DELIM//'AVG_MAX_CORR'//CSV_DELIM//'SDEV_MAX_CORR'//CSV_DELIM//'AVG_BONDL'//CSV_DELIM//'MAX_BONDL'//&
 &CSV_DELIM//'MIN_BONDL'//CSV_DELIM//'SDEV_BONDL'//CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MAX_NVOX'//CSV_DELIM//'MIN_NVOX'//&
 &CSV_DELIM//'SDEV_NVOX'//CSV_DELIM//'AVG_DIAM'//CSV_DELIM//'MAX_DIAM'//CSV_DELIM//'MIN_DIAM'//CSV_DELIM//'SDEV_DIAM'//&
-&CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'//CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'
+&CSV_DELIM//'NATOMS_PER_VOL'//CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'//CSV_DELIM//'MIN_RADIAL_STRAIN'//&
+&CSV_DELIM//'SDEV_RADIAL_STRAIN'
+
 ! container for per-atom statistics
 type :: atom_stats
     integer :: cc_ind          = 0  ! index of the connected component                            INDEX
@@ -126,6 +128,8 @@ type :: nanoparticle
     real           :: max_diam_cns(CNMIN:CNMAX)        = 0. ! maximum            -"-                                MAX_DIAM
     real           :: min_diam_cns(CNMIN:CNMAX)        = 0. ! minimum            -"-                                MIN_DIAM
     real           :: sdev_diam_cns(CNMIN:CNMAX)       = 0. ! standard deviation -"-                                SDEV_DIAM
+    ! -- # atoms per volume
+    real           :: atoms_per_vol_cns(CNMIN:CNMAX)   = 0. ! # atoms per volume (#/A**3)                           NATOMS_PER_VOL
     ! -- strain
     real           :: avg_rad_strain_cns(CNMIN:CNMAX)  = 0. ! average radial strain (%) as function of cn_std       AVG_RADIAL_STRAIN
     real           :: max_rad_strain_cns(CNMIN:CNMAX)  = 0. ! maximum            -"-                                MAX_RADIAL_STRAIN
@@ -974,9 +978,15 @@ contains
                 real :: vec_here(3)
                 real :: ang     ! output angle in degrees
                 real :: ang_rad ! angle in radians
-                real :: dot_prod
+                real :: dot_prod, sqsum
                 ! normalise
-                vec_here = vec / sqrt(vec(1)**2. + vec(2)**2. + vec(3)**2.)
+                sqsum = vec(1)**2. + vec(2)**2. + vec(3)**2.
+                if( sqsum > TINY )then
+                    vec_here = vec / sqrt(sqsum)
+                else
+                    ang = 0.
+                    return
+                endif
                 ! dot product
                 dot_prod = ZVEC(1) * vec_here(1) + ZVEC(2) * vec_here(2) + ZVEC(3) * vec_here(3)
                 ! sanity check
@@ -1020,8 +1030,9 @@ contains
 
             subroutine calc_cn_stats( cn )
                 integer, intent(in)  :: cn ! calculate stats for given std cn
-                integer :: cc, n, n_size, n_diam
+                integer :: cc, n, n_size, n_diam, natoms
                 logical :: cn_mask(self%n_cc), size_mask(self%n_cc), diam_mask(self%n_cc)
+                real    :: vshell
                 ! Generate masks
                 cn_mask   = self%atominfo(:)%cn_std == cn
                 size_mask = self%atominfo(:)%size > 2 .and. cn_mask
@@ -1054,24 +1065,30 @@ contains
                 self%sdev_rad_strain_cns(cn) = 0.
                 if( n == 0 ) return
                 ! -- intensity
-                self%avg_max_int_cns(cn)    = sum   (self%atominfo(:)%max_int,       mask=cn_mask) / real(n)
+                self%avg_max_int_cns(cn)    = sum   (self%atominfo(:)%max_int,  mask=cn_mask) / real(n)
                 ! -- cendist
-                self%max_cendist_cns(cn)    = maxval(self%atominfo(:)%cendist,       mask=cn_mask)
-                self%min_cendist_cns(cn)    = minval(self%atominfo(:)%cendist,       mask=cn_mask)
+                self%max_cendist_cns(cn)    = maxval(self%atominfo(:)%cendist,  mask=cn_mask)
+                self%min_cendist_cns(cn)    = minval(self%atominfo(:)%cendist,  mask=cn_mask)
                 ! -- correlation
-                self%avg_max_corr_cns(cn)   = sum   (self%atominfo(:)%max_corr,      mask=cn_mask) / real(n)
+                self%avg_max_corr_cns(cn)   = sum   (self%atominfo(:)%max_corr, mask=cn_mask) / real(n)
                 ! -- bond length
-                self%avg_bondl_cns(cn)      = sum   (self%atominfo(:)%bondl,         mask=cn_mask) / real(n)
-                self%max_bondl_cns(cn)      = maxval(self%atominfo(:)%bondl,         mask=cn_mask)
-                self%min_bondl_cns(cn)      = minval(self%atominfo(:)%bondl,         mask=cn_mask)
+                self%avg_bondl_cns(cn)      = sum   (self%atominfo(:)%bondl,    mask=cn_mask) / real(n)
+                self%max_bondl_cns(cn)      = maxval(self%atominfo(:)%bondl,    mask=cn_mask)
+                self%min_bondl_cns(cn)      = minval(self%atominfo(:)%bondl,    mask=cn_mask)
                 ! -- atom size
-                self%avg_size_cns(cn)       = sum   (self%atominfo(:)%size,          mask=size_mask) / real(n_size)
-                self%max_size_cns(cn)       = maxval(self%atominfo(:)%size,          mask=cn_mask)
-                self%min_size_cns(cn)       = minval(self%atominfo(:)%size,          mask=size_mask)
+                self%avg_size_cns(cn)       = sum   (self%atominfo(:)%size,     mask=size_mask) / real(n_size)
+                self%max_size_cns(cn)       = maxval(self%atominfo(:)%size,     mask=cn_mask)
+                self%min_size_cns(cn)       = minval(self%atominfo(:)%size,     mask=size_mask)
                 ! -- atom diameter
-                self%avg_diam_cns(cn)       = sum   (self%atominfo(:)%diam,          mask=diam_mask) / real(n_diam)
-                self%max_diam_cns(cn)       = maxval(self%atominfo(:)%diam,          mask=cn_mask)
-                self%min_diam_cns(cn)       = minval(self%atominfo(:)%diam,          mask=diam_mask)
+                self%avg_diam_cns(cn)       = sum   (self%atominfo(:)%diam,     mask=diam_mask) / real(n_diam)
+                self%max_diam_cns(cn)       = maxval(self%atominfo(:)%diam,     mask=cn_mask)
+                self%min_diam_cns(cn)       = minval(self%atominfo(:)%diam,     mask=diam_mask)
+                ! -- # atoms per volume
+                vshell = (FOURPI * self%max_cendist_cns(cn)**3.) / 3. - (FOURPI * self%min_cendist_cns(cn)**3.) / 3.
+                natoms = count(self%atominfo(:)%cendist <= self%max_cendist_cns(cn) .and.&
+                              &self%atominfo(:)%cendist >= self%min_cendist_cns(cn))
+                self%atoms_per_vol_cns(cn) = 0.
+                if( natoms > 0 .and. vshell > TINY ) self%atoms_per_vol_cns(cn) = real(natoms) / vshell
                 ! -- strain
                 self%avg_rad_strain_cns(cn) = sum   (self%atominfo(:)%radial_strain, mask=cn_mask) / real(n)
                 self%max_rad_strain_cns(cn) = maxval(self%atominfo(:)%radial_strain, mask=cn_mask)
@@ -1087,12 +1104,27 @@ contains
                     if( size_mask(cc) ) self%sdev_size_cns(cn) = self%sdev_size_cns(cn) + (self%avg_size_cns(cn) - self%atominfo(cc)%size)**2.
                     if( diam_mask(cc) ) self%sdev_diam_cns(cn) = self%sdev_diam_cns(cn) + (self%avg_diam_cns(cn) - self%atominfo(cc)%diam)**2.
                 enddo
-                self%sdev_max_int_cns(cn)    = sqrt(self%sdev_max_int_cns(cn)  / real(n-1))
-                self%sdev_max_corr_cns(cn)   = sqrt(self%sdev_max_corr_cns(cn) / real(n-1))
-                self%sdev_bondl_cns(cn)      = sqrt(self%sdev_bondl_cns(cn)    / real(n-1))
-                self%sdev_rad_strain_cns(cn) = sqrt(self%sdev_rad_strain_cns(cn)    / real(n-1))
-                self%sdev_size_cns(cn)       = sqrt(self%sdev_size_cns(cn)     / real(n_size-1))
-                self%sdev_diam_cns(cn)       = sqrt(self%sdev_diam_cns(cn)     / real(n_diam-1))
+                if( n > 1 )then
+                    self%sdev_max_int_cns(cn)    = sqrt(self%sdev_max_int_cns(cn)    / real(n-1))
+                    self%sdev_max_corr_cns(cn)   = sqrt(self%sdev_max_corr_cns(cn)   / real(n-1))
+                    self%sdev_bondl_cns(cn)      = sqrt(self%sdev_bondl_cns(cn)      / real(n-1))
+                    self%sdev_rad_strain_cns(cn) = sqrt(self%sdev_rad_strain_cns(cn) / real(n-1))
+                else
+                    self%sdev_max_int_cns(cn)    = 0.
+                    self%sdev_max_corr_cns(cn)   = 0.
+                    self%sdev_bondl_cns(cn)      = 0.
+                    self%sdev_rad_strain_cns(cn) = 0.
+                endif
+                if( n_size > 1 )then
+                    self%sdev_size_cns(cn) = sqrt(self%sdev_size_cns(cn) / real(n_size-1))
+                else
+                    self%sdev_size_cns(cn) = 0.
+                endif
+                if( n_diam > 1 )then
+                    self%sdev_diam_cns(cn) = sqrt(self%sdev_diam_cns(cn) / real(n_diam-1))
+                else
+                    self%sdev_diam_cns(cn) = 0.
+                endif
             end subroutine calc_cn_stats
 
     end subroutine fillin_atominfo
@@ -1335,6 +1367,8 @@ contains
         write(funit,601,advance='no') self%max_diam_cns(cn),       CSV_DELIM ! MAX_DIAM
         write(funit,601,advance='no') self%min_diam_cns(cn),       CSV_DELIM ! MIN_DIAM
         write(funit,601,advance='no') self%sdev_diam_cns(cn),      CSV_DELIM ! SDEV_DIAM
+        ! -- # atoms per volume (#/A**3)
+        write(funit,601,advance='no') self%atoms_per_vol_cns(cn),  CSV_DELIM ! NATOMS_PER_VOL
         ! -- radial strain
         write(funit,601,advance='no') self%avg_rad_strain_cns(cn), CSV_DELIM ! AVG_RADIAL_STRAIN
         write(funit,601,advance='no') self%max_rad_strain_cns(cn), CSV_DELIM ! MAX_RADIAL_STRAIN
