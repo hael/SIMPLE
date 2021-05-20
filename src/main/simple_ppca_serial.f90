@@ -218,7 +218,6 @@ contains
 
     !>  \brief  doing it all
     subroutine master( self, recsz, maxpcaits )
-        ! use simple_filehandling, only: get_fileunit, fopen_err
         class(ppca_serial),         intent(inout) :: self
         integer,                    intent(in)    :: recsz, maxpcaits
         integer  :: k, file_stat, funit2, recsz2, err, fhandle_txt

@@ -29,10 +29,10 @@ character(len=*), parameter :: CN_STATS_FILE   = 'cn_dependent_stats.csv'
 character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//'CN_STD'//CSV_DELIM//'NN_BONDL'//&
 &CSV_DELIM//'CN_GEN'//CSV_DELIM//'X'//CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'ASPECT_RATIO'//CSV_DELIM//'POLAR_ANGLE'//&
 &CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//CSV_DELIM//'MAX_INT'//CSV_DELIM//'SDEV_INT'//CSV_DELIM//'RADIAL_POS'//&
-&CSV_DELIM//'MAX_CORR'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//'EXY_STRAIN'//&
-&CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'//CSV_DELIM//'NVOX_CLASS'//&
-&CSV_DELIM//'NN_BONDL_CLASS'//CSV_DELIM//'ASPECT_RATIO_CLASS'//CSV_DELIM//'POLAR_ANGLE_CLASS'//CSV_DELIM//'DIAM_CLASS'//&
-&CSV_DELIM//'MAX_INT_CLASS'//CSV_DELIM//'MAX_CORR_CLASS'//CSV_DELIM//'RADIAL_STRAIN_CLASS'
+&CSV_DELIM//'MAX_CORR'//CSV_DELIM//'X_PCA'//CSV_DELIM//'Y_PCA'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//&
+&CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'//&
+&CSV_DELIM//'NVOX_CLASS'//CSV_DELIM//'NN_BONDL_CLASS'//CSV_DELIM//'ASPECT_RATIO_CLASS'//CSV_DELIM//'POLAR_ANGLE_CLASS'//&
+&CSV_DELIM//'DIAM_CLASS'//CSV_DELIM//'MAX_INT_CLASS'//CSV_DELIM//'MAX_CORR_CLASS'//CSV_DELIM//'RADIAL_STRAIN_CLASS'
 
 character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//CSV_DELIM//'X_POLAR'//CSV_DELIM//'Y_POLAR'//&
 &CSV_DELIM//'Z_POLAR'//CSV_DELIM//'POLAR_MAG'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'AVG_BONDL'//CSV_DELIM//'MAX_BONDL'//&
@@ -69,6 +69,8 @@ type :: atom_stats
     real    :: sdev_int          = 0. ! standard deviation -"-                                      SDEV_INT
     real    :: cendist           = 0. ! distance from the centre of mass of the nanoparticle        RADIAL_POS
     real    :: max_corr          = 0. ! maximum atom correlation within the connected component     MAX_CORR
+    real    :: x_pca             = 0. ! x-component of pca feature vector                           X_PCA
+    real    :: y_pca             = 0. ! y-component of pca feature vector                           Y_PCA
     ! strain
     real    :: exx_strain        = 0. ! tensile strain in %                                         EXX_STRAIN
     real    :: eyy_strain        = 0. ! -"-                                                         EYY_STRAIN
@@ -211,6 +213,7 @@ type :: nanoparticle
     procedure, private :: write_cn_stats
     ! clustering
     procedure, private :: bicluster_otsu
+    procedure, private :: ppca_atom_features
     procedure, private :: cluster_atom_intensity
     procedure          :: cluster_atom_maxint
     procedure          :: cluster_atom_intint
@@ -1019,7 +1022,7 @@ contains
             ! avg max_int and sdev max_int
             call calc_cn_stats( cn )
         end do
-        ! BINARY CLUSTERING OF RELEVANT PARAMETERS
+        ! BINARY CLUSTERING & PCA ANALYSIS OF RELEVANT PARAMETERS
         call self%bicluster_otsu('size')
         call self%bicluster_otsu('bondl')
         call self%bicluster_otsu('aspect_ratio')
@@ -1028,6 +1031,7 @@ contains
         call self%bicluster_otsu('max_int')
         call self%bicluster_otsu('max_corr')
         call self%bicluster_otsu('radial_strain')
+        call self%ppca_atom_features
         ! destruct
         deallocate(mask, imat_cc, tmpcens, tmparr, strain_array, centers_A)
         call phasecorr%kill
@@ -1365,6 +1369,8 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%sdev_int,               CSV_DELIM ! SDEV_INT
         write(funit,601,advance='no') self%atominfo(cc)%cendist,                CSV_DELIM ! RADIAL_POS
         write(funit,601,advance='no') self%atominfo(cc)%max_corr,               CSV_DELIM ! MAX_CORR
+        write(funit,601,advance='no') self%atominfo(cc)%x_pca,                  CSV_DELIM ! X_PCA
+        write(funit,601,advance='no') self%atominfo(cc)%y_pca,                  CSV_DELIM ! Y_PCA
         ! strain
         write(funit,601,advance='no') self%atominfo(cc)%exx_strain,             CSV_DELIM ! EXX_STRAIN
         write(funit,601,advance='no') self%atominfo(cc)%eyy_strain,             CSV_DELIM ! EYY_STRAIN
@@ -1537,6 +1543,42 @@ contains
             THROW_HARD('unsupported parameter for bicluster_otsu')
         end select
     end subroutine bicluster_otsu
+
+    subroutine ppca_atom_features( self )
+        use simple_ppca_serial, only: ppca_serial
+        class(nanoparticle), intent(inout) :: self
+        real               :: datvecs(self%n_cc,8), avg(8)
+        integer            :: cc, recsz
+        type(ppca_serial)  :: prob_pca
+        integer, parameter :: MAXPPCAITS = 20
+        real, allocatable  :: feature(:)
+        ! prepare data
+        inquire(iolength=recsz) avg
+        do cc = 1, self%n_cc
+            datvecs(cc,1) = real(self%atominfo(cc)%size)
+            datvecs(cc,2) = self%atominfo(cc)%bondl
+            datvecs(cc,3) = self%atominfo(cc)%aspect_ratio
+            datvecs(cc,4) = self%atominfo(cc)%polar_angle
+            datvecs(cc,5) = self%atominfo(cc)%diam
+            datvecs(cc,6) = self%atominfo(cc)%max_int
+            datvecs(cc,7) = self%atominfo(cc)%max_corr
+            datvecs(cc,8) = self%atominfo(cc)%radial_strain
+            avg           = avg + datvecs(cc,:)
+        end do
+        avg = avg / real(self%n_cc)
+        do cc = 1, self%n_cc
+            datvecs(cc,:) = datvecs(cc,:) - avg
+        enddo
+        ! probabilistic PCA
+        call prob_pca%new(self%n_cc, 8, 2, datvecs)
+        call prob_pca%master(recsz, MAXPPCAITS)
+        do cc = 1, self%n_cc
+            feature = prob_pca%get_feat(cc)
+            self%atominfo(cc)%x_pca = feature(1)
+            self%atominfo(cc)%y_pca = feature(1)
+            deallocate(feature)
+        end do
+    end subroutine ppca_atom_features
 
     ! This subroutine clusters the atoms with respect to the maximum intensity
     ! or the integrated density (according to the values contained in feature)
