@@ -77,16 +77,16 @@ contains
         call nano%mask(params%msk)
         ! execute
         if(cline%defined('cn_thres')) then
-              if(.not. cline%defined('cn_type')) then
-                  THROW_HARD('ERROR! cn_type needs to be specified when cn_thres is used; exec_detect_atoms')
-              elseif( params%cn_type .ne. 'cn_gen' .and. params%cn_type .ne. 'cn_std' )then
-                  THROW_WARN('Unvalid cn_type, proceeding with standard coordination number (cn_std)')
-                  call cline%set('cn_type', 'cn_std')
-              endif
-              call nano%identify_atomic_pos(nint(params%cn_thres), params%cn_type)
-          else
-              call cline%set('cn_type', 'cn_std')
-              call nano%identify_atomic_pos(CN_THRESH_DEFAULT,params%cn_type)
+            if( .not. cline%defined('cn_type')) then
+                params%cn_type = 'cn_std'
+            elseif( params%cn_type .ne. 'cn_gen' .and. params%cn_type .ne. 'cn_std' )then
+                THROW_WARN('Unvalid cn_type, proceeding with standard coordination number (cn_std)')
+                params%cn_type = 'cn_std'
+            endif
+            call nano%identify_atomic_pos(nint(params%cn_thres), params%cn_type)
+        else
+            params%cn_type = 'cn_std'
+            call nano%identify_atomic_pos(CN_THRESH_DEFAULT,params%cn_type)
         endif
         ! kill
         call nano%kill

@@ -91,7 +91,7 @@ contains
     subroutine propagate( self, centers, labels, simsum )
         class(aff_prop),      intent(inout) :: self
         integer, allocatable, intent(inout) :: centers(:) !< cluster centres
-        integer, allocatable, intent(inout) :: labels(:)  !< cluster lablse
+        integer, allocatable, intent(inout) :: labels(:)  !< cluster labels
         real,                 intent(inout) :: simsum     !< similarity sum
         real, allocatable :: similarities(:)
         real              :: x, realmax
