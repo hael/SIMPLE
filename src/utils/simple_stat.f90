@@ -9,7 +9,7 @@ public :: moment, pearsn, normalize, normalize_sigm, normalize_minmax
 public :: corrs2weights, analyze_smat, dev_from_dmat, mad, mad_gau, z_scores
 public :: robust_z_scores, robust_normalization, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
-public :: conv2rank_weights, calc_stats
+public :: conv2rank_weights, calc_stats, pearsn_serial
 private
 #include "simple_local_flags.inc"
 
@@ -410,6 +410,30 @@ contains
         !$omp end parallel do
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
     end function pearsn_1
+
+    !>    calculates Pearson's correlation coefficient
+    !! \param x input reference array
+    !! \param y input test array
+    function pearsn_serial( x, y ) result( r )
+        real, intent(in) :: x(:),y(:)
+        real    :: r,ax,ay,sxx,syy,sxy,xt,yt
+        integer :: j, n
+        n = size(x)
+        if( size(y) /= n ) THROW_HARD('pearsn_serial')
+        ax  = sum(x) / real(n)
+        ay  = sum(y) / real(n)
+        sxx = 0.
+        syy = 0.
+        sxy = 0.
+        do j=1,n
+            xt  = x(j) - ax
+            yt  = y(j) - ay
+            sxx = sxx + xt**2
+            syy = syy + yt**2
+            sxy = sxy + xt*yt
+        end do
+        r = sxy / sqrt(sxx * syy)
+    end function pearsn_serial
 
     !>    calculates Pearson's correlation coefficient
     !! \param x input reference array

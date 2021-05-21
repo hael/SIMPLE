@@ -212,8 +212,10 @@ type :: nanoparticle
     procedure, private :: write_np_stats
     procedure, private :: write_cn_stats
     ! clustering
+    procedure, private :: id_corr_vars
     procedure, private :: bicluster_otsu
-    procedure, private :: ppca_atom_features
+    procedure, private :: ppca_atom_binclusters
+    procedure, private :: cluster_ppca_features
     procedure, private :: cluster_atom_intensity
     procedure          :: cluster_atom_maxint
     procedure          :: cluster_atom_intint
@@ -1031,7 +1033,10 @@ contains
         call self%bicluster_otsu('max_int')
         call self%bicluster_otsu('max_corr')
         call self%bicluster_otsu('radial_strain')
-        call self%ppca_atom_features
+        call self%ppca_atom_binclusters
+        call self%cluster_ppca_features
+        ! identify correlated variables with Pearson's product moment correation coefficient
+        call self%id_corr_vars
         ! destruct
         deallocate(mask, imat_cc, tmpcens, tmparr, strain_array, centers_A)
         call phasecorr%kill
@@ -1468,6 +1473,74 @@ contains
         write(funit,602) self%sdev_rad_strain_cns(cn)                        ! SDEV_RADIAL_STRAIN
     end subroutine write_cn_stats
 
+    ! identify correlated variables with Pearson's product moment correation coefficient
+    subroutine id_corr_vars( self )
+        class(nanoparticle), target, intent(in) :: self
+        character(len=13) :: flags(12)
+        real, pointer     :: ptr1(:), ptr2(:)
+        real, allocatable, target :: sizes(:)
+        integer :: i, j
+        real    :: corr
+        ! make sizes a real array
+        allocate(sizes(self%n_cc), source=real(self%atominfo(:)%size))
+        ! variables to correlate
+        flags(1)  = 'NVOX'          ! size
+        flags(2)  = 'NN_BONDL'      ! bondl
+        flags(3)  = 'CN_GEN'        ! cn_gen
+        flags(4)  = 'ASPECT_RATIO'  ! aspect_ratio
+        flags(5)  = 'POLAR_ANGLE'   ! polar_angle
+        flags(6)  = 'DIAM'          ! diam
+        flags(7)  = 'AVG_INT'       ! avg_int
+        flags(8)  = 'MAX_INT'       ! max_int
+        flags(9)  = 'SDEV_INT'      ! sdev_int
+        flags(10) = 'RADIAL_POS'    ! cendist
+        flags(11) = 'MAX_CORR'      ! max_corr
+        flags(12) = 'RADIAL_STRAIN' ! radial_strain
+        ! calculate correlations
+        do i = 1, 12 - 1
+            do j = i + 1, 12
+                call set_ptr(flags(i), ptr1)
+                call set_ptr(flags(j), ptr2)
+                corr = pearsn_serial(ptr1, ptr2)
+                write(logfhandle,'(A,F7.4)')'PEARSONS CORRELATION BTW '//flags(i)//' & '//flags(j)//' IS ', corr
+            end do
+        end do
+
+        contains
+
+            subroutine set_ptr( flag, ptr )
+                character(len=*), intent(in)    :: flag
+                real, pointer,    intent(inout) :: ptr(:)
+                 select case(trim(flag))
+                    case('NVOX')
+                        ptr => sizes
+                    case('NN_BONDL')
+                        ptr => self%atominfo(:)%bondl
+                    case('CN_GEN')
+                        ptr => self%atominfo(:)%cn_gen
+                    case('ASPECT_RATIO')
+                        ptr => self%atominfo(:)%aspect_ratio
+                    case('POLAR_ANGLE')
+                        ptr => self%atominfo(:)%polar_angle
+                    case('DIAM')
+                        ptr => self%atominfo(:)%diam
+                    case('AVG_INT')
+                        ptr => self%atominfo(:)%avg_int
+                    case('MAX_INT')
+                        ptr => self%atominfo(:)%max_int
+                    case('SDEV_INT')
+                        ptr => self%atominfo(:)%sdev_int
+                    case('RADIAL_POS')
+                        ptr => self%atominfo(:)%cendist
+                    case('MAX_CORR')
+                        ptr => self%atominfo(:)%max_corr
+                    case('RADIAL_STRAIN')
+                        ptr => self%atominfo(:)%radial_strain
+                end select
+            end subroutine set_ptr
+
+    end subroutine id_corr_vars
+
     subroutine bicluster_otsu( self, which )
         class(nanoparticle), intent(inout) :: self
         character(len=*),    intent(in)    :: which
@@ -1544,7 +1617,7 @@ contains
         end select
     end subroutine bicluster_otsu
 
-    subroutine ppca_atom_features( self )
+    subroutine ppca_atom_binclusters( self )
         use simple_ppca_serial, only: ppca_serial
         class(nanoparticle), intent(inout) :: self
         real               :: datvecs(self%n_cc,8), avg(8)
@@ -1555,15 +1628,36 @@ contains
         ! prepare data
         inquire(iolength=recsz) avg
         do cc = 1, self%n_cc
+            ! real-valued data
             datvecs(cc,1) = real(self%atominfo(cc)%size)
-            datvecs(cc,2) = self%atominfo(cc)%bondl
-            datvecs(cc,3) = self%atominfo(cc)%aspect_ratio
-            datvecs(cc,4) = self%atominfo(cc)%polar_angle
-            datvecs(cc,5) = self%atominfo(cc)%diam
-            datvecs(cc,6) = self%atominfo(cc)%max_int
-            datvecs(cc,7) = self%atominfo(cc)%max_corr
-            datvecs(cc,8) = self%atominfo(cc)%radial_strain
-            avg           = avg + datvecs(cc,:)
+            datvecs(cc,2) =      self%atominfo(cc)%bondl
+            datvecs(cc,3) =      self%atominfo(cc)%aspect_ratio
+            datvecs(cc,4) =      self%atominfo(cc)%polar_angle
+            datvecs(cc,5) =      self%atominfo(cc)%diam
+            datvecs(cc,6) =      self%atominfo(cc)%max_int
+            datvecs(cc,7) =      self%atominfo(cc)%max_corr
+            datvecs(cc,8) =      self%atominfo(cc)%radial_strain
+            ! bincluster data
+            ! datvecs(cc,1) = real(self%atominfo(cc)%size_cls          - 1)
+            ! datvecs(cc,2) = real(self%atominfo(cc)%bondl_cls         - 1)
+            ! datvecs(cc,3) = real(self%atominfo(cc)%aspect_ratio_cls  - 1)
+            ! datvecs(cc,4) = real(self%atominfo(cc)%polar_angle_cls   - 1)
+            ! datvecs(cc,5) = real(self%atominfo(cc)%diam_cls          - 1)
+            ! datvecs(cc,6) = real(self%atominfo(cc)%max_int_cls       - 1)
+            ! datvecs(cc,7) = real(self%atominfo(cc)%max_corr_cls      - 1)
+            ! datvecs(cc,8) = real(self%atominfo(cc)%radial_strain_cls - 1)
+        end do
+        ! rescaling to avoid the polarization angle to dominate the analysis
+        call norm_minmax(datvecs(:,1))
+        call norm_minmax(datvecs(:,2))
+        call norm_minmax(datvecs(:,3))
+        call norm_minmax(datvecs(:,4))
+        call norm_minmax(datvecs(:,5))
+        call norm_minmax(datvecs(:,6))
+        call norm_minmax(datvecs(:,7))
+        call norm_minmax(datvecs(:,8))
+        do cc = 1, self%n_cc
+            avg = avg + datvecs(cc,:)
         end do
         avg = avg / real(self%n_cc)
         do cc = 1, self%n_cc
@@ -1575,10 +1669,98 @@ contains
         do cc = 1, self%n_cc
             feature = prob_pca%get_feat(cc)
             self%atominfo(cc)%x_pca = feature(1)
-            self%atominfo(cc)%y_pca = feature(1)
+            self%atominfo(cc)%y_pca = feature(2)
             deallocate(feature)
         end do
-    end subroutine ppca_atom_features
+
+        contains
+
+            subroutine norm_minmax( arr )
+                real, intent(inout) :: arr(:)
+                real                :: smin, smax, delta
+                smin  = minval(arr)
+                smax  = maxval(arr)
+                delta = smax - smin
+                arr = (arr - smin)/delta
+            end subroutine norm_minmax
+
+    end subroutine ppca_atom_binclusters
+
+    ! subroutine cluster_ppca_features( self )
+    !     use simple_aff_prop, only: aff_prop
+    !     class(nanoparticle), intent(inout) :: self
+    !     integer, allocatable :: centers(:), labels(:)
+    !     type(aff_prop) :: ap
+    !     real           :: smat(self%n_cc,self%n_cc), simsum
+    !     integer        :: i, j
+    !     ! calculate similarity matrix
+    !     do i = 1, self%n_cc - 1
+    !         do j = i + 1, self%n_cc
+    !             ! smat(i,j) = pearsn_serial([self%atominfo(i)%x_pca,self%atominfo(i)%y_pca],&
+    !             !                          &[self%atominfo(j)%x_pca,self%atominfo(j)%y_pca])
+    !             smat(i,j) = -      euclid([self%atominfo(i)%x_pca,self%atominfo(i)%y_pca],&
+    !                                      &[self%atominfo(j)%x_pca,self%atominfo(j)%y_pca])
+    !             smat(j,i) = smat(i,j)
+    !         end do
+    !     end do
+    !     ! affinity propagation
+    !     call ap%new(self%n_cc, smat)
+    !     call ap%propagate(centers, labels, simsum)
+    !     write(logfhandle,*) '# clusters found with affinity propagation', size(centers)
+    ! end subroutine cluster_ppca_features
+
+    subroutine cluster_ppca_features( self )
+        use simple_aff_prop, only: aff_prop
+        class(nanoparticle), intent(inout) :: self
+        integer, allocatable :: centers(:), labels(:)
+        type(aff_prop) :: ap
+        real           :: smat(self%n_cc,self%n_cc), simsum, datvecs(self%n_cc,8)
+        integer        :: i, j, cc
+        do cc = 1, self%n_cc
+            ! real-valued data
+            datvecs(cc,1) = real(self%atominfo(cc)%size)
+            datvecs(cc,2) =      self%atominfo(cc)%bondl
+            datvecs(cc,3) =      self%atominfo(cc)%aspect_ratio
+            datvecs(cc,4) =      self%atominfo(cc)%polar_angle
+            datvecs(cc,5) =      self%atominfo(cc)%diam
+            datvecs(cc,6) =      self%atominfo(cc)%max_int
+            datvecs(cc,7) =      self%atominfo(cc)%max_corr
+            datvecs(cc,8) =      self%atominfo(cc)%radial_strain
+        end do
+        ! rescaling to avoid the polarization angle to dominate the analysis
+        call norm_minmax(datvecs(:,1))
+        call norm_minmax(datvecs(:,2))
+        call norm_minmax(datvecs(:,3))
+        call norm_minmax(datvecs(:,4))
+        call norm_minmax(datvecs(:,5))
+        call norm_minmax(datvecs(:,6))
+        call norm_minmax(datvecs(:,7))
+        call norm_minmax(datvecs(:,8))
+        ! calculate similarity matrix
+        do i = 1, self%n_cc - 1
+            do j = i + 1, self%n_cc
+                ! smat(i,j) =   pearsn_serial(datvecs(i,:), datvecs(j,:))
+                smat(i,j) = - euclid(datvecs(i,:), datvecs(j,:))
+                smat(j,i) = smat(i,j)
+            end do
+        end do
+        ! affinity propagation
+        call ap%new(self%n_cc, smat)
+        call ap%propagate(centers, labels, simsum)
+        write(logfhandle,*) '# clusters found with affinity propagation', size(centers)
+
+        contains
+
+            subroutine norm_minmax( arr )
+                real, intent(inout) :: arr(:)
+                real                :: smin, smax, delta
+                smin  = minval(arr)
+                smax  = maxval(arr)
+                delta = smax - smin
+                arr = (arr - smin)/delta
+            end subroutine norm_minmax
+
+    end subroutine cluster_ppca_features
 
     ! This subroutine clusters the atoms with respect to the maximum intensity
     ! or the integrated density (according to the values contained in feature)

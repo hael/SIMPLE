@@ -647,7 +647,7 @@ contains
     end subroutine sortmeans
 
     ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10
-    subroutine hac_1d( vec, thresh,labels, centroids, populations )
+    subroutine hac_1d( vec, thresh, labels, centroids, populations )
         real,    intent(in)  :: vec(:)       ! input vector
         real,    intent(in)  :: thresh       ! threshold for class merging
         integer, intent(out) :: labels(:)    ! labels of the elements in vec
@@ -658,7 +658,7 @@ contains
         real    :: d
         integer :: N, i, j, index(1), loc1(1), loc2(1), cnt, ncls
         N = size(vec) ! number of data points
-        ! 1) calc all the couples of distances, using euclid dist
+        ! 1) calc all the couples of distances, using Manhattan dist
         allocate(mat(N,N), source = 0.)
         do i = 1, N-1
             do j = i+1, N
