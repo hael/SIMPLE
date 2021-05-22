@@ -13,18 +13,19 @@ private
 #include "simple_local_flags.inc"
 
 ! module global constants
-integer, parameter          :: N_THRESH        = 20      ! number of thresholds for binarization
-logical, parameter          :: DEBUG           = .false. ! for debugging purposes
-logical, parameter          :: GENERATE_FIGS   = .false. ! for figures generation
-integer, parameter          :: SOFT_EDGE       = 6
-integer, parameter          :: N_DISCRET       = 1000
-integer, parameter          :: CNMIN           = 4
-integer, parameter          :: CNMAX           = 12
-integer, parameter          :: NSTRAIN_COMPS   = 7
-character(len=3), parameter :: CSV_DELIM       = ', '
-character(len=*), parameter :: ATOM_STATS_FILE = 'atom_stats.csv'
-character(len=*), parameter :: NP_STATS_FILE   = 'nanoparticle_stats.csv'
-character(len=*), parameter :: CN_STATS_FILE   = 'cn_dependent_stats.csv'
+integer, parameter          :: N_THRESH            = 20      ! number of thresholds for binarization
+logical, parameter          :: DEBUG               = .false. ! for debugging purposes
+logical, parameter          :: GENERATE_FIGS       = .false. ! for figures generation
+integer, parameter          :: SOFT_EDGE           = 6
+integer, parameter          :: N_DISCRET           = 1000
+integer, parameter          :: CNMIN               = 4
+integer, parameter          :: CNMAX               = 12
+integer, parameter          :: NSTRAIN_COMPS       = 7
+character(len=3), parameter :: CSV_DELIM           = ', '
+character(len=*), parameter :: ATOM_STATS_FILE     = 'atom_stats.csv'
+character(len=*), parameter :: NP_STATS_FILE       = 'nanoparticle_stats.csv'
+character(len=*), parameter :: CN_STATS_FILE       = 'cn_dependent_stats.csv'
+character(len=*), parameter :: ATOM_VAR_CORRS_FILE = 'atom_param_corrs.txt'
 
 character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//'CN_STD'//CSV_DELIM//'NN_BONDL'//&
 &CSV_DELIM//'CN_GEN'//CSV_DELIM//'X'//CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'ASPECT_RATIO'//CSV_DELIM//'POLAR_ANGLE'//&
@@ -1319,9 +1320,8 @@ contains
 
     subroutine write_csv_files( self )
         class(nanoparticle), intent(in) :: self
-        character(len=LINE_MAX_LEN) :: buffer
-        integer                     :: ios, funit, cc, cn
-        character(len=256)          :: io_msg
+        integer            :: ios, funit, cc, cn
+        character(len=256) :: io_msg
         ! NANOPARTICLE STATS
         call fopen(funit, file=NP_STATS_FILE, iostat=ios, status='replace', iomsg=io_msg)
         call fileiochk("simple_nanoparticle :: write_csv_files; ERROR when opening file "//NP_STATS_FILE//'; '//trim(io_msg),ios)
@@ -1476,11 +1476,14 @@ contains
     ! identify correlated variables with Pearson's product moment correation coefficient
     subroutine id_corr_vars( self )
         class(nanoparticle), target, intent(in) :: self
-        character(len=13) :: flags(12)
-        real, pointer     :: ptr1(:), ptr2(:)
+        integer, parameter :: NFLAGS = 12
+        integer, parameter :: NPAIRS = (NFLAGS * (NFLAGS - 1)) / 2
+        character(len=13)  :: flags(NFLAGS), flags_i(NPAIRS), flags_j(NPAIRS)
+        character(len=256) :: io_msg
+        real, pointer      :: ptr1(:), ptr2(:)
         real, allocatable, target :: sizes(:)
-        integer :: i, j
-        real    :: corr
+        real    :: corrs(NPAIRS), corrs_copy(NPAIRS), corr
+        integer :: i, j, inds(NPAIRS), cnt, funit, ios
         ! make sizes a real array
         allocate(sizes(self%n_cc), source=real(self%atominfo(:)%size))
         ! variables to correlate
@@ -1497,14 +1500,28 @@ contains
         flags(11) = 'MAX_CORR'      ! max_corr
         flags(12) = 'RADIAL_STRAIN' ! radial_strain
         ! calculate correlations
-        do i = 1, 12 - 1
-            do j = i + 1, 12
+        cnt = 0
+        do i = 1, NFLAGS - 1
+            do j = i + 1, NFLAGS
+                cnt          = cnt + 1
+                inds(cnt)    = cnt
+                flags_i(cnt) = flags(i)
+                flags_j(cnt) = flags(j)
                 call set_ptr(flags(i), ptr1)
                 call set_ptr(flags(j), ptr2)
-                corr = pearsn_serial(ptr1, ptr2)
-                write(logfhandle,'(A,F7.4)')'PEARSONS CORRELATION BTW '//flags(i)//' & '//flags(j)//' IS ', corr
+                corrs(cnt) = pearsn_serial(ptr1, ptr2)
             end do
         end do
+        ! sort
+        corrs_copy = corrs
+        call hpsort(corrs_copy, inds)
+        ! write output
+        call fopen(funit, file=ATOM_VAR_CORRS_FILE, iostat=ios, status='replace', iomsg=io_msg)
+        call fileiochk("simple_nanoparticle :: id_corr_vars; ERROR when opening file "//ATOM_VAR_CORRS_FILE//'; '//trim(io_msg),ios)
+        do i = 1, NPAIRS
+            write(funit,'(A,F7.4)')'PEARSONS CORRELATION BTW '//flags_i(inds(i))//' & '//flags_j(inds(i))//' IS ', corrs(inds(i))
+        end do
+        call fclose(funit)
 
         contains
 
