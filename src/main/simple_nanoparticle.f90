@@ -14,6 +14,7 @@ private
 
 ! module global constants
 integer, parameter          :: N_THRESH            = 20      ! number of thresholds for binarization
+integer, parameter          :: NVOX_THRESH         = 3       ! min # voxels per atom is 2
 logical, parameter          :: DEBUG               = .false. ! for debugging purposes
 logical, parameter          :: GENERATE_FIGS       = .false. ! for figures generation
 integer, parameter          :: SOFT_EDGE           = 6
@@ -28,12 +29,16 @@ character(len=*), parameter :: CN_STATS_FILE       = 'cn_dependent_stats.csv'
 character(len=*), parameter :: ATOM_VAR_CORRS_FILE = 'atom_param_corrs.txt'
 
 character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//'CN_STD'//CSV_DELIM//'NN_BONDL'//&
-&CSV_DELIM//'CN_GEN'//CSV_DELIM//'X'//CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'ASPECT_RATIO'//CSV_DELIM//'POLAR_ANGLE'//&
-&CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//CSV_DELIM//'MAX_INT'//CSV_DELIM//'SDEV_INT'//CSV_DELIM//'RADIAL_POS'//&
-&CSV_DELIM//'MAX_CORR'//CSV_DELIM//'X_PCA'//CSV_DELIM//'Y_PCA'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//&
+&CSV_DELIM//'CN_GEN'//CSV_DELIM//'ASPECT_RATIO'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
+&CSV_DELIM//'MAX_INT'//CSV_DELIM//'SDEV_INT'//CSV_DELIM//'RADIAL_POS'//CSV_DELIM//'MAX_CORR'//CSV_DELIM//'X'//&
+&CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'X_PCA'//CSV_DELIM//'Y_PCA'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//&
 &CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'//&
 &CSV_DELIM//'NVOX_CLASS'//CSV_DELIM//'NN_BONDL_CLASS'//CSV_DELIM//'ASPECT_RATIO_CLASS'//CSV_DELIM//'POLAR_ANGLE_CLASS'//&
 &CSV_DELIM//'DIAM_CLASS'//CSV_DELIM//'MAX_INT_CLASS'//CSV_DELIM//'MAX_CORR_CLASS'//CSV_DELIM//'RADIAL_STRAIN_CLASS'
+
+character(len=*), parameter :: ATOM_STATS_HEAD_OMIT = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//'CN_STD'//CSV_DELIM//'NN_BONDL'//&
+&CSV_DELIM//'CN_GEN'//CSV_DELIM//'ASPECT_RATIO'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
+&CSV_DELIM//'MAX_INT'//CSV_DELIM//'SDEV_INT'//CSV_DELIM//'RADIAL_POS'//CSV_DELIM//'MAX_CORR'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//CSV_DELIM//'X_POLAR'//CSV_DELIM//'Y_POLAR'//&
 &CSV_DELIM//'Z_POLAR'//CSV_DELIM//'POLAR_MAG'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'AVG_BONDL'//CSV_DELIM//'MAX_BONDL'//&
@@ -60,7 +65,6 @@ type :: atom_stats
     integer :: loc_ldist(3)      = 0  ! vxl that determins the longest dim of the atom
     real    :: bondl             = 0. ! nearest neighbour bond lenght in A                          NN_BONDL
     real    :: cn_gen            = 0. ! generalized coordination number                             CN_GEN
-    real    :: center(3)         = 0. ! atom center                                                 X Y Z
     real    :: aspect_ratio      = 0. !                                                             ASPECT_RATIO
     real    :: polar_vec(3)      = 0. ! polarization vector
     real    :: polar_angle       = 0. ! polarization angle                                          POLAR_ANGLE
@@ -70,6 +74,7 @@ type :: atom_stats
     real    :: sdev_int          = 0. ! standard deviation -"-                                      SDEV_INT
     real    :: cendist           = 0. ! distance from the centre of mass of the nanoparticle        RADIAL_POS
     real    :: max_corr          = 0. ! maximum atom correlation within the connected component     MAX_CORR
+    real    :: center(3)         = 0. ! atom center                                                 X Y Z
     real    :: x_pca             = 0. ! x-component of pca feature vector                           X_PCA
     real    :: y_pca             = 0. ! y-component of pca feature vector                           Y_PCA
     ! strain
@@ -215,8 +220,8 @@ type :: nanoparticle
     ! clustering
     procedure, private :: id_corr_vars
     procedure, private :: bicluster_otsu
-    procedure, private :: ppca_atom_binclusters
-    procedure, private :: cluster_ppca_features
+    procedure, private :: ppca_atom_features
+    procedure, private :: cluster_atom_features
     procedure, private :: cluster_atom_intensity
     procedure          :: cluster_atom_maxint
     procedure          :: cluster_atom_intint
@@ -630,7 +635,7 @@ contains
         real    :: radius  ! radius of the sphere to consider for cn calculation
         real    :: a(3)    ! lattice parameter
         real    :: cn_gen(self%n_cc)
-        integer :: cn(self%n_cc), cc, n_discard, filnum, filnum1, filnum2, i
+        integer :: cn(self%n_cc), cc, n_discard, filnum, filnum1, filnum2, i, nvox
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS'
         centers_A = self%atominfo2centers_A()
         if( DEBUG )then
@@ -664,7 +669,7 @@ contains
             where( cn_gen < cn_thresh ) mask = .false. ! false where atom has to be discarded
             n_discard = count(cn_gen < cn_thresh)
         else
-            if(DEBUG) then
+            if( DEBUG )then
                 write(logfhandle, *) 'Before outliers discarding cn_std is'
                 write(logfhandle, *)  cn
             endif
@@ -676,6 +681,14 @@ contains
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
         ! Removing outliers from the binary image and the connected components image
+        ! remove atoms with < NVOX_THRESH voxels
+        do cc = 1, self%n_cc
+            nvox = count(imat_cc == cc)
+            if( nvox < NVOX_THRESH )then
+                where(imat_cc == cc) imat_bin = 0
+            endif
+        end do
+        ! Removing outliers based on coordination number
         if( generalised )then
             do cc = 1, self%n_cc
                 if( cn_gen(cc) < cn_thresh )then
@@ -880,7 +893,7 @@ contains
         real,    pointer     :: rmat(:,:,:), rmat_corr(:,:,:)
         integer, allocatable :: imat_cc(:,:,:)
         real    :: tmp_diam, a(3), radius_cn
-        logical :: cc_mask(self%n_cc), param_mask(self%n_cc)
+        logical :: cc_mask(self%n_cc), diam_mask(self%n_cc)
         integer :: i, j, k, cc, cn, n
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         ! calc cn and cn_gen
@@ -990,16 +1003,16 @@ contains
         self%max_polar_angle   = maxval(self%atominfo(:)%polar_angle)
         self%min_polar_angle   = minval(self%atominfo(:)%polar_angle)
         ! set atom diameter stats
-        param_mask             = self%atominfo(:)%diam > self%theoretical_radius
-        n                      = count(param_mask)
-        self%min_diam          = minval(self%atominfo(:)%diam, mask=param_mask)
+        diam_mask              = self%atominfo(cc)%size >= NVOX_THRESH
+        n                      = count(diam_mask)
+        self%min_diam          = minval(self%atominfo(:)%diam, mask=diam_mask)
         self%max_diam          = maxval(self%atominfo(:)%diam)
-        tmparr                 = pack(self%atominfo(:)%diam, mask=param_mask)
+        tmparr                 = pack(self%atominfo(:)%diam, mask=diam_mask)
         self%med_diam          = median_nocopy(tmparr)
-        self%avg_diam          = sum(self%atominfo(:)%diam, mask=param_mask) / real(n)
+        self%avg_diam          = sum(self%atominfo(:)%diam, mask=diam_mask) / real(n)
         self%sdev_diam         = 0.
         do cc = 1, self%n_cc
-            if( param_mask(cc) ) self%sdev_diam = self%sdev_diam + (self%avg_diam - self%atominfo(cc)%diam)**2.
+            if( diam_mask(cc) ) self%sdev_diam = self%sdev_diam + (self%avg_diam - self%atominfo(cc)%diam)**2.
         enddo
         self%sdev_diam         = sqrt(self%sdev_diam / real(n-1))
         ! max/min average intensity
@@ -1034,8 +1047,8 @@ contains
         call self%bicluster_otsu('max_int')
         call self%bicluster_otsu('max_corr')
         call self%bicluster_otsu('radial_strain')
-        call self%ppca_atom_binclusters
-        call self%cluster_ppca_features
+        call self%ppca_atom_features
+        call self%cluster_atom_features
         ! identify correlated variables with Pearson's product moment correation coefficient
         call self%id_corr_vars
         ! destruct
@@ -1330,7 +1343,7 @@ contains
         ! write record
         call self%write_np_stats(funit)
         call fclose(funit)
-        ! ! CN-DEPENDENT STATS
+        ! CN-DEPENDENT STATS
         call fopen(funit, file=CN_STATS_FILE, iostat=ios, status='replace', iomsg=io_msg)
         call fileiochk("simple_nanoparticle :: write_csv_files; ERROR when opening file "//CN_STATS_FILE//'; '//trim(io_msg),ios)
         ! write header
@@ -1344,17 +1357,22 @@ contains
         call fopen(funit, file=ATOM_STATS_FILE, iostat=ios, status='replace', iomsg=io_msg)
         call fileiochk("simple_nanoparticle :: write_csv_files; ERROR when opening file "//ATOM_STATS_FILE//'; '//trim(io_msg),ios)
         ! write header
-        write(funit,'(a)') ATOM_STATS_HEAD
+        write(funit,'(a)') ATOM_STATS_HEAD_OMIT
         ! write records
         do cc = 1, size(self%atominfo)
-            call self%write_atominfo(cc, funit)
+            call self%write_atominfo(cc, funit, omit=.true.)
         enddo
         call fclose(funit)
     end subroutine write_csv_files
 
-    subroutine write_atominfo( self, cc, funit )
+    subroutine write_atominfo( self, cc, funit, omit )
         class(nanoparticle), intent(in) :: self
         integer,             intent(in) :: cc, funit
+        logical, optional,   intent(in) :: omit
+        logical :: omit_here
+        if( self%atominfo(cc)%size < NVOX_THRESH ) return
+        omit_here = .false.
+        if( present(omit) ) omit_here = omit
         601 format(F8.4,A3)
         602 format(F8.4)
         ! various per-atom parameters
@@ -1363,9 +1381,6 @@ contains
         write(funit,601,advance='no') real(self%atominfo(cc)%cn_std),           CSV_DELIM ! CN_STD
         write(funit,601,advance='no') self%atominfo(cc)%bondl,                  CSV_DELIM ! NN_BONDL
         write(funit,601,advance='no') self%atominfo(cc)%cn_gen,                 CSV_DELIM ! CN_GEN
-        write(funit,601,advance='no') self%atominfo(cc)%center(1),              CSV_DELIM ! X
-        write(funit,601,advance='no') self%atominfo(cc)%center(2),              CSV_DELIM ! Y
-        write(funit,601,advance='no') self%atominfo(cc)%center(3),              CSV_DELIM ! Z
         write(funit,601,advance='no') self%atominfo(cc)%aspect_ratio,           CSV_DELIM ! ASPECT_RATIO
         write(funit,601,advance='no') self%atominfo(cc)%polar_angle,            CSV_DELIM ! POLAR_ANGLE
         write(funit,601,advance='no') self%atominfo(cc)%diam,                   CSV_DELIM ! DIAM
@@ -1374,6 +1389,10 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%sdev_int,               CSV_DELIM ! SDEV_INT
         write(funit,601,advance='no') self%atominfo(cc)%cendist,                CSV_DELIM ! RADIAL_POS
         write(funit,601,advance='no') self%atominfo(cc)%max_corr,               CSV_DELIM ! MAX_CORR
+        if( .not. omit_here )then
+        write(funit,601,advance='no') self%atominfo(cc)%center(1),              CSV_DELIM ! X
+        write(funit,601,advance='no') self%atominfo(cc)%center(2),              CSV_DELIM ! Y
+        write(funit,601,advance='no') self%atominfo(cc)%center(3),              CSV_DELIM ! Z
         write(funit,601,advance='no') self%atominfo(cc)%x_pca,                  CSV_DELIM ! X_PCA
         write(funit,601,advance='no') self%atominfo(cc)%y_pca,                  CSV_DELIM ! Y_PCA
         ! strain
@@ -1383,7 +1402,13 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%exy_strain,             CSV_DELIM ! EXY_STRAIN
         write(funit,601,advance='no') self%atominfo(cc)%eyz_strain,             CSV_DELIM ! EYZ_STRAIN
         write(funit,601,advance='no') self%atominfo(cc)%exz_strain,             CSV_DELIM ! EXZ_STRAIN
+        endif
+        if( .not. omit_here )then
         write(funit,601,advance='no') self%atominfo(cc)%radial_strain,          CSV_DELIM ! RADIAL_STRAIN
+        else
+        write(funit,602)              self%atominfo(cc)%radial_strain                     ! RADIAL_STRAIN
+        endif
+        if( .not. omit_here )then
         ! cluster assignments
         write(funit,601,advance='no') real(self%atominfo(cc)%size_cls),         CSV_DELIM ! NVOX_CLASS
         write(funit,601,advance='no') real(self%atominfo(cc)%bondl_cls),        CSV_DELIM ! NN_BONDL_CLASS
@@ -1393,6 +1418,7 @@ contains
         write(funit,601,advance='no') real(self%atominfo(cc)%max_int_cls),      CSV_DELIM ! MAX_INT_CLASS
         write(funit,601,advance='no') real(self%atominfo(cc)%max_corr_cls),     CSV_DELIM ! MAX_CORR_CLASS
         write(funit,602)              real(self%atominfo(cc)%radial_strain_cls)           ! RADIAL_STRAIN_CLASS
+        endif
     end subroutine write_atominfo
 
     subroutine write_np_stats( self, funit )
@@ -1634,7 +1660,7 @@ contains
         end select
     end subroutine bicluster_otsu
 
-    subroutine ppca_atom_binclusters( self )
+    subroutine ppca_atom_features( self )
         use simple_ppca_serial, only: ppca_serial
         class(nanoparticle), intent(inout) :: self
         real               :: datvecs(self%n_cc,8), avg(8)
@@ -1654,15 +1680,6 @@ contains
             datvecs(cc,6) =      self%atominfo(cc)%max_int
             datvecs(cc,7) =      self%atominfo(cc)%max_corr
             datvecs(cc,8) =      self%atominfo(cc)%radial_strain
-            ! bincluster data
-            ! datvecs(cc,1) = real(self%atominfo(cc)%size_cls          - 1)
-            ! datvecs(cc,2) = real(self%atominfo(cc)%bondl_cls         - 1)
-            ! datvecs(cc,3) = real(self%atominfo(cc)%aspect_ratio_cls  - 1)
-            ! datvecs(cc,4) = real(self%atominfo(cc)%polar_angle_cls   - 1)
-            ! datvecs(cc,5) = real(self%atominfo(cc)%diam_cls          - 1)
-            ! datvecs(cc,6) = real(self%atominfo(cc)%max_int_cls       - 1)
-            ! datvecs(cc,7) = real(self%atominfo(cc)%max_corr_cls      - 1)
-            ! datvecs(cc,8) = real(self%atominfo(cc)%radial_strain_cls - 1)
         end do
         ! rescaling to avoid the polarization angle to dominate the analysis
         call norm_minmax(datvecs(:,1))
@@ -1701,32 +1718,9 @@ contains
                 arr = (arr - smin)/delta
             end subroutine norm_minmax
 
-    end subroutine ppca_atom_binclusters
+    end subroutine ppca_atom_features
 
-    ! subroutine cluster_ppca_features( self )
-    !     use simple_aff_prop, only: aff_prop
-    !     class(nanoparticle), intent(inout) :: self
-    !     integer, allocatable :: centers(:), labels(:)
-    !     type(aff_prop) :: ap
-    !     real           :: smat(self%n_cc,self%n_cc), simsum
-    !     integer        :: i, j
-    !     ! calculate similarity matrix
-    !     do i = 1, self%n_cc - 1
-    !         do j = i + 1, self%n_cc
-    !             ! smat(i,j) = pearsn_serial([self%atominfo(i)%x_pca,self%atominfo(i)%y_pca],&
-    !             !                          &[self%atominfo(j)%x_pca,self%atominfo(j)%y_pca])
-    !             smat(i,j) = -      euclid([self%atominfo(i)%x_pca,self%atominfo(i)%y_pca],&
-    !                                      &[self%atominfo(j)%x_pca,self%atominfo(j)%y_pca])
-    !             smat(j,i) = smat(i,j)
-    !         end do
-    !     end do
-    !     ! affinity propagation
-    !     call ap%new(self%n_cc, smat)
-    !     call ap%propagate(centers, labels, simsum)
-    !     write(logfhandle,*) '# clusters found with affinity propagation', size(centers)
-    ! end subroutine cluster_ppca_features
-
-    subroutine cluster_ppca_features( self )
+    subroutine cluster_atom_features( self )
         use simple_aff_prop, only: aff_prop
         class(nanoparticle), intent(inout) :: self
         integer, allocatable :: centers(:), labels(:)
@@ -1777,7 +1771,7 @@ contains
                 arr = (arr - smin)/delta
             end subroutine norm_minmax
 
-    end subroutine cluster_ppca_features
+    end subroutine cluster_atom_features
 
     ! This subroutine clusters the atoms with respect to the maximum intensity
     ! or the integrated density (according to the values contained in feature)
