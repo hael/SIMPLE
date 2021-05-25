@@ -1003,7 +1003,7 @@ contains
         self%max_polar_angle   = maxval(self%atominfo(:)%polar_angle)
         self%min_polar_angle   = minval(self%atominfo(:)%polar_angle)
         ! set atom diameter stats
-        diam_mask              = self%atominfo(cc)%size >= NVOX_THRESH
+        diam_mask              = self%atominfo(:)%size >= NVOX_THRESH
         n                      = count(diam_mask)
         self%min_diam          = minval(self%atominfo(:)%diam, mask=diam_mask)
         self%max_diam          = maxval(self%atominfo(:)%diam)
