@@ -10,10 +10,10 @@ implicit none
 type(detect_atoms_commander)          :: xdetect_atoms
 type(atoms_mask_commander)            :: xatoms_mask
 type(atoms_stats_commander)           :: xatoms_stats
+type(write_cn_atoms_commander)        :: xwrite_cn_atoms
 type(atom_cluster_analysis_commander) :: xatom_cluster_analysis
 type(nano_softmask_commander)         :: xnano_softmask
 type(geometry_analysis_commander)     :: xgeometry_analysis
-type(plot_atom_commander)             :: xplot_atom
 type(dock_coords_commander)           :: xdock_coords
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: xarg, prg, entire_line
@@ -40,6 +40,9 @@ select case(prg)
     case( 'atoms_stats' )
         call cline%set('mkdir', 'yes')
         call xatoms_stats%execute(cline)
+    case( 'write_cn_atoms')
+        call cline%set('mkdir', 'yes')
+        call xwrite_cn_atoms%execute(cline)
     case( 'atom_cluster_analysis' )
         call xatom_cluster_analysis%execute(cline)
     case( 'atoms_mask' )
@@ -48,8 +51,6 @@ select case(prg)
         call xnano_softmask%execute(cline)
     case('geometry_analysis')
         call xgeometry_analysis%execute(cline)
-    case('plot_atom')
-        call xplot_atom%execute(cline)
     case('dock_coords')
         call xdock_coords%execute(cline)
     case DEFAULT

@@ -213,6 +213,7 @@ type :: nanoparticle
     ! visualization and output
     procedure          :: write_centers
     procedure          :: write_atoms
+    procedure          :: write_cn_atoms
     procedure          :: write_csv_files
     procedure, private :: write_atominfo
     procedure, private :: write_np_stats
@@ -1088,7 +1089,7 @@ contains
             function calc_net_dipole( cn ) result( net_dipole )
                 integer, optional, intent(in) :: cn ! calculate net polarization for given std cn
                 real    :: net_dipole(3), m_adjusted(3)
-                integer :: i
+                integer :: i, io_stat, filnum
                 logical :: cn_mask(self%n_cc)
                 ! assumes cn_std part of atominfo
                 ! Generate mask for cn
@@ -1112,6 +1113,15 @@ contains
                 enddo
                 m_adjusted = m_adjusted / real(count(cn_mask))
                 net_dipole = (net_dipole - 1.) * self%smpd + m_adjusted
+                if( present(cn) )then
+                    write(logfhandle, *) 'Generating output dipole *.bild file for fixed cn ', cn
+                    call fopen(filnum, file='NetDipole'//int2str(cn)//'.bild', iostat=io_stat)
+                else
+                    write(logfhandle, *) 'Generating output global dipole *.bild file for fixed cn ', cn
+                    call fopen(filnum, file='NetDipoleGlobal.bild', iostat=io_stat)
+                endif
+                write (filnum,'(a6,6i4)') trim('.arrow '), nint(m_adjusted), nint(net_dipole)
+                call fclose(filnum)
             end function calc_net_dipole
 
             subroutine calc_cn_stats( cn )
@@ -1309,12 +1319,11 @@ contains
        endif
     end subroutine write_centers
 
-    ! re-writwe so that it takes cn_max as input
     subroutine write_atoms( self )
-       class(nanoparticle), intent(inout) :: self
-       type(binimage)       :: img_atom
-       integer, allocatable :: imat(:,:,:), imat_atom(:,:,:)
-       integer :: i
+        class(nanoparticle), intent(inout) :: self
+        type(binimage)       :: img_atom
+        integer, allocatable :: imat(:,:,:), imat_atom(:,:,:)
+        integer :: i
         call img_atom%copy_bimg(self%img_cc)
         allocate(imat_atom(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
         call img_atom%get_imat(imat)
@@ -1330,6 +1339,37 @@ contains
         deallocate(imat,imat_atom)
         call img_atom%kill_bimg
     end subroutine write_atoms
+
+    subroutine write_cn_atoms( self, cn_std )
+        class(nanoparticle), intent(inout) :: self
+        integer,             intent(in)    :: cn_std
+        type(binimage)       :: img_atom
+        integer, allocatable :: imat(:,:,:), imat_atom(:,:,:)
+        real,    allocatable :: centers_A(:,:)
+        logical :: cn_mask(self%n_cc)
+        real    :: a(3), radius_cn
+        integer :: i
+        ! calc cn and cn_gen
+        centers_A = self%atominfo2centers_A()
+        call fit_lattice(centers_A, a)
+        call find_cn_radius(a, radius_cn)
+        call run_coord_number_analysis(centers_A,radius_cn,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+        ! make cn mask
+        cn_mask = self%atominfo(:)%cn_std == cn_std
+        ! make binary matrix of atoms with given cn_std
+        call img_atom%copy_bimg(self%img_cc)
+        allocate(imat_atom(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
+        call img_atom%get_imat(imat)
+        do i = 1, self%n_cc
+            if( cn_mask(i) )then
+                where( imat == i ) imat_atom = 1
+            endif
+        enddo
+        call img_atom%set_imat(imat_atom)
+        call img_atom%write_bimg('Atoms_with_cn_std'//trim(int2str(cn_std))//'.mrc')
+        deallocate(imat,imat_atom)
+        call img_atom%kill_bimg
+    end subroutine write_cn_atoms
 
     subroutine write_csv_files( self )
         class(nanoparticle), intent(in) :: self

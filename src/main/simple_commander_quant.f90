@@ -12,10 +12,10 @@ implicit none
 
 public :: detect_atoms_commander
 public :: atoms_stats_commander
+public :: write_cn_atoms_commander
 public :: atom_cluster_analysis_commander
 public :: nano_softmask_commander
 public :: geometry_analysis_commander
-public :: plot_atom_commander
 public :: dock_coords_commander
 public :: atoms_mask_commander
 
@@ -26,14 +26,18 @@ type, extends(commander_base) :: detect_atoms_commander
   contains
     procedure :: execute      => exec_detect_atoms
 end type detect_atoms_commander
-type, extends(commander_base) :: dock_coords_commander
-  contains
-    procedure :: execute      => exec_dock_coords
-end type dock_coords_commander
 type, extends(commander_base) :: atoms_stats_commander
   contains
     procedure :: execute      => exec_atoms_stats
 end type atoms_stats_commander
+type, extends(commander_base) :: write_cn_atoms_commander
+  contains
+    procedure :: execute      => exec_write_cn_atoms
+end type write_cn_atoms_commander
+type, extends(commander_base) :: dock_coords_commander
+  contains
+    procedure :: execute      => exec_dock_coords
+end type dock_coords_commander
 type, extends(commander_base) :: atom_cluster_analysis_commander
   contains
     procedure :: execute      => exec_atom_cluster_analysis
@@ -50,10 +54,9 @@ type, extends(commander_base) :: geometry_analysis_commander
   contains
     procedure :: execute      => exec_geometry_analysis
 end type geometry_analysis_commander
-type, extends(commander_base) :: plot_atom_commander
-  contains
-    procedure :: execute      => exec_plot_atom
-end type plot_atom_commander
+
+integer, parameter :: CNMIN = 4
+integer, parameter :: CNMAX = 12
 
 contains
 
@@ -94,6 +97,70 @@ contains
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
 
+    subroutine exec_atoms_stats( self, cline )
+        class(atoms_stats_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline !< command line input
+        character(len=STDLEN) :: fname
+        type(parameters)      :: params
+        type(nanoparticle)    :: nano
+        call params%new(cline)
+        if( .not. cline%defined('smpd') )then
+            THROW_HARD('ERROR! smpd needs to be present; exec_atoms_stats')
+        endif
+        if( .not. cline%defined('vol1') )then
+            THROW_HARD('ERROR! vol1 (raw map) needs to be present; exec_atoms_stats')
+        endif
+        if( .not. cline%defined('vol2') )then
+            THROW_HARD('ERROR! vol2 (connected components map *CC.mrc) needs to be present; exec_atoms_stats')
+        endif
+        if( .not. cline%defined('pdbfile') )then
+            THROW_HARD('ERROR! pdbfile needs to be present; exec_atoms_stats')
+        endif
+        call nano%new(params%vols(1), params%smpd, params%element)
+        call nano%set_atomic_coords(params%pdbfile)
+        call nano%set_img(params%vols(2), 'img_cc')
+        call nano%update_ncc()
+        call nano%fillin_atominfo
+        call nano%write_csv_files
+        ! kill
+        call nano%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_ATOMS_STATS NORMAL STOP ****')
+    end subroutine exec_atoms_stats
+
+    subroutine exec_write_cn_atoms( self, cline )
+        class(write_cn_atoms_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline !< command line input
+        character(len=STDLEN) :: fname
+        type(parameters)      :: params
+        type(nanoparticle)    :: nano
+        integer               :: cn
+        call params%new(cline)
+        if( .not. cline%defined('smpd') )then
+            THROW_HARD('ERROR! smpd needs to be present; exec_atoms_stats')
+        endif
+        if( .not. cline%defined('vol1') )then
+            THROW_HARD('ERROR! vol1 (raw map) needs to be present; exec_atoms_stats')
+        endif
+        if( .not. cline%defined('vol2') )then
+            THROW_HARD('ERROR! vol2 (connected components map *CC.mrc) needs to be present; exec_atoms_stats')
+        endif
+        if( .not. cline%defined('pdbfile') )then
+            THROW_HARD('ERROR! pdbfile needs to be present; exec_atoms_stats')
+        endif
+        call nano%new(params%vols(1), params%smpd, params%element)
+        call nano%set_atomic_coords(params%pdbfile)
+        call nano%set_img(params%vols(2), 'img_cc')
+        call nano%update_ncc()
+        do cn = CNMIN, CNMAX
+            call nano%write_cn_atoms( cn )
+        end do
+        ! kill
+        call nano%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_WRITE_CN_ATOMS NORMAL STOP ****')
+    end subroutine exec_write_cn_atoms
+
     subroutine exec_dock_coords(self, cline)
         use simple_ori ! for generation of the rotation matrix
         use simple_atoms, only : atoms
@@ -130,37 +197,6 @@ contains
         call a_ref%kill
         call a_targ%kill
     end subroutine exec_dock_coords
-
-    subroutine exec_atoms_stats( self, cline )
-        class(atoms_stats_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline !< command line input
-        character(len=STDLEN) :: fname
-        type(parameters)      :: params
-        type(nanoparticle)    :: nano
-        call params%new(cline)
-        if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_atoms_stats')
-        endif
-        if( .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! vol1 (raw map) needs to be present; exec_atoms_stats')
-        endif
-        if( .not. cline%defined('vol2') )then
-            THROW_HARD('ERROR! vol2 (connected components map *CC.mrc) needs to be present; exec_atoms_stats')
-        endif
-        if( .not. cline%defined('pdbfile') )then
-            THROW_HARD('ERROR! pdbfile needs to be present; exec_atoms_stats')
-        endif
-        call nano%new(params%vols(1), params%smpd, params%element)
-        call nano%set_atomic_coords(params%pdbfile)
-        call nano%set_img(params%vols(2), 'img_cc')
-        call nano%update_ncc()
-        call nano%fillin_atominfo
-        call nano%write_csv_files
-        ! kill
-        call nano%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_ATOMS_STATS NORMAL STOP ****')
-    end subroutine exec_atoms_stats
 
     subroutine exec_atom_cluster_analysis( self, cline )
         class(atom_cluster_analysis_commander), intent(inout) :: self
@@ -308,33 +344,5 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_GEOMETRY_ANALYSIS NORMAL STOP ****')
     end subroutine exec_geometry_analysis
-
-    subroutine exec_plot_atom( self, cline )
-        class(plot_atom_commander), intent(inout) :: self
-        class(cmdline),             intent(inout) :: cline !< command line input
-        character(len=STDLEN)  :: fname
-        type(parameters)       :: params
-        type(nanoparticle)     :: nano
-        call cline%set('mkdir', 'yes')
-        call params%new(cline)
-        if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_plot_atom')
-        endif
-        if( .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! vol1 needs to be present; exec_plot_atom')
-        endif
-        call nano%new(params%vols(1), params%smpd,params%element)
-        ! fetch img_bin, img_cc and atomic positions
-        fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
-        call nano%set_atomic_coords('../'//trim(fname)//'_atom_centers.pdb')
-        call nano%set_img('../'//trim(fname)//'CC.mrc', 'img_cc')
-        call nano%update_ncc()
-        ! execute
-        call nano%write_atoms()
-        ! kill
-        call nano%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_PLOT_ATOM NORMAL STOP ****')
-    end subroutine exec_plot_atom
 
 end module simple_commander_quant
