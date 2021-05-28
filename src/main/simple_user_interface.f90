@@ -4260,7 +4260,6 @@ contains
         call graphene_subtr%set_input('img_ios', 3, outstk)
         ! parameter input/output
         call graphene_subtr%set_input('parm_ios', 1, smpd)
-        graphene_subtr%parm_ios(1)%required = .false.
         ! <empty>
         ! alternative inputs
         ! <empty>

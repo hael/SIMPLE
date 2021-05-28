@@ -205,7 +205,7 @@ type :: nanoparticle
     procedure, private :: binarize_and_find_centers
     procedure, private :: find_centers
     procedure, private :: discard_outliers
-    procedure, private :: validate_atomic_positions
+    procedure, private :: split_atoms
     ! calc stats
     procedure          :: fillin_atominfo
     procedure, private :: masscen
@@ -420,7 +420,7 @@ contains
         end select
         if( GENERATE_FIGS ) call self%img_bin%write(trim(self%fbody)//'AfterOutliersRemoval.mrc')
         ! Validation of the selected atomic positions
-        call self%validate_atomic_positions()
+        call self%split_atoms()
         if( GENERATE_FIGS ) call self%img_bin%write(trim(self%fbody)//'AfterAPValidation.mrc')
     end subroutine identify_atomic_pos
 
@@ -469,7 +469,7 @@ contains
         type(atoms)          :: atom
         type(image)          :: simulated_distrib
         integer, allocatable :: imat_t(:,:,:)
-        real,    allocatable :: x_mat(:)  !vectorization of the volume
+        real,    allocatable :: x_mat(:)  ! vectorization of the volume
         real,    allocatable :: coords(:,:)
         real,    allocatable :: rmat(:,:,:)
         integer :: i, t
@@ -521,7 +521,7 @@ contains
             call self%img%phase_corr(simulated_distrib, pc, lp=3.)
             ! Calculation and update of the maxval the correlation reaches
             mm = pc%minmax()
-            if(mm(2) > maximum) then
+            if( mm(2) > maximum )then
                 maximum = mm(2)
                 t       = i
             endif
@@ -531,7 +531,7 @@ contains
         write(logfhandle,*) 'Selected threshold: ', x_thresh(t)
         ! Update img_bin and img_cc
         call self%img_bin%copy_bimg(img_bin_thresh(t))
-        if(GENERATE_FIGS) call self%img_bin%write_bimg(trim(self%fbody)//'SelectedThreshold.mrc')
+        if( GENERATE_FIGS ) call self%img_bin%write_bimg(trim(self%fbody)//'SelectedThreshold.mrc')
         call self%img_cc%copy_bimg(img_ccs_thresh(t))
         call self%update_ncc()
         call self%find_centers()
@@ -639,42 +639,14 @@ contains
         integer :: cn(self%n_cc), cc, n_discard, filnum, filnum1, filnum2, i, nvox
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS'
         centers_A = self%atominfo2centers_A()
-        if( DEBUG )then
-            call fopen(filnum, file='CentersAngCN.txt')
-            do i = 1, size(centers_A,2)
-                write(filnum,*) centers_A(:,i)
-            enddo
-            call fclose(filnum)
-            call fopen(filnum1, file='CentersPxlsCN.txt')
-            do i = 1, size(self%atominfo)
-                write(filnum1,*) self%atominfo(i)%center(:)
-            enddo
-            call fclose(filnum1)
-        endif
         call fit_lattice(centers_A,a)
         call find_cn_radius(a,radius)
-        if( DEBUG ) write(logfhandle,*) 'Radius for coord nr calculation ', radius
         call run_coord_number_analysis(centers_A,radius,cn,cn_gen)
-        if( DEBUG )then
-            call fopen(filnum2, file='CoordNumberGenBeforeOutliers.txt')
-            write(filnum2,*) cn_gen
-            call fclose(filnum2)
-        endif
         allocate(mask(self%n_cc), source=.true.)
         if( generalised )then
-            if( DEBUG )then
-                write(logfhandle, *) 'Before outliers discarding cn_gen is'
-                write(logfhandle, *)  cn_gen
-            endif
-            write(logfhandle, *) 'Using GENERALISED cn'
             where( cn_gen < cn_thresh ) mask = .false. ! false where atom has to be discarded
-            n_discard = count(cn_gen < cn_thresh)
+            n_discard = count( cn_gen < cn_thresh )
         else
-            if( DEBUG )then
-                write(logfhandle, *) 'Before outliers discarding cn_std is'
-                write(logfhandle, *)  cn
-            endif
-            write(logfhandle, *) 'Using STANDARD cn'
             where( cn < cn_thresh ) mask = .false. ! false where atom has to be discarded
             n_discard = count(cn < cn_thresh)
         endif
@@ -722,8 +694,7 @@ contains
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS, COMPLETED'
     end subroutine discard_outliers
 
-    ! This subrouitne validates the identified atomic positions
-    subroutine validate_atomic_positions( self )
+    subroutine split_atoms( self )
         class(nanoparticle), intent(inout) :: self
         real,    allocatable :: x(:)
         real,    pointer     :: rmat_pc(:,:,:)
@@ -765,11 +736,13 @@ contains
         do icc = 1, cnt
             self%atominfo(icc)%center(:) = new_centers(:,icc)
         enddo
+        !!!!!!!!!! NOT NECESSARY IF WE VALIDATE BEFORE DISCARDING OUTLIERS
         ! update contact scores
         do icc = 1, cnt
             self%atominfo(icc)%cn_std = new_coordination_number(icc)
             self%atominfo(icc)%cn_gen = new_coordination_number_gen(icc)
         enddo
+        !!!!!!!!!!
         call self%img_bin%get_imat(imat_bin)
         if( DEBUG ) call self%img_bin%write_bimg(trim(self%fbody)//'BINbeforeValidation.mrc')
         ! update binary image
@@ -778,17 +751,17 @@ contains
         elsewhere
             imat_bin = 0
         endwhere
+        ! update relevant data fields
         call self%img_bin%set_imat(imat_bin)
         call self%img_bin%update_img_rmat()
+        call self%img_bin%find_ccs(self%img_cc)
+        call self%update_ncc(self%img_cc)
+        call self%find_centers()
+        ! write output
         call self%img_bin%write_bimg(trim(self%fbody)//'BIN.mrc')
         write(logfhandle,*) 'output, binarized map:            ', trim(self%fbody)//'BIN.mrc'
-        call self%img_bin%find_ccs(self%img_cc)
         call self%img_cc%write_bimg(trim(self%fbody)//'CC.mrc')
-        write(logfhandle,*) 'output, connected components map: ', trim(self%fbody)//'BIN.mrc'
-        ! update number of ccs
-        call self%update_ncc(self%img_cc)
-        ! update and write centers
-        call self%find_centers()
+        write(logfhandle,*) 'output, connected components map: ', trim(self%fbody)//'CC.mrc'
         call self%write_centers()
         write(logfhandle, '(A)') '>>> VALIDATING ATOMIC POSITIONS, COMPLETED'
 
@@ -882,7 +855,7 @@ contains
             call self%img_cc%set_imat(imat_cc)
         end subroutine split_atom
 
-    end subroutine validate_atomic_positions
+    end subroutine split_atoms
 
     ! calc stats
 

@@ -55,8 +55,9 @@ type, extends(commander_base) :: geometry_analysis_commander
     procedure :: execute      => exec_geometry_analysis
 end type geometry_analysis_commander
 
-integer, parameter :: CNMIN = 4
-integer, parameter :: CNMAX = 12
+integer, parameter :: CNMIN             = 4
+integer, parameter :: CNMAX             = 12
+integer, parameter :: CN_THRESH_DEFAULT = 2
 
 contains
 
@@ -67,7 +68,6 @@ contains
         class(cmdline),                intent(inout) :: cline !< command line input
         type(parameters)   :: params
         type(nanoparticle) :: nano
-        integer, parameter :: CN_THRESH_DEFAULT = 3
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
         endif
