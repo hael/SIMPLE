@@ -171,7 +171,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: xmlloc=''
     ! other character variables in ascending alphabetical order
     character(len=STDLEN) :: algorithm=''         !< algorithm to be used
-    character(len=STDLEN) :: cn_type='cn_gen'     !< generalised coordination number (cn_gen) or stardard (cn_std)
+    character(len=STDLEN) :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)      :: automatic='no'       !< automatic thres for edge detect (yes|no) {no}
     character(len=4)      :: automsk='no'
