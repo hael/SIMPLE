@@ -79,17 +79,10 @@ contains
         ! volume soft-edge masking
         call nano%mask(params%msk)
         ! execute
-        if(cline%defined('cn_thres')) then
-            if( .not. cline%defined('cn_type')) then
-                params%cn_type = 'cn_std'
-            elseif( params%cn_type .ne. 'cn_gen' .and. params%cn_type .ne. 'cn_std' )then
-                THROW_WARN('Unvalid cn_type, proceeding with standard coordination number (cn_std)')
-                params%cn_type = 'cn_std'
-            endif
-            call nano%identify_atomic_pos(nint(params%cn_thres), params%cn_type)
+        if( cline%defined('cn_thres') )then
+            call nano%identify_atomic_pos(nint(params%cn_thres))
         else
-            params%cn_type = 'cn_std'
-            call nano%identify_atomic_pos(CN_THRESH_DEFAULT,params%cn_type)
+            call nano%identify_atomic_pos(CN_THRESH_DEFAULT)
         endif
         ! kill
         call nano%kill

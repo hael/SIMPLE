@@ -19,7 +19,7 @@ logical, parameter          :: DEBUG               = .false. ! for debugging pur
 logical, parameter          :: GENERATE_FIGS       = .false. ! for figures generation
 integer, parameter          :: SOFT_EDGE           = 6
 integer, parameter          :: N_DISCRET           = 1000
-integer, parameter          :: CNMIN               = 4
+integer, parameter          :: CNMIN               = 2
 integer, parameter          :: CNMAX               = 12
 integer, parameter          :: NSTRAIN_COMPS       = 7
 character(len=3), parameter :: CSV_DELIM           = ', '
@@ -31,7 +31,7 @@ character(len=*), parameter :: ATOM_VAR_CORRS_FILE = 'atom_param_corrs.txt'
 character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//'CN_STD'//CSV_DELIM//'NN_BONDL'//&
 &CSV_DELIM//'CN_GEN'//CSV_DELIM//'ASPECT_RATIO'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
 &CSV_DELIM//'MAX_INT'//CSV_DELIM//'SDEV_INT'//CSV_DELIM//'RADIAL_POS'//CSV_DELIM//'MAX_CORR'//CSV_DELIM//'X'//&
-&CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'X_PCA'//CSV_DELIM//'Y_PCA'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//&
+&CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//&
 &CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'//&
 &CSV_DELIM//'NVOX_CLASS'//CSV_DELIM//'NN_BONDL_CLASS'//CSV_DELIM//'ASPECT_RATIO_CLASS'//CSV_DELIM//'POLAR_ANGLE_CLASS'//&
 &CSV_DELIM//'DIAM_CLASS'//CSV_DELIM//'MAX_INT_CLASS'//CSV_DELIM//'MAX_CORR_CLASS'//CSV_DELIM//'RADIAL_STRAIN_CLASS'
@@ -75,8 +75,6 @@ type :: atom_stats
     real    :: cendist           = 0. ! distance from the centre of mass of the nanoparticle        RADIAL_POS
     real    :: max_corr          = 0. ! maximum atom correlation within the connected component     MAX_CORR
     real    :: center(3)         = 0. ! atom center                                                 X Y Z
-    real    :: x_pca             = 0. ! x-component of pca feature vector                           X_PCA
-    real    :: y_pca             = 0. ! y-component of pca feature vector                           Y_PCA
     ! strain
     real    :: exx_strain        = 0. ! tensile strain in %                                         EXX_STRAIN
     real    :: eyy_strain        = 0. ! -"-                                                         EYY_STRAIN
@@ -221,7 +219,6 @@ type :: nanoparticle
     ! clustering
     procedure, private :: id_corr_vars
     procedure, private :: bicluster_otsu
-    procedure, private :: ppca_atom_features
     procedure, private :: cluster_atom_features
     procedure, private :: cluster_atom_intensity
     procedure          :: cluster_atom_maxint
@@ -400,10 +397,9 @@ contains
 
     ! atomic position determination
 
-    subroutine identify_atomic_pos( self, cn_thresh, cn_type )
+    subroutine identify_atomic_pos( self, cn_thresh )
         class(nanoparticle), intent(inout) :: self
         integer,             intent(in)    :: cn_thresh
-        character(len=6),    intent(in)    :: cn_type ! use generalised cn or standard?
         ! Phase correlations approach
         call self%phasecorr_one_atom(self%img)
         ! Nanoparticle binarization
@@ -411,14 +407,7 @@ contains
         ! atom splitting by correlation map validation
         call self%split_atoms()
         ! Outliers discarding
-        select case(cn_type)
-            case('cn_gen')
-                call self%discard_outliers(cn_thresh, .true.)
-            case('cn_std')
-                call self%discard_outliers(cn_thresh, .false.)
-            case DEFAULT
-                call self%discard_outliers(cn_thresh, .false.)
-        end select
+        call self%discard_outliers(cn_thresh)
         ! write output
         call self%img_bin%write_bimg(trim(self%fbody)//'BIN.mrc')
         write(logfhandle,*) 'output, binarized map:            ', trim(self%fbody)//'BIN.mrc'
@@ -754,19 +743,13 @@ contains
 
     end subroutine split_atoms
 
-    ! This subroutine discards outliers that resisted binarization.
-    ! If generalised is true
-    ! It calculates the generalised coordination number (cn_gen) of each atom and discards
-    ! the atoms with cn_gen < cn_thresh
-    ! If generalised is false
+    ! This subroutine discards outliers that resisted binarization
     ! It calculates the standard coordination number (cn) of each atom and discards
     ! the atoms with cn_std < cn_thresh
-    ! It modifies the img_bin and img_cc instances deleting the
-    ! identified outliers.
-    subroutine discard_outliers( self, cn_thresh, generalised )
+    ! It modifies the img_bin and img_cc instances deleting the identified outliers.
+    subroutine discard_outliers( self, cn_thresh )
         class(nanoparticle), intent(inout) :: self
-        integer,             intent(in)    :: cn_thresh   ! threshold for discarding outliers based on coordination number
-        logical,             intent(in)    :: generalised ! use cn_gen or cn standard?
+        integer,             intent(in)    :: cn_thresh ! threshold for discarding outliers based on coordination number
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
         logical, allocatable :: mask(:)
         real, allocatable    :: centers_A(:,:) ! coordinates of the atoms in ANGSTROMS
@@ -780,13 +763,8 @@ contains
         call find_cn_radius(a,radius)
         call run_coord_number_analysis(centers_A,radius,cn,cn_gen)
         allocate(mask(self%n_cc), source=.true.)
-        if( generalised )then
-            where( cn_gen < cn_thresh ) mask = .false. ! false where atom has to be discarded
-            n_discard = count( cn_gen < cn_thresh )
-        else
-            where( cn < cn_thresh ) mask = .false. ! false where atom has to be discarded
-            n_discard = count(cn < cn_thresh)
-        endif
+        where( cn < cn_thresh ) mask = .false. ! false where atom has to be discarded
+        n_discard = count(cn < cn_thresh)
         write(logfhandle, *) 'Numbers of atoms discarded because of low cn ', n_discard
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
@@ -799,19 +777,11 @@ contains
             endif
         end do
         ! Removing outliers based on coordination number
-        if( generalised )then
-            do cc = 1, self%n_cc
-                if( cn_gen(cc) < cn_thresh )then
-                    where(imat_cc == cc) imat_bin = 0
-                endif
-            enddo
-        else
-            do cc = 1, self%n_cc
-                if( cn(cc) < cn_thresh )then
-                    where(imat_cc == cc) imat_bin = 0
-                endif
-            enddo
-        endif
+        do cc = 1, self%n_cc
+            if( cn(cc) < cn_thresh )then
+                where(imat_cc == cc) imat_bin = 0
+            endif
+        enddo
         call self%img_bin%set_imat(imat_bin)
         call self%img_bin%find_ccs(self%img_cc)
         ! update number of connected components
@@ -822,12 +792,6 @@ contains
         call run_coord_number_analysis(centers_A,radius,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
         ! ATTENTION: you will see low coord numbers because they are UPDATED, after elimination
         ! of the atoms with low cn. It is like this in order to be consistent with the figure.
-        if( DEBUG )then
-            write(logfhandle, *) 'After outliers discarding cn is'
-            write(logfhandle, *)  self%atominfo(:)%cn_std
-            write(logfhandle, *) 'And generalised cn is'
-            write(logfhandle, *)  self%atominfo(:)%cn_gen
-        endif
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS, COMPLETED'
     end subroutine discard_outliers
 
@@ -986,7 +950,7 @@ contains
             ! avg max_int and sdev max_int
             call calc_cn_stats( cn )
         end do
-        ! BINARY CLUSTERING & PCA ANALYSIS OF RELEVANT PARAMETERS
+        ! CLUSTERING OF RELEVANT PARAMETERS
         call self%bicluster_otsu('size')
         call self%bicluster_otsu('bondl')
         call self%bicluster_otsu('aspect_ratio')
@@ -995,7 +959,6 @@ contains
         call self%bicluster_otsu('max_int')
         call self%bicluster_otsu('max_corr')
         call self%bicluster_otsu('radial_strain')
-        call self%ppca_atom_features
         call self%cluster_atom_features
         ! identify correlated variables with Pearson's product moment correation coefficient
         call self%id_corr_vars
@@ -1041,11 +1004,7 @@ contains
                 ! assumes cn_std part of atominfo
                 ! Generate mask for cn
                 if( present(cn) )then
-                    where( self%atominfo(:)%cn_std .ne. cn )
-                        cn_mask = .false.
-                    elsewhere
-                        cn_mask = .true.
-                    endwhere
+                    cn_mask = self%atominfo(:)%cn_std == cn
                 else
                     cn_mask(:) = .true.
                 endif
@@ -1064,7 +1023,7 @@ contains
                     write(logfhandle, *) 'Generating output dipole *.bild file for fixed cn ', cn
                     call fopen(filnum, file='NetDipole'//int2str(cn)//'.bild', iostat=io_stat)
                 else
-                    write(logfhandle, *) 'Generating output global dipole *.bild file for fixed cn ', cn
+                    write(logfhandle, *) 'Generating output global dipole *.bild file'
                     call fopen(filnum, file='NetDipoleGlobal.bild', iostat=io_stat)
                 endif
                 write (filnum,'(a6,6i4)') trim('.arrow '), nint(m_adjusted), nint(net_dipole)
@@ -1380,8 +1339,6 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%center(1),              CSV_DELIM ! X
         write(funit,601,advance='no') self%atominfo(cc)%center(2),              CSV_DELIM ! Y
         write(funit,601,advance='no') self%atominfo(cc)%center(3),              CSV_DELIM ! Z
-        write(funit,601,advance='no') self%atominfo(cc)%x_pca,                  CSV_DELIM ! X_PCA
-        write(funit,601,advance='no') self%atominfo(cc)%y_pca,                  CSV_DELIM ! Y_PCA
         ! strain
         write(funit,601,advance='no') self%atominfo(cc)%exx_strain,             CSV_DELIM ! EXX_STRAIN
         write(funit,601,advance='no') self%atominfo(cc)%eyy_strain,             CSV_DELIM ! EYY_STRAIN
@@ -1449,6 +1406,7 @@ contains
         integer,             intent(in) :: cn, funit
         601 format(F8.4,A3)
         602 format(F8.4)
+        if( count(self%atominfo(:)%cn_std == cn) < 2 ) return
         write(funit,601,advance='no') real(cn),                    CSV_DELIM ! CN_STD
         ! -- dipole
         write(funit,601,advance='no') self%polar_angle_cns(cn),    CSV_DELIM ! POLAR_ANGLE
@@ -1646,66 +1604,6 @@ contains
             THROW_HARD('unsupported parameter for bicluster_otsu')
         end select
     end subroutine bicluster_otsu
-
-    subroutine ppca_atom_features( self )
-        use simple_ppca_serial, only: ppca_serial
-        class(nanoparticle), intent(inout) :: self
-        real               :: datvecs(self%n_cc,8), avg(8)
-        integer            :: cc, recsz
-        type(ppca_serial)  :: prob_pca
-        integer, parameter :: MAXPPCAITS = 20
-        real, allocatable  :: feature(:)
-        ! prepare data
-        inquire(iolength=recsz) avg
-        do cc = 1, self%n_cc
-            ! real-valued data
-            datvecs(cc,1) = real(self%atominfo(cc)%size)
-            datvecs(cc,2) =      self%atominfo(cc)%bondl
-            datvecs(cc,3) =      self%atominfo(cc)%aspect_ratio
-            datvecs(cc,4) =      self%atominfo(cc)%polar_angle
-            datvecs(cc,5) =      self%atominfo(cc)%diam
-            datvecs(cc,6) =      self%atominfo(cc)%max_int
-            datvecs(cc,7) =      self%atominfo(cc)%max_corr
-            datvecs(cc,8) =      self%atominfo(cc)%radial_strain
-        end do
-        ! rescaling to avoid the polarization angle to dominate the analysis
-        call norm_minmax(datvecs(:,1))
-        call norm_minmax(datvecs(:,2))
-        call norm_minmax(datvecs(:,3))
-        call norm_minmax(datvecs(:,4))
-        call norm_minmax(datvecs(:,5))
-        call norm_minmax(datvecs(:,6))
-        call norm_minmax(datvecs(:,7))
-        call norm_minmax(datvecs(:,8))
-        do cc = 1, self%n_cc
-            avg = avg + datvecs(cc,:)
-        end do
-        avg = avg / real(self%n_cc)
-        do cc = 1, self%n_cc
-            datvecs(cc,:) = datvecs(cc,:) - avg
-        enddo
-        ! probabilistic PCA
-        call prob_pca%new(self%n_cc, 8, 2, datvecs)
-        call prob_pca%master(recsz, MAXPPCAITS)
-        do cc = 1, self%n_cc
-            feature = prob_pca%get_feat(cc)
-            self%atominfo(cc)%x_pca = feature(1)
-            self%atominfo(cc)%y_pca = feature(2)
-            deallocate(feature)
-        end do
-
-        contains
-
-            subroutine norm_minmax( arr )
-                real, intent(inout) :: arr(:)
-                real                :: smin, smax, delta
-                smin  = minval(arr)
-                smax  = maxval(arr)
-                delta = smax - smin
-                arr = (arr - smin)/delta
-            end subroutine norm_minmax
-
-    end subroutine ppca_atom_features
 
     subroutine cluster_atom_features( self )
         use simple_aff_prop, only: aff_prop
