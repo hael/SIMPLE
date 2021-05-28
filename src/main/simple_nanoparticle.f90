@@ -237,7 +237,6 @@ end type nanoparticle
 
 contains
 
-    ! constructor
     subroutine new_nanoparticle(self, fname, cline_smpd, element)
         class(nanoparticle), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
@@ -409,6 +408,8 @@ contains
         call self%phasecorr_one_atom(self%img)
         ! Nanoparticle binarization
         call self%binarize_and_find_centers()
+        ! atom splitting by correlation map validation
+        call self%split_atoms()
         ! Outliers discarding
         select case(cn_type)
             case('cn_gen')
@@ -418,10 +419,12 @@ contains
             case DEFAULT
                 call self%discard_outliers(cn_thresh, .false.)
         end select
-        if( GENERATE_FIGS ) call self%img_bin%write(trim(self%fbody)//'AfterOutliersRemoval.mrc')
-        ! Validation of the selected atomic positions
-        call self%split_atoms()
-        if( GENERATE_FIGS ) call self%img_bin%write(trim(self%fbody)//'AfterAPValidation.mrc')
+        ! write output
+        call self%img_bin%write_bimg(trim(self%fbody)//'BIN.mrc')
+        write(logfhandle,*) 'output, binarized map:            ', trim(self%fbody)//'BIN.mrc'
+        call self%img_cc%write_bimg(trim(self%fbody)//'CC.mrc')
+        write(logfhandle,*) 'output, connected components map: ', trim(self%fbody)//'CC.mrc'
+        call self%write_centers()
     end subroutine identify_atomic_pos
 
     ! FORMULA: phasecorr = ifft2(fft2(field).*conj(fft2(reference)));
@@ -617,6 +620,140 @@ contains
        endif
     end subroutine find_centers
 
+    subroutine split_atoms( self )
+        class(nanoparticle), intent(inout) :: self
+        real,    allocatable :: x(:)
+        real,    pointer     :: rmat_pc(:,:,:)
+        integer, allocatable :: imat(:,:,:), imat_cc(:,:,:), imat_bin(:,:,:)
+        integer, parameter   :: RANK_THRESH = 4
+        integer :: icc, cnt
+        integer :: rank, m(1)
+        real    :: new_centers(3,2*self%n_cc) ! will pack it afterwards if it has too many elements
+        real    :: pc
+        write(logfhandle, '(A)') '>>> VALIDATING ATOMIC POSITIONS'
+        call self%img%get_rmat_ptr(rmat_pc) ! now img contains the phase correlation
+        call self%img_cc%get_imat(imat_cc)  ! to pass to the subroutine split_atoms
+        allocate(imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = imat_cc)
+        cnt = 0
+        ! Remember to update the centers
+        do icc =1, self%n_cc ! for each cc check if the center corresponds with the local max of the phase corr
+            pc = rmat_pc(nint(self%atominfo(icc)%center(1)),nint(self%atominfo(icc)%center(2)),nint(self%atominfo(icc)%center(3)))
+            ! calculate the rank
+            x = pack(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) == icc)
+            call hpsort(x)
+            m(:) = minloc(abs(x - pc))
+            rank = size(x) - m(1)
+            deallocate(x)
+            if( rank > RANK_THRESH )then
+                call split_atom(new_centers,cnt)
+            else
+                cnt = cnt + 1 ! new number of centers derived from splitting
+                new_centers(:,cnt) = self%atominfo(icc)%center(:)
+            endif
+        enddo
+        deallocate(self%atominfo)
+        self%n_cc = cnt ! update
+        allocate(self%atominfo(cnt))
+        ! update centers
+        do icc = 1, cnt
+            self%atominfo(icc)%center(:) = new_centers(:,icc)
+        enddo
+        call self%img_bin%get_imat(imat_bin)
+        if( DEBUG ) call self%img_bin%write_bimg(trim(self%fbody)//'BINbeforeValidation.mrc')
+        ! update binary image
+        where( imat_cc > 0 )
+            imat_bin = 1
+        elsewhere
+            imat_bin = 0
+        endwhere
+        ! update relevant data fields
+        call self%img_bin%set_imat(imat_bin)
+        call self%img_bin%update_img_rmat()
+        call self%img_bin%find_ccs(self%img_cc)
+        call self%update_ncc(self%img_cc)
+        call self%find_centers()
+        write(logfhandle, '(A)') '>>> VALIDATING ATOMIC POSITIONS, COMPLETED'
+
+    contains
+
+        subroutine split_atom(new_centers,cnt)
+            real,    intent(inout) :: new_centers(:,:)  ! updated coordinates of the centers
+            integer, intent(inout) :: cnt               ! atom counter, to update the center coords
+            integer :: new_center1(3), new_center2(3), new_center3(3)
+            integer :: i, j, k
+            logical :: mask(self%ldim(1),self%ldim(2),self%ldim(3)) ! false in the layer of connection of the atom to be split
+            mask = .false.  ! initialization
+            ! Identify first new center
+            new_center1 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), imat == icc)
+            cnt = cnt + 1
+            new_centers(:,cnt) = real(new_center1)
+            do i = 1, self%ldim(1)
+                do j = 1, self%ldim(2)
+                    do k = 1, self%ldim(3)
+                        if(((real(i-new_center1(1)))**2 + (real(j-new_center1(2)))**2 + &
+                        &   (real(k-new_center1(3)))**2)*self%smpd  <=  (0.9*self%theoretical_radius)**2) then
+                            if(imat(i,j,k) == icc) mask(i,j,k) = .true.
+                        endif
+                    enddo
+                enddo
+            enddo
+            ! Second likely center.
+            new_center2 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), (imat == icc) .and. .not. mask)
+            if( any(new_center2 > 0) )then ! if anything was found
+                ! Validate second center (check if it's 2 merged atoms, or one pointy one)
+                if(sum(real(new_center2-new_center1)**2.)*self%smpd <= 2.*self%theoretical_radius) then
+                    ! Set the merged cc back to 0
+                    where(imat_cc == icc .and. (.not.mask) ) imat_cc = 0
+                    return
+                else
+                    cnt = cnt + 1
+                    new_centers(:,cnt) = real(new_center2)
+                    ! In the case two merged atoms, build the second atom
+                    do i = 1, self%ldim(1)
+                        do j = 1, self%ldim(2)
+                            do k = 1, self%ldim(3)
+                                if(((real(i-new_center2(1)))**2 + (real(j-new_center2(2)))**2 + (real(k-new_center2(3)))**2)*self%smpd < &
+                                & (0.9*self%theoretical_radius)**2) then
+                                    if(imat(i,j,k) == icc)   mask(i,j,k) = .true.
+                                endif
+                            enddo
+                        enddo
+                    enddo
+                endif
+            endif
+            ! Third likely center.
+            new_center3 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), &
+            & (imat == icc) .and. .not. mask)
+            if(any(new_center3 > 0)) then ! if anything was found
+                ! Validate third center
+                if(sum(real(new_center3-new_center1)**2.)*self%smpd <= 2.*self%theoretical_radius .or. &
+                &  sum(real(new_center3-new_center2)**2.)*self%smpd <= 2.*self%theoretical_radius ) then
+                    ! Set the merged cc back to 0
+                    where( imat_cc == icc .and. (.not.mask) ) imat_cc = 0
+                    return
+                else
+                    cnt = cnt + 1
+                    new_centers(:,cnt) = real(new_center3)
+                    ! In the case two merged atoms, build the second atom
+                    do i = 1, self%ldim(1)
+                        do j = 1, self%ldim(2)
+                            do k = 1, self%ldim(3)
+                                if(((real(i-new_center3(1)))**2 + (real(j-new_center3(2)))**2 + &
+                                &(real(k-new_center3(3)))**2)*self%smpd < (0.9*self%theoretical_radius)**2) then ! a little smaller to be sure
+                                    if(imat(i,j,k) == icc)   mask(i,j,k) = .true.
+                                endif
+                            enddo
+                        enddo
+                    enddo
+                endif
+            endif
+            ! Set the merged cc back to 0
+            where(imat_cc == icc .and. (.not.mask) ) imat_cc = 0
+            call self%img_cc%set_imat(imat_cc)
+        end subroutine split_atom
+
+    end subroutine split_atoms
+
     ! This subroutine discards outliers that resisted binarization.
     ! If generalised is true
     ! It calculates the generalised coordination number (cn_gen) of each atom and discards
@@ -693,169 +830,6 @@ contains
         endif
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS, COMPLETED'
     end subroutine discard_outliers
-
-    subroutine split_atoms( self )
-        class(nanoparticle), intent(inout) :: self
-        real,    allocatable :: x(:)
-        real,    pointer     :: rmat_pc(:,:,:)
-        integer, allocatable :: imat(:,:,:), imat_cc(:,:,:), imat_bin(:,:,:)
-        integer, parameter   :: RANK_THRESH = 4
-        integer :: icc, cnt
-        integer :: rank, m(1)
-        real    :: new_centers(3,2*self%n_cc)               ! will pack it afterwards if it has too many elements
-        integer :: new_coordination_number(2*self%n_cc)     ! will pack it afterwards if it has too many elements
-        real    :: new_coordination_number_gen(2*self%n_cc) ! will pack it afterwards if it has too many elements
-        real    :: pc
-        write(logfhandle, '(A)') '>>> VALIDATING ATOMIC POSITIONS'
-        call self%img%get_rmat_ptr(rmat_pc) ! now img contains the phase correlation
-        call self%img_cc%get_imat(imat_cc)  ! to pass to the subroutine split_atoms
-        allocate(imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = imat_cc)
-        cnt = 0
-        ! Remember to update the centers
-        do icc =1, self%n_cc ! for each cc check if the center corresponds with the local max of the phase corr
-            pc = rmat_pc(nint(self%atominfo(icc)%center(1)),nint(self%atominfo(icc)%center(2)),nint(self%atominfo(icc)%center(3)))
-            ! calculate the rank
-            x = pack(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) == icc)
-            call hpsort(x)
-            m(:) = minloc(abs(x - pc))
-            rank = size(x) - m(1)
-            deallocate(x)
-            if( rank > RANK_THRESH )then
-                call split_atom(new_centers,cnt)
-            else
-                cnt = cnt + 1 ! new number of centers derived from splitting
-                new_centers(:,cnt)               = self%atominfo(icc)%center(:)
-                new_coordination_number(cnt)     = self%atominfo(icc)%cn_std
-                new_coordination_number_gen(cnt) = self%atominfo(icc)%cn_gen
-            endif
-        enddo
-        deallocate(self%atominfo)
-        self%n_cc = cnt ! update
-        allocate(self%atominfo(cnt))
-        ! update centers
-        do icc = 1, cnt
-            self%atominfo(icc)%center(:) = new_centers(:,icc)
-        enddo
-        !!!!!!!!!! NOT NECESSARY IF WE VALIDATE BEFORE DISCARDING OUTLIERS
-        ! update contact scores
-        do icc = 1, cnt
-            self%atominfo(icc)%cn_std = new_coordination_number(icc)
-            self%atominfo(icc)%cn_gen = new_coordination_number_gen(icc)
-        enddo
-        !!!!!!!!!!
-        call self%img_bin%get_imat(imat_bin)
-        if( DEBUG ) call self%img_bin%write_bimg(trim(self%fbody)//'BINbeforeValidation.mrc')
-        ! update binary image
-        where( imat_cc > 0 )
-            imat_bin = 1
-        elsewhere
-            imat_bin = 0
-        endwhere
-        ! update relevant data fields
-        call self%img_bin%set_imat(imat_bin)
-        call self%img_bin%update_img_rmat()
-        call self%img_bin%find_ccs(self%img_cc)
-        call self%update_ncc(self%img_cc)
-        call self%find_centers()
-        ! write output
-        call self%img_bin%write_bimg(trim(self%fbody)//'BIN.mrc')
-        write(logfhandle,*) 'output, binarized map:            ', trim(self%fbody)//'BIN.mrc'
-        call self%img_cc%write_bimg(trim(self%fbody)//'CC.mrc')
-        write(logfhandle,*) 'output, connected components map: ', trim(self%fbody)//'CC.mrc'
-        call self%write_centers()
-        write(logfhandle, '(A)') '>>> VALIDATING ATOMIC POSITIONS, COMPLETED'
-
-    contains
-
-        subroutine split_atom(new_centers,cnt)
-            real,    intent(inout) :: new_centers(:,:)  ! updated coordinates of the centers
-            integer, intent(inout) :: cnt               ! atom counter, to update the center coords
-            integer :: new_center1(3), new_center2(3), new_center3(3)
-            integer :: i, j, k
-            logical :: mask(self%ldim(1),self%ldim(2),self%ldim(3)) ! false in the layer of connection of the atom to be split
-            mask = .false.  ! initialization
-            ! Identify first new center
-            new_center1 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), imat == icc)
-            cnt = cnt + 1
-            new_centers(:,cnt)               = real(new_center1)
-            new_coordination_number(cnt)     = self%atominfo(icc)%cn_std
-            new_coordination_number_gen(cnt) = self%atominfo(icc)%cn_gen
-            do i = 1, self%ldim(1)
-                do j = 1, self%ldim(2)
-                    do k = 1, self%ldim(3)
-                        if(((real(i-new_center1(1)))**2 + (real(j-new_center1(2)))**2 + &
-                        &   (real(k-new_center1(3)))**2)*self%smpd  <=  (0.9*self%theoretical_radius)**2) then
-                            if(imat(i,j,k) == icc) mask(i,j,k) = .true.
-                        endif
-                    enddo
-                enddo
-            enddo
-            ! Second likely center.
-            new_center2 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), (imat == icc) .and. .not. mask)
-            if( any(new_center2 > 0) )then ! if anything was found
-                ! Validate second center (check if it's 2 merged atoms, or one pointy one)
-                if(sum(real(new_center2-new_center1)**2.)*self%smpd <= 2.*self%theoretical_radius) then
-                    ! Set the merged cc back to 0
-                    where(imat_cc == icc .and. (.not.mask) ) imat_cc = 0
-                    return
-                else
-                    cnt                                = cnt + 1
-                    new_centers(:,cnt)                 = real(new_center2)
-                    new_coordination_number(cnt)       = self%atominfo(icc)%cn_std + 1
-                    new_coordination_number(cnt-1)     = new_coordination_number(cnt)
-                    new_coordination_number_gen(cnt)   = self%atominfo(icc)%cn_gen + 1.
-                    new_coordination_number_gen(cnt-1) = new_coordination_number_gen(cnt)
-                    ! In the case two merged atoms, build the second atom
-                    do i = 1, self%ldim(1)
-                        do j = 1, self%ldim(2)
-                            do k = 1, self%ldim(3)
-                                if(((real(i-new_center2(1)))**2 + (real(j-new_center2(2)))**2 + (real(k-new_center2(3)))**2)*self%smpd < &
-                                & (0.9*self%theoretical_radius)**2) then
-                                    if(imat(i,j,k) == icc)   mask(i,j,k) = .true.
-                                endif
-                            enddo
-                        enddo
-                    enddo
-                endif
-            endif
-            ! Third likely center.
-            new_center3 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), &
-            & (imat == icc) .and. .not. mask)
-            if(any(new_center3 > 0)) then ! if anything was found
-                ! Validate third center
-                if(sum(real(new_center3-new_center1)**2.)*self%smpd <= 2.*self%theoretical_radius .or. &
-                &  sum(real(new_center3-new_center2)**2.)*self%smpd <= 2.*self%theoretical_radius ) then
-                    ! Set the merged cc back to 0
-                    where( imat_cc == icc .and. (.not.mask) ) imat_cc = 0
-                    return
-                else
-                    cnt = cnt + 1
-                    new_centers(:,cnt) = real(new_center3)
-                    new_coordination_number(cnt)   = self%atominfo(icc)%cn_std + 2
-                    new_coordination_number(cnt-1) = new_coordination_number(cnt)
-                    new_coordination_number(cnt-2) = new_coordination_number(cnt)
-                    new_coordination_number_gen(cnt)   = self%atominfo(icc)%cn_gen + 2.
-                    new_coordination_number_gen(cnt-1) = new_coordination_number_gen(cnt)
-                    new_coordination_number_gen(cnt-2) = new_coordination_number_gen(cnt)
-                    ! In the case two merged atoms, build the second atom
-                    do i = 1, self%ldim(1)
-                        do j = 1, self%ldim(2)
-                            do k = 1, self%ldim(3)
-                                if(((real(i-new_center3(1)))**2 + (real(j-new_center3(2)))**2 + &
-                                &(real(k-new_center3(3)))**2)*self%smpd < (0.9*self%theoretical_radius)**2) then ! a little smaller to be sure
-                                    if(imat(i,j,k) == icc)   mask(i,j,k) = .true.
-                                endif
-                            enddo
-                        enddo
-                    enddo
-                endif
-            endif
-            ! Set the merged cc back to 0
-            where(imat_cc == icc .and. (.not.mask) ) imat_cc = 0
-            call self%img_cc%set_imat(imat_cc)
-        end subroutine split_atom
-
-    end subroutine split_atoms
 
     ! calc stats
 
