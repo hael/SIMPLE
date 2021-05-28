@@ -14,12 +14,12 @@ private
 
 ! module global constants
 integer, parameter          :: N_THRESH            = 20      ! number of thresholds for binarization
-integer, parameter          :: NVOX_THRESH         = 3       ! min # voxels per atom is 2
+integer, parameter          :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
 logical, parameter          :: DEBUG               = .false. ! for debugging purposes
 logical, parameter          :: GENERATE_FIGS       = .false. ! for figures generation
 integer, parameter          :: SOFT_EDGE           = 6
 integer, parameter          :: N_DISCRET           = 1000
-integer, parameter          :: CNMIN               = 2
+integer, parameter          :: CNMIN               = 5
 integer, parameter          :: CNMAX               = 12
 integer, parameter          :: NSTRAIN_COMPS       = 7
 character(len=3), parameter :: CSV_DELIM           = ', '

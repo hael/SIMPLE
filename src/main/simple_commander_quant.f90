@@ -55,9 +55,9 @@ type, extends(commander_base) :: geometry_analysis_commander
     procedure :: execute      => exec_geometry_analysis
 end type geometry_analysis_commander
 
-integer, parameter :: CNMIN             = 4
+integer, parameter :: CNMIN             = 5
 integer, parameter :: CNMAX             = 12
-integer, parameter :: CN_THRESH_DEFAULT = 2
+integer, parameter :: CN_THRESH_DEFAULT = 5
 
 contains
 
