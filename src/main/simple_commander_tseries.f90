@@ -801,6 +801,9 @@ contains
         call cline%set('match_filt',     'no')
         call cline%set('keepvol',       'yes')
         call cline%set('ninplpeaks',      1.0)
+        ! npeaks=1 provides better result in 4/6 cases + massive speeedup
+        ! + we can actually measure the rotation rate trivially
+        call cline%set('npeaks',          1.0)
         ! dynamic parameters
         if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
         if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',          'no')
