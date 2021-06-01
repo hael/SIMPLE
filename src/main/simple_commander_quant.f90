@@ -12,7 +12,6 @@ implicit none
 
 public :: detect_atoms_commander
 public :: atoms_stats_commander
-public :: write_cn_atoms_commander
 public :: atom_cluster_analysis_commander
 public :: nano_softmask_commander
 public :: geometry_analysis_commander
@@ -30,10 +29,6 @@ type, extends(commander_base) :: atoms_stats_commander
   contains
     procedure :: execute      => exec_atoms_stats
 end type atoms_stats_commander
-type, extends(commander_base) :: write_cn_atoms_commander
-  contains
-    procedure :: execute      => exec_write_cn_atoms
-end type write_cn_atoms_commander
 type, extends(commander_base) :: dock_coords_commander
   contains
     procedure :: execute      => exec_dock_coords
@@ -120,39 +115,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_ATOMS_STATS NORMAL STOP ****')
     end subroutine exec_atoms_stats
-
-    subroutine exec_write_cn_atoms( self, cline )
-        class(write_cn_atoms_commander), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline !< command line input
-        character(len=STDLEN) :: fname
-        type(parameters)      :: params
-        type(nanoparticle)    :: nano
-        integer               :: cn
-        call params%new(cline)
-        if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_atoms_stats')
-        endif
-        if( .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! vol1 (raw map) needs to be present; exec_atoms_stats')
-        endif
-        if( .not. cline%defined('vol2') )then
-            THROW_HARD('ERROR! vol2 (connected components map *CC.mrc) needs to be present; exec_atoms_stats')
-        endif
-        if( .not. cline%defined('pdbfile') )then
-            THROW_HARD('ERROR! pdbfile needs to be present; exec_atoms_stats')
-        endif
-        call nano%new(params%vols(1), params%smpd, params%element)
-        call nano%set_atomic_coords(params%pdbfile)
-        call nano%set_img(params%vols(2), 'img_cc')
-        call nano%update_ncc()
-        do cn = CNMIN, CNMAX
-            call nano%write_cn_atoms( cn )
-        end do
-        ! kill
-        call nano%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_WRITE_CN_ATOMS NORMAL STOP ****')
-    end subroutine exec_write_cn_atoms
 
     subroutine exec_dock_coords(self, cline)
         use simple_ori ! for generation of the rotation matrix

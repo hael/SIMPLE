@@ -27,6 +27,7 @@ character(len=*), parameter :: ATOM_STATS_FILE     = 'atom_stats.csv'
 character(len=*), parameter :: NP_STATS_FILE       = 'nanoparticle_stats.csv'
 character(len=*), parameter :: CN_STATS_FILE       = 'cn_dependent_stats.csv'
 character(len=*), parameter :: ATOM_VAR_CORRS_FILE = 'atom_param_corrs.txt'
+character(len=*), parameter :: BIN_CLS_AVGS_FILE   = 'binary_class_averages.txt'
 
 character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//'CN_STD'//CSV_DELIM//'NN_BONDL'//&
 &CSV_DELIM//'CN_GEN'//CSV_DELIM//'ASPECT_RATIO'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
@@ -48,12 +49,10 @@ character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//CSV_
 &CSV_DELIM//'MIN_AVG_INT'//CSV_DELIM//'MAX_SDEV_INT'//CSV_DELIM//'MIN_SDEV_INT'//CSV_DELIM//'MAX_MAX_CORR'//CSV_DELIM//&
 &'MIN_MAX_CORR'//CSV_DELIM//'MAX_RADIAL_STRAIN'//CSV_DELIM//'MIN_RADIAL_STRAIN'
 
-character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'POLAR_MAG'//&
-&CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//CSV_DELIM//'MAX_RADIAL_POS'//CSV_DELIM//'MIN_RADIAL_POS'//&
-&CSV_DELIM//'AVG_MAX_CORR'//CSV_DELIM//'SDEV_MAX_CORR'//CSV_DELIM//'AVG_BONDL'//CSV_DELIM//'MAX_BONDL'//&
-&CSV_DELIM//'MIN_BONDL'//CSV_DELIM//'SDEV_BONDL'//CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MAX_NVOX'//CSV_DELIM//'MIN_NVOX'//&
-&CSV_DELIM//'SDEV_NVOX'//CSV_DELIM//'AVG_DIAM'//CSV_DELIM//'MAX_DIAM'//CSV_DELIM//'MIN_DIAM'//CSV_DELIM//'SDEV_DIAM'//&
-&CSV_DELIM//'NATOMS_PER_VOL'//CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'//CSV_DELIM//'MIN_RADIAL_STRAIN'//&
+character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
+&CSV_DELIM//'MAX_RADIAL_POS'//CSV_DELIM//'MIN_RADIAL_POS'//CSV_DELIM//'AVG_MAX_CORR'//CSV_DELIM//'SDEV_MAX_CORR'//&
+&CSV_DELIM//'AVG_BONDL'//CSV_DELIM//'SDEV_BONDL'//CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'SDEV_NVOX'//CSV_DELIM//'AVG_DIAM'//&
+&CSV_DELIM//'SDEV_DIAM'//CSV_DELIM//'NATOMS'//CSV_DELIM//'NATOMS_PER_VOL'//CSV_DELIM//'AVG_RADIAL_STRAIN'//&
 &CSV_DELIM//'SDEV_RADIAL_STRAIN'
 
 ! container for per-atom statistics
@@ -83,7 +82,7 @@ type :: atom_stats
     real    :: eyz_strain        = 0. ! -"-                                                         EYZ_STRAIN
     real    :: exz_strain        = 0. ! -"-                                                         EXZ_STRAIN
     real    :: radial_strain     = 0. ! -"-                                                         RADIAL_STRAIN
-    ! cluster assignments
+    ! binary cluster assignments
     integer :: size_cls          = 0  !                                                             NVOX_CLASS
     integer :: bondl_cls         = 0  !                                                             NN_BONDL_CLASS
     integer :: aspect_ratio_cls  = 0  !                                                             ASPECT_RATIO_CLASS
@@ -140,10 +139,6 @@ type :: nanoparticle
     real           :: max_radial_strain                = 0. ! maximum radial strain                                 MAX_RADIAL_STRAIN
     real           :: min_radial_strain                = 0. ! minimum            -"-                                MIN_RADIAL_STRAIN
     ! cn-dependent stats
-    ! -- dipole
-    real           :: net_dipole_cns(3,CNMIN:CNMAX)    = 0. ! net dipole as function of cn_std
-    real           :: polar_angle_cns(CNMIN:CNMAX)     = 0. ! polarization angle as function of cn_std              POLAR_ANGLE
-    real           :: polar_mag_cns(CNMIN:CNMAX)       = 0. ! polarization magnitude as function of cn_std          POLAR_MAG
     ! -- intensity
     real           :: avg_max_int_cns(CNMIN:CNMAX)     = 0. ! avg max grey level intensity as function of cn_std    AVG_MAX_INT
     real           :: sdev_max_int_cns(CNMIN:CNMAX)    = 0. ! standard deviation -"-                                SDEV_MAX_INT
@@ -155,28 +150,32 @@ type :: nanoparticle
     real           :: sdev_max_corr_cns(CNMIN:CNMAX)   = 0. ! standard deviation -"-                                SDEV_MAX_CORR
     ! -- bond length
     real           :: avg_bondl_cns(CNMIN:CNMAX)       = 0. ! average bond length in A as function of cn_std        AVG_BONDL
-    real           :: max_bondl_cns(CNMIN:CNMAX)       = 0. ! maximum            -"-                                MAX_BONDL
-    real           :: min_bondl_cns(CNMIN:CNMAX)       = 0. ! minimum            -"-                                MIN_BONDL
     real           :: sdev_bondl_cns(CNMIN:CNMAX)      = 0. ! standard deviation -"-                                SDEV_BONDL
     ! -- atom size
     real           :: avg_size_cns(CNMIN:CNMAX)        = 0. ! average atom size (#vxls) as function of cn_std       AVG_NVOX
-    real           :: max_size_cns(CNMIN:CNMAX)        = 0. ! maximum            -"-                                MAX_NVOX
-    real           :: min_size_cns(CNMIN:CNMAX)        = 0. ! minimum            -"-                                MIN_NVOX
     real           :: sdev_size_cns(CNMIN:CNMAX)       = 0. ! standard deviation -"-                                SDEV_NVOX
     ! -- atom diameter
     real           :: avg_diam_cns(CNMIN:CNMAX)        = 0. ! average atomic diameter in A as function of cn_std    AVG_DIAM
-    real           :: max_diam_cns(CNMIN:CNMAX)        = 0. ! maximum            -"-                                MAX_DIAM
-    real           :: min_diam_cns(CNMIN:CNMAX)        = 0. ! minimum            -"-                                MIN_DIAM
     real           :: sdev_diam_cns(CNMIN:CNMAX)       = 0. ! standard deviation -"-                                SDEV_DIAM
+    ! -- # atoms
+    real           :: natoms_cns(CNMIN:CNMAX)          = 0. ! # of atoms per cn_std                                 NATOMS
     ! -- # atoms per volume
     real           :: atoms_per_vol_cns(CNMIN:CNMAX)   = 0. ! # atoms per volume (#/A**3)                           NATOMS_PER_VOL
+
     ! -- strain
     real           :: avg_rad_strain_cns(CNMIN:CNMAX)  = 0. ! average radial strain (%) as function of cn_std       AVG_RADIAL_STRAIN
-    real           :: max_rad_strain_cns(CNMIN:CNMAX)  = 0. ! maximum            -"-                                MAX_RADIAL_STRAIN
-    real           :: min_rad_strain_cns(CNMIN:CNMAX)  = 0. ! minimum            -"-                                MIN_RADIAL_STRAIN
     real           :: sdev_rad_strain_cns(CNMIN:CNMAX) = 0. ! standard deviation -"-                                SDEV_RADIAL_STRAIN
     ! per-atom statistics
     type(atom_stats), allocatable :: atominfo(:)
+    ! binary class averages
+    real           :: size_cls_avgs(2)                 = 0.
+    real           :: bondl_cls_avgs(2)                = 0.
+    real           :: aspect_ratio_cls_avgs(2)         = 0.
+    real           :: polar_angle_cls_avgs(2)          = 0.
+    real           :: diam_cls_avgs(2)                 = 0.
+    real           :: max_int_cls_avgs(2)              = 0.
+    real           :: max_corr_cls_avgs(2)             = 0.
+    real           :: radial_strain_cls_avgs(2)        = 0.
     ! other
     character(len=2)      :: element     = ' '
     character(len=4)      :: atom_name   = '    '
@@ -211,7 +210,6 @@ type :: nanoparticle
     ! visualization and output
     procedure          :: write_centers
     procedure          :: write_atoms
-    procedure          :: write_cn_atoms
     procedure          :: write_csv_files
     procedure, private :: write_atominfo
     procedure, private :: write_np_stats
@@ -368,7 +366,7 @@ contains
         if( DEBUG ) call self%img%write(trim(self%fbody)//'_masked.mrc')
     end subroutine mask
 
-    subroutine make_soft_mask(self) !change the name
+    subroutine make_soft_mask(self)
         class(nanoparticle), intent(inout) :: self
         type(binimage) :: simulated_density
         type(image)    :: img_cos
@@ -400,7 +398,7 @@ contains
     subroutine identify_atomic_pos( self, cn_thresh )
         class(nanoparticle), intent(inout) :: self
         integer,             intent(in)    :: cn_thresh
-        ! Phase correlations approach
+        ! Phase correlation approach
         call self%phasecorr_one_atom(self%img)
         ! Nanoparticle binarization
         call self%binarize_and_find_centers()
@@ -540,10 +538,10 @@ contains
 
     contains
 
-        ! Otsu binarization for nanoparticle maps
-        ! It considers the grey level value only in the positive range.
-        ! It doesn't threshold the map. It just returns the ideal threshold.
-        ! This is based on the implementation of 1D otsu
+         ! Otsu binarization for nanoparticle maps
+         ! It considers the grey level value only in the positive range.
+         ! It doesn't threshold the map. It just returns the ideal threshold.
+         ! This is based on the implementation of 1D otsu
          subroutine otsu_nano(img, scaled_thresh)
              use simple_math, only : otsu
              type(image),    intent(inout) :: img
@@ -939,18 +937,12 @@ contains
         ! max/min radial strain
         self%max_radial_strain = maxval(self%atominfo(:)%radial_strain)
         self%min_radial_strain = minval(self%atominfo(:)%radial_strain)
-        ! CALCULATE CN-DEPENDENT PARAMETERS
+        ! CALCULATE CN-DEPENDENT STATS & WRITE CN-ATOMS
         do cn = CNMIN, CNMAX
-            ! net dipole
-            self%net_dipole_cns(:,cn) = calc_net_dipole(cn)
-            ! polarization angle
-            self%polar_angle_cns(cn)  = ang3D_zvec(self%net_dipole_cns(:,cn))
-            ! polarization magnitude
-            self%polar_mag_cns(cn)    = arg(self%net_dipole_cns(:,cn))
-            ! avg max_int and sdev max_int
             call calc_cn_stats( cn )
+            call write_cn_atoms( cn )
         end do
-        ! CLUSTERING OF RELEVANT PARAMETERS
+        ! BINARY CLUSTERING OF RELEVANT PARAMETERS
         call self%bicluster_otsu('size')
         call self%bicluster_otsu('bondl')
         call self%bicluster_otsu('aspect_ratio')
@@ -959,7 +951,6 @@ contains
         call self%bicluster_otsu('max_int')
         call self%bicluster_otsu('max_corr')
         call self%bicluster_otsu('radial_strain')
-        call self%cluster_atom_features
         ! identify correlated variables with Pearson's product moment correation coefficient
         call self%id_corr_vars
         ! destruct
@@ -996,36 +987,19 @@ contains
                 ang = rad2deg(ang_rad)
             end function ang3D_zvec
 
-            function calc_net_dipole( cn ) result( net_dipole )
-                integer, optional, intent(in) :: cn ! calculate net polarization for given std cn
+            function calc_net_dipole( ) result( net_dipole )
                 real    :: net_dipole(3), m_adjusted(3)
                 integer :: i, io_stat, filnum
-                logical :: cn_mask(self%n_cc)
-                ! assumes cn_std part of atominfo
-                ! Generate mask for cn
-                if( present(cn) )then
-                    cn_mask = self%atominfo(:)%cn_std == cn
-                else
-                    cn_mask(:) = .true.
-                endif
                 net_dipole = 0. ! inizialization
                 m_adjusted = 0.
-                if( count(cn_mask) == 0 ) return
                 do i = 1, self%n_cc
-                    if( cn_mask(i) )then
-                        net_dipole = net_dipole + self%atominfo(i)%polar_vec
-                        m_adjusted = m_adjusted + (tmpcens(:,i) - 1.) * self%smpd
-                    endif
+                    net_dipole = net_dipole + self%atominfo(i)%polar_vec
+                    m_adjusted = m_adjusted + (tmpcens(:,i) - 1.) * self%smpd
                 enddo
-                m_adjusted = m_adjusted / real(count(cn_mask))
+                m_adjusted = m_adjusted / real(self%n_cc)
                 net_dipole = (net_dipole - 1.) * self%smpd + m_adjusted
-                if( present(cn) )then
-                    write(logfhandle, *) 'Generating output dipole *.bild file for fixed cn ', cn
-                    call fopen(filnum, file='NetDipole'//int2str(cn)//'.bild', iostat=io_stat)
-                else
-                    write(logfhandle, *) 'Generating output global dipole *.bild file'
-                    call fopen(filnum, file='NetDipoleGlobal.bild', iostat=io_stat)
-                endif
+                write(logfhandle, *) 'Generating output global dipole *.bild file'
+                call fopen(filnum, file='NetDipoleGlobal.bild', iostat=io_stat)
                 write (filnum,'(a6,6i4)') trim('.arrow '), nint(m_adjusted), nint(net_dipole)
                 call fclose(filnum)
             end function calc_net_dipole
@@ -1050,41 +1024,29 @@ contains
                 self%avg_max_corr_cns(cn)    = 0.
                 self%sdev_max_corr_cns(cn)   = 0.
                 self%avg_bondl_cns(cn)       = 0.
-                self%max_bondl_cns(cn)       = 0.
-                self%min_bondl_cns(cn)       = 0.
                 self%sdev_bondl_cns(cn)      = 0.
                 self%avg_size_cns(cn)        = 0.
-                self%max_size_cns(cn)        = 0.
-                self%min_size_cns(cn)        = 0.
                 self%sdev_size_cns(cn)       = 0.
                 self%avg_diam_cns(cn)        = 0.
-                self%max_diam_cns(cn)        = 0.
-                self%min_diam_cns(cn)        = 0.
                 self%sdev_diam_cns(cn)       = 0.
                 self%avg_rad_strain_cns(cn)  = 0.
-                self%max_rad_strain_cns(cn)  = 0.
-                self%min_rad_strain_cns(cn)  = 0.
                 self%sdev_rad_strain_cns(cn) = 0.
                 if( n == 0 ) return
                 ! -- intensity
-                self%avg_max_int_cns(cn)    = sum   (self%atominfo(:)%max_int,  mask=cn_mask) / real(n)
+                self%avg_max_int_cns(cn)  = sum   (self%atominfo(:)%max_int,  mask=cn_mask) / real(n)
                 ! -- cendist
-                self%max_cendist_cns(cn)    = maxval(self%atominfo(:)%cendist,  mask=cn_mask)
-                self%min_cendist_cns(cn)    = minval(self%atominfo(:)%cendist,  mask=cn_mask)
+                self%max_cendist_cns(cn)  = maxval(self%atominfo(:)%cendist,  mask=cn_mask)
+                self%min_cendist_cns(cn)  = minval(self%atominfo(:)%cendist,  mask=cn_mask)
                 ! -- correlation
-                self%avg_max_corr_cns(cn)   = sum   (self%atominfo(:)%max_corr, mask=cn_mask) / real(n)
+                self%avg_max_corr_cns(cn) = sum   (self%atominfo(:)%max_corr, mask=cn_mask) / real(n)
                 ! -- bond length
-                self%avg_bondl_cns(cn)      = sum   (self%atominfo(:)%bondl,    mask=cn_mask) / real(n)
-                self%max_bondl_cns(cn)      = maxval(self%atominfo(:)%bondl,    mask=cn_mask)
-                self%min_bondl_cns(cn)      = minval(self%atominfo(:)%bondl,    mask=cn_mask)
+                self%avg_bondl_cns(cn)    = sum   (self%atominfo(:)%bondl,    mask=cn_mask) / real(n)
                 ! -- atom size
-                self%avg_size_cns(cn)       = sum   (self%atominfo(:)%size,     mask=size_mask) / real(n_size)
-                self%max_size_cns(cn)       = maxval(self%atominfo(:)%size,     mask=cn_mask)
-                self%min_size_cns(cn)       = minval(self%atominfo(:)%size,     mask=size_mask)
+                self%avg_size_cns(cn)     = sum   (self%atominfo(:)%size,     mask=size_mask) / real(n_size)
                 ! -- atom diameter
-                self%avg_diam_cns(cn)       = sum   (self%atominfo(:)%diam,     mask=diam_mask) / real(n_diam)
-                self%max_diam_cns(cn)       = maxval(self%atominfo(:)%diam,     mask=cn_mask)
-                self%min_diam_cns(cn)       = minval(self%atominfo(:)%diam,     mask=diam_mask)
+                self%avg_diam_cns(cn)     = sum   (self%atominfo(:)%diam,     mask=diam_mask) / real(n_diam)
+                ! -- # atoms
+                self%natoms_cns(cn)       = real(n)
                 ! -- # atoms per volume
                 vshell = (FOURPI * self%max_cendist_cns(cn)**3.) / 3. - (FOURPI * self%min_cendist_cns(cn)**3.) / 3.
                 natoms = count(self%atominfo(:)%cendist <= self%max_cendist_cns(cn) .and.&
@@ -1093,8 +1055,6 @@ contains
                 if( natoms > 0 .and. vshell > TINY ) self%atoms_per_vol_cns(cn) = real(natoms) / vshell
                 ! -- strain
                 self%avg_rad_strain_cns(cn) = sum   (self%atominfo(:)%radial_strain, mask=cn_mask) / real(n)
-                self%max_rad_strain_cns(cn) = maxval(self%atominfo(:)%radial_strain, mask=cn_mask)
-                self%min_rad_strain_cns(cn) = minval(self%atominfo(:)%radial_strain, mask=cn_mask)
                 ! calculate standard deviations
                 do cc = 1, self%n_cc
                     if( cn_mask(cc) )then
@@ -1128,6 +1088,29 @@ contains
                     self%sdev_diam_cns(cn) = 0.
                 endif
             end subroutine calc_cn_stats
+
+            subroutine write_cn_atoms( cn_std )
+                integer, intent(in)  :: cn_std
+                type(binimage)       :: img_atom
+                integer, allocatable :: imat(:,:,:), imat_atom(:,:,:)
+                logical :: cn_mask(self%n_cc)
+                integer :: i
+                ! make cn mask
+                cn_mask = self%atominfo(:)%cn_std == cn_std
+                ! make binary matrix of atoms with given cn_std
+                call img_atom%copy_bimg(self%img_cc)
+                allocate(imat_atom(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
+                call img_atom%get_imat(imat)
+                do i = 1, self%n_cc
+                    if( cn_mask(i) )then
+                        where( imat == i ) imat_atom = 1
+                    endif
+                enddo
+                call img_atom%set_imat(imat_atom)
+                call img_atom%write_bimg('Atoms_with_cn_std'//trim(int2str(cn_std))//'.mrc')
+                deallocate(imat,imat_atom)
+                call img_atom%kill_bimg
+            end subroutine write_cn_atoms
 
     end subroutine fillin_atominfo
 
@@ -1245,37 +1228,6 @@ contains
         deallocate(imat,imat_atom)
         call img_atom%kill_bimg
     end subroutine write_atoms
-
-    subroutine write_cn_atoms( self, cn_std )
-        class(nanoparticle), intent(inout) :: self
-        integer,             intent(in)    :: cn_std
-        type(binimage)       :: img_atom
-        integer, allocatable :: imat(:,:,:), imat_atom(:,:,:)
-        real,    allocatable :: centers_A(:,:)
-        logical :: cn_mask(self%n_cc)
-        real    :: a(3), radius_cn
-        integer :: i
-        ! calc cn and cn_gen
-        centers_A = self%atominfo2centers_A()
-        call fit_lattice(centers_A, a)
-        call find_cn_radius(a, radius_cn)
-        call run_coord_number_analysis(centers_A,radius_cn,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
-        ! make cn mask
-        cn_mask = self%atominfo(:)%cn_std == cn_std
-        ! make binary matrix of atoms with given cn_std
-        call img_atom%copy_bimg(self%img_cc)
-        allocate(imat_atom(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
-        call img_atom%get_imat(imat)
-        do i = 1, self%n_cc
-            if( cn_mask(i) )then
-                where( imat == i ) imat_atom = 1
-            endif
-        enddo
-        call img_atom%set_imat(imat_atom)
-        call img_atom%write_bimg('Atoms_with_cn_std'//trim(int2str(cn_std))//'.mrc')
-        deallocate(imat,imat_atom)
-        call img_atom%kill_bimg
-    end subroutine write_cn_atoms
 
     subroutine write_csv_files( self )
         class(nanoparticle), intent(in) :: self
@@ -1408,9 +1360,6 @@ contains
         602 format(F8.4)
         if( count(self%atominfo(:)%cn_std == cn) < 2 ) return
         write(funit,601,advance='no') real(cn),                    CSV_DELIM ! CN_STD
-        ! -- dipole
-        write(funit,601,advance='no') self%polar_angle_cns(cn),    CSV_DELIM ! POLAR_ANGLE
-        write(funit,601,advance='no') self%polar_mag_cns(cn),      CSV_DELIM ! POLAR_MAG
         ! -- intensity
         write(funit,601,advance='no') self%avg_max_int_cns(cn),    CSV_DELIM ! AVG_MAX_INT
         write(funit,601,advance='no') self%sdev_max_int_cns(cn),   CSV_DELIM ! SDEV_MAX_INT
@@ -1422,25 +1371,19 @@ contains
         write(funit,601,advance='no') self%sdev_max_corr_cns(cn),  CSV_DELIM ! SDEV_MAX_CORR
         ! -- bond length
         write(funit,601,advance='no') self%avg_bondl_cns(cn),      CSV_DELIM ! AVG_BONDL
-        write(funit,601,advance='no') self%max_bondl_cns(cn),      CSV_DELIM ! MAX_BONDL
-        write(funit,601,advance='no') self%min_bondl_cns(cn),      CSV_DELIM ! MIN_BONDL
         write(funit,601,advance='no') self%sdev_bondl_cns(cn),     CSV_DELIM ! SDEV_BONDL
         ! -- atom size
         write(funit,601,advance='no') self%avg_size_cns(cn),       CSV_DELIM ! AVG_NVOX
-        write(funit,601,advance='no') self%max_size_cns(cn),       CSV_DELIM ! MAX_NVOX
-        write(funit,601,advance='no') self%min_size_cns(cn),       CSV_DELIM ! MIN_NVOX
         write(funit,601,advance='no') self%sdev_size_cns(cn),      CSV_DELIM ! SDEV_NVOX
         ! -- atom diameter
         write(funit,601,advance='no') self%avg_diam_cns(cn),       CSV_DELIM ! AVG_DIAM
-        write(funit,601,advance='no') self%max_diam_cns(cn),       CSV_DELIM ! MAX_DIAM
-        write(funit,601,advance='no') self%min_diam_cns(cn),       CSV_DELIM ! MIN_DIAM
         write(funit,601,advance='no') self%sdev_diam_cns(cn),      CSV_DELIM ! SDEV_DIAM
+        ! -- # atoms per cn
+        write(funit,601,advance='no') self%natoms_cns(cn),         CSV_DELIM ! NATOMS
         ! -- # atoms per volume (#/A**3)
         write(funit,601,advance='no') self%atoms_per_vol_cns(cn),  CSV_DELIM ! NATOMS_PER_VOL
         ! -- radial strain
         write(funit,601,advance='no') self%avg_rad_strain_cns(cn), CSV_DELIM ! AVG_RADIAL_STRAIN
-        write(funit,601,advance='no') self%max_rad_strain_cns(cn), CSV_DELIM ! MAX_RADIAL_STRAIN
-        write(funit,601,advance='no') self%min_rad_strain_cns(cn), CSV_DELIM ! MIN_RADIAL_STRAIN
         write(funit,602) self%sdev_rad_strain_cns(cn)                        ! SDEV_RADIAL_STRAIN
     end subroutine write_cn_stats
 
@@ -1532,77 +1475,189 @@ contains
     subroutine bicluster_otsu( self, which )
         class(nanoparticle), intent(inout) :: self
         character(len=*),    intent(in)    :: which
-        real, allocatable :: vals4otsu(:)
-        integer :: n
+        real, allocatable  :: vals4otsu(:)
+        character(len=256) :: io_msg
+        integer :: n, funit, ios
         real    :: thresh
+        logical :: cls_mask(self%n_cc)
+        call fopen(funit, file=BIN_CLS_AVGS_FILE, iostat=ios, status='replace', iomsg=io_msg)
+        call fileiochk("simple_nanoparticle :: bicluster_otsu; ERROR when opening file "//BIN_CLS_AVGS_FILE//'; '//trim(io_msg),ios)
         select case(which)
             case('size')
-                vals4otsu = pack(self%atominfo(:)%size, mask = self%atominfo(:)%size > 3)
+                vals4otsu = pack(self%atominfo(:)%size, mask=self%atominfo(:)%size > 3)
                 call otsu(vals4otsu, thresh)
                 where( self%atominfo(:)%size > thresh )
-                    self%atominfo(:)%size_cls = 1
+                    self%atominfo(:)%size_cls = 1 ! 1 is large
                 elsewhere
-                    self%atominfo(:)%size_cls = 2
+                    self%atominfo(:)%size_cls = 2 ! 2 is small
                 endwhere
+                cls_mask              = self%atominfo(:)%size_cls == 1 .and. self%atominfo(:)%size > 3
+                self%size_cls_avgs(1) = sum(self%atominfo(:)%size, mask=cls_mask) / real(count(cls_mask))
+                call write_cls_atoms(1, which)
+                cls_mask              = self%atominfo(:)%size_cls == 2 .and. self%atominfo(:)%size > 3
+                self%size_cls_avgs(2) = sum(self%atominfo(:)%size, mask=cls_mask) / real(count(cls_mask))
+                call write_cls_atoms(2, which)
+                write(logfhandle,'(A,1X,F8.4,1X,F8.4)') 'size                class averages 1 & 2:',&
+                &self%size_cls_avgs(1), self%size_cls_avgs(2)
+                write(funit,     '(A,1X,F8.4,1X,F8.4)') 'size                class averages 1 & 2:',&
+                &self%size_cls_avgs(1), self%size_cls_avgs(2)
             case('bondl')
-                vals4otsu = pack(self%atominfo(:)%bondl, mask = self%atominfo(:)%bondl > 0.)
+                vals4otsu = pack(self%atominfo(:)%bondl, mask=self%atominfo(:)%bondl > 0.)
                 call otsu(vals4otsu, thresh)
                 where( self%atominfo(:)%bondl > thresh )
                     self%atominfo(:)%bondl_cls = 1
                 elsewhere
                     self%atominfo(:)%bondl_cls = 2
                 endwhere
+                cls_mask               = self%atominfo(:)%bondl_cls == 1 .and. self%atominfo(:)%bondl > 0.
+                self%bondl_cls_avgs(1) = sum(self%atominfo(:)%bondl, mask=cls_mask) / real(count(cls_mask))
+                call write_cls_atoms(1, which)
+                cls_mask               = self%atominfo(:)%bondl_cls == 2 .and. self%atominfo(:)%bondl > 0.
+                self%bondl_cls_avgs(2) = sum(self%atominfo(:)%bondl, mask=cls_mask) / real(count(cls_mask))
+                call write_cls_atoms(2, which)
+                write(logfhandle,'(A,1X,F8.4,1X,F8.4)') 'bond length         class averages 1 & 2:',&
+                &self%bondl_cls_avgs(1), self%bondl_cls_avgs(2)
+                write(funit,     '(A,1X,F8.4,1X,F8.4)') 'bond length         class averages 1 & 2:',&
+                &self%bondl_cls_avgs(1), self%bondl_cls_avgs(2)
             case('aspect_ratio')
-                vals4otsu = pack(self%atominfo(:)%aspect_ratio, mask = self%atominfo(:)%aspect_ratio > 0.)
+                vals4otsu = pack(self%atominfo(:)%aspect_ratio, mask=self%atominfo(:)%aspect_ratio > 0.)
                 call otsu(vals4otsu, thresh)
                 where( self%atominfo(:)%aspect_ratio > thresh )
                     self%atominfo(:)%aspect_ratio_cls = 1
                 elsewhere
                     self%atominfo(:)%aspect_ratio_cls = 2
                 endwhere
+                cls_mask                      = self%atominfo(:)%aspect_ratio_cls == 1 .and. self%atominfo(:)%aspect_ratio > 0.
+                self%aspect_ratio_cls_avgs(1) = sum(self%atominfo(:)%aspect_ratio, mask=cls_mask) / real(count(cls_mask))
+                call write_cls_atoms(1, which)
+                cls_mask                      = self%atominfo(:)%aspect_ratio_cls == 2 .and. self%atominfo(:)%aspect_ratio > 0.
+                self%aspect_ratio_cls_avgs(2) = sum(self%atominfo(:)%aspect_ratio, mask=cls_mask) / real(count(cls_mask))
+                call write_cls_atoms(2, which)
+                write(logfhandle,'(A,1X,F8.4,1X,F8.4)') 'aspect ratio        class averages 1 & 2:',&
+                &self%aspect_ratio_cls_avgs(1), self%aspect_ratio_cls_avgs(2)
+                write(funit,     '(A,1X,F8.4,1X,F8.4)') 'aspect ratio        class averages 1 & 2:',&
+                &self%aspect_ratio_cls_avgs(1), self%aspect_ratio_cls_avgs(2)
             case('polar_angle')
-                allocate(vals4otsu(size(self%atominfo)), source = self%atominfo(:)%polar_angle)
+                allocate(vals4otsu(size(self%atominfo)), source=self%atominfo(:)%polar_angle)
                 call otsu(vals4otsu, thresh)
                 where( self%atominfo(:)%polar_angle > thresh )
                     self%atominfo(:)%polar_angle_cls = 1
                 elsewhere
                     self%atominfo(:)%polar_angle_cls = 2
                 endwhere
+                cls_mask                     = self%atominfo(:)%polar_angle_cls == 1
+                self%polar_angle_cls_avgs(1) = sum(self%atominfo(:)%polar_angle, mask=cls_mask) / real(count(cls_mask))
+                call write_cls_atoms(1, which)
+                cls_mask                     = self%atominfo(:)%polar_angle_cls == 2
+                self%polar_angle_cls_avgs(2) = sum(self%atominfo(:)%polar_angle, mask=cls_mask) / real(count(cls_mask))
+                call write_cls_atoms(2, which)
+                write(logfhandle,'(A,1X,F8.4,1X,F8.4)') 'polarization angle  class averages 1 & 2:',&
+                &self%polar_angle_cls_avgs(1), self%polar_angle_cls_avgs(2)
+                write(funit,     '(A,1X,F8.4,1X,F8.4)') 'polarization angle  class averages 1 & 2:',&
+                &self%polar_angle_cls_avgs(1), self%polar_angle_cls_avgs(2)
             case('diam')
-                vals4otsu = pack(self%atominfo(:)%diam, mask = self%atominfo(:)%diam > 0.)
+                vals4otsu = pack(self%atominfo(:)%diam, mask=self%atominfo(:)%diam > 0.)
                 call otsu(vals4otsu, thresh)
                 where( self%atominfo(:)%diam > thresh )
                     self%atominfo(:)%diam_cls = 1
                 elsewhere
                     self%atominfo(:)%diam_cls = 2
                 endwhere
+                cls_mask              = self%atominfo(:)%diam_cls == 1
+                self%diam_cls_avgs(1) = sum(self%atominfo(:)%diam, mask=cls_mask) / real(count(cls_mask))
+                call write_cls_atoms(1, which)
+                cls_mask              = self%atominfo(:)%diam_cls == 2
+                self%diam_cls_avgs(2) = sum(self%atominfo(:)%diam, mask=cls_mask) / real(count(cls_mask))
+                call write_cls_atoms(2, which)
+                write(logfhandle,'(A,1X,F8.4,1X,F8.4)') 'diameter            class averages 1 & 2:',&
+                &self%diam_cls_avgs(1), self%diam_cls_avgs(2)
+                write(funit,     '(A,1X,F8.4,1X,F8.4)') 'diameter            class averages 1 & 2:',&
+                &self%diam_cls_avgs(1), self%diam_cls_avgs(2)
             case('max_int')
-                allocate(vals4otsu(size(self%atominfo)), source = self%atominfo(:)%max_int)
+                allocate(vals4otsu(size(self%atominfo)), source=self%atominfo(:)%max_int)
                 call otsu(vals4otsu, thresh)
                 where( self%atominfo(:)%max_int > thresh )
                     self%atominfo(:)%max_int_cls = 1
                 elsewhere
                     self%atominfo(:)%max_int_cls = 2
                 endwhere
+                cls_mask                 = self%atominfo(:)%max_int_cls == 1
+                self%max_int_cls_avgs(1) = sum(self%atominfo(:)%max_int, mask=cls_mask) / real(count(cls_mask))
+                call write_cls_atoms(1, which)
+                cls_mask                 = self%atominfo(:)%max_int_cls == 2
+                self%max_int_cls_avgs(2) = sum(self%atominfo(:)%max_int, mask=cls_mask) / real(count(cls_mask))
+                call write_cls_atoms(2, which)
+                write(logfhandle,'(A,1X,F8.4,1X,F8.4)') 'maximum intensity   class averages 1 & 2:',&
+                &self%max_int_cls_avgs(1), self%max_int_cls_avgs(2)
+                write(funit,     '(A,1X,F8.4,1X,F8.4)') 'maximum intensity   class averages 1 & 2:',&
+                &self%max_int_cls_avgs(1), self%max_int_cls_avgs(2)
             case('max_corr')
-                allocate(vals4otsu(size(self%atominfo)), source = self%atominfo(:)%max_corr)
+                allocate(vals4otsu(size(self%atominfo)), source=self%atominfo(:)%max_corr)
                 call otsu(vals4otsu, thresh)
                 where( self%atominfo(:)%max_corr > thresh )
                     self%atominfo(:)%max_corr_cls = 1
                 elsewhere
                     self%atominfo(:)%max_corr_cls = 2
                 endwhere
+                cls_mask                  = self%atominfo(:)%max_corr_cls == 1
+                self%max_corr_cls_avgs(1) = sum(self%atominfo(:)%max_corr, mask=cls_mask) / real(count(cls_mask))
+                call write_cls_atoms(1, which)
+                cls_mask                  = self%atominfo(:)%max_corr_cls == 2
+                self%max_corr_cls_avgs(2) = sum(self%atominfo(:)%max_corr, mask=cls_mask) / real(count(cls_mask))
+                call write_cls_atoms(2, which)
+                write(logfhandle,'(A,1X,F8.4,1X,F8.4)') 'maximum correlation class averages 1 & 2:',&
+                &self%max_corr_cls_avgs(1), self%max_corr_cls_avgs(2)
+                write(funit,     '(A,1X,F8.4,1X,F8.4)') 'maximum correlation class averages 1 & 2:',&
+                &self%max_corr_cls_avgs(1), self%max_corr_cls_avgs(2)
             case('radial_strain')
-                allocate(vals4otsu(size(self%atominfo)), source = self%atominfo(:)%radial_strain)
+                allocate(vals4otsu(size(self%atominfo)), source=self%atominfo(:)%radial_strain)
                 call otsu(vals4otsu, thresh)
                 where( self%atominfo(:)%radial_strain > thresh )
                     self%atominfo(:)%radial_strain_cls = 1
                 elsewhere
                     self%atominfo(:)%radial_strain_cls = 2
                 endwhere
+                cls_mask                       = self%atominfo(:)%radial_strain_cls == 1
+                self%radial_strain_cls_avgs(1) = sum(self%atominfo(:)%radial_strain, mask=cls_mask) / real(count(cls_mask))
+                call write_cls_atoms(1, which)
+                cls_mask                       = self%atominfo(:)%radial_strain_cls == 2
+                self%radial_strain_cls_avgs(2) = sum(self%atominfo(:)%radial_strain, mask=cls_mask) / real(count(cls_mask))
+                call write_cls_atoms(2, which)
+                write(logfhandle,'(A,1X,F8.4,1X,F8.4)') 'radial strain       class averages 1 & 2:',&
+                &self%radial_strain_cls_avgs(1), self%radial_strain_cls_avgs(2)
+                write(funit,     '(A,1X,F8.4,1X,F8.4)') 'radial strain       class averages 1 & 2:',&
+                &self%radial_strain_cls_avgs(1), self%radial_strain_cls_avgs(2)
         case DEFAULT
             THROW_HARD('unsupported parameter for bicluster_otsu')
         end select
+        call fclose(funit)
+
+        contains
+
+            subroutine write_cls_atoms( cls, which )
+                integer,          intent(in) :: cls
+                character(len=*), intent(in) :: which
+                type(binimage)       :: img_atom
+                integer, allocatable :: imat(:,:,:), imat_atom(:,:,:)
+                integer :: i
+                call img_atom%copy_bimg(self%img_cc)
+                allocate(imat_atom(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
+                call img_atom%get_imat(imat)
+                do i = 1, self%n_cc
+                    if( cls_mask(i) )then
+                        where( imat == i ) imat_atom = 1
+                    endif
+                enddo
+                call img_atom%set_imat(imat_atom)
+                if( cls == 1 )then
+                    call img_atom%write_bimg('Atoms_'//trim(which)//'_large.mrc')
+                else
+                    call img_atom%write_bimg('Atoms_'//trim(which)//'_small.mrc')
+                endif
+                deallocate(imat,imat_atom)
+                call img_atom%kill_bimg
+            end subroutine write_cls_atoms
+
     end subroutine bicluster_otsu
 
     subroutine cluster_atom_features( self )
