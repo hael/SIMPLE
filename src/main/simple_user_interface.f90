@@ -172,7 +172,6 @@ type(simple_program), target :: validate_nano
 type(simple_program), target :: vizoris
 type(simple_program), target :: volops
 type(simple_program), target :: write_classes
-type(simple_program), target :: write_cn_atoms
 
 ! declare common params here, with name same as flag
 type(simple_input_param) :: algorithm
@@ -396,7 +395,6 @@ contains
         call new_vizoris
         call new_volops
         call new_write_classes
-        call new_write_cn_atoms
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; make_user_interface, DONE'
     end subroutine make_user_interface
 
@@ -496,7 +494,6 @@ contains
         call push2prg_ptr_array(vizoris)
         call push2prg_ptr_array(volops)
         call push2prg_ptr_array(write_classes)
-        call push2prg_ptr_array(write_cn_atoms)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
         contains
 
@@ -708,8 +705,6 @@ contains
                 ptr2prg => volops
             case('write_classes')
                 ptr2prg => write_classes
-            case('write_cn_atoms')
-                ptr2prg => write_cn_atoms
             case DEFAULT
                 ptr2prg => null()
         end select
@@ -833,7 +828,6 @@ contains
     subroutine list_quant_prgs_in_ui
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') atoms_stats%name
-        write(logfhandle,'(A)') write_cn_atoms%name
         write(logfhandle,'(A)') atom_cluster_analysis%name
         write(logfhandle,'(A)') atoms_mask%name
         write(logfhandle,'(A)') geometry_analysis%name
@@ -4437,35 +4431,6 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_write_classes
-
-    subroutine new_write_cn_atoms
-        ! PROGRAM SPECIFICATION
-        call write_cn_atoms%new(&
-        &'write_cn_atoms',&                                                        ! name
-        &'writes binary maps of atoms with differet cn values',&                   ! descr_short
-        &'is a program that writes binary maps of atoms with differet cn values',& ! descr long
-        &'quant_exec',&                                                            ! executable
-        &2, 2, 0, 0, 1, 0, 0, .false.)                                             ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call write_cn_atoms%set_input('img_ios', 1, 'vol1', 'file', 'Raw volume', 'Raw volume of grey valued pixel intensities', &
-        & 'input volume e.g. vol.mrc', .true., '')
-        call write_cn_atoms%set_input('img_ios', 2, 'vol2', 'file', 'Connected components volume', 'Connected components volume produced by detect atoms', &
-        & 'input volume e.g. *CC.mrc', .true., '')
-        ! parameter input/output
-        call write_cn_atoms%set_input('parm_ios', 1, smpd)
-        call write_cn_atoms%set_input('parm_ios', 2, 'pdbfile', 'file', 'PDB', 'Input coords file in PDB format',  'Input coords file in PDB format', .true., '')
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call write_cn_atoms%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-    end subroutine new_write_cn_atoms
 
     ! instance methods
 

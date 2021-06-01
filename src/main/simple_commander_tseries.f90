@@ -1487,10 +1487,10 @@ contains
         integer          :: state, ipart, sz_list, istate, iptcl, cnt, nptcls, nptcls_per_state
         integer          :: funit, nparts, i, ind, nlps, ilp, iostat
         logical          :: fall_over
-        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('ptclw')   ) call cline%set('ptclw', 'no') ! to assure that shifts are being used
-        if( .not. cline%defined('trs')     ) call cline%set('trs', 5.) ! to assure that shifts are being used
-        if( .not. cline%defined('stepsz')  ) call cline%set('stepsz', 500.)
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
+        if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
+        if( .not. cline%defined('trs')     ) call cline%set('trs',           5.) ! to assure that shifts are being used
+        if( .not. cline%defined('stepsz')  ) call cline%set('stepsz',      500.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call cline%delete('refine')
         call build%init_params_and_build_spproj(cline, params)
