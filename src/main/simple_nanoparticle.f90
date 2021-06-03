@@ -69,8 +69,8 @@ character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//CS
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
 
 character(len=*), parameter :: BIN_CLS_STATS_HEAD = 'PARAMETER'//&
-&CSV_DELIM//'AVG_1'//CSV_DELIM//'MED_1'//CSV_DELIM//'SDEV_1'//CSV_DELIM//'MIN_1'//CSV_DELIM//'MAX_1'//&
-&CSV_DELIM//'AVG_2'//CSV_DELIM//'MED_2'//CSV_DELIM//'SDEV_2'//CSV_DELIM//'MIN_2'//CSV_DELIM//'MAX_2'
+&CSV_DELIM//'AVG_1'//CSV_DELIM//'MED_1'//CSV_DELIM//'SDEV_1'//CSV_DELIM//'MIN_1'//CSV_DELIM//'MAX_1'//CSV_DELIM//'POP_1'//&
+&CSV_DELIM//'AVG_2'//CSV_DELIM//'MED_2'//CSV_DELIM//'SDEV_2'//CSV_DELIM//'MIN_2'//CSV_DELIM//'MAX_2'//CSV_DELIM//'POP_2'
 
 ! container for per-atom statistics
 type :: atom_stats
@@ -157,9 +157,9 @@ type :: nanoparticle
     type(stats_struct)    :: max_int_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: max_corr_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: radial_strain_stats_cns(CNMIN:CNMAX)
-    ! per-atom statistics
+    ! PER-ATOM STATISTICS
     type(atom_stats), allocatable :: atominfo(:)
-    ! binary class averages
+    ! BINARY CLASS STATISTICS
     type(stats_struct)    :: size_cls_stats(2)
     type(stats_struct)    :: bondl_cls_stats(2)
     type(stats_struct)    :: aspect_ratio_cls_stats(2)
@@ -168,7 +168,7 @@ type :: nanoparticle
     type(stats_struct)    :: max_int_cls_stats(2)
     type(stats_struct)    :: max_corr_cls_stats(2)
     type(stats_struct)    :: radial_strain_cls_stats(2)
-    ! other
+    ! OTHER
     character(len=2)      :: element     = ' '
     character(len=4)      :: atom_name   = '    '
     character(len=STDLEN) :: partname    = '' ! fname
@@ -368,7 +368,6 @@ contains
         call simulated_density%grow_bins(nint(0.5*self%theoretical_radius/self%smpd)+1)
         call simulated_density%cos_edge(SOFT_EDGE, img_cos)
         call img_cos%write(trim(self%fbody)//'SoftMask.mrc')
-        !kill
         call img_cos%kill
         call simulated_density%kill_bimg
         call atomic_pos%kill
@@ -1486,6 +1485,7 @@ contains
                 real, allocatable  :: vals4otsu(:)
                 type(stats_struct) :: stats(2)
                 character(len=13)  :: param_str
+                integer            :: pop1, pop2
                 601 format(F8.4,A3)
                 602 format(F8.4)
                 param_str = trim(param)
@@ -1498,9 +1498,11 @@ contains
                     bicls = 2 ! 2 is small
                 endwhere
                 cls_mask = bicls == 1 .and. mask
+                pop1     = count(cls_mask)
                 call calc_stats(vals, stats(1), mask=cls_mask)
                 call write_cls_atoms(1, which)
                 cls_mask = bicls == 2 .and. mask
+                pop2     = count(cls_mask)
                 call calc_stats(vals, stats(2), mask=cls_mask)
                 call write_cls_atoms(2, which)
                 write(logfhandle,'(A,A21,1X,F8.4,1X,F8.4)') param_str, ' class averages 1 & 2:', stats(1)%avg, stats(2)%avg
@@ -1510,11 +1512,13 @@ contains
                 write(funit,601,  advance='no') stats(1)%sdev, CSV_DELIM ! SDEV_1
                 write(funit,601,  advance='no') stats(1)%minv, CSV_DELIM ! MIN_1
                 write(funit,601,  advance='no') stats(1)%maxv, CSV_DELIM ! MAX_1
+                write(funit,601,  advance='no') real(pop1),    CSV_DELIM ! POP_1
                 write(funit,601,  advance='no') stats(2)%avg,  CSV_DELIM ! AVG_2
                 write(funit,601,  advance='no') stats(2)%med,  CSV_DELIM ! MED_2
                 write(funit,601,  advance='no') stats(2)%sdev, CSV_DELIM ! SDEV_2
                 write(funit,601,  advance='no') stats(2)%minv, CSV_DELIM ! MIN_2
-                write(funit,602)                stats(2)%maxv            ! MAX_2
+                write(funit,601,  advance='no') stats(2)%maxv, CSV_DELIM ! MAX_2
+                write(funit,602)                real(pop2)               ! POP_2
             end subroutine bicluster_local
 
             subroutine write_cls_atoms( cls, which )
