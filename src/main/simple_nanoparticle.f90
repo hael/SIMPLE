@@ -386,9 +386,9 @@ contains
 
     ! atomic position determination
 
-    subroutine identify_atomic_pos( self, cNBIN_THRESH )
+    subroutine identify_atomic_pos( self, cn_thresh )
         class(nanoparticle), intent(inout) :: self
-        integer,             intent(in)    :: cNBIN_THRESH
+        integer,             intent(in)    :: cn_thresh
         ! Phase correlation approach
         call self%phasecorr_one_atom(self%img)
         ! Nanoparticle binarization
@@ -396,7 +396,7 @@ contains
         ! atom splitting by correlation map validation
         call self%split_atoms()
         ! Outliers discarding
-        call self%discard_outliers(cNBIN_THRESH)
+        call self%discard_outliers(cn_thresh)
         ! write output
         call self%img_bin%write_bimg(trim(self%fbody)//'BIN.mrc')
         write(logfhandle,*) 'output, binarized map:            ', trim(self%fbody)//'BIN.mrc'
@@ -444,7 +444,7 @@ contains
     ! obtained with that threshold reaches the maximum value.
     subroutine binarize_and_find_centers( self )
         class(nanoparticle), intent(inout) :: self
-        type(binimage)       :: img_biNBIN_THRESH(NBIN_THRESH/2-1)
+        type(binimage)       :: img_bin_thresh(NBIN_THRESH/2-1)
         type(binimage)       :: img_ccs_thresh(NBIN_THRESH/2-1)
         type(image)          :: pc
         type(atoms)          :: atom
@@ -471,7 +471,7 @@ contains
         maximum = 0.
         do i = 1, NBIN_THRESH/2-1
             call progress(i, NBIN_THRESH/2-1)
-            call img_biNBIN_THRESH(i)%new_bimg(self%ldim, self%smpd)
+            call img_bin_thresh(i)%new_bimg(self%ldim, self%smpd)
             if( i == 1 )then
                 x_thresh(i) = otsu_thresh
             else
@@ -483,11 +483,11 @@ contains
                 imat_t = 0
             endwhere
             ! Generate binary image and cc image
-            call img_biNBIN_THRESH(i)%set_imat(imat_t)
-            call img_biNBIN_THRESH(i)%find_ccs(img_ccs_thresh(i))
+            call img_bin_thresh(i)%set_imat(imat_t)
+            call img_bin_thresh(i)%find_ccs(img_ccs_thresh(i))
             ! Find atom centers in the generated distributions
             call self%update_ncc(img_ccs_thresh(i)) ! self%n_cc is needed in find_centers
-            call self%find_centers(img_biNBIN_THRESH(i), img_ccs_thresh(i), coords)
+            call self%find_centers(img_bin_thresh(i), img_ccs_thresh(i), coords)
             ! Generate a simulated distribution based on those center
             call self%write_centers('centers_'//trim(int2str(i))//'_iteration', coords)
             call atom%new          ('centers_'//trim(int2str(i))//'_iteration.pdb')
@@ -510,13 +510,13 @@ contains
         call self%img%ifft ! To remove
         write(logfhandle,*) 'Selected threshold: ', x_thresh(t)
         ! Update img_bin and img_cc
-        call self%img_bin%copy_bimg(img_biNBIN_THRESH(t))
+        call self%img_bin%copy_bimg(img_bin_thresh(t))
         if( GENERATE_FIGS ) call self%img_bin%write_bimg(trim(self%fbody)//'SelectedThreshold.mrc')
         call self%img_cc%copy_bimg(img_ccs_thresh(t))
         call self%update_ncc()
         call self%find_centers()
         do i = 1,  NBIN_THRESH/2-1
-            call img_biNBIN_THRESH(i)%kill_bimg
+            call img_bin_thresh(i)%kill_bimg
             call img_ccs_thresh(i)%kill_bimg
         enddo
         ! deallocate and kill
@@ -732,11 +732,11 @@ contains
 
     ! This subroutine discards outliers that resisted binarization
     ! It calculates the standard coordination number (cn) of each atom and discards
-    ! the atoms with cn_std < cNBIN_THRESH
+    ! the atoms with cn_std < cn_thresh
     ! It modifies the img_bin and img_cc instances deleting the identified outliers.
-    subroutine discard_outliers( self, cNBIN_THRESH )
+    subroutine discard_outliers( self, cn_thresh )
         class(nanoparticle), intent(inout) :: self
-        integer,             intent(in)    :: cNBIN_THRESH ! threshold for discarding outliers based on coordination number
+        integer,             intent(in)    :: cn_thresh ! threshold for discarding outliers based on coordination number
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
         logical, allocatable :: mask(:)
         real, allocatable    :: centers_A(:,:) ! coordinates of the atoms in ANGSTROMS
@@ -750,8 +750,8 @@ contains
         call find_cn_radius(a,radius)
         call run_coord_number_analysis(centers_A,radius,cn,cn_gen)
         allocate(mask(self%n_cc), source=.true.)
-        where( cn < cNBIN_THRESH ) mask = .false. ! false where atom has to be discarded
-        n_discard = count(cn < cNBIN_THRESH)
+        where( cn < cn_thresh ) mask = .false. ! false where atom has to be discarded
+        n_discard = count(cn < cn_thresh)
         write(logfhandle, *) 'Numbers of atoms discarded because of low cn ', n_discard
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
@@ -765,7 +765,7 @@ contains
         end do
         ! Removing outliers based on coordination number
         do cc = 1, self%n_cc
-            if( cn(cc) < cNBIN_THRESH )then
+            if( cn(cc) < cn_thresh )then
                 where(imat_cc == cc) imat_bin = 0
             endif
         enddo
