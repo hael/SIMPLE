@@ -1,5 +1,7 @@
 ! statistics utility functions
 module simple_stat
+!$ use omp_lib
+!$ use omp_lib_kinds
 use simple_defs   ! singleton
 use simple_error, only: allocchk, simple_exception
 use simple_math,  only: hpsort, median, median_nocopy, reverse
@@ -43,26 +45,22 @@ contains
 
     ! MOMENTS/NORMALIZATION
 
-    !>    given a 1D real array of data, this routine returns its mean: _ave_,
-    !!          standard deviation: _sdev_, and variance: _var_
-    !! \param data input data
-    !! \param ave,sdev,var  Geometric average,   standard deviation  and variance
     subroutine moment_1( data, ave, sdev, var, err )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         real,    intent(out) :: ave, sdev, var
-        logical, intent(out) :: err            !< error status
+        logical, intent(out) :: err
         real,    intent(in)  :: data(:)
-        integer              :: n, i
-        real                 :: nr, dev
-        real(dp)             :: ep_dp, var_dp
-        err = .false.
-        n   = size(data,1)
-        nr  = real(n)
-        if( n <= 1 ) then
-            write(logfhandle,*) 'ERROR: n must be at least 2'
-            write(logfhandle,*) 'In: moment_1, module: simple_stat.f90'
-            stop
+        integer  :: n, i
+        real     :: nr, dev
+        real(dp) :: ep_dp, var_dp
+        err  = .false.
+        n    = size(data,1)
+        nr   = real(n)
+        ave  = 0.
+        sdev = 0.
+        var  = 0.
+        if( n < 2 )then
+            THROW_WARN('ERROR: n must be at least 2')
+            return
         endif
         ! calc average
         ave = sum(real(data,dp))/real(n,dp)
@@ -72,12 +70,12 @@ contains
         !$omp parallel do default(shared) private(i,dev) schedule(static)&
         !$omp reduction(+:ep_dp,var_dp) proc_bind(close)
         do i=1,n
-            dev = data(i)-ave
-            ep_dp = ep_dp+real(dev,dp)
-            var_dp = var_dp+real(dev*dev,dp)
+            dev    = data(i) - ave
+            ep_dp  = ep_dp   + real(dev,dp)
+            var_dp = var_dp  + real(dev*dev,dp)
         end do
         !$omp end parallel do
-        var = real((var_dp-ep_dp**2./nr)/(nr-1.)) ! corrected two-pass formula
+        var  = real((var_dp - ep_dp**2./nr)/(nr-1.)) ! corrected two-pass formula
         sdev = 0.
         if( var > 0. ) sdev = sqrt(var)
         if( abs(var) < TINY )then
@@ -90,28 +88,24 @@ contains
         endif
     end subroutine moment_1
 
-    !>    given a 2D real array of data, this routine returns its mean: _ave_,
-    !!          standard deviation: _sdev_, and variance: _var_
-    !! \param data input data
-    !! \param ave,sdev,var  Geometric mean, standard deviation and variance
     subroutine moment_2( data, ave, sdev, var, err )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-        real, intent(out)    :: ave, sdev, var
-        logical, intent(out) :: err              !< error status
-        real, intent(in)     :: data(:,:)        !< input data
-        integer              :: nx, ny, n, i, j
-        real                 :: nr, dev
-        real(dp)             :: ep_dp, var_dp
-        err = .false.
-        nx = size(data,1)
-        ny = size(data,2)
-        n  = nx*ny
-        nr = real(n)
-        if( n <= 1 ) then
-            write(logfhandle,*) 'ERROR: n must be at least 2'
-            write(logfhandle,*) 'In: moment_2, module: simple_stat.f90'
-            stop
+        real,    intent(out) :: ave, sdev, var
+        logical, intent(out) :: err
+        real,    intent(in)  :: data(:,:)
+        integer  :: nx, ny, n, i, j
+        real     :: nr, dev
+        real(dp) :: ep_dp, var_dp
+        err  = .false.
+        nx   = size(data,1)
+        ny   = size(data,2)
+        n    = nx*ny
+        nr   = real(n)
+        ave  = 0.
+        sdev = 0.
+        var  = 0.
+        if( n < 2 )then
+            THROW_WARN('ERROR: n must be at least 2')
+            return
         endif
         ! calc average
         ave = sum(real(data,dp))/real(n,dp)
@@ -141,29 +135,25 @@ contains
         endif
     end subroutine moment_2
 
-    !>    given a 3D real array of data, this routine returns its mean: _ave_,
-    !!          standard deviation: _sdev_, and variance: _var_
-    !! \param data input data
-    !! \param ave,sdev,var  Geometric average,   standard deviation  and variance
     subroutine moment_3( data, ave, sdev, var, err )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-        real, intent(out)    :: ave, sdev, var
-        logical, intent(out) :: err               !< error status
-        real, intent(in)     :: data(:,:,:)       !< input data
-        integer              :: nx, ny, nz, n, i, j, k
-        real                 :: nr, dev
-        real(dp)             :: ep_dp, var_dp
-        err = .false.
-        nx = size(data,1)
-        ny = size(data,2)
-        nz = size(data,3)
-        n  = nx*ny*nz
-        nr = real(n)
-        if( n <= 1 ) then
-            write(logfhandle,*) 'ERROR: n must be at least 2'
-            write(logfhandle,*) 'In: moment_3, module: simple_stat.f90'
-            stop
+        real,    intent(out) :: ave, sdev, var
+        logical, intent(out) :: err
+        real,    intent(in)  :: data(:,:,:)
+        integer  :: nx, ny, nz, n, i, j, k
+        real     :: nr, dev
+        real(dp) :: ep_dp, var_dp
+        err  = .false.
+        nx   = size(data,1)
+        ny   = size(data,2)
+        nz   = size(data,3)
+        n    = nx*ny*nz
+        nr   = real(n)
+        ave  = 0.
+        sdev = 0.
+        var  = 0.
+        if( n < 2 )then
+            THROW_WARN('ERROR: n must be at least 2')
+            return
         endif
         ave = sum(real(data,dp))/real(n,dp)
         ! calc sum of devs and sum of devs squared
@@ -194,26 +184,26 @@ contains
         endif
     end subroutine moment_3
 
-    !>    given a 1D real array of data, this routine returns its mean: _ave_,
-    !!          standard deviation: _sdev_, and variance: _var_
-    !! \param data input data
-    !! \param ave,sdev,var  Geometric average,   standard deviation  and variance
     subroutine moment_4( data, ave, sdev, var, err, mask )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         real,    intent(out) :: ave, sdev, var
-        logical, intent(out) :: err !< error status
+        logical, intent(out) :: err
         real,    intent(in)  :: data(:)
         logical, intent(in)  :: mask(:)
         integer  :: n, i, sz
         real     :: nr, dev, abs_var
         real(dp) :: ep_dp, var_dp
-        err = .false.
-        sz  = size(data)
+        err  = .false.
+        sz   = size(data)
         if( sz /= size(mask) ) THROW_HARD('mask does not conform with data; moment_4')
-        n   = count(mask)
-        nr  = real(n)
-        if( n <= 1 ) THROW_HARD('n must be at least 2; moment_4')
+        n    = count(mask)
+        nr   = real(n)
+        ave  = 0.
+        sdev = 0.
+        var  = 0.
+        if( n < 2 )then
+            THROW_WARN('ERROR: n must be at least 2')
+            return
+        endif
         ! calc average
         ave = sum(real(data,dp), mask=mask)/real(n,dp)
         ! calc sum of devs and sum of devs squared
@@ -243,18 +233,23 @@ contains
     end subroutine moment_4
 
     !>  \brief  is for calculating variable statistics
-    subroutine calc_stats(arr, statvars, mask )
-        real,               intent(inout) :: arr(:)
-        type(stats_struct), intent(out)   :: statvars
-        logical, optional,  intent(in)    :: mask(:)
+    subroutine calc_stats( arr, statvars, mask )
+        real,               intent(in)  :: arr(:)
+        type(stats_struct), intent(out) :: statvars
+        logical, optional,  intent(in)  :: mask(:)
+        real, allocatable :: tmparr(:)
         real    :: var
         logical :: err
         if( present(mask) )then
             call moment(arr, statvars%avg, statvars%sdev, var, err, mask)
+            tmparr        = pack(arr, mask=mask)
+            statvars%med  = median_nocopy(tmparr)
             statvars%minv = minval(arr, mask)
             statvars%maxv = maxval(arr, mask)
+            deallocate(tmparr)
         else
             call moment(arr, statvars%avg, statvars%sdev, var, err)
+            statvars%med  = median(arr)
             statvars%minv = minval(arr)
             statvars%maxv = maxval(arr)
         endif
