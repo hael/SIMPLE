@@ -898,6 +898,7 @@ contains
                      enddo
                  endif
              end function det
+
     end subroutine kabsch
 
     ! This subroutine takes in input a pdbfile and saves its

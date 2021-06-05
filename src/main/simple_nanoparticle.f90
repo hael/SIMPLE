@@ -602,15 +602,16 @@ contains
         real,    pointer     :: rmat_pc(:,:,:)
         integer, allocatable :: imat(:,:,:), imat_cc(:,:,:), imat_bin(:,:,:)
         integer, parameter   :: RANK_THRESH = 4
-        integer :: icc, cnt
+        integer :: icc, cnt, cnt_split
         integer :: rank, m(1)
         real    :: new_centers(3,2*self%n_cc) ! will pack it afterwards if it has too many elements
-        real    :: pc
+        real    :: pc, aspect_ratio, radius
         write(logfhandle, '(A)') '>>> VALIDATING ATOMIC POSITIONS'
         call self%img%get_rmat_ptr(rmat_pc) ! now img contains the phase correlation
         call self%img_cc%get_imat(imat_cc)  ! to pass to the subroutine split_atoms
         allocate(imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = imat_cc)
-        cnt = 0
+        cnt       = 0
+        cnt_split = 0
         ! Remember to update the centers
         do icc =1, self%n_cc ! for each cc check if the center corresponds with the local max of the phase corr
             pc = rmat_pc(nint(self%atominfo(icc)%center(1)),nint(self%atominfo(icc)%center(2)),nint(self%atominfo(icc)%center(3)))
@@ -620,13 +621,18 @@ contains
             m(:) = minloc(abs(x - pc))
             rank = size(x) - m(1)
             deallocate(x)
-            if( rank > RANK_THRESH )then
+            ! calculate radius
+            call self%calc_aspect_ratio(icc, aspect_ratio, radius)
+            ! split
+            if( rank > RANK_THRESH .or. radius > 1.5 * self%theoretical_radius )then
+                cnt_split = cnt_split + 1
                 call split_atom(new_centers,cnt)
             else
                 cnt = cnt + 1 ! new number of centers derived from splitting
                 new_centers(:,cnt) = self%atominfo(icc)%center(:)
             endif
         enddo
+        write(logfhandle,*) '# atoms split: ', cnt_split
         deallocate(self%atominfo)
         self%n_cc = cnt ! update
         allocate(self%atominfo(cnt))
