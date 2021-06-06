@@ -186,6 +186,7 @@ type :: nanoparticle
     procedure, private :: atominfo2centers_A
     procedure, private :: center_on_atom
     procedure          :: mask
+    procedure          :: norm
     procedure          :: make_soft_mask
     procedure          :: update_ncc
     ! atomic position determination
@@ -351,11 +352,16 @@ contains
         call atom_centers%kill
     end subroutine center_on_atom
 
-    subroutine mask(self, msk_rad)
+    subroutine mask( self, msk_rad )
         class(nanoparticle), intent(inout) :: self
         real,                intent(in)    :: msk_rad
         call self%img%mask(msk_rad, 'soft')
     end subroutine mask
+
+    subroutine norm( self )
+        class(nanoparticle), intent(inout) :: self
+        call self%img%norm
+    end subroutine norm
 
     subroutine make_soft_mask(self)
         class(nanoparticle), intent(inout) :: self
@@ -658,12 +664,12 @@ contains
     contains
 
         subroutine split_atom(new_centers,cnt)
-            real,    intent(inout) :: new_centers(:,:)  ! updated coordinates of the centers
-            integer, intent(inout) :: cnt               ! atom counter, to update the center coords
+            real,    intent(inout) :: new_centers(:,:) ! updated coordinates of the centers
+            integer, intent(inout) :: cnt              ! atom counter, to update the center coords
             integer :: new_center1(3), new_center2(3), new_center3(3)
             integer :: i, j, k
             logical :: mask(self%ldim(1),self%ldim(2),self%ldim(3)) ! false in the layer of connection of the atom to be split
-            mask = .false.  ! initialization
+            mask = .false. ! initialization
             ! Identify first new center
             new_center1 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), imat == icc)
             cnt = cnt + 1
@@ -671,9 +677,9 @@ contains
             do i = 1, self%ldim(1)
                 do j = 1, self%ldim(2)
                     do k = 1, self%ldim(3)
-                        if(((real(i-new_center1(1)))**2 + (real(j-new_center1(2)))**2 + &
-                        &   (real(k-new_center1(3)))**2)*self%smpd  <=  (0.9*self%theoretical_radius)**2) then
-                            if(imat(i,j,k) == icc) mask(i,j,k) = .true.
+                        if(((real(i - new_center1(1)))**2 + (real(j - new_center1(2)))**2 + &
+                        &   (real(k - new_center1(3)))**2) * self%smpd  <=  (0.9 * self%theoretical_radius)**2) then
+                            if( imat(i,j,k) == icc ) mask(i,j,k) = .true.
                         endif
                     enddo
                 enddo
@@ -682,9 +688,9 @@ contains
             new_center2 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), (imat == icc) .and. .not. mask)
             if( any(new_center2 > 0) )then ! if anything was found
                 ! Validate second center (check if it's 2 merged atoms, or one pointy one)
-                if(sum(real(new_center2-new_center1)**2.)*self%smpd <= 2.*self%theoretical_radius) then
+                if( sum(real(new_center2 - new_center1)**2.) * self%smpd <= 2. * self%theoretical_radius) then
                     ! Set the merged cc back to 0
-                    where(imat_cc == icc .and. (.not.mask) ) imat_cc = 0
+                    where( imat_cc == icc .and. (.not.mask) ) imat_cc = 0
                     return
                 else
                     cnt = cnt + 1
@@ -693,9 +699,9 @@ contains
                     do i = 1, self%ldim(1)
                         do j = 1, self%ldim(2)
                             do k = 1, self%ldim(3)
-                                if(((real(i-new_center2(1)))**2 + (real(j-new_center2(2)))**2 + (real(k-new_center2(3)))**2)*self%smpd < &
-                                & (0.9*self%theoretical_radius)**2) then
-                                    if(imat(i,j,k) == icc)   mask(i,j,k) = .true.
+                                if(((real(i - new_center2(1)))**2 + (real(j - new_center2(2)))**2 +&
+                                &(real(k - new_center2(3)))**2) * self%smpd < (0.9 * self%theoretical_radius)**2 )then
+                                    if( imat(i,j,k) == icc ) mask(i,j,k) = .true.
                                 endif
                             enddo
                         enddo
@@ -703,12 +709,11 @@ contains
                 endif
             endif
             ! Third likely center.
-            new_center3 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), &
-            & (imat == icc) .and. .not. mask)
-            if(any(new_center3 > 0)) then ! if anything was found
+            new_center3 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), (imat == icc) .and. .not. mask)
+            if( any(new_center3 > 0) )then ! if anything was found
                 ! Validate third center
-                if(sum(real(new_center3-new_center1)**2.)*self%smpd <= 2.*self%theoretical_radius .or. &
-                &  sum(real(new_center3-new_center2)**2.)*self%smpd <= 2.*self%theoretical_radius ) then
+                if(sum(real(new_center3 - new_center1)**2.) * self%smpd <= 2. * self%theoretical_radius .or. &
+                &  sum(real(new_center3 - new_center2)**2.) * self%smpd <= 2. * self%theoretical_radius )then
                     ! Set the merged cc back to 0
                     where( imat_cc == icc .and. (.not.mask) ) imat_cc = 0
                     return
@@ -719,9 +724,10 @@ contains
                     do i = 1, self%ldim(1)
                         do j = 1, self%ldim(2)
                             do k = 1, self%ldim(3)
-                                if(((real(i-new_center3(1)))**2 + (real(j-new_center3(2)))**2 + &
-                                &(real(k-new_center3(3)))**2)*self%smpd < (0.9*self%theoretical_radius)**2) then ! a little smaller to be sure
-                                    if(imat(i,j,k) == icc)   mask(i,j,k) = .true.
+                                ! a little smaller to be sure
+                                if( ((real(i - new_center3(1)))**2 + (real(j - new_center3(2)))**2 + &
+                                &(real(k - new_center3(3)))**2) * self%smpd < (0.9 * self%theoretical_radius)**2) then
+                                    if( imat(i,j,k) == icc ) mask(i,j,k) = .true.
                                 endif
                             enddo
                         enddo
@@ -1102,7 +1108,9 @@ contains
        class(nanoparticle),        intent(inout) :: self
        character(len=*), optional, intent(in)    :: fname
        real,             optional, intent(in)    :: coords(:,:)
-       integer :: cc
+       type(image) :: simulated_distrib
+       type(atoms) :: atom
+       integer     :: cc
        if( present(coords) )then
            call self%centers_pdb%new(size(coords, dim = 2), dummy=.true.)
            do cc=1,size(coords, dim = 2)
@@ -1120,11 +1128,18 @@ contains
                call self%centers_pdb%set_resnum(cc,cc)
            enddo
        endif
-       if(present(fname)) then
+       if( present(fname) ) then
            call self%centers_pdb%writepdb(fname)
        else
            call self%centers_pdb%writepdb(trim(self%fbody)//'_atom_centers')
+           call atom%new                 (trim(self%fbody)//'_atom_centers.pdb')
+           call simulated_distrib%new(self%ldim,self%smpd)
+           call atom%convolve(simulated_distrib, cutoff = 8.*self%smpd)
+           call simulated_distrib%write(trim(self%fbody)//'SIM.mrc')
            write(logfhandle,*) 'output, atomic coordinates:       ', trim(self%fbody)//'_atom_centers.pdb'
+           write(logfhandle,*) 'output, simulated atomic density: ', trim(self%fbody)//'SIM.mrc'
+           call atom%kill
+           call simulated_distrib%kill
        endif
     end subroutine write_centers
 
