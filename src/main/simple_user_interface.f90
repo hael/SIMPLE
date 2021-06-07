@@ -389,6 +389,7 @@ contains
         call new_tseries_swap_stack
         call new_tseries_denoise_trajectory
         call new_tseries_track_particles
+        call new_tseries_reconstruct3D
         call new_graphene_subtr
         call new_update_project
         call new_validate_nano
@@ -488,6 +489,7 @@ contains
         call push2prg_ptr_array(tseries_swap_stack)
         call push2prg_ptr_array(tseries_denoise_trajectory)
         call push2prg_ptr_array(tseries_track_particles)
+        call push2prg_ptr_array(tseries_reconstruct3D)
         call push2prg_ptr_array(graphene_subtr)
         call push2prg_ptr_array(update_project)
         call push2prg_ptr_array(validate_nano)
@@ -4170,10 +4172,10 @@ contains
     subroutine new_tseries_track_particles
         ! PROGRAM SPECIFICATION
         call tseries_track_particles%new(&
-        &'tseries_track_particles',&                                                       ! name
+        &'tseries_track_particles',&                                             ! name
         &'Track particles in time-series',&                                      ! descr_short
         &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
-        &'single_exec',&                                                   ! executable
+        &'single_exec',&                                                         ! executable
         &0, 3, 0, 2, 4, 0, 1, .true.)                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -4209,7 +4211,7 @@ contains
 
     subroutine new_tseries_reconstruct3D
         ! PROGRAM SPECIFICATION
-        call reconstruct3D%new(&
+        call tseries_reconstruct3D%new(&
         &'tseries_reconstruct3D',&                                       ! name
         &'Time windowed 3D reconstruction from oriented particles',&     ! descr_long
         &'Time windowed 3D reconstruction from oriented particles',&
@@ -4219,7 +4221,7 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call tseries_reconstruct3D%set_input('parm_ios', 1, stepsz)
+        call tseries_reconstruct3D%set_input('parm_ios', 1, 'stepsz',  'num', 'Time window size (# frames){500}', 'Time window size (# frames) for windowed 3D rec{500}', 'give # frames',  .false., 500.)
         ! alternative inputs
         ! <empty>
         ! search controls

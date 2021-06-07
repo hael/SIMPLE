@@ -1467,7 +1467,7 @@ contains
 
     subroutine exec_tseries_reconstruct3D_distr( self, cline )
         use gnufor2
-        real, parameter :: LP_LIST(5) = [1.5,3.0,5.0,10.0,15.0]
+        real, parameter :: LP_LIST(5) = [1.5,2.0,2.5,3.0]
         class(tseries_reconstruct3D_distr), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         character(len=LONGSTRLEN), allocatable :: list(:)
@@ -1579,8 +1579,8 @@ contains
             call vol1%zero_and_unflag_ft
             sumw = 0.
             do istate = max(1,state-6),min(nparts,state+6)
-                w    = exp(-real(istate-state)**2. / 16.0)
-                sumw = sumw + w
+                w     = exp(-real(istate-state)**2. / 16.0)
+                sumw  = sumw + w
                 call vol2%zero_and_unflag_ft
                 call vol2%read(vol_fnames(istate))
                 call vol1%add(vol2,w)
@@ -1596,16 +1596,16 @@ contains
         nlps = size(LP_LIST)
         allocate(fsc(fdim(params%box)-1),ccs(nlps,nparts,nparts))
         ccs = 1.
-        do state = 1,nparts-1
+        do state = 1, nparts - 1
             call vol1%zero_and_unflag_ft
             call vol1%read(vol_fnames(state))
             call vol1%fft
-            do istate = state+1,nparts
+            do istate = state + 1, nparts
                 call vol2%zero_and_unflag_ft
                 call vol2%read(vol_fnames(istate))
                 call vol2%fft
                 call vol1%fsc(vol2,fsc)
-                do ilp = 1,nlps
+                do ilp = 1, nlps
                     ind = calc_fourier_index(LP_LIST(ilp), params%box, params_glob%smpd)
                     ccs(ilp,state,istate) = sum(fsc(:ind)) / real(ind)
                     ccs(ilp,istate,state) = ccs(ilp,state,istate)
@@ -1615,8 +1615,8 @@ contains
         do ilp = 1,nlps
             fname = 'ccmat_lp'//trim(real2str(LP_LIST(ilp)))//'.txt'
             call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=iostat)
-            do istate = 1,nparts
-                do i = 1,nparts-1
+            do istate = 1, nparts
+                do i = 1, nparts - 1
                     write(funit,'(F8.3)',advance='no') ccs(ilp,istate,i)
                 enddo
                 write(funit,'(F8.3)',advance='yes') ccs(ilp,istate,nparts)
