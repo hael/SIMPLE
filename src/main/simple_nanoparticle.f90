@@ -749,35 +749,31 @@ contains
         class(nanoparticle), intent(inout) :: self
         integer,             intent(in)    :: cn_thresh ! threshold for discarding outliers based on coordination number
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
-        logical, allocatable :: mask(:)
         real, allocatable    :: centers_A(:,:) ! coordinates of the atoms in ANGSTROMS
-        real    :: radius  ! radius of the sphere to consider for cn calculation
+        real    :: radius  ! radius of themask sphere to consider for cn calculation
         real    :: a(3)    ! lattice parameter
         real    :: cn_gen(self%n_cc)
-        integer :: cn(self%n_cc), cc, n_discard, filnum, filnum1, filnum2, i, nvox
+        integer :: cn(self%n_cc), cc, n_discard
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS'
         centers_A = self%atominfo2centers_A()
         call fit_lattice(centers_A,a)
         call find_cn_radius(a,radius)
         call run_coord_number_analysis(centers_A,radius,cn,cn_gen)
-        allocate(mask(self%n_cc), source=.true.)
-        where( cn < cn_thresh ) mask = .false. ! false where atom has to be discarded
-        n_discard = count(cn < cn_thresh)
-        write(logfhandle, *) 'Numbers of atoms discarded because of low cn ', n_discard
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
         ! Removing outliers from the binary image and the connected components image
         ! remove atoms with < NVOX_THRESH voxels
         do cc = 1, self%n_cc
-            nvox = count(imat_cc == cc)
-            if( nvox < NVOX_THRESH )then
+            if( count(imat_cc == cc) < NVOX_THRESH )then
                 where(imat_cc == cc) imat_bin = 0
             endif
         end do
         ! Removing outliers based on coordination number
+        n_discard = 0
         do cc = 1, self%n_cc
             if( cn(cc) < cn_thresh )then
                 where(imat_cc == cc) imat_bin = 0
+                n_discard = n_discard + 1
             endif
         enddo
         call self%img_bin%set_imat(imat_bin)
@@ -788,8 +784,7 @@ contains
         deallocate(centers_A)
         centers_A = self%atominfo2centers_A()
         call run_coord_number_analysis(centers_A,radius,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
-        ! ATTENTION: you will see low coord numbers because they are UPDATED, after elimination
-        ! of the atoms with low cn. It is like this in order to be consistent with the figure.
+        write(logfhandle, *) 'Numbers of atoms discarded because of low cn ', n_discard
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS, COMPLETED'
     end subroutine discard_outliers
 
