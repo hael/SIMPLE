@@ -186,7 +186,6 @@ type :: nanoparticle
     procedure, private :: atominfo2centers_A
     procedure, private :: center_on_atom
     procedure          :: mask
-    procedure          :: norm
     procedure          :: make_soft_mask
     procedure          :: update_ncc
     ! atomic position determination
@@ -210,7 +209,7 @@ type :: nanoparticle
     ! clustering
     procedure, private :: id_corr_vars
     procedure, private :: bicluster_otsu
-    procedure, private :: cluster_atom_features
+    ! procedure, private :: cluster_atom_features
     procedure, private :: cluster_atom_intensity
     procedure          :: cluster_atom_maxint
     procedure          :: cluster_atom_intint
@@ -357,11 +356,6 @@ contains
         real,                intent(in)    :: msk_rad
         call self%img%mask(msk_rad, 'soft')
     end subroutine mask
-
-    subroutine norm( self )
-        class(nanoparticle), intent(inout) :: self
-        call self%img%norm
-    end subroutine norm
 
     subroutine make_soft_mask(self)
         class(nanoparticle), intent(inout) :: self
@@ -900,6 +894,8 @@ contains
         call calc_stats( self%atominfo(:)%aspect_ratio,  self%aspect_ratio_stats  )
         call calc_stats( self%atominfo(:)%polar_angle,   self%polar_angle_stats   )
         call calc_stats( self%atominfo(:)%diam,          self%diam_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
+        call norm_minmax( self%atominfo(:)%avg_int )
+        call norm_minmax( self%atominfo(:)%max_int )
         call calc_stats( self%atominfo(:)%avg_int,       self%avg_int_stats       )
         call calc_stats( self%atominfo(:)%max_int,       self%max_int_stats       )
         call calc_stats( self%atominfo(:)%max_corr,      self%max_corr_stats      )
@@ -931,6 +927,15 @@ contains
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS, COMPLETED'
 
         contains
+
+            subroutine norm_minmax( arr )
+                real, intent(inout) :: arr(:)
+                real :: smin, smax, delta
+                smin  = minval(arr)
+                smax  = maxval(arr)
+                delta = smax - smin
+                arr = (arr - smin)/delta
+            end subroutine norm_minmax
 
             function ang3D_zvec( vec ) result( ang )
                 real, intent(in) :: vec(3)
@@ -1201,7 +1206,7 @@ contains
         if( self%atominfo(cc)%size < NVOX_THRESH ) return
         omit_here = .false.
         if( present(omit) ) omit_here = omit
-        601 format(F8.4,A3)
+        601 format(F8.4,A2)
         602 format(F8.4)
         ! various per-atom parameters
         write(funit,601,advance='no') real(self%atominfo(cc)%cc_ind),           CSV_DELIM ! INDEX
@@ -1250,7 +1255,7 @@ contains
     subroutine write_np_stats( self, funit )
         class(nanoparticle), intent(in) :: self
         integer,             intent(in) :: funit
-        601 format(F8.4,A3)
+        601 format(F8.4,A2)
         602 format(F8.4)
         ! -- # atoms
         write(funit,601,advance='no') real(self%n_cc),               CSV_DELIM ! NATOMS
@@ -1307,7 +1312,7 @@ contains
     subroutine write_cn_stats( self, cn, funit )
         class(nanoparticle), intent(in) :: self
         integer,             intent(in) :: cn, funit
-        601 format(F8.4,A3)
+        601 format(F8.4,A2)
         602 format(F8.4)
         if( count(self%atominfo(:)%cn_std == cn) < 2 ) return
         ! -- coordination number
@@ -1502,7 +1507,7 @@ contains
                 type(stats_struct) :: stats(2)
                 character(len=13)  :: param_str
                 integer            :: pop1, pop2
-                601 format(F8.4,A3)
+                601 format(F8.4,A2)
                 602 format(F8.4)
                 param_str = trim(param)
                 vals4otsu = pack(vals, mask=mask)
@@ -1563,58 +1568,58 @@ contains
 
     end subroutine bicluster_otsu
 
-    subroutine cluster_atom_features( self )
-        use simple_aff_prop, only: aff_prop
-        class(nanoparticle), intent(inout) :: self
-        integer, allocatable :: centers(:), labels(:)
-        type(aff_prop) :: ap
-        real           :: smat(self%n_cc,self%n_cc), simsum, datvecs(self%n_cc,8)
-        integer        :: i, j, cc
-        do cc = 1, self%n_cc
-            ! real-valued data
-            datvecs(cc,1) = real(self%atominfo(cc)%size)
-            datvecs(cc,2) =      self%atominfo(cc)%bondl
-            datvecs(cc,3) =      self%atominfo(cc)%aspect_ratio
-            datvecs(cc,4) =      self%atominfo(cc)%polar_angle
-            datvecs(cc,5) =      self%atominfo(cc)%diam
-            datvecs(cc,6) =      self%atominfo(cc)%max_int
-            datvecs(cc,7) =      self%atominfo(cc)%max_corr
-            datvecs(cc,8) =      self%atominfo(cc)%radial_strain
-        end do
-        ! rescaling to avoid the polarization angle to dominate the analysis
-        call norm_minmax(datvecs(:,1))
-        call norm_minmax(datvecs(:,2))
-        call norm_minmax(datvecs(:,3))
-        call norm_minmax(datvecs(:,4))
-        call norm_minmax(datvecs(:,5))
-        call norm_minmax(datvecs(:,6))
-        call norm_minmax(datvecs(:,7))
-        call norm_minmax(datvecs(:,8))
-        ! calculate similarity matrix
-        do i = 1, self%n_cc - 1
-            do j = i + 1, self%n_cc
-                ! smat(i,j) =   pearsn_serial(datvecs(i,:), datvecs(j,:))
-                smat(i,j) = - euclid(datvecs(i,:), datvecs(j,:))
-                smat(j,i) = smat(i,j)
-            end do
-        end do
-        ! affinity propagation
-        call ap%new(self%n_cc, smat)
-        call ap%propagate(centers, labels, simsum)
-        write(logfhandle,*) '# clusters found with affinity propagation', size(centers)
-
-        contains
-
-            subroutine norm_minmax( arr )
-                real, intent(inout) :: arr(:)
-                real                :: smin, smax, delta
-                smin  = minval(arr)
-                smax  = maxval(arr)
-                delta = smax - smin
-                arr = (arr - smin)/delta
-            end subroutine norm_minmax
-
-    end subroutine cluster_atom_features
+    ! subroutine cluster_atom_features( self )
+    !     use simple_aff_prop, only: aff_prop
+    !     class(nanoparticle), intent(inout) :: self
+    !     integer, allocatable :: centers(:), labels(:)
+    !     type(aff_prop) :: ap
+    !     real           :: smat(self%n_cc,self%n_cc), simsum, datvecs(self%n_cc,8)
+    !     integer        :: i, j, cc
+    !     do cc = 1, self%n_cc
+    !         ! real-valued data
+    !         datvecs(cc,1) = real(self%atominfo(cc)%size)
+    !         datvecs(cc,2) =      self%atominfo(cc)%bondl
+    !         datvecs(cc,3) =      self%atominfo(cc)%aspect_ratio
+    !         datvecs(cc,4) =      self%atominfo(cc)%polar_angle
+    !         datvecs(cc,5) =      self%atominfo(cc)%diam
+    !         datvecs(cc,6) =      self%atominfo(cc)%max_int
+    !         datvecs(cc,7) =      self%atominfo(cc)%max_corr
+    !         datvecs(cc,8) =      self%atominfo(cc)%radial_strain
+    !     end do
+    !     ! rescaling to avoid the polarization angle to dominate the analysis
+    !     call norm_minmax(datvecs(:,1))
+    !     call norm_minmax(datvecs(:,2))
+    !     call norm_minmax(datvecs(:,3))
+    !     call norm_minmax(datvecs(:,4))
+    !     call norm_minmax(datvecs(:,5))
+    !     call norm_minmax(datvecs(:,6))
+    !     call norm_minmax(datvecs(:,7))
+    !     call norm_minmax(datvecs(:,8))
+    !     ! calculate similarity matrix
+    !     do i = 1, self%n_cc - 1
+    !         do j = i + 1, self%n_cc
+    !             ! smat(i,j) =   pearsn_serial(datvecs(i,:), datvecs(j,:))
+    !             smat(i,j) = - euclid(datvecs(i,:), datvecs(j,:))
+    !             smat(j,i) = smat(i,j)
+    !         end do
+    !     end do
+    !     ! affinity propagation
+    !     call ap%new(self%n_cc, smat)
+    !     call ap%propagate(centers, labels, simsum)
+    !     write(logfhandle,*) '# clusters found with affinity propagation', size(centers)
+    !
+    !     contains
+    !
+    !         subroutine norm_minmax( arr )
+    !             real, intent(inout) :: arr(:)
+    !             real                :: smin, smax, delta
+    !             smin  = minval(arr)
+    !             smax  = maxval(arr)
+    !             delta = smax - smin
+    !             arr = (arr - smin)/delta
+    !         end subroutine norm_minmax
+    !
+    ! end subroutine cluster_atom_features
 
     ! This subroutine clusters the atoms with respect to the maximum intensity
     ! or the integrated density (according to the values contained in feature)

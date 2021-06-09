@@ -67,84 +67,141 @@ end type remoc_commander
 contains
 
     subroutine exec_cluster_smat( self, cline )
-        use simple_cluster_shc,   only: cluster_shc
-        use simple_cluster_valid, only: cluster_valid
+        use simple_aff_prop, only: aff_prop
         class(cluster_smat_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        type(parameters)    :: params
-        type(builder)       :: build
-        type(cluster_shc)   :: shcc
-        type(cluster_valid) :: cvalid
-        real, allocatable   :: smat(:,:)
-        integer             :: funit, io_stat, ncls_min, loc(1), ncls_stop, icls
-        integer             :: pop, ncls, irestart, ntot, cnt=0, numlen
-        real                :: avg_ratio, min_ratio, ratio, x, sim
-        real, allocatable   :: validinds(:)
-        integer, parameter  :: NRESTARTS=10
-        logical             :: done=.false.
+        type(parameters)     :: params
+        type(builder)        :: build
+        real,    allocatable :: smat(:,:), tmparr(:)
+        logical, allocatable :: mask(:,:)
+        integer, allocatable :: centers(:), labels(:)
+        type(aff_prop)       :: aprop
+        integer              :: n, i
+        real                 :: smed, ssum
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        ! obtain similarity matrix
-        allocate(smat(params%nptcls,params%nptcls), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: simple_cluster_smat, 1',alloc_stat)
-        smat = 1.
-        call fopen(funit, status='OLD', action='READ', file=params%fname, access='STREAM',iostat=io_stat)
-        call fileiochk('commander_misc; cluster_smat fopen', io_stat)
-        read(unit=funit,pos=1,iostat=io_stat) smat
-        if( io_stat .ne. 0 )then
-            write(logfhandle,'(a,i0,a)') 'I/O error ', io_stat, ' when reading: ', params%fname
-            THROW_HARD('I/O')
-        endif
-        call fclose(funit,errmsg='commander_misc; cluster_smat fclose ')
-        allocate(validinds(2:params%ncls), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In: simple_commander_misc:: cluster_smat",alloc_stat)
-        validinds = 0
-        ntot = (params%ncls-1)*NRESTARTS
-        cnt = 0
-        numlen = len(int2str(params%ncls))
-        do ncls=2,params%ncls
-            avg_ratio = 0.
-            min_ratio = huge(x)
-            do irestart=1,NRESTARTS
-                cnt = cnt+1
-                call progress(cnt,ntot)
-                call shcc%new(params%nptcls, ncls, smat, build%spproj_field)
-                call shcc%shc(.false., params%label, sim)
-                call cvalid%new(build%spproj_field, ncls, params%label, smat)
-                ratio = cvalid%ratio_index()
-                avg_ratio = avg_ratio+ratio
-                if( ratio < min_ratio )then
-                    min_ratio = ratio
-                    call build%spproj_field%write('clustering_shc_ncls'//int2str_pad(ncls,numlen)//trim(TXT_EXT), [1,params%nptcls])
-                endif
-            end do
-            validinds(ncls) = avg_ratio/real(NRESTARTS)
+        call read_smat(params%fname, smat, n)
+        ! find median similarity
+        allocate(mask(n,n), source=.true.)
+        do i=1,n
+            mask(i,i) = .false.
         end do
-        ncls_stop = 0
-        done = .false.
-        do ncls=2,params%ncls
-            write(logfhandle,'(a,1x,f9.3,8x,a,1x,i3)') 'COHESION/SEPARATION RATIO INDEX: ', validinds(ncls), ' NCLS: ', ncls
-            call build%spproj_field%read('clustering_shc_ncls'//int2str_pad(ncls,numlen)//trim(TXT_EXT), [1,build%spproj_field%get_noris()])
-            do icls=1,ncls
-                pop = build%spproj_field%get_pop(icls, params%label)
-                write(logfhandle,'(a,3x,i5,1x,a,1x,i3)') '  CLUSTER POPULATION:', pop, 'CLUSTER:', icls
-            end do
-            write(logfhandle,'(a)') '***************************************************'
-            if( ncls < params%ncls )then
-                if( validinds(ncls+1) >= validinds(ncls) .and. .not. done )then
-                    ncls_stop = ncls
-                    done = .true.
-                endif
-            endif
+        tmparr = pack(smat, mask=mask)
+        smed   = median_nocopy(tmparr)
+        write(logfhandle,'(A)') '>>> PERFORMING CLUSTERING WITH AFFINITY PROPAGATION'
+        call aprop%new(n, smat, pref=smed)
+        call aprop%propagate(centers, labels, ssum)
+        write(logfhandle,*) '# clusters found', size(centers)
+        do i=1,n
+            write(logfhandle,*) labels(i)
         end do
-        loc = minloc(validinds)
-        ncls_min = loc(1)+1
-        write(logfhandle,'(a,i3)') 'NUMBER OF CLUSTERS FOUND BY MINIMIZING RATIO INDEX: ', ncls_min
-        if( ncls_stop /= 0 )then
-            write(logfhandle,'(a,i3)') 'NUMBER OF CLUSTERS FOUND BY STOPPING CRITERIUM:     ', ncls_stop
-        endif
+        call aprop%kill
+        deallocate(smat, tmparr, mask)
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_SMAT NORMAL STOP ****')
+
+        contains
+
+            subroutine read_smat( filename, smat, n )
+                use simple_nrtxtfile, only: nrtxtfile
+                character(len=*),  intent(in)    :: filename
+                real, allocatable, intent(inout) :: smat(:,:)
+                integer,           intent(inout) :: n
+                integer         :: ndatlines, nrecs, i
+                type(nrtxtfile) :: nrsfile
+                call nrsfile%new(filename, 1)
+                ndatlines = nrsfile%get_ndatalines()
+                nrecs     = nrsfile%get_nrecs_per_line()
+                if( ndatlines /= nrecs ) THROW_HARD('ERROR! similarity matrix must be symmetric')
+                n = nrecs
+                if( allocated(smat) ) deallocate(smat)
+                allocate( smat(n,n), source=0. )
+                do i=1,ndatlines
+                    call nrsfile%readNextDataLine(smat(i,:))
+                end do
+                call nrsfile%kill
+            end subroutine read_smat
+
     end subroutine exec_cluster_smat
+
+    ! subroutine exec_cluster_smat( self, cline )
+    !     use simple_cluster_shc,   only: cluster_shc
+    !     use simple_cluster_valid, only: cluster_valid
+    !     class(cluster_smat_commander), intent(inout) :: self
+    !     class(cmdline),                intent(inout) :: cline
+    !     type(parameters)    :: params
+    !     type(builder)       :: build
+    !     type(cluster_shc)   :: shcc
+    !     type(cluster_valid) :: cvalid
+    !     real, allocatable   :: smat(:,:)
+    !     integer             :: funit, io_stat, ncls_min, loc(1), ncls_stop, icls
+    !     integer             :: pop, ncls, irestart, ntot, cnt=0, numlen
+    !     real                :: avg_ratio, min_ratio, ratio, x, sim
+    !     real, allocatable   :: validinds(:)
+    !     integer, parameter  :: NRESTARTS=10
+    !     logical             :: done=.false.
+    !     call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+    !     ! obtain similarity matrix
+    !     allocate(smat(params%nptcls,params%nptcls), stat=alloc_stat)
+    !     if(alloc_stat.ne.0)call allocchk('In: simple_cluster_smat, 1',alloc_stat)
+    !     smat = 1.
+    !     call fopen(funit, status='OLD', action='READ', file=params%fname, access='STREAM',iostat=io_stat)
+    !     call fileiochk('commander_misc; cluster_smat fopen', io_stat)
+    !     read(unit=funit,pos=1,iostat=io_stat) smat
+    !     if( io_stat .ne. 0 )then
+    !         write(logfhandle,'(a,i0,a)') 'I/O error ', io_stat, ' when reading: ', params%fname
+    !         THROW_HARD('I/O')
+    !     endif
+    !     call fclose(funit,errmsg='commander_misc; cluster_smat fclose ')
+    !     allocate(validinds(2:params%ncls), stat=alloc_stat)
+    !     if(alloc_stat.ne.0)call allocchk("In: simple_commander_misc:: cluster_smat",alloc_stat)
+    !     validinds = 0
+    !     ntot = (params%ncls-1)*NRESTARTS
+    !     cnt = 0
+    !     numlen = len(int2str(params%ncls))
+    !     do ncls=2,params%ncls
+    !         avg_ratio = 0.
+    !         min_ratio = huge(x)
+    !         do irestart=1,NRESTARTS
+    !             cnt = cnt+1
+    !             call progress(cnt,ntot)
+    !             call shcc%new(params%nptcls, ncls, smat, build%spproj_field)
+    !             call shcc%shc(.false., params%label, sim)
+    !             call cvalid%new(build%spproj_field, ncls, params%label, smat)
+    !             ratio = cvalid%ratio_index()
+    !             avg_ratio = avg_ratio+ratio
+    !             if( ratio < min_ratio )then
+    !                 min_ratio = ratio
+    !                 call build%spproj_field%write('clustering_shc_ncls'//int2str_pad(ncls,numlen)//trim(TXT_EXT), [1,params%nptcls])
+    !             endif
+    !         end do
+    !         validinds(ncls) = avg_ratio/real(NRESTARTS)
+    !     end do
+    !     ncls_stop = 0
+    !     done = .false.
+    !     do ncls=2,params%ncls
+    !         write(logfhandle,'(a,1x,f9.3,8x,a,1x,i3)') 'COHESION/SEPARATION RATIO INDEX: ', validinds(ncls), ' NCLS: ', ncls
+    !         call build%spproj_field%read('clustering_shc_ncls'//int2str_pad(ncls,numlen)//trim(TXT_EXT), [1,build%spproj_field%get_noris()])
+    !         do icls=1,ncls
+    !             pop = build%spproj_field%get_pop(icls, params%label)
+    !             write(logfhandle,'(a,3x,i5,1x,a,1x,i3)') '  CLUSTER POPULATION:', pop, 'CLUSTER:', icls
+    !         end do
+    !         write(logfhandle,'(a)') '***************************************************'
+    !         if( ncls < params%ncls )then
+    !             if( validinds(ncls+1) >= validinds(ncls) .and. .not. done )then
+    !                 ncls_stop = ncls
+    !                 done = .true.
+    !             endif
+    !         endif
+    !     end do
+    !     loc = minloc(validinds)
+    !     ncls_min = loc(1)+1
+    !     write(logfhandle,'(a,i3)') 'NUMBER OF CLUSTERS FOUND BY MINIMIZING RATIO INDEX: ', ncls_min
+    !     if( ncls_stop /= 0 )then
+    !         write(logfhandle,'(a,i3)') 'NUMBER OF CLUSTERS FOUND BY STOPPING CRITERIUM:     ', ncls_stop
+    !     endif
+    !     ! end gracefully
+    !     call simple_end('**** SIMPLE_CLUSTER_SMAT NORMAL STOP ****')
+    ! end subroutine exec_cluster_smat
 
     !> centers base on centre of mass
      subroutine exec_masscen( self, cline )
@@ -623,7 +680,7 @@ contains
                 enddo
                 call starfile_table__delete(star_table)
             end subroutine parse_particles
-    
+
             subroutine parse_mics( fname, mics, star_movies, ctf, mov_smpd )
                 character(len=*),                intent(in) :: fname
                 class(str4arr),    allocatable, intent(out) :: mics(:), star_movies(:)

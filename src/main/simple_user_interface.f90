@@ -86,6 +86,7 @@ type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster3D
 type(simple_program), target :: cluster3D_refine
 type(simple_program), target :: cluster_cavgs
+type(simple_program), target :: cluster_smat
 type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
@@ -310,6 +311,7 @@ contains
         call new_cluster3D
         call new_cluster3D_refine
         call new_cluster_cavgs
+        call new_cluster_smat
         call new_convert
         call new_ctf_estimate
         call new_ctfops
@@ -413,6 +415,7 @@ contains
         call push2prg_ptr_array(cluster3D)
         call push2prg_ptr_array(cluster3D_refine)
         call push2prg_ptr_array(cluster_cavgs)
+        call push2prg_ptr_array(cluster_smat)
         call push2prg_ptr_array(convert)
         call push2prg_ptr_array(ctf_estimate)
         call push2prg_ptr_array(ctfops)
@@ -535,6 +538,8 @@ contains
                 ptr2prg => cluster3D_refine
             case('cluster_cavgs')
                 ptr2prg => cluster_cavgs
+            case('cluster_smat')
+                ptr2prg => cluster_smat
             case('convert')
                 ptr2prg => convert
             case('ctf_estimate')
@@ -717,6 +722,7 @@ contains
         write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') cleanup2D%name
         write(logfhandle,'(A)') cluster_cavgs%name
+        write(logfhandle,'(A)') cluster_smat%name
         write(logfhandle,'(A)') cluster2D%name
         write(logfhandle,'(A)') cluster2D_stream%name
         write(logfhandle,'(A)') cluster3D%name
@@ -1476,6 +1482,31 @@ contains
         ! computer controls
         call cluster_cavgs%set_input('comp_ctrls', 1, nthr)
     end subroutine new_cluster_cavgs
+
+    subroutine new_cluster_smat
+        ! PROGRAM SPECIFICATION
+        call cluster_smat%new(&
+        &'cluster_smat',&                                                             ! name
+        &'Clustering of a similarity matrix with affinity propagation',&              ! descr_short
+        &'is a program for analyzing a similarity matrix with affinity propagation',& ! descr_long
+        &'simple_exec',&                                                              ! executable
+        &0, 1, 0, 0, 0, 0, 0, .false.)                                                ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call cluster_smat%set_input('parm_ios', 1, 'fname', 'file', 'Name of similarity matrix file', 'Name of similarity matrix text file', 'e.g. xxx.txt file', .true., '')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_cluster_smat
 
     subroutine new_convert
         ! PROGRAM SPECIFICATION

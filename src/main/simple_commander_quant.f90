@@ -105,7 +105,6 @@ contains
             THROW_HARD('ERROR! pdbfile needs to be present; exec_atoms_stats')
         endif
         call nano%new(params%vols(1), params%smpd, params%element)
-        call nano%norm
         call nano%set_atomic_coords(params%pdbfile)
         call nano%set_img(params%vols(2), 'img_cc')
         call nano%update_ncc()

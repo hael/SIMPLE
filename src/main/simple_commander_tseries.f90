@@ -1467,13 +1467,15 @@ contains
 
     subroutine exec_tseries_reconstruct3D_distr( self, cline )
         use gnufor2
-        real, parameter :: LP_LIST(5) = [1.5,2.0,2.5,3.0]
+        real, parameter :: LP_LIST(4) = [1.5,2.0,2.5,3.0]
+        real, parameter :: HP_LIM = 5.0 ! no information at lower res for these kind of data
         class(tseries_reconstruct3D_distr), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         character(len=LONGSTRLEN), allocatable :: list(:)
         character(len=:),          allocatable :: target_name
         character(len=STDLEN),     allocatable :: state_assemble_finished(:), vol_fnames(:)
         real,                      allocatable :: ccs(:,:,:), fsc(:)
+        integer,                   allocatable :: parts(:,:)
         character(len=LONGSTRLEN) :: fname
         character(len=STDLEN)     :: volassemble_output, str_state, fsc_file, optlp_file
         type(parameters) :: params
@@ -1482,10 +1484,9 @@ contains
         type(cmdline)    :: cline_volassemble
         type(chash)      :: job_descr
         type(image)      :: vol1, vol2
-        integer, allocatable :: parts(:,:)
         real             :: w, sumw
         integer          :: state, ipart, sz_list, istate, iptcl, cnt, nptcls, nptcls_per_state
-        integer          :: funit, nparts, i, ind, nlps, ilp, iostat
+        integer          :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind
         logical          :: fall_over
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
@@ -1593,7 +1594,8 @@ contains
             call vol1%write('state_'// int2str_pad(state,2)//'.mrc')
         enddo
         ! Calculate correlation matrices
-        nlps = size(LP_LIST)
+        nlps   = size(LP_LIST)
+        hp_ind = calc_fourier_index(HP_LIM, params%box, params_glob%smpd)
         allocate(fsc(fdim(params%box)-1),ccs(nlps,nparts,nparts))
         ccs = 1.
         do state = 1, nparts - 1
@@ -1607,23 +1609,36 @@ contains
                 call vol1%fsc(vol2,fsc)
                 do ilp = 1, nlps
                     ind = calc_fourier_index(LP_LIST(ilp), params%box, params_glob%smpd)
-                    ccs(ilp,state,istate) = sum(fsc(:ind)) / real(ind)
+                    ccs(ilp,state,istate) = sum(fsc(hp_ind:ind)) / real(ind - hp_ind + 1)
                     ccs(ilp,istate,state) = ccs(ilp,state,istate)
                 enddo
             enddo
         enddo
+        ! replace the diagonal elements with the maximum corr value in the columns
+        ! for improved plotting / graphing
+        do ilp = 1, nlps
+            do istate = 1, nparts
+                ccs(ilp,istate,istate) = maxval(ccs(ilp,istate,:), mask=ccs(ilp,istate,:) < 0.99)
+            end do
+        end do
         do ilp = 1,nlps
-            fname = 'ccmat_lp'//trim(real2str(LP_LIST(ilp)))//'.txt'
+            fname = 'ccmat_lp'//trim(real2str(LP_LIST(ilp)))//'.csv'
             call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=iostat)
             do istate = 1, nparts
                 do i = 1, nparts - 1
-                    write(funit,'(F8.3)',advance='no') ccs(ilp,istate,i)
+                    write(funit,'(F8.3,A2)', advance='no') ccs(ilp,istate,i), ', '
                 enddo
-                write(funit,'(F8.3)',advance='yes') ccs(ilp,istate,nparts)
+                write(funit,'(F8.3)', advance='yes') ccs(ilp,istate,nparts)
             enddo
             call fclose(funit)
             fname = 'lp'//trim(real2str(LP_LIST(ilp)))//'.txt'
             call gnufor_image(ccs(ilp,:,:),palette='gray',filename=fname,persist='persist')
+            fname = 'ccneigh_lp'//trim(real2str(LP_LIST(ilp)))//'.csv'
+            call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=iostat)
+            do istate = 1, nparts - 1
+                write(funit,'(I3,A3,F8.3)',advance='yes') istate, ', ', ccs(ilp,istate,istate + 1)
+            end do
+            call fclose(funit)
         enddo
         ! termination
         call qsys_cleanup

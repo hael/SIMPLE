@@ -119,6 +119,7 @@ type(simulate_subtomogram_commander) :: xsimulate_subtomogram
 ! MISCELLANEOUS WORKFLOWS
 type(scale_project_commander_distr) :: xscale_project
 type(prune_project_commander_distr) :: xprune_project
+type(cluster_smat_commander)        :: xcluster_smat
 
 ! SYSTEM INTERACTION PROGRAMS
 type(mkdir_commander) :: xmkdir
@@ -306,6 +307,8 @@ select case(prg)
         call xscale_project%execute( cline )
     case( 'prune_project' )
         call xprune_project%execute( cline )
+    case( 'cluster_smat' )
+        call xcluster_smat%execute( cline )
 
     ! SYSTEM INTERACTION PROGRAMS
     case( 'mkdir' )
