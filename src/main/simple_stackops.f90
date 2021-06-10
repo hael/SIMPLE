@@ -223,7 +223,7 @@ contains
         ! script ouput
         call fopen(funit, status='replace', action='write', file='makemovie.script',iostat=iostat)
         write(funit,*)'# Increase the argument to the first occurence of argument -r:v for a faster movie'
-        write(funit,*)'cat '//trim(fname_new_ext(basename(fname),'*.jpg'))//' | ffmpeg -y -f image2pipe -vcodec mjpeg -r:v 3 '&
+        write(funit,*)'cat '//trim(fname_new_ext(basename(fname),'*.jpg'))//' | ffmpeg -y -f image2pipe -vcodec mjpeg -r:v 5 '&
             &//'-i - -vcodec:v libx264 -preset veryslow -r:v 25 '//fname_new_ext(basename(fname),'mp4')
         call fclose(funit)
         iostat = simple_chmod('makemovie.script','+x')
