@@ -63,24 +63,48 @@ contains
         class(cmdline),                intent(inout) :: cline !< command line input
         type(parameters)   :: params
         type(nanoparticle) :: nano
+        real               :: a(3) ! lattice parameters
+        logical            :: prefit_lattice
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
         endif
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
         endif
+        prefit_lattice = cline%defined('vol2')
         call params%new(cline)
-        call nano%new(params%vols(1), params%smpd, params%element)
-        ! volume soft-edge masking
-        call nano%mask(params%msk)
-        ! execute
-        if( cline%defined('cn_thres') )then
-            call nano%identify_atomic_pos(nint(params%cn_thres))
+        if( prefit_lattice )then
+            call nano%new(params%vols(2), params%smpd, params%element)
+            ! volume soft-edge masking
+            call nano%mask(params%msk)
+            ! execute
+            call nano%identify_lattice_params( a )
+            ! kill
+            call nano%kill
+            call nano%new(params%vols(1), params%smpd, params%element)
+            ! volume soft-edge masking
+            call nano%mask(params%msk)
+            ! execute
+            if( cline%defined('cn_thres') )then
+                call nano%identify_atomic_pos(nint(params%cn_thres), a, l_fit_lattice=.false.)
+            else
+                call nano%identify_atomic_pos(CN_THRESH_DEFAULT,     a, l_fit_lattice=.false.)
+            endif
+            ! kill
+            call nano%kill
         else
-            call nano%identify_atomic_pos(CN_THRESH_DEFAULT)
+            call nano%new(params%vols(1), params%smpd, params%element)
+            ! volume soft-edge masking
+            call nano%mask(params%msk)
+            ! execute
+            if( cline%defined('cn_thres') )then
+                call nano%identify_atomic_pos(nint(params%cn_thres), a, l_fit_lattice=.true.)
+            else
+                call nano%identify_atomic_pos(CN_THRESH_DEFAULT,     a, l_fit_lattice=.true.)
+            endif
+            ! kill
+            call nano%kill
         endif
-        ! kill
-        call nano%kill
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms

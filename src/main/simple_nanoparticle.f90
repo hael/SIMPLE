@@ -189,6 +189,7 @@ type :: nanoparticle
     procedure          :: make_soft_mask
     procedure          :: update_ncc
     ! atomic position determination
+    procedure          :: identify_lattice_params
     procedure          :: identify_atomic_pos
     procedure, private :: phasecorr_one_atom
     procedure, private :: binarize_and_find_centers
@@ -385,9 +386,27 @@ contains
 
     ! atomic position determination
 
-    subroutine identify_atomic_pos( self, cn_thresh )
+    subroutine identify_lattice_params( self, a )
+        class(nanoparticle), intent(inout) :: self
+        real,                intent(inout) :: a(3) ! lattice parameters
+        real, allocatable :: centers_A(:,:)        ! coordinates of the atoms in ANGSTROMS
+        ! Phase correlation approach
+        call self%phasecorr_one_atom(self%img)
+        ! Nanoparticle binarization
+        call self%binarize_and_find_centers()
+        ! atom splitting by correlation map validation
+        call self%split_atoms()
+        ! fit lattice
+        centers_A = self%atominfo2centers_A()
+        call fit_lattice(centers_A,a)
+        deallocate(centers_A)
+    end subroutine identify_lattice_params
+
+    subroutine identify_atomic_pos( self, cn_thresh, a, l_fit_lattice )
         class(nanoparticle), intent(inout) :: self
         integer,             intent(in)    :: cn_thresh
+        real,                intent(inout) :: a(3)          ! lattice parameters
+        logical,             intent(in)    :: l_fit_lattice ! fit lattice or use inputted
         ! Phase correlation approach
         call self%phasecorr_one_atom(self%img)
         ! Nanoparticle binarization
@@ -395,7 +414,7 @@ contains
         ! atom splitting by correlation map validation
         call self%split_atoms()
         ! Outliers discarding
-        call self%discard_outliers(cn_thresh)
+        call self%discard_outliers(cn_thresh, a, l_fit_lattice)
         ! write output
         call self%img_bin%write_bimg(trim(self%fbody)//'BIN.mrc')
         write(logfhandle,*) 'output, binarized map:            ', trim(self%fbody)//'BIN.mrc'
@@ -739,18 +758,19 @@ contains
     ! It calculates the standard coordination number (cn) of each atom and discards
     ! the atoms with cn_std < cn_thresh
     ! It modifies the img_bin and img_cc instances deleting the identified outliers.
-    subroutine discard_outliers( self, cn_thresh )
+    subroutine discard_outliers( self, cn_thresh, a, l_fit_lattice )
         class(nanoparticle), intent(inout) :: self
-        integer,             intent(in)    :: cn_thresh ! threshold for discarding outliers based on coordination number
+        integer,             intent(in)    :: cn_thresh     ! threshold for discarding outliers based on coordination number
+        real,                intent(inout) :: a(3)          ! lattice parameter
+        logical,             intent(in)    :: l_fit_lattice ! fit lattice or use inputted
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
         real, allocatable    :: centers_A(:,:) ! coordinates of the atoms in ANGSTROMS
-        real    :: radius  ! radius of themask sphere to consider for cn calculation
-        real    :: a(3)    ! lattice parameter
+        real    :: radius ! radius of the mask sphere to consider for cn calculation
         real    :: cn_gen(self%n_cc)
-        integer :: cn(self%n_cc), cc, n_discard
+        integer :: cn(self%n_cc), cc, n_discard, new_cn_thresh
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS'
         centers_A = self%atominfo2centers_A()
-        call fit_lattice(centers_A,a)
+        if( l_fit_lattice ) call fit_lattice(centers_A,a) ! else use inputted lattice params
         call find_cn_radius(a,radius)
         call run_coord_number_analysis(centers_A,radius,cn,cn_gen)
         call self%img_cc%get_imat(imat_cc)
@@ -764,22 +784,51 @@ contains
         end do
         ! Removing outliers based on coordination number
         n_discard = 0
-        do cc = 1, self%n_cc
-            if( cn(cc) < cn_thresh )then
-                where(imat_cc == cc) imat_bin = 0
-                n_discard = n_discard + 1
-            endif
-        enddo
-        call self%img_bin%set_imat(imat_bin)
-        call self%img_bin%find_ccs(self%img_cc)
-        ! update number of connected components
-        call self%img_cc%get_nccs(self%n_cc)
-        call self%find_centers()
-        deallocate(centers_A)
-        centers_A = self%atominfo2centers_A()
-        call run_coord_number_analysis(centers_A,radius,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+        call remove_lowly_coordinated( cn_thresh )
+        ! do cc = 1, self%n_cc
+        !     if( cn(cc) < cn_thresh )then
+        !         where(imat_cc == cc) imat_bin = 0
+        !         n_discard = n_discard + 1
+        !     endif
+        ! enddo
+        ! call self%img_bin%set_imat(imat_bin)
+        ! call self%img_bin%find_ccs(self%img_cc)
+        ! ! update number of connected components
+        ! call self%img_cc%get_nccs(self%n_cc)
+        ! call self%find_centers()
+        ! deallocate(centers_A)
+        ! centers_A = self%atominfo2centers_A()
+        ! call run_coord_number_analysis(centers_A,radius,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+        ! don't leave behind any atoms with cn_std < cn_thresh - 2
+        new_cn_thresh = cn_thresh - 2
+        if( new_cn_thresh < 1 )then
+            ! we're done
+        else
+            call remove_lowly_coordinated( new_cn_thresh )
+        endif
         write(logfhandle, *) 'Numbers of atoms discarded because of low cn ', n_discard
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS, COMPLETED'
+
+        contains
+
+            subroutine remove_lowly_coordinated( cn_thresh )
+                integer, intent(in) :: cn_thresh
+                do cc = 1, self%n_cc
+                    if( cn(cc) < cn_thresh )then
+                        where(imat_cc == cc) imat_bin = 0
+                        n_discard = n_discard + 1
+                    endif
+                enddo
+                call self%img_bin%set_imat(imat_bin)
+                call self%img_bin%find_ccs(self%img_cc)
+                ! update number of connected components
+                call self%img_cc%get_nccs(self%n_cc)
+                call self%find_centers()
+                if( allocated(centers_A) ) deallocate(centers_A)
+                centers_A = self%atominfo2centers_A()
+                call run_coord_number_analysis(centers_A,radius,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+            end subroutine remove_lowly_coordinated
+
     end subroutine discard_outliers
 
     ! calc stats

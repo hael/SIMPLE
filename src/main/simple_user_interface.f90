@@ -1608,17 +1608,19 @@ contains
         &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-comp map',& ! descr long
         &'quant_exec',&                                        ! executable
-        &1, 1, 0, 1, 1, 1, 1, .false.)                         ! # entries in each group, requires sp_project
+        &2, 1, 0, 1, 1, 1, 1, .false.)                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
         & 'input volume e.g. vol.mrc', .true., '')
+        call detect_atoms%set_input('img_ios', 2, 'vol2', 'file', 'Volume', 'Nanoparticle volume to use for lattice fitting', &
+        & 'input volume 4 lattice fit e.g. vol2.mrc', .false., '')
         ! parameter input/output
         call detect_atoms%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call detect_atoms%set_input('srch_ctrls', 1, 'cn_thres', 'num', 'Threshold for outlier discarding based on coordination number','Threshold for outlier discarding based on coordination number', 'number', .false., 3.)
+        call detect_atoms%set_input('srch_ctrls', 1, 'cn_thres', 'num', 'Threshold for outlier discarding based on coordination number','Threshold for outlier discarding based on coordination number', 'number', .false., 5.)
         ! filter controls
         call detect_atoms%set_input('filt_ctrls', 1, 'element', 'str', 'Atom name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls

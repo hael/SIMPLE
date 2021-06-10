@@ -782,7 +782,7 @@ contains
         integer          :: lfoo(3), nimgs, iimg
         type(image)      :: img, tmp
         real             :: mm(2)
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call cline%set('mkdir', 'no')
         call params%new(cline)
         call read_filetable(params%filetab, filenames)
         nfiles = size(filenames)
