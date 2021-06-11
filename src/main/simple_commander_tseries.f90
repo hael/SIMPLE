@@ -1516,9 +1516,9 @@ contains
         do iptcl = 1,build%spproj_field%get_noris()
             if( build%spproj_field%get_state(iptcl) == 0 ) cycle
             cnt = cnt+1
-            if(cnt>nptcls_per_state)then
+            if( cnt > nptcls_per_state )then
                 istate = istate + 1
-                if(istate>nparts) exit
+                if( istate > nparts ) exit
                 nptcls_per_state = parts(istate,2) - parts(istate,1) + 1
                 cnt = 1
             endif

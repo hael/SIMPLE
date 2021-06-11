@@ -785,20 +785,6 @@ contains
         ! Removing outliers based on coordination number
         n_discard = 0
         call remove_lowly_coordinated( cn_thresh )
-        ! do cc = 1, self%n_cc
-        !     if( cn(cc) < cn_thresh )then
-        !         where(imat_cc == cc) imat_bin = 0
-        !         n_discard = n_discard + 1
-        !     endif
-        ! enddo
-        ! call self%img_bin%set_imat(imat_bin)
-        ! call self%img_bin%find_ccs(self%img_cc)
-        ! ! update number of connected components
-        ! call self%img_cc%get_nccs(self%n_cc)
-        ! call self%find_centers()
-        ! deallocate(centers_A)
-        ! centers_A = self%atominfo2centers_A()
-        ! call run_coord_number_analysis(centers_A,radius,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
         ! don't leave behind any atoms with cn_std < cn_thresh - 2
         new_cn_thresh = cn_thresh - 2
         if( new_cn_thresh < 1 )then
@@ -1686,7 +1672,7 @@ contains
         type(image)          :: class1, class2
         type(nanoML)         :: emfit
         real    :: centers_kmeans(2) ! output of k-means
-        real    :: avgs(2),  vars(2), gammas(self%n_cc,2) ! output of ML
+        real    :: avgs(2), vars(2), gammas(self%n_cc,2) ! output of ML
         integer :: i, cnt1, cnt2, filnum, io_stat
         feature = feature/maxval(feature)*10. ! normalise with maxval*10
         call hist(feature, 20)
