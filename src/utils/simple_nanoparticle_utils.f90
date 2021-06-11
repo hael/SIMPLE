@@ -131,7 +131,7 @@ contains
         write(logfhandle,*) 'angle UV', angleUV
         write(logfhandle,*) 'angle UW', angleUW
         write(logfhandle,*) 'angle VW', angleVW
-        write(logfhandle,*) 'PtNP FCC a: ', 2.*norm2(u),2.*norm2(v),2.*norm2(w)
+        write(logfhandle,*) 'FCC a: ', 2.*norm2(u),2.*norm2(v),2.*norm2(w)
         ! Return calculated fitted lattice parameter
         a(1) = 2. * norm2(u)
         a(2) = 2. * norm2(v)
