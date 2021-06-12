@@ -4,8 +4,9 @@ module simple_nanoparticle
 include 'simple_lib.f08'
 use simple_image,    only: image
 use simple_binimage, only: binimage
-use simple_atoms,    only: atoms, get_Z_and_radius_from_name
+use simple_atoms,    only: atoms
 use simple_nanoparticle_utils
+use simple_defs_atoms
 implicit none
 
 public :: nanoparticle
@@ -225,11 +226,12 @@ end type nanoparticle
 
 contains
 
-    subroutine new_nanoparticle(self, fname, cline_smpd, element)
+    subroutine new_nanoparticle( self, fname, cline_smpd, element )
         class(nanoparticle), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
         real,                intent(in)    :: cline_smpd
         character(len=2),    intent(inout) :: element
+        character(len=2) :: el_ucase
         integer :: nptcls
         integer :: Z ! atomic number
         real    :: smpd
@@ -239,7 +241,9 @@ contains
         self%smpd      = cline_smpd
         self%atom_name = ' '//element
         self%element   = element
-        call get_Z_and_radius_from_name(self%atom_name, Z, self%theoretical_radius)
+        el_ucase       = upperCase(trim(adjustl(element)))
+        call get_element_Z_and_radius(el_ucase, Z, self%theoretical_radius)
+        if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
         call find_ldim_nptcls(self%partname, self%ldim, nptcls, smpd)
         call self%img%new(self%ldim, self%smpd)
         call self%img_raw%new(self%ldim, self%smpd)
@@ -838,7 +842,7 @@ contains
         call run_coord_number_analysis(centers_A,radius_cn,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
         ! calc strain
         allocate(strain_array(self%n_cc,NSTRAIN_COMPS), source=0.)
-        call strain_analysis(centers_A, a, strain_array)
+        call strain_analysis(self%element, centers_A, a, strain_array)
         ! calc NPdiam & NPcen
         tmpcens     = self%atominfo2centers()
         cc_mask     = .true.

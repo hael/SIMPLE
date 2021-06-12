@@ -1,14 +1,8 @@
-! Fit the Pt NP model and reconstruction to a lattice
-! Find displacements from fit lattice
-! Find strain from displacements
-! Ideal Pt lattice:
-! [100] = 3.9242A
-! [110] = 2.77
-! [111] = 6.79
 module simple_nanoparticle_utils
 include 'simple_lib.f08'
 use simple_qr_solve
 use simple_atoms, only: atoms
+use simple_defs_atoms
 implicit none
 
 public :: fit_lattice, find_cn_radius, run_coord_number_analysis, strain_analysis, atoms_mask, dock_nanosPDB
@@ -58,7 +52,7 @@ contains
         if( DEBUG ) write(logfhandle,*) 'centerAtom ', centerAtom
         centerAtomCoords = model(:,centerAtom)
         if( DEBUG ) write(logfhandle,*) 'centerAtomCoords ', centerAtomCoords
-        rMax       = 3.5
+        rMax       = 3.5 ! 2. * Pt Bohr radius (in A)
         rMin       = 0.
         rMaxsq     = rMax * rMax
         areNearest = .false.
@@ -131,7 +125,7 @@ contains
         write(logfhandle,*) 'angle UV', angleUV
         write(logfhandle,*) 'angle UW', angleUW
         write(logfhandle,*) 'angle VW', angleVW
-        write(logfhandle,*) 'FCC a: ', 2.*norm2(u),2.*norm2(v),2.*norm2(w)
+        write(logfhandle,*) 'NP FCC a: ', 2.*norm2(u),2.*norm2(v),2.*norm2(w)
         ! Return calculated fitted lattice parameter
         a(1) = 2. * norm2(u)
         a(2) = 2. * norm2(v)
@@ -223,20 +217,19 @@ contains
     end subroutine run_coord_number_analysis
 
     ! ATTENTION: input coords of model have to be in ANGSTROMS
-    subroutine strain_analysis( model, a, strain_array )
-        real,    intent(in)    :: model(:,:)
-        real,    intent(inout) :: a(3)         ! fitted lattice parameter
-        real,    intent(inout) :: strain_array(:,:)
-        real,    parameter     :: H     = 2.   ! for weighted KDE differentiation
-        real,    parameter     :: Pt_a  = 3.92 ! ideal
-        integer, parameter     :: NITER = 30
-        integer, allocatable   :: modelCstart(:)
-        real,    allocatable   :: abc(:,:), modelFromABC(:,:), modelC(:,:), modelCS(:,:), modelU(:,:), modelU_spherical(:,:)
-        real,    allocatable   :: eXX(:), eYY(:), eZZ(:), eXY(:), eYZ(:), eXZ(:), list_displacement(:,:)
-        real,    allocatable   :: list_eXX(:,:), list_eYY(:,:), list_eZZ(:,:), list_eXY(:,:), list_eYZ(:,:), list_eXZ(:,:)
-        real,    allocatable   :: list_eRR(:,:), list_Ux(:,:), list_Uy(:,:), list_Uz(:,:)
-        real,    allocatable   :: r_CS(:), r_C(:), theta_CS(:), theta_C(:), phi_CS(:), phi_C(:), eRR(:)
-        real(kind=8) :: p0(3, size(model,dim=2))
+    subroutine strain_analysis( element, model, a, strain_array )
+        character(len=2), intent(in)    :: element
+        real,             intent(in)    :: model(:,:)
+        real,             intent(inout) :: a(3)         ! fitted lattice parameter
+        real,             intent(inout) :: strain_array(:,:)
+        real,    parameter   :: H     = 2.   ! for weighted KDE differentiation
+        integer, parameter   :: NITER = 30
+        integer, allocatable :: modelCstart(:)
+        real,    allocatable :: abc(:,:), modelFromABC(:,:), modelC(:,:), modelCS(:,:), modelU(:,:), modelU_spherical(:,:)
+        real,    allocatable :: eXX(:), eYY(:), eZZ(:), eXY(:), eYZ(:), eXZ(:), list_displacement(:,:)
+        real,    allocatable :: list_eXX(:,:), list_eYY(:,:), list_eZZ(:,:), list_eXY(:,:), list_eYZ(:,:), list_eXZ(:,:)
+        real,    allocatable :: list_eRR(:,:), list_Ux(:,:), list_Uy(:,:), list_Uz(:,:)
+        real,    allocatable :: r_CS(:), r_C(:), theta_CS(:), theta_C(:), phi_CS(:), phi_C(:), eRR(:)
         real         :: cMin(3), cMax(3), cMid(3), centerAtomCoords(3),origin0(3), origin(3)
         real         :: dist, dist_temp, avgNNRR, avgD, subK, k, rMax, rMin
         real         :: u0(3), v0(3), w0(3), u(3), v(3), w(3)
@@ -248,20 +241,24 @@ contains
         real         :: Uy_plusx_local, Uy_minusx_local, Uy_plusy_local, Uy_minusy_local, Uy_plusz_local, Uy_minusz_local
         real         :: Uz_plusx_local, Uz_minusx_local, Uz_plusy_local, Uz_minusy_local, Uz_plusz_local, Uz_minusz_local
         real         :: UR_plusR_local, UR_minusR_local, Ut_plusR_local, Ut_minusR_local, Up_plusR_local, Up_minusR_local
-        real         :: K1, K2, K3, K4, K5, K6, dR, dR_final
+        real         :: K1, K2, K3, K4, K5, K6, dR, dR_final, atm_a
         integer      :: natoms,iatom,centerAtom,i,ii,filnum,n,io_stat
         logical      :: areNearest(size(model,dim=2))
         logical      :: plusx_surface, minusx_surface, plusy_surface, minusy_surface, plusz_surface, minusz_surface
         type(atoms)  :: Exx_strain,Eyy_strain,Ezz_strain,Exy_strain,Eyz_strain,Exz_strain, Err_strain
         type(atoms)  :: Ux_atoms, Uy_atoms, Uz_atoms
-        character(len=4), parameter :: ATOM_NAME = ' Pt '
-        character(len=2), parameter :: ELEMENT   = 'Pt'
+        real(kind=8) :: p0(3, size(model,dim=2))
+        character(len=2) :: el_ucase
+        character(len=4) :: atom_name
+        character(len=8) :: crystal_system
         write(logfhandle, '(A)') '>>> STRAIN ANALYSIS'
         ! sanity check
         if( size(model,dim=1 ) /= 3 ) THROW_HARD('Wrong input coordinates! strain_analysis')
         natoms = size(model, dim=2)
         if( size(strain_array,dim=1) /= natoms )        THROW_HARD('dim=1 of strain_array not conforming with model! strain_analysis')
         if( size(strain_array,dim=2) /= NSTRAIN_COMPS ) THROW_HARD('dim=2 of strain_array not conforming with NSTRAIN_COMPS! strain_analysis')
+        ! naming convention (simple_atoms)
+        atom_name = ' '//trim(element)//' '
         ! supercell size
         cMin       = minval(model, dim=2)
         cMax       = maxval(model, dim=2)
@@ -278,7 +275,7 @@ contains
         enddo
         centerAtomCoords = model(:,centerAtom)
         ! find the nearest neighbors of the center atom
-        rMax       = 3.5
+        rMax       = 3.5 ! 2. * Pt Bohr radius (in A)
         rMin       = 0.
         areNearest = .false.
         avgNNRR    = 0.
@@ -314,11 +311,13 @@ contains
         dx = a(1)
         dy = a(2)
         dz = a(3)
-        ! expected Pt FCC lattice parameters as uvw matrix
+        ! expected lattice parameters as uvw matrix
+        el_ucase = uppercase(trim(adjustl(element)))
+        call get_lattice_params(el_ucase, crystal_system, atm_a)
         uvwN0      = 0.
-        uvwN0(1,1) = Pt_a/2.
-        uvwN0(2,2) = Pt_a/2.
-        uvwN0(3,3) = Pt_a/2.
+        uvwN0(1,1) = atm_a/2.
+        uvwN0(2,2) = atm_a/2.
+        uvwN0(3,3) = atm_a/2.
         allocate( modelFromABC(natoms,3), modelC(natoms,3), modelCS(natoms,3), modelU(natoms,3) )
         ! use perfect Pt FCC lattice and remove bad points
         modelFromABC = matmul(transpose(nint(abc)), uvwN0) ! create real positions from the fit; centered at the center atom
@@ -531,38 +530,38 @@ contains
                 endif
             enddo
             ! Exx strain
-            call Exx_strain%set_name(i,ATOM_NAME)
-            call Exx_strain%set_element(i,ELEMENT)
+            call Exx_strain%set_name(i,atom_name)
+            call Exx_strain%set_element(i,element)
             call Exx_strain%set_coord(i,list_eXX(i,1:3))
             call Exx_strain%set_beta(i,list_eXX(i,4))
             call Exx_strain%set_resnum(i,i)
             ! Eyy strain
-            call Eyy_strain%set_name(i,ATOM_NAME)
-            call Eyy_strain%set_element(i,ELEMENT)
+            call Eyy_strain%set_name(i,atom_name)
+            call Eyy_strain%set_element(i,element)
             call Eyy_strain%set_coord(i,list_eYY(i,1:3))
             call Eyy_strain%set_beta(i,list_eYY(i,4))
             call Eyy_strain%set_resnum(i,i)
             ! Ezz strain
-            call Ezz_strain%set_name(i,ATOM_NAME)
-            call Ezz_strain%set_element(i,ELEMENT)
+            call Ezz_strain%set_name(i,atom_name)
+            call Ezz_strain%set_element(i,element)
             call Ezz_strain%set_coord(i,list_eZZ(i,1:3))
             call Ezz_strain%set_beta(i,list_eZZ(i,4))
             call Ezz_strain%set_resnum(i,i)
             ! Exy strain
-            call Exy_strain%set_name(i,ATOM_NAME)
-            call Exy_strain%set_element(i,ELEMENT)
+            call Exy_strain%set_name(i,atom_name)
+            call Exy_strain%set_element(i,element)
             call Exy_strain%set_coord(i,list_eXY(i,1:3))
             call Exy_strain%set_beta(i,list_eXY(i,4))
             call Exy_strain%set_resnum(i,i)
             ! Eyz strain
-            call Eyz_strain%set_name(i,ATOM_NAME)
-            call Eyz_strain%set_element(i,ELEMENT)
+            call Eyz_strain%set_name(i,atom_name)
+            call Eyz_strain%set_element(i,element)
             call Eyz_strain%set_coord(i,list_eYZ(i,1:3))
             call Eyz_strain%set_beta(i,list_eYZ(i,4))
             call Eyz_strain%set_resnum(i,i)
             ! Exz strain
-            call Exz_strain%set_name(i,ATOM_NAME)
-            call Exz_strain%set_element(i,ELEMENT)
+            call Exz_strain%set_name(i,atom_name)
+            call Exz_strain%set_element(i,element)
             call Exz_strain%set_coord(i,list_eXZ(i,1:3))
             call Exz_strain%set_beta(i,list_eXZ(i,4))
             call Exz_strain%set_resnum(i,i)
@@ -653,8 +652,8 @@ contains
                     list_eRR(i,:) = [x_local,y_local,z_local,Strain_local]
                 endif
             enddo
-            call Err_strain%set_name(i,ATOM_NAME)
-            call Err_strain%set_element(i,ELEMENT)
+            call Err_strain%set_name(i,atom_name)
+            call Err_strain%set_element(i,element)
             call Err_strain%set_coord(i,list_eRR(i,1:3))
             call Err_strain%set_beta(i,list_eRR(i,4))
             call Err_strain%set_resnum(i,i)
@@ -684,20 +683,20 @@ contains
                 endif
             enddo
             ! Ux
-            call Ux_atoms%set_name(i,ATOM_NAME)
-            call Ux_atoms%set_element(i,ELEMENT)
+            call Ux_atoms%set_name(i,atom_name)
+            call Ux_atoms%set_element(i,element)
             call Ux_atoms%set_coord(i,list_Ux(i,1:3))
             call Ux_atoms%set_beta(i,list_Ux(i,4))
             call Ux_atoms%set_resnum(i,i)
             ! Uy
-            call Uy_atoms%set_name(i,ATOM_NAME)
-            call Uy_atoms%set_element(i,ELEMENT)
+            call Uy_atoms%set_name(i,atom_name)
+            call Uy_atoms%set_element(i,element)
             call Uy_atoms%set_coord(i,list_Uy(i,1:3))
             call Uy_atoms%set_beta(i,list_Uy(i,4))
             call Uy_atoms%set_resnum(i,i)
             ! Uz
-            call Uz_atoms%set_name(i,ATOM_NAME)
-            call Uz_atoms%set_element(i,ELEMENT)
+            call Uz_atoms%set_name(i,atom_name)
+            call Uz_atoms%set_element(i,element)
             call Uz_atoms%set_coord(i,list_Uz(i,1:3))
             call Uz_atoms%set_beta(i,list_Uz(i,4))
             call Uz_atoms%set_resnum(i,i)
@@ -930,8 +929,9 @@ contains
         real    :: theoretical_radius ! for threshold selection
         integer :: n   ! max number of couples
         integer :: cnt ! actual number of couples
-        integer :: i, location(1), cnt_P, cnt_Q
+        integer :: i, location(1), cnt_P, cnt_Q, z
         real    :: d
+        character(len=2)     :: el_ucase
         logical, allocatable :: mask(:)
         real,    allocatable :: points_P_out(:,:), points_Q_out(:,:)
         real,    parameter   :: ABSURD = -10000.
@@ -940,22 +940,9 @@ contains
             allocate(Q(size(points_Q, dim=1),size(points_Q, dim=2)),source = points_Q)
             return ! they are already coupled
         endif
-        ! To modify when we make a module for definitions
-        element = upperCase(element)
-        select case(element)
-            case('PT')
-                theoretical_radius = 1.1
-                ! thoretical radius is already set
-            case('PD')
-                theoretical_radius = 1.12
-            case('FE')
-                theoretical_radius = 1.02
-            case('AU')
-                theoretical_radius = 1.23
-            case default
-                write(logfhandle, *)('Unknown atom element; find_couples')
-                stop
-        end select
+        el_ucase = upperCase(trim(adjustl(element)))
+        call get_element_Z_and_radius(el_ucase, z, theoretical_radius)
+        if( z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
         if(size(points_P, dim=2) < size(points_Q, dim=2)) then
             n  = size(points_P, dim=2)
             allocate(mask(n), source = .true.)
