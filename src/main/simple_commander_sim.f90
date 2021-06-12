@@ -381,13 +381,14 @@ contains
 
     subroutine exec_simulate_atoms( self, cline )
         use simple_atoms, only: atoms
+        use simple_defs_atoms
         class(simulate_atoms_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         real, parameter  :: NPIX_CUTOFF = 12.
         type(parameters) :: params
         type(image)      :: vol
         type(atoms)      :: atoms_obj
-        character(len=2) :: el1, el2
+        character(len=2) :: el1, el2, el_ucase
         character(len=8) :: crystal_system
         real             :: center(3),ha,x,x1,x2,x3,y,y1,y2,y3,z,z1,z2,z3,msksq,cutoff
         real             :: a ! lattice parameter
@@ -400,50 +401,15 @@ contains
             call atoms_obj%new(params%pdbfile)
             cutoff = NPIX_CUTOFF * params%smpd
         else if( cline%defined('element') )then
-            ! Some cubic crystal systems
             if( .not. cline%defined('moldiam') ) THROW_HARD('MOLDIAM must be provided for FCC lattice!')
             if( .not. atoms_obj%element_exists(params%element) ) THROW_HARD('Unsupported element for now')
-            el1   = params%element(1:2)
-            el2   = params%element(3:4)
-            msksq = (params%moldiam / 2.)**2.
-            ! From Wheeler, D, 1925, Physical Review. 25 (6): 753–761, FCC & BCC only.
-            crystal_system = 'fcc     ' ! default
-            select case(uppercase(trim(params%element)))
-                case('C')
-                    a = 3.567 ! diamond
-                case('SI')
-                    a = 5.431020511
-                case('GE')
-                    a = 5.658
-                case('AL')
-                    a = 4.046
-                case('NI')
-                    a = 3.499
-                case('CU')
-                    a = 3.597
-                case('PT')
-                    a = 3.912
-                case('AU')
-                    a = 4.065
-                case('AG')
-                    a = 4.079
-                case('PD')
-                    a = 3.859
-                case('PB')
-                    a = 4.920
-                case('FE')
-                    a = 2.856; crystal_system = 'bcc     '
-                case('MO')
-                    a = 3.142; crystal_system = 'bcc     '
-                case('W')
-                    a = 3.155; crystal_system = 'bcc     '
-                case('PBSE')
-                    a = 6.12;  crystal_system = 'rocksalt'
-                case DEFAULT
-                    a = 3.76
-            end select
-            ha     = a / 2.
-            ncubes = floor(real(params%box) * params%smpd / a)
+            el1      = params%element(1:2)
+            el2      = params%element(3:4)
+            msksq    = (params%moldiam / 2.)**2.
+            el_ucase = uppercase(trim(adjustl(params%element)))
+            call get_lattice_params(el_ucase, crystal_system, a)
+            ha       = a / 2.
+            ncubes   = floor(real(params%box) * params%smpd / a)
             ! atoms at edges
             n = 0
             center = (real([params%box,params%box,params%box]/2 + 1) - 1.) * params%smpd
