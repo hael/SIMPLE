@@ -402,7 +402,7 @@ contains
         call self%split_atoms()
         ! fit lattice
         centers_A = self%atominfo2centers_A()
-        call fit_lattice(centers_A,a)
+        call fit_lattice(self%element, centers_A, a)
         deallocate(centers_A)
     end subroutine identify_lattice_params
 
@@ -774,7 +774,7 @@ contains
         integer :: cn(self%n_cc), cc, n_discard, new_cn_thresh
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS'
         centers_A = self%atominfo2centers_A()
-        if( l_fit_lattice ) call fit_lattice(centers_A,a) ! else use inputted lattice params
+        if( l_fit_lattice ) call fit_lattice(self%element, centers_A, a) ! else use inputted lattice params
         call find_cn_radius(a,radius)
         call run_coord_number_analysis(centers_A,radius,cn,cn_gen)
         call self%img_cc%get_imat(imat_cc)
@@ -837,7 +837,7 @@ contains
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         ! calc cn and cn_gen
         centers_A = self%atominfo2centers_A()
-        call fit_lattice(centers_A, a)
+        call fit_lattice(self%element, centers_A, a)
         call find_cn_radius(a, radius_cn)
         call run_coord_number_analysis(centers_A,radius_cn,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
         ! calc strain
@@ -1919,7 +1919,7 @@ contains
       character(len=4)     :: str_thres
       ! Calculate cn and cn_gen
       centers_A = self%atominfo2centers_A()
-      call fit_lattice(centers_A,a)
+      call fit_lattice(self%element, centers_A, a)
       call find_cn_radius(a,radius_cn)
       call run_coord_number_analysis(centers_A,radius_cn,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
       deallocate(centers_A)
