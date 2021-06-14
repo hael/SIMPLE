@@ -1,3 +1,7 @@
+! Ideal Pt lattice:
+! [100] = 3.9242A
+! [110] = 2.77
+! [111] = 6.79
 module simple_nanoparticle_utils
 include 'simple_lib.f08'
 use simple_qr_solve
@@ -14,10 +18,34 @@ integer, parameter :: NSTRAIN_COMPS = 7
 
 contains
 
+    ! Identify the bound for defining the neighbourhood in fit_lattice and strain_analysis
+    ! routines below
+    ! FCC:      a_0 * ((1+1/sqrt(2))/2)
+    ! BCC:      a_0 * ((1+sqrt(3))/2)
+    ! rocksalt: a_0 * (((1/2+1/sqrt(2))/2)
+    function find_rMax( element ) result( rMax )
+        character(len=2), intent(in) :: element
+        character(len=2) :: el_ucase
+        character(len=8) :: crystal_system
+        real :: a_0, rMax
+        el_ucase = uppercase(trim(adjustl(element)))
+        call get_lattice_params(el_ucase, crystal_system, a_0)
+        select case(trim(adjustl(crystal_system)))
+            case('rocksalt')
+                rMax = a_0 * ((1. + 1. / sqrt(2.)) / 2.)
+            case('bcc')
+                rMax = a_0 * ((1. + sqrt(3.)) / 2.)
+            case DEFAULT ! FCC by default
+                rMax = a_0 * ((1. + 1. / sqrt(2.)) / 2.)
+        end select
+        if( DEBUG ) write(logfhandle,*) 'rMax identified as ', rMax
+    end function find_rMax
+
     ! ATTENTION: input coords of model have to be in ANGSTROMS
-    subroutine fit_lattice( model, a )
-        real, intent(inout) :: model(:,:)
-        real, intent(inout) :: a(3) ! fitted lattice parameter
+    subroutine fit_lattice( element, model, a )
+        character(len=2), intent(in)    :: element
+        real,             intent(inout) :: model(:,:)
+        real,             intent(inout) :: a(3) ! fitted lattice parameter
         real(kind=8) , allocatable :: A_matrix(:,:), x2(:),x2_ref(:)
         real(kind=8) :: p0(3,size(model,dim=2))
         real(kind=8) :: b(3), uvw(3,3)
@@ -52,7 +80,8 @@ contains
         if( DEBUG ) write(logfhandle,*) 'centerAtom ', centerAtom
         centerAtomCoords = model(:,centerAtom)
         if( DEBUG ) write(logfhandle,*) 'centerAtomCoords ', centerAtomCoords
-        rMax       = 3.5 ! 2. * Pt Bohr radius (in A)
+        ! rMax       = 3.5 ! 2. * Pt Bohr radius (in A)
+        rMax       = find_rMax(element)
         rMin       = 0.
         rMaxsq     = rMax * rMax
         areNearest = .false.
@@ -162,11 +191,11 @@ contains
         real, intent(in)    :: a(3)  ! fitted lattice parameter
         real, intent(inout) :: d     ! radius for coordination number calculation
         real :: a0, d1, d2
-        a0 = sum(a)/real(size(a)) ! geometric mean
+        a0 = sum(a)/real(size(a))    ! geometric mean
         d1 = a0/sqrt(2.)
         d2 = a0
         d = (d1+d2)/2.
-        if( DEBUG ) write(logfhandle,*) 'Identified radius for coord numbe calculation ', d
+        if( DEBUG ) write(logfhandle,*) 'Identified radius for cn calculation ', d
     end subroutine find_cn_radius
 
     ! This function calculates the coordination number for each atom
@@ -275,7 +304,8 @@ contains
         enddo
         centerAtomCoords = model(:,centerAtom)
         ! find the nearest neighbors of the center atom
-        rMax       = 3.5 ! 2. * Pt Bohr radius (in A)
+        ! rMax       = 3.5 ! 2. * Pt Bohr radius (in A)
+        rMax       = find_rMax(element)
         rMin       = 0.
         areNearest = .false.
         avgNNRR    = 0.
