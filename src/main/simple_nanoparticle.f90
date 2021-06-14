@@ -769,14 +769,12 @@ contains
         logical,             intent(in)    :: l_fit_lattice ! fit lattice or use inputted
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
         real, allocatable    :: centers_A(:,:) ! coordinates of the atoms in ANGSTROMS
-        real    :: radius ! radius of the mask sphere to consider for cn calculation
         real    :: cn_gen(self%n_cc)
         integer :: cn(self%n_cc), cc, n_discard, new_cn_thresh
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS'
         centers_A = self%atominfo2centers_A()
         if( l_fit_lattice ) call fit_lattice(self%element, centers_A, a) ! else use inputted lattice params
-        call find_cn_radius(a,radius)
-        call run_coord_number_analysis(centers_A,radius,cn,cn_gen)
+        call run_coord_number_analysis(centers_A,a,cn,cn_gen)
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
         ! Removing outliers from the binary image and the connected components image
@@ -816,7 +814,7 @@ contains
                 call self%find_centers()
                 if( allocated(centers_A) ) deallocate(centers_A)
                 centers_A = self%atominfo2centers_A()
-                call run_coord_number_analysis(centers_A,radius,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+                call run_coord_number_analysis(centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
             end subroutine remove_lowly_coordinated
 
     end subroutine discard_outliers
@@ -831,15 +829,14 @@ contains
         real,    pointer     :: rmat(:,:,:), rmat_corr(:,:,:)
         integer, allocatable :: imat_cc(:,:,:)
         character(len=256)   :: io_msg
-        real    :: tmp_diam, a(3), radius_cn
+        real    :: tmp_diam, a(3)
         logical :: cc_mask(self%n_cc)
         integer :: i, j, k, cc, cn, n, funit, ios
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         ! calc cn and cn_gen
         centers_A = self%atominfo2centers_A()
         call fit_lattice(self%element, centers_A, a)
-        call find_cn_radius(a, radius_cn)
-        call run_coord_number_analysis(centers_A,radius_cn,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+        call run_coord_number_analysis(centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
         ! calc strain
         allocate(strain_array(self%n_cc,NSTRAIN_COMPS), source=0.)
         call strain_analysis(self%element, centers_A, a, strain_array)
@@ -1913,15 +1910,14 @@ contains
       integer, allocatable :: labels(:), populations(:)
       real,    allocatable :: stdev_within(:), centers_A(:,:), cn_cls(:), median_cn(:)
       integer              :: i, j, ncls, dim, filnum, io_stat, cnt
-      real                 :: avg, stdev, radius_cn, a(3)
+      real                 :: avg, stdev, a(3)
       type(binimage)       :: img_1clss
       integer, allocatable :: imat_cc(:,:,:), imat_1clss(:,:,:)
       character(len=4)     :: str_thres
       ! Calculate cn and cn_gen
       centers_A = self%atominfo2centers_A()
       call fit_lattice(self%element, centers_A, a)
-      call find_cn_radius(a,radius_cn)
-      call run_coord_number_analysis(centers_A,radius_cn,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+      call run_coord_number_analysis(centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
       deallocate(centers_A)
       if(thresh > 1. .or. thresh < 0.) THROW_HARD('Invalid input threshold! AR is in [0,1]; cluster_ar')
       ! Preparing for clustering

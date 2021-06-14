@@ -9,7 +9,7 @@ use simple_atoms, only: atoms
 use simple_defs_atoms
 implicit none
 
-public :: fit_lattice, find_cn_radius, run_coord_number_analysis, strain_analysis, atoms_mask, dock_nanosPDB
+public :: fit_lattice, run_coord_number_analysis, strain_analysis, atoms_mask, dock_nanosPDB
 private
 #include "simple_local_flags.inc"
 
@@ -32,9 +32,9 @@ contains
         call get_lattice_params(el_ucase, crystal_system, a_0)
         select case(trim(adjustl(crystal_system)))
             case('rocksalt')
-                rMax = a_0 * ((1. + 1. / sqrt(2.)) / 2.)
+                rMax = a_0 * ((1. / 2. + 1. / sqrt(2.)) / 2.)
             case('bcc')
-                rMax = a_0 * ((1. + sqrt(3.)) / 2.)
+                rMax = a_0 * ((1. + sqrt(3.) / 2.) / 2.)
             case DEFAULT ! FCC by default
                 rMax = a_0 * ((1. + 1. / sqrt(2.)) / 2.)
         end select
@@ -181,33 +181,17 @@ contains
 
     ! COORDINATION NUMBER ANALYSIS
 
-    ! CN of an atom is calculated as the number of neighboring atoms within specific distance d
-    ! 	d=(d_1+d_2)/2, where
-    !   d_1=(a_0)/√2
-    ! 	d_2=a_0	where
-    !   a_0 is fitted lattice constant of corresponding fcc nanocrystal
-    !   a_0 is geometric mean of three components of the lattice parameter
-    subroutine find_cn_radius( a, d )
-        real, intent(in)    :: a(3)  ! fitted lattice parameter
-        real, intent(inout) :: d     ! radius for coordination number calculation
-        real :: a0, d1, d2
-        a0 = sum(a)/real(size(a))    ! geometric mean
-        d1 = a0/sqrt(2.)
-        d2 = a0
-        d = (d1+d2)/2.
-        if( DEBUG ) write(logfhandle,*) 'Identified radius for cn calculation ', d
-    end subroutine find_cn_radius
-
     ! This function calculates the coordination number for each atom
     ! in the input model and prints it on a txt file.
     ! ATTENTION: input coords of model have to be in ANGSTROMS.
-    subroutine run_coord_number_analysis( model, d, coord_nums_std, coord_nums_gen )
+    subroutine run_coord_number_analysis( model, a, coord_nums_std, coord_nums_gen )
         real, allocatable,    intent(in)    :: model(:,:)
-        real,                 intent(in)    :: d   ! radius for coordination number analyis
+        real,                 intent(in)    :: a(3) ! lattice parameters
         integer,              intent(inout) :: coord_nums_std(size(model,2))
         real,                 intent(inout) :: coord_nums_gen(size(model,2))
         integer :: filnum, io_stat, natoms, iatom, jatom, cnt, cn_max(size(model,2))
-        real    :: dist
+        real    :: dist, d
+        call find_cn_radius( a, d )
         natoms         = size(model,2)
         coord_nums_std = 0
         coord_nums_gen = 0
@@ -243,6 +227,26 @@ contains
                 coord_nums_gen(iatom) = 0.
             endif
         enddo
+
+        contains
+
+            ! CN of an atom is calculated as the number of neighboring atoms within specific distance d
+            ! 	d=(d_1+d_2)/2, where
+            !   d_1=(a_0)/√2
+            ! 	d_2=a_0	where
+            !   a_0 is fitted lattice constant of corresponding fcc nanocrystal
+            !   a_0 is geometric mean of three components of the lattice parameter
+            subroutine find_cn_radius( a, d )
+                real, intent(in)    :: a(3)  ! fitted lattice parameter
+                real, intent(inout) :: d     ! radius for coordination number calculation
+                real :: a0, d1, d2
+                a0 = sum(a)/real(size(a))    ! geometric mean
+                d1 = a0/sqrt(2.)
+                d2 = a0
+                d = (d1+d2)/2.
+                if( DEBUG ) write(logfhandle,*) 'Identified radius for cn calculation ', d
+            end subroutine find_cn_radius
+
     end subroutine run_coord_number_analysis
 
     ! ATTENTION: input coords of model have to be in ANGSTROMS
