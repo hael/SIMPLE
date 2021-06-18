@@ -774,7 +774,7 @@ contains
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS'
         centers_A = self%atominfo2centers_A()
         if( l_fit_lattice ) call fit_lattice(self%element, centers_A, a) ! else use inputted lattice params
-        call run_coord_number_analysis(centers_A,a,cn,cn_gen)
+        call run_coord_number_analysis(self%element,centers_A,a,cn,cn_gen)
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
         ! Removing outliers from the binary image and the connected components image
@@ -814,7 +814,7 @@ contains
                 call self%find_centers()
                 if( allocated(centers_A) ) deallocate(centers_A)
                 centers_A = self%atominfo2centers_A()
-                call run_coord_number_analysis(centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+                call run_coord_number_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
             end subroutine remove_lowly_coordinated
 
     end subroutine discard_outliers
@@ -836,7 +836,7 @@ contains
         ! calc cn and cn_gen
         centers_A = self%atominfo2centers_A()
         call fit_lattice(self%element, centers_A, a)
-        call run_coord_number_analysis(centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+        call run_coord_number_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
         ! calc strain
         allocate(strain_array(self%n_cc,NSTRAIN_COMPS), source=0.)
         call strain_analysis(self%element, centers_A, a, strain_array)
@@ -919,9 +919,9 @@ contains
         end do
         ! CALCULATE GLOBAL NP PARAMETERS
         ! --global dipole
-        self%net_dipole        = calc_net_dipole()
-        self%net_dipole_mag    = arg(self%net_dipole)
-        self%net_dipole_ang    = ang3D_zvec(self%net_dipole)
+        self%net_dipole     = calc_net_dipole()
+        self%net_dipole_mag = arg(self%net_dipole)
+        self%net_dipole_ang = ang3D_zvec(self%net_dipole)
         ! --the rest
         call calc_stats( real(self%atominfo(:)%size),    self%size_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
         call calc_stats( real(self%atominfo(:)%cn_std),  self%cn_std_stats        )
@@ -930,8 +930,8 @@ contains
         call calc_stats( self%atominfo(:)%aspect_ratio,  self%aspect_ratio_stats  )
         call calc_stats( self%atominfo(:)%polar_angle,   self%polar_angle_stats   )
         call calc_stats( self%atominfo(:)%diam,          self%diam_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
-        call norm_minmax( self%atominfo(:)%avg_int )
-        call norm_minmax( self%atominfo(:)%max_int )
+        call norm_minmax( self%atominfo(:)%avg_int ) ! to get comparable intensities between different particles
+        call norm_minmax( self%atominfo(:)%max_int ) ! -"-
         call calc_stats( self%atominfo(:)%avg_int,       self%avg_int_stats       )
         call calc_stats( self%atominfo(:)%max_int,       self%max_int_stats       )
         call calc_stats( self%atominfo(:)%max_corr,      self%max_corr_stats      )
@@ -1917,7 +1917,7 @@ contains
       ! Calculate cn and cn_gen
       centers_A = self%atominfo2centers_A()
       call fit_lattice(self%element, centers_A, a)
-      call run_coord_number_analysis(centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+      call run_coord_number_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
       deallocate(centers_A)
       if(thresh > 1. .or. thresh < 0.) THROW_HARD('Invalid input threshold! AR is in [0,1]; cluster_ar')
       ! Preparing for clustering

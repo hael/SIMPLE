@@ -18,11 +18,8 @@ integer, parameter :: NSTRAIN_COMPS = 7
 
 contains
 
-    ! Identify the bound for defining the neighbourhood in fit_lattice and strain_analysis
-    ! routines below
-    ! FCC:      a_0 * ((1+1/sqrt(2))/2)
-    ! BCC:      a_0 * ((1+sqrt(3))/2)
-    ! rocksalt: a_0 * (((1/2+1/sqrt(2))/2)
+    ! Identify the bound for defining the neighbourhood in
+    ! fit_lattice and strain_analysis routines below
     function find_rMax( element ) result( rMax )
         character(len=2), intent(in) :: element
         character(len=2) :: el_ucase
@@ -60,12 +57,12 @@ contains
             write(logfhandle,*) 'Nonconforming input coordinates! fit_lattice'
             stop
         endif
-        natoms = size  (model,dim=2)
-        cMin   = minval(model,dim=2)
-        cMax   = maxval(model,dim=2)
-        cMid   = (cMax-cMin)/2.+cMin
+        natoms     = size  (model,dim=2)
+        cMin       = minval(model,dim=2)
+        cMax       = maxval(model,dim=2)
+        cMid       = (cMax-cMin)/2.+cMin
         if( DEBUG ) write(logfhandle,*) 'cMid ', cMid
-        dist_temp = HUGE(dist_temp)
+        dist_temp  = HUGE(dist_temp)
         centerAtom = 0
         do iatom = 1, natoms
             dist = euclid(model(:,iatom), cMid)
@@ -80,15 +77,14 @@ contains
         if( DEBUG ) write(logfhandle,*) 'centerAtom ', centerAtom
         centerAtomCoords = model(:,centerAtom)
         if( DEBUG ) write(logfhandle,*) 'centerAtomCoords ', centerAtomCoords
-        ! rMax       = 3.5 ! 2. * Pt Bohr radius (in A)
         rMax       = find_rMax(element)
-        rMin       = 0.
+        rMin       = TINY
         rMaxsq     = rMax * rMax
         areNearest = .false.
         avgNNRR    = 0.
         do iatom = 1 ,natoms
             dist = euclid(model(:,iatom),cMid(:))
-            if( dist < rMax .and. dist > rMin )then ! > rMin not to count the atom itself
+            if( dist <= rMax .and. dist > rMin )then ! > rMin not to count the atom itself
                 areNearest(iatom) = .true.
                 avgNNRR = avgNNRR + dist
             endif
@@ -132,18 +128,18 @@ contains
             call qr(A_matrix,p0(i,:),x2_ref)
             xyzbeta(:,i) = x2_ref
         enddo
-        origin = xyzbeta(1,:)
-        u      = xyzbeta(2,:)
-        v      = xyzbeta(3,:)
-        w      = xyzbeta(4,:)
+        origin  = xyzbeta(1,:)
+        u       = xyzbeta(2,:)
+        v       = xyzbeta(3,:)
+        w       = xyzbeta(4,:)
         ! normalize vectors
-        uN     = u / norm2(u)
-        vN     = v / norm2(v)
-        wN     = w / norm2(w)
+        uN      = u / norm2(u)
+        vN      = v / norm2(v)
+        wN      = w / norm2(w)
         ! find the angles between vectors
-        angleUV =  acos( dot_product(uN, vN) ) * 180. / PI
-        angleUW =  acos( dot_product(uN, wN) ) * 180. / PI
-        angleVW =  acos( dot_product(vN, wN) ) * 180. / PI
+        angleUV = acos( dot_product(uN, vN) ) * 180. / PI
+        angleUW = acos( dot_product(uN, wN) ) * 180. / PI
+        angleVW = acos( dot_product(vN, wN) ) * 180. / PI
         if( DEBUG ) write(logfhandle,*) 'origin ', origin
         write(logfhandle,*) 'vector uN', uN
         write(logfhandle,*) 'vector vN', vN
@@ -154,7 +150,7 @@ contains
         write(logfhandle,*) 'angle UV', angleUV
         write(logfhandle,*) 'angle UW', angleUW
         write(logfhandle,*) 'angle VW', angleVW
-        write(logfhandle,*) 'NP FCC a: ', 2.*norm2(u),2.*norm2(v),2.*norm2(w)
+        write(logfhandle,*) 'NP FCC a: ', 2. * norm2(u),2. * norm2(v),2. * norm2(w)
         ! Return calculated fitted lattice parameter
         a(1) = 2. * norm2(u)
         a(2) = 2. * norm2(v)
@@ -182,16 +178,30 @@ contains
     ! COORDINATION NUMBER ANALYSIS
 
     ! This function calculates the coordination number for each atom
-    ! in the input model and prints it on a txt file.
     ! ATTENTION: input coords of model have to be in ANGSTROMS.
-    subroutine run_coord_number_analysis( model, a, coord_nums_std, coord_nums_gen )
-        real, allocatable,    intent(in)    :: model(:,:)
-        real,                 intent(in)    :: a(3) ! lattice parameters
-        integer,              intent(inout) :: coord_nums_std(size(model,2))
-        real,                 intent(inout) :: coord_nums_gen(size(model,2))
+    subroutine run_coord_number_analysis( element, model, a, coord_nums_std, coord_nums_gen )
+        character(len=2),  intent(in)    :: element
+        real, allocatable, intent(in)    :: model(:,:)
+        real,              intent(in)    :: a(3) ! lattice parameters
+        integer,           intent(inout) :: coord_nums_std(size(model,2))
+        real,              intent(inout) :: coord_nums_gen(size(model,2))
+        character(len=2) :: el_ucase
+        character(len=8) :: crystal_system
         integer :: filnum, io_stat, natoms, iatom, jatom, cnt, cn_max(size(model,2))
-        real    :: dist, d
-        call find_cn_radius( a, d )
+        real    :: dist, d, a0, foo
+        ! Identify the bound for defining the neighbourhood
+        a0 = sum(a)/real(size(a)) ! geometric mean of fitted lattice parameters
+        el_ucase = uppercase(trim(adjustl(element)))
+        call get_lattice_params(el_ucase, crystal_system, foo)
+        select case(trim(adjustl(crystal_system)))
+            case('rocksalt')
+                d = a0 * ((1. / 2. + 1. / sqrt(2.)) / 2.)
+            case('bcc')
+                d = a0 * ((1. + sqrt(3.) / 2.) / 2.)
+            case DEFAULT ! FCC by default
+                d = a0 * ((1. + 1. / sqrt(2.)) / 2.)
+        end select
+        ! init
         natoms         = size(model,2)
         coord_nums_std = 0
         coord_nums_gen = 0
@@ -227,35 +237,15 @@ contains
                 coord_nums_gen(iatom) = 0.
             endif
         enddo
-
-        contains
-
-            ! CN of an atom is calculated as the number of neighboring atoms within specific distance d
-            ! 	d=(d_1+d_2)/2, where
-            !   d_1=(a_0)/√2
-            ! 	d_2=a_0	where
-            !   a_0 is fitted lattice constant of corresponding fcc nanocrystal
-            !   a_0 is geometric mean of three components of the lattice parameter
-            subroutine find_cn_radius( a, d )
-                real, intent(in)    :: a(3)  ! fitted lattice parameter
-                real, intent(inout) :: d     ! radius for coordination number calculation
-                real :: a0, d1, d2
-                a0 = sum(a)/real(size(a))    ! geometric mean
-                d1 = a0/sqrt(2.)
-                d2 = a0
-                d = (d1+d2)/2.
-                if( DEBUG ) write(logfhandle,*) 'Identified radius for cn calculation ', d
-            end subroutine find_cn_radius
-
     end subroutine run_coord_number_analysis
 
     ! ATTENTION: input coords of model have to be in ANGSTROMS
     subroutine strain_analysis( element, model, a, strain_array )
         character(len=2), intent(in)    :: element
         real,             intent(in)    :: model(:,:)
-        real,             intent(inout) :: a(3)         ! fitted lattice parameter
+        real,             intent(inout) :: a(3) ! fitted lattice parameter
         real,             intent(inout) :: strain_array(:,:)
-        real,    parameter   :: H     = 2.   ! for weighted KDE differentiation
+        real,    parameter   :: H     = 2.      ! for weighted KDE differentiation
         integer, parameter   :: NITER = 30
         integer, allocatable :: modelCstart(:)
         real,    allocatable :: abc(:,:), modelFromABC(:,:), modelC(:,:), modelCS(:,:), modelU(:,:), modelU_spherical(:,:)
@@ -308,14 +298,13 @@ contains
         enddo
         centerAtomCoords = model(:,centerAtom)
         ! find the nearest neighbors of the center atom
-        ! rMax       = 3.5 ! 2. * Pt Bohr radius (in A)
         rMax       = find_rMax(element)
-        rMin       = 0.
+        rMin       = TINY
         areNearest = .false.
         avgNNRR    = 0.
         do iatom = 1, natoms
             dist = euclid(model(:,iatom), cMid(:))
-            if( dist < rMax .and. dist > rMin )then ! > rMin not to count the atom itself
+            if( dist <= rMax .and. dist > rMin )then ! > rMin not to count the atom itself
                 areNearest(iatom) = .true.
                 avgNNRR = avgNNRR + dist
             endif
@@ -425,12 +414,12 @@ contains
             Uz_minusy_local = 0.
             Uz_plusz_local  = 0.
             Uz_minusz_local = 0.
-            plusx_surface  = .true.
-            minusx_surface = .true.
-            plusy_surface  = .true.
-            minusy_surface = .true.
-            plusz_surface  = .true.
-            minusz_surface = .true.
+            plusx_surface   = .true.
+            minusx_surface  = .true.
+            plusy_surface   = .true.
+            minusy_surface  = .true.
+            plusz_surface   = .true.
+            minusz_surface  = .true.
             do ii = 1, natoms
                 x2_local        = modelCS(ii,1)
                 y2_local        = modelCS(ii,2)
@@ -682,7 +671,7 @@ contains
                 coord = model(:,ii)
                 if(euclid(coord,ref) <0.1) then
                     n = n + 1
-                    Strain_local   = eRR(i)*100.
+                    Strain_local  = eRR(i) * 100.
                     list_eRR(i,:) = [x_local,y_local,z_local,Strain_local]
                 endif
             enddo
@@ -856,10 +845,10 @@ contains
     ! Kabsch is for registering two pairs of 3D coords such that the RMSD is minimised
     subroutine kabsch(points_P, points_Q, U, r, lrms)
         real(sp), intent(inout) :: points_P(:,:), points_Q(:,:) ! set of points to register
-        integer, parameter      :: D = 3  !space dimension
-        real(sp), intent(inout) :: U(D,D) !rotation matrix
-        real(sp), intent(inout) :: r(D)   !translation
-        real(sp), intent(inout) :: lrms   !RMSD of registered points
+        integer, parameter      :: D = 3  ! space dimension
+        real(sp), intent(inout) :: U(D,D) ! rotation matrix
+        real(sp), intent(inout) :: r(D)   ! translation
+        real(sp), intent(inout) :: lrms   ! RMSD of registered points
         real(sp), allocatable   :: m(:), Pdm(:,:), Diff(:,:), Diff_divided(:,:)
         integer  :: i, j, N
         real(sp) :: centroid_P(D), centroid_Q(D), C(D,D), w(D),v(D,D), Id(D,D)
@@ -876,25 +865,23 @@ contains
         centroid_P = sum(points_P(:,:), dim = 2)/real(N)
         centroid_Q = sum(points_Q(:,:), dim = 2)/real(N)
         do i = 1, N
-            points_P(:,i) = points_P(:,i)-centroid_P(:)
+            points_P(:,i) = points_P(:,i) - centroid_P(:)
         enddo
         do i = 1, N
-            points_Q(:,i) = points_Q(:,i)-centroid_Q(:)
+            points_Q(:,i) = points_Q(:,i) - centroid_Q(:)
         enddo
         ! computation of the covariance matrix
         allocate(Pdm(D,N), source = 0.)
          do i = 1, N
-             Pdm(:,i) = m(i)*points_P(:,i)
+             Pdm(:,i) = m(i) * points_P(:,i)
          enddo
-         C = matmul(Pdm, transpose(points_Q)) !covariance matrix of the coords
+         C = matmul(Pdm, transpose(points_Q)) ! covariance matrix of the coords
          ! svd
          call svdcmp(C,w,v)
          ! identity matrix
          Id(:,:) = 0.
          do i = 1, D
-             do j = 1, D
-                 if(i==j)  Id(i,j) = 1.
-             enddo
+            Id(i,i) = 1.
          enddo
          if(det(matmul(C,transpose(v)),D,-1) < 0.) Id(2,2) = -1.
          U = matmul(matmul(v,Id),transpose(C))
@@ -936,22 +923,19 @@ contains
 
     ! This subroutine takes in input a pdbfile and saves its
     ! coordinates in a matrix
-    subroutine read_pdb2matrix(pdbfile, matrix)
+    subroutine read_pdb2matrix( pdbfile, matrix )
         character(len=*),  intent(in)    :: pdbfile
         real, allocatable, intent(inout) :: matrix(:,:)
         integer     :: n, i
         type(atoms) :: a
         ! check that the file extension is .pdb
-        if(fname2ext(pdbfile) .ne. 'pdb') then
-            write(logfhandle, *) 'Wrong extension input file! Should be pdb'
-            stop
-        endif
+        if(fname2ext(pdbfile) .ne. 'pdb') THROW_HARD('Wrong extension input file! Should be pdb')
         call a%new(pdbfile)
         n = a%get_n()
-        if(allocated(matrix)) deallocate(matrix) ! for overwriting
+        if( allocated(matrix) ) deallocate(matrix) ! for overwriting
         allocate(matrix(3,n), source = 0.) ! 3D points
         do i = 1, n
-            matrix(:3,i) = a%get_coord(i)
+            matrix(:,i) = a%get_coord(i)
         enddo
         call a%kill
     end subroutine read_pdb2matrix
@@ -969,66 +953,65 @@ contains
         logical, allocatable :: mask(:)
         real,    allocatable :: points_P_out(:,:), points_Q_out(:,:)
         real,    parameter   :: ABSURD = -10000.
-        if(size(points_P) == size(points_Q))then
-            allocate(P(size(points_P, dim=1),size(points_P, dim=2)),source = points_P)
-            allocate(Q(size(points_Q, dim=1),size(points_Q, dim=2)),source = points_Q)
-            return ! they are already coupled
-        endif
+        ! if(size(points_P) == size(points_Q))then
+        !     allocate(P(size(points_P, dim=1),size(points_P, dim=2)),source = points_P)
+        !     allocate(Q(size(points_Q, dim=1),size(points_Q, dim=2)),source = points_Q)
+        !     return ! they are already coupled
+        ! endif
         el_ucase = upperCase(trim(adjustl(element)))
         call get_element_Z_and_radius(el_ucase, z, theoretical_radius)
         if( z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
-        if(size(points_P, dim=2) < size(points_Q, dim=2)) then
-            n  = size(points_P, dim=2)
-            allocate(mask(n), source = .true.)
+        if( size(points_P, dim=2) <= size(points_Q, dim=2) )then
+            n = size(points_P, dim=2)
+            allocate(mask(n), source=.true.)
             allocate(points_P_out(3,n), points_Q_out(3,n), source = ABSURD) ! init to absurd value
             cnt = 0 ! counts the number of identified couples
             do i = 1, size(points_Q, dim=2)
                 d = pixels_dist(points_Q(:,i),points_P(:,:),'min',mask,location,keep_zero=.true.)
-                if(d <= 2.*theoretical_radius)then ! has a couple
+                if( d <= 2.*theoretical_radius )then ! has a couple
                     cnt = cnt + 1
                     points_P_out(:,cnt) = points_P(:,location(1))
                     points_Q_out(:,cnt) = points_Q(:,i)
-                    mask(location(1)) = .false. ! not to consider the same atom more than once
+                    mask(location(1))   = .false. ! not to consider the same atom more than once
                 endif
             enddo
             allocate(P(3,cnt), Q(3,cnt), source = 0.) ! correct size
-            print *, 'n: ', n, 'cnt: ', cnt
             cnt_P = 0
             cnt_Q = 0
             do i = 1, n
-                if(abs(points_P_out(1,i)-ABSURD) > TINY) then ! check just firts component
+                if( abs(points_P_out(1,i)-ABSURD) > TINY )then
                     cnt_P = cnt_P + 1
                     P(:3,cnt_P) = points_P_out(:3,i)
                 endif
-                if(abs(points_Q_out(1,i)-ABSURD) > TINY) then
+                if( abs(points_Q_out(1,i)-ABSURD) > TINY )then
                     cnt_Q = cnt_Q + 1
                     Q(:3,cnt_Q) = points_Q_out(:3,i)
                 endif
             enddo
         else ! size(points_P, dim=2) > size(points_Q, dim=2)
-            n  = size(points_Q, dim=2)
+            n = size(points_Q, dim=2)
             allocate(mask(n), source = .true.)
             allocate(points_P_out(3,n), points_Q_out(3,n), source = ABSURD) ! init to absurd value
             cnt = 0 ! counts the number of identified couples
             do i = 1, size(points_P, dim=2)
-                d = pixels_dist(points_P(:,i),points_Q(:,:),'min',mask,location, keep_zero=.true.)
-                if(d <= 2.*theoretical_radius)then ! has couple
-                    cnt = cnt + 1
+                d = pixels_dist(points_P(:,i),points_Q(:,:),'min',mask,location,keep_zero=.true.)
+                if( d <= 2.*theoretical_radius )then ! has couple
+                    cnt                 = cnt + 1
                     points_Q_out(:,cnt) = points_Q(:,location(1))
                     points_P_out(:,cnt) = points_P(:,i)
-                    mask(location(1)) = .false. ! not to consider the same atom more than once
+                    mask(location(1))   = .false. ! not to consider the same atom more than once
                 endif
             enddo
-            allocate(P(3,cnt), Q(3,cnt), source = 0.)
+            allocate(P(3,cnt), Q(3,cnt), source=0.)
             cnt_P = 0
             cnt_Q = 0
             do i = 1, n
-                if(abs(points_P_out(1,i)-ABSURD) > TINY) then
-                    cnt_P = cnt_P + 1
+                if( abs(points_P_out(1,i)-ABSURD) > TINY )then
+                    cnt_P       = cnt_P + 1
                     P(:3,cnt_P) = points_P_out(:3,i)
                 endif
-                if(abs(points_Q_out(1,i)-ABSURD) > TINY) then
-                    cnt_Q = cnt_Q + 1
+                if( abs(points_Q_out(1,i)-ABSURD) > TINY )then
+                    cnt_Q       = cnt_Q + 1
                     Q(:3,cnt_Q) = points_Q_out(:3,i)
                 endif
             enddo
