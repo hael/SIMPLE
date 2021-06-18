@@ -142,6 +142,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: outvol=''            !< output volume{outvol.ext}
     character(len=LONGSTRLEN) :: pdbfile=''           !< PDB file
     character(len=LONGSTRLEN) :: pdbfile2=''          !< PDB file, another one
+    character(len=LONGSTRLEN) :: pdbfiles=''          !< list of PDB files
     character(len=LONGSTRLEN) :: pdfile='pdfile.bin'
     character(len=LONGSTRLEN) :: plaintexttab=''      !< plain text file of input parameters
     character(len=LONGSTRLEN) :: projfile=''          !< SIMPLE *.simple project file
@@ -652,6 +653,7 @@ contains
         call check_file('outvol',         self%outvol,       notAllowed='T')
         call check_file('pdbfile',        self%pdbfile)
         call check_file('pdbfile2',       self%pdbfile2)
+        call check_file('pdbfiles',       self%pdbfiles,     'T')
         call check_file('plaintexttab',   self%plaintexttab, 'T')
         call check_file('projfile',       self%projfile,     'O')
         call check_file('projfile_target',self%projfile_target,'O')
