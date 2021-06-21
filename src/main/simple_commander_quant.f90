@@ -151,6 +151,7 @@ contains
             integer           :: ind1, ind2, ncommon
             real, allocatable :: coords1(:,:), coords2(:,:)
             real, allocatable :: common1(:,:), common2(:,:)
+            real, allocatable :: different1(:,:), different2(:,:)
             real, allocatable :: displacements(:,:), dists(:)
         end type common_atoms
         class(tseries_atoms_analysis_commander), intent(inout) :: self
@@ -158,10 +159,11 @@ contains
         character(len=LONGSTRLEN), allocatable :: pdbfnames(:)
         type(common_atoms),        allocatable :: atms_common(:,:)
         character(len=:),          allocatable :: fname1, fname2
-        real, allocatable  :: pdbmat(:,:)
+        real, allocatable  :: pdbmat(:,:), dists_all(:)
         type(parameters)   :: params
-        integer            :: npdbs, i, j, k
+        integer            :: npdbs, i, j, k, ndists, cnt
         character(len=2)   :: el
+        type(stats_struct) :: dist_stats
         call params%new(cline)
         call read_filetable(params%pdbfiles, pdbfnames)
         npdbs = size(pdbfnames)
@@ -194,6 +196,44 @@ contains
                     fname2 = 'common_atoms_'//int2str_pad(j,2)//'in'//int2str_pad(i,2)//'.pdb'
                     call write_matrix2pdb(el, atms_common(i,j)%common1, fname1)
                     call write_matrix2pdb(el, atms_common(i,j)%common2, fname2)
+                endif
+            end do
+        end do
+        ! calculate distance statistics
+        ndists = 0
+        do i = 1, npdbs - 1
+            do j = i + 1, npdbs
+                ndists = ndists + atms_common(i,j)%ncommon
+            end do
+        end do
+        allocate( dists_all(ndists), source=0. )
+        cnt = 0
+        do i = 1, npdbs - 1
+            do j = i + 1, npdbs
+                do k = 1, atms_common(i,j)%ncommon
+                    cnt = cnt + 1
+                    dists_all(cnt) = atms_common(i,j)%dists(k)
+                end do
+            end do
+        end do
+        call calc_stats(dists_all, dist_stats)
+        write(logfhandle,'(A)') '>>> DISTANCE STATS FOR COMMON ATOMS BELOW'
+        write(logfhandle,'(A,F8.4)') 'Average: ', dist_stats%avg
+        write(logfhandle,'(A,F8.4)') 'Median : ', dist_stats%med
+        write(logfhandle,'(A,F8.4)') 'Sigma  : ', dist_stats%sdev
+        write(logfhandle,'(A,F8.4)') 'Max    : ', dist_stats%maxv
+        write(logfhandle,'(A,F8.4)') 'Min    : ', dist_stats%minv
+        ! identify different atoms across pairs
+        do i = 1, npdbs - 1
+            do j = i + 1, npdbs
+                call remove_atoms( atms_common(i,j)%common1, atms_common(i,j)%coords1, atms_common(i,j)%different1 )
+                call remove_atoms( atms_common(i,j)%common2, atms_common(i,j)%coords2, atms_common(i,j)%different2 )
+                ! write PDB files
+                if( j == i + 1 )then
+                    fname1 = 'different_atoms_'//int2str_pad(i,2)//'not_in'//int2str_pad(j,2)//'.pdb'
+                    fname2 = 'different_atoms_'//int2str_pad(j,2)//'not_in'//int2str_pad(i,2)//'.pdb'
+                    call write_matrix2pdb(el, atms_common(i,j)%different1, fname1)
+                    call write_matrix2pdb(el, atms_common(i,j)%different2, fname2)
                 endif
             end do
         end do
