@@ -7,13 +7,14 @@ use simple_commander_quant
 use simple_user_interface
 implicit none
 #include "simple_local_flags.inc"
-type(detect_atoms_commander)          :: xdetect_atoms
-type(atoms_mask_commander)            :: xatoms_mask
-type(atoms_stats_commander)           :: xatoms_stats
-type(atom_cluster_analysis_commander) :: xatom_cluster_analysis
-type(nano_softmask_commander)         :: xnano_softmask
-type(geometry_analysis_commander)     :: xgeometry_analysis
-type(dock_coords_commander)           :: xdock_coords
+type(detect_atoms_commander)           :: xdetect_atoms
+type(atoms_mask_commander)             :: xatoms_mask
+type(atoms_stats_commander)            :: xatoms_stats
+type(tseries_atoms_analysis_commander) :: xtseries_atoms_analysis
+type(atom_cluster_analysis_commander)  :: xatom_cluster_analysis
+type(nano_softmask_commander)          :: xnano_softmask
+type(geometry_analysis_commander)      :: xgeometry_analysis
+type(dock_coords_commander)            :: xdock_coords
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: xarg, prg, entire_line
 type(cmdline)         :: cline
@@ -39,6 +40,8 @@ select case(prg)
     case( 'atoms_stats' )
         call cline%set('mkdir', 'yes')
         call xatoms_stats%execute(cline)
+    case( 'tseries_atoms_analysis' )
+        call xtseries_atoms_analysis%execute(cline)
     case( 'atom_cluster_analysis' )
         call xatom_cluster_analysis%execute(cline)
     case( 'atoms_mask' )

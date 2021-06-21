@@ -427,11 +427,11 @@ contains
                 if( long )then
                     write(funit,pdbfmt_long)'ATOM ',self%num(i),self%name(i),self%altloc(i),&
                         self%resname(i),self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
-                        self%occupancy(i), self%beta(i),self%element(i)
+                        self%occupancy(i), self%beta(i), self%element(i)
                 else
                     write(funit,pdbfmt)'ATOM  ',self%num(i),self%name(i),self%altloc(i),&
                         self%resname(i),self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
-                        self%occupancy(i), self%beta(i),self%element(i)
+                        self%occupancy(i), self%beta(i), self%element(i)
                 endif
             endif
 
