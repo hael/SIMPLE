@@ -10,7 +10,8 @@ use simple_defs_atoms
 implicit none
 
 public :: fit_lattice, run_coord_number_analysis, strain_analysis
-public :: atoms_mask, read_pdb2matrix, write_matrix2pdb, find_couples, dock_nanosPDB
+public :: atoms_mask, read_pdb2matrix, write_matrix2pdb, find_couples
+public :: remove_atoms, dock_nanosPDB
 private
 #include "simple_local_flags.inc"
 
@@ -971,8 +972,8 @@ contains
     end subroutine write_matrix2pdb
 
     subroutine find_couples( points_P, points_Q, element, P, Q, theoretical_rad )
-        real,              intent(inout) :: points_P(:,:), points_Q(:,:)
-        character(len=2),  intent(inout) :: element
+        real,              intent(in)    :: points_P(:,:), points_Q(:,:)
+        character(len=2),  intent(in)    :: element
         real, allocatable, intent(inout) :: P(:,:), Q(:,:) ! just the couples of points
         real, optional,    intent(in)    :: theoretical_rad
         real    :: theoretical_radius ! for threshold selection
@@ -1049,6 +1050,34 @@ contains
         endif
         deallocate(mask, points_P_out, points_Q_out)
     end subroutine find_couples
+
+    subroutine remove_atoms( atms2rm, atms2keep, atms_kept )
+        real,              intent(in)    :: atms2rm(:,:), atms2keep(:,:)
+        real, allocatable, intent(inout) :: atms_kept(:,:)
+        logical, allocatable :: mask2keep(:)
+        integer :: n2rm, n, i, n2keep, cnt, loc(1)
+        real    :: d
+        n    = size(atms2keep, dim=2)
+        n2rm = size(atms2rm,   dim=2)
+        if( n2rm >= n ) THROW_HARD('atoms to remove must be subset of atoms to keep')
+        allocate(mask2keep(n), source=.true.)
+        do i = 1, n2rm
+            d = pixels_dist(atms2rm(:,i),atms2keep(:,:),'min',mask2keep,loc,keep_zero=.true.)
+            mask2keep(loc(1)) = .false.
+        enddo
+        n2keep = count(mask2keep)
+        if( n2keep /= n - n2rm .or. n2keep < 1 ) THROW_HARD('incorrect # atoms identified')
+        if( allocated(atms_kept) ) deallocate(atms_kept)
+        allocate(atms_kept(3,n2keep), source=0.)
+        cnt = 0
+        do i = 1, n
+            if( mask2keep(i) )then
+                cnt = cnt + 1
+                atms_kept(:,cnt) = atms2keep(:,i)
+            endif
+        end do
+        deallocate(mask2keep)
+    end subroutine remove_atoms
 
     ! This subrouine takes a pdb file input, removes all atoms beyond
     ! a given radius, outputs a new pdb file with the coordinates
