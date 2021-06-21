@@ -9,7 +9,8 @@ use simple_atoms, only: atoms
 use simple_defs_atoms
 implicit none
 
-public :: fit_lattice, run_coord_number_analysis, strain_analysis, atoms_mask, dock_nanosPDB
+public :: fit_lattice, run_coord_number_analysis, strain_analysis
+public :: atoms_mask, read_pdb2matrix, write_matrix2pdb, find_couples, dock_nanosPDB
 private
 #include "simple_local_flags.inc"
 
@@ -921,8 +922,6 @@ contains
 
     end subroutine kabsch
 
-    ! This subroutine takes in input a pdbfile and saves its
-    ! coordinates in a matrix
     subroutine read_pdb2matrix( pdbfile, matrix )
         character(len=*),  intent(in)    :: pdbfile
         real, allocatable, intent(inout) :: matrix(:,:)
@@ -933,17 +932,49 @@ contains
         call a%new(pdbfile)
         n = a%get_n()
         if( allocated(matrix) ) deallocate(matrix) ! for overwriting
-        allocate(matrix(3,n), source = 0.) ! 3D points
+        allocate(matrix(3,n), source = 0.)         ! 3D points
         do i = 1, n
             matrix(:,i) = a%get_coord(i)
         enddo
         call a%kill
     end subroutine read_pdb2matrix
 
-    subroutine find_couples( points_P, points_Q, element, P, Q )
-        real,             intent(inout) :: points_P(:,:), points_Q(:,:)
-        character(len=2), intent(inout) :: element
-        real,allocatable, intent(inout) :: P(:,:), Q(:,:) ! just the couples of points
+    subroutine write_matrix2pdb( element, matrix, pdbfile )
+        character(len=2),  intent(in) :: element
+        real, allocatable, intent(in) :: matrix(:,:)
+        character(len=*),  intent(in) :: pdbfile
+        character(len=:), allocatable :: ext
+        character(len=4)      :: atom_name
+        character(len=STDLEN) :: fbody
+        integer     :: n, i
+        type(atoms) :: a
+        ! check that the file extension is .pdb
+        if(fname2ext(pdbfile) .ne. 'pdb') THROW_HARD('Wrong extension input file! Should be pdb')
+        atom_name = trim(adjustl(element))//'  '
+        n = size(matrix, dim=2)
+        call a%new(n)
+        ! fill up a
+        do i = 1, n
+            call a%set_num(i,i)
+            call a%set_resnum(i,i)
+            call a%set_chain(i,'A')
+            call a%set_occupancy(i,1.)
+            call a%set_element(i, element)
+            call a%set_coord(i, matrix(:,i))
+            call a%set_name(i,atom_name)
+        enddo
+        ! write PDB
+        ext   = fname2ext(trim(pdbfile))
+        fbody = get_fbody(trim(pdbfile), ext)
+        call a%writePDB(fbody)
+        call a%kill
+    end subroutine write_matrix2pdb
+
+    subroutine find_couples( points_P, points_Q, element, P, Q, theoretical_rad )
+        real,              intent(inout) :: points_P(:,:), points_Q(:,:)
+        character(len=2),  intent(inout) :: element
+        real, allocatable, intent(inout) :: P(:,:), Q(:,:) ! just the couples of points
+        real, optional,    intent(in)    :: theoretical_rad
         real    :: theoretical_radius ! for threshold selection
         integer :: n   ! max number of couples
         integer :: cnt ! actual number of couples
@@ -953,14 +984,10 @@ contains
         logical, allocatable :: mask(:)
         real,    allocatable :: points_P_out(:,:), points_Q_out(:,:)
         real,    parameter   :: ABSURD = -10000.
-        ! if(size(points_P) == size(points_Q))then
-        !     allocate(P(size(points_P, dim=1),size(points_P, dim=2)),source = points_P)
-        !     allocate(Q(size(points_Q, dim=1),size(points_Q, dim=2)),source = points_Q)
-        !     return ! they are already coupled
-        ! endif
         el_ucase = upperCase(trim(adjustl(element)))
         call get_element_Z_and_radius(el_ucase, z, theoretical_radius)
         if( z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
+        if( present(theoretical_rad) ) theoretical_radius = theoretical_rad
         if( size(points_P, dim=2) <= size(points_Q, dim=2) )then
             n = size(points_P, dim=2)
             allocate(mask(n), source=.true.)
@@ -975,6 +1002,8 @@ contains
                     mask(location(1))   = .false. ! not to consider the same atom more than once
                 endif
             enddo
+            if( allocated(P) ) deallocate(P)
+            if( allocated(Q) ) deallocate(Q)
             allocate(P(3,cnt), Q(3,cnt), source = 0.) ! correct size
             cnt_P = 0
             cnt_Q = 0
@@ -1002,6 +1031,8 @@ contains
                     mask(location(1))   = .false. ! not to consider the same atom more than once
                 endif
             enddo
+            if( allocated(P) ) deallocate(P)
+            if( allocated(Q) ) deallocate(Q)
             allocate(P(3,cnt), Q(3,cnt), source=0.)
             cnt_P = 0
             cnt_Q = 0

@@ -12,6 +12,7 @@ implicit none
 
 public :: detect_atoms_commander
 public :: atoms_stats_commander
+public :: tseries_atoms_analysis_commander
 public :: atom_cluster_analysis_commander
 public :: nano_softmask_commander
 public :: geometry_analysis_commander
@@ -29,6 +30,10 @@ type, extends(commander_base) :: atoms_stats_commander
   contains
     procedure :: execute      => exec_atoms_stats
 end type atoms_stats_commander
+type, extends(commander_base) :: tseries_atoms_analysis_commander
+  contains
+    procedure :: execute      => exec_tseries_atoms_analysis
+end type tseries_atoms_analysis_commander
 type, extends(commander_base) :: dock_coords_commander
   contains
     procedure :: execute      => exec_dock_coords
@@ -140,9 +145,65 @@ contains
         call simple_end('**** SIMPLE_ATOMS_STATS NORMAL STOP ****')
     end subroutine exec_atoms_stats
 
-    subroutine exec_dock_coords(self, cline)
+    subroutine exec_tseries_atoms_analysis( self, cline )
+        use simple_nanoparticle_utils
+        type :: common_atoms
+            integer           :: ind1, ind2, ncommon
+            real, allocatable :: coords1(:,:), coords2(:,:)
+            real, allocatable :: common1(:,:), common2(:,:)
+            real, allocatable :: displacements(:,:), dists(:)
+        end type common_atoms
+        class(tseries_atoms_analysis_commander), intent(inout) :: self
+        class(cmdline),                          intent(inout) :: cline !< command line input
+        character(len=LONGSTRLEN), allocatable :: pdbfnames(:)
+        type(common_atoms),        allocatable :: atms_common(:,:)
+        character(len=:),          allocatable :: fname1, fname2
+        real, allocatable  :: pdbmat(:,:)
+        type(parameters)   :: params
+        integer            :: npdbs, i, j, k
+        character(len=2)   :: el
+        call params%new(cline)
+        call read_filetable(params%pdbfiles, pdbfnames)
+        npdbs = size(pdbfnames)
+        allocate( atms_common(npdbs,npdbs) )
+        el = trim(adjustl(params%element))
+        ! identify common atoms across pairs
+        do i = 1, npdbs - 1
+            do j = i + 1, npdbs
+                atms_common(i,j)%ind1 = i
+                atms_common(i,j)%ind2 = j
+                call read_pdb2matrix(trim(pdbfnames(i)), pdbmat)
+                allocate(atms_common(i,j)%coords1(3,size(pdbmat,dim=2)), source=pdbmat)
+                deallocate(pdbmat)
+                call read_pdb2matrix(trim(pdbfnames(j)), pdbmat)
+                allocate(atms_common(i,j)%coords2(3,size(pdbmat,dim=2)), source=pdbmat)
+                deallocate(pdbmat)
+                ! identify couples
+                call find_couples( atms_common(i,j)%coords1, atms_common(i,j)%coords2, el,&
+                                  &atms_common(i,j)%common1, atms_common(i,j)%common2)
+                atms_common(i,j)%ncommon = size(atms_common(i,j)%common1, dim=2)
+                ! calculate displacements and distances
+                allocate( atms_common(i,j)%displacements(3,atms_common(i,j)%ncommon), atms_common(i,j)%dists(atms_common(i,j)%ncommon) )
+                do k = 1, atms_common(i,j)%ncommon
+                    atms_common(i,j)%displacements(:,k) = atms_common(i,j)%common2(:,k) - atms_common(i,j)%common1(:,k)
+                    atms_common(i,j)%dists(k) = sqrt(sum((atms_common(i,j)%displacements(:,k))**2.))
+                end do
+                ! write PDB files
+                if( j == i + 1 )then
+                    fname1 = 'common_atoms_'//int2str_pad(i,2)//'in'//int2str_pad(j,2)//'.pdb'
+                    fname2 = 'common_atoms_'//int2str_pad(j,2)//'in'//int2str_pad(i,2)//'.pdb'
+                    call write_matrix2pdb(el, atms_common(i,j)%common1, fname1)
+                    call write_matrix2pdb(el, atms_common(i,j)%common2, fname2)
+                endif
+            end do
+        end do
+        ! end gracefully
+        call simple_end('**** SIMPLE_TSERIES_ATOMS_ANALYSIS NORMAL STOP ****')
+    end subroutine exec_tseries_atoms_analysis
+
+    subroutine exec_dock_coords( self, cline )
         use simple_ori ! for generation of the rotation matrix
-        use simple_atoms, only : atoms
+        use simple_atoms, only: atoms
         class(dock_coords_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline !< command line input
         type(parameters)       :: params
