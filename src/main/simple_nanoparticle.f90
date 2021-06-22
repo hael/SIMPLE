@@ -1408,12 +1408,9 @@ contains
         integer, parameter :: NPAIRS = (NFLAGS * (NFLAGS - 1)) / 2
         character(len=13)  :: flags(NFLAGS), flags_i(NPAIRS), flags_j(NPAIRS)
         character(len=256) :: io_msg
-        real, pointer      :: ptr1(:), ptr2(:)
-        real, allocatable, target :: sizes(:)
+        real               :: vals1(self%n_cc), vals2(self%n_cc)
         real    :: corrs(NPAIRS), corrs_copy(NPAIRS), corr
         integer :: i, j, inds(NPAIRS), cnt, funit, ios
-        ! make sizes a real array
-        allocate(sizes(self%n_cc), source=real(self%atominfo(:)%size))
         ! variables to correlate
         flags(1)  = 'NVOX'          ! size
         flags(2)  = 'NN_BONDL'      ! bondl
@@ -1430,14 +1427,14 @@ contains
         ! calculate correlations
         cnt = 0
         do i = 1, NFLAGS - 1
+            call set_vals(flags(i), vals1)
             do j = i + 1, NFLAGS
                 cnt          = cnt + 1
                 inds(cnt)    = cnt
                 flags_i(cnt) = flags(i)
                 flags_j(cnt) = flags(j)
-                call set_ptr(flags(i), ptr1)
-                call set_ptr(flags(j), ptr2)
-                corrs(cnt) = pearsn_serial(ptr1, ptr2)
+                call set_vals(flags(j), vals2)
+                corrs(cnt) = pearsn_serial(vals1,vals2)
             end do
         end do
         ! sort
@@ -1453,36 +1450,36 @@ contains
 
         contains
 
-            subroutine set_ptr( flag, ptr )
-                character(len=*), intent(in)    :: flag
-                real, pointer,    intent(inout) :: ptr(:)
+            subroutine set_vals( flag, vals )
+                character(len=*), intent(in)  :: flag
+                real,             intent(out) :: vals(self%n_cc)
                  select case(trim(flag))
                     case('NVOX')
-                        ptr => sizes
+                        vals = real(self%atominfo(:)%size)
                     case('NN_BONDL')
-                        ptr => self%atominfo(:)%bondl
+                        vals = self%atominfo(:)%bondl
                     case('CN_GEN')
-                        ptr => self%atominfo(:)%cn_gen
+                        vals = self%atominfo(:)%cn_gen
                     case('ASPECT_RATIO')
-                        ptr => self%atominfo(:)%aspect_ratio
+                        vals =  self%atominfo(:)%aspect_ratio
                     case('POLAR_ANGLE')
-                        ptr => self%atominfo(:)%polar_angle
+                        vals =  self%atominfo(:)%polar_angle
                     case('DIAM')
-                        ptr => self%atominfo(:)%diam
+                        vals =  self%atominfo(:)%diam
                     case('AVG_INT')
-                        ptr => self%atominfo(:)%avg_int
+                        vals =  self%atominfo(:)%avg_int
                     case('MAX_INT')
-                        ptr => self%atominfo(:)%max_int
+                        vals =  self%atominfo(:)%max_int
                     case('SDEV_INT')
-                        ptr => self%atominfo(:)%sdev_int
+                        vals =  self%atominfo(:)%sdev_int
                     case('RADIAL_POS')
-                        ptr => self%atominfo(:)%cendist
+                        vals =  self%atominfo(:)%cendist
                     case('MAX_CORR')
-                        ptr => self%atominfo(:)%max_corr
+                        vals =  self%atominfo(:)%max_corr
                     case('RADIAL_STRAIN')
-                        ptr => self%atominfo(:)%radial_strain
+                        vals =  self%atominfo(:)%radial_strain
                 end select
-            end subroutine set_ptr
+            end subroutine set_vals
 
     end subroutine id_corr_vars
 
