@@ -120,7 +120,8 @@ contains
         character(len=STDLEN) :: fname
         type(parameters)      :: params
         type(nanoparticle)    :: nano
-        call params%new(cline)
+        real                  :: a(3) ! lattice parameters
+        logical               :: prefit_lattice, use_subset_coords
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_atoms_stats')
         endif
@@ -133,14 +134,34 @@ contains
         if( .not. cline%defined('pdbfile') )then
             THROW_HARD('ERROR! pdbfile needs to be present; exec_atoms_stats')
         endif
-        call nano%new(params%vols(1), params%smpd, params%element)
-        call nano%set_atomic_coords(params%pdbfile)
-        call nano%set_img(params%vols(2), 'img_cc')
-        call nano%update_ncc()
-        call nano%fillin_atominfo
-        call nano%write_csv_files
-        ! kill
-        call nano%kill
+        prefit_lattice    = cline%defined('vol3')
+        use_subset_coords = cline%defined('pdbfile2')
+        call params%new(cline)
+        if( prefit_lattice )then
+            ! fit lattice using vol3
+            call nano%new(params%vols(3), params%smpd, params%element)
+            call nano%identify_lattice_params( a )
+            call nano%kill
+            ! calc stats
+            call nano%new(params%vols(1), params%smpd, params%element)
+            call nano%set_atomic_coords(params%pdbfile)
+            if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
+            call nano%set_img(params%vols(2), 'img_cc')
+            call nano%update_ncc()
+            call nano%fillin_atominfo( a )
+            call nano%write_csv_files
+            call nano%kill
+        else
+            ! calc stats
+            call nano%new(params%vols(1), params%smpd, params%element)
+            call nano%set_atomic_coords(params%pdbfile)
+            if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
+            call nano%set_img(params%vols(2), 'img_cc')
+            call nano%update_ncc()
+            call nano%fillin_atominfo
+            call nano%write_csv_files
+            call nano%kill
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_ATOMS_STATS NORMAL STOP ****')
     end subroutine exec_atoms_stats
@@ -400,8 +421,8 @@ contains
           call nano%new(params%vols(1), params%smpd,params%element)
           ! fetch img_bin, img_cc and atomic positions
           fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
-          call nano%set_img('../../'//trim(fname)//'BIN.mrc','img_bin')
           call nano%set_atomic_coords('../../'//trim(fname)//'_atom_centers.pdb')
+          call nano%set_img('../../'//trim(fname)//'BIN.mrc','img_bin')
           call nano%set_img('../../'//trim(fname)//'CC.mrc', 'img_cc')
           call nano%update_ncc()
           ! execute

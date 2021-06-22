@@ -20,11 +20,11 @@ logical,          parameter :: DEBUG               = .false. ! for debugging pur
 logical,          parameter :: GENERATE_FIGS       = .false. ! for figures generation
 integer,          parameter :: SOFT_EDGE           = 6
 integer,          parameter :: N_DISCRET           = 1000
-integer,          parameter :: CNMIN               = 5
+integer,          parameter :: CNMIN               = 3
 integer,          parameter :: CNMAX               = 12
 integer,          parameter :: NSTRAIN_COMPS       = 7
 character(len=3), parameter :: CSV_DELIM           = ', '
-character(len=*), parameter :: ATOM_STATS_FILE     = 'atom_stats.csv'
+character(len=*), parameter :: ATOMS_STATS_FILE    = 'atoms_stats.csv'
 character(len=*), parameter :: NP_STATS_FILE       = 'nanoparticle_stats.csv'
 character(len=*), parameter :: CN_STATS_FILE       = 'cn_dependent_stats.csv'
 character(len=*), parameter :: ATOM_VAR_CORRS_FILE = 'atom_param_corrs.txt'
@@ -113,11 +113,11 @@ end type atom_stats
 
 type :: nanoparticle
     private
-    type(atoms)           :: centers_pdb
     type(image)           :: img, img_raw
     type(binimage)        :: img_bin, img_cc
     integer               :: ldim(3)            = 0  ! logical dimension of image
     integer               :: n_cc               = 0  ! number of atoms (connected components)                NATOMS
+    integer               :: n4stats            = 0  ! number of atoms in subset used for stats calc
     real                  :: smpd               = 0. ! sampling distance
     real                  :: NPcen(3)           = 0. ! coordinates of the center of mass of the nanoparticle
     real                  :: NPdiam             = 0. ! diameter of the nanoparticle                          DIAM
@@ -160,6 +160,7 @@ type :: nanoparticle
     type(stats_struct)    :: radial_strain_stats_cns(CNMIN:CNMAX)
     ! PER-ATOM STATISTICS
     type(atom_stats), allocatable :: atominfo(:)
+    real,             allocatable :: coords4stats(:,:)
     ! BINARY CLASS STATISTICS
     type(stats_struct)    :: size_cls_stats(2)
     type(stats_struct)    :: bondl_cls_stats(2)
@@ -182,6 +183,8 @@ type :: nanoparticle
     procedure          :: get_natoms
     procedure          :: set_img
     procedure          :: set_atomic_coords
+    procedure          :: set_coords4stats
+    procedure, private :: pack_instance4stats
     ! utils
     procedure, private :: atominfo2centers
     procedure, private :: atominfo2centers_A
@@ -304,6 +307,62 @@ contains
         self%n_cc = N
         call a%kill
     end subroutine set_atomic_coords
+
+    subroutine set_coords4stats( self, pdb_file )
+        class(nanoparticle), intent(inout) :: self
+        character(len=*),    intent(in)    :: pdb_file
+        call read_pdb2matrix(pdb_file, self%coords4stats)
+        self%n4stats = size(self%coords4stats, dim=2)
+    end subroutine set_coords4stats
+
+    subroutine pack_instance4stats( self, strain_array )
+        class(nanoparticle), intent(inout) :: self
+        real, allocatable,   intent(inout) :: strain_array(:,:)
+        real,                allocatable   :: centers_A(:,:), strain_array_new(:,:)
+        logical,             allocatable   :: mask(:)
+        integer,             allocatable   :: imat_cc(:,:,:), imat_cc_new(:,:,:), imat_bin_new(:,:,:)
+        type(atom_stats),    allocatable   :: atominfo_new(:)
+        integer :: n_cc_orig, cc, cnt, nx, ny, nz
+        if( .not. allocated(self%coords4stats) ) return
+        centers_A = self%atominfo2centers_A()
+        n_cc_orig = size(centers_A, dim=2)
+        allocate(mask(n_cc_orig), source=.false.)
+        call find_atoms_subset(self%coords4stats, centers_A, mask)
+        ! remove atoms not in mask
+        if( n_cc_orig /= self%n_cc ) THROW_HARD('incongruent # cc:s')
+        ! (1) update img_cc & img_bin
+        call self%img_cc%get_imat(imat_cc)
+        nx = size(imat_cc, dim=1)
+        ny = size(imat_cc, dim=2)
+        nz = size(imat_cc, dim=3)
+        allocate(imat_cc_new(nx,ny,nz), imat_bin_new(nx,ny,nz), source=0)
+        cnt = 0
+        do cc = 1, self%n_cc
+            if( mask(cc) )then
+                cnt = cnt + 1
+                where(imat_cc == cc) imat_cc_new  = cnt
+                where(imat_cc == cc) imat_bin_new = 1
+            endif
+        end do
+        call self%img_cc%set_imat(imat_cc_new)
+        call self%img_bin%set_imat(imat_bin_new)
+        ! (2) update atominfo & strain_array
+        allocate(atominfo_new(cnt), strain_array_new(cnt,NSTRAIN_COMPS))
+        cnt = 0
+        do cc = 1, self%n_cc
+            if( mask(cc) )then
+                cnt = cnt + 1
+                atominfo_new(cnt)       = self%atominfo(cc)
+                strain_array_new(cnt,:) = strain_array(cc,:)
+            endif
+        end do
+        deallocate(self%atominfo, strain_array)
+        allocate(self%atominfo(cnt), source=atominfo_new)
+        allocate(strain_array, source=strain_array_new)
+        deallocate(centers_A, mask, imat_cc, imat_cc_new, imat_bin_new, atominfo_new)
+        ! (3) update number of connected components
+        self%n_cc = cnt
+    end subroutine pack_instance4stats
 
     ! utils
 
@@ -774,7 +833,7 @@ contains
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS'
         centers_A = self%atominfo2centers_A()
         if( l_fit_lattice ) call fit_lattice(self%element, centers_A, a) ! else use inputted lattice params
-        call run_coord_number_analysis(self%element,centers_A,a,cn,cn_gen)
+        call run_cn_analysis(self%element,centers_A,a,cn,cn_gen)
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
         ! Removing outliers from the binary image and the connected components image
@@ -814,35 +873,41 @@ contains
                 call self%find_centers()
                 if( allocated(centers_A) ) deallocate(centers_A)
                 centers_A = self%atominfo2centers_A()
-                call run_coord_number_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+                call run_cn_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
             end subroutine remove_lowly_coordinated
 
     end subroutine discard_outliers
 
     ! calc stats
 
-    subroutine fillin_atominfo( self )
+    subroutine fillin_atominfo( self, a0 )
         class(nanoparticle), intent(inout) :: self
+        real, optional,      intent(in)    :: a0(3) ! lattice parameters
         type(image)          :: phasecorr
         logical, allocatable :: mask(:,:,:)
         real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:)
         real,    pointer     :: rmat(:,:,:), rmat_corr(:,:,:)
         integer, allocatable :: imat_cc(:,:,:)
         character(len=256)   :: io_msg
+        logical, allocatable :: cc_mask(:)
         real    :: tmp_diam, a(3)
-        logical :: cc_mask(self%n_cc)
         integer :: i, j, k, cc, cn, n, funit, ios
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS'
         ! calc cn and cn_gen
         centers_A = self%atominfo2centers_A()
-        call fit_lattice(self%element, centers_A, a)
-        call run_coord_number_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
-        ! calc strain
+        if( present(a0) )then
+            a = a0
+        else
+            call fit_lattice(self%element, centers_A, a)
+        endif
+        call run_cn_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+        ! calc strain for all atoms
         allocate(strain_array(self%n_cc,NSTRAIN_COMPS), source=0.)
         call strain_analysis(self%element, centers_A, a, strain_array)
+        if( allocated(self%coords4stats) ) call self%pack_instance4stats(strain_array)
+        allocate(cc_mask(self%n_cc), source=.true.) ! because self%n_cc might change after pack_instance4stats
         ! calc NPdiam & NPcen
         tmpcens     = self%atominfo2centers()
-        cc_mask     = .true.
         self%NPdiam = 0.
         do i = 1, self%n_cc
             tmp_diam = pixels_dist(self%atominfo(i)%center(:), tmpcens, 'max', cc_mask)
@@ -958,7 +1023,7 @@ contains
         ! identify correlated variables with Pearson's product moment correation coefficient
         call self%id_corr_vars
         ! destruct
-        deallocate(mask, imat_cc, tmpcens, strain_array, centers_A)
+        deallocate(cc_mask, imat_cc, tmpcens, strain_array, centers_A)
         call phasecorr%kill
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS, COMPLETED'
 
@@ -1144,30 +1209,31 @@ contains
        class(nanoparticle),        intent(inout) :: self
        character(len=*), optional, intent(in)    :: fname
        real,             optional, intent(in)    :: coords(:,:)
+       type(atoms) :: centers_pdb
        type(image) :: simulated_distrib
        type(atoms) :: atom
        integer     :: cc
        if( present(coords) )then
-           call self%centers_pdb%new(size(coords, dim = 2), dummy=.true.)
+           call centers_pdb%new(size(coords, dim = 2), dummy=.true.)
            do cc=1,size(coords, dim = 2)
-               call self%centers_pdb%set_name(cc,self%atom_name)
-               call self%centers_pdb%set_element(cc,self%element)
-               call self%centers_pdb%set_coord(cc,(coords(:,cc)-1.)*self%smpd)
+               call centers_pdb%set_name(cc,self%atom_name)
+               call centers_pdb%set_element(cc,self%element)
+               call centers_pdb%set_coord(cc,(coords(:,cc)-1.)*self%smpd)
            enddo
        else
-           call self%centers_pdb%new(self%n_cc, dummy=.true.)
+           call centers_pdb%new(self%n_cc, dummy=.true.)
            do cc=1,self%n_cc
-               call self%centers_pdb%set_name(cc,self%atom_name)
-               call self%centers_pdb%set_element(cc,self%element)
-               call self%centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
-               call self%centers_pdb%set_beta(cc,self%atominfo(cc)%cn_gen) ! use generalised coordination number
-               call self%centers_pdb%set_resnum(cc,cc)
+               call centers_pdb%set_name(cc,self%atom_name)
+               call centers_pdb%set_element(cc,self%element)
+               call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
+               call centers_pdb%set_beta(cc,self%atominfo(cc)%cn_gen) ! use generalised coordination number
+               call centers_pdb%set_resnum(cc,cc)
            enddo
        endif
        if( present(fname) ) then
-           call self%centers_pdb%writepdb(fname)
+           call centers_pdb%writepdb(fname)
        else
-           call self%centers_pdb%writepdb(trim(self%fbody)//'_atom_centers')
+           call centers_pdb%writepdb(trim(self%fbody)//'_atom_centers')
            call atom%new                 (trim(self%fbody)//'_atom_centers.pdb')
            call simulated_distrib%new(self%ldim,self%smpd)
            call atom%convolve(simulated_distrib, cutoff = 8.*self%smpd)
@@ -1223,8 +1289,8 @@ contains
         enddo
         call fclose(funit)
         ! PER-ATOM STATS
-        call fopen(funit, file=ATOM_STATS_FILE, iostat=ios, status='replace', iomsg=io_msg)
-        call fileiochk("simple_nanoparticle :: write_csv_files; ERROR when opening file "//ATOM_STATS_FILE//'; '//trim(io_msg),ios)
+        call fopen(funit, file=ATOMS_STATS_FILE, iostat=ios, status='replace', iomsg=io_msg)
+        call fileiochk("simple_nanoparticle :: write_csv_files; ERROR when opening file "//ATOMS_STATS_FILE//'; '//trim(io_msg),ios)
         ! write header
         write(funit,'(a)') ATOM_STATS_HEAD_OMIT
         ! write records
@@ -1914,7 +1980,7 @@ contains
       ! Calculate cn and cn_gen
       centers_A = self%atominfo2centers_A()
       call fit_lattice(self%element, centers_A, a)
-      call run_coord_number_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+      call run_cn_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
       deallocate(centers_A)
       if(thresh > 1. .or. thresh < 0.) THROW_HARD('Invalid input threshold! AR is in [0,1]; cluster_ar')
       ! Preparing for clustering
@@ -2428,7 +2494,6 @@ contains
         call self%img_raw%kill
         call self%img_bin%kill_bimg()
         call self%img_cc%kill_bimg()
-        call self%centers_pdb%kill
         if( allocated(self%atominfo) ) deallocate(self%atominfo)
     end subroutine kill_nanoparticle
 

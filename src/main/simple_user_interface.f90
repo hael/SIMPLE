@@ -3950,16 +3950,19 @@ contains
         &'Statistical test for radial dependent symmetry',&                                           ! descr_short
         &'is a program that generates statistics at different radii and across the whold nano map.',& ! descr long
         &'quant_exec',&                                                                               ! executable
-        &2, 2, 0, 0, 1, 0, 0, .false.)                                                                ! # entries in each group, requires sp_project
+        &3, 3, 0, 0, 1, 0, 1, .false.)                                                                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call atoms_stats%set_input('img_ios', 1, 'vol1', 'file', 'Raw volume', 'Raw volume of grey valued pixel intensities', &
         & 'input volume e.g. vol.mrc', .true., '')
         call atoms_stats%set_input('img_ios', 2, 'vol2', 'file', 'Connected components volume', 'Connected components volume produced by detect atoms', &
         & 'input volume e.g. *CC.mrc', .true., '')
+        call atoms_stats%set_input('img_ios', 3, 'vol3', 'file', 'Volume', 'Nanoparticle volume to use for lattice fitting', &
+        & 'input volume 4 lattice fit e.g. vol3.mrc', .false., '')
         ! parameter input/output
         call atoms_stats%set_input('parm_ios', 1, smpd)
-        call atoms_stats%set_input('parm_ios', 2, 'pdbfile', 'file', 'PDB', 'Input coords file in PDB format',  'Input coords file in PDB format', .true., '')
+        call atoms_stats%set_input('parm_ios', 2, 'pdbfile', 'file', 'PDB', 'Input coords file in PDB format', 'Input coords file in PDB format', .true., '')
+        call atoms_stats%set_input('parm_ios', 3, 'pdbfile2', 'file', 'PDB', 'subset coords for stats calc', 'subset coords file in PDB format for stats calc', .false., '')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3969,13 +3972,13 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        ! <empty>
+        call atoms_stats%set_input('comp_ctrls', 1, nthr)
     end subroutine new_atoms_stats
 
     subroutine new_tseries_atoms_analysis
         ! PROGRAM SPECIFICATION
         call tseries_atoms_analysis%new(&
-        &'tseries_atoms_analyis',&                                                    ! name
+        &'tseries_atoms_analysis',&                                                    ! name
         &'Analysis of results obtianed with tseries_reconstruct3D and detect_atoms',& ! descr_short
         &'is a program that analysis atomic time-series coordinates',&                ! descr long
         &'quant_exec',&                                                               ! executable
