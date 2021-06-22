@@ -9,9 +9,9 @@ use simple_atoms, only: atoms
 use simple_defs_atoms
 implicit none
 
-public :: fit_lattice, run_coord_number_analysis, strain_analysis
+public :: fit_lattice, run_cn_analysis, strain_analysis
 public :: atoms_mask, read_pdb2matrix, write_matrix2pdb, find_couples
-public :: remove_atoms, dock_nanosPDB
+public :: remove_atoms, find_atoms_subset, dock_nanosPDB
 private
 #include "simple_local_flags.inc"
 
@@ -26,16 +26,21 @@ contains
         character(len=2), intent(in) :: element
         character(len=2) :: el_ucase
         character(len=8) :: crystal_system
-        real :: a_0, rMax
+        real, parameter  :: FRAC_ERR = 0.15 ! error term for expanding rMax (fraction of atomic radius)
+        real    :: a_0, rMax, r, err
+        integer :: Z
         el_ucase = uppercase(trim(adjustl(element)))
         call get_lattice_params(el_ucase, crystal_system, a_0)
+        call get_element_Z_and_radius(el_ucase, Z, r)
+        if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
+        err = FRAC_ERR * r
         select case(trim(adjustl(crystal_system)))
             case('rocksalt')
-                rMax = a_0 * ((1. / 2. + 1. / sqrt(2.)) / 2.)
+                rMax = a_0 * ((1. / 2. + 1. / sqrt(2.)) / 2.) + err
             case('bcc')
-                rMax = a_0 * ((1. + sqrt(3.) / 2.) / 2.)
+                rMax = a_0 * ((1. + sqrt(3.) / 2.) / 2.)      + err
             case DEFAULT ! FCC by default
-                rMax = a_0 * ((1. + 1. / sqrt(2.)) / 2.)
+                rMax = a_0 * ((1. + 1. / sqrt(2.)) / 2.)      + err
         end select
         if( DEBUG ) write(logfhandle,*) 'rMax identified as ', rMax
     end function find_rMax
@@ -181,7 +186,7 @@ contains
 
     ! This function calculates the coordination number for each atom
     ! ATTENTION: input coords of model have to be in ANGSTROMS.
-    subroutine run_coord_number_analysis( element, model, a, coord_nums_std, coord_nums_gen )
+    subroutine run_cn_analysis( element, model, a, coord_nums_std, coord_nums_gen )
         character(len=2),  intent(in)    :: element
         real, allocatable, intent(in)    :: model(:,:)
         real,              intent(in)    :: a(3) ! lattice parameters
@@ -239,7 +244,7 @@ contains
                 coord_nums_gen(iatom) = 0.
             endif
         enddo
-    end subroutine run_coord_number_analysis
+    end subroutine run_cn_analysis
 
     ! ATTENTION: input coords of model have to be in ANGSTROMS
     subroutine strain_analysis( element, model, a, strain_array )
@@ -1078,6 +1083,26 @@ contains
         end do
         deallocate(mask2keep)
     end subroutine remove_atoms
+
+    subroutine find_atoms_subset( atms2find, atms, mask_out )
+        real,    intent(in)    :: atms2find(:,:), atms(:,:)
+        logical, intent(inout) :: mask_out(:)
+        logical, allocatable   :: mask(:)
+        integer :: i, location(1), n2find, n
+        real    :: d
+        n2find = size(atms2find, dim=2)
+        n      = size(atms,      dim=2)
+        if( n2find         >= n ) THROW_HARD('atoms to find must be subset of atoms')
+        if( size(mask_out) /= n ) THROW_HARD('incongruent dim of mask')
+        allocate(mask(n), source=.true.)
+        mask_out = .false.
+        do i = 1, n2find
+            d = pixels_dist(atms2find(:,i), atms(:,:),'min',mask,location,keep_zero=.true.)
+            mask(location(1))     = .false. ! not to consider the same atom more than once
+            mask_out(location(1)) = .true.
+        enddo
+        deallocate(mask)
+    end subroutine find_atoms_subset
 
     ! This subrouine takes a pdb file input, removes all atoms beyond
     ! a given radius, outputs a new pdb file with the coordinates
