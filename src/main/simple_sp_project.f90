@@ -172,12 +172,10 @@ contains
             call self%projinfo%new(1)
         endif
         ! projname & profile
-        if( self%projinfo%isthere('projname') )then
-            if( cline%defined('projname') )then
-                projname = cline%get_carg('projname')
-                call self%projinfo%set(1, 'projname', trim(projname))
-                call self%projinfo%set(1, 'projfile', trim(projname)//'.simple')
-            endif
+        if( self%projinfo%isthere('projname').and.cline%defined('projname') )then
+            projname = cline%get_carg('projname')
+            call self%projinfo%set(1, 'projname', trim(projname))
+            call self%projinfo%set(1, 'projfile', trim(projname)//'.simple')
         else
             if( .not. cline%defined('projname') .and. .not. cline%defined('projfile') )then
                 THROW_HARD('the project needs a name, inputted via projname or projfile; update_projinfo')
