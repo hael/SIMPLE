@@ -16,6 +16,7 @@ private
 ! module global constants
 integer,          parameter :: NBIN_THRESH         = 20      ! number of thresholds for binarization
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
+real,             parameter :: VALID_CORR_THRESH   = 0.5     ! min valid_corr value allowed
 logical,          parameter :: DEBUG               = .false. ! for debugging purposes
 logical,          parameter :: GENERATE_FIGS       = .false. ! for figures generation
 integer,          parameter :: SOFT_EDGE           = 6
@@ -32,15 +33,15 @@ character(len=*), parameter :: BIN_CLS_STATS_FILE  = 'binary_class_stats.csv'
 
 character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//'CN_STD'//CSV_DELIM//'NN_BONDL'//&
 &CSV_DELIM//'CN_GEN'//CSV_DELIM//'ASPECT_RATIO'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
-&CSV_DELIM//'MAX_INT'//CSV_DELIM//'SDEV_INT'//CSV_DELIM//'RADIAL_POS'//CSV_DELIM//'MAX_CORR'//CSV_DELIM//'X'//&
+&CSV_DELIM//'MAX_INT'//CSV_DELIM//'SDEV_INT'//CSV_DELIM//'RADIAL_POS'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'X'//&
 &CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//&
 &CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'//&
 &CSV_DELIM//'NVOX_CLASS'//CSV_DELIM//'NN_BONDL_CLASS'//CSV_DELIM//'ASPECT_RATIO_CLASS'//CSV_DELIM//'POLAR_ANGLE_CLASS'//&
-&CSV_DELIM//'DIAM_CLASS'//CSV_DELIM//'MAX_INT_CLASS'//CSV_DELIM//'MAX_CORR_CLASS'//CSV_DELIM//'RADIAL_STRAIN_CLASS'
+&CSV_DELIM//'DIAM_CLASS'//CSV_DELIM//'MAX_INT_CLASS'//CSV_DELIM//'VALID_CORR_CLASS'//CSV_DELIM//'RADIAL_STRAIN_CLASS'
 
 character(len=*), parameter :: ATOM_STATS_HEAD_OMIT = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//'CN_STD'//CSV_DELIM//'NN_BONDL'//&
 &CSV_DELIM//'CN_GEN'//CSV_DELIM//'ASPECT_RATIO'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
-&CSV_DELIM//'MAX_INT'//CSV_DELIM//'SDEV_INT'//CSV_DELIM//'RADIAL_POS'//CSV_DELIM//'MAX_CORR'//CSV_DELIM//'RADIAL_STRAIN'
+&CSV_DELIM//'MAX_INT'//CSV_DELIM//'SDEV_INT'//CSV_DELIM//'RADIAL_POS'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MED_NVOX'//CSV_DELIM//'SDEV_NVOX'//&
@@ -52,7 +53,7 @@ character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_DIAM'//CSV_DELIM//'MED_DIAM'//CSV_DELIM//'SDEV_DIAM'//&
 &CSV_DELIM//'AVG_AVG_INT'//CSV_DELIM//'MED_AVG_INT'//CSV_DELIM//'SDEV_AVG_INT'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'MED_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
-&CSV_DELIM//'AVG_MAX_CORR'//CSV_DELIM//'MED_MAX_CORR'//CSV_DELIM//'SDEV_MAX_CORR'//&
+&CSV_DELIM//'AVG_VALID_CORR'//CSV_DELIM//'MED_VALID_CORR'//CSV_DELIM//'SDEV_VALID_CORR'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
 
@@ -65,7 +66,7 @@ character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//CS
 &CSV_DELIM//'AVG_DIAM'//CSV_DELIM//'MED_DIAM'//CSV_DELIM//'SDEV_DIAM'//&
 &CSV_DELIM//'AVG_AVG_INT'//CSV_DELIM//'MED_AVG_INT'//CSV_DELIM//'SDEV_AVG_INT'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'MED_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
-&CSV_DELIM//'AVG_MAX_CORR'//CSV_DELIM//'MED_MAX_CORR'//CSV_DELIM//'SDEV_MAX_CORR'//&
+&CSV_DELIM//'AVG_VALID_CORR'//CSV_DELIM//'MED_VALID_CORR'//CSV_DELIM//'SDEV_VALID_CORR'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
 
@@ -90,7 +91,7 @@ type :: atom_stats
     real    :: max_int           = 0. ! maximum            -"-                                      MAX_INT
     real    :: sdev_int          = 0. ! standard deviation -"-                                      SDEV_INT
     real    :: cendist           = 0. ! distance from the centre of mass of the nanoparticle        RADIAL_POS
-    real    :: max_corr          = 0. ! maximum atom correlation within the connected component     MAX_CORR
+    real    :: valid_corr        = 0. ! per-atom correlation with the simulated map                 VALID_CORR
     real    :: center(3)         = 0. ! atom center                                                 X Y Z
     ! strain
     real    :: exx_strain        = 0. ! tensile strain in %                                         EXX_STRAIN
@@ -107,7 +108,7 @@ type :: atom_stats
     integer :: polar_angle_cls   = 0  !                                                             POLAR_ANGLE_CLASS
     integer :: diam_cls          = 0  !                                                             DIAM_CLASS
     integer :: max_int_cls       = 0  !                                                             MAX_INT_CLASS
-    integer :: max_corr_cls      = 0  !                                                             MAX_CORR_CLASS
+    integer :: valid_corr_cls    = 0  !                                                             VALID_CORR_CLASS
     integer :: radial_strain_cls = 0  !                                                             RADIAL_STRAIN_CLASS
 end type atom_stats
 
@@ -137,7 +138,7 @@ type :: nanoparticle
     type(stats_struct)    :: diam_stats
     type(stats_struct)    :: avg_int_stats
     type(stats_struct)    :: max_int_stats
-    type(stats_struct)    :: max_corr_stats
+    type(stats_struct)    :: valid_corr_stats
     type(stats_struct)    :: radial_strain_stats
     ! CN-DEPENDENT STATS
     ! -- cendist
@@ -156,7 +157,7 @@ type :: nanoparticle
     type(stats_struct)    :: diam_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: avg_int_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: max_int_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: max_corr_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: valid_corr_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: radial_strain_stats_cns(CNMIN:CNMAX)
     ! PER-ATOM STATISTICS
     type(atom_stats), allocatable :: atominfo(:)
@@ -168,7 +169,7 @@ type :: nanoparticle
     type(stats_struct)    :: polar_angle_cls_stats(2)
     type(stats_struct)    :: diam_cls_stats(2)
     type(stats_struct)    :: max_int_cls_stats(2)
-    type(stats_struct)    :: max_corr_cls_stats(2)
+    type(stats_struct)    :: valid_corr_cls_stats(2)
     type(stats_struct)    :: radial_strain_cls_stats(2)
     ! OTHER
     character(len=2)      :: element     = ' '
@@ -198,13 +199,16 @@ type :: nanoparticle
     procedure, private :: phasecorr_one_atom
     procedure, private :: binarize_and_find_centers
     procedure, private :: find_centers
-    procedure, private :: discard_outliers
+    procedure, private :: discard_lowly_coordinated
+    procedure, private :: discard_low_valid_corr_atoms
     procedure, private :: split_atoms
+    procedure, private :: validate_atoms
     ! calc stats
     procedure          :: fillin_atominfo
     procedure, private :: masscen
     procedure, private :: calc_aspect_ratio
     ! visualization and output
+    procedure, private :: simulate_atoms
     procedure          :: write_centers
     procedure          :: write_atoms
     procedure          :: write_csv_files
@@ -453,16 +457,27 @@ contains
         class(nanoparticle), intent(inout) :: self
         real,                intent(inout) :: a(3) ! lattice parameters
         real, allocatable :: centers_A(:,:)        ! coordinates of the atoms in ANGSTROMS
+        type(image)       :: simatms
+        type(atoms)       :: atoms_obj
+        ! MODEL BUILDING
         ! Phase correlation approach
         call self%phasecorr_one_atom(self%img)
         ! Nanoparticle binarization
         call self%binarize_and_find_centers()
         ! atom splitting by correlation map validation
         call self%split_atoms()
+        ! OUTLIERS DISCARDING
+        ! validation through per-atom correlation with the simulated density
+        call self%simulate_atoms(atoms_obj, simatms)
+        call self%validate_atoms( simatms )
+        ! discard atoms with valid_corr < 0.5
+        call self%discard_low_valid_corr_atoms
         ! fit lattice
         centers_A = self%atominfo2centers_A()
         call fit_lattice(self%element, centers_A, a)
         deallocate(centers_A)
+        call simatms%kill
+        call atoms_obj%kill
     end subroutine identify_lattice_params
 
     subroutine identify_atomic_pos( self, cn_thresh, a, l_fit_lattice )
@@ -470,20 +485,35 @@ contains
         integer,             intent(in)    :: cn_thresh
         real,                intent(inout) :: a(3)          ! lattice parameters
         logical,             intent(in)    :: l_fit_lattice ! fit lattice or use inputted
+        type(image) :: simatms
+        type(atoms) :: atoms_obj
+        ! MODEL BUILDING
         ! Phase correlation approach
         call self%phasecorr_one_atom(self%img)
         ! Nanoparticle binarization
         call self%binarize_and_find_centers()
         ! atom splitting by correlation map validation
         call self%split_atoms()
-        ! Outliers discarding
-        call self%discard_outliers(cn_thresh, a, l_fit_lattice)
-        ! write output
+        ! OUTLIERS DISCARDING
+        ! validation through per-atom correlation with the simulated density
+        call self%simulate_atoms(atoms_obj, simatms)
+        call self%validate_atoms( simatms )
+        ! discard atoms with valid_corr < 0.5
+        call self%discard_low_valid_corr_atoms
+        ! discard lowly coordinated atoms
+        call self%discard_lowly_coordinated(cn_thresh, a, l_fit_lattice)
+        ! WRITE OUTPUT
         call self%img_bin%write_bimg(trim(self%fbody)//'BIN.mrc')
         write(logfhandle,*) 'output, binarized map:            ', trim(self%fbody)//'BIN.mrc'
         call self%img_cc%write_bimg(trim(self%fbody)//'CC.mrc')
         write(logfhandle,*) 'output, connected components map: ', trim(self%fbody)//'CC.mrc'
-        call self%write_centers()
+        call self%write_centers
+        call self%simulate_atoms(atoms_obj, simatms)
+        call simatms%write(trim(self%fbody)//'SIM.mrc')
+        write(logfhandle,*) 'output, simulated atomic density: ', trim(self%fbody)//'SIM.mrc'
+        ! destruct
+        call simatms%kill
+        call atoms_obj%kill
     end subroutine identify_atomic_pos
 
     ! FORMULA: phasecorr = ifft2(fft2(field).*conj(fft2(reference)));
@@ -688,7 +718,7 @@ contains
         integer :: rank, m(1)
         real    :: new_centers(3,2*self%n_cc) ! will pack it afterwards if it has too many elements
         real    :: pc, aspect_ratio, radius
-        write(logfhandle, '(A)') '>>> VALIDATING ATOMIC POSITIONS'
+        write(logfhandle, '(A)') '>>> SPLITTING CONNECTED ATOMS'
         call self%img%get_rmat_ptr(rmat_pc) ! now img contains the phase correlation
         call self%img_cc%get_imat(imat_cc)  ! to pass to the subroutine split_atoms
         allocate(imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = imat_cc)
@@ -735,7 +765,7 @@ contains
         call self%img_bin%find_ccs(self%img_cc)
         call self%update_ncc(self%img_cc)
         call self%find_centers()
-        write(logfhandle, '(A)') '>>> VALIDATING ATOMIC POSITIONS, COMPLETED'
+        write(logfhandle, '(A)') '>>> SPLITTING CONNECTED ATOMS, COMPLETED'
 
     contains
 
@@ -821,7 +851,7 @@ contains
     ! It calculates the standard coordination number (cn) of each atom and discards
     ! the atoms with cn_std < cn_thresh
     ! It modifies the img_bin and img_cc instances deleting the identified outliers.
-    subroutine discard_outliers( self, cn_thresh, a, l_fit_lattice )
+    subroutine discard_lowly_coordinated( self, cn_thresh, a, l_fit_lattice )
         class(nanoparticle), intent(inout) :: self
         integer,             intent(in)    :: cn_thresh     ! threshold for discarding outliers based on coordination number
         real,                intent(inout) :: a(3)          ! lattice parameter
@@ -853,6 +883,7 @@ contains
         else
             call remove_lowly_coordinated( new_cn_thresh )
         endif
+        deallocate(imat_bin, imat_cc, centers_A)
         write(logfhandle, *) 'Numbers of atoms discarded because of low cn ', n_discard
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS, COMPLETED'
 
@@ -876,14 +907,69 @@ contains
                 call run_cn_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
             end subroutine remove_lowly_coordinated
 
-    end subroutine discard_outliers
+    end subroutine discard_lowly_coordinated
+
+    subroutine validate_atoms( self, simatms )
+        class(nanoparticle), intent(inout) :: self
+        class(image),        intent(in)    :: simatms
+        real, allocatable :: centers(:,:)           ! coordinates of the atoms in PIXELS
+        real, allocatable :: pixels1(:), pixels2(:) ! pixels extracted around the center
+        real    :: maxrad, corrs(self%n_cc)
+        integer :: ijk(3), npix_in, npix_out1, npix_out2, i, winsz
+        type(stats_struct) :: corr_stats
+        maxrad  = (self%theoretical_radius * 1.5) / self%smpd ! in pixels
+        winsz   = ceiling(maxrad)
+        npix_in = (2 * winsz + 1)**3
+        centers = self%atominfo2centers()
+        allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
+        ! calculate per-atom correlations in parallel
+        !$omp parallel do default(shared) private(i,ijk,pixels1,pixels2,npix_out1,npix_out2) schedule(static) proc_bind(close)
+        do i = 1, self%n_cc
+            ijk = nint(centers(:,i))
+            call self%img_raw%win2arr_rad(ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out1, pixels1)
+            call simatms%win2arr_rad(     ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out2, pixels2)
+            self%atominfo(i)%valid_corr = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
+        end do
+        !$omp end parallel do
+        call calc_stats(self%atominfo(:)%valid_corr, corr_stats)
+        write(logfhandle,'(A)') '>>> VALID_CORR (PER-ATOM CORRELATION WITH SIMULATED DENSITY) STATS BELOW'
+        write(logfhandle,'(A,F8.4)') 'Average: ', corr_stats%avg
+        write(logfhandle,'(A,F8.4)') 'Median : ', corr_stats%med
+        write(logfhandle,'(A,F8.4)') 'Sigma  : ', corr_stats%sdev
+        write(logfhandle,'(A,F8.4)') 'Max    : ', corr_stats%maxv
+        write(logfhandle,'(A,F8.4)') 'Min    : ', corr_stats%minv
+    end subroutine validate_atoms
+
+    subroutine discard_low_valid_corr_atoms( self )
+        class(nanoparticle), intent(inout) :: self
+        integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
+        integer :: cc, n_discard
+        write(logfhandle, '(A)') '>>> DISCARDING ATOMS WITH VALID_CORR < 0.5'
+        call self%img_cc%get_imat(imat_cc)
+        call self%img_bin%get_imat(imat_bin)
+        n_discard = 0
+        do cc = 1, self%n_cc
+            if( self%atominfo(cc)%valid_corr < VALID_CORR_THRESH )then
+                where(imat_cc == cc) imat_bin = 0
+                n_discard = n_discard + 1
+            endif
+        end do
+        call self%img_bin%set_imat(imat_bin)
+        call self%img_bin%find_ccs(self%img_cc)
+        call self%img_cc%get_nccs(self%n_cc)
+        call self%find_centers()
+        deallocate(imat_bin, imat_cc)
+        write(logfhandle, *) 'Numbers of atoms discarded because of low valid_corr ', n_discard
+        write(logfhandle, '(A)') '>>> DISCARDING ATOMS WITH VALID_CORR < 0.5, COMPLETED'
+    end subroutine discard_low_valid_corr_atoms
 
     ! calc stats
 
     subroutine fillin_atominfo( self, a0 )
         class(nanoparticle), intent(inout) :: self
         real, optional,      intent(in)    :: a0(3) ! lattice parameters
-        type(image)          :: phasecorr
+        type(image)          :: phasecorr, simatms
+        type(atoms)          :: atoms_obj
         logical, allocatable :: mask(:,:,:)
         real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:)
         real,    pointer     :: rmat(:,:,:), rmat_corr(:,:,:)
@@ -906,6 +992,9 @@ contains
         call strain_analysis(self%element, centers_A, a, strain_array)
         if( allocated(self%coords4stats) ) call self%pack_instance4stats(strain_array)
         allocate(cc_mask(self%n_cc), source=.true.) ! because self%n_cc might change after pack_instance4stats
+        ! validation through per-atom correlation with the simulated density
+        call self%simulate_atoms(atoms_obj, simatms)
+        call self%validate_atoms( simatms )
         ! calc NPdiam & NPcen
         tmpcens     = self%atominfo2centers()
         self%NPdiam = 0.
@@ -958,7 +1047,7 @@ contains
                 self%atominfo(cc)%sdev_int = 0.
             endif
             ! atom correlation maximum within the connected component
-            self%atominfo(cc)%max_corr = maxval(rmat_corr(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),mask)
+            self%atominfo(cc)%valid_corr = maxval(rmat_corr(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),mask)
             ! vector and angle of polarization
             if( self%atominfo(cc)%size > 2 )then
                 self%atominfo(cc)%polar_vec   = real(self%atominfo(cc)%loc_ldist) - self%atominfo(cc)%center
@@ -999,7 +1088,7 @@ contains
         call norm_minmax( self%atominfo(:)%max_int ) ! -"-
         call calc_stats( self%atominfo(:)%avg_int,       self%avg_int_stats       )
         call calc_stats( self%atominfo(:)%max_int,       self%max_int_stats       )
-        call calc_stats( self%atominfo(:)%max_corr,      self%max_corr_stats      )
+        call calc_stats( self%atominfo(:)%valid_corr,    self%valid_corr_stats    )
         call calc_stats( self%atominfo(:)%radial_strain, self%radial_strain_stats )
         ! CALCULATE CN-DEPENDENT STATS & WRITE CN-ATOMS
         do cn = CNMIN, CNMAX
@@ -1017,7 +1106,7 @@ contains
         call self%bicluster_otsu('polar_angle',   funit)
         call self%bicluster_otsu('diam',          funit)
         call self%bicluster_otsu('max_int',       funit)
-        call self%bicluster_otsu('max_corr',      funit)
+        call self%bicluster_otsu('valid_corr',    funit)
         call self%bicluster_otsu('radial_strain', funit)
         call fclose(funit)
         ! identify correlated variables with Pearson's product moment correation coefficient
@@ -1025,6 +1114,8 @@ contains
         ! destruct
         deallocate(cc_mask, imat_cc, tmpcens, strain_array, centers_A)
         call phasecorr%kill
+        call simatms%kill
+        call atoms_obj%kill
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS, COMPLETED'
 
         contains
@@ -1113,7 +1204,7 @@ contains
                 call calc_stats( self%atominfo(:)%diam,          self%diam_stats_cns(cn),          mask=size_mask )
                 call calc_stats( self%atominfo(:)%avg_int,       self%avg_int_stats_cns(cn),       mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%max_int,       self%max_int_stats_cns(cn),       mask=cn_mask   )
-                call calc_stats( self%atominfo(:)%max_corr,      self%max_corr_stats_cns(cn),      mask=cn_mask   )
+                call calc_stats( self%atominfo(:)%valid_corr,    self%valid_corr_stats_cns(cn),    mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%radial_strain, self%radial_strain_stats_cns(cn), mask=cn_mask   )
             end subroutine calc_cn_stats
 
@@ -1205,13 +1296,39 @@ contains
 
     ! visualization and output
 
-    subroutine write_centers(self, fname, coords)
+    subroutine simulate_atoms( self, atoms_obj, simatms, betas )
+        class(nanoparticle), intent(inout) :: self
+        class(atoms),        intent(inout) :: atoms_obj
+        class(image),        intent(inout) :: simatms
+        real, optional,      intent(in)    :: betas(self%n_cc)
+        logical :: betas_present
+        integer :: i
+        betas_present = present(betas)
+        ! generate atoms object
+        call atoms_obj%new(self%n_cc)
+        do i = 1, self%n_cc
+            call atoms_obj%set_name(     i, self%atom_name)
+            call atoms_obj%set_element(  i, self%element)
+            call atoms_obj%set_coord(    i, (self%atominfo(i)%center(:)-1.)*self%smpd)
+            call atoms_obj%set_num(      i, i)
+            call atoms_obj%set_resnum(   i, i)
+            call atoms_obj%set_chain(    i, 'A')
+            call atoms_obj%set_occupancy(i, 1.)
+            if( betas_present )then
+                call atoms_obj%set_beta( i, betas(i))
+            else
+                call atoms_obj%set_beta( i ,self%atominfo(i)%cn_gen) ! use generalised coordination number
+            endif
+        enddo
+        call simatms%new(self%ldim,self%smpd)
+        call atoms_obj%convolve(simatms, cutoff = 8.*self%smpd)
+    end subroutine simulate_atoms
+
+    subroutine write_centers( self, fname, coords )
        class(nanoparticle),        intent(inout) :: self
        character(len=*), optional, intent(in)    :: fname
        real,             optional, intent(in)    :: coords(:,:)
        type(atoms) :: centers_pdb
-       type(image) :: simulated_distrib
-       type(atoms) :: atom
        integer     :: cc
        if( present(coords) )then
            call centers_pdb%new(size(coords, dim = 2), dummy=.true.)
@@ -1234,14 +1351,7 @@ contains
            call centers_pdb%writepdb(fname)
        else
            call centers_pdb%writepdb(trim(self%fbody)//'_atom_centers')
-           call atom%new                 (trim(self%fbody)//'_atom_centers.pdb')
-           call simulated_distrib%new(self%ldim,self%smpd)
-           call atom%convolve(simulated_distrib, cutoff = 8.*self%smpd)
-           call simulated_distrib%write(trim(self%fbody)//'SIM.mrc')
            write(logfhandle,*) 'output, atomic coordinates:       ', trim(self%fbody)//'_atom_centers.pdb'
-           write(logfhandle,*) 'output, simulated atomic density: ', trim(self%fbody)//'SIM.mrc'
-           call atom%kill
-           call simulated_distrib%kill
        endif
     end subroutine write_centers
 
@@ -1323,7 +1433,7 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%max_int,                CSV_DELIM ! MAX_INT
         write(funit,601,advance='no') self%atominfo(cc)%sdev_int,               CSV_DELIM ! SDEV_INT
         write(funit,601,advance='no') self%atominfo(cc)%cendist,                CSV_DELIM ! RADIAL_POS
-        write(funit,601,advance='no') self%atominfo(cc)%max_corr,               CSV_DELIM ! MAX_CORR
+        write(funit,601,advance='no') self%atominfo(cc)%valid_corr,             CSV_DELIM ! VALID_CORR
         if( .not. omit_here )then
         write(funit,601,advance='no') self%atominfo(cc)%center(1),              CSV_DELIM ! X
         write(funit,601,advance='no') self%atominfo(cc)%center(2),              CSV_DELIM ! Y
@@ -1349,7 +1459,7 @@ contains
         write(funit,601,advance='no') real(self%atominfo(cc)%polar_angle_cls),  CSV_DELIM ! POLAR_ANGLE_CLASS
         write(funit,601,advance='no') real(self%atominfo(cc)%diam_cls),         CSV_DELIM ! DIAM_CLASS
         write(funit,601,advance='no') real(self%atominfo(cc)%max_int_cls),      CSV_DELIM ! MAX_INT_CLASS
-        write(funit,601,advance='no') real(self%atominfo(cc)%max_corr_cls),     CSV_DELIM ! MAX_CORR_CLASS
+        write(funit,601,advance='no') real(self%atominfo(cc)%valid_corr_cls),   CSV_DELIM ! VALID_CORR_CLASS
         write(funit,602)              real(self%atominfo(cc)%radial_strain_cls)           ! RADIAL_STRAIN_CLASS
         endif
     end subroutine write_atominfo
@@ -1400,9 +1510,9 @@ contains
         write(funit,601,advance='no') self%max_int_stats%med,        CSV_DELIM ! MED_MAX_INT
         write(funit,601,advance='no') self%max_int_stats%sdev,       CSV_DELIM ! SDEV_MAX_INT
         ! -- maximum correlation
-        write(funit,601,advance='no') self%max_corr_stats%avg,       CSV_DELIM ! AVG_MAX_CORR
-        write(funit,601,advance='no') self%max_corr_stats%med,       CSV_DELIM ! MED_MAX_CORR
-        write(funit,601,advance='no') self%max_corr_stats%sdev,      CSV_DELIM ! SDEV_MAX_CORR
+        write(funit,601,advance='no') self%valid_corr_stats%avg,     CSV_DELIM ! AVG_VALID_CORR
+        write(funit,601,advance='no') self%valid_corr_stats%med,     CSV_DELIM ! MED_VALID_CORR
+        write(funit,601,advance='no') self%valid_corr_stats%sdev,    CSV_DELIM ! SDEV_VALID_CORR
         ! -- radial strain
         write(funit,601,advance='no') self%radial_strain_stats%avg,  CSV_DELIM ! AVG_RADIAL_STRAIN
         write(funit,601,advance='no') self%radial_strain_stats%med,  CSV_DELIM ! MED_RADIAL_STRAIN
@@ -1456,9 +1566,9 @@ contains
         write(funit,601,advance='no') self%max_int_stats_cns(cn)%med,        CSV_DELIM ! MED_MAX_INT
         write(funit,601,advance='no') self%max_int_stats_cns(cn)%sdev,       CSV_DELIM ! SDEV_MAX_INT
         ! -- maximum correlation
-        write(funit,601,advance='no') self%max_corr_stats_cns(cn)%avg,       CSV_DELIM ! AVG_MAX_CORR
-        write(funit,601,advance='no') self%max_corr_stats_cns(cn)%med,       CSV_DELIM ! MED_MAX_CORR
-        write(funit,601,advance='no') self%max_corr_stats_cns(cn)%sdev,      CSV_DELIM ! SDEV_MAX_CORR
+        write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%avg,     CSV_DELIM ! AVG_VALID_CORR
+        write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%med,     CSV_DELIM ! MED_VALID_CORR
+        write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%sdev,    CSV_DELIM ! SDEV_VALID_CORR
         ! -- radial strain
         write(funit,601,advance='no') self%radial_strain_stats_cns(cn)%avg,  CSV_DELIM ! AVG_RADIAL_STRAIN
         write(funit,601,advance='no') self%radial_strain_stats_cns(cn)%med,  CSV_DELIM ! MED_RADIAL_STRAIN
@@ -1488,7 +1598,7 @@ contains
         flags(8)  = 'MAX_INT'       ! max_int
         flags(9)  = 'SDEV_INT'      ! sdev_int
         flags(10) = 'RADIAL_POS'    ! cendist
-        flags(11) = 'MAX_CORR'      ! max_corr
+        flags(11) = 'VALID_CORR'    ! valid_corr
         flags(12) = 'RADIAL_STRAIN' ! radial_strain
         ! calculate correlations
         cnt = 0
@@ -1540,8 +1650,8 @@ contains
                         vals =  self%atominfo(:)%sdev_int
                     case('RADIAL_POS')
                         vals =  self%atominfo(:)%cendist
-                    case('MAX_CORR')
-                        vals =  self%atominfo(:)%max_corr
+                    case('VALID_CORR')
+                        vals =  self%atominfo(:)%valid_corr
                     case('RADIAL_STRAIN')
                         vals =  self%atominfo(:)%radial_strain
                 end select
@@ -1583,11 +1693,11 @@ contains
                 mask = .true.
                 call bicluster_local(mask, which, 'MAX_INT')
                 self%atominfo(:)%max_int_cls = bicls
-            case('max_corr')
-                vals = self%atominfo(:)%max_corr
+            case('valid_corr')
+                vals = self%atominfo(:)%valid_corr
                 mask = .true.
-                call bicluster_local(mask, which, 'MAX_CORR')
-                self%atominfo(:)%max_corr_cls = bicls
+                call bicluster_local(mask, which, 'VALID_CORR')
+                self%atominfo(:)%valid_corr_cls = bicls
             case('radial_strain')
                 vals = self%atominfo(:)%radial_strain
                 mask = .true.
@@ -1682,7 +1792,7 @@ contains
     !         datvecs(cc,4) =      self%atominfo(cc)%polar_angle
     !         datvecs(cc,5) =      self%atominfo(cc)%diam
     !         datvecs(cc,6) =      self%atominfo(cc)%max_int
-    !         datvecs(cc,7) =      self%atominfo(cc)%max_corr
+    !         datvecs(cc,7) =      self%atominfo(cc)%valid_corr
     !         datvecs(cc,8) =      self%atominfo(cc)%radial_strain
     !     end do
     !     ! rescaling to avoid the polarization angle to dominate the analysis

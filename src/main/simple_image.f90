@@ -48,6 +48,7 @@ contains
     procedure          :: window_slim
     procedure          :: add_window
     procedure          :: win2arr
+    procedure          :: win2arr_rad
     procedure          :: corner
     ! I/O
     procedure          :: open
@@ -902,6 +903,47 @@ contains
             end do
         end do
     end function win2arr
+
+    !>  \brief win2arr_rad extracts a small window into an array (circular indexing) with radial thres
+    subroutine win2arr_rad( self, i, j, k, winsz, npix_in, maxrad, npix_out, pixels )
+        class(image), intent(in)    :: self
+        integer,      intent(in)    :: i, j, k, winsz, npix_in
+        real,         intent(in)    :: maxrad ! in pixels
+        integer,      intent(inout) :: npix_out
+        real,         intent(inout) :: pixels(npix_in)
+        integer :: s, ss, t, tt, u, uu
+        real    :: vec_cen(3), vec_displ(3), maxradsq
+        if( self%is_ft() ) THROW_HARD('only 4 real images; win2arr_rad')
+        if( self%is_3d() )then
+            vec_cen = real([i,j,k])
+        else
+            vec_cen = real([i,j,1])
+        endif
+        maxradsq = maxrad**2.
+        npix_out = 1
+        do s = i - winsz,i + winsz
+            ss = cyci_1d_static(self%ldim(1), s)
+            do t = j - winsz, j + winsz
+                tt = cyci_1d_static(self%ldim(2), t)
+                if( self%ldim(3) > 1 )then
+                    do u = k - winsz, k + winsz
+                        vec_displ = real([s,t,u]) - vec_cen
+                        if( sum(vec_displ)**2. <= maxradsq )then
+                            uu               = cyci_1d_static(self%ldim(3), u)
+                            pixels(npix_out) = self%rmat(ss,tt,uu)
+                            npix_out         = npix_out + 1
+                        endif
+                    end do
+                else
+                    vec_displ = real([s,t,1]) - vec_cen
+                    if( sum(vec_displ(1:2))**2. <= maxradsq )then
+                        pixels(npix_out) = self%rmat(ss,tt,1)
+                        npix_out         = npix_out + 1
+                    endif
+                endif
+            end do
+        end do
+    end subroutine win2arr_rad
 
     !>  \brief corner extracts a corner of a volume with size box
     subroutine corner( self_in, box, self_out )
