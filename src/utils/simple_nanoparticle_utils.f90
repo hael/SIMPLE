@@ -42,7 +42,7 @@ contains
             case DEFAULT ! FCC by default
                 rMax = a_0 * ((1. + 1. / sqrt(2.)) / 2.)      + err
         end select
-        if( DEBUG ) write(logfhandle,*) 'rMax identified as ', rMax
+        write(logfhandle,*) 'rMax identified as ', rMax
     end function find_rMax
 
     ! ATTENTION: input coords of model have to be in ANGSTROMS
