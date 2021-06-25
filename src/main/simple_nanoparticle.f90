@@ -923,14 +923,12 @@ contains
         centers = self%atominfo2centers()
         allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
         ! calculate per-atom correlations in parallel
-        !$omp parallel do default(shared) private(i,ijk,pixels1,pixels2,npix_out1,npix_out2) schedule(static) proc_bind(close)
         do i = 1, self%n_cc
             ijk = nint(centers(:,i))
             call self%img_raw%win2arr_rad(ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out1, pixels1)
             call simatms%win2arr_rad(     ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out2, pixels2)
             self%atominfo(i)%valid_corr = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
         end do
-        !$omp end parallel do
         call calc_stats(self%atominfo(:)%valid_corr, corr_stats)
         write(logfhandle,'(A)') '>>> VALID_CORR (PER-ATOM CORRELATION WITH SIMULATED DENSITY) STATS BELOW'
         write(logfhandle,'(A,F8.4)') 'Average: ', corr_stats%avg
