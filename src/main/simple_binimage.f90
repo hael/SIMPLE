@@ -195,18 +195,13 @@ contains
                 enddo
             enddo
         enddo
-        ! find connected components in parallel
+        ! find connected components
         finished_job = .false.
         allocate(mat4compare(self%bldim(1),self%bldim(2),self%bldim(3)), source = 0)
-        !$omp parallel default(shared) private(i,j,k,neigh_8_pixs,nsz) proc_bind(close)
         do n_it = 1, n_maxit
             if( .not. finished_job )then
-                !$omp workshare
                 mat4compare = ccimage_unordered%bimat
-                !$omp end workshare nowait
-                !$omp single
                 diff = 0
-                !$omp end single nowait
                 do i = 1, self%bldim(1)
                     do j = 1, self%bldim(2)
                         do k = 1, self%bldim(3)
@@ -222,12 +217,9 @@ contains
                         enddo
                     enddo
                 enddo
-                !$omp single
                 if( diff <= 0 ) finished_job = .true.
-                !$omp end single nowait
             endif
         enddo
-        !$omp end parallel
         ! enumerate connected components
         cnt = 0
         do i = 1, self%bldim(1)
