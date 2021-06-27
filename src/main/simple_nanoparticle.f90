@@ -1043,8 +1043,6 @@ contains
             else ! atom composed by one voxel
                 self%atominfo(cc)%sdev_int = 0.
             endif
-            ! atom correlation maximum within the connected component
-            self%atominfo(cc)%valid_corr = maxval(rmat_corr(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),mask)
             ! vector and angle of polarization
             if( self%atominfo(cc)%size > 2 )then
                 self%atominfo(cc)%polar_vec   = real(self%atominfo(cc)%loc_ldist) - self%atominfo(cc)%center
