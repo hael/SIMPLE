@@ -221,6 +221,8 @@ contains
         call cline%set('mkdir', 'no')
         ! read project file
         call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo')
         ! sanity checks
         if( spproj%get_nptcls() == 0 )then
             THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cleanup2D_autoscale')
@@ -656,7 +658,7 @@ contains
                 call classify_pool
                 pool_iter = pool_iter+1
                 ! rejection each 5 iterations
-                if( mod(iter,5)==0 ) call reject_from_pool
+                if( mod(pool_iter,5)==0 ) call reject_from_pool
                 do_wait = .false.
             else if( mod(iter,5) /= 0 )then
                 do_wait = .true.
@@ -1020,7 +1022,7 @@ contains
                 ! correlation & resolution
                 ndev_here = 1.5*params%ndev ! less stringent rejection
                 call pool_proj%os_cls2D%find_best_classes(boxmatch,smpd,params%lpthresh,cls_mask,ndev_here)
-                if( .not.all(cls_mask) )then
+                if( count(cls_mask) > 1 .and. count(cls_mask) < ncls_glob )then
                     ncls_rejected = 0
                     do iptcl=1,pool_proj%os_ptcl2D%get_noris()
                         if( pool_proj%os_ptcl2D%get_state(iptcl) == 0 )cycle
@@ -1852,6 +1854,8 @@ contains
         call cline%set('mkdir', 'no')
         ! read project file
         call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo')
         orig_projfile = trim(params%projfile)
         ! sanity checks
         if( spproj%get_nptcls() == 0 )then

@@ -121,6 +121,7 @@ contains
         endif
         ! read project & update sampling distance
         call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
         ! retrieve cavgs stack & FRCS info
         call spproj%get_cavgs_stk(stk, ncavgs, orig_smpd)
         ctfvars%smpd = orig_smpd

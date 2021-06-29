@@ -393,6 +393,8 @@ contains
             THROW_HARD('project file: '//trim(params%projfile)//' does not exist! exec_import_boxes')
         endif
         call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo')
         ! get boxfiles into os_mic
         call read_filetable(params%boxtab, boxfnames)
         nboxf   = size(boxfnames)
@@ -630,6 +632,7 @@ contains
 
         ! PROJECT FILE MANAGEMENT
         call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
 
         ! UPDATE FIELDS
         ! add stack if present
