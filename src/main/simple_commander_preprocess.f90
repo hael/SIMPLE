@@ -135,6 +135,7 @@ contains
         character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract
         character(len=LONGSTRLEN)              :: movie
+        real                                   :: pickref_scale
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, n_completed, last_injection
         integer                                :: nptcls, cnt, n_imported, iproj, nptcls_glob
         logical                                :: l_pick, l_movies_left, l_haschanged
@@ -202,6 +203,10 @@ contains
             cline_make_pickrefs = cline
             call cline_make_pickrefs%set('prg','make_pickrefs')
             call cline_make_pickrefs%set('stream','no')
+            if( cline_make_pickrefs%defined('eer_upsampling') )then
+                pickref_scale = real(params%eer_upsampling) * params%scale
+                call cline_make_pickrefs%set('scale',pickref_scale)
+            endif
             call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
             call cline%set('refs', trim(PICKREFS)//params%ext)
             call cline%delete('vol1')
@@ -709,7 +714,8 @@ contains
         type(cmdline)                 :: cline_make_pickrefs
         type(chash)                   :: job_descr
         type(sp_project)              :: spproj
-        logical                       :: l_pick
+        real    :: pickref_scale
+        logical :: l_pick
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
         if( .not. cline%defined('stream')          ) call cline%set('stream',          'no')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',          'yes')
@@ -759,6 +765,10 @@ contains
             l_pick = .true.
             cline_make_pickrefs = cline
             call cline_make_pickrefs%set('prg','make_pickrefs')
+            if( cline_make_pickrefs%defined('eer_upsampling') )then
+                pickref_scale = real(params%eer_upsampling) * params%scale
+                call cline_make_pickrefs%set('scale',pickref_scale)
+            endif
             call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
             call cline%set('refs', trim(PICKREFS)//params%ext)
             call cline%delete('vol1')
@@ -770,6 +780,8 @@ contains
         call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
         call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo')
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         call spproj%kill
         ! cleanup
@@ -973,6 +985,8 @@ contains
         call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
         call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo')
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         call spproj%kill
         ! clean
@@ -1167,6 +1181,8 @@ contains
         call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
         call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%segwriter_inside(PROJINFO_SEG)
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         call spproj%kill
         ! clean
@@ -1264,6 +1280,8 @@ contains
         call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
         call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo')
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         ! cleanup
         call spproj%kill
@@ -1464,6 +1482,8 @@ contains
         call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
         call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
+        call spproj%write_segment_inside('projinfo')
         call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
         ! cleanup
         call qsys_cleanup
@@ -1562,6 +1582,7 @@ contains
         call cline%set('mkdir', 'no')
         ! read in integrated movies
         call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
         if( spproj%get_nintgs() == 0 ) THROW_HARD('No integrated micrograph to process!')
         nmics_tot = spproj%os_mic%get_noris()
         if( nmics_tot < params%nparts ) params%nparts = nmics_tot
