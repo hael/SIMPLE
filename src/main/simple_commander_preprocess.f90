@@ -180,6 +180,7 @@ contains
         endif
         ! master project file
         call spproj%read( params%projfile )
+        call spproj%update_projinfo(cline)
         if( spproj%os_mic%get_noris() /= 0 ) THROW_HARD('PREPROCESS_STREAM must start from an empty project (eg from root project folder)')
         ! picking
         l_pick = .false.
@@ -491,6 +492,7 @@ contains
                     call spproj%write_segment_inside('ptcl3D', params%projfile)
                     write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',spproj%os_ptcl2D%get_noris()
                 endif
+                call spproj%write_non_data_segments(params%projfile)
                 ! cleanup, we preserve os_mic
                 call spproj%os_stk%kill
                 call spproj%os_ptcl2D%kill
