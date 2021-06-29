@@ -935,8 +935,8 @@ contains
         call set_param(e1,             'e1',           'num',    'Rotation along Phi',  'Phi Euler angle',   'in degrees', .false., 0.)
         call set_param(e2,             'e2',           'num',    'Rotation along Theta','Theat Euler angle', 'in degrees', .false., 0.)
         call set_param(e3,             'e3',           'num',    'Rotation along Psi',  'Psi Euler angle',   'in degrees', .false., 0.)
-        call set_param(eer_fraction,   'eer_fraction', 'num',    '# of frames to fraction together', 'Number of raw frames to fraction together', '# frames{20}', .false., 20.)
-        call set_param(eer_upsampling, 'eer_upsampling','multi', 'EER up-sampling', 'EER up-sampling(1=4K|2=8K){1}', '(1=4K|2=8K){1}', .false., 1.)
+        call set_param(eer_fraction,   'eer_fraction', 'num',    '# of EER frames to fraction together', 'Number of raw EER frames to fraction together', '# EER frames{20}', .false., 20.)
+        call set_param(eer_upsampling, 'eer_upsampling','multi', 'EER up-sampling', 'EER up-sampling(1=4K|2=8K){1}', '(1|2){1}', .false., 1.)
         call set_param(elongated,      'elongated',    'binary', 'Elongated particles', 'Whether to perform generate only elliptical gaussian references during picking averaging, for phasecorr picker only(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(groupframes,    'groupframes',  'binary', 'Patch motion correction frames averaging', 'Whether to perform frames averaging during motion correction - for patchesonly(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(mcpatch,        'mcpatch',      'binary', 'Patch-based motion correction', 'Whether to perform Patch-based motion correction(yes|no){no}', '(yes|no){yes}', .false., 'yes')
@@ -2721,7 +2721,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &3, 13, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &3, 12, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2735,13 +2735,12 @@ contains
         call preprocess%set_input('parm_ios', 5,  eer_upsampling)
         call preprocess%set_input('parm_ios', 6,  algorithm)
         call preprocess%set_input('parm_ios', 7,  pcontrast)
-        call preprocess%set_input('parm_ios', 8,  'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
-        call preprocess%set_input('parm_ios', 9,  'fbody', 'string', 'Template output micrograph name',&
+        call preprocess%set_input('parm_ios', 8,  'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
-        call preprocess%set_input('parm_ios',10,  pspecsz)
-        call preprocess%set_input('parm_ios',11,  numlen)
-        call preprocess%set_input('parm_ios',12,  ctfpatch)
-        call preprocess%set_input('parm_ios',13,  picker)
+        call preprocess%set_input('parm_ios', 9,  pspecsz)
+        call preprocess%set_input('parm_ios',10,  numlen)
+        call preprocess%set_input('parm_ios',11,  ctfpatch)
+        call preprocess%set_input('parm_ios',12,  picker)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2829,7 +2828,7 @@ contains
         call preprocess_stream%set_input('srch_ctrls', 3, dfmin)
         call preprocess_stream%set_input('srch_ctrls', 4, dfmax)
         call preprocess_stream%set_input('srch_ctrls', 5, astigtol)
-        call preprocess_stream%set_input('srch_ctrls', 6, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in Angs)', 'in Angs{24.}', .false., 24.)
+        call preprocess_stream%set_input('srch_ctrls', 6, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
         call preprocess_stream%set_input('srch_ctrls', 7, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
         call preprocess_stream%set_input('srch_ctrls', 8, pgrp)
         preprocess_stream%srch_ctrls(8)%required = .false.
