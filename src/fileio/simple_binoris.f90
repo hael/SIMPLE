@@ -20,10 +20,10 @@ integer(kind=8),            parameter :: N_BYTES_HEADER  = MAX_N_SEGMENTS * N_VA
 integer,                    parameter :: THREAD_NSTRINGS = 2000
 
 type binoris_seginfo
-    integer(kind=8)   :: fromto(2)          = 0
-    integer(kind=8)   :: n_bytes_per_record = 0
-    integer(kind=8)   :: n_records          = 0
-    integer(kind=8)   :: first_data_byte    = 0
+    integer(kind=8) :: fromto(2)          = 0
+    integer(kind=8) :: n_bytes_per_record = 0
+    integer(kind=8) :: n_records          = 0
+    integer(kind=8) :: first_data_byte    = 0
 end type binoris_seginfo
 
 type binoris
@@ -77,7 +77,7 @@ contains
         class(binoris),    intent(inout) :: self          !< instance
         character(len=*),  intent(in)    :: fname         !< filename
         logical, optional, intent(in)    :: del_if_exists !< If the file already exists on disk, replace
-        integer(kind=8)    :: filesz
+        integer(kind=8) :: filesz
         integer(kind(ENUM_ORISEG)) :: isegment
         if( present(del_if_exists) )then
             if( del_if_exists )then
@@ -228,11 +228,11 @@ contains
     end subroutine write_segment_inside_1
 
     subroutine write_segment_inside_2( self, isegment, os_strings, fromto, strlen_max )
-        use simple_oris,   only: oris
-        class(binoris),          intent(inout) :: self
+        use simple_oris, only: oris
+        class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        type(str4arr),           intent(in)    :: os_strings(:)
-        integer,                 intent(in)    :: fromto(2), strlen_max
+        type(str4arr),              intent(in)    :: os_strings(:)
+        integer,                    intent(in)    :: fromto(2), strlen_max
         character(len=:), allocatable :: str_dyn
         integer(kind(ENUM_ORISEG)) :: iseg
         integer         :: i, nspaces, noris
@@ -388,8 +388,8 @@ contains
 
     subroutine write_segment_2( self, isegment, fromto, strlen_max, sarr )
         class(binoris), intent(inout) :: self
-        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        integer,                 intent(in)    :: fromto(2), strlen_max
+        integer(kind(ENUM_ORISEG)), intent(in) :: isegment
+        integer,                    intent(in) :: fromto(2), strlen_max
         type(str4arr),           intent(inout) :: sarr(:) ! indexed from 1 to nptcls
         integer :: i, nspaces
         integer(kind=8) :: ibytes
@@ -415,10 +415,10 @@ contains
     ! assumes that byte ranges have been updated
     ! on startup, initialize ibytes to the first data byte of the segment
     subroutine write_record( self, isegment, ibytes, str )
-        class(binoris),          intent(inout) :: self
+        class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        integer(kind=8),  intent(inout) :: ibytes
-        character(len=*), intent(in)    :: str
+        integer(kind=8),            intent(inout) :: ibytes
+        character(len=*),           intent(in)    :: str
         integer :: nspaces
         nspaces = self%header(isegment)%n_bytes_per_record - len_trim(str)
         if( nspaces > 0 )then
@@ -430,11 +430,11 @@ contains
     end subroutine write_record
 
     subroutine add_segment_1( self, isegment, os, fromto )
-        use simple_oris,   only: oris
-        class(binoris),          intent(inout) :: self
+        use simple_oris, only: oris
+        class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        class(oris),             intent(inout) :: os
-        integer, optional,       intent(in)    :: fromto(2)
+        class(oris),                intent(inout) :: os
+        integer, optional,          intent(in)    :: fromto(2)
         integer :: strlen_max
         ! sanity check isegment
         if( isegment < 1 .or. isegment > MAX_N_SEGMENTS )then
@@ -458,10 +458,10 @@ contains
     end subroutine add_segment_1
 
     subroutine add_segment_2( self, isegment, fromto, strlen_max )
-        class(binoris),          intent(inout) :: self
-        integer(kind(ENUM_ORISEG)), intent(in) :: isegment
-        integer,                 intent(in) :: fromto(2)
-        integer,                 intent(in) :: strlen_max
+        class(binoris),             intent(inout) :: self
+        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
+        integer,                    intent(in)    :: fromto(2)
+        integer,                    intent(in)    :: strlen_max
         ! sanity check isegment
         if( isegment < 1 .or. isegment > MAX_N_SEGMENTS )then
             write(logfhandle,*) 'isegment: ', isegment
@@ -512,11 +512,11 @@ contains
 
     subroutine read_segment_1( self, isegment, os, fromto, only_ctfparams_state_eo, wthreads )
         use simple_oris, only: oris
-        class(binoris),    intent(inout) :: self
-        integer(kind(ENUM_ORISEG)), intent(in) :: isegment
-        class(oris),             intent(inout) :: os
-        integer,          optional, intent(in) :: fromto(2)
-        logical,          optional, intent(in) :: only_ctfparams_state_eo, wthreads
+        class(binoris),             intent(inout) :: self
+        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
+        class(oris),                intent(inout) :: os
+        integer,          optional, intent(in)    :: fromto(2)
+        logical,          optional, intent(in)    :: only_ctfparams_state_eo, wthreads
         integer,          allocatable :: batches(:,:)
         character(len=:), allocatable :: tmp_string
         character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
@@ -583,9 +583,9 @@ contains
     end subroutine read_segment_1
 
     subroutine read_segment_2( self, isegment, sarr )
-        class(binoris),          intent(inout) :: self
+        class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        type(str4arr),           intent(inout) :: sarr(:)
+        type(str4arr),              intent(inout) :: sarr(:)
         integer :: i
         integer(kind=8) :: ibytes
         if( .not. self%l_open ) THROW_HARD('file needs to be open')
