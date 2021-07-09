@@ -1846,7 +1846,7 @@ contains
         & 'input volume e.g. vol.mrc', .false., '')
         call geometry_analysis%set_input('alt_ios', 2, 'pdbfile', 'file', 'PDB', 'Input coordinates file in PDB format of all the atoms', 'Input coordinates file', .false., '')
         ! search controls
-        call geometry_analysis%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold','Distance filer (in A)', 'in A', .false., 1.1)
+        call geometry_analysis%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold','Distance filter (in A)', 'in A', .false., 1.1)
         ! filter controls
         call geometry_analysis%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls

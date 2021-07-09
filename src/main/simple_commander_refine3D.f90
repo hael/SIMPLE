@@ -147,6 +147,8 @@ contains
         endif
         ! init
         call build%init_params_and_build_spproj(cline, params)
+        call build%spproj%update_projinfo(cline)
+        call build%spproj%write_segment_inside('projinfo')
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))
@@ -194,7 +196,7 @@ contains
             call cline_postprocess%delete( vol )
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
-        if( l_switch2euclid ) call cline_volassemble%set('objfun','euclid')
+        if( l_switch2euclid ) call cline_volassemble%set('needs_sigma','yes')
         ! E/O PARTITIONING
         if( build%spproj_field%get_nevenodd() == 0 )then
             call build%spproj_field%partition_eo
@@ -685,6 +687,8 @@ contains
         endif
         ! init
         call build%init_params_and_build_spproj(cline, params)
+        call build%spproj%update_projinfo(cline)
+        call build%spproj%write_segment_inside('projinfo')
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))
@@ -928,39 +932,39 @@ contains
 
     contains
 
-        subroutine remove_negative_sigmas(eo, igroup)
-            integer, intent(in) :: eo, igroup
-            logical :: is_positive
-            logical :: fixed_from_prev
-            integer :: nn, idx
-            ! remove any negative sigma2 noise values: replace by positive neighboring value
-            do idx = 1, size(group_pspecs, 3)
-                if( group_pspecs(eo,igroup,idx) < 0. )then
-                    ! first try the previous value
-                    fixed_from_prev = .false.
-                    if( idx - 1 >= 1 )then
-                        if( group_pspecs(eo,igroup,idx-1) > 0. )then
-                            group_pspecs(eo,igroup,idx) = group_pspecs(eo,igroup,idx-1)
-                            fixed_from_prev = .true.
-                        end if
-                    end if
-                    if( .not. fixed_from_prev )then
-                        is_positive = .false.
-                        nn          = idx
-                        do while (.not. is_positive)
-                            nn = nn + 1
-                            if( nn > size(group_pspecs,3) )then
-                                THROW_HARD('BUG! Cannot find positive values in sigma2 noise spectrum; eo=' // trim(int2str(eo)) // ', igroup=' // trim(int2str(igroup)))
-                            end if
-                            if( group_pspecs(eo,igroup,nn) > 0. )then
-                                is_positive = .true.
-                                group_pspecs(eo,igroup,idx) = group_pspecs(eo,igroup,nn)
-                            end if
-                        end do
+    subroutine remove_negative_sigmas(eo, igroup)
+        integer, intent(in) :: eo, igroup
+        logical :: is_positive
+        logical :: fixed_from_prev
+        integer :: nn, idx
+        ! remove any negative sigma2 noise values: replace by positive neighboring value
+        do idx = 1, size(group_pspecs, 3)
+            if( group_pspecs(eo,igroup,idx) < 0. )then
+                ! first try the previous value
+                fixed_from_prev = .false.
+                if( idx - 1 >= 1 )then
+                    if( group_pspecs(eo,igroup,idx-1) > 0. )then
+                        group_pspecs(eo,igroup,idx) = group_pspecs(eo,igroup,idx-1)
+                        fixed_from_prev = .true.
                     end if
                 end if
-            end do
-        end subroutine remove_negative_sigmas
+                if( .not. fixed_from_prev )then
+                    is_positive = .false.
+                    nn          = idx
+                    do while (.not. is_positive)
+                        nn = nn + 1
+                        if( nn > size(group_pspecs,3) )then
+                            THROW_HARD('BUG! Cannot find positive values in sigma2 noise spectrum; eo=' // trim(int2str(eo)) // ', igroup=' // trim(int2str(igroup)))
+                        end if
+                        if( group_pspecs(eo,igroup,nn) > 0. )then
+                            is_positive = .true.
+                            group_pspecs(eo,igroup,idx) = group_pspecs(eo,igroup,nn)
+                        end if
+                    end do
+                end if
+            end if
+        end do
+    end subroutine remove_negative_sigmas
 
     end subroutine exec_calc_pspec_assemble
 
