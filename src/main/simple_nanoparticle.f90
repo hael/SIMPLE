@@ -124,6 +124,7 @@ type :: nanoparticle
     real                  :: NPdiam             = 0. ! diameter of the nanoparticle                          DIAM
     real                  :: theoretical_radius = 0. ! theoretical atom radius in A
     ! GLOBAL NP STATS
+    type(stats_struct)    :: map_stats
     ! -- dipole stats
     real                  :: net_dipole(3)      = 0. ! sum of all the directions of polarization             X_POLAR Y_POLAR Z_POLAR
     real                  :: net_dipole_mag     = 0. ! net dipole magnitude                                  POLAR_MAG
@@ -174,7 +175,7 @@ type :: nanoparticle
     ! OTHER
     character(len=2)      :: element     = ' '
     character(len=4)      :: atom_name   = '    '
-    character(len=STDLEN) :: partname    = '' ! fname
+    character(len=STDLEN) :: npname    = '' ! fname
     character(len=STDLEN) :: fbody       = '' ! fbody
   contains
     ! constructor
@@ -190,8 +191,6 @@ type :: nanoparticle
     procedure, private :: atominfo2centers
     procedure, private :: atominfo2centers_A
     procedure, private :: center_on_atom
-    procedure          :: mask
-    procedure          :: make_soft_mask
     procedure          :: update_ncc
     ! atomic position determination
     procedure          :: identify_lattice_params
@@ -232,17 +231,18 @@ end type nanoparticle
 
 contains
 
-    subroutine new_nanoparticle( self, fname, cline_smpd, element )
+    subroutine new_nanoparticle( self, fname, cline_smpd, element, msk )
         class(nanoparticle), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
         real,                intent(in)    :: cline_smpd
         character(len=2),    intent(inout) :: element
+        real, optional,      intent(in)    :: msk
         character(len=2) :: el_ucase
         integer :: nptcls
         integer :: Z ! atomic number
         real    :: smpd
         call self%kill
-        self%partname  = fname
+        self%npname    = fname
         self%fbody     = get_fbody(trim(basename(fname)), trim(fname2ext(fname)))
         self%smpd      = cline_smpd
         self%atom_name = ' '//element
@@ -250,13 +250,15 @@ contains
         el_ucase       = upperCase(trim(adjustl(element)))
         call get_element_Z_and_radius(el_ucase, Z, self%theoretical_radius)
         if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
-        call find_ldim_nptcls(self%partname, self%ldim, nptcls, smpd)
+        call find_ldim_nptcls(self%npname, self%ldim, nptcls, smpd)
         call self%img%new(self%ldim, self%smpd)
         call self%img_raw%new(self%ldim, self%smpd)
         call self%img_bin%new_bimg(self%ldim, self%smpd)
         call self%img_bin%new(self%ldim, self%smpd)
         call self%img%read(fname)
-        call self%img_raw%read(fname)
+        if( present(msk) ) call self%img%mask(msk, 'soft')
+        call self%img_raw%copy(self%img)
+        call self%img_raw%stats(self%map_stats%avg, self%map_stats%sdev, self%map_stats%maxv, self%map_stats%minv)
     end subroutine new_nanoparticle
 
     ! getters/setters
@@ -418,27 +420,21 @@ contains
         call atom_centers%kill
     end subroutine center_on_atom
 
-    subroutine mask( self, msk_rad )
-        class(nanoparticle), intent(inout) :: self
-        real,                intent(in)    :: msk_rad
-        call self%img%mask(msk_rad, 'soft')
-    end subroutine mask
-
-    subroutine make_soft_mask(self)
-        class(nanoparticle), intent(inout) :: self
-        type(binimage) :: simulated_density
-        type(image)    :: img_cos
-        type(atoms)    :: atomic_pos
-        call simulated_density%new_bimg(self%ldim, self%smpd)
-        call atomic_pos%new(trim(self%fbody)//'_atom_centers.pdb')
-        call atomic_pos%convolve(simulated_density, cutoff=8.*self%smpd)
-        call simulated_density%grow_bins(nint(0.5*self%theoretical_radius/self%smpd)+1)
-        call simulated_density%cos_edge(SOFT_EDGE, img_cos)
-        call img_cos%write(trim(self%fbody)//'SoftMask.mrc')
-        call img_cos%kill
-        call simulated_density%kill_bimg
-        call atomic_pos%kill
-    end subroutine make_soft_mask
+    ! subroutine make_soft_mask(self)
+    !     class(nanoparticle), intent(inout) :: self
+    !     type(binimage) :: simulated_density
+    !     type(image)    :: img_cos
+    !     type(atoms)    :: atomic_pos
+    !     call simulated_density%new_bimg(self%ldim, self%smpd)
+    !     call atomic_pos%new(trim(self%fbody)//'_atom_centers.pdb')
+    !     call atomic_pos%convolve(simulated_density, cutoff=8.*self%smpd)
+    !     call simulated_density%grow_bins(nint(0.5*self%theoretical_radius/self%smpd)+1)
+    !     call simulated_density%cos_edge(SOFT_EDGE, img_cos)
+    !     call img_cos%write(trim(self%fbody)//'SoftMask.mrc')
+    !     call img_cos%kill
+    !     call simulated_density%kill_bimg
+    !     call atomic_pos%kill
+    ! end subroutine make_soft_mask
 
     subroutine update_ncc( self, img_cc )
         class(nanoparticle),      intent(inout) :: self
@@ -1072,19 +1068,19 @@ contains
         self%net_dipole_mag = arg(self%net_dipole)
         self%net_dipole_ang = ang3D_zvec(self%net_dipole)
         ! --the rest
-        call calc_stats( real(self%atominfo(:)%size),    self%size_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
-        call calc_stats( real(self%atominfo(:)%cn_std),  self%cn_std_stats        )
-        call calc_stats( self%atominfo(:)%bondl,         self%bondl_stats         )
-        call calc_stats( self%atominfo(:)%cn_gen,        self%cn_gen_stats        )
-        call calc_stats( self%atominfo(:)%aspect_ratio,  self%aspect_ratio_stats  )
-        call calc_stats( self%atominfo(:)%polar_angle,   self%polar_angle_stats   )
-        call calc_stats( self%atominfo(:)%diam,          self%diam_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
-        call norm_minmax( self%atominfo(:)%avg_int ) ! to get comparable intensities between different particles
-        call norm_minmax( self%atominfo(:)%max_int ) ! -"-
-        call calc_stats( self%atominfo(:)%avg_int,       self%avg_int_stats       )
-        call calc_stats( self%atominfo(:)%max_int,       self%max_int_stats       )
-        call calc_stats( self%atominfo(:)%valid_corr,    self%valid_corr_stats    )
-        call calc_stats( self%atominfo(:)%radial_strain, self%radial_strain_stats )
+        call calc_stats(  real(self%atominfo(:)%size),    self%size_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
+        call calc_stats(  real(self%atominfo(:)%cn_std),  self%cn_std_stats        )
+        call calc_stats(  self%atominfo(:)%bondl,         self%bondl_stats         )
+        call calc_stats(  self%atominfo(:)%cn_gen,        self%cn_gen_stats        )
+        call calc_stats(  self%atominfo(:)%aspect_ratio,  self%aspect_ratio_stats  )
+        call calc_stats(  self%atominfo(:)%polar_angle,   self%polar_angle_stats   )
+        call calc_stats(  self%atominfo(:)%diam,          self%diam_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
+        call calc_zscore( self%atominfo(:)%avg_int ) ! to get comparable intensities between different particles
+        call calc_zscore( self%atominfo(:)%max_int ) ! -"-
+        call calc_stats(  self%atominfo(:)%avg_int,       self%avg_int_stats       )
+        call calc_stats(  self%atominfo(:)%max_int,       self%max_int_stats       )
+        call calc_stats(  self%atominfo(:)%valid_corr,    self%valid_corr_stats    )
+        call calc_stats(  self%atominfo(:)%radial_strain, self%radial_strain_stats )
         ! CALCULATE CN-DEPENDENT STATS & WRITE CN-ATOMS
         do cn = CNMIN, CNMAX
             call calc_cn_stats( cn )
@@ -1115,14 +1111,10 @@ contains
 
         contains
 
-            subroutine norm_minmax( arr )
+            subroutine calc_zscore( arr )
                 real, intent(inout) :: arr(:)
-                real :: smin, smax, delta
-                smin  = minval(arr)
-                smax  = maxval(arr)
-                delta = smax - smin
-                arr = (arr - smin)/delta
-            end subroutine norm_minmax
+                arr = (arr - self%map_stats%avg) / self%map_stats%sdev
+            end subroutine calc_zscore
 
             function ang3D_zvec( vec ) result( ang )
                 real, intent(in) :: vec(3)

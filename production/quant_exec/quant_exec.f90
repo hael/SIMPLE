@@ -11,9 +11,6 @@ type(detect_atoms_commander)           :: xdetect_atoms
 type(atoms_mask_commander)             :: xatoms_mask
 type(atoms_stats_commander)            :: xatoms_stats
 type(tseries_atoms_analysis_commander) :: xtseries_atoms_analysis
-type(atom_cluster_analysis_commander)  :: xatom_cluster_analysis
-type(nano_softmask_commander)          :: xnano_softmask
-type(geometry_analysis_commander)      :: xgeometry_analysis
 type(dock_coords_commander)            :: xdock_coords
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: xarg, prg, entire_line
@@ -42,14 +39,8 @@ select case(prg)
         call xatoms_stats%execute(cline)
     case( 'tseries_atoms_analysis' )
         call xtseries_atoms_analysis%execute(cline)
-    case( 'atom_cluster_analysis' )
-        call xatom_cluster_analysis%execute(cline)
     case( 'atoms_mask' )
         call xatoms_mask%execute(cline)
-    case( 'nano_softmask' )
-        call xnano_softmask%execute(cline)
-    case('geometry_analysis')
-        call xgeometry_analysis%execute(cline)
     case('dock_coords')
         call xdock_coords%execute(cline)
     case DEFAULT

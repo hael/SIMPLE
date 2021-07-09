@@ -13,9 +13,6 @@ implicit none
 public :: detect_atoms_commander
 public :: atoms_stats_commander
 public :: tseries_atoms_analysis_commander
-public :: atom_cluster_analysis_commander
-public :: nano_softmask_commander
-public :: geometry_analysis_commander
 public :: dock_coords_commander
 public :: atoms_mask_commander
 
@@ -38,22 +35,10 @@ type, extends(commander_base) :: dock_coords_commander
   contains
     procedure :: execute      => exec_dock_coords
 end type dock_coords_commander
-type, extends(commander_base) :: atom_cluster_analysis_commander
-  contains
-    procedure :: execute      => exec_atom_cluster_analysis
-end type atom_cluster_analysis_commander
-type, extends(commander_base) :: nano_softmask_commander
-  contains
-    procedure :: execute      => exec_nano_softmask
-end type nano_softmask_commander
 type, extends(commander_base) :: atoms_mask_commander
   contains
     procedure :: execute      => exec_atoms_mask
 end type atoms_mask_commander
-type, extends(commander_base) :: geometry_analysis_commander
-  contains
-    procedure :: execute      => exec_geometry_analysis
-end type geometry_analysis_commander
 
 integer, parameter :: CNMIN             = 5
 integer, parameter :: CNMAX             = 12
@@ -79,16 +64,12 @@ contains
         prefit_lattice = cline%defined('vol2')
         call params%new(cline)
         if( prefit_lattice )then
-            call nano%new(params%vols(2), params%smpd, params%element)
-            ! volume soft-edge masking
-            call nano%mask(params%msk)
+            call nano%new(params%vols(2), params%smpd, params%element, params%msk)
             ! execute
             call nano%identify_lattice_params( a )
             ! kill
             call nano%kill
-            call nano%new(params%vols(1), params%smpd, params%element)
-            ! volume soft-edge masking
-            call nano%mask(params%msk)
+            call nano%new(params%vols(1), params%smpd, params%element, params%msk)
             ! execute
             if( cline%defined('cn_thres') )then
                 call nano%identify_atomic_pos(nint(params%cn_thres), a, l_fit_lattice=.false.)
@@ -98,9 +79,7 @@ contains
             ! kill
             call nano%kill
         else
-            call nano%new(params%vols(1), params%smpd, params%element)
-            ! volume soft-edge masking
-            call nano%mask(params%msk)
+            call nano%new(params%vols(1), params%smpd, params%element, params%msk)
             ! execute
             if( cline%defined('cn_thres') )then
                 call nano%identify_atomic_pos(nint(params%cn_thres), a, l_fit_lattice=.true.)
@@ -139,11 +118,11 @@ contains
         call params%new(cline)
         if( prefit_lattice )then
             ! fit lattice using vol3
-            call nano%new(params%vols(3), params%smpd, params%element)
+            call nano%new(params%vols(3), params%smpd, params%element, params%msk)
             call nano%identify_lattice_params( a )
             call nano%kill
             ! calc stats
-            call nano%new(params%vols(1), params%smpd, params%element)
+            call nano%new(params%vols(1), params%smpd, params%element, params%msk)
             call nano%set_atomic_coords(params%pdbfile)
             if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
             call nano%set_img(params%vols(2), 'img_cc')
@@ -153,7 +132,7 @@ contains
             call nano%kill
         else
             ! calc stats
-            call nano%new(params%vols(1), params%smpd, params%element)
+            call nano%new(params%vols(1), params%smpd, params%element, params%msk)
             call nano%set_atomic_coords(params%pdbfile)
             if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
             call nano%set_img(params%vols(2), 'img_cc')
@@ -299,78 +278,78 @@ contains
         call a_targ%kill
     end subroutine exec_dock_coords
 
-    subroutine exec_atom_cluster_analysis( self, cline )
-        class(atom_cluster_analysis_commander), intent(inout) :: self
-        class(cmdline),                         intent(inout) :: cline !< command line input
-        character(len=STDLEN)  :: fname
-        type(parameters)       :: params
-        type(nanoparticle)     :: nano
-        call params%new(cline)
-        if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_atom_cluster_analysis')
-        endif
-        if( .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! vol1 needs to be present; exec_atom_cluster_analysis')
-        endif
-        if( .not. cline%defined('clustermode') )then
-            THROW_HARD('ERROR! clustermode needs to be present; exec_atom_cluster_analysis')
-        endif
-        if( .not. cline%defined('thres') )then
-            THROW_HARD('ERROR! thres needs to be present; exec_atom_cluster_analysis')
-        endif
-        call nano%new(params%vols(1), params%smpd, params%element)
-        ! execute
-        fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
-        call nano%set_atomic_coords(trim(fname)//'_atom_centers.pdb')
-        call nano%set_img(trim(fname)//'CC.mrc', 'img_cc')
-        call nano%update_ncc()
-        select case(trim(params%clustermode))
-            case('ar')
-              call nano%cluster_ar(params%thres)
-            case('dist')
-              call nano%cluster_bondl(params%thres)
-            case('ang')
-              call nano%cluster_ang(params%thres)
-            case('maxint')
-              ! call nano%atoms_stats(.false.)
-              call nano%cluster_atom_maxint()
-            case('intint')
-              ! call nano%atoms_stats(.false.)
-              call nano%cluster_atom_intint()
-            case DEFAULT
-                write(logfhandle,*) 'clustermode: ', trim(params%clustermode)
-                THROW_HARD('unsupported clustermode; exec_atom_cluster_analysis')
-        end select
-        ! kill
-        call nano%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_ATOM_CLUSTER_ANALYSIS NORMAL STOP ****')
-    end subroutine exec_atom_cluster_analysis
+    ! subroutine exec_atom_cluster_analysis( self, cline )
+    !     class(atom_cluster_analysis_commander), intent(inout) :: self
+    !     class(cmdline),                         intent(inout) :: cline !< command line input
+    !     character(len=STDLEN)  :: fname
+    !     type(parameters)       :: params
+    !     type(nanoparticle)     :: nano
+    !     call params%new(cline)
+    !     if( .not. cline%defined('smpd') )then
+    !         THROW_HARD('ERROR! smpd needs to be present; exec_atom_cluster_analysis')
+    !     endif
+    !     if( .not. cline%defined('vol1') )then
+    !         THROW_HARD('ERROR! vol1 needs to be present; exec_atom_cluster_analysis')
+    !     endif
+    !     if( .not. cline%defined('clustermode') )then
+    !         THROW_HARD('ERROR! clustermode needs to be present; exec_atom_cluster_analysis')
+    !     endif
+    !     if( .not. cline%defined('thres') )then
+    !         THROW_HARD('ERROR! thres needs to be present; exec_atom_cluster_analysis')
+    !     endif
+    !     call nano%new(params%vols(1), params%smpd, params%element)
+    !     ! execute
+    !     fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
+    !     call nano%set_atomic_coords(trim(fname)//'_atom_centers.pdb')
+    !     call nano%set_img(trim(fname)//'CC.mrc', 'img_cc')
+    !     call nano%update_ncc()
+    !     select case(trim(params%clustermode))
+    !         case('ar')
+    !           call nano%cluster_ar(params%thres)
+    !         case('dist')
+    !           call nano%cluster_bondl(params%thres)
+    !         case('ang')
+    !           call nano%cluster_ang(params%thres)
+    !         case('maxint')
+    !           ! call nano%atoms_stats(.false.)
+    !           call nano%cluster_atom_maxint()
+    !         case('intint')
+    !           ! call nano%atoms_stats(.false.)
+    !           call nano%cluster_atom_intint()
+    !         case DEFAULT
+    !             write(logfhandle,*) 'clustermode: ', trim(params%clustermode)
+    !             THROW_HARD('unsupported clustermode; exec_atom_cluster_analysis')
+    !     end select
+    !     ! kill
+    !     call nano%kill
+    !     ! end gracefully
+    !     call simple_end('**** SIMPLE_ATOM_CLUSTER_ANALYSIS NORMAL STOP ****')
+    ! end subroutine exec_atom_cluster_analysis
 
-    subroutine exec_nano_softmask( self, cline )
-        class(nano_softmask_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline !< command line input
-        character(len=STDLEN)  :: fname
-        type(parameters)       :: params
-        type(nanoparticle) :: nano
-        call params%new(cline)
-        if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_nano_softmask')
-        endif
-        if( .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! vol1 needs to be present; exec_nano_softmask')
-        endif
-        call nano%new(params%vols(1), params%smpd,params%element)
-        ! fetch img_bin
-        fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
-        call nano%set_img(trim(fname)//'BIN.mrc','img_bin')
-        ! execute
-        call nano%make_soft_mask()
-        ! kill
-        call nano%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_NANO_SOFTMASK NORMAL STOP ****')
-    end subroutine exec_nano_softmask
+    ! subroutine exec_nano_softmask( self, cline )
+    !     class(nano_softmask_commander), intent(inout) :: self
+    !     class(cmdline),                 intent(inout) :: cline !< command line input
+    !     character(len=STDLEN)  :: fname
+    !     type(parameters)       :: params
+    !     type(nanoparticle) :: nano
+    !     call params%new(cline)
+    !     if( .not. cline%defined('smpd') )then
+    !         THROW_HARD('ERROR! smpd needs to be present; exec_nano_softmask')
+    !     endif
+    !     if( .not. cline%defined('vol1') )then
+    !         THROW_HARD('ERROR! vol1 needs to be present; exec_nano_softmask')
+    !     endif
+    !     call nano%new(params%vols(1), params%smpd,params%element)
+    !     ! fetch img_bin
+    !     fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
+    !     call nano%set_img(trim(fname)//'BIN.mrc','img_bin')
+    !     ! execute
+    !     call nano%make_soft_mask()
+    !     ! kill
+    !     call nano%kill
+    !     ! end gracefully
+    !     call simple_end('**** SIMPLE_NANO_SOFTMASK NORMAL STOP ****')
+    ! end subroutine exec_nano_softmask
 
     subroutine exec_atoms_mask( self, cline )
         use simple_nanoparticle_utils, only: atoms_mask
@@ -395,55 +374,55 @@ contains
         call simple_end('**** SIMPLE_ATOMS_MASK NORMAL STOP ****')
     end subroutine exec_atoms_mask
 
-    subroutine exec_geometry_analysis( self, cline )
-        use simple_atoms, only : atoms
-        class(geometry_analysis_commander), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline !< command line input
-        character(len=STDLEN)  :: fname
-        type(parameters)       :: params
-        type(nanoparticle)     :: nano
-        type(atoms)            :: a
-        call cline%set('mkdir', 'yes')
-        call params%new(cline)
-        if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_geometry_analysis')
-        endif
-        if( .not. cline%defined('pdbfile2') )then
-            THROW_HARD('ERROR! pdbfile2 needs to be present; exec_geometry_analysis')
-        endif
-        if( .not. cline%defined('pdbfile2') )then
-            THROW_HARD('ERROR! pdbfile2 needs to be present; exec_geometry_analysis')
-        endif
-        if( .not. cline%defined('pdbfile') )then
-          if(.not. cline%defined('vol1')) THROW_HARD('ERROR! pdbfile or vol1 need to be present; exec_geometry_analysis')
-        endif
-        if(cline%defined('vol1')) then
-          call nano%new(params%vols(1), params%smpd,params%element)
-          ! fetch img_bin, img_cc and atomic positions
-          fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
-          call nano%set_atomic_coords('../../'//trim(fname)//'_atom_centers.pdb')
-          call nano%set_img('../../'//trim(fname)//'BIN.mrc','img_bin')
-          call nano%set_img('../../'//trim(fname)//'CC.mrc', 'img_cc')
-          call nano%update_ncc()
-          ! execute
-          if(cline%defined('thres')) then
-              call nano%geometry_analysis(trim(params%pdbfile2), params%thres)
-          else
-              call nano%geometry_analysis(trim(params%pdbfile2))
-          endif
-          ! kill
-          call nano%kill
-        elseif(cline%defined('pdbfile')) then
-          call a%new(params%pdbfile)
-          if(cline%defined('thres')) then
-              call a%geometry_analysis_pdb(trim(params%pdbfile2), params%thres)
-          else
-              call a%geometry_analysis_pdb(trim(params%pdbfile2))
-          endif
-          call a%kill
-        endif
-        ! end gracefully
-        call simple_end('**** SIMPLE_GEOMETRY_ANALYSIS NORMAL STOP ****')
-    end subroutine exec_geometry_analysis
+    ! subroutine exec_geometry_analysis( self, cline )
+    !     use simple_atoms, only : atoms
+    !     class(geometry_analysis_commander), intent(inout) :: self
+    !     class(cmdline),                     intent(inout) :: cline !< command line input
+    !     character(len=STDLEN)  :: fname
+    !     type(parameters)       :: params
+    !     type(nanoparticle)     :: nano
+    !     type(atoms)            :: a
+    !     call cline%set('mkdir', 'yes')
+    !     call params%new(cline)
+    !     if( .not. cline%defined('smpd') )then
+    !         THROW_HARD('ERROR! smpd needs to be present; exec_geometry_analysis')
+    !     endif
+    !     if( .not. cline%defined('pdbfile2') )then
+    !         THROW_HARD('ERROR! pdbfile2 needs to be present; exec_geometry_analysis')
+    !     endif
+    !     if( .not. cline%defined('pdbfile2') )then
+    !         THROW_HARD('ERROR! pdbfile2 needs to be present; exec_geometry_analysis')
+    !     endif
+    !     if( .not. cline%defined('pdbfile') )then
+    !       if(.not. cline%defined('vol1')) THROW_HARD('ERROR! pdbfile or vol1 need to be present; exec_geometry_analysis')
+    !     endif
+    !     if(cline%defined('vol1')) then
+    !       call nano%new(params%vols(1), params%smpd,params%element)
+    !       ! fetch img_bin, img_cc and atomic positions
+    !       fname = get_fbody(trim(basename(params%vols(1))), trim(fname2ext(params%vols(1))))
+    !       call nano%set_atomic_coords('../../'//trim(fname)//'_atom_centers.pdb')
+    !       call nano%set_img('../../'//trim(fname)//'BIN.mrc','img_bin')
+    !       call nano%set_img('../../'//trim(fname)//'CC.mrc', 'img_cc')
+    !       call nano%update_ncc()
+    !       ! execute
+    !       if(cline%defined('thres')) then
+    !           call nano%geometry_analysis(trim(params%pdbfile2), params%thres)
+    !       else
+    !           call nano%geometry_analysis(trim(params%pdbfile2))
+    !       endif
+    !       ! kill
+    !       call nano%kill
+    !     elseif(cline%defined('pdbfile')) then
+    !       call a%new(params%pdbfile)
+    !       if(cline%defined('thres')) then
+    !           call a%geometry_analysis_pdb(trim(params%pdbfile2), params%thres)
+    !       else
+    !           call a%geometry_analysis_pdb(trim(params%pdbfile2))
+    !       endif
+    !       call a%kill
+    !     endif
+    !     ! end gracefully
+    !     call simple_end('**** SIMPLE_GEOMETRY_ANALYSIS NORMAL STOP ****')
+    ! end subroutine exec_geometry_analysis
 
 end module simple_commander_quant
