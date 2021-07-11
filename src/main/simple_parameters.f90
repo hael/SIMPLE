@@ -31,7 +31,7 @@ type :: parameters
     character(len=3)      :: corr_filt='no'       !< phase corr filtering in refinement(yes|no){no}
     character(len=3)      :: countvox='no'        !< count # voxels(yes|no){no}
     character(len=3)      :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
-    character(len=3)      :: ctfpatch='yes'        !< whether to perform patched CTF estimation(yes|no){yes}
+    character(len=3)      :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
     character(len=3)      :: cure='no'
     character(len=3)      :: dev='no'             !< development flag for experimental code(yes|no){no}
     character(len=3)      :: dihedral='no'        !< dihedral symmetry or not(yes|no){no}
@@ -390,7 +390,7 @@ type :: parameters
     real    :: lp_backgr=20.       !< low-pass for solvent blurring (in A)
     real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
-    real    :: lplim_crit=0.3      !< corr criterion low-pass limit assignment(0.143-0.5){0.3}
+    real    :: lplim_crit=0.5      !< corr criterion low-pass limit assignment(0.143-0.5){0.5}
     real    :: lplims2D(3)
     real    :: lpmed=20.
     real    :: lpstart=0.          !< start low-pass limit(in A){15}

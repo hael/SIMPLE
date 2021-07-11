@@ -2,10 +2,10 @@ module simple_ori_io
 use simple_defs
 use simple_fileio
 use simple_error, only: simple_exception
-use simple_ori,   only: ori
+use simple_oris,  only: oris
 implicit none
 
-public :: open_ori_io, close_ori_io, write_empty_ori_file, write_ori, read_ori
+public :: open_ori_io, close_ori_io, write_empty_ori_file, write_oris, read_oris
 public :: get_ori_filesz
 private
 #include "simple_local_flags.inc"
@@ -55,7 +55,7 @@ contains
         integer        :: recind, iptcl
         call open_ori_io( fname )
         do iptcl=fromto(1),fromto(2)
-            ! index stuff
+            ! indexing
             recind = iptcl - fromto(1) + 1
             if( recind < 1 )then
                 write(logfhandle,*) 'iptcl:  ', iptcl
@@ -69,63 +69,67 @@ contains
         call close_ori_io
     end subroutine write_empty_ori_file
 
-    subroutine write_ori( o, fromto, iptcl )
-        class(ori), intent(inout) :: o
-        integer,    intent(in)    :: fromto(2), iptcl
+    subroutine write_oris( os, fromto )
+        class(oris), intent(inout) :: os
+        integer,     intent(in)    :: fromto(2)
         type(ori_mini) :: ori_record
-        integer        :: recind
+        integer        :: iptcl, recind
         if( l_open )then
-            ! index stuff
-            recind = iptcl - fromto(1) + 1
-            if( recind < 1 )then
-                write(logfhandle,*) 'iptcl:  ', iptcl
-                write(logfhandle,*) 'fromto: ', fromto
-                write(logfhandle,*) 'recind: ', recind
-                THROW_HARD('nonsensical record index; write_ori')
-            endif
-            ! transfer record data
-            ori_record%eul       = o%get_euler()
-            ori_record%shift     = o%get_2Dshift()
-            ori_record%corr      = o%get('corr')
-            ori_record%specscore = o%get('specscore')
-            ori_record%iptcl     = iptcl
-            ori_record%class     = nint(o%get('class'))
-            ori_record%proj      = nint(o%get('proj'))
-            ori_record%state     = o%get_state()
-            ! write record
-            write(funit,rec=recind) ori_record
+            do iptcl=fromto(1),fromto(2)
+                ! indexing
+                recind = iptcl - fromto(1) + 1
+                if( recind < 1 )then
+                    write(logfhandle,*) 'iptcl:  ', iptcl
+                    write(logfhandle,*) 'fromto: ', fromto
+                    write(logfhandle,*) 'recind: ', recind
+                    THROW_HARD('nonsensical record index; write_ori')
+                endif
+                ! transfer record data
+                ori_record%eul       = os%get_euler(iptcl)
+                ori_record%shift     = os%get_2Dshift(iptcl)
+                ori_record%corr      = os%get(iptcl, 'corr')
+                ori_record%specscore = os%get(iptcl, 'specscore')
+                ori_record%iptcl     = iptcl
+                ori_record%class     = nint(os%get(iptcl, 'class'))
+                ori_record%proj      = nint(os%get(iptcl, 'proj'))
+                ori_record%state     = os%get_state(iptcl)
+                ! write record
+                write(funit,rec=recind) ori_record
+            end do
         else
             THROW_HARD('file not open; write_ori')
         endif
-    end subroutine write_ori
+    end subroutine write_oris
 
-    subroutine read_ori( o, fromto, iptcl )
-        class(ori), intent(inout) :: o
-        integer,    intent(in)    :: fromto(2), iptcl
+    subroutine read_oris( os, fromto )
+        class(oris), intent(inout) :: os
+        integer,     intent(in)    :: fromto(2)
         type(ori_mini) :: ori_record
-        integer        :: recind
+        integer        :: iptcl, recind
         if( l_open )then
-            ! index stuff
-            recind = iptcl - fromto(1) + 1
-            if( recind < 1 )then
-                write(logfhandle,*) 'iptcl:  ', iptcl
-                write(logfhandle,*) 'fromto: ', fromto
-                write(logfhandle,*) 'recind: ', recind
-                THROW_HARD('nonsensical record index; read_ori')
-            endif
-            ! read record
-            read(funit,rec=recind) ori_record
-            ! transfer record data
-            call o%set_euler(ori_record%eul)
-            call o%set_shift(ori_record%shift)
-            call o%set('corr',      ori_record%corr)
-            call o%set('specscore', ori_record%specscore)
-            call o%set('iptcl',     real(ori_record%iptcl))
-            call o%set('class',     real(ori_record%class))
-            call o%set('proj',      real(ori_record%proj))
-            call o%set('state',     real(ori_record%state))
+            do iptcl=fromto(1),fromto(2)
+                ! indexing
+                recind = iptcl - fromto(1) + 1
+                if( recind < 1 )then
+                    write(logfhandle,*) 'iptcl:  ', iptcl
+                    write(logfhandle,*) 'fromto: ', fromto
+                    write(logfhandle,*) 'recind: ', recind
+                    THROW_HARD('nonsensical record index; read_ori')
+                endif
+                ! read record
+                read(funit,rec=recind) ori_record
+                ! transfer record data
+                call os%set_euler(iptcl, ori_record%eul)
+                call os%set_shift(iptcl, ori_record%shift)
+                call os%set(iptcl, 'corr',      ori_record%corr)
+                call os%set(iptcl, 'specscore', ori_record%specscore)
+                call os%set(iptcl, 'iptcl',     real(ori_record%iptcl))
+                call os%set(iptcl, 'class',     real(ori_record%class))
+                call os%set(iptcl, 'proj',      real(ori_record%proj))
+                call os%set(iptcl, 'state',     real(ori_record%state))
+            end do
         endif
-    end subroutine read_ori
+    end subroutine read_oris
 
     integer function get_ori_filesz( fname )
         character(len=*), intent(in) :: fname
