@@ -306,14 +306,6 @@ contains
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
         call self%kill_strategy2D_tbox
-        if( params%neigh.eq.'yes' )then
-            if( self%spproj%os_cls3D%get_noris() == params%ncls )then
-                allocate(self%nnmat(params%ncls,params%nnn))
-                call self%spproj%os_cls3D%nearest_proj_neighbors(params%nnn, self%nnmat)
-            else
-               THROW_HARD('size of os_cls3D segment of spproj does not conform with # clusters (ncls)')
-            endif
-        endif
         call self%projfrcs%new(params%ncls, params%box, params%smpd, params%nstates)
         call self%projpssnrs%new(params%ncls, params%box, params%smpd, params%nstates)
         if( .not. associated(build_glob) ) build_glob => self
@@ -338,13 +330,7 @@ contains
         call self%kill_strategy3D_tbox
         allocate( self%eorecvols(params%nstates), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_builder, 1', alloc_stat)
-        if( str_has_substr(params%refine, 'clsneigh') )then
-            ncls = self%spproj%os_cls3D%get_noris()
-            allocate(self%nnmat(ncls,params%nnn))
-            call self%spproj%os_cls3D%nearest_proj_neighbors(params%nnn, self%nnmat)
-        else if( str_has_substr(params%refine, 'neigh') )then
-            allocate(self%nnmat(params%npeaks,params%nnn))
-        else if( params%neigh .eq. 'yes' )then
+        if( str_has_substr(params%refine, 'neigh') )then
             allocate(self%nnmat(params%nspace,params%nnn))
             call self%pgrpsyms%nearest_proj_neighbors(self%eulspace, params%nnn, self%nnmat)
         endif

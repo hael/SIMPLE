@@ -47,12 +47,7 @@ contains
             ! prep
             call self%s%prep4srch
             nrefs = self%s%nrefs
-            if( params_glob%l_clsneigh )then ! neighbours defined by projection direction of class average
-                call build_glob%eulspace%nearest_proj_neighbors(build_glob%spproj%os_cls3D, self%s%class,&
-                &params_glob%nnn, build_glob%nnmat, params_glob%athres, lnns)
-            else                             ! neighbours defined based on previous particle 3D
-                call build_glob%eulspace%nearest_proj_neighbors(s3D%o_peaks(self%s%iptcl), params_glob%nnn, lnns)
-            endif
+            call build_glob%eulspace%nearest_proj_neighbors(s3D%o_peaks(self%s%iptcl), params_glob%nnn, lnns)
             ! search
             do iproj=1,params_glob%nspace
                 if( .not. lnns(iproj) ) cycle

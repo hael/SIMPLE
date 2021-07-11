@@ -249,56 +249,51 @@ contains
                 iptcl_map  = batch_start + iptcl_batch - 1 ! masked global index (cumulative batch index)
                 iptcl      = pinds(iptcl_map)              ! global index
                 ! Search strategy (polymorphic strategy2D construction)
-                select case(trim(params_glob%neigh))
-                case('yes')
-                    allocate(strategy2D_neigh :: strategy2Dsrch(iptcl_batch)%ptr)
-                case DEFAULT
-                    updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-                    if( l_stream )then
-                        frac = build_glob%spproj_field%get(iptcl, 'frac')
-                        ! offline mode, based on history
-                        if( updatecnt==1 .or. (.not.build_glob%spproj_field%has_been_searched(iptcl)) )then
-                            ! brand new, virgin particles
+                updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
+                if( l_stream )then
+                    frac = build_glob%spproj_field%get(iptcl, 'frac')
+                    ! offline mode, based on history
+                    if( updatecnt==1 .or. (.not.build_glob%spproj_field%has_been_searched(iptcl)) )then
+                        ! brand new, virgin particles
+                        allocate(strategy2D_greedy :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
+                    else if( updatecnt > STREAM_SRCHLIM )then
+                        ! particles that already have a significant search history
+                        if( l_greedy .or. frac<5.)then
                             allocate(strategy2D_greedy :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
-                        else if( updatecnt > STREAM_SRCHLIM )then
-                            ! particles that already have a significant search history
-                            if( l_greedy .or. frac<5.)then
-                                allocate(strategy2D_greedy :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
-                            else
-                                allocate(strategy2D_snhc   :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
-                            endif
                         else
-                            ! newest particles
-                            if( l_greedy )then
-                                allocate(strategy2D_greedy :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
-                            else
-                                allocate(strategy2D_snhc   :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
-                            endif
+                            allocate(strategy2D_snhc   :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
                         endif
                     else
-                        ! offline mode, based on iteration
-                        if( l_greedy .or. (.not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt==1) )then
-                            if( trim(params_glob%tseries).eq.'yes' )then
-                                if( l_np_cls_defined )then
-                                    allocate(strategy2D_tseries :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
-                                else if( trim(params_glob%refine).eq.'inpl' )then
-                                    allocate(strategy2D_inpl  :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
-                                else
-                                    allocate(strategy2D_greedy  :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
-                                endif
+                        ! newest particles
+                        if( l_greedy )then
+                            allocate(strategy2D_greedy :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
+                        else
+                            allocate(strategy2D_snhc   :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
+                        endif
+                    endif
+                else
+                    ! offline mode, based on iteration
+                    if( l_greedy .or. (.not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt==1) )then
+                        if( trim(params_glob%tseries).eq.'yes' )then
+                            if( l_np_cls_defined )then
+                                allocate(strategy2D_tseries :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
+                            else if( trim(params_glob%refine).eq.'inpl' )then
+                                allocate(strategy2D_inpl  :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
                             else
                                 allocate(strategy2D_greedy  :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
                             endif
                         else
-                            if( trim(params_glob%tseries).eq.'yes' .and. trim(params_glob%refine).eq.'inpl' )then
-                                allocate(strategy2D_inpl  :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
-                            else
-                                allocate(strategy2D_snhc :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
-                            endif
+                            allocate(strategy2D_greedy  :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
+                        endif
+                    else
+                        if( trim(params_glob%tseries).eq.'yes' .and. trim(params_glob%refine).eq.'inpl' )then
+                            allocate(strategy2D_inpl  :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
+                        else
+                            allocate(strategy2D_snhc :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
                         endif
                     endif
-                    if(alloc_stat/=0)call allocchk("In strategy2D_matcher:: cluster2D_exec strategy2Dsrch object")
-                end select
+                endif
+                if(alloc_stat/=0)call allocchk("In strategy2D_matcher:: cluster2D_exec strategy2Dsrch object")
                 ! Search specification & object
                 strategy2Dspecs(iptcl_batch)%iptcl       = iptcl
                 strategy2Dspecs(iptcl_batch)%iptcl_map   = iptcl_batch

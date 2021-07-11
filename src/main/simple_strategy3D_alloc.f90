@@ -120,7 +120,7 @@ contains
             case( 'cluster','clustersym','clustersoft')
                 srch_order_allocated = .false.
             case DEFAULT
-                if( params_glob%neigh.eq.'yes' )then
+                if( str_has_substr(params_glob%refine, 'neigh') )then
                     nnnrefs =  params_glob%nnn * params_glob%nstates
                     allocate(s3D%srch_order(nthr_glob, nnnrefs), s3D%rts(nthr_glob))
                     do ithr=1,nthr_glob

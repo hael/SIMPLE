@@ -316,18 +316,15 @@ contains
             ! projection matching
             l_projection_matching = .true.
             if( .not. have_oris )then
-                select case( params%neigh )
-                    case( 'yes' )
-                        THROW_HARD('neigh=yes refinement mode requires input orientations')
-                    case DEFAULT
-                        ! all good
-                end select
+                if( str_has_substr(params%refine, 'neigh')) then
+                    THROW_HARD('neigh refinement mode requires input orientations')
+                endif
             endif
             if( .not.cline%defined('lp') )then
                 THROW_HARD('LP needs be defined for the first step of projection matching!')
                 call cline%delete('update_frac')
             endif
-            if( params%neigh .ne. 'yes' .and. .not.str_has_substr(params%refine,'cont') )then
+            if( .not.str_has_substr(params%refine, 'neigh') .and. .not.str_has_substr(params%refine,'cont') )then
                 ! this forces the first round of alignment on the starting model(s)
                 ! to be greedy and the subseqent ones to be whatever the refinement flag is set to
                 call build%spproj%os_ptcl3D%delete_3Dalignment(keepshifts=.true.)
