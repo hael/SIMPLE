@@ -66,7 +66,6 @@ type :: parameters
     character(len=3)      :: envfsc='no'          !< envelope mask even/odd pairs for FSC calculation(yes|no){no}
     character(len=3)      :: needs_sigma='no'     !< invert contrast of images(yes|no)
     character(len=3)      :: neg='no'             !< invert contrast of images(yes|no)
-    character(len=3)      :: neigh='no'           !< neighbourhood refinement(yes|no){no}
     character(len=3)      :: noise_norm ='no'
     character(len=3)      :: norm='no'            !< do statistical normalisation avg
     character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
@@ -434,7 +433,6 @@ type :: parameters
     real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in (roughly) ascending alphabetical order
     logical :: l_autoscale      = .false.
-    logical :: l_clsneigh       = .false.
     logical :: l_corrw          = .false.
     logical :: l_corr_filt      = .false.
     logical :: l_distr_exec     = .false.
@@ -572,7 +570,6 @@ contains
         call check_carg('mcconvention',   self%mcconvention)
         call check_carg('needs_sigma',    self%needs_sigma)
         call check_carg('neg',            self%neg)
-        call check_carg('neigh',          self%neigh)
         call check_carg('noise_norm',     self%noise_norm)
         call check_carg('norm',           self%norm)
         call check_carg('objfun',         self%objfun)
@@ -1454,23 +1451,9 @@ contains
             self%proj_weights_file = PROJ_WEIGHTS_FBODY//int2str(self%part)//BIN_EXT
         endif
         ! neigh refinement modes
-        self%l_clsneigh = .false.
-        if( str_has_substr(self%refine, 'clsneigh') )then
-            if( .not. cline%defined('nspace')    ) self%nspace    = 10000
-            if( .not. cline%defined('nnn')       ) self%nnn       = 3
-            if( .not. cline%defined('extr_init') ) self%extr_init = EXTRINITCLSNEIGH
-            self%l_clsneigh = .true.
-        else if( str_has_substr(self%refine, 'neigh') )then
+        if( str_has_substr(self%refine, 'neigh') )then
             if( .not. cline%defined('nspace')    ) self%nspace = 10000
-            if( .not. cline%defined('nnn')       ) self%nnn    = 3
-        else if( self%neigh .eq. 'yes' )then
-            if( cline%defined('nnn') )then
-                ! must be at least NPEAKS2REFINE nnn:s
-                self%nnn = max(self%nnn, NPEAKS2REFINE)
-            else
-                ! set default nnn value to 10% of the search space
-                self%nnn = max(nint(0.1 * real(self%nspace)), NPEAKS2REFINE)
-            endif
+            if( .not. cline%defined('nnn')       ) self%nnn    = max(nint(0.1 * real(self%nspace)), NPEAKS2REFINE)
         endif
         ! motion correction
         if( self%tomo .eq. 'yes' ) self%mcpatch = 'no'

@@ -143,7 +143,7 @@ contains
         self%nrefs_eval   = 0
         self%nsym         = build_glob%pgrpsyms%get_nsym()
         self%doshift      = params_glob%l_doshift
-        self%neigh        = params_glob%neigh == 'yes'
+        self%neigh        = str_has_substr(params_glob%refine, 'neigh')
         self%nnn_static   = params_glob%nnn
         self%nnn          = params_glob%nnn
         self%nnnrefs      = self%nnn*self%nstates
@@ -174,14 +174,6 @@ contains
         self%prev_proj  = build_glob%eulspace%find_closest_proj(o_prev)     ! previous projection direction
         call build_glob%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
         self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj  ! previous reference
-        ! projection direction neighbourhood based on 3D of class average
-        if( params_glob%l_clsneigh )then
-            if( build_glob%spproj%os_cls3D%get_noris() > 0 .and. self%class > 0 )then
-                call build_glob%spproj%os_cls3D%get_ori(self%class, self%o_cls)
-            else
-                THROW_HARD('nonsensical class info for refine=clsneigh mode; prep4srch')
-            endif
-        endif
         ! init threaded search arrays
         call prep_strategy3D_thread(self%ithr)
         ! search order

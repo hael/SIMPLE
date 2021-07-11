@@ -176,11 +176,6 @@ contains
                     case('clustersoft')
                         prev_states = nint(build_glob%spproj_field%get_all('state',[params_glob%fromp,params_glob%top]))
                 end select
-            case('clsneigh_multi','clsneigh_single')
-                call build_glob%spproj_field%set_extremal_vars(params_glob%extr_init, params_glob%extr_iter,&
-                    &which_iter, frac_srch_space, do_extr, iextr_lim, update_frac=params_glob%update_frac)
-                anneal_ratio = max(0., cos(PI/2.*real(params_glob%extr_iter-1)/real(iextr_lim)))
-                extr_thresh  = params_glob%extr_init * anneal_ratio
         end select
         if( L_BENCH ) rt_init = toc(t_init)
 
@@ -208,9 +203,7 @@ contains
         if( L_BENCH ) rt_prep_primesrch3D = toc(t_prep_primesrch3D)
 
         ! read o_peaks for neigh refinement modes
-        if( str_has_substr(params_glob%refine, 'clsneigh') )then
-            ! nothing to do
-        else if( str_has_substr(params_glob%refine, 'neigh') )then
+        if( str_has_substr(params_glob%refine, 'neigh') )then
             call read_o_peaks
         endif
 
@@ -291,33 +284,8 @@ contains
                         allocate(strategy3D_clustersoft       :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neigh_single')
                         allocate(strategy3D_neigh_single      :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('clsneigh_single')
-                        if( trim(params_glob%anneal).eq.'no' )then
-                            allocate(strategy3D_neigh_single  :: strategy3Dsrch(iptcl_batch)%ptr)
-                        else
-                            if( ran3() <= extr_thresh )then
-                                allocate(strategy3D_neigh_single  :: strategy3Dsrch(iptcl_batch)%ptr)
-                            else
-                                if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. ran3() < GREEDY_FREQ )then
-                                    allocate(strategy3D_greedy_single :: strategy3Dsrch(iptcl_batch)%ptr)
-                                else
-                                    allocate(strategy3D_single    :: strategy3Dsrch(iptcl_batch)%ptr)
-                                endif
-                            endif
-                        endif
                     case('neigh_multi')
                         allocate(strategy3D_neigh_multi       :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('clsneigh_multi')
-                        if( ran3() <= extr_thresh )then
-                            allocate(strategy3D_neigh_multi   :: strategy3Dsrch(iptcl_batch)%ptr)
-                        else
-                            updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-                            if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt == 1 )then
-                                allocate(strategy3D_greedy_multi :: strategy3Dsrch(iptcl_batch)%ptr)
-                            else
-                                allocate(strategy3D_multi     :: strategy3Dsrch(iptcl_batch)%ptr)
-                            endif
-                        endif
                     case('eval')
                         call eval_ptcl(pftcc, iptcl)
                         cycle !!
