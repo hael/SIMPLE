@@ -36,7 +36,7 @@ contains
         ! constants
         real,                  parameter :: SCALEFAC2_TARGET = 0.5
         real,                  parameter :: CENLP=30. !< consistency with refine3D
-        integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
+        integer,               parameter :: MAXITS_SNHC=20, MAXITS_INIT=15, MAXITS_REFINE=40
         integer,               parameter :: NSPACE_SNHC=1000, NSPACE_INIT=1000, NSPACE_REFINE=2500
         character(len=STDLEN), parameter :: ORIG_WORK_PROJFILE   = 'initial_3Dmodel_tmpproj.simple'
         character(len=STDLEN), parameter :: REC_FBODY            = 'rec_final'
@@ -245,6 +245,9 @@ contains
         if( .not. cline_refine3D_init%defined('nspace') )then
             call cline_refine3D_init%set('nspace', real(NSPACE_INIT))
         endif
+        if( .not. cline_refine3D_init%defined('npeaks') )then
+            call cline_refine3D_init%set('npeaks', 1.)
+        endif
         ! (3) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
             ! need to replace original point-group flag with c1/pgrp_start
@@ -279,6 +282,9 @@ contains
         endif
         if( .not. cline_refine3D_refine%defined('nspace') )then
             call cline_refine3D_refine%set('nspace', real(NSPACE_REFINE))
+        endif
+        if( .not. cline_refine3D_refine%defined('npeaks') )then
+            call cline_refine3D_refine%set('npeaks', 1.)
         endif
         ! (5) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',     'reconstruct3D')
@@ -406,7 +412,7 @@ contains
         call cline_refine3D_refine%set('projfile', WORK_PROJFILE)
         ! refinement stage
         write(logfhandle,'(A)') '>>>'
-        write(logfhandle,'(A)') '>>> PROBABILISTIC REFINEMENT'
+        write(logfhandle,'(A)') '>>> REFINEMENT'
         write(logfhandle,'(A)') '>>>'
         call cline_refine3D_refine%set('startit', iter + 1.)
         call xrefine3D_distr%execute(cline_refine3D_refine)
