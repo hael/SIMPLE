@@ -44,9 +44,6 @@ enum, bind(c)
 end enum
 
 integer, parameter :: N_PTCL_ORIPARAMS = 39
-integer, parameter :: N_MIC_STK_PARAMS = 8
-integer, parameter :: MIC_STK_PARAMS2INCLUDE(8) = [I_ANGAST,I_CS,I_DFX,I_DFY,I_FRACA,I_KV,I_PHSHIFT,I_STATE]
-integer, parameter :: CLSDOC_PARAMS2INCLUDE(4)  = [I_CLASS,I_CORR,I_W,I_SPECSCORE]
 
 contains
 
