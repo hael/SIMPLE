@@ -3,7 +3,6 @@ use simple_defs
 use simple_strings
 use simple_fileio
 use simple_error
-use simple_ori_io
 use simple_oris,       only: oris
 use simple_sp_project, only: sp_project
 use simple_syslib,     only: file_exists
@@ -28,10 +27,6 @@ contains
                 call spproj%read(fname)
             case('T')
                 call a%read(fname, fromto=fromto)
-            case('B')
-                call open_ori_io( fname )
-                call read_oris( a, fromto )
-                call close_ori_io
             case DEFAULT
                 THROW_HARD('format: '//fname2format(fname)//' unsupported')
         end select
@@ -88,10 +83,6 @@ contains
                 call spproj%write(fname, fromto, isegment)
             case('T')
                 call a%write(fname, fromto)
-            case('B')
-                call open_ori_io( fname )
-                call write_oris( a, fromto )
-                call close_ori_io
             case DEFAULT
                 THROW_HARD('format of file: '//trim(fname)//' unsupported')
         end select

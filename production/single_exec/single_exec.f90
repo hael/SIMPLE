@@ -41,7 +41,6 @@ type(estimate_diam_commander)                 :: xestimate_diam
 type(simulate_atoms_commander)                :: xsimulate_atoms
 type(random_rec_commander_distr)              :: xrndrec
 type(refine3D_nano_commander_distr)           :: xrefine3D_distr
-type(initial_3Dmodel_nano_commander_distr)    :: xinitial_3Dmodel_nano_distr
 type(tseries_reconstruct3D_distr)             :: xtseries_reconstruct3D_distr
 
 ! VALIDATION PROGRAMS
@@ -121,8 +120,6 @@ select case(prg)
         call xrndrec%execute(cline)
     case( 'refine3D_nano')
         call execute_commander(xrefine3D_distr, cline)
-    case( 'initial_3Dmodel_nano')
-        call xinitial_3Dmodel_nano_distr%execute(cline)
     case( 'tseries_reconstruct3D')
         call xtseries_reconstruct3D_distr%execute(cline)
 
