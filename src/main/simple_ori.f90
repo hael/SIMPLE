@@ -1,18 +1,20 @@
 ! an orientation
 module simple_ori
 include 'simple_lib.f08'
+use simple_ori_defs
 implicit none
 
 public :: ori, test_ori, euler2m, m2euler
 private
 #include "simple_local_flags.inc"
 
-!>  orientation parameter stuct and operations
 type :: ori
     private
-    type(hash)  :: htab              !< hash table for the parameters
-    type(chash) :: chtab             !< hash table for the filenames etc.
-    logical     :: existence=.false. !< to indicate existence
+    real        :: pparms(N_PTCL_ORIPARAMS) = 0. !< hardcoded per-particle parameters (see simple_ori_defs)
+    type(hash)  :: htab                          !< hash table for dynamic parameters
+    type(chash) :: chtab                         !< hash table for filenames etc.
+    logical     :: is_ptcl   = .false.           !< to indicate whether the info is of particle kind
+    logical     :: existence = .false.           !< to indicate existence
   contains
     ! CONSTRUCTOR
     procedure          :: new_ori
@@ -49,6 +51,7 @@ type :: ori
     procedure          :: set_boxfile
     ! GETTERS
     procedure          :: exists
+    procedure          :: is_particle
     procedure          :: get_euler
     procedure          :: e1get
     procedure          :: e2get
@@ -65,13 +68,13 @@ type :: ori
     procedure          :: get_2Dshift_incr
     procedure          :: get_state
     procedure          :: get_class
-    procedure          :: hash_size
     procedure          :: isthere
     procedure          :: ischar
     procedure          :: isstatezero
     procedure          :: has_been_searched
+    procedure          :: pparms2str
+    procedure          :: pparms_strlen
     procedure          :: ori2str
-    procedure          :: ori2str_static
     procedure          :: ori_strlen_trim
     procedure          :: ori2chash
     procedure          :: chash2ori
@@ -99,6 +102,7 @@ type :: ori
     generic            :: operator(.euldist.)     => euldist
     generic            :: operator(.inplrotdist.) => inplrotdist
     ! DESTRUCTORS
+    procedure          :: reset_pparms
     procedure          :: kill_hash
     procedure          :: kill_chash
     procedure          :: kill
@@ -114,27 +118,29 @@ contains
 
     ! CONSTRUCTORS
 
-    !>  \brief  is a constructor
-    function constructor( ) result( self )
+    function constructor( is_ptcl ) result( self )
+        logical, intent(in) :: is_ptcl
         type(ori) :: self
-        call self%new_ori
+        call self%new_ori(is_ptcl)
     end function constructor
 
-    !>  \brief  is a constructor
-    subroutine new_ori( self )
+    subroutine new_ori( self, is_ptcl )
         class(ori), intent(inout) :: self
+        logical,    intent(in)    :: is_ptcl
         call self%kill
-        self%htab  = hash()
-        self%chtab = chash()
+        self%htab      = hash()
+        self%chtab     = chash()
+        self%is_ptcl   = is_ptcl
         self%existence = .true.
     end subroutine new_ori
 
     !>  \brief  is a parameterized constructor
-    subroutine ori_from_rotmat( self, rotmat )
+    subroutine ori_from_rotmat( self, rotmat, is_ptcl )
         class(ori), intent(inout) :: self
         real,       intent(in)    :: rotmat(3,3) !< rotation matrix
+        logical,    intent(in)    :: is_ptcl
         real :: euls(3)
-        call self%new
+        call self%new(is_ptcl)
         euls = m2euler(rotmat)
         call self%set_euler(euls)
     end subroutine ori_from_rotmat
@@ -147,36 +153,45 @@ contains
         call self%set_euler([0., 0., 0.])
         call self%set_shift([0., 0.])
         call self%set_shift_incr([0., 0.])
-        call self%htab%set('state', 0.)
-        if( self%isthere('corr') )     call self%htab%set('corr',     -1.)
-        if( self%isthere('specscore') )call self%htab%set('specscore', 0.)
-        if( self%isthere('eo') )       call self%htab%set('eo', -1.)
+        if( self%is_ptcl )then
+            self%pparms(I_STATE)     =  0.
+            self%pparms(I_CORR)      = -1.
+            self%pparms(I_SPECSCORE) =  0.
+            self%pparms(I_EO)        = -1.
+        else
+            call self%htab%set('state', 0.)
+            if( self%isthere('corr') )     call self%htab%set('corr',     -1.)
+            if( self%isthere('specscore') )call self%htab%set('specscore', 0.)
+            if( self%isthere('eo') )       call self%htab%set('eo', -1.)
+        endif
     end subroutine reject
 
-    !>  \brief  is a polymorphic assigner
     subroutine assign_ori( self_out, self_in )
         type(ori), intent(in)     :: self_in
         class(ori), intent(inout) :: self_out
         call self_out%copy(self_in)
     end subroutine assign_ori
 
-    !>  \brief  is a polymorphic copier
     subroutine copy_ori( self_out, self_in )
         class(ori), intent(in)    :: self_in
         class(ori), intent(inout) :: self_out
-        self_out%htab   = self_in%htab
-        self_out%chtab  = self_in%chtab
+        self_out%pparms  = self_in%pparms
+        self_out%htab    = self_in%htab
+        self_out%chtab   = self_in%chtab
+        self_out%is_ptcl = self_in%is_ptcl
     end subroutine copy_ori
 
-    !>  \brief  is a setter
     subroutine delete_entry( self, key )
         class(ori),       intent(inout) :: self
         character(len=*), intent(in)    :: key
+        integer :: ind
         if( self%htab%isthere(key) )then
             call self%htab%delete(key)
         else
             call self%chtab%delete(key)
         endif
+        ind = get_oriparam_ind(key)
+        if( ind /= 0 ) self%pparms(ind) = 0. ! default value on init
     end subroutine delete_entry
 
     subroutine delete_2Dclustering( self, keepshifts )
@@ -185,14 +200,25 @@ contains
         logical :: kkeepshifts
         kkeepshifts = .false.
         if( present(keepshifts) ) kkeepshifts = keepshifts
-        call self%htab%delete('class')
-        call self%htab%delete('e3')
-        if( .not. kkeepshifts )then
-            call self%htab%delete('x')
-            call self%htab%delete('y')
+        if( self%is_ptcl )then
+            self%pparms(I_CLASS) = 0.
+            self%pparms(I_E3)    = 0.
+            if( .not. kkeepshifts )then
+                self%pparms(I_X) = 0.
+                self%pparms(I_Y) = 0.
+            endif
+            self%pparms(I_CORR) = -1.
+            self%pparms(I_FRAC) =  0.
+        else
+            call self%htab%delete('class')
+            call self%htab%delete('e3')
+            if( .not. kkeepshifts )then
+                call self%htab%delete('x')
+                call self%htab%delete('y')
+            endif
+            call self%htab%delete('corr')
+            call self%htab%delete('frac')
         endif
-        call self%htab%delete('corr')
-        call self%htab%delete('frac')
     end subroutine delete_2Dclustering
 
     subroutine delete_3Dalignment( self, keepshifts )
@@ -201,28 +227,52 @@ contains
         logical :: kkeepshifts
         kkeepshifts = .false.
         if( present(keepshifts) ) kkeepshifts = keepshifts
-        call self%htab%delete('proj')
-        call self%htab%delete('e1')
-        call self%htab%delete('e2')
-        call self%htab%delete('e3')
-        if( .not. kkeepshifts )then
-            call self%htab%delete('x')
-            call self%htab%delete('y')
+        if( self%is_ptcl )then
+            self%pparms(I_PROJ) = 0.
+            self%pparms(I_E1)   = 0.
+            self%pparms(I_E2)   = 0.
+            self%pparms(I_E3)   = 0.
+            if( .not. kkeepshifts )then
+                self%pparms(I_X) = 0.
+                self%pparms(I_Y) = 0.
+            endif
+            self%pparms(I_CORR) = -1.
+            self%pparms(I_FRAC) =  0.
+        else
+            call self%htab%delete('proj')
+            call self%htab%delete('e1')
+            call self%htab%delete('e2')
+            call self%htab%delete('e3')
+            if( .not. kkeepshifts )then
+                call self%htab%delete('x')
+                call self%htab%delete('y')
+            endif
+            call self%htab%delete('corr')
+            call self%htab%delete('frac')
         endif
-        call self%htab%delete('corr')
-        call self%htab%delete('frac')
     end subroutine delete_3Dalignment
 
     subroutine transfer_2Dparams( self_out, self_in )
         class(ori), intent(inout) :: self_out
         class(ori), intent(in)    :: self_in
-        call self_out%htab%set('class',    self_in%htab%get('class'))
-        call self_out%htab%set('corr',     self_in%htab%get('corr'))
-        call self_out%htab%set('frac',     self_in%htab%get('frac'))
-        call self_out%htab%set('specscore',self_in%htab%get('specscore'))
-        call self_out%htab%set('updatecnt',self_in%htab%get('updatecnt'))
-        call self_out%htab%set('w',        self_in%htab%get('w'))
-        call self_out%htab%set('eo',       self_in%htab%get('eo'))
+        if( .not.self_out%is_ptcl.eqv.self_in%is_ptcl ) THROW_HARD('non-conforming types (is_ptcl)')
+        if( self_out%is_ptcl )then
+            self_out%pparms(I_CLASS)     = self_in%pparms(I_CLASS)
+            self_out%pparms(I_CORR)      = self_in%pparms(I_CORR)
+            self_out%pparms(I_FRAC)      = self_in%pparms(I_FRAC)
+            self_out%pparms(I_SPECSCORE) = self_in%pparms(I_SPECSCORE)
+            self_out%pparms(I_UPDATECNT) = self_in%pparms(I_UPDATECNT)
+            self_out%pparms(I_W)         = self_in%pparms(I_W)
+            self_out%pparms(I_EO)        = self_in%pparms(I_EO)
+        else
+            call self_out%htab%set('class',    self_in%htab%get('class'))
+            call self_out%htab%set('corr',     self_in%htab%get('corr'))
+            call self_out%htab%set('frac',     self_in%htab%get('frac'))
+            call self_out%htab%set('specscore',self_in%htab%get('specscore'))
+            call self_out%htab%set('updatecnt',self_in%htab%get('updatecnt'))
+            call self_out%htab%set('w',        self_in%htab%get('w'))
+            call self_out%htab%set('eo',       self_in%htab%get('eo'))
+        endif
         call self_out%set_euler(self_in%get_euler())
         call self_out%set_shift(self_in%get_2Dshift())
     end subroutine transfer_2Dparams
@@ -230,94 +280,130 @@ contains
     subroutine transfer_3Dparams( self_out, self_in )
         class(ori), intent(inout) :: self_out
         class(ori), intent(in)    :: self_in
-        call self_out%htab%set('proj',     self_in%htab%get('proj'))
-        call self_out%htab%set('corr',     self_in%htab%get('corr'))
-        call self_out%htab%set('frac',     self_in%htab%get('frac'))
-        call self_out%htab%set('specscore',self_in%htab%get('specscore'))
-        call self_out%htab%set('updatecnt',self_in%htab%get('updatecnt'))
-        call self_out%htab%set('w',        self_in%htab%get('w'))
-        call self_out%htab%set('eo',       self_in%htab%get('eo'))
+        if( .not.self_out%is_ptcl.eqv.self_in%is_ptcl ) THROW_HARD('non-conforming types (is_ptcl)')
+        if( self_out%is_ptcl )then
+            self_out%pparms(I_PROJ)      = self_in%pparms(I_PROJ)
+            self_out%pparms(I_CORR)      = self_in%pparms(I_CORR)
+            self_out%pparms(I_FRAC)      = self_in%pparms(I_FRAC)
+            self_out%pparms(I_SPECSCORE) = self_in%pparms(I_SPECSCORE)
+            self_out%pparms(I_UPDATECNT) = self_in%pparms(I_UPDATECNT)
+            self_out%pparms(I_W)         = self_in%pparms(I_W)
+            self_out%pparms(I_EO)        = self_in%pparms(I_EO)
+        else
+            call self_out%htab%set('proj',     self_in%htab%get('proj'))
+            call self_out%htab%set('corr',     self_in%htab%get('corr'))
+            call self_out%htab%set('frac',     self_in%htab%get('frac'))
+            call self_out%htab%set('specscore',self_in%htab%get('specscore'))
+            call self_out%htab%set('updatecnt',self_in%htab%get('updatecnt'))
+            call self_out%htab%set('w',        self_in%htab%get('w'))
+            call self_out%htab%set('eo',       self_in%htab%get('eo'))
+        endif
         call self_out%set_euler(self_in%get_euler())
         call self_out%set_shift(self_in%get_2Dshift())
     end subroutine transfer_3Dparams
 
-    !>  \brief  is a setter
     subroutine set_euler( self, euls )
         class(ori), intent(inout) :: self
-        real,       intent(in)    :: euls(3) !< Euler angle
+        real,       intent(in)    :: euls(3)
         real :: euls_here(3), rmat(3,3)
-        rmat = euler2m(euls)
+        rmat      = euler2m(euls)
         euls_here = m2euler(rmat)
-        call self%htab%set('e1',euls_here(1))
-        call self%htab%set('e2',euls_here(2))
-        call self%htab%set('e3',euls_here(3))
+        if( self%is_ptcl )then
+            self%pparms(I_E1:I_E3) = euls_here
+        else
+            call self%htab%set('e1',euls_here(1))
+            call self%htab%set('e2',euls_here(2))
+            call self%htab%set('e3',euls_here(3))
+        endif
     end subroutine set_euler
 
-    !>  \brief  is a setter
     subroutine e1set( self, e1 )
         class(ori), intent(inout) :: self
-        real, intent(in)          :: e1     !< Euler angle
-        call self%htab%set('e1', e1)
+        real,       intent(in)    :: e1
+        if( self%is_ptcl )then
+            self%pparms(I_E1) = e1
+        else
+            call self%htab%set('e1', e1)
+        endif
     end subroutine e1set
 
-    !>  \brief  is a setter
     subroutine e2set( self, e2 )
         class(ori), intent(inout) :: self
-        real, intent(in)          :: e2      !< Euler angle
-        call self%htab%set('e2', e2)
+        real,       intent(in)    :: e2
+        if( self%is_ptcl )then
+            self%pparms(I_E2) = e2
+        else
+            call self%htab%set('e2', e2)
+        endif
     end subroutine e2set
 
-    !>  \brief  is a setter
     subroutine e3set( self, e3 )
         class(ori), intent(inout) :: self
-        real, intent(in)          :: e3      !< Euler angle
-        call self%htab%set('e3', e3)
+        real,       intent(in)    :: e3
+        if( self%is_ptcl )then
+            self%pparms(I_E3) = e3
+        else
+            call self%htab%set('e3', e3)
+        endif
     end subroutine e3set
 
-    !>  \brief  is a setter
     subroutine swape1e3( self )
         class(ori), intent(inout) :: self
         real :: e1, e3
-        e1 = self%htab%get('e1')
-        e3 = self%htab%get('e3')
-        call self%htab%set('e1', e3)
-        call self%htab%set('e3', e1)
+        if( self%is_ptcl )then
+            e1 = self%pparms(I_E1)
+            e3 = self%pparms(I_E3)
+            self%pparms(I_E1) = e3
+            self%pparms(I_E3) = e1
+        else
+            e1 = self%htab%get('e1')
+            e3 = self%htab%get('e3')
+            call self%htab%set('e1', e3)
+            call self%htab%set('e3', e1)
+        endif
     end subroutine swape1e3
 
-    !>  \brief  is a setter
     subroutine set_shift( self, shvec )
         class(ori), intent(inout) :: self
-        real,       intent(in)    :: shvec(2) !< shift vector
-        call self%htab%set( 'x', shvec(1) )
-        call self%htab%set( 'y', shvec(2) )
+        real,       intent(in)    :: shvec(2)
+        if( self%is_ptcl )then
+            self%pparms(I_X) = shvec(1)
+            self%pparms(I_Y) = shvec(2)
+        else
+            call self%htab%set('x', shvec(1))
+            call self%htab%set('y', shvec(2))
+        endif
     end subroutine set_shift
 
-    !>  \brief  is a setter
     subroutine set_shift_incr( self, shvec )
         class(ori), intent(inout) :: self
-        real,       intent(in)    :: shvec(2) !< shift vector
-        call self%htab%set( 'xincr', shvec(1) )
-        call self%htab%set( 'yincr', shvec(2) )
+        real,       intent(in)    :: shvec(2)
+        if( self%is_ptcl )then
+            self%pparms(I_XINCR) = shvec(1)
+            self%pparms(I_YINCR) = shvec(2)
+        else
+            call self%htab%set('xincr', shvec(1))
+            call self%htab%set('yincr', shvec(2))
+        endif
     end subroutine set_shift_incr
 
-    !>  \brief  is a setter
     subroutine set_1( self, key, val )
         class(ori),       intent(inout) :: self
         character(len=*), intent(in)    :: key
         real,             intent(in)    :: val
-        select case(key)
-            case('e1')
-                call self%e1set(val)
-            case('e2')
-                call self%e2set(val)
-            case('e3')
-                call self%e3set(val)
-            case DEFAULT
+        integer :: ind
+        if( self%is_ptcl )then
+            ind = get_oriparam_ind(key)
+            if( ind == 0 )then
                 call self%htab%set(key, val)
-        end select
+            else
+                self%pparms(ind) = val
+            endif
+        else
+            call self%htab%set(key, val)
+        endif
     end subroutine set_1
 
-    !>  \brief  is a setter
     subroutine set_2( self, key, val )
         class(ori),       intent(inout) :: self
         character(len=*), intent(in)    :: key, val
@@ -327,7 +413,7 @@ contains
     !>  \brief  for generating a random Euler angle
     subroutine rnd_euler_1( self, eullims )
         class(ori),     intent(inout) :: self
-        real, optional, intent(inout) :: eullims(3,2)!< Euler angles
+        real, optional, intent(inout) :: eullims(3,2) !< Euler angles
         logical :: found
         real    :: euls(3), rmat(3,3)
         if( present(eullims) )then
@@ -335,12 +421,12 @@ contains
             do while( .not.found )
                 call rnd_romat(rmat)
                 euls = m2euler(rmat)
-                if( euls(1) >= eullims(1,2) )cycle
-                if( euls(2) >= eullims(2,2) )cycle
-                if( euls(3) >= eullims(3,2) )cycle
-                if( euls(1) < eullims(1,1) )cycle
-                if( euls(2) < eullims(2,1) )cycle
-                if( euls(3) < eullims(3,1) )cycle
+                if( euls(1) >= eullims(1,2) ) cycle
+                if( euls(2) >= eullims(2,2) ) cycle
+                if( euls(3) >= eullims(3,2) ) cycle
+                if( euls(1) <  eullims(1,1) ) cycle
+                if( euls(2) <  eullims(2,1) ) cycle
+                if( euls(3) <  eullims(3,1) ) cycle
                 found = .true.
             end do
         else
@@ -352,9 +438,9 @@ contains
 
     !>  \brief  for generating a random Euler angle neighbour to o_prev
     subroutine rnd_euler_2( self, o_prev, athres )
-        class(ori),        intent(inout) :: self   !< instance
-        class(ori),        intent(in)    :: o_prev !< template ori
-        real,              intent(in)    :: athres !< angle threshold in degrees
+        class(ori), intent(inout) :: self   !< instance
+        class(ori), intent(in)    :: o_prev !< template ori
+        real,       intent(in)    :: athres !< angle threshold in degrees
         real    :: athres_rad, dist
         athres_rad = deg2rad(athres)
         dist = 2.*athres_rad
@@ -384,25 +470,23 @@ contains
             call self%set('y', y)
             call self%set('z', z)
         endif
-        if( present( eullims ) )then
+        if( present(eullims) )then
             call self%rnd_euler( eullims )
         else
             call self%rnd_euler
         endif
     end subroutine rnd_ori
 
-    !>  \brief  for generating random in-plane parameters
     subroutine rnd_inpl( self, trs )
         class(ori), intent(inout)  :: self
-        real, intent(in), optional :: trs         !< threshold
-        if( present(trs) )call self%rnd_shift(trs)
+        real, intent(in), optional :: trs !< threshold
+        if( present(trs) ) call self%rnd_shift(trs)
         call self%e3set(ran3()*359.99)
     end subroutine rnd_inpl
 
-    !>  \brief  for generating random in-plane parameters
     subroutine rnd_shift( self, trs )
-        class(ori), intent(inout)  :: self
-        real,       intent(in)     :: trs         !< threshold
+        class(ori), intent(inout) :: self
+        real,       intent(in)    :: trs !< threshold
         real :: x, y
         if( abs(trs) < 1e-3 )then
             x = 0.
@@ -415,22 +499,19 @@ contains
         call self%set('y', y)
     end subroutine rnd_shift
 
-    !>  \brief  reads all orientation info (by line) into the hash-tables
-    subroutine str2ori( self, line )
+    subroutine str2ori( self, line, is_ptcl )
         use simple_sauron, only: sauron_ori_parser
         class(ori),       intent(inout) :: self
         character(len=*), intent(inout) :: line
-        logical :: isthere(3)
-        call self%new
-        call sauron_ori_parser(line, self%htab, self%chtab)
-        isthere(1) = self%htab%isthere('e1')
-        isthere(2) = self%htab%isthere('e2')
-        isthere(3) = self%htab%isthere('e3')
-        if( any(isthere) )&
-          &call self%set_euler([self%htab%get('e1'),self%htab%get('e2'),self%htab%get('e3')])
+        logical,          intent(in)    :: is_ptcl
+        call self%new(is_ptcl)
+        if( is_ptcl )then
+            call sauron_ori_parser(line, self%pparms, self%htab, self%chtab)
+        else
+            call sauron_ori_parser(line, self%htab, self%chtab)
+        endif
     end subroutine str2ori
 
-    !>  \brief  reads all orientation info (by line) into the hash-tables
     subroutine set_boxfile( self, boxfname, nptcls )
         use simple_nrtxtfile, only: nrtxtfile
         class(ori),        intent(inout) :: self
@@ -451,53 +532,70 @@ contains
 
     ! GETTERS
 
-     !>  \brief  is a getter
     pure function exists( self ) result( t )
         class(ori), intent(in) :: self
         logical :: t
         t = self%existence
     end function exists
 
-    !>  \brief  is a getter
+    pure function is_particle( self ) result( t )
+        class(ori), intent(in) :: self
+        logical :: t
+        t = self%is_ptcl
+    end function is_particle
+
     pure function get_euler( self ) result( euls )
         class(ori), intent(in) :: self
         real :: euls(3)
-        euls(1) = self%htab%get('e1')
-        euls(2) = self%htab%get('e2')
-        euls(3) = self%htab%get('e3')
+        if( self%is_ptcl )then
+            euls(1) = self%pparms(I_E1)
+            euls(2) = self%pparms(I_E2)
+            euls(3) = self%pparms(I_E3)
+        else
+            euls(1) = self%htab%get('e1')
+            euls(2) = self%htab%get('e2')
+            euls(3) = self%htab%get('e3')
+        endif
     end function get_euler
 
-    !>  \brief  is a getter
     pure function e1get( self ) result( e1 )
         class(ori), intent(in) :: self
         real :: e1
-        e1 = self%htab%get('e1')
+        if( self%is_ptcl )then
+            e1 = self%pparms(I_E1)
+        else
+            e1 = self%htab%get('e1')
+        endif
     end function e1get
 
-    !>  \brief  is a getter
     pure function e2get( self ) result( e2 )
         class(ori), intent(in) :: self
         real :: e2
-        e2 = self%htab%get('e2')
+        if( self%is_ptcl )then
+            e2 = self%pparms(I_E2)
+        else
+            e2 = self%htab%get('e2')
+        endif
     end function e2get
 
-    !>  \brief  is a getter
     pure function e3get( self ) result( e3 )
         class(ori), intent(in) :: self
         real :: e3
-        e3 = self%htab%get('e3')
+        if( self%is_ptcl )then
+            e3 = self%pparms(I_E3)
+        else
+            e3 = self%htab%get('e3')
+        endif
     end function e3get
 
-    !>  \brief  is a getter
     pure function get_normal( self ) result( normal )
         class(ori), intent(in) :: self
         real :: normal(3), rmat(3,3), euls(3)
-        euls = self%get_euler()
+        euls   = self%get_euler()
         rmat   = euler2m(euls)
         normal = matmul(zvec, rmat)
     end function get_normal
 
-    !>  \brief  is a getter
     pure function get_mat( self ) result( mat )
         class(ori), intent(in) :: self
         real, dimension(3,3) :: mat
@@ -506,12 +604,21 @@ contains
         mat  = euler2m(euls)
     end function get_mat
 
-    !>  \brief  is a getter
     pure function get( self, key ) result( val )
         class(ori),       intent(in) :: self
         character(len=*), intent(in) :: key
-        real :: val
-        val = self%htab%get(key)
+        integer :: ind
+        real    :: val
+        if( self%is_ptcl )then
+            ind = get_oriparam_ind(key)
+            if( ind == 0 )then
+                val = self%htab%get(key)
+            else
+                val = self%pparms(ind)
+            endif
+        else
+            val = self%htab%get(key)
+        endif
     end function get
 
     !>  \brief  is a getter with fixed length return string
@@ -522,7 +629,6 @@ contains
         val = trim(self%chtab%get_static(key))
     end function get_static
 
-    !>  \brief  is a getter
     subroutine getter_1( self, key, val )
         class(ori),                    intent(inout) :: self
         character(len=*),              intent(in)    :: key
@@ -531,74 +637,109 @@ contains
         val = self%chtab%get(key)
     end subroutine getter_1
 
-    !>  \brief  is a getter
     subroutine getter_2( self, key, val )
         class(ori),       intent(in)    :: self
         character(len=*), intent(in)    :: key
         real,             intent(inout) :: val
-        val = self%htab%get(key)
+        integer :: ind
+        if( self%is_ptcl )then
+            ind = get_oriparam_ind(key)
+            if( ind == 0 )then
+                val = self%htab%get(key)
+            else
+                val = self%pparms(ind)
+            endif
+        else
+            val = self%htab%get(key)
+        endif
     end subroutine getter_2
 
-    !>  \brief  is a getter
     function get_2Dshift( self ) result( vec )
         class(ori), intent(in) :: self
         real :: vec(2)
-        vec(1) = self%htab%get('x')
-        vec(2) = self%htab%get('y')
+        if( self%is_ptcl )then
+            vec(1) = self%pparms(I_X)
+            vec(2) = self%pparms(I_Y)
+        else
+            vec(1) = self%htab%get('x')
+            vec(2) = self%htab%get('y')
+        endif
     end function get_2Dshift
 
-    !>  \brief  is a getter
     function get_3Dshift( self ) result( vec )
         class(ori), intent(in) :: self
         real :: vec(3)
-        vec(1) = self%htab%get('x')
-        vec(2) = self%htab%get('y')
-        vec(3) = self%htab%get('z')
+        if( self%is_ptcl )then
+            vec(1) = self%pparms(I_X)
+            vec(2) = self%pparms(I_Y)
+            vec(3) = self%htab%get('z')
+        else
+            vec(1) = self%htab%get('x')
+            vec(2) = self%htab%get('y')
+            vec(3) = self%htab%get('z')
+        endif
     end function get_3Dshift
 
-    !>  \brief  is a getter
     function get_2Dshift_incr( self ) result( vec )
         class(ori), intent(in) :: self
         real :: vec(2)
-        vec(1) = self%htab%get('xincr')
-        vec(2) = self%htab%get('yincr')
+        if( self%is_ptcl )then
+            vec(1) = self%pparms(I_XINCR)
+            vec(2) = self%pparms(I_YINCR)
+        else
+            vec(1) = self%htab%get('xincr')
+            vec(2) = self%htab%get('yincr')
+        endif
     end function get_2Dshift_incr
 
     pure integer function get_state( self )
         class(ori), intent(in) :: self
-        get_state = nint(self%htab%get('state'))
+        if( self%is_ptcl )then
+            get_state = nint(self%pparms(I_STATE))
+        else
+            get_state = nint(self%htab%get('state'))
+        endif
     end function get_state
 
     pure integer function get_class( self )
         class(ori), intent(in) :: self
-        get_class = nint(self%htab%get('class'))
+        if( self%is_ptcl )then
+            get_class = nint(self%pparms(I_CLASS))
+        else
+            get_class = nint(self%htab%get('class'))
+        endif
     end function get_class
 
-    !>  \brief  returns size of hash
-    pure integer function hash_size( self )
-        class(ori), intent(in) :: self
-        hash_size = self%htab%size_of()
-    end function hash_size
-
-    !>  \brief  check for presence of key in the ori hash
     pure function isthere( self, key ) result( found )
         class(ori),        intent(in) :: self
         character(len=*),  intent(in) :: key
         logical :: hash_found, chash_found, found
-        hash_found  = self%htab%isthere(key)
-        chash_found = self%chtab%isthere(key)
+        integer :: ind
         found = .false.
-        if( hash_found .or. chash_found ) found = .true.
+        if( self%is_ptcl )then
+            ind = get_oriparam_ind(key)
+            if( ind /= 0 )then
+                if( oriparam_isthere(ind, self%pparms(ind)) )then
+                    found = .true.
+                    return
+                endif
+            endif
+            hash_found  = self%htab%isthere(key)
+            chash_found = self%chtab%isthere(key)
+            if( hash_found .or. chash_found ) found = .true.
+        else
+            hash_found  = self%htab%isthere(key)
+            chash_found = self%chtab%isthere(key)
+            if( hash_found .or. chash_found ) found = .true.
+        endif
     end function isthere
 
-    !>  \brief  test for character key
     logical function ischar( self, key )
         class(ori),       intent(in) :: self
         character(len=*), intent(in) :: key
         ischar = self%chtab%isthere(key)
     end function ischar
 
-    !>  \brief  whether state is zero
     logical function isstatezero( self )
         class(ori), intent(in) :: self
         isstatezero = (self%get_state() == 0)
@@ -608,10 +749,10 @@ contains
     logical function has_been_searched( self )
         class(ori), intent(in) :: self
         has_been_searched = .true.
-        if(.not. is_zero(self%e1get()) )return
-        if(.not. is_zero(self%e2get())      )return
-        if(.not. is_zero(self%e3get())      )return
-        if(.not. is_zero(self%get('corr'))  )return
+        if (.not. is_zero(self%e1get())      ) return
+        if (.not. is_zero(self%e2get())      ) return
+        if (.not. is_zero(self%e3get())      ) return
+        if (.not. is_zero(self%get('corr'))  ) return
         ! removed shifts from here as we may want to keep shifts from ini3D
         ! but restart the refinement (not initialize with the class oris)
         ! if(.not. is_zero(self%get('x'))     )return
@@ -619,92 +760,122 @@ contains
         has_been_searched = .false.
     end function has_been_searched
 
-    !>  \brief  joins the hashes into a string that represent the ori
+    pure function pparms2str( self ) result( str )
+        class(ori), intent(in)     :: self
+        character(len=LONGSTRLEN)  :: str
+        character(len=XLONGSTRLEN) :: tmpstr
+        integer :: i, cnt
+        str = repeat(' ',LONGSTRLEN)
+        write(tmpstr,*)(trim(get_oriparam_flag(i)),'=',self%pparms(i),'/', i=1,N_PTCL_ORIPARAMS)
+        cnt = 0
+        do i=1,len_trim(tmpstr)
+            if( tmpstr(i:i) == ' ' ) cycle
+            cnt = cnt + 1
+            str(cnt:cnt) = tmpstr(i:i)
+        enddo
+        do i=4,cnt
+            if( str(i:i) == '/' ) str(i:i) = ' '
+        enddo
+        str = trim(str)
+    end function pparms2str
+
+    pure integer function pparms_strlen( self )
+        class(ori), intent(in)     :: self
+        character(len=XLONGSTRLEN) :: tmpstr
+        integer :: i, n
+        pparms_strlen = 0
+        n = N_PTCL_ORIPARAMS
+        write(tmpstr,*)(trim(get_oriparam_flag(i)), self%pparms(i), i=1,n)
+        do i=1,len_trim(tmpstr)
+            if( tmpstr(i:i) == ' ' ) cycle
+            pparms_strlen = pparms_strlen + 1
+        enddo
+        pparms_strlen = pparms_strlen + n     ! for '=' separator
+        pparms_strlen = pparms_strlen + n - 1 ! for ' ' separator
+    end function pparms_strlen
+
     pure function ori2str( self ) result( str )
         class(ori), intent(in)        :: self
         character(len=:), allocatable :: str
-        character(len=LONGSTRLEN)     :: str_htab
+        character(len=LONGSTRLEN)     :: str_pparms, str_htab
         character(len=XLONGSTRLEN)    :: str_chtab
         integer :: sz_chash, sz_hash
         sz_chash = self%chtab%size_of()
         sz_hash  = self%htab%size_of()
         if( sz_chash > 0 ) str_chtab = self%chtab%chash2str()
         if( sz_hash  > 0 ) str_htab  = self%htab%hash2str()
-        if( sz_chash > 0 .and. sz_hash > 0 )then
-            allocate( str, source=trim(str_chtab)//' '//trim(str_htab))
-        else if( sz_hash > 0 )then
-            allocate( str, source=trim(str_htab))
-        else if( sz_chash > 0 )then
-            allocate( str, source=trim(str_chtab))
+        if( self%is_ptcl )then
+            str_pparms = self%pparms2str()
+            if( sz_chash > 0 .and. sz_hash > 0 )then
+                allocate( str, source=trim(str_chtab)//' '//trim(str_pparms)//' '//trim(str_htab))
+            else if( sz_hash > 0 )then
+                allocate( str, source=trim(str_pparms)//' '//trim(str_htab))
+            else if( sz_chash > 0 )then
+                allocate( str, source=trim(str_chtab)//' '//trim(str_pparms))
+            else
+                allocate( str, source=trim(str_pparms))
+            endif
+        else
+            if( sz_chash > 0 .and. sz_hash > 0 )then
+                allocate( str, source=trim(str_chtab)//' '//trim(str_htab))
+            else if( sz_hash > 0 )then
+                allocate( str, source=trim(str_htab))
+            else if( sz_chash > 0 )then
+                allocate( str, source=trim(str_chtab))
+            endif
         endif
     end function ori2str
 
-    !>  \brief  joins the hashes into a string that represent the ori, for threaded use
-    pure subroutine ori2str_static( self, str )
-        class(ori),                 intent(in)  :: self
-        character(len=XLONGSTRLEN), intent(out) :: str
-        character(len=LONGSTRLEN)  :: str_htab
-        character(len=XLONGSTRLEN) :: str_chtab
-        integer :: sz_chash, sz_hash
-        sz_chash = self%chtab%size_of()
-        sz_hash  = self%htab%size_of()
-        if( sz_chash > 0 ) str_chtab = self%chtab%chash2str()
-        if( sz_hash  > 0 ) str_htab  = self%htab%hash2str()
-        if( sz_chash > 0 .and. sz_hash > 0 )then
-            str = trim(str_chtab)//' '//trim(str_htab)
-        else if( sz_hash > 0 )then
-            str = trim(str_htab)
-        else if( sz_chash > 0 )then
-            str = trim(str_chtab)
-        endif
-    end subroutine ori2str_static
-
     pure integer function ori_strlen_trim( self )
-        class(ori),        intent(in) :: self
-        integer :: chashlen, hashlen
+        class(ori), intent(in) :: self
+        integer :: chashlen, pprmslen, hashlen
         chashlen = self%chtab%chash_strlen()
         hashlen  = self%htab%hash_strlen()
         ori_strlen_trim = chashlen + hashlen
         if( chashlen > 0 .and. hashlen > 0 )then
-            ori_strlen_trim = ori_strlen_trim + 1 ! for ' ' separator
+            ori_strlen_trim = ori_strlen_trim + 1            ! + 1 for ' ' separator
+        endif
+        if( self%is_ptcl )then
+            pprmslen = self%pparms_strlen()
+            ori_strlen_trim = ori_strlen_trim + pprmslen + 1 ! + 1 for ' ' separator
         endif
     end function ori_strlen_trim
 
+    ! used by qsys_env, pparms omitted deliberatly
     function ori2chash( self ) result( ch )
         class(ori), intent(in) :: self
         type(chash) :: ch
         type(hash) :: h
         integer :: i
         ch = self%chtab
-        h = self%htab
+        h  = self%htab
         if( h%size_of() >= 1 )then
             do i=1,h%size_of()
-                call ch%push(h%get_str(i),&
-                    &int2str(int( h%get_value_at(i) ) ) )
+                call ch%push(h%get_str(i), int2str(int(h%get_value_at(i))))
             end do
         endif
     end function ori2chash
 
     subroutine chash2ori( self, ch )
-        class(ori),   intent(inout) :: self
-        class(chash), intent(in)    :: ch
+        class(ori),   intent(inout)   :: self
+        class(chash), intent(in)      :: ch
         character(len=:), allocatable :: line
         line = ch%chash2str()
-        call self%str2ori(line)
+        call self%str2ori(line, is_ptcl=.false.)
     end subroutine chash2ori
 
-    !>  \brief  converts euler angles into BILD Chimera readbale format
+    !>  \brief  converts euler angles into BILD Chimera readable format
     subroutine write2bild( self, fnr )
-        class(ori),     intent(inout) :: self
-        integer,        intent(in)    :: fnr
+        class(ori), intent(inout) :: self
+        integer,    intent(in)    :: fnr
         real :: xyz_start(3), xyz_end(3), radius
         xyz_start = self%get_normal()
         xyz_end   = 1.1 * xyz_start
         radius    = 0.05
-        write(fnr,'(A,3F7.3,F7.3,F7.3,F7.3,F6.3)')'.cylinder ',xyz_start,xyz_end,radius
+        write(fnr,'(A,3F7.3,F7.3,F7.3,F7.3,F6.3)')'.cylinder ', xyz_start, xyz_end, radius
     end subroutine write2bild
 
-    function get_ctfvars(self) result(ctfvars)
+    function get_ctfvars( self ) result( ctfvars )
         class(ori), intent(in) :: self
         type(ctfparams)        :: ctfvars
         character(len=STDLEN)  :: ctfstr, phplate
@@ -735,17 +906,17 @@ contains
         ctfvars%phshift = self%get('phshift')
     end function get_ctfvars
 
-    subroutine set_ctfvars(self, ctfvars)
+    subroutine set_ctfvars( self, ctfvars )
         class(ori),       intent(inout) :: self
         class(ctfparams), intent(in)    :: ctfvars
-        call self%set('smpd',  ctfvars%smpd)
+        call self%set('smpd', ctfvars%smpd)
         select case( ctfvars%ctfflag )
-        case(CTFFLAG_NO)
-            call self%set('ctf', 'no')
-        case(CTFFLAG_YES)
-            call self%set('ctf', 'yes')
-        case(CTFFLAG_FLIP)
-            call self%set('ctf', 'flip')
+            case(CTFFLAG_NO)
+                call self%set('ctf', 'no')
+            case(CTFFLAG_YES)
+                call self%set('ctf', 'yes')
+            case(CTFFLAG_FLIP)
+                call self%set('ctf', 'flip')
         end select
         call self%set('cs',    ctfvars%cs)
         call self%set('kv',    ctfvars%kv)
@@ -756,8 +927,8 @@ contains
         else
             call self%set('phaseplate', 'no')
         endif
-        call self%set('dfx', ctfvars%dfx)
-        call self%set('dfy', ctfvars%dfy)
+        call self%set('dfx',    ctfvars%dfx)
+        call self%set('dfy',    ctfvars%dfy)
         call self%set('angast', ctfvars%angast)
     end subroutine set_ctfvars
 
@@ -768,18 +939,28 @@ contains
         euls = self%get_euler()
         rmat = euler2m(euls)
         write(logfhandle,*) rmat(1,1), rmat(1,2), rmat(1,3), &
-            &      rmat(2,1), rmat(2,2), rmat(2,3), &
-            &      rmat(3,1), rmat(3,2), rmat(3,3)
+                     &      rmat(2,1), rmat(2,2), rmat(2,3), &
+                     &      rmat(3,1), rmat(3,2), rmat(3,3)
     end subroutine print_mat
 
-    !>  \brief prints ori data
     subroutine print_ori( self )
         class(ori), intent(inout) :: self
+        character(len=KEYLEN) :: flag
+        integer :: i
+        if( self%is_ptcl )then
+            do i=1,N_PTCL_ORIPARAMS-1,1
+                flag = get_oriparam_flag(i)
+                write(logfhandle,"(1X,A,A)", advance="no") trim(flag), '='
+                write(logfhandle,"(A)", advance="no") trim(real2str(self%pparms(i)))
+            end do
+            flag = get_oriparam_flag(N_PTCL_ORIPARAMS)
+            write(logfhandle,"(1X,A,A)", advance="no") trim(flag), '='
+            write(logfhandle,"(A)") trim(real2str(self%pparms(N_PTCL_ORIPARAMS)))
+        endif
         call self%htab%print()
         call self%chtab%print_key_val_pairs(logfhandle)
     end subroutine print_ori
 
-    !>  \brief  writes orientation info
     subroutine write( self, fhandle )
         class(ori), intent(inout) :: self
         integer,    intent(in)    :: fhandle
@@ -788,13 +969,14 @@ contains
         if( allocated(str) ) write(fhandle,'(a)') str
     end subroutine write
 
-    !>  \brief  reads all orientation info (by line) into the hash-tables
     subroutine read( self, fhandle )
         class(ori), intent(inout) :: self
         integer,    intent(in)    :: fhandle
         character(len=2048) :: line
+        logical :: is_ptcl
         read(fhandle,fmt='(A)') line
-        call self%str2ori(line)
+        is_ptcl = self%is_ptcl
+        call self%str2ori(line, is_ptcl)
     end subroutine read
 
     ! CALCULATORS
@@ -830,8 +1012,8 @@ contains
     subroutine compeuler( self1, self2, self_out )
         class(ori), intent(in)    :: self1, self2
         type(ori),  intent(inout) :: self_out
-        real      :: euls(3), euls1(3), euls2(3), rmat(3,3), rmat1(3,3), rmat2(3,3)
-        call self_out%new_ori
+        real :: euls(3), euls1(3), euls2(3), rmat(3,3), rmat1(3,3), rmat2(3,3)
+        call self_out%new_ori(self1%is_ptcl)
         euls1 = self1%get_euler()
         euls2 = self2%get_euler()
         rmat1 = euler2m(euls1)
@@ -847,9 +1029,9 @@ contains
     !! \param ori3d,ori2d,o_out ori class type rotational matrices
     subroutine compose3d2d( ori3d, ori2d, o_out )
         class(ori), intent(inout) :: ori3d, ori2d, o_out
-        real                      :: ori3dx,ori3dy,x,y,e3,euls(3)
-        real                      :: R3d(3,3), R2d(3,3), R(3,3)
-        logical                   :: mirr
+        real    :: ori3dx, ori3dy, x, y, e3, euls(3)
+        real    :: R3d(3,3), R2d(3,3), R(3,3)
+        logical :: mirr
         ! inpl from 3D
         ori3dx = ori3d%get('x')
         ori3dy = ori3d%get('y')
@@ -861,9 +1043,9 @@ contains
             ori3dy  = -ori3dy
         endif
         R3d = make_transfmat(euls(3), ori3dx, ori3dy)
-        x  = ori2d%get('x')
-        y  = ori2d%get('y')
-        e3 = ori2d%e3get()
+        x   = ori2d%get('x')
+        y   = ori2d%get('y')
+        e3  = ori2d%e3get()
         ! inpls composition and determination
         R2d = make_transfmat(e3, x, y)
         R   = matmul(R2d,R3d)
@@ -874,8 +1056,8 @@ contains
             e3 = -e3
             y  = -y
         endif
-        call o_out%set('x',x)
-        call o_out%set('y',y)
+        call o_out%set('x', x)
+        call o_out%set('y', y)
         euls(3) = e3
         call o_out%set_euler(euls)
 
@@ -883,12 +1065,12 @@ contains
 
             !>  extracts in-plane parameters from transformation matrix
             subroutine transfmat2inpls( R, psi, tx, ty )
-                real,intent(inout) :: psi,tx,ty
+                real,intent(inout) :: psi, tx, ty
                 real,intent(in)    :: R(3,3)
                 psi = rad2deg( myacos( R(1,1) ))
-                if( R(1,2)<0. )psi=360.-psi
-                tx  = R(1,3)
-                ty  = R(2,3)
+                if( R(1,2) < 0. ) psi = 360. - psi
+                tx = R(1,3)
+                ty = R(2,3)
             end subroutine transfmat2inpls
 
     end subroutine compose3d2d
@@ -896,9 +1078,9 @@ contains
     subroutine map3dshift22d( self, sh3d )
         class(ori), intent(inout) :: self
         real,       intent(in)    :: sh3d(3) !< 3D shift
-        real :: old_x,old_y,x,y,cx,cy
-        real :: u(3),v(3),shift(3),euls(3)
-        real :: phi,cosphi,sinphi,rmat(3,3)
+        real :: old_x, old_y, x, y, cx, cy
+        real :: u(3), v(3), shift(3), euls(3)
+        real :: phi, cosphi, sinphi, rmat(3,3)
         euls   = self%get_euler()
         phi    = deg2rad(euls(3))
         cosphi = cos( phi )
@@ -907,15 +1089,15 @@ contains
         old_y  = self%get('y')
         ! 3D Shift rotated with respect to projdir
         rmat  = euler2m(euls)
-        shift = matmul(rmat,sh3d)
+        shift = matmul(rmat, sh3d)
         ! Projection onto xy plane
-        shift = shift - dot_product(shift,zvec) * zvec
+        shift = shift - dot_product(shift, zvec) * zvec
         ! e3-composed xy plane unit vectors
         u = [  cosphi,sinphi,0. ]
         v = [ -sinphi,cosphi,0. ]
         ! composed shift clockwise components
-        cx =  old_x * cosphi + old_y * sinphi + dot_product(u,shift)
-        cy = -old_x * sinphi + old_y * cosphi + dot_product(v,shift)
+        cx =  old_x * cosphi + old_y * sinphi + dot_product(u, shift)
+        cy = -old_x * sinphi + old_y * cosphi + dot_product(v, shift)
         ! Identification
         x = cx * cosphi - cy * sinphi
         y = cx * sinphi + cy * cosphi
@@ -930,9 +1112,9 @@ contains
     subroutine mirror3d( self )
         class(ori), intent(inout) :: self
         real :: mirr_mat(3,3), rmat(3,3), euls(3)
-        mirr_mat = 0.
-        mirr_mat(1,1) = 1.
-        mirr_mat(2,2) = 1.
+        mirr_mat      =  0.
+        mirr_mat(1,1) =  1.
+        mirr_mat(2,2) =  1.
         mirr_mat(3,3) = -1.
         euls = self%get_euler()
         rmat = euler2m(euls)
@@ -948,7 +1130,7 @@ contains
     !!          the image after projection
     subroutine mirror2d( self )
         class(ori), intent(inout) :: self
-        real      :: euls(3), rmat(3,3), euls_mirr(3)
+        real :: euls(3), rmat(3,3), euls_mirr(3)
         euls = self%get_euler()
         euls_mirr(1) = euls(1)
         euls_mirr(2) = 180. + euls(2)
@@ -972,17 +1154,6 @@ contains
 
     ! GEODESIC DISTANCE METRIC
 
-    ! Here we seek to define a bi-invariant metric that respect the topology on SO(3), i.e.
-    ! we will define ta metric that attemts to find the rotation required to bring
-    ! R1 in register with R2. Our goal is to find R such that R1=matmul(R,R2), thus
-    ! R=matmul(R1,transpose(R2)).
-    !
-    ! Formally:
-    !
-    ! dist: SO(3)xSO(3)->R+
-    !
-    ! This metric is sensitive to in-plane rotation
-
     !>  \brief  this metric is measuring the frobenius deviation from the identity matrix .in.[0,2*sqrt(2)]
     !!          Larochelle, P.M., Murray, A.P., Angeles, J., A distance metric for finite
     !!          sets of rigid-body displacement in the polar decomposition. ASME J. Mech. Des.
@@ -1000,8 +1171,8 @@ contains
         euls2 = self2%get_euler()
         rmat1 = euler2m(euls1)
         rmat2 = euler2m(euls2)
-        diffmat = Imat - matmul(rmat1,transpose(rmat2))
-        sumsq   = sum(diffmat*diffmat)
+        diffmat = Imat - matmul(rmat1, transpose(rmat2))
+        sumsq   = sum(diffmat * diffmat)
         if( sumsq > 1e-6 )then
             geodesic_dist = sqrt(sumsq)
         else
@@ -1018,7 +1189,7 @@ contains
         real :: dist, normal1(3), normal2(3)
         normal1 = self1%get_normal()
         normal2 = self2%get_normal()
-        dist = myacos(dot_product(normal1,normal2))
+        dist = myacos(dot_product(normal1, normal2))
     end function euldist
 
     !>  \brief  calculates the distance (in radians) btw the in-plane rotations
@@ -1037,24 +1208,28 @@ contains
 
     ! DESTRUCTORS
 
-    !>  \brief  is a destructor
+    subroutine reset_pparms( self )
+        class(ori), intent(inout) :: self
+        self%pparms = 0.
+    end subroutine reset_pparms
+
     subroutine kill_hash( self )
         class(ori), intent(inout) :: self
         call self%htab%kill
     end subroutine kill_hash
 
-    !>  \brief  is a destructor
     subroutine kill_chash( self )
         class(ori), intent(inout) :: self
         call self%chtab%kill
     end subroutine kill_chash
 
-    !>  \brief  is a destructor
     subroutine kill( self )
         class(ori), intent(inout) :: self
         if( self%existence )then
+            self%pparms = 0.
             call self%htab%kill
             call self%chtab%kill
+            self%is_ptcl   = .false.
             self%existence = .false.
         endif
     end subroutine kill
@@ -1264,9 +1439,9 @@ contains
         type(ori) :: e1, e2, e3
         real :: euls(3), normal(3), mat(3,3), normal2(3), dist
         logical :: passed
-        call e1%new_ori
-        call e2%new_ori
-        call e3%new_ori
+        call e1%new_ori(.false.)
+        call e2%new_ori(.false.)
+        call e3%new_ori(.false.)
         write(logfhandle,'(a)') '**info(simple_ori_unit_test: testing all functionality'
         passed = .false.
         call e1%set_euler([1.,2.,3.])

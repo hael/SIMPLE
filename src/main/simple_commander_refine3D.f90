@@ -74,7 +74,7 @@ contains
         integer          :: i
         call params%new(cline)
         do i=500,5000,500
-            o = oris(i)
+            o = oris(i, is_ptcl=.false.)
             call o%spiral
             ares = o%find_angres()
             write(logfhandle,'(A,1X,I7,1X,A,1X,F5.2)') 'NR OF PROJDIRS:', i, 'RESOLUTION:', resang(ares, params%moldiam)

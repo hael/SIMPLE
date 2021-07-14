@@ -140,7 +140,7 @@ contains
         do iptcl = params_glob%fromp, params_glob%top
             if( ptcl_mask(iptcl) )then
                 ! orientation peaks
-                call s3D%o_peaks(iptcl)%new(npeaks)
+                call s3D%o_peaks(iptcl)%new(npeaks, is_ptcl=.false.)
                 ! transfer CTF params
                 if( params_glob%ctf.ne.'no' )then
                     call s3D%o_peaks(iptcl)%set_all2single('iptcl',  real(iptcl))

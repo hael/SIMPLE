@@ -1218,7 +1218,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                  ! executable
-        &1, 0, 0, 11, 8, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 0, 0, 11, 7, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
@@ -1257,8 +1257,7 @@ contains
         call cluster2D%set_input('filt_ctrls', 6, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
         '(yes|no){yes}', .false., 'yes')
-        call cluster2D%set_input('filt_ctrls', 7, ptclw)
-        call cluster2D%set_input('filt_ctrls', 8, graphene_filt)
+        call cluster2D%set_input('filt_ctrls', 7, graphene_filt)
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, msk)
         call cluster2D%set_input('mask_ctrls', 2, inner)
@@ -1936,7 +1935,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class&
         & averages obtained with cluster2D',&                                        ! descr_long
         &'simple_exec',&                                                        ! executable
-        &0, 0, 0, 7, 7, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
+        &0, 0, 0, 7, 4, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1964,9 +1963,6 @@ contains
             &'low-pass limit in Angstroms', .false., 0.)
         call initial_3Dmodel%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
             &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 8.)
-        call initial_3Dmodel%set_input('filt_ctrls', 5, wcrit)
-        call initial_3Dmodel%set_input('filt_ctrls', 6, ptclw)
-        call initial_3Dmodel%set_input('filt_ctrls', 7, envfsc)
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, msk)
         call initial_3Dmodel%set_input('mask_ctrls', 2, inner)

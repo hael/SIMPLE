@@ -10,7 +10,7 @@ type(binoris)        :: bos
 integer, allocatable :: strlens(:)
 
 ! prepare stack oris in project
-call myproject%os_stk%new(2)
+call myproject%os_stk%new(2, is_ptcl=.false.)
 ! motion_correct
 call myproject%os_stk%set(1, 'movie',       'movie1.mrc')
 call myproject%os_stk%set(1, 'intg',        'movie1_intg.mrc')
@@ -57,19 +57,19 @@ call myproject%print_info('myproject.simple')
 call myproject%write_segment2txt('stk', 'myproject_os_stk_2.txt')
 
 ! generate 3 algndocs for testing merging
-call myproject%os_ptcl3D%new(9)
+call myproject%os_ptcl3D%new(9, is_ptcl=.true.)
 call myproject%os_ptcl3D%set_euler(1, [1.,1.,1.])
 call myproject%os_ptcl3D%set_euler(2, [1.,1.,1.])
 call myproject%os_ptcl3D%set_euler(3, [1.,1.,1.])
 print *, 'writing doc1'
 call myproject%write('doc1.simple', [1,3])
-call myproject%os_ptcl3D%new(9)
+call myproject%os_ptcl3D%new(9, is_ptcl=.true.)
 call myproject%os_ptcl3D%set_euler(4, [2.,2.,2.])
 call myproject%os_ptcl3D%set_euler(5, [2.,2.,2.])
 call myproject%os_ptcl3D%set_euler(6, [2.,2.,2.])
 print *, 'writing doc2'
 call myproject%write('doc2.simple', [4,6])
-call myproject%os_ptcl3D%new(9)
+call myproject%os_ptcl3D%new(9, is_ptcl=.true.)
 call myproject%os_ptcl3D%set_euler(7, [3.,3.,3.])
 call myproject%os_ptcl3D%set_euler(8, [3.,3.,3.])
 call myproject%os_ptcl3D%set_euler(9, [3.,3.,3.])

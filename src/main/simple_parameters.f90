@@ -1065,7 +1065,7 @@ contains
                     ! nptcls
                     if( .not. cline%defined('nptcls') ) self%nptcls = bos%get_n_records(self%spproj_iseg)
                     ! smpd/box
-                    call o%new
+                    call o%new(is_ptcl=.false.)
                     select case(self%spproj_iseg)
                         case(MIC_SEG)
                             call bos%read_first_segment_record(MIC_SEG, o)

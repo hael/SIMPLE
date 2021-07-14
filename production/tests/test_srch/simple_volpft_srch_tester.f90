@@ -62,7 +62,7 @@ contains
         ! deal with target (randomly rotated version of vols(1))
         call vol_tmp%new([p%box,p%box,p%box], p%smpd)
         call vol_tmp%read(p%vols(1))
-        call ranori%new
+        call ranori%new(is_ptcl=.false.)
         ! call ranori%rnd_ori
         call ranori%set_euler([20.,40.,160.])
         call b%vol%copy( rotvol(vol_tmp, ranori))

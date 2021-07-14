@@ -81,7 +81,7 @@ contains
             call ofac%new(opt_symaxes(ithr)%ospec, opt_symaxes(ithr)%nlopt)
         end do
         ! create global symaxis
-        call saxis_glob%new
+        call saxis_glob%new(is_ptcl=.false.)
         call o%kill
         call symobj%kill
     end subroutine volpft_symsrch_init
@@ -101,10 +101,10 @@ contains
         fromto(2) = NPROJ
         ntot      = fromto(2) - fromto(1) + 1
         ! container for candidate symmetry axes
-        call cand_axes%new(NPROJ)
+        call cand_axes%new(NPROJ, is_ptcl=.false.)
         call cand_axes%set_all2single('corr', -1.0) ! for later ordering
         ! projection directions in discrete search
-        call espace%new(NPROJ)
+        call espace%new(NPROJ, is_ptcl=.false.)
         call espace%spiral
         ! only consider the northern hemisphere
         do iproj = 1, NPROJ

@@ -81,6 +81,7 @@ contains
         type(chash)      :: job_descr
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
+        call cline%set('ptclw','no')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -135,11 +136,7 @@ contains
             call build%spproj_field%mul_shifts(params%mul)
         endif
         ! setup weights
-        if( trim(params%ptclw) .eq. 'yes' )then
-            call build%spproj_field%calc_soft_weights2D
-        else
-            call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)
-        endif
+        call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)
         ! even/odd partitioning
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
         ! write
@@ -201,6 +198,7 @@ contains
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('refine')    ) call cline%set('refine', 'greedy')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
+        call cline%set('ptclw','no')
         do_ranking = .true.
         if( cline%defined('stream') )then
             if( cline%get_carg('stream').eq.'yes' ) do_ranking = .false.
@@ -477,7 +475,7 @@ contains
         if( .not. cline%defined('lpthresh')  ) call cline%set('lpthresh',    30.)
         if( .not. cline%defined('ndev')      ) call cline%set('ndev',        1.5)
         if( .not. cline%defined('oritype')   ) call cline%set('oritype','ptcl2D')
-        if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',      'no')
+        call cline%set('ptclw',      'no')
         call cline%set('stream','yes') ! only for parameters determination
         call seed_rnd
         call params%new(cline)
@@ -804,8 +802,8 @@ contains
                         call transfer_spproj%os_cls2D%set(icls,'pop_odd', real(eo_pops(icls,2)))
                     enddo
                     deallocate(eo_pops)
-                    call transfer_spproj%os_ptcl2D%new(n2update)
-                    call transfer_spproj%os_ptcl3D%new(n2update)
+                    call transfer_spproj%os_ptcl2D%new(n2update, is_ptcl=.true.)
+                    call transfer_spproj%os_ptcl3D%new(n2update, is_ptcl=.true.)
                     cnt = 0
                     do iptcl = 1,ntot
                         if( transfer_mask(iptcl) )then
@@ -819,7 +817,7 @@ contains
                     call transfer_spproj%write(PROJFILE_POOL)
                     call transfer_spproj%os_ptcl3D%kill
                     call transfer_spproj%os_stk%kill
-                    call transfer_spproj%os_ptcl2D%new(n2update)
+                    call transfer_spproj%os_ptcl2D%new(n2update, is_ptcl=.true.)
                 else
                     call spproj%write(PROJFILE_POOL)
                     n2update = ntot
@@ -1081,7 +1079,7 @@ contains
                 nmics_imported = pool_proj%os_mic%get_noris()
                 ! add movies
                 if( nmics_imported == 0 )then
-                    call pool_proj%os_mic%new(n_buffer_spprojs)
+                    call pool_proj%os_mic%new(n_buffer_spprojs, is_ptcl=.false.)
                 else
                     call pool_proj%os_mic%reallocate(nmics_imported+n_buffer_spprojs)
                 endif
@@ -1097,7 +1095,7 @@ contains
                 nmics_imported = pool_proj%os_mic%get_noris()
                 ! fetch stack list
                 allocate(stk_list(n_buffer_stks))
-                call os_stk%new(n_buffer_stks)
+                call os_stk%new(n_buffer_stks, is_ptcl=.false.)
                 istk = 0
                 do iproj=1,n_buffer_spprojs
                     if( nptcls(iproj) == 0 )cycle
@@ -1545,9 +1543,9 @@ contains
                 call buffer_proj%projinfo%delete_entry('projname')
                 call buffer_proj%projinfo%delete_entry('projfile')
                 call buffer_proj%update_projinfo(cline_cluster2D_buffer)
-                call buffer_proj%os_stk%new(n_buffer_stks)
-                call buffer_proj%os_ptcl2D%new(n_buffer_ptcls)
-                call buffer_proj%os_ptcl3D%new(n_buffer_ptcls)
+                call buffer_proj%os_stk%new(n_buffer_stks,     is_ptcl=.false.)
+                call buffer_proj%os_ptcl2D%new(n_buffer_ptcls, is_ptcl=.true.)
+                call buffer_proj%os_ptcl3D%new(n_buffer_ptcls, is_ptcl=.true.)
                 fromstk = max(1,nstks_imported-n_buffer_stks+1)
                 tostk   = nstks_imported
                 cnt   = 0
@@ -1736,7 +1734,7 @@ contains
                 call dummy_proj%projinfo%delete_entry('projname')
                 call dummy_proj%projinfo%delete_entry('projfile')
                 call dummy_proj%update_projinfo(cline_scale)
-                call os%new(n)
+                call os%new(n, is_ptcl=.false.)
                 call os%set_all2single('state', 1.)
                 call os%set_all2single('ctf',   'no')
                 call os%set_all2single('smpd',  orig_smpd)
@@ -1772,7 +1770,7 @@ contains
             !> for initial write of set of user adjustable parameters
             subroutine write_user_params
                 type(oris) :: os
-                call os%new(1)
+                call os%new(1, is_ptcl=.false.)
                 call os%set(1,'lpthresh',params%lpthresh)
                 call os%set(1,'ndev',    params%ndev)
                 call os%write(USER_PARAMS)
@@ -1786,7 +1784,7 @@ contains
                 if( .not.file_exists(USER_PARAMS) ) return ! use of default/last update
                 lpthresh = params%lpthresh
                 ndev     = params%ndev
-                call os%new(1)
+                call os%new(1, is_ptcl=.false.)
                 call os%read(USER_PARAMS)
                 if( os%isthere(1,'lpthresh') )then
                     lpthresh = os%get(1,'lpthresh')
@@ -1846,6 +1844,7 @@ contains
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       30. )
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',      30. )
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
+        call cline%set('ptclw','no')
         call cline%delete('clip')
         ! master parameters
         call params%new(cline)
@@ -2070,6 +2069,7 @@ contains
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
         call cline%set('stream','no')
+        call cline%set('ptclw','no')
         ! builder & params
         call build%init_params_and_build_spproj(cline, params)
         ! sanity check
@@ -2263,7 +2263,7 @@ contains
         call cavger_write(trim(params%refs_odd),  'odd'   )
         call cavger_kill()
         ! write project: cls2D and state congruent cls3D
-        call build%spproj%os_cls3D%new(params%ncls)
+        call build%spproj%os_cls3D%new(params%ncls, is_ptcl=.false.)
         states = build%spproj%os_cls2D%get_all('state')
         call build%spproj%os_cls3D%set_all('state',states)
         call build%spproj%write_segment_inside('cls2D', params%projfile)
@@ -2291,7 +2291,7 @@ contains
         if( build%spproj_field%get_noris() == params%ncls )then
             ! all we need to do is fetch from classdoc in projfile &
             ! order according to resolution
-            call clsdoc_ranked%new(params%ncls)
+            call clsdoc_ranked%new(params%ncls, is_ptcl=.false.)
             res = build%spproj%os_cls2D%get_all('res')
             allocate(order(params%ncls))
             order = (/(iclass,iclass=1,params%ncls)/)

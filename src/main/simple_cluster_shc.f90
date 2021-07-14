@@ -193,7 +193,7 @@ contains
         type(cluster_shc) :: shcc
         type(oris)        :: o
         real              :: sim
-        o = oris(10)
+        o = oris(10, is_ptcl=.false.)
         ! make known solution
         labels(1:5)  = 1
         labels(6:10) = 2

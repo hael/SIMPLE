@@ -287,7 +287,7 @@ contains
         character(len=STDLEN) :: phaseplate
         integer               :: i
         if( nlines(fname) /= 3 ) THROW_HARD('Invalid document; read_doc')
-        call os%new(3)
+        call os%new(3, is_ptcl=.false.)
         call os%read(fname)
         self%parms%smpd    = os%get(1,'smpd')
         self%parms%cs      = os%get(1,'cs')
@@ -1468,9 +1468,9 @@ contains
         real(dp)   :: x,y
         integer    :: i,pi,pj,cnt
         if( DEBUG_HERE )then
-            call os%new(3+self%ntotpatch)
+            call os%new(3+self%ntotpatch, is_ptcl=.false.)
         else
-            call os%new(3)
+            call os%new(3, is_ptcl=.false.)
         endif
         call os%set(1,'smpd',    self%parms%smpd)
         call os%set(1,'cs',      self%parms%cs)

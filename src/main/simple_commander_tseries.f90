@@ -156,7 +156,7 @@ contains
         call spproj%read(params%projfile)
         ! # of particles
         call find_ldim_nptcls(params%stk, lfoo, params%nptcls)
-        call os%new(params%nptcls)
+        call os%new(params%nptcls, is_ptcl=.true.)
         ! CTF parameters
         ctfvars%smpd    = params%smpd
         ctfvars%phshift = 0.
@@ -385,7 +385,7 @@ contains
         params%nframesgrp = 0
         call cline_mcorr%set('prg', 'motion_correct')
         call cline_mcorr%set('mkdir', 'no')
-        call o%new
+        call o%new(is_ptcl=.false.)
         ctfvars%smpd  = params%smpd
         frame_counter = 0
         ! motion corr

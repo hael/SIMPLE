@@ -373,7 +373,7 @@ contains
             if( cline%defined('e1') .or. cline%defined('e2') .or. cline%defined('e3') )then
                 if( .not. cline%defined('smpd') ) THROW_HARD('need smpd (sampling distance) input for volume rotation')
                 if( .not. cline%defined('msk')  ) THROW_HARD('need msk (mask radius) input for volume rotation')
-                call o%new
+                call o%new(is_ptcl=.false.)
                 call o%set_euler([params%e1,params%e2,params%e3])
                 shvec     = [params%xsh,params%ysh,params%zsh]
                 vol_rot   = rotvol(build%vol, o,  shvec)
@@ -615,7 +615,7 @@ contains
                 vol_out = rotvol(vol2, orientation, cxyz(2:4))
                 call orientation%print_ori
                 if( cline%defined('outfile') )then
-                    call ori2write%new(1)
+                    call ori2write%new(1, is_ptcl=.false.)
                     call ori2write%set_ori(1,orientation)
                     call ori2write%write(params%outfile)
                     call ori2write%kill
@@ -680,7 +680,7 @@ contains
         call volpft_symsrch_init(build%vol, params%pgrp, params%hp, params%lp)
         ! search
         call volpft_srch4symaxis(symaxis)
-        call symaxis4write%new(1)
+        call symaxis4write%new(1, is_ptcl=.false.)
         call symaxis4write%set_ori(1, symaxis)
         call symaxis4write%write(SYMAXISTAB, [1,1])
         if( cline%defined('projfile') )then

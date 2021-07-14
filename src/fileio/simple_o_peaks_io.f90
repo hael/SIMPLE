@@ -138,7 +138,7 @@ contains
             end do
             ! transfer record to o_peak
             noris = o_peak%get_noris()
-            if( noris < npeaks ) call o_peak%new(npeaks)
+            if( noris < npeaks ) call o_peak%new(npeaks, is_ptcl=.false.)
             n_nozero = 0
             do ipeak=1,NPEAKS2REFINE
                 if( o_peak_record(ipeak)%ow > TINY )then

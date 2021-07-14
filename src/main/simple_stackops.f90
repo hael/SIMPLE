@@ -181,7 +181,7 @@ contains
         ldim(3) = 1
         call raise_exception( n, ldim, 'stats_imgfile' )
         call img%new(ldim,1.)
-        call os%new(n)
+        call os%new(n, is_ptcl=.false.)
         write(logfhandle,'(a)') '>>> CALCULATING STACK STATISTICS'
         do i=1,n
             call progress(i,n)

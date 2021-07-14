@@ -464,7 +464,7 @@ contains
         if( l_lpset )then
             spproj%os_cls3D = work_proj2%os_ptcl3D
         else
-            call spproj%os_cls3D%new(ncavgs)
+            call spproj%os_cls3D%new(ncavgs, is_ptcl=.false.)
             do icls=1,ncavgs
                 call work_proj2%os_ptcl3D%get_ori(icls, o_tmp)
                 call spproj%os_cls3D%set_ori(icls, o_tmp)

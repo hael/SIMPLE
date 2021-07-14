@@ -283,7 +283,7 @@ contains
                     iptcl  = iptcl+1
                     istate = os%get_state(iptcl)
                     if( istate <= 1 )cycle
-                    call opeaks%new(NPEAKS2REFINE)
+                    call opeaks%new(NPEAKS2REFINE, is_ptcl=.false.)
                     call read_o_peak(opeaks, [1,nptcls_part], i, n_nozero)
                     call opeaks%set_all2single('state',real(istate))
                     call write_o_peak(opeaks, [1,nptcls_part], i)

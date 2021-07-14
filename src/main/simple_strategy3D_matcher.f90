@@ -170,7 +170,7 @@ contains
                        ! symmetry pairing matrix
                         c1_symop = sym('c1')
                         params_glob%nspace = min(params_glob%nspace*build_glob%pgrpsyms%get_nsym(), 2500)
-                        call build_glob%eulspace%new( params_glob%nspace )
+                        call build_glob%eulspace%new(params_glob%nspace, is_ptcl=.false.)
                         call build_glob%eulspace%spiral
                         call build_glob%pgrpsyms%nearest_sym_neighbors(build_glob%eulspace, symmat)
                     case('clustersoft')

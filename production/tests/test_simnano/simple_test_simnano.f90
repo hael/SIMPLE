@@ -40,7 +40,7 @@ call params%new(cline)
 ! init
 snr_pink     = params%snr/0.2
 snr_detector = params%snr/0.8
-call spiral%new(params%nptcls)
+call spiral%new(params%nptcls, is_ptcl=.false.)
 call spiral%spiral
 ! simulate graphene
 path = simple_getenv('SIMPLE_PATH',envstat)
@@ -79,7 +79,7 @@ pad = len(int2str(params%nptcls))
 ! graphene slice
 call graphene_vol%new([params%box,params%box,params%box],params%smpd)
 call graphene%new([params%boxpd,params%boxpd,1],params%smpd)
-call orientation%new
+call orientation%new(is_ptcl=.false.)
 call orientation%set_euler([0.,0.,0.])
 call graphene_vol%read(graphene_fname)
 call graphene_vol%neg

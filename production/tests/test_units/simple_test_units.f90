@@ -137,7 +137,7 @@ contains
         integer   :: i
         real      :: euls(3), euls_shifted(3)
         logical   :: doshift
-        call o%new
+        call o%new(is_ptcl=.false.)
         do i=1,100000
             euls(1) = ran3()*800.-400.
             euls(2) = ran3()*500-250.

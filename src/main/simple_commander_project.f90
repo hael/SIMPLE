@@ -147,7 +147,6 @@ contains
         call params%new(cline, silent=.true.)
         call spproj%print_info(params%projfile)
         call spproj%kill
-        ! no additional printing
     end subroutine exec_print_project_info
 
     subroutine exec_print_project_vals( self, cline )
@@ -181,7 +180,7 @@ contains
         noris   = bos_doc%get_n_records(iseg)
         if( noris == 0 ) return
         ! read segment
-        call os%new(noris)
+        call os%new(noris, is_ptcl=iseg==3.or.iseg==6) ! see simple_sp_project
         call bos_doc%read_segment(iseg, os)
         ! look for keys
         allocate(keys_present(nargs))
@@ -344,7 +343,7 @@ contains
         endif
         if( inputted_deftab )then
             ! micrographs with pre-determined CTF parameters
-            call deftab%new(nlines(params%deftab))
+            call deftab%new(nlines(params%deftab), is_ptcl=.false.)
             call deftab%read_ctfparams_state_eo(params%deftab)
             call spproj%add_intgs(movfnames, deftab, ctfvars)
             call deftab%kill
@@ -463,13 +462,13 @@ contains
         ! oris input
         if( inputted_oritab )then
             ndatlines = binread_nlines(params%oritab)
-            call os%new(ndatlines)
+            call os%new(ndatlines, is_ptcl=.false.)
             call binread_oritab(params%oritab, spproj, os, [1,ndatlines])
             call spproj%kill ! for safety
         endif
         if( inputted_deftab )then
             ndatlines = binread_nlines(params%deftab)
-            call os%new(ndatlines)
+            call os%new(ndatlines, is_ptcl=.false.)
             call binread_ctfparams_state_eo(params%deftab, spproj, os, [1,ndatlines])
             call spproj%kill ! for safety
         endif
@@ -480,7 +479,7 @@ contains
             if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
                 THROW_HARD('unsupported nr of rec:s in plaintexttab; exec_import_particles')
             endif
-            call os%new(ndatlines)
+            call os%new(ndatlines, is_ptcl=.false.)
             allocate( line(nrecs) )
             do i=1,ndatlines
                 call paramfile%readNextDataLine(line)
@@ -640,7 +639,7 @@ contains
             if( n_ori_inputs == 0 .and. trim(params%ctf) .eq. 'no' )then
                 ! get number of particles from stack
                 call find_ldim_nptcls(params%stk, lfoo, params%nptcls)
-                call os%new(params%nptcls)
+                call os%new(params%nptcls, is_ptcl=.true.)
             endif
             if( inputted_oritab .or. inputted_deftab )then
                 ! states are not to be modified
@@ -975,7 +974,7 @@ contains
             enddo
             nmics = cnt
             if( nmics > 0 )then
-                call spproj%os_mic%new(nmics)
+                call spproj%os_mic%new(nmics, is_ptcl=.false.)
                 cnt = 0
                 do ipart = 1,nparts
                     if( spproj_part(ipart)%os_mic%get_noris() == 0 ) cycle
@@ -1001,7 +1000,7 @@ contains
         nstks = cnt
         write(logfhandle,'(A,I8,A,I8)')'>>> # OF STACKS     :',nstks_orig,' -> ', nstks
         if( nstks > 0 )then
-            call spproj%os_stk%new(nstks)
+            call spproj%os_stk%new(nstks, is_ptcl=.false.)
             cnt = 0
             do ipart = 1,nparts
                 if( spproj_part(ipart)%os_stk%get_noris() == 0 ) cycle
@@ -1020,7 +1019,7 @@ contains
                 cnt = cnt + spproj_part(ipart)%os_ptcl2D%get_noris()
             enddo
             nptcls = cnt
-            call spproj%os_ptcl2D%new(nptcls)
+            call spproj%os_ptcl2D%new(nptcls, is_ptcl=.true.)
             cnt = 0
             do ipart = 1,nparts
                 if( spproj_part(ipart)%os_ptcl2D%get_noris() == 0 ) cycle
@@ -1031,7 +1030,7 @@ contains
                 call spproj_part(ipart)%kill
             enddo
             ! copy updated particles 3D segment
-            call spproj%os_ptcl3D%new(nptcls)
+            call spproj%os_ptcl3D%new(nptcls, is_ptcl=.true.)
             cnt = 0
             do ipart = 1,nparts
                 if( .not.part_mask(ipart) ) cycle
@@ -1109,8 +1108,8 @@ contains
         enddo
         !$omp end parallel do
         call spproj%read_segment('ptcl3D', params%projfile)
-        call spproj_out%os_ptcl2D%new(nptcls_part)
-        call spproj_out%os_ptcl3D%new(nptcls_part)
+        call spproj_out%os_ptcl2D%new(nptcls_part, is_ptcl=.true.)
+        call spproj_out%os_ptcl3D%new(nptcls_part, is_ptcl=.true.)
         ! stacks
         call spproj%read_segment('stk', params%projfile)
         nstks_tot = spproj%get_nstks()
@@ -1126,13 +1125,13 @@ contains
             call qsys_job_finished('simple_commander_project :: exec_prune_project')
             return
         endif
-        call spproj_out%os_stk%new(nstks_part)
+        call spproj_out%os_stk%new(nstks_part, is_ptcl=.false.)
         ! micrographs
         call spproj%read_segment('mic', params%projfile)
         nmics_tot = spproj%os_mic%get_noris()
         if( nmics_tot > 0 )then
             call spproj%get_mic2stk_inds(mic2stk_inds, stk2mic_inds)
-            call spproj_out%os_mic%new(nstks_part)
+            call spproj_out%os_mic%new(nstks_part, is_ptcl=.false.)
         endif
         ! new stacks
         box  = spproj%get_box()

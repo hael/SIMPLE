@@ -64,9 +64,9 @@ contains
         integer          :: i, class
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         if( cline%defined('ncls') )then
-            os_even = oris(params%ncls)
+            os_even = oris(params%ncls, is_ptcl=.false.)
             call build%pgrpsyms%build_refspiral(os_even)
-            call build%spproj_field%new(params%nptcls)
+            call build%spproj_field%new(params%nptcls, is_ptcl=.false.)
             do i=1,params%nptcls
                 class = irnd_uni(params%ncls)
                 call os_even%get_ori(class, orientation)
@@ -81,7 +81,7 @@ contains
             end do
         else if( cline%defined('ndiscrete') )then
             if( params%ndiscrete > 0 )then
-                call spiral%new(params%ndiscrete)
+                call spiral%new(params%ndiscrete, is_ptcl=.false.)
                 call build%pgrpsyms%build_refspiral(spiral)
                 call build%spproj_field%rnd_oris_discrete_from(spiral)
                 call spiral%kill
@@ -127,7 +127,7 @@ contains
             cline%defined('e2') .or.&
             cline%defined('e3') )then
             ! rotate input Eulers
-            call orientation%new
+            call orientation%new(is_ptcl=.false.)
             call orientation%set_euler([params%e1,params%e2,params%e3])
             if( cline%defined('state') )then
                 do i=1,build%spproj_field%get_noris()
@@ -263,7 +263,7 @@ contains
                 ! first, generate a mask based on state flag and w
                 ptcl_mask = build%spproj_field%included(consider_w=.true.)
                 allocate(clustering(noris), clustszs(NSPACE_REDUCED))
-                call osubspace%new(NSPACE_REDUCED)
+                call osubspace%new(NSPACE_REDUCED, is_ptcl=.false.)
                 call build%pgrpsyms%build_refspiral(osubspace)
                 call osubspace%write('even_pdirs'//trim(TXT_EXT), [1,NSPACE_REDUCED])
                 do iptcl=1,build%spproj_field%get_noris()
@@ -354,7 +354,7 @@ contains
         allocate(wstats(params%fromp:params%top), cstats(params%fromp:params%top),&
         &sstats(params%fromp:params%top), cxsstats(params%fromp:params%top))
         ! read o_peaks & gather stats)
-        call o_peak%new(NPEAKS2REFINE)
+        call o_peak%new(NPEAKS2REFINE, is_ptcl=.false.)
         call open_o_peaks_io(trim(params%o_peaks_file))
         do iptcl=params%fromp,params%top
             call read_o_peak(o_peak, [params%fromp,params%top], iptcl, n_nozero)
@@ -424,8 +424,8 @@ contains
         ! generate even partitioning
         parts = split_nobjs_even(params%nptcls, params%nparts)
         ! read o_peaks & gather angular distances (in degrees)
-        call o_peak1%new(NPEAKS2REFINE)
-        call o_peak2%new(NPEAKS2REFINE)
+        call o_peak1%new(NPEAKS2REFINE, is_ptcl=.false.)
+        call o_peak2%new(NPEAKS2REFINE, is_ptcl=.false.)
         write(*,'(A)') '#PARTICLE INDEX #PARTICLE_INDEX #MIN_ANG_DIST'
         do ipart = 1, params%nparts
             call open_o_peaks_io(trim(list(ipart)))
@@ -490,7 +490,7 @@ contains
         endif
         nrecs_per_line = rotmats%get_nrecs_per_line()
         if( nrecs_per_line /= 9 ) THROW_HARD('need 9 records (real nrs) per line of file (infile) describing rotation matrices')
-        call os_out%new(ndatlines)
+        call os_out%new(ndatlines, is_ptcl=.false.)
         do iline=1,ndatlines
             call rotmats%readNextDataLine(rline)
             rmat(1,1) = rline(1)
@@ -503,7 +503,7 @@ contains
             rmat(3,2) = rline(8)
             rmat(3,3) = rline(9)
             rmat = transpose(rmat)
-            call o%ori_from_rotmat(rmat)
+            call o%ori_from_rotmat(rmat, is_ptcl=.false.)
             call os_out%set_ori(iline,o)
         end do
         call os_out%swape1e3

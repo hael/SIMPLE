@@ -168,7 +168,7 @@ contains
         irot = 1
         select type(self)
             class is (pftcc_orisrch_grad)
-                call e%new()
+                call e%new(is_ptcl=.false.)
                 call e%set_euler(real(vec(1:3)))
                 if( pftcc_glob%ptcl_iseven(self%particle) )then
                     call build_glob%vol%fproject_polar(ithr, e, pftcc_glob, iseven=.true., mask=build_glob%l_resmsk)
