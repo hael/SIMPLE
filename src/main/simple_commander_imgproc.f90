@@ -848,7 +848,7 @@ contains
             if( cline%defined('oritab') .or. cline%defined('deftab') )then
                 call del_file(params%outfile)
             endif
-            call os_ran%new(params%nran)
+            call os_ran%new(params%nran, is_ptcl=.false.)
             do i=1,params%nran
                 call progress(i, params%nran)
                 call build%img%read(params%stk, pinds(i))
@@ -889,7 +889,7 @@ contains
                     endif
                 end do
                 ! make orientation structure for the best ones
-                o_here = oris(cnt)
+                o_here = oris(cnt, is_ptcl=.true.)
                 cnt = 0
                 do i=1,nincl
                     call progress(i, nincl)
@@ -913,7 +913,7 @@ contains
                     endif
                 end do
                 ! make orientation structure for the best ones
-                o_here = oris(cnt)
+                o_here = oris(cnt, is_ptcl=.true.)
                 cnt = 0
                 do i=1,nincl
                     call progress(i, nincl)
@@ -926,7 +926,7 @@ contains
                 end do
                 allocate(fname, source='extracted_oris_class'//int2str_pad(params%class,5)//trim(TXT_EXT))
             else
-                o_here = oris(nincl)
+                o_here = oris(nincl, is_ptcl=.true.)
                 do i=1,nincl
                     call progress(i, nincl)
                     call build%img%read(params%stk, pinds(i))
@@ -958,7 +958,7 @@ contains
                     endif
                 end do
                 ! make orientation structure for the extracted ones
-                o_here = oris(cnt)
+                o_here = oris(cnt, is_ptcl=.true.)
                 cnt = 0
                 do i=1,params%nptcls
                     call progress(i, params%nptcls)
@@ -982,7 +982,7 @@ contains
                     endif
                 end do
                 ! make orientation structure for the best ones
-                o_here = oris(cnt)
+                o_here = oris(cnt, is_ptcl=.true.)
                 cnt = 0
                 do i=1,params%nptcls
                     call progress(i, params%nptcls)

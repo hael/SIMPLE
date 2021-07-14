@@ -33,12 +33,13 @@ contains
     subroutine prep_strategy2D_glob
         ! gather class populations
         if( build_glob%spproj_field%isthere('class') )then
-            call build_glob%spproj_field%get_pops(s2D%cls_pops, 'class', consider_w=trim(params_glob%ptclw).eq.'yes', maxn=params_glob%ncls)
+            call build_glob%spproj_field%get_pops(s2D%cls_pops, 'class', consider_w=.false., maxn=params_glob%ncls)
         else
             ! first iteration, no class assignment: all classes are up for grab
             allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1, stat=alloc_stat)
             if(alloc_stat.ne.0)call allocchk("simple_strategy2D_alloc :: prep_strategy2D_glob")
         endif
+        if( all(s2D%cls_pops == 0) ) THROW_HARD('All class pops cannot be zero!')
     end subroutine prep_strategy2D_glob
 
     !>  prep batch related parameters (particles level)

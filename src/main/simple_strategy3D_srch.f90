@@ -217,7 +217,7 @@ contains
         logical   :: found_better
         if( DOCONTINUOUS )then
             ! BFGS over all df:s
-            call o%new
+            call o%new(is_ptcl=.false.)
             cnt = 0
             do i=self%nrefs,self%nrefs-self%npeaks+1,-1
                 cnt = cnt + 1

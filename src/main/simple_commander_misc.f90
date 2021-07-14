@@ -640,7 +640,7 @@ contains
                         object_id  = starfile_table__firstobject(star_table) ! base 0
                         num_objs   = starfile_table__numberofobjects(star_table)
                         nptcls_out = int(num_objs - object_id)
-                        call os%new(nptcls_out)
+                        call os%new(nptcls_out, is_ptcl=.true.)
                         allocate(mics(nptcls_out))
                         ind = 0
                         do while( (object_id < num_objs) .and. (object_id >= 0) )
@@ -656,7 +656,7 @@ contains
                             ctfparms%angast = parse_double(star_table, EMDL_CTF_DEFOCUS_ANGLE)
                             ! e/o
                             eo = parse_int(star_table, EMDL_PARTICLE_RANDOM_SUBSET) - 1
-                            ! Alignement parameters
+                            ! Alignment parameters
                             euls(1)  = parse_double(star_table, EMDL_ORIENT_ROT)
                             euls(2)  = parse_double(star_table, EMDL_ORIENT_TILT)
                             euls(3)  = parse_double(star_table, EMDL_ORIENT_PSI)

@@ -156,19 +156,7 @@ contains
         write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
 
         ! SETUP WEIGHTS
-        ! this needs to be done prior to search such that each part
-        ! sees the same information in distributed execution
-        ! has to be done prior to classaverager initialization
-        if( which_iter > 3 )then
-            if( trim(params_glob%ptclw) .eq. 'yes' )then
-                call build_glob%spproj_field%calc_soft_weights2D
-            else
-                call build_glob%spproj_field%calc_hard_weights2D(params_glob%frac, params_glob%ncls)
-            endif
-        else
-            call build_glob%spproj_field%set_all2single('w', 1.0)
-        endif
-        write(logfhandle,'(A)') '>>> WEIGHTS ASSIGNED'
+        call build_glob%spproj_field%set_all2single('w', 1.0)
 
         ! PREP REFERENCES
         call cavger_new('class', ptcl_mask)
@@ -243,8 +231,8 @@ contains
             if( L_BENCH ) rt_init = rt_init + toc(t_init)
             ! Particles threaded loop
             if( L_BENCH ) t_align = tic()
-            !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,updatecnt,frac)&
-            !$omp schedule(static) proc_bind(close)
+            !omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,updatecnt,frac)&
+            !omp schedule(static) proc_bind(close)
             do iptcl_batch = 1,batchsz                     ! particle batch index
                 iptcl_map  = batch_start + iptcl_batch - 1 ! masked global index (cumulative batch index)
                 iptcl      = pinds(iptcl_map)              ! global index
@@ -299,12 +287,11 @@ contains
                 strategy2Dspecs(iptcl_batch)%iptcl_map   = iptcl_batch
                 strategy2Dspecs(iptcl_batch)%stoch_bound = snhc_sz
                 call strategy2Dsrch(iptcl_batch)%ptr%new(strategy2Dspecs(iptcl_batch))
-                ! SEARCH
                 call strategy2Dsrch(iptcl_batch)%ptr%srch
                 ! cleanup
                 call strategy2Dsrch(iptcl_batch)%ptr%kill
             enddo ! Particles threaded loop
-            !$omp end parallel do
+            !omp end parallel do
             if( L_BENCH ) rt_align = rt_align + toc(t_align)
         enddo ! Batch loop
 

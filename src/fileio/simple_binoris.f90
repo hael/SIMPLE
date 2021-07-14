@@ -504,7 +504,7 @@ contains
         endif
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
             read(unit=self%funit,pos=self%header(isegment)%first_data_byte) str_os_line
-            call o%str2ori(str_os_line)
+            call o%str2ori(str_os_line, is_particle_seg(isegment))
         else
             ! empty segment, nothing to do
         endif
@@ -698,5 +698,14 @@ contains
         class(binoris), intent(in) :: self
         is_opened = self%l_open
     end function is_opened
+
+    logical function is_particle_seg( isegment )
+        integer, intent(in) :: isegment
+        is_particle_seg = .false.
+        ! In simple_sp_project:
+        ! type(oris) :: os_ptcl2D ! per-particle 2D os, segment 3
+        ! type(oris) :: os_ptcl3D ! per-particle 3D os, segment 6
+        if( isegment == 3 .or. isegment == 6 ) is_particle_seg = .true.
+    end function is_particle_seg
 
 end module simple_binoris

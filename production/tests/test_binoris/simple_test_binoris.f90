@@ -11,17 +11,17 @@ type(oris)         :: a1, a2, os_peak1, os_peak2
 integer            :: i
 logical            :: mask(5)
 mask = [.true.,.false.,.true.,.false.,.true.]
-call a1%new(5)
+call a1%new(5, is_ptcl=.false.)
 call a1%rnd_oris
 call a1%write('oris1_facit.txt')
-call os_peak1%new(3)
+call os_peak1%new(3, is_ptcl=.false.)
 call os_peak1%rnd_oris()
 call os_peak1%rnd_states(2)
 call os_peak1%rnd_corrs()
 call os_peak1%set_all2single('ow', 0.3)
 call os_peak1%set_all2single('proj', 3.0)
 call os_peak1%write('os_peak1_facit.txt')
-call os_peak2%new(5)
+call os_peak2%new(5, is_ptcl=.false.)
 call os_peak2%rnd_oris()
 call os_peak2%rnd_states(2)
 call os_peak2%rnd_corrs()

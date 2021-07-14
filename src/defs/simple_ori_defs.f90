@@ -217,4 +217,73 @@ contains
         end select
     end function get_oriparam_flag
 
+    pure logical function oriparam_isthere( ind, val )
+        integer, intent(in) :: ind
+        real,    intent(in) :: val
+        real, parameter :: TINY = 1e-10
+        logical :: is_zero
+        is_zero = .false.
+        select case(ind)
+            case(I_CLASS)
+                is_zero = abs(val) < TINY
+            case(I_CORR)
+                is_zero = abs(val) < TINY
+            case(I_CS)
+                is_zero = abs(val) < TINY
+            case(I_DFX)
+                is_zero = abs(val) < TINY
+            case(I_DFY)
+                is_zero = abs(val) < TINY
+            case(I_EO)
+                is_zero = abs(val) < TINY
+            case(I_FRAC)
+                is_zero = abs(val) < TINY
+            case(I_FRACA)
+                is_zero = abs(val) < TINY
+            case(I_INDINSTK)
+                is_zero = abs(val) < TINY
+            case(I_INPL)
+                is_zero = abs(val) < TINY
+            case(I_KV)
+                is_zero = abs(val) < TINY
+            case(I_LP)
+                is_zero = abs(val) < TINY
+            case(I_NPEAKS)
+                is_zero = abs(val) < TINY
+            case(I_OW)
+                is_zero = abs(val) < TINY
+            case(I_PHSHIFT)
+                is_zero = abs(val) < TINY
+            case(I_PROJ)
+                is_zero = abs(val) < TINY
+            case(I_SHWMEAN)
+                is_zero = abs(val) < TINY
+            case(I_SHWSTDEV)
+                is_zero = abs(val) < TINY
+            case(I_SPECSCORE)
+                is_zero = abs(val) < TINY
+            case(I_SPREAD)
+                is_zero = abs(val) < TINY
+            case(I_STKIND)
+                is_zero = abs(val) < TINY
+            case(I_UPDATECNT)
+                is_zero = abs(val) < TINY
+            case(I_W)
+                is_zero = abs(val) < TINY
+            case(I_X)
+                is_zero = abs(val) < TINY
+            case(I_XINCR)
+                is_zero = abs(val) < TINY
+            case(I_XPOS)
+                is_zero = abs(val) < TINY
+            case(I_Y)
+                is_zero = abs(val) < TINY
+            case(I_YINCR)
+                is_zero = abs(val) < TINY
+            case(I_YPOS)
+                is_zero = abs(val) < TINY
+        end select
+        oriparam_isthere = .not. is_zero
+    end function oriparam_isthere
+
 end module simple_ori_defs

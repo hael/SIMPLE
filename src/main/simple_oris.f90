@@ -14,7 +14,7 @@ private
 type :: oris
     private
     type(ori), allocatable :: o(:)
-    integer :: n=0
+    integer :: n = 0
   contains
     ! CONSTRUCTORS
     procedure          :: new
@@ -71,11 +71,9 @@ type :: oris
     procedure          :: has_been_searched
     procedure          :: any_state_zero
     procedure          :: ori2str
-    procedure          :: ori2str_static
     procedure          :: get_ctfvars
     ! SETTERS
-    procedure, private :: assign
-    generic            :: assignment(=) => assign
+    procedure          :: copy
     procedure          :: reject
     generic            :: delete_entry => delete_entry_1, delete_entry_2
     procedure          :: delete_entry_1
@@ -210,22 +208,24 @@ contains
 
     ! CONSTRUCTORS
 
-    function constructor( n ) result( self )
+    function constructor( n, is_ptcl ) result( self )
         integer, intent(in) :: n
+        logical, intent(in) :: is_ptcl
         type(oris) :: self
-        call self%new(n)
+        call self%new(n, is_ptcl)
     end function constructor
 
-    subroutine new( self, n )
+    subroutine new( self, n, is_ptcl )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: n
+        logical,     intent(in)    :: is_ptcl
         integer :: i
         call self%kill
         self%n = n
         allocate( self%o(self%n), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('new; simple_oris',alloc_stat)
+        if( alloc_stat.ne.0 ) call allocchk('new; simple_oris', alloc_stat)
         do i=1,n
-            call self%o(i)%new
+            call self%o(i)%new(is_ptcl)
         end do
     end subroutine new
 
@@ -234,13 +234,15 @@ contains
         integer,     intent(in)    :: new_n
         type(oris) :: tmp
         integer    :: old_n, i
+        logical    :: is_ptcl
         if( self%n == 0 )     THROW_HARD('cannot reallocate non-existing oris; reallocate')
         if( new_n <= self%n ) THROW_HARD('reallocation to smaller size not supported; reallocate')
+        is_ptcl = self%o(1)%is_particle()
         ! make a copies
         old_n = self%n
         tmp   = self
         ! reallocate
-        call self%new(new_n)
+        call self%new(new_n, is_ptcl)
         ! stash back the old data
         do i=1,old_n
             self%o(i) = tmp%o(i)
@@ -593,12 +595,14 @@ contains
         logical,     intent(in)    :: mask(:)
         type(oris) :: os_tmp
         integer    :: i, cnt
+        logical    :: is_ptcl
         if( size(mask) /= self%n )then
             write(logfhandle,*) 'self%n:     ', self%n
             write(logfhandle,*) 'size(mask): ', size(mask)
             THROW_HARD('nonconforming mask size; compress')
         endif
-        call os_tmp%new(count(mask))
+        is_ptcl = self%o(1)%is_particle()
+        call os_tmp%new(count(mask), is_ptcl)
         cnt = 0
         do i=1,self%n
             if( mask(i) )then
@@ -606,7 +610,7 @@ contains
                 os_tmp%o(cnt) = self%o(i)
             endif
         end do
-        self = os_tmp
+        call self%copy(os_tmp, is_ptcl)
         call os_tmp%kill
     end subroutine compress
 
@@ -1373,14 +1377,6 @@ contains
         str = self%o(i)%ori2str()
     end function ori2str
 
-    !>  \brief  joins the hashes into a string that represent the ith ori
-    subroutine ori2str_static( self, i, str )
-        class(oris),                intent(in)  :: self
-        integer,                    intent(in)  :: i
-        character(len=XLONGSTRLEN), intent(out) :: str
-        call self%o(i)%ori2str_static(str)
-    end subroutine ori2str_static
-
     function get_ctfvars( self, i ) result( ctfvars )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i
@@ -1390,16 +1386,16 @@ contains
 
     ! SETTERS
 
-    !>  \brief is polymorphic assignment, overloaded as (=)
-    subroutine assign( self_out, self_in )
+    subroutine copy( self_out, self_in, is_ptcl )
         class(oris), intent(inout) :: self_out
         class(oris), intent(in)    :: self_in
+        logical,     intent(in)    :: is_ptcl
         integer   :: i
-        call self_out%new(self_in%n)
+        call self_out%new(self_in%n, is_ptcl)
         do i=1,self_in%n
             self_out%o(i) = self_in%o(i)
         end do
-    end subroutine assign
+    end subroutine copy
 
     subroutine reject( self, i )
         class(oris), intent(inout) :: self
@@ -1697,12 +1693,12 @@ contains
             & THROW_HARD('missing orientation in rnd_proj_space')
         within_lims = .false.
         if( present(eullims) )within_lims = .true.
-        call self%new(nsample)
+        call self%new(nsample, is_ptcl=.false.)
         if( present(o_prev).and.present(thres) )then
             do i=1,self%n
                 found = .false.
                 do while( .not.found )
-                    call o_stoch%new
+                    call o_stoch%new(is_ptcl=.false.)
                     if( within_lims )then
                         call o_stoch%rnd_euler( eullims )
                     else
@@ -1918,10 +1914,12 @@ contains
     subroutine symmetrize( self, nsym )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: nsym
-        type(oris)                 :: tmp
-        type(ori)                  :: o
-        integer                    :: cnt, i, j
-        tmp = oris(self%get_noris()*nsym)
+        type(oris) :: tmp
+        type(ori)  :: o
+        integer    :: cnt, i, j
+        logical    :: is_ptcl
+        is_ptcl = self%o(1)%is_particle()
+        tmp = oris(self%get_noris()*nsym, is_ptcl)
         cnt = 0
         do i=1,self%get_noris()
             do j=1,nsym
@@ -1930,7 +1928,7 @@ contains
                 call tmp%set_ori(cnt, o)
             end do
         end do
-        self = tmp
+        call self%copy(tmp, is_ptcl)
         call tmp%kill
         call o%kill
     end subroutine symmetrize
@@ -1940,9 +1938,11 @@ contains
         class(oris), intent(inout) :: self1, self2add
         type(oris) :: self
         integer    :: ntot, cnt, i
-        ntot = self1%n+self2add%n
-        self = oris(ntot)
-        cnt  = 0
+        logical    :: is_ptcl
+        is_ptcl = self1%o(1)%is_particle()
+        ntot    = self1%n+self2add%n
+        self    = oris(ntot, is_ptcl)
+        cnt     = 0
         if( self1%n > 0 )then
             do i=1,self1%n
                 cnt = cnt+1
@@ -1955,7 +1955,7 @@ contains
                 self%o(cnt) = self2add%o(i)
             end do
         endif
-        self1 = self
+        call self1%copy(self, is_ptcl)
         call self%kill
         call self2add%kill
     end subroutine merge
@@ -2002,7 +2002,7 @@ contains
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
         character(len=*), intent(inout) :: line
-        call self%o(i)%str2ori(line)
+        call self%o(i)%str2ori(line, self%o(1)%is_particle())
     end subroutine str2ori
 
     subroutine str2ori_ctfparams_state_eo( self, i, line )
@@ -2010,7 +2010,7 @@ contains
         integer,          intent(in)    :: i
         character(len=*), intent(inout) :: line
         type(ori) :: o_tmp
-        call o_tmp%str2ori(line)
+        call o_tmp%str2ori(line, self%o(1)%is_particle())
         if( o_tmp%isthere('smpd')    ) call self%o(i)%set('smpd',    o_tmp%get('smpd'))
         if( o_tmp%isthere('kv')      ) call self%o(i)%set('kv',      o_tmp%get('kv'))
         if( o_tmp%isthere('cs')      ) call self%o(i)%set('cs',      o_tmp%get('cs'))
@@ -2049,6 +2049,7 @@ contains
         do i = 1,self%n
             call self%o(i)%kill_hash
             call self%o(i)%kill_chash
+            call self%o(i)%reset_pparms
         enddo
     end subroutine reset
 
@@ -2104,7 +2105,7 @@ contains
         if( str_has_substr(ctfparamfile,'.bin') )then
             THROW_HARD('this method does not support binary files; read_ctfparams_state_eo')
         endif
-        call os_tmp%new(self%n)
+        call os_tmp%new(self%n, self%o(1)%is_particle())
         call os_tmp%read(ctfparamfile)
         params_are_there(1)  = os_tmp%isthere('smpd')
         params_are_there(2)  = os_tmp%isthere('kv')
@@ -2473,7 +2474,7 @@ contains
                 integer :: i
                 if( allocated(avail) )deallocate(avail, stat=alloc_stat)
                 allocate(avail(n), source=.false., stat=alloc_stat)
-                call tmp%new(n)
+                call tmp%new(n, self%o(1)%is_particle())
                 call tmp%spiral_1
                 do i = 1, n
                     if( tmp%o(i)%e1get() <= e1lim .and. tmp%o(i)%e2get() <= e2lim )&
@@ -2692,7 +2693,7 @@ contains
                 call self%get_pinds(icls, 'class', pinds, consider_w=.false.)
                 if(.not.allocated(pinds)) cycle
                 pop = size(pinds)
-                call os%new(pop)
+                call os%new(pop, self%o(1)%is_particle())
                 do i=1,pop
                     call self%get_ori(pinds(i), o)
                     call os%set_ori(i, o)
@@ -2772,7 +2773,7 @@ contains
         type(oris) :: d
         integer    :: closest, i
         if( n < self%n )then
-            call d%new(n)
+            call d%new(n, self%o(1)%is_particle())
             call d%spiral
             do i=1,self%n
                 closest = d%find_closest_proj(self%o(i))
@@ -3223,8 +3224,8 @@ contains
         integer, allocatable :: order(:)
         logical              :: passed
         write(logfhandle,'(a)') '**info(simple_oris_unit_test, part1): testing getters/setters'
-        os = oris(100)
-        os2 = oris(100)
+        os  = oris(100, is_ptcl=.false.)
+        os2 = oris(100, is_ptcl=.false.)
         passed = .false.
         if( os%get_noris() == 100 ) passed = .true.
         if( .not. passed ) THROW_HARD('get_noris failed!')
@@ -3254,7 +3255,7 @@ contains
             end do
         endif
         write(logfhandle,'(a)') '**info(simple_oris_unit_test, part2): testing assignment'
-        os = oris(2)
+        os = oris(2, is_ptcl=.false.)
         call os%rnd_oris(5.)
         os2 = os
         do i=1,2
@@ -3284,8 +3285,8 @@ contains
         if( .not. passed ) THROW_HARD('assignment test failed!')
         write(logfhandle,'(a)') '**info(simple_oris_unit_test, part2): testing i/o'
         passed = .false.
-        os = oris(100)
-        os2 = oris(100)
+        os  = oris(100, is_ptcl=.false.)
+        os2 = oris(100, is_ptcl=.false.)
         call os%rnd_oris(5.)
         call os%write('test_oris_rndoris.txt')
         call os2%read('test_oris_rndoris.txt')
@@ -3316,7 +3317,7 @@ contains
         call os%kill
         call os2%kill
         ! test find_angres
-        os = oris(1000)
+        os = oris(1000, is_ptcl=.false.)
         call os%spiral
         write(logfhandle,*) 'angres:      ', os%find_angres()
         write(logfhandle,'(a)') 'SIMPLE_ORIS_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'

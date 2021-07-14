@@ -245,7 +245,7 @@ contains
             ws         = 0.
             specscores = 0.
         end where
-        call spproj%os_cls2D%new( params_glob%ncls )
+        call spproj%os_cls2D%new(params_glob%ncls, is_ptcl=.false.)
         do icls=1,params_glob%ncls
             pop = pops(icls)
             call build_glob%projfrcs%estimate_res(icls, frc05, frc0143)

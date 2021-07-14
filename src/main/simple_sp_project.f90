@@ -133,25 +133,25 @@ contains
         class(oris), pointer,      intent(inout) :: os_ptr
         select case(trim(oritype))
             case('mic')
-                call self%os_mic%new(n)
+                call self%os_mic%new(n,    is_ptcl=.false.)
                 os_ptr => self%os_mic
             case('stk')
-                call self%os_stk%new(n)
+                call self%os_stk%new(n,    is_ptcl=.false.)
                 os_ptr => self%os_stk
             case('ptcl2D')
-                call self%os_ptcl2D%new(n)
+                call self%os_ptcl2D%new(n, is_ptcl=.true.)
                 os_ptr => self%os_ptcl2D
             case('cls2D')
-                call self%os_cls2D%new(n)
+                call self%os_cls2D%new(n,  is_ptcl=.false.)
                 os_ptr => self%os_cls2D
             case('cls3D')
-                call self%os_cls3D%new(n)
+                call self%os_cls3D%new(n,  is_ptcl=.false.)
                 os_ptr => self%os_cls3D
             case('ptcl3D')
-                call self%os_ptcl3D%new(n)
+                call self%os_ptcl3D%new(n, is_ptcl=.true.)
                 os_ptr => self%os_ptcl3D
             case('out')
-                call self%os_out%new(n)
+                call self%os_out%new(n,    is_ptcl=.false.)
                 os_ptr => self%os_out
             case DEFAULT
                 THROW_HARD('unsupported oritype: '//trim(oritype)//'; new_seg_with_ptr')
@@ -169,7 +169,7 @@ contains
         if( self%projinfo%get_noris() == 1 )then
             ! no need to construct field
         else
-            call self%projinfo%new(1)
+            call self%projinfo%new(1, is_ptcl=.false.)
         endif
         ! projname & profile
         if( self%projinfo%isthere('projname').and.cline%defined('projname') )then
@@ -212,7 +212,7 @@ contains
         if( self%compenv%get_noris() == 1 )then
             ! no need to construct field
         else
-            call self%compenv%new(1)
+            call self%compenv%new(1, is_ptcl=.false.)
         endif
         ! compenv has to be filled as strings as it is used as a string only dictionary
         ! get from environment
@@ -319,7 +319,7 @@ contains
         select case(trim(oritype))
             case('mic')
                 if( n == 0 )then
-                    os_ptr = os_append_ptr
+                    call os_ptr%copy(os_append_ptr, is_ptcl=.false.)
                 else
                     ! append
                     call os_ptr%reallocate(n+n2append)
@@ -402,7 +402,7 @@ contains
             ind = njobs + 1
             call self%jobproc%reallocate(ind)
         else
-            call self%jobproc%new(1)
+            call self%jobproc%new(1, is_ptcl=.false.)
             ind = 1
         endif
         call self%jobproc%set_ori(ind,o)
@@ -491,7 +491,7 @@ contains
         end do
         ! map selection to self%os_cls3D
         sz_cls3D = self%os_cls3D%get_noris()
-        if( sz_cls3D /= sz_cls2D ) call self%os_cls3D%new(sz_cls2D)
+        if( sz_cls3D /= sz_cls2D ) call self%os_cls3D%new(sz_cls2D, is_ptcl=.false.)
         sz_cls3D = sz_cls2D
         do icls=1,sz_cls3D
             call self%os_cls3D%set(icls, 'state', real(states(icls)))
@@ -531,7 +531,7 @@ contains
             THROW_HARD('add_single_movie')
         endif
         ! update ori
-        call os_ptr%new(1)
+        call os_ptr%new(1, is_ptcl=.false.)
         call make_relativepath(CWD_GLOB, moviename, rel_fname)
         call find_ldim_nptcls(trim(rel_fname), ldim, nframes)
         if( nframes <= 0 )then
@@ -592,7 +592,7 @@ contains
         nprev_mics = os_ptr%get_noris()
         ntot       = nmics + nprev_mics
         if( nprev_mics == 0 )then
-            call os_ptr%new(ntot)
+            call os_ptr%new(ntot, is_ptcl=.false.)
         else
             prev_ctfvars = self%get_micparams(1)
             if( ctfvars%ctfflag /= prev_ctfvars%ctfflag ) THROW_HARD('CTF infos do not match! add_movies')
@@ -720,7 +720,7 @@ contains
         ! update oris
         if( nprev_intgs == 0 )then
             ! first import
-            call self%os_mic%new(nintgs)
+            call self%os_mic%new(nintgs, is_ptcl=.false.)
             ntot = nintgs
         else
             ! append
@@ -856,9 +856,9 @@ contains
         n_os_ptcl2D = self%os_ptcl2D%get_noris()
         n_os_ptcl3D = self%os_ptcl3D%get_noris()
         if( n_os_stk == 1 )then
-            call self%os_stk%new(1)
-            call self%os_ptcl2D%new(nptcls)
-            call self%os_ptcl3D%new(nptcls)
+            call self%os_stk%new(1,         is_ptcl=.false.)
+            call self%os_ptcl2D%new(nptcls, is_ptcl=.true.)
+            call self%os_ptcl3D%new(nptcls, is_ptcl=.true.)
             fromp = 1
             top   = nptcls
         else
@@ -892,7 +892,7 @@ contains
         call self%os_stk%set_ctfvars(n_os_stk, ctfvars)
         ! update particle oris objects
         do i = 1, nptcls
-            call o%new
+            call o%new(is_ptcl=.true.)
             call o%set('dfx',    ctfvars%dfx)
             call o%set('dfy',    ctfvars%dfy)
             call o%set('angast', ctfvars%angast)
@@ -932,6 +932,8 @@ contains
         endif
         self%os_ptcl2D = os
         self%os_ptcl3D = os
+        ! call self%os_ptcl2D%copy(os, is_ptcl=.true.)
+        ! call self%os_ptcl3D%copy(os, is_ptcl=.true.)
         call self%os_ptcl2D%set_all2single('stkind', 1.)
         call self%os_ptcl3D%set_all2single('stkind', 1.)
         if( .not. self%os_ptcl2D%isthere('state') ) call self%os_ptcl2D%set_all2single('state',  1.) ! default on import
@@ -948,7 +950,7 @@ contains
         ! path
         call make_relativepath(CWD_GLOB, stk_abspath, stk_relpath)
         ! records
-        call self%os_stk%new(1)
+        call self%os_stk%new(1, is_ptcl=.false.)
         call self%os_stk%set(1, 'stk',     trim(stk_relpath))
         call self%os_stk%set(1, 'box',     real(ldim(1)))
         call self%os_stk%set(1, 'nptcls',  real(nptcls))
@@ -1042,9 +1044,9 @@ contains
         n_os_ptcl2D = self%os_ptcl2D%get_noris()
         n_os_ptcl3D = self%os_ptcl3D%get_noris()
         if( n_os_stk == 0 )then
-            call self%os_stk%new(nstks)
-            call self%os_ptcl2D%new(nptcls_tot)
-            call self%os_ptcl3D%new(nptcls_tot)
+            call self%os_stk%new(nstks,         is_ptcl=.false.)
+            call self%os_ptcl2D%new(nptcls_tot, is_ptcl=.true.)
+            call self%os_ptcl3D%new(nptcls_tot, is_ptcl=.true.)
             fromp = 1
         else
             if( .not.self%os_stk%isthere(n_os_stk,'top') )then
@@ -1073,7 +1075,7 @@ contains
             if( o_stk%isthere('state') ) istate = o_stk%get_state()
             call self%os_stk%set(stk_ind, 'state', real(istate))
             ! updates particles segment
-            call o_ptcl%new
+            call o_ptcl%new(is_ptcl=.true.)
             call o_ptcl%set('dfx',    o_stk%get('dfx'))
             call o_ptcl%set('dfy',    o_stk%get('dfy'))
             call o_ptcl%set('angast', o_stk%get('angast'))
@@ -1144,9 +1146,9 @@ contains
         n_os_ptcl2D = self%os_ptcl2D%get_noris()
         n_os_ptcl3D = self%os_ptcl3D%get_noris()
         if( n_os_stk == 0 )then
-            call self%os_stk%new(nstks)
-            call self%os_ptcl2D%new(nptcls_tot)
-            call self%os_ptcl3D%new(nptcls_tot)
+            call self%os_stk%new(nstks, is_ptcl=.false.)
+            call self%os_ptcl2D%new(nptcls_tot, is_ptcl=.true.)
+            call self%os_ptcl3D%new(nptcls_tot, is_ptcl=.true.)
             fromp = 1
         else
             if( .not.self%os_stk%isthere(n_os_stk,'top') )then
@@ -1162,7 +1164,7 @@ contains
             top     = fromp + nptcls_arr(istk) - 1 ! global index
             stk_ind = n_os_stk + istk
             ! updates stk segment
-            call o_stk%new
+            call o_stk%new(is_ptcl=.false.)
             call o_stk%set('stk',     trim(stkfnames(istk)))
             call o_stk%set('box',     real(ldim(1)))
             call o_stk%set('nptcls',  real(nptcls_arr(istk)))
@@ -1280,7 +1282,7 @@ contains
             deallocate(stkpart)
         enddo
         call img%kill
-        call self%os_stk%new(nparts)
+        call self%os_stk%new(nparts, is_ptcl=.false.)
         if( present(dir) )then
            call simple_mkdir(filepath(trim(dir),trim(STKPARTSDIR)),errmsg="sp_project::split_stk")
         else
@@ -1415,7 +1417,7 @@ contains
         call self%os_out%set(ind, 'imgkind', iimgkind)
         call self%os_out%set(ind, 'ctf',     'no')
         ! add congruent os_cls2D & os_cls3D
-        call self%os_cls2D%new(nptcls)
+        call self%os_cls2D%new(nptcls, is_ptcl=.false.)
         call self%os_cls2D%set_all2single('state',1.)
         self%os_cls3D = self%os_cls2D
     end subroutine add_cavgs2os_out
@@ -1455,7 +1457,7 @@ contains
         if( n_os_out == 0 )then
             n_os_out = 1
             ind      = 1
-            call self%os_out%new(n_os_out)
+            call self%os_out%new(n_os_out, is_ptcl=.false.)
         else
             ind = 0
             do i=1,n_os_out
@@ -1516,7 +1518,7 @@ contains
         if( n_os_out == 0 )then
             n_os_out = 1
             ind      = 1
-            call self%os_out%new(n_os_out)
+            call self%os_out%new(n_os_out, is_ptcl=.false.)
         else
             select case(trim(which_imgkind))
                 case('vol_msk')
@@ -1576,7 +1578,7 @@ contains
         if( n_os_out == 0 )then
             n_os_out = 1
             ind      = 1
-            call self%os_out%new(n_os_out)
+            call self%os_out%new(n_os_out, is_ptcl=.false.)
         else
             ind = 0
             do i=1,n_os_out
@@ -2147,25 +2149,25 @@ contains
         class(oris),       intent(inout) :: os
         select case(trim(which_imgkind))
             case('mic')
-                os = self%os_mic
+                call os%copy(self%os_mic,    is_ptcl=.false.)
             case('stk')
-                os = self%os_stk
+                call os%copy(self%os_stk,    is_ptcl=.false.)
             case('ptcl2D')
-                os = self%os_ptcl2D
+                call os%copy(self%os_ptcl2D, is_ptcl=.true.)
             case('cls2D')
-                os = self%os_cls2D
+                call os%copy(self%os_cls2D,  is_ptcl=.false.)
             case('cls3D')
-                os = self%os_cls3D
+                call os%copy(self%os_cls3D,  is_ptcl=.false.)
             case('ptcl3D')
-                os = self%os_ptcl3D
+                call os%copy(self%os_ptcl3D, is_ptcl=.true.)
             case('out')
-                os = self%os_out
+                call os%copy(self%os_out,    is_ptcl=.false.)
             case('projinfo')
-                os = self%projinfo
+                call os%copy(self%projinfo,  is_ptcl=.false.)
             case('jobproc')
-                os = self%jobproc
+                call os%copy(self%jobproc,   is_ptcl=.false.)
             case('compenv')
-                os = self%compenv
+                call os%copy(self%compenv,   is_ptcl=.false.)
             case DEFAULT
                 THROW_HARD('unsupported which_imgkind flag; get_sp_oris')
         end select
@@ -3108,34 +3110,34 @@ contains
         n = self%bos%get_n_records(isegment)
         select case(isegment)
             case(MIC_SEG)
-                call self%os_mic%new(n)
+                call self%os_mic%new(n,    is_ptcl=.false.)
                 call self%bos%read_segment(isegment, self%os_mic,    wthreads=wthreads)
             case(STK_SEG)
-                call self%os_stk%new(n)
+                call self%os_stk%new(n,    is_ptcl=.false.)
                 call self%bos%read_segment(isegment, self%os_stk,    only_ctfparams_state_eo=only_ctfparams_state_eo, wthreads=wthreads)
             case(PTCL2D_SEG)
-                call self%os_ptcl2D%new(n)
+                call self%os_ptcl2D%new(n, is_ptcl=.true.)
                 call self%bos%read_segment(isegment, self%os_ptcl2D, only_ctfparams_state_eo=only_ctfparams_state_eo, wthreads=wthreads)
             case(CLS2D_SEG)
-                call self%os_cls2D%new(n)
+                call self%os_cls2D%new(n,  is_ptcl=.false.)
                 call self%bos%read_segment(isegment, self%os_cls2D)
             case(CLS3D_SEG)
-                call self%os_cls3D%new(n)
+                call self%os_cls3D%new(n,  is_ptcl=.false.)
                 call self%bos%read_segment(isegment, self%os_cls3D)
             case(PTCL3D_SEG)
-                call self%os_ptcl3D%new(n)
+                call self%os_ptcl3D%new(n, is_ptcl=.true.)
                 call self%bos%read_segment(isegment, self%os_ptcl3D, only_ctfparams_state_eo=only_ctfparams_state_eo, wthreads=wthreads)
             case(OUT_SEG)
-                call self%os_out%new(n)
+                call self%os_out%new(n,    is_ptcl=.false.)
                 call self%bos%read_segment(isegment, self%os_out)
             case(PROJINFO_SEG)
-                call self%projinfo%new(n)
+                call self%projinfo%new(n,  is_ptcl=.false.)
                 call self%bos%read_segment(isegment, self%projinfo)
             case(JOBPROC_SEG)
-                call self%jobproc%new(n)
+                call self%jobproc%new(n,   is_ptcl=.false.)
                 call self%bos%read_segment(isegment, self%jobproc)
             case(COMPENV_SEG)
-                call self%compenv%new(n)
+                call self%compenv%new(n,   is_ptcl=.false.)
                 call self%bos%read_segment(isegment, self%compenv)
         end select
     end subroutine segreader

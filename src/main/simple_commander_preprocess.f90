@@ -274,7 +274,7 @@ contains
             if( n_completed-n_imported > 0 )then
                 ! batch append
                 if( n_imported == 0 )then
-                    call spproj%os_mic%new(n_completed)
+                    call spproj%os_mic%new(n_completed, is_ptcl=.false.)
                 else
                     call spproj%os_mic%reallocate(n_completed)
                 endif
@@ -433,7 +433,7 @@ contains
                         states(iproj)   = spproj%os_mic%get_state(iproj)
                     enddo
                     nstks = count(stk_mask)
-                    call spproj%os_stk%new(nstks)
+                    call spproj%os_stk%new(nstks, is_ptcl=.false.)
                     nptcls = 0
                     istk   = 0
                     fromp  = 0
@@ -453,8 +453,8 @@ contains
                     enddo
                     call spproj%write_segment_inside('stk', params%projfile)
                     call spproj%os_stk%reset
-                    call spproj%os_ptcl2D%new(nptcls)
-                    call spproj%os_ptcl3D%new(nptcls)
+                    call spproj%os_ptcl2D%new(nptcls, is_ptcl=.true.)
+                    call spproj%os_ptcl3D%new(nptcls, is_ptcl=.true.)
                     ! particles 2D
                     istk   = 0
                     iptcl  = 0
@@ -610,7 +610,7 @@ contains
                     nptcls_glob = 0
                     return
                 endif
-                call spproj%os_mic%new(count(spproj_mask))
+                call spproj%os_mic%new(count(spproj_mask), is_ptcl=.false.)
                 cnt = 0
                 do iproj = 1,nprojs
                     if( .not.spproj_mask(iproj) )cycle
@@ -1026,7 +1026,7 @@ contains
             THROW_HARD('need tomoseries (filetable of filetables) to be part of the command line when tomo=yes')
         endif
         nseries = size(tomonames)
-        call exp_doc%new(nseries)
+        call exp_doc%new(nseries, is_ptcl=.false.)
         if( cline%defined('exp_doc') )then
             if( file_exists(params%exp_doc) )then
                 call exp_doc%read(params%exp_doc)
@@ -1685,7 +1685,7 @@ contains
         if( cnt /= nmics_tot ) THROW_HARD('Inconstistent number of micrographs in individual projects')
         ! fetch stacks table
         if( nstks > 0 )then
-            call os_stk%new(nstks)
+            call os_stk%new(nstks, is_ptcl=.false.)
             allocate(stktab(nstks))
             cnt = 0
             do ipart = 1,params%nparts
@@ -1798,7 +1798,7 @@ contains
             call spproj%projinfo%set(1,'projname', get_fbody(params%outfile,METADATA_EXT,separator=.false.))
             call spproj%projinfo%set(1,'projfile', params%outfile)
             params%projfile = trim(params%outfile) ! for builder later
-            call spproj%os_mic%new(nmics_here)
+            call spproj%os_mic%new(nmics_here, is_ptcl=.false.)
             cnt = 0
             do imic = fromto(1),fromto(2)
                 cnt = cnt + 1
@@ -2130,7 +2130,7 @@ contains
             nmics = nmics + spproj_parts(ipart)%os_mic%get_noris()
         enddo
         if( nmics > 0 )then
-            call spproj%os_mic%new(nmics)
+            call spproj%os_mic%new(nmics, is_ptcl=.false.)
             ! transfer stacks
             cnt   = 0
             nstks = 0
@@ -2145,7 +2145,7 @@ contains
             enddo
             if( nstks /= nmics ) THROW_HARD('Inconstistent number of stacks in individual projects')
             ! generates stacks table
-            call os_stk%new(nstks)
+            call os_stk%new(nstks, is_ptcl=.false.)
             allocate(stktab(nstks))
             cnt = 0
             do ipart = 1,params%nparts
@@ -2412,8 +2412,8 @@ contains
         call spproj%projinfo%set(1,'projfile', params%outfile)
         nmics = count(mic_mask)
         ! transfer mics & stk
-        call spproj%os_mic%new(nmics)
-        call spproj%os_stk%new(nmics)
+        call spproj%os_mic%new(nmics, is_ptcl=.false.)
+        call spproj%os_stk%new(nmics, is_ptcl=.false.)
         nptcls = count(ptcl_mask)
         cnt = 0
         do imic = params%fromp,params%top
@@ -2425,8 +2425,8 @@ contains
         enddo
         ! transfer particles
         nptcls = count(ptcl_mask)
-        call spproj%os_ptcl2D%new(nptcls)
-        call spproj%os_ptcl3D%new(nptcls)
+        call spproj%os_ptcl2D%new(nptcls, is_ptcl=.true.)
+        call spproj%os_ptcl3D%new(nptcls, is_ptcl=.true.)
         cnt = 0
         do iptcl = 1,size(ptcl_mask)
             if( .not.ptcl_mask(iptcl) )cycle
@@ -2581,7 +2581,7 @@ contains
             call ref3D%read(params%vols(1))
             call scale_ref(ref3D, params%smpd)
             ! make projection directions
-            call os%new(NPROJS)
+            call os%new(NPROJS, is_ptcl=.false.)
             call pgrpsyms%build_refspiral(os)
             ! generate reprojections
             projs  = reproject(ref3D, os)

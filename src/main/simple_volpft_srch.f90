@@ -64,7 +64,7 @@ contains
             call ofac%new(opt_eul(ithr)%ospec, opt_eul(ithr)%nlopt)
         end do
         ! create global ori
-        call e_glob%new()
+        call e_glob%new(is_ptcl=.false.)
         ! unflag doshift
         doshift    = .false.
         shvec_glob = 0.
@@ -87,10 +87,10 @@ contains
         integer    :: iloc, inpl, ithr, n_inpls
         real       :: eul(3), corr_best, cost, prev_cost
         ! create
-        call orientation%new
-        call cand_oris%new(NPROJ)
+        call orientation%new(is_ptcl=.false.)
+        call cand_oris%new(NPROJ, is_ptcl=.false.)
         call cand_oris%set_all2single('corr', -1.0) ! for later ordering
-        call espace%new(NPROJ)
+        call espace%new(NPROJ, is_ptcl=.false.)
         call espace%spiral
         ! count # in-plane angles
         n_inpls = 0
@@ -180,7 +180,7 @@ contains
         type(ori) :: orientation_best
         real      :: cost, prev_cost
         integer   :: ithr
-        call orientation_best%new
+        call orientation_best%new(is_ptcl=.false.)
         ithr = omp_get_thread_num() + 1
         opt_eul(ithr)%ospec%x = orientation_start%get_euler()
         if( present(angres) )then

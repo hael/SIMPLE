@@ -136,26 +136,26 @@ contains
         ! b%a is now a pointer to a field in b%spproj
         select case(params%spproj_iseg)
             case(MIC_SEG)
-                call self%spproj%os_mic%new(params%nptcls)
+                call self%spproj%os_mic%new(params%nptcls,    is_ptcl=.false.)
                 self%spproj_field => self%spproj%os_mic
             case(STK_SEG)
-                call self%spproj%os_stk%new(params%nptcls)
+                call self%spproj%os_stk%new(params%nptcls,    is_ptcl=.false.)
                 self%spproj_field => self%spproj%os_stk
             case(PTCL2D_SEG)
-                call self%spproj%os_ptcl2D%new(params%nptcls)
+                call self%spproj%os_ptcl2D%new(params%nptcls, is_ptcl=.true.)
                 self%spproj_field => self%spproj%os_ptcl2D
             case(CLS2D_SEG)
-                call self%spproj%os_cls2D%new(params%nptcls)
+                call self%spproj%os_cls2D%new(params%nptcls,  is_ptcl=.false.)
                 self%spproj_field => self%spproj%os_cls2D
             case(CLS3D_SEG)
-                call self%spproj%os_cls3D%new(params%nptcls)
+                call self%spproj%os_cls3D%new(params%nptcls,  is_ptcl=.false.)
                 self%spproj_field => self%spproj%os_cls3D
             case(PTCL3D_SEG)
-                call self%spproj%os_ptcl3D%new(params%nptcls)
+                call self%spproj%os_ptcl3D%new(params%nptcls, is_ptcl=.true.)
                 self%spproj_field => self%spproj%os_ptcl3D
             case DEFAULT
                 ! using ptcl3D as the generic segment
-                call self%spproj%os_ptcl3D%new(params%nptcls)
+                call self%spproj%os_ptcl3D%new(params%nptcls, is_ptcl=.true.)
                 self%spproj_field => self%spproj%os_ptcl3D
         end select
         ! read project file
@@ -203,9 +203,9 @@ contains
         endif
         ! generate discrete projection direction spaces
         if( ddo3d )then
-            call self%eulspace%new(params%nspace)
+            call self%eulspace%new(params%nspace, is_ptcl=.false.)
             call self%pgrpsyms%build_refspiral(self%eulspace)
-            call self%eulspace_red%new(NSPACE_REDUCED)
+            call self%eulspace_red%new(NSPACE_REDUCED, is_ptcl=.false.)
             call self%pgrpsyms%build_refspiral(self%eulspace_red)
         endif
         if( params%box > 0 )then

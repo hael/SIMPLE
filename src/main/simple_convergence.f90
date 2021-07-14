@@ -55,22 +55,19 @@ contains
         call os%stats('specscore', self%specscore, mask=mask)
         call os%stats('dist_inpl', self%dist_inpl, mask=mask)
         call os%stats('frac',      self%frac_srch, mask=mask)
-        call os%stats('w',         self%pw,        mask=mask)
         call os%stats('shwmean',   self%shwmean,   mask=mask)
         self%mi_class  = os%get_avg('mi_class',  mask=mask)
         write(logfhandle,601) '>>> CLASS OVERLAP:                          ', self%mi_class
         write(logfhandle,601) '>>> # PARTICLE UPDATES     AVG:             ', avg_updatecnt
         write(logfhandle,604) '>>> IN-PLANE DIST (DEG)    AVG/SDEV/MIN/MAX:',&
         &self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
-        write(logfhandle,604) '>>> PARTICLE WEIGHT        AVG/SDEV/MIN/MAX:',&
-        &self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED AVG/SDEV/MIN/MAX:',&
         &self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
         write(logfhandle,604) '>>> CORRELATION            AVG/SDEV/MIN/MAX:',&
         &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
         write(logfhandle,604) '>>> SPECSCORE              AVG/SDEV/MIN/MAX:',&
         &self%specscore%avg, self%specscore%sdev, self%specscore%minv, self%specscore%maxv
-        write(logfhandle,604) '>>> AVG  SHIFT INCR PEAKS  AVG/SDEV/MIN/MAX:',&
+        write(logfhandle,604) '>>> SHIFT INCR ARG         AVG/SDEV/MIN/MAX:',&
         &self%shwmean%avg, self%shwmean%sdev, self%shwmean%minv, self%shwmean%maxv
         ! dynamic shift search range update
         if( self%frac_srch%avg >= FRAC_SH_LIM )then
@@ -113,11 +110,10 @@ contains
             endif
         endif
         ! stats
-        call self%ostats%new(1)
+        call self%ostats%new(1, is_ptcl=.false.)
         call self%ostats%set(1,'CLASS_OVERLAP',self%mi_class)
         call self%ostats%set(1,'PARTICLE_UPDATES',avg_updatecnt)
         call self%ostats%set(1,'IN-PLANE_DIST',self%dist_inpl%avg)
-        call self%ostats%set(1,'PARTICLE_WEIGHT',self%pw%avg)
         call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac_srch%avg)
         call self%ostats%set(1,'CORRELATION',self%corr%avg)
         call self%ostats%set(1,'SPECSCORE',self%specscore%avg)
@@ -238,7 +234,7 @@ contains
             deallocate( state_mi_joint, statepops )
         endif
         ! stats
-        call self%ostats%new(1)
+        call self%ostats%new(1, is_ptcl=.false.)
         call self%ostats%set(1,'ORIENTATION_OVERLAP',self%mi_proj)
         if( params_glob%nstates > 1 ) call self%ostats%set(1,'STATE_OVERLAP', self%mi_state)
         call self%ostats%set(1,'PARTICLE_UPDATES',avg_updatecnt)
@@ -291,7 +287,7 @@ contains
             converged = .false.
         endif
         ! stats
-        call self%ostats%new(1)
+        call self%ostats%new(1, is_ptcl=.false.)
         call self%ostats%set(1,'STATE_OVERLAP',       self%mi_state)
         call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac_srch%avg)
         call self%ostats%set(1,'CORRELATION',         self%corr%avg)

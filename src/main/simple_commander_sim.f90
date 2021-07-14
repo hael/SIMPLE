@@ -103,7 +103,7 @@ contains
         ! generate orientation/CTF parameters
         if( cline%defined('ndiscrete') )then
             if( params%ndiscrete > 0 )then
-                call spiral%new(params%ndiscrete)
+                call spiral%new(params%ndiscrete, is_ptcl=.false.)
                 call build%pgrpsyms%build_refspiral(spiral)
                 call build%spproj_field%rnd_oris_discrete_from(spiral)
                 call spiral%kill
@@ -195,7 +195,7 @@ contains
         ! set fixed frame
         fixed_frame = nint(real(params%nframes)/2.)
         ! remake the alignment doc
-        call build%spproj_field%new(1)
+        call build%spproj_field%new(1, is_ptcl=.false.)
         ! check the fractional area occupied by particles & generate particle positions
         ptclarea   = params%box*params%box*params%nptcls
         mgrapharea = params%xdim*params%ydim
@@ -368,7 +368,7 @@ contains
         call build%vol%new([params%box,params%box,params%box],   params%smpd)
         call build%vol%read(params%vols(1))
         call build%vol%add_gauran(params%snr)
-        call o%new
+        call o%new(is_ptcl=.false.)
         numlen = len(int2str(params%nptcls))
         do iptcl=1,params%nptcls
             call o%rnd_ori

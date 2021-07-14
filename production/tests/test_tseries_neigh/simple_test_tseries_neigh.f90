@@ -6,7 +6,7 @@ type(oris) :: os
 integer :: i, inds(20)
 integer, allocatable :: ptcls2neigh(:,:)
 
-call os%new(20)
+call os%new(20, is_ptcl=.false.)
 do i=1,20,5
     inds(i:) = i
 end do

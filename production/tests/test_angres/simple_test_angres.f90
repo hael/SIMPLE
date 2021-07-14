@@ -7,7 +7,7 @@ integer    :: i
 type(oris) :: os
 
 do i=500,20000,500
-    call os%new(i)
+    call os%new(i, is_ptcl=.false.)
     call os%spiral
     write(logfhandle,*) i, os%find_angres()
 end do

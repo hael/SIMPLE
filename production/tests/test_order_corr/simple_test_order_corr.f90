@@ -8,7 +8,7 @@ type(ori)  :: o
 integer, allocatable :: order(:)
 integer :: i
 call seed_rnd
-call os%new(10)
+call os%new(10, is_ptcl=.false.)
 do i=1,10
     call os%set(i, 'corr', ran3())
 end do
