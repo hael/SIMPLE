@@ -38,6 +38,7 @@ type :: hash
     procedure          :: lookup
     procedure          :: get
     procedure          :: get_values
+    procedure          :: get_keys
     procedure          :: get_str
     procedure          :: get_value_at
     procedure          :: hash2str
@@ -289,6 +290,12 @@ contains
         real, allocatable  :: values(:)
         allocate(values(self%hash_index), source=self%values(:self%hash_index))
     end function get_values
+
+    function get_keys( self ) result( keys )
+        class(hash), intent(in)    :: self
+        type(str4arr), allocatable :: keys(:)
+        allocate(keys(self%hash_index), source=self%keys(:self%hash_index))
+    end function get_keys
 
     !>  \brief  convert hash to string
     pure function hash2str( self ) result( str )

@@ -7,17 +7,19 @@ use simple_strings
 use simple_error
 use simple_syslib
 use simple_fileio
+use simple_defs_ori
 use simple_map_reduce, only: split_nobjs_even
 implicit none
 
 public :: binoris, binoris_seginfo
-private
+! private
 #include "simple_local_flags.inc"
 
-integer(kind(ENUM_ORISEG)), parameter :: MAX_N_SEGMENTS = 20
-integer(kind=8),            parameter :: N_VARS_HEAD_SEG = 5
-integer(kind=8),            parameter :: N_BYTES_HEADER  = MAX_N_SEGMENTS * N_VARS_HEAD_SEG * 8 ! because dp integer
-integer,                    parameter :: THREAD_NSTRINGS = 2000
+integer(kind(ENUM_ORISEG)), parameter :: MAX_N_SEGMENTS     = 20
+integer(kind=8),            parameter :: N_VARS_HEAD_SEG    = 5
+integer(kind=8),            parameter :: N_BYTES_HEADER     = MAX_N_SEGMENTS * N_VARS_HEAD_SEG * 8 ! because dp integer
+integer,                    parameter :: THREAD_NSTRINGS    = 2000
+integer,                    parameter :: PTCL_BYTES_PER_REC = N_PTCL_ORIPARAMS * 4
 
 type binoris_seginfo
     integer(kind=8) :: fromto(2)          = 0
@@ -48,7 +50,6 @@ type binoris
     procedure, private :: write_segment_1
     procedure, private :: write_segment_2
     generic            :: write_segment => write_segment_1, write_segment_2
-    procedure          :: write_record
     procedure, private :: add_segment_1
     procedure, private :: add_segment_2
     generic            :: add_segment => add_segment_1, add_segment_2
@@ -166,16 +167,17 @@ contains
     end subroutine write_header
 
     subroutine write_segment_inside_1( self, isegment, os, fromto )
-        use simple_oris,   only: oris
-        class(binoris),          intent(inout) :: self
+        use simple_oris, only: oris
+        class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        class(oris), optional,   intent(inout) :: os ! indexed from 1 to nptcls
-        integer,     optional,   intent(in)    :: fromto(2)
+        class(oris), optional,      intent(inout) :: os ! indexed from 1 to nptcls
+        integer,     optional,      intent(in)    :: fromto(2)
         character(len=:), allocatable :: str_dyn
-        integer         :: i, nspaces, noris
+        integer :: i, nspaces, noris
         integer(kind(ENUM_ORISEG)) :: iseg
         integer(kind=8) :: end_part1, start_part3, end_part3
         integer(kind=8) :: ibytes, first_data_byte
+        real            :: ptcl_record(N_PTCL_ORIPARAMS)
         character(len=1), allocatable ::bytearr_part3(:)
         noris = os%get_noris()
         if( noris == 0 ) return
@@ -196,16 +198,24 @@ contains
         ! WRITE FILE
         ! write orientation data (2nd part)
         ibytes = self%header(isegment)%first_data_byte
-        do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
-            str_dyn = os%ori2str(i)
-            nspaces = self%header(isegment)%n_bytes_per_record - len_trim(str_dyn)
-            if( nspaces > 0 )then
-                write(unit=self%funit,pos=ibytes) trim(str_dyn)//spaces(nspaces)
-            else
-                write(unit=self%funit,pos=ibytes) trim(str_dyn)
-            endif
-            ibytes = ibytes + self%header(isegment)%n_bytes_per_record
-        end do
+        if( is_particle_seg(isegment) )then
+            do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
+                call os%ori2prec(i, ptcl_record)
+                write(unit=self%funit,pos=ibytes) ptcl_record
+                ibytes = ibytes + self%header(isegment)%n_bytes_per_record
+            end do
+        else
+            do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
+                str_dyn = os%ori2str(i)
+                nspaces = self%header(isegment)%n_bytes_per_record - len_trim(str_dyn)
+                if( nspaces > 0 )then
+                    write(unit=self%funit,pos=ibytes) trim(str_dyn)//spaces(nspaces)
+                else
+                    write(unit=self%funit,pos=ibytes) trim(str_dyn)
+                endif
+                ibytes = ibytes + self%header(isegment)%n_bytes_per_record
+            end do
+        endif
         ! 3d part
         if( allocated(bytearr_part3) )then
             ! find next nonzero first_data_byte
@@ -284,7 +294,7 @@ contains
 
     subroutine byte_manager4seg_inside_1( self, isegment, end_part1, start_part3, end_part3, bytearr_part3 )
         class(binoris),                intent(inout) :: self
-        integer(kind(ENUM_ORISEG)),       intent(in)    :: isegment
+        integer(kind(ENUM_ORISEG)),    intent(in)    :: isegment
         integer(kind=8),               intent(out)   :: end_part1, start_part3, end_part3
         character(len=1), allocatable, intent(out)   :: bytearr_part3(:)
         integer(kind(ENUM_ORISEG))  :: iseg
@@ -353,9 +363,10 @@ contains
         use simple_oris,   only: oris
         class(binoris),          intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        class(oris),             intent(inout) :: os ! indexed from 1 to nptcls
+        class(oris),             intent(in) :: os ! indexed from 1 to nptcls
         integer, optional,       intent(in)    :: fromto(2)
         character(len=:), allocatable :: str_dyn
+        real    :: ptcl_record(N_PTCL_ORIPARAMS)
         integer :: i, nspaces, noris
         integer(kind=8) :: ibytes
         noris = os%get_noris()
@@ -374,23 +385,31 @@ contains
         call self%update_byte_ranges
         ! write orientation data
         ibytes = self%header(isegment)%first_data_byte
-        do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
-            str_dyn = os%ori2str(i)
-            nspaces = self%header(isegment)%n_bytes_per_record - len_trim(str_dyn)
-            if( nspaces > 0 )then
-                write(unit=self%funit,pos=ibytes) str_dyn//spaces(nspaces)
-            else
-                write(unit=self%funit,pos=ibytes) str_dyn
-            endif
-            ibytes = ibytes + self%header(isegment)%n_bytes_per_record
-        end do
+        if( is_particle_seg(isegment) )then ! is ptcl2D or ptcl3D segment, see simple_sp_project
+            do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
+                call os%ori2prec(i, ptcl_record)
+                write(unit=self%funit,pos=ibytes) ptcl_record
+                ibytes = ibytes + self%header(isegment)%n_bytes_per_record
+            end do
+        else
+            do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
+                str_dyn = os%ori2str(i)
+                nspaces = self%header(isegment)%n_bytes_per_record - len_trim(str_dyn)
+                if( nspaces > 0 )then
+                    write(unit=self%funit,pos=ibytes) str_dyn//spaces(nspaces)
+                else
+                    write(unit=self%funit,pos=ibytes) str_dyn
+                endif
+                ibytes = ibytes + self%header(isegment)%n_bytes_per_record
+            end do
+        endif
     end subroutine write_segment_1
 
     subroutine write_segment_2( self, isegment, fromto, strlen_max, sarr )
-        class(binoris), intent(inout) :: self
-        integer(kind(ENUM_ORISEG)), intent(in) :: isegment
-        integer,                    intent(in) :: fromto(2), strlen_max
-        type(str4arr),           intent(inout) :: sarr(:) ! indexed from 1 to nptcls
+        class(binoris),             intent(inout) :: self
+        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
+        integer,                    intent(in)    :: fromto(2), strlen_max
+        type(str4arr),              intent(inout) :: sarr(:) ! indexed from 1 to nptcls
         integer :: i, nspaces
         integer(kind=8) :: ibytes
         if( .not. self%l_open ) THROW_HARD('file needs to be open')
@@ -411,29 +430,11 @@ contains
         end do
     end subroutine write_segment_2
 
-    ! assumes that segment has been added to stack
-    ! assumes that byte ranges have been updated
-    ! on startup, initialize ibytes to the first data byte of the segment
-    subroutine write_record( self, isegment, ibytes, str )
-        class(binoris),             intent(inout) :: self
-        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        integer(kind=8),            intent(inout) :: ibytes
-        character(len=*),           intent(in)    :: str
-        integer :: nspaces
-        nspaces = self%header(isegment)%n_bytes_per_record - len_trim(str)
-        if( nspaces > 0 )then
-            write(unit=self%funit,pos=ibytes) str//spaces(nspaces)
-        else
-            write(unit=self%funit,pos=ibytes) str
-        endif
-        ibytes = ibytes + self%header(isegment)%n_bytes_per_record
-    end subroutine write_record
-
     subroutine add_segment_1( self, isegment, os, fromto )
         use simple_oris, only: oris
         class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        class(oris),                intent(inout) :: os
+        class(oris),                intent(in)    :: os
         integer, optional,          intent(in)    :: fromto(2)
         integer :: strlen_max
         ! sanity check isegment
@@ -449,9 +450,14 @@ contains
             self%header(isegment)%fromto(1) = 1
             self%header(isegment)%fromto(2) = os%get_noris()
         endif
-        ! set maximum trimmed string lenght to n_bytes_per_record
-        strlen_max = os%max_ori_strlen_trim()
-        self%header(isegment)%n_bytes_per_record = strlen_max
+        if( is_particle_seg(isegment) )then ! is ptcl2D or ptcl3D segment, see simple_sp_project
+            ! fixed byte lenght per record
+            self%header(isegment)%n_bytes_per_record = PTCL_BYTES_PER_REC
+        else
+            ! set maximum trimmed string lenght to n_bytes_per_record
+            strlen_max = os%max_ori_strlen_trim()
+            self%header(isegment)%n_bytes_per_record = strlen_max
+        endif
         ! set n_records
         self%header(isegment)%n_records = self%header(isegment)%fromto(2) - self%header(isegment)%fromto(1) + 1
         if( self%header(isegment)%n_records < 1 ) THROW_HARD('input oritab (os) empty')
@@ -492,9 +498,9 @@ contains
 
     subroutine read_first_segment_record( self, isegment, o )
         use simple_ori, only: ori
-        class(binoris),          intent(inout) :: self
+        class(binoris),             intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        class(ori),              intent(inout) :: o
+        class(ori),                 intent(inout) :: o
         character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
         if( .not. self%l_open ) THROW_HARD('file needs to be open')
         if( isegment < 1 .or. isegment > self%n_segments )then
@@ -502,6 +508,7 @@ contains
             write(logfhandle,*) 'n_segments: ', self%n_segments
             THROW_HARD('isegment out of range')
         endif
+        if( is_particle_seg(isegment) ) THROW_HARD('Not intended for ptcl2D/3D segments')
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
             read(unit=self%funit,pos=self%header(isegment)%first_data_byte) str_os_line
             call o%str2ori(str_os_line, is_particle_seg(isegment))
@@ -521,6 +528,7 @@ contains
         character(len=:), allocatable :: tmp_string
         character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
         integer(kind=8) :: ibytes, ipos
+        real            :: ptcl_record(N_PTCL_ORIPARAMS)
         integer         :: i, irec, n, nl, nbatches, ibatch, nbatch, nthr
         logical         :: present_fromto, oonly_ctfparams_state_eo
         if( .not. self%l_open ) THROW_HARD('file needs to be open')
@@ -541,42 +549,51 @@ contains
         oonly_ctfparams_state_eo = .false.
         if( present(only_ctfparams_state_eo) ) oonly_ctfparams_state_eo = only_ctfparams_state_eo
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
-            ! read orientation data
-            ibytes   = self%header(isegment)%first_data_byte
-            nl       = self%header(isegment)%fromto(2) - self%header(isegment)%fromto(1) + 1
-            n        = nthr*THREAD_NSTRINGS
-            nbatches = ceiling(real(nl)/real(n))
-            batches  = split_nobjs_even(nl,nbatches)
-            do ibatch = 1,nbatches
-                nbatch = batches(ibatch,2)-batches(ibatch,1)+1
-                ! read
-                allocate(character(len=nbatch*self%header(isegment)%n_bytes_per_record) :: tmp_string)
-                read(unit=self%funit,pos=ibytes) tmp_string
-                ibytes = ibytes + nbatch*self%header(isegment)%n_bytes_per_record
-                ! parse
-                !omp parallel do default(shared) private(i,irec,ipos) schedule(static) proc_bind(close)
-                do i = 1,nbatch
-                    irec  = batches(ibatch,1) + i - 1
-                    ipos  = (i-1) * self%header(isegment)%n_bytes_per_record + 1
-                    if( oonly_ctfparams_state_eo )then
-                        if( present_fromto )then
-                            call os%str2ori_ctfparams_state_eo(i,&
-                                &tmp_string(ipos:ipos+self%header(isegment)%n_bytes_per_record-1))
+            ibytes = self%header(isegment)%first_data_byte
+            if( is_particle_seg(isegment) )then ! ptcl2D/3D segment, see simple_sp_project
+                if( .not.os%is_particle() ) THROW_HARD('os needs to be of particle kind')
+                do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
+                    read(unit=self%funit,pos=ibytes) ptcl_record
+                    call os%prec2ori(i, ptcl_record)
+                    ibytes = ibytes + self%header(isegment)%n_bytes_per_record
+                end do
+            else
+                ! read orientation data as strings
+                nl       = self%header(isegment)%fromto(2) - self%header(isegment)%fromto(1) + 1
+                n        = nthr * THREAD_NSTRINGS
+                nbatches = ceiling(real(nl)/real(n))
+                batches  = split_nobjs_even(nl,nbatches)
+                do ibatch = 1,nbatches
+                    nbatch = batches(ibatch,2)-batches(ibatch,1)+1
+                    ! read
+                    allocate(character(len=nbatch*self%header(isegment)%n_bytes_per_record) :: tmp_string)
+                    read(unit=self%funit,pos=ibytes) tmp_string
+                    ibytes = ibytes + nbatch*self%header(isegment)%n_bytes_per_record
+                    ! parse
+                    !omp parallel do default(shared) private(i,irec,ipos) schedule(static) proc_bind(close)
+                    do i = 1,nbatch
+                        irec  = batches(ibatch,1) + i - 1
+                        ipos  = (i-1) * self%header(isegment)%n_bytes_per_record + 1
+                        if( oonly_ctfparams_state_eo )then
+                            if( present_fromto )then
+                                call os%str2ori_ctfparams_state_eo(i,&
+                                    &tmp_string(ipos:ipos+self%header(isegment)%n_bytes_per_record-1))
+                            else
+                                call os%str2ori_ctfparams_state_eo(irec,&
+                                    &tmp_string(ipos:ipos+self%header(isegment)%n_bytes_per_record-1))
+                            endif
                         else
-                            call os%str2ori_ctfparams_state_eo(irec,&
-                                &tmp_string(ipos:ipos+self%header(isegment)%n_bytes_per_record-1))
+                            if( present_fromto )then
+                                call os%str2ori(i, tmp_string(ipos:ipos+self%header(isegment)%n_bytes_per_record-1))
+                            else
+                                call os%str2ori(irec, tmp_string(ipos:ipos+self%header(isegment)%n_bytes_per_record-1))
+                            endif
                         endif
-                    else
-                        if( present_fromto )then
-                            call os%str2ori(i, tmp_string(ipos:ipos+self%header(isegment)%n_bytes_per_record-1))
-                        else
-                            call os%str2ori(irec, tmp_string(ipos:ipos+self%header(isegment)%n_bytes_per_record-1))
-                        endif
-                    endif
+                    enddo
+                    !omp end parallel do
+                    deallocate(tmp_string)
                 enddo
-                !omp end parallel do
-                deallocate(tmp_string)
-            enddo
+            endif
         else
             ! empty segment, nothing to do
         endif
@@ -607,13 +624,23 @@ contains
     end subroutine read_segment_2
 
     subroutine read_record( self, isegment, ibytes, str )
+        use simple_ori, only: ori
         class(binoris),                intent(inout) :: self
         integer(kind(ENUM_ORISEG)),    intent(in)    :: isegment
         integer(kind=8),               intent(inout) :: ibytes
-        character(len=:), allocatable, intent(out)   :: str
+        character(len=:), allocatable, intent(inout) :: str
+        type(ori) :: o
+        real      :: ptcl_record(N_PTCL_ORIPARAMS)
         if( allocated(str) ) deallocate(str)
-        allocate(character(len=self%header(isegment)%n_bytes_per_record) :: str)
-        read(unit=self%funit,pos=ibytes) str
+        if( is_particle_seg(isegment) )then ! ptcl2D/3D segment, see simple_sp_project
+            call o%new(is_ptcl=.true.)
+            read(unit=self%funit,pos=ibytes) ptcl_record
+            call o%prec2ori(ptcl_record)
+            str = o%ori2str()
+        else
+            allocate(character(len=self%header(isegment)%n_bytes_per_record) :: str)
+            read(unit=self%funit,pos=ibytes) str
+        endif
         ibytes = ibytes + self%header(isegment)%n_bytes_per_record
     end subroutine read_record
 

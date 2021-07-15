@@ -1,49 +1,46 @@
-module simple_ori_defs
+module simple_defs_ori
 implicit none
 
 enum, bind(c)
     enumerator :: I_ANGAST    = 1
     enumerator :: I_CLASS     = 2
     enumerator :: I_CORR      = 3
-    enumerator :: I_CS        = 4
-    enumerator :: I_DFX       = 5
-    enumerator :: I_DFY       = 6
-    enumerator :: I_DIST      = 7
-    enumerator :: I_DIST_INPL = 8
-    enumerator :: I_E1        = 9
-    enumerator :: I_E2        = 10
-    enumerator :: I_E3        = 11
-    enumerator :: I_EO        = 12
-    enumerator :: I_FRAC      = 13
-    enumerator :: I_FRACA     = 14
-    enumerator :: I_INDINSTK  = 15
-    enumerator :: I_INPL      = 16
-    enumerator :: I_KV        = 17
-    enumerator :: I_LP        = 18
-    enumerator :: I_MI_CLASS  = 19
-    enumerator :: I_MI_PROJ   = 20
-    enumerator :: I_MI_STATE  = 21
-    enumerator :: I_NPEAKS    = 22
-    enumerator :: I_OW        = 23
-    enumerator :: I_PHSHIFT   = 24
-    enumerator :: I_PROJ      = 25
-    enumerator :: I_SHWMEAN   = 26
-    enumerator :: I_SHWSTDEV  = 27
-    enumerator :: I_SPECSCORE = 28
-    enumerator :: I_SPREAD    = 29
-    enumerator :: I_STATE     = 30
-    enumerator :: I_STKIND    = 31
-    enumerator :: I_UPDATECNT = 32
-    enumerator :: I_W         = 33
-    enumerator :: I_X         = 34
-    enumerator :: I_XINCR     = 35
-    enumerator :: I_XPOS      = 36
-    enumerator :: I_Y         = 37
-    enumerator :: I_YINCR     = 38
-    enumerator :: I_YPOS      = 39
+    enumerator :: I_DFX       = 4
+    enumerator :: I_DFY       = 5
+    enumerator :: I_DIST      = 6
+    enumerator :: I_DIST_INPL = 7
+    enumerator :: I_E1        = 8
+    enumerator :: I_E2        = 9
+    enumerator :: I_E3        = 10
+    enumerator :: I_EO        = 11
+    enumerator :: I_FRAC      = 12
+    enumerator :: I_INDSTK    = 13
+    enumerator :: I_INPL      = 14
+    enumerator :: I_LP        = 15
+    enumerator :: I_MI_CLASS  = 16
+    enumerator :: I_MI_PROJ   = 17
+    enumerator :: I_MI_STATE  = 18
+    enumerator :: I_NPEAKS    = 19
+    enumerator :: I_OW        = 20
+    enumerator :: I_PHSHIFT   = 21
+    enumerator :: I_PROJ      = 22
+    enumerator :: I_SHWMEAN   = 23
+    enumerator :: I_SHWSTDEV  = 24
+    enumerator :: I_SPECSCORE = 25
+    enumerator :: I_SPREAD    = 26
+    enumerator :: I_STATE     = 27
+    enumerator :: I_STKIND    = 28
+    enumerator :: I_UPDATECNT = 29
+    enumerator :: I_W         = 30
+    enumerator :: I_X         = 31
+    enumerator :: I_XINCR     = 32
+    enumerator :: I_XPOS      = 33
+    enumerator :: I_Y         = 34
+    enumerator :: I_YINCR     = 35
+    enumerator :: I_YPOS      = 36
 end enum
 
-integer, parameter :: N_PTCL_ORIPARAMS = 39
+integer, parameter :: N_PTCL_ORIPARAMS = 36
 
 contains
 
@@ -57,8 +54,6 @@ contains
                 get_oriparam_ind = I_CLASS
             case('corr')
                 get_oriparam_ind = I_CORR
-            case('cs')
-                get_oriparam_ind = I_CS
             case('dfx')
                 get_oriparam_ind = I_DFX
             case('dfy')
@@ -77,14 +72,10 @@ contains
                 get_oriparam_ind = I_EO
             case('frac')
                 get_oriparam_ind = I_FRAC
-            case('fraca')
-                get_oriparam_ind = I_FRACA
-            case('indinstk')
-                get_oriparam_ind = I_INDINSTK
+            case('indstk')
+                get_oriparam_ind = I_INDSTK
             case('inpl')
                 get_oriparam_ind = I_INPL
-            case('kv')
-                get_oriparam_ind = I_KV
             case('lp')
                 get_oriparam_ind = I_LP
             case('mi_class')
@@ -142,8 +133,6 @@ contains
                 flag ='class'
             case(I_CORR)
                 flag ='corr'
-            case(I_CS)
-                flag ='cs'
             case(I_DFX)
                 flag ='dfx'
             case(I_DFY)
@@ -162,14 +151,10 @@ contains
                 flag ='eo'
             case(I_FRAC)
                 flag ='frac'
-            case(I_FRACA)
-                flag ='fraca'
-            case(I_INDINSTK)
-                flag ='indinstk'
+            case(I_INDSTK)
+                flag ='indstk'
             case(I_INPL)
                 flag ='inpl'
-            case(I_KV)
-                flag ='kv'
             case(I_LP)
                 flag ='lp'
             case(I_MI_CLASS)
@@ -228,8 +213,6 @@ contains
                 is_zero = abs(val) < TINY
             case(I_CORR)
                 is_zero = abs(val) < TINY
-            case(I_CS)
-                is_zero = abs(val) < TINY
             case(I_DFX)
                 is_zero = abs(val) < TINY
             case(I_DFY)
@@ -238,13 +221,9 @@ contains
                 is_zero = abs(val) < TINY
             case(I_FRAC)
                 is_zero = abs(val) < TINY
-            case(I_FRACA)
-                is_zero = abs(val) < TINY
-            case(I_INDINSTK)
+            case(I_INDSTK)
                 is_zero = abs(val) < TINY
             case(I_INPL)
-                is_zero = abs(val) < TINY
-            case(I_KV)
                 is_zero = abs(val) < TINY
             case(I_LP)
                 is_zero = abs(val) < TINY
@@ -286,4 +265,4 @@ contains
         oriparam_isthere = .not. is_zero
     end function oriparam_isthere
 
-end module simple_ori_defs
+end module simple_defs_ori

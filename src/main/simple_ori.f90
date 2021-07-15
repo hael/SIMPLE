@@ -1,7 +1,7 @@
 ! an orientation
 module simple_ori
 include 'simple_lib.f08'
-use simple_ori_defs
+use simple_defs_ori
 implicit none
 
 public :: ori, test_ori, euler2m, m2euler
@@ -10,7 +10,7 @@ private
 
 type :: ori
     private
-    real        :: pparms(N_PTCL_ORIPARAMS) = 0. !< hardcoded per-particle parameters (see simple_ori_defs)
+    real        :: pparms(N_PTCL_ORIPARAMS) = 0. !< hardcoded per-particle parameters (see simple_defs_ori)
     type(hash)  :: htab                          !< hash table for dynamic parameters
     type(chash) :: chtab                         !< hash table for filenames etc.
     logical     :: is_ptcl   = .false.           !< to indicate whether the info is of particle kind
@@ -75,6 +75,8 @@ type :: ori
     procedure          :: pparms2str
     procedure          :: pparms_strlen
     procedure          :: ori2str
+    procedure          :: ori2prec
+    procedure          :: prec2ori
     procedure          :: ori_strlen_trim
     procedure          :: ori2chash
     procedure          :: chash2ori
@@ -173,12 +175,33 @@ contains
     end subroutine assign_ori
 
     subroutine copy_ori( self_out, self_in )
-        class(ori), intent(in)    :: self_in
-        class(ori), intent(inout) :: self_out
-        self_out%pparms  = self_in%pparms
-        self_out%htab    = self_in%htab
-        self_out%chtab   = self_in%chtab
-        self_out%is_ptcl = self_in%is_ptcl
+        class(ori), intent(in)     :: self_in
+        class(ori), intent(inout)  :: self_out
+        character(len=KEYLEN)      :: key
+        type(str4arr), allocatable :: keys(:)
+        integer :: sz, i, ind
+        self_out%pparms = self_in%pparms
+        self_out%htab   = self_in%htab
+        self_out%chtab  = self_in%chtab
+        if( self_out%is_ptcl.neqv.self_in%is_ptcl )then
+            if( self_in%is_ptcl )then
+                do i=1,N_PTCL_ORIPARAMS
+                    if( oriparam_isthere(i, self_in%pparms(i)) )then
+                        key = get_oriparam_flag(i)
+                        call self_out%set(trim(key), self_in%pparms(i))
+                    endif
+                end do
+            else ! self_out is ptcl, self_in is not
+                sz   = self_in%htab%size_of()
+                keys = self_in%htab%get_keys()
+                do i=1,sz
+                    ind = get_oriparam_ind(trim(keys(i)%str))
+                    if( ind /= 0 )then
+                        self_out%pparms(ind) = self_in%get(trim(keys(i)%str))
+                    endif
+                end do
+            endif
+        endif
     end subroutine copy_ori
 
     subroutine delete_entry( self, key )
@@ -207,8 +230,8 @@ contains
                 self%pparms(I_X) = 0.
                 self%pparms(I_Y) = 0.
             endif
-            self%pparms(I_CORR) = -1.
-            self%pparms(I_FRAC) =  0.
+            self%pparms(I_CORR) = 0.
+            self%pparms(I_FRAC) = 0.
         else
             call self%htab%delete('class')
             call self%htab%delete('e3')
@@ -236,7 +259,7 @@ contains
                 self%pparms(I_X) = 0.
                 self%pparms(I_Y) = 0.
             endif
-            self%pparms(I_CORR) = -1.
+            self%pparms(I_CORR) =  0.
             self%pparms(I_FRAC) =  0.
         else
             call self%htab%delete('proj')
@@ -255,7 +278,7 @@ contains
     subroutine transfer_2Dparams( self_out, self_in )
         class(ori), intent(inout) :: self_out
         class(ori), intent(in)    :: self_in
-        if( .not.self_out%is_ptcl.eqv.self_in%is_ptcl ) THROW_HARD('non-conforming types (is_ptcl)')
+        if( self_out%is_ptcl.neqv.self_in%is_ptcl ) THROW_HARD('non-conforming types (is_ptcl)')
         if( self_out%is_ptcl )then
             self_out%pparms(I_CLASS)     = self_in%pparms(I_CLASS)
             self_out%pparms(I_CORR)      = self_in%pparms(I_CORR)
@@ -280,7 +303,7 @@ contains
     subroutine transfer_3Dparams( self_out, self_in )
         class(ori), intent(inout) :: self_out
         class(ori), intent(in)    :: self_in
-        if( .not.self_out%is_ptcl.eqv.self_in%is_ptcl ) THROW_HARD('non-conforming types (is_ptcl)')
+        if( self_out%is_ptcl.neqv.self_in%is_ptcl ) THROW_HARD('non-conforming types (is_ptcl)')
         if( self_out%is_ptcl )then
             self_out%pparms(I_PROJ)      = self_in%pparms(I_PROJ)
             self_out%pparms(I_CORR)      = self_in%pparms(I_CORR)
@@ -825,6 +848,18 @@ contains
             endif
         endif
     end function ori2str
+
+    pure subroutine ori2prec( self, prec )
+        class(ori), intent(in)    :: self
+        real,       intent(inout) :: prec(N_PTCL_ORIPARAMS)
+        prec = self%pparms
+    end subroutine ori2prec
+
+    pure subroutine prec2ori( self, prec )
+        class(ori), intent(inout) :: self
+        real,       intent(in)    :: prec(N_PTCL_ORIPARAMS)
+        self%pparms = prec
+    end subroutine prec2ori
 
     pure integer function ori_strlen_trim( self )
         class(ori), intent(in) :: self

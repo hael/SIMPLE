@@ -930,10 +930,8 @@ contains
             write(logfhandle,*) 'ptcl3D field (self%os_ptcl3D) already populated with # entries: ', n_os_ptcl3D
             THROW_HARD('empty particle fields in project file assumed; add_single_stk')
         endif
-        self%os_ptcl2D = os
-        self%os_ptcl3D = os
-        ! call self%os_ptcl2D%copy(os, is_ptcl=.true.)
-        ! call self%os_ptcl3D%copy(os, is_ptcl=.true.)
+        call self%os_ptcl2D%copy(os, is_ptcl=.true.)
+        call self%os_ptcl3D%copy(os, is_ptcl=.true.)
         call self%os_ptcl2D%set_all2single('stkind', 1.)
         call self%os_ptcl3D%set_all2single('stkind', 1.)
         if( .not. self%os_ptcl2D%isthere('state') ) call self%os_ptcl2D%set_all2single('state',  1.) ! default on import
@@ -1146,7 +1144,7 @@ contains
         n_os_ptcl2D = self%os_ptcl2D%get_noris()
         n_os_ptcl3D = self%os_ptcl3D%get_noris()
         if( n_os_stk == 0 )then
-            call self%os_stk%new(nstks, is_ptcl=.false.)
+            call self%os_stk%new(nstks,         is_ptcl=.false.)
             call self%os_ptcl2D%new(nptcls_tot, is_ptcl=.true.)
             call self%os_ptcl3D%new(nptcls_tot, is_ptcl=.true.)
             fromp = 1
@@ -1276,6 +1274,8 @@ contains
             do iptcl = parts(istk,1), parts(istk,2)
                 cnt = cnt + 1
                 call self%get_stkname_and_ind('ptcl2D', iptcl, stk, ind_in_stk)
+                ! print *,iptcl, iptcl, stk, ind_in_stk
+                ! call self%os_ptcl2D%print_(iptcl)
                 call img%read(stk, ind_in_stk)
                 call img%write(stkpart, cnt)
             enddo
@@ -2396,41 +2396,67 @@ contains
         parts  = split_nobjs_even(nptcls, ndocs)
         ! convert from flag to enumerator
         isegment = oritype2segment(oritype)
-        ! allocate merged string representation
-        allocate(os_strings(nptcls))
-        ! maxium string length
-        strlen_max = 0
-        ! read into string representation
-        do i=1,ndocs
-            ! read part
-            fname     = trim(adjustl(fbody))//int2str_pad(i,numlen)//'.simple'
-            call bos_doc%open(trim(fname))
-            n_records = bos_doc%get_n_records(isegment)
-            partsz    = parts(i,2) - parts(i,1) + 1
-            if( n_records /= partsz )then
-                write(logfhandle,*) 'ERROR, # records does not match expectation'
-                write(logfhandle,*) 'EXTRACTED FROM file: ', trim(fname)
-                write(logfhandle,*) 'n_records: ', n_records
-                write(logfhandle,*) 'CALCULATED FROM input p%nptcls/p%ndocs'
-                write(logfhandle,*) 'fromto: ', parts(i,1), parts(i,2)
-                write(logfhandle,*) 'partsz: ', partsz
-                stop
-            endif
-            call bos_doc%read_segment(isegment, os_strings)
-            strlen_max = max(strlen_max, bos_doc%get_n_bytes_per_record(isegment))
-            call bos_doc%close
-        end do
-        ! write
-        call self%projinfo%getter(1, 'projfile', projfile)
-        call self%bos%open(projfile)
-        call self%bos%write_segment_inside(isegment, os_strings, [1,nptcls], strlen_max)
-        ! transfer to memory & destruct
-        call self%ptr2oritype(oritype, os)
-        do i=1,nptcls
-            call os%str2ori(i, os_strings(i)%str)
-            if( allocated(os_strings(i)%str) ) deallocate(os_strings(i)%str)
-        end do
-        deallocate(os_strings)
+        if( isegment==3 .or. isegment==6 )then
+            call self%ptr2oritype(oritype, os)
+            do i=1,ndocs
+                ! read part
+                fname     = trim(adjustl(fbody))//int2str_pad(i,numlen)//'.simple'
+                call bos_doc%open(trim(fname))
+                n_records = bos_doc%get_n_records(isegment)
+                partsz    = parts(i,2) - parts(i,1) + 1
+                if( n_records /= partsz )then
+                    write(logfhandle,*) 'ERROR, # records does not match expectation'
+                    write(logfhandle,*) 'EXTRACTED FROM file: ', trim(fname)
+                    write(logfhandle,*) 'n_records: ', n_records
+                    write(logfhandle,*) 'CALCULATED FROM input p%nptcls/p%ndocs'
+                    write(logfhandle,*) 'fromto: ', parts(i,1), parts(i,2)
+                    write(logfhandle,*) 'partsz: ', partsz
+                    stop
+                endif
+                call bos_doc%read_segment(isegment, os)
+                call bos_doc%close
+            end do
+            ! write
+            call self%projinfo%getter(1, 'projfile', projfile)
+            call self%bos%open(projfile)
+            call self%bos%write_segment_inside(isegment, os)
+        else
+            ! allocate merged string representation
+            allocate(os_strings(nptcls))
+            ! maxium string length
+            strlen_max = 0
+            ! read into string representation
+            do i=1,ndocs
+                ! read part
+                fname     = trim(adjustl(fbody))//int2str_pad(i,numlen)//'.simple'
+                call bos_doc%open(trim(fname))
+                n_records = bos_doc%get_n_records(isegment)
+                partsz    = parts(i,2) - parts(i,1) + 1
+                if( n_records /= partsz )then
+                    write(logfhandle,*) 'ERROR, # records does not match expectation'
+                    write(logfhandle,*) 'EXTRACTED FROM file: ', trim(fname)
+                    write(logfhandle,*) 'n_records: ', n_records
+                    write(logfhandle,*) 'CALCULATED FROM input p%nptcls/p%ndocs'
+                    write(logfhandle,*) 'fromto: ', parts(i,1), parts(i,2)
+                    write(logfhandle,*) 'partsz: ', partsz
+                    stop
+                endif
+                call bos_doc%read_segment(isegment, os_strings)
+                strlen_max = max(strlen_max, bos_doc%get_n_bytes_per_record(isegment))
+                call bos_doc%close
+            end do
+            ! write
+            call self%projinfo%getter(1, 'projfile', projfile)
+            call self%bos%open(projfile)
+            call self%bos%write_segment_inside(isegment, os_strings, [1,nptcls], strlen_max)
+            ! transfer to memory & destruct
+            call self%ptr2oritype(oritype, os)
+            do i=1,nptcls
+                call os%str2ori(i, os_strings(i)%str)
+                if( allocated(os_strings(i)%str) ) deallocate(os_strings(i)%str)
+            end do
+            deallocate(os_strings)
+        endif
         nullify(os)
         ! no need to update header (taken care of in binoris object)
         call self%bos%close
