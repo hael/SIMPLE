@@ -1502,12 +1502,6 @@ contains
                         THROW_HARD('invalid dimensions for volume: '//trim(vol)//'; add_vol2os_out 1')
                     endif
                 endif
-            case('vol_filt')
-                if(.not.present(box))then
-                    THROW_HARD('Missing dimensions for volume: '//trim(vol)//'; add_vol2os_out 2')
-                else
-                    ldim = box
-                endif
             case DEFAULT
                 THROW_HARD('invalid VOL kind: '//trim(which_imgkind)//'; add_vol2os_out 3')
         end select
@@ -1655,7 +1649,7 @@ contains
         character(len=:), allocatable :: imgkind_here
         integer :: i, ind, cnt
         select case(trim(imgkind))
-            case('vol_cavg','vol','vol_filt','vol_msk')
+            case('vol_cavg','vol','vol_msk')
                 ! all good
             case DEFAULT
                 THROW_HARD('invalid VOL kind: '//trim(imgkind)//'; get_vol')

@@ -36,8 +36,7 @@ use simple_convergence,              only: convergence
 use simple_euclid_sigma2,            only: euclid_sigma2
 implicit none
 
-public :: refine3D_exec, preppftcc4align, pftcc, setup_weights_read_o_peaks
-public :: calc_3Drec, calc_proj_weights
+public :: refine3D_exec, preppftcc4align, pftcc, setup_weights_read_o_peaks, calc_3Drec
 private
 #include "simple_local_flags.inc"
 
@@ -109,19 +108,6 @@ contains
 
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
-
-        ! READ FOURIER RING CORRELATIONS
-        if( params_glob%nstates.eq.1 )then
-            if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
-        else
-            if( file_exists(CLUSTER3D_FRCS) )then
-                call build_glob%projfrcs%read(CLUSTER3D_FRCS)
-            else
-                if( file_exists(params_glob%frcs) )then
-                    call build_glob%projfrcs%read(params_glob%frcs)
-                endif
-            endif
-        endif
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
@@ -288,7 +274,7 @@ contains
                         allocate(strategy3D_neigh_multi       :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('eval')
                         call eval_ptcl(pftcc, iptcl)
-                        cycle !!
+                        cycle
                     case DEFAULT
                         THROW_HARD('refinement mode: '//trim(params_glob%refine)//' unsupported')
                 end select
@@ -362,9 +348,6 @@ contains
                 call close_o_peaks_io
         end select
         call o_peak_prev%kill
-
-        ! CALCULATE PROJECTION DIRECTION WEIGHTS
-        ! call calc_proj_weights !!!!!!!!!! turned off 4 now, needs integration and testing
 
         ! CALCULATE PARTICLE WEIGHTS
         select case(trim(params_glob%ptclw))
@@ -721,38 +704,5 @@ contains
         end do
         call close_o_peaks_io
     end subroutine read_o_peaks
-
-    subroutine calc_proj_weights
-        real, allocatable :: weights(:), projs(:)
-        integer :: i, ind, iptcl
-        real    :: pw, proj_weights(params_glob%nspace), minw
-        select case(params_glob%refine)
-            case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval')
-                ! nothing to do
-            case DEFAULT
-                if( build_glob%spproj_field%get_avg('updatecnt') < 1.0 )then
-                    ! nothing to do
-                else
-                    ! calculate the weight strenght per projection direction
-                    proj_weights = 0.
-                    do iptcl=params_glob%fromp,params_glob%top
-                        pw = 1.0
-                        if( build_glob%spproj_field%isthere(iptcl, 'w') ) pw = build_glob%spproj_field%get(iptcl, 'w')
-                        if( s3D%o_peaks(iptcl)%isthere('ow') )then
-                            weights = s3D%o_peaks(iptcl)%get_all('ow')
-                            projs   = s3D%o_peaks(iptcl)%get_all('proj')
-                            do i=1,size(projs)
-                                ind = nint(projs(i))
-                                if( weights(i) > TINY ) proj_weights(ind) = proj_weights(ind) + weights(i) * pw
-                            end do
-                            deallocate(weights, projs)
-                        endif
-                    end do
-                    minw = minval(proj_weights, mask=proj_weights > TINY)
-                    where( proj_weights < TINY ) proj_weights = minw ! to prevent division with zero
-                endif
-                call arr2file(proj_weights, params_glob%proj_weights_file)
-        end select
-    end subroutine calc_proj_weights
 
 end module simple_strategy3D_matcher

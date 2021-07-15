@@ -11,7 +11,7 @@ use simple_sym,              only: sym
 use simple_projector,        only: projector
 use simple_polarizer,        only: polarizer
 use simple_masker,           only: masker
-use simple_projection_frcs,  only: projection_frcs
+use simple_class_frcs,  only: class_frcs
 use simple_parameters,       only: parameters
 use simple_cmdline,          only: cmdline
 implicit none
@@ -35,8 +35,8 @@ type :: builder
     type(projector)                     :: vol, vol_odd
     type(image)                         :: vol2                   !< -"-
     type(masker)                        :: mskimg                 !< mask image
-    type(projection_frcs)               :: projfrcs               !< projection FRC's used in the anisotropic Wiener filter
-    type(projection_frcs)               :: projpssnrs             !<
+    type(class_frcs)               :: clsfrcs               !< projection FRC's used cluster2D
+    type(class_frcs)               :: projpssnrs             !<
     type(image),            allocatable :: imgbatch(:)            !< batch of images
     ! RECONSTRUCTION TOOLBOX
     type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction
@@ -287,7 +287,6 @@ contains
         call self%kill_rec_eo_tbox
         call self%eorecvol%new(self%spproj)
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
-        call self%projfrcs%new(NSPACE_REDUCED, params%box, params%smpd, params%nstates)
         if( .not. associated(build_glob) ) build_glob => self
         self%eo_rec_tbox_exists = .true.
         write(logfhandle,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
@@ -297,7 +296,6 @@ contains
         class(builder), intent(inout) :: self
         if( self%eo_rec_tbox_exists )then
             call self%eorecvol%kill
-            call self%projfrcs%kill
             self%eo_rec_tbox_exists = .false.
         endif
     end subroutine kill_rec_eo_tbox
@@ -306,7 +304,7 @@ contains
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
         call self%kill_strategy2D_tbox
-        call self%projfrcs%new(params%ncls, params%box, params%smpd, params%nstates)
+        call self%clsfrcs%new(params%ncls, params%box, params%smpd, params%nstates)
         call self%projpssnrs%new(params%ncls, params%box, params%smpd, params%nstates)
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy2D_tbox_exists = .true.
@@ -317,7 +315,7 @@ contains
         class(builder), intent(inout) :: self
         if( self%strategy2D_tbox_exists )then
             if( allocated(self%nnmat) ) deallocate(self%nnmat)
-            call self%projfrcs%kill
+            call self%clsfrcs%kill
             call self%projpssnrs%kill
             self%strategy2D_tbox_exists = .false.
         endif
@@ -335,11 +333,6 @@ contains
             call self%pgrpsyms%nearest_proj_neighbors(self%eulspace, params%nnn, self%nnmat)
         endif
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
-        if( params%clsfrcs.eq.'yes' )then
-            ! done later
-        else
-            call self%projfrcs%new(NSPACE_REDUCED, params%box, params%smpd, params%nstates)
-        endif
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy3D_tbox_exists = .true.
         write(logfhandle,'(A)') '>>> DONE BUILDING STRATEGY3D TOOLBOX'
@@ -356,7 +349,6 @@ contains
                 deallocate(self%eorecvols)
             endif
             if( allocated(self%nnmat) ) deallocate(self%nnmat)
-            call self%projfrcs%kill
             self%strategy3D_tbox_exists = .false.
         endif
     end subroutine kill_strategy3D_tbox

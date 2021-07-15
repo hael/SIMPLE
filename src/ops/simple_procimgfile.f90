@@ -546,11 +546,11 @@ contains
     !! \param fname  input filename
     !! \param smpd  sampling distance
     subroutine matchfilt_imgfile( fname2filt, fname, frcs_fname, smpd )
-        use simple_projection_frcs, only: projection_frcs
+        use simple_class_frcs, only: class_frcs
         use simple_estimate_ssnr, only: fsc2optlp_sub
         character(len=*), intent(in) :: fname2filt, fname, frcs_fname
         real,             intent(in) :: smpd
-        type(projection_frcs) :: frcs
+        type(class_frcs) :: frcs
         type(image)           :: img
         real,     allocatable :: frc(:), filter(:)
         integer               :: i, n, ldim(3)
@@ -559,7 +559,7 @@ contains
         ldim(3) = 1
         if( frcs%get_nprojs().ne.n )then
             write(logfhandle,*) '# imgs: ',n
-            write(logfhandle,*) '# projection_frcs: ',frcs%get_nprojs()
+            write(logfhandle,*) '# class_frcs: ',frcs%get_nprojs()
             THROW_HARD('inconsistent dimensions; matchfilt_imgfile')
         endif
         call raise_exception_imgfile( n, ldim, 'matchfilt_imgfile' )

@@ -9,7 +9,7 @@ implicit none
 
 public :: read_img, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
 &norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, preprefvol,&
-&prep2Dref, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch,&
+&prep2Dref, preprecvols, killrecvols, gen_class_frcs, prepimgbatch,&
 &build_pftcc_particles
 private
 #include "simple_local_flags.inc"
@@ -205,7 +205,7 @@ contains
             params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%boxmatch, params_glob%smpd)
         else
             if( file_exists(params_glob%frcs) .and. which_iter > LPLIM1ITERBOUND )then
-                lplim = build_glob%projfrcs%estimate_lp_for_align()
+                lplim = build_glob%clsfrcs%estimate_lp_for_align()
             else
                 if( which_iter <= LPLIM1ITERBOUND )then
                     lplim = params_glob%lplims2D(1)
@@ -378,12 +378,12 @@ contains
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
-        real    :: frc(build_glob%projfrcs%get_filtsz()), filter(build_glob%projfrcs%get_filtsz())
+        real    :: frc(build_glob%img%get_filtsz()), filter(build_glob%img%get_filtsz())
         real    :: subfilter(build_glob%img_match%get_filtsz())
         real    :: xyz(3), sharg
         integer :: filtsz
         logical :: do_center
-        filtsz    = build_glob%projfrcs%get_filtsz()
+        filtsz    = build_glob%img%get_filtsz()
         do_center = (params_glob%center .eq. 'yes')
         ! centering only performed if params_glob%center.eq.'yes'
         if( present(center) ) do_center = do_center .and. center
@@ -413,9 +413,9 @@ contains
             call subsample_filter(filtsz, build_glob%img_match%get_filtsz(), filter, subfilter)
             call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
         else
-            call build_glob%projfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+            call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
             if( any(frc > 0.143) )then
-                call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
+                call fsc2optlp_sub(build_glob%clsfrcs%get_filtsz(), frc, filter)
                 if( params_glob%l_match_filt )then
                     call subsample_optlp(filtsz, build_glob%img_match%get_filtsz(), filter, subfilter)
                     call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
@@ -561,10 +561,10 @@ contains
         logical,                 intent(in)    :: iseven
         type(image)                   :: mskvol
         type(ori)                     :: o
-        character(len=:), allocatable :: fname_vol_filter
+        character(len=:), allocatable :: fname_opt_filter
         real,             allocatable :: pssnr(:)
         real    :: subfilter(build_glob%img_match%get_filtsz())
-        real    :: filter(build_glob%projfrcs%get_filtsz()), frc(build_glob%projfrcs%get_filtsz())
+        real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
         integer :: iref, iproj, iprojred, filtsz, subfiltsz
         ! ensure correct build_glob%vol dim
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
@@ -575,39 +575,28 @@ contains
         endif
         ! Volume filtering
         if( .not.params_glob%l_lpset )then
-            filtsz    = build_glob%projfrcs%get_filtsz()
+            filtsz    = build_glob%img%get_filtsz()
             subfiltsz = build_glob%img_match%get_filtsz()
             if( params_glob%l_match_filt )then
                 ! stores filters in pftcc
                 if( params_glob%l_pssnr )then
-                    allocate(fname_vol_filter, source=PSSNR_FBODY//int2str_pad(s,2)//BIN_EXT)
+                    allocate(fname_opt_filter, source=PSSNR_FBODY//int2str_pad(s,2)//BIN_EXT)
                     subfilter = 1.
-                    if( any(build_glob%fsc(s,:) > 0.143) .and. file_exists(fname_vol_filter))then
-                        pssnr = file2rarr(fname_vol_filter)
+                    if( any(build_glob%fsc(s,:) > 0.143) .and. file_exists(fname_opt_filter))then
+                        pssnr = file2rarr(fname_opt_filter)
                         call subsample_filter(filtsz, subfiltsz, pssnr, subfilter)
                     endif
                     do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
                         call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
                     enddo
                 else
-                    if( file_exists(params_glob%frcs) )then
-                        if( params_glob%clsfrcs.eq.'yes')then
+                    if( params_glob%clsfrcs.eq.'yes')then
+                        if( file_exists(params_glob%frcs) )then
                             iproj = 0
-                            do iref = 1,2*build_glob%projfrcs%get_nprojs()
+                            do iref = 1,2*build_glob%clsfrcs%get_nprojs()
                                 iproj = iproj+1
-                                if( iproj > build_glob%projfrcs%get_nprojs() ) iproj = 1
-                                call build_glob%projfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-                                call fsc2optlp_sub(filtsz, frc, filter)
-                                call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
-                                call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
-                            enddo
-                        else
-                            iproj = 0
-                            do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
-                                iproj    = iproj+1
-                                call build_glob%eulspace%get_ori(iproj, o)
-                                iprojred = build_glob%eulspace_red%find_closest_proj(o)
-                                call build_glob%projfrcs%frc_getter(iprojred, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+                                if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
+                                call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
                                 call fsc2optlp_sub(filtsz, frc, filter)
                                 call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
                                 call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
@@ -626,42 +615,10 @@ contains
                     endif
                 endif
             else
-                if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-                    call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
-                    if( params_glob%nstates == 1 )then
-                        allocate(fname_vol_filter, source=trim(ANISOLP_FBODY)//int2str_pad(s,2)//trim(params_glob%ext))
-                    else
-                        allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(params_glob%ext))
-                    endif
-                    if( file_exists(fname_vol_filter) )then
-                        ! anisotropic filter
-                        call build_glob%vol2%read(fname_vol_filter)
-                        call build_glob%vol%apply_filter(build_glob%vol2)
-                    else
-                        ! match filter based on Rosenthal & Henderson, 2003
-                        if( any(build_glob%fsc(s,:) > 0.143) )then
-                            call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
-                            call build_glob%vol%apply_filter(filter)
-                        endif
-                    endif
-                else
-                    call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
-                    if( params_glob%nstates == 1 )then
-                        allocate(fname_vol_filter, source=trim(ANISOLP_FBODY)//int2str_pad(s,2)//trim(params_glob%ext))
-                    else
-                        allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(params_glob%ext))
-                    endif
-                    if( file_exists(fname_vol_filter) )then
-                        ! anisotropic filter
-                        call build_glob%vol2%read(fname_vol_filter)
-                        call build_glob%vol%apply_filter(build_glob%vol2)
-                    else
-                        ! match filter based on Rosenthal & Henderson, 2003
-                        if( any(build_glob%fsc(s,:) > 0.143) )then
-                            call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
-                            call build_glob%vol%apply_filter(filter)
-                        endif
-                    endif
+                call build_glob%vol%fft()
+                if( any(build_glob%fsc(s,:) > 0.143) )then
+                    call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
+                    call build_glob%vol%apply_filter(filter)
                 endif
             endif
         endif
@@ -708,7 +665,6 @@ contains
     end subroutine preprefvol
 
     subroutine norm_struct_facts( cline, which_iter )
-        use simple_filterer, only: gen_anisotropic_optlp
         class(cmdline),    intent(inout) :: cline
         integer, optional, intent(in)    :: which_iter
         integer               :: s, find4eoavg
@@ -742,13 +698,6 @@ contains
                 call build_glob%eorecvols(s)%sum_eos
                 call build_glob%eorecvols(s)%sampl_dens_correct_eos(s, params_glob%vols_even(s), &
                     &params_glob%vols_odd(s), find4eoavg)
-                call gen_projection_frcs(cline,  params_glob%vols_even(s), params_glob%vols_odd(s), &
-                    params_glob%mskfile, s, build_glob%projfrcs)
-                call build_glob%projfrcs%write(FRCS_FILE)
-                call gen_anisotropic_optlp(build_glob%vol2, build_glob%projfrcs, &
-                    build_glob%eulspace_red, s, params_glob%pgrp, params_glob%hpind_fsc, &
-                    params_glob%l_phaseplate)
-                call build_glob%vol2%write('aniso_optlp_state'//int2str_pad(s,2)//params_glob%ext)
                 call build_glob%eorecvols(s)%get_res(res05s(s), res0143s(s))
                 call build_glob%eorecvols(s)%sampl_dens_correct_sum(build_glob%vol)
                 call build_glob%vol%write(params_glob%vols(s), del_if_exists=.true.)
@@ -790,14 +739,14 @@ contains
     end subroutine norm_struct_facts
 
     !>  \brief generate projection FRCs from even/odd pairs
-    subroutine gen_projection_frcs( cline, ename, oname, resmskname, state, projfrcs )
+    subroutine gen_class_frcs( cline, ename, oname, resmskname, state, clsfrcs )
         use simple_oris,            only: oris
         use simple_projector_hlev,  only: reproject
-        use simple_projection_frcs, only: projection_frcs
+        use simple_class_frcs, only: class_frcs
         class(cmdline),         intent(inout) :: cline
         character(len=*),       intent(in)    :: ename, oname, resmskname
         integer,                intent(in)    :: state
-        class(projection_frcs), intent(inout) :: projfrcs
+        class(class_frcs), intent(inout) :: clsfrcs
         type(oris)               :: e_space
         type(image)              :: mskvol
         type(image), allocatable :: even_imgs(:), odd_imgs(:)
@@ -817,7 +766,7 @@ contains
         ! generate even/odd projections
         even_imgs = reproject(build_glob%vol,  e_space)
         odd_imgs  = reproject(build_glob%vol2, e_space)
-        ! calculate FRCs and fill-in projfrcs object
+        ! calculate FRCs and fill-in clsfrcs object
         allocate(frc(even_imgs(1)%get_filtsz()))
         !$omp parallel do default(shared) private(iproj,frc) schedule(static) proc_bind(close)
         do iproj=1,NSPACE_REDUCED
@@ -825,7 +774,7 @@ contains
             call odd_imgs(iproj)%fft()
             call even_imgs(iproj)%fsc(odd_imgs(iproj), frc)
             if( params_glob%l_phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
-            call projfrcs%set_frc(iproj, frc, state)
+            call clsfrcs%set_frc(iproj, frc, state)
             call even_imgs(iproj)%kill
             call odd_imgs(iproj)%kill
         end do
@@ -855,6 +804,6 @@ contains
                 endif
         end subroutine prepeovol
 
-    end subroutine gen_projection_frcs
+    end subroutine gen_class_frcs
 
 end module simple_strategy2D3D_common

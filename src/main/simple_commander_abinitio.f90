@@ -380,7 +380,7 @@ contains
         call work_proj2%write
         ! split
         if( l_lpset )then
-            if(params%nparts == 1)then
+            if( params%nparts == 1 )then
                 ! all good
             else
                 call work_proj2%split_stk(params%nparts)
@@ -438,7 +438,6 @@ contains
             call work_proj2%add_vol2os_out(vol_iter, params%smpd, 1, 'vol')
             if( .not.l_lpset )then
                 call work_proj2%add_fsc2os_out(FSC_FBODY//str_state//trim(BIN_EXT), 1, orig_box)
-                call work_proj2%add_vol2os_out(ANISOLP_FBODY//str_state//params%ext, orig_smpd, 1, 'vol_filt', box=orig_box)
             endif
             call work_proj2%write_segment_inside('out',ORIG_WORK_PROJFILE)
             call xpostprocess%execute(cline_postprocess)
@@ -473,7 +472,7 @@ contains
         endif
         call work_proj2%kill
         ! revert splitting
-        call spproj%os_cls3D%set_all2single('stkind',1.)
+        call spproj%os_cls3D%set_all2single('stkind', 1.)
         ! map the orientation parameters obtained for the clusters back to the particles
         call spproj%map2ptcls
         ! add rec_final to os_out
@@ -553,15 +552,15 @@ contains
             end subroutine prep_eo_stks_refine
 
             subroutine rescale_2Dfilter
-                use simple_projection_frcs, only: projection_frcs
-                type(projection_frcs) :: projfrcs, projfrcs_sc
-                call projfrcs%read(frcs_fname)
-                call projfrcs%downsample(box, projfrcs_sc)
+                use simple_class_frcs, only: class_frcs
+                type(class_frcs) :: clsfrcs, clsfrcs_sc
+                call clsfrcs%read(frcs_fname)
+                call clsfrcs%downsample(box, clsfrcs_sc)
                 frcs_fname = trim(FRCS_FILE)
-                call projfrcs_sc%write(frcs_fname)
+                call clsfrcs_sc%write(frcs_fname)
                 call cline_refine3D_refine%set('frcs',frcs_fname)
-                call projfrcs%kill
-                call projfrcs_sc%kill
+                call clsfrcs%kill
+                call clsfrcs_sc%kill
             end subroutine rescale_2Dfilter
 
             subroutine conv_eo( os )

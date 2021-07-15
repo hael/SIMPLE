@@ -10,7 +10,6 @@ integer, parameter :: XLONGSTRLEN  = 4096 !< extra longer string length
 ! GLOBAL FILE CONSTANTS
 character(len=*), parameter :: SIMPLE_SUBPROC_OUT   = 'SIMPLE_SUBPROC_OUTPUT'
 character(len=*), parameter :: O_PEAKS_FBODY        = 'opeaks_part'
-character(len=*), parameter :: PROJ_WEIGHTS_FBODY   = 'projection_weights_part'
 ! EXTENSIONS
 character(len=*), parameter :: TXT_EXT              = '.txt'
 character(len=*), parameter :: BIN_EXT              = '.bin'
@@ -41,7 +40,6 @@ character(len=*), parameter :: AMSK_OTSU            = 'automasked_otsu.mrc'
 character(len=*), parameter :: REFINE3D_ITER_FBODY  = 'refine3Ddoc_'
 character(len=*), parameter :: STARTVOL_FBODY       = 'startvol_state'
 character(len=*), parameter :: VOL_FBODY            = 'recvol_state'
-character(len=*), parameter :: ANISOLP_FBODY        = 'aniso_optlp_state'
 character(len=*), parameter :: SNHCVOL              = 'snhc_recvol_state'
 ! 2D/3D COMMON
 character(len=*), parameter :: FSC_FBODY            = 'fsc_state'
@@ -59,7 +57,6 @@ character(len=*), parameter :: EXTRACT_PARAMS_FBODY = 'extract_params_'
 ! CLUSTER3D
 character(len=*), parameter :: CLUSTER3D_FSC        = 'mixed_fsc'//BIN_EXT
 character(len=*), parameter :: CLUSTER3D_FRCS       = 'mixed_frcs'//BIN_EXT
-character(len=*), parameter :: CLUSTER3D_ANISOLP    = 'mixed_aniso_optlp'
 character(len=*), parameter :: CLUSTER3D_VOL        = 'mixed_recvol'
 ! ML
 character(len=*), parameter :: SIGMA2_FBODY         = 'sigma2_noise_part'

@@ -4,9 +4,9 @@ include 'simple_lib.f08'
 use simple_builder,             only: builder
 use simple_cmdline,             only: cmdline
 use simple_commander_base,      only: commander_base
-use simple_strategy2D3D_common, only: gen_projection_frcs
+use simple_strategy2D3D_common, only: gen_class_frcs
 use simple_parameters,          only: parameters
-use simple_projection_frcs,     only: projection_frcs
+use simple_class_frcs,     only: class_frcs
 use simple_qsys_env,            only: qsys_env
 use simple_qsys_funs
 implicit none
@@ -35,7 +35,6 @@ type, extends(commander_base) :: random_rec_commander_distr
     procedure :: execute      => exec_random_rec
 end type random_rec_commander_distr
 
-
 contains
 
     subroutine exec_reconstruct3D_distr( self, cline )
@@ -45,7 +44,7 @@ contains
         character(len=:),          allocatable :: target_name
         character(len=STDLEN),     allocatable :: state_assemble_finished(:)
         character(len=LONGSTRLEN) :: refine_path
-        character(len=STDLEN)     :: volassemble_output, str_state, fsc_file, optlp_file
+        character(len=STDLEN)     :: volassemble_output, str_state, fsc_file!, optlp_file
         type(parameters) :: params
         type(builder)    :: build
         type(qsys_env)   :: qenv
@@ -132,9 +131,7 @@ contains
         if( params%mkdir.eq.'yes' )then
             do state = 1,params%nstates
                 fsc_file      = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
-                optlp_file    = ANISOLP_FBODY//trim(str_state)//params%ext
                 call build%spproj%add_fsc2os_out(trim(fsc_file), state, params%box)
-                call build%spproj%add_vol2os_out(trim(optlp_file), params%smpd, state, 'vol_filt', box=params%box)
                 if( trim(params%oritype).eq.'cls3D' )then
                     call build%spproj%add_vol2os_out(trim(VOL_FBODY)//trim(str_state)//params%ext, params%smpd, state, 'vol_cavg')
                 else
@@ -173,7 +170,6 @@ contains
 
     subroutine exec_volassemble( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
-        use simple_filterer,         only: gen_anisotropic_optlp
         class(volassemble_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters)              :: params
@@ -186,10 +182,8 @@ contains
         integer                       :: part, s, n, ss, state, find4eoavg, fnr
         logical, parameter            :: L_BENCH = .false.
         integer(timer_int_kind)       :: t_init, t_assemble, t_sum_eos, t_sampl_dens_correct_eos
-        integer(timer_int_kind)       :: t_gen_projection_frcs, t_gen_anisotropic_optlp
         integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_tot
         real(timer_int_kind)          :: rt_init, rt_assemble, rt_sum_eos, rt_sampl_dens_correct_eos
-        real(timer_int_kind)          :: rt_gen_projection_frcs, rt_gen_anisotropic_optlp
         real(timer_int_kind)          :: rt_sampl_dens_correct_sum, rt_eoavg, rt_tot
         if( L_BENCH )then
             t_init = tic()
@@ -214,8 +208,6 @@ contains
             rt_assemble                = 0.
             rt_sum_eos                 = 0.
             rt_sampl_dens_correct_eos  = 0.
-            rt_gen_projection_frcs     = 0.
-            rt_gen_anisotropic_optlp   = 0.
             rt_sampl_dens_correct_sum  = 0.
             rt_eoavg                   = 0.
         endif
@@ -251,16 +243,7 @@ contains
             call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
             if( L_BENCH )then
                 rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
-                t_gen_projection_frcs     = tic()
             endif
-            call gen_projection_frcs( cline, eonames(1), eonames(2), resmskname, s, build%projfrcs)
-            if( L_BENCH ) rt_gen_projection_frcs = rt_gen_projection_frcs + toc(t_gen_projection_frcs)
-            call build%projfrcs%write(FRCS_FILE)
-            if( L_BENCH ) t_gen_anisotropic_optlp = tic()
-            call gen_anisotropic_optlp(build%vol2, build%projfrcs, build%eulspace_red, s, &
-                &params%pgrp, params%hpind_fsc, params%l_phaseplate)
-            if( L_BENCH ) rt_gen_anisotropic_optlp = rt_gen_anisotropic_optlp + toc(t_gen_anisotropic_optlp)
-            call build%vol2%write('aniso_optlp_state'//int2str_pad(state,2)//params%ext)
             call build%eorecvol%get_res(res05s(s), res0143s(s))
             if( L_BENCH ) t_sampl_dens_correct_sum = tic()
             call build%eorecvol%sampl_dens_correct_sum( build%vol )
@@ -288,7 +271,7 @@ contains
         end do
         ! set the resolution limit according to the worst resolved model
         res  = maxval(res0143s)
-        params%lp = max( params%lpstop,res )
+        params%lp = max(params%lpstop, res)
         write(logfhandle,'(a,1x,F6.2)') '>>> LOW-PASS LIMIT:', params%lp
         call eorecvol_read%kill
         ! end gracefully
@@ -309,8 +292,6 @@ contains
             write(fnr,'(a,1x,f9.2)') 'assemble of volumes (I/O): ', rt_assemble
             write(fnr,'(a,1x,f9.2)') 'sum of eo-paris          : ', rt_sum_eos
             write(fnr,'(a,1x,f9.2)') 'gridding correction (eos): ', rt_sampl_dens_correct_eos
-            write(fnr,'(a,1x,f9.2)') 'projection FRCs          : ', rt_gen_projection_frcs
-            write(fnr,'(a,1x,f9.2)') 'anisotropic filter       : ', rt_gen_anisotropic_optlp
             write(fnr,'(a,1x,f9.2)') 'gridding correction (sum): ', rt_sampl_dens_correct_sum
             write(fnr,'(a,1x,f9.2)') 'averaging eo-pairs       : ', rt_eoavg
             write(fnr,'(a,1x,f9.2)') 'total time               : ', rt_tot
@@ -320,13 +301,10 @@ contains
             write(fnr,'(a,1x,f9.2)') 'assemble of volumes (I/O): ', (rt_assemble/rt_tot)               * 100.
             write(fnr,'(a,1x,f9.2)') 'sum of eo-paris          : ', (rt_sum_eos/rt_tot)                * 100.
             write(fnr,'(a,1x,f9.2)') 'gridding correction (eos): ', (rt_sampl_dens_correct_eos/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') 'projection FRCs          : ', (rt_gen_projection_frcs/rt_tot)    * 100.
-            write(fnr,'(a,1x,f9.2)') 'anisotropic filter       : ', (rt_gen_anisotropic_optlp/rt_tot)  * 100.
             write(fnr,'(a,1x,f9.2)') 'gridding correction (sum): ', (rt_sampl_dens_correct_sum/rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') 'averaging eo-pairs       : ', (rt_eoavg/rt_tot)                  * 100.
             write(fnr,'(a,1x,f9.2)') '% accounted for          : ',&
-            &((rt_init+rt_assemble+rt_sum_eos+rt_sampl_dens_correct_eos+rt_gen_projection_frcs+&
-            &rt_gen_anisotropic_optlp+rt_sampl_dens_correct_sum+rt_eoavg)/rt_tot) * 100.
+            &((rt_init+rt_assemble+rt_sum_eos+rt_sampl_dens_correct_eos+rt_sampl_dens_correct_sum+rt_eoavg)/rt_tot) * 100.
             call fclose(fnr)
         endif
     end subroutine exec_volassemble

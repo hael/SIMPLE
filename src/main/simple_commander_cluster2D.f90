@@ -163,7 +163,7 @@ contains
         use simple_commander_project, only: scale_project_commander_distr
         use simple_procimgfile,       only: random_selection_from_imgfile, random_cls_from_imgfile
         use simple_commander_imgproc, only: scale_commander
-        use simple_projection_frcs,   only: projection_frcs
+        use simple_class_frcs,   only: class_frcs
         class(cleanup2D_commander_hlev), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
@@ -177,7 +177,7 @@ contains
         ! other variables
         type(parameters)                    :: params
         type(sp_project)                    :: spproj, spproj_sc
-        type(projection_frcs)               :: frcs, frcs_sc
+        type(class_frcs)               :: frcs, frcs_sc
         character(len=:),       allocatable :: projfile, orig_projfile
         character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
         real                                :: scale_factor, smpd, msk, ring2, lp1, lp2
@@ -429,7 +429,7 @@ contains
     end subroutine exec_cleanup2D
 
     subroutine exec_cluster2D_stream( self, cline )
-        use simple_projection_frcs, only: projection_frcs
+        use simple_class_frcs, only: class_frcs
         use simple_oris,            only: oris
         class(cluster2D_commander_stream), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
@@ -1228,7 +1228,7 @@ contains
 
             !>  append the classified buffer to the pool
             subroutine transfer_buffer_to_pool
-                type(projection_frcs)         :: frcs_glob, frcs_buffer, frcs_prev
+                type(class_frcs)         :: frcs_glob, frcs_buffer, frcs_prev
                 character(len=:), allocatable :: refs_buffer
                 integer,          allocatable :: cls_pop(:), cls_buffer_pop(:), pinds(:), pool_inds(:), states(:)
                 integer :: endit, iptcl, ind, ncls_here, icls, i, stat, poolind, n_remap, pop
@@ -1608,7 +1608,7 @@ contains
             !> produces consolidated project at original scale
             subroutine write_snapshot( force, add_suffix )
                 logical,           intent(in) :: force, add_suffix
-                type(projection_frcs)         :: frcs, frcs_sc
+                type(class_frcs)         :: frcs, frcs_sc
                 type(oris)                    :: os_backup1, os_backup2, os_backup3
                 character(len=:), allocatable :: projfname, cavgsfname, suffix, frcsfname, src, dest
                 integer :: istk

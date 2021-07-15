@@ -164,7 +164,6 @@ type(simple_program), target :: tseries_ctf_estimate
 type(simple_program), target :: tseries_make_pickavg
 type(simple_program), target :: tseries_motion_correct
 type(simple_program), target :: tseries_swap_stack
-type(simple_program), target :: tseries_denoise_trajectory
 type(simple_program), target :: tseries_track_particles
 type(simple_program), target :: tseries_reconstruct3D
 type(simple_program), target :: graphene_subtr
@@ -389,7 +388,6 @@ contains
         call new_tseries_motion_correct
         call new_tseries_make_pickavg
         call new_tseries_swap_stack
-        call new_tseries_denoise_trajectory
         call new_tseries_track_particles
         call new_tseries_reconstruct3D
         call new_graphene_subtr
@@ -490,7 +488,6 @@ contains
         call push2prg_ptr_array(tseries_make_pickavg)
         call push2prg_ptr_array(tseries_motion_correct)
         call push2prg_ptr_array(tseries_swap_stack)
-        call push2prg_ptr_array(tseries_denoise_trajectory)
         call push2prg_ptr_array(tseries_track_particles)
         call push2prg_ptr_array(tseries_reconstruct3D)
         call push2prg_ptr_array(graphene_subtr)
@@ -692,8 +689,6 @@ contains
                 ptr2prg => tseries_make_pickavg
             case('tseries_motion_correct')
                 ptr2prg => tseries_motion_correct
-            case('tseries_denoise_trajectory')
-                ptr2prg => tseries_denoise_trajectory
             case('tseries_swap_stack')
                 ptr2prg => tseries_swap_stack
             case('tseries_track_particles')
@@ -814,7 +809,6 @@ contains
         write(logfhandle,'(A)') tseries_make_pickavg%name
         write(logfhandle,'(A)') tseries_track_particles%name
         write(logfhandle,'(A)') graphene_subtr%name
-        write(logfhandle,'(A)') tseries_denoise_trajectory%name
         write(logfhandle,'(A)') tseries_swap_stack%name
         write(logfhandle,'(A)') center2D_nano%name
         write(logfhandle,'(A)') cluster2D_nano%name
@@ -4135,34 +4129,6 @@ contains
         ! computer controls
         call tseries_make_pickavg%set_input('comp_ctrls', 1, nthr)
     end subroutine new_tseries_make_pickavg
-
-    subroutine new_tseries_denoise_trajectory
-        ! PROGRAM SPECIFICATION
-        call tseries_denoise_trajectory%new(&
-        &'tseries_denoise_trajectory',&                          ! name
-        &'PPCA-based particles denoising',&                     ! descr_short
-        &'is a program for PPCA-based particles denoising',&    ! descr_long
-        &'single_exec',&                                        ! executable
-        &2, 2, 0, 0, 0, 0, 1, .false.)                           ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call tseries_denoise_trajectory%set_input('img_ios', 1, stk)
-        tseries_denoise_trajectory%img_ios(1)%required = .true.
-        call tseries_denoise_trajectory%set_input('img_ios', 2, outstk)
-        ! parameter input/output
-        call tseries_denoise_trajectory%set_input('parm_ios', 1, smpd)
-        call tseries_denoise_trajectory%set_input('parm_ios', 2, 'winsz', 'num', 'Time window size', 'Time window size(frames)', 'winsz in # frames', .false., 500.0)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call tseries_denoise_trajectory%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_tseries_denoise_trajectory
 
     subroutine new_tseries_swap_stack
         ! PROGRAM SPECIFICATION

@@ -22,7 +22,7 @@ use simple_commander_relion
 use simple_commander_sim
 use simple_commander_volops
 use simple_commander_resolest
-use simple_projection_frcs
+! use simple_class_frcs
 use simple_spproj_hlev
 implicit none
 #include "simple_local_flags.inc"

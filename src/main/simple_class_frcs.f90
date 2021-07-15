@@ -1,12 +1,12 @@
-module simple_projection_frcs
+module simple_class_frcs
 include 'simple_lib.f08'
 implicit none
 
-public :: projection_frcs
+public :: class_frcs
 private
 #include "simple_local_flags.inc"
 
-type projection_frcs
+type class_frcs
     private
     integer           :: nprojs       = 0
     integer           :: filtsz       = 0
@@ -45,14 +45,14 @@ contains
     procedure          :: print_frcs
     ! destructor
     procedure          :: kill
-end type projection_frcs
+end type class_frcs
 
 contains
 
     ! constructor
 
     subroutine new( self, nprojs, box4frc_calc, smpd, nstates )
-        class(projection_frcs), intent(inout) :: self
+        class(class_frcs), intent(inout) :: self
         integer,                intent(in)    :: nprojs
         integer,                intent(in)    :: box4frc_calc
         real,                   intent(in)    :: smpd
@@ -75,7 +75,7 @@ contains
         self%headsz         = sizeof(self%file_header)
         ! alloc
         allocate( self%frcs(self%nstates,self%nprojs,self%filtsz), stat=alloc_stat)
-        if(alloc_stat .ne. 0)call allocchk('new; simple_projection_frcs', alloc_stat)
+        if(alloc_stat .ne. 0)call allocchk('new; simple_class_frcs', alloc_stat)
         self%frcs   = 0.0
         self%exists = .true.
     end subroutine new
@@ -83,7 +83,7 @@ contains
     ! exception
 
     subroutine raise_exception( self, proj, state, msg )
-        class(projection_frcs), intent(in) :: self
+        class(class_frcs), intent(in) :: self
         integer,                intent(in) :: proj, state
         character(len=*),       intent(in) :: msg
         logical :: l_outside
@@ -104,7 +104,7 @@ contains
     ! bound res
 
     subroutine bound_res( self, frc, res_frc05, res_frc0143 )
-        class(projection_frcs), intent(in)    :: self
+        class(class_frcs), intent(in)    :: self
         real,                   intent(in)    :: frc(:)
         real,                   intent(inout) :: res_frc05, res_frc0143
         if( res_frc05 < 0.0001 .and. res_frc0143 < 0.0001 )then
@@ -135,17 +135,17 @@ contains
     ! setters/getters
 
     pure integer function get_nprojs( self )
-        class(projection_frcs), intent(in) :: self
+        class(class_frcs), intent(in) :: self
         get_nprojs = self%nprojs
     end function get_nprojs
 
     pure integer function get_filtsz( self )
-        class(projection_frcs), intent(in) :: self
+        class(class_frcs), intent(in) :: self
         get_filtsz = self%filtsz
     end function get_filtsz
 
     subroutine set_frc( self, proj, frc, state )
-        class(projection_frcs), intent(inout) :: self
+        class(class_frcs), intent(inout) :: self
         integer,                intent(in)    :: proj
         real,                   intent(in)    :: frc(:)
         integer, optional,      intent(in)    :: state
@@ -178,7 +178,7 @@ contains
 
     !>  getter for values interepreted as FRCs
     function get_frc( self, proj, box, state ) result( frc )
-        class(projection_frcs), intent(in) :: self
+        class(class_frcs), intent(in) :: self
         integer,                intent(in) :: proj, box
         integer, optional,      intent(in) :: state
         real, allocatable :: frc(:)
@@ -197,7 +197,7 @@ contains
 
     !>  getter for values interepreted as FRCs
     subroutine frc_getter( self, proj, hpind_fsc, phaseplate, frc, state )
-        class(projection_frcs), intent(in)  :: self
+        class(class_frcs), intent(in)  :: self
         integer,                intent(in)  :: proj, hpind_fsc
         logical,                intent(in)  :: phaseplate
         real,                   intent(out) :: frc(self%filtsz)
@@ -215,7 +215,7 @@ contains
 
     !>  getter for raw values
     subroutine getter( self, proj, frc, state )
-        class(projection_frcs), intent(in)  :: self
+        class(class_frcs), intent(in)  :: self
         integer,                intent(in)  :: proj
         real,                   intent(out) :: frc(self%filtsz)
         integer, optional,      intent(in)  :: state
@@ -227,7 +227,7 @@ contains
     end subroutine getter
 
     subroutine estimate_res( self, proj, res_frc05, res_frc0143, state )
-        class(projection_frcs), intent(in)  :: self
+        class(class_frcs), intent(in)  :: self
         integer,                intent(in)  :: proj
         real,                   intent(out) :: res_frc05, res_frc0143
         integer, optional,      intent(in)  :: state
@@ -240,7 +240,7 @@ contains
     end subroutine estimate_res
 
     function estimate_find_for_eoavg( self, proj, state ) result( find )
-        class(projection_frcs), intent(in)  :: self
+        class(class_frcs), intent(in)  :: self
         integer,                intent(in)  :: proj
         integer, optional,      intent(in)  :: state
         integer :: sstate, find
@@ -251,7 +251,7 @@ contains
     end function estimate_find_for_eoavg
 
     function estimate_lp_for_align( self, state ) result( lp )
-        class(projection_frcs), intent(in)  :: self
+        class(class_frcs), intent(in)  :: self
         integer, optional,      intent(in)  :: state
         real    :: lplims(self%nprojs),lp3(3)
         integer :: sstate, iproj
@@ -271,9 +271,9 @@ contains
 
     subroutine downsample( self, newbox, self_out )
         use simple_estimate_ssnr, only: subsample_optlp
-        class(projection_frcs), intent(in)  :: self
+        class(class_frcs), intent(in)  :: self
         integer,                intent(in)  :: newbox
-        type(projection_frcs),  intent(out) :: self_out
+        type(class_frcs),  intent(out) :: self_out
         integer :: istate, iproj
         real    :: new_smpd
         if( newbox > self%box4frc_calc ) THROW_HARD('New > old filter size; downsample')
@@ -287,10 +287,10 @@ contains
     end subroutine downsample
 
     subroutine upsample( self, newsmpd, newbox, self_out )
-        class(projection_frcs), intent(in)  :: self
+        class(class_frcs), intent(in)  :: self
         real,                   intent(in)  :: newsmpd
         integer,                intent(in)  :: newbox
-        type(projection_frcs),  intent(out) :: self_out
+        type(class_frcs),  intent(out) :: self_out
         real    :: x, d, scale
         integer :: istate, iproj, sh, l,r
         if( newbox <= self%box4frc_calc ) THROW_HARD('New <= old filter size; downsample')
@@ -317,31 +317,31 @@ contains
     ! I/O
 
     subroutine read( self, fname )
-        class(projection_frcs), intent(inout) :: self
+        class(class_frcs), intent(inout) :: self
         character(len=*),       intent(in)    :: fname
         integer          :: funit, io_stat
         call fopen(funit,fname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
-        call fileiochk('projection_frcs; read; open for read '//trim(fname), io_stat)
+        call fileiochk('class_frcs; read; open for read '//trim(fname), io_stat)
         read(unit=funit,pos=1) self%file_header
         ! re-create the object according to file_header info
         call self%new(nint(self%file_header(1)), nint(self%file_header(2)), self%file_header(3), nint(self%file_header(4)))
         read(unit=funit,pos=self%headsz + 1) self%frcs
-        call fclose(funit, errmsg='projection_frcs; read; fhandle close')
+        call fclose(funit, errmsg='class_frcs; read; fhandle close')
     end subroutine read
 
     subroutine write( self, fname )
-        class(projection_frcs), intent(in) :: self
+        class(class_frcs), intent(in) :: self
         character(len=*),       intent(in) :: fname
         integer          :: funit, io_stat
         call fopen(funit,fname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
-        call fileiochk('projection_frcs; write; open for write '//trim(fname), io_stat)
+        call fileiochk('class_frcs; write; open for write '//trim(fname), io_stat)
         write(unit=funit,pos=1) self%file_header
         write(unit=funit,pos=self%headsz + 1) self%frcs
-        call fclose(funit, errmsg='projection_frcs; write; fhandle close')
+        call fclose(funit, errmsg='class_frcs; write; fhandle close')
     end subroutine write
 
     subroutine print_frcs( self, fname, state )
-        class(projection_frcs), intent(inout) :: self
+        class(class_frcs), intent(inout) :: self
         character(len=*),       intent(in)    :: fname
         integer,      optional, intent(in)    :: state
         real, allocatable :: res(:)
@@ -363,7 +363,7 @@ contains
     ! destructor
 
     subroutine kill( self )
-        class(projection_frcs), intent(inout) :: self
+        class(class_frcs), intent(inout) :: self
         if( self%exists )then
             deallocate(self%res4frc_calc, self%frcs)
             self%nprojs       = 0
@@ -373,4 +373,4 @@ contains
         endif
     end subroutine kill
 
-end module simple_projection_frcs
+end module simple_class_frcs

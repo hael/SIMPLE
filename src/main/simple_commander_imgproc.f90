@@ -389,7 +389,7 @@ contains
                         THROW_HARD('Unknown filter!')
                 end select
             else if( params%phrand .eq. 'no')then
-                ! projection_frcs filtering
+                ! class_frcs filtering
                 if( cline%defined('frcs') )then
                     call matchfilt_imgfile(params%stk, params%outstk, params%frcs, params%smpd)
                 ! Band pass

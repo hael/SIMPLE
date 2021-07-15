@@ -244,8 +244,6 @@ contains
             rename_stat = simple_rename(trim(VOL_FBODY)//one//'_even'//params%ext, trim(CLUSTER3D_VOL)//'_even'//params%ext)
             rename_stat = simple_rename(trim(VOL_FBODY)//one//'_odd'//params%ext,  trim(CLUSTER3D_VOL)//'_odd'//params%ext)
             rename_stat = simple_rename(trim(FSC_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FSC))
-            rename_stat = simple_rename(FRCS_FILE, trim(CLUSTER3D_FRCS))
-            rename_stat = simple_rename(trim(ANISOLP_FBODY)//one//params%ext, trim(CLUSTER3D_ANISOLP)//params%ext)
         endif
 
         ! calculate extremal initial ratio
@@ -310,7 +308,7 @@ contains
         call work_proj%read_segment('ptcl3D', params%projfile)
         call work_proj%kill
 
-        ! STAGE2: soft multi-states refinement
+        ! STAGE2: multi-states refinement
         startit = iter + 1
         call cline_refine3D2%set('startit', real(startit))
         call cline_refine3D2%set('maxits',  real(min(params%maxits,startit+MAXITS2)))
@@ -573,7 +571,7 @@ contains
                 integer, intent(in) :: s
                 character(len=2),            parameter :: one = '01'
                 character(len=LONGSTRLEN), allocatable :: files(:)
-                character(len=LONGSTRLEN) :: src, dest, vol, fsc, volfilt
+                character(len=LONGSTRLEN) :: src, dest, vol, fsc!, volfilt
                 character(len=2)          :: str_state
                 character(len=8)          :: str_iter
                 integer                   :: i, final_it, stat, l, pos
@@ -583,7 +581,6 @@ contains
                 if( s == 1 )then
                     vol     = filepath(dirs(s), trim(VOL_FBODY)//one//trim(params%ext))
                     fsc     = filepath(dirs(s), trim(FSC_FBODY)//one//BIN_EXT)
-                    volfilt = filepath(dirs(s), trim(ANISOLP_FBODY)//one//params%ext)
                 else
                     ! renames all *state01* files
                      call simple_list_files(trim(dirs(s))//'/*state01*', files)
@@ -608,7 +605,6 @@ contains
                      deallocate(files)
                      vol     = filepath(dirs(s), trim(VOL_FBODY)//str_state//trim(params%ext))
                      fsc     = filepath(dirs(s), trim(FSC_FBODY)//str_state//BIN_EXT)
-                     volfilt = filepath(dirs(s), trim(ANISOLP_FBODY)//str_state//params%ext)
                 endif
                 ! updates os_out
                 if(params%oritype.eq.'cls3D')then
@@ -617,7 +613,6 @@ contains
                     call spproj_master%add_vol2os_out(vol, params%smpd, s, 'vol')
                 endif
                 call spproj_master%add_fsc2os_out(fsc, s, params%box)
-                call spproj_master%add_vol2os_out(volfilt, params%smpd, s, 'vol_filt', box=params%box)
                 call spproj_master%add_frcs2os_out(filepath(dirs(s),FRCS_FILE),'frc3D')
             end subroutine stash_state
 
