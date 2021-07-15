@@ -546,14 +546,14 @@ contains
     !! \param fname  input filename
     !! \param smpd  sampling distance
     subroutine matchfilt_imgfile( fname2filt, fname, frcs_fname, smpd )
-        use simple_class_frcs, only: class_frcs
+        use simple_class_frcs,    only: class_frcs
         use simple_estimate_ssnr, only: fsc2optlp_sub
         character(len=*), intent(in) :: fname2filt, fname, frcs_fname
         real,             intent(in) :: smpd
-        type(class_frcs) :: frcs
-        type(image)           :: img
-        real,     allocatable :: frc(:), filter(:)
-        integer               :: i, n, ldim(3)
+        type(class_frcs)  :: frcs
+        type(image)       :: img
+        real, allocatable :: frc(:), filter(:)
+        integer           :: i, n, ldim(3)
         call frcs%read(frcs_fname)
         call find_ldim_nptcls(fname2filt, ldim, n)
         ldim(3) = 1
