@@ -235,29 +235,4 @@ contains
         deallocate(parts)
     end function merge_rmat_from_parts
 
-    subroutine merge_proj_weights_from_parts( nparts, proj_weights )
-        integer,           intent(in)  :: nparts
-        real, allocatable, intent(out) :: proj_weights(:)
-        character(len=:), allocatable  :: fname
-        real, allocatable :: pwpart(:)
-        logical :: file_exists
-        integer :: ipart, numlen
-        if( allocated(proj_weights) ) deallocate(proj_weights)
-        numlen = len(int2str(nparts))
-        do ipart=1,nparts
-            allocate(fname, source=PROJ_WEIGHTS_FBODY//int2str_pad(ipart, numlen)//BIN_EXT)
-            if( file_exists )then
-                pwpart = file2rarr(fname)
-                if( allocated(proj_weights) )then
-                    proj_weights = proj_weights + pwpart
-                else
-                    proj_weights = pwpart
-                endif
-            else
-                write(logfhandle,'(A)') 'WARNING! '//fname//' does not exist; merge_proj_weights_from_parts'
-            endif
-            deallocate(fname)
-        end do
-    end subroutine merge_proj_weights_from_parts
-
 end module simple_map_reduce

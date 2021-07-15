@@ -178,7 +178,7 @@ contains
         endif
 
         ! READ FOURIER RING CORRELATIONS
-        if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
+        if( file_exists(params_glob%frcs) ) call build_glob%clsfrcs%read(params_glob%frcs)
         if( params_glob%l_pssnr )then
             if( file_exists(trim(PSSNR_FBODY)//int2str_pad(1,2)//BIN_EXT) )then
                 call build_glob%projpssnrs%read(trim(PSSNR_FBODY)//int2str_pad(1,2)//BIN_EXT)

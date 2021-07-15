@@ -248,7 +248,7 @@ contains
         call spproj%os_cls2D%new(params_glob%ncls, is_ptcl=.false.)
         do icls=1,params_glob%ncls
             pop = pops(icls)
-            call build_glob%projfrcs%estimate_res(icls, frc05, frc0143)
+            call build_glob%clsfrcs%estimate_res(icls, frc05, frc0143)
             call spproj%os_cls2D%set(icls, 'class',     real(icls))
             call spproj%os_cls2D%set(icls, 'pop',       real(pop))
             call spproj%os_cls2D%set(icls, 'res',       frc0143)
@@ -688,9 +688,9 @@ contains
             call even_imgs(icls)%fsc(odd_imgs(icls), frc)
             find_plate = 0
             if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
-            call build_glob%projfrcs%set_frc(icls, frc, 1)
+            call build_glob%clsfrcs%set_frc(icls, frc, 1)
             ! average low-resolution info between eo pairs to keep things in register
-            find = build_glob%projfrcs%estimate_find_for_eoavg(icls, 1)
+            find = build_glob%clsfrcs%estimate_find_for_eoavg(icls, 1)
             find = max(find, find_plate)
             call cavgs_merged(icls)%fft()
             call cavgs_even(icls)%fft()
@@ -703,7 +703,7 @@ contains
         end do
         !$omp end parallel do
         ! write FRCs
-        call build_glob%projfrcs%write(fname)
+        call build_glob%clsfrcs%write(fname)
         ! SSNR
         call cavger_calc_and_write_pssnr
         ! destruct
@@ -727,7 +727,7 @@ contains
             call ctfsqsums_merged(icls)%spectrum('real', pad_inv_ctfsq_avg, norm=.true.)
             pad_inv_ctfsq_avg = 1. / pad_inv_ctfsq_avg
             call subsample_filter(size(pad_inv_ctfsq_avg),filtsz, pad_inv_ctfsq_avg, inv_ctfsq_avg)
-            frc = build_glob%projfrcs%get_frc(icls, params_glob%box, 1)
+            frc = build_glob%clsfrcs%get_frc(icls, params_glob%box, 1)
             ! Eq 19, Sindelar et al., JSB, 2011
             ssnr = ratio * inv_ctfsq_avg * fsc2ssnr(frc)
             call build_glob%projpssnrs%set_frc(icls, ssnr, 1)

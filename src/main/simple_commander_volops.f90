@@ -104,14 +104,14 @@ contains
         class(postprocess_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         type(parameters)  :: params
-        type(image)       :: vol, vol_copy, vol_filt
+        type(image)       :: vol, vol_copy
         type(masker)      :: mskvol
         type(sp_project)  :: spproj
-        character(len=:), allocatable :: vol_fname, fsc_fname, vol_filt_fname, mskfile_fname
+        character(len=:), allocatable :: vol_fname, fsc_fname, mskfile_fname
         real,             allocatable :: fsc(:), optlp(:), res(:)
         real              :: fsc0143, fsc05, smpd, mskfile_smpd
         integer           :: state, box, fsc_box, mskfile_box, ldim(3)
-        logical           :: has_fsc, has_vol_filt, has_mskfile
+        logical           :: has_fsc, has_mskfile
         ! set defaults
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call cline%set('oritype', 'out')
@@ -147,24 +147,11 @@ contains
                 has_fsc = .true.
             endif
         endif
-        ! check volume filter
-        has_vol_filt = .false.
-        if( cline%defined('lp') )then
-            ! all good
-        else
-            call spproj%get_vol('vol_filt', state, vol_filt_fname, smpd, box)
-            params%vol_filt = trim(vol_filt_fname)
-            if( .not.file_exists(params%vol_filt) )then
-                THROW_HARD('volume filter: '//trim(params%vol_filt)//' not found')
-            else
-                has_vol_filt = .true.
-            endif
-        endif
         ! check volume mask
         has_mskfile = .false.
         if( cline%defined('mskfile') )then
             if( .not.file_exists(params%mskfile) )then
-                THROW_HARD('volume mask file: '//trim(params%vol_filt)//' not found')
+                THROW_HARD('volume mask file: '//trim(params%mskfile)//' not found')
             else
                 has_mskfile = .true.
             endif
@@ -190,17 +177,11 @@ contains
         if( cline%defined('lp') )then
             ! low-pass overrides all input
             call vol%bp(0., params%lp)
-        else if( has_vol_filt )then
-            ! optimal low-pass filter from vol_filt
-            call vol_filt%new(ldim, smpd)
-            call vol_filt%read(params%vol_filt)
-            call vol%apply_filter(vol_filt)
-            call vol_filt%kill
         else if( has_fsc )then
             ! optimal low-pass filter from FSC
             call vol%apply_filter(optlp)
         else
-            THROW_HARD('no method for low-pass filtering defined; give fsc|lp|vol_filt on command line; exec_postprocess')
+            THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; exec_postprocess')
         endif
         call vol_copy%copy(vol)
         ! B-factor
@@ -558,33 +539,6 @@ contains
                 call vol_srch_init(vol1, vol_out, params%hp, params%lpstop, params%trs)
                 corr_prev = 0. ! initialise
                 cxyz2     = 0.
-                ! do i=1,10
-                !     ! rotate and shift vol to create reference for shift alignment
-                !     call vol2%ifft
-                !     vol_out = rotvol(vol2, orientation, cxyz(2:4))
-                !     call vol2%fft
-                !     call vol_out%fft
-                !     ! obtain joint shifts by vector addition
-                !     cxyz(2:4) = cxyz(2:4) + cxyz2(2:4)
-                !     ! update shifts in volpft_srch class and refine angles
-                !     call volpft_srch_set_shvec(cxyz(2:4))
-                !     if( i <= 3 )then
-                !         orientation_best = volpft_srch_refine(orientation)
-                !         cxyz2 = vol_shsrch_minimize()
-                !         if( cxyz2(1) > corr_prev )then ! a better solution was found
-                !             corr_prev = cxyz2(1)
-                !         endif
-                !     else
-                !         orientation_best = volpft_srch_refine(orientation, angres=5.)
-                !         if( cxyz2(1) > corr_prev )then ! a better solution was found
-                !             corr_prev = cxyz2(1)
-                !         endif
-                !     endif
-                !     orientation = orientation_best
-                !     call orientation%set('x', cxyz(2))
-                !     call orientation%set('y', cxyz(3))
-                !     call orientation%set('z', cxyz(4))
-                ! end do
                 do i=1,10
                     ! rotate and shift vol to create reference for shift alignment
                     call vol2%ifft

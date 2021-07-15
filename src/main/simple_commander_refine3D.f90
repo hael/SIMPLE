@@ -110,7 +110,7 @@ contains
         character(len=STDLEN),     allocatable :: state_assemble_finished(:)
         integer,                   allocatable :: state_pops(:), tmp_iarr(:)
         real,                      allocatable :: res(:), tmp_rarr(:)
-        character(len=STDLEN)     :: vol, vol_iter, str, str_iter, optlp_file
+        character(len=STDLEN)     :: vol, vol_iter, str, str_iter
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc
         character(len=LONGSTRLEN) :: volassemble_output
         real    :: corr, corr_prev, smpd, lplim
@@ -231,7 +231,7 @@ contains
                 params%vols(state) = vol_fname
             end do
             prev_refine_path = get_fpath(vol_fname)
-            ! carry over FRCs/FSCs
+            ! carry over FSCs
             ! one FSC file per state
             do state=1,params%nstates
                 str_state = int2str_pad(state,2)
@@ -239,7 +239,9 @@ contains
                 call simple_copy_file(trim(prev_refine_path)//trim(fsc_file), fsc_file)
             end do
             ! one FRC file for all states
-            call simple_copy_file(trim(prev_refine_path)//trim(FRCS_FILE), trim(FRCS_FILE))
+            if( file_exists(trim(prev_refine_path)//trim(FRCS_FILE)) )then
+                call simple_copy_file(trim(prev_refine_path)//trim(FRCS_FILE), trim(FRCS_FILE))
+            endif
             ! carry over the O_PEAKS_FBODY* files
             call simple_list_files(prev_refine_path//O_PEAKS_FBODY//'*', list)
             nfiles = size(list)
@@ -450,11 +452,8 @@ contains
                             else
                                 vol_iter = trim(vol)
                             endif
-                            fsc_file   = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
-                            optlp_file = ANISOLP_FBODY//trim(str_state)//params%ext
-                            ! add filters to os_out
+                            fsc_file = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
                             call build%spproj%add_fsc2os_out(fsc_file, state, params%box)
-                            call build%spproj%add_vol2os_out(optlp_file, params%smpd, state, 'vol_filt', box=params%box)
                             ! add state volume to os_out
                             if( trim(params%oritype).eq.'cls3D' )then
                                 call build%spproj%add_vol2os_out(vol_iter, params%smpd, state, 'vol_cavg')
@@ -806,10 +805,6 @@ contains
         end do
         call binfile%new(binfname,params%fromp,params%top,kfromto)
         call binfile%write(sigma2)
-        !! debug
-        ! call sum_img%ifft
-        ! call sum_img%write('realspace_sum_img_part'//int2str(params%part)//params%ext)
-        !! debug
         ! end gracefully
         call qsys_job_finished('simple_commander_refine3D :: exec_calc_pspec')
         call simple_end('**** SIMPLE_CALC_PSPEC NORMAL STOP ****', print_simple=.false.)
@@ -848,10 +843,6 @@ contains
             call del_file(part_fname)
         enddo
         call avg_img%div(real(nptcls_sel))
-        !! debug
-        ! call avg_img%ifft
-        ! call avg_img%write('avg_img'//params%ext)
-        !! debug
         ! calculate power spectrum
         call avg_img%spectrum('power',pspec_ave,norm=.true.)
         nyq = avg_img%get_nyq()

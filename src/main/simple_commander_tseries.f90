@@ -28,7 +28,6 @@ public :: tseries_ctf_estimate_commander
 public :: refine3D_nano_commander_distr
 public :: graphene_subtr_commander
 public :: validate_nano_commander
-public :: tseries_denoise_trajectory_commander
 public :: tseries_swap_stack_commander
 public :: tseries_reconstruct3D_distr
 private
@@ -90,10 +89,6 @@ type, extends(commander_base) :: validate_nano_commander
   contains
     procedure :: execute      => exec_validate_nano
 end type validate_nano_commander
-type, extends(commander_base) :: tseries_denoise_trajectory_commander
-  contains
-    procedure :: execute      => exec_tseries_denoise_trajectory
-end type tseries_denoise_trajectory_commander
 type, extends(commander_base) :: tseries_swap_stack_commander
   contains
     procedure :: execute      => exec_tseries_swap_stack
@@ -744,7 +739,6 @@ contains
         type(ctf_estimate_fit)        :: ctffit
         type(ctfparams)               :: ctfvars
         character(len=:), allocatable :: fname_diag, tmpl_fname, docname
-        ! call cline%set('oritype','mic')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('hp')      ) call cline%set('hp', 5.)
         if( .not. cline%defined('lp')      ) call cline%set('lp', 1.)
@@ -936,113 +930,10 @@ contains
         call cline%set('outstk', 'reprojections.mrc')
         call cline%set('oritab', 'oris.txt')
         call xreproject%execute(cline)
-        call exec_cmdline('rm -f aniso_optlp_state01.spi frcs.bin fsc_state01.bin&
+        call exec_cmdline('rm -f frcs.bin fsc_state01.bin&
         & nohup.out oris.txt recvol_state01_even.spi recvol_state01_odd.spi&
         & *pproc* *part* RESOLUTION* *filelist* reproject_oris.txt')
     end subroutine exec_validate_nano
-
-    subroutine exec_tseries_denoise_trajectory( self, cline )
-        use simple_strategy2D3D_common, only: read_img
-        use simple_ppca_serial,         only: ppca_serial
-        !$ use omp_lib
-        !$ use omp_lib_kinds
-        class(tseries_denoise_trajectory_commander), intent(inout) :: self
-        class(cmdline),                              intent(inout) :: cline
-        character(len=STDLEN), parameter :: STK_DENOISED = 'trajectory_denoised.mrc'
-        integer,               parameter :: Q = 60, QMIN = 11, WINSZ_DEFAULT = 500, MAXPPCAITS = 10
-        type(image)          :: img
-        type(parameters)     :: params
-        type(ppca_serial), allocatable :: ppca_objs(:)
-        real,    allocatable :: eigenvals(:),avg(:), dat(:,:), vec_sum(:), vec(:), vec_ref(:), vec_ptcl(:)
-        logical, allocatable :: l_mask(:,:,:)
-        integer, allocatable :: R(:)
-        real    :: threshold
-        integer :: ldim(3),i,j,iptcl,D,N,recsz,nimgs,iwinsz,ito,ifrom,jfrom,jto,nppcas,nthr,nthr_max,cnt
-        call params%new(cline)
-        call find_ldim_nptcls(params%stk, ldim, nimgs)
-        ldim(3) = 1
-        if(.not.cline%defined('outstk')) params%outstk = trim(STK_DENOISED)
-        ! init
-        N = nimgs
-        allocate(l_mask(ldim(1),ldim(2),1),source=.true.)
-        D = product(ldim)
-        allocate(avg(D),dat(N,D),vec(D),vec_ref(D),vec_sum(D),eigenvals(Q),source=0.)
-        inquire(iolength=recsz) avg
-        ! PPCA prep
-        call img%new(ldim,params%smpd)
-        call img%zero_and_unflag_ft
-        do iptcl = 1,N
-            call img%read(params%stk,iptcl)
-            call img%norm
-            vec = img%serialize(l_mask)
-            dat(iptcl,:) = vec(:)
-            avg = avg + vec
-            deallocate(vec)
-        enddo
-        avg = avg/real(N)
-        do i = 1,N
-            dat(i,:) = dat(i,:) - avg
-        enddo
-        iwinsz = WINSZ_DEFAULT
-        if( cline%defined('winsz') ) iwinsz = int(params%winsz)
-        nppcas = 0
-        do i = 1,N,iwinsz
-            nppcas = nppcas + 1
-        end do
-        allocate( ppca_objs(nppcas), R(nppcas) )
-        nppcas = 0
-        do i = 1,N,iwinsz
-            ifrom  = i
-            ito    = min(N,i + iwinsz - 1)
-            nppcas = nppcas + 1
-            call ppca_objs(nppcas)%new(ito - ifrom + 1, D, Q, dat(ifrom:ito,:), doprint=.false.)
-        end do
-        write(logfhandle,'(a)') '>>> DOING '//int2str(nppcas)//' PPCAS IN PARALLEL'
-        !$ nthr_max= omp_get_max_threads()
-        if( nthr_max >= nppcas )then
-            nthr = nppcas
-        else
-            nthr = nthr_max
-        endif
-        !$ call omp_set_num_threads(nthr)
-        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
-        do i = 1,nppcas
-            call ppca_objs(i)%master(recsz, MAXPPCAITS)
-        end do
-        !$omp end parallel do
-        deallocate(dat)
-        ! find thresholds
-        do i = 1,nppcas
-            eigenvals = ppca_objs(i)%get_evals()
-            call otsu( eigenvals(QMIN:), threshold )
-            do j = QMIN,Q
-                if( eigenvals(j) < threshold )exit
-            enddo
-            R(i) = j-1
-            write(logfhandle,'(A,I3)')'>>> # OF LATENT VECTORS USED: ',R(i)
-        end do
-        nppcas = 0
-        ! generate new particles
-        do i = 1,N,iwinsz
-            jfrom  = i
-            jto    = min(N,i + iwinsz - 1)
-            nppcas = nppcas + 1
-            cnt = 0
-            do j=jfrom,jto
-                cnt = cnt + 1
-                vec_ptcl = ppca_objs(nppcas)%generate_cumul(cnt, [1,R(nppcas)], avg)
-                call img%unserialize(l_mask,vec_ptcl)
-                call img%norm
-                call img%write(params%outstk,j)
-            end do
-        end do
-        ! cleanup
-        do i = 1,nppcas
-            call ppca_objs(i)%kill
-        end do
-        call img%kill
-        call simple_end('**** SINGLE_TSERIES_DENOSIE_TRAJECTORY NORMAL STOP ****')
-    end subroutine exec_tseries_denoise_trajectory
 
     subroutine exec_tseries_swap_stack( self, cline )
         use simple_commander_project
@@ -1185,7 +1076,7 @@ contains
                     call del_file(trim(VOL_FBODY)//trim(str_state)//'_part'//trim(int2str(ipart))//'_odd'//trim(params%ext))
                     call del_file('rho_'//trim(VOL_FBODY)//trim(str_state)//'_part'//trim(int2str(ipart))//'_even'//trim(params%ext))
                     call del_file('rho_'//trim(VOL_FBODY)//trim(str_state)//'_part'//trim(int2str(ipart))//'_odd'//trim(params%ext))
-                    call del_file(ANISOLP_FBODY//trim(str_state)//trim(params%ext))
+                    ! call del_file(ANISOLP_FBODY//trim(str_state)//trim(params%ext))
                 enddo
             enddo
         end do

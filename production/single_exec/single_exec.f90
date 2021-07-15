@@ -33,7 +33,6 @@ type(tseries_make_pickavg_commander)          :: xtseries_make_pickavg
 type(tseries_motion_correct_commander_distr)  :: xmcorr_distr
 type(tseries_track_particles_commander_distr) :: xtrack_distr
 type(graphene_subtr_commander)                :: xgraphene_subtr
-type(tseries_denoise_trajectory_commander)    :: xtseries_denoise_trajectory
 type(center2D_nano_commander_distr)           :: xcenter2D_distr
 type(cluster2D_nano_commander_hlev)           :: xcluster2D_distr
 type(map_cavgs_selection_commander)           :: xmap_cavgs_selection
@@ -101,9 +100,6 @@ select case(prg)
     case( 'graphene_subtr' )
         call cline%set('mkdir', 'no')
         call xgraphene_subtr%execute( cline )
-    case( 'tseries_denoise_trajectory' )
-        call cline%set('mkdir', 'no')
-        call xtseries_denoise_trajectory%execute( cline )
     case( 'center2D_nano' )
         call xcenter2D_distr%execute(cline)
     case( 'cluster2D_nano' )
