@@ -938,7 +938,7 @@ contains
     subroutine exec_tseries_swap_stack( self, cline )
         use simple_commander_project
         class(tseries_swap_stack_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
+        class(cmdline),                      intent(inout) :: cline
         type(sp_project) :: spproj, spproj_tmp
         type(parameters) :: params
         type(ctfparams)  :: ctfparms
@@ -1076,7 +1076,6 @@ contains
                     call del_file(trim(VOL_FBODY)//trim(str_state)//'_part'//trim(int2str(ipart))//'_odd'//trim(params%ext))
                     call del_file('rho_'//trim(VOL_FBODY)//trim(str_state)//'_part'//trim(int2str(ipart))//'_even'//trim(params%ext))
                     call del_file('rho_'//trim(VOL_FBODY)//trim(str_state)//'_part'//trim(int2str(ipart))//'_odd'//trim(params%ext))
-                    ! call del_file(ANISOLP_FBODY//trim(str_state)//trim(params%ext))
                 enddo
             enddo
         end do

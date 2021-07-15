@@ -53,10 +53,10 @@ contains
 
     subroutine new( self, nprojs, box4frc_calc, smpd, nstates )
         class(class_frcs), intent(inout) :: self
-        integer,                intent(in)    :: nprojs
-        integer,                intent(in)    :: box4frc_calc
-        real,                   intent(in)    :: smpd
-        integer, optional,      intent(in)    :: nstates
+        integer,           intent(in)    :: nprojs
+        integer,           intent(in)    :: box4frc_calc
+        real,              intent(in)    :: smpd
+        integer, optional, intent(in)    :: nstates
         ! init
         call self%kill
         self%nprojs       = nprojs
@@ -84,8 +84,8 @@ contains
 
     subroutine raise_exception( self, proj, state, msg )
         class(class_frcs), intent(in) :: self
-        integer,                intent(in) :: proj, state
-        character(len=*),       intent(in) :: msg
+        integer,           intent(in) :: proj, state
+        character(len=*),  intent(in) :: msg
         logical :: l_outside
         l_outside = .false.
         if( proj  < 1 .or. proj  > self%nprojs  )then
@@ -105,8 +105,8 @@ contains
 
     subroutine bound_res( self, frc, res_frc05, res_frc0143 )
         class(class_frcs), intent(in)    :: self
-        real,                   intent(in)    :: frc(:)
-        real,                   intent(inout) :: res_frc05, res_frc0143
+        real,              intent(in)    :: frc(:)
+        real,              intent(inout) :: res_frc05, res_frc0143
         if( res_frc05 < 0.0001 .and. res_frc0143 < 0.0001 )then
             res_frc0143 = self%res4frc_calc(1)
             res_frc05   = res_frc0143
@@ -146,9 +146,9 @@ contains
 
     subroutine set_frc( self, proj, frc, state )
         class(class_frcs), intent(inout) :: self
-        integer,                intent(in)    :: proj
-        real,                   intent(in)    :: frc(:)
-        integer, optional,      intent(in)    :: state
+        integer,           intent(in)    :: proj
+        real,              intent(in)    :: frc(:)
+        integer, optional, intent(in)    :: state
         integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
@@ -179,8 +179,8 @@ contains
     !>  getter for values interepreted as FRCs
     function get_frc( self, proj, box, state ) result( frc )
         class(class_frcs), intent(in) :: self
-        integer,                intent(in) :: proj, box
-        integer, optional,      intent(in) :: state
+        integer,           intent(in) :: proj, box
+        integer, optional, intent(in) :: state
         real, allocatable :: frc(:)
         real, allocatable :: res(:)
         integer :: sstate
@@ -198,10 +198,10 @@ contains
     !>  getter for values interepreted as FRCs
     subroutine frc_getter( self, proj, hpind_fsc, phaseplate, frc, state )
         class(class_frcs), intent(in)  :: self
-        integer,                intent(in)  :: proj, hpind_fsc
-        logical,                intent(in)  :: phaseplate
-        real,                   intent(out) :: frc(self%filtsz)
-        integer, optional,      intent(in)  :: state
+        integer,           intent(in)  :: proj, hpind_fsc
+        logical,           intent(in)  :: phaseplate
+        real,              intent(out) :: frc(self%filtsz)
+        integer, optional, intent(in)  :: state
         integer :: sstate, find_plate
         sstate = 1
         if( present(state) ) sstate = state
@@ -216,9 +216,9 @@ contains
     !>  getter for raw values
     subroutine getter( self, proj, frc, state )
         class(class_frcs), intent(in)  :: self
-        integer,                intent(in)  :: proj
-        real,                   intent(out) :: frc(self%filtsz)
-        integer, optional,      intent(in)  :: state
+        integer,           intent(in)  :: proj
+        real,              intent(out) :: frc(self%filtsz)
+        integer, optional, intent(in)  :: state
         integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
@@ -228,9 +228,9 @@ contains
 
     subroutine estimate_res( self, proj, res_frc05, res_frc0143, state )
         class(class_frcs), intent(in)  :: self
-        integer,                intent(in)  :: proj
-        real,                   intent(out) :: res_frc05, res_frc0143
-        integer, optional,      intent(in)  :: state
+        integer,           intent(in)  :: proj
+        real,              intent(out) :: res_frc05, res_frc0143
+        integer, optional, intent(in)  :: state
         integer :: sstate
         sstate = 1
         if( present(state) ) sstate = state
@@ -241,8 +241,8 @@ contains
 
     function estimate_find_for_eoavg( self, proj, state ) result( find )
         class(class_frcs), intent(in)  :: self
-        integer,                intent(in)  :: proj
-        integer, optional,      intent(in)  :: state
+        integer,           intent(in)  :: proj
+        integer, optional, intent(in)  :: state
         integer :: sstate, find
         sstate = 1
         if( present(state) ) sstate = state
@@ -252,7 +252,7 @@ contains
 
     function estimate_lp_for_align( self, state ) result( lp )
         class(class_frcs), intent(in)  :: self
-        integer, optional,      intent(in)  :: state
+        integer, optional, intent(in)  :: state
         real    :: lplims(self%nprojs),lp3(3)
         integer :: sstate, iproj
         real    :: lp, res_frc05, res_frc0143
@@ -272,7 +272,7 @@ contains
     subroutine downsample( self, newbox, self_out )
         use simple_estimate_ssnr, only: subsample_optlp
         class(class_frcs), intent(in)  :: self
-        integer,                intent(in)  :: newbox
+        integer,           intent(in)  :: newbox
         type(class_frcs),  intent(out) :: self_out
         integer :: istate, iproj
         real    :: new_smpd
@@ -288,8 +288,8 @@ contains
 
     subroutine upsample( self, newsmpd, newbox, self_out )
         class(class_frcs), intent(in)  :: self
-        real,                   intent(in)  :: newsmpd
-        integer,                intent(in)  :: newbox
+        real,              intent(in)  :: newsmpd
+        integer,           intent(in)  :: newbox
         type(class_frcs),  intent(out) :: self_out
         real    :: x, d, scale
         integer :: istate, iproj, sh, l,r
@@ -318,7 +318,7 @@ contains
 
     subroutine read( self, fname )
         class(class_frcs), intent(inout) :: self
-        character(len=*),       intent(in)    :: fname
+        character(len=*),  intent(in)    :: fname
         integer          :: funit, io_stat
         call fopen(funit,fname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
         call fileiochk('class_frcs; read; open for read '//trim(fname), io_stat)
@@ -331,7 +331,7 @@ contains
 
     subroutine write( self, fname )
         class(class_frcs), intent(in) :: self
-        character(len=*),       intent(in) :: fname
+        character(len=*),  intent(in) :: fname
         integer          :: funit, io_stat
         call fopen(funit,fname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         call fileiochk('class_frcs; write; open for write '//trim(fname), io_stat)
@@ -342,8 +342,8 @@ contains
 
     subroutine print_frcs( self, fname, state )
         class(class_frcs), intent(inout) :: self
-        character(len=*),       intent(in)    :: fname
-        integer,      optional, intent(in)    :: state
+        character(len=*),  intent(in)    :: fname
+        integer, optional, intent(in)    :: state
         real, allocatable :: res(:)
         integer :: j, sstate, iproj
         sstate = 1

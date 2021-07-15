@@ -740,9 +740,9 @@ contains
 
     !>  \brief generate projection FRCs from even/odd pairs
     subroutine gen_class_frcs( cline, ename, oname, resmskname, state, clsfrcs )
-        use simple_oris,            only: oris
-        use simple_projector_hlev,  only: reproject
-        use simple_class_frcs, only: class_frcs
+        use simple_oris,           only: oris
+        use simple_projector_hlev, only: reproject
+        use simple_class_frcs,     only: class_frcs
         class(cmdline),         intent(inout) :: cline
         character(len=*),       intent(in)    :: ename, oname, resmskname
         integer,                intent(in)    :: state

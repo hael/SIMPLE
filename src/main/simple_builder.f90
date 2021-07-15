@@ -11,7 +11,7 @@ use simple_sym,              only: sym
 use simple_projector,        only: projector
 use simple_polarizer,        only: polarizer
 use simple_masker,           only: masker
-use simple_class_frcs,  only: class_frcs
+use simple_class_frcs,       only: class_frcs
 use simple_parameters,       only: parameters
 use simple_cmdline,          only: cmdline
 implicit none
@@ -35,8 +35,8 @@ type :: builder
     type(projector)                     :: vol, vol_odd
     type(image)                         :: vol2                   !< -"-
     type(masker)                        :: mskimg                 !< mask image
-    type(class_frcs)               :: clsfrcs               !< projection FRC's used cluster2D
-    type(class_frcs)               :: projpssnrs             !<
+    type(class_frcs)                    :: clsfrcs               !< projection FRC's used cluster2D
+    type(class_frcs)                    :: projpssnrs             !<
     type(image),            allocatable :: imgbatch(:)            !< batch of images
     ! RECONSTRUCTION TOOLBOX
     type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction

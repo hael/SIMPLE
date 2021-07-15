@@ -6,7 +6,7 @@ use simple_cmdline,             only: cmdline
 use simple_commander_base,      only: commander_base
 use simple_strategy2D3D_common, only: gen_class_frcs
 use simple_parameters,          only: parameters
-use simple_class_frcs,     only: class_frcs
+use simple_class_frcs,          only: class_frcs
 use simple_qsys_env,            only: qsys_env
 use simple_qsys_funs
 implicit none
@@ -44,7 +44,7 @@ contains
         character(len=:),          allocatable :: target_name
         character(len=STDLEN),     allocatable :: state_assemble_finished(:)
         character(len=LONGSTRLEN) :: refine_path
-        character(len=STDLEN)     :: volassemble_output, str_state, fsc_file!, optlp_file
+        character(len=STDLEN)     :: volassemble_output, str_state, fsc_file
         type(parameters) :: params
         type(builder)    :: build
         type(qsys_env)   :: qenv
