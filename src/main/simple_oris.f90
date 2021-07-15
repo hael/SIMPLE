@@ -4,6 +4,7 @@ module simple_oris
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_ori, only: ori
+use simple_defs_ori
 implicit none
 
 public :: oris, test_oris
@@ -44,6 +45,7 @@ type :: oris
     procedure, private :: isthere_2
     generic            :: isthere => isthere_1, isthere_2
     procedure          :: ischar
+    procedure          :: is_particle
     procedure          :: max_ori_strlen_trim
     procedure          :: get_n
     procedure          :: get_pop
@@ -71,6 +73,8 @@ type :: oris
     procedure          :: has_been_searched
     procedure          :: any_state_zero
     procedure          :: ori2str
+    procedure          :: ori2prec
+    procedure          :: prec2ori
     procedure          :: get_ctfvars
     ! SETTERS
     procedure          :: copy
@@ -456,6 +460,12 @@ contains
         logical :: is
         is = self%o(i)%ischar(key)
     end function ischar
+
+    pure function is_particle( self ) result( t )
+        class(oris), intent(in) :: self
+        logical :: t
+        t = self%o(1)%is_particle()
+    end function is_particle
 
     !>  \brief  is for getting the maximum string length of a trimed string ori representation
     integer function max_ori_strlen_trim( self )
@@ -1376,6 +1386,20 @@ contains
         character(len=:), allocatable :: str
         str = self%o(i)%ori2str()
     end function ori2str
+
+    subroutine ori2prec( self, i, prec )
+        class(oris), intent(in)    :: self
+        integer,     intent(in)    :: i
+        real,        intent(inout) :: prec(N_PTCL_ORIPARAMS)
+        call self%o(i)%ori2prec(prec)
+    end subroutine ori2prec
+
+    subroutine prec2ori( self, i, prec )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i
+        real,        intent(in)    :: prec(N_PTCL_ORIPARAMS)
+        call self%o(i)%prec2ori(prec)
+    end subroutine prec2ori
 
     function get_ctfvars( self, i ) result( ctfvars )
         class(oris), intent(in) :: self

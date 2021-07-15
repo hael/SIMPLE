@@ -431,7 +431,7 @@ contains
         type(ctfparams)  :: ctfvars
         integer          :: lfoo(3), i, ndatlines, nrecs, n_ori_inputs, nstks
         logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab
-        logical          :: l_stktab_per_stk_parms
+        logical          :: l_stktab_per_stk_parms, is_ptcl
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('ctf')   ) call cline%set('ctf',   'yes')
         l_stktab_per_stk_parms = .true.
@@ -459,16 +459,19 @@ contains
         else
             THROW_HARD('either stk or stktab needed on command line; exec_import_particles')
         endif
+        ! set is particle flag for correct field parsing
+        is_ptcl = .false.
+        if( cline%defined('stk') ) is_ptcl = .true.
         ! oris input
         if( inputted_oritab )then
             ndatlines = binread_nlines(params%oritab)
-            call os%new(ndatlines, is_ptcl=.false.)
+            call os%new(ndatlines, is_ptcl=is_ptcl )
             call binread_oritab(params%oritab, spproj, os, [1,ndatlines])
             call spproj%kill ! for safety
         endif
         if( inputted_deftab )then
             ndatlines = binread_nlines(params%deftab)
-            call os%new(ndatlines, is_ptcl=.false.)
+            call os%new(ndatlines, is_ptcl=is_ptcl )
             call binread_ctfparams_state_eo(params%deftab, spproj, os, [1,ndatlines])
             call spproj%kill ! for safety
         endif
@@ -479,7 +482,7 @@ contains
             if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
                 THROW_HARD('unsupported nr of rec:s in plaintexttab; exec_import_particles')
             endif
-            call os%new(ndatlines, is_ptcl=.false.)
+            call os%new(ndatlines, is_ptcl=is_ptcl )
             allocate( line(nrecs) )
             do i=1,ndatlines
                 call paramfile%readNextDataLine(line)
@@ -639,7 +642,7 @@ contains
             if( n_ori_inputs == 0 .and. trim(params%ctf) .eq. 'no' )then
                 ! get number of particles from stack
                 call find_ldim_nptcls(params%stk, lfoo, params%nptcls)
-                call os%new(params%nptcls, is_ptcl=.true.)
+                call os%new(params%nptcls, is_ptcl=is_ptcl )
             endif
             if( inputted_oritab .or. inputted_deftab )then
                 ! states are not to be modified
