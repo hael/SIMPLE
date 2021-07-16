@@ -242,16 +242,6 @@ contains
             if( file_exists(trim(prev_refine_path)//trim(FRCS_FILE)) )then
                 call simple_copy_file(trim(prev_refine_path)//trim(FRCS_FILE), trim(FRCS_FILE))
             endif
-            ! carry over the O_PEAKS_FBODY* files
-            call simple_list_files(prev_refine_path//O_PEAKS_FBODY//'*', list)
-            nfiles = size(list)
-            err    = params%nparts /= nfiles
-            if( err ) THROW_HARD('# partitions not consistent with previous refinement round')
-            do i=1,nfiles
-                target_name = PATH_HERE//basename(trim(list(i)))
-                call simple_copy_file(trim(list(i)), target_name)
-            end do
-            deallocate(list)
             ! if we are doing fractional volume update, partial reconstructions need to be carried over
             if( params%l_frac_update )then
                 call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
@@ -636,7 +626,7 @@ contains
             endif
         else
             select case(params%refine)
-            case('cluster','clustersym','clustersoft')
+            case('cluster','clustersym')
                     converged = conv%check_conv_cluster(cline)
                 case DEFAULT
                     converged = conv%check_conv3D(cline, params%msk)

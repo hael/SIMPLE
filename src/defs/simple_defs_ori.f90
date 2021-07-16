@@ -20,27 +20,23 @@ enum, bind(c)
     enumerator :: I_MI_CLASS  = 16
     enumerator :: I_MI_PROJ   = 17
     enumerator :: I_MI_STATE  = 18
-    enumerator :: I_NPEAKS    = 19
-    enumerator :: I_OW        = 20
-    enumerator :: I_PHSHIFT   = 21
-    enumerator :: I_PROJ      = 22
-    enumerator :: I_SHWMEAN   = 23
-    enumerator :: I_SHWSTDEV  = 24
-    enumerator :: I_SPECSCORE = 25
-    enumerator :: I_SPREAD    = 26
-    enumerator :: I_STATE     = 27
-    enumerator :: I_STKIND    = 28
-    enumerator :: I_UPDATECNT = 29
-    enumerator :: I_W         = 30
-    enumerator :: I_X         = 31
-    enumerator :: I_XINCR     = 32
-    enumerator :: I_XPOS      = 33
-    enumerator :: I_Y         = 34
-    enumerator :: I_YINCR     = 35
-    enumerator :: I_YPOS      = 36
+    enumerator :: I_PHSHIFT   = 19
+    enumerator :: I_PROJ      = 20
+    enumerator :: I_SHINCARG  = 21
+    enumerator :: I_SPECSCORE = 22
+    enumerator :: I_STATE     = 23
+    enumerator :: I_STKIND    = 24
+    enumerator :: I_UPDATECNT = 25
+    enumerator :: I_W         = 26
+    enumerator :: I_X         = 27
+    enumerator :: I_XINCR     = 28
+    enumerator :: I_XPOS      = 29
+    enumerator :: I_Y         = 30
+    enumerator :: I_YINCR     = 31
+    enumerator :: I_YPOS      = 32
 end enum
 
-integer, parameter :: N_PTCL_ORIPARAMS = 36
+integer, parameter :: N_PTCL_ORIPARAMS = 32
 
 contains
 
@@ -84,22 +80,14 @@ contains
                 get_oriparam_ind = I_MI_PROJ
             case('mi_state')
                 get_oriparam_ind = I_MI_STATE
-            case('npeaks')
-                get_oriparam_ind = I_NPEAKS
-            case('ow')
-                get_oriparam_ind = I_OW
             case('phshift')
                 get_oriparam_ind = I_PHSHIFT
             case('proj')
                 get_oriparam_ind = I_PROJ
-            case('shwmean')
-                get_oriparam_ind = I_SHWMEAN
-            case('shwstdev')
-                get_oriparam_ind = I_SHWSTDEV
+            case('shincarg')
+                get_oriparam_ind = I_SHINCARG
             case('specscore')
                 get_oriparam_ind = I_SPECSCORE
-            case('spread')
-                get_oriparam_ind = I_SPREAD
             case('state')
                 get_oriparam_ind = I_STATE
             case('stkind')
@@ -163,22 +151,14 @@ contains
                 flag ='mi_proj'
             case(I_MI_STATE)
                 flag ='mi_state'
-            case(I_NPEAKS)
-                flag ='npeaks'
-            case(I_OW)
-                flag ='ow'
             case(I_PHSHIFT)
                 flag ='phshift'
             case(I_PROJ)
                 flag ='proj'
-            case(I_SHWMEAN)
-                flag ='shwmean'
-            case(I_SHWSTDEV)
-                flag ='shwstdev'
+            case(I_SHINCARG)
+                flag ='shincarg'
             case(I_SPECSCORE)
                 flag ='specscore'
-            case(I_SPREAD)
-                flag ='spread'
             case(I_STATE)
                 flag ='state'
             case(I_STKIND)
@@ -227,21 +207,13 @@ contains
                 is_zero = abs(val) < TINY
             case(I_LP)
                 is_zero = abs(val) < TINY
-            case(I_NPEAKS)
-                is_zero = abs(val) < TINY
-            case(I_OW)
-                is_zero = abs(val) < TINY
             case(I_PHSHIFT)
                 is_zero = abs(val) < TINY
             case(I_PROJ)
                 is_zero = abs(val) < TINY
-            case(I_SHWMEAN)
-                is_zero = abs(val) < TINY
-            case(I_SHWSTDEV)
+            case(I_SHINCARG)
                 is_zero = abs(val) < TINY
             case(I_SPECSCORE)
-                is_zero = abs(val) < TINY
-            case(I_SPREAD)
                 is_zero = abs(val) < TINY
             case(I_STKIND)
                 is_zero = abs(val) < TINY

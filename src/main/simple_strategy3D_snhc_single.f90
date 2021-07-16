@@ -27,11 +27,10 @@ end type strategy3D_snhc_single
 
 contains
 
-    subroutine new_snhc_single( self, spec, npeaks )
+    subroutine new_snhc_single( self, spec )
         class(strategy3D_snhc_single), intent(inout) :: self
         class(strategy3D_spec),        intent(inout) :: spec
-        integer,                       intent(in)    :: npeaks
-        call self%s%new( spec, npeaks )
+        call self%s%new(spec)
         self%spec = spec
     end subroutine new_snhc_single
 
@@ -63,11 +62,11 @@ contains
         contains
 
             subroutine per_ref_srch
-                integer :: loc(params_glob%ninplpeaks)
+                integer :: loc(NINPLPEAKS)
                 ! calculate in-plane correlations
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                ! identify the params_glob%ninplpeaks top scoring in-planes
-                loc = maxnloc(inpl_corrs, params_glob%ninplpeaks)
+                ! identify the NINPLPEAKS top scoring in-planes
+                loc = maxnloc(inpl_corrs, NINPLPEAKS)
                 ! stash
                 call self%s%store_solution(iref, loc, inpl_corrs(loc), .true.)
             end subroutine per_ref_srch
@@ -75,32 +74,28 @@ contains
     end subroutine srch_snhc_single
 
     subroutine oris_assign_snhc_single( self )
-        use simple_ori,  only: ori
-        use simple_strategy3D_utils, only: estimate_shift_increment
+        use simple_ori, only: ori
         class(strategy3D_snhc_single), intent(inout) :: self
         type(ori)  :: osym, o1, o2
         real       :: dist_inpl, corr, frac, euldist
-        real       :: shwmean, shwstdev
         integer    :: ref, roind
+        ! stash prev ori
+        call build_glob%spproj_field%get_ori(self%s%iptcl, o1)
         ! orientation parameters
         ref = s3D%proj_space_refinds_sorted(self%s%ithr, self%s%nrefsmaxinpl)
         if( ref < 1 .or. ref > self%s%nrefs )then
             THROW_HARD('ref index: '//int2str(ref)//' out of bound; oris_assign_snhc_single')
         endif
         roind = pftcc_glob%get_roind(360. - s3D%proj_space_euls(self%s%ithr,ref,1,3))
-        ! transfer to solution set
+        ! transfer to spproj_field
         corr = max(0., s3D%proj_space_corrs(self%s%ithr,ref,1))
-        call s3D%o_peaks(self%s%iptcl)%set(1, 'state', 1.)
-        call s3D%o_peaks(self%s%iptcl)%set(1, 'proj',  real(s3D%proj_space_proj(ref)))
-        call s3D%o_peaks(self%s%iptcl)%set(1, 'corr',  corr)
-        call s3D%o_peaks(self%s%iptcl)%set_euler(1, s3D%proj_space_euls(self%s%ithr,ref,1,1:3))
-        call s3D%o_peaks(self%s%iptcl)%set_shift(1, [0.,0.]) ! no shift search in snhc
-        call s3D%o_peaks(self%s%iptcl)%set(1, 'ow', 1.0)
-        ! shift incr stats
-        call estimate_shift_increment(self%s, shwmean, shwstdev)
+        call build_glob%spproj_field%set(self%s%iptcl, 'state', 1.)
+        call build_glob%spproj_field%set(self%s%iptcl, 'proj',  real(s3D%proj_space_proj(ref)))
+        call build_glob%spproj_field%set(self%s%iptcl, 'corr',  corr)
+        call build_glob%spproj_field%set_euler(self%s%iptcl, s3D%proj_space_euls(self%s%ithr,ref,1,1:3))
+        call build_glob%spproj_field%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc
         ! angular distances
-        call build_glob%spproj_field%get_ori(self%s%iptcl, o1)
-        call s3D%o_peaks(self%s%iptcl)%get_ori(1, o2)
+        call build_glob%spproj_field%get_ori(self%s%iptcl, o2)
         call build_glob%pgrpsyms%sym_dists( o1, o2, osym, euldist, dist_inpl)
         ! fraction search space
         frac = 100.*real(self%s%nrefs_eval) / real(self%s%nprojs)
@@ -113,19 +108,8 @@ contains
             call build_glob%spproj_field%set(self%s%iptcl, 'dist', euldist)
         endif
         call build_glob%spproj_field%set(self%s%iptcl, 'dist_inpl', dist_inpl)
-        ! all the other stuff
-        call build_glob%spproj_field%set(self%s%iptcl, 'state',     1.)
         call build_glob%spproj_field%set(self%s%iptcl, 'frac',      frac)
-        call build_glob%spproj_field%set(self%s%iptcl, 'corr',      corr)
         call build_glob%spproj_field%set(self%s%iptcl, 'specscore', self%s%specscore)
-        call build_glob%spproj_field%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(1,'proj'))
-        call build_glob%spproj_field%set(self%s%iptcl, 'inpl',      s3D%o_peaks(self%s%iptcl)%get(1,'inpl'))
-        call build_glob%spproj_field%set(self%s%iptcl, 'spread',    0.)
-        call build_glob%spproj_field%set(self%s%iptcl, 'shwmean',   shwmean)
-        call build_glob%spproj_field%set(self%s%iptcl, 'shwstdev',  shwstdev)
-        call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    1.)
-        call build_glob%spproj_field%set_euler(self%s%iptcl, s3D%proj_space_euls(self%s%ithr,ref,1,1:3))
-        call build_glob%spproj_field%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc
         call osym%kill
         call o1%kill
         call o2%kill

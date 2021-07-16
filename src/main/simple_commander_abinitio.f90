@@ -245,9 +245,6 @@ contains
         if( .not. cline_refine3D_init%defined('nspace') )then
             call cline_refine3D_init%set('nspace', real(NSPACE_INIT))
         endif
-        if( .not. cline_refine3D_init%defined('npeaks') )then
-            call cline_refine3D_init%set('npeaks', 1.)
-        endif
         ! (3) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
             ! need to replace original point-group flag with c1/pgrp_start
@@ -282,9 +279,6 @@ contains
         endif
         if( .not. cline_refine3D_refine%defined('nspace') )then
             call cline_refine3D_refine%set('nspace', real(NSPACE_REFINE))
-        endif
-        if( .not. cline_refine3D_refine%defined('npeaks') )then
-            call cline_refine3D_refine%set('npeaks', 1.)
         endif
         ! (5) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',     'reconstruct3D')
@@ -345,7 +339,7 @@ contains
         ! modulate shifts
         if( do_autoscale )then
             call os%mul_shifts( 1./scale_factor1 )
-            ! clean stacks & project file & o_peaks on disc
+            ! clean stacks & project file on disc
             call work_proj1%read_segment('stk', trim(WORK_PROJFILE))
             do istk=1,work_proj1%os_stk%get_noris()
                 call work_proj1%os_stk%getter(istk, 'stk', stk)
@@ -355,7 +349,6 @@ contains
         call work_proj1%kill()
         call del_file(WORK_PROJFILE)
         deallocate(WORK_PROJFILE)
-        call del_files(O_PEAKS_FBODY, params_glob%nparts, ext=BIN_EXT)
         ! re-create project
         call del_file(ORIG_WORK_PROJFILE)
         work_proj2%projinfo = spproj%projinfo

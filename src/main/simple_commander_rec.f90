@@ -68,31 +68,6 @@ contains
             THROW_HARD('unsupported ORITYPE')
         end select
         if( fall_over ) THROW_HARD('No images found!')
-        ! soft reconstruction from o_peaks in dir_refine?
-        if( params%l_rec_soft )then
-            call make_relativepath(CWD_GLOB,params%dir_refine,refine_path)
-            call simple_list_files(trim(refine_path)//'/'//trim(O_PEAKS_FBODY)//'*', list)
-            sz_list = size(list)
-            if( sz_list == 0 )then
-                THROW_HARD('No opeaks can be found in '//trim(params%dir_refine))
-            elseif( sz_list /= params%nparts )then
-                if( sz_list == 1 )then
-                    ! assume stack has been swapped, so split again
-                    call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
-                else
-                    THROW_HARD('# partitions not consistent with that in '//trim(params%dir_refine))
-                endif
-            endif
-            ! copy the orientation peak distributions
-            if( trim(params%dir_refine).eq.trim(CWD_GLOB) )then
-                ! already here
-            else
-                do ipart=1,params%nparts
-                    target_name = PATH_HERE//basename(trim(list(ipart)))
-                    call simple_copy_file(trim(list(ipart)), target_name)
-                end do
-            endif
-        endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
@@ -139,10 +114,6 @@ contains
                 endif
             enddo
             call build%spproj%write_segment_inside('out',params%projfile)
-            if( params%l_rec_soft )then
-                ! ptcl3D segment may have been updated and needs to be written
-                call build%spproj%write_segment_inside('ptcl3D',params%projfile)
-            endif
         endif
         ! termination
         call qsys_cleanup
@@ -151,19 +122,23 @@ contains
     end subroutine exec_reconstruct3D_distr
 
     subroutine exec_reconstruct3D( self, cline )
-        use simple_rec_master, only: exec_rec, exec_rec_soft
         class(reconstruct3D_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
+        integer          :: s
+        character(len=:), allocatable :: fbody
         call build%init_params_and_build_general_tbox(cline, params)
         call build%build_rec_eo_tbox(params)
-        if( params%l_rec_soft )then
-            call build%build_strategy3D_tbox(params)
-            call exec_rec_soft(cline, 1) ! which_iter = 1
-        else
-            call exec_rec
-        endif
+        ! rebuild according to box size (because it is otherwise boxmatch)
+        call build%vol%new([params%box,params%box,params%box], params%smpd)
+        do s=1,params%nstates
+            if( build%spproj_field%get_pop(s, 'state') == 0 ) cycle ! empty state
+            fbody = 'recvol_state'
+            call build%eorecvol%eorec_distr( build%spproj, build%spproj_field, build%pgrpsyms, s, fbody=fbody)
+        end do
+        call qsys_job_finished( 'simple_rec_master :: exec_eorec')
+        write(logfhandle,'(a,1x,a)') "GENERATED VOLUMES: reconstruct3D*.ext"
         ! end gracefully
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D

@@ -28,11 +28,10 @@ end type strategy3D_cluster
 
 contains
 
-    subroutine new_cluster3D( self, spec, npeaks )
+    subroutine new_cluster3D( self, spec )
         class(strategy3D_cluster), intent(inout) :: self
         class(strategy3D_spec),    intent(inout) :: spec
-        integer,                   intent(in)    :: npeaks
-        call self%s%new( spec, npeaks )
+        call self%s%new( spec )
         self%spec = spec
     end subroutine new_cluster3D
 
@@ -239,14 +238,12 @@ contains
         frac = 100.*real(self%s%nrefs_eval) / real(self%s%nstates)
         call build_glob%spproj_field%set(self%s%iptcl,'frac',frac)
         call build_glob%spproj_field%set(self%s%iptcl,'w',   1.)
-        call build_glob%spproj_field%set(self%s%iptcl,'ow',  1.)
-        call s3D%o_peaks(self%s%iptcl)%set(1,'w', 1.)
-        call s3D%o_peaks(self%s%iptcl)%set(1,'ow',1.)
-        call s3D%o_peaks(self%s%iptcl)%set_euler(1, build_glob%spproj_field%get_euler(self%s%iptcl))
-        call s3D%o_peaks(self%s%iptcl)%set_shift(1, build_glob%spproj_field%get_2Dshift(self%s%iptcl))
-        call s3D%o_peaks(self%s%iptcl)%set(1,'state', build_glob%spproj_field%get(self%s%iptcl,'state'))
-        call s3D%o_peaks(self%s%iptcl)%set(1,'corr',  build_glob%spproj_field%get(self%s%iptcl,'corr'))
-        call s3D%o_peaks(self%s%iptcl)%set(1,'proj',  build_glob%spproj_field%get(self%s%iptcl,'proj'))
+        ! call s3D%o_peaks(self%s%iptcl)%set(1,'w', 1.)
+        ! call s3D%o_peaks(self%s%iptcl)%set_euler(1,   build_glob%spproj_field%get_euler(self%s%iptcl))
+        ! call s3D%o_peaks(self%s%iptcl)%set_shift(1,   build_glob%spproj_field%get_2Dshift(self%s%iptcl))
+        ! call s3D%o_peaks(self%s%iptcl)%set(1,'state', build_glob%spproj_field%get(self%s%iptcl,'state'))
+        ! call s3D%o_peaks(self%s%iptcl)%set(1,'corr',  build_glob%spproj_field%get(self%s%iptcl,'corr'))
+        ! call s3D%o_peaks(self%s%iptcl)%set(1,'proj',  build_glob%spproj_field%get(self%s%iptcl,'proj'))
     end subroutine oris_assign_cluster3D
 
     subroutine kill_cluster3D( self )

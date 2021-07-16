@@ -25,7 +25,6 @@ end type cluster3D_refine_commander
 contains
 
     subroutine exec_cluster3D( self, cline )
-        use simple_o_peaks_io
         use simple_oris,               only: oris
         use simple_sym,                only: sym
         use simple_cluster_seed,       only: gen_labelling
@@ -204,11 +203,6 @@ contains
         endif
         ! refinement specific section
         select case(trim(params%refine))
-            case('soft')
-                call cline_refine3D1%set('refine','clustersoft')
-                call cline_refine3D1%set('neigh', 'no')
-                call cline_reconstruct3D_mixed_distr%set('dir_refine',PATH_HERE)
-                call cline_reconstruct3D_multi_distr%set('dir_refine',PATH_HERE)
             case('sym')
                 call cline_refine3D1%set('refine','clustersym')
                 call cline_refine3D2%set('pgrp','c1')
@@ -217,22 +211,6 @@ contains
             case DEFAULT
                 call cline_refine3D1%set('refine', 'cluster')
         end select
-
-        ! copy the orientation peak distributions
-        if( trim(params%refine).eq.'soft' )then
-            call work_proj%get_vol('vol', 1, prev_vol, smpdfoo, boxfoo)
-            params%dir_refine = get_fpath(prev_vol)
-            call simple_list_files(trim(params%dir_refine)//'/'//trim(O_PEAKS_FBODY)//'*', list)
-            if( size(list) == 0 )then
-                THROW_HARD('No peaks could be found in: '//trim(params%dir_refine))
-            elseif( size(list) /= params%nparts )then
-                THROW_HARD('# partitions not consistent with that in '//trim(params%dir_refine))
-            endif
-            do ipart=1,params%nparts
-                target_name = PATH_HERE//basename(trim(list(ipart)))
-                call simple_copy_file(trim(list(ipart)), target_name)
-            end do
-        endif
 
         ! MIXED MODEL RECONSTRUCTION
         ! retrieve mixed model Fourier components, normalization matrix, FSC & anisotropic filter
@@ -269,33 +247,6 @@ contains
         ! writes for reconstruct3D,refine3D
         call work_proj%write
         call work_proj%kill
-
-        if( trim(params%refine).eq.'soft' )then
-            ! update states
-            do ipart=1,params%nparts
-                target_name = PATH_HERE//basename(trim(list(ipart)))
-                nptcls_part = get_o_peak_filesz(target_name)
-                call open_o_peaks_io(target_name)
-                iptcl = 0
-                do i = 1,nptcls_part
-                    iptcl  = iptcl+1
-                    istate = os%get_state(iptcl)
-                    if( istate <= 1 )cycle
-                    call opeaks%new(NPEAKS2REFINE, is_ptcl=.false.)
-                    call read_o_peak(opeaks, [1,nptcls_part], i, n_nozero)
-                    call opeaks%set_all2single('state',real(istate))
-                    call write_o_peak(opeaks, [1,nptcls_part], i)
-                enddo
-                call close_o_peaks_io
-            enddo
-            deallocate(list)
-            call opeaks%kill
-            ! reconstruct & updates starting volumes
-            call xreconstruct3D_distr%execute(cline_reconstruct3D_multi_distr)
-            do istate = 1,params%nstates
-                call cline_refine3D1%set('vol'//int2str(istate), trim(VOL_FBODY)//int2str_pad(istate,2)//params%ext)
-            enddo
-        endif
         call os%kill
 
         ! STAGE1: extremal optimization, frozen orientation parameters

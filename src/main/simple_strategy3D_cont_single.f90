@@ -31,15 +31,15 @@ end type strategy3D_cont_single
 
 contains
 
-    subroutine new_cont_single( self, spec, npeaks )
+    subroutine new_cont_single( self, spec )
         class(strategy3D_cont_single), intent(inout) :: self
         class(strategy3D_spec),        intent(inout) :: spec
-        integer,                       intent(in)    :: npeaks
-        call self%s%new(spec, npeaks)
+        call self%s%new(spec)
         self%spec = spec
         call self%cont_srch%new
     end subroutine new_cont_single
 
+    ! >>>>> REWRITE
     subroutine srch_cont_single( self, ithr )
         class(strategy3D_cont_single), intent(inout) :: self
         integer,                       intent(in)    :: ithr
@@ -53,7 +53,7 @@ contains
             call self%s%prep4srch
             call self%cont_srch%set_particle(self%s%iptcl)
             call build_glob%spproj_field%get_ori(self%s%iptcl, self%o)
-            cxy       = self%cont_srch%minimize(self%o, NPEAKSATHRES/2.0, params_glob%trs, found_better)
+            ! cxy       = self%cont_srch%minimize(self%o, NPEAKSATHRES/2.0, params_glob%trs, found_better)
             self%corr = cxy(1)
             if( .not. found_better )then
                 ! put back the original one
@@ -99,8 +99,8 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'spread',    0.)
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    1.)
         ! transfer data to o_peaks
-        call build_glob%spproj_field%get_ori(self%s%iptcl, o_tmp)
-        call s3D%o_peaks(self%s%iptcl)%set_ori(1, o_tmp)
+        ! call build_glob%spproj_field%get_ori(self%s%iptcl, o_tmp)
+        ! call s3D%o_peaks(self%s%iptcl)%set_ori(1, o_tmp)
         call osym%kill
         call o_tmp%kill
     end subroutine oris_assign_cont_single

@@ -30,7 +30,7 @@ character(len=:), allocatable :: micname, refsname
 character(len=LONGSTRLEN)     :: boxname
 integer                       :: ldim(3), ldim_refs(3), ldim_shrink(3)
 integer                       :: ntargets
-integer                       :: nrefs, npeaks, npeaks_sel, orig_box
+integer                       :: nrefs, nmax, nmax_sel, orig_box
 real                          :: smpd, smpd_shrunken
 real                          :: msk, hp,lp, distthr, ndev
 real                          :: min_rad, max_rad, step_sz
@@ -438,20 +438,20 @@ contains
         endif
         write(logfhandle,'(a)') '>>> PEAKS SELECTION'
         call sortmeans(target_corrs, MAXKMIT, means, labels)
-        npeaks = count(labels == 2)
+        nmax = count(labels == 2)
         if(DEBUG_HERE) then
             write(logfhandle,'(a,1x,I7)') 'peak positions initially identified:         ', ntargets
-            write(logfhandle,'(a,1x,I7)') 'peak positions after sortmeans:              ',npeaks
+            write(logfhandle,'(a,1x,I7)') 'peak positions after sortmeans:              ',nmax
          endif
         ! get peak positions
-        allocate( peak_positions(npeaks,2),  stat=alloc_stat)
+        allocate( peak_positions(nmax,2),  stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk( 'In: simple_picker :: gen_corr_peaks, 2',alloc_stat)
         peak_positions = 0
-        npeaks = 0
+        nmax = 0
         do i=1,ntargets
             if( labels(i) == 2 )then
-                npeaks = npeaks + 1
-                peak_positions(npeaks,:) = target_positions(i,:)
+                nmax = nmax + 1
+                peak_positions(nmax,:) = target_positions(i,:)
             endif
         end do
         ! cleanup
@@ -519,16 +519,16 @@ contains
         logical, allocatable :: mask(:)
         real,    allocatable :: corrs(:)
         write(logfhandle,'(a)') '>>> DISTANCE FILTERING'
-        allocate( mask(npeaks), corrs(npeaks), selected_peak_positions(npeaks), stat=alloc_stat)
+        allocate( mask(nmax), corrs(nmax), selected_peak_positions(nmax), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk( 'In: simple_picker :: distance_filter',alloc_stat)
         selected_peak_positions = .true.
         distthr_sq = nint(distthr*distthr)
         !$omp parallel do schedule(static) default(shared) private(ipeak,jpeak,ipos,jpos,dist,mask,loc,corr) proc_bind(close)
-        do ipeak=1,npeaks
+        do ipeak=1,nmax
             ipos = peak_positions(ipeak,:)
             corr = -HUGE(corr)
             mask = .false.
-            do jpeak=1,npeaks
+            do jpeak=1,nmax
                 jpos = peak_positions(jpeak,:)
                 ! dist = euclid(real(ipos),real(jpos))
                 dist_sq = sum((ipos-jpos)**2)
@@ -548,8 +548,8 @@ contains
             end where
         end do
         !$omp end parallel do
-        npeaks_sel = count(selected_peak_positions)
-        if(DEBUG_HERE) write(logfhandle,'(a,1x,I7)') 'peak positions left after distance filtering: ', npeaks_sel
+        nmax_sel = count(selected_peak_positions)
+        if(DEBUG_HERE) write(logfhandle,'(a,1x,I7)') 'peak positions left after distance filtering: ', nmax_sel
     end subroutine distance_filter
 
     subroutine gather_stats
@@ -561,8 +561,8 @@ contains
         write(logfhandle,'(a)') '>>> GATHERING REMAINING STATS'
         call ptcl_target%new(ldim_refs, smpd_shrunken)
         cnt = 0
-        allocate( peak_stats(npeaks_sel,NSTAT) )
-        do ipeak=1,npeaks
+        allocate( peak_stats(nmax_sel,NSTAT) )
+        do ipeak=1,nmax
             if( selected_peak_positions(ipeak) )then
                 cnt = cnt + 1
                 call mic_saved%window_slim(peak_positions(ipeak,:)-ldim_refs(1)/2,&
@@ -588,17 +588,17 @@ contains
         real, allocatable :: dmat(:,:)
         integer           :: i_median, i, j, cnt, ipeak
         real              :: ddev
-        allocate(dmat(npeaks_sel,npeaks_sel), source=0., stat=alloc_stat)
+        allocate(dmat(nmax_sel,nmax_sel), source=0., stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('picker::one_cluster_clustering dmat ',alloc_stat)
-        do i=1,npeaks_sel - 1
-            do j=i + 1,npeaks_sel
+        do i=1,nmax_sel - 1
+            do j=i + 1,nmax_sel
                 dmat(i,j) = euclid(peak_stats(i,:), peak_stats(j,:))
                 dmat(j,i) = dmat(i,j)
             end do
         end do
         call dev_from_dmat( dmat, i_median, ddev )
         cnt = 0
-        do ipeak=1,npeaks
+        do ipeak=1,nmax
             if( selected_peak_positions(ipeak) )then
                 cnt = cnt + 1
                 if( dmat(i_median,cnt) <=  ndev * ddev )then
@@ -609,15 +609,15 @@ contains
                 endif
             endif
         end do
-        npeaks_sel = count(selected_peak_positions)
-        write(logfhandle,'(a,1x,I5)') 'peak positions after one cluster clustering: ', npeaks_sel
+        nmax_sel = count(selected_peak_positions)
+        write(logfhandle,'(a,1x,I5)') 'peak positions after one cluster clustering: ', nmax_sel
     end subroutine one_cluster_clustering
 
     subroutine write_boxfile
         integer :: funit, ipeak,iostat
         call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(boxname)),iostat=iostat)
         call fileiochk('phasecorr_picker; write_boxfile ', iostat)
-        do ipeak=1,npeaks
+        do ipeak=1,nmax
             if( selected_peak_positions(ipeak) )then
                 write(funit,'(I7,I7,I7,I7,I7)') peak_positions(ipeak,1),&
                 peak_positions(ipeak,2), orig_box, orig_box, -3
@@ -647,11 +647,11 @@ contains
 end module simple_phasecorr_picker
 
 ! IN distance filtering previous implementation of the loop
-! do ipeak=1,npeaks
+! do ipeak=1,nmax
 !     ipos = peak_positions(ipeak,:)
 !     mask = .false.
 !     !$omp parallel do schedule(static) default(shared) private(jpeak,jpos,dist) proc_bind(close)
-!     do jpeak=1,npeaks
+!     do jpeak=1,nmax
 !         jpos = peak_positions(jpeak,:)
 !         dist_sq = sum((ipos-jpos)**2)
 !         if( dist_sq < distthr_sq ) mask(jpeak) = .true.

@@ -14,7 +14,7 @@ private
 #include "simple_local_flags.inc"
 
 ! module global constants
-integer, parameter :: NTESTS=10, NPEAKS=3
+integer, parameter :: NTESTS=10
 real,    parameter :: SNR=0.5, LPLIM=20.0, ROERR_LIM=2.0
 
 ! module global variables

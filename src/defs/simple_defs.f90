@@ -132,6 +132,10 @@ real, parameter    :: KBWINSZ              = 1.5       !< interpolation window s
 real, parameter    :: KBALPHA              = sqrt(2.0) !< interpolation alpha (oversampling constant)
 real, parameter    :: RECWINSZ             = 1.5       !< half-window size for 3D reconstruction
 
+! npeaks
+integer, parameter :: NPEAKS     = 1
+integer, parameter :: NINPLPEAKS = 1
+
 ! real constants that control search and convergence
 real, parameter    :: FRAC_SH_LIM          = 80.0      !< at what frac to turn on the shift search
 real, parameter    :: FRAC_GREEDY_LIM      = 99.0      !< at what frac to turn to greedy search
@@ -142,7 +146,6 @@ real, parameter    :: SNHC2D_DECAY         = 0.2       !< factorial decay in 2D 
 real, parameter    :: GREEDY_FREQ          = 0.2       !< frequency of greedy search in refine3D with refine=single
 real, parameter    :: LP2SMPDFAC           = 0.4125    !< low-pass limit scaling constant
 real, parameter    :: LP2SMPDFAC2D         = 0.4       !< low-pass limit scaling constant
-real, parameter    :: NPEAKSATHRES         = 12.0      !< angular threshold for determining npeaks (PRIME3D)
 real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)
 real, parameter    :: SHCFRAC_DEFAULT      = 3.0       !< min % of projection directions evaluated in stochastic search
 real, parameter    :: STREAM_SRCHFRAC      = 0.4       !< fraction of times full 2D search is performed in the pool
@@ -153,10 +156,6 @@ real, parameter    :: ENVMSK_FSC_THRESH    = 0.8       !< FSC value after which 
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
 integer, parameter :: LPLIM3ITERBOUND      = 7         !< # iteration bound lplim stage 2 (PRIME2D)
 integer, parameter :: MINCLSPOPLIM         = 5         !< limit for adaptive cluster splitting/spreading (PRIME2D)
-integer, parameter :: CONTNPEAKS           = 5         !< # peaks to refine continuously
-integer, parameter :: MAXNPEAKS            = 30        !< maximum # peaks
-integer, parameter :: NPEAKS2REFINE        = 200       !< # peaks to be further optimised
-integer, parameter :: NINPLPEAKS2SORT      = 5         !< maximum # in-plane peaks to be considered for sorting
 integer, parameter :: NSPACE_REDUCED       = 600       !< # projection directions for the balancing constraint (PRIME3D)
 integer, parameter :: GRIDCORR_MAXITS      = 2         !< # iterations for reconstruction gridding correction
 integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
@@ -171,24 +170,24 @@ integer, parameter :: FAST2D_NPTCLS_PER_CLS = 500      !< # of particles per cla
 integer, parameter :: FAST2D_ITER_BATCH    = 3         !< # of iterations after which # of particles is updated
 
 ! orientation weighting scheme
-real,             parameter :: RANKW_EXP            = 2.0    !< Exponent for exponential rank orientation weights
-real,             parameter :: SIGMA2_FUDGE_DEFAULT = 50.    !< controls the sharpeness of the orientation weight distribution when objfun .eq. euclid
-                                                             !! smaller number means sharper distribution
-real,             parameter :: TAU_DEFAULT          = 0.01   !< controls the sharpeness of the orientation weight distribution when objfun .ne. euclid
-                                                             !! smaller number means sharper distribution
+real, parameter :: RANKW_EXP            = 2.0    !< Exponent for exponential rank orientation weights
+real, parameter :: SIGMA2_FUDGE_DEFAULT = 50.    !< controls the sharpeness of the orientation weight distribution when objfun .eq. euclid
+                                                 !! smaller number means sharper distribution
+real, parameter :: TAU_DEFAULT          = 0.01   !< controls the sharpeness of the orientation weight distribution when objfun .ne. euclid
+                                                 !! smaller number means sharper distribution
 ! Graphene
-real, parameter    :: GRAPHENE_BAND1       = 2.14      !< graphene band 1 for omission in score function
-real, parameter    :: GRAPHENE_BAND2       = 1.23      !< graphene band 2 for omission in score function
+real, parameter :: GRAPHENE_BAND1       = 2.14   !< graphene band 1 for omission in score function
+real, parameter :: GRAPHENE_BAND2       = 1.23   !< graphene band 2 for omission in score function
 
 ! C-compatible boolean constants
 logical(c_bool), parameter :: C_FALSE = logical(.false.,kind=c_bool)
 logical(c_bool), parameter :: C_TRUE  = logical(.true. ,kind=c_bool)
 
 ! criterion for even/odd averaging in gold-FSC
-real,    parameter :: FREQ4EOAVG3D = 20.                !< Frequencry criterion for eo-averaging in 3D
-real,    parameter :: FSC4EOAVG3D  = 0.95               !< corr criterion for eo-averaging in 3D
-real,    parameter :: FSC4EOAVG2D  = 0.7                !< corr criterion for eo-averaging in 2D
-integer, parameter :: K4EOAVGLB    = 4                  !< Fourier index lower-bound
+real,    parameter :: FREQ4EOAVG3D = 20.        !< Frequencry criterion for eo-averaging in 3D
+real,    parameter :: FSC4EOAVG3D  = 0.95       !< corr criterion for eo-averaging in 3D
+real,    parameter :: FSC4EOAVG2D  = 0.7        !< corr criterion for eo-averaging in 2D
+integer, parameter :: K4EOAVGLB    = 4          !< Fourier index lower-bound
 
 ! SNHC-related global constants, PRIME3D, refine=snhc
 integer, parameter :: SZSN_INIT  = 5
@@ -205,7 +204,7 @@ integer, parameter :: img_kind = DP
 #else
 integer, parameter :: img_kind = SP
 #endif
-integer, parameter :: fp_kind = DP
+integer, parameter :: fp_kind  = DP
 
 ! debugging and print verbosity flags
 #ifdef _DEBUG
