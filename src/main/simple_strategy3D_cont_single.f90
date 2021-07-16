@@ -66,7 +66,6 @@ contains
         endif
     end subroutine srch_cont_single
 
-    !>  \brief retrieves and preps npeaks orientations for reconstruction
     subroutine oris_assign_cont_single( self )
         use simple_ori,  only: ori
         class(strategy3D_cont_single), intent(inout) :: self
@@ -95,12 +94,6 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'state',     1.)
         call build_glob%spproj_field%set(self%s%iptcl, 'corr',      self%corr)
         call build_glob%spproj_field%set(self%s%iptcl, 'specscore', self%s%specscore)
-        call build_glob%spproj_field%set(self%s%iptcl, 'ow',        1.0)
-        call build_glob%spproj_field%set(self%s%iptcl, 'spread',    0.)
-        call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    1.)
-        ! transfer data to o_peaks
-        ! call build_glob%spproj_field%get_ori(self%s%iptcl, o_tmp)
-        ! call s3D%o_peaks(self%s%iptcl)%set_ori(1, o_tmp)
         call osym%kill
         call o_tmp%kill
     end subroutine oris_assign_cont_single

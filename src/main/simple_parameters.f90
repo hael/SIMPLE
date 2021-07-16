@@ -99,7 +99,6 @@ type :: parameters
     character(len=3)      :: tomo='no'            !< tomography mode(yes|no){no}
     character(len=3)      :: tophat='no'          !< tophat filter(yes|no){no}
     character(len=3)      :: time='no'
-    character(len=3)      :: trspeaks='no'        !< whther to use soft 3D translational peaks(yes|no){no}
     character(len=3)      :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)      :: tseries='no'         !< images represent a time-series(yes|no){no}
     character(len=3)      :: vis='no'             !< visualise(yes|no)
@@ -261,7 +260,6 @@ type :: parameters
     integer :: lp_iters=1          !< # iters low-pass limited refinement
     integer :: maxits=500          !< maximum # iterations
     integer :: maxp=0
-    integer :: minnrefs2eval=40    !< minimum # references to evaluate in stochastic search
     integer :: minp=10             !< minimum cluster population
     integer :: mrcmode=2
     integer :: navgs=1
@@ -310,7 +308,6 @@ type :: parameters
     integer :: reliongroups=0
     integer :: ring1=2
     integer :: ring2=0
-    integer :: rndfac=0            !< randomness factor in stochastic search, the higher the greedier
     integer :: spec=0
     integer :: startit=1           !< start iterating from here
     integer :: state=1             !< state to extract
@@ -403,15 +400,11 @@ type :: parameters
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
     real    :: scale=1.            !< image scale factor{1}
-    real    :: shcfrac=SHCFRAC_DEFAULT !< min % of projection directions evaluated in stochastic search
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
-    real    :: sigma2_fudge=SIGMA2_FUDGE_DEFAULT !< fudge factor for sigma2_noise{50.}
     real    :: smpd=2.             !< sampling distance, same as EMANs apix(in A)
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio
-    real    :: tau=TAU_DEFAULT     !< tau fudge factor, controls the sharpness of the orientation weight distribution,
-                                   !! smaller number means sharper distribution
     real    :: tilt_thres=0.05
     real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
     real    :: thres_low=0.        !< lower threshold for canny edge detection
@@ -613,7 +606,6 @@ contains
         call check_carg('tomoseries',     self%tomoseries)
         call check_carg('tophat',         self%tophat)
         call check_carg('trsstats',       self%trsstats)
-        call check_carg('trspeaks',       self%trspeaks)
         call check_carg('tseries',        self%tseries)
         call check_carg('vis',            self%vis)
         call check_carg('wcrit',          self%wcrit)
@@ -822,13 +814,10 @@ contains
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('power',          self%power)
         call check_rarg('scale',          self%scale)
-        call check_rarg('shcfrac',        self%shcfrac)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
         call check_rarg('sigma',          self%sigma)
-        call check_rarg('sigma2_fudge',   self%sigma2_fudge)
         call check_rarg('snr',            self%snr)
-        call check_rarg('tau',            self%tau)
         call check_rarg('tilt_thres',     self%tilt_thres)
         call check_rarg('thres',          self%thres)
         call check_rarg('thres_low',      self%thres_low)
@@ -1293,9 +1282,6 @@ contains
         self%eullims(:,1) = 0.
         self%eullims(:,2) = 359.99
         self%eullims(2,2) = 180.
-        ! set minimum # of projection directions to search
-        self%minnrefs2eval = 200
-        self%rndfac = max(3,ceiling((self%shcfrac / 100.) * real(self%nspace)))
         ! set default size of random sample
         if( .not. cline%defined('nran') )then
             self%nran = self%nptcls

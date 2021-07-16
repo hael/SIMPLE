@@ -68,14 +68,14 @@ contains
         contains
 
             subroutine per_ref_srch
-                integer :: loc(NINPLPEAKS)
+                integer :: loc(1)
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
                     ! calculate in-plane correlations
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    ! identify the NINPLPEAKS top scoring in-planes
-                    loc = maxnloc(inpl_corrs, NINPLPEAKS)
+                    ! identify the top scoring in-plane angle
+                    loc = maxloc(inpl_corrs)
                     ! stash
-                    call self%s%store_solution(iref, loc, inpl_corrs(loc), .true.)
+                    call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)), .true.)
                 endif
             end subroutine per_ref_srch
 

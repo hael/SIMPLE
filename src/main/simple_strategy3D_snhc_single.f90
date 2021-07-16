@@ -62,13 +62,13 @@ contains
         contains
 
             subroutine per_ref_srch
-                integer :: loc(NINPLPEAKS)
+                integer :: loc(1)
                 ! calculate in-plane correlations
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                ! identify the NINPLPEAKS top scoring in-planes
-                loc = maxnloc(inpl_corrs, NINPLPEAKS)
+                ! identify the top scoring in-plane angle
+                loc = maxloc(inpl_corrs)
                 ! stash
-                call self%s%store_solution(iref, loc, inpl_corrs(loc), .true.)
+                call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)), .true.)
             end subroutine per_ref_srch
 
     end subroutine srch_snhc_single
@@ -82,17 +82,17 @@ contains
         ! stash prev ori
         call build_glob%spproj_field%get_ori(self%s%iptcl, o1)
         ! orientation parameters
-        ref = s3D%proj_space_refinds_sorted(self%s%ithr, self%s%nrefsmaxinpl)
+        ref = s3D%proj_space_refinds_sorted(self%s%ithr, self%s%nrefs)
         if( ref < 1 .or. ref > self%s%nrefs )then
             THROW_HARD('ref index: '//int2str(ref)//' out of bound; oris_assign_snhc_single')
         endif
-        roind = pftcc_glob%get_roind(360. - s3D%proj_space_euls(self%s%ithr,ref,1,3))
+        roind = pftcc_glob%get_roind(360. - s3D%proj_space_euls(self%s%ithr,ref,3))
         ! transfer to spproj_field
-        corr = max(0., s3D%proj_space_corrs(self%s%ithr,ref,1))
+        corr = max(0., s3D%proj_space_corrs(self%s%ithr,ref))
         call build_glob%spproj_field%set(self%s%iptcl, 'state', 1.)
         call build_glob%spproj_field%set(self%s%iptcl, 'proj',  real(s3D%proj_space_proj(ref)))
         call build_glob%spproj_field%set(self%s%iptcl, 'corr',  corr)
-        call build_glob%spproj_field%set_euler(self%s%iptcl, s3D%proj_space_euls(self%s%ithr,ref,1,1:3))
+        call build_glob%spproj_field%set_euler(self%s%iptcl, s3D%proj_space_euls(self%s%ithr,ref,1:3))
         call build_glob%spproj_field%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc
         ! angular distances
         call build_glob%spproj_field%get_ori(self%s%iptcl, o2)

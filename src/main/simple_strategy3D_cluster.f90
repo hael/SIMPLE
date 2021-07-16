@@ -123,8 +123,8 @@ contains
             if( s%neigh )then
                 iproj = neigh_projs(state)
                 iref  = (state-1)*s%nprojs + iproj
-                call build_glob%spproj_field%e1set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1,1)) ! inpl = 1
-                call build_glob%spproj_field%e2set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1,2))
+                call build_glob%spproj_field%e1set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1))
+                call build_glob%spproj_field%e2set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,2))
             else
                 iproj = s%prev_proj
             endif
@@ -202,8 +202,8 @@ contains
             s%nrefs_eval = count(corrs <= s%prev_corr)
             iproj        = projs(state)
             iref         = (state-1)*s%nprojs+iproj
-            call build_glob%spproj_field%e1set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1,1))
-            call build_glob%spproj_field%e2set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1,2))
+            call build_glob%spproj_field%e1set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1))
+            call build_glob%spproj_field%e2set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,2))
             corr = corrs(state)
             if(state == s%prev_state) call greedy_inplsrch(s, corr, state, iproj)
         endif
@@ -225,10 +225,10 @@ contains
         s3D%proj_space_refinds_sorted_highest(s%ithr,s%nrefs) = iref ! inpl angle + shift
         s3D%proj_space_corrs_srchd(s%ithr,iref) = .true.
         call s%inpl_srch
-        if( s3D%proj_space_corrs(s%ithr,iref,1) > corr )then
-            corr = s3D%proj_space_corrs(s%ithr,iref,1)  ! inpl=1
-            call build_glob%spproj_field%set_shift(s%iptcl,s%prev_shvec+s3D%proj_space_shift(s%ithr,iref,1,:))
-            call build_glob%spproj_field%e3set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1,3))
+        if( s3D%proj_space_corrs(s%ithr,iref) > corr )then
+            corr = s3D%proj_space_corrs(s%ithr,iref)
+            call build_glob%spproj_field%set_shift(s%iptcl,s%prev_shvec+s3D%proj_space_shift(s%ithr,iref,:))
+            call build_glob%spproj_field%e3set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,3))
         endif
     end subroutine greedy_inplsrch
 
@@ -238,12 +238,6 @@ contains
         frac = 100.*real(self%s%nrefs_eval) / real(self%s%nstates)
         call build_glob%spproj_field%set(self%s%iptcl,'frac',frac)
         call build_glob%spproj_field%set(self%s%iptcl,'w',   1.)
-        ! call s3D%o_peaks(self%s%iptcl)%set(1,'w', 1.)
-        ! call s3D%o_peaks(self%s%iptcl)%set_euler(1,   build_glob%spproj_field%get_euler(self%s%iptcl))
-        ! call s3D%o_peaks(self%s%iptcl)%set_shift(1,   build_glob%spproj_field%get_2Dshift(self%s%iptcl))
-        ! call s3D%o_peaks(self%s%iptcl)%set(1,'state', build_glob%spproj_field%get(self%s%iptcl,'state'))
-        ! call s3D%o_peaks(self%s%iptcl)%set(1,'corr',  build_glob%spproj_field%get(self%s%iptcl,'corr'))
-        ! call s3D%o_peaks(self%s%iptcl)%set(1,'proj',  build_glob%spproj_field%get(self%s%iptcl,'proj'))
     end subroutine oris_assign_cluster3D
 
     subroutine kill_cluster3D( self )

@@ -132,10 +132,6 @@ real, parameter    :: KBWINSZ              = 1.5       !< interpolation window s
 real, parameter    :: KBALPHA              = sqrt(2.0) !< interpolation alpha (oversampling constant)
 real, parameter    :: RECWINSZ             = 1.5       !< half-window size for 3D reconstruction
 
-! npeaks
-integer, parameter :: NPEAKS     = 1
-integer, parameter :: NINPLPEAKS = 1
-
 ! real constants that control search and convergence
 real, parameter    :: FRAC_SH_LIM          = 80.0      !< at what frac to turn on the shift search
 real, parameter    :: FRAC_GREEDY_LIM      = 99.0      !< at what frac to turn to greedy search
@@ -146,8 +142,7 @@ real, parameter    :: SNHC2D_DECAY         = 0.2       !< factorial decay in 2D 
 real, parameter    :: GREEDY_FREQ          = 0.2       !< frequency of greedy search in refine3D with refine=single
 real, parameter    :: LP2SMPDFAC           = 0.4125    !< low-pass limit scaling constant
 real, parameter    :: LP2SMPDFAC2D         = 0.4       !< low-pass limit scaling constant
-real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)
-real, parameter    :: SHCFRAC_DEFAULT      = 3.0       !< min % of projection directions evaluated in stochastic search
+real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)ch
 real, parameter    :: STREAM_SRCHFRAC      = 0.4       !< fraction of times full 2D search is performed in the pool
 real, parameter    :: MC_PATCHSZ           = 740.      !< recommended patch size (in pixels) for motion correction
 real, parameter    :: ENVMSK_FSC_THRESH    = 0.8       !< FSC value after which phase-randomization and FSC correction is applied in enveloppe masking
@@ -169,12 +164,9 @@ integer, parameter :: FAST2D_MINSZ         = 25000     !< Minimum # of particles
 integer, parameter :: FAST2D_NPTCLS_PER_CLS = 500      !< # of particles per class to sample for fast subset 2D classification
 integer, parameter :: FAST2D_ITER_BATCH    = 3         !< # of iterations after which # of particles is updated
 
-! orientation weighting scheme
-real, parameter :: RANKW_EXP            = 2.0    !< Exponent for exponential rank orientation weights
-real, parameter :: SIGMA2_FUDGE_DEFAULT = 50.    !< controls the sharpeness of the orientation weight distribution when objfun .eq. euclid
-                                                 !! smaller number means sharper distribution
-real, parameter :: TAU_DEFAULT          = 0.01   !< controls the sharpeness of the orientation weight distribution when objfun .ne. euclid
-                                                 !! smaller number means sharper distribution
+! weighting scheme
+real, parameter :: RANKW_EXP = 2.0 !< Exponent for exponential rank weights
+
 ! Graphene
 real, parameter :: GRAPHENE_BAND1       = 2.14   !< graphene band 1 for omission in score function
 real, parameter :: GRAPHENE_BAND2       = 1.23   !< graphene band 2 for omission in score function
