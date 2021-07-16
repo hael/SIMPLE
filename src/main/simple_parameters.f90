@@ -77,8 +77,7 @@ type :: parameters
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
     character(len=3)      :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)      :: projstats='no'
-    character(len=3)      :: projw='no'           !< correct for uneven orientation distribution
-    character(len=3)      :: pssnr='no'           !< correct for uneven orientation distribution
+    character(len=3)      :: pssnr='no'
     character(len=3)      :: roavg='no'           !< rotationally average images in stack
     character(len=3)      :: clsfrcs='no'
     character(len=3)      :: readwrite='no'
@@ -132,7 +131,6 @@ type :: parameters
     character(len=LONGSTRLEN) :: mskfile=''           !< maskfile.ext
     character(len=LONGSTRLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
     character(len=LONGSTRLEN) :: mskvols(MAXS)=''
-    character(len=LONGSTRLEN) :: o_peaks_file=''
     character(len=LONGSTRLEN) :: oritab=''            !< table  of orientations(.txt|.simple)
     character(len=LONGSTRLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.simple)
     character(len=LONGSTRLEN) :: oritab3D=''          !< table of 3D orientations(.txt|.simple)
@@ -278,13 +276,11 @@ type :: parameters
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
-    integer :: ninplpeaks=NINPLPEAKS2SORT !< # of in-plane peaks
-    integer :: nnn=NPEAKS2REFINE   !< # nearest neighbors{200}
+    integer :: nnn=200             !< # nearest neighbors{200}
     integer :: nmics=0             !< # micographs
     integer :: nmovies_trial=0     !< # of movies after which preprocess_stream will stop
     integer :: noris=0
     integer :: nparts=1            !< # partitions in distributed exection
-    integer :: npeaks=NPEAKS2REFINE
     integer :: npix=0              !< # pixles/voxels in binary representation
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
     integer :: nptcls_per_cls=400  !< # images in stk/# orientations in oritab
@@ -449,9 +445,7 @@ type :: parameters
     logical :: l_needs_sigma    = .false.
     logical :: l_pssnr          = .false.
     logical :: l_phaseplate     = .false.
-    logical :: l_projw          = .false.
     logical :: l_remap_cls      = .false.
-    logical :: l_rec_soft       = .false.
     logical :: l_wglob          = .true.
     logical :: sp_required      = .false.
   contains
@@ -589,7 +583,6 @@ contains
         call check_carg('projname',       self%projname)
         call check_carg('proj_is_class',  self%proj_is_class)
         call check_carg('projstats',      self%projstats)
-        call check_carg('projw',          self%projw)
         call check_carg('pssnr',          self%pssnr)
         call check_carg('ptclw',          self%ptclw)
         call check_carg('clsfrcs',        self%clsfrcs)
@@ -722,11 +715,9 @@ contains
         call check_iarg('newbox',         self%newbox)
         call check_iarg('nframes',        self%nframes)
         call check_iarg('ngrow',          self%ngrow)
-        call check_iarg('ninplpeaks',     self%ninplpeaks)
         call check_iarg('nmovies_trial',  self%nmovies_trial)
         call check_iarg('nnn',            self%nnn)
         call check_iarg('noris',          self%noris)
-        call check_iarg('npeaks',         self%npeaks)
         call check_iarg('nran',           self%nran)
         call check_iarg('nrefs',          self%nrefs)
         call check_iarg('nrestarts',      self%nrestarts)
@@ -972,8 +963,6 @@ contains
             ! open the log file
             call fopen(logfhandle, status='replace', file=LOGFNAME, action='write')
         endif
-        ! soft reconstruction
-        self%l_rec_soft = cline%defined('dir_refine')
         !>>> END, EXECUTION RELATED
 
         !>>> START, SANITY CHECKING AND PARAMETER EXTRACTION FROM ORITAB(S)/VOL(S)/STACK(S)
@@ -1230,8 +1219,6 @@ contains
         self%l_lpset  = cline%defined('lp')
         ! set envfsc flag
         self%l_envfsc = self%envfsc .ne. 'no'
-        ! set projw flag
-        self%l_projw  = self%projw  .ne. 'no'
         ! set correlation weighting scheme
         self%l_corrw = self%wcrit .ne. 'no'
         if( self%l_corrw )then
@@ -1306,12 +1293,8 @@ contains
         self%eullims(:,1) = 0.
         self%eullims(:,2) = 359.99
         self%eullims(2,2) = 180.
-        ! check number of peaks
-        if(self%npeaks<=0) THROW_HARD('Invalid number of peaks')
-        if(self%ninplpeaks<=0 .or. self%ninplpeaks>NINPLPEAKS2SORT)&
-            &THROW_HARD('Invalid number of in-plane peaks')
         ! set minimum # of projection directions to search
-        self%minnrefs2eval = ceiling(real(NPEAKS2REFINE) / real(self%ninplpeaks))
+        self%minnrefs2eval = 200
         self%rndfac = max(3,ceiling((self%shcfrac / 100.) * real(self%nspace)))
         ! set default size of random sample
         if( .not. cline%defined('nran') )then
@@ -1437,16 +1420,10 @@ contains
                 write(logfhandle,*) 'imgkind: ', trim(self%imgkind)
                 THROW_HARD('unsupported imgkind; new')
         end select
-        ! o_peaks file
-        if(self%numlen > 0 )then
-            self%o_peaks_file = O_PEAKS_FBODY//int2str_pad(self%part, self%numlen)//BIN_EXT
-        else
-            self%o_peaks_file = O_PEAKS_FBODY//int2str(self%part)//BIN_EXT
-        endif
         ! neigh refinement modes
         if( str_has_substr(self%refine, 'neigh') )then
             if( .not. cline%defined('nspace')    ) self%nspace = 10000
-            if( .not. cline%defined('nnn')       ) self%nnn    = max(nint(0.1 * real(self%nspace)), NPEAKS2REFINE)
+            if( .not. cline%defined('nnn')       ) self%nnn    = max(nint(0.1 * real(self%nspace)), 200)
         endif
         ! motion correction
         if( self%tomo .eq. 'yes' ) self%mcpatch = 'no'

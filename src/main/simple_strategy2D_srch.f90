@@ -173,7 +173,7 @@ contains
         ! update parameters
         call build_glob%spproj_field%e3set(self%iptcl,e3)
         call build_glob%spproj_field%set_shift(self%iptcl, self%prev_shvec + self%best_shvec)
-        call build_glob%spproj_field%set(self%iptcl, 'shwmean',    arg(self%best_shvec))
+        call build_glob%spproj_field%set(self%iptcl, 'shincarg',   arg(self%best_shvec))
         call build_glob%spproj_field%set(self%iptcl, 'inpl',       real(self%best_rot))
         call build_glob%spproj_field%set(self%iptcl, 'class',      real(self%best_class))
         call build_glob%spproj_field%set(self%iptcl, 'corr',       self%best_corr)

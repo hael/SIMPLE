@@ -5,7 +5,6 @@ module simple_strategy3D_matcher
 include 'simple_lib.f08'
 use simple_strategy3D_alloc ! singleton s3D
 use simple_timer
-use simple_o_peaks_io
 use simple_oris,                     only: oris
 use simple_qsys_funs,                only: qsys_job_finished
 use simple_binoris_io,               only: binwrite_oritab
@@ -21,7 +20,6 @@ use simple_polarft_corrcalc,         only: polarft_corrcalc
 use simple_strategy2D3D_common,      only: killrecvols, set_bp_range, preprecvols,&
     prepimgbatch, grid_ptcl, read_imgbatch, norm_struct_facts
 use simple_strategy3D_cluster,       only: strategy3D_cluster
-use simple_strategy3D_clustersoft,   only: strategy3D_clustersoft
 use simple_strategy3D_single,        only: strategy3D_single
 use simple_strategy3D_multi,         only: strategy3D_multi
 use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
@@ -36,7 +34,7 @@ use simple_convergence,              only: convergence
 use simple_euclid_sigma2,            only: euclid_sigma2
 implicit none
 
-public :: refine3D_exec, preppftcc4align, pftcc, setup_weights_read_o_peaks, calc_3Drec
+public :: refine3D_exec, preppftcc4align, pftcc, setup_weights, calc_3Drec
 private
 #include "simple_local_flags.inc"
 
@@ -48,7 +46,6 @@ integer,           allocatable :: prev_states(:), pinds(:)
 logical,           allocatable :: ptcl_mask(:)
 type(sym)                      :: c1_symop
 integer                        :: nptcls2update
-integer                        :: npeaks
 integer(timer_int_kind)        :: t_init, t_prep_pftcc, t_align, t_rec, t_tot, t_prep_primesrch3D
 real(timer_int_kind)           :: rt_init, rt_prep_pftcc, rt_align, rt_rec, rt_prep_primesrch3D
 real(timer_int_kind)           :: rt_tot
@@ -72,7 +69,7 @@ contains
         !      relevant strategy3D base class
         type(strategy3D_spec),     allocatable :: strategy3Dspecs(:)
         type(convergence)     :: conv
-        type(oris)            :: o_peak_prev
+        type(ori)             :: orientation
         real,    allocatable  :: resarr(:)
         integer, allocatable  :: batches(:,:)
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj, anneal_ratio
@@ -95,17 +92,6 @@ contains
         ! SET FOURIER INDEX RANGE
         call set_bp_range(cline)
 
-        ! DETERMINE THE NUMBER OF PEAKS
-        select case(params_glob%refine)
-            case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval')
-                npeaks = 1
-            case DEFAULT
-                npeaks = NPEAKS2REFINE
-                ! command line overrides
-                if( cline%defined('npeaks') ) npeaks = params_glob%npeaks
-        end select
-        if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: determined the number of peaks'
-
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
 
@@ -126,7 +112,7 @@ contains
         do_extr           = .false.
         extr_score_thresh = -huge(extr_score_thresh)
         select case(trim(params_glob%refine))
-            case('cluster','clustersym','clustersoft')
+            case('cluster','clustersym')
                 ! general logics
                 if(allocated(het_mask))deallocate(het_mask)
                 allocate(het_mask(params_glob%fromp:params_glob%top), source=ptcl_mask)
@@ -159,8 +145,6 @@ contains
                         call build_glob%eulspace%new(params_glob%nspace, is_ptcl=.false.)
                         call build_glob%eulspace%spiral
                         call build_glob%pgrpsyms%nearest_sym_neighbors(build_glob%eulspace, symmat)
-                    case('clustersoft')
-                        prev_states = nint(build_glob%spproj_field%get_all('state',[params_glob%fromp,params_glob%top]))
                 end select
         end select
         if( L_BENCH ) rt_init = toc(t_init)
@@ -184,14 +168,9 @@ contains
         call build_glob%vol2%kill
         ! array allocation for strategy3D
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D'
-        call prep_strategy3D( ptcl_mask, npeaks ) ! allocate s3D singleton
+        call prep_strategy3D(ptcl_mask) ! allocate s3D singleton
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D, DONE'
         if( L_BENCH ) rt_prep_primesrch3D = toc(t_prep_primesrch3D)
-
-        ! read o_peaks for neigh refinement modes
-        if( str_has_substr(params_glob%refine, 'neigh') )then
-            call read_o_peaks
-        endif
 
         ! GENERATE PARTICLES IMAGE OBJECTS
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
@@ -224,15 +203,6 @@ contains
             call build_pftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
             if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
             if( L_BENCH ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
-            if( trim(params_glob%refine).eq.'clustersoft' )then
-                call open_o_peaks_io(trim(params_glob%o_peaks_file))
-                do iptcl_batch = 1,batchsz
-                    iptcl_map  = batch_start + iptcl_batch - 1
-                    iptcl      = pinds(iptcl_map)
-                    call read_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl, n_nozero)
-                enddo
-                call close_o_peaks_io
-            endif
             ! Particles loop
             if( L_BENCH ) t_align = tic()
             !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,ithr,updatecnt)&
@@ -266,8 +236,6 @@ contains
                         allocate(strategy3D_greedy_multi      :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('cluster','clustersym')
                         allocate(strategy3D_cluster           :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('clustersoft')
-                        allocate(strategy3D_clustersoft       :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neigh_single')
                         allocate(strategy3D_neigh_single      :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neigh_multi')
@@ -285,7 +253,7 @@ contains
                 if( allocated(het_mask) ) strategy3Dspecs(iptcl_batch)%do_extr =  het_mask(iptcl)
                 if( allocated(symmat)   ) strategy3Dspecs(iptcl_batch)%symmat  => symmat
                 ! search object
-                call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch), npeaks)
+                call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch))
                 ! search
                 call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
                 ! cleanup
@@ -293,7 +261,9 @@ contains
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
                     if( params_glob%which_iter > 1 )then
-                        call eucl_sigma%calc_sigma2(build_glob%spproj_field, iptcl, s3D%o_peaks(iptcl))
+                        call build_glob%spproj_field%get_ori(iptcl, orientation)
+                        if( orientation%isstatezero() ) cycle
+                        call eucl_sigma%calc_sigma2(build_glob%spproj_field, iptcl, orientation)
                     endif
                 end if
             enddo ! Particles loop
@@ -307,47 +277,10 @@ contains
         deallocate(strategy3Dsrch,strategy3Dspecs,batches)
 
         ! WRITE SIGMAS FOR ML-BASED REFINEMENT
-        if ( params_glob%l_needs_sigma ) then
-            call eucl_sigma%write_sigma2
-            ! call eucl_sigma%write_model(build_glob%spproj_field, [params_glob%fromp,params_glob%top],&
-            !     &s3D%o_peaks, build_glob%eulspace, which_iter)
-        end if
+        if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
 
         ! UPDATE PARTICLE STATS
         call calc_ptcl_stats( batchsz_max, l_ctf )
-
-        ! O_PEAKS I/O & CONVERGENCE STATS
-        ! here we read all peaks to allow deriving statistics based on the complete set
-        ! this is needed for deriving projection direction weights
-        select case(trim(params_glob%refine))
-            case('eval','cluster','clustersym')
-                ! nothing to do
-            case DEFAULT
-                if( .not. file_exists(trim(params_glob%o_peaks_file)) )then
-                    ! write an empty one to be filled in
-                    call write_empty_o_peaks_file(params_glob%o_peaks_file, [params_glob%fromp,params_glob%top])
-                endif
-                call open_o_peaks_io(trim(params_glob%o_peaks_file))
-                do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) )then
-                        state = build_glob%spproj_field%get_state(iptcl)
-                        call read_o_peak(o_peak_prev, [params_glob%fromp,params_glob%top], iptcl, n_nozero)
-                        if( n_nozero == 0 )then
-                            ! there's nothing to compare, set overlap to zero
-                            call build_glob%spproj_field%set(iptcl, 'mi_proj', 0.)
-                        else
-                            mi_proj = s3D%o_peaks(iptcl)%overlap(o_peak_prev, 'proj', state)
-                            call build_glob%spproj_field%set(iptcl, 'mi_proj', mi_proj)
-                        endif
-                        ! replace the peak on disc
-                        call write_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl)
-                    else
-                        call read_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl, n_nozero)
-                    endif
-                end do
-                call close_o_peaks_io
-        end select
-        call o_peak_prev%kill
 
         ! CALCULATE PARTICLE WEIGHTS
         select case(trim(params_glob%ptclw))
@@ -362,6 +295,7 @@ contains
         call pftcc%kill
         call build_glob%vol%kill
         call build_glob%vol_odd%kill
+        call orientation%kill
         do ibatch=1,batchsz_max
             call match_imgs(ibatch)%kill_polarizer
             call match_imgs(ibatch)%kill
@@ -557,7 +491,7 @@ contains
         integer :: nptcls, iptcl_batch, iptcl, nbatches, ibatch, batch_start, batch_end, iptcl_map, batchsz
         if( .not.params_glob%l_frac_update ) return
         select case(params_glob%refine)
-            case('cluster','clustersym','clustersoft','eval')
+            case('cluster','clustersym','eval')
                 return
             case DEFAULT
                 ! all good
@@ -651,9 +585,9 @@ contains
                         select case(trim(params_glob%refine))
                             case('clustersym')
                                 ! always C1 reconstruction
-                                call grid_ptcl(fpls(ibatch), c1_symop, orientation, s3D%o_peaks(iptcl))
+                                call grid_ptcl(fpls(ibatch), c1_symop, orientation)
                             case DEFAULT
-                                call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation, s3D%o_peaks(iptcl))
+                                call grid_ptcl(fpls(ibatch), build_glob%pgrpsyms, orientation)
                         end select
                     end do
                 end do
@@ -669,9 +603,7 @@ contains
        call orientation%kill
     end subroutine calc_3Drec
 
-    subroutine setup_weights_read_o_peaks
-        ! set npeaks
-        npeaks = NPEAKS2REFINE
+    subroutine setup_weights
         ! particle weights
         select case(trim(params_glob%ptclw))
             case('yes')
@@ -684,25 +616,7 @@ contains
         call build_glob%spproj_field%sample4update_and_incrcnt_nofrac([params_glob%fromp,params_glob%top],&
         nptcls2update, pinds, ptcl_mask)
         ! allocate s3D singleton
-        call prep_strategy3D(ptcl_mask, npeaks)
-        ! read peaks
-        call read_o_peaks
-    end subroutine setup_weights_read_o_peaks
-
-    subroutine read_o_peaks
-        use simple_strategy3D_utils, only: update_softmax_weights
-        integer :: iptcl, n_nozero
-        if( .not. file_exists(trim(params_glob%o_peaks_file)) )then
-            THROW_HARD(trim(params_glob%o_peaks_file)//' file does not exist')
-        endif
-        call open_o_peaks_io(trim(params_glob%o_peaks_file))
-        do iptcl=params_glob%fromp,params_glob%top
-            if( ptcl_mask(iptcl) )then
-                call read_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl, n_nozero)
-                call update_softmax_weights(iptcl, npeaks)
-            endif
-        end do
-        call close_o_peaks_io
-    end subroutine read_o_peaks
+        call prep_strategy3D(ptcl_mask)
+    end subroutine setup_weights
 
 end module simple_strategy3D_matcher

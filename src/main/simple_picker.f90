@@ -29,7 +29,7 @@ character(len=:), allocatable :: micname, refsname
 character(len=LONGSTRLEN)     :: boxname
 integer                       :: ldim(3), ldim_refs(3), ldim_refs_refine(3), ldim_shrink(3)
 integer                       :: ldim_shrink_refine(3), ntargets, nx, ny, nx_refine, ny_refine
-integer                       :: nrefs, npeaks, npeaks_sel, orig_box, cnt_glob=0
+integer                       :: nrefs, nmax, nmax_sel, orig_box, cnt_glob=0
 real                          :: smpd, smpd_shrunken, smpd_shrunken_refine, corrmax, corrmin
 real                          :: msk, msk_refine, lp, distthr, ndev
 
@@ -204,15 +204,15 @@ contains
             end do
         end do
         call sortmeans(target_corrs, MAXKMIT, means, labels)
-        npeaks = count(labels == 2)
-        allocate( peak_positions(npeaks,2),  stat=alloc_stat)
+        nmax = count(labels == 2)
+        allocate( peak_positions(nmax,2),  stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk( 'In: simple_picker :: gen_corr_peaks, 2',alloc_stat)
         peak_positions = 0
-        npeaks = 0
+        nmax = 0
         do i=1,ntargets
             if( labels(i) == 2 )then
-                npeaks = npeaks + 1
-                peak_positions(npeaks,:) = target_positions(i,:)
+                nmax = nmax + 1
+                peak_positions(nmax,:) = target_positions(i,:)
             endif
         end do
     end subroutine extract_peaks
@@ -223,14 +223,14 @@ contains
         logical, allocatable :: mask(:)
         real,    allocatable :: corrs(:)
         write(logfhandle,'(a)') '>>> DISTANCE FILTERING'
-        allocate( mask(npeaks), corrs(npeaks), selected_peak_positions(npeaks), stat=alloc_stat)
+        allocate( mask(nmax), corrs(nmax), selected_peak_positions(nmax), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk( 'In: simple_picker :: distance_filter',alloc_stat)
         selected_peak_positions = .true.
-        do ipeak=1,npeaks
+        do ipeak=1,nmax
             ipos = peak_positions(ipeak,:)
             mask = .false.
             !$omp parallel do schedule(static) default(shared) private(jpeak,jpos,dist) proc_bind(close)
-            do jpeak=1,npeaks
+            do jpeak=1,nmax
                 jpos = peak_positions(jpeak,:)
                 dist = euclid(real(ipos),real(jpos))
                 if( dist < distthr ) mask(jpeak) = .true.
@@ -245,8 +245,8 @@ contains
                 selected_peak_positions = .false.
             end where
         end do
-        npeaks_sel = count(selected_peak_positions)
-        write(logfhandle,'(a,1x,I5)') 'peak positions left after distance filtering: ', npeaks_sel
+        nmax_sel = count(selected_peak_positions)
+        write(logfhandle,'(a,1x,I5)') 'peak positions left after distance filtering: ', nmax_sel
     end subroutine distance_filter
 
     subroutine refine_positions
@@ -254,12 +254,12 @@ contains
         real    :: corr, target_corr
         logical :: outside
         write(logfhandle,'(a)') '>>> REFINING POSITIONS & GATHERING FIRST STATS'
-        allocate( peak_stats(npeaks_sel,NSTAT) )
+        allocate( peak_stats(nmax_sel,NSTAT) )
         ! bring back coordinates to refinement sampling
-        allocate( peak_positions_refined(npeaks,2), source=nint(PICKER_SHRINK/PICKER_SHRINK_REFINE)*peak_positions)
+        allocate( peak_positions_refined(nmax,2), source=nint(PICKER_SHRINK/PICKER_SHRINK_REFINE)*peak_positions)
         call ptcl_target%new(ldim_refs_refine, smpd_shrunken_refine)
         cnt = 0
-        do ipeak=1,npeaks
+        do ipeak=1,nmax
             if( selected_peak_positions(ipeak) )then
                 cnt = cnt + 1
                 ! best match in crude first scan
@@ -302,7 +302,7 @@ contains
         write(logfhandle,'(a)') '>>> GATHERING REMAINING STATS'
         call ptcl_target%new(ldim_refs_refine, smpd_shrunken_refine)
         cnt = 0
-        do ipeak=1,npeaks
+        do ipeak=1,nmax
             if( selected_peak_positions(ipeak) )then
                 cnt = cnt + 1
                 call mic_shrunken_refine%window_slim(peak_positions_refined(ipeak,:),&
@@ -323,17 +323,17 @@ contains
         real, allocatable :: dmat(:,:)
         integer           :: i_median, i, j, cnt, ipeak
         real              :: ddev
-        allocate(dmat(npeaks_sel,npeaks_sel), source=0., stat=alloc_stat)
+        allocate(dmat(nmax_sel,nmax_sel), source=0., stat=alloc_stat)
             if(alloc_stat.ne.0)call allocchk('picker::one_cluster_clustering dmat ',alloc_stat)
-        do i=1,npeaks_sel - 1
-            do j=i + 1,npeaks_sel
+        do i=1,nmax_sel - 1
+            do j=i + 1,nmax_sel
                 dmat(i,j) = euclid(peak_stats(i,:), peak_stats(j,:))
                 dmat(j,i) = dmat(i,j)
             end do
         end do
         call dev_from_dmat( dmat, i_median, ddev )
         cnt = 0
-        do ipeak=1,npeaks
+        do ipeak=1,nmax
             if( selected_peak_positions(ipeak) )then
                 cnt = cnt + 1
                 if( dmat(i_median,cnt) <=  ndev * ddev )then
@@ -344,15 +344,15 @@ contains
                 endif
             endif
         end do
-        npeaks_sel = count(selected_peak_positions)
-        write(logfhandle,'(a,1x,I5)') 'peak positions left after one cluster clustering: ', npeaks_sel
+        nmax_sel = count(selected_peak_positions)
+        write(logfhandle,'(a,1x,I5)') 'peak positions left after one cluster clustering: ', nmax_sel
     end subroutine one_cluster_clustering
 
     subroutine write_boxfile
         integer :: funit, ipeak,iostat
         call fopen(funit, status='REPLACE', action='WRITE', file=trim(adjustl(boxname)),iostat=iostat)
         call fileiochk('picker; write_boxfile ', iostat)
-        do ipeak=1,npeaks
+        do ipeak=1,nmax
             if( selected_peak_positions(ipeak) )then
                 write(funit,'(I7,I7,I7,I7,I7)') peak_positions_refined(ipeak,1),&
                 peak_positions_refined(ipeak,2), orig_box, orig_box, -3

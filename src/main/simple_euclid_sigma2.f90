@@ -3,6 +3,7 @@ include 'simple_lib.f08'
 use simple_parameters,       only: params_glob
 use simple_polarft_corrcalc, only: polarft_corrcalc, pftcc_glob
 use simple_oris,             only: oris
+use simple_ori,              only: ori
 use simple_sigma2_binfile,   only: sigma2_binfile
 use simple_starfile_wrappers
 implicit none
@@ -14,17 +15,17 @@ private
 type euclid_sigma2
     private
     real,    allocatable, public  :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
-    real,    allocatable          :: sigma2_part(:,:)               !< the actual sigmas per particle (this part only)
+    real,    allocatable          :: sigma2_part(:,:)       !< the actual sigmas per particle (this part only)
     real,    allocatable, public  :: sigma2_groups(:,:,:)   !< sigmas for groups
     real,    allocatable          :: mic_sigma2_noise(:,:)  !< weighted average for euclidian distance calculation and reconstruction
     integer, allocatable          :: pinds(:)
     integer, allocatable          :: micinds(:)
     integer                       :: fromp
     integer                       :: top
-    integer                       :: kfromto(2)     = 0
-    integer                       :: pftsz          = 0
+    integer                       :: kfromto(2) = 0
+    integer                       :: pftsz      = 0
     character(len=:), allocatable :: binfname
-    logical                       :: exists    = .false.
+    logical                       :: exists     = .false.
 
 contains
     ! constructor
@@ -104,31 +105,21 @@ contains
     end subroutine read_groups
 
     !>  For soft assignment
-    subroutine calc_sigma2( self, os, iptcl, o_peaks )
+    subroutine calc_sigma2( self, os, iptcl, o )
         class(euclid_sigma2), intent(inout) :: self
-        class(oris),          intent(inout) :: os, o_peaks
+        class(oris),          intent(inout) :: os
+        class(ori),           intent(in)    :: o
         integer,              intent(in)    :: iptcl
-        integer              :: ipeak, iref, npeaks, irot
-        real                 :: sigmas_tmp(self%kfromto(1):self%kfromto(2)), sigma_contrib(self%kfromto(1):self%kfromto(2))
-        real                 :: shvec(2), weight, weightnorm
+        integer              :: iref, irot
+        real                 :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        real                 :: shvec(2)
         if ( os%get_state(iptcl)==0 ) return
-        sigmas_tmp = 0.
-        npeaks     = o_peaks%get_noris()
-        weightnorm = 0.
-        do ipeak = 1,npeaks
-            weight = o_peaks%get(ipeak, 'ow')
-            if (weight < TINY) cycle
-            weightnorm = weightnorm + weight
-            iref       = nint(o_peaks%get(ipeak, 'proj'))
-            shvec      = o_peaks%get_2Dshift(ipeak)
-            irot       = pftcc_glob%get_roind(360. - o_peaks%e3get(ipeak))
-            call pftcc_glob%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
-            sigmas_tmp = sigmas_tmp + weight * sigma_contrib
-        end do
-        self%sigma2_part(:,iptcl) = sigmas_tmp / weightnorm
+        iref       = nint(o%get('proj'))
+        shvec      = o%get_2Dshift()
+        irot       = pftcc_glob%get_roind(360. - o%e3get())
+        call pftcc_glob%gencorr_sigma_contrib(iref, iptcl, shvec, irot, self%sigma2_part(:,iptcl))
     end subroutine calc_sigma2
 
-    !>  
     subroutine write_sigma2( self )
         class(euclid_sigma2), intent(inout) :: self
         type(sigma2_binfile)                :: binfile
@@ -167,7 +158,7 @@ contains
         character(len=:), allocatable :: fname, string
         real(dp),         allocatable :: projdir_wsum(:,:)
         type(starfile_table_type)     :: star
-        integer  :: iptcl, ipeak, npeaks, eo, n_projdirs, proj
+        integer  :: iptcl, ipeak, eo, n_projdirs, proj
         real     :: shift(2), w, ow, pw, psigma2
         real(dp) :: sigma2_shift(2), wsum(2), sigma_shift
         ! projection directions
@@ -177,7 +168,7 @@ contains
         sigma2_shift = 0.d0
         wsum         = 0.d0
         !$omp parallel do default(shared) schedule(static) reduction(+:wsum,sigma2_shift,projdir_wsum)&
-        !$omp private(iptcl,ipeak,pw,w,ow,eo,npeaks,shift,psigma2,proj) proc_bind(close)
+        !$omp private(iptcl,ipeak,pw,w,ow,eo,shift,psigma2,proj) proc_bind(close)
         do iptcl = fromto(1),fromto(2)
             if( os%get(iptcl,'state') < 0.5 ) cycle
             w = os%get(iptcl,'w')
@@ -185,8 +176,7 @@ contains
             eo      = nint(os%get(iptcl,'eo'))+1
             pw      = 0.
             psigma2 = 0.
-            npeaks  = o_peaks(iptcl)%get_noris()
-            do ipeak = 1,npeaks
+            do ipeak = 1,NPEAKS
                 ow = o_peaks(iptcl)%get(ipeak,'ow')
                 if( ow <= TINY ) cycle
                 ow      = w*ow
@@ -320,6 +310,5 @@ contains
         end do
         call starfile_table__delete(istarfile)
     end subroutine read_groups_starfile
-
 
 end module simple_euclid_sigma2

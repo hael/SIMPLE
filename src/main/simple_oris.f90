@@ -129,7 +129,6 @@ type :: oris
     procedure          :: merge
     procedure          :: clean_updatecnt
     procedure          :: partition_eo
-    procedure          :: partition_based_on_npeaks
     procedure          :: str2ori
     procedure          :: str2ori_ctfparams_state_eo
     procedure          :: set_ctfvars
@@ -187,7 +186,6 @@ type :: oris
     procedure          :: find_angres
     procedure          :: extremal_bound
     procedure          :: set_extremal_vars
-    procedure          :: find_npeaks_from_athres
     procedure, private :: map3dshift22d_1
     procedure, private :: map3dshift22d_2
     generic            :: map3dshift22d => map3dshift22d_1, map3dshift22d_2
@@ -2007,21 +2005,6 @@ contains
         endif
     end subroutine partition_eo
 
-    ! pinds is particle indices
-    ! nparts is number of k-partitions
-    ! part_assgn is assignment to part, resulting in balancing based on npeaks
-    subroutine partition_based_on_npeaks( self, nparts, part_assgn )
-        class(oris), intent(in)    :: self
-        integer,     intent(in)    :: nparts
-        integer,     intent(inout) :: part_assgn(self%n)
-        real    :: npeaks_arr(self%n)
-        integer :: i
-        do i=1,self%n
-            npeaks_arr(i) = self%o(i)%get('npeaks')
-        end do
-        call approx_balanced_partitioning(npeaks_arr, self%n, nparts, part_assgn)
-    end subroutine partition_based_on_npeaks
-
     subroutine str2ori( self, i, line )
         class(oris),      intent(inout) :: self
         integer,          intent(in)    :: i
@@ -2839,30 +2822,24 @@ contains
 
     !>  \brief  to identify the k nearest projection neighbors (exclusive), returned as logical array
     !!          self is search space with finer angular resolution
-    subroutine nearest_proj_neighbors_2( self, o_peaks, k, lnns )
+    subroutine nearest_proj_neighbors_2( self, o_in, k, lnns )
         class(oris), intent(inout) :: self
-        class(oris), intent(in)    :: o_peaks
+        class(ori),  intent(in)    :: o_in
         integer,     intent(in)    :: k
         logical,     intent(inout) :: lnns(self%n)
-        real, allocatable :: ows(:)
         real      :: dists(self%n)
-        integer   :: inds(self%n), i, ii, j
+        integer   :: inds(self%n), i, j
         type(ori) :: o
         lnns  = .false.
-        ows   = o_peaks%get_all('ow')
-        do i=1,o_peaks%n
-            if( ows(i) <= TINY ) cycle
-            do ii=1,self%n
-                inds(ii) = ii
-                call self%get_ori(ii, o)
-                dists(ii) = o.euldist.o_peaks%o(i)
-            end do
-            call hpsort(dists, inds)
-            do j=1,k
-                lnns(inds(j)) = .true.
-            end do
+        do i=1,self%n
+            inds(i) = i
+            call self%get_ori(i, o)
+            dists(i) = o.euldist.o_in
         end do
-        deallocate(ows)
+        call hpsort(dists, inds)
+        do j=1,k
+            lnns(inds(j)) = .true.
+        end do
     end subroutine nearest_proj_neighbors_2
 
     !>  \brief  to identify the nearest projection neighbors based on euldist threshold
@@ -2908,27 +2885,22 @@ contains
         end do
     end subroutine nearest_proj_neighbors_4
 
-    subroutine min_euldist( self, o_peaks, mindist )
+    subroutine min_euldist( self, o_in, mindist )
         class(oris), intent(inout) :: self
-        class(oris), intent(in)    :: o_peaks
+        class(ori),  intent(in)    :: o_in
         real,        intent(inout) :: mindist
         real, allocatable :: ows(:)
         real      :: dists(self%n), x
-        integer   :: inds(self%n), i, ii, loc(1)
+        integer   :: inds(self%n), i, loc(1)
         type(ori) :: o
         dists = huge(x)
-        ows   = o_peaks%get_all('ow')
-        do i=1,o_peaks%n
-            if( ows(i) <= TINY ) cycle
-            do ii=1,self%n
-                inds(ii) = ii
-                call self%get_ori(ii, o)
-                dists(ii) = o.euldist.o_peaks%o(i)
-            end do
+        do i=1,self%n
+            inds(i) = i
+            call self%get_ori(i, o)
+            dists(i) = o.euldist.o_in
         end do
         loc = minloc(dists)
         mindist = rad2deg(dists(loc(1)))
-        deallocate(ows)
     end subroutine min_euldist
 
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
@@ -3020,22 +2992,6 @@ contains
             if(iter==1 .or.(frac_srch_space <= 98. .and. extr_iter <= iextr_lim)) do_extr = .true.
         endif
     end subroutine set_extremal_vars
-
-    !>  \brief  find number of peaks from angular threshold
-    function find_npeaks_from_athres( self, athres ) result( npeaks )
-        class(oris), intent(in) :: self
-        real,        intent(in) :: athres
-        integer :: i, j, npeaks
-        real :: dists(self%n), rnpeaks
-        rnpeaks = 0.
-        do i=1,self%n
-            do j=1,self%n
-                dists(j) = rad2deg( self%o(i).euldist.self%o(j) )
-            end do
-            rnpeaks = rnpeaks + real(count(dists <= athres))
-        end do
-        npeaks = nint(rnpeaks/real(self%n))
-    end function find_npeaks_from_athres
 
     !>  \brief  for mapping a 3D shift of volume to 2D shifts of the projections
     subroutine map3dshift22d_1( self, sh3d, state )

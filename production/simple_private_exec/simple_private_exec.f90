@@ -71,7 +71,6 @@ type(kstest_commander)                :: xkstst
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
 type(rotmats2oris_commander)          :: xrotmats2oris
 type(print_project_vals_commander)    :: xprint_project_vals
-type(o_peaksstats_commander)          :: xo_peaksstats
 type(tseries_rotrate_commander)       :: xtseries_rotrate
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
@@ -194,8 +193,6 @@ select case(prg)
         call xrotmats2oris%execute(cline)
     case( 'print_project_vals' )
         call xprint_project_vals%execute(cline)
-    case( 'o_peaksstats')
-        call xo_peaksstats%execute(cline)
     case( 'tseries_rotrate')
         call xtseries_rotrate%execute(cline)
 

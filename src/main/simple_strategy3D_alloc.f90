@@ -9,7 +9,7 @@ implicit none
 public :: s3D, clean_strategy3D, prep_strategy3D, prep_strategy3D_thread
 private
 
-integer, parameter :: NTRS_PEAKS = 81
+integer, parameter :: NTRS_PEAKS = 1
 
 type inpl_peaks
     integer              :: n    = 0        ! # of peaks
@@ -24,7 +24,7 @@ end type inpl_peaks
 
 type strategy3D_alloc
     ! per-ptcl/ref allocation
-    type(oris),       allocatable :: o_peaks(:)                           !< solution objects
+    ! type(oris),       allocatable :: o_peaks(:)                           !< solution objects
     integer,          allocatable :: proj_space_state(:)                  !< states
     integer,          allocatable :: proj_space_proj(:)                   !< projection directions (1 state assumed)
     logical,          allocatable :: state_exists(:)                      !< indicates state existence
@@ -49,45 +49,40 @@ logical                :: srch_order_allocated = .false.
 
 contains
 
-    subroutine prep_strategy3D( ptcl_mask, npeaks )
+    subroutine prep_strategy3D( ptcl_mask )
         logical, target, intent(in) :: ptcl_mask(params_glob%fromp:params_glob%top)
-        integer,         intent(in) :: npeaks
         real    :: eul(3)
         integer :: i, istate, iproj, iptcl, inpl, ithr
         integer :: nnnrefs, cnt, nrefs
         real    :: areal
         ! clean all class arrays & types
         call clean_strategy3D()
-        if( allocated(s3D%o_peaks) )then
-            do i=params_glob%fromp,params_glob%top
-                call s3D%o_peaks(i)%kill
-            enddo
-            deallocate(s3D%o_peaks)
-        endif
+        ! if( allocated(s3D%o_peaks) )then
+        !     do i=params_glob%fromp,params_glob%top
+        !         call s3D%o_peaks(i)%kill
+        !     enddo
+        !     deallocate(s3D%o_peaks)
+        ! endif
         ! parameters
         nrefs  = params_glob%nspace * params_glob%nstates
         ! shared-memory arrays
-        allocate(master_proj_space_euls(nrefs,params_glob%ninplpeaks,3), s3D%proj_space_euls(nthr_glob,nrefs,params_glob%ninplpeaks,3),&
-            &s3D%proj_space_shift(nthr_glob,nrefs,params_glob%ninplpeaks,2),s3D%proj_space_state(nrefs),&
-            &s3D%proj_space_corrs(nthr_glob,nrefs,params_glob%ninplpeaks),&
-            &s3D%proj_space_refinds_sorted(nthr_glob,nrefs*params_glob%ninplpeaks),&
+        allocate(master_proj_space_euls(nrefs,NINPLPEAKS,3), s3D%proj_space_euls(nthr_glob,nrefs,NINPLPEAKS,3),&
+            &s3D%proj_space_shift(nthr_glob,nrefs,NINPLPEAKS,2),s3D%proj_space_state(nrefs),&
+            &s3D%proj_space_corrs(nthr_glob,nrefs,NINPLPEAKS),&
+            &s3D%proj_space_refinds_sorted(nthr_glob,nrefs*NINPLPEAKS),&
             &s3D%proj_space_refinds_sorted_highest(nthr_glob,nrefs),&
-            &s3D%proj_space_inplinds_sorted(nthr_glob,nrefs*params_glob%ninplpeaks),&
+            &s3D%proj_space_inplinds_sorted(nthr_glob,nrefs*NINPLPEAKS),&
             &s3D%proj_space_corrs_srchd(nthr_glob,nrefs), s3D%proj_space_corrs_calcd(nthr_glob,nrefs),&
-            &s3D%proj_space_inplinds(nthr_glob,nrefs,params_glob%ninplpeaks),&
+            &s3D%proj_space_inplinds(nthr_glob,nrefs,NINPLPEAKS),&
             &s3D%proj_space_proj(nrefs), stat=alloc_stat )
         if( trim(params_glob%trspeaks).eq.'yes' )then
-            call s3D%inplpeaks%allocate(params_glob%npeaks, params_glob%ninplpeaks, NTRS_PEAKS, nthr_glob)
+            call s3D%inplpeaks%allocate(NPEAKS, NINPLPEAKS, NTRS_PEAKS, nthr_glob)
         endif
         if(alloc_stat/=0)call allocchk("strategy3D_alloc failed")
         ! states existence
         if( .not.build_glob%spproj%is_virgin_field(params_glob%oritype) )then
             if( str_has_substr(params_glob%refine,'greedy') )then
                 allocate(s3D%state_exists(params_glob%nstates), source=.true.)
-                ! allocate(s3D%state_exists(params_glob%nstates), source=.true.)
-                ! do istate = 1,params_glob%nstates
-                !     s3D%state_exists(istate) = file_exists(params_glob%vols(istate))
-                ! enddo
             else
                 s3D%state_exists = build_glob%spproj_field%states_exist(params_glob%nstates)
             endif
@@ -102,7 +97,7 @@ contains
                 s3D%proj_space_state(cnt) = istate
                 s3D%proj_space_proj(cnt)  = iproj
                 eul = build_glob%eulspace%get_euler(iproj)
-                do inpl=1,params_glob%ninplpeaks
+                do inpl=1,NINPLPEAKS
                     master_proj_space_euls(cnt,inpl,:) = eul
                 end do
             enddo
@@ -136,28 +131,28 @@ contains
                 s3D%srch_order = 0
         end select
         ! projection direction peaks, eo & CTF transfer
-        allocate(s3D%o_peaks(params_glob%fromp:params_glob%top))
-        do iptcl = params_glob%fromp, params_glob%top
-            if( ptcl_mask(iptcl) )then
-                ! orientation peaks
-                call s3D%o_peaks(iptcl)%new(npeaks, is_ptcl=.false.)
-                ! transfer CTF params
-                if( params_glob%ctf.ne.'no' )then
-                    call s3D%o_peaks(iptcl)%set_all2single('iptcl',  real(iptcl))
-                    call s3D%o_peaks(iptcl)%set_all2single('kv',     build_glob%spproj_field%get(iptcl,'kv')    )
-                    call s3D%o_peaks(iptcl)%set_all2single('cs',     build_glob%spproj_field%get(iptcl,'cs')    )
-                    call s3D%o_peaks(iptcl)%set_all2single('fraca',  build_glob%spproj_field%get(iptcl,'fraca') )
-                    call s3D%o_peaks(iptcl)%set_all2single('dfx',    build_glob%spproj_field%get(iptcl,'dfx')   )
-                    call s3D%o_peaks(iptcl)%set_all2single('dfy',    build_glob%spproj_field%get(iptcl,'dfy')   )
-                    call s3D%o_peaks(iptcl)%set_all2single('angast', build_glob%spproj_field%get(iptcl,'angast'))
-                    if( params_glob%l_phaseplate )then
-                        call s3D%o_peaks(iptcl)%set_all2single('phshift', build_glob%spproj_field%get(iptcl,'phshift'))
-                    endif
-                endif
-                ! transfer eo flag
-                call s3D%o_peaks(iptcl)%set_all2single('eo', build_glob%spproj_field%get(iptcl,'eo'))
-            endif
-        enddo
+        ! allocate(s3D%o_peaks(params_glob%fromp:params_glob%top))
+        ! do iptcl = params_glob%fromp, params_glob%top
+        !     if( ptcl_mask(iptcl) )then
+        !         ! orientation peaks
+        !         call s3D%o_peaks(iptcl)%new(NPEAKS, is_ptcl=.false.)
+        !         ! transfer CTF params
+        !         if( params_glob%ctf.ne.'no' )then
+        !             call s3D%o_peaks(iptcl)%set_all2single('iptcl',  real(iptcl))
+        !             call s3D%o_peaks(iptcl)%set_all2single('kv',     build_glob%spproj_field%get(iptcl,'kv')    )
+        !             call s3D%o_peaks(iptcl)%set_all2single('cs',     build_glob%spproj_field%get(iptcl,'cs')    )
+        !             call s3D%o_peaks(iptcl)%set_all2single('fraca',  build_glob%spproj_field%get(iptcl,'fraca') )
+        !             call s3D%o_peaks(iptcl)%set_all2single('dfx',    build_glob%spproj_field%get(iptcl,'dfx')   )
+        !             call s3D%o_peaks(iptcl)%set_all2single('dfy',    build_glob%spproj_field%get(iptcl,'dfy')   )
+        !             call s3D%o_peaks(iptcl)%set_all2single('angast', build_glob%spproj_field%get(iptcl,'angast'))
+        !             if( params_glob%l_phaseplate )then
+        !                 call s3D%o_peaks(iptcl)%set_all2single('phshift', build_glob%spproj_field%get(iptcl,'phshift'))
+        !             endif
+        !         endif
+        !         ! transfer eo flag
+        !         call s3D%o_peaks(iptcl)%set_all2single('eo', build_glob%spproj_field%get(iptcl,'eo'))
+        !     endif
+        ! enddo
     end subroutine prep_strategy3D
 
     ! init thread specific search arrays

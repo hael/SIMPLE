@@ -15,12 +15,11 @@ end type strategy3D
 
 abstract interface
 
-    subroutine generic_new( self, spec, npeaks )
+    subroutine generic_new( self, spec )
         use simple_strategy3D_srch, only: strategy3D_spec
         import :: strategy3D
         class(strategy3D),      intent(inout) :: self
         class(strategy3D_spec), intent(inout) :: spec
-        integer,                intent(in)    :: npeaks
     end subroutine generic_new
 
     subroutine generic_srch( self, ithr )

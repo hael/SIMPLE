@@ -9,7 +9,6 @@ integer, parameter :: LONGSTRLEN   = 1024 !< longer string length
 integer, parameter :: XLONGSTRLEN  = 4096 !< extra longer string length
 ! GLOBAL FILE CONSTANTS
 character(len=*), parameter :: SIMPLE_SUBPROC_OUT   = 'SIMPLE_SUBPROC_OUTPUT'
-character(len=*), parameter :: O_PEAKS_FBODY        = 'opeaks_part'
 ! EXTENSIONS
 character(len=*), parameter :: TXT_EXT              = '.txt'
 character(len=*), parameter :: BIN_EXT              = '.bin'
