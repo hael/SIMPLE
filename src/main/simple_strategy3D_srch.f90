@@ -32,7 +32,6 @@ type strategy3D_srch
     integer                  :: iptcl         = 0         !< global particle index
     integer                  :: ithr          = 0         !< thread index
     integer                  :: nrefs         = 0         !< total # references (nstates*nprojs)
-    integer                  :: nrefsmaxinpl  = 0         !< total # references (nstates*nprojs)
     integer                  :: nnnrefs       = 0         !< total # neighboring references (nstates*nnn)
     integer                  :: nstates       = 0         !< # states
     integer                  :: nprojs        = 0         !< # projections
@@ -132,7 +131,6 @@ contains
         self%nstates      = params_glob%nstates
         self%nprojs       = params_glob%nspace
         self%nrefs        = self%nprojs*self%nstates
-        self%nrefsmaxinpl = self%nrefs*NINPLPEAKS
         self%nrots        = pftcc_glob%get_nrots()
         self%nbetter      = 0
         self%nrefs_eval   = 0
@@ -208,88 +206,62 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         type(ori) :: o
         real      :: cxy(3)
-        integer   :: i, j, ref, irot, cnt
+        integer   :: ref, irot!, cnt, j
         logical   :: found_better
         if( DOCONTINUOUS )then
             ! BFGS over all df:s
             call o%new(is_ptcl=.false.)
-            cnt = 0
-            do i=self%nrefs,self%nrefs-NPEAKS+1,-1
-                cnt = cnt + 1
-                ref = s3D%proj_space_refinds_sorted_highest(self%ithr, i)
-                if( cnt <= NPEAKS )then
-                    ! continuous refinement over all df:s
-                    call o%set_euler(s3D%proj_space_euls(self%ithr,ref,1,:))
-                    call o%set_shift([0.,0.])
-                    call self%grad_orisrch_obj%set_particle(self%iptcl)
-                    ! cxy = self%grad_orisrch_obj%minimize(o, NPEAKSATHRES/2.0, params_glob%trs, found_better)
-                    if( found_better )then
-                        s3D%proj_space_euls(self%ithr, ref, 1,:) = o%get_euler()
-                        s3D%proj_space_corrs(self%ithr,ref, 1)   = cxy(1)
-                        s3D%proj_space_shift(self%ithr,ref, 1,:) = cxy(2:3)
-                    endif
-                else
-                    ! refinement of in-plane rotation (discrete) & shift (continuous)
-                    call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                    cxy = self%grad_shsrch_obj%minimize(irot=irot)
-                    if( irot > 0 )then
-                        ! irot > 0 guarantees improvement found, update solution
-                        s3D%proj_space_euls(self%ithr, ref,1, 3) = 360. - pftcc_glob%get_rot(irot)
-                        s3D%proj_space_corrs(self%ithr,ref,1)    = cxy(1)
-                        s3D%proj_space_shift(self%ithr,ref,1,:)  = cxy(2:3)
-                    endif
-                endif
-            end do
+            ref = s3D%proj_space_refinds_sorted_highest(self%ithr, self%nrefs)
+            ! continuous refinement over all df:s
+            call o%set_euler(s3D%proj_space_euls(self%ithr,ref,:))
+            call o%set_shift([0.,0.])
+            call self%grad_orisrch_obj%set_particle(self%iptcl)
+            ! cxy = self%grad_orisrch_obj%minimize(o, NPEAKSATHRES/2.0, params_glob%trs, found_better)
+            if( found_better )then
+                s3D%proj_space_euls(self%ithr, ref,:) = o%get_euler()
+                s3D%proj_space_corrs(self%ithr,ref)   = cxy(1)
+                s3D%proj_space_shift(self%ithr,ref,:) = cxy(2:3)
+            endif
         else
             if( self%doshift )then
                 if( self%dowinpl )then
                     ! BFGS over shifts only
-                    do i=self%nrefsmaxinpl,self%nrefsmaxinpl-NPEAKS+1,-1
-                        ref  = s3D%proj_space_refinds_sorted(self%ithr, i)
-                        if( .not. s3D%proj_space_corrs_srchd(self%ithr,ref) ) cycle ! must have seen the reference before
-                        call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                        j    = s3D%proj_space_inplinds_sorted(self%ithr, i)
-                        irot = s3D%proj_space_inplinds(self%ithr, ref, j)
-                        cxy  = self%grad_shsrch_obj%minimize(irot=irot)
-                        if( irot > 0 )then
-                            ! irot > 0 guarantees improvement found, update solution
-                            s3D%proj_space_euls( self%ithr,ref,j,3) = 360. - pftcc_glob%get_rot(irot)
-                            s3D%proj_space_corrs(self%ithr,ref,j)   = cxy(1)
-                            s3D%proj_space_shift(self%ithr,ref,j,:) = cxy(2:3)
-                        endif
-                    end do
+                    ref  = s3D%proj_space_refinds_sorted(self%ithr, self%nrefs)
+                    call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+                    irot = s3D%proj_space_inplinds(self%ithr, ref)
+                    cxy  = self%grad_shsrch_obj%minimize(irot=irot)
+                    if( irot > 0 )then
+                        ! irot > 0 guarantees improvement found, update solution
+                        s3D%proj_space_euls( self%ithr,ref,3) = 360. - pftcc_glob%get_rot(irot)
+                        s3D%proj_space_corrs(self%ithr,ref)   = cxy(1)
+                        s3D%proj_space_shift(self%ithr,ref,:) = cxy(2:3)
+                    endif
                 else
                     ! BFGS over shifts with in-plane rot exhaustive callback
-                    do i=self%nrefs,self%nrefs-NPEAKS+1,-1
-                        ref = s3D%proj_space_refinds_sorted_highest(self%ithr, i)
-                        if( .not. s3D%proj_space_corrs_srchd(self%ithr,ref) ) cycle ! must have seen the reference before
-                        call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                        cxy = self%grad_shsrch_obj%minimize(irot=irot)
-                        if( irot > 0 )then
-                            ! irot > 0 guarantees improvement found, update solution
-                            s3D%proj_space_euls( self%ithr,ref,1,3) = 360. - pftcc_glob%get_rot(irot)
-                            s3D%proj_space_corrs(self%ithr,ref,1)   = cxy(1)
-                            s3D%proj_space_shift(self%ithr,ref,1,:) = cxy(2:3)
-                        endif
-                    end do
+                    ref = s3D%proj_space_refinds_sorted_highest(self%ithr, self%nrefs)
+                    call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+                    cxy = self%grad_shsrch_obj%minimize(irot=irot)
+                    if( irot > 0 )then
+                        ! irot > 0 guarantees improvement found, update solution
+                        s3D%proj_space_euls( self%ithr,ref,3) = 360. - pftcc_glob%get_rot(irot)
+                        s3D%proj_space_corrs(self%ithr,ref)   = cxy(1)
+                        s3D%proj_space_shift(self%ithr,ref,:) = cxy(2:3)
+                    endif
                 endif
             endif
         endif
     end subroutine inpl_srch
 
-    subroutine store_solution( self, ref, inpl_inds, corrs, searched )
+    subroutine store_solution( self, ref, inpl_ind, corr, searched )
         class(strategy3D_srch), intent(inout) :: self
-        integer,                intent(in)    :: ref, inpl_inds(NINPLPEAKS)
-        real,                   intent(in)    :: corrs(NINPLPEAKS)
+        integer,                intent(in)    :: ref, inpl_ind
+        real,                   intent(in)    :: corr
         logical,                intent(in)    :: searched
-        integer :: inpl
-        s3D%proj_space_inplinds(self%ithr,ref,:) = inpl_inds
-        do inpl=1,NINPLPEAKS
-            s3D%proj_space_euls(self%ithr,ref,inpl,3) = 360. - pftcc_glob%get_rot(inpl_inds(inpl))
-        end do
-        s3D%proj_space_corrs(self%ithr,ref,:) = corrs
+        s3D%proj_space_inplinds(self%ithr,ref)    = inpl_ind
+        s3D%proj_space_euls(self%ithr,ref,3)      = 360. - pftcc_glob%get_rot(inpl_ind)
+        s3D%proj_space_corrs(self%ithr,ref)       = corr
         s3D%proj_space_corrs_calcd(self%ithr,ref) = .true.
-        if (searched) s3D%proj_space_corrs_srchd(self%ithr,ref) = .true.
+        if( searched ) s3D%proj_space_corrs_srchd(self%ithr,ref) = .true.
     end subroutine store_solution
 
     subroutine kill( self )

@@ -252,7 +252,6 @@ type(simple_input_param) :: picker
 type(simple_input_param) :: projfile
 type(simple_input_param) :: projfile_target
 type(simple_input_param) :: projname
-type(simple_input_param) :: projw
 type(simple_input_param) :: pspecsz
 type(simple_input_param) :: ptclw
 type(simple_input_param) :: qsys_name
@@ -263,7 +262,6 @@ type(simple_input_param) :: remap_cls
 type(simple_input_param) :: scale_movies
 type(simple_input_param) :: sherr
 type(simple_input_param) :: sigma
-type(simple_input_param) :: sigma2_fudge
 type(simple_input_param) :: smpd
 type(simple_input_param) :: star_datadir
 type(simple_input_param) :: starfile
@@ -936,7 +934,6 @@ contains
         call set_param(neigh,          'neigh',        'binary', 'Neighbourhood refinement', 'Neighbourhood refinement(yes|no){yes}', '(yes|no){no}', .false., 'no')
         call set_param(projname,       'projname',     'str',    'Project name', 'Name of project to create ./myproject/myproject.simple file for',&
         &'e.g. to create ./myproject/myproject.simple', .true., '')
-        call set_param(projw,          'projw',        'binary', 'Correct for uneven orientation distribution', 'Whether to correct for uneven orientation distribution through weighting(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(user_email,     'user_email',   'str',    'Your e-mail address', 'Your e-mail address', 'e.g. myname@uni.edu', .false., '')
         call set_param(time_inactive,  'time_inactive','num',    'Time limit for exit (no new data detected)', 'Time limit in minutes after which the application will exit when no new data is detected{120}', 'in mins{120}', .false., 120.)
         call set_param(time_per_image, 'time_per_image','num',   'Time per image', 'Estimated time per image in seconds for forecasting total execution time{100}', 'in seconds{100}', .false., 100.)
@@ -952,7 +949,6 @@ contains
         call set_param(star_ptcl,      'star_ptcl',    'file',   'Particles STAR file name', 'Particles STAR-formatted filename', 'e.g. particles.star', .true., '')
         call set_param(startype,       'startype',     'str',    'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
         call set_param(scale_movies,   'scale',        'num',    'Down-scaling factor(0-1)', 'Down-scaling factor to apply to the movies(0-1){1.}', '{1.}', .false., 1.0)
-        call set_param(sigma2_fudge,   'sigma2_fudge', 'num',    'Sigma2-fudge factor', 'Fudge factor for sigma2_noise{100.}', '{100.}', .false., 100.)
         call set_param(ptclw,          'ptclw',        'multi',  'Particle weights', 'Particle weights(yes|no){yes}',  '(yes|otsu|no){yes}',  .false., 'yes')
         call set_param(envfsc,         'envfsc',       'binary', 'Envelope mask e/o maps for FSC', 'Envelope mask even/odd pairs prior to FSC calculation(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(graphene_filt,  'graphene_filt','binary', 'Omit graphene bands from corr calc', 'Omit graphene bands from corr calc(yes|no){no}',  '(yes|no){no}',  .false., 'no')
@@ -1685,7 +1681,7 @@ contains
     subroutine new_estimate_diam
         ! PROGRAM SPECIFICATION
         call estimate_diam%new(&
-        &'estimate_diam',&                                                                                    ! name
+        &'estimate_diam',&                                                                                            ! name
         &'Estimation of a suitable mask radius for nanoparticle time-series',&                                        ! descr_short
         &'is a program for estimation of a suitable mask radius for spherical masking of nanoparticle time-series ',& ! descr_long
         &'single_exec',&                                                                                              ! executable
@@ -3186,31 +3182,26 @@ contains
     subroutine new_reconstruct3D
         ! PROGRAM SPECIFICATION
         call reconstruct3D%new(&
-        &'reconstruct3D',&                                                     ! name
-        &'3D reconstruction from oriented particles',&                         ! descr_long
+        &'reconstruct3D',&                                               ! name
+        &'3D reconstruction from oriented particles',&                   ! descr_short
         &'is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks,&
         & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
         & with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_exec',&                                                 ! executable
-        &0, 1, 0, 4, 4, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &0, 0, 0, 2, 2, 2, 2, .true.)                                    ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call reconstruct3D%set_input('parm_ios', 1, 'dir_refine', 'file', 'Directory with opeaks_part*.bin',&
-        &'Directory to grab opeaks_part*.bin from', 'e.g. 1_refine3D', .false., '')
+        ! <empty>
         ! alternative inputs
         ! <empty>
         ! search controls
         call reconstruct3D%set_input('srch_ctrls', 1, pgrp)
         call reconstruct3D%set_input('srch_ctrls', 2, frac)
-        call reconstruct3D%set_input('srch_ctrls', 3, objfun)
-        call reconstruct3D%set_input('srch_ctrls', 4, sigma2_fudge)
         ! filter controls
-        call reconstruct3D%set_input('filt_ctrls', 1, projw)
-        call reconstruct3D%set_input('filt_ctrls', 2, wcrit)
-        call reconstruct3D%set_input('filt_ctrls', 3, ptclw)
-        call reconstruct3D%set_input('filt_ctrls', 4, envfsc)
+        call reconstruct3D%set_input('filt_ctrls', 1, ptclw)
+        call reconstruct3D%set_input('filt_ctrls', 2, envfsc)
         ! mask controls
         call reconstruct3D%set_input('mask_ctrls', 1, msk)
         call reconstruct3D%set_input('mask_ctrls', 2, mskfile)
@@ -3226,7 +3217,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_exec',&                                                                      ! executable
-        &1, 0, 0, 15, 9, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
+        &1, 0, 0, 14, 8, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -3253,8 +3244,7 @@ contains
         &clustersym){no}', '(snhc|single|neigh_single|multi|greedy_single|greedy_multi|cluster|clustersym){single}', .false., 'single')
         call refine3D%set_input('srch_ctrls', 12, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
         call refine3D%set_input('srch_ctrls', 13, nrestarts)
-        call refine3D%set_input('srch_ctrls', 14, sigma2_fudge)
-        call refine3D%set_input('srch_ctrls', 15, 'lp_iters', 'num', '# iterations lp refinement', '# iterations lp refinement', '# of iterations for low-pass limited refinement', .false., 20.)
+        call refine3D%set_input('srch_ctrls', 14, 'lp_iters', 'num', '# iterations lp refinement', '# iterations lp refinement', '# of iterations for low-pass limited refinement', .false., 20.)
         ! filter controls
         call refine3D%set_input('filt_ctrls', 1, hp)
         call refine3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -3265,9 +3255,8 @@ contains
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
         call refine3D%set_input('filt_ctrls', 5, lplim_crit)
         call refine3D%set_input('filt_ctrls', 6, lp_backgr)
-        call refine3D%set_input('filt_ctrls', 7, wcrit)
-        call refine3D%set_input('filt_ctrls', 8, ptclw)
-        call refine3D%set_input('filt_ctrls', 9, envfsc)
+        call refine3D%set_input('filt_ctrls', 7, ptclw)
+        call refine3D%set_input('filt_ctrls', 8, envfsc)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, msk)
         call refine3D%set_input('mask_ctrls', 2, inner)
@@ -3286,7 +3275,7 @@ contains
         &'3D refinement of metallic nanoparticles',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                                                ! executable
-        &1, 0, 0, 8, 6, 4, 2, .true.)                                                                                        ! # entries in each group, requires sp_project
+        &1, 0, 0, 8, 5, 4, 2, .true.)                                                                                        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -3312,8 +3301,7 @@ contains
         &Angstroms{5}', .false., 5.)
         call refine3D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms{1.0}', .false., 1.)
         call refine3D_nano%set_input('filt_ctrls', 4, lp_backgr)
-        call refine3D_nano%set_input('filt_ctrls', 5, wcrit)
-        call refine3D_nano%set_input('filt_ctrls', 6, ptclw)
+        call refine3D_nano%set_input('filt_ctrls', 5, ptclw)
         ! mask controls
         call refine3D_nano%set_input('mask_ctrls', 1, msk)
         call refine3D_nano%set_input('mask_ctrls', 2, inner)

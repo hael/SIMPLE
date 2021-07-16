@@ -335,8 +335,8 @@ contains
         ! generate even partitioning
         parts = split_nobjs_even(params%nptcls, params%nparts)
         ! read o_peaks & gather angular distances (in degrees)
-        call o_peak1%new(NPEAKS, is_ptcl=.false.)
-        call o_peak2%new(NPEAKS, is_ptcl=.false.)
+        call o_peak1%new(1, is_ptcl=.false.)
+        call o_peak2%new(1, is_ptcl=.false.)
         write(*,'(A)') '#PARTICLE INDEX #PARTICLE_INDEX #MIN_ANG_DIST'
         do ipart = 1, params%nparts
             do iptcl = parts(ipart,1), parts(ipart,2)

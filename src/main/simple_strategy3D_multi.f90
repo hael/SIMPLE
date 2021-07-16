@@ -69,16 +69,14 @@ contains
     contains
 
         subroutine per_ref_srch
-            real    :: best_inpl_corr
-            integer :: loc(NINPLPEAKS)
+            integer :: loc(1)
             if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
-                ! identify the NINPLPEAKS top scoring in-planes
+                ! identify the top scoring in-plane angle
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                loc            = maxnloc(inpl_corrs, NINPLPEAKS)
-                best_inpl_corr = inpl_corrs(loc(1))
-                call self%s%store_solution(iref, loc, inpl_corrs(loc), .true.)
+                loc            = maxloc(inpl_corrs)
+                call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)), .true.)
                 ! update nbetter to keep track of how many improving solutions we have identified
-                if( best_inpl_corr > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
+                if( inpl_corrs(loc(1)) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
                 ! keep track of how many references we are evaluating
                 self%s%nrefs_eval = self%s%nrefs_eval + 1
             end if

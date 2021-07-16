@@ -342,7 +342,7 @@ contains
         type(image)               :: img_intg
         integer :: i, nframes, frame_counter, ldim(3), ifoo
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',    10.)
-        if( .not. cline%defined('mcpatch')     ) call cline%set('mcpatch',    'yes')
+        if( .not. cline%defined('mcpatch')    ) call cline%set('mcpatch',    'yes')
         if( .not. cline%defined('nxpatch')    ) call cline%set('nxpatch',        3.)
         if( .not. cline%defined('nypatch')    ) call cline%set('nypatch',        3.)
         if( .not. cline%defined('trs')        ) call cline%set('trs',           10.)
@@ -635,7 +635,7 @@ contains
         case DEFAULT
             THROW_HARD('Unsupported refinement mode!')
         end select
-        if( .not. cline%defined('center')               ) call cline%set('center',       'yes')
+        if( .not. cline%defined('center')         ) call cline%set('center',       'yes')
         if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt','yes')
         if( .not. cline%defined('lpstart')        ) call cline%set('lpstart',        1.0)
         if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',         1.0)
@@ -793,8 +793,6 @@ contains
         if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
         if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('nspace')        ) call cline%set('nspace',       10000.)
-        if( .not. cline%defined('shcfrac')       ) call cline%set('shcfrac',         10.)
-        if( .not. cline%defined('wcrit')         ) call cline%set('wcrit',         'inv')
         if( .not. cline%defined('trs')           ) call cline%set('trs',             5.0)
         if( .not. cline%defined('lp')            ) call cline%set('lp',              1.0)
         if( .not. cline%defined('cenlp')         ) call cline%set('cenlp',            5.)
