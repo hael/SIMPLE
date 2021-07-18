@@ -644,22 +644,14 @@ contains
                 call find_ldim_nptcls(params%stk, lfoo, params%nptcls)
                 call os%new(params%nptcls, is_ptcl=is_ptcl )
             endif
-            if( inputted_oritab .or. inputted_deftab )then
-                ! states are not to be modified
-            else
-                ! state = 1 by default
-                call os%set_all2single('state', 1.0)
-            endif
+            ! state = 1 by default
+            call os%set_all2single('state', 1.0)
             call spproj%add_single_stk(params%stk, ctfvars, os)
         endif
         ! add list of stacks (stktab) if present
         if( cline%defined('stktab') )then
-            if( inputted_oritab .or. inputted_deftab )then
-                ! states are not to be modified
-            else
-                ! state = 1 by default
-                call os%set_all2single('state', 1.0)
-            endif
+            ! state = 1 by default
+            call os%set_all2single('state', 1.0)
             if( l_stktab_per_stk_parms )then
                 ! per stack parameters
                 call spproj%add_stktab(stkfnames, os)

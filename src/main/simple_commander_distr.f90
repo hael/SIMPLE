@@ -6,17 +6,12 @@ use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters
 implicit none
 
-public :: merge_nnmat_commander
 public :: merge_similarities_commander
 public :: split_pairs_commander
 public :: split_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: merge_nnmat_commander
-  contains
-    procedure :: execute      => exec_merge_nnmat
-end type merge_nnmat_commander
 type, extends(commander_base) :: merge_similarities_commander
   contains
     procedure :: execute      => exec_merge_similarities
@@ -32,28 +27,6 @@ end type split_commander
 
 contains
 
-    !> for merging partial nearest neighbour matrices calculated in distributed mode
-    subroutine exec_merge_nnmat( self, cline )
-        use simple_map_reduce, only: merge_nnmat_from_parts
-        class(merge_nnmat_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        type(parameters) :: params
-        integer, allocatable :: nnmat(:,:)
-        integer :: filnum, io_stat
-        call params%new(cline)
-        nnmat  = merge_nnmat_from_parts(params%nptcls, params%nparts, params%nnn) !! intel realloc warning
-        call fopen(filnum, status='REPLACE', action='WRITE', file='nnmat.bin', access='STREAM', iostat=io_stat)
-        call fileiochk('simple_merge_nnmat ; fopen error when opening nnmat.bin  ', io_stat)
-        write(unit=filnum,pos=1,iostat=io_stat) nnmat
-        if( io_stat .ne. 0 )then
-            write(logfhandle,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to nnmat.bin'
-            THROW_HARD('I/O; exec_merge_nnmat')
-        endif
-        call fclose(filnum,errmsg='simple_merge_nnmat ;error when closing nnmat.bin  ')
-        ! end gracefully
-        call simple_end('**** SIMPLE_MERGE_NNMAT NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_merge_nnmat
-
     subroutine exec_merge_similarities( self, cline )
         use simple_map_reduce, only: merge_similarities_from_parts
         class(merge_similarities_commander), intent(inout) :: self
@@ -64,13 +37,13 @@ contains
         call params%new(cline)
         simmat = merge_similarities_from_parts(params%nptcls, params%nparts) !! intel realloc warning
         call fopen(filnum, status='REPLACE', action='WRITE', file='smat.bin', access='STREAM', iostat=io_stat)
-        call fileiochk('simple_merge_nnmat ; fopen error when opening smat.bin  ', io_stat)
+        call fileiochk('exec_merge_similarities ; fopen error when opening smat.bin  ', io_stat)
         write(unit=filnum,pos=1,iostat=io_stat) simmat
         if( io_stat .ne. 0 )then
             write(logfhandle,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to smat.bin'
             THROW_HARD('I/O; exec_merge_similarities')
         endif
-        call fclose(filnum,errmsg='simple_merge_nnmat ; error when closing smat.bin ')
+        call fclose(filnum,errmsg='exec_merge_similarities ; error when closing smat.bin ')
         ! end gracefully
         call simple_end('**** SIMPLE_MERGE_SIMILARITIES NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_merge_similarities

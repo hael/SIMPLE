@@ -1,10 +1,10 @@
 module simple_classaverager
 include 'simple_lib.f08'
 !$ use omp_lib
-use simple_builder,      only: build_glob
-use simple_parameters,   only: params_glob
-use simple_ctf,          only: ctf
-use simple_image,        only: image
+use simple_builder,    only: build_glob
+use simple_parameters, only: params_glob
+use simple_ctf,        only: ctf
+use simple_image,      only: image
 implicit none
 
 public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc, cavger_assemble_sums,&
@@ -49,12 +49,11 @@ type(image),       allocatable :: ctfsqsums_merged(:)           !< -"-
 integer,           allocatable :: prev_eo_pops(:,:)
 logical,           allocatable :: pptcl_mask(:)
 logical                        :: phaseplate    = .false.       !< Volta phaseplate images or not
-logical                        :: l_is_class    = .true.        !< for prime2D or not
 logical                        :: l_hard_assign = .true.        !< npeaks == 1 or not
 logical                        :: l_bilinear    = .true.        !< whether to use bilinear or convolution interpolation
 logical                        :: exists        = .false.       !< to flag instance existence
 
-logical, parameter      :: L_BENCH      = .false.
+logical, parameter      :: L_BENCH = .true.
 integer(timer_int_kind) :: t_class_loop,t_batch_loop, t_gridding, t_init, t_tot
 real(timer_int_kind)    :: rt_class_loop,rt_batch_loop, rt_gridding, rt_init, rt_tot
 character(len=STDLEN)   :: benchfname
@@ -62,12 +61,8 @@ character(len=STDLEN)   :: benchfname
 contains
 
     !>  \brief  is a constructor
-    !!          data is now managed so that all exclusions are taken care of here
-    !!          which means properly balanced batches can be produced for both soft
-    !!          and hard clustering solutions
-    subroutine cavger_new( which, ptcl_mask )
-        character(len=*),      intent(in)    :: which !< class/proj
-        logical, optional,     intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
+    subroutine cavger_new( ptcl_mask )
+        logical, optional, intent(in) :: ptcl_mask(params_glob%fromp:params_glob%top)
         integer :: alloc_stat, icls
         ! destruct possibly pre-existing instance
         call cavger_kill
@@ -76,19 +71,7 @@ contains
         else
             allocate(pptcl_mask(params_glob%fromp:params_glob%top), source=.true.)
         endif
-        ! class or proj
-        select case(which)
-            case('class')
-                l_is_class = .true.
-                ncls       = params_glob%ncls
-            case('proj')
-                l_is_class = .false.
-                ! possible reduction of # projection directions used
-                ! for the class average representation
-                ncls = min(NSPACE_REDUCED,params_glob%nspace)
-            case DEFAULT
-                THROW_HARD('unsupported which flag')
-        end select
+        ncls       = params_glob%ncls
         ! work out range and partsz
         if( params_glob%l_distr_exec )then
             istart = params_glob%fromp
@@ -742,7 +725,7 @@ contains
     !>  \brief  writes class averages to disk
     subroutine cavger_write( fname, which )
         character(len=*),  intent(in) :: fname, which
-        integer               :: icls
+        integer :: icls
         select case(which)
             case('even')
                 do icls=1,ncls
@@ -987,7 +970,6 @@ contains
             iend          = 0
             partsz        = 0
             ncls          = 0
-            l_is_class    = .true.
             l_hard_assign = .true.
             exists        = .false.
         endif

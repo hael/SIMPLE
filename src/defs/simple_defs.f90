@@ -151,7 +151,6 @@ real, parameter    :: ENVMSK_FSC_THRESH    = 0.8       !< FSC value after which 
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
 integer, parameter :: LPLIM3ITERBOUND      = 7         !< # iteration bound lplim stage 2 (PRIME2D)
 integer, parameter :: MINCLSPOPLIM         = 5         !< limit for adaptive cluster splitting/spreading (PRIME2D)
-integer, parameter :: NSPACE_REDUCED       = 600       !< # projection directions for the balancing constraint (PRIME3D)
 integer, parameter :: GRIDCORR_MAXITS      = 2         !< # iterations for reconstruction gridding correction
 integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
@@ -225,9 +224,6 @@ integer, parameter :: EXIT_FAILURE4 = 4
 integer, parameter :: EXIT_FAILURE5 = 5
 integer, parameter :: EXIT_FAILURE6 = 6
 integer, parameter :: EXIT_FAILURE7 = 7
-
-logical :: mir_projns = .false.    ! flag indicating if mirrored projection should be computed simultaneously
-                                   ! (remove this flag once integration is done)
 
 ! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
 #include "SimpleGitVersion.h"

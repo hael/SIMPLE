@@ -1,4 +1,4 @@
-! projection-matching based on Hadamard products, high-level search routines for REFINE3D
+! projection-matching by stochastic hill-climbing, high-level search routines for REFINE3D
 module simple_strategy3D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -20,14 +20,11 @@ use simple_polarft_corrcalc,         only: polarft_corrcalc
 use simple_strategy2D3D_common,      only: killrecvols, set_bp_range, preprecvols,&
     prepimgbatch, grid_ptcl, read_imgbatch, norm_struct_facts
 use simple_strategy3D_cluster,       only: strategy3D_cluster
-use simple_strategy3D_single,        only: strategy3D_single
-use simple_strategy3D_multi,         only: strategy3D_multi
-use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
-use simple_strategy3D_greedy_single, only: strategy3D_greedy_single
-use simple_strategy3D_greedy_multi,  only: strategy3D_greedy_multi
-use simple_strategy3D_neigh_single,  only: strategy3D_neigh_single
-use simple_strategy3D_neigh_multi,   only: strategy3D_neigh_multi
-use simple_strategy3D_cont_single,   only: strategy3D_cont_single
+use simple_strategy3D_shc,           only: strategy3D_shc
+use simple_strategy3D_snhc,   only: strategy3D_snhc
+use simple_strategy3D_greedy,        only: strategy3D_greedy
+use simple_strategy3D_neigh,         only: strategy3D_neigh
+use simple_strategy3D_cont,   only: strategy3D_cont
 use simple_strategy3D,               only: strategy3D
 use simple_strategy3D_srch,          only: strategy3D_spec, set_ptcl_stats, eval_ptcl
 use simple_convergence,              only: convergence
@@ -38,7 +35,7 @@ public :: refine3D_exec, preppftcc4align, pftcc, setup_weights, calc_3Drec
 private
 #include "simple_local_flags.inc"
 
-logical, parameter             :: L_BENCH = .false., DEBUG_HERE = .false.
+logical, parameter             :: DEBUG_HERE = .false.
 logical                        :: has_been_searched
 type(polarft_corrcalc), target :: pftcc
 type(polarizer),   allocatable :: match_imgs(:)
@@ -46,11 +43,12 @@ integer,           allocatable :: prev_states(:), pinds(:)
 logical,           allocatable :: ptcl_mask(:)
 type(sym)                      :: c1_symop
 integer                        :: nptcls2update
-integer(timer_int_kind)        :: t_init, t_prep_pftcc, t_align, t_rec, t_tot, t_prep_primesrch3D
-real(timer_int_kind)           :: rt_init, rt_prep_pftcc, rt_align, rt_rec, rt_prep_primesrch3D
-real(timer_int_kind)           :: rt_tot
-character(len=STDLEN)          :: benchfname
 type(euclid_sigma2)            :: eucl_sigma
+! benchmarking
+logical, parameter             :: L_BENCH = .true.
+integer(timer_int_kind)        :: t_init,   t_prep_pftcc,  t_prep_orisrch,  t_align,  t_rec,  t_tot,  t_projio
+real(timer_int_kind)           :: rt_init, rt_prep_pftcc, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
+character(len=STDLEN)          :: benchfname
 
 contains
 
@@ -77,7 +75,6 @@ contains
         integer :: iptcl, fnr, ithr, updatecnt, state, n_nozero, iptcl_batch, iptcl_map
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
         logical :: doprint, do_extr, l_ctf
-
         if( L_BENCH )then
             t_init = tic()
             t_tot  = t_init
@@ -147,8 +144,6 @@ contains
                         call build_glob%pgrpsyms%nearest_sym_neighbors(build_glob%eulspace, symmat)
                 end select
         end select
-        if( L_BENCH ) rt_init = toc(t_init)
-
         ! PREP BATCH ALIGNEMENT
         batchsz_max = min(nptcls2update,params_glob%nthr*BATCHTHRSZ)
         nbatches    = ceiling(real(nptcls2update)/real(batchsz_max))
@@ -156,13 +151,14 @@ contains
         batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
 
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
-        if( L_BENCH ) t_prep_pftcc = tic()
+        if( L_BENCH )then
+            rt_init = toc(t_init)
+            t_prep_pftcc = tic()
+        endif
         call preppftcc4align(cline, batchsz_max)
         if( L_BENCH ) rt_prep_pftcc = toc(t_prep_pftcc)
 
-        ! STOCHASTIC IMAGE ALIGNMENT
-        if( L_BENCH ) t_prep_primesrch3D = tic()
-        write(logfhandle,'(A,1X,I3)') '>>> REFINE3D SEARCH, ITERATION:', which_iter
+        if( L_BENCH ) t_prep_orisrch = tic()
         ! clean big objects before starting to allocate new big memory chunks
         ! cannot kill build_glob%vol since used in continuous search
         call build_glob%vol2%kill
@@ -170,9 +166,7 @@ contains
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D'
         call prep_strategy3D(ptcl_mask) ! allocate s3D singleton
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D, DONE'
-        if( L_BENCH ) rt_prep_primesrch3D = toc(t_prep_primesrch3D)
-
-        ! GENERATE PARTICLES IMAGE OBJECTS
+        ! generate particles image objects
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         allocate(match_imgs(batchsz_max),strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max),stat=alloc_stat)
         if(alloc_stat.ne.0) call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch",alloc_stat)
@@ -184,8 +178,7 @@ contains
         end do
         !$omp end parallel do
 
-        ! SEARCH
-        rt_align = 0.
+        ! STOCHASTIC IMAGE ALIGNMENT
         if( trim(params_glob%oritype) .eq. 'ptcl3D' )then
             l_ctf = build_glob%spproj%get_ctfflag('ptcl3D').ne.'no'
         else
@@ -193,6 +186,10 @@ contains
             l_ctf = .false.
         endif
         write(logfhandle,'(A,1X,I3)') '>>> REFINE3D SEARCH, ITERATION:', which_iter
+        if( L_BENCH )then
+            rt_prep_orisrch = toc(t_prep_orisrch)
+            rt_align        = 0.
+        endif
         ! Batch loop
         do ibatch=1,nbatches
             batch_start = batches(ibatch,1)
@@ -214,39 +211,32 @@ contains
                 ! switch for per-particle polymorphic strategy3D construction
                 select case(trim(params_glob%refine))
                     case('snhc')
-                        allocate(strategy3D_snhc_single       :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('single')
-                        if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. ran3() < GREEDY_FREQ )then
-                            allocate(strategy3D_greedy_single :: strategy3Dsrch(iptcl_batch)%ptr)
-                        else
-                            allocate(strategy3D_single        :: strategy3Dsrch(iptcl_batch)%ptr)
-                        endif
-                    case('greedy_single')
-                        allocate(strategy3D_greedy_single     :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('cont_single')
-                        allocate(strategy3D_cont_single       :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('multi')
+                        allocate(strategy3D_snhc    :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('shc')
                         updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
                         if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt == 1 )then
-                            allocate(strategy3D_greedy_multi  :: strategy3Dsrch(iptcl_batch)%ptr)
+                            allocate(strategy3D_greedy     :: strategy3Dsrch(iptcl_batch)%ptr)
                         else
-                            allocate(strategy3D_multi         :: strategy3Dsrch(iptcl_batch)%ptr)
+                            if( ran3() < GREEDY_FREQ )then
+                                allocate(strategy3D_greedy :: strategy3Dsrch(iptcl_batch)%ptr)
+                            else
+                                allocate(strategy3D_shc    :: strategy3Dsrch(iptcl_batch)%ptr)
+                            endif
                         endif
-                    case('greedy_multi')
-                        allocate(strategy3D_greedy_multi      :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('greedy')
+                        allocate(strategy3D_greedy         :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('neigh')
+                        allocate(strategy3D_neigh          :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('cont')
+                        allocate(strategy3D_cont    :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('cluster','clustersym')
-                        allocate(strategy3D_cluster           :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('neigh_single')
-                        allocate(strategy3D_neigh_single      :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('neigh_multi')
-                        allocate(strategy3D_neigh_multi       :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_cluster        :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('eval')
                         call eval_ptcl(pftcc, iptcl)
                         cycle
                     case DEFAULT
                         THROW_HARD('refinement mode: '//trim(params_glob%refine)//' unsupported')
                 end select
-                ! ACTUAL SEARCH
                 strategy3Dspecs(iptcl_batch)%iptcl =  iptcl
                 strategy3Dspecs(iptcl_batch)%szsn  =  params_glob%szsn
                 strategy3Dspecs(iptcl_batch)%extr_score_thresh = extr_score_thresh
@@ -301,11 +291,11 @@ contains
             call match_imgs(ibatch)%kill
         end do
         deallocate(match_imgs)
-        if( L_BENCH ) rt_align = toc(t_align)
         if( allocated(symmat)   ) deallocate(symmat)
         if( allocated(het_mask) ) deallocate(het_mask)
 
         ! OUTPUT ORIENTATIONS
+        if( L_BENCH ) t_projio = tic()
         select case(trim(params_glob%oritype))
             case('ptcl3D')
                 call binwrite_oritab(params_glob%outfile, build_glob%spproj, &
@@ -317,10 +307,13 @@ contains
                 THROW_HARD('unsupported oritype: '//trim(params_glob%oritype)//'; refine3D_exec')
         end select
         params_glob%oritab = params_glob%outfile
+        if( L_BENCH ) rt_projio = toc(t_projio)
 
         ! VOLUMETRIC 3D RECONSTRUCTION
+        if( L_BENCH ) t_rec = tic()
         call calc_3Drec( cline, which_iter )
         call eucl_sigma%kill
+        if( L_BENCH ) rt_rec = toc(t_rec)
 
         ! REPORT CONVERGENCE
         call qsys_job_finished(  'simple_strategy3D_matcher :: refine3D_exec')
@@ -330,24 +323,26 @@ contains
             doprint = .true.
             if( params_glob%part /= 1 ) doprint = .false.
             if( doprint )then
-                benchfname = 'HADAMARD3D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
+                benchfname = 'REFINE3D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
                 call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
-                write(fnr,'(a,1x,f9.2)') 'initialisation          : ', rt_init
-                write(fnr,'(a,1x,f9.2)') 'pftcc preparation       : ', rt_prep_pftcc
-                write(fnr,'(a,1x,f9.2)') 'primesrch3D preparation : ', rt_prep_primesrch3D
-                write(fnr,'(a,1x,f9.2)') 'stochastic alignment    : ', rt_align
-                write(fnr,'(a,1x,f9.2)') 'reconstruction          : ', rt_rec
-                write(fnr,'(a,1x,f9.2)') 'total time              : ', rt_tot
+                write(fnr,'(a,1x,f9.2)') 'initialisation        : ', rt_init
+                write(fnr,'(a,1x,f9.2)') 'pftcc preparation     : ', rt_prep_pftcc
+                write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation : ', rt_prep_orisrch
+                write(fnr,'(a,1x,f9.2)') 'stochastic alignment  : ', rt_align
+                write(fnr,'(a,1x,f9.2)') 'project file I/O      : ', rt_projio
+                write(fnr,'(a,1x,f9.2)') 'reconstruction        : ', rt_rec
+                write(fnr,'(a,1x,f9.2)') 'total time            : ', rt_tot
                 write(fnr,'(a)') ''
                 write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-                write(fnr,'(a,1x,f9.2)') 'initialisation          : ', (rt_init/rt_tot)             * 100.
-                write(fnr,'(a,1x,f9.2)') 'pftcc preparation       : ', (rt_prep_pftcc/rt_tot)       * 100.
-                write(fnr,'(a,1x,f9.2)') 'primesrch3D preparation : ', (rt_prep_primesrch3D/rt_tot) * 100.
-                write(fnr,'(a,1x,f9.2)') 'stochastic alignment    : ', (rt_align/rt_tot)            * 100.
-                write(fnr,'(a,1x,f9.2)') 'reconstruction          : ', (rt_rec/rt_tot)              * 100.
-                write(fnr,'(a,1x,f9.2)') '% accounted for         : ',&
-                    &((rt_init+rt_prep_pftcc+rt_prep_primesrch3D+rt_align+rt_rec)/rt_tot) * 100.
+                write(fnr,'(a,1x,f9.2)') 'initialisation        : ', (rt_init/rt_tot)         * 100.
+                write(fnr,'(a,1x,f9.2)') 'pftcc preparation     : ', (rt_prep_pftcc/rt_tot)   * 100.
+                write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation : ', (rt_prep_orisrch/rt_tot) * 100.
+                write(fnr,'(a,1x,f9.2)') 'stochastic alignment  : ', (rt_align/rt_tot)        * 100.
+                write(fnr,'(a,1x,f9.2)') 'project file I/O      : ', (rt_projio/rt_tot)       * 100.
+                write(fnr,'(a,1x,f9.2)') 'reconstruction        : ', (rt_rec/rt_tot)          * 100.
+                write(fnr,'(a,1x,f9.2)') '% accounted for       : ',&
+                    &((rt_init+rt_prep_pftcc+rt_prep_orisrch+rt_align+rt_projio+rt_rec)/rt_tot) * 100.
                 call fclose(fnr)
             endif
         endif

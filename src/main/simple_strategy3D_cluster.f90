@@ -73,30 +73,30 @@ contains
     subroutine statesrch_cluster3D(s, spec)
         type(strategy3D_srch), intent(inout) :: s
         type(strategy3D_spec), intent(in)    :: spec
-        integer :: neigh_projs(s%nstates), ind,iproj,iref,state,ineigh,inpl,i
+        integer :: ind,iproj,iref,state,inpl,i ! neigh_projs(s%nstates), ineigh
         real    :: corrs(s%nstates),corrs_inpl(s%nrots), corr,mi_state,mi_proj
         corrs       = -1.
-        neigh_projs = 0
+        ! neigh_projs = 0
         ! evaluate all correlations
         do state=1,s%nstates
             if( .not. s3D%state_exists(state) ) cycle
-            if( s%neigh )then
-                ! greedy neighbourhood search
-                do ineigh=1,s%nnn
-                    iproj = build_glob%nnmat(s%prev_proj,ineigh)
-                    iref  = (state-1)*s%nprojs + iproj
-                    call pftcc_glob%gencorrs(iref, s%iptcl, corrs_inpl)
-                    inpl = maxloc(corrs_inpl,dim=1)
-                    if( corrs_inpl(inpl) > corrs(state) )then
-                        corrs(state)       = corrs_inpl(inpl)
-                        neigh_projs(state) = iproj
-                    endif
-                enddo
-            else
+            ! if( s%neigh )then
+            !     ! greedy neighbourhood search
+            !     do ineigh=1,s%nnn
+            !         iproj = build_glob%nnmat(s%prev_proj,ineigh)
+            !         iref  = (state-1)*s%nprojs + iproj
+            !         call pftcc_glob%gencorrs(iref, s%iptcl, corrs_inpl)
+            !         inpl = maxloc(corrs_inpl,dim=1)
+            !         if( corrs_inpl(inpl) > corrs(state) )then
+            !             corrs(state)       = corrs_inpl(inpl)
+            !             neigh_projs(state) = iproj
+            !         endif
+            !     enddo
+            ! else
                 iref = (state-1)*s%nprojs + s%prev_proj
                 call pftcc_glob%gencorrs(iref, s%iptcl, corrs_inpl)
                 corrs(state) = maxval(corrs_inpl)
-            endif
+            ! endif
         enddo
         ! make moves
         if(s%prev_corr < spec%extr_score_thresh)then
@@ -120,14 +120,14 @@ contains
             state        = shcloc(s%nstates, corrs, s%prev_corr)
             corr         = corrs(state)
             s%nrefs_eval = count(corrs <= s%prev_corr)
-            if( s%neigh )then
-                iproj = neigh_projs(state)
-                iref  = (state-1)*s%nprojs + iproj
-                call build_glob%spproj_field%e1set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1))
-                call build_glob%spproj_field%e2set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,2))
-            else
+            ! if( s%neigh )then
+            !     iproj = neigh_projs(state)
+            !     iref  = (state-1)*s%nprojs + iproj
+            !     call build_glob%spproj_field%e1set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1))
+            !     call build_glob%spproj_field%e2set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,2))
+            ! else
                 iproj = s%prev_proj
-            endif
+            ! endif
             if( state == s%prev_state ) call greedy_inplsrch(s, corr, state, iproj)
         endif
         ! reporting & convergence
@@ -143,7 +143,7 @@ contains
     subroutine symsrch_cluster3D(s, spec)
         type(strategy3D_srch), intent(inout) :: s
         type(strategy3D_spec), intent(in)    :: spec
-        integer :: projs(s%nstates),iproj,iref,isym,ineigh,state,iproj_sym
+        integer :: projs(s%nstates),iproj,iref,isym,state,iproj_sym ! ineigh
         real    :: corrs(s%nstates),sym_corrs(s%nsym),corrs_inpl(s%nrots)
         real    :: corr,mi_state,mi_proj
         corrs = -1.
@@ -151,22 +151,22 @@ contains
         ! evaluate all correlations
         do state = 1, s%nstates
             if( .not. s3D%state_exists(state) ) cycle
-            if( s%neigh )then
-                ! greedy in symmetric unit & neighbourhood
-                do ineigh=1,s%nnn
-                    iproj = build_glob%nnmat(s%prev_proj,ineigh)
-                    do isym=1,s%nsym
-                        iproj_sym = spec%symmat(iproj,isym)
-                        iref      = (state-1)*s%nprojs+iproj_sym
-                        call pftcc_glob%gencorrs(iref,s%iptcl,corrs_inpl)
-                        corr = maxval(corrs_inpl)
-                        if( corr > corrs(state) )then
-                            corrs(state) = corr
-                            projs(state) = iproj_sym
-                        endif
-                    enddo
-                enddo
-            else
+            ! if( s%neigh )then
+            !     ! greedy in symmetric unit & neighbourhood
+            !     do ineigh=1,s%nnn
+            !         iproj = build_glob%nnmat(s%prev_proj,ineigh)
+            !         do isym=1,s%nsym
+            !             iproj_sym = spec%symmat(iproj,isym)
+            !             iref      = (state-1)*s%nprojs+iproj_sym
+            !             call pftcc_glob%gencorrs(iref,s%iptcl,corrs_inpl)
+            !             corr = maxval(corrs_inpl)
+            !             if( corr > corrs(state) )then
+            !                 corrs(state) = corr
+            !                 projs(state) = iproj_sym
+            !             endif
+            !         enddo
+            !     enddo
+            ! else
                 ! greedy in symmetric unit
                 do isym=1,s%nsym
                     iproj = spec%symmat(s%prev_proj, isym)
@@ -177,7 +177,7 @@ contains
                 isym = maxloc(sym_corrs, dim=1)
                 corrs(state) = sym_corrs(isym)
                 projs(state) = spec%symmat(s%prev_proj, isym)
-            endif
+            ! endif
         enddo
         ! makes move
         if( s%prev_corr < spec%extr_score_thresh )then

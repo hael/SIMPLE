@@ -1,13 +1,12 @@
 ! concrete commander: 3D reconstruction routines
 module simple_commander_rec
 include 'simple_lib.f08'
-use simple_builder,             only: builder
-use simple_cmdline,             only: cmdline
-use simple_commander_base,      only: commander_base
-use simple_strategy2D3D_common, only: gen_class_frcs
-use simple_parameters,          only: parameters
-use simple_class_frcs,          only: class_frcs
-use simple_qsys_env,            only: qsys_env
+use simple_builder,        only: builder
+use simple_cmdline,        only: cmdline
+use simple_commander_base, only: commander_base
+use simple_parameters,     only: parameters
+use simple_class_frcs,     only: class_frcs
+use simple_qsys_env,       only: qsys_env
 use simple_qsys_funs
 implicit none
 
@@ -155,7 +154,7 @@ contains
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
         integer                       :: part, s, n, ss, state, find4eoavg, fnr
-        logical, parameter            :: L_BENCH = .false.
+        logical, parameter            :: L_BENCH = .true.
         integer(timer_int_kind)       :: t_init, t_assemble, t_sum_eos, t_sampl_dens_correct_eos
         integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_tot
         real(timer_int_kind)          :: rt_init, rt_assemble, rt_sum_eos, rt_sampl_dens_correct_eos
@@ -260,7 +259,7 @@ contains
         call simple_touch( finished_fname , errmsg='In: commander_rec::volassemble')
         if( L_BENCH )then
             rt_tot     = toc(t_tot)
-            benchfname = 'volassemble_BENCH.txt'
+            benchfname = 'VOLASSEMBLE_BENCH.txt'
             call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f9.2)') 'initialisation           : ', rt_init

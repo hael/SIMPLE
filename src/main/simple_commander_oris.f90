@@ -173,7 +173,7 @@ contains
         real,    allocatable :: clustszs(:)
         integer, allocatable :: clustering(:), pops(:), tmp(:)
         logical, allocatable :: ptcl_mask(:)
-        integer, parameter   :: hlen=50
+        integer, parameter   :: hlen=50, NSPACE_REDUCED = 600
         logical              :: err
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         if( cline%defined('oritab2') )then
@@ -319,55 +319,33 @@ contains
         call simple_end('**** SIMPLE_ORISTATS NORMAL STOP ****')
     end subroutine exec_oristats
 
-    !>>>>> REWRITE
     subroutine exec_tseries_rotrate( self, cline )
         class(tseries_rotrate_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        type(oris)       :: o_peak1, o_peak2
-        integer,                   allocatable :: parts(:,:)
-        character(len=:),          allocatable :: target_name, refine_path
-        character(len=LONGSTRLEN), allocatable :: list(:)
+        type(oris)       :: os
+        type(ori)        :: o_peak1, o_peak2
         integer :: iptcl, n_nozero, ipart, ptcl1, ptcl2
         real    :: mindist
         call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        ! generate even partitioning
-        parts = split_nobjs_even(params%nptcls, params%nparts)
-        ! read o_peaks & gather angular distances (in degrees)
-        call o_peak1%new(1, is_ptcl=.false.)
-        call o_peak2%new(1, is_ptcl=.false.)
+        call os%new(params%nptcls, is_ptcl=.true.)
+        call os%read(params%oritab)
+        call o_peak1%new(is_ptcl=.true.)
+        call o_peak2%new(is_ptcl=.true.)
         write(*,'(A)') '#PARTICLE INDEX #PARTICLE_INDEX #MIN_ANG_DIST'
-        do ipart = 1, params%nparts
-            do iptcl = parts(ipart,1), parts(ipart,2)
-                if( iptcl == params%nptcls )then
-                    cycle
-                else
-                    if( iptcl == parts(ipart,1) )then
-                        ! o_peak1 now has the last o_peak in the previous part and o_peak2 the first o_peak in this part
-                        ! call o_peak1%min_euldist(o_peak2, mindist)
-                        ptcl1 = parts(ipart,1) - 1
-                        ptcl2 = iptcl
-                        if( ptcl1 /= 0 )then
-                            write(*,'(I7,1X,I7,1X,F6.1)') ptcl1, ptcl2, mindist
-                        endif
-                        ! copy back
-                        o_peak1 = o_peak2
-                    else
-                    endif
-                    ptcl1 = iptcl
-                    ptcl2 = iptcl + 1
-                    if( iptcl == parts(ipart,2) )then
-                        ! nothing to do, last particle in partition
-                        cycle
-                    else
-                        ! not on a boundary, read and calc dist
-                        ! call o_peak1%min_euldist(o_peak2, mindist)
-                    endif
-                endif
+        do iptcl = 1, params%nptcls - 1
+            ptcl1   = iptcl
+            ptcl2   = iptcl + 1
+            call os%get_ori(ptcl1, o_peak1)
+            call os%get_ori(ptcl2, o_peak2)
+            if( o_peak1%isstatezero() .or. o_peak2%isstatezero() )then
+                write(*,'(I7,1X,I7,1X,A)') ptcl1, ptcl2, 'NaN'
+            else
                 write(*,'(I7,1X,I7,1X,F6.1)') ptcl1, ptcl2, mindist
-            end do
+            endif
         end do
+        call os%kill
         call o_peak1%kill
         call o_peak2%kill
     end subroutine exec_tseries_rotrate

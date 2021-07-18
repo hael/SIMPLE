@@ -83,8 +83,8 @@ contains
         ! fraction of search space scanned
         neff_states = 1
         if( l_multistates ) neff_states = count(s3D%state_exists)
-        if( s%neigh )then
-            frac = 100.*real(s%nrefs_eval) / real(s%nnn * neff_states)
+        if( s%l_neigh .or. s%l_greedy .or. s%l_cont )then
+            frac = 100.
         else
             frac = 100.*real(s%nrefs_eval) / real(s%nprojs * neff_states)
         endif

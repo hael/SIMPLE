@@ -31,7 +31,6 @@ type strategy2D_srch
     integer                 :: prev_class    =  0   !< previous class index
     integer                 :: best_class    =  0   !< best class index found by search
     integer                 :: best_rot      =  0   !< best in-plane rotation found by search
-    integer                 :: nnn           =  0   !< # nearest neighbors
     integer                 :: iptcl         =  0   !< global particle index
     integer                 :: iptcl_map     =  0   !< index in pre-allocated batch array
     real                    :: prev_shvec(2) =  0.  !< previous origin shift vector
@@ -61,7 +60,6 @@ contains
         self%nrefs      =  params_glob%ncls
         self%nrots      =  pftcc_glob%get_nrots()
         self%nrefs_eval =  0
-        self%nnn        =  params_glob%nnn
         ! construct composites
         self%trs        = params_glob%trs
         lims(:,1)       = -params_glob%trs

@@ -16,8 +16,6 @@ public :: strategy3D_srch, strategy3D_spec, set_ptcl_stats, eval_ptcl
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DOCONTINUOUS = .false.
-
 type strategy3D_spec
     integer, pointer :: symmat(:,:) => null()
     integer :: iptcl=0, szsn=0
@@ -32,15 +30,13 @@ type strategy3D_srch
     integer                  :: iptcl         = 0         !< global particle index
     integer                  :: ithr          = 0         !< thread index
     integer                  :: nrefs         = 0         !< total # references (nstates*nprojs)
-    integer                  :: nnnrefs       = 0         !< total # neighboring references (nstates*nnn)
     integer                  :: nstates       = 0         !< # states
     integer                  :: nprojs        = 0         !< # projections
     integer                  :: nrots         = 0         !< # in-plane rotations in polar representation
     integer                  :: nsym          = 0         !< symmetry order
+    integer                  :: nnn           = 0         !< # nearest neighbors
     integer                  :: nbetter       = 0         !< # better orientations identified
     integer                  :: nrefs_eval    = 0         !< # references evaluated
-    integer                  :: nnn_static    = 0         !< # nearest neighbors (static)
-    integer                  :: nnn           = 0         !< # nearest neighbors (dynamic)
     integer                  :: prev_roind    = 0         !< previous in-plane rotation index
     integer                  :: prev_state    = 0         !< previous state index
     integer                  :: class         = 0         !< 2D class index
@@ -49,9 +45,10 @@ type strategy3D_srch
     real                     :: prev_corr     = 1.        !< previous best correlation
     real                     :: specscore     = 0.        !< spectral score
     real                     :: prev_shvec(2) = 0.        !< previous origin shift vector
-    logical                  :: neigh         = .false.   !< nearest neighbour refinement flag
+    logical                  :: l_neigh       = .false.   !< neighbourhood refinement flag
+    logical                  :: l_greedy      = .false.   !< greedy        refinement flag
+    logical                  :: l_cont        = .false.   !< continuous    refinement flag
     logical                  :: doshift       = .true.    !< 2 indicate whether 2 serch shifts
-    logical                  :: dowinpl       = .true.    !< 2 indicate weights over in-planes as well as projection dirs
     logical                  :: exists        = .false.   !< 2 indicate existence
   contains
     procedure :: new
@@ -136,17 +133,16 @@ contains
         self%nrefs_eval   = 0
         self%nsym         = build_glob%pgrpsyms%get_nsym()
         self%doshift      = params_glob%l_doshift
-        self%neigh        = str_has_substr(params_glob%refine, 'neigh')
-        self%nnn_static   = params_glob%nnn
-        self%nnn          = params_glob%nnn
-        self%nnnrefs      = self%nnn*self%nstates
+        self%l_neigh      = str_has_substr(params_glob%refine, 'neigh')
+        self%l_greedy     = str_has_substr(params_glob%refine, 'greedy')
+        self%l_cont       = str_has_substr(params_glob%refine, 'cont')
         ! create in-plane search object
         lims(:,1)         = -params_glob%trs
         lims(:,2)         =  params_glob%trs
         lims_init(:,1)    = -SHC_INPL_TRSHWDTH
         lims_init(:,2)    =  SHC_INPL_TRSHWDTH
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
-            &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.not.self%dowinpl)
+            &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.true.)
         ! create all df:s search object
         call self%grad_orisrch_obj%new
         self%exists = .true.
@@ -169,17 +165,7 @@ contains
         ! init threaded search arrays
         call prep_strategy3D_thread(self%ithr)
         ! search order
-        if( self%neigh )then
-            if( .not. allocated(build_glob%nnmat) )&
-                &THROW_HARD('need optional nnmat to be present for refine=neigh modes; prep4srch')
-            do istate = 0, self%nstates - 1
-                i = istate * self%nnn + 1
-                s3D%srch_order(self%ithr,i:i+self%nnn-1) = build_glob%nnmat(self%prev_proj,:) + istate*self%nprojs
-            enddo
-            call s3D%rts(self%ithr)%shuffle(s3D%srch_order(self%ithr,:))
-        else
-            call s3D%rts(self%ithr)%ne_ran_iarr(s3D%srch_order(self%ithr,:))
-        endif
+        call s3D%rts(self%ithr)%ne_ran_iarr(s3D%srch_order(self%ithr,:))
         call put_last(self%prev_ref, s3D%srch_order(self%ithr,:))
         ! sanity check
         if( self%prev_state > 0 )then
@@ -201,14 +187,13 @@ contains
         call o_prev%kill
     end subroutine prep4srch
 
-    ! >>>>> REWRITE
     subroutine inpl_srch( self )
         class(strategy3D_srch), intent(inout) :: self
         type(ori) :: o
         real      :: cxy(3)
         integer   :: ref, irot!, cnt, j
         logical   :: found_better
-        if( DOCONTINUOUS )then
+        if( self%l_cont )then
             ! BFGS over all df:s
             call o%new(is_ptcl=.false.)
             ref = s3D%proj_space_refinds_sorted_highest(self%ithr, self%nrefs)
@@ -216,7 +201,7 @@ contains
             call o%set_euler(s3D%proj_space_euls(self%ithr,ref,:))
             call o%set_shift([0.,0.])
             call self%grad_orisrch_obj%set_particle(self%iptcl)
-            ! cxy = self%grad_orisrch_obj%minimize(o, NPEAKSATHRES/2.0, params_glob%trs, found_better)
+            cxy = self%grad_orisrch_obj%minimize(o, params_glob%athres/2., params_glob%trs, found_better)
             if( found_better )then
                 s3D%proj_space_euls(self%ithr, ref,:) = o%get_euler()
                 s3D%proj_space_corrs(self%ithr,ref)   = cxy(1)
@@ -224,29 +209,15 @@ contains
             endif
         else
             if( self%doshift )then
-                if( self%dowinpl )then
-                    ! BFGS over shifts only
-                    ref  = s3D%proj_space_refinds_sorted(self%ithr, self%nrefs)
-                    call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                    irot = s3D%proj_space_inplinds(self%ithr, ref)
-                    cxy  = self%grad_shsrch_obj%minimize(irot=irot)
-                    if( irot > 0 )then
-                        ! irot > 0 guarantees improvement found, update solution
-                        s3D%proj_space_euls( self%ithr,ref,3) = 360. - pftcc_glob%get_rot(irot)
-                        s3D%proj_space_corrs(self%ithr,ref)   = cxy(1)
-                        s3D%proj_space_shift(self%ithr,ref,:) = cxy(2:3)
-                    endif
-                else
-                    ! BFGS over shifts with in-plane rot exhaustive callback
-                    ref = s3D%proj_space_refinds_sorted_highest(self%ithr, self%nrefs)
-                    call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                    cxy = self%grad_shsrch_obj%minimize(irot=irot)
-                    if( irot > 0 )then
-                        ! irot > 0 guarantees improvement found, update solution
-                        s3D%proj_space_euls( self%ithr,ref,3) = 360. - pftcc_glob%get_rot(irot)
-                        s3D%proj_space_corrs(self%ithr,ref)   = cxy(1)
-                        s3D%proj_space_shift(self%ithr,ref,:) = cxy(2:3)
-                    endif
+                ! BFGS over shifts with in-plane rot exhaustive callback
+                ref = s3D%proj_space_refinds_sorted_highest(self%ithr, self%nrefs)
+                call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+                cxy = self%grad_shsrch_obj%minimize(irot=irot)
+                if( irot > 0 )then
+                    ! irot > 0 guarantees improvement found, update solution
+                    s3D%proj_space_euls( self%ithr,ref,3) = 360. - pftcc_glob%get_rot(irot)
+                    s3D%proj_space_corrs(self%ithr,ref)   = cxy(1)
+                    s3D%proj_space_shift(self%ithr,ref,:) = cxy(2:3)
                 endif
             endif
         endif

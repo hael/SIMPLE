@@ -40,13 +40,13 @@ type sym
     procedure          :: apply
     procedure, private :: apply2all
     procedure          :: apply_sym_with_shift
+    procedure          :: nearest_proj_neighbors
     procedure          :: rot_to_asym
     procedure          :: rotall_to_asym
     procedure          :: symrandomize
     procedure          :: build_refspiral
     ! calculators
     procedure          :: sym_dists
-    procedure          :: nearest_proj_neighbors
     procedure          :: nearest_sym_neighbors
     ! utils
     procedure, private :: build_eullims
@@ -478,48 +478,40 @@ contains
     end subroutine apply_sym_with_shift
 
     !>  \brief  is for retrieving nearest neighbors in symmetric cases
-    subroutine nearest_proj_neighbors( self, os_asym_unit, k, nnmat )
-        class(sym),           intent(inout) :: self
-        type(oris),           intent(inout) :: os_asym_unit !< sampled orientations from assymetric unit, eg from spiral with symmetry
-        integer,              intent(inout) :: k
-        integer, allocatable, intent(inout) :: nnmat(:,:) !< nearest-neighbour matrix
-        real,    allocatable :: dists(:)
-        integer, allocatable :: inds(:)
-        type(ori)  :: oasym, osym, oj
-        integer    :: i, j, n_os, isym
+    subroutine nearest_proj_neighbors( self, os_asym_unit, o, euldist_thres, lnns )
+        class(sym), intent(inout) :: self
+        type(oris), intent(inout) :: os_asym_unit !< sampled orientations from assymetric unit, eg from spiral with symmetry
+        class(ori), intent(in)    :: o
+        real,       intent(in)    :: euldist_thres ! in degrees
+        logical,    intent(inout) :: lnns(os_asym_unit%get_noris())
+        real      :: dists(os_asym_unit%get_noris()), euldist_thres_rad
+        integer   :: inds(os_asym_unit%get_noris()), i, isym
+        type(ori) :: oasym, osym
         if( trim(self%pgrp).eq.'c1' )then
-            call os_asym_unit%nearest_proj_neighbors(k, nnmat)
+            call os_asym_unit%nearest_proj_neighbors(o, euldist_thres, lnns)
         else
-            n_os = os_asym_unit%get_noris()
-            allocate( nnmat(n_os,k), dists(n_os), inds(n_os), stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk("In: nearest_proj_neighbors; simple_sym")
-            do i = 1, n_os
-                dists = pi
+            euldist_thres_rad = deg2rad(euldist_thres)
+            lnns  = .false.
+            dists = pi
+            do i=1,os_asym_unit%get_noris()
                 call os_asym_unit%get_ori(i, oasym)
+                inds(i) = i
                 do isym = 1, self%n
                     if(isym == 1)then
-                        osym = oasym
+                        call osym%copy(oasym)
                     else
                         call self%apply(oasym, isym, osym)
                     endif
-                    do j = 1, n_os
-                        if( j == i )then
-                            dists(j) = 0.
-                        else
-                            call os_asym_unit%get_ori(j, oj)
-                            dists(j) = min(dists(j), osym.euldist.oj)
-                        endif
-                    enddo
-                enddo
-                inds = (/(j,j=1,n_os)/)
-                call hpsort(dists, inds)
-                nnmat(i,:) = inds(:k)
-            enddo
-            deallocate(inds, dists)
+                    dists(i) = min(dists(i), osym.euldist.o)
+                end do
+            end do
+            call hpsort(dists, inds)
+            do i=1,os_asym_unit%get_noris()
+                if( dists(i) <= euldist_thres_rad ) lnns(inds(i)) = .true.
+            end do
         endif
         call oasym%kill
         call osym%kill
-        call oj%kill
     end subroutine nearest_proj_neighbors
 
     !>  \brief  is for retrieving nearest symmetry neighbours in an assymetric set of projection directions
