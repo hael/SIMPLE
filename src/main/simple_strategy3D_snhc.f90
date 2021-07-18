@@ -1,5 +1,5 @@
 ! concrete strategy3D: stochastic neighbourhood hill-climbing
-module simple_strategy3D_snhc_single
+module simple_strategy3D_snhc
 include 'simple_lib.f08'
 use simple_strategy3D_alloc
 use simple_strategy3D_utils
@@ -10,32 +10,32 @@ use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
 use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
-public :: strategy3D_snhc_single
+public :: strategy3D_snhc
 private
 #include "simple_local_flags.inc"
 
-type, extends(strategy3D) :: strategy3D_snhc_single
+type, extends(strategy3D) :: strategy3D_snhc
     private
     type(strategy3D_srch) :: s
     type(strategy3D_spec) :: spec
 contains
-    procedure          :: new         => new_snhc_single
-    procedure          :: srch        => srch_snhc_single
-    procedure          :: oris_assign => oris_assign_snhc_single
-    procedure          :: kill        => kill_snhc_single
-end type strategy3D_snhc_single
+    procedure          :: new         => new_snhc
+    procedure          :: srch        => srch_snhc
+    procedure          :: oris_assign => oris_assign_snhc
+    procedure          :: kill        => kill_snhc
+end type strategy3D_snhc
 
 contains
 
-    subroutine new_snhc_single( self, spec )
-        class(strategy3D_snhc_single), intent(inout) :: self
+    subroutine new_snhc( self, spec )
+        class(strategy3D_snhc), intent(inout) :: self
         class(strategy3D_spec),        intent(inout) :: spec
         call self%s%new(spec)
         self%spec = spec
-    end subroutine new_snhc_single
+    end subroutine new_snhc
 
-    subroutine srch_snhc_single( self, ithr )
-        class(strategy3D_snhc_single), intent(inout) :: self
+    subroutine srch_snhc( self, ithr )
+        class(strategy3D_snhc), intent(inout) :: self
         integer,                       intent(in)    :: ithr
         integer :: iref, isample
         real    ::  inpl_corrs(self%s%nrots)
@@ -71,11 +71,11 @@ contains
                 call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)), .true.)
             end subroutine per_ref_srch
 
-    end subroutine srch_snhc_single
+    end subroutine srch_snhc
 
-    subroutine oris_assign_snhc_single( self )
+    subroutine oris_assign_snhc( self )
         use simple_ori, only: ori
-        class(strategy3D_snhc_single), intent(inout) :: self
+        class(strategy3D_snhc), intent(inout) :: self
         type(ori)  :: osym, o1, o2
         real       :: dist_inpl, corr, frac, euldist
         integer    :: ref, roind
@@ -84,7 +84,7 @@ contains
         ! orientation parameters
         ref = s3D%proj_space_refinds_sorted(self%s%ithr, self%s%nrefs)
         if( ref < 1 .or. ref > self%s%nrefs )then
-            THROW_HARD('ref index: '//int2str(ref)//' out of bound; oris_assign_snhc_single')
+            THROW_HARD('ref index: '//int2str(ref)//' out of bound; oris_assign_snhc')
         endif
         roind = pftcc_glob%get_roind(360. - s3D%proj_space_euls(self%s%ithr,ref,3))
         ! transfer to spproj_field
@@ -113,11 +113,11 @@ contains
         call osym%kill
         call o1%kill
         call o2%kill
-    end subroutine oris_assign_snhc_single
+    end subroutine oris_assign_snhc
 
-    subroutine kill_snhc_single( self )
-        class(strategy3D_snhc_single),   intent(inout) :: self
+    subroutine kill_snhc( self )
+        class(strategy3D_snhc),   intent(inout) :: self
         call self%s%kill
-    end subroutine kill_snhc_single
+    end subroutine kill_snhc
 
-end module simple_strategy3D_snhc_single
+end module simple_strategy3D_snhc

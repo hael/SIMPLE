@@ -100,6 +100,11 @@ contains
         type(cmdline)    :: cline_check_3Dconv
         type(cmdline)    :: cline_volassemble
         type(cmdline)    :: cline_postprocess
+        ! benchmarking
+        logical, parameter      :: L_BENCH = .true.
+        integer(timer_int_kind) :: t_init,   t_scheduled,  t_merge_algndocs,  t_volassemble,  t_tot
+        real(timer_int_kind)    :: rt_init, rt_scheduled, rt_merge_algndocs, rt_volassemble, rt_tot
+        character(len=STDLEN)   :: benchfname
         ! other variables
         type(parameters) :: params
         type(builder)    :: build
@@ -113,23 +118,13 @@ contains
         character(len=STDLEN)     :: vol, vol_iter, str, str_iter
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc
         character(len=LONGSTRLEN) :: volassemble_output
-        real    :: corr, corr_prev, smpd, lplim
-        integer :: ldim(3), i, state, iter, iostat, box, nfiles, niters, iter_switch2euclid, ifoo
-        integer :: ncls, icls, ind
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
         logical :: l_projection_matching, l_switch2euclid, l_continue, l_multistates
+        real    :: corr, corr_prev, smpd, lplim
+        integer :: ldim(3), i, state, iter, iostat, box, nfiles, niters, iter_switch2euclid, ifoo
+        integer :: ncls, icls, ind, fnr
         l_multistates = .false.
-        if( .not. cline%defined('refine') )then
-            call cline%set('refine',  'single')
-        else
-            if( str_has_substr(cline%get_carg('refine'), 'multi') )then
-                if( .not. cline%defined('nstates') )then
-                    THROW_HARD('refine=MULTI modes requires specification of NSTATES')
-                else
-                    l_multistates = .true.
-                endif
-            endif
-        endif
+        if( cline%defined('nstates') ) l_multistates = .true.
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
         if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
@@ -343,6 +338,10 @@ contains
         iter   = params%startit - 1
         corr   = -1.
         do
+            if( L_BENCH )then
+                t_init = tic()
+                t_tot  = t_init
+            endif
             niters            = niters + 1
             iter              = iter + 1
             params%which_iter = iter
@@ -380,12 +379,7 @@ contains
             if( cline_check_3Dconv%defined('frac_srch') )then
                 if( iter >= MIN_ITERS_SHC )then
                     if( cline_check_3Dconv%get_rarg('frac_srch') >= FRAC_GREEDY_LIM )then
-                        select case(trim(params%refine))
-                            case('single')
-                                params%refine = 'greedy_single'
-                            case('multi')
-                                params%refine = 'greedy_multi'
-                        end select
+                        params%refine = 'greedy'
                         call job_descr%set( 'refine', params%refine )
                         call cline%set('refine', params%refine)
                         call cline_check_3Dconv%set('refine',params%refine)
@@ -399,10 +393,21 @@ contains
                 call job_descr%set('frcs', trim(FRCS_FILE))
             endif
             ! schedule
+            if( L_BENCH )then
+                rt_init = toc(t_init)
+                t_scheduled = tic()
+            endif
             call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
             ! assemble alignment docs
+            if( L_BENCH )then
+                rt_scheduled = toc(t_scheduled)
+                t_merge_algndocs = tic()
+            endif
             call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
-
+            if( L_BENCH )then
+                rt_merge_algndocs = toc(t_merge_algndocs)
+                t_volassemble = tic()
+            endif
             ! ASSEMBLE VOLUMES
             select case(trim(params%refine))
                 case('eval')
@@ -482,6 +487,8 @@ contains
                         endif
                     enddo
             end select
+            if( L_BENCH ) rt_volassemble = toc(t_volassemble)
+
             ! CONVERGENCE
             converged = .false.
             select case(trim(params%refine))
@@ -553,6 +560,26 @@ contains
                 params%objfun    = 'euclid'
                 params%cc_objfun = OBJFUN_EUCLID
                 l_switch2euclid  = .false.
+            endif
+            if( L_BENCH )then
+                rt_tot  = toc(t_init)
+                benchfname = 'REFINE3D_DISTR_BENCH_ITER'//int2str_pad(iter,3)//'.txt'
+                call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+                write(fnr,'(a)') '*** TIMINGS (s) ***'
+                write(fnr,'(a,1x,f9.2)') 'initialisation  : ', rt_init
+                write(fnr,'(a,1x,f9.2)') 'scheduled jobs  : ', rt_scheduled
+                write(fnr,'(a,1x,f9.2)') 'merge_algndocs  : ', rt_merge_algndocs
+                write(fnr,'(a,1x,f9.2)') 'volassemble     : ', rt_volassemble
+                write(fnr,'(a,1x,f9.2)') 'total time      : ', rt_tot
+                write(fnr,'(a)') ''
+                write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
+                write(fnr,'(a,1x,f9.2)') 'initialisation  : ', (rt_init/rt_tot)           * 100.
+                write(fnr,'(a,1x,f9.2)') 'scheduled jobs  : ', (rt_scheduled/rt_tot)      * 100.
+                write(fnr,'(a,1x,f9.2)') 'merge_algndocs  : ', (rt_merge_algndocs/rt_tot) * 100.
+                write(fnr,'(a,1x,f9.2)') 'volassemble     : ', (rt_volassemble/rt_tot)    * 100.
+                write(fnr,'(a,1x,f9.2)') '% accounted for : ',&
+                    &((rt_init+rt_scheduled+rt_merge_algndocs+rt_volassemble)/rt_tot) * 100.
+                call fclose(fnr)
             endif
         end do
         call qsys_cleanup

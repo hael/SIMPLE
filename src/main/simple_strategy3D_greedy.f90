@@ -1,5 +1,5 @@
-! concrete strategy3D: greedy multi-state refinement
-module simple_strategy3D_greedy_multi
+! concrete strategy3D: greedy refinement
+module simple_strategy3D_greedy
 include 'simple_lib.f08'
 use simple_strategy3D_alloc  ! use all in there
 use simple_strategy3D_utils  ! use all in there
@@ -10,52 +10,47 @@ use simple_builder,          only: build_glob
 use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
-public :: strategy3D_greedy_multi
+public :: strategy3D_greedy
 private
 
 #include "simple_local_flags.inc"
 
-type, extends(strategy3D) :: strategy3D_greedy_multi
+type, extends(strategy3D) :: strategy3D_greedy
     type(strategy3D_srch) :: s
     type(strategy3D_spec) :: spec
 contains
-    procedure :: new         => new_greedy_multi
-    procedure :: srch        => srch_greedy_multi
-    procedure :: kill        => kill_greedy_multi
-    procedure :: oris_assign => oris_assign_greedy_multi
-end type strategy3D_greedy_multi
+    procedure :: new         => new_greedy
+    procedure :: srch        => srch_greedy
+    procedure :: kill        => kill_greedy
+    procedure :: oris_assign => oris_assign_greedy
+end type strategy3D_greedy
 
 contains
 
-    subroutine new_greedy_multi( self, spec )
-        class(strategy3D_greedy_multi), intent(inout) :: self
+    subroutine new_greedy( self, spec )
+        class(strategy3D_greedy), intent(inout) :: self
         class(strategy3D_spec),         intent(inout) :: spec
         call self%s%new(spec)
         self%spec = spec
-    end subroutine new_greedy_multi
+    end subroutine new_greedy
 
-    subroutine srch_greedy_multi( self, ithr )
-        class(strategy3D_greedy_multi), intent(inout) :: self
+    subroutine srch_greedy( self, ithr )
+        class(strategy3D_greedy), intent(inout) :: self
         integer,                        intent(in)    :: ithr
-        integer :: iref, isample,nrefs
+        integer :: iref, isample
         real    :: inpl_corrs(self%s%nrots)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
             ! prep
             call self%s%prep4srch
-            if( self%s%neigh )then
-                nrefs = self%s%nnnrefs
-            else
-                nrefs = self%s%nrefs
-            endif
             ! search
-            do isample=1,nrefs
+            do isample=1,self%s%nrefs
                 iref = s3D%srch_order(self%s%ithr,isample) ! set the reference index
                 call per_ref_srch                          ! actual search
             end do
             ! in greedy mode, we evaluate all refs
-            self%s%nrefs_eval = nrefs
+            self%s%nrefs_eval = self%s%nrefs
             call sort_corrs(self%s)  ! sort in correlation projection direction space
             ! take care of the in-planes
             call self%s%inpl_srch
@@ -79,16 +74,16 @@ contains
                 endif
             end subroutine per_ref_srch
 
-    end subroutine srch_greedy_multi
+    end subroutine srch_greedy
 
-    subroutine oris_assign_greedy_multi( self )
-        class(strategy3D_greedy_multi), intent(inout) :: self
+    subroutine oris_assign_greedy( self )
+        class(strategy3D_greedy), intent(inout) :: self
         call extract_peak_ori(self%s)
-    end subroutine oris_assign_greedy_multi
+    end subroutine oris_assign_greedy
 
-    subroutine kill_greedy_multi( self )
-        class(strategy3D_greedy_multi), intent(inout) :: self
+    subroutine kill_greedy( self )
+        class(strategy3D_greedy), intent(inout) :: self
         call self%s%kill
-    end subroutine kill_greedy_multi
+    end subroutine kill_greedy
 
-end module simple_strategy3D_greedy_multi
+end module simple_strategy3D_greedy

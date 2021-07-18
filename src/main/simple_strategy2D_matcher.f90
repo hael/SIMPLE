@@ -15,14 +15,14 @@ public :: cluster2D_exec
 private
 #include "simple_local_flags.inc"
 
-logical, parameter           :: L_BENCH = .false.
 
 type(polarizer), allocatable :: match_ptcl_imgs(:)
 type(polarft_corrcalc)       :: pftcc
 integer                      :: batchsz_max
-real(timer_int_kind)    :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_tot
-integer(timer_int_kind) :: t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_tot
-character(len=STDLEN)   :: benchfname
+logical, parameter           :: L_BENCH = .true.
+real(timer_int_kind)         :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio, rt_tot
+integer(timer_int_kind)      ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
+character(len=STDLEN)        :: benchfname
 
 contains
 
@@ -36,7 +36,6 @@ contains
         use simple_strategy2D_alloc,      only: prep_strategy2d_batch, clean_strategy2d, prep_strategy2D_glob
         use simple_strategy2D_greedy,     only: strategy2D_greedy
         use simple_strategy2D_tseries,    only: strategy2D_tseries
-        use simple_strategy2D_neigh,      only: strategy2D_neigh
         use simple_strategy2D_snhc,       only: strategy2D_snhc
         use simple_strategy2D_inpl,       only: strategy2D_inpl
         use simple_strategy2D_eval,       only: strategy2D_eval
@@ -159,7 +158,7 @@ contains
         call build_glob%spproj_field%set_all2single('w', 1.0)
 
         ! PREP REFERENCES
-        call cavger_new('class', ptcl_mask)
+        call cavger_new(ptcl_mask)
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
             THROW_HARD('no eo partitioning available; cluster2D_exec')
         endif
@@ -187,7 +186,6 @@ contains
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D(cline, which_iter, frac_srch_space )
-        if( L_BENCH ) rt_init = toc(t_init)
 
         ! PREP BATCH ALIGNEMENT
         batchsz_max = min(nptcls2update,params_glob%nthr*BATCHTHRSZ)
@@ -196,7 +194,10 @@ contains
         batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
 
         ! GENERATE REFERENCES
-        if( L_BENCH ) t_prep_pftcc = tic()
+        if( L_BENCH )then
+            rt_init = toc(t_init)
+            t_prep_pftcc = tic()
+        endif
         call preppftcc4align( which_iter )
 
         ! GENERATE PARTICLES IMAGE OBJECTS
@@ -305,9 +306,11 @@ contains
         deallocate(strategy2Dsrch,pinds,strategy2Dspecs,match_ptcl_imgs,batches,ptcl_mask)
 
         ! OUTPUT ORIENTATIONS
+        if( L_BENCH ) t_projio = tic()
         call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%spproj_field, &
             &[params_glob%fromp,params_glob%top], isegment=PTCL2D_SEG)
         params_glob%oritab = params_glob%outfile
+        if( L_BENCH ) rt_projio = toc(t_projio)
 
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( L_BENCH ) t_cavg = tic()
@@ -330,6 +333,7 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'pftcc preparation    : ', rt_prep_pftcc
                 write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', rt_align
                 write(fnr,'(a,1x,f9.2)') 'class averaging      : ', rt_cavg
+                write(fnr,'(a,1x,f9.2)') 'project file I/O     : ', rt_projio
                 write(fnr,'(a,1x,f9.2)') 'total time           : ', rt_tot
                 write(fnr,'(a)') ''
                 write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
@@ -337,8 +341,9 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'pftcc preparation    : ', (rt_prep_pftcc/rt_tot) * 100.
                 write(fnr,'(a,1x,f9.2)') 'stochastic alignment : ', (rt_align/rt_tot)      * 100.
                 write(fnr,'(a,1x,f9.2)') 'class averaging      : ', (rt_cavg/rt_tot)       * 100.
+                write(fnr,'(a,1x,f9.2)') 'project file I/O     : ', (rt_projio/rt_tot)     * 100.
                 write(fnr,'(a,1x,f9.2)') '% accounted for      : ',&
-                    &((rt_init+rt_prep_pftcc+rt_align+rt_cavg)/rt_tot) * 100.
+                    &((rt_init+rt_prep_pftcc+rt_align+rt_cavg+rt_projio)/rt_tot) * 100.
                 call fclose(fnr)
             endif
         endif

@@ -148,7 +148,7 @@ contains
         else
             call os%set_all2single('eo', -1.)
         endif
-        if( trim(params%refine) .eq. 'sym' )then
+        if( trim(params%refine) .eq. 'clustersym' )then
             ! randomize projection directions with respect to symmetry
             symop = sym(params%pgrp)
             call symop%symrandomize(os)
@@ -172,15 +172,14 @@ contains
         call cline_refine3D1%set('prg',       'refine3D')
         call cline_refine3D1%set('match_filt','no')
         call cline_refine3D1%set('maxits',     real(MAXITS1))
-        call cline_refine3D1%set('neigh',     'yes') ! always consider neighbours
-        if( .not.cline_refine3D1%defined('nnn') )then
-            call cline_refine3D1%set('nnn', 0.05*real(params%nspace))
+        if( .not.cline_refine3D1%defined('athres') )then
+            call cline_refine3D1%set('athres', 20.)
         endif
         call cline_refine3D1%delete('update_frac')  ! no update frac for extremal optimization
         ! second stage
         call cline_refine3D2%set('prg', 'refine3D')
         call cline_refine3D2%set('match_filt','no')
-        call cline_refine3D2%set('refine', 'multi')
+        call cline_refine3D2%set('refine', 'shc')
         if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
         ! reconstructions
         call cline_reconstruct3D_mixed_distr%set('prg',    'reconstruct3D')
@@ -188,7 +187,7 @@ contains
         call cline_reconstruct3D_mixed_distr%delete('lp')
         call cline_reconstruct3D_multi_distr%set('prg', 'reconstruct3D')
         call cline_reconstruct3D_multi_distr%delete('lp')
-        if( trim(params%refine) .eq. 'sym' )then
+        if( trim(params%refine) .eq. 'clustersym' )then
             call cline_reconstruct3D_multi_distr%set('pgrp','c1')
             call cline_reconstruct3D_mixed_distr%set('pgrp','c1')
         endif
@@ -206,8 +205,7 @@ contains
             case('sym')
                 call cline_refine3D1%set('refine','clustersym')
                 call cline_refine3D2%set('pgrp','c1')
-                call cline_refine3D2%delete('neigh') ! no neighbour mode for symmetry
-                call cline_refine3D2%delete('nnn')
+                call cline_refine3D2%delete('athres')
             case DEFAULT
                 call cline_refine3D1%set('refine', 'cluster')
         end select
@@ -371,7 +369,7 @@ contains
             call cline_refine3D(state)%set('projname',trim(projname))
             call cline_refine3D(state)%set('projfile',trim(projfiles(state)))
             call cline_refine3D(state)%set('mkdir',   'yes')
-            call cline_refine3D(state)%set('refine',  'single')
+            call cline_refine3D(state)%set('refine',  'shc')
             call cline_refine3D(state)%delete('state')
             call cline_refine3D(state)%delete('nstates')
             if(params%oritype.eq.'cls3D') call cline_refine3D(state)%set('oritype', 'ptcl3D')

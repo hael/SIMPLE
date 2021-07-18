@@ -28,7 +28,6 @@ type :: parameters
     character(len=3)      :: clustvalid='no'      !< validate clustering(yes|homo|no){no}
     character(len=3)      :: compare='no'         !< do comparison(yes|no){no}
     character(len=3)      :: continue='no'        !< continue previous refinement(yes|no){no}
-    character(len=3)      :: corr_filt='no'       !< phase corr filtering in refinement(yes|no){no}
     character(len=3)      :: countvox='no'        !< count # voxels(yes|no){no}
     character(len=3)      :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)      :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
@@ -112,7 +111,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: dir=''               !< directory
     character(len=LONGSTRLEN) :: dir_movies=''        !< grab mrc mrcs files from here
     character(len=LONGSTRLEN) :: dir_prev=''          !< grab previous projects for streaming
-    character(len=LONGSTRLEN) :: dir_refine=''        !< grab opeaks_part*.bin from here
+    character(len=LONGSTRLEN) :: dir_refine=''        !< refinement directory
     character(len=LONGSTRLEN) :: dir_reject='rejected'!< move rejected files to here{rejected}
     character(len=LONGSTRLEN) :: dir_select='selected'!< move selected files to here{selected}
     character(len=LONGSTRLEN) :: dir_target=''        !< put output here
@@ -207,7 +206,7 @@ type :: parameters
     character(len=STDLEN) :: ptclw='yes'          !< use particle weights(yes|no){yes}
     character(len=STDLEN) :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
     character(len=STDLEN) :: real_filter=''
-    character(len=STDLEN) :: refine='single'      !< refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}
+    character(len=STDLEN) :: refine='shc'         !< refinement mode(snhc|shc|greedy|neigh|cont|cluster|clustersym){shc}
     character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stats='no'           !< provide statistics(yes|no|print){no}
@@ -264,7 +263,6 @@ type :: parameters
     integer :: mrcmode=2
     integer :: navgs=1
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
-    integer :: nbest=10
     integer :: nboot=0
     integer :: ncls=500            !< # clusters
     integer :: ncls_start=10       !< minimum # clusters for 2D streaming
@@ -274,7 +272,6 @@ type :: parameters
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: nframes=0           !< # frames{30}
     integer :: ngrow=0             !< # of white pixel layers to grow in binary image
-    integer :: nnn=200             !< # nearest neighbors{200}
     integer :: nmics=0             !< # micographs
     integer :: nmovies_trial=0     !< # of movies after which preprocess_stream will stop
     integer :: noris=0
@@ -314,7 +311,7 @@ type :: parameters
     integer :: state2split=0       !< state group to split
     integer :: stepsz=1            !< size of step{0}
     integer :: szsn=SZSN_INIT      !< size of stochastic neighborhood{5}
-    integer :: time_inactive=120  !< end time limit(mins)
+    integer :: time_inactive=120   !< end time limit(mins)
     integer :: tofny=0
     integer :: top=1
     integer :: tos=1
@@ -422,7 +419,6 @@ type :: parameters
     ! logical variables in (roughly) ascending alphabetical order
     logical :: l_autoscale      = .false.
     logical :: l_corrw          = .false.
-    logical :: l_corr_filt      = .false.
     logical :: l_distr_exec     = .false.
     logical :: l_dev            = .false.
     logical :: l_dose_weight    = .false.
@@ -500,7 +496,6 @@ contains
         call check_carg('cn_type',        self%cn_type)
         call check_carg('compare',        self%compare)
         call check_carg('continue',       self%continue)
-        call check_carg('corr_filt',      self%continue)
         call check_carg('countvox',       self%countvox)
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfpatch',       self%ctfpatch)
@@ -697,7 +692,6 @@ contains
         call check_iarg('minp',           self%minp)
         call check_iarg('mrcmode',        self%mrcmode)
         call check_iarg('navgs',          self%navgs)
-        call check_iarg('nbest',          self%nbest)
         call check_iarg('nboot',          self%nboot)
         call check_iarg('ncls',           self%ncls)
         call check_iarg('ncls_start',     self%ncls_start)
@@ -708,7 +702,6 @@ contains
         call check_iarg('nframes',        self%nframes)
         call check_iarg('ngrow',          self%ngrow)
         call check_iarg('nmovies_trial',  self%nmovies_trial)
-        call check_iarg('nnn',            self%nnn)
         call check_iarg('noris',          self%noris)
         call check_iarg('nran',           self%nran)
         call check_iarg('nrefs',          self%nrefs)
@@ -1276,8 +1269,6 @@ contains
         if( cline%defined('xdim') ) self%ldim = [self%xdim,self%ydim,1]
         ! box on the command line overrides all other ldim setters
         if( cline%defined('box')  ) self%ldim = [self%box,self%box,1]
-        ! if CTF refinement
-        if( self%ctf .eq. 'refine' ) THROW_HARD('CTF refinement not yet implemented')
         ! set eullims
         self%eullims(:,1) = 0.
         self%eullims(:,2) = 359.99
@@ -1307,12 +1298,6 @@ contains
         ! set remap_clusters flag
         self%l_remap_cls = .false.
         if( self%remap_cls .eq. 'yes' ) self%l_remap_cls = .true.
-        ! set nbest to 20% of ncls (if present) or 20% of NSPACE_REDUCED
-        if( cline%defined('ncls') )then
-            self%nbest = max(1,nint(real(self%ncls)*0.2))
-        else
-            self%nbest = max(1,nint(real(NSPACE_REDUCED)*0.2))
-        endif
         ! set to particle index if not defined in cmdlin
         if( .not. cline%defined('top') ) self%top = self%nptcls
         ! set the number of input orientations
@@ -1321,10 +1306,10 @@ contains
         self%trs = abs(self%trs)
         if( .not. cline%defined('trs') )then
             select case(trim(self%refine))
-                case('single', 'multi', 'snhc')
+                case('snhc')
                     self%trs = 0.
                 case DEFAULT
-                    self%trs = 1.
+                    self%trs = MINSHIFT
             end select
         endif
         self%l_doshift = .true.
@@ -1372,12 +1357,10 @@ contains
         ! matched filter and sigma needs flags
         select case(self%cc_objfun)
             case(OBJFUN_EUCLID)
-                self%l_corr_filt   = .false.
                 self%l_match_filt  = .false.
                 self%l_pssnr       = .false.
                 self%l_needs_sigma = .true.
             case(OBJFUN_CC)
-                self%l_corr_filt   = (trim(self%corr_filt)  .eq.'yes') .and.       self%l_lpset
                 self%l_match_filt  = (trim(self%match_filt) .eq.'yes') .and. (.not.self%l_lpset)
                 self%l_pssnr       = (trim(self%pssnr)      .eq.'yes') .and. self%l_match_filt
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
@@ -1406,10 +1389,21 @@ contains
                 write(logfhandle,*) 'imgkind: ', trim(self%imgkind)
                 THROW_HARD('unsupported imgkind; new')
         end select
-        ! neigh refinement modes
+        ! refinement modes
+        select case(trim(self%refine))
+            case('snhc')
+            case('shc')
+            case('greedy')
+            case('neigh')
+            case('cont')
+            case('cluster','clustersym')
+            case('eval')
+            case DEFAULT
+                THROW_HARD('refinement mode: '//trim(self%refine)//' unsupported')
+        end select
         if( str_has_substr(self%refine, 'neigh') )then
             if( .not. cline%defined('nspace')    ) self%nspace = 10000
-            if( .not. cline%defined('nnn')       ) self%nnn    = max(nint(0.1 * real(self%nspace)), 200)
+            if( .not. cline%defined('athres')    ) self%athres = 10.
         endif
         ! motion correction
         if( self%tomo .eq. 'yes' ) self%mcpatch = 'no'

@@ -11,9 +11,9 @@ private
 
 type strategy3D_alloc
     ! per-ptcl/ref allocation
-    integer,          allocatable :: proj_space_state(:)                  !< states
-    integer,          allocatable :: proj_space_proj(:)                   !< projection directions (1 state assumed)
-    logical,          allocatable :: state_exists(:)                      !< indicates state existence
+    integer,        allocatable :: proj_space_state(:)                    !< states
+    integer,        allocatable :: proj_space_proj(:)                     !< projection directions (1 state assumed)
+    logical,        allocatable :: state_exists(:)                        !< indicates state existence
     ! per thread allocation
     type(ran_tabu), allocatable :: rts(:)                                 !< stochastic search order generators
     real,           allocatable :: proj_space_euls(:,:,:)                 !< euler angles
@@ -27,7 +27,7 @@ type strategy3D_alloc
     integer,        allocatable :: srch_order(:,:)                        !< stochastic search index
 end type strategy3D_alloc
 
-type(strategy3D_alloc) :: s3D                           ! singleton
+type(strategy3D_alloc) :: s3D                         ! singleton
 real,      allocatable :: master_proj_space_euls(:,:) !< references euler angles
 logical                :: srch_order_allocated = .false.
 
@@ -86,18 +86,10 @@ contains
             case( 'cluster','clustersym','clustersoft')
                 srch_order_allocated = .false.
             case DEFAULT
-                if( str_has_substr(params_glob%refine, 'neigh') )then
-                    nnnrefs =  params_glob%nnn * params_glob%nstates
-                    allocate(s3D%srch_order(nthr_glob, nnnrefs), s3D%rts(nthr_glob))
-                    do ithr=1,nthr_glob
-                        s3D%rts(ithr) = ran_tabu(nnnrefs)
-                    end do
-                else
-                    allocate(s3D%srch_order(nthr_glob,nrefs), s3D%rts(nthr_glob))
-                    do ithr=1,nthr_glob
-                        s3D%rts(ithr) = ran_tabu(nrefs)
-                    end do
-                endif
+                allocate(s3D%srch_order(nthr_glob,nrefs), s3D%rts(nthr_glob))
+                do ithr=1,nthr_glob
+                    s3D%rts(ithr) = ran_tabu(nrefs)
+                end do
                 srch_order_allocated = .true.
                 s3D%srch_order = 0
         end select

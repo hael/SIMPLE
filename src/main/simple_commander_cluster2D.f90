@@ -144,7 +144,7 @@ contains
             call build%spproj%write_segment_inside(params%oritype)
         endif
         ! create class averager
-        call cavger_new('class')
+        call cavger_new
         ! transfer ori data to object
         call cavger_transf_oridat(build%spproj)
         ! standard cavg assembly
@@ -2054,12 +2054,17 @@ contains
         type(cmdline) :: cline_check_2Dconv
         type(cmdline) :: cline_cavgassemble
         type(cmdline) :: cline_make_cavgs
+        ! benchmarking
+        logical, parameter        :: L_BENCH = .true.
+        integer(timer_int_kind)   :: t_init,   t_scheduled,  t_merge_algndocs,  t_cavgassemble,  t_tot
+        real(timer_int_kind)      :: rt_init, rt_scheduled, rt_merge_algndocs, rt_cavgassemble, rt_tot
+        character(len=STDLEN)     :: benchfname
         ! other variables
         type(parameters)          :: params
         type(builder)             :: build
         type(qsys_env)            :: qenv
         character(len=LONGSTRLEN) :: refs, refs_even, refs_odd, str, str_iter
-        integer                   :: iter, cnt, iptcl, ptclind
+        integer                   :: iter, cnt, iptcl, ptclind, fnr
         type(chash)               :: job_descr
         real                      :: frac_srch_space
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15. )
@@ -2157,6 +2162,10 @@ contains
         ! main loop
         iter = params%startit - 1
         do
+            if( L_BENCH )then
+                t_init = tic()
+                t_tot  = t_init
+            endif
             iter = iter + 1
             params_glob%which_iter = iter
             str_iter = int2str_pad(iter,3)
@@ -2173,15 +2182,28 @@ contains
             ! the only FRC we have is from the previous iteration, hence the iter - 1
             call job_descr%set('frcs', trim(FRCS_FILE))
             ! schedule
+            if( L_BENCH )then
+                rt_init = toc(t_init)
+                t_scheduled = tic()
+            endif
             call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY))
-            ! merge orientation documents and transfers to memory
+            ! assemble alignment docs
+            if( L_BENCH )then
+                rt_scheduled = toc(t_scheduled)
+                t_merge_algndocs = tic()
+            endif
             call build%spproj%merge_algndocs(params%nptcls, params%nparts, 'ptcl2D', ALGN_FBODY)
+            if( L_BENCH )then
+                rt_merge_algndocs = toc(t_merge_algndocs)
+                t_cavgassemble = tic()
+            endif
             ! assemble class averages
             refs      = trim(CAVGS_ITER_FBODY) // trim(str_iter)            // params%ext
             refs_even = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_even' // params%ext
             refs_odd  = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // params%ext
             call cline_cavgassemble%set('refs', trim(refs))
             call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE_FINISHED')
+            if( L_BENCH ) rt_cavgassemble = toc(t_cavgassemble)
             ! check convergence
             call check_2Dconv(cline_check_2Dconv, build%spproj_field)
             frac_srch_space = 0.
@@ -2197,6 +2219,26 @@ contains
             if( cline_check_2Dconv%get_carg('converged').eq.'yes' .or. iter==params%maxits )then
                 if( cline_check_2Dconv%get_carg('converged').eq.'yes' )call cline%set('converged','yes')
                 exit
+            endif
+            if( L_BENCH )then
+                rt_tot  = toc(t_init)
+                benchfname = 'REFINE3D_DISTR_BENCH_ITER'//int2str_pad(iter,3)//'.txt'
+                call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+                write(fnr,'(a)') '*** TIMINGS (s) ***'
+                write(fnr,'(a,1x,f9.2)') 'initialisation  : ', rt_init
+                write(fnr,'(a,1x,f9.2)') 'scheduled jobs  : ', rt_scheduled
+                write(fnr,'(a,1x,f9.2)') 'merge_algndocs  : ', rt_merge_algndocs
+                write(fnr,'(a,1x,f9.2)') 'cavgassemble    : ', rt_cavgassemble
+                write(fnr,'(a,1x,f9.2)') 'total time      : ', rt_tot
+                write(fnr,'(a)') ''
+                write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
+                write(fnr,'(a,1x,f9.2)') 'initialisation  : ', (rt_init/rt_tot)           * 100.
+                write(fnr,'(a,1x,f9.2)') 'scheduled jobs  : ', (rt_scheduled/rt_tot)      * 100.
+                write(fnr,'(a,1x,f9.2)') 'merge_algndocs  : ', (rt_merge_algndocs/rt_tot) * 100.
+                write(fnr,'(a,1x,f9.2)') 'cavgassemble    : ', (rt_cavgassemble/rt_tot)   * 100.
+                write(fnr,'(a,1x,f9.2)') '% accounted for : ',&
+                    &((rt_init+rt_scheduled+rt_merge_algndocs+rt_cavgassemble)/rt_tot) * 100.
+                call fclose(fnr)
             endif
         end do
         call qsys_cleanup
@@ -2242,7 +2284,7 @@ contains
         real, allocatable :: states(:)
         call cline%set('oritype', 'ptcl2D')
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
-        call cavger_new( 'class')
+        call cavger_new
         call cavger_transf_oridat( build%spproj )
         call cavger_assemble_sums_from_parts()
         if( cline%defined('which_iter') )then

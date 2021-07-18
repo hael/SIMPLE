@@ -24,7 +24,7 @@ type :: builder
     ! GENERAL TOOLBOX
     type(sp_project)                    :: spproj                 !< centralised single-particle project meta-data handler
     class(oris), pointer                :: spproj_field => null() !< pointer to field in spproj
-    type(oris)                          :: eulspace, eulspace_red !< discrete spaces(red for reduced)
+    type(oris)                          :: eulspace               !< discrete spaces(red for reduced)
     type(sym)                           :: pgrpsyms               !< symmetry elements object
     type(image)                         :: img                    !< individual image/projector objects
     type(polarizer)                     :: img_match              !< -"-
@@ -43,7 +43,6 @@ type :: builder
     ! STRATEGY3D TOOLBOX
     type(reconstructor_eo), allocatable :: eorecvols(:)           !< array of volumes for eo-reconstruction
     real,                   allocatable :: fsc(:,:)               !< Fourier Shell Correlation
-    integer,                allocatable :: nnmat(:,:)             !< matrix with nearest neighbor indices
     logical,                allocatable :: lmsk(:,:,:)            !< logical circular 2D mask
     logical,                allocatable :: l_resmsk(:)            !< logical resolution mask
     ! PRIVATE EXISTENCE VARIABLES
@@ -205,8 +204,6 @@ contains
         if( ddo3d )then
             call self%eulspace%new(params%nspace, is_ptcl=.false.)
             call self%pgrpsyms%build_refspiral(self%eulspace)
-            call self%eulspace_red%new(NSPACE_REDUCED, is_ptcl=.false.)
-            call self%pgrpsyms%build_refspiral(self%eulspace_red)
         endif
         if( params%box > 0 )then
             ! build image objects
@@ -262,7 +259,6 @@ contains
             self%spproj_field => null()
             call self%spproj%kill
             call self%eulspace%kill
-            call self%eulspace_red%kill
             call self%img%kill
             call self%img_match%kill_polarizer
             call self%img_match%kill
@@ -314,7 +310,6 @@ contains
     subroutine kill_strategy2D_tbox( self )
         class(builder), intent(inout) :: self
         if( self%strategy2D_tbox_exists )then
-            if( allocated(self%nnmat) ) deallocate(self%nnmat)
             call self%clsfrcs%kill
             call self%projpssnrs%kill
             self%strategy2D_tbox_exists = .false.
@@ -328,10 +323,6 @@ contains
         call self%kill_strategy3D_tbox
         allocate( self%eorecvols(params%nstates), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_builder, 1', alloc_stat)
-        if( str_has_substr(params%refine, 'neigh') )then
-            allocate(self%nnmat(params%nspace,params%nnn))
-            call self%pgrpsyms%nearest_proj_neighbors(self%eulspace, params%nnn, self%nnmat)
-        endif
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy3D_tbox_exists = .true.
@@ -348,7 +339,6 @@ contains
                 end do
                 deallocate(self%eorecvols)
             endif
-            if( allocated(self%nnmat) ) deallocate(self%nnmat)
             self%strategy3D_tbox_exists = .false.
         endif
     end subroutine kill_strategy3D_tbox

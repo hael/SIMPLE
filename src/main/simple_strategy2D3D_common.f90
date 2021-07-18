@@ -9,8 +9,7 @@ implicit none
 
 public :: read_img, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
 &norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, preprefvol,&
-&prep2Dref, preprecvols, killrecvols, gen_class_frcs, prepimgbatch,&
-&build_pftcc_particles
+&prep2Dref, preprecvols, killrecvols, prepimgbatch, build_pftcc_particles
 private
 #include "simple_local_flags.inc"
 
@@ -737,73 +736,5 @@ contains
         call build_glob%vol%kill
         call build_glob%vol2%kill
     end subroutine norm_struct_facts
-
-    !>  \brief generate projection FRCs from even/odd pairs
-    subroutine gen_class_frcs( cline, ename, oname, resmskname, state, clsfrcs )
-        use simple_oris,           only: oris
-        use simple_projector_hlev, only: reproject
-        use simple_class_frcs,     only: class_frcs
-        class(cmdline),         intent(inout) :: cline
-        character(len=*),       intent(in)    :: ename, oname, resmskname
-        integer,                intent(in)    :: state
-        class(class_frcs), intent(inout) :: clsfrcs
-        type(oris)               :: e_space
-        type(image)              :: mskvol
-        type(image), allocatable :: even_imgs(:), odd_imgs(:)
-        real,        allocatable :: frc(:)
-        integer :: iproj, find_plate
-        ! ensure correct build_glob%vol dim
-        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
-        ! read & prep even/odd pair
-        call build_glob%vol%read(ename)
-        call build_glob%vol2%read(oname)
-        call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
-        call prepeovol(build_glob%vol)
-        call prepeovol(build_glob%vol2)
-        ! create e_space
-        call e_space%new(NSPACE_REDUCED, is_ptcl=.false.)
-        call build_glob%pgrpsyms%build_refspiral(e_space)
-        ! generate even/odd projections
-        even_imgs = reproject(build_glob%vol,  e_space)
-        odd_imgs  = reproject(build_glob%vol2, e_space)
-        ! calculate FRCs and fill-in clsfrcs object
-        allocate(frc(even_imgs(1)%get_filtsz()))
-        !$omp parallel do default(shared) private(iproj,frc) schedule(static) proc_bind(close)
-        do iproj=1,NSPACE_REDUCED
-            call even_imgs(iproj)%fft()
-            call odd_imgs(iproj)%fft()
-            call even_imgs(iproj)%fsc(odd_imgs(iproj), frc)
-            if( params_glob%l_phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
-            call clsfrcs%set_frc(iproj, frc, state)
-            call even_imgs(iproj)%kill
-            call odd_imgs(iproj)%kill
-        end do
-        !$omp end parallel do
-        deallocate(even_imgs, odd_imgs)
-        call e_space%kill
-        call mskvol%kill
-
-        contains
-
-            !>  \brief  prepares even/odd volume for FSC/FRC calcualtion
-            subroutine prepeovol( vol )
-                class(image), intent(inout) :: vol
-                if( params_glob%l_envfsc .and. cline%defined('mskfile') )then
-                    ! mask provided
-                    call mskvol%read(resmskname)
-                    call vol%zero_env_background(mskvol)
-                    call vol%mul(mskvol)
-                else
-                    ! circular masking
-                    if( params_glob%l_innermsk )then
-                        call vol%mask(params_glob%msk, 'soft', &
-                            inner=params_glob%inner, width=params_glob%width)
-                    else
-                        call vol%mask(params_glob%msk, 'soft')
-                    endif
-                endif
-        end subroutine prepeovol
-
-    end subroutine gen_class_frcs
 
 end module simple_strategy2D3D_common

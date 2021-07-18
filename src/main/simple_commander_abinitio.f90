@@ -233,18 +233,18 @@ contains
         call cline_refine3D_snhc%set('ptclw',      'no')  ! no soft particle weights in first phase
         call cline_refine3D_snhc%delete('update_frac') ! no fractional update in first phase
         ! (2) REFINE3D_INIT
-        call cline_refine3D_init%set('prg',      'refine3D')
         call cline_refine3D_init%set('projfile', trim(WORK_PROJFILE))
         call cline_refine3D_init%set('msk',      msk)
         call cline_refine3D_init%set('box',      real(box))
-        call cline_refine3D_init%set('maxits',   real(MAXITS_INIT))
-        call cline_refine3D_init%set('vol1',     trim(SNHCVOL)//trim(str_state)//params%ext)
+        call cline_refine3D_init%set('prg',      'refine3D')
         call cline_refine3D_init%set('lp',       lplims(1))
-        call cline_refine3D_init%set('match_filt','no')
-        call cline_refine3D_init%set('ptclw',     'no')  ! no soft particle weights in init phase
         if( .not. cline_refine3D_init%defined('nspace') )then
             call cline_refine3D_init%set('nspace', real(NSPACE_INIT))
         endif
+        call cline_refine3D_init%set('maxits',   real(MAXITS_INIT))
+        call cline_refine3D_init%set('match_filt','no')
+        call cline_refine3D_init%set('ptclw',     'no')  ! no soft particle weights in init phase
+        call cline_refine3D_init%set('vol1',     trim(SNHCVOL)//trim(str_state)//params%ext)
         ! (3) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
             ! need to replace original point-group flag with c1/pgrp_start
@@ -266,7 +266,7 @@ contains
         call cline_refine3D_refine%set('prg',      'refine3D')
         call cline_refine3D_refine%set('pgrp',     trim(pgrp_refine))
         call cline_refine3D_refine%set('maxits',   real(MAXITS_REFINE))
-        call cline_refine3D_refine%set('refine',   'single')
+        call cline_refine3D_refine%set('refine',   'shc')
         call cline_refine3D_refine%set('trs',      real(MINSHIFT)) ! activates shift search
         if( l_lpset )then
             call cline_refine3D_refine%set('lp', lplims(2))

@@ -27,7 +27,6 @@ end type pftcc_orisrch_grad
 
 contains
 
-    !> constructor
     subroutine new( self )
         use simple_projector,   only: projector
         use simple_opt_factory, only: opt_factory
@@ -58,7 +57,6 @@ contains
         self%particle  = ptcl
     end subroutine set_particle
 
-    !> minimisation
     function minimize( self, o_inout, angerr_deg, maxHWshift, found_better ) result( cxy )
         use simple_ori, only: ori
         class(pftcc_orisrch_grad), intent(inout) :: self
@@ -159,15 +157,14 @@ contains
         integer,  intent(in)    :: D
         real(dp), intent(in)    :: vec(D)
         real(dp)                :: corr, cost
-        !real(dp)                :: corr_grad(5)
         integer   :: ithr, irot
         type(ori) :: e
         ! thread-safe extraction of projection and derivatives (because pftcc is an OpenMP shared data structure)
         ithr = omp_get_thread_num() + 1
         ! because we start from a continous solution
         irot = 1
-        select type(self)
-            class is (pftcc_orisrch_grad)
+        select type( self )
+            class is( pftcc_orisrch_grad )
                 call e%new(is_ptcl=.false.)
                 call e%set_euler(real(vec(1:3)))
                 if( pftcc_glob%ptcl_iseven(self%particle) )then
@@ -178,7 +175,7 @@ contains
                 corr = pftcc_glob%gencorr_cc_for_rot_8(ithr, self%particle, vec(4:5), irot)
                 cost = -corr
                 call e%kill()
-            class default
+            class DEFAULT
                 write (*,*) 'error in pftcc_orisrch_grad :: costfun: unknown type'
                 cost = 0.
                 stop
@@ -197,8 +194,8 @@ contains
         ithr = omp_get_thread_num() + 1
         ! because we start from a continous solution
         irot = 1
-        select type(self)
-            class is (pftcc_orisrch_grad)
+        select type( self )
+            class is( pftcc_orisrch_grad )
                 if( pftcc_glob%ptcl_iseven(self%particle) )then
                     call build_glob%vol%fdf_project_polar(ithr, vec(1:3), pftcc_glob, iseven=.true.)
                 else
@@ -207,7 +204,7 @@ contains
                 call pftcc_glob%gencorr_cont_shift_grad_cc_for_rot_8(ithr, self%particle, vec(4:5), irot, corr, corr_grad)
                 f    = - corr
                 grad = - corr_grad
-            class default
+            class DEFAULT
                 write (*,*) 'error in pftcc_orisrch_grad :: fdfcostfun: unknown type'
                 f    = 0.
                 grad = 0.
@@ -215,9 +212,8 @@ contains
         end select
     end subroutine fdfcostfun
 
-    ! destructor
     subroutine kill( self )
-        class(pftcc_orisrch_grad), intent(inout) :: self !< instance
+        class(pftcc_orisrch_grad), intent(inout) :: self
         if( self%exists )then
             if( associated(self%nlopt) )then
                 call self%nlopt%kill

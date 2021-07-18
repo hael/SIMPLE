@@ -25,7 +25,6 @@ type :: ran_tabu
     procedure          :: mnomal
     procedure          :: ne_ran_iarr
     procedure          :: ne_mnomal_iarr
-    procedure          :: stoch_nnmat
     procedure, private :: shuffle_1
     procedure, private :: shuffle_2
     generic            :: shuffle => shuffle_1, shuffle_2
@@ -208,20 +207,6 @@ contains
         call rt4shuffle%shuffle(rndiarr)
         call rt4shuffle%kill
     end subroutine ne_mnomal_iarr
-
-    !>  \brief  stochastic nearest neighbor generation
-    function stoch_nnmat( self, pfromto, nnn, pmat ) result( nnmat )
-        class(ran_tabu), intent(inout) :: self
-        integer,         intent(in)    :: pfromto(2), nnn                     !< pmat range
-        real,            intent(in)    :: pmat(pfromto(1):pfromto(2),self%NP) !< multinomal array
-        integer, allocatable :: nnmat(:,:) !> output nearest neigh matrix
-        integer :: iptcl
-        allocate(nnmat(pfromto(1):pfromto(2),nnn), stat=alloc_stat)
-        if(alloc_stat /= 0) call allocchk('In: simple_ran_tabu; stoch_nnmat', alloc_stat)
-        do iptcl=pfromto(1),pfromto(2)
-            call self%ne_mnomal_iarr( pmat(iptcl,:), nnmat(iptcl,:))
-        end do
-    end function stoch_nnmat
 
     !>  \brief  shuffles an integer array
     subroutine shuffle_1( self, shuffled )

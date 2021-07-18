@@ -2074,7 +2074,7 @@ contains
             THROW_HARD("the file you are trying to read: "//trim(orifile)//' does not exist in cwd' )
         endif
         if( str_has_substr(orifile,'.bin') )then
-            THROW_HARD('this method does not support binary files;  read')
+            THROW_HARD('this method does not support binary files; read')
         endif
         io_message='No error'
         call fopen(fnr, FILE=orifile, STATUS='OLD', action='READ', iostat=file_stat,iomsg=io_message)
@@ -2083,8 +2083,8 @@ contains
         if( present(fromto) )then
             istart = fromto(1)
             iend   = fromto(2)
-            if(istart < 1) THROW_HARD('Invalid index; read')
-            if(iend > self%n) THROW_HARD('Invalid index; read')
+            if(istart <      1) THROW_HARD('Invalid index; read')
+            if(iend   > self%n) THROW_HARD('Invalid index; read')
         else
             istart = 1
             iend   = self%n

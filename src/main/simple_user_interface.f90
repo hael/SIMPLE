@@ -227,7 +227,6 @@ type(simple_input_param) :: mul
 type(simple_input_param) :: mw
 type(simple_input_param) :: ncls
 type(simple_input_param) :: neg
-type(simple_input_param) :: neigh
 type(simple_input_param) :: nparts
 type(simple_input_param) :: nptcls
 type(simple_input_param) :: nrestarts
@@ -887,7 +886,7 @@ contains
         call set_param(objfun,        'objfun',        'multi',  'Objective function', 'Objective function(cc|euclid){cc}', '(cc|euclid){cc}', .false., 'cc')
         call set_param(remap_cls,     'remap_cls',     'binary', 'Whether to remap 2D clusters', 'Whether to remap the number of 2D clusters(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV{300}', 'in kV{300}', .false., 300.)
-        call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.5}',&
+        call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.3}',&
         &'low-pass FSC criterion(0.143-0.5){0.3}', .false., 0.3)
         call set_param(cs,            'cs',            'num',    'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in mm{2.7}', .false., 2.7)
         call set_param(fraca,         'fraca',         'num',    'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', 'fraction{0.1}', .false., 0.1)
@@ -931,7 +930,6 @@ contains
         call set_param(nypatch,        'nypatch',      'num',    '# of patches along y-axis', 'Motion correction # of patches along y-axis', '# y-patches{5}', .false., 5.)
         call set_param(numlen,         'numlen',       'num',    'Length of number string', 'Length of number string', '# characters', .false., 5.0)
         call set_param(nsig,           'nsig',         'num',    'Number of sigmas for outlier removal', 'Number of standard deviations threshold for pixel outlier removal{6}', '# standard deviations{6}', .false., 6.)
-        call set_param(neigh,          'neigh',        'binary', 'Neighbourhood refinement', 'Neighbourhood refinement(yes|no){yes}', '(yes|no){no}', .false., 'no')
         call set_param(projname,       'projname',     'str',    'Project name', 'Name of project to create ./myproject/myproject.simple file for',&
         &'e.g. to create ./myproject/myproject.simple', .true., '')
         call set_param(user_email,     'user_email',   'str',    'Your e-mail address', 'Your e-mail address', 'e.g. myname@uni.edu', .false., '')
@@ -1354,7 +1352,7 @@ contains
         &'3D heterogeneity analysis',&                                             ! descr_short
         &'is a distributed workflow for heterogeneity analysis by 3D clustering',& ! descr_long
         &'simple_exec',&                                                     ! executable
-        &0, 1, 0, 8, 6, 5, 2, .true.)                                              ! # entries in each group, requires sp_project
+        &0, 1, 0, 7, 6, 5, 2, .true.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1372,7 +1370,6 @@ contains
         call cluster3D%set_input('srch_ctrls', 6, objfun)
         call cluster3D%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', 'Refinement mode(cluster|clustersym)&
         &){cluster}', '(cluster|clustersym){cluster}', .false., 'cluster')
-        call cluster3D%set_input('srch_ctrls', 8, neigh)
         ! filter controls
         call cluster3D%set_input('filt_ctrls', 1, hp)
         call cluster3D%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20.)
@@ -1400,7 +1397,7 @@ contains
         &'is a distributed workflow based on probabilistic projection matching &
         &for refinement of 3D heterogeneity analysis by cluster3D ',&        ! descr_long
         &'simple_exec',&                                               ! executable
-        &2, 1, 0, 11, 6, 3, 2, .true.)                                       ! # entries in each group
+        &2, 1, 0, 9, 6, 3, 2, .true.)                                       ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster3D_refine%set_input('img_ios', 1, 'msklist', 'file', 'List of mask files', 'List (.txt file) of mask files for the different states', 'e.g. mskfiles.txt', .false., '')
@@ -1419,10 +1416,7 @@ contains
         call cluster3D_refine%set_input('srch_ctrls', 6, update_frac)
         call cluster3D_refine%set_input('srch_ctrls', 7, frac)
         call cluster3D_refine%set_input('srch_ctrls', 8, pgrp)
-        call cluster3D_refine%set_input('srch_ctrls', 9, 'nnn', 'num', 'Number of nearest neighbours', 'Number of nearest projection direction &
-        &neighbours in neigh=yes refinement', '# projection neighbours{10% of search space}', .false., 200.)
-        call cluster3D_refine%set_input('srch_ctrls', 10, objfun)
-        call cluster3D_refine%set_input('srch_ctrls', 11, neigh)
+        call cluster3D_refine%set_input('srch_ctrls', 9, objfun)
         ! filter controls
         call cluster3D_refine%set_input('filt_ctrls', 1, hp)
         call cluster3D_refine%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -3217,7 +3211,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_exec',&                                                                      ! executable
-        &1, 0, 0, 14, 8, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
+        &1, 0, 0, 12, 8, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -3235,16 +3229,12 @@ contains
         call refine3D%set_input('srch_ctrls', 5, update_frac)
         call refine3D%set_input('srch_ctrls', 6, frac)
         call refine3D%set_input('srch_ctrls', 7, pgrp)
-        call refine3D%set_input('srch_ctrls', 8, 'nnn', 'num', 'Number of nearest neighbours', 'Number of nearest projection direction &
-        &neighbours in neigh=yes refinement', '# projection neighbours{10% of search space}', .false., 200.)
-        call refine3D%set_input('srch_ctrls', 9, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to reconstruct',&
+        call refine3D%set_input('srch_ctrls', 8, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to reconstruct',&
         '# states to reconstruct', .false., 1.0)
-        call refine3D%set_input('srch_ctrls', 10, objfun)
-        call refine3D%set_input('srch_ctrls', 11, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|&
-        &clustersym){no}', '(snhc|single|neigh_single|multi|greedy_single|greedy_multi|cluster|clustersym){single}', .false., 'single')
-        call refine3D%set_input('srch_ctrls', 12, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call refine3D%set_input('srch_ctrls', 13, nrestarts)
-        call refine3D%set_input('srch_ctrls', 14, 'lp_iters', 'num', '# iterations lp refinement', '# iterations lp refinement', '# of iterations for low-pass limited refinement', .false., 20.)
+        call refine3D%set_input('srch_ctrls', 9, objfun)
+        call refine3D%set_input('srch_ctrls', 10, 'refine', 'multi', 'Refinement mode', 'Refinement mode(shc|greedy|neigh|cont|cluster|clustersym){shc}', '(shc|greedy|neigh|cont|cluster|clustersym){shc}', .false., 'single')
+        call refine3D%set_input('srch_ctrls', 11, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call refine3D%set_input('srch_ctrls', 12, 'lp_iters', 'num', '# iterations lp refinement', '# iterations lp refinement', '# of iterations for low-pass limited refinement', .false., 20.)
         ! filter controls
         call refine3D%set_input('filt_ctrls', 1, hp)
         call refine3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
