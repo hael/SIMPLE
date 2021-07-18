@@ -92,7 +92,6 @@ contains
         ! prepare command lines from prototype master
         cline_cavgassemble = cline
         call cline_cavgassemble%set('prg', 'cavgassemble')
-        call cline_cavgassemble%set('nthr', 0.) ! to ensure the use of all resources in assembly
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr)
         ! assemble class averages
@@ -2055,7 +2054,7 @@ contains
         type(cmdline) :: cline_cavgassemble
         type(cmdline) :: cline_make_cavgs
         ! benchmarking
-        logical, parameter        :: L_BENCH = .true.
+        logical, parameter        :: L_BENCH = .false.
         integer(timer_int_kind)   :: t_init,   t_scheduled,  t_merge_algndocs,  t_cavgassemble,  t_tot
         real(timer_int_kind)      :: rt_init, rt_scheduled, rt_merge_algndocs, rt_cavgassemble, rt_tot
         character(len=STDLEN)     :: benchfname
@@ -2222,7 +2221,7 @@ contains
             endif
             if( L_BENCH )then
                 rt_tot  = toc(t_init)
-                benchfname = 'REFINE3D_DISTR_BENCH_ITER'//int2str_pad(iter,3)//'.txt'
+                benchfname = 'CLUSTER2D_DISTR_BENCH_ITER'//int2str_pad(iter,3)//'.txt'
                 call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
                 write(fnr,'(a,1x,f9.2)') 'initialisation  : ', rt_init

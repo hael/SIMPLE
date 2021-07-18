@@ -38,7 +38,7 @@ contains
         class(strategy3D_neigh), intent(inout) :: self
         integer,                       intent(in)    :: ithr
         type(ori) :: o
-        integer   :: iref,nrefs,iproj
+        integer   :: iref,iproj
         real      :: inpl_corrs(self%s%nrots)
         logical   :: lnns(params_glob%nspace)
         ! execute search
@@ -47,7 +47,9 @@ contains
             self%s%ithr = ithr
             ! prep
             call self%s%prep4srch
-            nrefs = self%s%nrefs
+            ! initialize, ctd
+            self%s%nbetter    = 0
+            self%s%nrefs_eval = 0
             call build_glob%spproj_field%get_ori(self%s%iptcl, o)
             call build_glob%pgrpsyms%nearest_proj_neighbors(build_glob%eulspace, o, params_glob%athres, lnns)
             self%s%nnn = count(lnns)
@@ -56,8 +58,9 @@ contains
                 if( .not. lnns(iproj) ) cycle
                 iref = (self%s%prev_state - 1) * params_glob%nspace + iproj
                 call per_ref_srch
+                ! exit condition
+                if( self%s%nbetter > 0 ) exit
             end do
-            self%s%nrefs_eval = nrefs
             call sort_corrs(self%s) ! sort in correlation projection direction space
             call self%s%inpl_srch   ! search shifts
             ! prepare weights and orientations
@@ -71,12 +74,14 @@ contains
         subroutine per_ref_srch
             integer :: loc(1)
             if( s3D%state_exists(s3D%proj_space_state(iref)) )then
-                ! calculate in-plane correlations
-                call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                 ! identify the top scoring in-plane angle
+                call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                 loc = maxloc(inpl_corrs)
-                ! stash
                 call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)), .true.)
+                ! update nbetter to keep track of how many improving solutions we have identified
+                if( inpl_corrs(loc(1)) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
+                ! keep track of how many references we are evaluating
+                self%s%nrefs_eval = self%s%nrefs_eval + 1
             endif
         end subroutine per_ref_srch
 

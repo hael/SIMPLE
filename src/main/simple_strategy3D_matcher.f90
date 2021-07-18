@@ -45,7 +45,7 @@ type(sym)                      :: c1_symop
 integer                        :: nptcls2update
 type(euclid_sigma2)            :: eucl_sigma
 ! benchmarking
-logical, parameter             :: L_BENCH = .true.
+logical, parameter             :: L_BENCH = .false.
 integer(timer_int_kind)        :: t_init,   t_prep_pftcc,  t_prep_orisrch,  t_align,  t_rec,  t_tot,  t_projio
 real(timer_int_kind)           :: rt_init, rt_prep_pftcc, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
 character(len=STDLEN)          :: benchfname
@@ -329,7 +329,7 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'initialisation        : ', rt_init
                 write(fnr,'(a,1x,f9.2)') 'pftcc preparation     : ', rt_prep_pftcc
                 write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation : ', rt_prep_orisrch
-                write(fnr,'(a,1x,f9.2)') 'stochastic alignment  : ', rt_align
+                write(fnr,'(a,1x,f9.2)') '3D alignment          : ', rt_align
                 write(fnr,'(a,1x,f9.2)') 'project file I/O      : ', rt_projio
                 write(fnr,'(a,1x,f9.2)') 'reconstruction        : ', rt_rec
                 write(fnr,'(a,1x,f9.2)') 'total time            : ', rt_tot
@@ -338,7 +338,7 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'initialisation        : ', (rt_init/rt_tot)         * 100.
                 write(fnr,'(a,1x,f9.2)') 'pftcc preparation     : ', (rt_prep_pftcc/rt_tot)   * 100.
                 write(fnr,'(a,1x,f9.2)') 'orisrch3D preparation : ', (rt_prep_orisrch/rt_tot) * 100.
-                write(fnr,'(a,1x,f9.2)') 'stochastic alignment  : ', (rt_align/rt_tot)        * 100.
+                write(fnr,'(a,1x,f9.2)') '3D alignment          : ', (rt_align/rt_tot)        * 100.
                 write(fnr,'(a,1x,f9.2)') 'project file I/O      : ', (rt_projio/rt_tot)       * 100.
                 write(fnr,'(a,1x,f9.2)') 'reconstruction        : ', (rt_rec/rt_tot)          * 100.
                 write(fnr,'(a,1x,f9.2)') '% accounted for       : ',&

@@ -53,7 +53,6 @@ logical                        :: l_hard_assign = .true.        !< npeaks == 1 o
 logical                        :: l_bilinear    = .true.        !< whether to use bilinear or convolution interpolation
 logical                        :: exists        = .false.       !< to flag instance existence
 
-logical, parameter      :: L_BENCH = .true.
 integer(timer_int_kind) :: t_class_loop,t_batch_loop, t_gridding, t_init, t_tot
 real(timer_int_kind)    :: rt_class_loop,rt_batch_loop, rt_gridding, rt_init, rt_tot
 character(len=STDLEN)   :: benchfname
@@ -356,11 +355,6 @@ contains
         integer :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, sh, iwinsz, nyq
         integer :: alloc_stat, wdim, h, k, l, m, ll, mm, incr, icls, iptcl, batchsz_max, interp_shlim, interp_shlim_sq
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
-        if( l_BENCH )then
-            rt_tot = 0.
-            t_tot  = tic()
-            t_init = t_tot
-        endif
         ! init cavgs
         call init_cavgs_sums
         if( do_frac_update )then
@@ -408,16 +402,9 @@ contains
         allocate( rho(lims(1,1):lims(1,2),lims(2,1):lims(2,2)),&
                  &rho_even(lims(1,1):lims(1,2),lims(2,1):lims(2,2)),&
                  &rho_odd( lims(1,1):lims(1,2),lims(2,1):lims(2,2)), stat=alloc_stat)
-        if( L_BENCH )then
-            rt_class_loop = 0.
-            rt_batch_loop = 0.
-            rt_gridding   = 0.
-            rt_init       = toc(t_init)
-        endif
         cnt_progress = 0
         ! class loop
         do icls=1,ncls
-            if( L_BENCH ) t_class_loop = tic()
             cnt_progress = cnt_progress + 1
             call progress(cnt_progress, ncls)
             icls_pop = class_pop(icls)
@@ -432,20 +419,17 @@ contains
             ! batch planning
             nbatches = ceiling(real(icls_pop)/real(params_glob%nthr*BATCHTHRSZ))
             batches  = split_nobjs_even(icls_pop, nbatches)
-            if( L_BENCH ) rt_class_loop = rt_class_loop + toc(t_class_loop)
             ! batch loop, prep
             do batch=1,nbatches
                 ! prep batch
                 batchsz = batches(batch,2) - batches(batch,1) + 1
                 ! read images
-                if( L_BENCH ) t_batch_loop = tic()
+
                 do i=1,batchsz
                     iptcl = ptcls_inds(batches(batch,1) + i - 1)
                     call read_img( iptcl, batch_imgs(i) )
                 enddo
                 ! batch particles loop
-                if( L_BENCH ) rt_batch_loop = rt_batch_loop + toc(t_batch_loop)
-                if( L_BENCH ) t_gridding = tic()
                 !$omp parallel do default(shared) schedule(static) reduction(+:cmat_even,cmat_odd,rho_even,rho_odd) proc_bind(close)&
                 !$omp private(iptcl,fcomp,win_corner,i,iprec,iori,add_phshift,rho,pw,mat,h,k,l,m,ll,mm,dist,loc,sh,phys_cmat,cyc1,cyc2,w,incr)
                 ! batch loop, direct Fourier interpolation
@@ -555,9 +539,7 @@ contains
                     endif
                 enddo
                 !$omp end parallel do
-                if( L_BENCH ) rt_gridding = rt_gridding + toc(t_gridding)
             enddo ! batch loop
-            if( L_BENCH ) t_class_loop = tic()
             ! put back cmats
             call cls_imgsum_even%new(ldim_pd, params_glob%smpd)
             call cls_imgsum_odd%new(ldim_pd, params_glob%smpd)
@@ -572,7 +554,6 @@ contains
                     &cls_imgsum_even,cls_imgsum_odd, lims, rho_even, rho_odd)
             endif
             deallocate(ptcls_inds, batches, iprecs, ioris)
-            if( L_BENCH ) rt_class_loop = rt_class_loop + toc(t_class_loop)
         enddo ! class loop
         ! batch cleanup
         call cls_imgsum_even%kill
@@ -585,24 +566,6 @@ contains
         if( allocated(cmat_odd)  ) deallocate(cmat_odd)
         deallocate(rho, rho_even, rho_odd, batch_imgs, cgrid_imgs, cyc1, cyc2, w)
         if( .not. params_glob%l_distr_exec ) call cavger_merge_eos_and_norm
-        if( L_BENCH )then
-            rt_tot = rt_tot + toc(t_tot)
-            benchfname = 'CLASSAVERAGER_BENCH_'//int2str_pad(max(1,params_glob%startit),4)//'_'//int2str_pad(params_glob%part,2)//'.txt'
-            call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
-            write(fnr,'(a)') '*** TIMINGS (s) ***'
-            write(fnr,'(a,1x,f9.2)') 'init       : ', rt_init
-            write(fnr,'(a,1x,f9.2)') 'class loop : ', rt_class_loop
-            write(fnr,'(a,1x,f9.2)') 'batch loop : ', rt_batch_loop
-            write(fnr,'(a,1x,f9.2)') 'gridding   : ', rt_gridding
-            write(fnr,'(a,1x,f9.2)') 'total time : ', rt_tot
-            write(fnr,'(a)') ''
-            write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-            write(fnr,'(a,1x,f9.2)') 'batch loop : ', (rt_init/rt_tot)       * 100.
-            write(fnr,'(a,1x,f9.2)') 'gridding   : ', (rt_class_loop/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') 'batch loop : ', (rt_batch_loop/rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') 'gridding   : ', (rt_gridding/rt_tot)   * 100.
-            call fclose(fnr)
-        endif
     end subroutine cavger_assemble_sums
 
     !>  \brief  merges the even/odd pairs and normalises the sums

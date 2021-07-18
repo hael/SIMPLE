@@ -99,7 +99,7 @@ contains
         call self%nlopt%minimize(self%ospec, self, cost)
 
         ! OUTPUT
-        if( cost <= cost_init )then
+        if( cost < cost_init )then
             ! set corr
             cxy(1)  = -cost ! correlation
             ! set Euler
