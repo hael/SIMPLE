@@ -16,6 +16,8 @@ public :: strategy3D_srch, strategy3D_spec, set_ptcl_stats, eval_ptcl
 private
 #include "simple_local_flags.inc"
 
+logical, parameter :: DOCONTINUOUS = .false.
+
 type strategy3D_spec
     integer, pointer :: symmat(:,:) => null()
     integer :: iptcl=0, szsn=0
@@ -114,7 +116,6 @@ contains
         call build_glob%spproj_field%set(iptcl, 'corr',      corr)
         call build_glob%spproj_field%set(iptcl, 'specscore', specscore)
         call build_glob%spproj_field%set(iptcl, 'w',         1.)
-        call build_glob%spproj_field%set(iptcl, 'ow',        1.)
         call o_prev%kill
     end subroutine eval_ptcl
 
@@ -124,23 +125,23 @@ contains
         integer, parameter :: MAXITS = 60
         real    :: lims(2,2), lims_init(2,2)
         ! set constants
-        self%iptcl        = spec%iptcl
-        self%nstates      = params_glob%nstates
-        self%nprojs       = params_glob%nspace
-        self%nrefs        = self%nprojs*self%nstates
-        self%nrots        = pftcc_glob%get_nrots()
-        self%nbetter      = 0
-        self%nrefs_eval   = 0
-        self%nsym         = build_glob%pgrpsyms%get_nsym()
-        self%doshift      = params_glob%l_doshift
-        self%l_neigh      = str_has_substr(params_glob%refine, 'neigh')
-        self%l_greedy     = str_has_substr(params_glob%refine, 'greedy')
-        self%l_cont       = str_has_substr(params_glob%refine, 'cont')
+        self%iptcl      = spec%iptcl
+        self%nstates    = params_glob%nstates
+        self%nprojs     = params_glob%nspace
+        self%nrefs      = self%nprojs*self%nstates
+        self%nrots      = pftcc_glob%get_nrots()
+        self%nbetter    = 0
+        self%nrefs_eval = 0
+        self%nsym       = build_glob%pgrpsyms%get_nsym()
+        self%doshift    = params_glob%l_doshift
+        self%l_neigh    = str_has_substr(params_glob%refine, 'neigh')
+        self%l_greedy   = str_has_substr(params_glob%refine, 'greedy')
+        self%l_cont     = str_has_substr(params_glob%refine, 'cont')
         ! create in-plane search object
-        lims(:,1)         = -params_glob%trs
-        lims(:,2)         =  params_glob%trs
-        lims_init(:,1)    = -SHC_INPL_TRSHWDTH
-        lims_init(:,2)    =  SHC_INPL_TRSHWDTH
+        lims(:,1)       = -params_glob%trs
+        lims(:,2)       =  params_glob%trs
+        lims_init(:,1)  = -SHC_INPL_TRSHWDTH
+        lims_init(:,2)  =  SHC_INPL_TRSHWDTH
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
             &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.true.)
         ! create all df:s search object
@@ -193,7 +194,7 @@ contains
         real      :: cxy(3)
         integer   :: ref, irot!, cnt, j
         logical   :: found_better
-        if( self%l_cont )then
+        if( DOCONTINUOUS )then
             ! BFGS over all df:s
             call o%new(is_ptcl=.false.)
             ref = s3D%proj_space_refinds_sorted_highest(self%ithr, self%nrefs)

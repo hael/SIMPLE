@@ -83,10 +83,12 @@ contains
         ! fraction of search space scanned
         neff_states = 1
         if( l_multistates ) neff_states = count(s3D%state_exists)
-        if( s%l_neigh .or. s%l_greedy .or. s%l_cont )then
+        if( s%l_neigh )then
+            frac = 100. * real(s%nrefs_eval) / real(s%nnn * neff_states)
+        else if( s%l_greedy .or. s%l_cont )then
             frac = 100.
         else
-            frac = 100.*real(s%nrefs_eval) / real(s%nprojs * neff_states)
+            frac = 100. * real(s%nrefs_eval) / real(s%nprojs * neff_states)
         endif
         call build_glob%spproj_field%set(s%iptcl, 'frac',      frac)
         ! destruct

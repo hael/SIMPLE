@@ -19,7 +19,7 @@ private
 type(polarizer), allocatable :: match_ptcl_imgs(:)
 type(polarft_corrcalc)       :: pftcc
 integer                      :: batchsz_max
-logical, parameter           :: L_BENCH = .true.
+logical, parameter           :: L_BENCH = .false.
 real(timer_int_kind)         :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio, rt_tot
 integer(timer_int_kind)      ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
 character(len=STDLEN)        :: benchfname
@@ -326,7 +326,7 @@ contains
             doprint = .true.
             if( params_glob%part /= 1 ) doprint = .false.
             if( doprint )then
-                benchfname = 'HADAMARD2D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
+                benchfname = 'CLUSTER2D_BENCH_ITER'//int2str_pad(which_iter,3)//'.txt'
                 call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
                 write(fnr,'(a)') '*** TIMINGS (s) ***'
                 write(fnr,'(a,1x,f9.2)') 'initialisation       : ', rt_init

@@ -101,7 +101,7 @@ contains
         type(cmdline)    :: cline_volassemble
         type(cmdline)    :: cline_postprocess
         ! benchmarking
-        logical, parameter      :: L_BENCH = .true.
+        logical, parameter      :: L_BENCH = .false.
         integer(timer_int_kind) :: t_init,   t_scheduled,  t_merge_algndocs,  t_volassemble,  t_tot
         real(timer_int_kind)    :: rt_init, rt_scheduled, rt_merge_algndocs, rt_volassemble, rt_tot
         character(len=STDLEN)   :: benchfname
@@ -521,7 +521,6 @@ contains
                     ! e/o projection matching
                     write(logfhandle,'(A)')'>>>'
                     write(logfhandle,'(A)')'>>> SWITCHING TO EVEN/ODD RESOLUTION LIMIT'
-                    write(logfhandle,'(A)')'>>>'
                     l_projection_matching = .false.
                     if( cline%defined('match_filt') )then
                         if( cline%get_carg('match_filt').eq.'no' )then
