@@ -38,7 +38,7 @@ contains
         class(strategy3D_neigh), intent(inout) :: self
         integer,                       intent(in)    :: ithr
         type(ori) :: o
-        integer   :: iref,iproj
+        integer   :: iref, iproj, minnrefs
         real      :: inpl_corrs(self%s%nrots)
         logical   :: lnns(params_glob%nspace)
         ! execute search
@@ -53,13 +53,14 @@ contains
             call build_glob%spproj_field%get_ori(self%s%iptcl, o)
             call build_glob%pgrpsyms%nearest_proj_neighbors(build_glob%eulspace, o, params_glob%athres, lnns)
             self%s%nnn = count(lnns)
+            minnrefs   = ceiling(real(self%s%nnn) * NEIGH_MINFRAC)
             ! search
             do iproj=1,params_glob%nspace
                 if( .not. lnns(iproj) ) cycle
                 iref = (self%s%prev_state - 1) * params_glob%nspace + iproj
                 call per_ref_srch
                 ! exit condition
-                if( self%s%nbetter > 0 ) exit
+                if( self%s%nbetter > 0 .and. self%s%nrefs_eval >= minnrefs ) exit
             end do
             call sort_corrs(self%s) ! sort in correlation projection direction space
             call self%s%inpl_srch   ! search shifts

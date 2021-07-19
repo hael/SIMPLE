@@ -154,7 +154,6 @@ contains
                 write(logfhandle,*)'Unsupported ORITYPE; simple_commander_refine3D :: exec_refine3D_distr'
         end select
         if( fall_over ) THROW_HARD('no particles found! :exec_refine3D_distr')
-        if(       l_multistates .and. params%nstates <= 1 ) THROW_HARD('nstates must be > 1 for multi refine modes!')
         if( .not. l_multistates .and. params%nstates >  1 ) THROW_HARD('nstates > 1 but refine mode is single')
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -171,10 +170,10 @@ contains
         cline_postprocess         = cline
         cline_calc_group_sigmas   = cline
         ! initialise static command line parameters and static job description parameter
-        call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' ) ! required for distributed call
-        call cline_calc_pspec_distr%set( 'prg', 'calc_pspec' )       ! required for distributed call
-        call cline_postprocess%set('prg', 'postprocess' )            ! required for local call
-        call cline_calc_group_sigmas%set('prg', 'calc_group_sigmas' )! required for local call
+        call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' )    ! required for distributed call
+        call cline_calc_pspec_distr%set(    'prg', 'calc_pspec' )       ! required for distributed call
+        call cline_postprocess%set(         'prg', 'postprocess' )      ! required for local call
+        call cline_calc_group_sigmas%set(   'prg', 'calc_group_sigmas' )! required for local call
         if( trim(params%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set('pgrp', 'c1')
         call cline_postprocess%set('mirr',    'no')
         call cline_postprocess%set('mkdir',   'no')
@@ -286,17 +285,17 @@ contains
             do state = 1,params%nstates
                 ! rename volumes and update cline
                 str_state = int2str_pad(state,2)
-                vol = trim(VOL_FBODY)//trim(str_state)//params%ext
-                str = trim(STARTVOL_FBODY)//trim(str_state)//params%ext
-                iostat = simple_rename( trim(vol), trim(str) )
-                vol = 'vol'//trim(int2str(state))
+                vol       = trim(VOL_FBODY)//trim(str_state)//params%ext
+                str       = trim(STARTVOL_FBODY)//trim(str_state)//params%ext
+                iostat    = simple_rename( trim(vol), trim(str) )
+                vol       = 'vol'//trim(int2str(state))
                 call cline%set( trim(vol), trim(str) )
-                vol_even = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
-                str = trim(STARTVOL_FBODY)//trim(str_state)//'_even'//params%ext
-                iostat= simple_rename( trim(vol_even), trim(str) )
-                vol_odd  = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
-                str = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//params%ext
-                iostat =  simple_rename( trim(vol_odd), trim(str) )
+                vol_even  = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
+                str       = trim(STARTVOL_FBODY)//trim(str_state)//'_even'//params%ext
+                iostat    = simple_rename( trim(vol_even), trim(str) )
+                vol_odd   = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
+                str       = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//params%ext
+                iostat    =  simple_rename( trim(vol_odd), trim(str) )
             enddo
         else if( vol_defined .and. params%continue .ne. 'yes' )then
             ! projection matching
@@ -310,7 +309,7 @@ contains
                 THROW_HARD('LP needs be defined for the first step of projection matching!')
                 call cline%delete('update_frac')
             endif
-            if( .not.str_has_substr(params%refine, 'neigh') .and. .not.str_has_substr(params%refine,'cont') )then
+            if( .not.str_has_substr(params%refine, 'neigh') )then
                 ! this forces the first round of alignment on the starting model(s)
                 ! to be greedy and the subseqent ones to be whatever the refinement flag is set to
                 call build%spproj%os_ptcl3D%delete_3Dalignment(keepshifts=.true.)
@@ -369,20 +368,22 @@ contains
             endif
             ! exponential cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1
-            call job_descr%set('extr_iter', trim(int2str(params%extr_iter)))
-            call cline%set('extr_iter', real(params%extr_iter))
-            call job_descr%set('which_iter', trim(int2str(params%which_iter)))
-            call cline%set('which_iter', real(params%which_iter))
-            call job_descr%set( 'startit', trim(int2str(iter)))
-            call cline%set('startit', real(iter))
+            call job_descr%set( 'extr_iter',  trim(int2str(params%extr_iter)))
+            call cline%set(     'extr_iter',  real(params%extr_iter))
+            call job_descr%set( 'which_iter', trim(int2str(params%which_iter)))
+            call cline%set(     'which_iter', real(params%which_iter))
+            call job_descr%set( 'startit',    trim(int2str(iter)))
+            call cline%set(     'startit',    real(iter))
             ! switch to refine=greedy_* when frac >= 99 and iter >= 5
-            if( cline_check_3Dconv%defined('frac_srch') )then
-                if( iter >= MIN_ITERS_SHC )then
-                    if( cline_check_3Dconv%get_rarg('frac_srch') >= FRAC_GREEDY_LIM )then
-                        params%refine = 'greedy'
-                        call job_descr%set( 'refine', params%refine )
-                        call cline%set('refine', params%refine)
-                        call cline_check_3Dconv%set('refine',params%refine)
+            if( trim(params%refine).eq.'shc' )then
+                if( cline_check_3Dconv%defined('frac_srch') )then
+                    if( iter >= MIN_ITERS_SHC )then
+                        if( cline_check_3Dconv%get_rarg('frac_srch') >= FRAC_GREEDY_LIM )then
+                            params%refine = 'greedy'
+                            call job_descr%set( 'refine', params%refine )
+                            call cline%set('refine', params%refine)
+                            call cline_check_3Dconv%set('refine',params%refine)
+                        endif
                     endif
                 endif
             endif
@@ -471,7 +472,7 @@ contains
                     ! per state post-process
                     do state = 1,params%nstates
                         str_state = int2str_pad(state,2)
-                        if( state_pops(state) == 0 )cycle
+                        if( state_pops(state) == 0 ) cycle
                         call cline_postprocess%set('state', real(state))
                         if( cline%defined('lp') ) call cline_postprocess%set('lp', params%lp)
                         call xpostprocess%execute(cline_postprocess)
