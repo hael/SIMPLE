@@ -169,10 +169,10 @@ contains
 
     subroutine local_res( even, odd, mskimg, corr_thres, locres_finds, half_winsz )
         use simple_image, only: image
-        class(image),               intent(inout) :: even, odd, mskimg
-        real,                       intent(in)    :: corr_thres
-        integer, allocatable,       intent(out)   :: locres_finds(:,:,:)
-        integer,          optional, intent(in)    :: half_winsz
+        class(image),         intent(inout) :: even, odd, mskimg
+        real,                 intent(in)    :: corr_thres
+        integer, allocatable, intent(out)   :: locres_finds(:,:,:)
+        integer, optional,    intent(in)    :: half_winsz
         logical,  allocatable :: l_mask(:,:,:)
         real,     allocatable :: fsc(:), res(:)
         integer     :: hwinsz, filtsz, ldim(3), i, j, k, kind, funit, io_stat
@@ -195,8 +195,8 @@ contains
         npix   = count(l_mask)
         res    = even%get_res()
         ! to avoid allocation in the loop
-        call ecopy%new(ldim, smpd)
-        call ocopy%new(ldim, smpd)
+        call ecopy%new(ldim, smpd, wthreads=.true.)
+        call ocopy%new(ldim, smpd, wthreads=.true.)
         if( allocated(locres_finds) ) deallocate(locres_finds)
         allocate(locres_finds(ldim(1),ldim(2),ldim(3)), fsc(filtsz))
         locres_finds = 0
