@@ -21,10 +21,9 @@ use simple_strategy2D3D_common,      only: killrecvols, set_bp_range, preprecvol
     prepimgbatch, grid_ptcl, read_imgbatch, norm_struct_facts
 use simple_strategy3D_cluster,       only: strategy3D_cluster
 use simple_strategy3D_shc,           only: strategy3D_shc
-use simple_strategy3D_snhc,   only: strategy3D_snhc
+use simple_strategy3D_snhc,          only: strategy3D_snhc
 use simple_strategy3D_greedy,        only: strategy3D_greedy
 use simple_strategy3D_neigh,         only: strategy3D_neigh
-use simple_strategy3D_cont,   only: strategy3D_cont
 use simple_strategy3D,               only: strategy3D
 use simple_strategy3D_srch,          only: strategy3D_spec, set_ptcl_stats, eval_ptcl
 use simple_convergence,              only: convergence
@@ -211,7 +210,7 @@ contains
                 ! switch for per-particle polymorphic strategy3D construction
                 select case(trim(params_glob%refine))
                     case('snhc')
-                        allocate(strategy3D_snhc    :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_snhc           :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc')
                         updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
                         if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt == 1 )then
@@ -227,8 +226,6 @@ contains
                         allocate(strategy3D_greedy         :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neigh')
                         allocate(strategy3D_neigh          :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('cont')
-                        allocate(strategy3D_cont    :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('cluster','clustersym')
                         allocate(strategy3D_cluster        :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('eval')

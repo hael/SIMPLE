@@ -1,5 +1,5 @@
 module simple_defs_conv
-real, parameter :: MI_CLASS_LIM_3D      = 0.998
+real, parameter :: MI_CLASS_LIM_3D      = 0.996
 real, parameter :: MI_CLASS_LIM_2D      = 0.98
 real, parameter :: MI_CLASS_LIM_2D_FRAC = 0.99
 real, parameter :: MI_STATE_LIM         = 0.98

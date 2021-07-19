@@ -16,8 +16,6 @@ public :: strategy3D_srch, strategy3D_spec, set_ptcl_stats, eval_ptcl
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DOCONTINUOUS = .false.
-
 type strategy3D_spec
     integer, pointer :: symmat(:,:) => null()
     integer :: iptcl=0, szsn=0
@@ -194,32 +192,16 @@ contains
         real      :: cxy(3)
         integer   :: ref, irot!, cnt, j
         logical   :: found_better
-        if( DOCONTINUOUS )then
-            ! BFGS over all df:s
-            call o%new(is_ptcl=.false.)
+        if( self%doshift )then
+            ! BFGS over shifts with in-plane rot exhaustive callback
             ref = s3D%proj_space_refinds_sorted_highest(self%ithr, self%nrefs)
-            ! continuous refinement over all df:s
-            call o%set_euler(s3D%proj_space_euls(self%ithr,ref,:))
-            call o%set_shift([0.,0.])
-            call self%grad_orisrch_obj%set_particle(self%iptcl)
-            cxy = self%grad_orisrch_obj%minimize(o, params_glob%athres/2., params_glob%trs, found_better)
-            if( found_better )then
-                s3D%proj_space_euls(self%ithr, ref,:) = o%get_euler()
+            call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+            cxy = self%grad_shsrch_obj%minimize(irot=irot)
+            if( irot > 0 )then
+                ! irot > 0 guarantees improvement found, update solution
+                s3D%proj_space_euls( self%ithr,ref,3) = 360. - pftcc_glob%get_rot(irot)
                 s3D%proj_space_corrs(self%ithr,ref)   = cxy(1)
                 s3D%proj_space_shift(self%ithr,ref,:) = cxy(2:3)
-            endif
-        else
-            if( self%doshift )then
-                ! BFGS over shifts with in-plane rot exhaustive callback
-                ref = s3D%proj_space_refinds_sorted_highest(self%ithr, self%nrefs)
-                call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                cxy = self%grad_shsrch_obj%minimize(irot=irot)
-                if( irot > 0 )then
-                    ! irot > 0 guarantees improvement found, update solution
-                    s3D%proj_space_euls( self%ithr,ref,3) = 360. - pftcc_glob%get_rot(irot)
-                    s3D%proj_space_corrs(self%ithr,ref)   = cxy(1)
-                    s3D%proj_space_shift(self%ithr,ref,:) = cxy(2:3)
-                endif
             endif
         endif
     end subroutine inpl_srch
