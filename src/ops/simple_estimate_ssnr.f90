@@ -174,11 +174,11 @@ contains
         integer, allocatable, intent(out)   :: locres_finds(:,:,:)
         integer, optional,    intent(in)    :: half_winsz
         logical,  allocatable :: l_mask(:,:,:)
-        real,     allocatable :: fsc(:), res(:)
+        real,     allocatable :: fsc(:), res(:), fsc_iso(:)
         integer     :: hwinsz, filtsz, ldim(3), i, j, k, kind, funit, io_stat
         integer     :: vecsz, find_hres, find_lres, cnt, npix, hwinszsq
         type(image) :: ecopy, ocopy
-        real        :: smpd, cc, ccavg, res_fsc05, res_fsc0143, frac_nccs
+        real        :: smpd, cc, ccavg, res_fsc05, res_fsc0143, frac_nccs, hp, lp
         ! check input
         if( .not. even%is_ft() ) THROW_HARD('even vol not FTed; local_res')
         if( .not. odd%is_ft()  ) THROW_HARD('odd vol not FTed; local_res')
@@ -188,12 +188,12 @@ contains
         hwinszsq = hwinsz * hwinsz
         ldim     = even%get_ldim()
         if( ldim(3) == 1 )  THROW_HARD('not intended for 2D images; local_res')
-        vecsz = (2 * hwinsz + 1)**3
-        filtsz = even%get_filtsz()
-        smpd   = even%get_smpd()
-        l_mask = mskimg%bin2logical()
-        npix   = count(l_mask)
-        res    = even%get_res()
+        vecsz    = (2 * hwinsz + 1)**3
+        filtsz   = even%get_filtsz()
+        smpd     = even%get_smpd()
+        l_mask   = mskimg%bin2logical()
+        npix     = count(l_mask)
+        res      = even%get_res()
         ! to avoid allocation in the loop
         call ecopy%new(ldim, smpd, wthreads=.true.)
         call ocopy%new(ldim, smpd, wthreads=.true.)
@@ -201,38 +201,53 @@ contains
         allocate(locres_finds(ldim(1),ldim(2),ldim(3)), fsc(filtsz))
         locres_finds = 0
         fsc          = 0.
+        allocate(fsc_iso(filtsz), source=0.)
+        call even%fsc(odd, fsc_iso)
         ! loop over resolution shells
         do kind=1,filtsz
-            ! tophat filter out the shell
-            call ecopy%copy(even)
-            call ocopy%copy(odd)
-            call ecopy%tophat(kind)
-            call ocopy%tophat(kind)
-            call ecopy%ifft
-            call ocopy%ifft
-            ! neighborhood correlation analysis
-            ccavg = 0.
-            cnt   = 0
-            ! parallel section needs to start here as the above steps are threaded as well
-            !$omp parallel do collapse(3) default(shared) private(i,j,k,cc)&
-            !$omp schedule(static) proc_bind(close) reduction(+:ccavg,cnt)
-            do k=1,ldim(3)
-                do j=1,ldim(2)
-                    do i=1,ldim(1)
-                        if( .not. l_mask(i,j,k) ) cycle
-                        cc    = neigh_cc([i,j,k])
-                        ccavg = ccavg + cc
-                        if( cc >= corr_thres ) locres_finds(i,j,k) = kind
-                        if( cc >= 0.5 ) cnt = cnt + 1
+            if( fsc_iso(kind) >= 0.98 )then
+                locres_finds(i,j,k) = kind
+                ccavg               = fsc_iso(kind)
+                fsc(kind)           = fsc_iso(kind)
+                frac_nccs           = 100.
+            else
+                ! filter out the shell
+                lp = calc_lowpass_lim(kind,   ldim(1), smpd)
+                hp = calc_lowpass_lim(kind-1, ldim(1), smpd)
+                call ecopy%copy(even)
+                call ocopy%copy(odd)
+                ! call ecopy%bp(hp, lp, width=2.0)
+                ! call ocopy%bp(hp, lp, width=2.0)
+                call ecopy%tophat(kind)
+                call ocopy%tophat(kind)
+                call ecopy%ifft
+                call ocopy%ifft
+                ! neighborhood correlation analysis
+                ccavg = 0.
+                cnt   = 0
+                ! parallel section needs to start here as the above steps are threaded as well
+                !$omp parallel do collapse(3) default(shared) private(i,j,k,cc)&
+                !$omp schedule(static) proc_bind(close) reduction(+:ccavg,cnt)
+                do k=1,ldim(3)
+                    do j=1,ldim(2)
+                        do i=1,ldim(1)
+                            if( .not. l_mask(i,j,k) ) cycle
+                            cc    = neigh_cc([i,j,k])
+                            ccavg = ccavg + cc
+                            if( cc >= corr_thres )then
+                                locres_finds(i,j,k) = kind
+                                cnt = cnt + 1
+                            endif
+                        end do
                     end do
                 end do
-            end do
-            !$omp end parallel do
-            ccavg     = ccavg / real(npix)
-            fsc(kind) = ccavg
-            frac_nccs = real(cnt) / real(npix) * 100.
-            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3,1X,A,1X,F6.2)') '>>> RESOLUTION:', res(kind), '>>> CORRELATION:', fsc(kind),&
-            &'>>> % NEIGH_CCS >= 0.5', frac_nccs
+                !$omp end parallel do
+                ccavg     = ccavg / real(npix)
+                fsc(kind) = ccavg
+                frac_nccs = real(cnt) / real(npix) * 100.
+            endif
+            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3,1X,A,1X,F6.2,1X,A,1X,F6.2)') '>>> RESOLUTION:', res(kind), '>>> CORRELATION:', fsc(kind),&
+            &'>>> % NEIGH_CCS >=', corr_thres, 'IS', frac_nccs
             if( frac_nccs < 1. .or. ccavg < 0.01 ) exit ! save the compute
         end do
         call get_resolution(fsc, res, res_fsc05, res_fsc0143)
@@ -267,29 +282,26 @@ contains
                 ! set bounds
                 lb = loc - hwinsz
                 ub = loc + hwinsz
-                ! extract components wihin sphere
+                ! extract components within sphere
                 cnt = 0
                 kk  = -hwinsz
                 do k=lb(3),ub(3)
-                    if( k >= 1 .and. k <= ldim(3) )then
+                    if( k < 1 .and. k > ldim(3) ) cycle
                         jj = -hwinsz
                         do j=lb(2),ub(2)
-                            if( j >= 1 .and. j <= ldim(2) )then
+                            if( j < 1 .and. j > ldim(2) ) cycle
                                 ii = -hwinsz
                                 do i=lb(1),ub(1)
-                                    if( i >= 1 .and. i <= ldim(1) )then
-                                        if( kk*kk + jj*jj + ii*ii <= hwinszsq )then
-                                            cnt       = cnt + 1
-                                            vec1(cnt) = dble(ecopy%get_rmat_at(i,j,k))
-                                            vec2(cnt) = dble(ocopy%get_rmat_at(i,j,k))
-                                        endif
+                                    if( i < 1 .and. i > ldim(1) ) cycle
+                                    if( kk*kk + jj*jj + ii*ii <= hwinszsq )then
+                                        cnt       = cnt + 1
+                                        vec1(cnt) = dble(ecopy%get_rmat_at(i,j,k))
+                                        vec2(cnt) = dble(ocopy%get_rmat_at(i,j,k))
                                     endif
                                     ii = ii + 1
                                 enddo
-                            endif
                             jj = jj + 1
                         enddo
-                    endif
                     kk = kk + 1
                 enddo
                 ! correlate

@@ -97,7 +97,7 @@ contains
         integer, allocatable :: locres_finds(:,:,:)
         real,    allocatable :: res(:), corrs(:)
         if( .not. cline%defined('mkdir') )      call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('lplim_crit') ) call cline%set('lplim_crit', 0.5)
+        if( .not. cline%defined('lplim_crit') ) call cline%set('lplim_crit', 0.143)
         call params%new(cline)
         ! read even/odd pair
         call even%new([params%box,params%box,params%box], params%smpd)
