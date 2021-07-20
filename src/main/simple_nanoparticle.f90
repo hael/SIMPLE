@@ -57,7 +57,7 @@ character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
 
-character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//CSV_DELIM//'NATOMS_PER_VOL'//&
+character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//&
 &CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MED_NVOX'//CSV_DELIM//'SDEV_NVOX'//&
 &CSV_DELIM//'AVG_NN_BONDL'//CSV_DELIM//'MED_NN_BONDL'//CSV_DELIM//'SDEV_NN_BONDL'//&
 &CSV_DELIM//'AVG_CN_GEN'//CSV_DELIM//'MED_CN_GEN'//CSV_DELIM//'SDEV_CN_GEN'//&
@@ -147,8 +147,6 @@ type :: nanoparticle
     real                  :: min_cendist_cns(CNMIN:CNMAX)     = 0. ! min -"-                                          MIN_RADIAL_POS
     ! -- # atoms
     real                  :: natoms_cns(CNMIN:CNMAX)          = 0. ! # of atoms per cn_std                            NATOMS
-    ! -- # atoms per volume
-    real                  :: atoms_per_vol_cns(CNMIN:CNMAX)   = 0. ! # atoms per volume (#/A**3)                      NATOMS_PER_VOL
     ! -- the rest
     type(stats_struct)    :: size_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: bondl_stats_cns(CNMIN:CNMAX)
@@ -1162,9 +1160,8 @@ contains
 
             subroutine calc_cn_stats( cn )
                 integer, intent(in)  :: cn ! calculate stats for given std cn
-                integer :: cc, n, n_size, n_diam, natoms
+                integer :: cc, n, n_size, n_diam
                 logical :: cn_mask(self%n_cc), size_mask(self%n_cc)
-                real    :: vshell
                 ! Generate masks
                 cn_mask   = self%atominfo(:)%cn_std == cn
                 size_mask = self%atominfo(:)%size >= NVOX_THRESH .and. cn_mask
@@ -1174,13 +1171,7 @@ contains
                 self%max_cendist_cns(cn) = maxval(self%atominfo(:)%cendist,  mask=cn_mask)
                 self%min_cendist_cns(cn) = minval(self%atominfo(:)%cendist,  mask=cn_mask)
                 ! -- # atoms
-                self%natoms_cns(cn)       = real(n)
-                ! -- # atoms per volume
-                vshell = (FOURPI * self%max_cendist_cns(cn)**3.) / 3. - (FOURPI * self%min_cendist_cns(cn)**3.) / 3.
-                natoms = count(self%atominfo(:)%cendist <= self%max_cendist_cns(cn) .and.&
-                              &self%atominfo(:)%cendist >= self%min_cendist_cns(cn))
-                self%atoms_per_vol_cns(cn) = 0.
-                if( natoms > 0 .and. vshell > TINY ) self%atoms_per_vol_cns(cn) = real(natoms) / vshell
+                self%natoms_cns(cn) = real(n)
                 if( n < 2 ) return
                 ! -- the rest
                 call calc_stats( real(self%atominfo(:)%size),    self%size_stats_cns(cn),          mask=size_mask )
@@ -1518,8 +1509,6 @@ contains
         write(funit,601,advance='no') real(cn),                              CSV_DELIM ! CN_STD
         ! -- # atoms per cn
         write(funit,601,advance='no') self%natoms_cns(cn),                   CSV_DELIM ! NATOMS
-        ! -- # atoms per volume (#/A**3)
-        write(funit,601,advance='no') self%atoms_per_vol_cns(cn),            CSV_DELIM ! NATOMS_PER_VOL
         ! -- atom size
         write(funit,601,advance='no') self%size_stats_cns(cn)%avg,           CSV_DELIM ! AVG_NVOX
         write(funit,601,advance='no') self%size_stats_cns(cn)%med,           CSV_DELIM ! MED_NVOX
