@@ -30,7 +30,7 @@ use simple_convergence,              only: convergence
 use simple_euclid_sigma2,            only: euclid_sigma2
 implicit none
 
-public :: refine3D_exec, preppftcc4align, pftcc, setup_weights, calc_3Drec
+public :: refine3D_exec, preppftcc4align, pftcc, calc_3Drec
 private
 #include "simple_local_flags.inc"
 
@@ -594,21 +594,5 @@ contains
        end select
        call orientation%kill
     end subroutine calc_3Drec
-
-    subroutine setup_weights
-        ! particle weights
-        select case(trim(params_glob%ptclw))
-            case('yes')
-                call build_glob%spproj_field%calc_soft_weights(params_glob%frac)
-            case DEFAULT
-                call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
-        end select
-        ! prepare particle mask
-        allocate(ptcl_mask(params_glob%fromp:params_glob%top))
-        call build_glob%spproj_field%sample4update_and_incrcnt_nofrac([params_glob%fromp,params_glob%top],&
-        nptcls2update, pinds, ptcl_mask)
-        ! allocate s3D singleton
-        call prep_strategy3D(ptcl_mask)
-    end subroutine setup_weights
 
 end module simple_strategy3D_matcher

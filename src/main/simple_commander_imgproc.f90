@@ -353,7 +353,7 @@ contains
         real, parameter   :: SIGMA_DEFAULT=1.0
         real              :: width, fsc05, fsc0143, sigma
         integer           :: find
-        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'filtered.mrcs')
         if( .not. cline%defined('outvol') ) call cline%set('outvol', 'filtered.mrc')
         width = 10.

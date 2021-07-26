@@ -194,7 +194,11 @@ contains
             call vol%zero_background
             call mskvol%new(ldim, smpd)
             call mskvol%read(params%mskfile)
-            call vol%mul(mskvol)
+            if( cline%defined('lp_backgr') )then
+                call vol%lp_background(mskvol,params%lp_backgr)
+            else
+                call vol%mul(mskvol)
+            endif
             call mskvol%kill
         else if( params%automsk .eq. 'yes' )then
             if( .not. cline%defined('thres') )then
@@ -267,7 +271,7 @@ contains
         type(image), allocatable :: imgs(:)
         integer                  :: i
         logical                  :: do_zero
-        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('wfun')   ) call cline%set('wfun',   'kb')
         if( .not. cline%defined('winsz')  ) call cline%set('winsz',   1.5)
         if( .not. cline%defined('alpha')  ) call cline%set('alpha',    2.)
