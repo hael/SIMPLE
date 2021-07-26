@@ -218,6 +218,7 @@ contains
     procedure, private :: shellnorm_and_apply_filter_serial_2
     generic            :: shellnorm_and_apply_filter_serial =>&
         &shellnorm_and_apply_filter_serial_1, shellnorm_and_apply_filter_serial_2
+    procedure          :: zero_fcomps_below_noise_power
     procedure          :: apply_bfac
     procedure          :: bp
     procedure          :: tophat
@@ -3612,115 +3613,157 @@ contains
         end do
     end subroutine apply_filter_serial
 
-   ! This function performs image filtering by convolution
-   ! with the 1D kernel filt. REAL SPACE.
-   subroutine imfilter1(img,filt)
-       class(image), intent(inout) :: img
-       type(image) :: img_p
-       real, allocatable   ::  rmat(:,:,:)
-       real, intent(in)    :: filt(:)
-       real, allocatable   :: shifted_filt(:)
-       real, allocatable   :: rmat_t(:,:,:)
-       integer :: ldim(3), sz_f(1), L1, L2, L3
-       integer :: i, j, k, m, n, o
-       ldim = img%get_ldim()
-       sz_f = shape(filt)
-       L1 = sz_f(1)
-       allocate(shifted_filt(-(L1-1)/2:(L1-1)/2), source = filt)
-       allocate(rmat_t(ldim(1),ldim(2),ldim(3)), source = 0.)
-       call img_p%new([ldim(1)+L1-1,ldim(2)+L1-1,1],1.)
-       call img%pad(img_p)
-       rmat = img_p%get_rmat()
-       !$omp parallel do collapse(2) default(shared) private(i,j,m)&
-       !$omp schedule(static) proc_bind(close)
-       do i = 1, ldim(1)
-         do j = 1, ldim(2)
-                 do m = -(L1-1)/2,(L1-1)/2
-                   rmat_t(i,j,1) = rmat_t(i,j,1)+rmat(i+m+1,j+n+1,1)*shifted_filt(m)
-             enddo
-         end do
-       end do
-       !omp end parallel do
-       call img%set_rmat(rmat_t)
-       deallocate(rmat, rmat_t, shifted_filt)
-   end subroutine imfilter1
+    subroutine zero_fcomps_below_noise_power( self, noise_vol )
+        class(image), intent(inout) :: self, noise_vol
+        real, allocatable :: res(:)
+        integer :: h, k, l, lims(3,2), phys(3), cnt, counts(self%get_filtsz())
+        integer :: sh, counts_all(self%get_filtsz()), filtsz
+        real    :: sig_pow, noise_pow
+        lims  = self%fit%loop_lims(2)
+        if( .not.self%is_ft() ) THROW_HARD('Instance need to be FTed')
+        if( .not.self%is_ft() ) THROW_HARD('noise_vol need to be FTed')
+        cnt        = 0
+        counts     = 0
+        counts_all = 0
+        filtsz     = self%get_filtsz()
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    sh             = nint(hyp(real(h),real(k),real(l)))
+                    if( sh == 0 ) cycle
+                    phys           = self%comp_addr_phys([h,k,l])
+                    sig_pow        = csq(self%cmat(phys(1),phys(2),phys(3)))
+                    noise_pow      = csq(noise_vol%cmat(phys(1),phys(2),phys(3)))
+                    if( sh <= filtsz ) counts_all(sh) = counts_all(sh) + 1
+                    if( noise_pow > sig_pow )then
+                        call self%mul([h,k,l], 0.)
+                        cnt = cnt + 1
+                    else
+                        if( sh <= filtsz ) counts(sh) = counts(sh) + 1
+                    endif
+                enddo
+            enddo
+        enddo
+        res = self%get_res()
+        do k=1,size(res)
+            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F15.3)') '>>> RESOLUTION:',&
+            &res(k), '>>> % pow(FCOMPS) > pow(NOISE):', 100 * (real(counts(k)) / real(counts_all(k)))
+        end do
+        deallocate(res)
+        write(logfhandle,'(a,f4.1)')&
+        'fraction (%) of Fourier components with power below noise power zeroed: ',&
+        &100 * (real(cnt) / product(self%ldim))
+    end subroutine zero_fcomps_below_noise_power
 
-   ! This function performs image filtering by convolution
-   ! with the 2D kernel filt. REAL SPACE.
-   subroutine imfilter2(img,filt)
-       class(image), intent(inout) :: img
-       type(image) :: img_p
-       real, allocatable   ::  rmat(:,:,:)
-       real, intent(in)    :: filt(:,:)
-       real, allocatable   :: shifted_filt(:,:)
-       real, allocatable   :: rmat_t(:,:,:)
-       integer :: ldim(3), sz_f(2), L1, L2, L3
-       integer :: i, j, k, m, n, o
-       ldim = img%get_ldim()
-       sz_f = shape(filt)
-       L1 = sz_f(1)
-       L2 = sz_f(2)
-       allocate(shifted_filt(-(L1-1)/2:(L1-1)/2, -(L2-1)/2:(L2-1)/2), source = filt)
-       allocate(rmat_t(ldim(1),ldim(2),ldim(3)), source = 0.)
-       call img_p%new([ldim(1)+L1-1,ldim(2)+L2-1,1],1.)
-       call img%pad(img_p)
-       rmat = img_p%get_rmat()
-       !$omp parallel do collapse(2) default(shared) private(i,j,m,n)&
-       !$omp schedule(static) proc_bind(close)
-       do i = 1, ldim(1)
-           do j = 1, ldim(2)
-               do m = -(L1-1)/2,(L1-1)/2
-                   do n = -(L2-1)/2,(L2-1)/2
-                       rmat_t(i,j,1) = rmat_t(i,j,1)+rmat(i+m+1,j+n+1,1)*shifted_filt(m,n)
-                   enddo
-               enddo
-           end do
-       end do
-       !omp end parallel do
-       call img%set_rmat(rmat_t)
-       deallocate(rmat, rmat_t, shifted_filt)
-   end subroutine imfilter2
+    ! This function performs image filtering by convolution
+    ! with the 1D kernel filt. REAL SPACE.
+    subroutine imfilter1(img,filt)
+        class(image), intent(inout) :: img
+        type(image) :: img_p
+        real, allocatable   ::  rmat(:,:,:)
+        real, intent(in)    :: filt(:)
+        real, allocatable   :: shifted_filt(:)
+        real, allocatable   :: rmat_t(:,:,:)
+        integer :: ldim(3), sz_f(1), L1, L2, L3
+        integer :: i, j, k, m, n, o
+        ldim = img%get_ldim()
+        sz_f = shape(filt)
+        L1 = sz_f(1)
+        allocate(shifted_filt(-(L1-1)/2:(L1-1)/2), source = filt)
+        allocate(rmat_t(ldim(1),ldim(2),ldim(3)), source = 0.)
+        call img_p%new([ldim(1)+L1-1,ldim(2)+L1-1,1],1.)
+        call img%pad(img_p)
+        rmat = img_p%get_rmat()
+        !$omp parallel do collapse(2) default(shared) private(i,j,m)&
+        !$omp schedule(static) proc_bind(close)
+        do i = 1, ldim(1)
+            do j = 1, ldim(2)
+                do m = -(L1-1)/2,(L1-1)/2
+                    rmat_t(i,j,1) = rmat_t(i,j,1)+rmat(i+m+1,j+n+1,1)*shifted_filt(m)
+                enddo
+            end do
+        end do
+        !omp end parallel do
+        call img%set_rmat(rmat_t)
+        deallocate(rmat, rmat_t, shifted_filt)
+    end subroutine imfilter1
 
-   ! This function performs image filtering by convolution
-   ! with the 3D kernel filt. REAL SPACE.
-   subroutine imfilter3(img,filt)
-       class(image), intent(inout) :: img
-       type(image) :: img_p
-       real, allocatable   ::  rmat(:,:,:)
-       real, intent(in)    :: filt(:,:,:)
-       real, allocatable   :: shifted_filt(:,:,:)
-       real, allocatable   :: rmat_t(:,:,:)
-       integer :: ldim(3), sz_f(3), L1, L2, L3
-       integer :: i, j, k, m, n, o
-       ldim = img%get_ldim()
-       sz_f = shape(filt)
-       L1 = sz_f(1)
-       L2 = sz_f(2)
-       L3 = sz_f(3)
-       allocate(shifted_filt(-(L1-1)/2:(L1-1)/2,-(L2-1)/2:(L2-1)/2,-(L3-1)/2:(L3-1)/2), source = filt)
-       allocate(rmat_t(ldim(1),ldim(2),ldim(3)), source = 0.)
-       call img_p%new([ldim(1)+L1-1,ldim(2)+L2-1,ldim(3)+L3-1],1.)
-       call img%pad(img_p)
-       rmat = img_p%get_rmat()
-       !$omp parallel do collapse(2) default(shared) private(i,j,k,m,n,o)&
-       !$omp schedule(static) proc_bind(close)
-       do i = 1, ldim(1)
-           do j = 1, ldim(2)
-               do k = 1, ldim(3)
-                   do m = -(L1-1)/2,(L1-1)/2
-                       do n = -(L2-1)/2,(L2-1)/2
-                           do o = -(L3-1)/2,(L3-1)/2
-                               rmat_t(i,j,k) = rmat_t(i,j,k)+rmat(i+m+1,j+n+1,k+o+1)*shifted_filt(m,n,o)
-                           enddo
-                       enddo
-                   enddo
-               enddo
-           end do
-       end do
-       !omp end parallel do
-       call img%set_rmat(rmat_t)
-       deallocate(rmat, rmat_t, shifted_filt)
-   end subroutine imfilter3
+    ! This function performs image filtering by convolution
+    ! with the 2D kernel filt. REAL SPACE.
+    subroutine imfilter2(img,filt)
+        class(image), intent(inout) :: img
+        type(image) :: img_p
+        real, allocatable   ::  rmat(:,:,:)
+        real, intent(in)    :: filt(:,:)
+        real, allocatable   :: shifted_filt(:,:)
+        real, allocatable   :: rmat_t(:,:,:)
+        integer :: ldim(3), sz_f(2), L1, L2, L3
+        integer :: i, j, k, m, n, o
+        ldim = img%get_ldim()
+        sz_f = shape(filt)
+        L1 = sz_f(1)
+        L2 = sz_f(2)
+        allocate(shifted_filt(-(L1-1)/2:(L1-1)/2, -(L2-1)/2:(L2-1)/2), source = filt)
+        allocate(rmat_t(ldim(1),ldim(2),ldim(3)), source = 0.)
+        call img_p%new([ldim(1)+L1-1,ldim(2)+L2-1,1],1.)
+        call img%pad(img_p)
+        rmat = img_p%get_rmat()
+        !$omp parallel do collapse(2) default(shared) private(i,j,m,n)&
+        !$omp schedule(static) proc_bind(close)
+        do i = 1, ldim(1)
+            do j = 1, ldim(2)
+                do m = -(L1-1)/2,(L1-1)/2
+                    do n = -(L2-1)/2,(L2-1)/2
+                        rmat_t(i,j,1) = rmat_t(i,j,1)+rmat(i+m+1,j+n+1,1)*shifted_filt(m,n)
+                    enddo
+                enddo
+            end do
+        end do
+        !omp end parallel do
+        call img%set_rmat(rmat_t)
+        deallocate(rmat, rmat_t, shifted_filt)
+    end subroutine imfilter2
+
+    ! This function performs image filtering by convolution
+    ! with the 3D kernel filt. REAL SPACE.
+    subroutine imfilter3(img,filt)
+        class(image), intent(inout) :: img
+        type(image) :: img_p
+        real, allocatable   ::  rmat(:,:,:)
+        real, intent(in)    :: filt(:,:,:)
+        real, allocatable   :: shifted_filt(:,:,:)
+        real, allocatable   :: rmat_t(:,:,:)
+        integer :: ldim(3), sz_f(3), L1, L2, L3
+        integer :: i, j, k, m, n, o
+        ldim = img%get_ldim()
+        sz_f = shape(filt)
+        L1 = sz_f(1)
+        L2 = sz_f(2)
+        L3 = sz_f(3)
+        allocate(shifted_filt(-(L1-1)/2:(L1-1)/2,-(L2-1)/2:(L2-1)/2,-(L3-1)/2:(L3-1)/2), source = filt)
+        allocate(rmat_t(ldim(1),ldim(2),ldim(3)), source = 0.)
+        call img_p%new([ldim(1)+L1-1,ldim(2)+L2-1,ldim(3)+L3-1],1.)
+        call img%pad(img_p)
+        rmat = img_p%get_rmat()
+        !$omp parallel do collapse(2) default(shared) private(i,j,k,m,n,o)&
+        !$omp schedule(static) proc_bind(close)
+        do i = 1, ldim(1)
+            do j = 1, ldim(2)
+                do k = 1, ldim(3)
+                    do m = -(L1-1)/2,(L1-1)/2
+                        do n = -(L2-1)/2,(L2-1)/2
+                            do o = -(L3-1)/2,(L3-1)/2
+                                rmat_t(i,j,k) = rmat_t(i,j,k)+rmat(i+m+1,j+n+1,k+o+1)*shifted_filt(m,n,o)
+                            enddo
+                        enddo
+                    enddo
+                enddo
+            end do
+        end do
+        !omp end parallel do
+        call img%set_rmat(rmat_t)
+        deallocate(rmat, rmat_t, shifted_filt)
+    end subroutine imfilter3
 
     !> \brief phase_rand  is for randomzing the phases of the FT of an image from lp and out
     subroutine phase_rand( self, lp )

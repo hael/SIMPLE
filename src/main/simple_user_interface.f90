@@ -2616,7 +2616,7 @@ contains
         &'Post-processing of volume',&                                        ! descr_short
         &'is a program for map post-processing. Use program volops to estimate the B-factor with the Guinier plot',& ! descr_long
         &'simple_exec',&                                                      ! executable
-        &0, 1, 0, 0, 4, 9, 1, .true.)                                         ! # entries in each group, requires sp_project
+        &0, 1, 0, 0, 5, 9, 1, .true.)                                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2632,6 +2632,7 @@ contains
         call postprocess%set_input('filt_ctrls', 2, 'lp', 'num', 'Low-pass limit for map filtering', 'Low-pass limit for map filtering', 'low-pass limit in Angstroms', .false., 20.)
         call postprocess%set_input('filt_ctrls', 3, bfac)
         call postprocess%set_input('filt_ctrls', 4, mirr)
+        call postprocess%set_input('filt_ctrls', 5, lp_backgr)
         ! mask controls
         call postprocess%set_input('mask_ctrls', 1, msk)
         call postprocess%set_input('mask_ctrls', 2, inner)
