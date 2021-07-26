@@ -32,24 +32,22 @@ character(len=*), parameter :: ATOM_VAR_CORRS_FILE = 'atom_param_corrs.txt'
 character(len=*), parameter :: BIN_CLS_STATS_FILE  = 'binary_class_stats.csv'
 
 character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//'CN_STD'//CSV_DELIM//'NN_BONDL'//&
-&CSV_DELIM//'CN_GEN'//CSV_DELIM//'ASPECT_RATIO'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
-&CSV_DELIM//'MAX_INT'//CSV_DELIM//'SDEV_INT'//CSV_DELIM//'RADIAL_POS'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'X'//&
+&CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
+&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'X'//&
 &CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//&
 &CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'//&
-&CSV_DELIM//'NVOX_CLASS'//CSV_DELIM//'NN_BONDL_CLASS'//CSV_DELIM//'ASPECT_RATIO_CLASS'//CSV_DELIM//'POLAR_ANGLE_CLASS'//&
+&CSV_DELIM//'NVOX_CLASS'//CSV_DELIM//'NN_BONDL_CLASS'//&
 &CSV_DELIM//'DIAM_CLASS'//CSV_DELIM//'MAX_INT_CLASS'//CSV_DELIM//'VALID_CORR_CLASS'//CSV_DELIM//'RADIAL_STRAIN_CLASS'
 
 character(len=*), parameter :: ATOM_STATS_HEAD_OMIT = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//'CN_STD'//CSV_DELIM//'NN_BONDL'//&
-&CSV_DELIM//'CN_GEN'//CSV_DELIM//'ASPECT_RATIO'//CSV_DELIM//'POLAR_ANGLE'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
-&CSV_DELIM//'MAX_INT'//CSV_DELIM//'SDEV_INT'//CSV_DELIM//'RADIAL_POS'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'RADIAL_STRAIN'
+&CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
+&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MED_NVOX'//CSV_DELIM//'SDEV_NVOX'//&
 &CSV_DELIM//'AVG_CN_STD'//CSV_DELIM//'MED_CN_STD'//CSV_DELIM//'SDEV_CN_STD'//&
 &CSV_DELIM//'AVG_NN_BONDL'//CSV_DELIM//'MED_NN_BONDL'//CSV_DELIM//'SDEV_NN_BONDL'//&
 &CSV_DELIM//'AVG_CN_GEN'//CSV_DELIM//'MED_CN_GEN'//CSV_DELIM//'SDEV_CN_GEN'//&
-&CSV_DELIM//'AVG_ASPECT_RATIO'//CSV_DELIM//'MED_ASPECT_RATIO'//CSV_DELIM//'SDEV_ASPECT_RATIO'//&
-&CSV_DELIM//'AVG_POLAR_ANGLE'//CSV_DELIM//'MED_POLAR_ANGLE'//CSV_DELIM//'SDEV_POLAR_ANGLE'//&
 &CSV_DELIM//'AVG_DIAM'//CSV_DELIM//'MED_DIAM'//CSV_DELIM//'SDEV_DIAM'//&
 &CSV_DELIM//'AVG_AVG_INT'//CSV_DELIM//'MED_AVG_INT'//CSV_DELIM//'SDEV_AVG_INT'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'MED_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
@@ -61,8 +59,6 @@ character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//&
 &CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MED_NVOX'//CSV_DELIM//'SDEV_NVOX'//&
 &CSV_DELIM//'AVG_NN_BONDL'//CSV_DELIM//'MED_NN_BONDL'//CSV_DELIM//'SDEV_NN_BONDL'//&
 &CSV_DELIM//'AVG_CN_GEN'//CSV_DELIM//'MED_CN_GEN'//CSV_DELIM//'SDEV_CN_GEN'//&
-&CSV_DELIM//'AVG_ASPECT_RATIO'//CSV_DELIM//'MED_ASPECT_RATIO'//CSV_DELIM//'SDEV_ASPECT_RATIO'//&
-&CSV_DELIM//'AVG_POLAR_ANGLE'//CSV_DELIM//'MED_POLAR_ANGLE'//CSV_DELIM//'SDEV_POLAR_ANGLE'//&
 &CSV_DELIM//'AVG_DIAM'//CSV_DELIM//'MED_DIAM'//CSV_DELIM//'SDEV_DIAM'//&
 &CSV_DELIM//'AVG_AVG_INT'//CSV_DELIM//'MED_AVG_INT'//CSV_DELIM//'SDEV_AVG_INT'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'MED_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
@@ -80,17 +76,12 @@ type :: atom_stats
     integer :: cc_ind            = 0  ! index of the connected component                            INDEX
     integer :: size              = 0  ! number of voxels in connected component                     NVOX
     integer :: cn_std            = 0  ! standard coordination number                                CN_STD
-    integer :: loc_ldist(3)      = 0  ! vxl that determins the longest dim of the atom
     real    :: bondl             = 0. ! nearest neighbour bond lenght in A                          NN_BONDL
     real    :: cn_gen            = 0. ! generalized coordination number                             CN_GEN
-    real    :: aspect_ratio      = 0. !                                                             ASPECT_RATIO
-    real    :: polar_vec(3)      = 0. ! polarization vector
-    real    :: polar_angle       = 0. ! polarization angle                                          POLAR_ANGLE
     real    :: diam              = 0. ! atom diameter                                               DIAM
     real    :: avg_int           = 0. ! average grey level intensity across the connected component AVG_INT
     real    :: max_int           = 0. ! maximum            -"-                                      MAX_INT
-    real    :: sdev_int          = 0. ! standard deviation -"-                                      SDEV_INT
-    real    :: cendist           = 0. ! distance from the centre of mass of the nanoparticle        RADIAL_POS
+    real    :: cendist           = 0. ! distance from the centre of mass of the nanoparticle        CENDIST
     real    :: valid_corr        = 0. ! per-atom correlation with the simulated map                 VALID_CORR
     real    :: center(3)         = 0. ! atom center                                                 X Y Z
     ! strain
@@ -104,8 +95,6 @@ type :: atom_stats
     ! binary cluster assignments
     integer :: size_cls          = 0  !                                                             NVOX_CLASS
     integer :: bondl_cls         = 0  !                                                             NN_BONDL_CLASS
-    integer :: aspect_ratio_cls  = 0  !                                                             ASPECT_RATIO_CLASS
-    integer :: polar_angle_cls   = 0  !                                                             POLAR_ANGLE_CLASS
     integer :: diam_cls          = 0  !                                                             DIAM_CLASS
     integer :: max_int_cls       = 0  !                                                             MAX_INT_CLASS
     integer :: valid_corr_cls    = 0  !                                                             VALID_CORR_CLASS
@@ -125,34 +114,23 @@ type :: nanoparticle
     real                  :: theoretical_radius = 0. ! theoretical atom radius in A
     ! GLOBAL NP STATS
     type(stats_struct)    :: map_stats
-    ! -- dipole stats
-    real                  :: net_dipole(3)      = 0. ! sum of all the directions of polarization             X_POLAR Y_POLAR Z_POLAR
-    real                  :: net_dipole_mag     = 0. ! net dipole magnitude                                  POLAR_MAG
-    real                  :: net_dipole_ang     = 0. ! net dipole angle                                      POLAR_ANGLE
     ! -- the rest
     type(stats_struct)    :: size_stats
     type(stats_struct)    :: cn_std_stats
     type(stats_struct)    :: bondl_stats
     type(stats_struct)    :: cn_gen_stats
-    type(stats_struct)    :: aspect_ratio_stats
-    type(stats_struct)    :: polar_angle_stats
     type(stats_struct)    :: diam_stats
     type(stats_struct)    :: avg_int_stats
     type(stats_struct)    :: max_int_stats
     type(stats_struct)    :: valid_corr_stats
     type(stats_struct)    :: radial_strain_stats
     ! CN-DEPENDENT STATS
-    ! -- cendist
-    real                  :: max_cendist_cns(CNMIN:CNMAX)     = 0. ! max distance from the centre of mass of the NP   MAX_RADIAL_POS
-    real                  :: min_cendist_cns(CNMIN:CNMAX)     = 0. ! min -"-                                          MIN_RADIAL_POS
     ! -- # atoms
     real                  :: natoms_cns(CNMIN:CNMAX)          = 0. ! # of atoms per cn_std                            NATOMS
     ! -- the rest
     type(stats_struct)    :: size_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: bondl_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: cn_gen_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: aspect_ratio_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: polar_angle_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: diam_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: avg_int_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: max_int_stats_cns(CNMIN:CNMAX)
@@ -164,8 +142,6 @@ type :: nanoparticle
     ! BINARY CLASS STATISTICS
     type(stats_struct)    :: size_cls_stats(2)
     type(stats_struct)    :: bondl_cls_stats(2)
-    type(stats_struct)    :: aspect_ratio_cls_stats(2)
-    type(stats_struct)    :: polar_angle_cls_stats(2)
     type(stats_struct)    :: diam_cls_stats(2)
     type(stats_struct)    :: max_int_cls_stats(2)
     type(stats_struct)    :: valid_corr_cls_stats(2)
@@ -203,7 +179,7 @@ type :: nanoparticle
     ! calc stats
     procedure          :: fillin_atominfo
     procedure, private :: masscen
-    procedure, private :: calc_aspect_ratio
+    procedure, private :: calc_longest_dist
     ! visualization and output
     procedure, private :: simulate_atoms
     procedure          :: write_centers
@@ -218,11 +194,9 @@ type :: nanoparticle
     procedure, private :: cluster_atom_intensity
     procedure          :: cluster_atom_maxint
     procedure          :: cluster_atom_intint
-    procedure          :: cluster_ang
-    procedure          :: cluster_ar
     procedure          :: cluster_bondl
     ! others
-    procedure          :: geometry_analysis
+    ! procedure          :: geometry_analysis
     ! kill
     procedure          :: kill => kill_nanoparticle
 end type nanoparticle
@@ -710,7 +684,7 @@ contains
         integer :: icc, cnt, cnt_split
         integer :: rank, m(1)
         real    :: new_centers(3,2*self%n_cc) ! will pack it afterwards if it has too many elements
-        real    :: pc, aspect_ratio, radius
+        real    :: pc, radius
         write(logfhandle, '(A)') '>>> SPLITTING CONNECTED ATOMS'
         call self%img%get_rmat_ptr(rmat_pc) ! now img contains the phase correlation
         call self%img_cc%get_imat(imat_cc)  ! to pass to the subroutine split_atoms
@@ -727,7 +701,7 @@ contains
             rank = size(x) - m(1)
             deallocate(x)
             ! calculate radius
-            call self%calc_aspect_ratio(icc, aspect_ratio, radius)
+            call self%calc_longest_dist(icc, radius)
             ! split
             if( rank > RANK_THRESH .or. radius > 1.5 * self%theoretical_radius )then
                 cnt_split = cnt_split + 1
@@ -1014,37 +988,14 @@ contains
             self%atominfo(cc)%size = count(mask)
             ! distance from the centre of mass of the nanoparticle
             self%atominfo(cc)%cendist = euclid(self%atominfo(cc)%center(:), self%NPcen) * self%smpd
-            ! atom aspect ratio and diameter
-            call self%calc_aspect_ratio(cc, self%atominfo(cc)%aspect_ratio, self%atominfo(cc)%diam)
+            ! atom diameter
+            call self%calc_longest_dist(cc, self%atominfo(cc)%diam)
             self%atominfo(cc)%diam = 2.*self%atominfo(cc)%diam ! radius --> diameter in A
             ! maximum grey level intensity across the connected component
             self%atominfo(cc)%max_int = maxval(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
             ! average grey level intensity across the connected component
             self%atominfo(cc)%avg_int = sum(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
             self%atominfo(cc)%avg_int = self%atominfo(cc)%avg_int / real(count(mask))
-            ! standard deviation of the grey level intensity across the connected component
-            self%atominfo(cc)%sdev_int = 0.
-            do i = 1, self%ldim(1)
-                do j = 1, self%ldim(2)
-                    do k = 1, self%ldim(3)
-                        if( mask(i,j,k) ) self%atominfo(cc)%sdev_int = &
-                        &self%atominfo(cc)%sdev_int + (rmat(i,j,k) - self%atominfo(cc)%avg_int)**2.
-                    enddo
-                enddo
-            enddo
-            if( count(mask) > 1 )then
-                self%atominfo(cc)%sdev_int = sqrt(self%atominfo(cc)%sdev_int / real(count(mask)-1))
-            else ! atom composed by one voxel
-                self%atominfo(cc)%sdev_int = 0.
-            endif
-            ! vector and angle of polarization
-            if( self%atominfo(cc)%size > 2 )then
-                self%atominfo(cc)%polar_vec   = real(self%atominfo(cc)%loc_ldist) - self%atominfo(cc)%center
-                self%atominfo(cc)%polar_angle = ang3D_zvec(self%atominfo(cc)%polar_vec)
-            else
-                self%atominfo(cc)%polar_vec   = [0.,0.,0.]
-                self%atominfo(cc)%polar_angle = 0. ! If the cc is too small it doesn't make sense
-            endif
             ! bond length of nearest neighbour...
             self%atominfo(cc)%bondl = pixels_dist(self%atominfo(cc)%center(:), tmpcens, 'min', mask=cc_mask) ! Use all the atoms
             self%atominfo(cc)%bondl = self%atominfo(cc)%bondl * self%smpd ! convert to A
@@ -1061,17 +1012,10 @@ contains
             cc_mask = .true.
         end do
         ! CALCULATE GLOBAL NP PARAMETERS
-        ! --global dipole
-        self%net_dipole     = calc_net_dipole()
-        self%net_dipole_mag = arg(self%net_dipole)
-        self%net_dipole_ang = ang3D_zvec(self%net_dipole)
-        ! --the rest
         call calc_stats(  real(self%atominfo(:)%size),    self%size_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
         call calc_stats(  real(self%atominfo(:)%cn_std),  self%cn_std_stats        )
         call calc_stats(  self%atominfo(:)%bondl,         self%bondl_stats         )
         call calc_stats(  self%atominfo(:)%cn_gen,        self%cn_gen_stats        )
-        call calc_stats(  self%atominfo(:)%aspect_ratio,  self%aspect_ratio_stats  )
-        call calc_stats(  self%atominfo(:)%polar_angle,   self%polar_angle_stats   )
         call calc_stats(  self%atominfo(:)%diam,          self%diam_stats, mask=self%atominfo(:)%size >= NVOX_THRESH )
         call calc_zscore( self%atominfo(:)%avg_int ) ! to get comparable intensities between different particles
         call calc_zscore( self%atominfo(:)%max_int ) ! -"-
@@ -1091,8 +1035,6 @@ contains
         write(funit,'(a)') BIN_CLS_STATS_HEAD
         call self%bicluster_otsu('size',          funit)
         call self%bicluster_otsu('bondl',         funit)
-        call self%bicluster_otsu('aspect_ratio',  funit)
-        call self%bicluster_otsu('polar_angle',   funit)
         call self%bicluster_otsu('diam',          funit)
         call self%bicluster_otsu('max_int',       funit)
         call self%bicluster_otsu('valid_corr',    funit)
@@ -1114,50 +1056,6 @@ contains
                 arr = (arr - self%map_stats%avg) / self%map_stats%sdev
             end subroutine calc_zscore
 
-            function ang3D_zvec( vec ) result( ang )
-                real, intent(in) :: vec(3)
-                real, parameter  :: ZVEC(3) = [0.,0.,1.]
-                real :: vec_here(3)
-                real :: ang     ! output angle in degrees
-                real :: ang_rad ! angle in radians
-                real :: dot_prod, sqsum
-                ! normalise
-                sqsum = vec(1)**2. + vec(2)**2. + vec(3)**2.
-                if( sqsum > TINY )then
-                    vec_here = vec / sqrt(sqsum)
-                else
-                    ang = 0.
-                    return
-                endif
-                ! dot product
-                dot_prod = ZVEC(1) * vec_here(1) + ZVEC(2) * vec_here(2) + ZVEC(3) * vec_here(3)
-                ! sanity check
-                if( dot_prod > 1. .or. dot_prod < -1. )then
-                    THROW_WARN('Out of the domain of definition of arccos; fillin_atominfo :: ang3D_zvec')
-                    ang_rad = 0.
-                else
-                    ang_rad = acos(dot_prod)
-                endif
-                ang = rad2deg(ang_rad)
-            end function ang3D_zvec
-
-            function calc_net_dipole( ) result( net_dipole )
-                real    :: net_dipole(3), m_adjusted(3)
-                integer :: i, io_stat, filnum
-                net_dipole = 0. ! inizialization
-                m_adjusted = 0.
-                do i = 1, self%n_cc
-                    net_dipole = net_dipole + self%atominfo(i)%polar_vec
-                    m_adjusted = m_adjusted + (tmpcens(:,i) - 1.) * self%smpd
-                enddo
-                m_adjusted = m_adjusted / real(self%n_cc)
-                net_dipole = (net_dipole - 1.) * self%smpd + m_adjusted
-                write(logfhandle, *) 'Generating output global dipole *.bild file'
-                call fopen(filnum, file='NetDipoleGlobal.bild', iostat=io_stat)
-                write (filnum,'(a6,6i4)') trim('.arrow '), nint(m_adjusted), nint(net_dipole)
-                call fclose(filnum)
-            end function calc_net_dipole
-
             subroutine calc_cn_stats( cn )
                 integer, intent(in)  :: cn ! calculate stats for given std cn
                 integer :: cc, n, n_size, n_diam
@@ -1167,9 +1065,6 @@ contains
                 size_mask = self%atominfo(:)%size >= NVOX_THRESH .and. cn_mask
                 n         = count(cn_mask)
                 if( n == 0 ) return
-                ! -- cendist
-                self%max_cendist_cns(cn) = maxval(self%atominfo(:)%cendist,  mask=cn_mask)
-                self%min_cendist_cns(cn) = minval(self%atominfo(:)%cendist,  mask=cn_mask)
                 ! -- # atoms
                 self%natoms_cns(cn) = real(n)
                 if( n < 2 ) return
@@ -1177,8 +1072,6 @@ contains
                 call calc_stats( real(self%atominfo(:)%size),    self%size_stats_cns(cn),          mask=size_mask )
                 call calc_stats( self%atominfo(:)%bondl,         self%bondl_stats_cns(cn),         mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%cn_gen,        self%cn_gen_stats_cns(cn),        mask=cn_mask   )
-                call calc_stats( self%atominfo(:)%aspect_ratio,  self%aspect_ratio_stats_cns(cn),  mask=cn_mask   )
-                call calc_stats( self%atominfo(:)%polar_angle,   self%polar_angle_stats_cns(cn),   mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%diam,          self%diam_stats_cns(cn),          mask=size_mask )
                 call calc_stats( self%atominfo(:)%avg_int,       self%avg_int_stats_cns(cn),       mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%max_int,       self%max_int_stats_cns(cn),       mask=cn_mask   )
@@ -1223,54 +1116,30 @@ contains
        m = m / real(self%n_cc)
     end function masscen
 
-    ! This subroutine takes in input a connected component (cc) image
-    ! and the label of one of its ccs and calculates the aspect ratio of the cc,
-    ! defined as the ratio of the width and the height.
-    ! The idea behind this is that the center of the cc is calculated,
-    ! then everything is deleted except the borders of the cc. Finally,
-    ! in order to calculate the width and the height, the min/max
-    ! distances between the center and the borders are calculated. The
-    ! aspect ratio is the ratio of those 2 distances.
-    subroutine calc_aspect_ratio( self, label, ratio, longest_dist )
+    subroutine calc_longest_dist( self, label, longest_dist )
        class(nanoparticle), intent(inout) :: self
        integer,             intent(in)    :: label
-       real,                intent(out)   :: ratio
        real,                intent(out)   :: longest_dist
        integer, allocatable :: pos(:,:)
        integer, allocatable :: imat_cc(:,:,:)
-       logical, allocatable :: border(:,:,:)
        logical, allocatable :: mask_dist(:) ! for min and max dist calculation
        integer :: location(1)               ! location of vxls of the atom farthest from its center
-       real    :: shortest_dist
        call self%img_cc%get_imat(imat_cc)
-       call self%img_cc%border_mask(border, label, .true.) ! use 4neigh instead of 8neigh
-       where(border .eqv. .true.)
+       where(imat_cc.eq.label)
            imat_cc = 1
        elsewhere
            imat_cc = 0
        endwhere
        call get_pixel_pos( imat_cc, pos ) ! pxls positions of the shell
        allocate(mask_dist(size(pos, dim=2)), source = .true.)
-       shortest_dist = pixels_dist(self%atominfo(label)%center(:), real(pos), 'min', mask_dist, location)
        if( size(pos,2) == 1 ) then ! if the connected component has size 1 (just 1 vxl)
-           shortest_dist = 0.
-           longest_dist  = shortest_dist
-           ratio         = 1.
-           self%atominfo(label)%loc_ldist(:) = nint(self%atominfo(label)%center(:))
+           longest_dist  = self%smpd
            return
        else
-           longest_dist  = pixels_dist(self%atominfo(label)%center(:), real(pos),'max', mask_dist, location)
-           self%atominfo(label)%loc_ldist(:) =  pos(:,location(1))
+           longest_dist  = pixels_dist(self%atominfo(label)%center(:), real(pos),'max', mask_dist, location) * self%smpd
        endif
-       if( abs(longest_dist) > TINY .and. size(pos,2) > 1 )then
-           ratio = shortest_dist/longest_dist
-       else
-           ratio = 0.
-       endif
-       longest_dist  = longest_dist  * self%smpd  ! in A
-       shortest_dist = shortest_dist * self%smpd
-       deallocate(imat_cc, border, pos, mask_dist)
-    end subroutine calc_aspect_ratio
+       deallocate(imat_cc, pos, mask_dist)
+    end subroutine calc_longest_dist
 
     ! visualization and output
 
@@ -1404,13 +1273,10 @@ contains
         write(funit,601,advance='no') real(self%atominfo(cc)%cn_std),           CSV_DELIM ! CN_STD
         write(funit,601,advance='no') self%atominfo(cc)%bondl,                  CSV_DELIM ! NN_BONDL
         write(funit,601,advance='no') self%atominfo(cc)%cn_gen,                 CSV_DELIM ! CN_GEN
-        write(funit,601,advance='no') self%atominfo(cc)%aspect_ratio,           CSV_DELIM ! ASPECT_RATIO
-        write(funit,601,advance='no') self%atominfo(cc)%polar_angle,            CSV_DELIM ! POLAR_ANGLE
         write(funit,601,advance='no') self%atominfo(cc)%diam,                   CSV_DELIM ! DIAM
         write(funit,601,advance='no') self%atominfo(cc)%avg_int,                CSV_DELIM ! AVG_INT
         write(funit,601,advance='no') self%atominfo(cc)%max_int,                CSV_DELIM ! MAX_INT
-        write(funit,601,advance='no') self%atominfo(cc)%sdev_int,               CSV_DELIM ! SDEV_INT
-        write(funit,601,advance='no') self%atominfo(cc)%cendist,                CSV_DELIM ! RADIAL_POS
+        write(funit,601,advance='no') self%atominfo(cc)%cendist,                CSV_DELIM ! CENDIST
         write(funit,601,advance='no') self%atominfo(cc)%valid_corr,             CSV_DELIM ! VALID_CORR
         if( .not. omit_here )then
         write(funit,601,advance='no') self%atominfo(cc)%center(1),              CSV_DELIM ! X
@@ -1433,8 +1299,6 @@ contains
         ! cluster assignments
         write(funit,601,advance='no') real(self%atominfo(cc)%size_cls),         CSV_DELIM ! NVOX_CLASS
         write(funit,601,advance='no') real(self%atominfo(cc)%bondl_cls),        CSV_DELIM ! NN_BONDL_CLASS
-        write(funit,601,advance='no') real(self%atominfo(cc)%aspect_ratio_cls), CSV_DELIM ! ASPECT_RATIO_CLASS
-        write(funit,601,advance='no') real(self%atominfo(cc)%polar_angle_cls),  CSV_DELIM ! POLAR_ANGLE_CLASS
         write(funit,601,advance='no') real(self%atominfo(cc)%diam_cls),         CSV_DELIM ! DIAM_CLASS
         write(funit,601,advance='no') real(self%atominfo(cc)%max_int_cls),      CSV_DELIM ! MAX_INT_CLASS
         write(funit,601,advance='no') real(self%atominfo(cc)%valid_corr_cls),   CSV_DELIM ! VALID_CORR_CLASS
@@ -1467,14 +1331,6 @@ contains
         write(funit,601,advance='no') self%cn_gen_stats%avg,         CSV_DELIM ! AVG_CN_GEN
         write(funit,601,advance='no') self%cn_gen_stats%med,         CSV_DELIM ! MED_CN_GEN
         write(funit,601,advance='no') self%cn_gen_stats%sdev,        CSV_DELIM ! SDEV_CN_GEN
-        ! -- aspect ratio
-        write(funit,601,advance='no') self%aspect_ratio_stats%avg,   CSV_DELIM ! AVG_ASPECT_RATIO
-        write(funit,601,advance='no') self%aspect_ratio_stats%med,   CSV_DELIM ! MED_ASPECT_RATIO
-        write(funit,601,advance='no') self%aspect_ratio_stats%sdev,  CSV_DELIM ! SDEV_ASPECT_RATIO
-        ! -- polarization angle
-        write(funit,601,advance='no') self%polar_angle_stats%avg,    CSV_DELIM ! AVG_POLAR_ANGLE
-        write(funit,601,advance='no') self%polar_angle_stats%med,    CSV_DELIM ! MED_POLAR_ANGLE
-        write(funit,601,advance='no') self%polar_angle_stats%sdev,   CSV_DELIM ! SDEV_POLAR_ANGLE
         ! -- atom diameter
         write(funit,601,advance='no') self%diam_stats%avg,           CSV_DELIM ! AVG_DIAM
         write(funit,601,advance='no') self%diam_stats%med,           CSV_DELIM ! MED_DIAM
@@ -1521,14 +1377,6 @@ contains
         write(funit,601,advance='no') self%cn_gen_stats_cns(cn)%avg,         CSV_DELIM ! AVG_CN_GEN
         write(funit,601,advance='no') self%cn_gen_stats_cns(cn)%med,         CSV_DELIM ! MED_CN_GEN
         write(funit,601,advance='no') self%cn_gen_stats_cns(cn)%sdev,        CSV_DELIM ! SDEV_CN_GEN
-        ! -- aspect ratio
-        write(funit,601,advance='no') self%aspect_ratio_stats_cns(cn)%avg,   CSV_DELIM ! AVG_ASPECT_RATIO
-        write(funit,601,advance='no') self%aspect_ratio_stats_cns(cn)%med,   CSV_DELIM ! MED_ASPECT_RATIO
-        write(funit,601,advance='no') self%aspect_ratio_stats_cns(cn)%sdev,  CSV_DELIM ! SDEV_ASPECT_RATIO
-        ! -- polarization angle
-        write(funit,601,advance='no') self%polar_angle_stats_cns(cn)%avg,    CSV_DELIM ! AVG_POLAR_ANGLE
-        write(funit,601,advance='no') self%polar_angle_stats_cns(cn)%med,    CSV_DELIM ! MED_POLAR_ANGLE
-        write(funit,601,advance='no') self%polar_angle_stats_cns(cn)%sdev,   CSV_DELIM ! SDEV_POLAR_ANGLE
         ! -- atom diameter
         write(funit,601,advance='no') self%diam_stats_cns(cn)%avg,           CSV_DELIM ! AVG_DIAM
         write(funit,601,advance='no') self%diam_stats_cns(cn)%med,           CSV_DELIM ! MED_DIAM
@@ -1556,7 +1404,7 @@ contains
     ! identify correlated variables with Pearson's product moment correation coefficient
     subroutine id_corr_vars( self )
         class(nanoparticle), target, intent(in) :: self
-        integer, parameter :: NFLAGS = 12
+        integer, parameter :: NFLAGS = 9
         integer, parameter :: NPAIRS = (NFLAGS * (NFLAGS - 1)) / 2
         character(len=13)  :: flags(NFLAGS), flags_i(NPAIRS), flags_j(NPAIRS)
         character(len=256) :: io_msg
@@ -1567,15 +1415,12 @@ contains
         flags(1)  = 'NVOX'          ! size
         flags(2)  = 'NN_BONDL'      ! bondl
         flags(3)  = 'CN_GEN'        ! cn_gen
-        flags(4)  = 'ASPECT_RATIO'  ! aspect_ratio
-        flags(5)  = 'POLAR_ANGLE'   ! polar_angle
-        flags(6)  = 'DIAM'          ! diam
-        flags(7)  = 'AVG_INT'       ! avg_int
-        flags(8)  = 'MAX_INT'       ! max_int
-        flags(9)  = 'SDEV_INT'      ! sdev_int
-        flags(10) = 'RADIAL_POS'    ! cendist
-        flags(11) = 'VALID_CORR'    ! valid_corr
-        flags(12) = 'RADIAL_STRAIN' ! radial_strain
+        flags(4)  = 'DIAM'          ! diam
+        flags(5)  = 'AVG_INT'       ! avg_int
+        flags(6)  = 'MAX_INT'       ! max_int
+        flags(7)  = 'CENDIST'    ! cendist
+        flags(8)  = 'VALID_CORR'    ! valid_corr
+        flags(9)  = 'RADIAL_STRAIN' ! radial_strain
         ! calculate correlations
         cnt = 0
         do i = 1, NFLAGS - 1
@@ -1612,19 +1457,13 @@ contains
                         vals = self%atominfo(:)%bondl
                     case('CN_GEN')
                         vals = self%atominfo(:)%cn_gen
-                    case('ASPECT_RATIO')
-                        vals =  self%atominfo(:)%aspect_ratio
-                    case('POLAR_ANGLE')
-                        vals =  self%atominfo(:)%polar_angle
                     case('DIAM')
                         vals =  self%atominfo(:)%diam
                     case('AVG_INT')
                         vals =  self%atominfo(:)%avg_int
                     case('MAX_INT')
                         vals =  self%atominfo(:)%max_int
-                    case('SDEV_INT')
-                        vals =  self%atominfo(:)%sdev_int
-                    case('RADIAL_POS')
+                    case('CENDIST')
                         vals =  self%atominfo(:)%cendist
                     case('VALID_CORR')
                         vals =  self%atominfo(:)%valid_corr
@@ -1651,15 +1490,6 @@ contains
                 vals = self%atominfo(:)%bondl
                 call bicluster_local(self%atominfo(:)%bondl > 0., which, 'NN_BONDL')
                 self%atominfo(:)%bondl_cls = bicls
-            case('aspect_ratio')
-                vals = self%atominfo(:)%aspect_ratio
-                call bicluster_local(self%atominfo(:)%aspect_ratio > 0., which, 'ASPECT_RATIO')
-                self%atominfo(:)%aspect_ratio_cls = bicls
-            case('polar_angle')
-                vals = self%atominfo(:)%polar_angle
-                mask = .true.
-                call bicluster_local(mask, which, 'POLAR_ANGLE')
-                self%atominfo(:)%polar_angle_cls = bicls
             case('diam')
                 vals = self%atominfo(:)%diam
                 call bicluster_local(self%atominfo(:)%diam > 0., which, 'DIAM')
@@ -1910,202 +1740,6 @@ contains
         call self%cluster_atom_intensity(int_intensity)
     end subroutine cluster_atom_intint
 
-    ! Cluster wrt to the angle between the direction of the longest dimension and a fixed vector
-    subroutine cluster_ang(self, thresh)
-        class(nanoparticle), intent(inout) :: self
-        real,    intent(in)  :: thresh ! threshold for class definition, user inputted
-        real,    allocatable :: stdev_within(:), centroids(:)
-        integer, allocatable :: labels(:), populations(:)
-        integer              :: i, j, ncls, dim, filnum, io_stat
-        real                 :: avg, stdev
-        type(binimage)       :: img_1clss
-        integer, allocatable :: imat_cc(:,:,:), imat_1clss(:,:,:)
-        character(len=4)     :: str_thres
-        ! Preparing for clustering
-        ! Aspect ratios and loc_longest dist estimation
-        ! call self%est_aspect_ratios(print_ar=.false.) ! it's needed to identify the dir of longest dim
-        ! call self%search_polarization(output_files =.false.)
-        dim = size(self%atominfo)
-        allocate(labels(dim), source = 0)
-        call hac_1d(self%atominfo(:)%polar_angle,thresh,labels,centroids,populations)
-        ! Stats calculations
-        ncls = maxval(labels)
-        allocate(stdev_within(ncls), source = 0.)
-        !stdev within the same class
-        do i = 1, ncls
-            do j = 1, dim
-                if(labels(j) == i) stdev_within(i) = stdev_within(i) + (self%atominfo(j)%polar_angle-centroids(i))**2
-            enddo
-        enddo
-        where (populations>1)
-            stdev_within = sqrt(stdev_within/(real(populations)-1.))
-        elsewhere
-            stdev_within = 0.
-        endwhere
-        ! avg and stdev among different classes
-        avg = 0.
-        do i = 1, ncls
-            avg = avg + centroids(i)
-        enddo
-        avg = avg/real(ncls)
-        stdev = 0.
-        if(ncls>1) then
-          do i = 1, ncls
-              stdev = stdev + (centroids(i) - avg)**2
-          enddo
-          stdev = sqrt(stdev/(real(ncls)-1.))
-        endif
-        ! Output on a file
-        str_thres = trim(real2str(thresh))
-        call fopen(filnum, file='ClusterAngThresh'//str_thres//'.txt', iostat=io_stat)
-        write(unit = filnum,fmt ='(a,i2,a,f6.2)') 'NR OF IDENTIFIED CLUSTERS:', ncls, ' SELECTED THRESHOLD: ',  thresh
-        write(unit = filnum,fmt ='(a)') 'CLASSIFICATION '
-        do i = 1, dim
-          write(unit = filnum,fmt ='(a,i3,a,f6.2,a,i3)') 'Atom #: ', i, '; data (deg): ', self%atominfo(i)%polar_angle, '; class: ', labels(i)
-        enddo
-        write(unit = filnum,fmt ='(a)') 'CLASS STATISTICS '
-        do i = 1, ncls
-            write(unit = filnum,fmt ='(a,i3,a,i3,a,f6.2,a,f6.2,a)') 'class: ', i, '; cardinality: ', populations(i), '; centroid: ', centroids(i), ' degrees; stdev within the class: ', stdev_within(i), ' degrees'
-        enddo
-        write(unit = filnum,fmt ='(a,f6.2,a,f6.2,a)') 'AVG among the classes: ', avg, ' degrees; STDEV among the classes: ', stdev, ' degrees'
-        call fclose(filnum)
-        call fopen(filnum, file='Ang.csv', iostat=io_stat)
-        write(filnum,*) 'ang'
-        do i  = 1, self%n_cc
-          write(filnum,*) self%atominfo(i)%polar_angle
-        enddo
-        call fclose(filnum)
-        !Generate one figure for each class
-        if(GENERATE_FIGS) then
-          call img_1clss%new_bimg(self%ldim, self%smpd)
-          call self%img_cc%get_imat(imat_cc)
-          allocate(imat_1clss(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
-          do i = 1, ncls
-              imat_1clss = 0
-              do j = 1, dim
-                  if(labels(j) == i) then
-                      where(imat_cc == j) imat_1clss = i
-                  endif
-              enddo
-              call img_1clss%set_imat(imat_1clss)
-              call img_1clss%write_bimg('AngClass'//int2str(i)//'.mrc')
-          enddo
-          call img_1clss%kill_bimg
-        endif
-        if(allocated(stdev_within)) deallocate(stdev_within)
-        deallocate(centroids, labels, populations)
-    end subroutine cluster_ang
-
-   ! Cluster the atoms wrt to the aspect ratio
-   ! Additionally, calculate the median std cn
-   ! (coordination number) in each class
-   subroutine cluster_ar(self, thresh)
-      class(nanoparticle), intent(inout) :: self
-      real,    intent(in)  :: thresh ! threshold for class definition, user inputted
-      real,    allocatable :: centroids(:)
-      integer, allocatable :: labels(:), populations(:)
-      real,    allocatable :: stdev_within(:), centers_A(:,:), cn_cls(:), median_cn(:)
-      integer              :: i, j, ncls, dim, filnum, io_stat, cnt
-      real                 :: avg, stdev, a(3)
-      type(binimage)       :: img_1clss
-      integer, allocatable :: imat_cc(:,:,:), imat_1clss(:,:,:)
-      character(len=4)     :: str_thres
-      ! Calculate cn and cn_gen
-      centers_A = self%atominfo2centers_A()
-      call fit_lattice(self%element, centers_A, a)
-      call run_cn_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
-      deallocate(centers_A)
-      if(thresh > 1. .or. thresh < 0.) THROW_HARD('Invalid input threshold! AR is in [0,1]; cluster_ar')
-      ! Preparing for clustering
-      ! Aspect ratios calculations
-      ! call self%est_aspect_ratios(print_ar=.false.) ! it's needed to identify the dir of longest dim
-      dim = size(self%atominfo)
-      allocate(labels(dim), source = 0)
-      ! classify
-      call hac_1d(self%atominfo(:)%aspect_ratio,thresh,labels,centroids,populations)
-      ! Stats calculations
-      ncls = maxval(labels)
-      allocate(stdev_within(ncls), source = 0.)
-      ! stdev within the same class
-      do i = 1, ncls
-          do j = 1, dim
-              if(labels(j) == i) stdev_within(i) = stdev_within(i) + (self%atominfo(j)%aspect_ratio-centroids(i))**2
-          enddo
-      enddo
-      where (populations>1)
-          stdev_within = sqrt(stdev_within/(real(populations)-1.))
-      elsewhere
-          stdev_within = 0.
-      endwhere
-      ! avg and stdev among different classes
-      avg = 0.
-      do i = 1, ncls
-          avg = avg + centroids(i)
-      enddo
-      avg = avg/real(ncls)
-      stdev = 0.
-      if(ncls>1) then
-        do i = 1, ncls
-            stdev = stdev + (centroids(i) - avg)**2
-        enddo
-        stdev = sqrt(stdev/(real(ncls)-1.))
-      endif
-      ! median std cn on each class
-      allocate(median_cn(ncls), source = 0.)
-      do i = 1, ncls
-        if(allocated(cn_cls)) deallocate(cn_cls)
-        allocate(cn_cls(populations(i)), source = 0.)
-        cnt = 0
-        do j = 1, dim
-            if(labels(j) == i) then
-              cnt = cnt + 1
-              cn_cls(cnt) = self%atominfo(j)%cn_std
-            endif
-        enddo
-        median_cn(i) = median(cn_cls)
-      enddo
-      ! Output on a file
-      str_thres = trim(real2str(thresh))
-      call fopen(filnum, file='ClusterARThresh'//str_thres//'.txt', iostat=io_stat)
-      write(unit = filnum,fmt ='(a,i2,a,f6.2)') 'NR OF IDENTIFIED CLUSTERS:', ncls, ' SELECTED THRESHOLD: ',  thresh
-      write(unit = filnum,fmt ='(a)') 'CLASSIFICATION '
-      do i = 1, dim
-        write(unit = filnum,fmt ='(a,i3,a,f6.2,a,i3,a,f6.2)') 'Atom #: ', i, '; data (adimensional): ', self%atominfo(i)%aspect_ratio, '; class: ', labels(i)
-      enddo
-      write(unit = filnum,fmt ='(a)') 'CLASS STATISTICS '
-      do i = 1, ncls
-        write(unit = filnum,fmt ='(a,i3,a,i3,a,f6.2,a,f6.2,a,f6.2)') 'class: ', i, '; cardinality: ', populations(i), '; centroid: ', centroids(i), '; stdev within the class: ', stdev_within(i), '; median std cn: ', median_cn(i)
-      enddo
-      write(unit = filnum,fmt ='(a,f6.2,a,f6.2)') 'AVG among the classes: ', avg, '; STDEV among the classes: ', stdev
-      call fclose(filnum)
-      ! Generate file that contains the calculater AR, that can be read afterwards
-      call fopen(filnum, file='AspectRatio.csv', iostat=io_stat)
-      write(filnum,*) 'ar'
-      do i  = 1, self%n_cc
-        write(filnum,*) self%atominfo(i)%aspect_ratio
-      enddo
-      call fclose(filnum)
-      ! Generate one figure for each class
-      if(GENERATE_FIGS) then
-        call img_1clss%new_bimg(self%ldim, self%smpd)
-        call self%img_cc%get_imat(imat_cc)
-        allocate(imat_1clss(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
-        do i = 1, ncls
-            imat_1clss = 0
-            do j = 1, dim
-                if(labels(j) == i) then
-                    where(imat_cc == j) imat_1clss = i
-                endif
-            enddo
-            call img_1clss%set_imat(imat_1clss)
-            call img_1clss%write_bimg('ArClass'//int2str(i)//'.mrc')
-        enddo
-        call img_1clss%kill_bimg
-      endif
-      if(allocated(stdev_within)) deallocate(stdev_within)
-      deallocate(centroids, labels, populations)
-    end subroutine cluster_ar
-
     ! Cluster the atoms wrt to the interatomic distances
     subroutine cluster_bondl(self, thresh)
         class(nanoparticle), intent(inout) :: self
@@ -2203,323 +1837,323 @@ contains
 
     ! others
 
-    subroutine geometry_analysis(self, pdbfile2, thresh)
-        use simple_math, only : plane_from_points
-        class(nanoparticle),        intent(inout) :: self
-        character(len=*),           intent(in)    :: pdbfile2  ! atomic pos of the 2 (or 3) selected atoms
-        real,             optional, intent(in)    :: thresh    ! for belonging/not belonging to the plane/column
-        type(atoms)           :: init_atoms, final_atoms
-        type(binimage)        :: img_out
-        character(len=3)      :: aux_var
-        integer, allocatable  :: imat_cc(:,:,:), imat(:,:,:)
-        real,    allocatable  :: line(:,:), plane(:,:,:),points(:,:),distances_totheplane(:),pointsTrans(:,:)
-        real,    allocatable  :: radii(:),max_intensity(:),w(:),v(:,:),d(:),distances_totheline(:)
-        integer :: i, n, t, s, filnum, io_stat, cnt_intersect, cnt
-        logical :: flag(self%n_cc)
-        real    :: atom1(3), atom2(3), atom3(3), dir_1(3), dir_2(3), vec(3), m(3), dist_plane, dist_line
-        real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator, prod(3), centroid(3), tthresh
-        if(present(thresh)) then
-            tthresh = thresh
-        else
-            tthresh = 0.9*self%theoretical_radius
-        endif
-        call init_atoms%new(pdbfile2)
-        n = init_atoms%get_n()
-        if(n < 2 .or. n > 3 ) THROW_HARD('Inputted pdb file contains the wrong number of atoms!; geometry_analysis')
-        do i = 1, N_DISCRET/2
-            t_vec(i) = -real(i)/10.
-        enddo
-        t_vec(N_DISCRET/2+1:N_DISCRET) = -t_vec(1:N_DISCRET/2)
-        s_vec(:) = t_vec(:)
-        call self%img_cc%get_imat(imat_cc)
-        call img_out%new(self%ldim, self%smpd)
-        allocate(imat(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
-        flag(:) = .false.  ! initialization
-        if( n == 2 )then
-          write(logfhandle,*)'COLUMN IDENTIFICATION, INITIATION'
-          allocate(line(3, N_DISCRET), source = 0.)
-          atom1(:) = init_atoms%get_coord(1)/self%smpd + 1.
-          atom2(:) = init_atoms%get_coord(2)/self%smpd + 1.
-          dir_1 = atom1-atom2
-          do t = 1, N_DISCRET
-              line(1,t) = atom1(1) + t_vec(t)* dir_1(1)
-              line(2,t) = atom1(2) + t_vec(t)* dir_1(2)
-              line(3,t) = atom1(3) + t_vec(t)* dir_1(3)
-          enddo
-          ! calculate how many atoms does the line intersect and flag them
-          do i = 1, self%n_cc
-            do t = 1, N_DISCRET
-              dist_line = euclid(self%atominfo(i)%center(:),line(:3,t))
-              if(dist_line*self%smpd <= tthresh) then ! it intersects atoms i
-                flag(i) = .true. !flags also itself
-              endif
-            enddo
-          enddo
-          ! generate volume for visualisation
-          imat          = 0
-          cnt_intersect = 0
-          call img_out%new_bimg(self%ldim, self%smpd)
-          call final_atoms%new(count(flag), dummy=.true.)
-          do i = 1, self%n_cc
-            if(flag(i)) then
-              cnt_intersect = cnt_intersect + 1
-              call final_atoms%set_name(cnt_intersect,self%atom_name)
-              call final_atoms%set_element(cnt_intersect,self%element)
-              call final_atoms%set_coord(cnt_intersect,(self%atominfo(i)%center(:)-1.)*self%smpd)
-              where(imat_cc == i) imat = 1
-            endif
-          enddo
-          call img_out%set_imat(imat)
-          call img_out%write_bimg('ImageColumn.mrc')
-          call final_atoms%writePDB('AtomColumn')
-          call final_atoms%kill
-          ! Find the line that best fits the atoms
-          allocate(points(3,count(flag)), source = 0.)
-          cnt = 0
-          do i = 1, self%n_cc
-            if(flag(i)) then
-              cnt = cnt + 1
-              points(:3,cnt) = self%atominfo(i)%center(:)
-            endif
-          enddo
-          ! svd fit (https://au.mathworks.com/matlabcentral/answers/424591-3d-best-fit-line)
-          allocate(pointsTrans(count(flag),3), source = 0.) ! because svdcmp modifies its input
-          ! translate
-          centroid = sum(points, dim = 2)/real(count(flag)) ! it belongs to the line
-          do i = 1, count(flag)
-            pointsTrans(i,:3) = points(:3,i) - centroid(:3)
-          enddo
-          allocate(w(3), v(3,3), source = 0.)
-          allocate(d(3), source = 0.)
-          call svdcmp(pointsTrans,w,v)
-          d = v(:,1)
-          write(logfhandle,*) 'Directional vector of the line', d
-          ! line
-          ! line(1,t) = centroid(1) + t_vec(t)* d(1)
-          ! line(2,t) = centroid(2) + t_vec(t)* d(2)
-          ! line(3,t) = centroid(3) + t_vec(t)* d(3)
-          ! calculate the distance to the points from the identified line
-          allocate(distances_totheline(cnt), source = 0.)
-          allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
-          denominator = sqrt(d(1)**2+d(2)**2+d(3)**2)
-          m = self%masscen()
-          cnt = count(flag)
-          do i = 1, cnt
-            vec  = centroid(:3)-points(:3,i)
-            prod = cross(vec,d)
-            distances_totheline(i) = sqrt(prod(1)**2+prod(2)**2+prod(3)**2)/denominator
-            radii(i) = euclid(points(:,i), m)*self%smpd
-          enddo
-          distances_totheline = distances_totheline*self%smpd ! go to A
-          call fopen(filnum, file='Radii.csv', iostat=io_stat)
-          write (filnum,*) 'r'
-          do i = 1, cnt
-            write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
-          end do
-          call fclose(filnum)
-          call fopen(filnum, file='DistancesToTheLine.csv',iostat=io_stat)
-          write (filnum,*) 'd'
-          do i = 1, cnt
-            write (filnum,'(A)', advance='yes') trim(real2str(distances_totheline(i)))
-          end do
-          call fclose(filnum)
-          ! Read ratios, ang_var, dists, max_intensity
-          if(.not. allocated(self%atominfo)) allocate(self%atominfo(self%n_cc))
-          call fopen(filnum, file='../'//'../'//'AspectRatio.csv', action='readwrite',iostat=io_stat)
-          if( io_stat .ne. 0 ) then
-            THROW_HARD('Unable to read file AspectRatio.csv Did you run cluster_analysis?; geometry_analysis')
-          endif
-          read(filnum,*) ! first line is variable name
-          do i = 1, self%n_cc
-            read(filnum,*) self%atominfo(i)%aspect_ratio
-          enddo
-          call fclose(filnum)
-          call fopen(filnum, file='../'//'../'//'Ang.csv', action='readwrite', iostat=io_stat)
-          if( io_stat .ne. 0 ) then
-            THROW_HARD('Unable to read file Ang.csv Did you run cluster_analysis?; geometry_analysis')
-          endif
-          read(filnum,*)
-          do i = 1, self%n_cc
-            read(filnum,*) self%atominfo(i)%polar_angle
-          enddo
-          call fclose(filnum)
-          call fopen(filnum, file='../'//'../'//'Dist.csv', action='readwrite', iostat=io_stat)
-          if( io_stat .ne. 0 ) then
-            THROW_HARD('Unable to read file Dist.csv Did you run cluster_analysis?; geometry_analysis')
-          endif
-          read(filnum,*)
-          do i = 1, self%n_cc
-            read(filnum,*) self%atominfo(i)%bondl
-          enddo
-          call fclose(filnum)
-          allocate(max_intensity(self%n_cc))
-          call fopen(filnum, file='../'//'../'//'MaxIntensity.csv', action='readwrite', iostat=io_stat)
-          read(filnum,*)
-          do i = 1, self%n_cc
-            read(filnum,*) max_intensity(i)
-          enddo
-          call fclose(filnum)
-          ! Output on Excel file all the stats on the atoms belonging to the plane
-          cnt = 0
-          call fopen(filnum, file='AtomColumnInfo.txt',iostat=io_stat)
-          write (filnum,*) '        Atom #    ','   Ar        ','       Dist     ','         Ang     ','         MaxInt     '
-          do i = 1, self%n_cc
-            if(flag(i)) then
-              cnt = cnt + 1
-              write (filnum,*) i, '   ', self%atominfo(i)%aspect_ratio, self%atominfo(i)%bondl, self%atominfo(i)%polar_angle, max_intensity(i)
-            endif
-          end do
-          call fclose(filnum)
-        elseif(n == 3) then
-          write(logfhandle,*)'PLANE IDENTIFICATION, INITIATION'
-          atom1(:) = init_atoms%get_coord(1)/self%smpd + 1.
-          atom2(:) = init_atoms%get_coord(2)/self%smpd + 1.
-          atom3(:) = init_atoms%get_coord(3)/self%smpd + 1.
-          dir_1 = atom1-atom2
-          dir_2 = atom1-atom3
-          allocate(plane(3, N_DISCRET, N_DISCRET), source = 0.)
-          do t = 1, N_DISCRET
-            do s = 1, N_DISCRET
-              plane(1,t,s) = atom1(1) + t_vec(t)* dir_1(1) + s_vec(s)* dir_2(1)
-              plane(2,t,s) = atom1(2) + t_vec(t)* dir_1(2) + s_vec(s)* dir_2(2)
-              plane(3,t,s) = atom1(3) + t_vec(t)* dir_1(3) + s_vec(s)* dir_2(3)
-            enddo
-          enddo
-          ! calculate how many atoms does the plane intersect and flag them
-          do i = 1, self%n_cc
-            do t = 1, N_DISCRET
-              do s = 1, N_DISCRET
-                dist_plane = euclid(self%atominfo(i)%center(:),plane(:3,t,s))
-                if(dist_plane*self%smpd <= tthresh) then ! it intersects atoms i
-                  flag(i) = .true. !flags also itself
-                endif
-              enddo
-            enddo
-          enddo
-          ! generate volume for visualisation
-          ! reset
-          imat    = 0
-          cnt_intersect = 0
-          call img_out%new_bimg(self%ldim, self%smpd)
-          call final_atoms%new(count(flag), dummy=.true.)
-          do i = 1, self%n_cc
-            if(flag(i)) then
-              cnt_intersect = cnt_intersect + 1
-              call final_atoms%set_name(cnt_intersect,self%atom_name)
-              call final_atoms%set_element(cnt_intersect,self%element)
-              call final_atoms%set_coord(cnt_intersect,(self%atominfo(i)%center(:)-1.)*self%smpd)
-              where(imat_cc == i) imat = 1
-            endif
-          enddo
-          call img_out%set_imat(imat)
-          call img_out%write_bimg('ImagePlane.mrc')
-          call final_atoms%writePDB('AtomPlane')
-          call final_atoms%kill
-          allocate(points(3, count(flag)), source = 0.)
-          m = self%masscen()
-          cnt = 0
-          do i = 1, self%n_cc
-            if(flag(i)) then
-              cnt = cnt + 1
-              points(:3,cnt) = self%atominfo(i)%center(:)-m(:)
-            endif
-          enddo
-          vec = plane_from_points(points)
-          allocate(distances_totheplane(cnt), source = 0.)
-          allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
-          cnt = 0
-          denominator = sqrt(vec(1)**2+vec(2)**2+1.)
-          write(logfhandle,*) 'Normal vector: [', vec(1), ',', vec(2), ',', -1., ']'
-          do i = 1, self%n_cc
-            if(flag(i)) then
-              cnt = cnt + 1
-              ! formula for distance of a point to a plane
-              distances_totheplane(cnt) = abs(vec(1)*points(1,cnt)+vec(2)*points(2,cnt)-points(3,cnt)+vec(3))/denominator
-              radii(cnt) = euclid(self%atominfo(i)%center(:), m)*self%smpd
-            endif
-          enddo
-          distances_totheplane = (distances_totheplane)*self%smpd
-          call fopen(filnum, file='Radii.csv', action='readwrite', iostat=io_stat)
-          write (filnum,*) 'r'
-          do i = 1, cnt
-            write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
-          end do
-          call fclose(filnum)
-          call fopen(filnum, file='DistancesToThePlane.csv', action='readwrite',iostat=io_stat)
-          write (filnum,*) 'd'
-          do i = 1, cnt
-            write (filnum,'(A)', advance='yes') trim(real2str(distances_totheplane(i)))
-          end do
-          call fclose(filnum)
-          ! Read ratios, ang_var, dists, max_intensity
-          if(.not. allocated(self%atominfo)) allocate(self%atominfo(self%n_cc))
-          call fopen(filnum, file='../'//'../'//'AspectRatio.csv', action='readwrite', iostat=io_stat)
-          if( io_stat .ne. 0 ) then
-            THROW_HARD('Unable to read file AspectRatio.csv Did you run cluster_analysis?; geometry_analysis')
-          endif
-          read(filnum,*)  ! first line is variable name
-          do i = 1, self%n_cc
-            read(filnum,*) self%atominfo(i)%aspect_ratio
-          enddo
-          call fclose(filnum)
-          call fopen(filnum, file='../'//'../'//'Ang.csv', action='readwrite', iostat=io_stat)
-          if( io_stat .ne. 0 ) then
-            THROW_HARD('Unable to read file Ang.csv Did you run cluster_analysis?; geometry_analysis')
-          endif
-          read(filnum,*)
-          do i = 1, self%n_cc
-            read(filnum,*) self%atominfo(i)%polar_angle
-          enddo
-          call fclose(filnum)
-          call fopen(filnum, file='../'//'../'//'Dist.csv', action='readwrite', iostat=io_stat)
-          if( io_stat .ne. 0 ) then
-            THROW_HARD('Unable to read file Dist.csv Did you run cluster_analysis?; geometry_analysis')
-          endif
-          read(filnum,*)
-          do i = 1, self%n_cc
-            read(filnum,*) self%atominfo(i)%bondl
-          enddo
-          call fclose(filnum)
-          allocate(max_intensity(self%n_cc))
-          call fopen(filnum, file='../'//'../'//'MaxIntensity.csv', action='readwrite', iostat=io_stat)
-          if( io_stat .ne. 0 ) then
-            THROW_HARD('Unable to read file MaxIntensity.csv Did you run atoms_stats?; geometry_analysis')
-          endif
-          read(filnum,*)
-          do i = 1, self%n_cc
-            read(filnum,*) max_intensity(i)
-          enddo
-          call fclose(filnum)
-          ! Output on txt file all the stats on the atoms belonging to the plane
-          cnt = 0
-          call fopen(filnum, file='AtomPlaneInfo.txt',action='write',iostat=io_stat)
-          write (filnum,*) '        Atom #    ','   Ar        ','       Dist     ','         Ang     ','      MaxInt     '
-          do i = 1, self%n_cc
-            if(flag(i)) then
-              cnt = cnt + 1
-              write (filnum,*) i, '   ', self%atominfo(i)%aspect_ratio, self%atominfo(i)%bondl, self%atominfo(i)%polar_angle, max_intensity(i)
-            endif
-          end do
-          call fclose(filnum)
-        endif
-        call img_out%kill_bimg
-        call init_atoms%kill
-        if(allocated(line))  deallocate(line)
-        if(allocated(plane)) deallocate(plane)
-        deallocate(imat_cc, imat)
-
-    contains
-
-      ! Compute the cross product of 2 3D real vectors
-      function cross(a, b) result(c)
-          real, intent(in) :: a(3),b(3)
-          real :: c(3)
-          c(1) = a(2) * b(3) - a(3) * b(2)
-          c(2) = a(3) * b(1) - a(1) * b(3)
-          c(3) = a(1) * b(2) - a(2) * b(1)
-      end function cross
-
-    end subroutine geometry_analysis
+    ! subroutine geometry_analysis(self, pdbfile2, thresh)
+    !     use simple_math, only : plane_from_points
+    !     class(nanoparticle),        intent(inout) :: self
+    !     character(len=*),           intent(in)    :: pdbfile2  ! atomic pos of the 2 (or 3) selected atoms
+    !     real,             optional, intent(in)    :: thresh    ! for belonging/not belonging to the plane/column
+    !     type(atoms)           :: init_atoms, final_atoms
+    !     type(binimage)        :: img_out
+    !     character(len=3)      :: aux_var
+    !     integer, allocatable  :: imat_cc(:,:,:), imat(:,:,:)
+    !     real,    allocatable  :: line(:,:), plane(:,:,:),points(:,:),distances_totheplane(:),pointsTrans(:,:)
+    !     real,    allocatable  :: radii(:),max_intensity(:),w(:),v(:,:),d(:),distances_totheline(:)
+    !     integer :: i, n, t, s, filnum, io_stat, cnt_intersect, cnt
+    !     logical :: flag(self%n_cc)
+    !     real    :: atom1(3), atom2(3), atom3(3), dir_1(3), dir_2(3), vec(3), m(3), dist_plane, dist_line
+    !     real    :: t_vec(N_DISCRET), s_vec(N_DISCRET), denominator, prod(3), centroid(3), tthresh
+    !     if(present(thresh)) then
+    !         tthresh = thresh
+    !     else
+    !         tthresh = 0.9*self%theoretical_radius
+    !     endif
+    !     call init_atoms%new(pdbfile2)
+    !     n = init_atoms%get_n()
+    !     if(n < 2 .or. n > 3 ) THROW_HARD('Inputted pdb file contains the wrong number of atoms!; geometry_analysis')
+    !     do i = 1, N_DISCRET/2
+    !         t_vec(i) = -real(i)/10.
+    !     enddo
+    !     t_vec(N_DISCRET/2+1:N_DISCRET) = -t_vec(1:N_DISCRET/2)
+    !     s_vec(:) = t_vec(:)
+    !     call self%img_cc%get_imat(imat_cc)
+    !     call img_out%new(self%ldim, self%smpd)
+    !     allocate(imat(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
+    !     flag(:) = .false.  ! initialization
+    !     if( n == 2 )then
+    !       write(logfhandle,*)'COLUMN IDENTIFICATION, INITIATION'
+    !       allocate(line(3, N_DISCRET), source = 0.)
+    !       atom1(:) = init_atoms%get_coord(1)/self%smpd + 1.
+    !       atom2(:) = init_atoms%get_coord(2)/self%smpd + 1.
+    !       dir_1 = atom1-atom2
+    !       do t = 1, N_DISCRET
+    !           line(1,t) = atom1(1) + t_vec(t)* dir_1(1)
+    !           line(2,t) = atom1(2) + t_vec(t)* dir_1(2)
+    !           line(3,t) = atom1(3) + t_vec(t)* dir_1(3)
+    !       enddo
+    !       ! calculate how many atoms does the line intersect and flag them
+    !       do i = 1, self%n_cc
+    !         do t = 1, N_DISCRET
+    !           dist_line = euclid(self%atominfo(i)%center(:),line(:3,t))
+    !           if(dist_line*self%smpd <= tthresh) then ! it intersects atoms i
+    !             flag(i) = .true. !flags also itself
+    !           endif
+    !         enddo
+    !       enddo
+    !       ! generate volume for visualisation
+    !       imat          = 0
+    !       cnt_intersect = 0
+    !       call img_out%new_bimg(self%ldim, self%smpd)
+    !       call final_atoms%new(count(flag), dummy=.true.)
+    !       do i = 1, self%n_cc
+    !         if(flag(i)) then
+    !           cnt_intersect = cnt_intersect + 1
+    !           call final_atoms%set_name(cnt_intersect,self%atom_name)
+    !           call final_atoms%set_element(cnt_intersect,self%element)
+    !           call final_atoms%set_coord(cnt_intersect,(self%atominfo(i)%center(:)-1.)*self%smpd)
+    !           where(imat_cc == i) imat = 1
+    !         endif
+    !       enddo
+    !       call img_out%set_imat(imat)
+    !       call img_out%write_bimg('ImageColumn.mrc')
+    !       call final_atoms%writePDB('AtomColumn')
+    !       call final_atoms%kill
+    !       ! Find the line that best fits the atoms
+    !       allocate(points(3,count(flag)), source = 0.)
+    !       cnt = 0
+    !       do i = 1, self%n_cc
+    !         if(flag(i)) then
+    !           cnt = cnt + 1
+    !           points(:3,cnt) = self%atominfo(i)%center(:)
+    !         endif
+    !       enddo
+    !       ! svd fit (https://au.mathworks.com/matlabcentral/answers/424591-3d-best-fit-line)
+    !       allocate(pointsTrans(count(flag),3), source = 0.) ! because svdcmp modifies its input
+    !       ! translate
+    !       centroid = sum(points, dim = 2)/real(count(flag)) ! it belongs to the line
+    !       do i = 1, count(flag)
+    !         pointsTrans(i,:3) = points(:3,i) - centroid(:3)
+    !       enddo
+    !       allocate(w(3), v(3,3), source = 0.)
+    !       allocate(d(3), source = 0.)
+    !       call svdcmp(pointsTrans,w,v)
+    !       d = v(:,1)
+    !       write(logfhandle,*) 'Directional vector of the line', d
+    !       ! line
+    !       ! line(1,t) = centroid(1) + t_vec(t)* d(1)
+    !       ! line(2,t) = centroid(2) + t_vec(t)* d(2)
+    !       ! line(3,t) = centroid(3) + t_vec(t)* d(3)
+    !       ! calculate the distance to the points from the identified line
+    !       allocate(distances_totheline(cnt), source = 0.)
+    !       allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
+    !       denominator = sqrt(d(1)**2+d(2)**2+d(3)**2)
+    !       m = self%masscen()
+    !       cnt = count(flag)
+    !       do i = 1, cnt
+    !         vec  = centroid(:3)-points(:3,i)
+    !         prod = cross(vec,d)
+    !         distances_totheline(i) = sqrt(prod(1)**2+prod(2)**2+prod(3)**2)/denominator
+    !         radii(i) = euclid(points(:,i), m)*self%smpd
+    !       enddo
+    !       distances_totheline = distances_totheline*self%smpd ! go to A
+    !       call fopen(filnum, file='Radii.csv', iostat=io_stat)
+    !       write (filnum,*) 'r'
+    !       do i = 1, cnt
+    !         write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
+    !       end do
+    !       call fclose(filnum)
+    !       call fopen(filnum, file='DistancesToTheLine.csv',iostat=io_stat)
+    !       write (filnum,*) 'd'
+    !       do i = 1, cnt
+    !         write (filnum,'(A)', advance='yes') trim(real2str(distances_totheline(i)))
+    !       end do
+    !       call fclose(filnum)
+    !       ! Read ratios, ang_var, dists, max_intensity
+    !       if(.not. allocated(self%atominfo)) allocate(self%atominfo(self%n_cc))
+    !       call fopen(filnum, file='../'//'../'//'AspectRatio.csv', action='readwrite',iostat=io_stat)
+    !       if( io_stat .ne. 0 ) then
+    !         THROW_HARD('Unable to read file AspectRatio.csv Did you run cluster_analysis?; geometry_analysis')
+    !       endif
+    !       read(filnum,*) ! first line is variable name
+    !       do i = 1, self%n_cc
+    !         read(filnum,*) self%atominfo(i)%aspect_ratio
+    !       enddo
+    !       call fclose(filnum)
+    !       call fopen(filnum, file='../'//'../'//'Ang.csv', action='readwrite', iostat=io_stat)
+    !       if( io_stat .ne. 0 ) then
+    !         THROW_HARD('Unable to read file Ang.csv Did you run cluster_analysis?; geometry_analysis')
+    !       endif
+    !       read(filnum,*)
+    !       do i = 1, self%n_cc
+    !         read(filnum,*) self%atominfo(i)%polar_angle
+    !       enddo
+    !       call fclose(filnum)
+    !       call fopen(filnum, file='../'//'../'//'Dist.csv', action='readwrite', iostat=io_stat)
+    !       if( io_stat .ne. 0 ) then
+    !         THROW_HARD('Unable to read file Dist.csv Did you run cluster_analysis?; geometry_analysis')
+    !       endif
+    !       read(filnum,*)
+    !       do i = 1, self%n_cc
+    !         read(filnum,*) self%atominfo(i)%bondl
+    !       enddo
+    !       call fclose(filnum)
+    !       allocate(max_intensity(self%n_cc))
+    !       call fopen(filnum, file='../'//'../'//'MaxIntensity.csv', action='readwrite', iostat=io_stat)
+    !       read(filnum,*)
+    !       do i = 1, self%n_cc
+    !         read(filnum,*) max_intensity(i)
+    !       enddo
+    !       call fclose(filnum)
+    !       ! Output on Excel file all the stats on the atoms belonging to the plane
+    !       cnt = 0
+    !       call fopen(filnum, file='AtomColumnInfo.txt',iostat=io_stat)
+    !       write (filnum,*) '        Atom #    ','   Ar        ','       Dist     ','         Ang     ','         MaxInt     '
+    !       do i = 1, self%n_cc
+    !         if(flag(i)) then
+    !           cnt = cnt + 1
+    !           write (filnum,*) i, '   ', self%atominfo(i)%aspect_ratio, self%atominfo(i)%bondl, self%atominfo(i)%polar_angle, max_intensity(i)
+    !         endif
+    !       end do
+    !       call fclose(filnum)
+    !     elseif(n == 3) then
+    !       write(logfhandle,*)'PLANE IDENTIFICATION, INITIATION'
+    !       atom1(:) = init_atoms%get_coord(1)/self%smpd + 1.
+    !       atom2(:) = init_atoms%get_coord(2)/self%smpd + 1.
+    !       atom3(:) = init_atoms%get_coord(3)/self%smpd + 1.
+    !       dir_1 = atom1-atom2
+    !       dir_2 = atom1-atom3
+    !       allocate(plane(3, N_DISCRET, N_DISCRET), source = 0.)
+    !       do t = 1, N_DISCRET
+    !         do s = 1, N_DISCRET
+    !           plane(1,t,s) = atom1(1) + t_vec(t)* dir_1(1) + s_vec(s)* dir_2(1)
+    !           plane(2,t,s) = atom1(2) + t_vec(t)* dir_1(2) + s_vec(s)* dir_2(2)
+    !           plane(3,t,s) = atom1(3) + t_vec(t)* dir_1(3) + s_vec(s)* dir_2(3)
+    !         enddo
+    !       enddo
+    !       ! calculate how many atoms does the plane intersect and flag them
+    !       do i = 1, self%n_cc
+    !         do t = 1, N_DISCRET
+    !           do s = 1, N_DISCRET
+    !             dist_plane = euclid(self%atominfo(i)%center(:),plane(:3,t,s))
+    !             if(dist_plane*self%smpd <= tthresh) then ! it intersects atoms i
+    !               flag(i) = .true. !flags also itself
+    !             endif
+    !           enddo
+    !         enddo
+    !       enddo
+    !       ! generate volume for visualisation
+    !       ! reset
+    !       imat    = 0
+    !       cnt_intersect = 0
+    !       call img_out%new_bimg(self%ldim, self%smpd)
+    !       call final_atoms%new(count(flag), dummy=.true.)
+    !       do i = 1, self%n_cc
+    !         if(flag(i)) then
+    !           cnt_intersect = cnt_intersect + 1
+    !           call final_atoms%set_name(cnt_intersect,self%atom_name)
+    !           call final_atoms%set_element(cnt_intersect,self%element)
+    !           call final_atoms%set_coord(cnt_intersect,(self%atominfo(i)%center(:)-1.)*self%smpd)
+    !           where(imat_cc == i) imat = 1
+    !         endif
+    !       enddo
+    !       call img_out%set_imat(imat)
+    !       call img_out%write_bimg('ImagePlane.mrc')
+    !       call final_atoms%writePDB('AtomPlane')
+    !       call final_atoms%kill
+    !       allocate(points(3, count(flag)), source = 0.)
+    !       m = self%masscen()
+    !       cnt = 0
+    !       do i = 1, self%n_cc
+    !         if(flag(i)) then
+    !           cnt = cnt + 1
+    !           points(:3,cnt) = self%atominfo(i)%center(:)-m(:)
+    !         endif
+    !       enddo
+    !       vec = plane_from_points(points)
+    !       allocate(distances_totheplane(cnt), source = 0.)
+    !       allocate(radii(cnt), source = 0.) ! which radius is the atom center belonging to
+    !       cnt = 0
+    !       denominator = sqrt(vec(1)**2+vec(2)**2+1.)
+    !       write(logfhandle,*) 'Normal vector: [', vec(1), ',', vec(2), ',', -1., ']'
+    !       do i = 1, self%n_cc
+    !         if(flag(i)) then
+    !           cnt = cnt + 1
+    !           ! formula for distance of a point to a plane
+    !           distances_totheplane(cnt) = abs(vec(1)*points(1,cnt)+vec(2)*points(2,cnt)-points(3,cnt)+vec(3))/denominator
+    !           radii(cnt) = euclid(self%atominfo(i)%center(:), m)*self%smpd
+    !         endif
+    !       enddo
+    !       distances_totheplane = (distances_totheplane)*self%smpd
+    !       call fopen(filnum, file='Radii.csv', action='readwrite', iostat=io_stat)
+    !       write (filnum,*) 'r'
+    !       do i = 1, cnt
+    !         write (filnum,'(A)', advance='yes') trim(real2str(radii(i)))
+    !       end do
+    !       call fclose(filnum)
+    !       call fopen(filnum, file='DistancesToThePlane.csv', action='readwrite',iostat=io_stat)
+    !       write (filnum,*) 'd'
+    !       do i = 1, cnt
+    !         write (filnum,'(A)', advance='yes') trim(real2str(distances_totheplane(i)))
+    !       end do
+    !       call fclose(filnum)
+    !       ! Read ratios, ang_var, dists, max_intensity
+    !       if(.not. allocated(self%atominfo)) allocate(self%atominfo(self%n_cc))
+    !       call fopen(filnum, file='../'//'../'//'AspectRatio.csv', action='readwrite', iostat=io_stat)
+    !       if( io_stat .ne. 0 ) then
+    !         THROW_HARD('Unable to read file AspectRatio.csv Did you run cluster_analysis?; geometry_analysis')
+    !       endif
+    !       read(filnum,*)  ! first line is variable name
+    !       do i = 1, self%n_cc
+    !         read(filnum,*) self%atominfo(i)%aspect_ratio
+    !       enddo
+    !       call fclose(filnum)
+    !       call fopen(filnum, file='../'//'../'//'Ang.csv', action='readwrite', iostat=io_stat)
+    !       if( io_stat .ne. 0 ) then
+    !         THROW_HARD('Unable to read file Ang.csv Did you run cluster_analysis?; geometry_analysis')
+    !       endif
+    !       read(filnum,*)
+    !       do i = 1, self%n_cc
+    !         read(filnum,*) self%atominfo(i)%polar_angle
+    !       enddo
+    !       call fclose(filnum)
+    !       call fopen(filnum, file='../'//'../'//'Dist.csv', action='readwrite', iostat=io_stat)
+    !       if( io_stat .ne. 0 ) then
+    !         THROW_HARD('Unable to read file Dist.csv Did you run cluster_analysis?; geometry_analysis')
+    !       endif
+    !       read(filnum,*)
+    !       do i = 1, self%n_cc
+    !         read(filnum,*) self%atominfo(i)%bondl
+    !       enddo
+    !       call fclose(filnum)
+    !       allocate(max_intensity(self%n_cc))
+    !       call fopen(filnum, file='../'//'../'//'MaxIntensity.csv', action='readwrite', iostat=io_stat)
+    !       if( io_stat .ne. 0 ) then
+    !         THROW_HARD('Unable to read file MaxIntensity.csv Did you run atoms_stats?; geometry_analysis')
+    !       endif
+    !       read(filnum,*)
+    !       do i = 1, self%n_cc
+    !         read(filnum,*) max_intensity(i)
+    !       enddo
+    !       call fclose(filnum)
+    !       ! Output on txt file all the stats on the atoms belonging to the plane
+    !       cnt = 0
+    !       call fopen(filnum, file='AtomPlaneInfo.txt',action='write',iostat=io_stat)
+    !       write (filnum,*) '        Atom #    ','   Ar        ','       Dist     ','         Ang     ','      MaxInt     '
+    !       do i = 1, self%n_cc
+    !         if(flag(i)) then
+    !           cnt = cnt + 1
+    !           write (filnum,*) i, '   ', self%atominfo(i)%aspect_ratio, self%atominfo(i)%bondl, self%atominfo(i)%polar_angle, max_intensity(i)
+    !         endif
+    !       end do
+    !       call fclose(filnum)
+    !     endif
+    !     call img_out%kill_bimg
+    !     call init_atoms%kill
+    !     if(allocated(line))  deallocate(line)
+    !     if(allocated(plane)) deallocate(plane)
+    !     deallocate(imat_cc, imat)
+    !
+    ! contains
+    !
+    !   ! Compute the cross product of 2 3D real vectors
+    !   function cross(a, b) result(c)
+    !       real, intent(in) :: a(3),b(3)
+    !       real :: c(3)
+    !       c(1) = a(2) * b(3) - a(3) * b(2)
+    !       c(2) = a(3) * b(1) - a(1) * b(3)
+    !       c(3) = a(1) * b(2) - a(2) * b(1)
+    !   end function cross
+    !
+    ! end subroutine geometry_analysis
 
     subroutine kill_nanoparticle(self)
         class(nanoparticle), intent(inout) :: self
