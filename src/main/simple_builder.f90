@@ -221,6 +221,7 @@ contains
             call self%img_pad%new([params%boxpd,params%boxpd,1],params%smpd)
             if( ddo3d )then
                 call self%vol%new([params%box,params%box,params%box], params%smpd)
+                call self%vol_odd%new([params%box,params%box,params%box], params%smpd)
                 call self%vol2%new([params%box,params%box,params%box], params%smpd)
             endif
             ! build arrays
@@ -268,6 +269,8 @@ contains
             call self%img_pad%kill
             call self%vol%kill_expanded
             call self%vol%kill
+            call self%vol_odd%kill_expanded
+            call self%vol_odd%kill
             call self%vol2%kill
             call self%mskimg%kill
             if( allocated(self%fsc)  )     deallocate(self%fsc)

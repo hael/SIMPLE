@@ -34,23 +34,24 @@ call vol_odd%fft
 call vol_noise%fft
 filtsz = vol_even%get_filtsz()
 allocate(corrs(filtsz))
-call vol_even%fsc(vol_odd, corrs)
-write(logfhandle,'(a)') 'ORIGINAL RESOLUTION ESTIMATION'
-do k=1,size(res)
-   write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(k), '>>> CORRELATION:', corrs(k)
-end do
-call get_resolution(corrs, res, res_fsc05, res_fsc0143)
-write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
-write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
-call vol_even%zero_fcomps_below_noise_power(vol_noise)
-call vol_odd%zero_fcomps_below_noise_power(vol_noise)
-write(logfhandle,'(a)') 'RESOLUTION ESTIMATION AFTER NOISE FILTERING'
-do k=1,size(res)
-   write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(k), '>>> CORRELATION:', corrs(k)
-end do
-call get_resolution(corrs, res, res_fsc05, res_fsc0143)
-write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
-write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
+! call vol_even%fsc(vol_odd, corrs)
+! write(logfhandle,'(a)') 'ORIGINAL RESOLUTION ESTIMATION'
+! do k=1,size(res)
+!    write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(k), '>>> CORRELATION:', corrs(k)
+! end do
+! call get_resolution(corrs, res, res_fsc05, res_fsc0143)
+! write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
+! write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
+call vol_even%zero_fcomps_below_noise_power(vol_odd)
+! call vol_odd%fcomps_below_noise_power_stats(vol_noise)
+! call vol_even%fsc(vol_odd, corrs)
+! write(logfhandle,'(a)') 'RESOLUTION ESTIMATION AFTER NOISE FILTERING'
+! do k=1,size(res)
+!    write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(k), '>>> CORRELATION:', corrs(k)
+! end do
+! call get_resolution(corrs, res, res_fsc05, res_fsc0143)
+! write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
+! write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
 call vol_even%ifft
-call vol_even%write('nothing_below_noise.mrc')
+call vol_even%write('new_impl.mrc')
 end program simple_test_eo_diff

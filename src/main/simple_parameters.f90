@@ -23,6 +23,7 @@ type :: parameters
     character(len=3)      :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
     character(len=3)      :: avg='no'             !< calculate average (yes|no){no}
     character(len=3)      :: bin='no'             !< binarise image(yes|no){no}
+    character(len=3)      :: cancel_noise='no'    !< zero F-comps below noise power in refvols(yes|no){no}
     character(len=3)      :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)      :: classtats='no'       !< calculate class population statistics(yes|no){no}
     character(len=3)      :: clustvalid='no'      !< validate clustering(yes|homo|no){no}
@@ -489,6 +490,7 @@ contains
         call check_carg('avg',            self%avg)
         call check_carg('bin',            self%bin)
         call check_carg('boxtype',        self%boxtype)
+        call check_carg('cancel_noise',   self%cancel_noise)
         call check_carg('center',         self%center)
         call check_carg('classtats',      self%classtats)
         call check_carg('clustermode',    self%clustermode)
