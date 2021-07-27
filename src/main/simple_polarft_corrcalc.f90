@@ -1002,8 +1002,9 @@ contains
             return
         endif
         ! init
-        pft_ptcl = self%pfts_ptcls(:,:,i)
+        ! pft_ptcl = self%pfts_ptcls(:,:,i)
         if( params_glob%l_pssnr )then
+            pft_ptcl = self%pfts_ptcls(:,:,i)
             do k=params_glob%kfromto(1),params_glob%kstop
                 ! particle power spectrum
                 pw_ptcl = real(sum(csq_fast(dcmplx(pft_ptcl(:,k)))) / real(self%pftsz,dp))
@@ -1034,12 +1035,12 @@ contains
             ! match spectrums
             do k=params_glob%kfromto(1),params_glob%kstop
                 ! particle
-                pw_ptcl = real(sum(csq_fast(dcmplx(pft_ptcl(:,k)))) / real(self%pftsz,dp))
-                if( pw_ptcl > 1.e-12 )then
-                    pft_ptcl(:,k) = pft_ptcl(:,k) * self%ref_optlp(k,iref) / sqrt(pw_ptcl)
-                else
-                    pft_ptcl(:,k) = pft_ptcl(:,k) * self%ref_optlp(k,iref)
-                endif
+                ! pw_ptcl = real(sum(csq_fast(dcmplx(pft_ptcl(:,k)))) / real(self%pftsz,dp))
+                ! if( pw_ptcl > 1.e-12 )then
+                !     pft_ptcl(:,k) = pft_ptcl(:,k) * self%ref_optlp(k,iref) / sqrt(pw_ptcl)
+                ! else
+                !     pft_ptcl(:,k) = pft_ptcl(:,k) * self%ref_optlp(k,iref)
+                ! endif
                 ! reference
                 pw_ref = real(sum(csq_fast(dcmplx(pft_ref(:,k)))) / real(self%pftsz,dp))
                 if( pw_ref > 1.e-12 )then
@@ -1048,49 +1049,49 @@ contains
                     pft_ref(:,k) = pft_ref(:,k) * self%ref_optlp(k,iref)
                 endif
             enddo
-            ! power spectrum difference
-            rot = merge(irot - self%pftsz, irot, irot >= self%pftsz + 1)
-            do k = params_glob%kfromto(1), params_glob%kstop
-                if( irot == 1 )then
-                    pw_diffk = sum(csq_fast(dcmplx(pft_ref(:,k) - pft_ptcl(:,k))))
-                else if( irot <= self%pftsz )then
-                    pw_diffk =            sum(csq_fast(dcmplx(pft_ref(1:self%pftsz-rot+1,k)          - pft_ptcl(rot:self%pftsz,k))))
-                    pw_diffk = pw_diffk + sum(csq_fast(dcmplx(pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(pft_ptcl(1:rot-1,k)))))
-                else if( irot == self%pftsz + 1 )then
-                    pw_diffk = sum(csq_fast(pft_ref(:,k) - conjg(pft_ptcl(:,k))))
-                else
-                    pw_diffk =            sum(csq_fast(dcmplx(pft_ref(1:self%pftsz-rot+1,k)          - conjg(pft_ptcl(rot:self%pftsz,k)))))
-                    pw_diffk = pw_diffk + sum(csq_fast(dcmplx(pft_ref(self%pftsz-rot+2:self%pftsz,k) - pft_ptcl(1:rot-1,k))))
-                end if
-                pw_diff(k) = real(pw_diffk / real(self%pftsz,dp))
-            end do
-            ! fitting of difference
-            pw_diff_fit = pw_diff
-            call SavitzkyGolay_filter(params_glob%kstop-params_glob%kfromto(1)+1, pw_diff_fit)
-            where( pw_diff_fit <= 0.) pw_diff_fit = pw_diff                 ! takes care of range
-            pw_diff_fit(params_glob%kfromto(1):params_glob%kfromto(1)+2) =& ! to avoid left border effect
-                &pw_diff(params_glob%kfromto(1):params_glob%kfromto(1)+2)
-            ! shell normalize & filter particle
-            do k=params_glob%kfromto(1),params_glob%kstop
-                ! particle
-                pw_ptcl = real(sum(csq_fast(dcmplx(pft_ptcl(:,k)))) / real(self%pftsz,dp))
-                w = 1.
-                if( pw_ptcl > 1.e-12 ) w  = 1. / sqrt(pw_ptcl)
-                ! reference
-                pw_ref = real(sum(csq_fast(dcmplx(pft_ref(:,k)))) / real(self%pftsz,dp))
-                ! optimal filter
-                if( pw_diff_fit(k) > 1.e-12 )then
-                    ssnr = pw_ref / pw_diff_fit(k)
-                    w    = w * sqrt(ssnr / (ssnr + 1.))
-                else
-                    ! ssnr -> inf
-                endif
-                ! filter
-                pft_ptcl(:,k) = w * pft_ptcl(:,k)
-            enddo
+            ! ! power spectrum difference
+            ! rot = merge(irot - self%pftsz, irot, irot >= self%pftsz + 1)
+            ! do k = params_glob%kfromto(1), params_glob%kstop
+            !     if( irot == 1 )then
+            !         pw_diffk = sum(csq_fast(dcmplx(pft_ref(:,k) - pft_ptcl(:,k))))
+            !     else if( irot <= self%pftsz )then
+            !         pw_diffk =            sum(csq_fast(dcmplx(pft_ref(1:self%pftsz-rot+1,k)          - pft_ptcl(rot:self%pftsz,k))))
+            !         pw_diffk = pw_diffk + sum(csq_fast(dcmplx(pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(pft_ptcl(1:rot-1,k)))))
+            !     else if( irot == self%pftsz + 1 )then
+            !         pw_diffk = sum(csq_fast(pft_ref(:,k) - conjg(pft_ptcl(:,k))))
+            !     else
+            !         pw_diffk =            sum(csq_fast(dcmplx(pft_ref(1:self%pftsz-rot+1,k)          - conjg(pft_ptcl(rot:self%pftsz,k)))))
+            !         pw_diffk = pw_diffk + sum(csq_fast(dcmplx(pft_ref(self%pftsz-rot+2:self%pftsz,k) - pft_ptcl(1:rot-1,k))))
+            !     end if
+            !     pw_diff(k) = real(pw_diffk / real(self%pftsz,dp))
+            ! end do
+            ! ! fitting of difference
+            ! pw_diff_fit = pw_diff
+            ! call SavitzkyGolay_filter(params_glob%kstop-params_glob%kfromto(1)+1, pw_diff_fit)
+            ! where( pw_diff_fit <= 0.) pw_diff_fit = pw_diff                 ! takes care of range
+            ! pw_diff_fit(params_glob%kfromto(1):params_glob%kfromto(1)+2) =& ! to avoid left border effect
+            !     &pw_diff(params_glob%kfromto(1):params_glob%kfromto(1)+2)
+            ! ! shell normalize & filter particle
+            ! do k=params_glob%kfromto(1),params_glob%kstop
+            !     ! particle
+            !     pw_ptcl = real(sum(csq_fast(dcmplx(pft_ptcl(:,k)))) / real(self%pftsz,dp))
+            !     w = 1.
+            !     if( pw_ptcl > 1.e-12 ) w  = 1. / sqrt(pw_ptcl)
+            !     ! reference
+            !     pw_ref = real(sum(csq_fast(dcmplx(pft_ref(:,k)))) / real(self%pftsz,dp))
+            !     ! optimal filter
+            !     if( pw_diff_fit(k) > 1.e-12 )then
+            !         ssnr = pw_ref / pw_diff_fit(k)
+            !         w    = w * sqrt(ssnr / (ssnr + 1.))
+            !     else
+            !         ! ssnr -> inf
+            !     endif
+            !     ! filter
+            !     pft_ptcl(:,k) = w * pft_ptcl(:,k)
+            ! enddo
         endif
         ! update particle pft & re-memoize
-        call self%set_ptcl_pft(iptcl, pft_ptcl)
+        ! call self%set_ptcl_pft(iptcl, pft_ptcl)
         call self%memoize_fft(i)
     end subroutine prep_matchfilt
 

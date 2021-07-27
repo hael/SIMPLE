@@ -219,6 +219,7 @@ contains
     generic            :: shellnorm_and_apply_filter_serial =>&
         &shellnorm_and_apply_filter_serial_1, shellnorm_and_apply_filter_serial_2
     procedure          :: zero_fcomps_below_noise_power
+    procedure          :: fcomps_below_noise_power_stats
     procedure          :: apply_bfac
     procedure          :: bp
     procedure          :: tophat
@@ -3613,7 +3614,7 @@ contains
         end do
     end subroutine apply_filter_serial
 
-    subroutine zero_fcomps_below_noise_power( self, noise_vol )
+    subroutine fcomps_below_noise_power_stats( self, noise_vol )
         class(image), intent(inout) :: self, noise_vol
         real, allocatable :: res(:)
         integer :: h, k, l, lims(3,2), phys(3), cnt, counts(self%get_filtsz())
@@ -3653,6 +3654,33 @@ contains
         write(logfhandle,'(a,f4.1)')&
         'fraction (%) of Fourier components with power below noise power zeroed: ',&
         &100 * (real(cnt) / product(self%ldim))
+    end subroutine fcomps_below_noise_power_stats
+
+    subroutine zero_fcomps_below_noise_power( self_even, self_odd )
+        class(image), intent(inout) :: self_even, self_odd
+        integer :: h, k, l, lims(3,2), phys(3)
+        real    :: noise_pow, even_pow, odd_pow
+        complex :: diff
+        lims  = self_even%fit%loop_lims(2)
+        if( .not.self_even%is_ft() ) THROW_HARD('even vol needs to be FTed')
+        if( .not.self_odd%is_ft()  ) THROW_HARD('odd  vol needs to be FTed')
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,diff,noise_pow,even_pow,odd_pow)&
+        !$omp schedule(static) proc_bind(close)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    phys      = self_even%comp_addr_phys([h,k,l])
+                    diff      = self_even%cmat(phys(1),phys(2),phys(3)) -&
+                               &self_odd%cmat(phys(1),phys(2),phys(3))
+                    noise_pow = csq(diff)
+                    even_pow  = csq(self_even%cmat(phys(1),phys(2),phys(3)))
+                    odd_pow   = csq(self_odd%cmat(phys(1),phys(2),phys(3)))
+                    if( noise_pow > even_pow ) call self_even%mul([h,k,l], 0.)
+                    if( noise_pow > odd_pow  ) call self_odd%mul([h,k,l],  0.)
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
     end subroutine zero_fcomps_below_noise_power
 
     ! This function performs image filtering by convolution

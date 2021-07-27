@@ -5,29 +5,28 @@ module simple_strategy3D_matcher
 include 'simple_lib.f08'
 use simple_strategy3D_alloc ! singleton s3D
 use simple_timer
-use simple_oris,                     only: oris
-use simple_qsys_funs,                only: qsys_job_finished
-use simple_binoris_io,               only: binwrite_oritab
-use simple_kbinterpol,               only: kbinterpol
-use simple_ori,                      only: ori
-use simple_sym,                      only: sym
-use simple_image,                    only: image
-use simple_cmdline,                  only: cmdline
-use simple_parameters,               only: params_glob
-use simple_builder,                  only: build_glob
-use simple_polarizer,                only: polarizer
-use simple_polarft_corrcalc,         only: polarft_corrcalc
-use simple_strategy2D3D_common,      only: killrecvols, set_bp_range, preprecvols,&
-    prepimgbatch, grid_ptcl, read_imgbatch, norm_struct_facts
-use simple_strategy3D_cluster,       only: strategy3D_cluster
-use simple_strategy3D_shc,           only: strategy3D_shc
-use simple_strategy3D_snhc,          only: strategy3D_snhc
-use simple_strategy3D_greedy,        only: strategy3D_greedy
-use simple_strategy3D_neigh,         only: strategy3D_neigh
-use simple_strategy3D,               only: strategy3D
-use simple_strategy3D_srch,          only: strategy3D_spec, set_ptcl_stats, eval_ptcl
-use simple_convergence,              only: convergence
-use simple_euclid_sigma2,            only: euclid_sigma2
+use simple_oris,               only: oris
+use simple_qsys_funs,          only: qsys_job_finished
+use simple_binoris_io,         only: binwrite_oritab
+use simple_kbinterpol,         only: kbinterpol
+use simple_ori,                only: ori
+use simple_sym,                only: sym
+use simple_image,              only: image
+use simple_cmdline,            only: cmdline
+use simple_parameters,         only: params_glob
+use simple_builder,            only: build_glob
+use simple_polarizer,          only: polarizer
+use simple_polarft_corrcalc,   only: polarft_corrcalc
+use simple_strategy3D_cluster, only: strategy3D_cluster
+use simple_strategy3D_shc,     only: strategy3D_shc
+use simple_strategy3D_snhc,    only: strategy3D_snhc
+use simple_strategy3D_greedy,  only: strategy3D_greedy
+use simple_strategy3D_neigh,   only: strategy3D_neigh
+use simple_strategy3D,         only: strategy3D
+use simple_strategy3D_srch,    only: strategy3D_spec, set_ptcl_stats, eval_ptcl
+use simple_convergence,        only: convergence
+use simple_euclid_sigma2,      only: euclid_sigma2
+use simple_strategy2D3D_common
 implicit none
 
 public :: refine3D_exec, preppftcc4align, pftcc, calc_3Drec
@@ -161,6 +160,7 @@ contains
         ! clean big objects before starting to allocate new big memory chunks
         ! cannot kill build_glob%vol since used in continuous search
         call build_glob%vol2%kill
+        call build_glob%vol_odd%kill
         ! array allocation for strategy3D
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D'
         call prep_strategy3D(ptcl_mask) ! allocate s3D singleton
@@ -359,7 +359,7 @@ contains
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
         call pftcc%new(nrefs, [1,batchsz_max])
-        if ( params_glob%l_needs_sigma ) then
+        if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname)
             call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
@@ -388,7 +388,8 @@ contains
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
             if( params_glob%l_lpset )then
                 ! low-pass set or multiple states
-                call preprefvol(pftcc, cline, s, params_glob%vols(s), do_center, xyz, .true.)
+                call readrefvols(params_glob%vols(s))
+                call preprefvol(pftcc, cline, s, do_center, xyz, .true.)
                 !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
                 do iref=1,params_glob%nspace
                     call build_glob%eulspace%get_ori(iref, o_tmp)
@@ -399,22 +400,20 @@ contains
                 !$omp end parallel do
             else
                 if( params_glob%nstates.eq.1 )then
+                    call readrefvols(params_glob%vols_even(s), params_glob%vols_odd(s))
+                    if( trim(params_glob%cancel_noise).eq.'yes' ) call zero_refvol_fcomps_below_noise
                     ! PREPARE ODD REFERENCES
-                    call preprefvol(pftcc, cline, s, params_glob%vols_odd(s), do_center, xyz, .false.)
+                    call preprefvol(pftcc, cline, s, do_center, xyz, .false.)
                     !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
                         call build_glob%eulspace%get_ori(iref, o_tmp)
-                        call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
+                        call build_glob%vol_odd%fproject_polar((s - 1) * params_glob%nspace + iref, &
                             &o_tmp, pftcc, iseven=.false., mask=build_glob%l_resmsk)
                         call o_tmp%kill
                     end do
                     !$omp end parallel do
-                    ! copy odd volume
-                    build_glob%vol_odd = build_glob%vol
-                    ! expand for fast interpolation
-                    call build_glob%vol_odd%expand_cmat(params_glob%alpha,norm4proj=.true.)
                     ! PREPARE EVEN REFERENCES
-                    call preprefvol(pftcc,  cline, s, params_glob%vols_even(s), do_center, xyz, .true.)
+                    call preprefvol(pftcc,  cline, s, do_center, xyz, .true.)
                     !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
                         call build_glob%eulspace%get_ori(iref, o_tmp)
@@ -424,7 +423,8 @@ contains
                     end do
                     !$omp end parallel do
                 else
-                    call preprefvol(pftcc, cline, s, params_glob%vols(s), do_center, xyz, .true.)
+                    call readrefvols(params_glob%vols(s))
+                    call preprefvol(pftcc, cline, s, do_center, xyz, .true.)
                     !$omp parallel do default(shared) private(iref, ind, o_tmp) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
                         ind = (s - 1) * params_glob%nspace + iref
