@@ -157,7 +157,7 @@ contains
         call pspec_img%fft()
         call pspec_img%polarize(pftcc,1,.true.,.true.)
         ! rotational correlations
-        call pftcc%prep_matchfilt(1,1,1)
+        call pftcc%memoize_ffts
         call pftcc%gencorrs(1,1,corrs)
         ! mask out non peak-shape values
         do i = 1,nrots

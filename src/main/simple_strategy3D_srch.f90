@@ -75,8 +75,6 @@ contains
         prev_roind = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
         prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
         prev_ref   = (prev_state-1)*params_glob%nspace + prev_proj ! previous reference
-        ! particle prep
-        call pftcc%prep_matchfilt(iptcl,prev_ref,prev_roind)
         ! calc specscore
         specscore = pftcc%specscore(prev_ref, iptcl, prev_roind)
         ! update spproj_field
@@ -98,8 +96,6 @@ contains
         prev_roind = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
         prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
         prev_ref   = (prev_state-1)*params_glob%nspace + prev_proj ! previous reference
-        ! particle prep
-        call pftcc%prep_matchfilt(iptcl,prev_ref,prev_roind)
         ! calc specscore
         specscore = pftcc%specscore(prev_ref, iptcl, prev_roind)
         ! prep corr
@@ -171,8 +167,6 @@ contains
             if( self%prev_state > self%nstates )          THROW_HARD('previous best state outside boundary; prep4srch')
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4srch')
         endif
-        ! particle prep
-        call pftcc_glob%prep_matchfilt(self%iptcl,self%prev_ref,self%prev_roind)
         ! calc specscore
         self%specscore = pftcc_glob%specscore(self%prev_ref, self%iptcl, self%prev_roind)
         ! prep corr

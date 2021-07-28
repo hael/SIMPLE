@@ -433,7 +433,6 @@ type :: parameters
     logical :: l_locres         = .false.
     logical :: l_match_filt     = .true.
     logical :: l_needs_sigma    = .false.
-    logical :: l_pssnr          = .false.
     logical :: l_phaseplate     = .false.
     logical :: l_remap_cls      = .false.
     logical :: l_wglob          = .true.
@@ -1360,15 +1359,12 @@ contains
         select case(self%cc_objfun)
             case(OBJFUN_EUCLID)
                 self%l_match_filt  = .false.
-                self%l_pssnr       = .false.
                 self%l_needs_sigma = .true.
             case(OBJFUN_CC)
                 self%l_match_filt  = (trim(self%match_filt) .eq.'yes') .and. (.not.self%l_lpset)
-                self%l_pssnr       = (trim(self%pssnr)      .eq.'yes') .and. self%l_match_filt
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
                 if( self%l_needs_sigma )then
                     self%l_match_filt = .false.
-                    self%l_pssnr      = .false.
                 endif
         end select
         ! atoms
