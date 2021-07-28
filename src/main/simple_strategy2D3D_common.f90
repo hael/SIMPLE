@@ -407,21 +407,15 @@ contains
             endif
         endif
         ! filter
-        if( params_glob%l_pssnr )then
-            call build_glob%projpssnrs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, filter)
-            call subsample_filter(filtsz, build_glob%img_match%get_filtsz(), filter, subfilter)
-            call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
-        else
-            call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-            if( any(frc > 0.143) )then
-                call fsc2optlp_sub(build_glob%clsfrcs%get_filtsz(), frc, filter)
-                if( params_glob%l_match_filt )then
-                    call subsample_optlp(filtsz, build_glob%img_match%get_filtsz(), filter, subfilter)
-                    call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
-                else
-                    call img_in%fft() ! needs to be here in case the shift was never applied (above)
-                    call img_in%apply_filter_serial(filter)
-                endif
+        call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+        if( any(frc > 0.143) )then
+            call fsc2optlp_sub(build_glob%clsfrcs%get_filtsz(), frc, filter)
+            if( params_glob%l_match_filt )then
+                call subsample_optlp(filtsz, build_glob%img_match%get_filtsz(), filter, subfilter)
+                call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
+            else
+                call img_in%fft() ! needs to be here in case the shift was never applied (above)
+                call img_in%apply_filter_serial(filter)
             endif
         endif
         ! ensure we are in real-space before clipping
@@ -603,40 +597,28 @@ contains
             subfiltsz = build_glob%img_match%get_filtsz()
             if( params_glob%l_match_filt )then
                 ! stores filters in pftcc
-                if( params_glob%l_pssnr )then
-                    allocate(fname_opt_filter, source=PSSNR_FBODY//int2str_pad(s,2)//BIN_EXT)
-                    subfilter = 1.
-                    if( any(build_glob%fsc(s,:) > 0.143) .and. file_exists(fname_opt_filter))then
-                        pssnr = file2rarr(fname_opt_filter)
-                        call subsample_filter(filtsz, subfiltsz, pssnr, subfilter)
+                if( params_glob%clsfrcs.eq.'yes')then
+                    if( file_exists(params_glob%frcs) )then
+                        iproj = 0
+                        do iref = 1,2*build_glob%clsfrcs%get_nprojs()
+                            iproj = iproj+1
+                            if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
+                            call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+                            call fsc2optlp_sub(filtsz, frc, filter)
+                            call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
+                            call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
+                        enddo
+                    endif
+                else
+                    if( any(build_glob%fsc(s,:) > 0.143) )then
+                        call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
+                        call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
+                    else
+                        subfilter = 1.
                     endif
                     do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
                         call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
                     enddo
-                else
-                    if( params_glob%clsfrcs.eq.'yes')then
-                        if( file_exists(params_glob%frcs) )then
-                            iproj = 0
-                            do iref = 1,2*build_glob%clsfrcs%get_nprojs()
-                                iproj = iproj+1
-                                if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
-                                call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-                                call fsc2optlp_sub(filtsz, frc, filter)
-                                call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
-                                call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
-                            enddo
-                        endif
-                    else
-                        if( any(build_glob%fsc(s,:) > 0.143) )then
-                            call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
-                            call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
-                        else
-                            subfilter = 1.
-                        endif
-                        do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
-                            call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
-                        enddo
-                    endif
                 endif
             else
                 call vol_ptr%fft()

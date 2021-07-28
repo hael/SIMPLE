@@ -28,8 +28,8 @@ contains
 
     !>  \brief  is the prime2D algorithm
     subroutine cluster2D_exec( cline, which_iter )
-        use simple_qsys_funs,    only: qsys_job_finished
-        use simple_binoris_io,   only: binwrite_oritab
+        use simple_qsys_funs,             only: qsys_job_finished
+        use simple_binoris_io,            only: binwrite_oritab
         use simple_strategy2D3D_common,   only: set_bp_range2d, prepimgbatch
         use simple_strategy2D,            only: strategy2D, strategy2D_per_ptcl
         use simple_strategy2D_srch,       only: strategy2D_spec
@@ -178,11 +178,6 @@ contains
 
         ! READ FOURIER RING CORRELATIONS
         if( file_exists(params_glob%frcs) ) call build_glob%clsfrcs%read(params_glob%frcs)
-        if( params_glob%l_pssnr )then
-            if( file_exists(trim(PSSNR_FBODY)//int2str_pad(1,2)//BIN_EXT) )then
-                call build_glob%projpssnrs%read(trim(PSSNR_FBODY)//int2str_pad(1,2)//BIN_EXT)
-            endif
-        endif
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D(cline, which_iter, frac_srch_space )
