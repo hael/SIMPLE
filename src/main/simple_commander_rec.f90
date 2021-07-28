@@ -5,7 +5,6 @@ use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters
-use simple_class_frcs,     only: class_frcs
 use simple_qsys_env,       only: qsys_env
 use simple_qsys_funs
 implicit none
