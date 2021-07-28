@@ -330,10 +330,11 @@ contains
         integer,                 intent(out)   :: find4eoavg            !< Fourier index for eo averaging
         type(image)           :: even, odd
         complex,  allocatable :: cmat(:,:,:)
-        real,     allocatable :: res(:), corrs(:), ssnr(:), pssnr(:), fsc_t(:), fsc_n(:)
-        real,     allocatable :: ctfsqsum_pad(:), inv_ctfsqsum_pad(:), tmp(:), inv_ctfsqsum(:), cntvec(:)
-        real                  :: lp_rand, Ab,Am,Ap,Vb,Vm, msk
+        real,     allocatable :: res(:), corrs(:), fsc_t(:), fsc_n(:)
+        real                  :: lp_rand, msk
         integer               :: k,k_rand, find_plate, filtsz
+        msk = real(self%box / 2) - COSMSKHALFWIDTH - 1.
+        ! msk = self%msk ! for a tighter spherical mask
         if( (params_glob%cc_objfun==OBJFUN_EUCLID) .or. params_glob%l_needs_sigma )then
             ! even
             cmat = self%even%get_cmat()
@@ -352,10 +353,6 @@ contains
             call odd%ifft()
             call odd%clip_inplace([self%box,self%box,self%box])
             ! masking
-            msk = self%msk
-            if( (params_glob%cc_objfun==OBJFUN_EUCLID) .or. params_glob%l_needs_sigma )then
-                msk = self%box / 2 - COSMSKHALFWIDTH - 1.
-            endif
             if( self%automsk )then
                 ! mask provided
                 call even%zero_env_background(self%envmask)
@@ -440,7 +437,7 @@ contains
                 ! Randomize then calculate masked FSC
                 k_rand = get_lplim_at_corr(fsc_t, ENVMSK_FSC_THRESH) ! randomization frequency
                 if( k_rand > filtsz-3 )then
-                    ! reverts to sherical masking
+                    ! reverts to provided sherical masking
                     call even%mask(self%msk, 'soft')
                     call odd%mask(self%msk, 'soft')
                     call even%fft()
@@ -479,11 +476,11 @@ contains
             else
                 ! spherical masking
                 if( self%inner > 1. )then
-                    call even%mask(self%msk, 'soft', inner=self%inner, width=self%width)
-                    call odd%mask(self%msk, 'soft', inner=self%inner, width=self%width)
+                    call even%mask(msk, 'soft', inner=self%inner, width=self%width)
+                    call odd%mask(msk, 'soft', inner=self%inner, width=self%width)
                 else
-                    call even%mask(self%msk, 'soft')
-                    call odd%mask(self%msk, 'soft')
+                    call even%mask(msk, 'soft')
+                    call odd%mask(msk, 'soft')
                 endif
                 ! forward FT
                 call even%fft()

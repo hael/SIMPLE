@@ -578,7 +578,6 @@ contains
         type(image)                   :: mskvol
         type(ori)                     :: o
         character(len=:), allocatable :: fname_opt_filter
-        real,             allocatable :: pssnr(:)
         real    :: subfilter(build_glob%img_match%get_filtsz())
         real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
         integer :: iref, iproj, iprojred, filtsz, subfiltsz
