@@ -192,6 +192,9 @@ contains
         endif
         ! masking
         call vol%ifft()
+        if( cline%defined('automsk') )then
+            if( cline%get_carg('automsk').eq.'no' ) has_mskfile = .false. ! turn off masking
+        endif
         if( trim(params%automsk) .eq. 'file' .and. has_mskfile )then
             call vol%zero_background
             call mskvol%new(ldim, smpd)
