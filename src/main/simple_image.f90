@@ -5323,7 +5323,7 @@ contains
         endif
         allocate(w(self%ldim(1)),source=1.)
         center = self%ldim/2+1
-        ! kaiser-besel window
+        ! kaiser-bessel window
         do i = 1,self%ldim(1)
             arg  = real(i-center(1))/real(self%ldim(1))
             w(i) = kbwin%instr(arg)

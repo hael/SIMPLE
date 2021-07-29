@@ -566,7 +566,6 @@ contains
     subroutine preprefvol( pftcc, cline, s, do_center, xyz, iseven )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_estimate_ssnr,    only: fsc2optlp_sub, subsample_optlp, subsample_filter
-        use simple_ori,              only: ori
         use simple_projector,        only: projector
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(cmdline),          intent(inout) :: cline
@@ -576,7 +575,6 @@ contains
         logical,                 intent(in)    :: iseven
         type(projector),  pointer     :: vol_ptr => null()
         type(image)                   :: mskvol
-        type(ori)                     :: o
         character(len=:), allocatable :: fname_opt_filter
         real    :: subfilter(build_glob%img_match%get_filtsz())
         real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
@@ -666,7 +664,6 @@ contains
         call vol_ptr%fft()
         ! expand for fast interpolation
         call vol_ptr%expand_cmat(params_glob%alpha,norm4proj=.true.)
-        call o%kill
     end subroutine preprefvol
 
     subroutine norm_struct_facts( cline, which_iter )

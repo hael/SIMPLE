@@ -1018,7 +1018,6 @@ contains
                     call converged_chunks(ichunk)%remove_folder
                     call converged_chunks(ichunk)%kill
                 enddo
-                call pool_proj%os_ptcl2D%write('import_ptcl2D_'//int2str(pool_iter)//'.txt')
                 ! cleanup
                 deallocate(converged_chunks)
                 call frcs_prev%kill
