@@ -255,6 +255,7 @@ contains
         type(parameters) :: params
         type(masker)     :: mskvol
         call params%new(cline)
+        call build%build_spproj(params, cline)
         call build%build_general_tbox(params, cline)
         call build%vol%read(params%vols(1))
         call mskvol%automask3D(build%vol)
@@ -283,10 +284,12 @@ contains
         call params%new(cline)
         if( cline%defined('oritab') )then
             params%nptcls = binread_nlines(params%oritab)
+            call build%build_spproj(params, cline)
             call build%build_general_tbox(params, cline)
             params%nspace = build%spproj_field%get_noris()
         else
             params%nptcls = params%nspace
+            call build%build_spproj(params, cline)
             call build%build_general_tbox(params, cline)
             call build%pgrpsyms%build_refspiral(build%spproj_field)
         endif

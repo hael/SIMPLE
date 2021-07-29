@@ -87,7 +87,7 @@ contains
                 converged = ( self%mi_class > MI_CLASS_LIM_2D .and. self%frac_srch%avg > FRAC_LIM )
             endif
             if( params_glob%refine.eq.'fast' )then
-                converged = converged .and. (params_glob%which_iter > 4*FAST2D_ITER_BATCH)
+                converged = converged .and. (params_glob%which_iter >= 4*FAST2D_ITER_BATCH)
             else if( params_glob%refine.eq.'inpl' )then
                 converged = self%dist_inpl%avg < 0.02
             endif
@@ -107,6 +107,7 @@ contains
         endif
         ! stats
         call self%ostats%new(1, is_ptcl=.false.)
+        call self%ostats%set(1,'ITERATION',real(params_glob%which_iter))
         call self%ostats%set(1,'CLASS_OVERLAP',self%mi_class)
         call self%ostats%set(1,'PARTICLE_UPDATES',avg_updatecnt)
         call self%ostats%set(1,'IN-PLANE_DIST',self%dist_inpl%avg)

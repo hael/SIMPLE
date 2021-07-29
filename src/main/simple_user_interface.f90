@@ -81,6 +81,7 @@ type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
 type(simple_program), target :: center2D_nano
 type(simple_program), target :: cluster2D
+type(simple_program), target :: cluster2D_distr
 type(simple_program), target :: cluster2D_nano
 type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster3D
@@ -405,6 +406,7 @@ contains
         call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(center2D_nano)
         call push2prg_ptr_array(cluster2D)
+        call push2prg_ptr_array(cluster2D_distr)
         call push2prg_ptr_array(cluster2D_nano)
         call push2prg_ptr_array(cluster2D_stream)
         call push2prg_ptr_array(cluster3D)
@@ -522,6 +524,8 @@ contains
                 ptr2prg => center2D_nano
             case('cluster2D')
                 ptr2prg => cluster2D
+            case('cluster2D_distr')
+                ptr2prg => cluster2D_distr
             case('cluster2D_nano')
                 ptr2prg => cluster2D_nano
             case('cluster2D_stream')
@@ -1299,8 +1303,8 @@ contains
         &'cluster2D_stream',&                                                                     ! name
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
-        &'simple_exec',&                                                                    ! executable
-        &0, 2, 0, 7, 4, 2, 2, .true.)                                                             ! # entries in each group, requires sp_project
+        &'simple_exec',&                                                                          ! executable
+        &0, 2, 0, 7, 4, 2, 4, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1341,8 +1345,11 @@ contains
         call cluster2D_stream%set_input('mask_ctrls', 1, msk)
         call cluster2D_stream%set_input('mask_ctrls', 2, inner)
         ! computer controls
-        call cluster2D_stream%set_input('comp_ctrls', 1, nparts)
-        call cluster2D_stream%set_input('comp_ctrls', 2, nthr)
+        call cluster2D_stream%set_input('comp_ctrls', 1, 'nchunks', 'num', 'Number of chunks', 'Number of chunks', '# chunks', .true., 1.0)
+        call cluster2D_stream%set_input('comp_ctrls', 2, 'nparts_chunk', 'num', 'Number of partitions per chunk',&
+        &'Number of partitions for distributed execution of each chunk', 'divide chunk job into # parts', .true., 1.0)
+        call cluster2D_stream%set_input('comp_ctrls', 3, nparts)
+        call cluster2D_stream%set_input('comp_ctrls', 4, nthr)
     end subroutine new_cluster2D_stream
 
     subroutine new_cluster3D
@@ -2726,7 +2733,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                              ! executable
-        &5, 16, 0, 16, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 15, 0, 16, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
@@ -2741,22 +2748,21 @@ contains
         call preprocess_stream%set_input('parm_ios', 3, scale_movies)
         call preprocess_stream%set_input('parm_ios', 4, eer_fraction)
         call preprocess_stream%set_input('parm_ios', 5, eer_upsampling)
-        call preprocess_stream%set_input('parm_ios', 6, algorithm)
-        call preprocess_stream%set_input('parm_ios', 7, pcontrast)
-        call preprocess_stream%set_input('parm_ios', 8, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
-        call preprocess_stream%set_input('parm_ios', 9, 'fbody', 'string', 'Template output micrograph name',&
+        call preprocess_stream%set_input('parm_ios', 6, pcontrast)
+        call preprocess_stream%set_input('parm_ios', 7, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
+        call preprocess_stream%set_input('parm_ios', 8, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
-        call preprocess_stream%set_input('parm_ios',10, pspecsz)
-        call preprocess_stream%set_input('parm_ios',11, kv)
+        call preprocess_stream%set_input('parm_ios', 9, pspecsz)
+        call preprocess_stream%set_input('parm_ios',10, kv)
         preprocess_stream%parm_ios(11)%required = .true.
-        call preprocess_stream%set_input('parm_ios',12, cs)
+        call preprocess_stream%set_input('parm_ios',11, cs)
         preprocess_stream%parm_ios(12)%required = .true.
-        call preprocess_stream%set_input('parm_ios',13, fraca)
+        call preprocess_stream%set_input('parm_ios',12, fraca)
         preprocess_stream%parm_ios(13)%required = .true.
-        call preprocess_stream%set_input('parm_ios',14, smpd)
+        call preprocess_stream%set_input('parm_ios',13, smpd)
         preprocess_stream%parm_ios(14)%required = .true.
-        call preprocess_stream%set_input('parm_ios',15, ctfpatch)
-        call preprocess_stream%set_input('parm_ios',16, picker)
+        call preprocess_stream%set_input('parm_ios',14, ctfpatch)
+        call preprocess_stream%set_input('parm_ios',15, picker)
         ! alternative inputs
         ! <empty>
         ! search controls

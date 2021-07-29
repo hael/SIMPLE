@@ -51,7 +51,7 @@ contains
     procedure          :: win2arr_rad
     procedure          :: corner
     ! I/O
-    procedure          :: open
+    procedure, private :: open
     procedure          :: read
     procedure          :: write
     procedure          :: update_header_stats
