@@ -81,7 +81,7 @@ contains
         endif
         partsz     = count(pptcl_mask)
         ! CTF logics
-        ctfflag    = build_glob%spproj%get_ctfflag_type('ptcl2D')
+        ctfflag    = build_glob%spproj%get_ctfflag_type('ptcl2D',iptcl=params_glob%fromp)
         ! set phaseplate flag
         phaseplate = build_glob%spproj%has_phaseplate('ptcl2D')
         ! smpd
@@ -169,9 +169,9 @@ contains
         if( trim(params_glob%stream).eq.'yes' .and. spproj%os_cls2D%get_noris() == ncls )then
             do i = 1,ncls
                 icls = nint(spproj%os_cls2D%get(i,'class'))
-                if( .not.spproj%os_cls2D%isthere(i,'pop_even') ) cycle
-                prev_eo_pops(icls,1) = nint(spproj%os_cls2D%get(i,'pop_even'))
-                prev_eo_pops(icls,2) = nint(spproj%os_cls2D%get(i,'pop_odd'))
+                if( .not.spproj%os_cls2D%isthere(i,'prev_pop_even') ) cycle
+                prev_eo_pops(icls,1) = nint(spproj%os_cls2D%get(i,'prev_pop_even'))
+                prev_eo_pops(icls,2) = nint(spproj%os_cls2D%get(i,'prev_pop_odd'))
             enddo
         endif
     end subroutine cavger_transf_oridat
@@ -207,13 +207,13 @@ contains
             &spproj%os_cls2D%get_noris()==ncls .and. params_glob%update_frac<.99 )then
             do i = 1,ncls
                 icls = nint(spproj%os_cls2D%get(i,'class'))
-                if( .not.spproj%os_cls2D%isthere(i,'pop_even') ) cycle
-                prev_eo_pops(icls,1) = nint(spproj%os_cls2D%get(i,'pop_even'))
-                prev_eo_pops(icls,2) = nint(spproj%os_cls2D%get(i,'pop_odd'))
+                if( .not.spproj%os_cls2D%isthere(i,'prev_pop_even') ) cycle
+                prev_eo_pops(icls,1) = nint(spproj%os_cls2D%get(i,'prev_pop_even'))
+                prev_eo_pops(icls,2) = nint(spproj%os_cls2D%get(i,'prev_pop_odd'))
                 pop = sum(prev_eo_pops(icls,:))
                 if( pop == 0 ) cycle
                 corrs(icls)      = corrs(icls)      + real(pop) * spproj%os_cls2D%get(i,'corr')
-                ws(icls)         = ws(icls)         + real(pop) * spproj%os_cls2D%get(i,'ws')
+                ws(icls)         = ws(icls)         + real(pop) * spproj%os_cls2D%get(i,'w')
                 specscores(icls) = specscores(icls) + real(pop) * spproj%os_cls2D%get(i,'specscore')
                 pops(icls)       = pops(icls) + pop
             enddo
@@ -650,8 +650,6 @@ contains
         !$omp end parallel do
         ! write FRCs
         call build_glob%clsfrcs%write(fname)
-        ! SSNR
-        call cavger_calc_and_write_pssnr
         ! destruct
         do icls=1,ncls
             call even_imgs(icls)%kill
@@ -659,29 +657,6 @@ contains
         end do
         deallocate(even_imgs, odd_imgs, frc)
     end subroutine cavger_calc_and_write_frcs_and_eoavg
-
-    subroutine cavger_calc_and_write_pssnr
-        use simple_estimate_ssnr, only: subsample_filter, fsc2ssnr
-        real, allocatable :: pad_inv_ctfsq_avg(:), frc(:), inv_ctfsq_avg(:), ssnr(:)
-        real              :: ratio
-        integer           :: icls
-        allocate(inv_ctfsq_avg(filtsz),frc(filtsz),ssnr(filtsz))
-        ratio = real(params_glob%box**2) / (PI*params_glob%msk**2.) ! for ssnr of spherically masked particle image
-        !$omp parallel do default(shared) private(icls,pad_inv_ctfsq_avg,frc,inv_ctfsq_avg,ssnr)&
-        !$omp schedule(static) proc_bind(close)
-        do icls=1,ncls
-            call ctfsqsums_merged(icls)%spectrum('real', pad_inv_ctfsq_avg, norm=.true.)
-            pad_inv_ctfsq_avg = 1. / pad_inv_ctfsq_avg
-            call subsample_filter(size(pad_inv_ctfsq_avg),filtsz, pad_inv_ctfsq_avg, inv_ctfsq_avg)
-            frc = build_glob%clsfrcs%get_frc(icls, params_glob%box, 1)
-            ! Eq 19, Sindelar et al., JSB, 2011
-            ssnr = ratio * inv_ctfsq_avg * fsc2ssnr(frc)
-            call build_glob%projpssnrs%set_frc(icls, ssnr, 1)
-        end do
-        !$omp end parallel do
-        ! write PSSNRs
-        call build_glob%projpssnrs%write(trim(PSSNR_FBODY)//int2str_pad(1,2)//BIN_EXT)
-    end subroutine cavger_calc_and_write_pssnr
 
     ! I/O
 

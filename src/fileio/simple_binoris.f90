@@ -55,8 +55,7 @@ type binoris
     generic            :: add_segment => add_segment_1, add_segment_2
     procedure          :: update_byte_ranges
     procedure          :: read_first_segment_record
-    procedure, private :: read_segment_1
-    procedure, private :: read_segment_2
+    procedure, private :: read_segment_1, read_segment_2
     generic            :: read_segment => read_segment_1, read_segment_2
     procedure          :: read_record
     ! getters
@@ -524,23 +523,25 @@ contains
         class(oris),                intent(inout) :: os
         integer,          optional, intent(in)    :: fromto(2)
         logical,          optional, intent(in)    :: only_ctfparams_state_eo, wthreads
-        integer,          allocatable :: batches(:,:)
-        character(len=:), allocatable :: tmp_string
-        character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
+        integer,       allocatable :: batches(:,:)
+        character(len=self%header(isegment)%n_bytes_per_record), allocatable :: str_os_line(:) ! string with static length (set to max(strlen))
+        character(len=:), allocatable ::  tmp_string
         integer(kind=8) :: ibytes, ipos
         real            :: ptcl_record(N_PTCL_ORIPARAMS)
-        integer         :: i, irec, n, nl, nbatches, ibatch, nbatch, nthr
+        integer         :: fromto_here(2), i, irec, n, nl, nbatches, ibatch, nbatch, nthr
         logical         :: present_fromto, oonly_ctfparams_state_eo
         if( .not. self%l_open ) THROW_HARD('file needs to be open')
         if( isegment < 1 .or. isegment > self%n_segments )then
             write(logfhandle,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
-        present_fromto = present(fromto)
-        if( present_fromto )then
-            if( .not. all(fromto .eq. self%header(isegment)%fromto) )then
-                THROW_HARD('passed dummy fromto not consistent with self%header')
-            endif
+        fromto_here = self%header(isegment)%fromto
+        if( present(fromto) ) fromto_here = fromto
+        if( fromto_here(1)<self%header(isegment)%fromto(1) .or. fromto_here(1)>self%header(isegment)%fromto(2) )then
+            THROW_HARD('Invalid fromto(1) index, out of range')
+        endif
+        if( fromto_here(2)<self%header(isegment)%fromto(1) .or. fromto_here(2)>self%header(isegment)%fromto(2) )then
+            THROW_HARD('Invalid fromto(2) index, out of range')
         endif
         nthr = 1
         if( present(wthreads) )then
@@ -549,15 +550,17 @@ contains
         oonly_ctfparams_state_eo = .false.
         if( present(only_ctfparams_state_eo) ) oonly_ctfparams_state_eo = only_ctfparams_state_eo
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
-            ibytes = self%header(isegment)%first_data_byte
             if( is_particle_seg(isegment) )then ! ptcl2D/3D segment, see simple_sp_project
                 if( .not.os%is_particle() ) THROW_HARD('os needs to be of particle kind')
-                do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
+                ibytes = self%header(isegment)%first_data_byte
+                ibytes = ibytes + (fromto_here(1)-self%header(isegment)%fromto(1))*self%header(isegment)%n_bytes_per_record
+                do i=fromto_here(1),fromto_here(2)
                     read(unit=self%funit,pos=ibytes) ptcl_record
                     call os%prec2ori(i, ptcl_record)
                     ibytes = ibytes + self%header(isegment)%n_bytes_per_record
                 end do
             else
+                ibytes = self%header(isegment)%first_data_byte
                 ! read orientation data as strings
                 nl       = self%header(isegment)%fromto(2) - self%header(isegment)%fromto(1) + 1
                 n        = nthr * THREAD_NSTRINGS

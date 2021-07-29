@@ -286,12 +286,13 @@ contains
     end subroutine generate_script_1
 
     !>  \brief  public script generator for single jobs
-    subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile )
+    subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile, job_descr2 )
         class(qsys_ctrl),           intent(inout) :: self
         class(chash),               intent(in)    :: job_descr
         class(chash),               intent(in)    :: q_descr
         character(len=*),           intent(in)    :: exec_bin, script_name
         character(len=*), optional, intent(in)    :: outfile
+        class(chash),     optional, intent(in)    :: job_descr2
         character(len=512) :: io_msg
         integer :: ios, funit
         call fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
@@ -308,7 +309,14 @@ contains
         write(funit,'(a)') 'cd '//trim(cwd_glob)
         write(funit,'(a)') ''
         ! compose the command line
-        write(funit,'(a)',advance='no') trim(exec_bin)//' '//trim(job_descr%chash2str())
+        if( present(job_descr2) )then
+            write(funit,'(a)',advance='no') trim(exec_bin)//' '//trim(job_descr%chash2str())
+            write(funit,'(a)') ' >> '//SIMPLE_SUBPROC_OUT//' '//STDERR2STDOUT
+            write(funit,'(a)') ''
+            write(funit,'(a)',advance='no') trim(exec_bin)//' '//trim(job_descr2%chash2str())
+        else
+            write(funit,'(a)',advance='no') trim(exec_bin)//' '//trim(job_descr%chash2str())
+        endif
         ! direct output
         if( present(outfile) )then
             ! unique output

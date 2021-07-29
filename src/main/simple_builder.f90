@@ -36,7 +36,6 @@ type :: builder
     type(image)                         :: vol2                   !< -"-
     type(masker)                        :: mskimg                 !< mask image
     type(class_frcs)                    :: clsfrcs               !< projection FRC's used cluster2D
-    type(class_frcs)                    :: projpssnrs             !<
     type(image),            allocatable :: imgbatch(:)            !< batch of images
     ! RECONSTRUCTION TOOLBOX
     type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction
@@ -55,12 +54,13 @@ type :: builder
     logical, private                    :: extremal3D_tbox_exists = .false.
   contains
     ! HIGH-LEVEL BUILDERS
+    procedure                           :: init_params_spproj_tbox2D
     procedure                           :: init_params_and_build_spproj
     procedure                           :: init_params_and_build_general_tbox
     procedure                           :: init_params_and_build_strategy2D_tbox
     procedure                           :: init_params_and_build_strategy3D_tbox
     ! LOW-LEVEL BUILDERS
-    procedure, private                  :: build_spproj
+    procedure                           :: build_spproj
     procedure                           :: build_general_tbox
     procedure                           :: kill_general_tbox
     procedure                           :: build_rec_eo_tbox
@@ -76,6 +76,49 @@ class(builder), pointer :: build_glob  => null()
 contains
 
     ! HIGH-LEVEL BUILDERS
+
+    subroutine init_params_spproj_tbox2D( self, cline, params, ptclrange )
+        class(builder),    target, intent(inout)  :: self
+        class(cmdline),    intent(inout)          :: cline
+        class(parameters), intent(inout)          :: params
+        logical, optional, intent(in)             :: ptclrange
+        logical :: read_spproj, ptclrange_here
+        call params%new(cline)
+        read_spproj = .false.
+        if( params%sp_required )then
+            read_spproj = .true.
+        else
+            if( cline%defined('projfile') )read_spproj = .true.
+        endif
+        ptclrange_here = merge(ptclrange, .false., present(ptclrange))
+        if( read_spproj )then
+            call self%spproj%read_non_data_segments(params%projfile)
+            call self%spproj%projinfo%set(1, 'cwd', trim(params%cwd))
+            if( ptclrange_here )then
+                call self%spproj%read_segment('ptcl2D', params%projfile, fromto=[params%fromp,params%top])
+            else
+                call self%spproj%read_segment('ptcl2D', params%projfile)
+            endif
+            call self%spproj%read_segment('stk',    params%projfile)
+            call self%spproj%read_segment('cls2D',  params%projfile)
+            select case(params%spproj_iseg)
+            case(MIC_SEG,CLS3D_SEG,PTCL3D_SEG)
+                THROW_HARD('SEGMENT DOES NOT MATCH TO A 2D-RELATED FIELD')
+            case(STK_SEG)
+                self%spproj_field => self%spproj%os_stk
+            case(PTCL2D_SEG)
+                self%spproj_field => self%spproj%os_ptcl2D
+            case(CLS2D_SEG)
+                self%spproj_field => self%spproj%os_cls2D
+            case DEFAULT
+                ! using ptcl2D as the generic segment
+                self%spproj_field => self%spproj%os_ptcl2D
+            end select
+        endif
+        call self%build_general_tbox(params, cline, do3d=.false.)
+        call self%build_strategy2D_tbox(params)
+        build_glob => self
+    end subroutine init_params_spproj_tbox2D
 
     subroutine init_params_and_build_spproj( self, cline, params )
         class(builder),    target, intent(inout)  :: self
@@ -96,6 +139,7 @@ contains
         if( present(boxmatch_off) ) bboxmatch_off = boxmatch_off
         call params%new(cline)
         if( bboxmatch_off ) params%boxmatch = params%box
+        call self%build_spproj(params, cline)
         call self%build_general_tbox(params, cline, do3d=do3d)
         build_glob => self
     end subroutine init_params_and_build_general_tbox
@@ -106,6 +150,7 @@ contains
         class(parameters),         intent(inout) :: params
         logical,         optional, intent(in)    :: wthreads
         call params%new(cline)
+        call self%build_spproj(params, cline, wthreads=wthreads)
         call self%build_general_tbox(params, cline, do3d=.false., wthreads=wthreads)
         call self%build_strategy2D_tbox(params)
         build_glob => self
@@ -116,6 +161,7 @@ contains
         class(cmdline),             intent(inout) :: cline
         class(parameters),          intent(inout) :: params
         call params%new(cline)
+        call self%build_spproj(params, cline)
         call self%build_general_tbox(params, cline, do3d=.true.)
         call self%build_strategy3D_tbox(params)
         build_glob => self
@@ -192,8 +238,6 @@ contains
         call self%pgrpsyms%new(trim(params%pgrp))
         params%nsym    = self%pgrpsyms%get_nsym()
         params%eullims = self%pgrpsyms%get_eullims()
-        ! build spproj
-        call self%build_spproj(params, cline, wthreads=wthreads)
         ! states exception
         if( self%spproj_field%get_n('state') > 1 )then
             if( .not. cline%defined('nstates') )then
@@ -304,7 +348,6 @@ contains
         class(parameters),      intent(inout) :: params
         call self%kill_strategy2D_tbox
         call self%clsfrcs%new(params%ncls, params%box, params%smpd, params%nstates)
-        call self%projpssnrs%new(params%ncls, params%box, params%smpd, params%nstates)
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy2D_tbox_exists = .true.
         write(logfhandle,'(A)') '>>> DONE BUILDING STRATEGY2D TOOLBOX'
@@ -314,7 +357,6 @@ contains
         class(builder), intent(inout) :: self
         if( self%strategy2D_tbox_exists )then
             call self%clsfrcs%kill
-            call self%projpssnrs%kill
             self%strategy2D_tbox_exists = .false.
         endif
     end subroutine kill_strategy2D_tbox
@@ -322,7 +364,6 @@ contains
     subroutine build_strategy3D_tbox( self, params )
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
-        integer :: ncls
         call self%kill_strategy3D_tbox
         allocate( self%eorecvols(params%nstates), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_builder, 1', alloc_stat)

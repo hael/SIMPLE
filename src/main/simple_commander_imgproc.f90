@@ -611,9 +611,9 @@ contains
         if( cline%defined('projfile') .and. cline%defined('fromp') .and. cline%defined('top')&
             &.and..not.cline%defined('stk') .and. .not.cline%defined('vol1') .and. .not.cline%defined('filetab'))then
             ! input comes from distributed execution scale_project
-            call cline%set('oritype', 'ptcl2D')
+            call cline%set('oritype', 'stk')
             call build%init_params_and_build_spproj(cline, params)
-            call build%spproj%read_segment('stk',params%projfile)
+            call build%spproj%read_segment('ptcl2D',params%projfile)
             nstks = build%spproj%os_stk%get_noris()
             if( nstks == 0 ) THROW_HARD('NO EXISTING STACK IN PROJECT')
             if( cline%defined('newbox') )then
@@ -627,7 +627,7 @@ contains
                 THROW_HARD('MISSING NEW DIMENSION!')
             endif
             ! state handling
-            states = nint(build%spproj_field%get_all('state'))
+            states = nint(build%spproj%os_ptcl2D%get_all('state'))
             if( cline%defined('state') )then
                 if( .not.any(states == params%state) )then
                     THROW_HARD('NO PARTICLE MATCHING STATE FOUND. STATE: '//int2str(params%state))
