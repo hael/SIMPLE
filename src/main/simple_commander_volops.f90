@@ -165,14 +165,19 @@ contains
         ldim = [box,box,box]
         call vol%new(ldim, smpd)
         call vol%read(vol_fname)
+        call vol_copy%copy(vol)
         call vol%fft()
+        ! B-factor goes first if present
+        if( cline%defined('bfac') ) call vol%apply_bfac(params%bfac)
         if( has_fsc )then
             ! resolution & optimal low-pass filter from FSC
-            fsc   = file2rarr(params%fsc)
-            optlp = fsc2optlp(fsc)
-            res   = vol%get_res()
+            fsc = file2rarr(params%fsc)
+            allocate(optlp(size(fsc)), source=0.)
+            where( fsc    > 0.     ) optlp = sqrt(2. * fsc / (fsc + 1.)) ! sqrt used here but not elsewhere
+            where( optlp  > 0.9999 ) optlp = 0.99999
+            res = vol%get_res()
             call get_resolution( fsc, res, fsc05, fsc0143 )
-            where(res < TINY) optlp = 0.
+            where( res    < TINY   ) optlp = 0.
         endif
         if( cline%defined('lp') )then
             ! low-pass overrides all input
@@ -180,14 +185,11 @@ contains
         else if( has_fsc )then
             ! optimal low-pass filter from FSC
             call vol%apply_filter(optlp)
+            ! final low-pass filtering for smoothness
+            call vol%bp(0., fsc0143)
         else
             THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; exec_postprocess')
         endif
-        call vol_copy%copy(vol)
-        ! B-factor
-        if( cline%defined('bfac') ) call vol%apply_bfac(params%bfac)
-        ! final low-pass filtering for smoothness
-        if( has_fsc ) call vol%bp(0., fsc0143)
         ! masking
         call vol%ifft()
         if( trim(params%automsk) .eq. 'file' .and. has_mskfile )then
@@ -212,7 +214,6 @@ contains
             if( .not. cline%defined('mw') )then
                 THROW_HARD('molecular weight must be provided for auto-masking (MW); postprocess')
             endif
-            call vol_copy%ifft
             call mskvol%automask3D(vol_copy)
             call mskvol%write('automask'//params%ext)
             call vol%zero_background
