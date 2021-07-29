@@ -128,6 +128,7 @@ contains
         ctfvars%fraca = params%fraca
         ! import the individual frames
         call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
         call spproj%add_movies(filenames, ctfvars, singleframe=.true.)
         call spproj%write
         ! end gracefully
@@ -149,6 +150,7 @@ contains
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
         ! # of particles
         call find_ldim_nptcls(params%stk, lfoo, params%nptcls)
         call os%new(params%nptcls, is_ptcl=.true.)
@@ -179,6 +181,7 @@ contains
             enddo
         endif
         ! import stack
+        call os%set_all2single('state', 1.0)
         call spproj%add_single_stk(params%stk, ctfvars, os)
         call spproj%write
         ! end gracefully
@@ -224,6 +227,7 @@ contains
         call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
         call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
         call spproj%merge_algndocs(nframes, params%nparts, 'mic', ALGN_FBODY)
         call spproj%kill
         ! clean
@@ -559,6 +563,7 @@ contains
         call cline%set('mkdir', 'no')
         ! read project file
         call spproj%read(params%projfile)
+        call spproj%update_projinfo(cline)
         orig_projfile = trim(params%projfile)
         ! sanity checks
         nptcls = spproj%get_nptcls()

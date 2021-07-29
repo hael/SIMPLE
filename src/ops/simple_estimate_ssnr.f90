@@ -20,8 +20,8 @@ contains
         allocate( ssnr(nyq),stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("in simple_estimate_ssnr::fsc2ssnr ssnr ",alloc_stat)
         do k=1,nyq
-            fsc = min(abs(corrs(k)),0.999)
-            ssnr(k) = (2.*fsc)/(1.-fsc)
+            fsc     = min(abs(corrs(k)), 0.999)
+            ssnr(k) = (2. * fsc) / (1. - fsc)
         end do
     end function fsc2ssnr
 
@@ -34,7 +34,7 @@ contains
         allocate( filt(nyq),stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("in simple_estimate_ssnr::fsc2optlp filt ",alloc_stat)
         filt = 0.
-        where( corrs > 0. )     filt = sqrt( 2. * corrs / (corrs + 1.) )
+        where( corrs > 0. )     filt = 2. * corrs / (corrs + 1.)
         where( filt  > 0.9999 ) filt = 0.99999
     end function fsc2optlp
 
@@ -44,7 +44,7 @@ contains
         real,    intent(in)  :: corrs(filtsz) !< fsc plot (correlations)
         real,    intent(out) :: filt(filtsz)  !< output filter coefficients
         filt = 0.
-        where( corrs > 0. )     filt = sqrt( 2. * corrs / (corrs + 1.) )
+        where( corrs > 0. )     filt = 2. * corrs / (corrs + 1.)
         where( filt  > 0.9999 ) filt = 0.99999
     end subroutine fsc2optlp_sub
 
@@ -106,7 +106,7 @@ contains
         allocate( corrs(nyq),stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("in simple_estimate_ssnr::ssnr2fsc corrs ",alloc_stat)
         do k=1,nyq
-            corrs(k) = ssnr(k)/(ssnr(k)+1.)
+            corrs(k) = ssnr(k) / (ssnr(k) + 1.)
         end do
     end function ssnr2fsc
 
@@ -119,7 +119,7 @@ contains
         allocate( w(nyq),stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("in simple_estimate_ssnr::ssnr2optlp w ",alloc_stat)
         do k=1,nyq
-            w(k) = ssnr(k)/(ssnr(k)+1.)
+            w(k) = ssnr(k) / (ssnr(k) + 1.)
         end do
     end function ssnr2optlp
 

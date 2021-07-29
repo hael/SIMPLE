@@ -111,6 +111,7 @@ contains
         call self%qdescr%set('job_nparts',        int2str(params_glob%nparts)) ! overrides env file
         deallocate(qsnam)
         call compenv_o%kill
+        call spproj%kill
         self%existence = .true.
     end subroutine new
 
@@ -145,23 +146,27 @@ contains
         call self%qscripts%submit_script(SCRIPT_NAME)
         call qsys_watcher(finish_indicator)
         call del_file(finish_indicator)
+        call job_descr%kill
     end subroutine exec_simple_prg_in_queue
 
-    subroutine exec_simple_prg_in_queue_async( self, cline, script_name, outfile )
+    subroutine exec_simple_prg_in_queue_async( self, cline, script_name, outfile, cline2 )
         use simple_cmdline, only: cmdline
         class(qsys_env),            intent(inout) :: self
-        class(cmdline),             intent(inout) :: cline
-        character(len=*),           intent(in)    :: script_name
-        character(len=*), optional, intent(in)    :: outfile
-        type(chash) :: job_descr
+        class(cmdline),             intent(in)    :: cline
+        character(len=*),           intent(in)    :: script_name, outfile
+        class(cmdline), optional,   intent(in)    :: cline2
+        type(chash) :: job_descr, job_descr2
         call cline%gen_job_descr(job_descr)
-        if( present(outfile) )then
-            call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name, outfile)
+        if(present(cline2) )then
+            call cline2%gen_job_descr(job_descr2)
+            call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name, outfile, job_descr2)
         else
-            call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name)
+            call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name, outfile)
         endif
         call wait_for_closure(script_name)
         call self%qscripts%submit_script(script_name)
+        call job_descr%kill
+        call job_descr2%kill
     end subroutine exec_simple_prg_in_queue_async
 
     function get_qsys( self )result( qsys )

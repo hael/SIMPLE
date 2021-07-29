@@ -151,7 +151,6 @@ type :: polarft_corrcalc
     procedure          :: calc_ptcl_pspec
     procedure          :: create_polar_absctfmats
     procedure, private :: prep_ref4corr
-    procedure          :: prep_matchfilt
     procedure, private :: gen_shmat
     procedure, private :: gen_shmat_8
     procedure          :: calc_corrs_over_k
@@ -250,10 +249,8 @@ contains
         self%nrefs = nrefs                          !< the number of references (logically indexded [1,nrefs])
         self%pftsz = magic_pftsz(params_glob%ring2) !< size of reference (number of vectors used for matching,determined by radius of molecule)
         self%nrots = 2 * self%pftsz                 !< number of in-plane rotations for one pft  (pftsz*2)
-        ! allocate optimal low-pass filter if matched filter is on
-        if( params_glob%l_match_filt )then
-            allocate(self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,self%nrefs),source=1.)
-        endif
+        ! allocate optimal low-pass filter
+        allocate(self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,self%nrefs),source=1.)
         ! generate polar coordinates & eo assignment
         allocate( self%polar(2*self%nrots,params_glob%kfromto(1):params_glob%kfromto(2)),&
                  &self%angtab(self%nrots), self%iseven(1:self%nptcls), polar_here(2*self%nrots), stat=alloc_stat)
@@ -759,16 +756,7 @@ contains
         complex(sp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         real    :: pw, w, ssnr
         integer :: k
-        ! looks like an enumeration and case selection needs to happen here
-        if( params_glob%l_pssnr )then
-            do k=params_glob%kfromto(1),params_glob%kstop
-                ssnr = self%ref_optlp(k,iref)
-                pw   = real(sum(csq_fast(dcmplx(pft(:,k)))) / real(self%pftsz,dp))
-                w    = sqrt(ssnr * real(k))
-                if( pw > 1.e-12 ) w = w / sqrt(pw)
-                pft(:,k) = w * pft(:,k)
-            enddo
-        else if( params_glob%l_match_filt ) then
+        if( params_glob%l_match_filt ) then
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = real(sum(csq_fast(dcmplx(pft(:,k)))) / real(self%pftsz,dp))
                 if( pw > 1.e-12 )then
@@ -786,15 +774,7 @@ contains
         complex(dp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         real(dp) :: pw, w, ssnr
         integer  :: k
-        if( params_glob%l_pssnr )then
-            do k=params_glob%kfromto(1),params_glob%kstop
-                ssnr = real(self%ref_optlp(k,iref),dp)
-                pw   = sum(csq_fast(pft(:,k))) / real(self%pftsz,dp)
-                w    = dsqrt(ssnr * real(k,dp))
-                if( pw > 1.d-12 ) w = w / dsqrt(pw)
-                pft(:,k) = w * pft(:,k)
-            enddo
-        else if( params_glob%l_match_filt ) then
+        if( params_glob%l_match_filt ) then
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
                 if( pw > 1.d-12 )then
@@ -813,16 +793,7 @@ contains
         complex(dp),             intent(inout) :: dpft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),3)
         real(dp) :: w, pw, ssnr
         integer  :: k
-        if( params_glob%l_pssnr )then
-            do k=params_glob%kfromto(1),params_glob%kstop
-                ssnr = real(self%ref_optlp(k,iref),dp)
-                pw   = sum(csq_fast(pft(:,k))) / real(self%pftsz,dp)
-                w    = dsqrt(ssnr * real(k,dp))
-                if( pw > 1.d-12 ) w = w / dsqrt(pw)
-                pft(:,k)    = w * pft(:,k)
-                dpft(:,k,:) = w * dpft(:,k,:)
-            enddo
-        else
+        if( params_glob%l_match_filt ) then
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
                 if( pw > 1.d-12 )then
@@ -848,10 +819,6 @@ contains
     subroutine memoize_ffts( self )
         class(polarft_corrcalc), intent(inout) :: self
         integer :: i
-        if( params_glob%l_match_filt )then
-            ! because with match_filt=yes the particle filtering is done on the fly
-            return
-        endif
         ! memoize particle FFTs in parallel
         !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static)
         do i=1,self%nptcls
@@ -983,116 +950,6 @@ contains
         ! for corr normalisation
         sqsum_ref = sum(csq_fast(pft_ref(:,params_glob%kfromto(1):kstop)))
     end subroutine prep_ref4corr
-
-    subroutine prep_matchfilt( self, iptcl, iref, irot )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: iptcl, iref, irot
-        complex(sp), pointer :: pft_ref(:,:)
-        complex(sp) :: pft_ptcl(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
-        real(dp)    :: pw_diffk
-        real        :: pw_diff(params_glob%kfromto(1):params_glob%kfromto(2))
-        real        :: pw_diff_fit(params_glob%kfromto(1):params_glob%kfromto(2))
-        real        :: pw_ptcl, pw_ref, w, ssnr
-        integer     :: i, k, ithr, rot
-        ! particle is assumed phase-flipped, reference untouched
-        i = self%pinds(iptcl)
-        if( iref == 0 .or. .not. params_glob%l_match_filt )then
-            ! just memoize the particle
-            call self%memoize_fft(i)
-            return
-        endif
-        ! init
-        pft_ptcl = self%pfts_ptcls(:,:,i)
-        if( params_glob%l_pssnr )then
-            do k=params_glob%kfromto(1),params_glob%kstop
-                ! particle power spectrum
-                pw_ptcl = real(sum(csq_fast(dcmplx(pft_ptcl(:,k)))) / real(self%pftsz,dp))
-                ! shell weighting
-                ssnr = self%ref_optlp(k,iref)
-                w    = sqrt(real(k))
-                if( pw_ptcl > 1.e-12 ) w = w / sqrt(pw_ptcl)
-                if( self%with_ctf )then
-                    pft_ptcl(:,k) = pft_ptcl(:,k) * w * sqrt(1. + ssnr*self%ctfmats(:,k,i)**2.)
-                else
-                    pft_ptcl(:,k) = pft_ptcl(:,k) * w * sqrt(1. + ssnr)
-                endif
-            enddo
-        else
-            ithr     =  omp_get_thread_num() + 1
-            pft_ref  => self%heap_vars(ithr)%pft_ref
-            if( self%iseven(i) )then
-                pft_ref = self%pfts_refs_even(:,:,iref)
-            else
-                pft_ref = self%pfts_refs_odd(:,:,iref)
-            endif
-            ! CTF
-            if( self%with_ctf )then
-                ! particle is phase-flipped
-                ! reference: x|CTF|
-                pft_ref = pft_ref * self%ctfmats(:,:,i)
-            endif
-            ! match spectrums
-            do k=params_glob%kfromto(1),params_glob%kstop
-                ! particle
-                pw_ptcl = real(sum(csq_fast(dcmplx(pft_ptcl(:,k)))) / real(self%pftsz,dp))
-                if( pw_ptcl > 1.e-12 )then
-                    pft_ptcl(:,k) = pft_ptcl(:,k) * self%ref_optlp(k,iref) / sqrt(pw_ptcl)
-                else
-                    pft_ptcl(:,k) = pft_ptcl(:,k) * self%ref_optlp(k,iref)
-                endif
-                ! reference
-                pw_ref = real(sum(csq_fast(dcmplx(pft_ref(:,k)))) / real(self%pftsz,dp))
-                if( pw_ref > 1.e-12 )then
-                    pft_ref(:,k) = pft_ref(:,k) * self%ref_optlp(k,iref) / sqrt(pw_ref)
-                else
-                    pft_ref(:,k) = pft_ref(:,k) * self%ref_optlp(k,iref)
-                endif
-            enddo
-            ! power spectrum difference
-            rot = merge(irot - self%pftsz, irot, irot >= self%pftsz + 1)
-            do k = params_glob%kfromto(1), params_glob%kstop
-                if( irot == 1 )then
-                    pw_diffk = sum(csq_fast(dcmplx(pft_ref(:,k) - pft_ptcl(:,k))))
-                else if( irot <= self%pftsz )then
-                    pw_diffk =            sum(csq_fast(dcmplx(pft_ref(1:self%pftsz-rot+1,k)          - pft_ptcl(rot:self%pftsz,k))))
-                    pw_diffk = pw_diffk + sum(csq_fast(dcmplx(pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(pft_ptcl(1:rot-1,k)))))
-                else if( irot == self%pftsz + 1 )then
-                    pw_diffk = sum(csq_fast(pft_ref(:,k) - conjg(pft_ptcl(:,k))))
-                else
-                    pw_diffk =            sum(csq_fast(dcmplx(pft_ref(1:self%pftsz-rot+1,k)          - conjg(pft_ptcl(rot:self%pftsz,k)))))
-                    pw_diffk = pw_diffk + sum(csq_fast(dcmplx(pft_ref(self%pftsz-rot+2:self%pftsz,k) - pft_ptcl(1:rot-1,k))))
-                end if
-                pw_diff(k) = real(pw_diffk / real(self%pftsz,dp))
-            end do
-            ! fitting of difference
-            pw_diff_fit = pw_diff
-            call SavitzkyGolay_filter(params_glob%kstop-params_glob%kfromto(1)+1, pw_diff_fit)
-            where( pw_diff_fit <= 0.) pw_diff_fit = pw_diff                 ! takes care of range
-            pw_diff_fit(params_glob%kfromto(1):params_glob%kfromto(1)+2) =& ! to avoid left border effect
-                &pw_diff(params_glob%kfromto(1):params_glob%kfromto(1)+2)
-            ! shell normalize & filter particle
-            do k=params_glob%kfromto(1),params_glob%kstop
-                ! particle
-                pw_ptcl = real(sum(csq_fast(dcmplx(pft_ptcl(:,k)))) / real(self%pftsz,dp))
-                w = 1.
-                if( pw_ptcl > 1.e-12 ) w  = 1. / sqrt(pw_ptcl)
-                ! reference
-                pw_ref = real(sum(csq_fast(dcmplx(pft_ref(:,k)))) / real(self%pftsz,dp))
-                ! optimal filter
-                if( pw_diff_fit(k) > 1.e-12 )then
-                    ssnr = pw_ref / pw_diff_fit(k)
-                    w    = w * sqrt(ssnr / (ssnr + 1.))
-                else
-                    ! ssnr -> inf
-                endif
-                ! filter
-                pft_ptcl(:,k) = w * pft_ptcl(:,k)
-            enddo
-        endif
-        ! update particle pft & re-memoize
-        call self%set_ptcl_pft(iptcl, pft_ptcl)
-        call self%memoize_fft(i)
-    end subroutine prep_matchfilt
 
     !>  Generate polar shift matrix by means of de Moivre's formula, double precision
     subroutine gen_shmat_8( self, ithr, shift_8 , shmat_8 )

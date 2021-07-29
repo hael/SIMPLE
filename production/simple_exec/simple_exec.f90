@@ -14,6 +14,7 @@ use simple_commander_misc
 use simple_commander_oris
 use simple_commander_preprocess
 use simple_commander_cluster2D
+use simple_commander_cluster2D_stream
 use simple_commander_abinitio
 use simple_commander_refine3D
 use simple_commander_cluster3D
@@ -53,7 +54,8 @@ type(pick_commander_distr)                  :: xpick_distr
 
 ! CLUSTER2D WORKFLOWS
 type(make_cavgs_commander_distr)            :: xmake_cavgs_distr
-type(cluster2D_autoscale_commander_hlev)    :: xcluster2D_distr
+type(cluster2D_autoscale_commander_hlev)    :: xcluster2D_hlev
+type(cluster2D_commander_distr)             :: xcluster2D_distr
 type(cluster2D_commander_stream)            :: xcluster2D_stream
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 
@@ -197,6 +199,9 @@ select case(prg)
     case( 'cleanup2D' )
         call xcleanup2D_distr%execute(cline)
     case( 'cluster2D' )
+        call execute_commander(xcluster2D_hlev, cline)
+    case( 'cluster2D_distr' )
+        ! is not part of the user interface
         call execute_commander(xcluster2D_distr, cline)
     case( 'cluster2D_stream' )
         call xcluster2D_stream%execute(cline)

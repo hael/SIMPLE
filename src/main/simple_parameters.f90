@@ -76,7 +76,6 @@ type :: parameters
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
     character(len=3)      :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)      :: projstats='no'
-    character(len=3)      :: pssnr='no'
     character(len=3)      :: roavg='no'           !< rotationally average images in stack
     character(len=3)      :: clsfrcs='no'
     character(len=3)      :: readwrite='no'
@@ -262,6 +261,7 @@ type :: parameters
     integer :: minp=10             !< minimum cluster population
     integer :: mrcmode=2
     integer :: navgs=1
+    integer :: nchunks=0          !< # computing units, can be < nparts{nparts}
     integer :: ncunits=0           !< # computing units, can be < nparts{nparts}
     integer :: nboot=0
     integer :: ncls=500            !< # clusters
@@ -275,7 +275,8 @@ type :: parameters
     integer :: nmics=0             !< # micographs
     integer :: nmovies_trial=0     !< # of movies after which preprocess_stream will stop
     integer :: noris=0
-    integer :: nparts=1            !< # partitions in distributed exection
+    integer :: nparts=1            !< # partitions in distributed execution
+    integer :: nparts_chunk=1      !< # partitions in chunks distributed execution
     integer :: npix=0              !< # pixles/voxels in binary representation
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
     integer :: nptcls_per_cls=400  !< # images in stk/# orientations in oritab
@@ -432,7 +433,6 @@ type :: parameters
     logical :: l_locres         = .false.
     logical :: l_match_filt     = .true.
     logical :: l_needs_sigma    = .false.
-    logical :: l_pssnr          = .false.
     logical :: l_phaseplate     = .false.
     logical :: l_remap_cls      = .false.
     logical :: l_wglob          = .true.
@@ -571,7 +571,6 @@ contains
         call check_carg('projname',       self%projname)
         call check_carg('proj_is_class',  self%proj_is_class)
         call check_carg('projstats',      self%projstats)
-        call check_carg('pssnr',          self%pssnr)
         call check_carg('ptclw',          self%ptclw)
         call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('qsys_name',      self%qsys_name)
@@ -693,6 +692,7 @@ contains
         call check_iarg('mrcmode',        self%mrcmode)
         call check_iarg('navgs',          self%navgs)
         call check_iarg('nboot',          self%nboot)
+        call check_iarg('nchunks',        self%nchunks)
         call check_iarg('ncls',           self%ncls)
         call check_iarg('ncls_start',     self%ncls_start)
         call check_iarg('ncunits',        self%ncunits)
@@ -710,6 +710,7 @@ contains
         call check_iarg('nstates',        self%nstates)
         call check_iarg('class',          self%class)
         call check_iarg('nparts',         self%nparts)
+        call check_iarg('nparts_chunk',   self%nparts_chunk)
         call check_iarg('npix',           self%npix)
         call check_iarg('nptcls',         self%nptcls)
         call check_iarg('nptcls_per_cls', self%nptcls_per_cls)
@@ -1358,15 +1359,12 @@ contains
         select case(self%cc_objfun)
             case(OBJFUN_EUCLID)
                 self%l_match_filt  = .false.
-                self%l_pssnr       = .false.
                 self%l_needs_sigma = .true.
             case(OBJFUN_CC)
                 self%l_match_filt  = (trim(self%match_filt) .eq.'yes') .and. (.not.self%l_lpset)
-                self%l_pssnr       = (trim(self%pssnr)      .eq.'yes') .and. self%l_match_filt
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
                 if( self%l_needs_sigma )then
                     self%l_match_filt = .false.
-                    self%l_pssnr      = .false.
                 endif
         end select
         ! atoms
