@@ -109,12 +109,6 @@ contains
             endif
         endif
 
-        print *,'l_stream',l_stream
-        print *,'l_frac_update',l_frac_update
-        print *,'l_partial_sums',l_partial_sums
-        print *,'params_glob%l_frac_update',params_glob%l_frac_update
-        print *,'params_glob%update_frac',params_glob%update_frac
-
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
@@ -190,9 +184,6 @@ contains
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D(cline, which_iter, frac_srch_space )
-
-        print *,'params_glob%l_lpset ',params_glob%l_lpset
-        print *,'params_glob%kfromto ',params_glob%kfromto
 
         ! PREP BATCH ALIGNEMENT
         batchsz_max = min(nptcls2update,params_glob%nthr*BATCHTHRSZ)
@@ -312,15 +303,6 @@ contains
         if( L_BENCH ) rt_projio = toc(t_projio)
 
         ! WIENER RESTORATION OF CLASS AVERAGES
-
-        ! if( l_stream )then
-        !     do iptcl = params_glob%fromp,params_glob%top
-        !         updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-        !         if( updatecnt > 1 ) call build_glob%spproj_field%set(iptcl,'w',0.0)
-
-        !     enddo
-        ! endif
-
         if( L_BENCH ) t_cavg = tic()
         call cavger_transf_oridat( build_glob%spproj )
         call cavger_assemble_sums( l_partial_sums )
