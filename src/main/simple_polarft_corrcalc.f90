@@ -189,7 +189,6 @@ type :: polarft_corrcalc
     procedure          :: gencorr_sigma_contrib
     procedure, private :: genfrc
     procedure, private :: calc_frc
-    procedure          :: calc_aniso_optlp
     procedure, private :: specscore_1, specscore_2
     generic            :: specscore => specscore_1, specscore_2
     procedure          :: calc_roinv_corrmat
@@ -1340,48 +1339,6 @@ contains
             endif
         end do
     end subroutine calc_frc
-
-    subroutine calc_aniso_optlp( self )
-        class(polarft_corrcalc), intent(inout) :: self
-        complex(sp), pointer     :: pft_ref_odd(:,:)
-        real(sp),    pointer     :: kcorrs(:)
-        complex(sp) :: pft_ptcl_one(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
-        real(sp)    :: frc(params_glob%kfromto(1):params_glob%kstop)
-        real(sp)    :: filt(params_glob%kfromto(1):params_glob%kstop)
-        real(sp)    :: sumsqref, sumsqptcl, denom
-        integer     :: k, ithr, iref
-        ithr        =  omp_get_thread_num() + 1
-        pft_ref_odd => self%heap_vars(ithr)%pft_ref
-        kcorrs      => self%heap_vars(ithr)%kcorrs
-        ! make a copy of particle pft 1
-        pft_ptcl_one = self%pfts_ptcls(:,:,1)
-        ! loop over 2D e/o:s
-        do iref = 1, self%nrefs
-            pft_ref_odd = self%pfts_refs_odd(:,:,iref)
-            ! put the even reference in pft 1 position
-            call self%cp_even_ref2ptcl(iref, 1)
-            call self%memoize_fft(1)
-            ! calculate FRC
-            do k=params_glob%kfromto(1),params_glob%kstop
-                call self%calc_k_corrs(pft_ref_odd, 1, k, kcorrs)
-                sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,1)))
-                sumsqref  = sum(csq_fast(pft_ref_odd(:,k)))
-                denom     = sqrt(sumsqptcl * sumsqref)
-                if( denom < 1.e-12 )then
-                    frc(k) = 0.
-                else
-                    frc(k) = kcorrs(1) / denom
-                endif
-            end do
-            ! calculate optimal low-pass filter
-            filt = 0.
-            where( frc > 0. )       filt = sqrt( 2. * frc / (frc + 1.) )
-            where( filt  > 0.9999 ) filt = 0.99999
-            call self%set_ref_optlp(iref, filt)
-        enddo
-        ! put back the pft 1 position
-        self%pfts_ptcls(:,:,1) = pft_ptcl_one
-    end subroutine calc_aniso_optlp
 
     subroutine gencorrs_cc_1( self, iref, iptcl, cc )
         class(polarft_corrcalc), intent(inout) :: self

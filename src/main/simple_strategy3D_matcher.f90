@@ -401,7 +401,7 @@ contains
             else
                 if( params_glob%nstates.eq.1 )then
                     call readrefvols(params_glob%vols_even(s), params_glob%vols_odd(s))
-                    if( trim(params_glob%cancel_noise).eq.'yes' ) call zero_refvol_fcomps_below_noise
+                    call zero_refvol_fcomps_below_noise
                     ! PREPARE ODD REFERENCES
                     call preprefvol(pftcc, cline, s, do_center, xyz, .false.)
                     !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
