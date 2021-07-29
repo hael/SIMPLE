@@ -126,7 +126,7 @@ type :: nanoparticle
     type(stats_struct)    :: radial_strain_stats
     ! CN-DEPENDENT STATS
     ! -- # atoms
-    real                  :: natoms_cns(CNMIN:CNMAX)          = 0. ! # of atoms per cn_std                            NATOMS
+    real                  :: natoms_cns(CNMIN:CNMAX) = 0. ! # of atoms per cn_std                            NATOMS
     ! -- the rest
     type(stats_struct)    :: size_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: bondl_stats_cns(CNMIN:CNMAX)
@@ -182,7 +182,9 @@ type :: nanoparticle
     procedure, private :: calc_longest_dist
     ! visualization and output
     procedure, private :: simulate_atoms
-    procedure          :: write_centers
+    procedure, private :: write_centers_1
+    procedure, private :: write_centers_2
+    generic            :: write_centers => write_centers_1, write_centers_2
     procedure          :: write_atoms
     procedure          :: write_csv_files
     procedure, private :: write_atominfo
@@ -532,9 +534,9 @@ contains
         real,    allocatable :: coords(:,:)
         real,    allocatable :: rmat(:,:,:)
         integer :: i, t
-        real    :: otsu_thresh
+        real    :: otsu_thresh, corr
         real    :: x_thresh(NBIN_THRESH/2-1)
-        real    :: step, maximum, mm(2)
+        real    :: step, max_corr
         call otsu_nano(self%img,otsu_thresh) ! find initial threshold
         write(logfhandle,'(A)') '>>> BINARIZATION'
         rmat = self%img%get_rmat()
@@ -543,10 +545,8 @@ contains
         step = (maxval(x_mat)-otsu_thresh )/real(NBIN_THRESH)
         deallocate(x_mat)
         call simulated_distrib%new(self%ldim,self%smpd)
-        call pc%new(self%ldim,self%smpd)
-        call self%img%fft ! for pc calculation
         t = 1
-        maximum = 0.
+        max_corr = -1.
         do i = 1, NBIN_THRESH/2-1
             call progress(i, NBIN_THRESH/2-1)
             call img_bin_thresh(i)%new_bimg(self%ldim, self%smpd)
@@ -572,21 +572,15 @@ contains
             call atom%convolve(simulated_distrib, cutoff = 8.*self%smpd)
             call del_file('centers_'//trim(int2str(i))//'_iteration.pdb')
             call atom%kill
-            ! Take care of Fourier status, for phase_corr calculation
-            call simulated_distrib%fft
-            call pc%zero_and_flag_ft
-            ! Correlation volume generation
-            call self%img%phase_corr(simulated_distrib, pc, lp=3.)
-            ! Calculation and update of the maxval the correlation reaches
-            mm = pc%minmax()
-            if( mm(2) > maximum )then
-                maximum = mm(2)
-                t       = i
+            ! correlate volumes
+            corr = self%img%real_corr(simulated_distrib)
+            if( corr > max_corr )then
+                max_corr = corr
+                t        = i
             endif
             call simulated_distrib%set_ft(.false.)
         enddo
-        call self%img%ifft ! To remove
-        write(logfhandle,*) 'Selected threshold: ', x_thresh(t)
+        write(logfhandle,*) 'bin_i', t, 'Threshold: ', x_thresh(t), 'Corr: ', max_corr
         ! Update img_bin and img_cc
         call self%img_bin%copy_bimg(img_bin_thresh(t))
         if( GENERATE_FIGS ) call self%img_bin%write_bimg(trim(self%fbody)//'SelectedThreshold.mrc')
@@ -677,9 +671,10 @@ contains
 
     subroutine split_atoms( self )
         class(nanoparticle), intent(inout) :: self
+        type(binimage)       :: img_split_ccs
         real,    allocatable :: x(:)
         real,    pointer     :: rmat_pc(:,:,:)
-        integer, allocatable :: imat(:,:,:), imat_cc(:,:,:), imat_bin(:,:,:)
+        integer, allocatable :: imat(:,:,:), imat_cc(:,:,:), imat_bin(:,:,:), imat_split_ccs(:,:,:)
         integer, parameter   :: RANK_THRESH = 4
         integer :: icc, cnt, cnt_split
         integer :: rank, m(1)
@@ -688,14 +683,17 @@ contains
         write(logfhandle, '(A)') '>>> SPLITTING CONNECTED ATOMS'
         call self%img%get_rmat_ptr(rmat_pc) ! now img contains the phase correlation
         call self%img_cc%get_imat(imat_cc)  ! to pass to the subroutine split_atoms
-        allocate(imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = imat_cc)
+        allocate(imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),           source = imat_cc)
+        allocate(imat_split_ccs(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = 0)
+        call img_split_ccs%new_bimg(self%ldim, self%smpd)
+        call img_split_ccs%new(self%ldim, self%smpd)
         cnt       = 0
         cnt_split = 0
         ! Remember to update the centers
-        do icc =1, self%n_cc ! for each cc check if the center corresponds with the local max of the phase corr
+        do icc = 1, self%n_cc ! for each cc check if the center corresponds with the local max of the phase corr
             pc = rmat_pc(nint(self%atominfo(icc)%center(1)),nint(self%atominfo(icc)%center(2)),nint(self%atominfo(icc)%center(3)))
             ! calculate the rank
-            x = pack(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) == icc)
+            x = pack(rmat_pc, mask=imat == icc)
             call hpsort(x)
             m(:) = minloc(abs(x - pc))
             rank = size(x) - m(1)
@@ -704,6 +702,9 @@ contains
             call self%calc_longest_dist(icc, radius)
             ! split
             if( rank > RANK_THRESH .or. radius > 1.5 * self%theoretical_radius )then
+                where(imat == icc)
+                    imat_split_ccs = 1
+                end where
                 cnt_split = cnt_split + 1
                 call split_atom(new_centers,cnt)
             else
@@ -727,6 +728,9 @@ contains
             imat_bin = 0
         endwhere
         ! update relevant data fields
+        call img_split_ccs%set_imat(imat_split_ccs)
+        call img_split_ccs%write('split_ccs.mrc')
+        call img_split_ccs%kill
         call self%img_bin%set_imat(imat_bin)
         call self%img_bin%update_img_rmat()
         call self%img_bin%find_ccs(self%img_cc)
@@ -741,40 +745,46 @@ contains
             integer, intent(inout) :: cnt              ! atom counter, to update the center coords
             integer :: new_center1(3), new_center2(3), new_center3(3)
             integer :: i, j, k
+            logical :: found3d_cen
             logical :: mask(self%ldim(1),self%ldim(2),self%ldim(3)) ! false in the layer of connection of the atom to be split
             mask = .false. ! initialization
             ! Identify first new center
-            new_center1 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), imat == icc)
+            new_center1 = maxloc(rmat_pc, mask=imat == icc)
             cnt = cnt + 1
             new_centers(:,cnt) = real(new_center1)
             do i = 1, self%ldim(1)
                 do j = 1, self%ldim(2)
                     do k = 1, self%ldim(3)
-                        if(((real(i - new_center1(1)))**2 + (real(j - new_center1(2)))**2 + &
-                        &   (real(k - new_center1(3)))**2) * self%smpd  <=  (0.9 * self%theoretical_radius)**2) then
-                            if( imat(i,j,k) == icc ) mask(i,j,k) = .true.
+                        if( imat(i,j,k) == icc )then
+                            if(((real(i - new_center1(1)))**2 + (real(j - new_center1(2)))**2 + &
+                            &   (real(k - new_center1(3)))**2) * self%smpd  <=  (0.9 * self%theoretical_radius)**2) then
+                                mask(i,j,k) = .true.
+                            endif
                         endif
                     enddo
                 enddo
             enddo
             ! Second likely center.
-            new_center2 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), (imat == icc) .and. .not. mask)
+            new_center2 = maxloc(rmat_pc, (imat == icc) .and. .not. mask)
             if( any(new_center2 > 0) )then ! if anything was found
                 ! Validate second center (check if it's 2 merged atoms, or one pointy one)
-                if( sum(real(new_center2 - new_center1)**2.) * self%smpd <= 2. * self%theoretical_radius) then
-                    ! Set the merged cc back to 0
+                if( sum(real(new_center2 - new_center1)**2.) * self%smpd <= (0.9 * self%theoretical_radius)**2) then
+                    ! the new_center2 is within the diameter of the atom position at new_center1
+                    ! therefore, it is not another atom and should be removed
                     where( imat_cc == icc .and. (.not.mask) ) imat_cc = 0
                     return
                 else
                     cnt = cnt + 1
                     new_centers(:,cnt) = real(new_center2)
-                    ! In the case two merged atoms, build the second atom
+                    ! In the case of two merged atoms, build the second atom
                     do i = 1, self%ldim(1)
                         do j = 1, self%ldim(2)
                             do k = 1, self%ldim(3)
-                                if(((real(i - new_center2(1)))**2 + (real(j - new_center2(2)))**2 +&
-                                &(real(k - new_center2(3)))**2) * self%smpd < (0.9 * self%theoretical_radius)**2 )then
-                                    if( imat(i,j,k) == icc ) mask(i,j,k) = .true.
+                                if( imat(i,j,k) == icc )then
+                                    if(((real(i - new_center2(1)))**2 + (real(j - new_center2(2)))**2 +&
+                                    &   (real(k - new_center2(3)))**2) * self%smpd <= (0.9 * self%theoretical_radius)**2 )then
+                                        mask(i,j,k) = .true.
+                                    endif
                                 endif
                             enddo
                         enddo
@@ -782,25 +792,29 @@ contains
                 endif
             endif
             ! Third likely center.
-            new_center3 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), (imat == icc) .and. .not. mask)
+            new_center3 = maxloc(rmat_pc, (imat == icc) .and. .not. mask)
             if( any(new_center3 > 0) )then ! if anything was found
                 ! Validate third center
-                if(sum(real(new_center3 - new_center1)**2.) * self%smpd <= 2. * self%theoretical_radius .or. &
-                &  sum(real(new_center3 - new_center2)**2.) * self%smpd <= 2. * self%theoretical_radius )then
-                    ! Set the merged cc back to 0
+                if(sum(real(new_center3 - new_center1)**2.) * self%smpd <= (0.9 * self%theoretical_radius)**2 .or. &
+                &  sum(real(new_center3 - new_center2)**2.) * self%smpd <= (0.9 * self%theoretical_radius)**2 )then
+                    ! the new_center3 is within the diameter of the atom position at new_center1 or new_center2
+                    ! therefore, it is not another atom and should be removed
                     where( imat_cc == icc .and. (.not.mask) ) imat_cc = 0
                     return
                 else
                     cnt = cnt + 1
                     new_centers(:,cnt) = real(new_center3)
-                    ! In the case two merged atoms, build the second atom
+                    found3d_cen = .false.
+                    ! In the case of two merged atoms, build the second atom
                     do i = 1, self%ldim(1)
                         do j = 1, self%ldim(2)
                             do k = 1, self%ldim(3)
-                                ! a little smaller to be sure
-                                if( ((real(i - new_center3(1)))**2 + (real(j - new_center3(2)))**2 + &
-                                &(real(k - new_center3(3)))**2) * self%smpd < (0.9 * self%theoretical_radius)**2) then
-                                    if( imat(i,j,k) == icc ) mask(i,j,k) = .true.
+                                if( imat(i,j,k) == icc )then
+                                    if( ((real(i - new_center3(1)))**2 + (real(j - new_center3(2)))**2 + &
+                                    &    (real(k - new_center3(3)))**2) * self%smpd <= (0.9 * self%theoretical_radius)**2 )then
+                                         found3d_cen = .not.mask(i,j,k)
+                                         mask(i,j,k) = .true.
+                                    endif
                                 endif
                             enddo
                         enddo
@@ -1042,6 +1056,9 @@ contains
         call fclose(funit)
         ! identify correlated variables with Pearson's product moment correation coefficient
         call self%id_corr_vars
+        ! write pdf files with valid_corr and max_int in the B-factor field (for validation/visualisation)
+        call self%write_centers('valid_corr_in_bfac_field', 'valid_corr')
+        call self%write_centers('max_int_in_bfac_field',    'max_int')
         ! destruct
         deallocate(cc_mask, imat_cc, tmpcens, strain_array, centers_A)
         call phasecorr%kill
@@ -1171,7 +1188,7 @@ contains
         call atoms_obj%convolve(simatms, cutoff = 8.*self%smpd)
     end subroutine simulate_atoms
 
-    subroutine write_centers( self, fname, coords )
+    subroutine write_centers_1( self, fname, coords )
        class(nanoparticle),        intent(inout) :: self
        character(len=*), optional, intent(in)    :: fname
        real,             optional, intent(in)    :: coords(:,:)
@@ -1200,7 +1217,31 @@ contains
            call centers_pdb%writepdb(trim(self%fbody)//'_atom_centers')
            write(logfhandle,*) 'output, atomic coordinates:       ', trim(self%fbody)//'_atom_centers.pdb'
        endif
-    end subroutine write_centers
+   end subroutine write_centers_1
+
+   subroutine write_centers_2( self, fname, which )
+      class(nanoparticle), intent(inout) :: self
+      character(len=*),    intent(in)    :: fname
+      character(len=*),    intent(in)    :: which ! parameter in the B-factor field of the pdb file
+      type(atoms) :: centers_pdb
+      integer     :: cc
+      call centers_pdb%new(self%n_cc, dummy=.true.)
+      do cc=1,self%n_cc
+          call centers_pdb%set_name(cc,self%atom_name)
+          call centers_pdb%set_element(cc,self%element)
+          call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
+          select case(which)
+              case('valid_corr')
+                  call centers_pdb%set_beta(cc,self%atominfo(cc)%valid_corr)  ! use per-atom validation correlation
+              case('max_int')
+                  call centers_pdb%set_beta(cc,self%atominfo(cc)%max_int)     ! use z-score of maximum intensity
+              case DEFAULT
+                  call centers_pdb%set_beta(cc,self%atominfo(cc)%cn_gen)      ! use generalised coordination number
+          end select
+          call centers_pdb%set_resnum(cc,cc)
+      enddo
+     call centers_pdb%writepdb(fname)
+  end subroutine write_centers_2
 
     subroutine write_atoms( self )
         class(nanoparticle), intent(inout) :: self
