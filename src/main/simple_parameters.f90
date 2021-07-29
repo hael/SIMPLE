@@ -1393,6 +1393,7 @@ contains
             case('shc')
             case('greedy')
             case('neigh')
+            case('greedy_neigh')
             case('cluster','clustersym')
             case('eval')
             case DEFAULT

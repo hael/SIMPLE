@@ -5,27 +5,28 @@ module simple_strategy3D_matcher
 include 'simple_lib.f08'
 use simple_strategy3D_alloc ! singleton s3D
 use simple_timer
-use simple_oris,               only: oris
-use simple_qsys_funs,          only: qsys_job_finished
-use simple_binoris_io,         only: binwrite_oritab
-use simple_kbinterpol,         only: kbinterpol
-use simple_ori,                only: ori
-use simple_sym,                only: sym
-use simple_image,              only: image
-use simple_cmdline,            only: cmdline
-use simple_parameters,         only: params_glob
-use simple_builder,            only: build_glob
-use simple_polarizer,          only: polarizer
-use simple_polarft_corrcalc,   only: polarft_corrcalc
-use simple_strategy3D_cluster, only: strategy3D_cluster
-use simple_strategy3D_shc,     only: strategy3D_shc
-use simple_strategy3D_snhc,    only: strategy3D_snhc
-use simple_strategy3D_greedy,  only: strategy3D_greedy
-use simple_strategy3D_neigh,   only: strategy3D_neigh
-use simple_strategy3D,         only: strategy3D
-use simple_strategy3D_srch,    only: strategy3D_spec, set_ptcl_stats, eval_ptcl
-use simple_convergence,        only: convergence
-use simple_euclid_sigma2,      only: euclid_sigma2
+use simple_oris,                    only: oris
+use simple_qsys_funs,               only: qsys_job_finished
+use simple_binoris_io,              only: binwrite_oritab
+use simple_kbinterpol,              only: kbinterpol
+use simple_ori,                     only: ori
+use simple_sym,                     only: sym
+use simple_image,                   only: image
+use simple_cmdline,                 only: cmdline
+use simple_parameters,              only: params_glob
+use simple_builder,                 only: build_glob
+use simple_polarizer,               only: polarizer
+use simple_polarft_corrcalc,        only: polarft_corrcalc
+use simple_strategy3D_cluster,      only: strategy3D_cluster
+use simple_strategy3D_shc,          only: strategy3D_shc
+use simple_strategy3D_snhc,         only: strategy3D_snhc
+use simple_strategy3D_greedy,       only: strategy3D_greedy
+use simple_strategy3D_greedy_neigh, only: strategy3D_greedy_neigh
+use simple_strategy3D_neigh,        only: strategy3D_neigh
+use simple_strategy3D,              only: strategy3D
+use simple_strategy3D_srch,         only: strategy3D_spec, set_ptcl_stats, eval_ptcl
+use simple_convergence,             only: convergence
+use simple_euclid_sigma2,           only: euclid_sigma2
 use simple_strategy2D3D_common
 implicit none
 
@@ -210,24 +211,30 @@ contains
                 ! switch for per-particle polymorphic strategy3D construction
                 select case(trim(params_glob%refine))
                     case('snhc')
-                        allocate(strategy3D_snhc           :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_snhc             :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc')
                         updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
                         if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt == 1 )then
-                            allocate(strategy3D_greedy     :: strategy3Dsrch(iptcl_batch)%ptr)
+                            allocate(strategy3D_greedy       :: strategy3Dsrch(iptcl_batch)%ptr)
                         else
                             if( ran3() < GREEDY_FREQ )then
-                                allocate(strategy3D_greedy :: strategy3Dsrch(iptcl_batch)%ptr)
+                                allocate(strategy3D_greedy   :: strategy3Dsrch(iptcl_batch)%ptr)
                             else
-                                allocate(strategy3D_shc    :: strategy3Dsrch(iptcl_batch)%ptr)
+                                allocate(strategy3D_shc      :: strategy3Dsrch(iptcl_batch)%ptr)
                             endif
                         endif
                     case('greedy')
-                        allocate(strategy3D_greedy         :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neigh')
-                        allocate(strategy3D_neigh          :: strategy3Dsrch(iptcl_batch)%ptr)
+                        if( ran3() < GREEDY_FREQ )then
+                            allocate(strategy3D_greedy_neigh :: strategy3Dsrch(iptcl_batch)%ptr)
+                        else
+                            allocate(strategy3D_neigh        :: strategy3Dsrch(iptcl_batch)%ptr)
+                        endif
+                    case('greedy_neigh')
+                        allocate(strategy3D_greedy_neigh     :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('cluster','clustersym')
-                        allocate(strategy3D_cluster        :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_cluster          :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('eval')
                         call eval_ptcl(pftcc, iptcl)
                         cycle

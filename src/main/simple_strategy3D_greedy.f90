@@ -54,7 +54,7 @@ contains
             call sort_corrs(self%s)  ! sort in correlation projection direction space
             ! take care of the in-planes
             call self%s%inpl_srch
-            ! prepare weights & orientation
+            ! prepare orientation
             call self%oris_assign()
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
@@ -65,11 +65,9 @@ contains
             subroutine per_ref_srch
                 integer :: loc(1)
                 if( s3D%state_exists(s3D%proj_space_state(iref)) )then
-                    ! calculate in-plane correlations
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                     ! identify the top scoring in-plane angle
+                    call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                     loc = maxloc(inpl_corrs)
-                    ! stash
                     call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)), .true.)
                 endif
             end subroutine per_ref_srch

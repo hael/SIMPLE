@@ -375,15 +375,18 @@ contains
             call job_descr%set( 'startit',    trim(int2str(iter)))
             call cline%set(     'startit',    real(iter))
             ! switch to refine=greedy_* when frac >= 99 and iter >= 5
-            if( trim(params%refine).eq.'shc' )then
-                if( cline_check_3Dconv%defined('frac_srch') )then
-                    if( iter >= MIN_ITERS_SHC )then
-                        if( cline_check_3Dconv%get_rarg('frac_srch') >= FRAC_GREEDY_LIM )then
-                            params%refine = 'greedy'
-                            call job_descr%set( 'refine', params%refine )
-                            call cline%set('refine', params%refine)
-                            call cline_check_3Dconv%set('refine',params%refine)
-                        endif
+            if( cline_check_3Dconv%defined('frac_srch') )then
+                if( iter >= MIN_ITERS_SHC )then
+                    if( cline_check_3Dconv%get_rarg('frac_srch') >= FRAC_GREEDY_LIM )then
+                        select case(trim(params%refine))
+                            case('shc')
+                                params%refine = 'greedy'
+                            case('neigh')
+                                params%refine = 'greedy_neigh'
+                        end select
+                        call job_descr%set('refine', params%refine)
+                        call cline%set('refine', params%refine)
+                        call cline_check_3Dconv%set('refine',params%refine)
                     endif
                 endif
             endif
