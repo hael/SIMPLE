@@ -28,8 +28,8 @@ contains
 
     !>  \brief  is the prime2D algorithm
     subroutine cluster2D_exec( cline, which_iter )
-        use simple_qsys_funs,    only: qsys_job_finished
-        use simple_binoris_io,   only: binwrite_oritab
+        use simple_qsys_funs,             only: qsys_job_finished
+        use simple_binoris_io,            only: binwrite_oritab
         use simple_strategy2D3D_common,   only: set_bp_range2d, prepimgbatch
         use simple_strategy2D,            only: strategy2D, strategy2D_per_ptcl
         use simple_strategy2D_srch,       only: strategy2D_spec
@@ -98,7 +98,7 @@ contains
             l_partial_sums            = .false.
             params_glob%l_frac_update = .false.
             if( which_iter > 1 )then
-                if( params_glob%update_frac < 0.99 )then
+                if( params_glob%update_frac < 0.99 )then                    
                     l_partial_sums            = .true.
                     params_glob%l_frac_update = .true.
                 else
@@ -123,14 +123,14 @@ contains
                     nptcls2update = count(ptcl_mask)
                     deallocate(pinds)
                     if( which_iter <= FAST2D_ITER_BATCH )then
-                        min_nsamples               = FAST2D_MINSZ
-                        params_glob%nptcls_per_cls = FAST2D_NPTCLS_PER_CLS
+                        min_nsamples               = nint(real(FAST2D_MINSZ)/real(params_glob%nparts))
+                        params_glob%nptcls_per_cls = nint(real(FAST2D_NPTCLS_PER_CLS)/real(params_glob%nparts))
                     else if( which_iter <= 2*FAST2D_ITER_BATCH )then
-                        min_nsamples               = 2*FAST2D_MINSZ
-                        params_glob%nptcls_per_cls = 2*FAST2D_NPTCLS_PER_CLS
+                        min_nsamples               = nint(real(2*FAST2D_MINSZ)/params_glob%nparts)
+                        params_glob%nptcls_per_cls = nint(real(2*FAST2D_NPTCLS_PER_CLS)/params_glob%nparts)
                     else
                         min_nsamples               = nint(0.35*real(nptcls2update))
-                        params_glob%nptcls_per_cls = 4*FAST2D_NPTCLS_PER_CLS
+                        params_glob%nptcls_per_cls = nint(real(4*FAST2D_NPTCLS_PER_CLS)/params_glob%nparts)
                     endif
                     call build_glob%spproj_field%sample_rnd_subset(params_glob%ncls, [params_glob%fromp,params_glob%top],&
                         &min_nsamples, params_glob%nptcls_per_cls, params_glob%nparts, ptcl_mask, pinds)
@@ -156,6 +156,9 @@ contains
 
         ! SETUP WEIGHTS
         call build_glob%spproj_field%set_all2single('w', 1.0)
+        ! do iptcl = params_glob%fromp,params_glob%top
+        !     call build_glob%spproj_field%set(iptcl,'w', 1.0)
+        ! enddo
 
         ! PREP REFERENCES
         call cavger_new(ptcl_mask)
@@ -178,11 +181,6 @@ contains
 
         ! READ FOURIER RING CORRELATIONS
         if( file_exists(params_glob%frcs) ) call build_glob%clsfrcs%read(params_glob%frcs)
-        if( params_glob%l_pssnr )then
-            if( file_exists(trim(PSSNR_FBODY)//int2str_pad(1,2)//BIN_EXT) )then
-                call build_glob%projpssnrs%read(trim(PSSNR_FBODY)//int2str_pad(1,2)//BIN_EXT)
-            endif
-        endif
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D(cline, which_iter, frac_srch_space )
@@ -213,7 +211,7 @@ contains
 
         ! STOCHASTIC IMAGE ALIGNMENT
         rt_align         = 0.
-        l_ctf            = build_glob%spproj%get_ctfflag('ptcl2D').ne.'no'
+        l_ctf            = build_glob%spproj%get_ctfflag('ptcl2D',iptcl=params_glob%fromp).ne.'no'
         l_np_cls_defined = cline%defined('nptcls_per_cls')
         write(logfhandle,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         ! Batch loop
@@ -232,7 +230,7 @@ contains
             if( L_BENCH ) rt_init = rt_init + toc(t_init)
             ! Particles threaded loop
             if( L_BENCH ) t_align = tic()
-            !omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,updatecnt,frac)&
+            !omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,updatecnt)&
             !omp schedule(static) proc_bind(close)
             do iptcl_batch = 1,batchsz                     ! particle batch index
                 iptcl_map  = batch_start + iptcl_batch - 1 ! masked global index (cumulative batch index)
@@ -240,20 +238,12 @@ contains
                 ! Search strategy (polymorphic strategy2D construction)
                 updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
                 if( l_stream )then
-                    frac = build_glob%spproj_field%get(iptcl, 'frac')
-                    ! offline mode, based on history
+                    ! online mode, based on history
                     if( updatecnt==1 .or. (.not.build_glob%spproj_field%has_been_searched(iptcl)) )then
-                        ! brand new, virgin particles
+                        ! brand new particles
                         allocate(strategy2D_greedy :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
-                    else if( updatecnt > STREAM_SRCHLIM )then
-                        ! particles that already have a significant search history
-                        if( l_greedy .or. frac<5.)then
-                            allocate(strategy2D_greedy :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
-                        else
-                            allocate(strategy2D_snhc   :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
-                        endif
                     else
-                        ! newest particles
+                        ! other particles
                         if( l_greedy )then
                             allocate(strategy2D_greedy :: strategy2Dsrch(iptcl_batch)%ptr, stat=alloc_stat)
                         else

@@ -934,6 +934,7 @@ contains
         call self%os_ptcl3D%copy(os, is_ptcl=.true.)
         call self%os_ptcl2D%set_all2single('stkind', 1.)
         call self%os_ptcl3D%set_all2single('stkind', 1.)
+        print *,self%os_ptcl2D%isthere('state')
         if( .not. self%os_ptcl2D%isthere('state') ) call self%os_ptcl2D%set_all2single('state',  1.) ! default on import
         if( .not. self%os_ptcl3D%isthere('state') ) call self%os_ptcl3D%set_all2single('state',  1.) ! default on import
         ! full path and existence check
@@ -1933,12 +1934,13 @@ contains
         get_nstks = self%os_stk%get_noris()
     end function get_nstks
 
-    character(len=STDLEN) function get_ctfflag( self, oritype )
+    character(len=STDLEN) function get_ctfflag( self, oritype, iptcl )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
+        integer,         optional, intent(in)    :: iptcl
         class(oris), pointer         :: ptcl_field
         character(len=:),allocatable :: ctfflag_str
-        integer               :: stkind, ind_in_stk
+        integer :: stkind, ind_in_stk, ind
         get_ctfflag = 'no'
         nullify(ptcl_field)
         ! set field pointer
@@ -1953,23 +1955,26 @@ contains
                 THROW_HARD('oritype: '//trim(oritype)//' not supported by get_ctfflag')
         end select
         ! do the index mapping
-        call self%map_ptcl_ind2stk_ind(oritype, 1, stkind, ind_in_stk)
+        ind = 1
+        if( present(iptcl) ) ind = iptcl
+        call self%map_ptcl_ind2stk_ind(oritype, ind, stkind, ind_in_stk)
         ! CTF flag string
         if( self%os_stk%isthere(stkind, 'ctf') )then
             call self%os_stk%getter(stkind, 'ctf', ctfflag_str)
-        else if( ptcl_field%isthere(1, 'ctf') )then
-            call ptcl_field%getter(1, 'ctf', ctfflag_str)
+        else if( ptcl_field%isthere(ind, 'ctf') )then
+            call ptcl_field%getter(ind, 'ctf', ctfflag_str)
         else
            ctfflag_str = 'no'
         endif
         get_ctfflag = trim(ctfflag_str)
     end function get_ctfflag
 
-    integer(kind(ENUM_CTFFLAG)) function get_ctfflag_type( self, oritype )
+    integer(kind(ENUM_CTFFLAG)) function get_ctfflag_type( self, oritype, iptcl )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
+        integer,         optional, intent(in)    :: iptcl
         character(len=:), allocatable :: ctfflag
-        ctfflag = self%get_ctfflag(oritype)
+        ctfflag = self%get_ctfflag(oritype, iptcl=iptcl)
         select case(trim(ctfflag))
             case('no')
                 get_ctfflag_type = CTFFLAG_NO
@@ -1985,15 +1990,19 @@ contains
     end function get_ctfflag_type
 
     ! the entire project must be phase-plate, so the 1 is
-    logical function has_phaseplate( self, oritype )
+    logical function has_phaseplate( self, oritype, iptcl )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
+        integer,         optional, intent(in)    :: iptcl
         character(len=:), allocatable :: phaseplate
+        integer :: ind
         has_phaseplate = .false.
         if( trim(oritype) .eq. 'cls3D' ) return
+        ind = 1
+        if( present(iptcl) ) ind = iptcl
         ! get info
-        if( self%os_stk%isthere(1, 'phaseplate') )then
-            phaseplate = trim(self%os_stk%get_static(1, 'phaseplate'))
+        if( self%os_stk%isthere(ind, 'phaseplate') )then
+            phaseplate = trim(self%os_stk%get_static(ind, 'phaseplate'))
         else
             phaseplate = 'no'
         endif
@@ -3075,11 +3084,12 @@ contains
         call self%bos%close
     end subroutine read_ctfparams_state_eo
 
-    subroutine read_segment( self, oritype, fname, fromto )
+    subroutine read_segment( self, oritype, fname, fromto, wthreads )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: oritype
         character(len=*),  intent(in)    :: fname
         integer, optional, intent(in)    :: fromto(2)
+        logical, optional, intent(in)    :: wthreads
         integer :: isegment
         if( .not. file_exists(trim(fname)) )then
             THROW_HARD('inputted file: '//trim(fname)//' does not exist; read_segment')
@@ -3089,7 +3099,7 @@ contains
                 ! *.simple project file
                 isegment = oritype2segment(oritype)
                 call self%bos%open(fname)
-                call self%segreader(isegment)
+                call self%segreader(isegment,fromto=fromto,wthreads=wthreads)
                 call self%bos%close
             case('T')
                 ! *.txt plain text ori file
@@ -3099,13 +3109,13 @@ contains
                     case('stk')
                         call self%os_stk%read(fname)
                     case('ptcl2D')
-                        call self%os_ptcl2D%read(fname, fromto)
+                        call self%os_ptcl2D%read(fname, fromto=fromto)
                     case('cls2D')
                         call self%os_cls2D%read(fname)
                     case('cls3D')
-                        call self%os_cls3D%read(fname,  fromto)
+                        call self%os_cls3D%read(fname,  fromto=fromto)
                     case('ptcl3D')
-                        call self%os_ptcl3D%read(fname, fromto)
+                        call self%os_ptcl3D%read(fname, fromto=fromto)
                     case('out')
                         call self%os_out%read(fname)
                     case('projinfo')
@@ -3122,9 +3132,10 @@ contains
         end select
     end subroutine read_segment
 
-    subroutine segreader( self, isegment, only_ctfparams_state_eo, wthreads )
+    subroutine segreader( self, isegment, fromto, only_ctfparams_state_eo, wthreads )
         class(sp_project),          intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
+        integer, optional,          intent(in)    :: fromto(2)
         logical, optional,          intent(in)    :: only_ctfparams_state_eo, wthreads
         integer :: n
         n = self%bos%get_n_records(isegment)

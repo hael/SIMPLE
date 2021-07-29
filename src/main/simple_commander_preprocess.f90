@@ -1873,6 +1873,7 @@ contains
             ! set normalization radius
             params%msk = RADFRAC_NORM_EXTRACT * real(params%box/2)
             ! init
+            call build%build_spproj(params, cline)
             call build%build_general_tbox(params, cline, do3d=.false.)
             call micrograph%new([ldim(1),ldim(2),1], params%smpd)
             noutside  = 0

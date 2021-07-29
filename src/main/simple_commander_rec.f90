@@ -5,7 +5,6 @@ use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters
-use simple_class_frcs,     only: class_frcs
 use simple_qsys_env,       only: qsys_env
 use simple_qsys_funs
 implicit none
@@ -69,18 +68,22 @@ contains
         if( fall_over ) THROW_HARD('No images found!')
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
+        ! splitting
+        if( trim(params%oritype).eq.'ptcl3D' ) call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        ! eo partitioning
+        if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
+        ! particle weights
+        select case(trim(params%ptclw))
+            case('yes')
+                call build%spproj_field%calc_soft_weights(params%frac)
+            case DEFAULT
+                call build%spproj_field%calc_hard_weights(params%frac)
+        end select
+        ! to update eo flags and weights
+        call build%spproj%write_segment_inside(params%oritype)
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
         call cline%gen_job_descr(job_descr)
-        ! splitting
-        if( trim(params%oritype).eq.'ptcl3D' )then
-            call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
-        endif
-        ! eo partitioning
-        if( build%spproj_field%get_nevenodd() == 0 )then
-            call build%spproj_field%partition_eo
-            call build%spproj%write_segment_inside(params%oritype)
-        endif
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr)
         ! assemble volumes
@@ -134,7 +137,7 @@ contains
         do s=1,params%nstates
             if( build%spproj_field%get_pop(s, 'state') == 0 ) cycle ! empty state
             fbody = 'recvol_state'
-            call build%eorecvol%eorec_distr( build%spproj, build%spproj_field, build%pgrpsyms, s, fbody=fbody)
+            call build%eorecvol%eorec_distr(build%spproj, build%spproj_field, build%pgrpsyms, s, fbody=fbody)
         end do
         call qsys_job_finished( 'simple_rec_master :: exec_eorec')
         write(logfhandle,'(a,1x,a)') "GENERATED VOLUMES: reconstruct3D*.ext"

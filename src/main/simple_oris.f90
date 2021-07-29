@@ -21,6 +21,7 @@ type :: oris
     procedure          :: new
     procedure          :: reallocate
     ! GETTERS
+    procedure          :: exists
     procedure          :: e1get
     procedure          :: e2get
     procedure          :: e3get
@@ -253,6 +254,12 @@ contains
 
     ! GETTERS
 
+    pure logical function exists( self, i )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
+        exists = self%o(i)%exists()
+    end function exists
+
     pure function e1get( self, i ) result( e1 )
         class(oris), intent(in) :: self
         integer,     intent(in) :: i
@@ -480,8 +487,8 @@ contains
 
     !>  \brief  is for getting the max val of integer label
     function get_n( self, label ) result( n )
-        class(oris),      intent(inout) :: self
-        character(len=*), intent(in)    :: label
+        class(oris),      intent(in) :: self
+        character(len=*), intent(in) :: label
         integer :: i, n, ival
         n = 1
         do i=1,self%n
@@ -492,7 +499,7 @@ contains
 
     !>  \brief  is for checking label population
     function get_pop( self, ind, label, consider_w, eo ) result( pop )
-        class(oris),       intent(inout) :: self
+        class(oris),       intent(in)    :: self
         integer,           intent(in)    :: ind
         character(len=*),  intent(in)    :: label
         logical, optional, intent(in)    :: consider_w
@@ -510,8 +517,8 @@ contains
         pop = 0
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
-            myeo    = nint(self%o(i)%get('eo'))
             if( consider_eo )then
+                myeo = nint(self%o(i)%get('eo'))
                 if( myeo /= eo ) cycle
             endif
             w = 1.0
@@ -538,7 +545,7 @@ contains
     end function get_all_rmats
 
     subroutine get_pops( self, pops, label, consider_w, maxn, eo )
-        class(oris),          intent(inout) :: self
+        class(oris),          intent(in)    :: self
         integer, allocatable, intent(out)   :: pops(:)
         character(len=*),     intent(in)    :: label
         logical, optional,    intent(in)    :: consider_w
@@ -563,8 +570,8 @@ contains
         if(alloc_stat.ne.0)call allocchk('In: get_pops, module: simple_oris')
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
-            myeo    = nint(self%o(i)%get('eo'))
             if( consider_eo )then
+                myeo = nint(self%o(i)%get('eo'))
                 if( myeo /= eo ) cycle
             endif
             w = 1.0

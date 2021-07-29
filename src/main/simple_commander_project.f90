@@ -833,6 +833,7 @@ contains
         integer,          allocatable :: parts(:,:)
         type(parameters) :: params
         type(builder)    :: build
+        character(len=XLONGSTRLEN) :: dir_target
         real             :: smpd, smpd_target
         integer          :: ipart, nparts, nstks, box, newbox
         logical          :: gen_sc_project
@@ -860,9 +861,10 @@ contains
         if( gen_sc_project )then
             ! make new project & scales
             smpd_target = max(smpd, smpd * real(box)/real(params%newbox))
-            call simple_mkdir(filepath(PATH_PARENT,'stack_parts_sc'), errmsg="commander_distr_wflows::exec_scale_project_distr ")
-            call build%spproj%scale_projfile(smpd_target, projfile_sc, cline, cline_scale,&
-                dir=filepath(PATH_PARENT,'stack_parts_sc'))
+            dir_target = filepath(PATH_PARENT,'stack_parts_sc')
+            if( cline%defined('dir_target') ) dir_target = trim(cline%get_carg('dir_target'))
+            call simple_mkdir(dir_target, errmsg="commander_distr_wflows::exec_scale_project_distr ")
+            call build%spproj%scale_projfile(smpd_target, projfile_sc, cline, cline_scale, dir=dir_target)
             newbox = nint(cline_scale%get_rarg('newbox'))
             if( newbox == box )then
                 write(logfhandle,*)'Inconsistent input dimensions: from ',box,' to ',newbox

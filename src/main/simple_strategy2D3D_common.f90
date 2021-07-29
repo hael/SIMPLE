@@ -8,8 +8,8 @@ use simple_parameters, only: params_glob
 implicit none
 
 public :: read_img, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
-&norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, preprefvol,&
-&prep2Dref, preprecvols, killrecvols, prepimgbatch, build_pftcc_particles
+&norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, readrefvols, zero_refvol_fcomps_below_noise,&
+&preprefvol, prep2Dref, preprecvols, killrecvols, prepimgbatch, build_pftcc_particles
 private
 #include "simple_local_flags.inc"
 
@@ -407,21 +407,15 @@ contains
             endif
         endif
         ! filter
-        if( params_glob%l_pssnr )then
-            call build_glob%projpssnrs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, filter)
-            call subsample_filter(filtsz, build_glob%img_match%get_filtsz(), filter, subfilter)
-            call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
-        else
-            call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-            if( any(frc > 0.143) )then
-                call fsc2optlp_sub(build_glob%clsfrcs%get_filtsz(), frc, filter)
-                if( params_glob%l_match_filt )then
-                    call subsample_optlp(filtsz, build_glob%img_match%get_filtsz(), filter, subfilter)
-                    call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
-                else
-                    call img_in%fft() ! needs to be here in case the shift was never applied (above)
-                    call img_in%apply_filter_serial(filter)
-                endif
+        call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+        if( any(frc > 0.143) )then
+            call fsc2optlp_sub(build_glob%clsfrcs%get_filtsz(), frc, filter)
+            if( params_glob%l_match_filt )then
+                call subsample_optlp(filtsz, build_glob%img_match%get_filtsz(), filter, subfilter)
+                call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
+            else
+                call img_in%fft() ! needs to be here in case the shift was never applied (above)
+                call img_in%apply_filter_serial(filter)
             endif
         endif
         ! ensure we are in real-space before clipping
@@ -546,31 +540,55 @@ contains
         if( has_been_searched ) call build_glob%spproj_field%map3dshift22d(-xyz(:), state=s)
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
+    subroutine readrefvols( fname_even, fname_odd )
+        character(len=*),           intent(in) :: fname_even
+        character(len=*), optional, intent(in) :: fname_odd
+        ! ensure correct build_glob%vol dim
+        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
+        call build_glob%vol%read(fname_even)
+        ! expand for fast interpolation
+        call build_glob%vol%fft
+        call build_glob%vol%expand_cmat(params_glob%alpha,norm4proj=.true.)
+        if( present(fname_odd) )then
+            call build_glob%vol_odd%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
+            call build_glob%vol_odd%read(fname_odd)
+            ! expand for fast interpolation
+            call build_glob%vol_odd%fft
+            call build_glob%vol_odd%expand_cmat(params_glob%alpha,norm4proj=.true.)
+        endif
+    end subroutine readrefvols
+
+    subroutine zero_refvol_fcomps_below_noise
+        call build_glob%vol%zero_fcomps_below_noise_power(build_glob%vol_odd)
+    end subroutine zero_refvol_fcomps_below_noise
+
     !>  \brief  prepares one volume for references extraction
-    subroutine preprefvol( pftcc, cline, s, volfname, do_center, xyz, iseven )
+    subroutine preprefvol( pftcc, cline, s, do_center, xyz, iseven )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_estimate_ssnr,    only: fsc2optlp_sub, subsample_optlp, subsample_filter
         use simple_ori,              only: ori
+        use simple_projector,        only: projector
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: s
-        character(len=*),        intent(in)    :: volfname
         logical,                 intent(in)    :: do_center
         real,                    intent(in)    :: xyz(3)
         logical,                 intent(in)    :: iseven
+        type(projector),  pointer     :: vol_ptr => null()
         type(image)                   :: mskvol
         type(ori)                     :: o
         character(len=:), allocatable :: fname_opt_filter
-        real,             allocatable :: pssnr(:)
         real    :: subfilter(build_glob%img_match%get_filtsz())
         real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
         integer :: iref, iproj, iprojred, filtsz, subfiltsz
-        ! ensure correct build_glob%vol dim
-        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
-        call build_glob%vol%read(volfname)
+        if( iseven )then
+            vol_ptr => build_glob%vol
+        else
+            vol_ptr => build_glob%vol_odd
+        endif
         if( do_center )then
-            call build_glob%vol%fft()
-            call build_glob%vol%shift([xyz(1),xyz(2),xyz(3)])
+            call vol_ptr%fft()
+            call vol_ptr%shift([xyz(1),xyz(2),xyz(3)])
         endif
         ! Volume filtering
         if( .not.params_glob%l_lpset )then
@@ -578,54 +596,42 @@ contains
             subfiltsz = build_glob%img_match%get_filtsz()
             if( params_glob%l_match_filt )then
                 ! stores filters in pftcc
-                if( params_glob%l_pssnr )then
-                    allocate(fname_opt_filter, source=PSSNR_FBODY//int2str_pad(s,2)//BIN_EXT)
-                    subfilter = 1.
-                    if( any(build_glob%fsc(s,:) > 0.143) .and. file_exists(fname_opt_filter))then
-                        pssnr = file2rarr(fname_opt_filter)
-                        call subsample_filter(filtsz, subfiltsz, pssnr, subfilter)
+                if( params_glob%clsfrcs.eq.'yes')then
+                    if( file_exists(params_glob%frcs) )then
+                        iproj = 0
+                        do iref = 1,2*build_glob%clsfrcs%get_nprojs()
+                            iproj = iproj+1
+                            if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
+                            call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+                            call fsc2optlp_sub(filtsz, frc, filter)
+                            call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
+                            call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
+                        enddo
+                    endif
+                else
+                    if( any(build_glob%fsc(s,:) > 0.143) )then
+                        call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
+                        call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
+                    else
+                        subfilter = 1.
                     endif
                     do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
                         call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
                     enddo
-                else
-                    if( params_glob%clsfrcs.eq.'yes')then
-                        if( file_exists(params_glob%frcs) )then
-                            iproj = 0
-                            do iref = 1,2*build_glob%clsfrcs%get_nprojs()
-                                iproj = iproj+1
-                                if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
-                                call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-                                call fsc2optlp_sub(filtsz, frc, filter)
-                                call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
-                                call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
-                            enddo
-                        endif
-                    else
-                        if( any(build_glob%fsc(s,:) > 0.143) )then
-                            call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
-                            call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
-                        else
-                            subfilter = 1.
-                        endif
-                        do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
-                            call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
-                        enddo
-                    endif
                 endif
             else
-                call build_glob%vol%fft()
+                call vol_ptr%fft()
                 if( any(build_glob%fsc(s,:) > 0.143) )then
                     call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
-                    call build_glob%vol%apply_filter(filter)
+                    call vol_ptr%apply_filter(filter)
                 endif
             endif
         endif
         ! back to real space
-        call build_glob%vol%ifft()
+        call vol_ptr%ifft()
         ! clip
         if( params_glob%boxmatch < params_glob%box ) &
-            call build_glob%vol%clip_inplace(&
+            call vol_ptr%clip_inplace(&
             [params_glob%boxmatch,params_glob%boxmatch,params_glob%boxmatch])
         ! masking
         if( cline%defined('mskfile') )then
@@ -637,29 +643,29 @@ contains
                 call mskvol%clip_inplace(&
                 [params_glob%boxmatch,params_glob%boxmatch,params_glob%boxmatch])
             if( cline%defined('lp_backgr') )then
-                call build_glob%vol%lp_background(mskvol, params_glob%lp_backgr)
+                call vol_ptr%lp_background(mskvol, params_glob%lp_backgr)
             else
-                call build_glob%vol%zero_env_background(mskvol)
-                call build_glob%vol%mul(mskvol)
+                call vol_ptr%zero_env_background(mskvol)
+                call vol_ptr%mul(mskvol)
             endif
             call mskvol%kill
         else
             ! circular masking
             if( params_glob%l_innermsk )then
-                call build_glob%vol%mask(params_glob%msk, 'soft', &
+                call vol_ptr%mask(params_glob%msk, 'soft', &
                     inner=params_glob%inner, width=params_glob%width)
             else
-                call build_glob%vol%mask(params_glob%msk, 'soft')
+                call vol_ptr%mask(params_glob%msk, 'soft')
             endif
         endif
         ! gridding prep
         if( params_glob%griddev.eq.'yes' )then
-            call build_glob%vol%div_w_instrfun(params_glob%alpha)
+            call vol_ptr%div_w_instrfun(params_glob%alpha)
         endif
         ! FT volume
-        call build_glob%vol%fft()
+        call vol_ptr%fft()
         ! expand for fast interpolation
-        call build_glob%vol%expand_cmat(params_glob%alpha,norm4proj=.true.)
+        call vol_ptr%expand_cmat(params_glob%alpha,norm4proj=.true.)
         call o%kill
     end subroutine preprefvol
 
