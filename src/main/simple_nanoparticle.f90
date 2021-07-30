@@ -173,6 +173,7 @@ type :: nanoparticle
     procedure, private :: binarize_and_find_centers
     procedure, private :: find_centers
     procedure, private :: discard_lowly_coordinated
+    procedure, private :: autodiscard_lowly_coordinated
     procedure, private :: discard_low_valid_corr_atoms
     procedure, private :: split_atoms
     procedure, private :: validate_atoms
@@ -471,6 +472,7 @@ contains
         call self%discard_low_valid_corr_atoms
         ! discard lowly coordinated atoms
         call self%discard_lowly_coordinated(cn_thresh, a, l_fit_lattice)
+        ! call self%autodiscard_lowly_coordinated(a, l_fit_lattice)
         ! WRITE OUTPUT
         call self%img_bin%write_bimg(trim(self%fbody)//'BIN.mrc')
         write(logfhandle,*) 'output, binarized map:            ', trim(self%fbody)//'BIN.mrc'
@@ -534,9 +536,8 @@ contains
         real,    allocatable :: coords(:,:)
         real,    allocatable :: rmat(:,:,:)
         integer :: i, t
-        real    :: otsu_thresh, corr
+        real    :: otsu_thresh, corr, step, max_corr
         real    :: x_thresh(NBIN_THRESH/2-1)
-        real    :: step, max_corr
         call otsu_nano(self%img,otsu_thresh) ! find initial threshold
         write(logfhandle,'(A)') '>>> BINARIZATION'
         rmat = self%img%get_rmat()
@@ -578,12 +579,10 @@ contains
                 max_corr = corr
                 t        = i
             endif
-            call simulated_distrib%set_ft(.false.)
         enddo
         write(logfhandle,*) 'bin_i', t, 'Threshold: ', x_thresh(t), 'Corr: ', max_corr
         ! Update img_bin and img_cc
         call self%img_bin%copy_bimg(img_bin_thresh(t))
-        if( GENERATE_FIGS ) call self%img_bin%write_bimg(trim(self%fbody)//'SelectedThreshold.mrc')
         call self%img_cc%copy_bimg(img_ccs_thresh(t))
         call self%update_ncc()
         call self%find_centers()
@@ -689,7 +688,6 @@ contains
         call img_split_ccs%new(self%ldim, self%smpd)
         cnt       = 0
         cnt_split = 0
-        ! Remember to update the centers
         do icc = 1, self%n_cc ! for each cc check if the center corresponds with the local max of the phase corr
             pc = rmat_pc(nint(self%atominfo(icc)%center(1)),nint(self%atominfo(icc)%center(2)),nint(self%atominfo(icc)%center(3)))
             ! calculate the rank
@@ -828,6 +826,58 @@ contains
 
     end subroutine split_atoms
 
+    subroutine validate_atoms( self, simatms )
+        class(nanoparticle), intent(inout) :: self
+        class(image),        intent(in)    :: simatms
+        real, allocatable :: centers(:,:)           ! coordinates of the atoms in PIXELS
+        real, allocatable :: pixels1(:), pixels2(:) ! pixels extracted around the center
+        real    :: maxrad, corrs(self%n_cc)
+        integer :: ijk(3), npix_in, npix_out1, npix_out2, i, winsz
+        type(stats_struct) :: corr_stats
+        maxrad  = (self%theoretical_radius * 1.5) / self%smpd ! in pixels
+        winsz   = ceiling(maxrad)
+        npix_in = (2 * winsz + 1)**3 ! cubic window size (-winsz:winsz in each dim)
+        centers = self%atominfo2centers()
+        allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
+        ! calculate per-atom correlations
+        do i = 1, self%n_cc
+            ijk = nint(centers(:,i))
+            call self%img_raw%win2arr_rad(ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out1, pixels1)
+            call simatms%win2arr_rad(     ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out2, pixels2)
+            self%atominfo(i)%valid_corr = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
+        end do
+        call calc_stats(self%atominfo(:)%valid_corr, corr_stats)
+        write(logfhandle,'(A)') '>>> VALID_CORR (PER-ATOM CORRELATION WITH SIMULATED DENSITY) STATS BELOW'
+        write(logfhandle,'(A,F8.4)') 'Average: ', corr_stats%avg
+        write(logfhandle,'(A,F8.4)') 'Median : ', corr_stats%med
+        write(logfhandle,'(A,F8.4)') 'Sigma  : ', corr_stats%sdev
+        write(logfhandle,'(A,F8.4)') 'Max    : ', corr_stats%maxv
+        write(logfhandle,'(A,F8.4)') 'Min    : ', corr_stats%minv
+    end subroutine validate_atoms
+
+    subroutine discard_low_valid_corr_atoms( self )
+        class(nanoparticle), intent(inout) :: self
+        integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
+        integer :: cc, n_discard
+        write(logfhandle, '(A)') '>>> DISCARDING ATOMS WITH VALID_CORR < 0.5'
+        call self%img_cc%get_imat(imat_cc)
+        call self%img_bin%get_imat(imat_bin)
+        n_discard = 0
+        do cc = 1, self%n_cc
+            if( self%atominfo(cc)%valid_corr < VALID_CORR_THRESH )then
+                where(imat_cc == cc) imat_bin = 0
+                n_discard = n_discard + 1
+            endif
+        end do
+        call self%img_bin%set_imat(imat_bin)
+        call self%img_bin%find_ccs(self%img_cc)
+        call self%img_cc%get_nccs(self%n_cc)
+        call self%find_centers()
+        deallocate(imat_bin, imat_cc)
+        write(logfhandle, *) 'Numbers of atoms discarded because of low valid_corr ', n_discard
+        write(logfhandle, '(A)') '>>> DISCARDING ATOMS WITH VALID_CORR < 0.5, COMPLETED'
+    end subroutine discard_low_valid_corr_atoms
+
     ! This subroutine discards outliers that resisted binarization
     ! It calculates the standard coordination number (cn) of each atom and discards
     ! the atoms with cn_std < cn_thresh
@@ -890,57 +940,112 @@ contains
 
     end subroutine discard_lowly_coordinated
 
-    subroutine validate_atoms( self, simatms )
+    subroutine autodiscard_lowly_coordinated( self, a, l_fit_lattice )
         class(nanoparticle), intent(inout) :: self
-        class(image),        intent(in)    :: simatms
-        real, allocatable :: centers(:,:)           ! coordinates of the atoms in PIXELS
-        real, allocatable :: pixels1(:), pixels2(:) ! pixels extracted around the center
-        real    :: maxrad, corrs(self%n_cc)
-        integer :: ijk(3), npix_in, npix_out1, npix_out2, i, winsz
-        type(stats_struct) :: corr_stats
-        maxrad  = (self%theoretical_radius * 1.5) / self%smpd ! in pixels
-        winsz   = ceiling(maxrad)
-        npix_in = (2 * winsz + 1)**3
-        centers = self%atominfo2centers()
-        allocate(pixels1(npix_in), pixels2(npix_in), source=0.)
-        ! calculate per-atom correlations in parallel
-        do i = 1, self%n_cc
-            ijk = nint(centers(:,i))
-            call self%img_raw%win2arr_rad(ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out1, pixels1)
-            call simatms%win2arr_rad(     ijk(1), ijk(2), ijk(3), winsz, npix_in, maxrad, npix_out2, pixels2)
-            self%atominfo(i)%valid_corr = pearsn_serial(pixels1(:npix_out1),pixels2(:npix_out2))
-        end do
-        call calc_stats(self%atominfo(:)%valid_corr, corr_stats)
-        write(logfhandle,'(A)') '>>> VALID_CORR (PER-ATOM CORRELATION WITH SIMULATED DENSITY) STATS BELOW'
-        write(logfhandle,'(A,F8.4)') 'Average: ', corr_stats%avg
-        write(logfhandle,'(A,F8.4)') 'Median : ', corr_stats%med
-        write(logfhandle,'(A,F8.4)') 'Sigma  : ', corr_stats%sdev
-        write(logfhandle,'(A,F8.4)') 'Max    : ', corr_stats%maxv
-        write(logfhandle,'(A,F8.4)') 'Min    : ', corr_stats%minv
-    end subroutine validate_atoms
-
-    subroutine discard_low_valid_corr_atoms( self )
-        class(nanoparticle), intent(inout) :: self
-        integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
-        integer :: cc, n_discard
-        write(logfhandle, '(A)') '>>> DISCARDING ATOMS WITH VALID_CORR < 0.5'
-        call self%img_cc%get_imat(imat_cc)
-        call self%img_bin%get_imat(imat_bin)
-        n_discard = 0
-        do cc = 1, self%n_cc
-            if( self%atominfo(cc)%valid_corr < VALID_CORR_THRESH )then
-                where(imat_cc == cc) imat_bin = 0
-                n_discard = n_discard + 1
+        real,                intent(inout) :: a(3)          ! lattice parameter
+        logical,             intent(in)    :: l_fit_lattice ! fit lattice or use inputted
+        integer, parameter   :: MIN_CN=0, MAX_CN=5
+        type(binimage)       :: img_bin_cn(MIN_CN:MAX_CN)
+        type(binimage)       :: img_ccs_cn(MIN_CN:MAX_CN)
+        type(atoms)          :: atom
+        type(image)          :: simulated_distrib
+        integer, allocatable :: imat_cc(:,:,:), imat_bin(:,:,:)
+        real,    allocatable :: coords(:,:)
+        real,    allocatable :: centers_A(:,:) ! coordinates of the atoms in ANGSTROMS
+        integer :: i_cn, cn_opt, cn(self%n_cc), sz, i, n_discard(MIN_CN:MAX_CN), new_cn_thresh, cc
+        real    :: corr, max_corr, cn_gen(self%n_cc)
+        write(logfhandle,'(A)') '>>> DETERMINING OPTIMAL CN-THRESHOLD'
+        centers_A = self%atominfo2centers_A()
+        if( l_fit_lattice ) call fit_lattice(self%element, centers_A, a) ! else use inputted lattice params
+        call run_cn_analysis(self%element,centers_A,a,cn,cn_gen)
+        call simulated_distrib%new(self%ldim,self%smpd)
+        cn_opt = 0
+        max_corr = -1.
+        do i_cn = MIN_CN, MAX_CN
+            call progress(i_cn + 1, MAX_CN + 1)
+            call self%img_cc%get_imat(imat_cc)
+            call self%img_bin%get_imat(imat_bin)
+            ! remove atoms with < NVOX_THRESH voxels
+            do cc = 1, self%n_cc
+                if( count(imat_cc == cc) < NVOX_THRESH )then
+                    where(imat_cc == cc) imat_bin = 0
+                endif
+            end do
+            ! Removing outliers based on coordination number
+            n_discard(i_cn) = 0
+            call remove_lowly_coordinated( i_cn )
+            ! don't leave behind any atoms with cn_std < cn_thresh - 2
+            new_cn_thresh = i_cn - 2
+            if( new_cn_thresh < 1 )then
+                ! we're done
+            else
+                call remove_lowly_coordinated( new_cn_thresh )
+            endif
+            ! Generate a simulated distribution based on those center
+            call self%write_centers('centers_'//trim(int2str(i_cn))//'cn_thres', coords)
+            call atom%new          ('centers_'//trim(int2str(i_cn))//'cn_thres.pdb')
+            call atom%convolve(simulated_distrib, cutoff = 8. * self%smpd)
+            call del_file('centers_'//trim(int2str(i_cn))//'cn_thres.pdb')
+            call atom%kill
+            ! correlate volumes
+            corr = self%img%real_corr(simulated_distrib)
+            write(logfhandle,*) 'cn_thres', i_cn, 'corr: ', corr
+            if( corr > max_corr )then
+                max_corr = corr
+                cn_opt   = i_cn
             endif
         end do
-        call self%img_bin%set_imat(imat_bin)
-        call self%img_bin%find_ccs(self%img_cc)
-        call self%img_cc%get_nccs(self%n_cc)
+        write(logfhandle,*) 'cn_thres_opt', cn_opt, 'max_corr: ', max_corr
+        ! Update img_bin and img_cc
+        call self%img_bin%copy_bimg(img_bin_cn(cn_opt))
+        call self%img_cc%copy_bimg(img_ccs_cn(cn_opt))
+        call self%update_ncc()
         call self%find_centers()
-        deallocate(imat_bin, imat_cc)
-        write(logfhandle, *) 'Numbers of atoms discarded because of low valid_corr ', n_discard
-        write(logfhandle, '(A)') '>>> DISCARDING ATOMS WITH VALID_CORR < 0.5, COMPLETED'
-    end subroutine discard_low_valid_corr_atoms
+        if( allocated(centers_A) ) deallocate(centers_A)
+        centers_A = self%atominfo2centers_A()
+        call run_cn_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+        ! destruct
+        do i_cn = MIN_CN, MAX_CN
+            call img_bin_cn(i_cn)%kill_bimg
+            call img_ccs_cn(i_cn)%kill_bimg
+        enddo
+        if( allocated(imat_cc)  ) deallocate(imat_cc)
+        if( allocated(imat_bin) ) deallocate(imat_bin)
+        if( allocated(coords)   ) deallocate(coords)
+        if( allocated(centers_A)) deallocate(centers_A)
+        call atom%kill
+        call simulated_distrib%kill
+        write(logfhandle, *) 'Numbers of atoms discarded because of low cn ', n_discard(cn_opt)
+        write(logfhandle,'(A)') '>>> DETERMINING OPTIMAL CN-THRESHOLD, COMPLETED'
+
+    contains
+
+        subroutine remove_lowly_coordinated( i_cn )
+            integer, intent(in) :: i_cn
+            do cc = 1, self%n_cc
+                if( cn(cc) < i_cn )then
+                    where(imat_cc == cc) imat_bin = 0
+                    n_discard(i_cn) = n_discard(i_cn) + 1
+                endif
+            enddo
+            call img_bin_cn(i_cn)%new_bimg(self%ldim, self%smpd)
+            call img_bin_cn(i_cn)%set_imat(imat_bin)
+            call img_ccs_cn(i_cn)%new_bimg(self%ldim, self%smpd)
+            call img_bin_cn(i_cn)%find_ccs(img_ccs_cn(i_cn))
+            ! Find atom centers in the generated distributions
+            call self%update_ncc(img_ccs_cn(i_cn)) ! self%n_cc is needed in find_centers
+            call self%find_centers(img_bin_cn(i_cn), img_ccs_cn(i_cn), coords)
+            ! update centers_A
+            if( allocated(centers_A) ) deallocate(centers_A)
+            sz = size(coords, dim=2)
+            allocate(centers_A(3,sz), source=0.)
+            do i = 1, sz
+                centers_A(:,i) = (coords(:,i) - 1.) * self%smpd
+            end do
+            call run_cn_analysis(self%element,centers_A,a,cn,cn_gen)
+        end subroutine remove_lowly_coordinated
+
+    end subroutine autodiscard_lowly_coordinated
 
     ! calc stats
 
