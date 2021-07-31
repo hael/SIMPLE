@@ -157,7 +157,7 @@ contains
     ! Finds connected components in the binary input image and saves
     ! them in the output connected component image.
     ! Black = .true. finds the black connected components instead of the white ones
-    subroutine find_ccs(self, ccimage, black, update_imat)
+    subroutine find_ccs( self, ccimage, black, update_imat )
         class(binimage),   intent(inout) :: self
         class(binimage),   intent(inout) :: ccimage
         logical, optional, intent(in)    :: black, update_imat
@@ -166,35 +166,34 @@ contains
         integer :: i, j, k, n_it, n_maxit, nsz, cnt, diff, tmp
         logical :: finished_job, black_present
         if( .not. self%bimat_is_set ) call self%set_imat
-        if(present(update_imat)) then
-          if(update_imat .eqv. .true.) call self%set_imat
+        if( present(update_imat) ) then
+          if( update_imat .eqv. .true. ) call self%set_imat
         endif
         black_present = present(black)
         call ccimage_unordered%new_bimg(self%bldim,self%bsmpd)
         call ccimage%new_bimg          (self%bldim,self%bsmpd)
-        if(self%bldim(3) > 1) then
-            allocate(neigh_8_pixs(27), source = 0)
+        if( self%bldim(3) > 1 )then
+            allocate(neigh_8_pixs(27), source=0)
         else
-            allocate(neigh_8_pixs(9),  source = 0)
+            allocate(neigh_8_pixs(9),  source=0)
         endif
-        if( black_present .and. black .eqv. .true.) then
+        if( black_present .and. black .eqv. .true.)then
             ! flip foreground to background and vice versa
             self%bimat = -1 * (self%bimat - 1)
         endif
         ! enumerate white pixels
-        cnt     = 0 ! # labels
-        n_maxit = 0
+        cnt = 0 ! # labels
         do i = 1, self%bldim(1)
             do j = 1, self%bldim(2)
                 do k = 1, self%bldim(3)
                     if( self%bimat(i,j,k) > 0 )then
                         cnt = cnt + 1
                         ccimage_unordered%bimat(i,j,k) = cnt
-                        n_maxit = max(cnt,n_maxit)
                     endif
                 enddo
             enddo
         enddo
+        n_maxit = cnt
         ! find connected components
         finished_job = .false.
         allocate(mat4compare(self%bldim(1),self%bldim(2),self%bldim(3)), source = 0)
@@ -202,6 +201,7 @@ contains
             if( .not. finished_job )then
                 mat4compare = ccimage_unordered%bimat
                 diff = 0
+                !$omp parallel do default(shared) private(i,j,k,neigh_8_pixs,nsz) schedule(static) proc_bind(close) reduction(+:diff) collapse(3)
                 do i = 1, self%bldim(1)
                     do j = 1, self%bldim(2)
                         do k = 1, self%bldim(3)
@@ -217,6 +217,7 @@ contains
                         enddo
                     enddo
                 enddo
+                !$omp end parallel do
                 if( diff <= 0 ) finished_job = .true.
             endif
         enddo
@@ -645,7 +646,7 @@ contains
         integer :: i,j,k, tsz(3,2), win(3,2), pdsz(3,2)
         if( .not. self%bimat_is_set ) call self%set_imat
         tsz(:,1) = -nlayers
-        tsz(:,2) = nlayers
+        tsz(:,2) =  nlayers
         if( self%bldim(3) == 1 ) tsz(3,:) = 1
         allocate(template(tsz(1,1):tsz(1,2), tsz(2,1):tsz(2,2), tsz(3,1):tsz(3,2)))
         pdsz(:,1) = 1 - nlayers
@@ -665,10 +666,8 @@ contains
                 endif
             enddo
         enddo
-        ! init paddedd logical array
         add_pixels = .false.
         forall( i=1:self%bldim(1), j=1:self%bldim(2), k=1:self%bldim(3), self%bimat(i,j,k)==1 ) add_pixels(i,j,k) = .true.
-        ! cycle
         if( self%bldim(3) > 1 )then
             do i = 1, self%bldim(1)
                 if( .not.any(self%bimat(i,:,:) > 0) ) cycle
@@ -677,7 +676,7 @@ contains
                     win(1:2,1) = [i, j] - nlayers
                     win(1:2,2) = [i, j] + nlayers
                     do k = 1, self%bldim(3)
-                        if (self%bimat(i,j,k) < 1) cycle
+                        if( self%bimat(i,j,k) < 1 ) cycle
                         win(3,1) = k - nlayers
                         win(3,2) = k + nlayers
                         add_pixels(win(1,1):win(1,2), win(2,1):win(2,2), win(3,1):win(3,2)) =&

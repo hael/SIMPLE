@@ -8,7 +8,7 @@ use simple_user_interface
 implicit none
 #include "simple_local_flags.inc"
 type(detect_atoms_commander)           :: xdetect_atoms
-type(atoms_mask_commander)             :: xatoms_mask
+type(nano_softmask_commander)          :: xnano_softmask
 type(atoms_stats_commander)            :: xatoms_stats
 type(tseries_atoms_analysis_commander) :: xtseries_atoms_analysis
 type(dock_coords_commander)            :: xdock_coords
@@ -39,10 +39,8 @@ select case(prg)
         call xatoms_stats%execute(cline)
     case( 'tseries_atoms_analysis' )
         call xtseries_atoms_analysis%execute(cline)
-    case( 'atoms_mask' )
-        call xatoms_mask%execute(cline)
-    case('dock_coords')
-        call xdock_coords%execute(cline)
+    case( 'nano_softmask' )
+        call xnano_softmask%execute(cline)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select

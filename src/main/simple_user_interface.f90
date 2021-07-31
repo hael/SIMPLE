@@ -75,7 +75,7 @@ type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
 ! declare simple_exec and single_exec program specifications here
 type(simple_program), target :: atom_cluster_analysis
-type(simple_program), target :: atoms_mask
+! type(simple_program), target :: atoms_mask
 type(simple_program), target :: calc_pspec
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
@@ -297,7 +297,7 @@ contains
         call set_common_params
         call set_prg_ptr_array
         call new_atom_cluster_analysis
-        call new_atoms_mask
+        ! call new_atoms_mask
         call new_calc_pspec
         call new_center
         call new_cleanup2D
@@ -400,7 +400,7 @@ contains
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0
         call push2prg_ptr_array(atom_cluster_analysis)
-        call push2prg_ptr_array(atoms_mask)
+        ! call push2prg_ptr_array(atoms_mask)
         call push2prg_ptr_array(calc_pspec)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
@@ -512,8 +512,8 @@ contains
         select case(trim(which_program))
             case('atom_cluster_analysis')
                 ptr2prg => atom_cluster_analysis
-            case('atoms_mask')
-                ptr2prg => atoms_mask
+            ! case('atoms_mask')
+            !     ptr2prg => atoms_mask
             case('calc_pspec')
                 ptr2prg => calc_pspec
             case('center')
@@ -831,9 +831,6 @@ contains
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') atoms_stats%name
         write(logfhandle,'(A)') tseries_atoms_analysis%name
-        write(logfhandle,'(A)') atom_cluster_analysis%name
-        write(logfhandle,'(A)') atoms_mask%name
-        write(logfhandle,'(A)') geometry_analysis%name
         write(logfhandle,'(A)') nano_softmask%name
     end subroutine list_quant_prgs_in_ui
 
@@ -1044,32 +1041,32 @@ contains
         ! <empty>
     end subroutine new_atom_cluster_analysis
 
-    subroutine new_atoms_mask
-        ! PROGRAM SPECIFICATION
-        call atoms_mask%new(&
-        &'atoms_mask', &                             ! name
-        &'Remove the atoms outside a given radius',& ! descr_short
-        &'is a program that takes a pdb file input, removes all atoms beyond a given diameter, &
-        & outputs a new pdb file with the coordinates removed and reports how many atoms were removed.',& ! descr long
-        &'quant_exec',&                 ! executable
-        &0, 2, 0, 0, 0, 1, 0, .false.)  ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call atoms_mask%set_input('parm_ios', 1, 'pdbfile',  'file', 'PDB', 'Input coords file in PDB format',  'Input coords file in PDB format', .true., '')
-        call atoms_mask%set_input('parm_ios', 2, 'pdbfile2', 'file', 'PDB', 'Output coords file in PDB format', 'Output coords file in PDB format', .true., '')
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        call atoms_mask%set_input('mask_ctrls', 1, 'max_rad', 'num', 'Maximum radius in A', 'Atoms outside a shell with this radius will be removed{20.} ', '{20.}', .true., 20.)
-        ! computer controls
-        ! <empty>
-    end subroutine new_atoms_mask
+    ! subroutine new_atoms_mask
+    !     ! PROGRAM SPECIFICATION
+    !     call atoms_mask%new(&
+    !     &'atoms_mask', &                             ! name
+    !     &'Remove the atoms outside a given radius',& ! descr_short
+    !     &'is a program that takes a pdb file input, removes all atoms beyond a given diameter, &
+    !     & outputs a new pdb file with the coordinates removed and reports how many atoms were removed.',& ! descr long
+    !     &'quant_exec',&                 ! executable
+    !     &0, 2, 0, 0, 0, 1, 0, .false.)  ! # entries in each group, requires sp_project
+    !     ! INPUT PARAMETER SPECIFICATIONS
+    !     ! image input/output
+    !     ! <empty>
+    !     ! parameter input/output
+    !     call atoms_mask%set_input('parm_ios', 1, 'pdbfile',  'file', 'PDB', 'Input coords file in PDB format',  'Input coords file in PDB format', .true., '')
+    !     call atoms_mask%set_input('parm_ios', 2, 'pdbfile2', 'file', 'PDB', 'Output coords file in PDB format', 'Output coords file in PDB format', .true., '')
+    !     ! alternative inputs
+    !     ! <empty>
+    !     ! search controls
+    !     ! <empty>
+    !     ! filter controls
+    !     ! <empty>
+    !     ! mask controls
+    !     call atoms_mask%set_input('mask_ctrls', 1, 'max_rad', 'num', 'Maximum radius in A', 'Atoms outside a shell with this radius will be removed{20.} ', '{20.}', .true., 20.)
+    !     ! computer controls
+    !     ! <empty>
+    ! end subroutine new_atoms_mask
 
     subroutine new_calc_pspec
         ! PROGRAM SPECIFICATION
@@ -2516,13 +2513,16 @@ contains
         &'nano_softmask in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program generating soft mask for 3D refinement of an atomic-res nanoparticle 3D map',& ! descr long
         &'quant_exec',&                                        ! executable
-        &1, 1, 0, 0, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
+        &2, 2, 0, 0, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call nano_softmask%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
+        call nano_softmask%set_input('img_ios', 1, 'vol1', 'file', 'Raw volume', 'Raw volume of grey valued pixel intensities', &
         & 'input volume e.g. vol.mrc', .true., '')
+        call nano_softmask%set_input('img_ios', 2, 'vol2', 'file', 'Binary volume', 'Binary volume produced by detect atoms', &
+        & 'input volume e.g. *BIN.mrc', .true., '')
         ! parameter input/output
         call nano_softmask%set_input('parm_ios', 1, smpd)
+        call nano_softmask%set_input('parm_ios', 2, 'pdbfile', 'file', 'PDB', 'Input coords file in PDB format', 'Input coords file in PDB format', .true., '')
         ! search controls
         ! <empty>
         ! alternative inputs

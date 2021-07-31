@@ -14,7 +14,7 @@ private
 #include "simple_local_flags.inc"
 
 ! module global constants
-integer,          parameter :: NBIN_THRESH         = 20      ! number of thresholds for binarization
+integer,          parameter :: NBIN_THRESH         = 15      ! number of thresholds for binarization
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
 real,             parameter :: VALID_CORR_THRESH   = 0.5     ! min valid_corr value allowed
 logical,          parameter :: DEBUG               = .false. ! for debugging purposes
@@ -165,6 +165,7 @@ type :: nanoparticle
     procedure, private :: atominfo2centers
     procedure, private :: atominfo2centers_A
     procedure, private :: center_on_atom
+    procedure          :: make_soft_mask
     procedure          :: update_ncc
     ! atomic position determination
     procedure          :: identify_lattice_params
@@ -395,21 +396,22 @@ contains
         call atom_centers%kill
     end subroutine center_on_atom
 
-    ! subroutine make_soft_mask(self)
-    !     class(nanoparticle), intent(inout) :: self
-    !     type(binimage) :: simulated_density
-    !     type(image)    :: img_cos
-    !     type(atoms)    :: atomic_pos
-    !     call simulated_density%new_bimg(self%ldim, self%smpd)
-    !     call atomic_pos%new(trim(self%fbody)//'_atom_centers.pdb')
-    !     call atomic_pos%convolve(simulated_density, cutoff=8.*self%smpd)
-    !     call simulated_density%grow_bins(nint(0.5*self%theoretical_radius/self%smpd)+1)
-    !     call simulated_density%cos_edge(SOFT_EDGE, img_cos)
-    !     call img_cos%write(trim(self%fbody)//'SoftMask.mrc')
-    !     call img_cos%kill
-    !     call simulated_density%kill_bimg
-    !     call atomic_pos%kill
-    ! end subroutine make_soft_mask
+    subroutine make_soft_mask( self, pdbfile )
+        class(nanoparticle), intent(inout) :: self
+        character(len=*),    intent(in)    :: pdbfile
+        type(binimage) :: simulated_density
+        type(image)    :: img_cos
+        type(atoms)    :: atomic_pos
+        call simulated_density%new_bimg(self%ldim, self%smpd)
+        call atomic_pos%new(trim(pdbfile))
+        call atomic_pos%convolve(simulated_density, cutoff=8.*self%smpd)
+        call simulated_density%grow_bins(nint(0.5*self%theoretical_radius/self%smpd)+1)
+        call simulated_density%cos_edge(SOFT_EDGE, img_cos)
+        call img_cos%write(trim(self%fbody)//'MSK.mrc')
+        call img_cos%kill
+        call simulated_density%kill_bimg
+        call atomic_pos%kill
+    end subroutine make_soft_mask
 
     subroutine update_ncc( self, img_cc )
         class(nanoparticle),      intent(inout) :: self
@@ -526,8 +528,8 @@ contains
     ! obtained with that threshold reaches the maximum value.
     subroutine binarize_and_find_centers( self )
         class(nanoparticle), intent(inout) :: self
-        type(binimage)       :: img_bin_thresh(NBIN_THRESH/2-1)
-        type(binimage)       :: img_ccs_thresh(NBIN_THRESH/2-1)
+        type(binimage)       :: img_bin_t
+        type(binimage)       :: img_ccs_t
         type(image)          :: pc
         type(atoms)          :: atom
         type(image)          :: simulated_distrib
@@ -535,61 +537,84 @@ contains
         real,    allocatable :: x_mat(:)  ! vectorization of the volume
         real,    allocatable :: coords(:,:)
         real,    allocatable :: rmat(:,:,:)
-        integer :: i, t
-        real    :: otsu_thresh, corr, step, max_corr
-        real    :: x_thresh(NBIN_THRESH/2-1)
+        integer :: i, fnr
+        real    :: otsu_thresh, corr, step, step_refine, max_corr, thresh, thresh_opt, lbt, rbt
+        logical, parameter      :: L_BENCH = .true.
+        real(timer_int_kind)    :: rt_find_ccs, rt_find_centers, rt_gen_sim, rt_real_corr, rt_tot
+        integer(timer_int_kind) ::  t_find_ccs,  t_find_centers,  t_gen_sim,  t_real_corr,  t_tot
         call otsu_nano(self%img,otsu_thresh) ! find initial threshold
         write(logfhandle,'(A)') '>>> BINARIZATION'
         rmat = self%img%get_rmat()
-        x_mat = pack(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) >= 0.)
+        x_mat = pack(rmat, rmat >= 0.)
         allocate(imat_t(self%ldim(1), self%ldim(2), self%ldim(3)), source = 0)
         step = (maxval(x_mat)-otsu_thresh )/real(NBIN_THRESH)
+        step_refine = step / 6.
         deallocate(x_mat)
         call simulated_distrib%new(self%ldim,self%smpd)
-        t = 1
-        max_corr = -1.
-        do i = 1, NBIN_THRESH/2-1
-            call progress(i, NBIN_THRESH/2-1)
-            call img_bin_thresh(i)%new_bimg(self%ldim, self%smpd)
+        rt_find_ccs     =  0.
+        rt_find_centers =  0.
+        rt_gen_sim      =  0.
+        rt_real_corr    =  0.
+        t_tot           =  tic()
+        max_corr        = -1.
+        ! discrete search
+        do i = 1, NBIN_THRESH
             if( i == 1 )then
-                x_thresh(i) = otsu_thresh
+                thresh = otsu_thresh
             else
-                x_thresh(i) = x_thresh(i-1) + step
+                thresh = thresh + step
             endif
-            where(rmat > x_thresh(i))
-                imat_t = 1
-            elsewhere
-                imat_t = 0
-            endwhere
-            ! Generate binary image and cc image
-            call img_bin_thresh(i)%set_imat(imat_t)
-            call img_bin_thresh(i)%find_ccs(img_ccs_thresh(i))
-            ! Find atom centers in the generated distributions
-            call self%update_ncc(img_ccs_thresh(i)) ! self%n_cc is needed in find_centers
-            call self%find_centers(img_bin_thresh(i), img_ccs_thresh(i), coords)
-            ! Generate a simulated distribution based on those center
-            call self%write_centers('centers_'//trim(int2str(i))//'_iteration', coords)
-            call atom%new          ('centers_'//trim(int2str(i))//'_iteration.pdb')
-            call atom%convolve(simulated_distrib, cutoff = 8.*self%smpd)
-            call del_file('centers_'//trim(int2str(i))//'_iteration.pdb')
-            call atom%kill
-            ! correlate volumes
-            corr = self%img%real_corr(simulated_distrib)
+            corr = t2c( thresh )
+            write(logfhandle,*) 'threshold: ', thresh , 'corr: ', corr
             if( corr > max_corr )then
-                max_corr = corr
-                t        = i
+                max_corr  = corr
+                thresh_opt = thresh
             endif
         enddo
-        write(logfhandle,*) 'bin_i', t, 'Threshold: ', x_thresh(t), 'Corr: ', max_corr
+        ! refinement
+        lbt    = thresh_opt - step + step_refine
+        rbt    = thresh_opt + step - step_refine
+        thresh = lbt
+        i      = NBIN_THRESH
+        do while( thresh <= rbt )
+            i = i + 1
+            corr = t2c( thresh )
+            write(logfhandle,*) 'threshold: ', thresh, 'corr: ', corr
+            if( corr > max_corr )then
+                max_corr  = corr
+                thresh_opt = thresh
+            endif
+            thresh = thresh + step_refine
+        end do
+        rt_tot = toc(t_tot)
+        if( L_BENCH )then
+            call fopen(fnr, FILE='BINARIZE_AND_FIND_CENTERS_BENCH.txt', STATUS='REPLACE', action='WRITE')
+            write(fnr,'(a)') '*** TIMINGS (s) ***'
+            write(fnr,'(a,1x,f9.2)') 'find_ccs       : ', rt_find_ccs
+            write(fnr,'(a,1x,f9.2)') 'find_centers   : ', rt_find_centers
+            write(fnr,'(a,1x,f9.2)') 'gen_sim        : ', rt_gen_sim
+            write(fnr,'(a,1x,f9.2)') 'real_corr      : ', rt_real_corr
+            write(fnr,'(a,1x,f9.2)') 'total time     : ', rt_tot
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
+            write(fnr,'(a,1x,f9.2)') 'find_ccs       : ', (rt_find_ccs/rt_tot)     * 100.
+            write(fnr,'(a,1x,f9.2)') 'find_centers   : ', (rt_find_centers/rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') 'gen_sim        : ', (rt_gen_sim/rt_tot)      * 100.
+            write(fnr,'(a,1x,f9.2)') 'real_corr      : ', (rt_real_corr/rt_tot)    * 100.
+            write(fnr,'(a,1x,f9.2)') 'total time     : ', rt_tot
+            write(fnr,'(a,1x,f9.2)') '% accounted for: ',&
+            &((rt_find_ccs+rt_find_centers+rt_gen_sim+rt_real_corr)/rt_tot)     * 100.
+            call fclose(fnr)
+        endif
+        write(logfhandle,*) 'optimal threshold: ', thresh_opt, 'max_corr: ', max_corr
         ! Update img_bin and img_cc
-        call self%img_bin%copy_bimg(img_bin_thresh(t))
-        call self%img_cc%copy_bimg(img_ccs_thresh(t))
+        corr = t2c( thresh_opt )
+        call self%img_bin%copy_bimg(img_bin_t)
+        call self%img_cc%copy_bimg(img_ccs_t)
         call self%update_ncc()
         call self%find_centers()
-        do i = 1,  NBIN_THRESH/2-1
-            call img_bin_thresh(i)%kill_bimg
-            call img_ccs_thresh(i)%kill_bimg
-        enddo
+        call img_bin_t%kill_bimg
+        call img_ccs_t%kill_bimg
         ! deallocate and kill
         if(allocated(rmat))   deallocate(rmat)
         if(allocated(imat_t)) deallocate(imat_t)
@@ -613,6 +638,39 @@ contains
              x = pack(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) > 0.)
              call otsu(x, scaled_thresh)
          end subroutine otsu_nano
+
+         real function t2c( thres )
+             real, intent(in) :: thres
+             where(rmat > thres)
+                 imat_t = 1
+             elsewhere
+                 imat_t = 0
+             endwhere
+             ! Generate binary image and cc image
+             call img_bin_t%new_bimg(self%ldim, self%smpd)
+             call img_bin_t%set_imat(imat_t)
+             t_find_ccs = tic()
+             call img_ccs_t%new_bimg(self%ldim, self%smpd)
+             call img_bin_t%find_ccs(img_ccs_t)
+             rt_find_ccs = rt_find_ccs + toc(t_find_ccs)
+             ! Find atom centers in the generated distributions
+             call self%update_ncc(img_ccs_t) ! self%n_cc is needed in find_centers
+             t_find_centers = tic()
+             call self%find_centers(img_bin_t, img_ccs_t, coords)
+             rt_find_centers = rt_find_centers + toc(t_find_centers)
+             ! Generate a simulated distribution based on those center
+             t_gen_sim = tic()
+             call self%write_centers('centers_'//trim(int2str(i))//'_iteration', coords)
+             call atom%new          ('centers_'//trim(int2str(i))//'_iteration.pdb')
+             call atom%convolve(simulated_distrib, cutoff = 8.*self%smpd)
+             call del_file('centers_'//trim(int2str(i))//'_iteration.pdb')
+             call atom%kill
+             rt_gen_sim = rt_gen_sim + toc(t_gen_sim)
+             ! correlate volumes
+             t_real_corr = tic()
+             t2c = self%img%real_corr(simulated_distrib)
+             rt_real_corr = rt_real_corr + toc(t_real_corr)
+        end function t2c
 
     end subroutine binarize_and_find_centers
 
