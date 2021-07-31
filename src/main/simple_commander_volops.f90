@@ -195,17 +195,7 @@ contains
         if( cline%defined('automsk') )then
             if( cline%get_carg('automsk').eq.'no' ) has_mskfile = .false. ! turn off masking
         endif
-        if( trim(params%automsk) .eq. 'file' .and. has_mskfile )then
-            call vol%zero_background
-            call mskvol%new(ldim, smpd)
-            call mskvol%read(params%mskfile)
-            if( cline%defined('lp_backgr') )then
-                call vol%lp_background(mskvol,params%lp_backgr)
-            else
-                call vol%mul(mskvol)
-            endif
-            call mskvol%kill
-        else if( params%automsk .eq. 'yes' )then
+        if( params%automsk .eq. 'yes' )then
             if( .not. cline%defined('thres') )then
                 write(logfhandle,*) 'Need a pixel threshold > 0. for the binarisation'
                 write(logfhandle,*) 'Procedure for obtaining thresh:'
@@ -221,6 +211,16 @@ contains
             call mskvol%write('automask'//params%ext)
             call vol%zero_background
             call vol%mul(mskvol)
+            call mskvol%kill
+        else if( trim(params%automsk) .eq. 'file' .and. has_mskfile )then
+            call vol%zero_background
+            call mskvol%new(ldim, smpd)
+            call mskvol%read(params%mskfile)
+            if( cline%defined('lp_backgr') )then
+                call vol%lp_background(mskvol,params%lp_backgr)
+            else
+                call vol%mul(mskvol)
+            endif
             call mskvol%kill
         else
             if( has_mskfile )then
