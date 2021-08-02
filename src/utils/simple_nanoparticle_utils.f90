@@ -9,7 +9,7 @@ use simple_atoms, only: atoms
 use simple_defs_atoms
 implicit none
 
-public :: fit_lattice, run_cn_analysis, strain_analysis
+public :: fit_lattice, calc_contact_scores, run_cn_analysis, strain_analysis
 public :: atoms_mask, read_pdb2matrix, write_matrix2pdb, find_couples
 public :: remove_atoms, find_atoms_subset, dock_nanosPDB
 private
@@ -184,6 +184,31 @@ contains
 
     ! COORDINATION NUMBER ANALYSIS
 
+    ! This function calculates the contact score for each atom
+    ! ATTENTION: input coords of model have to be in ANGSTROMS.
+    subroutine calc_contact_scores( element, model, contact_scores )
+        character(len=2),  intent(in)    :: element
+        real, allocatable, intent(in)    :: model(:,:)
+        integer,           intent(inout) :: contact_scores(size(model,2))
+        integer :: natoms, iatom, jatom, cnt
+        real    :: dist, d, rMax
+        ! init
+        rMax           = find_rMax(element)
+        natoms         = size(model,2)
+        contact_scores = 0
+        do iatom = 1, natoms
+            cnt = 0 ! reset counter, # neighbours
+            do jatom = 1, natoms
+                if( iatom /= jatom )then
+                    dist = euclid(model(:,iatom), model(:,jatom))
+                    ! the error term in rMax is the only difference from standard cn
+                    if( dist < rMax ) cnt = cnt + 1
+                endif
+            enddo
+            contact_scores(iatom) = cnt
+        enddo
+    end subroutine calc_contact_scores
+
     ! This function calculates the coordination number for each atom
     ! ATTENTION: input coords of model have to be in ANGSTROMS.
     subroutine run_cn_analysis( element, model, a, coord_nums_std, coord_nums_gen )
@@ -194,7 +219,7 @@ contains
         real,              intent(inout) :: coord_nums_gen(size(model,2))
         character(len=2) :: el_ucase
         character(len=8) :: crystal_system
-        integer :: filnum, io_stat, natoms, iatom, jatom, cnt, cn_max(size(model,2))
+        integer :: natoms, iatom, jatom, cnt, cn_max(size(model,2))
         real    :: dist, d, a0, foo
         ! Identify the bound for defining the neighbourhood
         a0 = sum(a)/real(size(a)) ! geometric mean of fitted lattice parameters

@@ -32,7 +32,7 @@ contains
         type(parameters)  :: params
         type(image)       :: even, odd
         type(masker)      :: mskvol
-        integer           :: j, find_plate
+        integer           :: j, find_plate, k_hp, k_lp
         real              :: res_fsc05, res_fsc0143
         real, allocatable :: res(:), corrs(:)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -75,9 +75,11 @@ contains
            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
         end do
         call get_resolution(corrs, res, res_fsc05, res_fsc0143)
+        k_hp = calc_fourier_index(params%hp, params%box, params%smpd)
+        k_lp = calc_fourier_index(params%lp, params%box, params%smpd)
         write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
         write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
-        write(logfhandle,'(A,1X,F6.2)') '>>> MEDIAN FSC (SPECSCORE):', median_nocopy(corrs)
+        write(logfhandle,'(A,1X,F8.4)') '>>> MEDIAN FSC (SPECSCORE):', median_nocopy(corrs(k_hp:k_lp))
         call even%kill
         call odd%kill
         ! end gracefully

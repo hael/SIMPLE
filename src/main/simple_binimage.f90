@@ -177,9 +177,9 @@ contains
         else
             allocate(neigh_8_pixs(9),  source=0)
         endif
-        if( black_present .and. black .eqv. .true.)then
+        if( black_present )then
             ! flip foreground to background and vice versa
-            self%bimat = -1 * (self%bimat - 1)
+            if( black .eqv. .true. ) self%bimat = -1 * (self%bimat - 1)
         endif
         ! enumerate white pixels
         cnt = 0 ! # labels
@@ -244,9 +244,9 @@ contains
         ! kill
         deallocate(mat4compare)
         call ccimage_unordered%kill_bimg
-        if( black_present .and. black .eqv. .true.) then
+        if( black_present ) then
             ! flip foreground to background and vice versa
-            self%bimat = -1 * (self%bimat - 1)
+            if( black .eqv. .true. )self%bimat = -1 * (self%bimat - 1)
         endif
         call self%update_img_rmat
     end subroutine find_ccs

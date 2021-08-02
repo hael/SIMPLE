@@ -76,21 +76,13 @@ contains
             call nano%kill
             call nano%new(params%vols(1), params%smpd, params%element, params%msk)
             ! execute
-            if( cline%defined('cn_thres') )then
-                call nano%identify_atomic_pos(nint(params%cn_thres), a, l_fit_lattice=.false.)
-            else
-                call nano%identify_atomic_pos(CN_THRESH_DEFAULT,     a, l_fit_lattice=.false.)
-            endif
+            call nano%identify_atomic_pos(a, l_fit_lattice=.false.)
             ! kill
             call nano%kill
         else
             call nano%new(params%vols(1), params%smpd, params%element, params%msk)
             ! execute
-            if( cline%defined('cn_thres') )then
-                call nano%identify_atomic_pos(nint(params%cn_thres), a, l_fit_lattice=.true.)
-            else
-                call nano%identify_atomic_pos(CN_THRESH_DEFAULT,     a, l_fit_lattice=.true.)
-            endif
+            call nano%identify_atomic_pos(a, l_fit_lattice=.true.)
             ! kill
             call nano%kill
         endif
