@@ -107,7 +107,7 @@ contains
         type(image)       :: vol, vol_copy
         type(masker)      :: mskvol
         type(sp_project)  :: spproj
-        character(len=:), allocatable :: vol_fname, fsc_fname, mskfile_fname
+        character(len=:), allocatable :: vol_fname, fsc_fname, mskfile_fname, even_fname, odd_fname
         real,             allocatable :: fsc(:), optlp(:), res(:)
         real              :: fsc0143, fsc05, smpd, mskfile_smpd
         integer           :: state, box, fsc_box, mskfile_box, ldim(3)
@@ -134,6 +134,8 @@ contains
         if( .not.file_exists(vol_fname) )then
             THROW_HARD('volume: '//trim(vol_fname)//' does not exist; exec_postprocess')
         endif
+        even_fname = add2fbody(vol_fname, params%ext, '_even')
+        odd_fname  = add2fbody(vol_fname, params%ext, '_odd' )
         ! check fsc filter
         has_fsc = .false.
         if( cline%defined('lp') )then
@@ -172,12 +174,10 @@ contains
         if( has_fsc )then
             ! resolution & optimal low-pass filter from FSC
             fsc = file2rarr(params%fsc)
-            allocate(optlp(size(fsc)), source=0.)
-            where( fsc    > 0.     ) optlp = sqrt(2. * fsc / (fsc + 1.)) ! sqrt used here but not elsewhere
-            where( optlp  > 0.9999 ) optlp = 0.99999
-            res = vol%get_res()
+            optlp = fsc2optlp(fsc)
+            res   = vol%get_res()
             call get_resolution( fsc, res, fsc05, fsc0143 )
-            where( res    < TINY   ) optlp = 0.
+            where( res < TINY ) optlp = 0.
         endif
         if( cline%defined('lp') )then
             ! low-pass overrides all input

@@ -1595,7 +1595,7 @@ contains
         &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-comp map',& ! descr long
         &'quant_exec',&                                        ! executable
-        &2, 1, 0, 1, 1, 1, 1, .false.)                         ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 1, 1, 1, .false.)                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
@@ -1607,7 +1607,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call detect_atoms%set_input('srch_ctrls', 1, 'cn_thres', 'num', 'Threshold for outlier discarding based on coordination number','Threshold for outlier discarding based on coordination number', 'number', .false., 5.)
+        ! <empty>
         ! filter controls
         call detect_atoms%set_input('filt_ctrls', 1, 'element', 'str', 'Atom name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
@@ -1788,7 +1788,7 @@ contains
         &'Calculate FSC between the two input volumes',&                        ! descr_short
         &'is a program for calculating the FSC between the two input volumes',& ! descr_long
         &'simple_exec',&                                                        ! executable
-        &2, 1, 0, 0, 1, 2, 1, .false.)                                          ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 3, 2, 1, .false.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call fsc%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
@@ -1801,6 +1801,10 @@ contains
         ! <empty>
         ! filter controls
         call fsc%set_input('filt_ctrls', 1, envfsc)
+        hp%required = .false.
+        lp%required = .false.
+        call fsc%set_input('filt_ctrls', 2, hp)
+        call fsc%set_input('filt_ctrls', 3, lp)
         ! mask controls
         call fsc%set_input('mask_ctrls', 1, msk)
         call fsc%set_input('mask_ctrls', 2, mskfile)

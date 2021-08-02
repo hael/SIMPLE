@@ -3656,14 +3656,20 @@ contains
         &100 * (real(cnt) / product(self%ldim))
     end subroutine fcomps_below_noise_power_stats
 
-    subroutine zero_fcomps_below_noise_power( self_even, self_odd )
-        class(image), intent(inout) :: self_even, self_odd
+    subroutine zero_fcomps_below_noise_power( self_even, self_odd, self2filt )
+        class(image),           intent(inout) :: self_even, self_odd
+        class(image), optional, intent(inout) :: self2filt
         integer :: h, k, l, lims(3,2), phys(3)
         real    :: noise_pow, even_pow, odd_pow
         complex :: diff
+        logical :: self2filt_present
         lims  = self_even%fit%loop_lims(2)
         if( .not.self_even%is_ft() ) THROW_HARD('even vol needs to be FTed')
         if( .not.self_odd%is_ft()  ) THROW_HARD('odd  vol needs to be FTed')
+        self2filt_present = present(self2filt)
+        if( self2filt_present )then
+            if( .not.self2filt%is_ft() ) THROW_HARD('vol 2 filt needs to be FTed')
+        endif
         !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,diff,noise_pow,even_pow,odd_pow)&
         !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
@@ -3675,8 +3681,11 @@ contains
                     noise_pow = csq(diff)
                     even_pow  = csq(self_even%cmat(phys(1),phys(2),phys(3)))
                     odd_pow   = csq(self_odd%cmat(phys(1),phys(2),phys(3)))
-                    if( noise_pow > even_pow ) call self_even%mul([h,k,l], 0.)
-                    if( noise_pow > odd_pow  ) call self_odd%mul([h,k,l],  0.)
+                    if( noise_pow > even_pow .or. noise_pow > odd_pow )then
+                        call self_even%mul([h,k,l], 0.)
+                        call self_odd%mul([h,k,l],  0.)
+                        if( self2filt_present ) call self2filt%mul([h,k,l], 0.)
+                    endif
                 enddo
             enddo
         enddo
@@ -4737,9 +4746,12 @@ contains
         real(dp)    :: sqsum1,sqsum2
         integer     :: nrflims(3,2),phys(3),npix
         integer     :: h,k,l,shsq, hplim, hplimsq, bphplimsq, lplim, lplimsq, bplplimsq
-        if(present(border) .and. self1%ldim(3) > 1) THROW_HARD('Border discarding not implemented for 3D; phase_corr')
-        if(present(border) .and. (border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2 ))&
-        & THROW_HARD('Input border parameter too big; phase_corr')
+        if( present(border) )then
+            if( self1%ldim(3) > 1 ) THROW_HARD('Border discarding not implemented for 3D')
+            if( border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2 )then
+                THROW_HARD('Input border parameter too big; phase_corr')
+            endif
+        endif
         if( .not. all([self1%is_ft(),self2%is_ft(),pc%is_ft()]) )then
             THROW_HARD('All inputted images must be FTed')
         endif
@@ -4805,11 +4817,13 @@ contains
         endif
         call pc%ifft()
         call pc%div(sqrt(real(sqsum1*sqsum2)))
-        if(present(border) .and. border > 1) then
-            pc%rmat(1:border,:,1) = 0.
-            pc%rmat(pc%ldim(1)-border:pc%ldim(1),:,1) = 0.
-            pc%rmat(:,1:border,1) = 0.
-            pc%rmat(:,pc%ldim(2)-border:pc%ldim(2),1) = 0.
+        if( present(border) ) then
+            if( border > 1 )then
+                pc%rmat(1:border,:,1) = 0.
+                pc%rmat(pc%ldim(1)-border:pc%ldim(1),:,1) = 0.
+                pc%rmat(:,1:border,1) = 0.
+                pc%rmat(:,pc%ldim(2)-border:pc%ldim(2),1) = 0.
+            endif
         endif
     end subroutine phase_corr
 
