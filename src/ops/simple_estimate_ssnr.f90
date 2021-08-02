@@ -1,10 +1,12 @@
 ! spectral signal-to-noise ratio estimation routines
 module simple_estimate_ssnr
+!$ use omp_lib
+!$ use omp_lib_kinds
 include 'simple_lib.f08'
 implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
-public :: subsample_filter, acc_dose2filter, dose_weight, local_res, local_res_lp
+public :: subsample_filter, acc_dose2filter, dose_weight, nonuniform_lp, local_res, local_res_lp
 private
 #include "simple_local_flags.inc"
 
@@ -160,12 +162,109 @@ contains
             ! critical exposure does not need modification
         else if( abs(kV-200.) < 0.001 )then
             ! critical exposure at 200 kV expected to be ~25% lower
-            critical_exp = critical_exp*kV_factor
+            critical_exp = critical_exp * kV_factor
         else
             THROW_HARD('unsupported kV (acceleration voltage); dose_weight')
         endif
         dose_weight = exp(-acc_dose/(2.0*critical_exp))
     end function dose_weight
+
+    subroutine nonuniform_lp( even, odd, mskimg )
+        use simple_image, only: image
+        class(image), intent(inout) :: even, odd, mskimg
+        integer,      parameter     :: SUBBOX=32, LSHIFT=15, RSHIFT=16, CPIX=LSHIFT + 1
+        real,         parameter     :: SUBMSK=real(SUBBOX)/2. - COSMSKHALFWIDTH - 1.
+        type(image),  allocatable   :: subvols_even(:) ! one per thread
+        type(image),  allocatable   :: subvols_odd(:)  ! one per thread
+        logical,      allocatable   :: l_mask(:,:,:)
+        type(image) :: ecopy, ocopy
+        integer     :: ldim(3), i, j, k, ithr, cnt, npix
+        real        :: smpd
+        ! check input
+        if( even%is_ft()   ) THROW_HARD('even vol FTed; nonuniform_lp')
+        if( odd%is_ft()    ) THROW_HARD('odd  vol FTed; nonuniform_lp')
+        if( mskimg%is_ft() ) THROW_HARD('odd  vol FTed; nonuniform_lp')
+        ! set parameters
+        ldim    = even%get_ldim()
+        if( ldim(3) == 1 ) THROW_HARD('not intended for 2D images; nonuniform_lp')
+        smpd    = even%get_smpd()
+        l_mask  = mskimg%bin2logical()
+        npix    = count(l_mask)
+        ! construct
+        allocate(subvols_even(nthr_glob), subvols_odd(nthr_glob))
+        do ithr = 1, nthr_glob
+            call subvols_even(ithr)%new([SUBBOX,SUBBOX,SUBBOX], smpd, wthreads=.false.)
+            call subvols_odd(ithr)%new( [SUBBOX,SUBBOX,SUBBOX], smpd, wthreads=.false.)
+        end do
+        call ecopy%new(ldim, smpd)
+        call ocopy%new(ldim, smpd)
+        ! loop over pixels
+        !$omp parallel do collapse(3) default(shared) private(i,j,k,ithr) schedule(static) proc_bind(close)
+        do k = 1, ldim(3)
+            do j = 1, ldim(2)
+                do i = 1, ldim(1)
+                    if( .not.l_mask(i,j,k) ) cycle
+                    ithr = omp_get_thread_num() + 1
+                    call set_subvols_msk_fft_filter_ifft([i,j,k], ithr)
+                    call ecopy%set_rmat_at(i,j,k, subvols_even(ithr)%get_rmat_at(CPIX,CPIX,CPIX))
+                    call ocopy%set_rmat_at(i,j,k, subvols_odd(ithr)%get_rmat_at(CPIX,CPIX,CPIX))
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        ! write output
+        call ecopy%write('nonuniform_lp_even.mrc')
+        call ocopy%write('nonuniform_lp_odd.mrc')
+        ! destruct
+        deallocate(l_mask)
+        call ecopy%kill
+        call ocopy%kill
+
+        contains
+
+            subroutine set_subvols_msk_fft_filter_ifft( loc, ithr )
+                integer, intent(in) :: loc(3), ithr
+                integer  :: lb(3), ub(3), i, j, k, ii, jj, kk, isub, jsub, ksub
+                call subvols_even(ithr)%zero_and_unflag_ft
+                call subvols_odd(ithr)%zero_and_unflag_ft
+                ! set bounds
+                lb = loc - LSHIFT
+                ub = loc + RSHIFT
+                ! extract components
+                kk  = -LSHIFT
+                do k = lb(3), ub(3)
+                    if( k < 1 .and. k > ldim(3) ) cycle
+                    jj = -LSHIFT
+                    do j = lb(2), ub(2)
+                        if( j < 1 .and. j > ldim(2) ) cycle
+                        ii = -LSHIFT
+                        do i = lb(1), ub(1)
+                            if( i < 1 .and. i > ldim(1) ) cycle
+                            isub = ii + LSHIFT + 1
+                            jsub = jj + LSHIFT + 1
+                            ksub = kk + LSHIFT + 1
+                            call subvols_even(ithr)%set_rmat_at(isub,jsub,ksub, even%get_rmat_at(i,j,k))
+                            call subvols_odd(ithr)%set_rmat_at( isub,jsub,ksub, odd%get_rmat_at(i,j,k))
+                            ii = ii + 1
+                        enddo
+                        jj = jj + 1
+                    enddo
+                    kk = kk + 1
+                enddo
+                ! mask
+                call subvols_even(ithr)%mask(SUBMSK, 'soft')
+                call subvols_odd(ithr)%mask( SUBMSK, 'soft')
+                ! fft
+                call subvols_even(ithr)%fft
+                call subvols_odd(ithr)%fft
+                ! filter
+                call subvols_even(ithr)%zero_fcomps_below_noise_power(subvols_odd(ithr))
+                ! back to real space
+                call subvols_even(ithr)%ifft
+                call subvols_odd(ithr)%ifft
+            end subroutine set_subvols_msk_fft_filter_ifft
+
+    end subroutine nonuniform_lp
 
     subroutine local_res( even, odd, mskimg, corr_thres, locres_finds, half_winsz )
         use simple_image, only: image

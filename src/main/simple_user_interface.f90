@@ -121,6 +121,7 @@ type(simple_program), target :: motion_correct
 type(simple_program), target :: motion_correct_tomo
 type(simple_program), target :: nano_softmask
 type(simple_program), target :: new_project
+type(simple_program), target :: nonuniform_lp
 type(simple_program), target :: normalize_
 type(simple_program), target :: orisops
 type(simple_program), target :: oristats
@@ -342,6 +343,7 @@ contains
         call new_motion_correct_tomo
         call new_nano_softmask
         call new_new_project
+        call new_nonuniform_lp
         call new_normalize
         call new_orisops
         call new_oristats
@@ -444,6 +446,7 @@ contains
         call push2prg_ptr_array(motion_correct_tomo)
         call push2prg_ptr_array(nano_softmask)
         call push2prg_ptr_array(new_project)
+        call push2prg_ptr_array(nonuniform_lp)
         call push2prg_ptr_array(normalize_)
         call push2prg_ptr_array(orisops)
         call push2prg_ptr_array(oristats)
@@ -604,6 +607,8 @@ contains
                 ptr2prg => nano_softmask
             case('new_project')
                 ptr2prg => new_project
+            case('nonuniform_lp')
+                ptr2prg => nonuniform_lp
             case('normalize')
                 ptr2prg => normalize_
             case('orisops')
@@ -752,6 +757,7 @@ contains
         write(logfhandle,'(A)') motion_correct%name
         write(logfhandle,'(A)') motion_correct_tomo%name
         write(logfhandle,'(A)') new_project%name
+        write(logfhandle,'(A)') nonuniform_lp%name
         write(logfhandle,'(A)') normalize_%name
         write(logfhandle,'(A)') orisops%name
         write(logfhandle,'(A)') oristats%name
@@ -2538,6 +2544,33 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_nano_softmask
+
+    subroutine new_nonuniform_lp
+        ! PROGRAM SPECIFICATION
+        call nonuniform_lp%new(&
+        &'nonuniform_lp',&                                      ! name
+        &'Nonuniform low-pass filtering',&                      ! descr_short
+        &'is a program for nonuniform low-pass filtering by zeroing F-comps below noise in e/o maps',& ! descr_long
+        &'simple_exec',&                                        ! executable
+        &2, 1, 0, 0, 0, 2, 1, .false.)                          ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call nonuniform_lp%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
+        call nonuniform_lp%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
+        ! parameter input/output
+        call nonuniform_lp%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call nonuniform_lp%set_input('mask_ctrls', 1, msk)
+        call nonuniform_lp%set_input('mask_ctrls', 2, mskfile)
+        ! computer controls
+        call nonuniform_lp%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_nonuniform_lp
 
     subroutine new_new_project
         ! PROGRAM SPECIFICATION
