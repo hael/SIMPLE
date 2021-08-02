@@ -76,6 +76,7 @@ contains
     procedure, private :: get_rmat_at_1
     procedure, private :: get_rmat_at_2
     generic            :: get_rmat_at => get_rmat_at_1, get_rmat_at_2
+    procedure          :: set_rmat_at
     procedure, private :: set_1
     procedure, private :: set_2
     generic            :: set => set_1, set_2
@@ -1369,6 +1370,13 @@ contains
         real :: val
         val = self%rmat(i,j,k)
     end function get_rmat_at_2
+
+    pure subroutine set_rmat_at( self, i,j,k, val )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: i,j,k
+        real,         intent(in)    :: val  
+        self%rmat(i,j,k) = val
+    end subroutine set_rmat_at
 
     !>  \brief   get_cmat get the image object's complex matrix
     pure function get_cmat( self ) result( cmat )
@@ -3670,26 +3678,46 @@ contains
         if( self2filt_present )then
             if( .not.self2filt%is_ft() ) THROW_HARD('vol 2 filt needs to be FTed')
         endif
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,diff,noise_pow,even_pow,odd_pow)&
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    phys      = self_even%comp_addr_phys([h,k,l])
-                    diff      = self_even%cmat(phys(1),phys(2),phys(3)) -&
-                               &self_odd%cmat(phys(1),phys(2),phys(3))
-                    noise_pow = csq(diff)
-                    even_pow  = csq(self_even%cmat(phys(1),phys(2),phys(3)))
-                    odd_pow   = csq(self_odd%cmat(phys(1),phys(2),phys(3)))
-                    if( noise_pow > even_pow .or. noise_pow > odd_pow )then
-                        call self_even%mul([h,k,l], 0.)
-                        call self_odd%mul([h,k,l],  0.)
-                        if( self2filt_present ) call self2filt%mul([h,k,l], 0.)
-                    endif
+        if( self_even%wthreads )then
+            !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,diff,noise_pow,even_pow,odd_pow)&
+            !$omp schedule(static) proc_bind(close)
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        phys      = self_even%comp_addr_phys([h,k,l])
+                        diff      = self_even%cmat(phys(1),phys(2),phys(3)) -&
+                                   &self_odd%cmat(phys(1),phys(2),phys(3))
+                        noise_pow = csq(diff)
+                        even_pow  = csq(self_even%cmat(phys(1),phys(2),phys(3)))
+                        odd_pow   = csq(self_odd%cmat(phys(1),phys(2),phys(3)))
+                        if( noise_pow > even_pow .or. noise_pow > odd_pow )then
+                            call self_even%mul([h,k,l], 0.)
+                            call self_odd%mul([h,k,l],  0.)
+                            if( self2filt_present ) call self2filt%mul([h,k,l], 0.)
+                        endif
+                    enddo
                 enddo
             enddo
-        enddo
-        !$omp end parallel do
+            !$omp end parallel do
+        else
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        phys      = self_even%comp_addr_phys([h,k,l])
+                        diff      = self_even%cmat(phys(1),phys(2),phys(3)) -&
+                                   &self_odd%cmat(phys(1),phys(2),phys(3))
+                        noise_pow = csq(diff)
+                        even_pow  = csq(self_even%cmat(phys(1),phys(2),phys(3)))
+                        odd_pow   = csq(self_odd%cmat(phys(1),phys(2),phys(3)))
+                        if( noise_pow > even_pow .or. noise_pow > odd_pow )then
+                            call self_even%mul([h,k,l], 0.)
+                            call self_odd%mul([h,k,l],  0.)
+                            if( self2filt_present ) call self2filt%mul([h,k,l], 0.)
+                        endif
+                    enddo
+                enddo
+            enddo
+        endif
     end subroutine zero_fcomps_below_noise_power
 
     ! This function performs image filtering by convolution
