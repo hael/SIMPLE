@@ -176,7 +176,6 @@ type :: nanoparticle
     procedure, private :: find_centers
     procedure, private :: discard_atoms_with_low_contact_score
     procedure, private :: discard_lowly_coordinated
-    procedure, private :: autodiscard_lowly_coordinated
     procedure, private :: discard_low_valid_corr_atoms
     procedure, private :: split_atoms
     procedure, private :: validate_atoms
