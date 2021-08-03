@@ -120,8 +120,8 @@ contains
         class(preprocess_commander_stream), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                       :: params
-        integer,                   parameter   :: SHORTTIME       = 30   ! folder watched every minute
-        integer,                   parameter   :: LONGTIME        = 600  ! time lag after which a movie is processed
+        integer,                   parameter   :: SHORTTIME       = 30   ! folder watched every 30 seconds
+        integer,                   parameter   :: LONGTIME        = 300  ! time lag after which a movie is processed
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for write project file
         logical,                   parameter   :: DEBUG_HERE      = .false.
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
@@ -137,7 +137,7 @@ contains
         character(len=LONGSTRLEN)              :: movie
         real                                   :: pickref_scale
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, n_completed, last_injection
-        integer                                :: nptcls, cnt, n_imported, iproj, nptcls_glob
+        integer                                :: nptcls, cnt, n_imported, iproj, nptcls_glob, n2import
         logical                                :: l_pick, l_movies_left, l_haschanged
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
@@ -267,22 +267,26 @@ contains
             if( qenv%qscripts%get_done_stacksz() > 0 )then
                 call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
                 call update_projects_list( completed_fnames, n_completed )
+                do cnt = 1,size(completed_jobs_clines)
+                    call completed_jobs_clines(cnt)%kill
+                enddo
                 deallocate(completed_jobs_clines)
             endif
             ! project update
             n_imported = spproj%os_mic%get_noris() ! # of projects already added
-            if( n_completed-n_imported > 0 )then
-                ! batch append
+            n2import   = n_completed-n_imported
+            if( n2import > 0 )then
                 if( n_imported == 0 )then
-                    call spproj%os_mic%new(n_completed, is_ptcl=.false.)
+                    call spproj%os_mic%new(n2import, is_ptcl=.false.) ! first time
                 else
                     call spproj%os_mic%reallocate(n_completed)
                 endif
+                ! actual update
                 nptcls = 0
                 do iproj=n_imported+1,n_completed
                     call stream_spproj%read_segment('mic', completed_fnames(iproj))
-                    call spproj%os_mic%transfer_ori(iproj, stream_spproj%os_mic, 1)
                     if( l_pick ) nptcls = nptcls + nint(stream_spproj%os_mic%get(1,'nptcls'))
+                    call spproj%os_mic%transfer_ori(iproj, stream_spproj%os_mic, 1)
                 enddo
                 call stream_spproj%kill
                 ! total number of micrographs
@@ -311,13 +315,15 @@ contains
                 call spproj%write(micspproj_fname)
                 last_injection = simple_gettime()
                 l_haschanged   = .true.
+                n_imported     = spproj%os_mic%get_noris()
+                n_completed    = n_imported
             else
                 ! wait
                 if( .not.l_movies_left )then
                     if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
                         ! write project when inactive...
                         call report_selection
-                        call write_project(final_check=.false.)
+                        call write_project
                         l_haschanged = .false.
                     else
                         ! ...or wait
@@ -328,7 +334,7 @@ contains
         end do
         ! termination
         call report_selection
-        call write_project(final_check=.true.)
+        call write_project
         call spproj%kill
         ! cleanup
         call qsys_cleanup
@@ -399,28 +405,11 @@ contains
                 if( DEBUG_HERE ) print *,'end report_selection'; call flush(6)
             end subroutine report_selection
 
-            subroutine write_project( final_check )
-                logical, intent(in)  :: final_check
+            subroutine write_project()
                 logical, allocatable :: stk_mask(:)
                 integer, allocatable :: states(:)
                 integer              :: iproj,nptcls,istk,fromp,top,i,iptcl,nstks,n
                 write(logfhandle,'(A)')'>>> PROJECT UPDATE'
-                if( final_check )then
-                    if( qenv%qscripts%get_done_stacksz() > 0 )then
-                        call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
-                        call update_projects_list( completed_fnames, n_completed )
-                    endif
-                    n_imported = spproj%os_mic%get_noris()
-                    if( n_completed > n_imported )then
-                        ! micrographs
-                        do iproj=n_imported+1,n_completed
-                            call stream_spproj%read_segment('mic', completed_fnames(iproj))
-                            call spproj%append_project(stream_spproj, 'mic')
-                        enddo
-                        call stream_spproj%kill
-                        write(logfhandle,'(A,I5)')'>>> # MOVIES PROCESSED & IMPORTED:    ',spproj%os_mic%get_noris()
-                    endif
-                endif
                 n_imported = spproj%os_mic%get_noris()
                 call spproj%write_segment_inside('mic', params%projfile)
                 if( l_pick )then
@@ -519,38 +508,60 @@ contains
                 integer,                                intent(inout) :: n_completed
                 character(len=:),          allocatable :: fname, abs_fname
                 character(len=LONGSTRLEN), allocatable :: old_fnames(:)
-                type(cmdline) :: cline_mov
-                integer       :: i, n_spprojs, n_old
+                logical, allocatable :: spproj_mask(:)
+                integer              :: i, n_spprojs, n_old, nptcls_here, j, n2import
                 n_completed = 0
                 if( allocated(completed_fnames) ) deallocate(completed_fnames)
                 n_spprojs = size(completed_jobs_clines)
                 if( n_spprojs == 0 )return
+                allocate(spproj_mask(n_spprojs),source=.true.)
                 if( file_exists(STREAM_SPPROJFILES) )then
-                    ! append
                     call read_filetable(STREAM_SPPROJFILES, old_fnames)
-                    n_old       = size(old_fnames)
-                    n_completed = n_spprojs+n_old
+                    n_old = size(old_fnames)
+                else
+                    n_old = 0 ! first time
+                endif
+                if( l_pick )then
+                    do i = 1,n_spprojs
+                        ! flags zero-picked mics that will not be imported
+                        fname = trim(completed_jobs_clines(i)%get_carg('projfile'))
+                        call check_nptcls(fname,nptcls_here)
+                        spproj_mask(i) = nptcls_here > 0
+                    enddo
+                endif
+                n2import = count(spproj_mask)
+                if( n2import /= n_spprojs )then
+                    write(logfhandle,'(A,I3,A)')'>>> NO PARTICLES FOUND IN ',n_spprojs-n2import,' MICROGRAPHS'
+                endif
+                if( n2import > 0 )then
+                    n_completed = n_old + n2import
                     allocate(completed_fnames(n_completed))
-                    completed_fnames(1:n_old) = old_fnames(:)
+                    if( n_old > 0 )then
+                        completed_fnames(1:n_old) = old_fnames(:)
+                    endif
+                    j = 0
                     do i=1,n_spprojs
-                        cline_mov = completed_jobs_clines(i)
-                        fname     = trim(cline_mov%get_carg('projfile'))
+                        if( .not.spproj_mask(i) ) cycle
+                        j = j+1
+                        fname     = trim(completed_jobs_clines(i)%get_carg('projfile'))
                         abs_fname = simple_abspath(fname, errmsg='preprocess_stream :: update_projects_list 1')
-                        completed_fnames(n_old+i) = trim(abs_fname)
+                        completed_fnames(n_old+j) = trim(abs_fname)
                     enddo
                 else
-                    ! first write
-                    n_completed = n_spprojs
-                    allocate(completed_fnames(n_completed))
-                    do i=1,n_completed
-                        cline_mov = completed_jobs_clines(i)
-                        fname     = trim(cline_mov%get_carg('projfile'))
-                        abs_fname = simple_abspath(fname, errmsg='preprocess_stream :: update_projects_list 2')
-                        completed_fnames(i) = trim(abs_fname)
-                    enddo
+                    n_completed = 0
+                    return
                 endif
                 call write_filetable(STREAM_SPPROJFILES, completed_fnames)
             end subroutine update_projects_list
+
+            subroutine check_nptcls( fname, nptcls )
+                character(len=*), intent(in)  :: fname
+                integer,          intent(out) :: nptcls
+                type(sp_project) :: spproj_here
+                call spproj_here%read_segment('mic',fname)
+                nptcls = nint(spproj_here%os_mic%get(1,'nptcls'))
+                call spproj_here%kill
+            end subroutine check_nptcls
 
             subroutine create_individual_project
                 type(sp_project)              :: spproj_here
@@ -591,19 +602,22 @@ contains
                 integer :: iproj,nprojs,cnt,nptcls
                 logical :: err
                 if( .not.cline%defined('dir_prev') ) return
+                err = .false.
                 call simple_list_files_regexp(params%dir_prev,'^'//trim(PREPROCESS_PREFIX)//'.*\.simple$',sp_files)
                 nprojs = size(sp_files)
                 if( nprojs < 1 ) return
                 allocate(spproj_mask(nprojs),source=.false.)
                 nptcls = 0
                 do iproj = 1,nprojs
-                    err = .false.
                     call stream_spproj%read_segment('mic', sp_files(iproj) )
                     if( stream_spproj%os_mic%get_noris() /= 1 )then
                         THROW_WARN('Ignoring previous project'//trim(sp_files(iproj)))
                         cycle
                     endif
                     if( .not. stream_spproj%os_mic%isthere(1,'intg') )cycle
+                    if( l_pick )then
+                        if( stream_spproj%os_mic%get(1,'nptcls') < 0.5 )cycle
+                    endif
                     spproj_mask(iproj) = .true.
                 enddo
                 if( count(spproj_mask) == 0 )then
@@ -919,8 +933,12 @@ contains
                 params_glob%lp = max(2.*smpd_pick, params%lp_pick)
                 call o_mov%getter('intg', moviename_intg)
                 call piter%iterate(cline, smpd_pick, moviename_intg, boxfile, nptcls_out, output_dir_picker)
-                call o_mov%set('boxfile', trim(boxfile)   )
                 call o_mov%set('nptcls',  real(nptcls_out))
+                if( nptcls_out > 0 )then
+                    call o_mov%set('boxfile', trim(boxfile))
+                else
+                    call o_mov%set('state',0.)
+                endif
                 ! update project
                 call spproj%os_mic%set_ori(imovie, o_mov)
                 ! extract particles
@@ -2401,7 +2419,7 @@ contains
                     call make_relativepath(CWD_GLOB, stack, rel_stack)
                     call spproj_in%os_stk%set(stk_ind,'stk',rel_stack)
                     call spproj_in%os_stk%set(stk_ind,'box', real(params%box))
-                    call spproj_in%os_stk%set(imic,'nptcls',real(nptcls))
+                    call spproj_in%os_stk%set(stk_ind,'nptcls',real(nptcls))
                     call spproj_in%os_mic%set(imic,'nptcls',real(nptcls))
                     call spproj_in%os_mic%delete_entry(imic,'boxfile')
                 endif
