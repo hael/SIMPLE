@@ -204,7 +204,7 @@ contains
         call even%kill
         call odd%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_nonuniform_lp NORMAL STOP ****')
+        call simple_end('**** SIMPLE_NONUNIFORM_LP NORMAL STOP ****')
     end subroutine exec_nonuniform_lp
 
 end module simple_commander_resolest
