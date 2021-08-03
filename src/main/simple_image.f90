@@ -5398,7 +5398,7 @@ contains
                     do k = 1,ldim(3)
                         iarg = sum(([i,j,k]-center)**2)
                         if( iarg == 0 )cycle
-                        arg = sqrt(real(iarg))
+                        arg = PI*sqrt(real(iarg))
                         self%rmat(i,j,k) = self%rmat(i,j,k) / (sin(arg)/arg)
                     enddo
                 enddo

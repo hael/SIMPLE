@@ -62,7 +62,7 @@ contains
                         if( iarg == 0 )then
                             arg = 1.0
                         else
-                            arg = sqrt(real(iarg))
+                            arg = PI*sqrt(real(iarg))
                             arg = sin(arg/arg)
                         endif
                         call instrfun_img%set([i,j,k], arg)
@@ -110,7 +110,7 @@ contains
                     do k = 1,ldim(3)
                         iarg = sum(([i,j,k]-center)**2)
                         if( iarg == 0 ) cycle
-                        arg = sqrt(real(iarg))
+                        arg = PI*sqrt(real(iarg))
                         call vol%mul([i,j,k], sin(arg)/arg)
                     enddo
                 enddo
