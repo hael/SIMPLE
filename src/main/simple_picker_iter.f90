@@ -78,7 +78,7 @@ subroutine iterate( self, cline, smpd, moviename_intg, boxfile, nptcls_out, dir_
             call kill_phasecorr_picker
         endif
       elseif(params_glob%picker .eq. 'seg') then
-        ! segmetation based reference free picking
+        ! segmentation based reference free picking
         if( cline%defined('refs') .or. cline%defined('vol1') ) THROW_HARD('Picker by segmentation cannot have refs/vol1; picker_iterate')
         if(.not. cline%defined('elongated')) params_glob%elongated = ' no'
         if(.not. cline%defined('center'))    params_glob%center    = ' no'

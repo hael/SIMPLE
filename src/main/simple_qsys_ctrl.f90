@@ -352,7 +352,7 @@ contains
         integer, intent(in), optional    :: localopt
         character(len=LONGSTRLEN)        :: qsys_cmd
         character(len=STDLEN)            :: script_name
-        integer               :: ipart, pid, localopt_here
+        integer               :: ipart, localopt_here
         logical               :: submit_or_not(self%fromto_part(1):self%fromto_part(2))
         ! make a submission mask
         submit_or_not = .false.
@@ -404,7 +404,6 @@ contains
         class(qsys_ctrl), intent(inout) :: self
         character(len=*), intent(in)    :: script_name
         character(len=STDLEN) :: cmd
-        integer :: pid
         if( .not.file_exists(filepath(PATH_HERE,trim(script_name))))then
             write(logfhandle,'(A,A)')'FILE DOES NOT EXIST:',trim(script_name)
         endif

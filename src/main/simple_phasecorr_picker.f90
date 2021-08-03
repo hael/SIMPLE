@@ -317,6 +317,10 @@ contains
         integer       :: i
         real          :: maxv
         call extract_peaks
+        if( ntargets==0 )then
+            nptcls_out = 0
+            return
+        endif
         call distance_filter
         call gather_stats
         call one_cluster_clustering
@@ -395,6 +399,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
+        if( ntargets==0 ) return
         allocate( target_corrs(ntargets),target_positions(ntargets,2))
         ntargets = 0
         do xind=1,ldim_shrink(1),PICKER_OFFSET_HERE
@@ -632,10 +637,16 @@ contains
             call micrograph%kill
             call mic_shrunken%kill
             call mic_saved%kill
-            deallocate(selected_peak_positions,corrmat, stat=alloc_stat)
+            if( allocated(selected_peak_positions) ) deallocate(selected_peak_positions, stat=alloc_stat)
             if(alloc_stat.ne.0)call allocchk('phasecorr_picker kill, 1',alloc_stat)
-            deallocate(peak_positions,micname,peak_stats, stat=alloc_stat)
+            if( allocated(corrmat) ) deallocate(corrmat, stat=alloc_stat)
             if(alloc_stat.ne.0)call allocchk('phasecorr_picker kill, 2',alloc_stat)
+            if( allocated(peak_positions) ) deallocate(peak_positions, stat=alloc_stat)
+            if(alloc_stat.ne.0)call allocchk('phasecorr_picker kill, 3',alloc_stat)
+            if( allocated(peak_stats) ) deallocate(peak_stats, stat=alloc_stat)
+            if(alloc_stat.ne.0)call allocchk('phasecorr_picker kill, 4',alloc_stat)
+            deallocate(micname, stat=alloc_stat)
+            if(alloc_stat.ne.0)call allocchk('phasecorr_picker kill, 5',alloc_stat)
             if(allocated(refsname)) deallocate(refsname)
             do iref=1,nrefs
                 call refs(iref)%kill

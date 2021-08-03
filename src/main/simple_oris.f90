@@ -2080,7 +2080,7 @@ contains
         if( .not. file_exists(orifile) )then
             THROW_HARD("the file you are trying to read: "//trim(orifile)//' does not exist in cwd' )
         endif
-        if( str_has_substr(orifile,'.bin') )then
+        if( trim(fname2ext(orifile)) == 'bin' )then
             THROW_HARD('this method does not support binary files; read')
         endif
         io_message='No error'
