@@ -84,39 +84,55 @@ contains
     end subroutine init
 
     subroutine generate( self, fnames, nptcls, ind_glob )
-        class(chunk),             intent(inout) :: self
+        class(chunk),              intent(inout) :: self
         character(len=LONGSTRLEN), intent(in)    :: fnames(:)
         integer,                   intent(in)    :: nptcls, ind_glob
-        type(sp_project) :: spproj
-        integer :: iproj, iptcl, cnt, inptcls, fromp
-        if( .not.self%available ) THROW_HARD('chunk unavailable; generate')
-        self%nmics    = size(fnames)
-        self%nptcls   = nptcls
+        type(sp_project)     :: spproj
+        logical, allocatable :: spproj_mask(:)
+        integer :: iproj, iptcl, cnt, inptcls, nptcls_tot, fromp, iiproj, n_in
+        if( .not.self%available ) THROW_HARD('chunk unavailable; chunk%generate')
+        n_in = size(fnames)
+        if( n_in == 0 ) THROW_HARD('# patcls == 0; chunk%generate')
+        allocate(spproj_mask(n_in),source=.false.)
+        nptcls_tot = 0
+        do iproj = 1,n_in
+            call spproj%read_segment('mic', fnames(iproj))
+            inptcls = nint(spproj%os_mic%get(1,'nptcls'))
+            spproj_mask(iproj) = inptcls > 0
+            if( spproj_mask(iproj) ) nptcls_tot = nptcls_tot + inptcls
+        enddo
+        call spproj%kill
+        if( nptcls /= nptcls_tot ) THROW_HARD('Inconsistent # of particles; chunk%generate')
+        self%nmics  = count(spproj_mask)
+        self%nptcls = nptcls
         call self%spproj%os_mic%new(self%nmics, is_ptcl=.false.)
         call self%spproj%os_stk%new(self%nmics, is_ptcl=.false.)
         call self%spproj%os_ptcl2D%new(self%nptcls, is_ptcl=.true.)
         allocate(self%orig_stks(self%nmics))
-        cnt   = 0
-        fromp = 1
-        do iproj = 1,self%nmics
+        cnt    = 0
+        fromp  = 1
+        iiproj = 0
+        do iproj = 1,n_in
+            if( .not.spproj_mask(iproj) ) cycle
+            iiproj = iiproj + 1
             call spproj%read_segment('mic', fnames(iproj))
-            call self%spproj%os_mic%transfer_ori(iproj, spproj%os_mic, 1)
+            inptcls = nint(spproj%os_mic%get(1,'nptcls'))
+            call self%spproj%os_mic%transfer_ori(iiproj, spproj%os_mic, 1)
             call spproj%read_segment('stk', fnames(iproj))
-            call self%spproj%os_stk%transfer_ori(iproj, spproj%os_stk, 1)
-            inptcls = nint(self%spproj%os_stk%get(iproj,'nptcls'))
+            call self%spproj%os_stk%transfer_ori(iiproj, spproj%os_stk, 1)
+            self%orig_stks(iiproj) = simple_abspath(trim(spproj%get_stkname(1)))
+            call self%spproj%os_stk%set(iiproj, 'stk', self%orig_stks(iiproj))
             call spproj%read_segment('ptcl2D', fnames(iproj))
             do iptcl = 1,inptcls
                 cnt = cnt + 1
                 call self%spproj%os_ptcl2D%transfer_ori(cnt, spproj%os_ptcl2D, iptcl)
-                call self%spproj%os_ptcl2D%set(cnt, 'stkind', real(iproj))
+                call self%spproj%os_ptcl2D%set(cnt, 'stkind', real(iiproj))
             enddo
-            call self%spproj%os_stk%set(iproj, 'fromp', real(fromp))
-            call self%spproj%os_stk%set(iproj, 'top',   real(fromp+inptcls-1))
+            call self%spproj%os_stk%set(iiproj, 'fromp', real(fromp))
+            call self%spproj%os_stk%set(iiproj, 'top',   real(fromp+inptcls-1))
             fromp = fromp + inptcls
-            self%orig_stks(iproj) = trim(spproj%get_stkname(1))
-            call spproj%kill
         enddo
-        if( self%nptcls /= cnt ) THROW_HARD('# of ptcls must match; generate')
+        call spproj%kill
         self%spproj%os_ptcl3D = self%spproj%os_ptcl2D
     end subroutine generate
 
@@ -566,7 +582,7 @@ contains
                 do ichunk = 1,params%nchunks
                     call chunks(ichunk)%exec_classify(cline_cluster2D_chunk, orig_smpd, orig_box, box)
                 enddo
-                ! deal for chunk completion, rejection, reset
+                ! deal with chunk completion, rejection, reset
                 do ichunk = 1,params%nchunks
                     if( chunks(ichunk)%has_converged() )then
                         ! rejection
@@ -768,6 +784,7 @@ contains
                     if( spproj_mask(iproj) )then
                         call stream_proj%read_segment('mic',spproj_list(iproj))
                         spproj_nptcls(iproj) = nint(stream_proj%os_mic%get(1,'nptcls'))
+                        if( spproj_nptcls(iproj)==0 ) THROW_HARD('zero particles project detected!')
                         nptcls = nptcls + spproj_nptcls(iproj)
                         if( nptcls > nptcls_per_chunk )then
                             n2fill = n2fill + 1
