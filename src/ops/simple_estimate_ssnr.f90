@@ -172,13 +172,13 @@ contains
     subroutine nonuniform_lp( even, odd, mskimg )
         use simple_image, only: image
         class(image), intent(inout) :: even, odd, mskimg
-        integer,      parameter     :: SUBBOX=32, LSHIFT=15, RSHIFT=16, CPIX=LSHIFT + 1
+        integer,      parameter     :: SUBBOX=32, LSHIFT=15, RSHIFT=16, CPIX=LSHIFT + 1, CHUNKSZ=20
         real,         parameter     :: SUBMSK=real(SUBBOX)/2. - COSMSKHALFWIDTH - 1.
         type(image),  allocatable   :: subvols_even(:) ! one per thread
         type(image),  allocatable   :: subvols_odd(:)  ! one per thread
         logical,      allocatable   :: l_mask(:,:,:)
         type(image) :: ecopy, ocopy
-        integer     :: ldim(3), i, j, k, ithr, cnt, npix
+        integer     :: ldim(3), i, j, k, ithr, cnt, npix, lb(3), ub(3)
         real        :: smpd
         ! check input
         if( even%is_ft()   ) THROW_HARD('even vol FTed; nonuniform_lp')
@@ -198,11 +198,44 @@ contains
         end do
         call ecopy%new(ldim, smpd)
         call ocopy%new(ldim, smpd)
+        ! determine loop bounds for better load balancing in the following parallel loop
+        lb(1) = 1
+        do while( lb(1) <= ldim(1) / 2 )
+            if( any(l_mask(lb(1),:,:)) ) exit
+            lb(1) = lb(1) + 1
+        end do
+        lb(2) = 1
+        do while( lb(2) <= ldim(2) / 2 )
+            if( any(l_mask(:,lb(2),:)) ) exit
+            lb(2) = lb(2) + 1
+        end do
+        lb(3) = 1
+        do while( lb(3) <= ldim(3) / 2 )
+            if( any(l_mask(:,:,lb(3))) ) exit
+            lb(3) = lb(3) + 1
+        end do
+        ub(1) = ldim(1)
+        do while( ub(1) >= ldim(1) / 2 )
+            if( any(l_mask(ub(1),:,:)) ) exit
+            ub(1) = ub(1) - 1
+        end do
+        ub(2) = ldim(2)
+        do while( ub(2) >= ldim(2) / 2 )
+            if( any(l_mask(:,ub(2),:)) ) exit
+            ub(2) = ub(2) - 1
+        end do
+        ub(3) = ldim(3)
+        do while( ub(3) >= ldim(3) / 2 )
+            if( any(l_mask(:,ub(3),:)) ) exit
+            ub(3) = ub(3) - 1
+        end do
         ! loop over pixels
-        !$omp parallel do collapse(3) default(shared) private(i,j,k,ithr) schedule(static) proc_bind(close)
-        do k = 1, ldim(3)
-            do j = 1, ldim(2)
-                do i = 1, ldim(1)
+        !omp parallel do collapse(3) default(shared) private(i,j,k,ithr) schedule(static) proc_bind(close)
+        ! 2 consider
+        !$omp parallel do collapse(3) default(shared) private(i,j,k,ithr) schedule(dynamic,CHUNKSZ) proc_bind(close)
+        do k = lb(3), ub(3)
+            do j = lb(2), ub(2)
+                do i = lb(1), ub(1)
                     if( .not.l_mask(i,j,k) ) cycle
                     ithr = omp_get_thread_num() + 1
                     call set_subvols_msk_fft_filter_ifft([i,j,k], ithr)
