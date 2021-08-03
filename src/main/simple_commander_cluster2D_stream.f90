@@ -22,15 +22,15 @@ private
 real,                  parameter   :: GREEDY_TARGET_LP    = 15.
 integer,               parameter   :: MINBOXSZ            = 72    ! minimum boxsize for scaling
 integer,               parameter   :: WAIT_WATCHER        = 5    ! seconds prior to new stack detection
-integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 300   ! dev settings
-! integer,               parameter   :: ORIGPROJ_WRITEFREQ = 7200  ! Frequency at which the original project file should be updated
+! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 300   ! dev settings
+integer,               parameter   :: ORIGPROJ_WRITEFREQ = 7200  ! Frequency at which the original project file should be updated
 integer,               parameter   :: FREQ_POOL_REJECTION = 5   !
 character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter   :: SPPROJ_SNAPSHOT     = 'SIMPLE_PROJECT_SNAPSHOT'
 character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
 character(len=STDLEN), parameter   :: PROJFILE_CHUNK      = 'chunk.simple'
 character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
-logical,               parameter   :: DEBUG_HERE          = .true.
+logical,               parameter   :: DEBUG_HERE          = .false.
 
 type, extends(commander_base) :: cluster2D_commander_stream
   contains
@@ -366,6 +366,7 @@ contains
         type(qsys_env)                     :: qenv_pool
         type(sp_project)                   :: pool_proj
         character(LONGSTRLEN), allocatable :: imported_spprojs(:), imported_stks(:)
+        character(len=STDLEN)              :: refs_glob, refs_glob_ranked
         integer,               allocatable :: pool_inds(:)
         logical                            :: pool_converged, pool_available
         ! chunk-related variables
@@ -375,7 +376,6 @@ contains
         type(sp_project)                   :: orig_proj, transfer_spproj
         character(LONGSTRLEN), allocatable :: spproj_list(:)
         character(len=:),      allocatable :: spproj_list_fname, orig_projfile
-        character(len=STDLEN)              :: refs_glob, refs_glob_ranked
         character(len=LONGSTRLEN)          :: prev_snapshot_frcs, prev_snapshot_cavgs
         real    :: SMPD_TARGET = 4.       ! target sampling distance
         real    :: orig_smpd, msk, scale_factor, orig_msk, smpd, large_msk, lp_greedy, lpstart_stoch
@@ -566,7 +566,9 @@ contains
         l_maxed        = .false. ! ncls_glob == params%ncls
         l_forced_exit  = .false.
         call simple_touch(CLUSTER2D_FINISHED)
-        do iter = 1,9999999
+        iter = 0
+        do
+            iter = iter + 1
             time_start_iter = simple_gettime()
             ! update rejection parameters
             call update_user_params
@@ -631,6 +633,11 @@ contains
                     if( n_converged_chunks > 0) call import_chunks_into_pool
                     ! execute
                     call exec_classify_pool
+                    ! tidy
+                    if( pool_iter > 3 )then
+                        call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_even'//trim(params%ext))
+                        call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_odd'//trim(params%ext))
+                    endif
                 endif
             endif
             if( l_forced_exit )then
@@ -727,9 +734,6 @@ contains
                     call pool_proj%os_cls2D%set_all('pop', real(pops))
                 endif
                 call spproj%kill
-                if( debug_here )then
-                    print *,'end update_pool ',pool_iter
-                endif
             end subroutine update_pool
 
             !> returns the list of projects necessary for creating a new chunk
@@ -842,8 +846,9 @@ contains
             subroutine import_chunks_into_pool
                 type(class_frcs)              :: frcs_glob, frcs_chunk, frcs_prev
                 character(LONGSTRLEN), allocatable :: tmp(:)
-                character(len=:), allocatable :: cavgs_chunk, dir_chunk
-                integer,          allocatable :: cls_pop(:), cls_chunk_pop(:), pinds(:), states(:)
+                character(len=:),      allocatable :: cavgs_chunk, dir_chunk
+                integer,               allocatable :: cls_pop(:), cls_chunk_pop(:), pinds(:), states(:)
+                character(len=LONGSTRLEN) :: stk_relpath
                 real    :: smpd_here
                 integer :: nptcls_imported, nptcls2import
                 integer :: iptcl, ind, ncls_here, icls, i, poolind, n_remap, pop, ichunk, nmics2import, nmics_imported
@@ -857,7 +862,7 @@ contains
                     nmics2import  = nmics2import + converged_chunks(ichunk)%nmics
                 enddo
                 if( nptcls2import == 0 ) return
-                write(logfhandle,'(A,I6,A)')'>>> TRANSFER ',nptcls2import,' CHUNK(S) PARTICLES CLASSIFICATION TO POOL'
+                write(logfhandle,'(A,I6,A)')'>>> TRANSFER ',nptcls2import,' CHUNK PARTICLES TO POOL'
                 ! reallocations
                 nmics_imported  = pool_proj%os_mic%get_noris()
                 nptcls_imported = pool_proj%os_ptcl2D%get_noris()
@@ -883,7 +888,7 @@ contains
                 do ichunk = 1,nchunks2import
                     fromp_prev = fromp
                     call converged_chunks(ichunk)%read(boxpd) 
-                    ! transfer micrographs, stacks & particles
+                    ! transfer micrographs, stacks & particles parameters
                     jptcl = 0
                     do iproj=1,converged_chunks(ichunk)%nmics
                         imic  = imic+1
@@ -894,7 +899,8 @@ contains
                         nptcls = nint(converged_chunks(ichunk)%spproj%os_stk%get(iproj,'nptcls'))
                         call pool_proj%os_stk%set(imic, 'fromp', real(fromp))
                         call pool_proj%os_stk%set(imic, 'top',   real(fromp+nptcls-1))
-                        imported_stks(imic) = trim(converged_chunks(ichunk)%orig_stks(iproj))
+                        call make_relativepath(cwd_glob, converged_chunks(ichunk)%orig_stks(iproj), stk_relpath)
+                        imported_stks(imic) = trim(stk_relpath)
                         ! particles
                         do i = 1,nptcls
                             iptcl = iptcl + 1
@@ -1330,8 +1336,8 @@ contains
             subroutine write_snapshot( force, add_suffix )
                 logical,           intent(in) :: force, add_suffix
                 type(class_frcs)              :: frcs, frcs_sc
-                type(oris)                    :: os_backup1, os_backup2, os_backup3
-                character(len=:), allocatable :: projfname, cavgsfname, suffix, frcsfname, src, dest
+                type(oris)                    :: os_backup2, os_backup3
+                character(len=:), allocatable :: projfile,projfname, cavgsfname, suffix, frcsfname, src, dest
                 integer :: istk
                 if( debug_here ) print *,'in write_snapshot'; call flush(6)
                 if( .not.force )then
@@ -1347,10 +1353,10 @@ contains
                     frcsfname  = trim(frcsfname)//trim(suffix)
                 endif
                 call pool_proj%projinfo%set(1,'projname', projfname)
-                projfname  = trim(projfname)//trim(METADATA_EXT)
+                projfile   = trim(projfname)//trim(METADATA_EXT)
                 cavgsfname = trim(cavgsfname)//trim(params%ext)
                 frcsfname  = trim(frcsfname)//trim(BIN_EXT)
-                call pool_proj%projinfo%set(1,'projfile', projfname)
+                call pool_proj%projinfo%set(1,'projfile', projfile)
                 if( add_suffix )then
                     if( trim(prev_snapshot_cavgs) /= '' )then
                         call del_file(prev_snapshot_frcs)
@@ -1361,10 +1367,9 @@ contains
                         call del_file(src)
                     endif
                 endif
-                write(logfhandle,'(A,A,A,A)')'>>> GENERATING PROJECT SNAPSHOT ',trim(projfname), ' AT: ',cast_time_char(simple_gettime())
+                write(logfhandle,'(A,A,A,A)')'>>> GENERATING PROJECT SNAPSHOT ',trim(projfile), ' AT: ',cast_time_char(simple_gettime())
                 if( do_autoscale )then
                     os_backup3 = pool_proj%os_cls2D
-                    os_backup1 = pool_proj%os_ptcl2D
                     os_backup2 = pool_proj%os_stk
                     ! rescale classes
                     call rescale_cavgs(refs_glob, cavgsfname)
@@ -1377,6 +1382,7 @@ contains
                     call pool_proj%os_out%kill
                     call pool_proj%add_cavgs2os_out(cavgsfname, orig_smpd, 'cavg')
                     pool_proj%os_cls2D = os_backup3
+                    call os_backup3%kill
                     ! rescale frcs
                     call frcs_sc%read(FRCS_FILE)
                     call frcs_sc%upsample(orig_smpd, orig_box, frcs)
@@ -1391,14 +1397,16 @@ contains
                     do istk = 1,pool_proj%os_stk%get_noris()
                         call pool_proj%os_stk%set(istk,'stk',imported_stks(istk))
                     enddo
-                    call os_backup3%kill
                     ! write
-                    call pool_proj%write(projfname)
+                    pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
+                    call pool_proj%os_ptcl3D%delete_2Dclustering
+                    call pool_proj%write(projfile)
+                    call pool_proj%os_ptcl3D%kill
                     ! preserve down-scaling
-                    pool_proj%os_ptcl2D = os_backup1
-                    call os_backup1%kill
-                    pool_proj%os_stk    = os_backup2
+                    call pool_proj%os_ptcl2D%mul_shifts( scale_factor )
+                    pool_proj%os_stk   = os_backup2
                     call os_backup2%kill
+                    call os_backup3%kill
                 else
                     if( add_suffix )then
                         call simple_copy_file(FRCS_FILE, frcsfname)
@@ -1416,12 +1424,14 @@ contains
                     call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
                     call os_backup3%kill
                     ! write
-                    call pool_proj%write(projfname)
+                    pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
+                    call pool_proj%os_ptcl3D%delete_2Dclustering
+                    call pool_proj%write(projfile)
+                    call pool_proj%os_ptcl3D%kill
                 endif
                 ! cleanup previous snapshot
                 prev_snapshot_frcs  = trim(frcsfname)
                 prev_snapshot_cavgs = trim(cavgsfname)
-                if( debug_here ) print *,'end write_snapshot'; call flush(6)
             end subroutine write_snapshot
 
             !> for initial write of set of user adjustable parameters
