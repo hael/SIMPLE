@@ -126,7 +126,7 @@ contains
         deallocate( cych,cyck,cycm )
         ! gridding correction
         self%interp_fcomp => interp_fcomp_norm
-        if( params_glob%griddev.eq.'yes') self%interp_fcomp => interp_fcomp_grid
+        if( params_glob%gridding.eq.'yes') self%interp_fcomp => interp_fcomp_grid
         !
         self%expanded_exists = .true.
     end subroutine expand_cmat

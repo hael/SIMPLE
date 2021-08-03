@@ -49,7 +49,7 @@ type :: parameters
     character(len=3)      :: for3D='yes'          !< for 3D analysis(yes|no){yes}
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)      :: graphene_filt='no'   !< filter out graphene bands in correcation search
-    character(len=3)      :: griddev='no'         !< to test gridding correction
+    character(len=3)      :: gridding='no'         !< to test gridding correction
     character(len=3)      :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
     character(len=3)      :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)      :: kmeans='yes'
@@ -529,7 +529,7 @@ contains
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
-        call check_carg('griddev',        self%griddev)
+        call check_carg('gridding',        self%gridding)
         call check_carg('hfun',           self%hfun)
         call check_carg('hist',           self%hist)
         call check_carg('imgkind',        self%imgkind)
@@ -1563,6 +1563,10 @@ contains
                         ! TIFF
                         cntfile = cntfile+1
                         checkupfile(cntfile) = 'J'
+                    case('L')
+                        ! .gain, which is a single tiff image
+                        cntfile = cntfile+1
+                        checkupfile(cntfile) = 'L'
 #endif
                     case DEFAULT
                         write(logfhandle,*) 'file: ', trim(var)
@@ -1687,8 +1691,8 @@ contains
             case('S')
                 self%ext = '.spi'
 #ifdef USING_TIFF
-            case('J','K')
-                ! for tiff/eer we set .mrc as preferred output format
+            case('J','K','L')
+                ! for tiff/eer/gain we set .mrc as preferred output format
                 self%ext = '.mrc'
 #endif
             case DEFAULT

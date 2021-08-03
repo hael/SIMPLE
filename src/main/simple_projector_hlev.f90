@@ -31,8 +31,8 @@ contains
         boxpd   = 2 * round2even(KBALPHA * real(box / 2))
         ldim_pd = [boxpd,boxpd,boxpd]
         ! pre-gridding
-        if( params_glob%griddev.eq.'yes' )then
-            call vol%div_w_instrfun(KBALPHA)
+        if( params_glob%gridding.eq.'yes' )then
+            call vol%div_w_instrfun(alpha=KBALPHA)
         endif
         ! padding & fft
         call vol_pad%new(ldim_pd, smpd)
@@ -104,8 +104,8 @@ contains
         call vol_pad%fft
         call vol_pad%expand_cmat(KBALPHA)
         call rotvol_slim( vol_pad, rovol_pad, rovol, o, shvec )
-        if( params_glob%griddev.eq.'yes' )then
-            call rovol%div_w_instrfun(KBALPHA)
+        if( params_glob%gridding.eq.'yes' )then
+            call rovol%div_w_instrfun(alpha=KBALPHA)
         endif
         call vol_pad%kill_expanded
         call vol_pad%kill
