@@ -696,6 +696,8 @@ contains
             fname2format = 'J'
         case('eer')
             fname2format = 'K'
+        case('gain')
+            fname2format = 'L'
 #endif
         case DEFAULT
             fname2format = 'N'

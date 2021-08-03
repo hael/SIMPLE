@@ -561,7 +561,7 @@ contains
                 l_lastiter = (iter == GRIDCORR_MAXITS)
                 ! W <- (W / rho) x kernel
                 call W_img%ifft()
-                call mul_w_instr(W_img, kbwin)
+                call mul_w_instr(W_img, kbwin=kbwin)
                 call W_img%fft()
                 !$omp parallel do default(shared) private(i,j,l,val,val_prev) proc_bind(close)&
                 !$omp collapse(3) schedule(static)
@@ -594,7 +594,7 @@ contains
             call Wprev_img%kill
             ! Fourier comps / rho
             !$omp parallel do collapse(3) default(shared) schedule(static)&
-            !$omp private(h,k,m,phys,rsh_sq,sh,invrho,w) proc_bind(close)
+            !$omp private(h,k,m,phys,rsh_sq,sh,invrho) proc_bind(close)
             do h = self%lims(1,1),self%lims(1,2)
                 do k = self%lims(2,1),self%lims(2,2)
                     do m = self%lims(3,1),self%lims(3,2)
@@ -605,17 +605,15 @@ contains
                             ! outside Nyqvist, zero
                             call self%set_cmat_at(phys(1),phys(2),phys(3), zero)
                         else
-                            if( do_hann_window )then
-                                w = antialw(max(1,abs(h)))*antialw(max(1,abs(k)))*antialw(max(1,abs(m)))
-                            else
-                                w = 1.
-                            end if
-                            if( .not. skip_pipemenon )then
-                                invrho = real(W_img%get_cmat_at(phys(1), phys(2), phys(3))) !! Real(C) == Real(C*)
-                            else
+                            if( skip_pipemenon )then
                                 invrho = 1. / (1.e-2+self%rho(phys(1),phys(2),phys(3)))
+                            else
+                                invrho = real(W_img%get_cmat_at(phys(1), phys(2), phys(3)))
                             end if
-                            call self%mul_cmat_at(phys(1),phys(2),phys(3),invrho * w)
+                            if( do_hann_window )then
+                                invrho = invrho * antialw(max(1,abs(h)))*antialw(max(1,abs(k)))*antialw(max(1,abs(m)))
+                            endif
+                            call self%mul_cmat_at(phys(1),phys(2),phys(3),invrho)
                         endif
                     end do
                 end do

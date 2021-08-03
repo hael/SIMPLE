@@ -357,7 +357,7 @@ contains
             endif
         endif
         ! gridding prep
-        if( params_glob%griddev.eq.'yes' )then
+        if( params_glob%gridding.eq.'yes' )then
             call img_out%div_by_instrfun
         endif
         ! return in Fourier space
@@ -430,7 +430,7 @@ contains
             call img_out%mask(params_glob%msk, 'soft')
         endif
         ! gridding prep
-        if( params_glob%griddev.eq.'yes' )then
+        if( params_glob%gridding.eq.'yes' )then
             call img_out%div_by_instrfun
         endif
         ! move to Fourier space
@@ -657,12 +657,12 @@ contains
             endif
         endif
         ! gridding prep
-        if( params_glob%griddev.eq.'yes' )then
-            call vol_ptr%div_w_instrfun(params_glob%alpha)
+        if( params_glob%gridding.eq.'yes' )then
+            call vol_ptr%div_w_instrfun(alpha=params_glob%alpha)
         endif
         ! FT volume
         call vol_ptr%fft()
-        ! expand for fast interpolation
+        ! expand for fast interpolation & correct for norm when clipped
         call vol_ptr%expand_cmat(params_glob%alpha,norm4proj=.true.)
     end subroutine preprefvol
 

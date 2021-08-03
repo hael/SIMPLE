@@ -992,7 +992,7 @@ contains
                 !            4 transform: complex 32-bit reals (THIS WOULD BE THE DEFAULT FT MODE)
                 mode = ioimg%getMode()
                 if( mode == 3 .or. mode == 4 ) self%ft = .true.
-            case('F','S','J')
+            case('F','S','J','L')
                 call ioimg%open(fname, self%ldim, self%smpd, formatchar=formatchar, readhead=readhead, rwaction=rwaction)
             end select
         else
@@ -1029,7 +1029,7 @@ contains
             form = fname2format(fname)
         endif
         select case(form)
-        case('M', 'F', 'S', 'J')
+        case('M', 'F', 'S', 'J', 'L')
             call self%open(fname, ioimg, formatchar, readhead, rwaction='READ')
         case DEFAULT
             write(logfhandle,*) 'Trying to read from file: ', trim(fname)
@@ -5353,43 +5353,58 @@ contains
     !>  \brief generates instrument function image for division of real-space images
     subroutine div_w_instrfun( self, alpha )
         use simple_kbinterpol, only: kbinterpol
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: alpha
+        class(image),           intent(inout) :: self
+        real,         optional, intent(in)    :: alpha
         type(kbinterpol)  :: kbwin
         real, allocatable :: w(:)
-        real    :: arg
+        real    :: iarg, arg
         integer :: ldim(3), center(3), i,j,k
-        kbwin = kbinterpol(KBWINSZ,alpha)
         if( any(self%ldim==0) .or. self%is_ft() .or. .not.self%square_dims() )then
             THROW_HARD('Erroneous image in div_w_instrfun')
         endif
-        allocate(w(self%ldim(1)),source=1.)
         center = self%ldim/2+1
-        ! kaiser-bessel window
-        do i = 1,self%ldim(1)
-            arg  = real(i-center(1))/real(self%ldim(1))
-            w(i) = kbwin%instr(arg)
-        end do
-        if( self%is_2d() )then
-            !$omp parallel do collapse(2) private(i,j) default(shared) proc_bind(close) schedule(static)
+        if( present(alpha) )then
+            ! kaiser-bessel window
+            kbwin = kbinterpol(KBWINSZ,alpha)
+            allocate(w(self%ldim(1)),source=1.)
             do i = 1,self%ldim(1)
-                do j = 1,self%ldim(2)
-                    self%rmat(i,j,1) = self%rmat(i,j,1) / (w(i)*w(j))
+                arg  = real(i-center(1))/real(self%ldim(1))
+                w(i) = kbwin%instr(arg)
+            end do
+            if( self%is_2d() )then
+                !$omp parallel do collapse(2) private(i,j) default(shared) proc_bind(close) schedule(static)
+                do i = 1,self%ldim(1)
+                    do j = 1,self%ldim(2)
+                        self%rmat(i,j,1) = self%rmat(i,j,1) / (w(i)*w(j))
+                    enddo
                 enddo
-            enddo
-            !$omp end parallel do
+                !$omp end parallel do
+            else
+                !$omp parallel do collapse(3) private(i,j,k) default(shared) proc_bind(close) schedule(static)
+                do i = 1,self%ldim(1)
+                    do j = 1,self%ldim(2)
+                        do k = 1,self%ldim(3)
+                            self%rmat(i,j,k) = self%rmat(i,j,k) / (w(i)*w(j)*w(k))
+                        enddo
+                    enddo
+                enddo
+                !$omp end parallel do
+            endif
         else
-            !$omp parallel do collapse(3) private(i,j,k) default(shared) proc_bind(close) schedule(static)
-            do i = 1,self%ldim(1)
-                do j = 1,self%ldim(2)
-                    do k = 1,self%ldim(3)
-                        self%rmat(i,j,k) = self%rmat(i,j,k) / (w(i)*w(j)*w(k))
+            ! linear interpolation
+            !$omp parallel do collapse(3) private(i,j,k,iarg,arg) default(shared) proc_bind(close) schedule(static)
+            do i = 1,ldim(1)
+                do j = 1,ldim(2)
+                    do k = 1,ldim(3)
+                        iarg = sum(([i,j,k]-center)**2)
+                        if( iarg == 0 )cycle
+                        arg = sqrt(real(iarg))
+                        self%rmat(i,j,k) = self%rmat(i,j,k) / (sin(arg)/arg)
                     enddo
                 enddo
             enddo
             !$omp end parallel do
         endif
-        deallocate(w)
     end subroutine div_w_instrfun
 
     subroutine pad_fft( self, self_out )

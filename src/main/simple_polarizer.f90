@@ -63,8 +63,10 @@ contains
                   &self%pft(self%pdim(1),self%pdim(2):self%pdim(3)), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('in simple_projector :: init_imgpolarizer',alloc_stat)
         ! instrument function
-        call self%instrfun_img%new(self%get_ldim(), self%get_smpd())
-        call gen_instrfun_img(self%instrfun_img, kbwin)
+        if( params_glob%gridding.eq.'yes' )then
+            call self%instrfun_img%new(self%get_ldim(), self%get_smpd())
+            call gen_instrfun_img(self%instrfun_img, kbwin=kbwin)
+        endif
         ! cartesian to polar
         !$omp parallel do collapse(2) schedule(static) private(i,k,l,w,loc,cnt,win) default(shared) proc_bind(close)
         do i=1,self%pdim(1)
@@ -84,7 +86,7 @@ contains
                     self%polcyc2_mat(i, k, cnt) = cyci_1d(lims(2,:), win(2,1)+l-1)
                 end do
                 self%polweights_mat(i,k,:) = reshape(w,(/self%wlen/))
-                if( params_glob%griddev.ne.'yes') self%polweights_mat(i,k,:) = self%polweights_mat(i,k,:) / sum(w)
+                if( params_glob%gridding.ne.'yes') self%polweights_mat(i,k,:) = self%polweights_mat(i,k,:) / sum(w)
             enddo
         enddo
         !$omp end parallel do
@@ -103,7 +105,7 @@ contains
         allocate( self%polweights_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wlen), source=self_in%polweights_mat )
         allocate( self%comps(1:self%wdim,1:self%wdim),                                         source=CMPLX_ZERO )
         allocate( self%pft(self%pdim(1),self%pdim(2):self%pdim(3)),                            source=CMPLX_ZERO )
-        call self%instrfun_img%copy(self_in%instrfun_img)
+        if( self_in%instrfun_img%exists() ) call self%instrfun_img%copy(self_in%instrfun_img)
     end subroutine copy_polarizer
 
     !> \brief  divide by gridding weights in real-space prior to FFT &

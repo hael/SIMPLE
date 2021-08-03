@@ -428,13 +428,17 @@ contains
         integer(kind=8), optional, intent(in)    :: pos
         logical,         optional, intent(in)    :: print_entire
         character(kind=c_char), allocatable :: filename_c(:), open_mode_c(:)
-        integer            :: io_status
+        character(len=1) :: form
+        integer          :: io_status
         select type( self )
 #ifdef USING_TIFF
             type is( TiffImgHead )
                 filename_c  = toCstring(fname)
                 open_mode_c = toCstring('rc')
+                form = fname2format(fname)
+                if( form == 'L' ) call TIFFMuteWarnings
                 self%fhandle = TIFFOpen(filename_c,open_mode_c)
+                if( form == 'L' ) call TIFFUnMuteWarnings
                 self%nx = TIFFGetWidth(self%fhandle)
                 self%ny = TIFFGetLength(self%fhandle)
                 do
@@ -1402,15 +1406,19 @@ contains
         integer,          intent(out) :: ldim(3), nptcls
         logical,          intent(in)  :: doprint
         character(kind=c_char), allocatable :: filename_c(:), open_mode_c(:)
-        type(c_ptr) :: fhandle = c_null_ptr
-        integer     :: success
+        character(len=1) :: form
+        type(c_ptr)      :: fhandle = c_null_ptr
+        integer          :: success
         ldim   = 0
         nptcls = 0
         smpd_here = 0.
         filename_c  = toCstring(fname)
         open_mode_c = toCstring('rc')
 #ifdef USING_TIFF
+        form = fname2format(fname)
+        if( form == 'L' ) call TIFFMuteWarnings
         fhandle = TIFFOpen(filename_c,open_mode_c)
+        if( form == 'L' ) call TIFFUnMuteWarnings
         ldim(1) = TIFFGetWidth(fhandle)
         ldim(2) = TIFFGetLength(fhandle)
         ldim(3) = 1 ! by convention
@@ -1478,7 +1486,7 @@ contains
             case('S')
                call get_spifile_info(fname, ldim, iform, nptcls, smpd_here, conv, ddoprint)
 #ifdef USING_TIFF
-            case('J')
+            case('J','L')
                 call get_tiffile_info(fname, ldim, nptcls, smpd_here, ddoprint)
             case('K')
                 call get_eerfile_info(fname, ldim, nptcls, smpd_here, ddoprint)

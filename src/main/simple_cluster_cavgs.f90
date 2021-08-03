@@ -37,7 +37,7 @@ contains
         do icls=1,ncls
             if( icls /= 1 ) call cavg_imgs(icls)%copy_polarizer(cavg_imgs(1))
             ! gridding prep
-            if( params_glob%griddev.eq.'yes' )then
+            if( params_glob%gridding.eq.'yes' )then
                 call cavg_imgs(icls)%div_by_instrfun
             endif
             ! move to Fourier space
