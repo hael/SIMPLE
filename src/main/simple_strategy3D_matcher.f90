@@ -211,30 +211,34 @@ contains
                 ! switch for per-particle polymorphic strategy3D construction
                 select case(trim(params_glob%refine))
                     case('snhc')
-                        allocate(strategy3D_snhc             :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_snhc                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc')
                         updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
                         if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt == 1 )then
-                            allocate(strategy3D_greedy       :: strategy3Dsrch(iptcl_batch)%ptr)
+                            allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)
                         else
                             if( ran3() < GREEDY_FREQ )then
-                                allocate(strategy3D_greedy   :: strategy3Dsrch(iptcl_batch)%ptr)
+                                allocate(strategy3D_greedy       :: strategy3Dsrch(iptcl_batch)%ptr)
                             else
-                                allocate(strategy3D_shc      :: strategy3Dsrch(iptcl_batch)%ptr)
+                                allocate(strategy3D_shc          :: strategy3Dsrch(iptcl_batch)%ptr)
                             endif
                         endif
                     case('greedy')
-                        allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neigh')
-                        if( ran3() < GREEDY_FREQ )then
-                            allocate(strategy3D_greedy_neigh :: strategy3Dsrch(iptcl_batch)%ptr)
+                        if( ran3() < GLOB_FREQ )then
+                            allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)
                         else
-                            allocate(strategy3D_neigh        :: strategy3Dsrch(iptcl_batch)%ptr)
+                            if( ran3() < GREEDY_FREQ )then
+                                allocate(strategy3D_greedy_neigh :: strategy3Dsrch(iptcl_batch)%ptr)
+                            else
+                                allocate(strategy3D_neigh        :: strategy3Dsrch(iptcl_batch)%ptr)
+                            endif
                         endif
                     case('greedy_neigh')
-                        allocate(strategy3D_greedy_neigh     :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_greedy_neigh         :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('cluster','clustersym')
-                        allocate(strategy3D_cluster          :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_cluster              :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('eval')
                         call eval_ptcl(pftcc, iptcl)
                         cycle
@@ -395,7 +399,7 @@ contains
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
             if( params_glob%l_lpset )then
                 ! low-pass set or multiple states
-                call readrefvols(params_glob%vols(s))
+                call readrefvols_zero_fcomps_below_noise( cline, params_glob%vols(s) )
                 call preprefvol(pftcc, cline, s, do_center, xyz, .true.)
                 !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
                 do iref=1,params_glob%nspace
@@ -407,8 +411,7 @@ contains
                 !$omp end parallel do
             else
                 if( params_glob%nstates.eq.1 )then
-                    call readrefvols(params_glob%vols_even(s), params_glob%vols_odd(s))
-                    call zero_refvol_fcomps_below_noise
+                    call readrefvols_zero_fcomps_below_noise( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
                     ! PREPARE ODD REFERENCES
                     call preprefvol(pftcc, cline, s, do_center, xyz, .false.)
                     !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
@@ -430,7 +433,7 @@ contains
                     end do
                     !$omp end parallel do
                 else
-                    call readrefvols(params_glob%vols(s))
+                    call readrefvols_zero_fcomps_below_noise( cline, params_glob%vols(s) )
                     call preprefvol(pftcc, cline, s, do_center, xyz, .true.)
                     !$omp parallel do default(shared) private(iref, ind, o_tmp) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace

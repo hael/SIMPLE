@@ -84,13 +84,18 @@ contains
         neff_states = 1
         if( l_multistates ) neff_states = count(s3D%state_exists)
         if( s%l_neigh )then
-            frac = 100. * real(s%nrefs_eval) / real(s%nnn * neff_states)
+            if( s%nnn > 1 )then
+                frac = 100. * real(s%nrefs_eval) / real(s%nnn * neff_states)
+            else
+                ! the case of global srch
+                frac = 100.
+            endif
         else if( s%l_greedy .or. s%l_cont )then
             frac = 100.
         else
             frac = 100. * real(s%nrefs_eval) / real(s%nprojs * neff_states)
         endif
-        call build_glob%spproj_field%set(s%iptcl, 'frac',      frac)
+        call build_glob%spproj_field%set(s%iptcl, 'frac', frac)
         ! destruct
         call osym%kill
         call o_prev%kill

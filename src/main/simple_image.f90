@@ -202,6 +202,7 @@ contains
     procedure          :: calc_shiftcen_serial
     procedure          :: bin_inv
     procedure          :: remove_edge
+    procedure          :: one_at_edge
     procedure          :: bin2logical
     procedure          :: collage
     ! FILTERS
@@ -2850,6 +2851,15 @@ contains
             THROW_HARD('input to remove edge not binary; remove_edge')
         where( self%rmat < 0.999 ) self%rmat = 0.
     end subroutine remove_edge
+
+    !>  \brief  set the edge pixels to one
+    subroutine one_at_edge( self )
+        class(image), intent(inout) :: self
+        if( self%ft ) THROW_HARD('only for real binary images (not FTed ones); one_at_edge')
+        if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
+            THROW_HARD('input to one_at_edge not binary')
+        where( self%rmat < 0.999 .and. self%rmat > TINY ) self%rmat = 1.
+    end subroutine one_at_edge
 
     !>  \brief  generates a logical mask from a binary one
     function bin2logical( self ) result( mask )

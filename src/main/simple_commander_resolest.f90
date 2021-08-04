@@ -193,13 +193,20 @@ contains
                 call odd%mask(params%msk, 'soft')
             endif
         endif
-        if( cline%defined('mskfile') )then
-            call mskvol%read(params%mskfile)
-            call mskvol%remove_edge
+        if( have_mask_file )then
+            call mskvol%one_at_edge ! to expand before masking of reference internally (preprefvol)
         else
             call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
         endif
         call nonuniform_lp(even, odd, mskvol)
+        if( have_mask_file )then
+            call mskvol%read(params%mskfile)
+            call even%mul(mskvol)
+            call odd%mul(mskvol)
+            call mskvol%kill
+        endif
+        call even%write('nonuniform_lp_even.mrc')
+        call odd%write('nonuniform_lp_odd.mrc')
         ! destruct
         call even%kill
         call odd%kill
