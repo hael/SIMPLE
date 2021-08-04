@@ -2677,17 +2677,26 @@ contains
     !!          binary normalization (norm_bin) assumed!> bin_1
     ! In case of binarization failure, it tries to adjust the
     ! by setting a new treshold equal to half of the selected one.
-    subroutine binarize_1( self_in, thres, self_out )
+    subroutine binarize_1( self_in, thres, self_out, err )
         class(image),           intent(inout) :: self_in
         real,                   intent(in)    :: thres
         class(image), optional, intent(inout) :: self_out
+        logical,      optional, intent(out)   :: err
         integer :: n_foreground ! number of
         real    :: refined_thres
+        if( present(err) ) err = .false.
         n_foreground = count(self_in%rmat > thres)
         if(n_foreground < 1) then ! empty
             write(logfhandle, *) 'Threshold refinement for binarization'
             refined_thres = thres/2.
-            if(count(self_in%rmat > refined_thres) < 1) THROW_HARD('Binarization produces empty image!; binarize_1')
+            if(count(self_in%rmat > refined_thres) < 1)then
+                if( present(err) )then
+                    err = .true.
+                    return
+                else
+                    THROW_HARD('Binarization produces empty image!; binarize_1')
+                endif
+            endif
         else
             refined_thres = thres
         endif
@@ -2706,7 +2715,6 @@ contains
                 self_in%rmat = 0.
             end where
         endif
-        ! sanity check
     end subroutine binarize_1
 
     !>  \brief  bin_2 is for binarizing an image using nr of pixels/voxels threshold
@@ -4743,7 +4751,7 @@ contains
         integer, optional, intent(in)    :: border
         real, parameter :: width = 3.
         complex     :: c1,c2
-        real        :: w,rw,rhplim,rlplim,rsh
+        real        :: w,rw,rhplim,rlplim,rsh,normsq
         real(dp)    :: sqsum1,sqsum2
         integer     :: nrflims(3,2),phys(3),npix
         integer     :: h,k,l,shsq, hplim, hplimsq, bphplimsq, lplim, lplimsq, bplplimsq
@@ -4817,7 +4825,10 @@ contains
             enddo
         endif
         call pc%ifft()
-        call pc%div(sqrt(real(sqsum1*sqsum2)))
+        normsq = real(sqsum1*sqsum2)
+        if( is_a_number(normsq) )then
+            if( normsq > 1.0e-12 ) pc%rmat = pc%rmat / sqrt(normsq)
+        endif
         if( present(border) ) then
             if( border > 1 )then
                 pc%rmat(1:border,:,1) = 0.
