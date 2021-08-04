@@ -2363,7 +2363,7 @@ contains
         call self%os_ptcl3D%mul_shifts(scale_factor)
         ! name changes and list for scaling job
         new_projname = trim(projname)//SCALE_SUFFIX
-        new_projfile = trim(new_projname)//'.simple'
+        new_projfile = trim(new_projname)//trim(METADATA_EXT)
         call cline%set('projname', trim(new_projname))
         call cline%delete('projfile')
         call self%update_projinfo( cline )
