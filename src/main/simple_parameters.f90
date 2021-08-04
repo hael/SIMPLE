@@ -1224,10 +1224,11 @@ contains
         endif
         ! set graphene flag
         self%l_graphene = self%graphene_filt .ne. 'no'
-        ! boxmatch
-        if( .not.cline%defined('boxmatch'))then
-            self%boxmatch = find_boxmatch(self%box, self%msk)
-        end if
+        ! boxmatch (is currently turned off)
+        self%boxmatch = self%box
+        ! if( .not.cline%defined('boxmatch'))then
+        !     self%boxmatch = find_boxmatch(self%box, self%msk)
+        ! end if
         ! set default outer mask value
         if( .not. cline%defined('outer') ) self%outer = self%msk
         ! checks automask related values

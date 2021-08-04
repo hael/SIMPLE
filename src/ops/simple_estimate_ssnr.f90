@@ -178,7 +178,6 @@ contains
         type(image),  allocatable   :: subvols_even(:) ! one per thread
         type(image),  allocatable   :: subvols_odd(:)  ! one per thread
         logical,      allocatable   :: l_mask(:,:,:)
-        type(image) :: ecopy, ocopy
         integer     :: ldim(3), i, j, k, ithr, cnt, npix, lb(3), ub(3)
         real        :: smpd
         ! check input
@@ -197,8 +196,6 @@ contains
             call subvols_even(ithr)%new([SUBBOX,SUBBOX,SUBBOX], smpd, wthreads=.false.)
             call subvols_odd(ithr)%new( [SUBBOX,SUBBOX,SUBBOX], smpd, wthreads=.false.)
         end do
-        call ecopy%new(ldim, smpd)
-        call ocopy%new(ldim, smpd)
         ! determine loop bounds for better load balancing in the following parallel loop
         lb(1) = 1
         do while( lb(1) <= ldim(1) / 2 )
@@ -231,8 +228,6 @@ contains
             ub(3) = ub(3) - 1
         end do
         ! loop over pixels
-        !omp parallel do collapse(3) default(shared) private(i,j,k,ithr) schedule(static) proc_bind(close)
-        ! 2 consider
         !$omp parallel do collapse(3) default(shared) private(i,j,k,ithr) schedule(dynamic,CHUNKSZ) proc_bind(close)
         do k = lb(3), ub(3)
             do j = lb(2), ub(2)
@@ -240,19 +235,14 @@ contains
                     if( .not.l_mask(i,j,k) ) cycle
                     ithr = omp_get_thread_num() + 1
                     call set_subvols_msk_fft_filter_ifft([i,j,k], ithr)
-                    call ecopy%set_rmat_at(i,j,k, subvols_even(ithr)%get_rmat_at(CPIX,CPIX,CPIX))
-                    call ocopy%set_rmat_at(i,j,k, subvols_odd(ithr)%get_rmat_at(CPIX,CPIX,CPIX))
+                    call even%set_rmat_at(i,j,k, subvols_even(ithr)%get_rmat_at(CPIX,CPIX,CPIX))
+                    call odd%set_rmat_at(i,j,k, subvols_odd(ithr)%get_rmat_at(CPIX,CPIX,CPIX))
                 end do
             end do
         end do
         !$omp end parallel do
-        ! write output
-        call ecopy%write('nonuniform_lp_even.mrc')
-        call ocopy%write('nonuniform_lp_odd.mrc')
         ! destruct
         deallocate(l_mask)
-        call ecopy%kill
-        call ocopy%kill
 
         contains
 

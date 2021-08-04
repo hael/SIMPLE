@@ -8,7 +8,7 @@ use simple_parameters, only: params_glob
 implicit none
 
 public :: read_img, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
-&norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, readrefvols, zero_refvol_fcomps_below_noise,&
+&norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, readrefvols_zero_fcomps_below_noise,&
 &preprefvol, prep2Dref, preprecvols, killrecvols, prepimgbatch, build_pftcc_particles
 private
 #include "simple_local_flags.inc"
@@ -540,27 +540,52 @@ contains
         if( has_been_searched ) call build_glob%spproj_field%map3dshift22d(-xyz(:), state=s)
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
-    subroutine readrefvols( fname_even, fname_odd )
+    subroutine readrefvols_zero_fcomps_below_noise( cline, fname_even, fname_odd )
+        use simple_estimate_ssnr, only: nonuniform_lp
+        class(cmdline),             intent(in) :: cline
         character(len=*),           intent(in) :: fname_even
         character(len=*), optional, intent(in) :: fname_odd
+        type(image) :: mskvol
         ! ensure correct build_glob%vol dim
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         call build_glob%vol%read(fname_even)
-        ! expand for fast interpolation
-        call build_glob%vol%fft
-        call build_glob%vol%expand_cmat(params_glob%alpha,norm4proj=.true.)
         if( present(fname_odd) )then
             call build_glob%vol_odd%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
             call build_glob%vol_odd%read(fname_odd)
+            if( cline%defined('mskfile') )then
+                ! zero Fourier components below noise power in a nonuniform manner
+                call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
+                call mskvol%read(params_glob%mskfile)
+                call mskvol%one_at_edge ! to expand before masking of reference
+                call nonuniform_lp(build_glob%vol, build_glob%vol_odd, mskvol)
+                ! envelope masking
+                call mskvol%read(params_glob%mskfile) ! to bring back the edge
+                call build_glob%vol%zero_env_background(mskvol)
+                call build_glob%vol_odd%zero_env_background(mskvol)
+                call build_glob%vol%mul(mskvol)
+                call build_glob%vol_odd%mul(mskvol)
+                call mskvol%kill
+                ! expand for fast interpolation
+                call build_glob%vol%fft
+                call build_glob%vol%expand_cmat(params_glob%alpha,norm4proj=.true.)
+                call build_glob%vol_odd%fft
+                call build_glob%vol_odd%expand_cmat(params_glob%alpha,norm4proj=.true.)
+            else
+                ! expand for fast interpolation
+                call build_glob%vol%fft
+                call build_glob%vol%expand_cmat(params_glob%alpha,norm4proj=.true.)
+                call build_glob%vol_odd%fft
+                call build_glob%vol_odd%expand_cmat(params_glob%alpha,norm4proj=.true.)
+                ! zero Fourier components below noise power in a global manner
+                if( params_glob%clsfrcs.eq.'no' )&
+                &call build_glob%vol%zero_fcomps_below_noise_power(build_glob%vol_odd)
+            endif
+        else
             ! expand for fast interpolation
-            call build_glob%vol_odd%fft
-            call build_glob%vol_odd%expand_cmat(params_glob%alpha,norm4proj=.true.)
+            call build_glob%vol%fft
+            call build_glob%vol%expand_cmat(params_glob%alpha,norm4proj=.true.)
         endif
-    end subroutine readrefvols
-
-    subroutine zero_refvol_fcomps_below_noise
-        call build_glob%vol%zero_fcomps_below_noise_power(build_glob%vol_odd)
-    end subroutine zero_refvol_fcomps_below_noise
+    end subroutine readrefvols_zero_fcomps_below_noise
 
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( pftcc, cline, s, do_center, xyz, iseven )
@@ -574,7 +599,7 @@ contains
         real,                    intent(in)    :: xyz(3)
         logical,                 intent(in)    :: iseven
         type(projector),  pointer     :: vol_ptr => null()
-        type(image)                   :: mskvol
+        ! type(image)                   :: mskvol
         character(len=:), allocatable :: fname_opt_filter
         real    :: subfilter(build_glob%img_match%get_filtsz())
         real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
@@ -633,20 +658,23 @@ contains
             [params_glob%boxmatch,params_glob%boxmatch,params_glob%boxmatch])
         ! masking
         if( cline%defined('mskfile') )then
+
+            ! masking performed in readrefvols_zero_fcomps_below_noise, above
+
             ! mask provided
-            call mskvol%new([params_glob%box, params_glob%box, params_glob%box], &
-                params_glob%smpd)
-            call mskvol%read(params_glob%mskfile)
-            if( params_glob%boxmatch < params_glob%box )&
-                call mskvol%clip_inplace(&
-                [params_glob%boxmatch,params_glob%boxmatch,params_glob%boxmatch])
-            if( cline%defined('lp_backgr') )then
-                call vol_ptr%lp_background(mskvol, params_glob%lp_backgr)
-            else
-                call vol_ptr%zero_env_background(mskvol)
-                call vol_ptr%mul(mskvol)
-            endif
-            call mskvol%kill
+            ! call mskvol%new([params_glob%box, params_glob%box, params_glob%box], &
+            !     params_glob%smpd)
+            ! call mskvol%read(params_glob%mskfile)
+            ! if( params_glob%boxmatch < params_glob%box )&
+            !     call mskvol%clip_inplace(&
+            !     [params_glob%boxmatch,params_glob%boxmatch,params_glob%boxmatch])
+            ! if( cline%defined('lp_backgr') )then
+            !     call vol_ptr%lp_background(mskvol, params_glob%lp_backgr)
+            ! else
+            !     call vol_ptr%zero_env_background(mskvol)
+            !     call vol_ptr%mul(mskvol)
+            ! endif
+            ! call mskvol%kill
         else
             ! circular masking
             if( params_glob%l_innermsk )then

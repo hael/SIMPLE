@@ -140,7 +140,8 @@ real, parameter    :: EXTRINITHRESH        = 0.5       !< initial randomization 
 real, parameter    :: EXTRTHRESH_CONST     = 0.2       !< threshold for factorial decay in extremal search
 real, parameter    :: SNHC2D_INITFRAC      = 0.5       !< initial neighbourhood fraction for 2D SNHC
 real, parameter    :: SNHC2D_DECAY         = 0.2       !< factorial decay in 2D SNHC
-real, parameter    :: GREEDY_FREQ          = 0.2       !< frequency of greedy search in refine3D with refine=single
+real, parameter    :: GREEDY_FREQ          = 0.2       !< frequency of greedy search in refine3D with refine=shc/neigh
+real, parameter    :: GLOB_FREQ            = 0.1       !< frequency of global search in refine3D with refine=neigh
 real, parameter    :: LP2SMPDFAC           = 0.4125    !< low-pass limit scaling constant
 real, parameter    :: LP2SMPDFAC2D         = 0.4       !< low-pass limit scaling constant
 real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)ch
