@@ -219,24 +219,30 @@ contains
 
     !>  for printing the binary FSC files produced by PRIME3D
     subroutine exec_print_fsc( self, cline )
+        use simple_estimate_ssnr, only: plot_fsc
         class(print_fsc_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type(parameters)  :: params
-        type(image)       :: img
-        real, allocatable :: res(:), fsc(:)
-        integer           :: k
-        real              :: res0143, res05
+        type(parameters)      :: params
+        type(image)           :: img
+        character(len=STDLEN) :: tmpl_fname
+        real,     allocatable :: res(:), fsc(:)
+        integer               :: k,n
+        real                  :: res0143, res05
         call params%new(cline)
         call img%new([params%box,params%box,1], params%smpd)
         res = img%get_res()
         fsc = file2rarr(params%fsc)
-        do k=1,size(fsc)
-        write(logfhandle,'(A,1X,F6.2,1X,A,1X,F15.3)') '>>> RESOLUTION:', res(k), '>>> FSC:', fsc(k)
+        n = size(fsc)
+        do k=1,n
+            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F15.3)') '>>> RESOLUTION:', res(k), '>>> FSC:', fsc(k)
         end do
         ! get & print resolution
         call get_resolution(fsc, res, res05, res0143)
         write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res0143
         write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res05
+        ! plot
+        tmpl_fname = get_fbody(params%fsc,trim(BIN_EXT),separator=.false.)
+        call plot_fsc(n, fsc, res, params%smpd, tmpl_fname)
         ! end gracefully
         call simple_end('**** SIMPLE_PRINT_FSC NORMAL STOP ****')
     end subroutine exec_print_fsc
