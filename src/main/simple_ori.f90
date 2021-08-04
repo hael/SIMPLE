@@ -544,6 +544,10 @@ contains
         integer         :: nptcls_here
         if( present(nptcls) )then
             nptcls_here = nptcls
+            if( nptcls_here == 0 )then
+                call self%set('nptcls',  0.)
+                return
+            endif
         else
             call boxfile%new(boxfname, 1)
             nptcls_here = boxfile%get_ndatalines()

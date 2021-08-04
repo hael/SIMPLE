@@ -358,7 +358,7 @@ contains
         logical, allocatable     :: mask(:,:), l_mask(:,:,:)
         real                     :: means(2), ave, sdev, maxv, minv, msk_shrunken
         integer                  :: xind, yind, alloc_stat, i, border, j, l, r, u, d, iref, ithr
-        logical :: outside
+        logical :: outside, l_err
         write(logfhandle,'(a)') '>>> EXTRACTING PEAKS'
         write(logfhandle,'(a)') '>>> FOURIER CORRELATIONS'
         allocate(ref_inds(1:ldim_shrink(1), 1:ldim_shrink(2)), source=0)
@@ -379,7 +379,12 @@ contains
         enddo
         !$omp end parallel do
         write(logfhandle,'(a)') '>>> BINARIZATION'
-        call mic_shrunken%binarize(ave+.8*sdev)
+        call mic_shrunken%binarize(ave+.8*sdev, err=l_err)
+        if( l_err )then
+            ! binarization failed because of uniform values
+            ntargets = 0
+            return
+        endif
         border = max(ldim_refs(1)/2,ldim_refs(2)/2)
         rmat_phasecorr(1:border,:,1) = 0. !set to zero the borders
         rmat_phasecorr(ldim_shrink(1)-border:ldim_shrink(1),:,1) = 0. !set to zero the borders
