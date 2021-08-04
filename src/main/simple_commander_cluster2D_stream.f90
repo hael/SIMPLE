@@ -190,7 +190,7 @@ contains
         self%available = .false.
         self%converged = .false.
         write(logfhandle,'(A,I6,A,I6,A)')'>>> CHUNK ',self%id,&
-            &': INITIATED CLASSIFICATION WITH ',self%nptcls,' PARTICLES'
+            &' INITIATED CLASSIFICATION WITH ',self%nptcls,' PARTICLES'
     end subroutine exec_classify
 
     subroutine read( self, box )
@@ -866,7 +866,6 @@ contains
                     nmics2import  = nmics2import + converged_chunks(ichunk)%nmics
                 enddo
                 if( nptcls2import == 0 ) return
-                write(logfhandle,'(A,I6,A)')'>>> TRANSFER ',nptcls2import,' CHUNK PARTICLES TO POOL'
                 ! reallocations
                 nmics_imported  = pool_proj%os_mic%get_noris()
                 nptcls_imported = pool_proj%os_ptcl2D%get_noris()
@@ -916,6 +915,8 @@ contains
                         enddo
                         fromp = fromp + nptcls
                     enddo
+                    write(logfhandle,'(A,I6,A,I6,A)')'>>> TRANSFERRED ',fromp-fromp_prev,' PARTICLES FROM CHUNK ',&
+                    &converged_chunks(ichunk)%id,' TO POOL'
                     ! transfer classes
                     l_maxed   = ncls_glob >= max_ncls ! max # of classes reached ?
                     ncls_here = ncls_glob
@@ -1093,15 +1094,13 @@ contains
                 enddo
                 nptcls_sel = count(transfer_mask)
                 allocate(prev_eo_pops(ncls_glob,2),source=0)
-                if( nptcls_old > ncls_glob*params%nptcls_per_cls )then
-                    ! such that an appropriate number of particles can be turned off 
-                ! if( nptcls_old > 0 )then
-                        srch_frac = STREAM_SRCHFRAC
+                if( real(nptcls_old) > 0.8*real(ncls_glob*params%nptcls_per_cls) )then
+                    srch_frac = STREAM_SRCHFRAC
                     if( nint(real(nptcls_old)*STREAM_SRCHFRAC) > MAX_STREAM_NPTCLS )then
                         ! cap reached
                         srch_frac = real(MAX_STREAM_NPTCLS) / real(nptcls_old)
                     endif
-                    ! randomly deactivating 'old' particles
+                    ! randomly retires 'old' particles
                     do iptcl = 1,nptcls_tot
                         if( transfer_mask(iptcl) )then
                             if( update_cnts(iptcl) >= STREAM_SRCHLIM )then
@@ -1157,7 +1156,7 @@ contains
                 call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D, './distr_cluster2D_pool', 'simple_log_cluster2D_pool')
                 pool_available = .false.
                 pool_converged = .false.
-                write(logfhandle,'(A,I6,A,I6,A,I8,A3,I8,A)')'>>> POOL          : INITIATED ITERATION ',pool_iter,' WITH ',n2update,&
+                write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',n2update,&
                 &' / ', nptcls_sel,' PARTICLES'
                 if( L_BENCH ) print *,'timer exec_classify_pool tot : ',toc(t_tot)
             end subroutine exec_classify_pool
@@ -1236,7 +1235,7 @@ contains
                         call img%read(refs_glob, ncls_glob)
                         call img%write(refs_glob, ncls_glob)
                         deallocate(cls_mask)
-                        write(logfhandle,'(A,I4,A,I6,A)')'>>> REJECTED FROM POOL: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
+                        write(logfhandle,'(A,I4,A,I6,A)')'>>> REJECTED FROM POOL: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTER(S)'
                         if( debug_here )call pool_proj%os_cls2D%write('classdoc_pool_aftersel_'//int2str(pool_iter)//'.txt')
                     endif
                 else

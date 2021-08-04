@@ -7,6 +7,7 @@ implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
 public :: subsample_filter, acc_dose2filter, dose_weight, nonuniform_lp, local_res, local_res_lp
+public :: plot_fsc
 private
 #include "simple_local_flags.inc"
 
@@ -478,5 +479,46 @@ contains
         call img2filter%set_rmat(rmat_filt)
         call resimg%kill
     end subroutine local_res_lp
+
+    subroutine plot_fsc( n, fsc, res, smpd, tmpl_fname )
+        use CPlot2D_wrapper_module
+        integer,           intent(in) :: n
+        real,              intent(in) :: fsc(n), res(n), smpd
+        character(len=*),  intent(in) :: tmpl_fname
+        real, parameter           :: SCALE = 40.
+        type(str4arr)             :: title
+        type(CPlot2D_type)        :: plot2D
+        type(CDataSet_type)       :: dataSet
+        character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, fname_eps
+        integer  :: k,iostat
+        if( n == 0 ) THROW_HARD('Empty FSC vector; plot_fsc')
+        fname_eps  = trim(tmpl_fname)//'.eps'
+        fname_pdf  = trim(tmpl_fname)//'.pdf'
+        call CPlot2D__new(plot2D, trim(tmpl_fname)//C_NULL_CHAR)
+        call CPlot2D__SetXAxisSize(plot2D, 400.d0)
+        call CPlot2D__SetYAxisSize(plot2D, 400.d0)
+        call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
+        call CPlot2D__SetFlipY(plot2D, C_FALSE)
+        call CDataSet__new(dataSet)
+        call CDataSet__SetDrawMarker(dataSet, C_FALSE)
+        call CDataSet__SetDatasetColor(dataSet, 0.d0,0.d0,1.d0)
+        do k = 1,n
+            call CDataSet_addpoint(dataSet, 1.0/res(k), fsc(k))
+        end do
+        call CPlot2D__AddDataSet(plot2D, dataset)
+        call CDataSet__delete(dataset)
+        title%str = 'Resolution (Angstroms^-1)'//C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(plot2D, title%str)
+        title%str = 'Fourier Shell Correlations'//C_NULL_CHAR
+        call CPlot2D__SetYAxisTitle(plot2D, title%str)
+        print *,trim(fname_eps)
+        call CPlot2D__OutputPostScriptPlot(plot2D, trim(fname_eps)//C_NULL_CHAR)
+        call CPlot2D__delete(plot2D)
+        ! conversion to PDF
+        ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=600 -dDEVICEHEIGHTPOINTS=600 -sOutputFile='&
+            &//trim(fname_pdf)//' '//trim(fname_eps)
+        call exec_cmdline(trim(adjustl(ps2pdf_cmd)), suppress_errors=.true., exitstat=iostat)
+        if( iostat == 0 ) call del_file(fname_eps)
+    end subroutine plot_fsc
 
 end module simple_estimate_ssnr
