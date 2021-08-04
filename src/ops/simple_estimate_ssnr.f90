@@ -501,7 +501,6 @@ contains
         call CPlot2D__SetXAxisTitle(plot2D, title%str)
         title%str = 'Fourier Shell Correlations'//C_NULL_CHAR
         call CPlot2D__SetYAxisTitle(plot2D, title%str)
-        print *,trim(fname_eps)
         call CPlot2D__OutputPostScriptPlot(plot2D, trim(fname_eps)//C_NULL_CHAR)
         call CPlot2D__delete(plot2D)
         ! conversion to PDF

@@ -230,8 +230,8 @@ contains
             if( L_BENCH ) rt_init = rt_init + toc(t_init)
             ! Particles threaded loop
             if( L_BENCH ) t_align = tic()
-            !omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,updatecnt)&
-            !omp schedule(static) proc_bind(close)
+            !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,updatecnt)&
+            !$omp schedule(static) proc_bind(close)
             do iptcl_batch = 1,batchsz                     ! particle batch index
                 iptcl_map  = batch_start + iptcl_batch - 1 ! masked global index (cumulative batch index)
                 iptcl      = pinds(iptcl_map)              ! global index
@@ -282,7 +282,7 @@ contains
                 ! cleanup
                 call strategy2Dsrch(iptcl_batch)%ptr%kill
             enddo ! Particles threaded loop
-            !omp end parallel do
+            !$omp end parallel do
             if( L_BENCH ) rt_align = rt_align + toc(t_align)
         enddo ! Batch loop
 
