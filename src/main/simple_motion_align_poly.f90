@@ -133,11 +133,11 @@ contains
         class(motion_align_poly), intent(inout) :: self
         integer :: ithr
         allocate(self%tmp_imgs(self%nthr))
-        ! $omp parallel do private(ithr) default(shared) proc_bind(close) schedule(static)
+        !$omp parallel do private(ithr) default(shared) proc_bind(close) schedule(static)
         do ithr = 1,self%nthr
             call self%tmp_imgs(ithr)%new(self%ldim_tile, self%smpd, wthreads=.false.)
         enddo
-        ! $omp end do
+        !$omp end parallel do
     end subroutine alloc_tmp_objs
 
     subroutine gen_patches_dimensions( self )
@@ -1102,11 +1102,11 @@ contains
         class(motion_align_poly), intent(inout) :: self
         integer :: ithr
         if( allocated(self%tmp_imgs ))then
-            ! $omp parallel do private(ithr) default(shared) proc_bind(close) schedule(static)
+            !$omp parallel do private(ithr) default(shared) proc_bind(close) schedule(static)
             do ithr = 1,self%nthr
                 call self%tmp_imgs(ithr)%kill
             enddo
-            ! $omp end do
+            !$omp end parallel do
             deallocate(self%tmp_imgs)
         endif
     end subroutine dealloc_tmp_objs

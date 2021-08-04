@@ -3739,7 +3739,7 @@ contains
                 enddo
             end do
         end do
-        !omp end parallel do
+        !$omp end parallel do
         call img%set_rmat(rmat_t)
         deallocate(rmat, rmat_t, shifted_filt)
     end subroutine imfilter1
@@ -3775,7 +3775,7 @@ contains
                 enddo
             end do
         end do
-        !omp end parallel do
+        !$omp end parallel do
         call img%set_rmat(rmat_t)
         deallocate(rmat, rmat_t, shifted_filt)
     end subroutine imfilter2
@@ -3816,7 +3816,7 @@ contains
                 enddo
             end do
         end do
-        !omp end parallel do
+        !$omp end parallel do
         call img%set_rmat(rmat_t)
         deallocate(rmat, rmat_t, shifted_filt)
     end subroutine imfilter3
