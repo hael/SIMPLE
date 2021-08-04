@@ -22,13 +22,13 @@ private
 real,                  parameter   :: GREEDY_TARGET_LP    = 15.
 integer,               parameter   :: MINBOXSZ            = 72    ! minimum boxsize for scaling
 integer,               parameter   :: WAIT_WATCHER        = 5    ! seconds prior to new stack detection
-! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 300   ! dev settings
-integer,               parameter   :: ORIGPROJ_WRITEFREQ = 7200  ! Frequency at which the original project file should be updated
+integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 1800   ! dev settings
+! integer,               parameter   :: ORIGPROJ_WRITEFREQ = 7200  ! Frequency at which the original project file should be updated
 integer,               parameter   :: FREQ_POOL_REJECTION = 5   !
 character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter   :: SPPROJ_SNAPSHOT     = 'SIMPLE_PROJECT_SNAPSHOT'
 character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
-character(len=STDLEN), parameter   :: PROJFILE_CHUNK      = 'chunk.simple'
+character(len=STDLEN), parameter   :: PROJNAME_CHUNK      = 'chunk'
 character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
 logical,               parameter   :: DEBUG_HERE          = .false.
 
@@ -41,7 +41,7 @@ type chunk
     type(sp_project)                       :: spproj
     type(qsys_env)                         :: qenv
     character(len=LONGSTRLEN), allocatable :: orig_stks(:)
-    character(len=LONGSTRLEN)              :: path
+    character(len=LONGSTRLEN)              :: path, projfile_out
     integer                                :: id
     integer                                :: it
     integer                                :: nmics
@@ -73,7 +73,8 @@ contains
         self%nmics     = 0
         self%nptcls    = 0
         self%path      = './chunk_'//int2str(id)//'/'
-        call self%qenv%new(params_glob%nparts_chunk,exec_bin='simple_exec')
+        self%projfile_out = ''
+        call self%qenv%new(params_glob%nparts_chunk,exec_bin='simple_private_exec')
         self%spproj%projinfo = master_spproj%projinfo
         self%spproj%compenv  = master_spproj%compenv
         call self%spproj%projinfo%delete_entry('projname')
@@ -141,35 +142,40 @@ contains
         class(cmdline),            intent(inout) :: cline_classify
         real,                      intent(in)    :: orig_smpd
         integer,                   intent(in)    :: orig_box, box
-        type(cmdline)    :: cline_scale
+        type(cmdline)               :: cline_scale
         character(len=XLONGSTRLEN) :: cwd
-        logical          :: err
+        character(len=LONGSTRLEN)  :: projfile_in
+        logical :: err
         if( .not.self%available ) return
+        if( self%nptcls == 0 ) return
         err = .false.
         call simple_mkdir(self%path)
         call chdir(self%path)
         call simple_getcwd(cwd)
-        cwd_glob = trim(cwd)
+        cwd_glob    = trim(cwd)
+        projfile_in = trim(PROJNAME_CHUNK)//trim(METADATA_EXT)
         ! scaling
         if( box /= orig_box )then
-            call cline_scale%set('prg',        'scale_project')
-            call cline_scale%set('projfile',   trim(PROJFILE_CHUNK))
-            call cline_scale%set('projname',   trim(get_fbody(trim(PROJFILE_CHUNK),trim('simple'))))
+            self%projfile_out = trim(PROJNAME_CHUNK)//SCALE_SUFFIX//trim(METADATA_EXT) ! as per scale_project convention
+            call cline_scale%set('prg',        'scale_project_distr')
+            call cline_scale%set('projname',   trim(PROJNAME_CHUNK))
+            call cline_scale%set('projfile',   projfile_in)
             call cline_scale%set('smpd',       orig_smpd)
             call cline_scale%set('box',        real(orig_box))
             call cline_scale%set('newbox',     real(box))
             call cline_scale%set('nparts',     real(params_glob%nparts_chunk))
             call cline_scale%set('nthr',       real(params_glob%nthr))
-            call cline_scale%set('mkdir',      'yes')
+            call cline_scale%set('mkdir',      'yes') ! required but not done as it is a simple_private_exec
             call cline_scale%set('dir_target', '../'//trim(SCALE_DIR))
             call self%spproj%update_projinfo(cline_scale)
-            call self%spproj%write(PROJFILE_CHUNK)
-            call cline_classify%delete('projfile')
+            call self%spproj%write(projfile_in)
             call cline_classify%delete('projname')
+            call cline_classify%set('projfile',self%projfile_out)
             call self%qenv%exec_simple_prg_in_queue_async(cline_scale, './distr_chunk2D', 'simple_log_chunk2d', cline2=cline_classify )
         else
-            call cline_classify%set('projfile', trim(PROJFILE_CHUNK))
-            call cline_classify%set('projname', trim(get_fbody(trim(PROJFILE_CHUNK),trim('simple'))))
+            self%projfile_out = trim(projfile_in)
+            call cline_classify%set('projfile', projfile_in)
+            call cline_classify%set('projname', trim(PROJNAME_CHUNK))
             call self%spproj%update_projinfo(cline_classify)
             call self%spproj%write()
             call self%qenv%exec_simple_prg_in_queue_async(cline_classify, './distr_chunk2D', 'simple_log_chunk2d')
@@ -191,12 +197,10 @@ contains
         class(chunk), intent(inout) :: self
         integer,      intent(in)    :: box
         type(image)                :: img, avg
-        character(len=XLONGSTRLEN) :: path_cluster2d, projfile
+        character(len=XLONGSTRLEN) :: projfile
         if( .not.self%converged )THROW_HARD('cannot read chunk prior to convergence')
-        path_cluster2d = trim(self%path)//'2_cluster2D/'
         ! doc & parameters
-        projfile = trim(path_cluster2d)//trim(get_fbody(trim(PROJFILE_CHUNK),trim('simple')))&
-            &//trim(SCALE_SUFFIX)//trim(METADATA_EXT)
+        projfile = trim(self%path)//trim(self%projfile_out)
         call self%spproj%read_segment('mic',   projfile)
         call self%spproj%read_segment('stk',   projfile)
         call self%spproj%read_segment('ptcl2D',projfile)
@@ -205,10 +209,10 @@ contains
         ! classes, to account for nparts /= nparts_chunk
         call img%new([box,box,1],1.0)
         call avg%new([box,box,1],1.0)
-        call average_into(trim(path_cluster2d)//'cavgs_even_part')
-        call average_into(trim(path_cluster2d)//'cavgs_odd_part')
-        call average_into(trim(path_cluster2d)//'ctfsqsums_even_part')
-        call average_into(trim(path_cluster2d)//'ctfsqsums_odd_part')
+        call average_into(trim(self%path)//'cavgs_even_part')
+        call average_into(trim(self%path)//'cavgs_odd_part')
+        call average_into(trim(self%path)//'ctfsqsums_even_part')
+        call average_into(trim(self%path)//'ctfsqsums_odd_part')
         call img%kill
         call avg%kill
         contains
@@ -242,7 +246,7 @@ contains
         character(len=XLONGSTRLEN) :: fname
         real                       :: mi_class,frac,corr
         integer                    :: it
-        fname = trim(self%path)//'2_cluster2D/'//trim(STATS_FILE )
+        fname = trim(self%path)//trim(STATS_FILE )
         if( file_exists(fname) )then
             call os%new(1,is_ptcl=.false.)
             call os%read(fname)
@@ -261,7 +265,7 @@ contains
 
     logical function has_converged( self )
         class(chunk), intent(inout) :: self
-        self%converged = file_exists(trim(self%path)//'2_cluster2D/'//trim(CLUSTER2D_FINISHED))
+        self%converged = file_exists(trim(self%path)//trim(CLUSTER2D_FINISHED))
         has_converged   = self%converged
     end function has_converged
 
@@ -277,14 +281,13 @@ contains
         integer               :: nptcls_rejected, ncls_rejected, iptcl
         integer               :: boxmatch, icls, ncls_here, cnt
         if( DEBUG_HERE ) print *,'in chunk%reject'; call flush(6)
-        projfile = trim(self%path)//'2_cluster2D/'//trim(get_fbody(trim(PROJFILE_CHUNK),trim('simple')))&
-            &//trim(SCALE_SUFFIX)//trim(METADATA_EXT)
+        projfile = trim(self%path)//self%projfile_out
         ncls_rejected   = 0
         nptcls_rejected = 0
-        call self%spproj%read_segment('cls2D', projfile)
-        call self%spproj%read_segment('out',   projfile)
+        call self%spproj%read_segment('cls2D',projfile)
+        call self%spproj%read_segment('out',  projfile)
         call self%spproj%get_cavgs_stk(cavgs, ncls_here, smpd_here)
-        cavgs = trim(self%path)//'2_cluster2D/'//basename(cavgs)
+        cavgs = trim(self%path)//basename(cavgs)
         allocate(cls_mask(ncls_here), source=.true.)
         boxmatch = find_boxmatch(box, msk)
         call self%spproj%os_cls2D%find_best_classes(boxmatch, smpd_here, res_thresh, cls_mask, ndev)
@@ -333,6 +336,7 @@ contains
     subroutine print_info( self )
         class(chunk), intent(inout) :: self
         print *,'self%id           : ',self%id
+        print *,'self%path         : ',trim(self%path)
         print *,'self%it           : ',self%it
         print *,'self%nmics        : ',self%nmics
         print *,'self%nptcls       : ',self%nptcls
@@ -349,6 +353,7 @@ contains
         self%nmics     = 0
         self%nptcls    = 0
         self%path      = ''
+        self%projfile_out = ''
         if( allocated(self%orig_stks) ) deallocate(self%orig_stks)
         self%converged = .false.
         self%available = .false.
@@ -445,9 +450,10 @@ contains
         call cline_cluster2D_chunk%set('match_filt','no')
         call cline_cluster2D_chunk%set('autoscale', 'no')
         call cline_cluster2D_chunk%set('ptclw',     'no')
-        call cline_cluster2D_chunk%set('mkdir',     'yes')
+        call cline_cluster2D_chunk%set('mkdir',     'no')
         call cline_cluster2D_chunk%set('stream',    'no')
         call cline_cluster2D_chunk%delete('update_frac')
+        call cline_cluster2D_chunk%delete('dir_target')
         if( l_greedy )then
             call cline_cluster2D_chunk%set('maxits', 10.)
             call cline_cluster2D_chunk%set('refine', 'greedy')
@@ -498,7 +504,7 @@ contains
             call chunks(ichunk)%init(ichunk, pool_proj)
         enddo
         glob_chunk_id = params%nchunks
-        call qenv_pool%new(params%nparts,exec_bin='simple_exec')
+        call qenv_pool%new(params%nparts,exec_bin='simple_private_exec')
         ! wait for first stacks
         do
             if( file_exists(spproj_list_fname) )then
@@ -682,7 +688,6 @@ contains
             call qsys_cleanup
             call simple_rmdir(SCALE_DIR)
             call del_file(PROJFILE_POOL)
-            call del_file(PROJFILE_CHUNK)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER2D_STREAM NORMAL STOP ****')
@@ -807,35 +812,34 @@ contains
                         enough = nptcls >= nptcls_per_chunk
                         if( enough )exit
                     enddo
+                    if( .not.enough ) exit
                     ! generate new chunk
-                    if( enough )then
-                        n_new = iproj - first_new + 1
-                        allocate(spprojs_for_chunk(n_new))
-                        cnt = 0
-                        do jproj = first_new,iproj
-                            cnt = cnt + 1
-                            spprojs_for_chunk(cnt) = trim(spproj_list(jproj))
-                        enddo
-                        call chunks(ichunk)%generate(spprojs_for_chunk, nptcls, first_new)
-                        n_new_chunks = n_new_chunks + 1
-                        ! update list of imported projects
-                        if( nmics_imported == 0 )then
-                            allocate(imported_spprojs(n_new))
-                        else
-                            tmp = imported_spprojs(:)
-                            deallocate(imported_spprojs)
-                            allocate(imported_spprojs(nmics_imported+n_new))
-                            imported_spprojs(1:nmics_imported) = tmp(:)
-                            deallocate(tmp)
-                        endif
-                        imported_spprojs(nmics_imported+1:nmics_imported+n_new) = spprojs_for_chunk(:)
-                        nmics_imported = nmics_imported + n_new
-                        deallocate(spprojs_for_chunk)
-                        ! update for next chunk
-                        spproj_nptcls(first_new:iproj) = 0
-                        spproj_mask(first_new:iproj)   = .false.
-                        first_new = min(iproj+1,n_spprojs)
+                    n_new = iproj - first_new + 1
+                    allocate(spprojs_for_chunk(n_new))
+                    cnt = 0
+                    do jproj = first_new,iproj
+                        cnt = cnt + 1
+                        spprojs_for_chunk(cnt) = trim(spproj_list(jproj))
+                    enddo
+                    call chunks(ichunk)%generate(spprojs_for_chunk, nptcls, first_new)
+                    n_new_chunks = n_new_chunks + 1
+                    ! update list of imported projects
+                    if( nmics_imported == 0 )then
+                        allocate(imported_spprojs(n_new))
+                    else
+                        tmp = imported_spprojs(:)
+                        deallocate(imported_spprojs)
+                        allocate(imported_spprojs(nmics_imported+n_new))
+                        imported_spprojs(1:nmics_imported) = tmp(:)
+                        deallocate(tmp)
                     endif
+                    imported_spprojs(nmics_imported+1:nmics_imported+n_new) = spprojs_for_chunk(:)
+                    nmics_imported = nmics_imported + n_new
+                    deallocate(spprojs_for_chunk)
+                    ! update for next chunk
+                    spproj_nptcls(first_new:iproj) = 0
+                    spproj_mask(first_new:iproj)   = .false.
+                    first_new = min(iproj+1,n_spprojs)
                 enddo
                 if( debug_here )then
                     print *,'nmics_imported: ',nmics_imported
@@ -918,7 +922,7 @@ contains
                     if( .not.l_maxed ) ncls_here = ncls_glob+params%ncls_start
                     states = nint(converged_chunks(ichunk)%spproj%os_ptcl2D%get_all('state'))
                     call converged_chunks(ichunk)%spproj%get_cavgs_stk(cavgs_chunk, ncls_tmp, smpd_here)
-                    dir_chunk   = trim(converged_chunks(ichunk)%path)//'2_cluster2D/'
+                    dir_chunk   = trim(converged_chunks(ichunk)%path)
                     cavgs_chunk = trim(dir_chunk)//basename(cavgs_chunk)
                     call frcs_chunk%new(params%ncls_start, box, smpd, nstates=1)
                     call frcs_chunk%read(trim(dir_chunk)//trim(FRCS_FILE))
@@ -1050,7 +1054,7 @@ contains
             end subroutine import_chunks_into_pool
 
             subroutine exec_classify_pool
-                logical,      parameter :: L_BENCH = .true.
+                logical,      parameter :: L_BENCH = .false.
                 logical, allocatable    :: transfer_mask(:)
                 integer, allocatable    :: update_cnts(:), prev_eo_pops(:,:)
                 real                    :: srch_frac, frac_update
@@ -1089,10 +1093,9 @@ contains
                 enddo
                 nptcls_sel = count(transfer_mask)
                 allocate(prev_eo_pops(ncls_glob,2),source=0)
-                write(logfhandle,'(A,I6)')'>>> TOTAL # OF PARTICLES IN POOL: ', nptcls_sel
-                ! if( nptcls_old > ncls_glob*params%nptcls_per_cls )then
+                if( nptcls_old > ncls_glob*params%nptcls_per_cls )then
                     ! such that an appropriate number of particles can be turned off 
-                if( nptcls_old > 0 )then
+                ! if( nptcls_old > 0 )then
                         srch_frac = STREAM_SRCHFRAC
                     if( nint(real(nptcls_old)*STREAM_SRCHFRAC) > MAX_STREAM_NPTCLS )then
                         ! cap reached
@@ -1154,7 +1157,8 @@ contains
                 call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D, './distr_cluster2D_pool', 'simple_log_cluster2D_pool')
                 pool_available = .false.
                 pool_converged = .false.
-                write(logfhandle,'(A,I6,A,I6,A,I8,A)')'>>> POOL          : INITIATED ITERATION ',pool_iter,' WITH ',n2update,' PARTICLES'
+                write(logfhandle,'(A,I6,A,I6,A,I8,A3,I8,A)')'>>> POOL          : INITIATED ITERATION ',pool_iter,' WITH ',n2update,&
+                &' / ', nptcls_sel,' PARTICLES'
                 if( L_BENCH ) print *,'timer exec_classify_pool tot : ',toc(t_tot)
             end subroutine exec_classify_pool
 
@@ -1212,9 +1216,9 @@ contains
                     if( nptcls_rejected > 0 )then
                         do icls=1,ncls_glob
                             if( .not.cls_mask(icls) )then
+                                if( pool_proj%os_cls2D%get(icls,'pop') > 0.5 ) ncls_rejected = ncls_rejected+1
                                 call pool_proj%os_cls2D%set(icls,'pop',0.)
                                 call pool_proj%os_cls2D%set(icls,'corr',-1.)
-                                ncls_rejected = ncls_rejected+1
                             endif
                         enddo
                         cnt = 0

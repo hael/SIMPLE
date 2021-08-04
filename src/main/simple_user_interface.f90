@@ -81,7 +81,6 @@ type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
 type(simple_program), target :: center2D_nano
 type(simple_program), target :: cluster2D
-type(simple_program), target :: cluster2D_distr
 type(simple_program), target :: cluster2D_nano
 type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster3D
@@ -408,7 +407,6 @@ contains
         call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(center2D_nano)
         call push2prg_ptr_array(cluster2D)
-        call push2prg_ptr_array(cluster2D_distr)
         call push2prg_ptr_array(cluster2D_nano)
         call push2prg_ptr_array(cluster2D_stream)
         call push2prg_ptr_array(cluster3D)
@@ -527,8 +525,6 @@ contains
                 ptr2prg => center2D_nano
             case('cluster2D')
                 ptr2prg => cluster2D
-            case('cluster2D_distr')
-                ptr2prg => cluster2D_distr
             case('cluster2D_nano')
                 ptr2prg => cluster2D_nano
             case('cluster2D_stream')
