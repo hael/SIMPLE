@@ -22,8 +22,8 @@ private
 real,                  parameter   :: GREEDY_TARGET_LP    = 15.
 integer,               parameter   :: MINBOXSZ            = 72    ! minimum boxsize for scaling
 integer,               parameter   :: WAIT_WATCHER        = 5    ! seconds prior to new stack detection
-integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 1800   ! dev settings
-! integer,               parameter   :: ORIGPROJ_WRITEFREQ = 7200  ! Frequency at which the original project file should be updated
+! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 1800   ! dev settings
+integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
 integer,               parameter   :: FREQ_POOL_REJECTION = 5   !
 character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter   :: SPPROJ_SNAPSHOT     = 'SIMPLE_PROJECT_SNAPSHOT'
@@ -736,6 +736,13 @@ contains
                     pool_proj%os_cls2D = spproj%os_cls2D
                     call pool_proj%os_cls2D%delete_entry('find')
                     call pool_proj%os_cls2D%set_all('pop', real(pops))
+                    ! for gui
+                    os = pool_proj%os_cls2D
+                    call pool_proj%add_cavgs2os_out(refs_glob, smpd, 'cavg')
+                    pool_proj%os_cls2D = os
+                    call pool_proj%write_segment_inside('out',   orig_projfile)
+                    call pool_proj%write_segment_inside('cls2D', orig_projfile)
+                    call os%kill
                 endif
                 call spproj%kill
             end subroutine update_pool
@@ -851,6 +858,7 @@ contains
                 character(LONGSTRLEN), allocatable :: tmp(:)
                 character(len=:),      allocatable :: cavgs_chunk, dir_chunk
                 integer,               allocatable :: cls_pop(:), cls_chunk_pop(:), pinds(:), states(:)
+                type(oris) :: os_backup
                 character(len=LONGSTRLEN) :: stk_relpath
                 real    :: smpd_here
                 integer :: nptcls_imported, nptcls2import
@@ -1045,6 +1053,13 @@ contains
                     call converged_chunks(ichunk)%remove_folder
                     call converged_chunks(ichunk)%kill
                 enddo
+                ! for gui
+                os_backup = pool_proj%os_cls2D
+                call pool_proj%add_cavgs2os_out(refs_glob, smpd, 'cavg')
+                pool_proj%os_cls2D = os_backup
+                call pool_proj%write_segment_inside('out',   orig_projfile)
+                call pool_proj%write_segment_inside('cls2D', orig_projfile)
+                call os_backup%kill
                 ! cleanup
                 deallocate(converged_chunks)
                 call frcs_prev%kill
@@ -1093,7 +1108,7 @@ contains
                 enddo
                 nptcls_sel = count(transfer_mask)
                 allocate(prev_eo_pops(ncls_glob,2),source=0)
-                if( real(nptcls_old) > 0.8*real(ncls_glob*params%nptcls_per_cls) )then
+                if( nptcls_old > params%ncls_start*params%nptcls_per_cls )then
                     srch_frac = STREAM_SRCHFRAC
                     if( nint(real(nptcls_old)*STREAM_SRCHFRAC) > MAX_STREAM_NPTCLS )then
                         ! cap reached
