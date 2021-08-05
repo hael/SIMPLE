@@ -37,7 +37,7 @@ contains
         if( cline%defined('stk') .and. cline%defined('vol1') ) THROW_HARD('Cannot operate on images AND volume at once')
         if( cline%defined('stk') )then
             ! 2D
-            call build%init_params_and_build_general_tbox(cline,params,do3d=.false.,boxmatch_off=.true.)
+            call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
             if( cline%defined('msk') .or. cline%defined('inner') )then
                 ! spherical
                 if( cline%defined('inner') )then
@@ -56,7 +56,7 @@ contains
             endif
         else if( cline%defined('vol1') )then
             ! 3D
-            call build%init_params_and_build_general_tbox(cline,params,do3d=.true.,boxmatch_off=.true.)
+            call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
             if( .not. file_exists(params%vols(1)) ) THROW_HARD('Cannot find input volume')
             call build%vol%read(params%vols(1))
             if( cline%defined('mskfile') )then

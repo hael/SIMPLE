@@ -120,7 +120,7 @@ contains
                     extr_score_thresh = build_glob%spproj_field%extremal_bound(extr_thresh, 'corr')
                     if( cline%defined('lpstart') )then
                         ! resolution limit update
-                        lpind_start       = calc_fourier_index(params_glob%lpstart,params_glob%boxmatch,params_glob%smpd)
+                        lpind_start       = calc_fourier_index(params_glob%lpstart,params_glob%box,params_glob%smpd)
                         lpind_anneal      = nint(real(lpind_start) + (1.-anneal_ratio)*real(params_glob%kstop-lpind_start))
                         params_glob%kstop = min(lpind_anneal, params_glob%kstop)
                         resarr            = build_glob%img%get_res()
@@ -173,7 +173,7 @@ contains
         call prepimgbatch(batchsz_max)
         !$omp parallel do default(shared) private(imatch) schedule(static) proc_bind(close)
         do imatch=1,batchsz_max
-            call match_imgs(imatch)%new([params_glob%boxmatch, params_glob%boxmatch, 1], params_glob%smpd)
+            call match_imgs(imatch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd)
             call match_imgs(imatch)%copy_polarizer(build_glob%img_match)
         end do
         !$omp end parallel do

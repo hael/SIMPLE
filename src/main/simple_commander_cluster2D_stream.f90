@@ -275,11 +275,11 @@ contains
         integer,       intent(in)    :: box
         type(image) :: img
         logical,          allocatable :: cls_mask(:)
-        character(len=:), allocatable :: cavgs 
+        character(len=:), allocatable :: cavgs
         character(len=XLONGSTRLEN) :: projfile
         real                  :: smpd_here
         integer               :: nptcls_rejected, ncls_rejected, iptcl
-        integer               :: boxmatch, icls, ncls_here, cnt
+        integer               :: icls, ncls_here, cnt
         if( DEBUG_HERE ) print *,'in chunk%reject'; call flush(6)
         projfile = trim(self%path)//self%projfile_out
         ncls_rejected   = 0
@@ -289,8 +289,7 @@ contains
         call self%spproj%get_cavgs_stk(cavgs, ncls_here, smpd_here)
         cavgs = trim(self%path)//basename(cavgs)
         allocate(cls_mask(ncls_here), source=.true.)
-        boxmatch = find_boxmatch(box, msk)
-        call self%spproj%os_cls2D%find_best_classes(boxmatch, smpd_here, res_thresh, cls_mask, ndev)
+        call self%spproj%os_cls2D%find_best_classes(box, smpd_here, res_thresh, cls_mask, ndev)
         ncls_rejected = count(.not.cls_mask)
         if( ncls_rejected == 0 .or. ncls_rejected == ncls_here )then
             ! nothing to do
@@ -890,7 +889,7 @@ contains
                 iptcl = nptcls_imported
                 do ichunk = 1,nchunks2import
                     fromp_prev = fromp
-                    call converged_chunks(ichunk)%read(boxpd) 
+                    call converged_chunks(ichunk)%read(boxpd)
                     ! transfer micrographs, stacks & particles parameters
                     jptcl = 0
                     do iproj=1,converged_chunks(ichunk)%nmics
@@ -1192,17 +1191,16 @@ contains
                 logical, allocatable :: cls_mask(:)
                 real                 :: ndev_here
                 integer              :: nptcls_rejected, ncls_rejected, iptcl
-                integer              :: boxmatch, icls, cnt
+                integer              :: icls, cnt
                 if( debug_here ) print *,'in reject from_pool'; call flush(6)
                 if( pool_proj%os_cls2D%get_noris() == 0 ) return
                 ncls_rejected   = 0
                 nptcls_rejected = 0
-                boxmatch        = find_boxmatch(box, msk)
                 allocate(cls_mask(ncls_glob), source=.true.)
                 if( debug_here )call pool_proj%os_cls2D%write('classdoc_pool_beforesel_'//int2str(pool_iter)//'.txt')
                 ! correlation & resolution
                 ndev_here = 1.5*params%ndev ! less stringent rejection
-                call pool_proj%os_cls2D%find_best_classes(boxmatch,smpd,params%lpthresh,cls_mask,ndev_here)
+                call pool_proj%os_cls2D%find_best_classes(box,smpd,params%lpthresh,cls_mask,ndev_here)
                 if( count(cls_mask) > 1 .and. count(cls_mask) < ncls_glob )then
                     ncls_rejected = 0
                     do iptcl=1,pool_proj%os_ptcl2D%get_noris()

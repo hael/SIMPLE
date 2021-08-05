@@ -325,7 +325,7 @@ contains
         type(ori)        :: o
         type(image)      :: vol_rot
         real             :: shvec(3),  ave, sdev, maxv, minv
-        call build%init_params_and_build_general_tbox(cline,params,boxmatch_off=.true.)
+        call build%init_params_and_build_general_tbox(cline,params)
         inquire(FILE=params%vols(1), EXIST=here)
         if( here )then
             call build%vol%read(params%vols(1))

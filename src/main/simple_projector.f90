@@ -88,7 +88,7 @@ contains
         l_norm4proj = .false.
         if( present(norm4proj) ) l_norm4proj = norm4proj
         factor = 1.
-        if( l_norm4proj ) factor = real(params_glob%boxmatch)**3 / real(params_glob%box)**2
+        if( l_norm4proj ) factor = real(params_glob%box)**3 / real(params_glob%box)**2
         allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
                                 &self%ldim_exp(2,1):self%ldim_exp(2,2),&
                                 &self%ldim_exp(3,1):self%ldim_exp(3,2)),&

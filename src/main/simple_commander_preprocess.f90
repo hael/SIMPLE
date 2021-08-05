@@ -1878,7 +1878,6 @@ contains
                 call boxfile%readNextDataLine(boxdata(1,:))
                 call boxfile%kill
                 params%box = nint(boxdata(1,3))
-                params%boxmatch = params%box
             endif
         enddo
         call spproj%write

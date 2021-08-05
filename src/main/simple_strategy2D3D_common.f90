@@ -94,17 +94,14 @@ contains
         character(len=STDLEN) :: fsc_fname
         logical               :: fsc_bin_exists(params_glob%nstates), all_fsc_bin_exist
         ! Nyqvist index
-        k_nyq = calc_fourier_index(2.*params_glob%smpd, params_glob%boxmatch, params_glob%smpd)
+        k_nyq = calc_fourier_index(2.*params_glob%smpd, params_glob%box, params_glob%smpd)
         if( params_glob%l_lpset )then
             ! set Fourier index range
-            params_glob%kfromto(1) = max(2, calc_fourier_index( params_glob%hp, &
-                params_glob%boxmatch, params_glob%smpd))
-            params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, &
-                params_glob%boxmatch, params_glob%smpd)
+            params_glob%kfromto(1) = max(2, calc_fourier_index( params_glob%hp, params_glob%box, params_glob%smpd))
+            params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
             if( cline%defined('lpstop') )then
-                params_glob%kfromto(2) = min(params_glob%kfromto(2), &
-                    calc_fourier_index(params_glob%lpstop, &
-                    params_glob%boxmatch, params_glob%smpd))
+                params_glob%kfromto(2) = min(params_glob%kfromto(2),&
+                    &calc_fourier_index(params_glob%lpstop, params_glob%box, params_glob%smpd))
             endif
             params_glob%kstop = params_glob%kfromto(2)
             if( params_glob%l_needs_sigma ) params_glob%kfromto(2) = k_nyq
@@ -159,32 +156,27 @@ contains
                     lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
                 endif
                 ! interpolation limit is NOT Nyqvist in correlation search
-                params_glob%kfromto(2) = calc_fourier_index(resarr(lp_ind), &
-                    params_glob%boxmatch, params_glob%smpd)
+                params_glob%kfromto(2) = calc_fourier_index(resarr(lp_ind), params_glob%box, params_glob%smpd)
             else if( params_glob%l_lpset )then
-                params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, &
-                    params_glob%boxmatch, params_glob%smpd)
+                params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
             else if( build_glob%spproj_field%isthere(params_glob%fromp,'lp') )then
                 params_glob%kfromto(2) = calc_fourier_index(&
-                    build_glob%spproj_field%get(params_glob%fromp,'lp'), &
-                    params_glob%boxmatch, params_glob%smpd)
+                    build_glob%spproj_field%get(params_glob%fromp,'lp'), params_glob%box, params_glob%smpd)
             else
                 THROW_HARD('no method available for setting the low-pass limit. Need fsc file or lp find; set_bp_range')
             endif
             ! lpstop overrides any other method for setting the low-pass limit
             if( cline%defined('lpstop') )then
                 params_glob%kfromto(2) = min(params_glob%kfromto(2), &
-                    calc_fourier_index(params_glob%lpstop, params_glob%boxmatch, params_glob%smpd))
+                    calc_fourier_index(params_glob%lpstop, params_glob%box, params_glob%smpd))
             endif
             ! low-pass limit equals interpolation limit for correlation search
             params_glob%kstop = params_glob%kfromto(2)
             if( params_glob%l_needs_sigma ) params_glob%kfromto(2) = k_nyq
             ! set high-pass Fourier index limit
-            params_glob%kfromto(1) = max(2,calc_fourier_index( params_glob%hp, &
-                params_glob%boxmatch, params_glob%smpd))
+            params_glob%kfromto(1) = max(2,calc_fourier_index( params_glob%hp, params_glob%box, params_glob%smpd))
             ! re-set the low-pass limit
-            params_glob%lp = calc_lowpass_lim(params_glob%kstop, &
-                params_glob%boxmatch, params_glob%smpd)
+            params_glob%lp = calc_lowpass_lim(params_glob%kstop, params_glob%box, params_glob%smpd)
         endif
         call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
     end subroutine set_bp_range
@@ -196,12 +188,12 @@ contains
         real    :: lplim
         integer :: lpstart_find, k_nyq
         ! Nyqvist index
-        k_nyq = calc_fourier_index(2.*params_glob%smpd, params_glob%boxmatch, params_glob%smpd)
+        k_nyq = calc_fourier_index(2.*params_glob%smpd, params_glob%box, params_glob%smpd)
         ! High-pass index
-        params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, params_glob%boxmatch, params_glob%smpd))
+        params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
         if( params_glob%l_lpset )then
             lplim = params_glob%lp
-            params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%boxmatch, params_glob%smpd)
+            params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box, params_glob%smpd)
         else
             if( file_exists(params_glob%frcs) .and. which_iter > LPLIM1ITERBOUND )then
                 lplim = build_glob%clsfrcs%estimate_lp_for_align()
@@ -214,9 +206,9 @@ contains
                     lplim = params_glob%lplims2D(2)
                 endif
             endif
-            params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%boxmatch, params_glob%smpd)
+            params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box, params_glob%smpd)
             ! to avoid pathological cases, fall-back on lpstart
-            lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%boxmatch, params_glob%smpd)
+            lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%box, params_glob%smpd)
             if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
         endif
         params_glob%kstop = params_glob%kfromto(2)
@@ -362,13 +354,12 @@ contains
         endif
         ! return in Fourier space
         call img_out%fft()
-        call img_out%mul(real(params_glob%boxmatch**2) / real(params_glob%box**2))
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
     subroutine prep2Dref( pftcc, img_in, img_out, icls, center, xyz_in, xyz_out )
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_estimate_ssnr,    only: fsc2optlp_sub, subsample_optlp, subsample_filter
+        use simple_estimate_ssnr,    only: fsc2optlp_sub
         use simple_polarizer,        only: polarizer
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(image),            intent(inout) :: img_in
@@ -378,7 +369,6 @@ contains
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
         real    :: frc(build_glob%img%get_filtsz()), filter(build_glob%img%get_filtsz())
-        real    :: subfilter(build_glob%img_match%get_filtsz())
         real    :: xyz(3), sharg
         integer :: filtsz
         logical :: do_center
@@ -411,8 +401,7 @@ contains
         if( any(frc > 0.143) )then
             call fsc2optlp_sub(build_glob%clsfrcs%get_filtsz(), frc, filter)
             if( params_glob%l_match_filt )then
-                call subsample_optlp(filtsz, build_glob%img_match%get_filtsz(), filter, subfilter)
-                call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
+                call pftcc%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kstop))
             else
                 call img_in%fft() ! needs to be here in case the shift was never applied (above)
                 call img_in%apply_filter_serial(filter)
@@ -435,7 +424,6 @@ contains
         endif
         ! move to Fourier space
         call img_out%fft()
-        call img_out%mul(real(params_glob%boxmatch**2) / real(params_glob%box**2))
     end subroutine prep2Dref
 
     !>  \brief  initializes all volumes for reconstruction
@@ -590,7 +578,7 @@ contains
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( pftcc, cline, s, do_center, xyz, iseven )
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_estimate_ssnr,    only: fsc2optlp_sub, subsample_optlp, subsample_filter
+        use simple_estimate_ssnr,    only: fsc2optlp_sub
         use simple_projector,        only: projector
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(cmdline),          intent(inout) :: cline
@@ -601,9 +589,9 @@ contains
         type(projector),  pointer     :: vol_ptr => null()
         ! type(image)                   :: mskvol
         character(len=:), allocatable :: fname_opt_filter
-        real    :: subfilter(build_glob%img_match%get_filtsz())
+
         real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
-        integer :: iref, iproj, iprojred, filtsz, subfiltsz
+        integer :: iref, iproj, iprojred, filtsz
         if( iseven )then
             vol_ptr => build_glob%vol
         else
@@ -616,7 +604,6 @@ contains
         ! Volume filtering
         if( .not.params_glob%l_lpset )then
             filtsz    = build_glob%img%get_filtsz()
-            subfiltsz = build_glob%img_match%get_filtsz()
             if( params_glob%l_match_filt )then
                 ! stores filters in pftcc
                 if( params_glob%clsfrcs.eq.'yes')then
@@ -627,19 +614,17 @@ contains
                             if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
                             call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
                             call fsc2optlp_sub(filtsz, frc, filter)
-                            call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
-                            call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
+                            call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kstop))
                         enddo
                     endif
                 else
                     if( any(build_glob%fsc(s,:) > 0.143) )then
                         call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
-                        call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
                     else
-                        subfilter = 1.
+                        filter = 1.
                     endif
                     do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
-                        call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
+                        call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kstop))
                     enddo
                 endif
             else
@@ -652,10 +637,6 @@ contains
         endif
         ! back to real space
         call vol_ptr%ifft()
-        ! clip
-        if( params_glob%boxmatch < params_glob%box ) &
-            call vol_ptr%clip_inplace(&
-            [params_glob%boxmatch,params_glob%boxmatch,params_glob%boxmatch])
         ! masking
         if( cline%defined('mskfile') )then
 
@@ -665,9 +646,6 @@ contains
             ! call mskvol%new([params_glob%box, params_glob%box, params_glob%box], &
             !     params_glob%smpd)
             ! call mskvol%read(params_glob%mskfile)
-            ! if( params_glob%boxmatch < params_glob%box )&
-            !     call mskvol%clip_inplace(&
-            !     [params_glob%boxmatch,params_glob%boxmatch,params_glob%boxmatch])
             ! if( cline%defined('lp_backgr') )then
             !     call vol_ptr%lp_background(mskvol, params_glob%lp_backgr)
             ! else
