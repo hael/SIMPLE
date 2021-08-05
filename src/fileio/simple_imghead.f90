@@ -62,7 +62,6 @@ contains
     procedure, private :: transfer_byte_array2obj
     ! getters/setters
     procedure          :: isTiff
-    ! procedure          :: isTiffOpen
     procedure          :: CloseTiff
     procedure          :: bytesPerPix
     procedure          :: pixIsSigned
@@ -438,7 +437,6 @@ contains
                 form = fname2format(fname)
                 if( form == 'L' ) call TIFFMuteWarnings
                 self%fhandle = TIFFOpen(filename_c,open_mode_c)
-                if( form == 'L' ) call TIFFUnMuteWarnings
                 self%nx = TIFFGetWidth(self%fhandle)
                 self%ny = TIFFGetLength(self%fhandle)
                 do
@@ -447,6 +445,7 @@ contains
                     if (io_status .ne. 1)THROW_HARD('Error setting TIFF directory, or already at last directory; read_tiff')
                 enddo
                 self%nz = TIFFCurrentDirectory(self%fhandle) + 1
+                if( form == 'L' ) call TIFFUnMuteWarnings
                 self%sampleformat     = TIFFGetSampleFormat(self%fhandle)
                 self%bitspersample    = TIFFGetBitsPerSample(self%fhandle)
                 self%samplesperpixel  = TIFFGetSamplesPerPixel(self%fhandle)
@@ -1418,7 +1417,6 @@ contains
         form = fname2format(fname)
         if( form == 'L' ) call TIFFMuteWarnings
         fhandle = TIFFOpen(filename_c,open_mode_c)
-        if( form == 'L' ) call TIFFUnMuteWarnings
         ldim(1) = TIFFGetWidth(fhandle)
         ldim(2) = TIFFGetLength(fhandle)
         ldim(3) = 1 ! by convention
@@ -1427,6 +1425,7 @@ contains
             success = TIFFReadDirectory(fhandle)
             if (success .ne. 1)THROW_HARD('Error setting TIFF directory, or already at last directory; get_tiffile_info')
         enddo
+        if( form == 'L' ) call TIFFUnMuteWarnings
         nptcls = TIFFCurrentDirectory(fhandle) + 1
         if( doprint ) call TIFFPrintInfo(fhandle)
         call TIFFClose(fhandle)
