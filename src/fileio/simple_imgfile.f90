@@ -23,6 +23,13 @@ public :: imgfile
 private
 #include "simple_local_flags.inc"
 
+integer,       parameter :: TIFF_SAMPLEFORMAT_UINT          = 1
+integer,       parameter :: TIFF_SAMPLEFORMAT_INT           = 2
+integer,       parameter :: TIFF_SAMPLEFORMAT_IEEEFP        = 3
+integer,       parameter :: TIFF_SAMPLEFORMAT_VOID          = 4
+integer,       parameter :: TIFF_SAMPLEFORMAT_COMPLEXINT    = 5
+integer,       parameter :: TIFF_SAMPLEFORMAT_COMPLEXIEEEFP = 6
+
 type imgfile
     private
     class(ImgHead), allocatable :: overall_head              !< Overall image head object
@@ -102,7 +109,7 @@ contains
             allocate(SpiImgHead :: self%overall_head)
             call self%overall_head%new(ldim)
             if( ldim(3) > 1 ) self%isvol = .true.
-        case ('J')
+        case ('J','L')
             if( write_enabled ) THROW_HARD('TIFF format is only for reading; open')
             allocate(TiffImgHead :: self%overall_head)
             call self%overall_head%new(ldim)
@@ -118,7 +125,7 @@ contains
                 select case(self%head_format)
                 case ('M','S')
                     call self%overall_head%read(self%funit)
-                case('J')
+                case('J','L')
                     call self%overall_head%read_tiff(self%fname)
                 end select
             endif
@@ -406,53 +413,63 @@ contains
         class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
         integer,                intent(in)    :: image_index  !<
         real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
-        integer,       parameter :: SAMPLEFORMAT_UINT = 1
         class(ImgHead),  pointer :: ptr=>null()
-        integer(kind=1), pointer :: temp_byte_array8(:)
-        integer(kind=2), pointer :: temp_byte_array16(:)
+        integer(kind=1), pointer :: itemp_byte_array8(:)
+        integer(kind=2), pointer :: itemp_byte_array16(:)
+        real(kind=4),    pointer :: ftemp_byte_array32(:)
         type(c_ptr)              :: strip_buffer_cptr
         integer :: NumberOfStrips, rows_per_strip, prev_nbytes_in_buffer, nbytes_in_buffer, current_first_byte, current_first_row
         integer :: io_stat,dims(3),current_last_byte,current_last_row,row_counter,strip_counter
         ! checks have been performed in rSlices
-        if( self%head_format.ne.'J' ) THROW_HARD('format not supported; rTiffSlices')
-        ptr  => self%overall_head
+        select case(self%head_format)
+        case('J','L')
+            ptr  => self%overall_head
+        case DEFAULT
+            THROW_HARD('format not supported; rTiffSlices')
+        end select
         ! Get the dims of the image file
         dims = self%overall_head%getDims()
         rarr = 0. ! initialize to zero
         select type(ptr)
         type is( TiffImgHead )
 #ifdef USING_TIFF
+        if( self%head_format == 'L' ) call TIFFMuteWarnings
         io_stat = TIFFSetDirectory(ptr%fhandle,int(image_index-1,kind=c_int16_t))
+        if( self%head_format == 'L' ) call TIFFUnMuteWarnings
         if (io_stat .ne. 1) THROW_HARD('rTiffSlices; Failed to set directory to: '//int2str(image_index-1))
         ! We don't support tiled organization, only strips
         if (ptr%IsTiled) THROW_HARD('rTiffSlices; Tile-based TIFF files not supported')
         ! Number of Bits
         select case(ptr%BitsPerSample)
             case(8,16)
-                ! 8/16-bit grayscale TIFFs only supported
+                ! 8/16-bit grayscale unsigned int TIFFs only supported
+                if(ptr%SampleFormat .ne. TIFF_SAMPLEFORMAT_UINT)then
+                    THROW_HARD('rTiffSlices; 8/16-bit Unsupported sample format: '//int2str(ptr%SampleFormat))
+                endif
+            case(32)
+                ! 32-bit grayscale float TIFFs only supported
+                if(ptr%SampleFormat .ne. TIFF_SAMPLEFORMAT_IEEEFP)then
+                    THROW_HARD('rTiffSlices; Unsupported 32-bit sample format: '//int2str(ptr%SampleFormat))
+                endif
             case DEFAULT
-                THROW_HARD('rTiffSlices; Unsupported bit depth: '//int2str(ptr%BitsPerSample))
+                THROW_HARD('rTiffSlices; Unsupported combination of # bits & bit depth: '//int2str(ptr%BitsPerSample)//' & '//int2str(ptr%SampleFormat))
         end select
         if (ptr%SamplesPerPixel .ne. 1) then
             THROW_HARD('rTiffSlices; Unsupported number of samples per pixel: '//int2str(ptr%SamplesPerPixel))
-        endif
-        if(ptr%SampleFormat .ne. SAMPLEFORMAT_UINT)then
-            THROW_HARD('rTiffSlices; Unsupported sample format: '//int2str(ptr%SampleFormat))
         endif
         rows_per_strip    = ptr%RowsPerStrip
         strip_buffer_cptr = ptr%StripBuffer_cptr
         NumberOfStrips    = ptr%NumberOfStrips
         prev_nbytes_in_buffer = 0
         do strip_counter = 1,NumberOfStrips
-            ! Read a strip from the file
-            nbytes_in_buffer = TIFFReadEncodedStrip(ptr%fhandle, int(strip_counter-1,kind=c_int32_t),&
-                                                   &strip_buffer_cptr, int(-1,kind=c_int32_t))
-            if (nbytes_in_buffer .le. 0) THROW_HARD('rTiffSlices; Failed to read from strip: '//int2str(strip_counter))
             select case(ptr%BitsPerSample)
             case(8)
+                ! Read a strip from the file
+                nbytes_in_buffer = TIFFReadEncodedStrip(ptr%fhandle, int(strip_counter-1,kind=c_int32_t),strip_buffer_cptr, int(-1,kind=c_int32_t))
+                if (nbytes_in_buffer .le. 0) THROW_HARD('rTiffSlices; Failed to read from strip: '//int2str(strip_counter))
                 ! Setup F pointer to the strip data
                 if (nbytes_in_buffer .ne. prev_nbytes_in_buffer) then
-                    call c_f_pointer(strip_buffer_cptr,temp_byte_array8,[nbytes_in_buffer])
+                    call c_f_pointer(strip_buffer_cptr,itemp_byte_array8,[nbytes_in_buffer])
                 endif
                 ! Sanity check
                 if (nbytes_in_buffer .ne. rows_per_strip * dims(1)) THROW_HARD('rTiffSlices; Unexpected number of bytes in buffer')
@@ -463,23 +480,35 @@ contains
                 do row_counter=current_first_row,current_last_row
                     current_first_byte = (row_counter-current_first_row)*dims(1)+1
                     current_last_byte  = current_first_byte + dims(1) - 1
-                    rarr(1:dims(1),dims(2)-row_counter+1,1) = temp_byte_array8(current_first_byte:current_last_byte)
+                    rarr(1:dims(1),dims(2)-row_counter+1,1) = itemp_byte_array8(current_first_byte:current_last_byte)
                 enddo
             case(16)
-                ! Setup F pointer to the strip data
+                nbytes_in_buffer = TIFFReadEncodedStrip(ptr%fhandle, int(strip_counter-1,kind=c_int32_t),strip_buffer_cptr, int(-1,kind=c_int32_t))
+                if (nbytes_in_buffer .le. 0) THROW_HARD('rTiffSlices; Failed to read from strip: '//int2str(strip_counter))
                 if (nbytes_in_buffer .ne. prev_nbytes_in_buffer) then
-                    call c_f_pointer(strip_buffer_cptr,temp_byte_array16,[nbytes_in_buffer])
+                    call c_f_pointer(strip_buffer_cptr,itemp_byte_array16,[nbytes_in_buffer])
                 endif
-                ! Sanity check
                 if (nbytes_in_buffer .ne. 2*rows_per_strip*dims(1)) THROW_HARD('rTiffSlices; Unexpected number of bytes in buffer')
-                ! Which rows of the image did we just get
                 current_first_row = rows_per_strip * (strip_counter-1) + 1
                 current_last_row  = rows_per_strip * strip_counter
-                ! Copy (and cast) the data to the output array
                 do row_counter=current_first_row,current_last_row
                     current_first_byte = (row_counter-current_first_row)*dims(1)+1
                     current_last_byte  = current_first_byte + dims(1) - 1
-                    rarr(1:dims(1),dims(2)-row_counter+1,1) = temp_byte_array16(current_first_byte:current_last_byte)
+                    rarr(1:dims(1),dims(2)-row_counter+1,1) = itemp_byte_array16(current_first_byte:current_last_byte)
+                enddo
+            case(32)
+                nbytes_in_buffer = TIFFReadEncodedStrip(ptr%fhandle, int(strip_counter-1,kind=c_float),strip_buffer_cptr, int(-1,kind=c_float))
+                if (nbytes_in_buffer .le. 0) THROW_HARD('rTiffSlices; Failed to read from strip: '//int2str(strip_counter))
+                if (nbytes_in_buffer .ne. prev_nbytes_in_buffer) then
+                    call c_f_pointer(strip_buffer_cptr,ftemp_byte_array32,[nbytes_in_buffer])
+                endif
+                if (nbytes_in_buffer .ne. 4*rows_per_strip*dims(1)) THROW_HARD('rTiffSlices; Unexpected number of bytes in buffer')
+                current_first_row = rows_per_strip * (strip_counter-1) + 1
+                current_last_row  = rows_per_strip * strip_counter
+                do row_counter=current_first_row,current_last_row
+                    current_first_byte = (row_counter-current_first_row)*dims(1)+1
+                    current_last_byte  = current_first_byte + dims(1) - 1
+                    rarr(1:dims(1),dims(2)-row_counter+1,1) = ftemp_byte_array32(current_first_byte:current_last_byte)
                 enddo
             end select
         enddo
@@ -630,7 +659,7 @@ contains
             call self%setMinmax(stats(1), stats(2))
             call self%setMean(stats(3))
             call self%setRMSD(stats(4))
-        case('S','J')
+        case('S','J','L')
             ! this routine is for MRC only
             return
         case DEFAULT
