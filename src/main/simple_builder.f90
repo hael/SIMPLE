@@ -129,16 +129,12 @@ contains
         build_glob => self
     end subroutine init_params_and_build_spproj
 
-    subroutine init_params_and_build_general_tbox( self, cline, params, do3d, boxmatch_off )
+    subroutine init_params_and_build_general_tbox( self, cline, params, do3d )
         class(builder),    target, intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         class(parameters),         intent(inout) :: params
-        logical,         optional, intent(in)    :: do3d, boxmatch_off
-        logical :: bboxmatch_off
-        bboxmatch_off = .false.
-        if( present(boxmatch_off) ) bboxmatch_off = boxmatch_off
+        logical,         optional, intent(in)    :: do3d
         call params%new(cline)
-        if( bboxmatch_off ) params%boxmatch = params%box
         call self%build_spproj(params, cline)
         call self%build_general_tbox(params, cline, do3d=do3d)
         build_glob => self
@@ -251,16 +247,13 @@ contains
         endif
         if( params%box > 0 )then
             ! build image objects
-            ! box-sized ones
-            call self%img%new([params%box,params%box,1],params%smpd,                 wthreads=.false.)
-            call self%img_match%new([params%boxmatch,params%boxmatch,1],params%smpd, wthreads=.false.)
+            call self%img%new([params%box,params%box,1],params%smpd,       wthreads=.false.)
+            call self%img_match%new([params%box,params%box,1],params%smpd, wthreads=.false.)
             call self%img_copy%new([params%box,params%box,1],params%smpd,  wthreads=.false.)
-            ! for thread safety in the image class
-            call self%img%construct_thread_safe_tmp_imgs(params%nthr)
-            ! boxmatch-sized ones
-            call self%img_tmp%new([params%boxmatch,params%boxmatch,1],params%smpd,   wthreads=.false.)
-            call self%img_msk%new([params%boxmatch,params%boxmatch,1],params%smpd,   wthreads=.false.)
-            call self%mskimg%new ([params%boxmatch,params%boxmatch,1],params%smpd,   wthreads=.false.)
+            call self%img%construct_thread_safe_tmp_imgs(params%nthr) ! for thread safety in the image class
+            call self%img_tmp%new([params%box,params%box,1],params%smpd,   wthreads=.false.)
+            call self%img_msk%new([params%box,params%box,1],params%smpd,   wthreads=.false.)
+            call self%mskimg%new ([params%box,params%box,1],params%smpd,   wthreads=.false.)
             ! boxpd-sized ones
             call self%img_pad%new([params%boxpd,params%boxpd,1],params%smpd)
             if( ddo3d )then
@@ -286,10 +279,8 @@ contains
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         endif
         ! resolution mask for correlation calculation (omitting shells corresponding to the graphene signal if params%l_graphene = .true.)
-        if( params%boxmatch > 0 ) then
-            self%l_resmsk = calc_graphene_mask(params%boxmatch, params%smpd)
-            if( .not. params%l_graphene ) self%l_resmsk = .true.
-        end if
+        self%l_resmsk = calc_graphene_mask(params%box, params%smpd)
+        if( .not. params%l_graphene ) self%l_resmsk = .true.
         ! associate global build pointer
         if( .not. associated(build_glob) ) build_glob => self
         self%general_tbox_exists = .true.

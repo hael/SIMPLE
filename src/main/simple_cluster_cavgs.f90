@@ -23,12 +23,11 @@ contains
             if( cavg_imgs(icls)%is_ft() ) THROW_HARD('cavgs assumed not be FTed; cluster_cavgs')
             call cavg_imgs(icls)%norm
             call cavg_imgs(icls)%mask(params_glob%msk, 'soft')
-            if( params_glob%boxmatch /= params_glob%box ) call cavg_imgs(icls)%clip_inplace([params_glob%boxmatch,params_glob%boxmatch,1])
         end do
         write(logfhandle,'(A)') '>>> PREPARING REFERENCES IN POLAR REPRESENTATION'
         ! create the polarft_corrcalc object
-        params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, params_glob%boxmatch, params_glob%smpd))
-        params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, params_glob%boxmatch, params_glob%smpd)
+        params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
+        params_glob%kfromto(2) =        calc_fourier_index(params_glob%lp, params_glob%box, params_glob%smpd)
         params_glob%kstop      = params_glob%kfromto(2)
         call pftcc%new(ncls, [1,ncls])
         ! initialize polarizer for the first image, then copy it to the rest

@@ -5,7 +5,7 @@ use simple_error, only: simple_exception
 use simple_defs
 implicit none
 
-public :: find_larger_magic_box, find_magic_box, find_boxmatch, magic_pftsz
+public :: find_larger_magic_box, find_magic_box, magic_pftsz
 public :: print_magic_box_range, find_magic_boxes4scale, autoscale
 private
 #include "simple_local_flags.inc"
@@ -62,17 +62,6 @@ contains
             best_box = round2even(real(trial_box))
         endif
     end function find_magic_box
-
-    integer function find_boxmatch( box, msk )
-        integer, intent(in) :: box
-        real,    intent(in) :: msk
-        if( box > 2*(nint(msk)+10) )then
-            find_boxmatch = find_magic_box(2*(nint(msk)+10))
-            find_boxmatch = min(find_boxmatch, box)
-        else
-            find_boxmatch = box
-        endif
-    end function find_boxmatch
 
     subroutine print_magic_box_range( smpd, diam )
         real, intent(in) :: smpd, diam

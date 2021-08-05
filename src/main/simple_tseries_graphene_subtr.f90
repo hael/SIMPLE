@@ -120,7 +120,6 @@ contains
         call cline%set('prg',      'dummy')
         call cline%set('smpd',     smpd)
         call cline%set('box',      real(box))
-        call cline%set('boxmatch', real(box))
         call cline%set('nthr',     1.)
         call cline%set('match_filt','no')
         call cline%set('ctf',      'no')

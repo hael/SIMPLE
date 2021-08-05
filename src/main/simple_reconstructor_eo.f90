@@ -323,7 +323,7 @@ contains
 
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, find4eoavg )
-        use simple_estimate_ssnr, only: subsample_filter, fsc2ssnr
+        use simple_estimate_ssnr, only: fsc2ssnr
         class(reconstructor_eo), intent(inout) :: self                  !< instance
         integer,                 intent(in)    :: state                 !< state
         character(len=*),        intent(in)    :: fname_even, fname_odd !< even/odd filenames

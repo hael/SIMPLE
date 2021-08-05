@@ -839,6 +839,45 @@ contains
         call sqwin_1d_2(z,winsz,[lims(3,1), lims(3,2)], win(3,:))
     end subroutine sqwin_3d_2
 
+    pure subroutine bounds_from_mask3D( l_mask, lb, ub )
+        logical, intent(in)    :: l_mask(:,:,:)
+        integer, intent(inout) :: lb(3), ub(3)
+        integer :: ldim(3)
+        ldim(1) = size(l_mask, dim=1)
+        ldim(2) = size(l_mask, dim=2)
+        ldim(3) = size(l_mask, dim=3)
+        lb(1) = 1
+        do while( lb(1) <= ldim(1) / 2 )
+            if( any(l_mask(lb(1),:,:)) ) exit
+            lb(1) = lb(1) + 1
+        end do
+        lb(2) = 1
+        do while( lb(2) <= ldim(2) / 2 )
+            if( any(l_mask(:,lb(2),:)) ) exit
+            lb(2) = lb(2) + 1
+        end do
+        lb(3) = 1
+        do while( lb(3) <= ldim(3) / 2 )
+            if( any(l_mask(:,:,lb(3))) ) exit
+            lb(3) = lb(3) + 1
+        end do
+        ub(1) = ldim(1)
+        do while( ub(1) >= ldim(1) / 2 )
+            if( any(l_mask(ub(1),:,:)) ) exit
+            ub(1) = ub(1) - 1
+        end do
+        ub(2) = ldim(2)
+        do while( ub(2) >= ldim(2) / 2 )
+            if( any(l_mask(:,ub(2),:)) ) exit
+            ub(2) = ub(2) - 1
+        end do
+        ub(3) = ldim(3)
+        do while( ub(3) >= ldim(3) / 2 )
+            if( any(l_mask(:,ub(3),:)) ) exit
+            ub(3) = ub(3) - 1
+        end do
+    end subroutine bounds_from_mask3D
+
     ! USEFUL MATHEMATICAL FUNCTIONS
 
     !>   returns acos with the argument's absolute value limited to 1.
@@ -1209,6 +1248,21 @@ contains
             fsc05 = res(ires05)
         endif
     end subroutine get_resolution
+
+    pure subroutine get_find_at_crit( n, corrs, crit, find )
+        integer, intent(in)  :: n
+        real,    intent(in)  :: corrs(n), crit
+        integer, intent(out) :: find
+        find = 1
+        do while( find <= n )
+            if( corrs(find) >= crit )then
+                find = find + 1
+                cycle
+            else
+                exit
+            endif
+        end do
+    end subroutine get_find_at_crit
 
     subroutine phaseplate_correct_fsc( fsc, find_plate )
         real,    intent(inout) :: fsc(:)

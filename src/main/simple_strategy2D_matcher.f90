@@ -98,7 +98,7 @@ contains
             l_partial_sums            = .false.
             params_glob%l_frac_update = .false.
             if( which_iter > 1 )then
-                if( params_glob%update_frac < 0.99 )then                    
+                if( params_glob%update_frac < 0.99 )then
                     l_partial_sums            = .true.
                     params_glob%l_frac_update = .true.
                 else
@@ -203,7 +203,7 @@ contains
         call prepimgbatch(batchsz_max)
         !$omp parallel do default(shared) private(iptcl_batch) schedule(static) proc_bind(close)
         do iptcl_batch=1,batchsz_max
-            call match_ptcl_imgs(iptcl_batch)%new([params_glob%boxmatch, params_glob%boxmatch, 1], params_glob%smpd, wthreads=.false.)
+            call match_ptcl_imgs(iptcl_batch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
             call match_ptcl_imgs(iptcl_batch)%copy_polarizer(build_glob%img_match)
         end do
         !$omp end parallel do
@@ -393,7 +393,7 @@ contains
                 pop_odd  = build_glob%spproj_field%get_pop(icls, 'class', eo=1)
             endif
             if( pop > 0 )then
-                call match_imgs(icls)%new([params_glob%boxmatch, params_glob%boxmatch, 1], params_glob%smpd, wthreads=.false.)
+                call match_imgs(icls)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
                 call match_imgs(icls)%copy_polarizer(build_glob%img_match)
                 ! prepare the references
                 ! here we are determining the shifts and map them back to classes

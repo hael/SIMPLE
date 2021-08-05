@@ -6,7 +6,7 @@ include 'simple_lib.f08'
 implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
-public :: subsample_filter, acc_dose2filter, dose_weight, nonuniform_lp, local_res, local_res_lp
+public :: acc_dose2filter, dose_weight, nonuniform_lp, local_res, local_res_lp
 public :: plot_fsc
 private
 #include "simple_local_flags.inc"
@@ -75,30 +75,6 @@ contains
             subfilt(subfiltsz) = max(min(filt(filtsz),1.),0.)
         endif
     end subroutine subsample_optlp
-
-    subroutine subsample_filter( filtsz, subfiltsz, filt, subfilt )
-        integer, intent(in)  :: filtsz, subfiltsz   !< sz of filters
-        real,    intent(in)  :: filt(filtsz)        !< filter coefficients
-        real,    intent(out) :: subfilt(subfiltsz)  !< output filter coefficients
-        real    :: x, fracx, step
-        integer :: i, floorx
-        if( filtsz < subfiltsz )then
-            THROW_HARD('Invalid filter sizes!')
-        else if( filtsz == subfiltsz )then
-            subfilt = filt
-        else
-            x    = 1.
-            step = real(filtsz-1) / real(subfiltsz-1)
-            do i = 2,subfiltsz-1
-                x          = x+step
-                floorx     = floor(x)
-                fracx      = x-real(floorx)
-                subfilt(i) = (1.-fracx)*filt(floorx) + fracx*filt(ceiling(x))
-            enddo
-            subfilt(1)         = filt(1)
-            subfilt(subfiltsz) = filt(filtsz)
-        endif
-    end subroutine subsample_filter
 
     !> \brief  converts the SSNR to FSC
     function ssnr2fsc( ssnr ) result( corrs )
@@ -183,7 +159,7 @@ contains
         ! check input
         if( even%is_ft()   ) THROW_HARD('even vol FTed; nonuniform_lp')
         if( odd%is_ft()    ) THROW_HARD('odd  vol FTed; nonuniform_lp')
-        if( mskimg%is_ft() ) THROW_HARD('odd  vol FTed; nonuniform_lp')
+        if( mskimg%is_ft() ) THROW_HARD('msk  vol FTed; nonuniform_lp')
         ! set parameters
         ldim    = even%get_ldim()
         if( ldim(3) == 1 ) THROW_HARD('not intended for 2D images; nonuniform_lp')
@@ -197,36 +173,7 @@ contains
             call subvols_odd(ithr)%new( [SUBBOX,SUBBOX,SUBBOX], smpd, wthreads=.false.)
         end do
         ! determine loop bounds for better load balancing in the following parallel loop
-        lb(1) = 1
-        do while( lb(1) <= ldim(1) / 2 )
-            if( any(l_mask(lb(1),:,:)) ) exit
-            lb(1) = lb(1) + 1
-        end do
-        lb(2) = 1
-        do while( lb(2) <= ldim(2) / 2 )
-            if( any(l_mask(:,lb(2),:)) ) exit
-            lb(2) = lb(2) + 1
-        end do
-        lb(3) = 1
-        do while( lb(3) <= ldim(3) / 2 )
-            if( any(l_mask(:,:,lb(3))) ) exit
-            lb(3) = lb(3) + 1
-        end do
-        ub(1) = ldim(1)
-        do while( ub(1) >= ldim(1) / 2 )
-            if( any(l_mask(ub(1),:,:)) ) exit
-            ub(1) = ub(1) - 1
-        end do
-        ub(2) = ldim(2)
-        do while( ub(2) >= ldim(2) / 2 )
-            if( any(l_mask(:,ub(2),:)) ) exit
-            ub(2) = ub(2) - 1
-        end do
-        ub(3) = ldim(3)
-        do while( ub(3) >= ldim(3) / 2 )
-            if( any(l_mask(:,ub(3),:)) ) exit
-            ub(3) = ub(3) - 1
-        end do
+        call bounds_from_mask3D( l_mask, lb, ub )
         ! loop over pixels
         !$omp parallel do collapse(3) default(shared) private(i,j,k,ithr) schedule(dynamic,CHUNKSZ) proc_bind(close)
         do k = lb(3), ub(3)
@@ -290,92 +237,48 @@ contains
 
     end subroutine nonuniform_lp
 
-    subroutine local_res( even, odd, mskimg, corr_thres, locres_finds, half_winsz )
+    subroutine local_res( even, odd, mskimg, fsc_crit, locres_finds )
         use simple_image, only: image
         class(image),         intent(inout) :: even, odd, mskimg
-        real,                 intent(in)    :: corr_thres
-        integer, allocatable, intent(out)   :: locres_finds(:,:,:)
-        integer, optional,    intent(in)    :: half_winsz
-        logical,  allocatable :: l_mask(:,:,:)
-        real,     allocatable :: fsc(:), res(:), fsc_iso(:)
-        integer     :: hwinsz, filtsz, ldim(3), i, j, k, kind, funit, io_stat
-        integer     :: vecsz, find_hres, find_lres, cnt, npix, hwinszsq
-        type(image) :: ecopy, ocopy
-        real        :: smpd, cc, ccavg, res_fsc05, res_fsc0143, frac_nccs, hp, lp
+        real,                 intent(in)    :: fsc_crit
+        integer, allocatable, intent(inout) :: locres_finds(:,:,:)
+        integer,      parameter   :: SUBBOX=32, LSHIFT=15, RSHIFT=16, CPIX=LSHIFT + 1, CHUNKSZ=20
+        real,         parameter   :: SUBMSK=real(SUBBOX)/2. - COSMSKHALFWIDTH - 1.
+        type(image),  allocatable :: subvols_even(:) ! one per thread
+        type(image),  allocatable :: subvols_odd(:)  ! one per thread
+        logical,      allocatable :: l_mask(:,:,:)
+        integer :: filtsz, ldim(3), i, j, k, funit, io_stat, npix
+        integer :: find_hres, find_lres, ithr, lb(3), ub(3)
+        real    :: smpd
         ! check input
-        if( .not. even%is_ft() ) THROW_HARD('even vol not FTed; local_res')
-        if( .not. odd%is_ft()  ) THROW_HARD('odd vol not FTed; local_res')
+        if( even%is_ft()   ) THROW_HARD('even vol FTed; local_res')
+        if( odd%is_ft()    ) THROW_HARD('odd  vol FTed; local_res')
+        if( mskimg%is_ft() ) THROW_HARD('msk  vol FTed; local_res')
         ! set parameters
-        hwinsz   = 3
-        if( present(half_winsz) ) hwinsz = half_winsz
-        hwinszsq = hwinsz * hwinsz
-        ldim     = even%get_ldim()
-        if( ldim(3) == 1 )  THROW_HARD('not intended for 2D images; local_res')
-        vecsz    = (2 * hwinsz + 1)**3
-        filtsz   = even%get_filtsz()
-        smpd     = even%get_smpd()
-        l_mask   = mskimg%bin2logical()
-        npix     = count(l_mask)
-        res      = even%get_res()
-        ! to avoid allocation in the loop
-        call ecopy%new(ldim, smpd, wthreads=.true.)
-        call ocopy%new(ldim, smpd, wthreads=.true.)
+        ldim    = even%get_ldim()
+        if( ldim(3) == 1 ) THROW_HARD('not intended for 2D images; local_res')
+        smpd    = even%get_smpd()
+        l_mask  = mskimg%bin2logical()
+        npix    = count(l_mask)
+        filtsz  = fdim(SUBBOX) - 1
+        ! allocate res indices
         if( allocated(locres_finds) ) deallocate(locres_finds)
-        allocate(locres_finds(ldim(1),ldim(2),ldim(3)), fsc(filtsz))
+        allocate(locres_finds(ldim(1),ldim(2),ldim(3)))
         locres_finds = 0
-        fsc          = 0.
-        allocate(fsc_iso(filtsz), source=0.)
-        call even%fsc(odd, fsc_iso)
-        ! loop over resolution shells
-        do kind=1,filtsz
-            if( fsc_iso(kind) >= 0.98 )then
-                locres_finds(i,j,k) = kind
-                ccavg               = fsc_iso(kind)
-                fsc(kind)           = fsc_iso(kind)
-                frac_nccs           = 100.
-            else
-                ! filter out the shell
-                lp = calc_lowpass_lim(kind,   ldim(1), smpd)
-                hp = calc_lowpass_lim(kind-1, ldim(1), smpd)
-                call ecopy%copy(even)
-                call ocopy%copy(odd)
-                ! call ecopy%bp(hp, lp, width=2.0)
-                ! call ocopy%bp(hp, lp, width=2.0)
-                call ecopy%tophat(kind)
-                call ocopy%tophat(kind)
-                call ecopy%ifft
-                call ocopy%ifft
-                ! neighborhood correlation analysis
-                ccavg = 0.
-                cnt   = 0
-                ! parallel section needs to start here as the above steps are threaded as well
-                !$omp parallel do collapse(3) default(shared) private(i,j,k,cc)&
-                !$omp schedule(static) proc_bind(close) reduction(+:ccavg,cnt)
-                do k=1,ldim(3)
-                    do j=1,ldim(2)
-                        do i=1,ldim(1)
-                            if( .not. l_mask(i,j,k) ) cycle
-                            cc    = neigh_cc([i,j,k])
-                            ccavg = ccavg + cc
-                            if( cc >= corr_thres )then
-                                locres_finds(i,j,k) = kind
-                                cnt = cnt + 1
-                            endif
-                        end do
-                    end do
+        ! determine loop bounds for better load balancing in the following parallel loop
+        call bounds_from_mask3D( l_mask, lb, ub )
+        ! loop over pixels
+        !$omp parallel do collapse(3) default(shared) private(i,j,k,ithr) schedule(dynamic,CHUNKSZ) proc_bind(close)
+        do k = lb(3), ub(3)
+            do j = lb(2), ub(2)
+                do i = lb(1), ub(1)
+                    if( .not.l_mask(i,j,k) ) cycle
+                    ithr = omp_get_thread_num() + 1
+                    call set_subvols_msk_fft_filter_fsc([i,j,k], ithr)
                 end do
-                !$omp end parallel do
-                ccavg     = ccavg / real(npix)
-                fsc(kind) = ccavg
-                frac_nccs = real(cnt) / real(npix) * 100.
-            endif
-            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3,1X,A,1X,F6.2,1X,A,1X,F6.2)') '>>> RESOLUTION:', res(kind), '>>> CORRELATION:', fsc(kind),&
-            &'>>> % NEIGH_CCS >=', corr_thres, 'IS', frac_nccs
-            if( frac_nccs < 1. .or. ccavg < 0.01 ) exit ! save the compute
+            end do
         end do
-        call get_resolution(fsc, res, res_fsc05, res_fsc0143)
-        write(logfhandle,'(A,1X,F6.2)') '>>> GLOBAL RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
-        write(logfhandle,'(A,1X,F6.2)') '>>> GLOBAL RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
+        !$omp end parallel do
         find_hres = maxval(locres_finds, l_mask)
         find_lres = max(2, minval(locres_finds, l_mask .and. locres_finds > 0))
         write(logfhandle,'(A,1X,F6.2)') '>>> HIGHEST LOCAL RESOLUTION DETERMINED TO:', even%get_lp(find_hres)
@@ -386,8 +289,6 @@ contains
         where( locres_finds == 0 ) locres_finds = find_lres
         ! destruct
         deallocate(l_mask)
-        call ecopy%kill
-        call ocopy%kill
         ! write output
         call fopen(funit, LOCRESMAP3D_FILE, access='STREAM', action='WRITE',&
             &status='REPLACE', form='UNFORMATTED', iostat=io_stat)
@@ -395,41 +296,52 @@ contains
         write(unit=funit,pos=1) locres_finds
         call fclose(funit)
 
-        contains
+    contains
 
-            function neigh_cc( loc ) result( cc )
-                integer, intent(in) :: loc(3)
-                integer  :: lb(3), ub(3), i, j, k, cnt, ii, jj, kk
-                real     :: cc
-                real(dp) :: vec1(vecsz), vec2(vecsz)
-                ! set bounds
-                lb = loc - hwinsz
-                ub = loc + hwinsz
-                ! extract components within sphere
-                cnt = 0
-                kk  = -hwinsz
-                do k=lb(3),ub(3)
-                    if( k < 1 .and. k > ldim(3) ) cycle
-                        jj = -hwinsz
-                        do j=lb(2),ub(2)
-                            if( j < 1 .and. j > ldim(2) ) cycle
-                                ii = -hwinsz
-                                do i=lb(1),ub(1)
-                                    if( i < 1 .and. i > ldim(1) ) cycle
-                                    if( kk*kk + jj*jj + ii*ii <= hwinszsq )then
-                                        cnt       = cnt + 1
-                                        vec1(cnt) = dble(ecopy%get_rmat_at(i,j,k))
-                                        vec2(cnt) = dble(ocopy%get_rmat_at(i,j,k))
-                                    endif
-                                    ii = ii + 1
-                                enddo
-                            jj = jj + 1
-                        enddo
-                    kk = kk + 1
+        subroutine set_subvols_msk_fft_filter_fsc( loc, ithr )
+            integer, intent(in) :: loc(3), ithr
+            integer :: lb(3), ub(3), i, j, k, ii, jj, kk, isub, jsub, ksub
+            real    :: corrs(filtsz)
+            call subvols_even(ithr)%zero_and_unflag_ft
+            call subvols_odd(ithr)%zero_and_unflag_ft
+            ! set bounds
+            lb = loc - LSHIFT
+            ub = loc + RSHIFT
+            ! extract components
+            kk  = -LSHIFT
+            do k = lb(3), ub(3)
+                if( k < 1 .and. k > ldim(3) ) cycle
+                jj = -LSHIFT
+                do j = lb(2), ub(2)
+                    if( j < 1 .and. j > ldim(2) ) cycle
+                    ii = -LSHIFT
+                    do i = lb(1), ub(1)
+                        if( i < 1 .and. i > ldim(1) ) cycle
+                        isub = ii + LSHIFT + 1
+                        jsub = jj + LSHIFT + 1
+                        ksub = kk + LSHIFT + 1
+                        call subvols_even(ithr)%set_rmat_at(isub,jsub,ksub, even%get_rmat_at(i,j,k))
+                        call subvols_odd(ithr)%set_rmat_at( isub,jsub,ksub, odd%get_rmat_at(i,j,k))
+                        ii = ii + 1
+                    enddo
+                    jj = jj + 1
                 enddo
-                ! correlate
-                cc = pearsn_serial_8(cnt, vec1(:cnt), vec2(:cnt))
-            end function neigh_cc
+                kk = kk + 1
+            enddo
+            ! mask
+            call subvols_even(ithr)%mask(SUBMSK, 'soft')
+            call subvols_odd(ithr)%mask( SUBMSK, 'soft')
+            ! fft
+            call subvols_even(ithr)%fft
+            call subvols_odd(ithr)%fft
+            ! fsc
+            call subvols_even(ithr)%fsc(subvols_odd(ithr), corrs)
+            ! Fourier index at fsc_crit
+            call get_find_at_crit(filtsz, corrs, fsc_crit, locres_finds(loc(1),loc(2),loc(3)))
+            ! back to real space
+            call subvols_even(ithr)%zero_and_unflag_ft
+            call subvols_odd(ithr)%zero_and_unflag_ft
+        end subroutine set_subvols_msk_fft_filter_fsc
 
     end subroutine local_res
 

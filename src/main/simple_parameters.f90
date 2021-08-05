@@ -224,7 +224,6 @@ type :: parameters
     integer :: balance=0           !< max pop for balancing restraint{0}
     integer :: binwidth=1          !< binary layers grown for molecular envelope(in pixels){1}
     integer :: box=0               !< square image size(in pixels)
-    integer :: boxmatch=0
     integer :: box_original
     integer :: box_extract
     integer :: boxpd=0
@@ -663,7 +662,6 @@ contains
         call check_iarg('balance',        self%balance)
         call check_iarg('binwidth',       self%binwidth)
         call check_iarg('box',            self%box)
-        call check_iarg('boxmatch',       self%boxmatch)
         call check_iarg('box_extract',    self%box_extract)
         call check_iarg('chunksz',        self%chunksz)
         call check_iarg('clip',           self%clip)
@@ -1224,11 +1222,6 @@ contains
         endif
         ! set graphene flag
         self%l_graphene = self%graphene_filt .ne. 'no'
-        ! boxmatch (is currently turned off)
-        self%boxmatch = self%box
-        ! if( .not.cline%defined('boxmatch'))then
-        !     self%boxmatch = find_boxmatch(self%box, self%msk)
-        ! end if
         ! set default outer mask value
         if( .not. cline%defined('outer') ) self%outer = self%msk
         ! checks automask related values

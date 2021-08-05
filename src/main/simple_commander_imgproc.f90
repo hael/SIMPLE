@@ -530,7 +530,7 @@ contains
             endif
         else if( cline%defined('vol1') )then
             ! 3D
-            call build%init_params_and_build_general_tbox(cline, params, do3d=.true., boxmatch_off=.true.)
+            call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
             if( .not.file_exists(params%vols(1)) )THROW_HARD('Cannot find input volume')
             call build%vol%read(params%vols(1))
             if( params%norm.eq.'yes' )then
@@ -682,7 +682,7 @@ contains
                 endif
             else if( cline%defined('vol1') )then
                 ! 3D
-                call build%init_params_and_build_general_tbox(cline, params, do3d=.true., boxmatch_off=.true.)
+                call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
                 if( .not.file_exists(params%vols(1)) ) THROW_HARD('Cannot find input volume')
                 call build%vol%read(params%vols(1))
                 if( cline%defined('scale') .or. cline%defined('newbox') )then
@@ -837,7 +837,7 @@ contains
         character(len=:), allocatable :: fname
         integer :: i, s, cnt, nincl
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.,boxmatch_off=.true.)
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! random selection
         if( cline%defined('nran') )then
             write(logfhandle,'(a)') '>>> RANDOMLY SELECTING IMAGES'

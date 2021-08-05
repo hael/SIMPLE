@@ -232,7 +232,7 @@ contains
             write(logfhandle,*) 'nrefs: ', nrefs
             THROW_HARD ('nrefs (# of reference sections) must be > 0; new')
         endif
-        self%ldim = [params_glob%boxmatch,params_glob%boxmatch,1] !< logical dimensions of original cartesian image
+        self%ldim = [params_glob%box,params_glob%box,1] !< logical dimensions of original cartesian image
         test      = .false.
         test(1)   = is_even(self%ldim(1))
         test(2)   = is_even(self%ldim(2))
