@@ -122,7 +122,7 @@ contains
         type(parameters)                       :: params
         integer,                   parameter   :: SHORTTIME       = 30   ! folder watched every 30 seconds
         integer,                   parameter   :: LONGTIME        = 300  ! time lag after which a movie is processed
-        integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for write project file
+        integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
         logical,                   parameter   :: DEBUG_HERE      = .false.
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
         character(len=STDLEN),     parameter   :: selection_fname = './STREAM_SELECTION'
