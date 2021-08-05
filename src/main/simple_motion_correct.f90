@@ -840,9 +840,12 @@ contains
         if( l_eer )then
             call eer%prep_gainref(gainref_fname, gain_img)
         else
+            if( fname2format(gainref_fname)=='L' )then
+                THROW_HARD('''.gain'' files only for use with EER movies! correct_gain')
+            endif
             call find_ldim_nptcls(gainref_fname,ldim_gain,ifoo)
             if( ldim_gain(1).ne.ldim(1) .or. ldim_gain(2).ne.ldim(2) )then
-                THROW_HARD('Inconsistent dimensions between movie frames & gain references! correct_gain')
+                THROW_HARD('Inconsistent dimensions between movie frames & gain reference! correct_gain')
             endif
             call gain_img%new(ldim_gain, smpd)
             call gain_img%read(gainref_fname)
