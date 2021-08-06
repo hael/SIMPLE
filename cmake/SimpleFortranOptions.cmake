@@ -87,7 +87,7 @@ message(STATUS "Making sure your C compiler points to the correct binary")
     message(STATUS "WARNING gcc points to Clang -- Attempting other paths, starting with ${FORTRAN_PARENT_DIR}")
     find_file (
       CMAKE_C_COMPILER_NEW
-      NAMES gcc-10 gcc-9 gcc-8 gcc-7 gcc-6 gcc-5 gcc-4.9 gcc- gcc-fsf-6 gcc-fsf-5 gcc10 gcc9 gcc8 gcc7 gcc6 gcc5 gcc4.9
+      NAMES gcc-11 gcc-10 gcc-9 gcc-8 gcc-7 gcc-6 gcc-5 gcc-4.9 gcc- gcc-fsf-6 gcc-fsf-5 gcc11 gcc10 gcc9 gcc8 gcc7 gcc6 gcc5 gcc4.9
       HINTS ${FORTRAN_PARENT_DIR}
       PATHS  /sw/bin /usr/local/bin /opt/local/bin /usr/bin
       #  [PATH_SUFFIXES suffix1 [suffix2 ...]]
@@ -114,7 +114,7 @@ message(STATUS "Making sure your C++ compiler points to the correct binary")
     message(STATUS "WARNING g++ points to Clang -- Trying other paths")
     find_file (
       CMAKE_CXX_COMPILER_NEW
-      NAMES g++- g++-10 g++-9 g++-8 g++-7 g++-6 g++-5 g++-4.9 g++-fsf-6 g++-fsf-5 g++10 g++9 g++8 g++7 g++6 g++5 g++4.9 g++
+      NAMES g++- g++-11 g++-10 g++-9 g++-8 g++-7 g++-6 g++-5 g++-4.9 g++-fsf-6 g++-fsf-5 g++11 g++10 g++9 g++8 g++7 g++6 g++5 g++4.9 g++
       PATHS ${FORTRAN_PARENT_DIR} /sw/bin /usr/local/bin /opt/local/bin /usr/bin
       DOC "Searching for GNU g++ preprocessor "
 NO_DEFAULT_PATH NO_CMAKE_PATH NO_CMAKE_ENVIRONMENT_PATH NO_SYSTEM_ENVIRONMENT_PATH NO_CMAKE_SYSTEM_PATH
