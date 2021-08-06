@@ -1944,6 +1944,8 @@ contains
                     mics_mask(imic) = .false.
                     cycle
                 endif
+                ! update micrograph field
+                call build%spproj_field%set(imic, 'nptcls', real(count(oris_mask)))
                 ! fetch ctf info
                 ctfparms      = o_mic%get_ctfvars()
                 ctfparms%smpd = params%smpd
