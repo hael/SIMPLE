@@ -3543,9 +3543,9 @@ contains
     subroutine apply_filter_1( self, filter )
         class(image), intent(inout) :: self
         real,         intent(in)    :: filter(:)
-        integer                     :: nyq, sh, h, k, l, lims(3,2)
-        logical                     :: didft
-        real                        :: fwght, wzero
+        integer :: nyq, sh, h, k, l, lims(3,2)
+        logical :: didft
+        real    :: fwght, wzero
         nyq = size(filter)
         didft = .false.
         if( .not. self%ft )then
