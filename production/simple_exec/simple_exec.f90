@@ -85,7 +85,7 @@ type(remoc_commander)               :: xremoc
 type(pspec_stats_commander)   :: xpspecstats
 type(mask_commander)          :: xmask
 type(fsc_commander)           :: xfsc
-type(local_res_commander)     :: xlocal_res
+! type(local_res_commander)     :: xlocal_res
 type(nonuniform_lp_commander) :: xnonuniform_lp
 type(centervol_commander)     :: xcenter
 type(reproject_commander)     :: xreproject
@@ -248,8 +248,8 @@ select case(prg)
         call xmask%execute(cline)
     case( 'fsc' )
         call xfsc%execute(cline)
-    case( 'local_resolution' )
-        call xlocal_res%execute(cline)
+    ! case( 'local_resolution' )
+    !     call xlocal_res%execute(cline)
     case( 'nonuniform_lp' )
         call xnonuniform_lp%execute(cline)
     case( 'center' )
