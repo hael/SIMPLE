@@ -414,12 +414,14 @@ contains
         integer,                intent(in)    :: image_index  !<
         real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
         class(ImgHead),  pointer :: ptr=>null()
+        real(kind=4),    pointer :: ftemp_byte_array32(:)
         integer(kind=1), pointer :: itemp_byte_array8(:)
         integer(kind=2), pointer :: itemp_byte_array16(:)
-        real(kind=4),    pointer :: ftemp_byte_array32(:)
-        type(c_ptr)              :: strip_buffer_cptr
-        integer :: NumberOfStrips, rows_per_strip, prev_nbytes_in_buffer, nbytes_in_buffer, current_first_byte, current_first_row
-        integer :: io_stat,dims(3),current_last_byte,current_last_row,row_counter,strip_counter
+        type(c_ptr)              :: strip_buffer_cptr, string_ptr
+        integer :: dims(3), nbytes_in_buffer, first_byte, first_row
+        integer :: io_stat, last_byte, last_row, row_counter, strip_counter
+        integer :: last_strip_length, strip_length, nbytes, nrows
+        character,pointer,dimension(:) :: string
         ! checks have been performed in rSlices
         select case(self%head_format)
         case('J','L')
@@ -439,76 +441,97 @@ contains
         if (io_stat .ne. 1) THROW_HARD('rTiffSlices; Failed to set directory to: '//int2str(image_index-1))
         ! We don't support tiled organization, only strips
         if (ptr%IsTiled) THROW_HARD('rTiffSlices; Tile-based TIFF files not supported')
-        ! Number of Bits
+        ! Number of Bits/Sample Format
+        nbytes = 1
         select case(ptr%BitsPerSample)
-            case(8,16)
-                ! 8/16-bit grayscale unsigned int TIFFs only supported
+            case(8)
+                ! 8-bit: unsigned
                 if(ptr%SampleFormat .ne. TIFF_SAMPLEFORMAT_UINT)then
+                    THROW_HARD('rTiffSlices; 8-bit Unsupported sample format: '//int2str(ptr%SampleFormat))
+                endif
+            case(16)
+                ! 16-bit: signed/unsigned
+                if((ptr%SampleFormat.ne.TIFF_SAMPLEFORMAT_UINT) .and. (ptr%SampleFormat.ne.TIFF_SAMPLEFORMAT_INT) )then
                     THROW_HARD('rTiffSlices; 8/16-bit Unsupported sample format: '//int2str(ptr%SampleFormat))
                 endif
+                nbytes = 2
             case(32)
-                ! 32-bit grayscale float TIFFs only supported
+                ! 32-bit: float
                 if(ptr%SampleFormat .ne. TIFF_SAMPLEFORMAT_IEEEFP)then
                     THROW_HARD('rTiffSlices; Unsupported 32-bit sample format: '//int2str(ptr%SampleFormat))
                 endif
+                nbytes = 4
             case DEFAULT
                 THROW_HARD('rTiffSlices; Unsupported combination of # bits & bit depth: '//int2str(ptr%BitsPerSample)//' & '//int2str(ptr%SampleFormat))
         end select
         if (ptr%SamplesPerPixel .ne. 1) then
             THROW_HARD('rTiffSlices; Unsupported number of samples per pixel: '//int2str(ptr%SamplesPerPixel))
         endif
-        rows_per_strip    = ptr%RowsPerStrip
+        strip_length      = nbytes*ptr%RowsPerStrip*dims(1)
         strip_buffer_cptr = ptr%StripBuffer_cptr
-        NumberOfStrips    = ptr%NumberOfStrips
-        prev_nbytes_in_buffer = 0
-        do strip_counter = 1,NumberOfStrips
+        ! Allocating buffer prior to read to circumvent overflow in versions < 4.0.9
+        strip_buffer_cptr = TIFFmalloc(strip_length)
+        do strip_counter  = 1,ptr%NumberOfStrips
+            ! Read a strip from the file
+            if( (strip_counter==ptr%NumberOfStrips) .and. (ptr%NumberOfStrips>1) )then
+                ! making sure buffer is allocated to correct size for the very last strip
+                last_strip_length = int(real(ptr%StripSize*dims(2))/real(ptr%RowsPerStrip))
+                last_strip_length = last_strip_length - ((strip_counter-1)*ptr%StripSize+1) + 1
+                if( last_strip_length /= ptr%StripSize )then
+                    io_stat           = TIFFfree(strip_buffer_cptr)
+                    strip_length      = nbytes*last_strip_length
+                    strip_buffer_cptr = TIFFmalloc(strip_length)
+                endif
+            endif
+            nrows = strip_length / dims(1) / nbytes ! rows to be read
+            nbytes_in_buffer = TIFFReadEncodedStrip(ptr%fhandle, int(strip_counter-1,kind=c_int32_t),&
+                              &strip_buffer_cptr, int(strip_length,kind=c_int32_t))
+            if (nbytes_in_buffer .le. 0) THROW_HARD('rTiffSlices; Failed to read from strip: '//int2str(strip_counter))
+            if (nbytes_in_buffer .ne. strip_length)then
+                string_ptr = TIFFGetVersion()
+                call c_f_pointer(string_ptr, string, [23])
+                write(logfhandle,*)string(:)
+                write(logfhandle,*)'strip_length     ',strip_length
+                write(logfhandle,*)'nbytes_in_buffer ',nbytes_in_buffer
+                write(logfhandle,*)'StripSize        ',ptr%Stripsize
+                write(logfhandle,*)'RowsPerStrip     ',ptr%RowsPerStrip
+                write(logfhandle,*)'NumberOfStrips   ',ptr%NumberOfStrips
+                write(logfhandle,*)'SampleFormat     ',ptr%SampleFormat
+                write(logfhandle,*)'BitsPerSample    ',ptr%BitsPerSample
+                THROW_HARD('rTiffSlices; Unexpected number of bytes in buffer 1')
+            endif
             select case(ptr%BitsPerSample)
             case(8)
-                ! Read a strip from the file
-                nbytes_in_buffer = TIFFReadEncodedStrip(ptr%fhandle, int(strip_counter-1,kind=c_int32_t),strip_buffer_cptr, int(-1,kind=c_int32_t))
-                if (nbytes_in_buffer .le. 0) THROW_HARD('rTiffSlices; Failed to read from strip: '//int2str(strip_counter))
                 ! Setup F pointer to the strip data
-                if (nbytes_in_buffer .ne. prev_nbytes_in_buffer) then
-                    call c_f_pointer(strip_buffer_cptr,itemp_byte_array8,[nbytes_in_buffer])
-                endif
-                ! Sanity check
-                if (nbytes_in_buffer .ne. rows_per_strip * dims(1)) THROW_HARD('rTiffSlices; Unexpected number of bytes in buffer')
-                ! Which rows of the image did we just get
-                current_first_row = rows_per_strip * (strip_counter-1) + 1
-                current_last_row  = rows_per_strip * strip_counter
-                ! Copy (and cast) the data to the output array
-                do row_counter=current_first_row,current_last_row
-                    current_first_byte = (row_counter-current_first_row)*dims(1)+1
-                    current_last_byte  = current_first_byte + dims(1) - 1
-                    rarr(1:dims(1),dims(2)-row_counter+1,1) = itemp_byte_array8(current_first_byte:current_last_byte)
+                call c_f_pointer(strip_buffer_cptr,itemp_byte_array8,[nbytes_in_buffer])
+                ! update row counter
+                first_row = ptr%RowsPerStrip * (strip_counter-1) + 1
+                last_row  = first_row + nrows - 1
+                ! cast and copy
+                do row_counter = first_row,last_row
+                    first_byte = (row_counter-first_row)*dims(1)+1
+                    last_byte  = first_byte + dims(1) - 1
+                    rarr(1:dims(1),dims(2)-row_counter+1,1) = real(iand(int(itemp_byte_array8(first_byte:last_byte),kind=4),&
+                        &int(huge(int(1,kind=1)), kind=4)*2+1))
                 enddo
             case(16)
-                nbytes_in_buffer = TIFFReadEncodedStrip(ptr%fhandle, int(strip_counter-1,kind=c_int32_t),strip_buffer_cptr, int(-1,kind=c_int32_t))
-                if (nbytes_in_buffer .le. 0) THROW_HARD('rTiffSlices; Failed to read from strip: '//int2str(strip_counter))
-                if (nbytes_in_buffer .ne. prev_nbytes_in_buffer) then
-                    call c_f_pointer(strip_buffer_cptr,itemp_byte_array16,[nbytes_in_buffer])
-                endif
-                if (nbytes_in_buffer .ne. 2*rows_per_strip*dims(1)) THROW_HARD('rTiffSlices; Unexpected number of bytes in buffer')
-                current_first_row = rows_per_strip * (strip_counter-1) + 1
-                current_last_row  = rows_per_strip * strip_counter
-                do row_counter=current_first_row,current_last_row
-                    current_first_byte = (row_counter-current_first_row)*dims(1)+1
-                    current_last_byte  = current_first_byte + dims(1) - 1
-                    rarr(1:dims(1),dims(2)-row_counter+1,1) = itemp_byte_array16(current_first_byte:current_last_byte)
+                call c_f_pointer(strip_buffer_cptr,itemp_byte_array16,[nbytes_in_buffer])
+                first_row = ptr%RowsPerStrip * (strip_counter-1) + 1
+                last_row  = first_row + strip_length/dims(1)/nbytes - 1
+                do row_counter = first_row,last_row
+                    first_byte = (row_counter-first_row)*dims(1)+1
+                    last_byte  = first_byte + dims(1) - 1
+                    rarr(1:dims(1),dims(2)-row_counter+1,1) = real(iand(int(itemp_byte_array16(first_byte:last_byte),kind=4),&
+                    &int(huge(int(1,kind=2)), kind=4)*2+1))
                 enddo
             case(32)
-                nbytes_in_buffer = TIFFReadEncodedStrip(ptr%fhandle, int(strip_counter-1,kind=c_float),strip_buffer_cptr, int(-1,kind=c_float))
-                if (nbytes_in_buffer .le. 0) THROW_HARD('rTiffSlices; Failed to read from strip: '//int2str(strip_counter))
-                if (nbytes_in_buffer .ne. prev_nbytes_in_buffer) then
-                    call c_f_pointer(strip_buffer_cptr,ftemp_byte_array32,[nbytes_in_buffer])
-                endif
-                if (nbytes_in_buffer .ne. 4*rows_per_strip*dims(1)) THROW_HARD('rTiffSlices; Unexpected number of bytes in buffer')
-                current_first_row = rows_per_strip * (strip_counter-1) + 1
-                current_last_row  = rows_per_strip * strip_counter
-                do row_counter=current_first_row,current_last_row
-                    current_first_byte = (row_counter-current_first_row)*dims(1)+1
-                    current_last_byte  = current_first_byte + dims(1) - 1
-                    rarr(1:dims(1),dims(2)-row_counter+1,1) = ftemp_byte_array32(current_first_byte:current_last_byte)
+                call c_f_pointer(strip_buffer_cptr,ftemp_byte_array32,[nbytes_in_buffer])
+                first_row = ptr%RowsPerStrip * (strip_counter-1) + 1
+                last_row  = first_row + nrows - 1
+                do row_counter = first_row,last_row
+                    first_byte = (row_counter-first_row)*dims(1)+1
+                    last_byte  = first_byte + dims(1) - 1
+                    rarr(1:dims(1),dims(2)-row_counter+1,1) = real(ftemp_byte_array32(first_byte:last_byte),kind=4)
                 enddo
             end select
         enddo
