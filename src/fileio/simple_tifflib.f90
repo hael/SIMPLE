@@ -26,6 +26,11 @@ interface
         character(kind=c_char)  ::  cmode(*)
     end function TIFFOpen
 
+    function TIFFGetVersion() bind(c,name='TIFFGetVersion')
+        use, intrinsic :: iso_c_binding, only: c_ptr
+        type(c_ptr) :: TIFFGetVersion
+    end function TIFFGetVersion
+
     ! tsize_t TIFFReadEncodedStrip(TIFF *tif, tstrip_t strip, tdata_t buf, tsize_t size)
     ! tstrip_t is uint32
     ! tdata_t is void*

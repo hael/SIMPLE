@@ -137,7 +137,8 @@ type, extends(ImgHead) :: MrcImgHead
 end type MrcImgHead
 
 type, extends(ImgHead) :: TiffImgHead
-    type(c_ptr) :: fhandle = c_null_ptr !< file handle
+    type(c_ptr) :: fhandle          = c_null_ptr !< file handle
+    type(c_ptr) :: StripBuffer_cptr = c_null_ptr !< buffer
     integer     :: nx = 0                 !< number of columns
     integer     :: ny = 0                 !< number of rows
     integer     :: nz = 0                 !< number of frames
@@ -145,8 +146,8 @@ type, extends(ImgHead) :: TiffImgHead
     integer     :: SamplesPerPixel  = 0
     integer     :: SampleFormat     = 0
     integer     :: RowsPerStrip     = 0
-    type(c_ptr) :: StripBuffer_cptr = c_null_ptr
     integer     :: NumberOfStrips   = 0
+    integer     :: StripSize        = 0
     integer     :: MinVal           = 0
     integer     :: MaxVal           = 0
     logical     :: isTiled = .true.       !< tiled is not supported
@@ -294,14 +295,15 @@ contains
                 write(logfhandle,'(a,3(f0.3,1x))')   'Pixel size: ', smpd
             type is( TiffImgHead )
                 write(logfhandle,'(a,3(1x,i6))') 'Number of columns, rows, sections: ', self%nx, self%ny, self%nz
-                write(logfhandle,'(a,1x,i16)') 'Bits Per Samples:   ', self%BitsPerSample
+                write(logfhandle,'(a,1x,i16)') 'Bits Per Samples :  ', self%BitsPerSample
                 write(logfhandle,'(a,1x,i16)') 'Samples Per Pixel : ', self%SamplesPerPixel
-                write(logfhandle,'(a,1x,i16)') 'Sample Format :     ', self%SampleFormat
-                write(logfhandle,'(a,1x,a1)')  'Tiled :             ', self%istiled
+                write(logfhandle,'(a,1x,i16)') 'Sample Format     : ', self%SampleFormat
+                write(logfhandle,'(a,1x,a1)')  'Tiled             : ', self%istiled
                 write(logfhandle,'(a,1x,i16)') 'Maximum data value: ', self%maxval
                 write(logfhandle,'(a,1x,i16)') 'Minimum data value: ', self%maxval
-                write(logfhandle,'(a,1x,i16)') 'Rows Per Strip :    ', self%RowsPerStrip
-                write(logfhandle,'(a,1x,i16)') 'Number of Strips :  ', self%RowsPerStrip
+                write(logfhandle,'(a,1x,i16)') 'Rows Per Strip    : ', self%RowsPerStrip
+                write(logfhandle,'(a,1x,i16)') 'Number of Strips  : ', self%NumberOfStrips
+                write(logfhandle,'(a,1x,i16)') 'Strip size        : ', self%StripSize
             type is( SpiImgHead )
                 write(logfhandle,'(a,3(1x,f7.0))') 'Number of columns, rows, sections: ', self%nx, self%ny, self%nz
                 write(logfhandle,'(a,1x,f7.0)') 'SPIDER data mode (iform):                                       ', self%iform
@@ -453,6 +455,7 @@ contains
                 self%RowsPerStrip     = TIFFGetRowsPerStrip(self%fhandle)
                 self%StripBuffer_cptr = TIFFAllocateStripBuffer(self%fhandle)
                 self%NumberOfStrips   = TIFFNumberOfStrips(self%fhandle)
+                self%StripSize        = TIFFStripsize(self%fhandle)
                 self%minval           = TIFFGetMinVal(self%fhandle)
                 self%maxval           = TIFFGetMaxVal(self%fhandle)
 #endif
@@ -719,6 +722,7 @@ contains
                 self%SampleFormat    = 0
                 self%RowsPerStrip    = 0
                 self%NumberOfStrips  = 0
+                self%StripSize       = 0
                 self%MinVal          = 0
                 self%MaxVal          = 0
                 self%pixsiz          = 0.

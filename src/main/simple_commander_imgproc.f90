@@ -280,9 +280,14 @@ contains
         class(cmdline),           intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        integer          :: iptcl
+        integer          :: ldim(3), nptcls, iptcl
         if( cline%defined('stk') )then
             call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+            call find_ldim_nptcls(params%stk,ldim,nptcls)
+            ldim(3) = 1
+            if( ldim(1) /= ldim(2) )then
+                call build%img%new(ldim,params%smpd)
+            endif
             do iptcl=1,params%nptcls
                 call progress(iptcl, params%nptcls)
                 call build%img%read(params%stk, iptcl)
