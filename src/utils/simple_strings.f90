@@ -410,6 +410,34 @@ contains
         str_has_substr = .not. (index(str, substr) == 0)
     end function str_has_substr
 
+    !>  \brief  removes occurrences of substr in str into str_out
+    subroutine void_substr( str, substr, str_out)
+        character(len=*), intent(in)                 :: str, substr
+        character(len=:), allocatable, intent(inout) :: str_out
+        integer :: l, lout, pos
+        str_out = trim(str)
+        l = len_trim(substr)
+        if( l == 0 )return
+        if( .not.str_has_substr(str_out, substr) )return
+        pos = index(str_out, substr)
+        do while( pos > 0 )
+            lout = len_trim(str_out)
+            if( (pos==1) .and. (lout==l) )then
+                str_out = ''
+                return
+            else if( pos == 1)then
+                str_out = str_out(pos+l:lout)
+            else
+                if( pos+l-1 == lout )then
+                    str_out = str_out(1:pos-1)
+                else
+                    str_out = str_out(1:pos-1)//str_out(pos+l:lout)
+                endif
+            endif
+            pos = index(str_out, substr)
+        end do
+    end subroutine
+
     subroutine replace_substr( str, substr, repl, str_out )
         character(len=*), intent(inout) :: str
         character(len=*), intent(in)    :: substr, repl
