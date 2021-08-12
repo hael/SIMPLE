@@ -555,7 +555,7 @@ contains
         class(sp_project),      intent(inout)   :: spproj
         class(cmdline),         intent(inout)   :: cline
         integer                                 :: i,j,k
-        character (len=:),      allocatable     :: tiltname, tmpname
+        character (len=:),      allocatable     :: tiltname, tmpname, fname
         character(len=LONGSTRLEN)               :: fname_eps
         character(len=20),      allocatable     :: tiltgroups(:)
         type(Node),             pointer         :: xmldoc, beamtiltnode, beamtiltnodex, beamtiltnodey
@@ -567,7 +567,7 @@ contains
         real, allocatable                       :: centroids(:,:)
         integer, allocatable                    :: populations(:) 
         logical                                 :: exists
-        integer                                 :: fault
+        integer                                 :: pos
 
         call seed_rnd
 
@@ -607,42 +607,30 @@ contains
         j = 1
         
         do i=1, size(self%movienames)
-        
-            if(index(self%movienames(i), '_fractions') .ne. 0) then
-                inquire(file=trim(adjustl(cline%get_carg('xmlloc'))) // "/" //  trim(adjustl(self%movienames(i)(1:index(self%movienames(i), '_fractions') - 1))) //".xml", exist=exists)
-                if(.NOT. exists) then
-                    write(logfhandle, *) trim(adjustl(cline%get_carg('xmlloc'))) // "/" // trim(adjustl(self%movienames(i)(1:index(self%movienames(i), '_fractions') - 1))) //".xml" // ' does not exist. Ignoring'
-                    tilts(i,1) = 0.0
-                    tilts(i,2) = 0.0
-                else
-                    xmldoc => parseFile(trim(adjustl(cline%get_carg('xmlloc'))) // "/" // trim(adjustl(self%movienames(i)(1:index(self%movienames(i), '_fractions') - 1))) //".xml")
-                    beamtiltnode => item(getElementsByTagname(xmldoc, "BeamShift"), 0) 
-                    beamtiltnodex => item(getElementsByTagname(beamtiltnode, "a:_x"), 0)
-                    beamtiltnodey => item(getElementsByTagname(beamtiltnode, "a:_y"), 0)
-                    beamtiltx = str2real(getTextContent(beamtiltnodex))
-                    beamtilty = str2real(getTextContent(beamtiltnodey))
-                    tilts(i,1) = beamtiltx
-                    tilts(i,2) = beamtilty
-                    call destroy(xmldoc)
-                endif
+
+            pos = index(self%movienames(i), '_fractions')
+            if( pos .ne. 0 ) then
+                tmpname = trim(adjustl(cline%get_carg('xmlloc'))) // "/" // trim(adjustl(self%movienames(i)(1:pos - 1))) // ".xml"
             else
-                inquire(file=trim(adjustl(cline%get_carg('xmlloc'))) // "/" //  trim(adjustl(self%movienames(i))) //".xml", exist=exists)
-                if(.NOT. exists) then
-                    write(logfhandle, *) trim(adjustl(cline%get_carg('xmlloc'))) // "/" // trim(adjustl(self%movienames(i))) //".xml" // ' does not exist. Ignoring'
-                    tilts(i,1) = 0.0
-                    tilts(i,2) = 0.0
-                else
-                    xmldoc => parseFile(trim(adjustl(cline%get_carg('xmlloc'))) // "/" // trim(adjustl(self%movienames(i))) //".xml")
-                    beamtiltnode => item(getElementsByTagname(xmldoc, "BeamShift"), 0) 
-                    beamtiltnodex => item(getElementsByTagname(beamtiltnode, "a:_x"), 0)
-                    beamtiltnodey => item(getElementsByTagname(beamtiltnode, "a:_y"), 0)
-                    beamtiltx = str2real(getTextContent(beamtiltnodex))
-                    beamtilty = str2real(getTextContent(beamtiltnodey))
-                    tilts(i,1) = beamtiltx
-                    tilts(i,2) = beamtilty
-                    call destroy(xmldoc)
-                endif 
-               
+                tmpname = trim(adjustl(cline%get_carg('xmlloc'))) // "/" //  trim(adjustl(self%movienames(i))) //".xml"
+            endif
+            call void_substr(tmpname, '_EER', fname)
+
+            inquire(file=fname, exist=exists)
+            if(.NOT. exists) then
+                write(logfhandle, *) trim(fname) // ' does not exist. Ignoring'
+                tilts(i,1) = 0.0
+                tilts(i,2) = 0.0
+            else
+                xmldoc => parseFile(fname)
+                beamtiltnode => item(getElementsByTagname(xmldoc, "BeamShift"), 0)
+                beamtiltnodex => item(getElementsByTagname(beamtiltnode, "a:_x"), 0)
+                beamtiltnodey => item(getElementsByTagname(beamtiltnode, "a:_y"), 0)
+                beamtiltx = str2real(getTextContent(beamtiltnodex))
+                beamtilty = str2real(getTextContent(beamtiltnodey))
+                tilts(i,1) = beamtiltx
+                tilts(i,2) = beamtilty
+                call destroy(xmldoc)
             endif
               
             if(index(self%movienames(1), 'FoilHole') .ne. 0) then
