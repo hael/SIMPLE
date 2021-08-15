@@ -74,7 +74,8 @@ contains
         self%nptcls    = 0
         self%path      = './chunk_'//int2str(id)//'/'
         self%projfile_out = ''
-        call self%qenv%new(params_glob%nparts_chunk,exec_bin='simple_private_exec')
+        ! we need to override the qsys_name for non local distributed execution
+        call self%qenv%new(params_glob%nparts_chunk,exec_bin='simple_private_exec',qsys_name='local')
         self%spproj%projinfo = master_spproj%projinfo
         self%spproj%compenv  = master_spproj%compenv
         call self%spproj%projinfo%delete_entry('projname')
@@ -93,7 +94,7 @@ contains
         integer :: iproj, iptcl, cnt, inptcls, nptcls_tot, fromp, iiproj, n_in
         if( .not.self%available ) THROW_HARD('chunk unavailable; chunk%generate')
         n_in = size(fnames)
-        if( n_in == 0 ) THROW_HARD('# patcls == 0; chunk%generate')
+        if( n_in == 0 ) THROW_HARD('# ptcls == 0; chunk%generate')
         allocate(spproj_mask(n_in),source=.false.)
         nptcls_tot = 0
         do iproj = 1,n_in
@@ -503,7 +504,8 @@ contains
             call chunks(ichunk)%init(ichunk, pool_proj)
         enddo
         glob_chunk_id = params%nchunks
-        call qenv_pool%new(params%nparts,exec_bin='simple_private_exec')
+        ! we need to override the qsys_name for non local distributed execution
+        call qenv_pool%new(params%nparts,exec_bin='simple_private_exec',qsys_name='local')
         ! wait for first stacks
         do
             if( file_exists(spproj_list_fname) )then

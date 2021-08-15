@@ -33,7 +33,7 @@ end type qsys_env
 
 contains
 
-    subroutine new( self, nparts, stream, numlen, nptcls, exec_bin )
+    subroutine new( self, nparts, stream, numlen, nptcls, exec_bin, qsys_name)
         use simple_ori,        only: ori
         use simple_sp_project, only: sp_project
         class(qsys_env),             intent(inout) :: self
@@ -41,6 +41,7 @@ contains
         logical,           optional, intent(in)    :: stream
         integer,           optional, intent(in)    :: numlen, nptcls
         character(len=*),  optional, intent(in)    :: exec_bin
+        character(len=*),  optional, intent(in)    :: qsys_name ! to override the qsys read in
         type(ori)                     :: compenv_o
         type(sp_project)              :: spproj
         character(len=:), allocatable :: qsnam, tpi, hrs_str, mins_str, secs_str
@@ -92,6 +93,7 @@ contains
                 call self%qdescr%set('job_time','0-'//hrs_str//':'//mins_str//':'//secs_str)
             endif
         endif
+        if( present(qsys_name) ) call self%qdescr%set('qsys_name', qsys_name)
         qsnam = self%qdescr%get('qsys_name')
         call self%qsys_fac%new(qsnam, self%myqsys)
         ! create the user specific qsys and qsys controller (script generator)
