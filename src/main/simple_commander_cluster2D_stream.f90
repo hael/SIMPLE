@@ -1268,11 +1268,10 @@ contains
                 logical, optional, intent(in) :: self_transfer
                 type(image)                   :: img
                 character(len=:), allocatable :: stkout, stkin
-                integer :: ipart, numlen_chunk
+                integer :: ipart
                 logical :: l_self
                 l_self = .false.
                 if( present(self_transfer) ) l_self = self_transfer
-                numlen_chunk = len(int2str(params%nparts_chunk)) ! as per parameters
                 call img%new([box,box,1],smpd)
                 call img%read( refs_in, indin)
                 call img%write(refs_out,indout)
@@ -1289,22 +1288,22 @@ contains
                 call img%zero_and_flag_ft
                 if( l_self )then
                     do ipart = 1,params%nparts
-                        stkin = 'cavgs_even_part'//int2str_pad(ipart,numlen_chunk)//trim(params%ext)
+                        stkin = 'cavgs_even_part'//int2str_pad(ipart,params%numlen)//trim(params%ext)
                         call img%read(stkin, indin)
                         call img%write(stkin,indout)
                     enddo
                     do ipart = 1,params%nparts
-                        stkin = 'cavgs_even_part'//int2str_pad(ipart,numlen_chunk)//trim(params%ext)
+                        stkin = 'cavgs_even_part'//int2str_pad(ipart,params%numlen)//trim(params%ext)
                         call img%read(stkin, indin)
                         call img%write(stkin,indout)
                     enddo
                     do ipart = 1,params%nparts
-                        stkin = 'ctfsqsums_even_part'//int2str_pad(ipart,numlen_chunk)//trim(params%ext)
+                        stkin = 'ctfsqsums_even_part'//int2str_pad(ipart,params%numlen)//trim(params%ext)
                         call img%read(stkin, indin)
                         call img%write(stkin,indout)
                     enddo
                     do ipart = 1,params%nparts
-                        stkin = 'ctfsqsums_odd_part'//int2str_pad(ipart,numlen_chunk)//trim(params%ext)
+                        stkin = 'ctfsqsums_odd_part'//int2str_pad(ipart,params%numlen)//trim(params%ext)
                         call img%read(stkin, indin)
                         call img%write(stkin,indout)
                     enddo
@@ -1312,25 +1311,25 @@ contains
                     stkin  = trim(dir)//'/cavgs_even_part'//trim(params%ext)
                     call img%read(stkin, indin)
                     do ipart = 1,params%nparts
-                        stkout = 'cavgs_even_part'//int2str_pad(ipart,numlen_chunk)//trim(params%ext)
+                        stkout = 'cavgs_even_part'//int2str_pad(ipart,params%numlen)//trim(params%ext)
                         call img%write(stkout,indout)
                     enddo
                     stkin  = trim(dir)//'/cavgs_odd_part'//trim(params%ext)
                     call img%read(stkin, indin)
                     do ipart = 1,params%nparts
-                        stkout = 'cavgs_odd_part'//int2str_pad(ipart,numlen_chunk)//trim(params%ext)
+                        stkout = 'cavgs_odd_part'//int2str_pad(ipart,params%numlen)//trim(params%ext)
                         call img%write(stkout,indout)
                     enddo
                     stkin  = trim(dir)//'/ctfsqsums_even_part'//trim(params%ext)
                     call img%read(stkin, indin)
                     do ipart = 1,params%nparts
-                        stkout = 'ctfsqsums_even_part'//int2str_pad(ipart,numlen_chunk)//trim(params%ext)
+                        stkout = 'ctfsqsums_even_part'//int2str_pad(ipart,params%numlen)//trim(params%ext)
                         call img%write(stkout,indout)
                     enddo
                     stkin  = trim(dir)//'/ctfsqsums_odd_part'//trim(params%ext)
                     call img%read(stkin, indin)
                     do ipart = 1,params%nparts
-                        stkout = 'ctfsqsums_odd_part'//int2str_pad(ipart,numlen_chunk)//trim(params%ext)
+                        stkout = 'ctfsqsums_odd_part'//int2str_pad(ipart,params%numlen)//trim(params%ext)
                         call img%write(stkout,indout)
                     enddo
                 endif

@@ -93,7 +93,7 @@ contains
         do k = 1, size(pairs,2)
             i = pairs(1,k)
             j = pairs(2,k)
-            self%Dmat(i,j) = self%frames_ftexp(i)%corr_unnorm(self%frames_ftexp(j))
+            self%Dmat(i,j) = self%frames_ftexp(i)%corr_unnorm_serial(self%frames_ftexp(j))
             self%Dmat(j,i) = self%Dmat(i,j)
         end do
         !$omp end parallel do
@@ -119,16 +119,13 @@ contains
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i=1,self%nframes
             call self%frames_ftexp(i)%new(self%frames(i), self%hp, self%lp, .true., bfac=self%bfactor)
+            call self%frames_ftexp(i)%normalize_mat
         end do
         !$omp end parallel do
         if (.not. self%Dmat_based) then
             call self%R   %new(self%frames(1), self%hp, self%lp, .false., bfac=self%bfactor)
             call self%Rhat%new(self%frames(1), self%hp, self%lp, .false., bfac=self%bfactor)
         end if
-        ! normalize objects
-        do i=1,self%nframes
-            call self%frames_ftexp(i)%normalize_mat
-        end do
     end subroutine create_ftexp_objs
 
     subroutine dealloc_ftexp_objs( self )
@@ -396,7 +393,7 @@ contains
         ! calculate e(i)
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1, self%nframes
-            val_e(i) = self%R%corr_unnorm(self%frames_ftexp(i))
+            val_e(i) = self%R%corr_unnorm_serial(self%frames_ftexp(i))
         end do
         !$omp end parallel do
         val_RR = 0._dp
@@ -444,7 +441,7 @@ contains
         ! calculate e(i)
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1, self%nframes
-            val_e(i) = self%R%corr_unnorm(self%frames_ftexp(i))
+            val_e(i) = self%R%corr_unnorm_serial(self%frames_ftexp(i))
         end do
         !$omp end parallel do
         val_RR = 0._dp
@@ -477,7 +474,7 @@ contains
                 if (i==n) cycle
                 T1 = T1 + val_e(n) * (val_e(i) - vec(i)) / val_EE(i)
             end do
-            T2 = self%Rhat%corr_unnorm(self%frames_ftexp(n)) - 1._dp/val_D(n) + kk(n) ! term 2
+            T2 = self%Rhat%corr_unnorm_serial(self%frames_ftexp(n)) - 1._dp/val_D(n) + kk(n) ! term 2
             grad(n) =  T2 - T1
         end do
         !$omp end parallel do

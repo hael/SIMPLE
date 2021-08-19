@@ -159,7 +159,7 @@ contains
                 end if
             end do
         end do
-        if( fetch_comps ) self%sumsq = self%corr_unnorm(self)
+        if( fetch_comps ) self%sumsq = real(self%corr_unnorm_serial(self))
         if( didft ) call img%ifft()
         ! allocate class variables
         self%existence = .true.
@@ -219,7 +219,7 @@ contains
         class(ft_expanded), intent(inout) :: self
         complex,            intent(in) :: cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2))
         self%cmat = cmat
-        self%sumsq = self%corr_unnorm(self)
+        self%sumsq = real(self%corr_unnorm_serial(self))
     end subroutine set_cmat
 
     pure subroutine zero( self )
@@ -253,11 +253,11 @@ contains
         if( present(w) )then
              if( w > 0. )then
                  self%cmat  = self%cmat + self2add%cmat*w
-                 self%sumsq = self%corr_unnorm(self)
+                 self%sumsq = real(self%corr_unnorm_serial(self))
              endif
         else
             self%cmat  = self%cmat + self2add%cmat
-            self%sumsq = self%corr_unnorm(self)
+            self%sumsq = real(self%corr_unnorm_serial(self))
         endif
     end subroutine add
 
@@ -280,7 +280,7 @@ contains
         ww = 1.0
         if( present(w) ) ww = w
         if( ww > 0. ) self%cmat = self%cmat-ww*self2subtr%cmat
-        self%sumsq = self%corr_unnorm(self)
+        self%sumsq = real(self%corr_unnorm_serial(self))
     end subroutine subtr
 
     subroutine div( self, val )
@@ -288,7 +288,7 @@ contains
         real,               intent(in)    :: val
         if( abs(val) < TINY ) return
         self%cmat  = self%cmat / val
-        self%sumsq = self%corr_unnorm(self)
+        self%sumsq = real(self%corr_unnorm_serial(self))
     end subroutine div
 
     ! MODIFIERS
@@ -333,9 +333,9 @@ contains
             end do
         endif
         if( present(calc_sumsq) )then
-            if( calc_sumsq ) self_out%sumsq = self_out%corr_unnorm(self)
+            if( calc_sumsq ) self_out%sumsq = real(self_out%corr_unnorm_serial(self))
         else
-            self_out%sumsq = self_out%corr_unnorm(self_out)
+            self_out%sumsq = real(self_out%corr_unnorm_serial(self_out))
         endif
     end subroutine shift
 
@@ -363,21 +363,16 @@ contains
                 endif
             end do
         end do
-        self_out%sumsq = self_out%corr_unnorm(self_out)
+        self_out%sumsq = real(self_out%corr_unnorm_serial(self_out))
     end subroutine shift_and_add
 
     subroutine normalize_mat( self )
         class(ft_expanded), intent(inout) :: self
         real    :: anorm
-        integer :: hind,kind
-        anorm = sqrt(self%corr_unnorm(self))
-        !$omp parallel do collapse(2) default(shared) private(hind,kind) proc_bind(close) schedule(static)
-        do kind=self%flims(2,1),self%flims(2,2)
-            do hind=self%flims(1,1),self%flims(1,2)
-                if( self%bandmsk(hind,kind) ) self%cmat(hind,kind) = self%cmat(hind,kind) / anorm
-            end do
-        end do
-        !$omp end parallel do
+        anorm = real(sqrt(self%corr_unnorm_serial(self)))
+        where(self%bandmsk)
+            self%cmat = self%cmat / anorm
+        end where
     end subroutine normalize_mat
 
     ! CALCULATORS
@@ -402,8 +397,7 @@ contains
         real(dp) :: r, tmp ! we need double precision here to avoid round-off errors in openmp loop
         integer  :: hind, kind
         ! corr is real part of the complex mult btw 1 and 2*
-        r = sum(real(self1%cmat(1,:)*conjg(self2%cmat(1,:)),dp),&
-            mask=self1%bandmsk(1,:))
+        r = sum(real(self1%cmat(1,:)*conjg(self2%cmat(1,:)),dp), mask=self1%bandmsk(1,:))
         tmp = 0._dp
         !$omp parallel do collapse(2) default(shared) private(kind,hind) reduction(+:tmp) proc_bind(close) schedule(static)
         do kind = self1%flims(2,1), self1%flims(2,2)
