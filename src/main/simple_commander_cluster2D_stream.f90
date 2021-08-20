@@ -788,12 +788,15 @@ contains
                     spproj_mask(iproj) = isnew
                 enddo
                 ! first new project index
+                first_new = 0
                 do iproj = 1,n_spprojs
                     if( spproj_mask(iproj) )then
                         first_new = iproj
                         exit
                     endif
                 enddo
+                ! no new data to process
+                if( first_new == 0 )return
                 ! gather number of particles
                 allocate(spproj_nptcls(n_spprojs),source=0)
                 nptcls = 0
