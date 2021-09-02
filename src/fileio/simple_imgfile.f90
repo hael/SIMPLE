@@ -418,6 +418,7 @@ contains
         integer(kind=1), pointer :: itemp_byte_array8(:)
         integer(kind=2), pointer :: itemp_byte_array16(:)
         type(c_ptr)              :: strip_buffer_cptr, string_ptr
+        real(kind=dp) :: v
         integer :: dims(3), nbytes_in_buffer, first_byte, first_row
         integer :: io_stat, last_byte, last_row, row_counter, strip_counter
         integer :: last_strip_length, strip_length, nbytes, nrows
@@ -475,8 +476,9 @@ contains
             ! Read a strip from the file
             if( (strip_counter==ptr%NumberOfStrips) .and. (ptr%NumberOfStrips>1) )then
                 ! making sure buffer is allocated to correct size for the very last strip
-                last_strip_length = int(real(ptr%StripSize*dims(2))/real(ptr%RowsPerStrip))
-                last_strip_length = last_strip_length - ((strip_counter-1)*ptr%StripSize+1) + 1
+                v = real(ptr%StripSize,dp) / real(ptr%RowsPerStrip,dp) ! order is to avoid integer kind=4 overflow!!
+                v = v * real(dims(2),dp)
+                last_strip_length = nint(v) - ((strip_counter-1)*ptr%StripSize+1) + 1
                 if( last_strip_length /= ptr%StripSize )then
                     io_stat           = TIFFfree(strip_buffer_cptr)
                     strip_length      = nbytes*last_strip_length
