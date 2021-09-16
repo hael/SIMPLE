@@ -30,7 +30,7 @@ character(len=STDLEN), parameter   :: SPPROJ_SNAPSHOT     = 'SIMPLE_PROJECT_SNAP
 character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
 character(len=STDLEN), parameter   :: PROJNAME_CHUNK      = 'chunk'
 character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
-logical,               parameter   :: DEBUG_HERE          = .false.
+logical,               parameter   :: DEBUG_HERE          = .true.
 
 type, extends(commander_base) :: cluster2D_commander_stream
   contains
@@ -63,10 +63,19 @@ end type chunk
 
 contains
 
+    subroutine debug_print( string )
+        character(len=*), intent(in) :: string
+        if( DEBUG_HERE )then
+            write(logfhandle,*) trim(string)
+            call flush(logfhandle)
+        endif
+    end subroutine debug_print
+
     subroutine init( self, id, master_spproj )
         class(chunk),     intent(inout) :: self
         integer,           intent(in)    :: id
         class(sp_project), intent(in)    :: master_spproj
+        call debug_print('in chunk%init '//int2str(id))
         call self%spproj%kill
         self%id        = id
         self%it        = 0
@@ -83,6 +92,7 @@ contains
         if( allocated(self%orig_stks) ) deallocate(self%orig_stks)
         self%converged = .false.
         self%available = .true.
+        call debug_print('end chunk%init '//int2str(id))
     end subroutine init
 
     subroutine generate( self, fnames, nptcls, ind_glob )
@@ -95,6 +105,7 @@ contains
         if( .not.self%available ) THROW_HARD('chunk unavailable; chunk%generate')
         n_in = size(fnames)
         if( n_in == 0 ) THROW_HARD('# ptcls == 0; chunk%generate')
+        call debug_print('in chunk%generate '//int2str(self%id)//' '//int2str(ind_glob)//' '//int2str(nptcls)//' '//int2str(n_in))
         allocate(spproj_mask(n_in),source=.false.)
         nptcls_tot = 0
         do iproj = 1,n_in
@@ -111,6 +122,7 @@ contains
         call self%spproj%os_stk%new(self%nmics, is_ptcl=.false.)
         call self%spproj%os_ptcl2D%new(self%nptcls, is_ptcl=.true.)
         allocate(self%orig_stks(self%nmics))
+        call debug_print('in chunk%generate '//int2str(self%nmics)//' '//int2str(self%nptcls))
         cnt    = 0
         fromp  = 1
         iiproj = 0
@@ -133,20 +145,23 @@ contains
             call self%spproj%os_stk%set(iiproj, 'fromp', real(fromp))
             call self%spproj%os_stk%set(iiproj, 'top',   real(fromp+inptcls-1))
             fromp = fromp + inptcls
+            call debug_print('in chunk%generate '//int2str(iproj)//' '//int2str(iiproj)//' '//int2str(inptcls)//' '//int2str(fromp))
         enddo
         call spproj%kill
         self%spproj%os_ptcl3D = self%spproj%os_ptcl2D
+        call debug_print('end chunk%generate '//int2str(self%id))
     end subroutine generate
 
     subroutine exec_classify( self, cline_classify, orig_smpd, orig_box, box )
-        class(chunk),             intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline_classify
-        real,                      intent(in)    :: orig_smpd
-        integer,                   intent(in)    :: orig_box, box
-        type(cmdline)               :: cline_scale
+        class(chunk),   intent(inout) :: self
+        class(cmdline), intent(inout) :: cline_classify
+        real,           intent(in)    :: orig_smpd
+        integer,        intent(in)    :: orig_box, box
+        type(cmdline)              :: cline_scale
         character(len=XLONGSTRLEN) :: cwd
         character(len=LONGSTRLEN)  :: projfile_in
         logical :: err
+        call debug_print('in chunk%exec_classify '//int2str(self%id))
         if( .not.self%available ) return
         if( self%nptcls == 0 ) return
         err = .false.
@@ -192,6 +207,7 @@ contains
         self%converged = .false.
         write(logfhandle,'(A,I6,A,I6,A)')'>>> CHUNK ',self%id,&
             &' INITIATED CLASSIFICATION WITH ',self%nptcls,' PARTICLES'
+        call debug_print('end chunk%exec_classify')
     end subroutine exec_classify
 
     subroutine read( self, box )
@@ -199,6 +215,7 @@ contains
         integer,      intent(in)    :: box
         type(image)                :: img, avg
         character(len=XLONGSTRLEN) :: projfile
+        call debug_print('in chunk%read '//int2str(self%id))
         if( .not.self%converged )THROW_HARD('cannot read chunk prior to convergence')
         ! doc & parameters
         projfile = trim(self%path)//trim(self%projfile_out)
@@ -216,6 +233,7 @@ contains
         call average_into(trim(self%path)//'ctfsqsums_odd_part')
         call img%kill
         call avg%kill
+        call debug_print('end chunk%read '//int2str(self%id))
         contains
             subroutine average_into(tmpl)
                 character(len=*), intent(in) :: tmpl
@@ -238,8 +256,10 @@ contains
 
     subroutine remove_folder( self )
         class(chunk), intent(inout) :: self
+        call debug_print('in chunk%remove_folder '//int2str(self%id))
         if( .not.self%converged )THROW_HARD('cannot remove chunk prior to convergence; remove_folder')
         call simple_rmdir(self%path)
+        call debug_print('end chunk%remove_folder '//int2str(self%id))
     end subroutine remove_folder
 
     subroutine display_iter( self )
@@ -248,11 +268,12 @@ contains
         character(len=XLONGSTRLEN) :: fname
         real                       :: mi_class,frac,corr
         integer                    :: it
-        fname = trim(self%path)//trim(STATS_FILE )
+        fname = trim(self%path)//trim(STATS_FILE)
+        call debug_print('in chunk%display_iter '//int2str(self%id)//' '//trim(fname))
         if( file_exists(fname) )then
             call os%new(1,is_ptcl=.false.)
             call os%read(fname)
-            it       = nint(os%get(1,'ITERATION'))
+            it = nint(os%get(1,'ITERATION'))
             if( it /= self%it )then
                 self%it  = it
                 mi_class = os%get(1,'CLASS_OVERLAP')
@@ -263,12 +284,19 @@ contains
             endif
             call os%kill
         endif
+        call debug_print('end chunk%display_iter '//int2str(self%id))
     end subroutine display_iter
 
     logical function has_converged( self )
         class(chunk), intent(inout) :: self
+        call debug_print('in chunk%has_converged '//int2str(self%id))
         self%converged = file_exists(trim(self%path)//trim(CLUSTER2D_FINISHED))
-        has_converged   = self%converged
+        has_converged  = self%converged
+        if( has_converged )then
+            call debug_print('end chunk%has_converged T '//int2str(self%id))
+        else
+            call debug_print('end chunk%has_converged F '//int2str(self%id))
+        endif
     end function has_converged
 
     subroutine reject( self, res_thresh, ndev, msk, box )
@@ -282,7 +310,7 @@ contains
         real                  :: smpd_here
         integer               :: nptcls_rejected, ncls_rejected, iptcl
         integer               :: icls, ncls_here, cnt
-        if( DEBUG_HERE ) print *,'in chunk%reject'; call flush(6)
+        call debug_print('in chunk%reject '//int2str(self%id))
         projfile = trim(self%path)//self%projfile_out
         ncls_rejected   = 0
         nptcls_rejected = 0
@@ -305,6 +333,7 @@ contains
                 nptcls_rejected = nptcls_rejected+1
                 call self%spproj%os_ptcl2D%set(iptcl,'state',0.)
             enddo
+            call debug_print('in chunk%reject '//int2str(self%id)//' '//int2str(nptcls_rejected))
             call self%spproj%write_segment_inside('ptcl2D',projfile)
             ! updates cls2D field
             do icls=1,ncls_here
@@ -331,7 +360,7 @@ contains
         endif
         call img%kill
         call self%spproj%kill
-        ! if( debug_here ) print *,'end reject from_chunk'; call flush(6)
+        call debug_print('end chunk%reject '//int2str(self%id))
     end subroutine reject
 
     subroutine print_info( self )
@@ -546,7 +575,7 @@ contains
         endif
         boxpd     = 2*round2even(params%alpha*real(box/2)) ! logics from parameters
         large_msk = max(msk, (msk+real(box/2)-COSMSKHALFWIDTH)/2.0)
-        if( debug_here )then
+        if( DEBUG_HERE )then
             print *,'box         ' ,box
             print *,'msk         ' ,msk
             print *,'smpd        ' ,smpd
@@ -578,17 +607,20 @@ contains
         do
             iter = iter + 1
             time_start_iter = simple_gettime()
+            call debug_print('global iter '//int2str(iter)//' '//trim(cast_time_char(time_start_iter)))
             ! update rejection parameters
             call update_user_params
             if( file_exists(TERM_STREAM) )then
-                write(logfhandle,'(A,A)')'>>> TERMINATING CLUSTER2D STREAM ',cast_time_char(simple_gettime())
+                write(logfhandle,'(A,A)')'>>> TERMINATING CLUSTER2D STREAM ',trim(cast_time_char(simple_gettime()))
                 l_forced_exit = .true.
                 exit
             endif
             if( l_forced_exit )then
                 n_converged_chunks = 0
+                call debug_print('forced exit')
             else
                 ! classify chunks
+                call debug_print('chunk section global iter '//int2str(iter))
                 do ichunk = 1,params%nchunks
                     call chunks(ichunk)%exec_classify(cline_cluster2D_chunk, orig_smpd, orig_box, box)
                 enddo
@@ -612,15 +644,18 @@ contains
                 enddo
                 n_converged_chunks = 0
                 if( allocated(converged_chunks) ) n_converged_chunks = size(converged_chunks)
+                call debug_print('end chunk section global iter '//int2str(iter))
             endif
             ! deal with pool completion, rejection, execution
             call update_user_params
             if( .not.pool_available )then
+                call debug_print('pool unavailable '//int2str(iter))
                 pool_converged = file_exists(CLUSTER2D_FINISHED)
                 if( pool_iter > 1 ) refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params%ext)
                 pool_available = pool_converged
             endif
             if( pool_available )then
+                call debug_print('pool available '//int2str(iter))
                 call del_file(CLUSTER2D_FINISHED)
                 ! read in previous iteration
                 call update_pool
@@ -647,10 +682,12 @@ contains
                         call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_odd'//trim(params%ext))
                     endif
                 endif
+                call debug_print('end pool available '//int2str(iter))
             endif
             if( l_forced_exit )then
                 ! do nothing
             else
+                call debug_print('new chunk section global iter '//int2str(iter))
                 ! generate new chunk projects
                 call generate_new_chunks(n_new_chunks)
                 if( n_new_chunks > 0 ) last_injection = simple_gettime()
@@ -668,8 +705,10 @@ contains
                     endif
                     call simple_sleep(WAIT_WATCHER)
                 enddo
+                call debug_print('end new chunk section global iter '//int2str(iter))
             endif
         enddo
+        call debug_print('exited global iter '//int2str(iter))
         call qsys_cleanup(keep2D=.false.)
         if( .not.pool_converged )then
             pool_iter = pool_iter-1
@@ -702,9 +741,7 @@ contains
                 character(len=STDLEN) :: fname
                 real    :: corr, frac, mi_class
                 integer :: i, it
-                if( debug_here )then
-                    print *,'in update_pool ',pool_iter
-                endif
+                call debug_print('in update_pool pool_iter '//int2str(pool_iter))
                 ! iteration info
                 fname = trim(STATS_FILE )
                 if( file_exists(fname) )then
@@ -720,14 +757,17 @@ contains
                     endif
                     call os%kill
                 endif
+                call debug_print('in update_pool 1')
                 ! transfer to pool
                 call spproj%read_segment('ptcl2D',PROJFILE_POOL)
                 call spproj%read_segment('cls2D', PROJFILE_POOL)
                 call spproj%os_ptcl2D%delete_entry('indstk')
                 if( spproj%os_cls2D%get_noris() == 0 )then
+                    call debug_print('in update_pool 2')
                     ! not executed yet, do nothing
                     call spproj%kill
                 else
+                    call debug_print('in update_pool 3')
                     if( .not.allocated(pool_inds) )then
                         ! first time
                         pool_inds = (/(i,i=1,spproj%os_ptcl2D%get_noris())/)
@@ -739,6 +779,7 @@ contains
                     pool_proj%os_cls2D = spproj%os_cls2D
                     call pool_proj%os_cls2D%delete_entry('find')
                     call pool_proj%os_cls2D%set_all('pop', real(pops))
+                    call debug_print('in update_pool 4')
                     ! for gui
                     os = pool_proj%os_cls2D
                     call pool_proj%add_cavgs2os_out(refs_glob, smpd, 'cavg')
@@ -748,11 +789,12 @@ contains
                     call os%kill
                 endif
                 call spproj%kill
+                call debug_print('end update_pool')
             end subroutine update_pool
 
             !> returns the list of projects necessary for creating a new chunk
             subroutine generate_new_chunks( n_new_chunks )
-                integer,                                intent(inout) :: n_new_chunks
+                integer,                 intent(inout) :: n_new_chunks
                 type(sp_project)                       :: stream_proj
                 character(len=LONGSTRLEN), allocatable :: tmp(:)
                 character(len=LONGSTRLEN), allocatable :: spprojs_for_chunk(:)
@@ -760,6 +802,7 @@ contains
                 integer, allocatable :: spproj_nptcls(:)
                 integer :: nptcls, iproj, jproj, cnt, nmics_imported, ichunk, first_new, n_new, n_avail, n2fill
                 logical :: isnew, enough
+                call debug_print('in generate_new_chunks')
                 nmics_imported = 0
                 if( allocated(imported_spprojs) ) nmics_imported = size(imported_spprojs)
                 n_new_chunks = 0
@@ -771,7 +814,7 @@ contains
                     endif
                 enddo
                 if(n_avail == 0) return
-                if( debug_here ) print *,'in generate_new_chunks ',n_avail; call flush(6)
+                call debug_print('in generate_new_chunks 1 '//int2str(n_avail))
                 call read_filetable(spproj_list_fname, spproj_list)
                 if( .not.allocated(spproj_list) )return
                 n_spprojs = size(spproj_list)
@@ -787,6 +830,7 @@ contains
                     enddo
                     spproj_mask(iproj) = isnew
                 enddo
+                call debug_print('in generate_new_chunks 2 '//int2str(count(spproj_mask)))
                 ! first new project index
                 first_new = 0
                 do iproj = 1,n_spprojs
@@ -795,6 +839,7 @@ contains
                         exit
                     endif
                 enddo
+                call debug_print('in generate_new_chunks 3 '//int2str(first_new))
                 ! no new data to process
                 if( first_new == 0 )return
                 ! gather number of particles
@@ -815,6 +860,7 @@ contains
                     endif
                 enddo
                 call stream_proj%kill
+                call debug_print('in generate_new_chunks 4 '//int2str(n2fill))
                 ! enough ?
                 if( n2fill == 0 ) return
                 do ichunk =  1,params%nchunks
@@ -852,11 +898,9 @@ contains
                     spproj_nptcls(first_new:iproj) = 0
                     spproj_mask(first_new:iproj)   = .false.
                     first_new = min(iproj+1,n_spprojs)
+                    call debug_print('in generate_new_chunks 5 '//int2str(ichunk))
                 enddo
-                if( debug_here )then
-                    print *,'nmics_imported: ',nmics_imported
-                    print *,'end generate_new_chunks'; call flush(6)
-                endif
+                call debug_print('end generate_new_chunks '//int2str(nmics_imported))
             end subroutine generate_new_chunks
 
             subroutine import_chunks_into_pool
@@ -871,6 +915,7 @@ contains
                 integer :: iptcl, ind, ncls_here, icls, i, poolind, n_remap, pop, ichunk, nmics2import, nmics_imported
                 integer :: nptcls, imic, iproj, ncls_tmp, fromp_prev, nchunks2import, fromp, ii, jptcl
                 logical :: l_maxed
+                call debug_print('in import_chunks_into_pool')
                 nptcls2import   = 0
                 nmics2import    = 0
                 nchunks2import = size(converged_chunks)
@@ -879,6 +924,7 @@ contains
                     nmics2import  = nmics2import + converged_chunks(ichunk)%nmics
                 enddo
                 if( nptcls2import == 0 ) return
+                call debug_print('in import_chunks_into_pool 1 '//int2str(nptcls2import))
                 ! reallocations
                 nmics_imported  = pool_proj%os_mic%get_noris()
                 nptcls_imported = pool_proj%os_ptcl2D%get_noris()
@@ -901,6 +947,7 @@ contains
                 endif
                 imic  = nmics_imported
                 iptcl = nptcls_imported
+                call debug_print('in import_chunks_into_pool 2 '//int2str(imic)//' '//int2str(iptcl))
                 do ichunk = 1,nchunks2import
                     fromp_prev = fromp
                     call converged_chunks(ichunk)%read(boxpd)
@@ -930,6 +977,7 @@ contains
                     enddo
                     write(logfhandle,'(A,I6,A,I6,A)')'>>> TRANSFERRED ',fromp-fromp_prev,' PARTICLES FROM CHUNK ',&
                     &converged_chunks(ichunk)%id,' TO POOL'
+                    call flush(logfhandle)
                     ! transfer classes
                     l_maxed   = ncls_glob >= max_ncls ! max # of classes reached ?
                     ncls_here = ncls_glob
@@ -941,6 +989,7 @@ contains
                     call frcs_chunk%new(params%ncls_start, box, smpd, nstates=1)
                     call frcs_chunk%read(trim(dir_chunk)//trim(FRCS_FILE))
                     if( l_maxed )then
+                        call debug_print('in import_chunks_into_pool 3 '//int2str(ichunk))
                         ! transfer all others
                         cls_pop = nint(pool_proj%os_cls2D%get_all('pop'))
                         n_remap = 0
@@ -998,6 +1047,7 @@ contains
                                 write(logfhandle,'(A,I4)')'>>> # OF RE-MAPPED CLASS AVERAGES: ',n_remap
                             endif
                         else
+                            call debug_print('in import_chunks_into_pool 4 '//int2str(ichunk))
                             ! no remapping, just transfer particles & updates 2D population
                             do ii = 1,converged_chunks(ichunk)%nptcls
                                 if( states(ii) /= 0 )then
@@ -1010,7 +1060,9 @@ contains
                         endif
                         ! updates class populations
                         call pool_proj%os_cls2D%set_all('pop',real(cls_pop))
+                        call debug_print('in import_chunks_into_pool 5 '//int2str(ichunk))
                     else
+                        call debug_print('in import_chunks_into_pool 6 '//' '//int2str(ichunk)//' '//int2str(ncls_glob))
                         ! all new classes can be imported, no remapping
                         if( ncls_glob == 0 )then
                             ! first transfer : copy classes, frcs & class parameters
@@ -1044,6 +1096,7 @@ contains
                                 call pool_proj%os_cls2D%set(ind, 'class', real(ind))
                             enddo
                         endif
+                        call debug_print('in import_chunks_into_pool 7'//' '//int2str(ichunk))
                         ! particles 2D
                         do ii = 1,converged_chunks(ichunk)%nptcls
                             if( states(ii) /= 0 )then
@@ -1054,10 +1107,12 @@ contains
                         enddo
                         ! global # of classes
                         ncls_glob = ncls_here
+                        call debug_print('in import_chunks_into_pool 8'//' '//int2str(ichunk))
                     endif
                     ! remove chunk
                     call converged_chunks(ichunk)%remove_folder
                     call converged_chunks(ichunk)%kill
+                    call debug_print('in import_chunks_into_pool 9'//' '//int2str(ichunk))
                 enddo
                 ! for gui
                 os_backup = pool_proj%os_cls2D
@@ -1066,12 +1121,13 @@ contains
                 call pool_proj%write_segment_inside('out',   orig_projfile)
                 call pool_proj%write_segment_inside('cls2D', orig_projfile)
                 call os_backup%kill
+                call debug_print('in import_chunks_into_pool 10'//' '//int2str(ichunk))
                 ! cleanup
                 deallocate(converged_chunks)
                 call frcs_prev%kill
                 call frcs_glob%kill
                 call frcs_chunk%kill
-                if( debug_here )print *,'end import_chunks_into_pool'; call flush(6)
+                call debug_print('end import_chunks_into_pool')
             end subroutine import_chunks_into_pool
 
             subroutine exec_classify_pool
@@ -1082,14 +1138,12 @@ contains
                 integer                 :: cnt, iptcl,i, nptcls_tot, nptcls_old, n2update
                 integer                 :: indinstk, stkind, eo, icls, nptcls_sel
                 integer(timer_int_kind) :: t_tot
-                if( debug_here )then
-                    print *,'in exec_classify_pool '
-                endif
                 if( L_BENCH )then
                     t_tot  = tic()
                 endif
                 nptcls_tot = pool_proj%os_ptcl2D%get_noris()
                 if( nptcls_tot == 0 ) return
+                call debug_print('in exec_classify_pool '//int2str(nptcls_tot))
                 pool_iter = pool_iter + 1
                 call cline_cluster2D%set('refs', refs_glob)
                 call cline_cluster2D%set('ncls', real(ncls_glob))
@@ -1113,6 +1167,7 @@ contains
                     endif
                 enddo
                 nptcls_sel = count(transfer_mask)
+                call debug_print('in exec_classify_pool 1 '//int2str(nptcls_sel))
                 allocate(prev_eo_pops(ncls_glob,2),source=0)
                 if( nptcls_old > params%ncls_start*params%nptcls_per_cls )then
                     srch_frac = STREAM_SRCHFRAC
@@ -1134,6 +1189,7 @@ contains
                         endif
                     end do
                     n2update = count(transfer_mask)
+                    call debug_print('in exec_classify_pool 2 '//int2str(n2update)//' '//real2str(srch_frac))
                     do icls = 1,ncls_glob
                         call transfer_spproj%os_cls2D%set(icls,'prev_pop_even',real(prev_eo_pops(icls,1)))
                         call transfer_spproj%os_cls2D%set(icls,'prev_pop_odd', real(prev_eo_pops(icls,2)))
@@ -1157,6 +1213,7 @@ contains
                     pool_inds = (/(i,i=1,n2update)/)
                     transfer_spproj%os_ptcl2D = pool_proj%os_ptcl2D
                 endif
+                call debug_print('in exec_classify_pool 3')
                 transfer_spproj%os_stk    = pool_proj%os_stk
                 transfer_spproj%os_ptcl3D = transfer_spproj%os_ptcl2D
                 call transfer_spproj%write(PROJFILE_POOL)
@@ -1171,6 +1228,7 @@ contains
                     call cline_cluster2D%set('update_frac', frac_update)
                     call cline_cluster2D%set('center',      'no')
                 endif
+                call debug_print('in exec_classify_pool 4')
                 deallocate(update_cnts,transfer_mask)
                 call transfer_spproj%kill
                 call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D, './distr_cluster2D_pool', 'simple_log_cluster2D_pool')
@@ -1179,6 +1237,7 @@ contains
                 write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',n2update,&
                 &' / ', nptcls_sel,' PARTICLES'
                 if( L_BENCH ) print *,'timer exec_classify_pool tot : ',toc(t_tot)
+                call debug_print('end exec_classify_pool')
             end subroutine exec_classify_pool
 
             subroutine rescale_cavgs( src, dest )
@@ -1186,6 +1245,8 @@ contains
                 type(image)          :: img, img_pad
                 integer, allocatable :: cls_pop(:)
                 integer              :: ldim(3),icls, iostat, ncls_here
+                call debug_print('in rescale_cavgs '//trim(src))
+                call debug_print('in rescale_cavgs '//trim(dest))
                 call img%new([box,box,1],smpd)
                 call img_pad%new([orig_box,orig_box,1],params%smpd)
                 cls_pop = nint(pool_proj%os_cls2D%get_all('pop'))
@@ -1205,6 +1266,7 @@ contains
                 iostat = simple_rename('tmp_cavgs.mrc',dest)
                 call img%kill
                 call img_pad%kill
+                call debug_print('end rescale_cavgs')
             end subroutine rescale_cavgs
 
             subroutine reject_from_pool
@@ -1213,12 +1275,11 @@ contains
                 real                 :: ndev_here
                 integer              :: nptcls_rejected, ncls_rejected, iptcl
                 integer              :: icls, cnt
-                if( debug_here ) print *,'in reject from_pool'; call flush(6)
+                call debug_print('in reject from_pool')
                 if( pool_proj%os_cls2D%get_noris() == 0 ) return
                 ncls_rejected   = 0
                 nptcls_rejected = 0
                 allocate(cls_mask(ncls_glob), source=.true.)
-                if( debug_here )call pool_proj%os_cls2D%write('classdoc_pool_beforesel_'//int2str(pool_iter)//'.txt')
                 ! correlation & resolution
                 ndev_here = 1.5*params%ndev ! less stringent rejection
                 call pool_proj%os_cls2D%find_best_classes(box,smpd,params%lpthresh,cls_mask,ndev_here)
@@ -1231,6 +1292,7 @@ contains
                         nptcls_rejected = nptcls_rejected+1
                         call pool_proj%os_ptcl2D%set(iptcl,'state',0.)
                     enddo
+                    call debug_print('in reject from_pool 1')
                     if( nptcls_rejected > 0 )then
                         do icls=1,ncls_glob
                             if( .not.cls_mask(icls) )then
@@ -1239,6 +1301,7 @@ contains
                                 call pool_proj%os_cls2D%set(icls,'corr',-1.)
                             endif
                         enddo
+                        call debug_print('in reject from_pool 2')
                         cnt = 0
                         call img%new([box,box,1],smpd)
                         do icls=1,ncls_glob
@@ -1251,17 +1314,18 @@ contains
                             img = 0.
                             call img%write(refs_glob,icls)
                         enddo
+                        call debug_print('in reject from_pool 3')
                         call img%read(refs_glob, ncls_glob)
                         call img%write(refs_glob, ncls_glob)
                         deallocate(cls_mask)
                         write(logfhandle,'(A,I4,A,I6,A)')'>>> REJECTED FROM POOL: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTER(S)'
-                        if( debug_here )call pool_proj%os_cls2D%write('classdoc_pool_aftersel_'//int2str(pool_iter)//'.txt')
+                        ! if( debug_here )call pool_proj%os_cls2D%write('classdoc_pool_aftersel_'//int2str(pool_iter)//'.txt')
                     endif
                 else
                     write(logfhandle,'(A,I4,A,I6,A)')'>>> NO PARTICLES FLAGGED FOR REJECTION FROM POOL'
                 endif
                 call img%kill
-                if( debug_here ) print *,'end reject from_pool'; call flush(6)
+                call debug_print('end reject from_pool')
             end subroutine reject_from_pool
 
             !>  Convenience function for transfer_chunk_to_pool
@@ -1273,8 +1337,10 @@ contains
                 character(len=:), allocatable :: stkout, stkin
                 integer :: ipart
                 logical :: l_self
+                call debug_print('in transfer_cavg '//int2str(indin)//' '//int2str(indout))
                 l_self = .false.
                 if( present(self_transfer) ) l_self = self_transfer
+                if( l_self ) call debug_print('in transfer_cavg self_transfer')
                 call img%new([box,box,1],smpd)
                 call img%read( refs_in, indin)
                 call img%write(refs_out,indout)
@@ -1338,8 +1404,10 @@ contains
                 endif
                 ! cleanup
                 call img%kill
+                call debug_print('end transfer_cavg')
             end subroutine transfer_cavg
 
+            ! unused
             logical function is_timeout( time_now )
                 integer, intent(in) :: time_now
                 is_timeout = .false.
@@ -1361,7 +1429,16 @@ contains
                 type(oris)                    :: os_backup2, os_backup3
                 character(len=:), allocatable :: projfile,projfname, cavgsfname, suffix, frcsfname, src, dest
                 integer :: istk
-                if( debug_here ) print *,'in write_snapshot'; call flush(6)
+                if( force )then
+                    call debug_print('in write_snapshot force T')
+                else
+                    call debug_print('in write_snapshot force F')
+                endif
+                if( add_suffix )then
+                    call debug_print('in write_snapshot suffix T')
+                else
+                    call debug_print('in write_snapshot suffix F')
+                endif
                 if( .not.force )then
                     if( .not.file_exists(SPPROJ_SNAPSHOT) )return
                     call del_file(SPPROJ_SNAPSHOT)
@@ -1379,6 +1456,7 @@ contains
                 cavgsfname = trim(cavgsfname)//trim(params%ext)
                 frcsfname  = trim(frcsfname)//trim(BIN_EXT)
                 call pool_proj%projinfo%set(1,'projfile', projfile)
+                call debug_print('in write_snapshot 1')
                 if( add_suffix )then
                     if( trim(prev_snapshot_cavgs) /= '' )then
                         call del_file(prev_snapshot_frcs)
@@ -1405,6 +1483,7 @@ contains
                     call pool_proj%add_cavgs2os_out(cavgsfname, orig_smpd, 'cavg')
                     pool_proj%os_cls2D = os_backup3
                     call os_backup3%kill
+                    call debug_print('in write_snapshot 2')
                     ! rescale frcs
                     call frcs_sc%read(FRCS_FILE)
                     call frcs_sc%upsample(orig_smpd, orig_box, frcs)
@@ -1412,6 +1491,7 @@ contains
                     call frcs%kill
                     call frcs_sc%kill
                     call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
+                    call debug_print('in write_snapshot 3')
                     ! project updates to original scale
                     call pool_proj%os_stk%set_all2single('box', real(orig_box))
                     call pool_proj%os_stk%set_all2single('smpd',orig_smpd)
@@ -1419,16 +1499,19 @@ contains
                     do istk = 1,pool_proj%os_stk%get_noris()
                         call pool_proj%os_stk%set(istk,'stk',imported_stks(istk))
                     enddo
+                    call debug_print('in write_snapshot 4')
                     ! write
                     pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
                     call pool_proj%os_ptcl3D%delete_2Dclustering
                     call pool_proj%write(projfile)
                     call pool_proj%os_ptcl3D%kill
+                    call debug_print('in write_snapshot 5')
                     ! preserve down-scaling
                     call pool_proj%os_ptcl2D%mul_shifts( scale_factor )
                     pool_proj%os_stk   = os_backup2
                     call os_backup2%kill
                     call os_backup3%kill
+                    call debug_print('in write_snapshot 6')
                 else
                     if( add_suffix )then
                         call simple_copy_file(FRCS_FILE, frcsfname)
@@ -1454,6 +1537,7 @@ contains
                 ! cleanup previous snapshot
                 prev_snapshot_frcs  = trim(frcsfname)
                 prev_snapshot_cavgs = trim(cavgsfname)
+                call debug_print('end write_snapshot')
             end subroutine write_snapshot
 
             !> for initial write of set of user adjustable parameters
@@ -1471,6 +1555,7 @@ contains
                 type(oris) :: os
                 real       :: lpthresh, ndev
                 if( .not.file_exists(USER_PARAMS) ) return ! use of default/last update
+                call debug_print('in update_user_params')
                 lpthresh = params%lpthresh
                 ndev     = params%ndev
                 call os%new(1, is_ptcl=.false.)
@@ -1479,7 +1564,7 @@ contains
                     lpthresh = os%get(1,'lpthresh')
                     if( abs(lpthresh-params%lpthresh) > 0.001 )then
                         params%lpthresh = lpthresh
-                        write(logfhandle,'(A,F8.2)')'>>> REJECTION LPTHESH UPDATED TO: ',params%lpthresh
+                        write(logfhandle,'(A,F8.2)')'>>> REJECTION LPTHRESH UPDATED TO: ',params%lpthresh
                     endif
                 endif
                 if( os%isthere(1,'ndev') )then
@@ -1490,6 +1575,7 @@ contains
                     endif
                 endif
                 call os%kill
+                call debug_print('end update_user_params')
             end subroutine update_user_params
 
     end subroutine exec_cluster2D_stream
