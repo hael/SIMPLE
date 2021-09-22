@@ -233,7 +233,7 @@ contains
                 call subvols_even(ithr)%fft
                 call subvols_odd(ithr)%fft
                 ! filter
-                call subvols_even(ithr)%zero_fcomps_below_noise_power(subvols_odd(ithr))
+                call subvols_even(ithr)%ran_phases_below_noise_power(subvols_odd(ithr))
                 ! back to real space
                 call subvols_even(ithr)%ifft
                 call subvols_odd(ithr)%ifft

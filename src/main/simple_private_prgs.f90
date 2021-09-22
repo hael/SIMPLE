@@ -342,7 +342,7 @@ contains
         call cmd_dict%push('lp_ctf_estimate', 'low-pass limit 4 ctf_estimate(in A)')
         call cmd_dict%push('lp_iters',      '# of iterations for low-pass limited refinement')
         call cmd_dict%push('lp_pick',       'low-pass limit 4 picker(in A)')
-        call cmd_dict%push('lplim_crit',    'corr criterion low-pass limit assignment(0.143-0.5){0.3}')
+        call cmd_dict%push('lplim_crit',    'corr criterion low-pass limit assignment(0.143-0.5){0.5}')
         call cmd_dict%push('lpstart',       'start low-pass limit(in A){15}')
         call cmd_dict%push('lpstop',        'stop low-pass limit(in A){8}')
         call cmd_dict%push('lpthresh',      'resolution rejection limit(in A){30}')

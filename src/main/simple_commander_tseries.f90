@@ -25,6 +25,7 @@ public :: tseries_track_particles_commander
 public :: center2D_nano_commander_distr
 public :: cluster2D_nano_commander_hlev
 public :: tseries_ctf_estimate_commander
+public :: autorefine3D_nano_commander
 public :: refine3D_nano_commander_distr
 public :: graphene_subtr_commander
 public :: validate_nano_commander
@@ -77,6 +78,10 @@ type, extends(commander_base) :: tseries_ctf_estimate_commander
   contains
     procedure :: execute      => exec_tseries_ctf_estimate
 end type tseries_ctf_estimate_commander
+type, extends(commander_base) :: autorefine3D_nano_commander
+  contains
+    procedure :: execute      => exec_autorefine3D_nano
+end type autorefine3D_nano_commander
 type, extends(commander_base) :: refine3D_nano_commander_distr
   contains
     procedure :: execute      => exec_refine3D_nano_distr
@@ -783,6 +788,35 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_CTF_ESTIMATE NORMAL STOP ****')
     end subroutine exec_tseries_ctf_estimate
+
+    ! smpd must be default input
+    ! element must be default input
+    subroutine exec_autorefine3D_nano( self, cline )
+        use simple_commander_quant, only: detect_atoms_commander
+        class(autorefine3D_nano_commander), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
+        ! commanders
+        type(refine3D_nano_commander_distr) :: xrefine
+        type(detect_atoms_commander)        :: xdetect_atms
+        integer,          parameter :: MOD_BLD_FREQ = 5
+        character(len=*), parameter :: STARTVOL     = 'recvol_state01SIM.mrc'
+        character(len=*), parameter :: RECVOL       = 'recvol_state01.mrc'
+        type(cmdline) :: cline_start, cline_refine, cline_detect_atms
+        cline_start       = cline
+        cline_refine      = cline
+        cline_detect_atms = cline
+        call cline_start%set( 'prg',   'refine3D_nano')
+        call cline_start%set( 'maxits', real(MOD_BLD_FREQ))
+        call cline_refine%set( 'prg',  'refine3D_nano')
+        call cline_refine%set('maxits', real(MOD_BLD_FREQ))
+        call cline_refine%delete('lp')  ! 1.0 by default
+        call cline_refine%set('vol1',   STARTVOL)
+        call cline_detect_atms%set('prg', 'detect_atoms')
+        call cline_detect_atms%set('vol1', RECVOL)
+        call xrefine%execute(cline_start)
+        call xrefine%execute(cline_refine)
+        call xdetect_atms%execute(cline_detect_atms)
+    end subroutine exec_autorefine3D_nano
 
     subroutine exec_refine3D_nano_distr( self, cline )
         use simple_commander_refine3D, only: refine3D_commander_distr

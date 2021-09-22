@@ -8,7 +8,7 @@ use simple_parameters, only: params_glob
 implicit none
 
 public :: read_img, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
-&norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, readrefvols_zero_fcomps_below_noise,&
+&norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, readrefvols_ran_phases_below_noise,&
 &preprefvol, prep2Dref, preprecvols, killrecvols, prepimgbatch, build_pftcc_particles
 private
 #include "simple_local_flags.inc"
@@ -528,7 +528,7 @@ contains
         if( has_been_searched ) call build_glob%spproj_field%map3dshift22d(-xyz(:), state=s)
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
-    subroutine readrefvols_zero_fcomps_below_noise( cline, fname_even, fname_odd )
+    subroutine readrefvols_ran_phases_below_noise( cline, fname_even, fname_odd )
         use simple_estimate_ssnr, only: nonuniform_lp
         class(cmdline),             intent(in) :: cline
         character(len=*),           intent(in) :: fname_even
@@ -566,14 +566,14 @@ contains
                 call build_glob%vol_odd%expand_cmat(params_glob%alpha,norm4proj=.true.)
                 ! zero Fourier components below noise power in a global manner
                 if( params_glob%clsfrcs.eq.'no' )&
-                &call build_glob%vol%zero_fcomps_below_noise_power(build_glob%vol_odd)
+                &call build_glob%vol%ran_phases_below_noise_power(build_glob%vol_odd)
             endif
         else
             ! expand for fast interpolation
             call build_glob%vol%fft
             call build_glob%vol%expand_cmat(params_glob%alpha,norm4proj=.true.)
         endif
-    end subroutine readrefvols_zero_fcomps_below_noise
+    end subroutine readrefvols_ran_phases_below_noise
 
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( pftcc, cline, s, do_center, xyz, iseven )
@@ -640,7 +640,7 @@ contains
         ! masking
         if( cline%defined('mskfile') )then
 
-            ! masking performed in readrefvols_zero_fcomps_below_noise, above
+            ! masking performed in readrefvols_ran_phases_below_noise, above
 
             ! mask provided
             ! call mskvol%new([params_glob%box, params_glob%box, params_glob%box], &
