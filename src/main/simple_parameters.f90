@@ -62,7 +62,7 @@ type :: parameters
     character(len=3)      :: merge='no'
     character(len=3)      :: mirr='no'            !< mirror(no|x|y){no}
     character(len=3)      :: mkdir='no'           !< make auto-named execution directory(yes|no){no}
-    character(len=3)      :: envfsc='no'          !< envelope mask even/odd pairs for FSC calculation(yes|no){no}
+    character(len=3)      :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
     character(len=3)      :: needs_sigma='no'     !< invert contrast of images(yes|no)
     character(len=3)      :: neg='no'             !< invert contrast of images(yes|no)
     character(len=3)      :: noise_norm ='no'
@@ -1331,12 +1331,8 @@ contains
         select case(trim(self%objfun))
             case('cc')
                 self%cc_objfun = OBJFUN_CC
-                ! below is to guard against over-fitting
-                if( .not. cline%defined('lplim_crit') ) self%lplim_crit = 0.3
             case('euclid')
                 self%cc_objfun = OBJFUN_EUCLID
-                ! to be consistent with RELION
-                if( .not. cline%defined('lplim_crit') ) self%lplim_crit = 0.143
             case DEFAULT
                 write(logfhandle,*) 'objfun flag: ', trim(self%objfun)
                 THROW_HARD('unsupported objective function; new')

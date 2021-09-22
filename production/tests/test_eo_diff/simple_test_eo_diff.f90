@@ -42,7 +42,7 @@ allocate(corrs(filtsz))
 ! call get_resolution(corrs, res, res_fsc05, res_fsc0143)
 ! write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
 ! write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
-call vol_even%zero_fcomps_below_noise_power(vol_odd)
+call vol_even%ran_phases_below_noise_power(vol_odd)
 ! call vol_odd%fcomps_below_noise_power_stats(vol_noise)
 ! call vol_even%fsc(vol_odd, corrs)
 ! write(logfhandle,'(a)') 'RESOLUTION ESTIMATION AFTER NOISE FILTERING'

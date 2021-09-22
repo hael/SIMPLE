@@ -220,7 +220,7 @@ contains
     procedure, private :: shellnorm_and_apply_filter_serial_2
     generic            :: shellnorm_and_apply_filter_serial =>&
         &shellnorm_and_apply_filter_serial_1, shellnorm_and_apply_filter_serial_2
-    procedure          :: zero_fcomps_below_noise_power
+    procedure          :: ran_phases_below_noise_power
     procedure          :: fcomps_below_noise_power_stats
     procedure          :: apply_bfac
     procedure          :: bp
@@ -3682,15 +3682,15 @@ contains
         &100 * (real(cnt) / product(self%ldim))
     end subroutine fcomps_below_noise_power_stats
 
-    subroutine zero_fcomps_below_noise_power( self_even, self_odd )
+    subroutine ran_phases_below_noise_power( self_even, self_odd )
         class(image), intent(inout) :: self_even, self_odd
         integer :: h, k, l, lims(3,2), phys(3)
-        real    :: noise_pow, even_pow, odd_pow
+        real    :: noise_pow, even_pow, odd_pow, phase
         complex :: diff
         lims  = self_even%fit%loop_lims(2)
         if( .not.self_even%is_ft() ) THROW_HARD('even vol needs to be FTed')
         if( .not.self_odd%is_ft()  ) THROW_HARD('odd  vol needs to be FTed')
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,diff,noise_pow,even_pow,odd_pow)&
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,diff,noise_pow,even_pow,odd_pow,phase)&
         !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
@@ -3702,14 +3702,16 @@ contains
                     even_pow  = csq_fast(self_even%cmat(phys(1),phys(2),phys(3)))
                     odd_pow   = csq_fast(self_odd%cmat(phys(1),phys(2),phys(3)))
                     if( noise_pow > even_pow .or. noise_pow > odd_pow )then
-                        self_even%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                        self_odd%cmat(phys(1),phys(2),phys(3))  = cmplx(0.,0.)
+                        phase = ran3() * TWOPI
+                        self_even%cmat(phys(1),phys(2),phys(3)) = mycabs(self_even%cmat(phys(1),phys(2),phys(3))) * cmplx(cos(phase), sin(phase))
+                        phase = ran3() * TWOPI
+                        self_odd%cmat(phys(1),phys(2),phys(3))  = mycabs(self_odd%cmat(phys(1),phys(2),phys(3)))  * cmplx(cos(phase), sin(phase))
                     endif
                 enddo
             enddo
         enddo
         !$omp end parallel do
-    end subroutine zero_fcomps_below_noise_power
+    end subroutine ran_phases_below_noise_power
 
     ! This function performs image filtering by convolution
     ! with the 1D kernel filt. REAL SPACE.
