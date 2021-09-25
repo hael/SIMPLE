@@ -420,6 +420,12 @@ contains
                     do iproj = 1,n_imported
                         stk_mask(iproj) = nint(spproj%os_mic%get(iproj,'nptcls')) > 0
                         states(iproj)   = spproj%os_mic%get_state(iproj)
+                        if( stk_mask(iproj) )then
+                            if( .not.spproj%os_mic%isthere(iproj,'stk') )then
+                                write(logfhandle,'(A)')'>>> stack is absent in:'
+                                call spproj%os_mic%print_(iproj)
+                            endif
+                        endif
                     enddo
                     nstks = count(stk_mask)
                     call spproj%os_stk%new(nstks, is_ptcl=.false.)
