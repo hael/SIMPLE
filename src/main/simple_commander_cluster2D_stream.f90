@@ -813,9 +813,16 @@ contains
                 call debug_print('in generate_new_chunks 1 '//int2str(n_avail)//' '//int2str(nmics_imported))
                 if(n_avail == 0) return
                 call debug_print('in generate_new_chunks reading '//trim(spproj_list_fname))
-                if( is_file_open(spproj_list_fname) ) return
+                cnt = 0
+                do while( file_exists(IOLOCK) )
+                    call simple_sleep(1)
+                    cnt = cnt + 1
+                    if( cnt > 5 ) return ! better luck next time
+                enddo
+                call simple_touch(IOLOCK)
                 call read_filetable(spproj_list_fname, spproj_list)
-                call debug_print('in generate_new_chunks read')
+                call del_file(IOLOCK)
+                call debug_print('in generate_new_chunks read cnt '//int2str(cnt))
                 if( .not.allocated(spproj_list) )return
                 n_spprojs = size(spproj_list)
                 call debug_print('in generate_new_chunks 1b  '//int2str(n_spprojs))
