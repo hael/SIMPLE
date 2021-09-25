@@ -509,7 +509,7 @@ contains
                 character(len=:),          allocatable :: fname, abs_fname
                 character(len=LONGSTRLEN), allocatable :: old_fnames(:)
                 logical, allocatable :: spproj_mask(:)
-                integer              :: i, n_spprojs, n_old, nptcls_here, j, n2import
+                integer              :: i, n_spprojs, n_old, nptcls_here, state, j, n2import
                 n_completed = 0
                 if( allocated(completed_fnames) ) deallocate(completed_fnames)
                 n_spprojs = size(completed_jobs_clines)
@@ -525,8 +525,8 @@ contains
                     do i = 1,n_spprojs
                         ! flags zero-picked mics that will not be imported
                         fname = trim(completed_jobs_clines(i)%get_carg('projfile'))
-                        call check_nptcls(fname,nptcls_here)
-                        spproj_mask(i) = nptcls_here > 0
+                        call check_nptcls(fname,nptcls_here,state)
+                        spproj_mask(i) = (nptcls_here > 0) .and. (state > 0)
                     enddo
                 endif
                 n2import = count(spproj_mask)
@@ -551,16 +551,27 @@ contains
                     n_completed = 0
                     return
                 endif
+                ! write to temporary file...
                 call write_filetable('tmp.txt', completed_fnames)
+                ! ...and rename it when safe
+                i = 0
+                do while( file_exists(IOLOCK) )
+                    call simple_sleep(1)
+                    i = i + 1
+                    if( mod(i,5)==0 ) write(logfhandle,'A,I,A')'>>> IO has been locked for ',i,' seconds...'
+                enddo
+                call simple_touch(IOLOCK)
                 i = simple_rename('tmp.txt',STREAM_SPPROJFILES,overwrite=.true.)
+                call del_file(IOLOCK)
             end subroutine update_projects_list
 
-            subroutine check_nptcls( fname, nptcls )
+            subroutine check_nptcls( fname, nptcls, state )
                 character(len=*), intent(in)  :: fname
-                integer,          intent(out) :: nptcls
+                integer,          intent(out) :: nptcls, state
                 type(sp_project) :: spproj_here
                 call spproj_here%read_segment('mic',fname)
                 nptcls = nint(spproj_here%os_mic%get(1,'nptcls'))
+                state  = nint(spproj_here%os_mic%get(1,'state'))
                 call spproj_here%kill
             end subroutine check_nptcls
 
