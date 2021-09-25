@@ -30,21 +30,19 @@ contains
 
     !> \brief  is for checking file IO status
     subroutine fileiochk( message, iostat , die)
-        character(len=*),  intent(in)    :: message  !< error message
-        integer, optional, intent(inout) :: iostat   !< error status
-        logical, optional, intent(in)    :: die      !< do you want to terminate or not
+        character(len=*),  intent(in) :: message  !< error message
+        integer,           intent(in) :: iostat   !< error status
+        logical, optional, intent(in) :: die      !< do you want to terminate or not
         logical :: die_this
-        integer :: iostat_this
+        if( iostat == 0 ) return
         die_this=.true.
-        iostat_this=2
         if( present(die) ) die_this=die
-        if( present(iostat) ) iostat_this=iostat
-        if( iostat_this /= 0 ) write(logfhandle,'(a)') message
-        if (iostat_this == -1)then
+        write(logfhandle,'(a)') message
+        if( iostat == -1 )then
             write(logfhandle,'(a)') "fileio: EOF reached "
-        else if (iostat_this == -2) then
+        else if( iostat == -2 )then
             write(logfhandle,'(a)') "fileio: End-of-record reached "
-        else if( iostat_this /= 0 ) then
+        else
             if( die_this ) THROW_HARD('I/O')
         endif
     end subroutine fileiochk
@@ -255,10 +253,9 @@ contains
         integer,          intent(inout)        :: iostat
         character(len=*), intent(in), optional :: errmsg
         character(len=STDLEN) :: msg_this
-        msg_this="SIMPLE_FILEIO::fclose_1 failed closing unit "//int2str(funit)
-        if (present(errmsg)) write(msg_this,'(A)') trim(adjustl(errmsg))
-
         if (is_open(funit)) then
+            msg_this="SIMPLE_FILEIO::fclose_1 failed closing unit "//int2str(funit)
+            if (present(errmsg)) write(msg_this,'(A)') trim(adjustl(errmsg))
             CLOSE (funit,IOSTAT=iostat)
             call simple_error_check(iostat, trim(msg_this))
         end if
@@ -294,7 +291,7 @@ contains
         integer          :: n, funit, ios,io_status
         character(len=1) :: junk
         if( file_exists(fname) )then
-            tfile=fname
+            tfile = trim(fname)
             call fopen(funit, tfile, status='unknown', action='read', iostat=io_status)
             call fileiochk(":nlines error opening file "//trim(tfile), io_status)
             n = 0
@@ -710,6 +707,7 @@ contains
         character(len=LONGSTRLEN), allocatable, intent(out) :: filenames(:) !< array of filenames
         integer :: nl, funit, iline,io_stat
         nl = nlines(trim(filetable))
+        if( nl == 0 ) return
         call fopen(funit,filetable,'old','unknown',io_stat)
         call fileiochk("read_filetable failed to open file "//trim(filetable),io_stat )
         allocate( filenames(nl), stat=alloc_stat )
