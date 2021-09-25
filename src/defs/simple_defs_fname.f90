@@ -77,6 +77,7 @@ character(len=*), parameter :: PAUSE_STREAM         = './SIMPLE_PAUSE_STREAM'
 ! MISCELLANEOUS
 character(len=3), parameter :: NIL                  = 'nil'
 character(len=*), parameter :: STDERR2STDOUT        = '2>&1'
+character(len=*), parameter :: IOLOCK               = 'io.lock'
 ! character constants
 character(len=*), parameter :: NEWLINE              = new_line('a')
 character(len=*), parameter :: SUPPRESS_MSG         = '2>/dev/null'
