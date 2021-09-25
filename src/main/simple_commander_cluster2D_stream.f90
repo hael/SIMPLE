@@ -409,7 +409,6 @@ contains
         integer                            :: n_new_chunks, glob_chunk_id, n_converged_chunks
         ! others
         type(sp_project)                   :: orig_proj, transfer_spproj
-        character(LONGSTRLEN), allocatable :: spproj_list(:)
         character(len=:),      allocatable :: spproj_list_fname, orig_projfile
         character(len=LONGSTRLEN)          :: prev_snapshot_frcs, prev_snapshot_cavgs
         real    :: SMPD_TARGET = 4.       ! target sampling distance
@@ -627,6 +626,7 @@ contains
                 ! deal with chunk completion, rejection, reset
                 do ichunk = 1,params%nchunks
                     if( chunks(ichunk)%has_converged() )then
+                        call chunks(ichunk)%display_iter
                         ! rejection
                         call chunks(ichunk)%reject(params%lpthresh, params%ndev, msk, box)
                         ! updates list of chunks to import
@@ -638,8 +638,6 @@ contains
                         ! free chunk
                         glob_chunk_id = glob_chunk_id + 1
                         call chunks(ichunk)%init(glob_chunk_id, pool_proj)
-                    else
-                        call chunks(ichunk)%display_iter
                     endif
                 enddo
                 n_converged_chunks = 0
@@ -796,10 +794,9 @@ contains
             subroutine generate_new_chunks( n_new_chunks )
                 integer,                 intent(inout) :: n_new_chunks
                 type(sp_project)                       :: stream_proj
-                character(len=LONGSTRLEN), allocatable :: tmp(:)
-                character(len=LONGSTRLEN), allocatable :: spprojs_for_chunk(:)
+                character(len=LONGSTRLEN), allocatable :: tmp(:), spprojs_for_chunk(:), spproj_list(:)
+                integer,                   allocatable :: spproj_nptcls(:)
                 logical,                   allocatable :: spproj_mask(:)
-                integer, allocatable :: spproj_nptcls(:)
                 integer :: nptcls, iproj, jproj, cnt, nmics_imported, ichunk, first_new, n_new, n_avail, n2fill
                 logical :: isnew, enough
                 call debug_print('in generate_new_chunks')
@@ -813,13 +810,18 @@ contains
                         n_avail = n_avail+1
                     endif
                 enddo
+                call debug_print('in generate_new_chunks 1 '//int2str(n_avail)//' '//int2str(nmics_imported))
                 if(n_avail == 0) return
-                call debug_print('in generate_new_chunks 1 '//int2str(n_avail))
+                call debug_print('in generate_new_chunks reading '//trim(spproj_list_fname))
+                if( is_file_open(spproj_list_fname) ) return
                 call read_filetable(spproj_list_fname, spproj_list)
+                call debug_print('in generate_new_chunks read')
                 if( .not.allocated(spproj_list) )return
                 n_spprojs = size(spproj_list)
+                call debug_print('in generate_new_chunks 1b  '//int2str(n_spprojs))
                 ! whether the projects have been processed
-                allocate(spproj_mask(n_spprojs),source=.false.)
+                allocate(spproj_mask(n_spprojs),source=.false.,stat=alloc_stat)
+                if(alloc_stat /= 0) call allocchk('In: generate_new_chunks ', alloc_stat)
                 do iproj = 1,n_spprojs
                     isnew = .true.
                     do jproj = 1,nmics_imported
