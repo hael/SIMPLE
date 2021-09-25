@@ -19,7 +19,7 @@ integer,  parameter :: MAXITS_ANISO         = 10         ! Maximum # of iteratio
 real,     parameter :: RMSD_THRESHOLD_ISO   = 0.2        ! Convergence RMSD for isotropic alignement
 real,     parameter :: RMSD_THRESHOLD_ANISO = 0.2        ! Convergence RMSD for anisotropic alignement
 real,     parameter :: RMSD_POLY_THRESHOLD  = 4.         ! RMSD acceptance threshold for anisotropic alignement
-real,     parameter :: MIN_ANISO_WEIGHT     = 0.5        ! Minimum distance-based weight for anisotropic alignement
+real,     parameter :: MIN_ANISO_WEIGHT     = 0.4        ! Minimum distance-based weight for anisotropic alignement
 real,     parameter :: RMSD_THRESHOLD_POLY  = 0.1        ! Convergence RMSD for polynomial refinement
 real,     parameter :: PBOUND               = 2.0        ! Half bound for polynomial coefficient search
 integer,  parameter :: LBFGSB_MAXITS = 60, MAXITS = 3    ! Iterations parameters for polynomial refinement
@@ -200,7 +200,7 @@ contains
         real, optional,           intent(in)    :: boxdata(:,:)
         type(image)            :: tmp_imgs(self%nthr)
         type(image_ptr)        :: ptmp_imgs(self%nthr), pframes(self%nframes), ptiles(self%nthr)
-        real, allocatable      :: bfac_weights(:,:)
+        real, allocatable      :: bfac_weights(:,:), res(:)
         real          :: spafreqsq, spafreqh, spafreqk, shsq, sumsq, w, sumw, d, sigma
         integer       :: nr_lims(3,2),phys(3),cdim(3),find,magic_ldim,hplim,lplim,hplimsq,lplimsq
         integer       :: pi,pj,i,j,t,h,k,n,x,y,ithr,l_sq,d_sq
@@ -257,6 +257,8 @@ contains
         ! shift boundary
         self%trs = self%scale_factor*self%trs
         ! weight and normalize once and for all
+        res      = self%tiles(1,1,1)%get_res()
+        self%hp  = min(self%hp,res(1))
         nr_lims = self%tiles(1,1,1)%loop_lims(2)
         hplim   = max(1,                           calc_fourier_index(self%hp, self%tilesz, self%smpd))
         lplim   = min(self%tiles(1,1,1)%get_nyq(), calc_fourier_index(self%lp, self%tilesz, self%smpd))
@@ -678,7 +680,7 @@ contains
                 do j = 1, self%nypatch
                     if( self%tiles_mask(i,j) )then
                         call self%tiles(t,i,j)%set_smpd(self%smpd_tile) !!
-                        call self%ftexp_tiles(t,i,j)%new(self%tiles(t,i,j), [self%tilesz,self%tilesz], self%hp, self%lp, .true., bfac=0.)
+                        call self%ftexp_tiles(t,i,j)%new(self%tiles(t,i,j), [self%tilesz,self%tilesz], self%hp, self%lp, .true., bfac=self%bfactor)
                         call self%ftexp_tiles(t,i,j)%shift(-real(iso_shifts(i,j,t,:),dp))
                         call self%ftexp_tiles(t,i,j)%normalize_mat
                         call self%tiles(t,i,j)%kill
@@ -722,7 +724,7 @@ contains
             rmsd_cumul = calc_rmsd(ini_shifts,        real(shifts))
             self%corr  = -lowest_cost / real(ntot)
             ! print *,'poly iter rmsd rmsdcumul corr: ', iter,rmsd,rmsd_cumul,self%corr
-            if( iter>=2 .and. rmsd<RMSD_THRESHOLD_POLY ) exit
+            if( iter>2 .and. rmsd<RMSD_THRESHOLD_POLY ) exit
         enddo
         self%aniso_shifts = real(shifts)
         call self%center_shifts_to_frame(self%aniso_shifts, self%fixed_frame)

@@ -263,20 +263,6 @@ contains
         call ftexp_transfmat_init(movie_frames_scaled(1), params_glob%lpstop)
         if( l_BENCH ) rt_correct_iso_transfmat = toc(t_correct_iso_transfmat)
         if( l_BENCH ) t_correct_iso_align = tic()
-        ! if (DO_ISO_DIRECT) then
-        !     call align_iso_polyn_direct%new
-        !     call align_iso_polyn_direct%set_frames(movie_frames_scaled, nframes)
-        !     call align_iso_polyn_direct%set_hp_lp(hp,lp)
-        !     updateres = 0
-        !     call align_iso_polyn_direct%set_callback( motion_correct_iso_polyn_direct_callback )
-        !     call align_iso_polyn_direct%set_group_frames(trim(params_glob%groupframes).eq.'yes')
-        !     call align_iso_polyn_direct%align_direct(callback_ptr)
-        !     corr = align_iso_polyn_direct%get_corr()
-        !     call align_iso_polyn_direct%get_opt_shifts(opt_shifts)
-        !     call align_iso_polyn_direct%get_weights(frameweights)
-        !     call align_iso_polyn_direct%get_shifts_toplot(shifts_toplot)
-        !     call align_iso_polyn_direct%kill
-        ! else
         call hybrid_srch%new(movie_frames_scaled)
         call hybrid_srch%set_group_frames(.false.)
         call hybrid_srch%set_reslims(hp, params_glob%lpstart, params_glob%lpstop)
@@ -535,8 +521,8 @@ contains
 
     !>  patch-based motion_correction of DDD movie
     !>  movie_frames_scaled assumed shifted, in Fourier domain
-    subroutine motion_correct_patched( bfac, rmsd )
-        real, intent(in)  :: bfac
+    subroutine motion_correct_patched( bfac, rmsd_threshold, rmsd )
+        real, intent(in)  :: bfac, rmsd_threshold
         real, intent(out) :: rmsd(2)     !< whether polynomial fitting was within threshold
         integer :: iframe
         if( l_BENCH ) t_patched = tic()
@@ -547,17 +533,21 @@ contains
         !$omp end parallel do
         rmsd = huge(rmsd(1))
         call motion_patch%new(params_glob%scale*params_glob%trs)
-        write(logfhandle,'(A,I2,A3,I2,A1)') '>>> PATCH-BASED REFINEMENT (',&
-            &params_glob%nxpatch,' x ',params_glob%nypatch,')'
+        write(logfhandle,'(A,I2,A3,I2,A1)') '>>> PATCH-BASED REFINEMENT (',params_glob%nxpatch,' x ',params_glob%nypatch,')'
         call motion_patch%set_fitshifts(FITSHIFTS)
         call motion_patch%set_frameweights(frameweights)
         call motion_patch%set_fixed_frame(fixed_frame)
         call motion_patch%set_interp_fixed_frame(fixed_frame)
         call motion_patch%set_bfactor(bfac)
-        call motion_patch%correct(hp, resstep, movie_frames_scaled, patched_shift_fname, shifts_toplot)
-        rmsd = motion_patch%get_polyfit_rmsd()
+        if( trim(params_glob%algorithm).eq.'poly2' )then
+            call motion_patch%correct_poly(hp, resstep, rmsd_threshold, movie_frames_scaled, patched_shift_fname, patched_polyn, shifts_toplot)
+            rmsd = motion_patch%get_polyfit_rmsd()
+        else
+            call motion_patch%correct(hp, resstep, movie_frames_scaled, patched_shift_fname, shifts_toplot)
+            rmsd = motion_patch%get_polyfit_rmsd()
+            call motion_patch%get_poly4star(patched_polyn, patched_shifts, patched_centers)
+        endif
         ! end if
-        call motion_patch%get_poly4star(patched_polyn, patched_shifts, patched_centers)
         if( L_BENCH )then
             rt_patched = toc(t_patched)
             print *,'rt_patched:      ',rt_patched
