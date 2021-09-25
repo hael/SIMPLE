@@ -149,7 +149,7 @@ contains
             call motion_correct_iso_kill
             ! Patch based approach
             if( motion_correct_with_patched ) then
-                call motion_correct_patched( bfac_here, goodnessoffit )
+                call motion_correct_patched(bfac_here, PATCH_FIT_THRESHOLD, goodnessoffit)
                 patch_success = all(goodnessoffit < PATCH_FIT_THRESHOLD)
                 ! generate sums
                 if( patch_success )then

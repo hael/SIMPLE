@@ -965,7 +965,7 @@ contains
         call set_param(picker,         'picker',       'multi',  'Picking approach','Picking approach(seg|phasecorr|old_school){phasecorr}','(seg|phasecorr|old_school){phasecorr}', .false.,'phasecorr')
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
         call set_param(mul,            'mul',          'num',    'Multiplication factor', 'Multiplication factor{1.}','{1.}',.false., 1.)
-        call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(patch|wpatch|poly){patch}','(patch|wpatch|poly){patch}', .false.,'patch')
+        call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(patch|wpatch|poly|poly2){patch}','(patch|wpatch|poly|poly2){patch}', .false.,'patch')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 

@@ -61,6 +61,7 @@ contains
     procedure, private                  :: deallocate_fields
     ! Drivers & algorithms
     procedure                           :: correct
+    procedure                           :: correct_poly
     ! Specific methods
     procedure, private                  :: det_shifts
     ! Generic routine
@@ -212,6 +213,158 @@ contains
         call self%plot_shifts()
         shift_fname = trim(self%shift_fname) // C_NULL_CHAR
     end subroutine correct
+
+    subroutine correct_poly( self, hp, resstep, rmsd_threshold, frames, shift_fname, patched_polyn, global_shifts )
+        use simple_motion_align_poly2, only: motion_align_poly2
+        class(motion_patched),           intent(inout) :: self
+        real,                            intent(in)    :: hp, resstep, rmsd_threshold
+        type(image),        allocatable, intent(inout) :: frames(:)
+        character(len=:),   allocatable, intent(inout) :: shift_fname
+        real(dp),           allocatable, intent(inout) :: patched_polyn(:)
+        real,     optional, allocatable, intent(in)    :: global_shifts(:,:)
+        type(motion_align_hybrid), allocatable :: align_hybrid(:,:)
+        type(motion_align_poly2) :: align_poly
+        real,        allocatable :: opt_shifts(:,:), res(:)
+        real(dp)                 :: poly_coeffs(2*PATCH_PDIM)
+        real                     :: corr_avg, rmsd(2)
+        integer                  :: ldim_frames(3), iframe, i, j, alloc_stat, fixed_frame_bak
+        self%hp          = hp
+        self%lp          = params_glob%lpstart
+        self%resstep     = resstep
+        self%updateres   = 0
+        self%shift_fname = shift_fname // C_NULL_CHAR
+        if (allocated(self%global_shifts)) deallocate(self%global_shifts)
+        self%has_global_shifts = .false.
+        if (present(global_shifts)) then
+            allocate(self%global_shifts(size(global_shifts, 1), size(global_shifts, 2)))
+            self%global_shifts     = global_shifts
+            self%has_global_shifts = .true.
+        end if
+        self%nframes = size(frames,dim=1)
+        self%ldim    = frames(1)%get_ldim()
+        self%smpd    = frames(1)%get_smpd()
+        do iframe = 1,self%nframes
+            ldim_frames = frames(iframe)%get_ldim()
+            if (any(ldim_frames(1:2) /= self%ldim(1:2))) then
+                THROW_HARD('error in motion_patched_correct: frame dimensions do not match reference dimension; simple_motion_patched')
+            end if
+        end do
+        call self%allocate_fields()
+        ! determines patch geometry
+        call self%set_size_frames_ref()
+        ! determine shifts for patches
+        self%shifts_patches = 0.
+        allocate(align_hybrid(params_glob%nxpatch, params_glob%nypatch), stat=alloc_stat )
+        if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched')
+        ! initialize transfer matrix to correct dimensions
+        call self%frame_patches(1,1)%stack(1)%new(self%ldim_patch, self%smpd, wthreads=.false.)
+        call ftexp_transfmat_init(self%frame_patches(1,1)%stack(1), params_glob%lpstop)
+        res               = self%frame_patches(1,1)%stack(1)%get_res()
+        self%hp           = min(self%hp,res(1))
+        corr_avg          = 0.0
+        self%frameweights = 1.0 ! need to be one here
+        write(logfhandle,'(A,F6.1)')'>>> PATCH HIGH-PASS: ',self%hp
+        !$omp parallel do collapse(2) default(shared) private(i,j,iframe,opt_shifts)&
+        !$omp proc_bind(close) schedule(dynamic) reduction(+:corr_avg)
+        do i = 1,params_glob%nxpatch
+            do j = 1,params_glob%nypatch
+                ! init
+                self%lp(i,j) = params_glob%lpstart
+                call self%gen_patch(frames,i,j)
+                call align_hybrid(i,j)%new(self%frame_patches(i,j)%stack)
+                call align_hybrid(i,j)%set_group_frames(.false.)
+                call align_hybrid(i,j)%set_rand_init_shifts(.true.)
+                call align_hybrid(i,j)%set_reslims(self%hp, self%lp(i,j), params_glob%lpstop)
+                call align_hybrid(i,j)%set_trs(params_glob%scale*params_glob%trs)
+                call align_hybrid(i,j)%set_coords(i,j)
+                call align_hybrid(i,j)%set_fitshifts(self%fitshifts)
+                call align_hybrid(i,j)%set_fixed_frame(self%fixed_frame)
+                call align_hybrid(i,j)%set_bfactor(self%bfactor)
+                ! align
+                call align_hybrid(i,j)%align(frameweights=self%frameweights)
+                ! fetch info
+                corr_avg = corr_avg + align_hybrid(i,j)%get_corr()
+                call align_hybrid(i,j)%get_opt_shifts(opt_shifts)
+                ! making sure the shifts are in reference to fixed_frame
+                do iframe = 1, self%nframes
+                    self%shifts_patches(:,iframe,i,j) = opt_shifts(iframe,:) - opt_shifts(self%fixed_frame,:)
+                end do
+                ! cleanup
+                call align_hybrid(i,j)%kill
+                ! do iframe=1,self%nframes
+                !     call self%frame_patches(i,j)%stack(iframe)%kill
+                ! end do
+            end do
+        end do
+        !$omp end parallel do
+        call ftexp_transfmat_kill
+        self%shifts_patches_for_fit = self%shifts_patches
+        corr_avg = corr_avg / real(params_glob%nxpatch*params_glob%nypatch)
+        write(logfhandle,'(A,F6.3)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
+        deallocate(align_hybrid,res)
+        call self%fit_polynomial() ! therefore whether polynomial fit was successful is determined with central frame!
+        rmsd = self%polyfit_rmsd
+        if(allocated(patched_polyn)) deallocate(patched_polyn)
+        allocate(patched_polyn(2*PATCH_PDIM),source=0.d0)
+        if( all(self%polyfit_rmsd < rmsd_threshold) )then
+            ! for polynomial refinement we use fixed_frame=1
+            fixed_frame_bak  = self%fixed_frame
+            self%fixed_frame = 1 !!
+            do iframe = 2, self%nframes
+                self%shifts_patches_for_fit(1,iframe,:,:) = self%shifts_patches_for_fit(1,iframe,:,:) - self%shifts_patches_for_fit(1,1,:,:)
+                self%shifts_patches_for_fit(2,iframe,:,:) = self%shifts_patches_for_fit(2,iframe,:,:) - self%shifts_patches_for_fit(2,1,:,:)
+            enddo
+            self%shifts_patches_for_fit(:,1,:,:) = 0.
+            call self%fit_polynomial()
+            ! refine polynomial
+            call align_poly%new(self%frame_patches, self%poly_coeffs, self%patch_centers, self%ldim, self%hp, self%fixed_frame)
+            do i = 1,params_glob%nxpatch
+            do j = 1,params_glob%nypatch
+            do iframe=1,self%nframes
+                call self%frame_patches(i,j)%stack(iframe)%kill
+            end do
+            end do
+            end do
+            call align_poly%refine(self%poly_coeffs, self%frameweights)
+            patched_polyn(:PATCH_PDIM)   = self%poly_coeffs(:,1)
+            patched_polyn(PATCH_PDIM+1:) = self%poly_coeffs(:,2)
+            write(logfhandle,'(A,F6.3)')'>>> AVERAGE POLYNOMIAL CORRELATION: ', align_poly%get_corr()
+            call align_poly%kill
+            select case(trim(params_glob%mcconvention))
+            case('first','relion')
+                self%interp_fixed_frame = 1
+            case DEFAULT
+                ! need to update frame of reference & polynomial
+                do i = 1,params_glob%nxpatch
+                do j = 1,params_glob%nypatch
+                do iframe=1,self%nframes
+                    call self%get_local_shift(iframe, self%patch_centers(i,j,1),self%patch_centers(i,j,2), self%shifts_patches_for_fit(:,iframe,i,j))
+                enddo
+                enddo
+                enddo
+                self%fixed_frame = fixed_frame_bak
+                do iframe = 1, self%nframes
+                    if( iframe == self%fixed_frame ) cycle
+                    self%shifts_patches_for_fit(1,iframe,:,:) = self%shifts_patches_for_fit(1,iframe,:,:) - self%shifts_patches_for_fit(1,self%fixed_frame,:,:)
+                    self%shifts_patches_for_fit(2,iframe,:,:) = self%shifts_patches_for_fit(2,iframe,:,:) - self%shifts_patches_for_fit(2,self%fixed_frame,:,:)
+                enddo
+                self%shifts_patches_for_fit(:,self%fixed_frame,:,:) = 0.
+                call self%fit_polynomial()
+                self%shifts_patches_for_fit = self%shifts_patches
+            end select
+            self%polyfit_rmsd = rmsd
+        endif
+        do i = 1,params_glob%nxpatch
+        do j = 1,params_glob%nypatch
+        do iframe=1,self%nframes
+            call self%frame_patches(i,j)%stack(iframe)%kill
+        end do
+        end do
+        end do
+        ! report visual results
+        call self%plot_shifts()
+        shift_fname = trim(self%shift_fname) // C_NULL_CHAR
+    end subroutine correct_poly
 
     ! SPECIFIC METHODS
 
