@@ -551,7 +551,8 @@ contains
                     n_completed = 0
                     return
                 endif
-                call write_filetable(STREAM_SPPROJFILES, completed_fnames)
+                call write_filetable('tmp.txt', completed_fnames)
+                i = simple_rename('tmp.txt',STREAM_SPPROJFILES,overwrite=.true.)
             end subroutine update_projects_list
 
             subroutine check_nptcls( fname, nptcls )
@@ -1942,6 +1943,7 @@ contains
                 if( count(oris_mask) == 0 )then
                     ! no particles to extract
                     mics_mask(imic) = .false.
+                    call build%spproj_field%set(imic, 'nptcls', 0.)
                     cycle
                 endif
                 ! update micrograph field
