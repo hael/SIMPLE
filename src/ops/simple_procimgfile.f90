@@ -172,8 +172,8 @@ contains
         call find_ldim_nptcls(fname2resize, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
-        call img%new(ldim,smpd)
-        call img_resized%new(ldim_new,smpd) ! this sampling distance will be overwritten
+        call img%new(ldim,smpd,wthreads=.false.)
+        call img_resized%new(ldim_new,smpd,wthreads=.false.) ! this sampling distance will be overwritten
         write(logfhandle,'(a)') '>>> RESIZING IMAGES'
         use_mask = present(mask)
         if( use_mask )then
