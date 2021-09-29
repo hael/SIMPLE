@@ -596,15 +596,13 @@ contains
 
     !> provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )
-        use simple_procimgfile, only: resize_imgfile_double, resize_and_clip_imgfile, resize_imgfile, pad_imgfile, clip_imgfile
+        use simple_procimgfile, only: resize_and_clip_imgfile, resize_imgfile, pad_imgfile, clip_imgfile
         use simple_qsys_funs, only: qsys_job_finished
         class(scale_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
         type(image)      :: vol2, img, img2
-        integer, allocatable :: states(:)
-        logical, allocatable :: ptcl_msk(:)
         real             :: ave, sdev, var, med, smpd_new, scale
         integer          :: ldim(3), ldim_scaled(3), nfiles, nframes, iframe, ifile
         integer          :: istk, nstks, ptcl_fromp, ptcl_top
@@ -618,7 +616,7 @@ contains
             ! input comes from distributed execution scale_project
             call cline%set('oritype', 'stk')
             call build%init_params_and_build_spproj(cline, params)
-            call build%spproj%read_segment('ptcl2D',params%projfile)
+            call build%spproj%read_segment('stk',params%projfile)
             nstks = build%spproj%os_stk%get_noris()
             if( nstks == 0 ) THROW_HARD('NO EXISTING STACK IN PROJECT')
             if( cline%defined('newbox') )then
@@ -631,33 +629,19 @@ contains
             else
                 THROW_HARD('MISSING NEW DIMENSION!')
             endif
-            ! state handling
-            states = nint(build%spproj%os_ptcl2D%get_all('state'))
-            if( cline%defined('state') )then
-                if( .not.any(states == params%state) )then
-                    THROW_HARD('NO PARTICLE MATCHING STATE FOUND. STATE: '//int2str(params%state))
-                endif
-                where( states /= params%state ) states = 0
-            else
-                ! all inclusive by default
-                params%state = 1
-                states = 1
-            endif
             do istk = params%fromp, params%top
                 call progress(istk, nstks)
                 stkin      = build%spproj%get_stkname(istk)
                 ptcl_fromp = nint(build%spproj%os_stk%get(istk,'fromp'))
                 ptcl_top   = nint(build%spproj%os_stk%get(istk,'top'))
-                ptcl_msk   = (states(ptcl_fromp:ptcl_top) == 1)
                 ext        = '.'//fname2ext(stkin)
                 if( cline%defined('dir_target') )then
                     stkout = filepath(trim(params%dir_target),add2fbody(basename(stkin),ext,SCALE_SUFFIX))
                 else
                     stkout = add2fbody(trim(stkin),ext,SCALE_SUFFIX)
                 endif
-                call resize_imgfile(stkin, stkout, params%smpd, ldim_scaled, smpd_new, mask=ptcl_msk)
+                call resize_imgfile(stkin, stkout, params%smpd, ldim_scaled, smpd_new)
             enddo
-            deallocate(states,ptcl_msk)
         else
             if( cline%defined('stk') )then
                 ! 2D

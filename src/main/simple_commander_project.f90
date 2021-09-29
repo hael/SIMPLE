@@ -822,40 +822,47 @@ contains
     end subroutine exec_replace_project_field
 
     subroutine exec_scale_project_distr( self, cline )
-        use simple_builder, only: builder
+        use simple_builder,    only: builder
+        use simple_parameters, only: params_glob
         class(scale_project_commander_distr), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(qsys_env)                     :: qenv
-        type(chash)                        :: job_descr
-        type(cmdline)                      :: cline_scale
         type(chash),      allocatable :: part_params(:)
         character(len=:), allocatable :: projfile_sc
         integer,          allocatable :: parts(:,:)
+        integer,          parameter   :: MAX_NCUNITS = 64
+        character(len=XLONGSTRLEN)    :: dir_target
+        type(qsys_env)   :: qenv
+        type(chash)      :: job_descr
+        type(cmdline)    :: cline_scale
         type(parameters) :: params
         type(builder)    :: build
-        character(len=XLONGSTRLEN) :: dir_target
         real             :: smpd, smpd_target
-        integer          :: ipart, nparts, nstks, box, newbox
+        integer          :: ipart, nparts, nstks, box, newbox, nthr_orig, nparts_orig, ncunits_orig
         logical          :: gen_sc_project
         ! mkdir=yes: a new *_sc project + stacks are generated
         ! mkdir=no : only stacks are scaled
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         gen_sc_project = cline%get_carg('mkdir').eq.'yes'
         ! make parameters and project
-        call build%init_params_and_build_spproj(cline, params)
+        call params%new(cline)
+        params%nptcls = 1 ! to avoid excessive memory allocation
+        call build%build_spproj(params, cline)
+        call build%spproj%read_segment('stk',params%projfile)
+        nstks = build%spproj%os_stk%get_noris()
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! copy command line
-        cline_scale = cline
-        ! prepare part-dependent parameters
-        nstks = build%spproj%os_stk%get_noris()
-        if( nstks == 0 ) THROW_HARD('os_stk field of spproj empty; exec_scale_distr')
+        cline_scale  = cline
+        ! save overridden parameters
+        nparts_orig  = params%nparts
+        ncunits_orig = params%ncunits
+        nthr_orig    = params%nthr
         if( cline%defined('nparts') )then
-            nparts = min(params%nparts, nstks)
-            call cline_scale%set('nparts', real(nparts))
+            nparts = min(params%nparts * params%nthr, nstks)
         else
-            nparts = 1
+            nparts = params%nthr
         endif
+        call cline_scale%set('nparts', real(nparts))
         smpd = build%spproj%get_smpd()
         box  = build%spproj%get_box()
         if( gen_sc_project )then
@@ -877,7 +884,12 @@ contains
         call cline_scale%set('smpd', smpd)
         call cline_scale%set('box',  real(box))
         ! setup the environment for distributed execution
-        params%nparts = nparts
+        params%nparts       = nparts
+        params_glob%nparts  = nparts
+        params%ncunits      = min(MAX_NCUNITS, nparts)
+        params_glob%ncunits = min(MAX_NCUNITS, nparts)
+        params%nthr         = 1
+        params_glob%nthr    = 1
         call qenv%new(nparts)
         ! prepares stack-based parts
         parts = split_nobjs_even(nstks, nparts)
@@ -892,13 +904,18 @@ contains
         call job_descr%set('prg',      'scale')
         call job_descr%set('newbox',   int2str(newbox))
         call job_descr%set('autoscale','no')
+        call job_descr%set('nthr',     int2str(1))
+        call job_descr%set('nparts',   int2str(nparts))
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params)
         ! delete copy in working directory
-        if( gen_sc_project )call del_file(params%projfile)
+        if( gen_sc_project ) call del_file(params%projfile)
         ! clean
         call qsys_cleanup
         ! end gracefully
+        params_glob%nparts  = nparts_orig
+        params_glob%ncunits = ncunits_orig
+        params_glob%nthr    = nthr_orig
         call build%spproj%kill
         call simple_end('**** SIMPLE_DISTR_SCALE NORMAL STOP ****')
     end subroutine exec_scale_project_distr
