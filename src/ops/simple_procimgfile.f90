@@ -8,7 +8,7 @@ implicit none
 
 !! Basic Operations
 public :: copy_imgfile, diff_imgfiles, pad_imgfile, resize_imgfile, clip_imgfile, mirror_imgfile
-public :: random_selection_from_imgfile, resize_and_clip_imgfile, resize_imgfile_double
+public :: random_selection_from_imgfile, resize_and_clip_imgfile
 public :: subtr_backgr_imgfile, random_cls_from_imgfile, selection_from_tseries_imgfile
 public :: roavg_imgfile
 !! Normalisation
@@ -159,27 +159,20 @@ contains
     !! \param smpd_new new sampling distance
     !! \param fromptop index range for copying
     !!
-    subroutine resize_imgfile( fname2resize, fname, smpd, ldim_new, smpd_new, fromptop, mask )
+    subroutine resize_imgfile( fname2resize, fname, smpd, ldim_new, smpd_new, fromptop )
         character(len=*),  intent(in)  :: fname2resize, fname
         real,              intent(in)  :: smpd
         integer,           intent(in)  :: ldim_new(3)
         real,              intent(out) :: smpd_new
         integer, optional, intent(in)  :: fromptop(2)
-        logical, optional, intent(in)  :: mask(:)
         type(image) :: img, img_resized, blank_img
         integer     :: n, i, ldim(3), prange(2), cnt, sz
-        logical     :: use_mask
         call find_ldim_nptcls(fname2resize, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
         call img%new(ldim,smpd,wthreads=.false.)
         call img_resized%new(ldim_new,smpd,wthreads=.false.) ! this sampling distance will be overwritten
         write(logfhandle,'(a)') '>>> RESIZING IMAGES'
-        use_mask = present(mask)
-        if( use_mask )then
-            if( size(mask) /= n ) THROW_HARD('INCOMPATIBLE STACK & MASK SIZE: '//int2str(n)//' vs. '//int2str(size(mask)))
-            if( .not.all(mask) ) call blank_img%new(ldim_new,smpd*real(ldim(1))/real(ldim_new(1)))
-        endif
         if( present(fromptop) )then
             prange = fromptop
         else
@@ -187,28 +180,26 @@ contains
             prange(2) = n
         endif
         sz  = prange(2)-prange(1)+1
-        cnt = 0
-        do i=prange(1),prange(2)
-            cnt = cnt+1
-            call progress(cnt,sz)
-            if( use_mask )then
-                if( .not.mask(i) )then
-                    call blank_img%write(fname, cnt)
-                    cycle
+        if( all(prange == 0) )then
+            call simple_touch(fname)
+        else
+            cnt = 0
+            do i=prange(1),prange(2)
+                cnt = cnt+1
+                call progress(cnt,sz)
+                call img%read(fname2resize, i)
+                call img%fft()
+                if( ldim_new(1) <= ldim(1) .and. ldim_new(2) <= ldim(2)&
+                     .and. ldim_new(3) <= ldim(3) )then
+                    call img%clip(img_resized)
+                else
+                    call img%pad(img_resized)
                 endif
-            endif
-            call img%read(fname2resize, i)
-            call img%fft()
-            if( ldim_new(1) <= ldim(1) .and. ldim_new(2) <= ldim(2)&
-                 .and. ldim_new(3) <= ldim(3) )then
-                call img%clip(img_resized)
-            else
-                call img%pad(img_resized)
-            endif
-            call img_resized%ifft()
-            call img_resized%write(fname, cnt)
-        end do
-        smpd_new = img_resized%get_smpd()
+                call img_resized%ifft()
+                call img_resized%write(fname, cnt)
+            end do
+            smpd_new = img_resized%get_smpd()
+        endif
         call img%kill
         call img_resized%kill
         call blank_img%kill
@@ -337,56 +328,6 @@ contains
         call img_resized%kill
         call img_clip%kill
     end subroutine resize_and_clip_imgfile
-
-    !>  \brief  is for resizing and clipping
-     !! \param fname2resize  output filename
-    !! \param fname1,fname2  input filenames
-    !! \param smpd  sampling distance
-    !! \param ldims_new new logical dimension
-    !! \param smpds_new new sampling distance
-    !! \param fromptop  index range for copying
-    !!
-    subroutine resize_imgfile_double( fname2resize, fname1, fname2, smpd, ldims_new, smpds_new, fromptop )
-        character(len=*),  intent(in)  :: fname2resize, fname1, fname2
-        real,              intent(in)  :: smpd
-        integer,           intent(in)  :: ldims_new(2,3)
-        real,              intent(out) :: smpds_new(2)
-        integer, optional, intent(in)  :: fromptop(2)
-        type(image) :: img, img_resized1, img_resized2
-        integer     :: n, i, ldim(3), prange(2), cnt, sz
-        call find_ldim_nptcls(fname2resize, ldim, n)
-        ldim(3) = 1
-        call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
-        call img%new(ldim,smpd)
-        call img_resized1%new(ldims_new(1,:),smpd) ! this sampling distance will be overwritten
-        call img_resized2%new(ldims_new(2,:),smpd) ! this sampling distance will be overwritten
-        write(logfhandle,'(a)') '>>> RESIZING IMAGES'
-        if( present(fromptop) )then
-            prange = fromptop
-        else
-            prange(1) = 1
-            prange(2) = n
-        endif
-        sz  = prange(2)-prange(1)+1
-        cnt = 0
-        do i=prange(1),prange(2)
-            cnt = cnt+1
-            call progress(cnt,sz)
-            call img%read(fname2resize, i)
-            call img%fft()
-            call img%clip(img_resized1)
-            call img%clip(img_resized2)
-            call img_resized1%ifft()
-            call img_resized2%ifft()
-            call img_resized1%write(fname1, cnt)
-            call img_resized2%write(fname2, cnt)
-        end do
-        smpds_new(1) = img_resized1%get_smpd()
-        smpds_new(2) = img_resized2%get_smpd()
-        call img%kill
-        call img_resized1%kill
-        call img_resized2%kill
-    end subroutine resize_imgfile_double
 
     subroutine subtr_backgr_imgfile_1( fname2subtr, fname, smpd, lp )
         character(len=*), intent(in) :: fname2subtr, fname

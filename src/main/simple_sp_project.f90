@@ -1355,33 +1355,24 @@ contains
     subroutine add_scale_tag( self, dir )
         class(sp_project),          intent(inout) :: self
         character(len=*), optional, intent(in)    :: dir
-        character(len=:), allocatable :: ext, newname, stkname, abs_dir, nametmp
-        character(len=4) :: ext_out
+        character(len=:), allocatable :: ext, newname, stkname, abs_dir, nametmp, ext_out
         integer :: imic, nmics
         nmics = self%os_stk%get_noris()
-        if(present(dir))then
-            call simple_mkdir(trim(dir),errmsg="sp_project::add_scale_tag")
-            abs_dir = simple_abspath(dir,'sp_project :: add_scale_tag')
+        if( present(dir) )then
+            call simple_mkdir( trim(dir), errmsg="sp_project::add_scale_tag" )
+            abs_dir = simple_abspath( dir, 'sp_project :: add_scale_tag' )
         endif
         do imic=1,nmics
             call self%os_stk%getter(imic, 'stk', stkname)
             ext = fname2ext(trim(stkname))
-            select case(fname2format(stkname))
-                case('M','D','B')
-                    ext_out = '.mrc'
-                case('S')
-                    ext_out = '.spi'
-                case DEFAULT
-                    write(logfhandle,*)'format: ', trim(ext)
-                    THROW_HARD('This file format is not supported by SIMPLE; add_scale_tag')
-            end select
+            ext_out = '.'//ext
             if(present(dir))then
                 nametmp = basename(add2fbody(stkname, '.'//trim(ext), trim(SCALE_SUFFIX)))
                 newname = filepath(trim(abs_dir), trim(nametmp))
             else
                 newname = add2fbody(stkname, '.'//trim(ext), trim(SCALE_SUFFIX))
             endif
-            newname = fname_new_ext(newname, ext_out(2:4))
+            newname = fname_new_ext(newname, ext_out(2:))
             call self%os_stk%set(imic, 'stk', newname)
         end do
     end subroutine add_scale_tag
@@ -2342,8 +2333,8 @@ contains
         call cline_scale%set('scale',    scale_factor)
         call cline_scale%set('projfile', projfile)
         call cline_scale%set('smpd',     smpd_sc)
-        if( cline%defined('mkdir') ) call cline_scale%set('mkdir', cline%get_carg('mkdir'))
-        if(present(dir))call cline_scale%set('dir_target',trim(dir)//path_separator)
+        if( cline%defined('mkdir') )     call cline_scale%set('mkdir', cline%get_carg('mkdir'))
+        if( present(dir) )               call cline_scale%set('dir_target',trim(dir)//path_separator)
         if( box == box_sc )then
             ! no scaling
             new_projfile = trim(projfile)
@@ -2366,7 +2357,7 @@ contains
         new_projfile = trim(new_projname)//trim(METADATA_EXT)
         call cline%set('projname', trim(new_projname))
         call cline%delete('projfile')
-        call self%update_projinfo( cline )
+        call self%update_projinfo(cline)
         if(present(dir))then
             call self%add_scale_tag(dir=trim(dir)//path_separator)
         else
