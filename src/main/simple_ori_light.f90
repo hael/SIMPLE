@@ -150,7 +150,7 @@ contains
     !! \param e1,e2,e3 Euler triplet
     pure function euler2m_sp( euls ) result( r )
         real, intent(in)     :: euls(3)
-        real, dimension(3,3) :: r1, r2, r3, r, tmp
+        real, dimension(3,3) :: r1, r2, r3, r
         real                 :: e1, e2, e3
         e1 = euls(1)
         e2 = euls(2)
@@ -159,15 +159,14 @@ contains
         r2 = rotmat_sp(e2,2) ! tilt
         r3 = rotmat_sp(e3,3) ! rotation around z
         ! order of multiplication is r3r2r1
-        tmp = matmul(r3,r2)
-        r = matmul(tmp,r1)
+        r = matmul(matmul(r3,r2),r1)
     end function euler2m_sp
 
     !>  \brief  makes a rotation matrix from a Spider format Euler triplet
     !! \param e1,e2,e3 Euler triplet
     pure function euler2m_dp( euls ) result( r )
         real(dp), intent(in)     :: euls(3)
-        real(dp), dimension(3,3) :: r1, r2, r3, r, tmp
+        real(dp), dimension(3,3) :: r1, r2, r3, r
         real(dp)                 :: e1, e2, e3
         e1 = euls(1)
         e2 = euls(2)
@@ -176,8 +175,7 @@ contains
         r2 = rotmat_dp(e2,2) ! tilt
         r3 = rotmat_dp(e3,3) ! rotation around z
         ! order of multiplication is r3r2r1
-        tmp = matmul(r3,r2)
-        r = matmul(tmp,r1)
+        r = matmul(matmul(r3,r2),r1)
     end function euler2m_dp
 
     !>  \brief  returns the rotation matrix for _ang_ degrees of rotation
@@ -186,34 +184,36 @@ contains
         real, intent(in)           :: ang
         integer, intent(in)        :: choice
         real :: r(3,3)
-        real :: ang_in_rad
+        real :: ang_in_rad, c, s
         ang_in_rad = ang*pi/180.
+        c = cos( ang_in_rad )
+        s = sin( ang_in_rad )
         if ( choice == 1 ) then
             r( 1,1 ) = 1.
             r( 1,2 ) = 0.
             r( 1,3 ) = 0.
             r( 2,1 ) = 0.
-            r( 2,2 ) = cos( ang_in_rad )
-            r( 2,3 ) =-sin( ang_in_rad )
+            r( 2,2 ) = c
+            r( 2,3 ) =-s
             r( 3,1 ) = 0.
-            r( 3,2 ) = sin( ang_in_rad )
-            r( 3,3 ) = cos( ang_in_rad )
+            r( 3,2 ) = s
+            r( 3,3 ) = c
         elseif ( choice == 2 ) then
-            r( 1,1 ) = cos( ang_in_rad )
+            r( 1,1 ) = c
             r( 1,2 ) = 0.
-            r( 1,3 ) = -sin( ang_in_rad )
+            r( 1,3 ) = -s
             r( 2,1 ) = 0.
             r( 2,2 ) = 1.
             r( 2,3 ) = 0.
-            r( 3,1 ) = sin( ang_in_rad )
+            r( 3,1 ) = s
             r( 3,2 ) = 0.
-            r( 3,3 ) = cos( ang_in_rad )
+            r( 3,3 ) = c
         elseif ( choice == 3 ) then
-            r( 1,1 ) = cos( ang_in_rad )
-            r( 1,2 ) = sin( ang_in_rad )
+            r( 1,1 ) = c
+            r( 1,2 ) = s
             r( 1,3 ) = 0.
-            r( 2,1 ) = -sin( ang_in_rad )
-            r( 2,2 ) = cos( ang_in_rad )
+            r( 2,1 ) = -s
+            r( 2,2 ) = c
             r( 2,3 ) = 0.
             r( 3,1 ) = 0.
             r( 3,2 ) = 0.
@@ -228,34 +228,36 @@ contains
         real(dp), intent(in) :: ang
         integer,  intent(in) :: choice
         real(dp) :: r(3,3)
-        real(dp) :: ang_in_rad
+        real(dp) :: ang_in_rad, c, s
         ang_in_rad = ang*dpi/180._dp
+        c = cos( ang_in_rad )
+        s = sin( ang_in_rad )
         if ( choice == 1 ) then
             r( 1,1 ) = 1._dp
             r( 1,2 ) = 0._dp
             r( 1,3 ) = 0._dp
             r( 2,1 ) = 0._dp
-            r( 2,2 ) = cos( ang_in_rad )
-            r( 2,3 ) =-sin( ang_in_rad )
+            r( 2,2 ) = c
+            r( 2,3 ) = -s
             r( 3,1 ) = 0._dp
-            r( 3,2 ) = sin( ang_in_rad )
-            r( 3,3 ) = cos( ang_in_rad )
+            r( 3,2 ) = s
+            r( 3,3 ) = c
         elseif ( choice == 2 ) then
-            r( 1,1 ) = cos( ang_in_rad )
+            r( 1,1 ) = c
             r( 1,2 ) = 0._dp
-            r( 1,3 ) = -sin( ang_in_rad )
+            r( 1,3 ) = -s
             r( 2,1 ) = 0._dp
             r( 2,2 ) = 1._dp
             r( 2,3 ) = 0._dp
-            r( 3,1 ) = sin( ang_in_rad )
+            r( 3,1 ) = s
             r( 3,2 ) = 0._dp
-            r( 3,3 ) = cos( ang_in_rad )
+            r( 3,3 ) = c
         elseif ( choice == 3 ) then
-            r( 1,1 ) = cos( ang_in_rad )
-            r( 1,2 ) = sin( ang_in_rad )
+            r( 1,1 ) = c
+            r( 1,2 ) = s
             r( 1,3 ) = 0._dp
-            r( 2,1 ) = -sin( ang_in_rad )
-            r( 2,2 ) = cos( ang_in_rad )
+            r( 2,1 ) = -s
+            r( 2,2 ) = c
             r( 2,3 ) = 0._dp
             r( 3,1 ) = 0._dp
             r( 3,2 ) = 0._dp
