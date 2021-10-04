@@ -136,8 +136,8 @@ contains
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract
         character(len=LONGSTRLEN)              :: movie
         real                                   :: pickref_scale
-        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, n_completed, last_injection
-        integer                                :: nptcls, cnt, n_imported, iproj, nptcls_glob, n2import
+        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection
+        integer                                :: cnt, n_imported, nptcls_glob
         logical                                :: l_pick, l_movies_left, l_haschanged
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
@@ -223,7 +223,6 @@ contains
         prev_stacksz  = 0
         nmovies       = 0
         iter          = 0
-        n_completed   = 0
         n_imported    = 0
         l_movies_left = .false.
         l_haschanged  = .false.
@@ -266,37 +265,19 @@ contains
             ! fetch completed jobs list & updates of cluster2D_stream
             if( qenv%qscripts%get_done_stacksz() > 0 )then
                 call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
-                call update_projects_list( completed_fnames, n_completed )
+                call update_projects_list( completed_fnames, n_imported )
                 do cnt = 1,size(completed_jobs_clines)
                     call completed_jobs_clines(cnt)%kill
                 enddo
                 deallocate(completed_jobs_clines)
+            else
+                n_imported = 0 ! newly imported
             endif
             ! project update
-            n_imported = spproj%os_mic%get_noris() ! # of projects already added
-            n2import   = n_completed-n_imported
-            if( n2import > 0 )then
-                if( n_imported == 0 )then
-                    call spproj%os_mic%new(n2import, is_ptcl=.false.) ! first time
-                else
-                    call spproj%os_mic%reallocate(n_completed)
-                endif
-                ! actual update
-                nptcls = 0
-                do iproj=n_imported+1,n_completed
-                    call stream_spproj%read_segment('mic', completed_fnames(iproj))
-                    if( l_pick ) nptcls = nptcls + nint(stream_spproj%os_mic%get(1,'nptcls'))
-                    call spproj%os_mic%transfer_ori(iproj, stream_spproj%os_mic, 1)
-                enddo
-                call stream_spproj%kill
-                ! total number of micrographs
+            if( n_imported > 0 )then
                 n_imported = spproj%os_mic%get_noris()
                 write(logfhandle,'(A,I5)')'>>> # MOVIES PROCESSED & IMPORTED:    ',n_imported
-                if( l_pick )then
-                    ! total number of particles
-                    nptcls_glob = nptcls_glob + nptcls
-                    write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',nptcls_glob
-                endif
+                if( l_pick ) write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',nptcls_glob
                 ! exit for trial runs
                 if( cline%defined('nmovies_trial') )then
                     if( n_imported  >= params%nmovies_trial )then
@@ -316,7 +297,6 @@ contains
                 last_injection = simple_gettime()
                 l_haschanged   = .true.
                 n_imported     = spproj%os_mic%get_noris()
-                n_completed    = n_imported
             else
                 ! wait
                 if( .not.l_movies_left )then
@@ -408,16 +388,16 @@ contains
             subroutine write_project()
                 logical, allocatable :: stk_mask(:)
                 integer, allocatable :: states(:)
-                integer              :: iproj,nptcls,istk,fromp,top,i,iptcl,nstks,n
+                integer              :: iproj,nptcls,istk,fromp,top,i,iptcl,nstks,n,nmics
                 write(logfhandle,'(A)')'>>> PROJECT UPDATE'
-                n_imported = spproj%os_mic%get_noris()
+                nmics = spproj%os_mic%get_noris()
                 call spproj%write_segment_inside('mic', params%projfile)
                 if( l_pick )then
                     if( DEBUG_HERE ) t0 = tic()
                     ! stacks
-                    allocate(stk_mask(n_imported))
-                    allocate(states(n_imported))
-                    do iproj = 1,n_imported
+                    allocate(stk_mask(nmics))
+                    allocate(states(nmics))
+                    do iproj = 1,nmics
                         stk_mask(iproj) = nint(spproj%os_mic%get(iproj,'nptcls')) > 0
                         states(iproj)   = spproj%os_mic%get_state(iproj)
                         if( stk_mask(iproj) )then
@@ -433,7 +413,7 @@ contains
                     istk   = 0
                     fromp  = 0
                     top    = 0
-                    do iproj = 1,n_imported
+                    do iproj = 1,nmics
                         if( .not.stk_mask(iproj) ) cycle
                         istk = istk+1
                         call stream_spproj%read_segment('stk', completed_fnames(iproj))
@@ -453,7 +433,7 @@ contains
                     ! particles 2D
                     istk   = 0
                     iptcl  = 0
-                    do iproj = 1,n_imported
+                    do iproj = 1,nmics
                         if( .not.stk_mask(iproj) ) cycle
                         istk = istk+1
                         call stream_spproj%read_segment('ptcl2D', completed_fnames(iproj))
@@ -471,7 +451,7 @@ contains
                     ! particles 3D
                     istk   = 0
                     iptcl  = 0
-                    do iproj = 1,n_imported
+                    do iproj = 1,nmics
                         if( .not.stk_mask(iproj) ) cycle
                         istk = istk+1
                         call stream_spproj%read_segment('ptcl3D', completed_fnames(iproj))
@@ -509,14 +489,16 @@ contains
             end subroutine submit_jobs
 
             ! returns list of completed jobs + updates for cluster2D_stream
-            subroutine update_projects_list( completed_fnames, n_completed )
+            subroutine update_projects_list( completed_fnames, n_imported )
                 character(len=LONGSTRLEN), allocatable, intent(inout) :: completed_fnames(:)
-                integer,                                intent(inout) :: n_completed
+                integer,                                intent(inout) :: n_imported
+                type(sp_project)                       :: stream_spproj
                 character(len=:),          allocatable :: fname, abs_fname
                 character(len=LONGSTRLEN), allocatable :: old_fnames(:)
                 logical, allocatable :: spproj_mask(:)
-                integer              :: i, n_spprojs, n_old, nptcls_here, state, j, n2import
+                integer :: i, n_spprojs, n_old, nptcls_here, state, j, n2import, nprev_imports, n_completed
                 n_completed = 0
+                n_imported  = 0
                 if( allocated(completed_fnames) ) deallocate(completed_fnames)
                 n_spprojs = size(completed_jobs_clines)
                 if( n_spprojs == 0 )return
@@ -541,20 +523,33 @@ contains
                 endif
                 if( n2import > 0 )then
                     n_completed = n_old + n2import
+                    n_imported  = n2import
+                    nprev_imports = spproj%os_mic%get_noris()
+                    if( nprev_imports == 0 )then
+                        call spproj%os_mic%new(n2import, is_ptcl=.false.) ! first time
+                    else
+                        call spproj%os_mic%reallocate(n_completed)
+                    endif
                     allocate(completed_fnames(n_completed))
                     if( n_old > 0 )then
                         completed_fnames(1:n_old) = old_fnames(:)
                     endif
                     j = 0
+                    nptcls_here = 0
                     do i=1,n_spprojs
                         if( .not.spproj_mask(i) ) cycle
                         j = j+1
                         fname     = trim(completed_jobs_clines(i)%get_carg('projfile'))
                         abs_fname = simple_abspath(fname, errmsg='preprocess_stream :: update_projects_list 1')
                         completed_fnames(n_old+j) = trim(abs_fname)
+                        call stream_spproj%read_segment('mic', abs_fname)
+                        if( l_pick ) nptcls_here = nptcls_here + nint(stream_spproj%os_mic%get(1,'nptcls'))
+                        call spproj%os_mic%transfer_ori(n_old+j, stream_spproj%os_mic, 1)
+                        call stream_spproj%kill
                     enddo
+                    if( l_pick ) nptcls_glob = nptcls_glob + nptcls_here
                 else
-                    n_completed = 0
+                    n_imported  = 0
                     return
                 endif
                 ! write to temporary file...
@@ -701,7 +696,7 @@ contains
                             call completed_jobs_clines(cnt)%set('projfile',basename(sp_files(iproj)))
                         endif
                     enddo
-                    call update_projects_list(completed_fnames, n_completed)
+                    call update_projects_list(completed_fnames, n_imported)
                     deallocate(completed_jobs_clines)
                 endif
                 call o%kill

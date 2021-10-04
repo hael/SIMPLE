@@ -194,7 +194,6 @@ contains
             rmsd       = calc_rmsd(real(prev_shifts), real(shifts))
             rmsd_cumul = calc_rmsd(ini_shifts,        real(shifts))
             self%corr  = -lowest_cost / real(ntot)
-            print *,'poly iter rmsd rmsdcumul corr: ', iter,rmsd,rmsd_cumul,self%corr
             if( iter>=2 .and. rmsd<RMSD_THRESHOLD_POLY ) exit
         enddo
         ! cleanup
