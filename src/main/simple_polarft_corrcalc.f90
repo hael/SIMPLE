@@ -178,6 +178,7 @@ type :: polarft_corrcalc
     procedure          :: gencorr_cc_for_rot
     procedure          :: gencorr_cc_for_rot_8
     procedure          :: gencorr_cont_grad_cc_for_rot_8
+    procedure          :: gencorr_cont_cc_for_rot_8
     procedure          :: gencorr_cont_shift_grad_cc_for_rot_8
     procedure          :: gencorr_cc_grad_for_rot_8
     procedure          :: gencorr_cc_grad_only_for_rot_8
@@ -1114,15 +1115,13 @@ contains
     end function calc_corr_for_rot_8
 
     !<  \brief  compute the terms T1, T2 necessary for finding the derivative of the correlations, double precision
-    subroutine calc_T1_T2_for_rot_8( self, pft_ref, pft_dref, i, irot, nderivs, T1_k, T2_k)
+    subroutine calc_T1_T2_for_rot_8( self, pft_ref, pft_dref, i, irot, nderivs, T1, T2)
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: i, irot, nderivs
         complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2)), &
             pft_dref(1:self%pftsz,params_glob%kfromto(1):params_glob%kstop,nderivs)
-        real(dp),                intent(out)   :: T1_k(params_glob%kfromto(1):params_glob%kstop,nderivs), T2_k(params_glob%kfromto(1):params_glob%kstop,nderivs)
-        integer                                :: k, rot, j
-        complex(dp)                            :: tmp_T1(params_glob%kfromto(1):params_glob%kstop,nderivs)
-        complex(dp)                            :: tmp_T2(params_glob%kfromto(1):params_glob%kstop,nderivs)
+        real(dp),                intent(out)   :: T1(params_glob%kfromto(1):params_glob%kstop,nderivs), T2(params_glob%kfromto(1):params_glob%kstop,nderivs)
+        integer :: k, rot, j
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
         else
@@ -1131,21 +1130,19 @@ contains
         do j = 1, nderivs
             do k = params_glob%kfromto(1),params_glob%kstop
                 if( irot == 1 ) then
-                    tmp_T1(k,j) = sum( pft_dref(:,k,j) * conjg(self%pfts_ptcls(:,k,i)))
+                    T1(k,j) = real(sum( pft_dref(:,k,j) * conjg(self%pfts_ptcls(:,k,i))), kind=dp)
                 else if( irot <= self%pftsz ) then
-                    tmp_T1(k,j) =               sum( pft_dref(               1:self%pftsz-rot+1,k,j) * conjg(self%pfts_ptcls(rot:self%pftsz,k,i)))
-                    tmp_T1(k,j) = tmp_T1(k,j) + sum( pft_dref(self%pftsz-rot+2:self%pftsz,      k,j) *       self%pfts_ptcls(  1:rot-1,     k,i))
+                    T1(k,j) =           real(sum( pft_dref(               1:self%pftsz-rot+1,k,j) * conjg(self%pfts_ptcls(rot:self%pftsz,k,i))), kind=dp)
+                    T1(k,j) = T1(k,j) + real(sum( pft_dref(self%pftsz-rot+2:self%pftsz,      k,j) *       self%pfts_ptcls(  1:rot-1,     k,i)), kind=dp)
                 else if( irot == self%pftsz + 1 ) then
-                    tmp_T1(k,j) = sum( pft_dref(:,k,j) * self%pfts_ptcls(:,k,i) )
+                    T1(k,j) = real(sum( pft_dref(:,k,j) * self%pfts_ptcls(:,k,i) ), kind=dp)
                 else
-                    tmp_T1(k,j) =               sum( pft_dref(               1:self%pftsz-rot+1,k,j) *       self%pfts_ptcls(rot:self%pftsz,k,i))
-                    tmp_T1(k,j) = tmp_T1(k,j) + sum( pft_dref(self%pftsz-rot+2:self%pftsz,      k,j) * conjg(self%pfts_ptcls(  1:rot-1,     k,i)) )
+                    T1(k,j) =           real(sum( pft_dref(               1:self%pftsz-rot+1,k,j) *       self%pfts_ptcls(rot:self%pftsz,k,i)), kind=dp)
+                    T1(k,j) = T1(k,j) + real(sum( pft_dref(self%pftsz-rot+2:self%pftsz,      k,j) * conjg(self%pfts_ptcls(  1:rot-1,     k,i)) ), kind=dp)
                 end if
-                tmp_T2(k,j) = sum( pft_dref(:,k,j) * conjg(pft_ref(:,k)))
+                T2(k,j) = real(sum( pft_dref(:,k,j) * conjg(pft_ref(:,k))), kind=dp)
             end do
         end do
-        T1_k = real(tmp_T1, kind=dp)
-        T2_k = real(tmp_T2, kind=dp)
     end subroutine calc_T1_T2_for_rot_8
 
     function calc_euclid_for_rot( self, pft_ref, iptcl, i, irot ) result( euclid )
@@ -1655,6 +1652,43 @@ contains
             dcc(j) = ( sum(fdf_T1(:,j)) - sum(fdf_y) * sum(fdf_T2(:,j)) / sqsum_ref ) / denom
         end do
     end function gencorr_cont_grad_cc_for_rot_8
+
+    real(dp) function gencorr_cont_cc_for_rot_8( self, iref, iptcl, shvec, irot )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl
+        real(dp),                intent(in)    :: shvec(2)
+        integer,                 intent(in)    :: irot
+        complex(dp), pointer :: pft_ref(:,:), shmat(:,:)
+        real(dp),    pointer :: fdf_y(:)
+        real(dp) :: sqsum_ref, denom
+        integer  :: ithr, k
+        ithr        =  omp_get_thread_num() + 1
+        pft_ref     => self%heap_vars(ithr)%pft_ref_8
+        shmat       => self%heap_vars(ithr)%shmat_8
+        fdf_y       => self%heap_vars(ithr)%fdf_y_8
+        call self%gen_shmat_8(ithr, shvec, shmat)
+        if( self%iseven(self%pinds(iptcl)) )then
+            pft_ref  = self%pfts_refs_even(:,:,iref)
+        else
+            pft_ref  = self%pfts_refs_odd(:,:,iref)
+        endif
+        if( self%l_clsfrcs )then
+            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
+        else
+            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
+        endif
+        if( self%with_ctf )then
+            pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+        else
+            pft_ref = pft_ref * shmat
+        endif
+        sqsum_ref = sum(csq_fast(pft_ref(:,params_glob%kfromto(1):params_glob%kstop)))
+        denom     = sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
+        do k = params_glob%kfromto(1),params_glob%kstop
+            fdf_y(k) = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), k, irot)
+        end do
+        gencorr_cont_cc_for_rot_8 = sum(fdf_y) / denom
+    end function gencorr_cont_cc_for_rot_8
 
     subroutine gencorr_cont_shift_grad_cc_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
         class(polarft_corrcalc), intent(inout) :: self
