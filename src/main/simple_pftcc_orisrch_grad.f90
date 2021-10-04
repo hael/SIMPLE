@@ -66,7 +66,7 @@ contains
         complex, allocatable :: pft_ref_even(:,:) !< for thread safe use of pftcc
         complex, allocatable :: pft_ref_odd(:,:)  !< -"-
         real     :: cxy(3), rotmat(2,2), cost, cost_init
-        real(dp) :: f, grad(5), vec(5)
+        real(dp) :: vec(5)
         integer  :: ithr
         ! copy the pftcc references so we can put them back after minimization is done
         ithr         = omp_get_thread_num() + 1
@@ -94,8 +94,7 @@ contains
         ! MINIMISATION
         self%ospec%nevals = 0
         vec = self%ospec%x
-        call fdfcostfun(self, vec, f, grad, 5)
-        cost_init = real(f) ! for later comparison
+        cost_init = real(costfun(self, vec, 5)) ! for later comparison
         call self%nlopt%minimize(self%ospec, self, cost)
 
         ! OUTPUT
@@ -138,9 +137,9 @@ contains
         select type(self)
             class is (pftcc_orisrch_grad)
                 if( pftcc_glob%ptcl_iseven(self%particle) )then
-                    call build_glob%vol%fdf_project_polar(ithr, vec(1:3), pftcc_glob, iseven=.true.)
+                    call build_glob%vol%fdf_project_polar(ithr, vec(1:3), pftcc_glob, iseven=.true., mask=build_glob%l_resmsk)
                 else
-                    call build_glob%vol_odd%fdf_project_polar(ithr, vec(1:3), pftcc_glob, iseven=.false.)
+                    call build_glob%vol_odd%fdf_project_polar(ithr, vec(1:3), pftcc_glob, iseven=.false., mask=build_glob%l_resmsk)
                 endif
                 call pftcc_glob%gencorr_cont_shift_grad_cc_for_rot_8(ithr, self%particle, vec(4:5), irot, corr, corr_grad)
                 grad = - corr_grad
@@ -172,7 +171,7 @@ contains
                 else
                     call build_glob%vol_odd%fproject_polar(ithr, e, pftcc_glob, iseven=.false., mask=build_glob%l_resmsk)
                 endif
-                corr = pftcc_glob%gencorr_cc_for_rot_8(ithr, self%particle, vec(4:5), irot)
+                corr = pftcc_glob%gencorr_cont_cc_for_rot_8(ithr, self%particle, vec(4:5), irot)
                 cost = -corr
                 call e%kill()
             class DEFAULT
@@ -197,9 +196,9 @@ contains
         select type( self )
             class is( pftcc_orisrch_grad )
                 if( pftcc_glob%ptcl_iseven(self%particle) )then
-                    call build_glob%vol%fdf_project_polar(ithr, vec(1:3), pftcc_glob, iseven=.true.)
+                    call build_glob%vol%fdf_project_polar(ithr, vec(1:3), pftcc_glob, iseven=.true., mask=build_glob%l_resmsk)
                 else
-                    call build_glob%vol_odd%fdf_project_polar(ithr, vec(1:3), pftcc_glob, iseven=.false.)
+                    call build_glob%vol_odd%fdf_project_polar(ithr, vec(1:3), pftcc_glob, iseven=.false., mask=build_glob%l_resmsk)
                 endif
                 call pftcc_glob%gencorr_cont_shift_grad_cc_for_rot_8(ithr, self%particle, vec(4:5), irot, corr, corr_grad)
                 f    = - corr
