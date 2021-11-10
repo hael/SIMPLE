@@ -299,17 +299,21 @@ contains
         class(image),       intent(inout) :: gain
         type(image)   :: tmp
         real, pointer :: prmat(:,:,:)
-        real          :: avg
+        real          :: avg, val
         integer       :: ldim_gain(3), ifoo, i,j, ii,jj
+        logical       :: dotgain
+        dotgain = (fname2format(fname) == 'J') .or. (fname2format(fname) == 'L')
         call find_ldim_nptcls(fname,ldim_gain,ifoo)
         ! gain always at desired sampling of frames
         call gain%new([self%onx,self%ony,1],self%osmpd)
         if( ldim_gain(1)==self%onx .and. ldim_gain(2)==self%ony )then
             ! gain dimensions = desired frames dimensions
             call gain%read(fname)
+            if( dotgain ) call flipY(gain)
         else
             call tmp%new(ldim_gain, 1.)
             call tmp%read(fname)
+            if( dotgain ) call flipY(tmp)
             call gain%zero
             if( ldim_gain(1)==EER_IMAGE_WIDTH .and. self%upsampling==2 )then
                 ! gain 4K, images 8K
@@ -340,16 +344,35 @@ contains
             endif
             call tmp%kill
         endif
-        ! taking inverse times average
-        call gain%get_rmat_ptr(prmat)
-        !$omp workshare
-        avg = real(sum(real(prmat(:self%onx,:self%ony,1),dp)) / real(self%onx*self%ony,dp))
-        where( is_zero(prmat(:self%onx,:self%ony,1)) )
-            ! zeroes are preserved and dealt with at outliers curation level
-        else where
-            prmat(:self%onx,:self%ony,1) = avg / prmat(:self%onx,:self%ony,1)
-        end where
-        !$omp end workshare
+        if( .not.dotgain )then
+            ! .mrc, taking inverse times average
+            call gain%get_rmat_ptr(prmat)
+            !$omp workshare
+            avg = real(sum(real(prmat(:self%onx,:self%ony,1),dp)) / real(self%onx*self%ony,dp))
+            where( is_zero(prmat(:self%onx,:self%ony,1)) )
+                ! zeroes are preserved and dealt with at outliers curation level
+            else where
+                prmat(:self%onx,:self%ony,1) = avg / prmat(:self%onx,:self%ony,1)
+            end where
+            !$omp end workshare
+        endif
+
+        contains
+
+            subroutine flipY( img )
+                class(image), intent(inout) :: img
+                call img%get_rmat_ptr(prmat)
+                do j = 1,ldim_gain(2)/2
+                    jj = ldim_gain(2) - j - 1
+                    do i = 1,ldim_gain(1)
+                        val           = prmat(i,j,1)
+                        prmat(i,j,1)  = prmat(i,jj,1)
+                        prmat(i,jj,1) = val
+                    enddo
+                enddo
+                nullify(prmat)
+            end subroutine flipY
+
     end subroutine prep_gainref
 
 
