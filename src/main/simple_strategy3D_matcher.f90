@@ -23,6 +23,7 @@ use simple_strategy3D_snhc,         only: strategy3D_snhc
 use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedy_neigh, only: strategy3D_greedy_neigh
 use simple_strategy3D_neigh,        only: strategy3D_neigh
+use simple_strategy3D_cont,         only: strategy3D_cont
 use simple_strategy3D,              only: strategy3D
 use simple_strategy3D_srch,         only: strategy3D_spec, set_ptcl_stats, eval_ptcl
 use simple_convergence,             only: convergence
@@ -237,6 +238,8 @@ contains
                         endif
                     case('greedy_neigh')
                         allocate(strategy3D_greedy_neigh         :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('cont')
+                        allocate(strategy3D_cont                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('cluster','clustersym')
                         allocate(strategy3D_cluster              :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('eval')

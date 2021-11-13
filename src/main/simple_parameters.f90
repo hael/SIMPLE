@@ -205,7 +205,7 @@ type :: parameters
     character(len=STDLEN) :: ptclw='yes'          !< use particle weights(yes|no){yes}
     character(len=STDLEN) :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
     character(len=STDLEN) :: real_filter=''
-    character(len=STDLEN) :: refine='shc'         !< refinement mode(snhc|shc|greedy|neigh|cluster|clustersym){shc}
+    character(len=STDLEN) :: refine='shc'         !< refinement mode(snhc|shc|greedy|neigh|cont|cluster|clustersym){shc}
     character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stats='no'           !< provide statistics(yes|no|print){no}

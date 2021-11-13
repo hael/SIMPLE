@@ -166,11 +166,11 @@ integer, parameter :: FAST2D_NPTCLS_PER_CLS = 500      !< # of particles per cla
 integer, parameter :: FAST2D_ITER_BATCH    = 3         !< # of iterations after which # of particles is updated
 
 ! weighting scheme
-real, parameter :: RANKW_EXP = 2.0 !< Exponent for exponential rank weights
+real, parameter :: RANKW_EXP = 2.0              !< Exponent for exponential rank weights
 
 ! Graphene
-real, parameter :: GRAPHENE_BAND1       = 2.14   !< graphene band 1 for omission in score function
-real, parameter :: GRAPHENE_BAND2       = 1.23   !< graphene band 2 for omission in score function
+real, parameter :: GRAPHENE_BAND1 = 2.14        !< graphene band 1 for omission in score function
+real, parameter :: GRAPHENE_BAND2 = 1.23        !< graphene band 2 for omission in score function
 
 ! C-compatible boolean constants
 logical(c_bool), parameter :: C_FALSE = logical(.false.,kind=c_bool)

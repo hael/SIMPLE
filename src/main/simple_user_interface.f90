@@ -1402,8 +1402,8 @@ contains
         &'cluster 3D refinement',&                                           ! descr_short
         &'is a distributed workflow based on probabilistic projection matching &
         &for refinement of 3D heterogeneity analysis by cluster3D ',&        ! descr_long
-        &'simple_exec',&                                               ! executable
-        &2, 1, 0, 9, 6, 3, 2, .true.)                                       ! # entries in each group
+        &'simple_exec',&                                                     ! executable
+        &2, 1, 0, 9, 6, 3, 2, .true.)                                        ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster3D_refine%set_input('img_ios', 1, 'msklist', 'file', 'List of mask files', 'List (.txt file) of mask files for the different states', 'e.g. mskfiles.txt', .false., '')
