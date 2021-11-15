@@ -71,7 +71,7 @@ contains
         type(sym)             :: se1,se2
         type(image)           :: img, vol
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine
-        real                  :: iter, smpd_target, lplims(2), msk, orig_msk, orig_smpd
+        real                  :: iter, smpd_target, lplims(2), mskdiam, orig_mskdiam, orig_smpd
         real                  :: scale_factor1, scale_factor2
         integer               :: icls, ncavgs, orig_box, box, istk, status, cnt
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset
@@ -186,7 +186,7 @@ contains
         endif
         ! down-scale
         orig_box      = work_proj1%get_box()
-        orig_msk      = params%msk
+        orig_mskdiam  = params%mskdiam
         smpd_target   = max(params%smpd, lplims(2)*LP2SMPDFAC)
         do_autoscale  = do_autoscale .and. smpd_target > work_proj1%get_smpd()
         scale_factor1 = 1.
@@ -196,12 +196,12 @@ contains
             call work_proj1%scale_projfile(smpd_target, WORK_PROJFILE, cline, cline_scale1, dir=trim(STKPARTSDIR))
             scale_factor1 = cline_scale1%get_rarg('scale')
             box           = nint(cline_scale1%get_rarg('newbox'))
-            msk           = cline%get_rarg('msk')
+            mskdiam       = cline%get_rarg('mskdiam')
             call cline_scale1%delete('smpd')
             call xscale_distr%execute( cline_scale1 )
         else
-            box = orig_box
-            msk = orig_msk
+            box     = orig_box
+            mskdiam = orig_mskdiam
         endif
         ! prepare command lines from prototype
         ! projects names are subject to change depending on scaling and are updated individually
@@ -221,20 +221,20 @@ contains
         call cline_reproject%delete('nparts')
         ! initialise command line parameters
         ! (1) INITIALIZATION BY STOCHASTIC NEIGHBORHOOD HILL-CLIMBING
-        call cline_refine3D_snhc%set('projfile', trim(WORK_PROJFILE))
-        call cline_refine3D_snhc%set('msk',      msk)
-        call cline_refine3D_snhc%set('box',      real(box))
-        call cline_refine3D_snhc%set('prg',    'refine3D')
-        call cline_refine3D_snhc%set('refine',  'snhc')
-        call cline_refine3D_snhc%set('lp',      lplims(1))
-        call cline_refine3D_snhc%set('nspace',  real(NSPACE_SNHC))
-        call cline_refine3D_snhc%set('maxits',  real(MAXITS_SNHC))
+        call cline_refine3D_snhc%set('projfile',   trim(WORK_PROJFILE))
+        call cline_refine3D_snhc%set('mskdiam',    mskdiam)
+        call cline_refine3D_snhc%set('box',        real(box))
+        call cline_refine3D_snhc%set('prg',        'refine3D')
+        call cline_refine3D_snhc%set('refine',     'snhc')
+        call cline_refine3D_snhc%set('lp',         lplims(1))
+        call cline_refine3D_snhc%set('nspace',     real(NSPACE_SNHC))
+        call cline_refine3D_snhc%set('maxits',     real(MAXITS_SNHC))
         call cline_refine3D_snhc%set('match_filt', 'no')
-        call cline_refine3D_snhc%set('ptclw',      'no')  ! no soft particle weights in first phase
-        call cline_refine3D_snhc%delete('update_frac') ! no fractional update in first phase
+        call cline_refine3D_snhc%set('ptclw',      'no') ! no soft particle weights in first phase
+        call cline_refine3D_snhc%delete('update_frac')   ! no fractional update in first phase
         ! (2) REFINE3D_INIT
         call cline_refine3D_init%set('projfile', trim(WORK_PROJFILE))
-        call cline_refine3D_init%set('msk',      msk)
+        call cline_refine3D_init%set('mskdiam',  mskdiam)
         call cline_refine3D_init%set('box',      real(box))
         call cline_refine3D_init%set('prg',      'refine3D')
         call cline_refine3D_init%set('lp',       lplims(1))
@@ -254,7 +254,7 @@ contains
             call qenv%new(1, exec_bin='simple_exec')
             call cline_symsrch%set('prg',     'symaxis_search') ! needed for cluster exec
             call cline_symsrch%set('pgrp',     trim(pgrp_refine))
-            call cline_symsrch%set('msk',      msk)
+            call cline_symsrch%set('mskdiam',  mskdiam)
             call cline_symsrch%set('smpd',     work_proj1%get_smpd())
             call cline_symsrch%set('projfile', trim(WORK_PROJFILE))
             if( .not. cline_symsrch%defined('cenlp') ) call cline_symsrch%set('cenlp', CENLP)
@@ -282,7 +282,7 @@ contains
         endif
         ! (5) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',     'reconstruct3D')
-        call cline_reconstruct3D%set('msk',      orig_msk)
+        call cline_reconstruct3D%set('mskdiam',  orig_mskdiam)
         call cline_reconstruct3D%set('box',      real(orig_box))
         call cline_reconstruct3D%set('projfile', ORIG_WORK_PROJFILE)
         call cline_postprocess%set('prg',       'postprocess')
@@ -293,12 +293,12 @@ contains
         else
             call cline_postprocess%delete('lp')
         endif
-        call cline_reproject%set('prg',   'reproject')
-        call cline_reproject%set('pgrp',   trim(pgrp_refine))
-        call cline_reproject%set('outstk','reprojs'//params%ext)
-        call cline_reproject%set('smpd',   params%smpd)
-        call cline_reproject%set('msk',    orig_msk)
-        call cline_reproject%set('box',    real(orig_box))
+        call cline_reproject%set('prg',     'reproject')
+        call cline_reproject%set('pgrp',    trim(pgrp_refine))
+        call cline_reproject%set('outstk',  'reprojs'//params%ext)
+        call cline_reproject%set('smpd',    params%smpd)
+        call cline_reproject%set('mskdiam', orig_mskdiam)
+        call cline_reproject%set('box',     real(orig_box))
         ! execute commanders
         if( .not. cline%defined('vol1') )then
             write(logfhandle,'(A)') '>>>'
@@ -384,11 +384,11 @@ contains
         if( do_autoscale )then
             if( scale_factor1 < SCALEFAC2_TARGET )then
                 smpd_target = orig_smpd / SCALEFAC2_TARGET
-                call cline%set('msk',orig_msk)
+                call cline%set('mskdiam',orig_mskdiam)
                 call work_proj2%scale_projfile(smpd_target, WORK_PROJFILE, cline, cline_scale2, dir=trim(STKPARTSDIR))
                 scale_factor2 = cline_scale2%get_rarg('scale')
                 box = nint(cline_scale2%get_rarg('newbox'))
-                msk = cline%get_rarg('msk')
+                mskdiam = cline%get_rarg('mskdiam')
                 call cline_scale2%delete('smpd') !!
                 call xscale_distr%execute( cline_scale2 )
                 call work_proj2%os_ptcl3D%mul_shifts(scale_factor2)
@@ -396,11 +396,11 @@ contains
                 if( .not.l_lpset ) call rescale_2Dfilter
             else
                 do_autoscale = .false.
-                box = orig_box
-                msk = orig_msk
+                box     = orig_box
+                mskdiam = orig_mskdiam
             endif
         endif
-        call cline_refine3D_refine%set('msk', msk)
+        call cline_refine3D_refine%set('mskdiam', mskdiam)
         call cline_refine3D_refine%set('box', real(box))
         call cline_refine3D_refine%set('projfile', WORK_PROJFILE)
         ! refinement stage

@@ -302,8 +302,6 @@ type :: parameters
     integer :: ptcl=1
     integer :: recl_cgrid=-1
     integer :: reliongroups=0
-    integer :: ring1=2
-    integer :: ring2=0
     integer :: spec=0
     integer :: startit=1           !< start iterating from here
     integer :: state=1             !< state to extract
@@ -358,7 +356,8 @@ type :: parameters
     real    :: exp_time=2.0        !< exposure time(in s)
     real    :: extr_init=EXTRINITHRESH !< initial extremal ratio (0-1)
     real    :: fny=0.
-    real    :: focusmsk=0.         !< spherical msk for use with focused refinement
+    real    :: focusmsk=0.         !< spherical msk for use with focused refinement (radius in pixels)
+    real    :: focusmskdiam=0.     !< spherical msk for use with focused refinement (diameter in Angstroms)
     real    :: frac=1.             !< fraction of ptcls(0-1){1}
     real    :: fraca=0.1           !< fraction of amplitude contrast used for fitting CTF{0.1}
     real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
@@ -371,6 +370,7 @@ type :: parameters
     real    :: hp_fsc=0.           !< FSC high-pass limit(in A)
     real    :: hp_ctf_estimate=30. !< high-pass limit 4 ctf_estimate(in A)
     real    :: inner=0.            !< inner mask radius(in pixels)
+    real    :: innerdiam=0.        !< inner mask diameter(in A)
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
     real    :: lambda=0.5
     real    :: lp=20.              !< low-pass limit(in A)
@@ -388,11 +388,11 @@ type :: parameters
     real    :: moldiam=140.        !< molecular diameter(in A)
     real    :: moment=0.
     real    :: msk=0.              !< mask radius(in pixels)
+    real    :: mskdiam=0.          !< mask diameter(in Angstroms)
     real    :: mul=1.              !< origin shift multiplication factor{1}
     real    :: mw=0.               !< molecular weight(in kD)
     real    :: ndev=2.0            !< # deviations in one-cluster clustering
     real    :: nsig=2.5            !< # sigmas
-    real    :: outer=0.            !< outer mask radius(in pixels)
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
     real    :: scale=1.            !< image scale factor{1}
@@ -460,7 +460,7 @@ contains
         type(sp_project) :: spproj
         type(ori)        :: o
         type(atoms)      :: atoms_obj
-        real             :: smpd
+        real             :: smpd, mskdiam_default, msk_default
         integer          :: i, ncls, ifoo, lfoo(3), cntfile, istate
         integer          :: idir, nsp_files, box, nptcls, nthr
         logical          :: nparts_set, ssilent
@@ -722,8 +722,6 @@ contains
         call check_iarg('optics_offset',  self%optics_offset)
         call check_iarg('part',           self%part)
         call check_iarg('pspecsz',        self%pspecsz)
-        call check_iarg('ring1',          self%ring1)
-        call check_iarg('ring2',          self%ring2)
         call check_iarg('startit',        self%startit)
         call check_iarg('state',          self%state)
         call check_iarg('state2split',    self%state2split)
@@ -772,6 +770,7 @@ contains
         call check_rarg('exp_time',       self%exp_time)
         call check_rarg('extr_init',      self%extr_init)
         call check_rarg('focusmsk',       self%focusmsk)
+        call check_rarg('focusmskdiam',   self%focusmskdiam)
         call check_rarg('frac',           self%frac)
         call check_rarg('fraca',          self%fraca)
         call check_rarg('fracdeadhot',    self%fracdeadhot)
@@ -782,6 +781,7 @@ contains
         call check_rarg('hp_ctf_estimate',self%hp_ctf_estimate)
         call check_rarg('hp_fsc',         self%hp_fsc)
         call check_rarg('inner',          self%inner)
+        call check_rarg('innerdiam',      self%innerdiam)
         call check_rarg('kv',             self%kv)
         call check_rarg('lambda',         self%lambda)
         call check_rarg('lp',             self%lp)
@@ -796,11 +796,11 @@ contains
         call check_rarg('min_rad',        self%min_rad)
         call check_rarg('moldiam',        self%moldiam)
         call check_rarg('msk',            self%msk)
+        call check_rarg('mskdiam',        self%mskdiam)
         call check_rarg('mul',            self%mul)
         call check_rarg('mw',             self%mw)
         call check_rarg('ndev',           self%ndev)
         call check_rarg('nsig',           self%nsig)
-        call check_rarg('outer',          self%outer)
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('power',          self%power)
         call check_rarg('scale',          self%scale)
@@ -1176,20 +1176,32 @@ contains
         self%smpd_targets2D(2) = self%lplims2D(3)*LP2SMPDFAC2D
         ! check scale factor sanity
         if( self%scale < 0.00001 ) THROW_HARD('scale out if range, should be > 0; new')
-        ! set default ring2 value
-        if( .not. cline%defined('ring2') )then
-            if( cline%defined('msk') )then
-                self%ring2 = round2even(self%msk)
-            else
-                self%ring2 = round2even(real(self%box/2-2))
+        ! set default msk value
+        if( cline%defined('msk') )then
+            THROW_HARD('msk (mask radius in pixels) is depreciated! Use mskdiam (mask diameter in A)')
+        endif
+        mskdiam_default = (real(self%box) - COSMSKHALFWIDTH) * smpd
+        msk_default     = round2even((real(self%box) - COSMSKHALFWIDTH) / 2.)
+        if( cline%defined('mskdiam') )then
+            self%msk = round2even((self%mskdiam / self%smpd) / 2.)
+            if( self%msk > msk_default )then
+                THROW_WARN('Mask diameter too large, falling back on default value')
+                self%mskdiam = mskdiam_default
+                self%msk     = msk_default
             endif
         else
-            self%ring2 = round2even(real(min(self%box/2-2,self%ring2)))
+            self%mskdiam = mskdiam_default
+            self%msk     = msk_default
         endif
-        ! set default msk value
-        if( .not. cline%defined('msk') ) self%msk = round2even(real(self%box/2-2))
+
+        print *, 'mask radius in pixels: ', self%msk
+
         ! set mode of masking
         if( cline%defined('inner') )then
+            THROW_HARD('inner (inner mask radius in pixels) is depreciated! Use innerdiam (inner mask diameter in A)')
+        endif
+        if( cline%defined('innerdiam') )then
+            self%inner = round2even((self%innerdiam / self%smpd) / 2.)
             self%l_innermsk = .true.
         else
             self%l_innermsk = .false.
@@ -1220,8 +1232,6 @@ contains
         endif
         ! set graphene flag
         self%l_graphene = self%graphene_filt .ne. 'no'
-        ! set default outer mask value
-        if( .not. cline%defined('outer') ) self%outer = self%msk
         ! checks automask related values
         if( cline%defined('mskfile') )then
             if( .not. file_exists(self%mskfile) )then
@@ -1232,12 +1242,15 @@ contains
         ! focused masking
         self%l_focusmsk = .false.
         if( cline%defined('focusmsk') )then
-            if( .not.cline%defined('mskfile') )THROW_HARD('mskfile must be provided together with focusmsk')
-            if( .not.cline%defined('msk') )then
-                THROW_HARD('msk must be provided together with focusmsk')
-            else
-                if(self%focusmsk >= self%msk)THROW_HARD('focusmsk should be smaller than msk')
+            THROW_HARD('focusmsk (focused mask radius in pixels) is depreciated! Use focusmskdiam (focused mask diameter in A)')
+        endif
+        if( cline%defined('focusmskdiam') )then
+            if( .not.cline%defined('mskfile') )THROW_HARD('mskfile must be provided together with focusmskdiam')
+            if( .not.cline%defined('mskdiam') )then
+                THROW_HARD('mskdiam must be provided together with focusmskdiam')
             endif
+            self%focusmsk = round2even((self%focusmskdiam / self%smpd) / 2.)
+            if(self%focusmsk >= self%msk) THROW_HARD('focusmskdiam should be smaller than mskdiam')
             self%l_focusmsk = .true.
         else
             self%focusmsk = self%msk
@@ -1337,9 +1350,9 @@ contains
         end select
         ! eer sanity checks
         select case(self%eer_upsampling)
-        case(1,2)
-        case DEFAULT
-            THROW_HARD('eer_upsampling not supported: '//int2str(self%eer_upsampling))
+            case(1,2)
+            case DEFAULT
+                THROW_HARD('eer_upsampling not supported: '//int2str(self%eer_upsampling))
         end select
         if( self%eer_fraction < 1 )THROW_HARD('invalid eer_fraction: '//int2str(self%eer_fraction))
         ! FILTERS
@@ -1358,7 +1371,7 @@ contains
         ! atoms
         if( cline%defined('element') )then
             if( .not. atoms_obj%element_exists(self%element) )then
-                THROW_HARD('Element: '//trim(self%element)//' unsupported for for now')
+                THROW_HARD('Element: '//trim(self%element)//' unsupported for now')
             endif
         endif
         ! local resolution for filtering or  not

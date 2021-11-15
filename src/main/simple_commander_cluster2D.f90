@@ -175,7 +175,7 @@ contains
         type(class_frcs)                    :: frcs, frcs_sc
         character(len=:),       allocatable :: projfile, orig_projfile
         character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
-        real                                :: scale_factor, smpd, msk, ring2, lp1, lp2
+        real                                :: scale_factor, smpd, mskdiam, lp1, lp2
         integer                             :: last_iter, box, status
         logical                             :: do_scaling
         ! parameters
@@ -287,12 +287,11 @@ contains
             status   = simple_rename(projfile,orig_projfile)
             projfile = trim(orig_projfile)
         endif
-        if( cline%defined('msk') )then
-            msk = params%msk*scale_factor
+        if( cline%defined('mskdiam') )then
+            mskdiam = params%mskdiam * scale_factor
         else
-            msk = real(box/2)-COSMSKHALFWIDTH
+            mskdiam = (real(box) - COSMSKHALFWIDTH) * smpd
         endif
-        ring2 = 0.8*msk
         lp1   = max(2.*smpd, max(params%lp,TARGET_LP))
         lp2   = max(2.*smpd, params%lp)
         ! execute initialiser
@@ -319,12 +318,11 @@ contains
             call spproj%kill
         endif
         ! updates command-lines
-        call cline_cluster2D1%set('refs',   params%refs)
-        call cline_cluster2D1%set('msk',    msk)
-        call cline_cluster2D1%set('ring2',  ring2)
-        call cline_cluster2D1%set('lp',     lp1)
-        call cline_cluster2D2%set('msk',    msk)
-        call cline_cluster2D2%set('lp',     lp2)
+        call cline_cluster2D1%set('refs', params%refs)
+        call cline_cluster2D1%set('mskdiam',  mskdiam)
+        call cline_cluster2D1%set('lp',   lp1)
+        call cline_cluster2D2%set('mskdiam',  mskdiam)
+        call cline_cluster2D2%set('lp',   lp2)
         ! execution 1
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A,F6.1)') '>>> STAGE 1, LOW-PASS LIMIT: ',lp1
@@ -567,7 +565,7 @@ contains
                 status = simple_rename(projfile_sc,orig_projfile)
                 deallocate(projfile_sc)
             endif
-            trs_stage2 = MSK_FRAC*cline_cluster2D_stage2%get_rarg('msk')
+            trs_stage2 = MSK_FRAC * cline_cluster2D_stage2%get_rarg('mskdiam') / (2 * params%smpd_targets2D(2))
             trs_stage2 = min(MAXSHIFT,max(MINSHIFT,trs_stage2))
             call cline_cluster2D_stage2%set('trs', trs_stage2)
             ! execution
@@ -662,7 +660,7 @@ contains
         integer                   :: iter, cnt, iptcl, ptclind, fnr
         type(chash)               :: job_descr
         real                      :: frac_srch_space
-        logical :: l_stream        
+        logical :: l_stream
         call cline%set('prg','cluster2D')
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15. )
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',      8. )

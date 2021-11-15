@@ -1,23 +1,23 @@
 module simple_tseries_graphene_subtr
-use simple_parameters,   only: parameters, params_glob
-use simple_cmdline,  only: cmdline
-use simple_polarizer,only: polarizer
-use simple_image,    only: image
+use simple_parameters,       only: parameters, params_glob
+use simple_cmdline,          only: cmdline
+use simple_polarizer,        only: polarizer
+use simple_image,            only: image
+use simple_atoms,            only: atoms
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_math
 use simple_rnd
-use simple_defs ! singleton
-use simple_atoms,    only: atoms
+use simple_defs
 implicit none
 
 public :: init_graphene_subtr, calc_peaks, remove_lattices, kill_graphene_subtr
 private
 
-real, parameter :: angular_threshold = 3.0  ! Degrees
-real, parameter :: GRAPHENE_BAND3    = 1.06 ! Angstroms
-real, parameter :: REMOVAL_HWIDTH1 = 3.          ! pixels, obscuring half-width 1
-real, parameter :: REMOVAL_HWIDTH2 = sqrt(6.)    ! obscuring half-width 2
-real, parameter :: REMOVAL_HWIDTH3 = sqrt(3.)    ! obscuring half-width 3
+real, parameter :: angular_threshold = 3.0    ! Degrees
+real, parameter :: GRAPHENE_BAND3    = 1.06   ! Angstroms
+real, parameter :: REMOVAL_HWIDTH1 = 3.       ! pixels, obscuring half-width 1
+real, parameter :: REMOVAL_HWIDTH2 = sqrt(6.) ! obscuring half-width 2
+real, parameter :: REMOVAL_HWIDTH3 = sqrt(3.) ! obscuring half-width 3
 
 type(polarft_corrcalc) :: pftcc
 type(polarizer)        :: pspec_img
@@ -28,7 +28,7 @@ integer                :: nrots
 
 contains
 
-    subroutine init_graphene_subtr(box, smpd)
+    subroutine init_graphene_subtr( box, smpd )
         integer,  intent(in) :: box
         real,     intent(in) :: smpd
         real,      parameter :: gdist = 1.42
@@ -124,7 +124,6 @@ contains
         call cline%set('match_filt','no')
         call cline%set('ctf',      'no')
         call params%new(cline, silent=.true.)
-        params_glob%ring2      = nint(0.4*real(box))
         params_glob%kfromto(1) = 5
         params_glob%kfromto(2) = nyq-1
         params_glob%kstop      = params_glob%kfromto(2)

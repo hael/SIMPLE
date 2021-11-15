@@ -22,11 +22,11 @@ integer :: boxsizes(NSZS) = [32, 36, 40, 48, 52, 56, 64, 66, 70, 72, 80, 84, 88,
 contains
 
     !>  For finding fftw-friendly dimension for polar representation
-    integer function magic_pftsz( ring2 )
-        integer, intent(in) :: ring2
+    integer function magic_pftsz( msk )
+        integer, intent(in) :: msk
         real    :: a
         integer :: pftsz, pftsz_old
-        a = PI*real(ring2)
+        a = PI*real(msk)
         pftsz_old   = round2even(a)
         pftsz       = find_magic_box(nint(a))
         magic_pftsz = pftsz

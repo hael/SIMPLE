@@ -201,14 +201,14 @@ type(simple_input_param) :: eer_upsampling
 type(simple_input_param) :: element
 type(simple_input_param) :: elongated
 type(simple_input_param) :: eo
-type(simple_input_param) :: focusmsk
+type(simple_input_param) :: focusmskdiam
 type(simple_input_param) :: frac
 type(simple_input_param) :: fraca
 type(simple_input_param) :: frcs
 type(simple_input_param) :: graphene_filt
 type(simple_input_param) :: groupframes
 type(simple_input_param) :: hp
-type(simple_input_param) :: inner
+type(simple_input_param) :: innerdiam
 type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
 type(simple_input_param) :: lp
@@ -221,7 +221,7 @@ type(simple_input_param) :: mcconvention
 type(simple_input_param) :: min_rad
 type(simple_input_param) :: mirr
 type(simple_input_param) :: moldiam
-type(simple_input_param) :: msk
+type(simple_input_param) :: mskdiam
 type(simple_input_param) :: mskfile
 type(simple_input_param) :: envfsc
 type(simple_input_param) :: mul
@@ -241,7 +241,6 @@ type(simple_input_param) :: objfun
 type(simple_input_param) :: oritab
 type(simple_input_param) :: oritab2
 type(simple_input_param) :: oritype
-type(simple_input_param) :: outer
 type(simple_input_param) :: outfile
 type(simple_input_param) :: outstk
 type(simple_input_param) :: outvol
@@ -283,6 +282,7 @@ type(simple_input_param) :: user_account
 type(simple_input_param) :: user_email
 type(simple_input_param) :: user_project
 type(simple_input_param) :: wcrit
+type(simple_input_param) :: width
 
 interface set_param
     module procedure set_param_1
@@ -865,17 +865,15 @@ contains
         call set_param(hp,            'hp',            'num',    'High-pass limit', 'High-pass resolution limit', 'high-pass limit in Angstroms', .false., 100.)
         call set_param(lp,            'lp',            'num',    'Low-pass limit', 'Low-pass resolution limit', 'low-pass limit in Angstroms', .false., 20.)
         call set_param(lp_backgr,     'lp_backgr',     'num',    'Background low-pass resolution', 'Low-pass resolution for solvent blurring', 'low-pass limit in Angstroms', .false., 20.)
-        call set_param(msk,           'msk',           'num',    'Mask radius', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise', 'mask radius in pixels', .true., 0.)
-        call set_param(inner,         'inner',         'num',    'Inner mask radius', 'Inner mask radius for omitting unordered cores of particles with high radial symmetry, typically icosahedral viruses',&
-        &'inner mask radius in pixels', .false., 0.)
+        call set_param(mskdiam,       'mskdiam',           'num',    'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to remove background noise', 'mask diameter in A', .true., 0.)
+        call set_param(innerdiam,     'innerdiam',         'num',    'Inner mask diameter', 'Inner mask diameter (in A) for omitting unordered cores of particles with high radial symmetry, typically icosahedral viruses',&
+        &'inner mask diamater in A', .false., 0.)
         call set_param(ncls,          'ncls',          'num',    'Number of 2D clusters', 'Number of groups to sort the particles &
         &into prior to averaging to create 2D class averages with improved SNR', '# 2D clusters', .true., 200.)
         call set_param(nparts,        'nparts',        'num',    'Number of parts', 'Number of partitions for distrbuted memory execution. One part typically corresponds to one CPU socket in the distributed &
         &system. On a single-socket machine there may be speed benfits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', 'divide job into # parts', .true., 1.0)
         call set_param(nthr,          'nthr',          'num',    'Number of threads per part, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
         &logical threads in a socket.', '# shared-memory CPU threads', .true., 0.)
-        call set_param(outer,         'outer',         'num',    'Outer mask radius', 'Outer mask radius for omitting unordered cores of particles with high radial symmetry, typically icosahedral viruses',&
-        &'outer mask radius in pixels', .false., 0.)
         call set_param(update_frac,   'update_frac',   'num',    'Fractional update per iteration', 'Fraction of particles to update per iteration in incremental learning scheme for accelerated convergence &
         &rate(0.1-0.5){1.}', 'update this fraction per iter(0.1-0.5){1.0}', .false., 1.0)
         call set_param(frac,          'frac',          'num',    'Fraction of particles to include', 'Fraction of particles to include based on spectral score (median of FRC between reference and particle)',&
@@ -941,7 +939,7 @@ contains
         call set_param(user_account,   'user_account', 'str',    'User account name in SLURM/PBS', 'User account name in SLURM/PBS system', 'e.g. Account084', .false., '')
         call set_param(user_project,   'user_project', 'str',    'User project name in SLURM/PBS', 'User project name in SLURM/PBS system', 'e.g. Project001', .false., '')
         call set_param(frcs,           'frcs',         'str',    'Projection FRCs file', 'Projection FRCs file', 'e.g. frcs.bin', .false., '')
-        call set_param(focusmsk,       'focusmsk',     'num',    'Mask radius in focused refinement', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false., 0.)
+        call set_param(focusmskdiam,   'focusmskdiam', 'num',    'Mask diameter in focused refinement', 'Mask diameter in A for application of a soft-edged circular mask to remove background noise in focused refinement', 'focused mask diameter in A', .false., 0.)
         call set_param(nrestarts,      'nrestarts',    'num',    'Number of restarts', 'Number of program restarts to execute{1}', '# restarts{1}', .false., 1.0)
         call set_param(star_datadir,   'star_datadir', 'file',   'STAR project data directory', 'Pathname of STAR image/data files', 'e.g. Micrographs', .false., '')
         call set_param(starfile,       'starfile',     'file',   'STAR-format file name', 'STAR-formatted filename', 'e.g. proj.star', .false., '')
@@ -966,6 +964,7 @@ contains
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
         call set_param(mul,            'mul',          'num',    'Multiplication factor', 'Multiplication factor{1.}','{1.}',.false., 1.)
         call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(patch|wpatch|poly|poly2){patch}','(patch|wpatch|poly|poly2){patch}', .false.,'patch')
+        call set_param(width,          'width',        'num',    'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1158,7 +1157,7 @@ contains
         &Angstroms{30}', .false., 30.)
         call cleanup2D%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
         ! mask controls
-        call cleanup2D%set_input('mask_ctrls', 1, msk)
+        call cleanup2D%set_input('mask_ctrls', 1, mskdiam)
         cleanup2D%mask_ctrls(1)%required = .false.
         ! computer controls
         call cleanup2D%set_input('comp_ctrls', 1, nparts)
@@ -1168,11 +1167,11 @@ contains
     subroutine new_center2D_nano
         ! PROGRAM SPECIFICATION
         call center2D_nano%new(&
-        &'center2D_nano',&                                                     ! name
+        &'center2D_nano',&                                                      ! name
         &'Simultaneous 2D alignment and clustering of nanoparticle images',&    ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after time-series tracking',&  ! descr_long
-        &'single_exec',&                                                  ! executable
+        &'single_exec',&                                                        ! executable
         &0, 0, 0, 4, 3, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1195,7 +1194,7 @@ contains
         &Angstroms{5}', .false., 5.)
         call center2D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms{1.0}', .false., 1.)
         ! mask controls
-        call center2D_nano%set_input('mask_ctrls', 1, msk)
+        call center2D_nano%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call center2D_nano%set_input('comp_ctrls', 1, nparts)
         call center2D_nano%set_input('comp_ctrls', 2, nthr)
@@ -1250,8 +1249,8 @@ contains
         '(yes|no){yes}', .false., 'yes')
         call cluster2D%set_input('filt_ctrls', 7, graphene_filt)
         ! mask controls
-        call cluster2D%set_input('mask_ctrls', 1, msk)
-        call cluster2D%set_input('mask_ctrls', 2, inner)
+        call cluster2D%set_input('mask_ctrls', 1, mskdiam)
+        call cluster2D%set_input('mask_ctrls', 2, innerdiam)
         ! computer controls
         call cluster2D%set_input('comp_ctrls', 1, nparts)
         call cluster2D%set_input('comp_ctrls', 2, nthr)
@@ -1289,8 +1288,8 @@ contains
         call cluster2D_nano%set_input('filt_ctrls', 4, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'initial low-pass limit in Angstroms', .false., 1.)
         call cluster2D_nano%set_input('filt_ctrls', 5, 'lpstop', 'num', 'Final low-pass limit', 'Final low-pass limit{1.0}', 'final low-pass limit in Angstroms', .false., 1.)
         ! mask controls
-        call cluster2D_nano%set_input('mask_ctrls', 1, msk)
-        call cluster2D_nano%set_input('mask_ctrls', 2, inner)
+        call cluster2D_nano%set_input('mask_ctrls', 1, mskdiam)
+        call cluster2D_nano%set_input('mask_ctrls', 2, innerdiam)
         ! computer controls
         call cluster2D_nano%set_input('comp_ctrls', 1, nparts)
         call cluster2D_nano%set_input('comp_ctrls', 2, nthr)
@@ -1341,8 +1340,8 @@ contains
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){no}',&
         '(yes|no){no}', .false., 'no')
         ! mask controls
-        call cluster2D_stream%set_input('mask_ctrls', 1, msk)
-        call cluster2D_stream%set_input('mask_ctrls', 2, inner)
+        call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
+        call cluster2D_stream%set_input('mask_ctrls', 2, innerdiam)
         ! computer controls
         call cluster2D_stream%set_input('comp_ctrls', 1, 'nchunks', 'num', 'Number of chunks', 'Number of chunks', '# chunks', .true., 1.0)
         call cluster2D_stream%set_input('comp_ctrls', 2, 'nparts_chunk', 'num', 'Number of partitions per chunk',&
@@ -1385,11 +1384,11 @@ contains
         call cluster3D%set_input('filt_ctrls', 5, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit','low-pass limit in Angstroms', .false., 0.)
         call cluster3D%set_input('filt_ctrls', 6, envfsc)
         ! mask controls
-        call cluster3D%set_input('mask_ctrls', 1, msk)
-        call cluster3D%set_input('mask_ctrls', 2, inner)
+        call cluster3D%set_input('mask_ctrls', 1, mskdiam)
+        call cluster3D%set_input('mask_ctrls', 2, innerdiam)
         call cluster3D%set_input('mask_ctrls', 3, mskfile)
-        call cluster3D%set_input('mask_ctrls', 4, focusmsk)
-        call cluster3D%set_input('mask_ctrls', 5, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
+        call cluster3D%set_input('mask_ctrls', 4, focusmskdiam)
+        call cluster3D%set_input('mask_ctrls', 5, width)
         ! computer controls
         call cluster3D%set_input('comp_ctrls', 1, nparts)
         call cluster3D%set_input('comp_ctrls', 2, nthr)
@@ -1434,9 +1433,9 @@ contains
         call cluster3D_refine%set_input('filt_ctrls', 5, lplim_crit)
         call cluster3D_refine%set_input('filt_ctrls', 6, envfsc)
         ! mask controls
-        call cluster3D_refine%set_input('mask_ctrls', 1, msk)
-        call cluster3D_refine%set_input('mask_ctrls', 2, inner)
-        call cluster3D_refine%set_input('mask_ctrls', 3, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
+        call cluster3D_refine%set_input('mask_ctrls', 1, mskdiam)
+        call cluster3D_refine%set_input('mask_ctrls', 2, innerdiam)
+        call cluster3D_refine%set_input('mask_ctrls', 3, width)
         ! computer controls
         call cluster3D_refine%set_input('comp_ctrls', 1, nparts)
         call cluster3D_refine%set_input('comp_ctrls', 2, nthr)
@@ -1467,7 +1466,7 @@ contains
         call cluster_cavgs%set_input('filt_ctrls', 2, lp)
         cluster_cavgs%filt_ctrls(2)%required = .true.
         ! mask controls
-        call cluster_cavgs%set_input('mask_ctrls', 1, msk)
+        call cluster_cavgs%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call cluster_cavgs%set_input('comp_ctrls', 1, nthr)
     end subroutine new_cluster_cavgs
@@ -1613,7 +1612,7 @@ contains
         ! filter controls
         call detect_atoms%set_input('filt_ctrls', 1, 'element', 'str', 'Atom name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
-        call detect_atoms%set_input('mask_ctrls', 1, 'msk','num','Mask radius','Mask radius in pixels for application of a soft circular mask', 'mask radius in pixels', .true., 75.)
+        call detect_atoms%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call detect_atoms%set_input('comp_ctrls', 1, nthr)
     end subroutine new_detect_atoms
@@ -1673,7 +1672,7 @@ contains
         call dock_volpair%set_input('filt_ctrls', 2, 'lpstop',   'num', 'Final low-pass limit',   'Final low-pass resolution limit',   'low-pass limit in Angstroms', .true., 0.)
         call dock_volpair%set_input('filt_ctrls', 3, hp)
         ! mask controls
-        call dock_volpair%set_input('mask_ctrls', 1, msk)
+        call dock_volpair%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call dock_volpair%set_input('comp_ctrls', 1, nthr)
     end subroutine new_dock_volpair
@@ -1682,8 +1681,8 @@ contains
         ! PROGRAM SPECIFICATION
         call estimate_diam%new(&
         &'estimate_diam',&                                                                                            ! name
-        &'Estimation of a suitable mask radius for nanoparticle time-series',&                                        ! descr_short
-        &'is a program for estimation of a suitable mask radius for spherical masking of nanoparticle time-series ',& ! descr_long
+        &'Estimation of a suitable mask diameter for nanoparticle time-series',&                                        ! descr_short
+        &'is a program for estimation of a suitable mask diameter for spherical masking of nanoparticle time-series ',& ! descr_long
         &'single_exec',&                                                                                              ! executable
         &1, 2, 0, 0, 1, 1, 1, .false.)                                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1702,7 +1701,7 @@ contains
         estimate_diam%filt_ctrls(1)%descr_short  = 'low-pass limit in Angstroms{7.}'
         estimate_diam%filt_ctrls(1)%rval_default = 7.
         ! mask controls
-        call estimate_diam%set_input('mask_ctrls', 1, 'msk','num','Mask radius','Mask radius in pixels for application of a hard circular mask to remove background noise', 'mask radius in pixels', .false., 75.)
+        call estimate_diam%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call estimate_diam%set_input('comp_ctrls', 1, nthr)
     end subroutine new_estimate_diam
@@ -1808,7 +1807,7 @@ contains
         call fsc%set_input('filt_ctrls', 2, hp)
         call fsc%set_input('filt_ctrls', 3, lp)
         ! mask controls
-        call fsc%set_input('mask_ctrls', 1, msk)
+        call fsc%set_input('mask_ctrls', 1, mskdiam)
         call fsc%set_input('mask_ctrls', 2, mskfile)
         ! computer controls
         call fsc%set_input('comp_ctrls', 1, nthr)
@@ -1958,9 +1957,9 @@ contains
         call initial_3Dmodel%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
             &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 8.)
         ! mask controls
-        call initial_3Dmodel%set_input('mask_ctrls', 1, msk)
-        call initial_3Dmodel%set_input('mask_ctrls', 2, inner)
-        call initial_3Dmodel%set_input('mask_ctrls', 3, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge', .false., 10.)
+        call initial_3Dmodel%set_input('mask_ctrls', 1, mskdiam)
+        call initial_3Dmodel%set_input('mask_ctrls', 2, innerdiam)
+        call initial_3Dmodel%set_input('mask_ctrls', 3, width)
         ! computer controls
         call initial_3Dmodel%set_input('comp_ctrls', 1, nparts)
         call initial_3Dmodel%set_input('comp_ctrls', 2, nthr)
@@ -2212,7 +2211,7 @@ contains
         ! filter controls
         call local_resolution%set_input('filt_ctrls', 1, lplim_crit)
         ! mask controls
-        call local_resolution%set_input('mask_ctrls', 1, msk)
+        call local_resolution%set_input('mask_ctrls', 1, mskdiam)
         call local_resolution%set_input('mask_ctrls', 2, mskfile)
         ! computer controls
         call local_resolution%set_input('comp_ctrls', 1, nthr)
@@ -2320,9 +2319,9 @@ contains
         &'mask',&                                                        ! name
         &'Mask images/volumes',&                                         ! descr_short
         &'is a program for masking of 2D images and volumes. If you want to mask your images with a spherical mask with a soft &
-        & falloff, set msk to the radius in pixels',&                    ! descr_long
+        & falloff, set mskdiam to the diameter in A',&                   ! descr_long
         &'simple_exec',&                                                 ! executable
-        &0, 3, 2, 1, 2,10, 1, .false.)                                   ! # entries in each group, requires sp_project
+        &0, 3, 2, 1, 2, 9, 1, .false.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2342,21 +2341,19 @@ contains
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
         call mask%set_input('filt_ctrls', 2, lp_backgr)
         ! mask controls
-        call mask%set_input('mask_ctrls', 1, msk)
+        call mask%set_input('mask_ctrls', 1, mskdiam)
         mask%mask_ctrls(1)%required = .false.
-        call mask%set_input('mask_ctrls', 2, inner)
-        call mask%set_input('mask_ctrls', 3, outer)
-        call mask%set_input('mask_ctrls', 4, mskfile)
-        call mask%set_input('mask_ctrls', 5, 'msktype', 'multi', 'Mask type',&
+        call mask%set_input('mask_ctrls', 2, innerdiam)
+        call mask%set_input('mask_ctrls', 3, mskfile)
+        call mask%set_input('mask_ctrls', 4, 'msktype', 'multi', 'Mask type',&
         &'Type of mask to use(soft|hard){soft}', '(soft|hard){soft}', .false., 'soft')
-        call mask%set_input('mask_ctrls', 6, mw)
-        call mask%set_input('mask_ctrls', 7, 'width', 'num', 'Inner mask falloff',&
-        &'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge', .false., 10.)
-        call mask%set_input('mask_ctrls', 8, 'edge', 'num', 'Envelope mask soft edge',&
+        call mask%set_input('mask_ctrls', 5, mw)
+        call mask%set_input('mask_ctrls', 6, width)
+        call mask%set_input('mask_ctrls', 7, 'edge', 'num', 'Envelope mask soft edge',&
         &'Cosine edge size for softening molecular envelope in pixels', '# pixels cosine edge', .false., 6.)
-        call mask%set_input('mask_ctrls', 9, 'taper_edges', 'binary', 'Taper edges',&
+        call mask%set_input('mask_ctrls', 8, 'taper_edges', 'binary', 'Taper edges',&
         &'Whether to taper the edges of image/volume(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call mask%set_input('mask_ctrls',10, 'pdbfile', 'file', 'PDB for 3D envelope masking',&
+        call mask%set_input('mask_ctrls', 9, 'pdbfile', 'file', 'PDB for 3D envelope masking',&
         &'PDB file used to determine the mask', 'e.g. molecule.pdb', .false., '')
         ! computer controls
         call mask%set_input('comp_ctrls', 1, nthr)
@@ -2562,7 +2559,7 @@ contains
         ! filter controls
         ! <empty>
         ! mask controls
-        call nonuniform_lp%set_input('mask_ctrls', 1, msk)
+        call nonuniform_lp%set_input('mask_ctrls', 1, mskdiam)
         call nonuniform_lp%set_input('mask_ctrls', 2, mskfile)
         ! computer controls
         call nonuniform_lp%set_input('comp_ctrls', 1, nthr)
@@ -2674,8 +2671,8 @@ contains
         call postprocess%set_input('filt_ctrls', 4, mirr)
         call postprocess%set_input('filt_ctrls', 5, lp_backgr)
         ! mask controls
-        call postprocess%set_input('mask_ctrls', 1, msk)
-        call postprocess%set_input('mask_ctrls', 2, inner)
+        call postprocess%set_input('mask_ctrls', 1, mskdiam)
+        call postprocess%set_input('mask_ctrls', 2, innerdiam)
         call postprocess%set_input('mask_ctrls', 3, mskfile)
         call postprocess%set_input('mask_ctrls', 4, 'binwidth', 'num', 'Envelope binary layers width',&
         &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false., 1.)
@@ -2684,8 +2681,7 @@ contains
         call postprocess%set_input('mask_ctrls', 6, 'automsk', 'multi', 'Perform envelope masking',&
         &'Whether to generate/apply an envelope mask(yes|no|file){no}', '(yes|no|file){no}', .false., 'no')
         call postprocess%set_input('mask_ctrls', 7, mw)
-        call postprocess%set_input('mask_ctrls', 8, 'width', 'num', 'Inner mask falloff',&
-        &'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge', .false., 10.)
+        call postprocess%set_input('mask_ctrls', 8, width)
         call postprocess%set_input('mask_ctrls', 9, 'edge', 'num', 'Envelope mask soft edge',&
         &'Cosine edge size for softening molecular envelope in pixels{6}', '# pixels cosine edge{6}', .false., 6.)
         ! computer controls
@@ -3029,7 +3025,7 @@ contains
         ! filter controls
         ! <empty>
         ! mask controls
-        call reproject%set_input('mask_ctrls', 1, msk)
+        call reproject%set_input('mask_ctrls', 1, mskdiam)
         reproject%mask_ctrls(1)%required = .false.
         ! computer controls
         call reproject%set_input('comp_ctrls', 1, nthr)
@@ -3059,7 +3055,7 @@ contains
         ! filter controls
         ! <empty>
         ! mask controls
-        call normalize_%set_input('mask_ctrls', 1, msk)
+        call normalize_%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call normalize_%set_input('comp_ctrls', 1, nthr)
     end subroutine new_normalize
@@ -3205,7 +3201,7 @@ contains
         ! filter controls
         ! <empty>
         ! mask controls
-        call random_rec%set_input('mask_ctrls', 1, msk)
+        call random_rec%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call random_rec%set_input('comp_ctrls', 1, nparts)
         call random_rec%set_input('comp_ctrls', 2, nthr)
@@ -3235,7 +3231,7 @@ contains
         call reconstruct3D%set_input('filt_ctrls', 1, ptclw)
         call reconstruct3D%set_input('filt_ctrls', 2, envfsc)
         ! mask controls
-        call reconstruct3D%set_input('mask_ctrls', 1, msk)
+        call reconstruct3D%set_input('mask_ctrls', 1, mskdiam)
         call reconstruct3D%set_input('mask_ctrls', 2, mskfile)
         ! computer controls
         call reconstruct3D%set_input('comp_ctrls', 1, nparts)
@@ -3286,11 +3282,11 @@ contains
         call refine3D%set_input('filt_ctrls', 7, ptclw)
         call refine3D%set_input('filt_ctrls', 8, envfsc)
         ! mask controls
-        call refine3D%set_input('mask_ctrls', 1, msk)
-        call refine3D%set_input('mask_ctrls', 2, inner)
+        call refine3D%set_input('mask_ctrls', 1, mskdiam)
+        call refine3D%set_input('mask_ctrls', 2, innerdiam)
         call refine3D%set_input('mask_ctrls', 3, mskfile)
-        call refine3D%set_input('mask_ctrls', 4, focusmsk)
-        call refine3D%set_input('mask_ctrls', 5, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
+        call refine3D%set_input('mask_ctrls', 4, focusmskdiam)
+        call refine3D%set_input('mask_ctrls', 5, width)
         ! computer controls
         call refine3D%set_input('comp_ctrls', 1, nparts)
         call refine3D%set_input('comp_ctrls', 2, nthr)
@@ -3331,10 +3327,10 @@ contains
         call refine3D_nano%set_input('filt_ctrls', 4, lp_backgr)
         call refine3D_nano%set_input('filt_ctrls', 5, ptclw)
         ! mask controls
-        call refine3D_nano%set_input('mask_ctrls', 1, msk)
-        call refine3D_nano%set_input('mask_ctrls', 2, inner)
+        call refine3D_nano%set_input('mask_ctrls', 1, mskdiam)
+        call refine3D_nano%set_input('mask_ctrls', 2, innerdiam)
         call refine3D_nano%set_input('mask_ctrls', 3, mskfile)
-        call refine3D_nano%set_input('mask_ctrls', 4, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
+        call refine3D_nano%set_input('mask_ctrls', 4, width)
         ! computer controls
         call refine3D_nano%set_input('comp_ctrls', 1, nparts)
         call refine3D_nano%set_input('comp_ctrls', 2, nthr)
@@ -3686,7 +3682,7 @@ contains
         call simulate_particles%set_input('filt_ctrls', 1, 'bfac', 'num', 'CTF B-factor','B-factor of CTF in Angstroms^2', 'B-factor in Angstroms^2(>0.0){0}', .false., 0.)
         call simulate_particles%set_input('filt_ctrls', 2, 'bfacerr', 'num', 'B-factor error', 'Uniform B-factor error(in Angstroms^2)', 'error(in Angstroms^2)', .false., 50.)
         ! mask controls
-        call simulate_particles%set_input('mask_ctrls', 1, msk)
+        call simulate_particles%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call simulate_particles%set_input('comp_ctrls', 1, nthr)
     end subroutine new_simulate_particles
@@ -3831,7 +3827,7 @@ contains
         &prior to determination of the center of gravity of the input volume and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
         ! mask controls
-        call symaxis_search%set_input('mask_ctrls', 1, msk)
+        call symaxis_search%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call symaxis_search%set_input('comp_ctrls', 1, nthr)
     end subroutine new_symaxis_search
@@ -3865,8 +3861,8 @@ contains
         &prior to determination of the center of gravity of the input volume and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 20.)
         ! mask controls
-        call symmetrize_map%set_input('mask_ctrls', 1, msk)
-        call symmetrize_map%set_input('mask_ctrls', 2, inner)
+        call symmetrize_map%set_input('mask_ctrls', 1, mskdiam)
+        call symmetrize_map%set_input('mask_ctrls', 2, innerdiam)
         ! computer controls
         call symmetrize_map%set_input('comp_ctrls', 1, nthr)
     end subroutine new_symmetrize_map
@@ -3900,8 +3896,8 @@ contains
         &prior to determination of the center of gravity of the input volume and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
         ! mask controls
-        call symmetry_test%set_input('mask_ctrls', 1, msk)
-        call symmetry_test%set_input('mask_ctrls', 2, inner)
+        call symmetry_test%set_input('mask_ctrls', 1, mskdiam)
+        call symmetry_test%set_input('mask_ctrls', 2, innerdiam)
         ! computer controls
         call symmetry_test%set_input('comp_ctrls', 1, nthr)
     end subroutine new_symmetry_test
@@ -3933,7 +3929,7 @@ contains
         ! filter controls
         call atoms_stats%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
-        call atoms_stats%set_input('mask_ctrls', 1, 'msk','num', 'Mask radius', 'Mask radius in pixels for application of a soft circular mask', 'mask radius in pixels', .true., 75.)
+        call atoms_stats%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call atoms_stats%set_input('comp_ctrls', 1, nthr)
     end subroutine new_atoms_stats
@@ -4232,7 +4228,7 @@ contains
         ! filter controls
         ! <empty>
         ! mask controls
-        call tseries_reconstruct3D%set_input('mask_ctrls', 1, msk)
+        call tseries_reconstruct3D%set_input('mask_ctrls', 1, mskdiam)
         call tseries_reconstruct3D%set_input('mask_ctrls', 2, mskfile)
         ! computer controls
         call tseries_reconstruct3D%set_input('comp_ctrls', 1, nparts)
@@ -4362,7 +4358,7 @@ contains
         ! filter controls
         ! <empty>
         ! mask controls
-        call validate_nano%set_input('mask_ctrls', 1, msk)
+        call validate_nano%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call validate_nano%set_input('comp_ctrls', 1, nparts)
         call validate_nano%set_input('comp_ctrls', 2, nthr)
@@ -4406,7 +4402,7 @@ contains
         call volops%set_input('filt_ctrls', 2, hp)
         call volops%set_input('filt_ctrls', 3, bfac)
         ! mask controls
-        call volops%set_input('mask_ctrls', 1, msk)
+        call volops%set_input('mask_ctrls', 1, mskdiam)
         volops%mask_ctrls(1)%required = .false.
         ! computer controls
         call volops%set_input('comp_ctrls', 1, nthr)

@@ -248,9 +248,9 @@ contains
         else
             self%nptcls  = self%pfromto(2) - self%pfromto(1) + 1       !< the total number of particles in partition
         endif
-        self%nrefs = nrefs                          !< the number of references (logically indexded [1,nrefs])
-        self%pftsz = magic_pftsz(params_glob%ring2) !< size of reference (number of vectors used for matching,determined by radius of molecule)
-        self%nrots = 2 * self%pftsz                 !< number of in-plane rotations for one pft  (pftsz*2)
+        self%nrefs = nrefs                              !< the number of references (logically indexded [1,nrefs])
+        self%pftsz = magic_pftsz(nint(params_glob%msk)) !< size of reference (number of vectors used for matching,determined by radius of molecule)
+        self%nrots = 2 * self%pftsz                     !< number of in-plane rotations for one pft  (pftsz*2)
         ! allocate optimal low-pass filter
         allocate(self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,self%nrefs),source=1.)
         ! generate polar coordinates & eo assignment

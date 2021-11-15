@@ -33,7 +33,7 @@ contains
 
     subroutine new_cont( self, spec )
         class(strategy3D_cont), intent(inout) :: self
-        class(strategy3D_spec),        intent(inout) :: spec
+        class(strategy3D_spec), intent(inout) :: spec
         call self%s%new(spec)
         self%spec = spec
         call self%cont_srch%new
