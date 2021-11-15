@@ -294,7 +294,6 @@ contains
         call cmd_dict%push('endian',        'endiannesss of files(big|little|native){native}')
         call cmd_dict%push('eps',           'learning rate{0.003}')
         call cmd_dict%push('eo',            'use FSC for filtering and low-pass limit update(yes|aniso|no)')
-        call cmd_dict%push('errify',        'introduce error(yes|no){no}')
         call cmd_dict%push('even',          'even orientation distribution(yes|no){no}')
         call cmd_dict%push('exp_doc',       'specifying exp_time and dose_rate per tomogram')
         call cmd_dict%push('startype',      'specifying startype for STAR formated projects (movies|micrographs|mcmicrographs|ctf_estimation|select|extract|class2d|init3dmodel|refine3d|post|all)')
