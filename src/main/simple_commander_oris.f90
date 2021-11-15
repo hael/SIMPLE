@@ -112,11 +112,14 @@ contains
         type(builder)    :: build
         type(ori)        :: orientation
         integer          :: s, i
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        if( params%errify .eq. 'yes' )then
+        call build%init_params_and_build_spproj(cline,params)
+        if( cline%defined('angerr') )then
             ! introduce error in input orientations
             call build%spproj_field%introd_alig_err(params%angerr, params%sherr)
-            if( params%ctf .ne. 'no' ) call build%spproj_field%introd_ctf_err(params%dferr)
+        endif
+        if( cline%defined('dferr') )then
+            ! introduce error in defocus parameters
+            call build%spproj_field%introd_ctf_err(params%dferr)
         endif
         if( cline%defined('e1') .or.&
             cline%defined('e2') .or.&
@@ -136,9 +139,9 @@ contains
             endif
         endif
         if( cline%defined('mul') )       call build%spproj_field%mul_shifts(params%mul)
-        if( params%zero .eq. 'yes' )          call build%spproj_field%zero_shifts
+        if( params%zero .eq. 'yes' )     call build%spproj_field%zero_shifts
         if( cline%defined('ndiscrete') ) call build%spproj_field%discretize(params%ndiscrete)
-        if( params%symrnd .eq. 'yes' )        call build%pgrpsyms%symrandomize(build%spproj_field)
+        if( params%symrnd .eq. 'yes' )   call build%pgrpsyms%symrandomize(build%spproj_field)
         if( cline%defined('nstates') )   call build%spproj_field%rnd_states(params%nstates)
         if( cline%defined('mirr') )then
             select case(trim(params%mirr))

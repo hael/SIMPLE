@@ -934,7 +934,6 @@ contains
         call self%os_ptcl3D%copy(os, is_ptcl=.true.)
         call self%os_ptcl2D%set_all2single('stkind', 1.)
         call self%os_ptcl3D%set_all2single('stkind', 1.)
-        print *,self%os_ptcl2D%isthere('state')
         if( .not. self%os_ptcl2D%isthere('state') ) call self%os_ptcl2D%set_all2single('state',  1.) ! default on import
         if( .not. self%os_ptcl3D%isthere('state') ) call self%os_ptcl3D%set_all2single('state',  1.) ! default on import
         ! full path and existence check
