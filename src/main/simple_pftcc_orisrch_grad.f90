@@ -95,7 +95,13 @@ contains
         self%ospec%nevals = 0
         vec = self%ospec%x
         cost_init = real(costfun(self, vec, 5)) ! for later comparison
+
+        print *, 'cost_init: ', cost_init
+
         call self%nlopt%minimize(self%ospec, self, cost)
+
+        print *, 'cost_opt: ', cost
+        print *, '*************************'
 
         ! OUTPUT
         if( cost < cost_init )then

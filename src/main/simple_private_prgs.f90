@@ -307,7 +307,7 @@ contains
         call cmd_dict%push('find',          'Fourier index')
         call cmd_dict%push('fname',         'file name')
         call cmd_dict%push('for3D',         'for 3D analysis(yes|no){yes}')
-        call cmd_dict%push('focusmsk',      'focused mask radius(in pixels)')
+        call cmd_dict%push('focusmskdiam',  'focused mask diameter(in A)')
         call cmd_dict%push('frac',          'fraction of ptcls(0-1){1}')
         call cmd_dict%push('frac_outliers', 'fraction of outliers(0-1){0.0}')
         call cmd_dict%push('fraca',         'fraction of amplitude contrast used for fitting CTF{0.1}')
@@ -329,7 +329,7 @@ contains
         call cmd_dict%push('imgkind',       'type of image(ptcl|cavg|mic|movie){ptcl}')
         call cmd_dict%push('infile',        'file with inputs(.txt)')
         call cmd_dict%push('infile2',       'file with inputs(.txt)')
-        call cmd_dict%push('inner',         'inner mask radius(in pixels)')
+        call cmd_dict%push('innerdiam',     'inner mask diameter(in A)')
         call cmd_dict%push('job_memory_per_task', 'memory in MB per task in distributed exec (typically memory per socket)')
         call cmd_dict%push('jumpsz',        'size of contigous segment')
         call cmd_dict%push('keepvol',       'whether to keep iterative volumes')
@@ -355,7 +355,7 @@ contains
         call cmd_dict%push('minp',          'minimum cluster population')
         call cmd_dict%push('mirr',          'mirror(no|x|y){no}')
         call cmd_dict%push('moldiam',       'molecular diameter(in A)')
-        call cmd_dict%push('msk',           'mask radius(in pixels)')
+        call cmd_dict%push('mskdiam',       'mask diameter(in A)')
         call cmd_dict%push('mskfile',       'maskfile.ext')
         call cmd_dict%push('msktype',       'type of mask(hard|soft){soft}')
         call cmd_dict%push('mul',           'origin shift multiplication factor{1}')
@@ -505,7 +505,7 @@ contains
         ! AUTOMASK, for volumetric envelope masking
         call private_prgs(1)%set_name('automask')
         ! required keys
-        call private_prgs(1)%push_req_key('msk')
+        call private_prgs(1)%push_req_key('mskdiam')
         call private_prgs(1)%push_req_key('amsklp')
         call private_prgs(1)%push_req_key('mw')
         call private_prgs(1)%push_req_key('thres')
@@ -620,7 +620,7 @@ contains
         call private_prgs(13)%push_req_key('smpd')
         call private_prgs(13)%push_req_key('lp')
         ! optional keys
-        call private_prgs(13)%push_opt_key('msk')
+        call private_prgs(13)%push_opt_key('mskdiam')
         call private_prgs(13)%push_opt_key('neg')
         call private_prgs(13)%push_opt_key('outstk')
 
@@ -674,7 +674,7 @@ contains
         call private_prgs(19)%push_req_key('stk')
         call private_prgs(19)%push_req_key('stk2')
         call private_prgs(19)%push_req_key('smpd')
-        call private_prgs(19)%push_req_key('msk')
+        call private_prgs(19)%push_req_key('mskdiam')
         ! optional keys
         call private_prgs(19)%push_opt_key('lp')
 
@@ -683,7 +683,7 @@ contains
         ! required keys
         call private_prgs(20)%push_req_key('nparts')
         call private_prgs(20)%push_req_key('projfile')
-        call private_prgs(20)%push_req_key('msk')
+        call private_prgs(20)%push_req_key('mskdiam')
         ! optional keys
         call private_prgs(20)%push_opt_key('nthr')
         call private_prgs(20)%push_opt_key('state')
