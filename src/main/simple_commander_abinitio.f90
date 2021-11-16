@@ -266,7 +266,6 @@ contains
             call cline_refine3D_refine%set('lp', lplims(2))
         else
             call cline_refine3D_refine%delete('lp')
-            call cline_refine3D_refine%set('lplim_crit',  0.5)
             call cline_refine3D_refine%set('lpstop',      lplims(2))
             call cline_refine3D_refine%set('clsfrcs',    'yes')
             call cline_refine3D_refine%set('match_filt', 'yes')

@@ -161,8 +161,6 @@ contains
         if( trim(params%oritype).eq.'cls3D' )then
             params%l_lpset = .true.
             call cline%set('lp',lp_cls3D)
-        else
-            if(.not.cline%defined('lplim_crit'))call cline%set('lplim_crit', 0.5)
         endif
         cline_refine3D1                 = cline ! first stage, extremal optimization
         cline_refine3D2                 = cline ! second stage, stochastic refinement
@@ -573,7 +571,6 @@ contains
                 do state=1,params%nstates
                     call cline_refine3D(state)%delete('lp')
                     call cline_refine3D(state)%set('frcs',trim(frcs_fname))
-                    call cline_refine3D(state)%set('lplim_crit', 0.5)
                     call cline_refine3D(state)%set('clsfrcs',   'yes')
                 enddo
                 ! add stks
