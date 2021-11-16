@@ -1184,30 +1184,24 @@ contains
         msk_default     = round2even((real(self%box) - COSMSKHALFWIDTH) / 2.)
         if( cline%defined('mskdiam') )then
             self%msk = round2even((self%mskdiam / self%smpd) / 2.)
-
-            print *, 'did set msk from mskdiam: ', self%msk
-
             if( self%msk > msk_default )then
                 THROW_WARN('Mask diameter too large, falling back on default value')
                 self%mskdiam = mskdiam_default
                 self%msk     = msk_default
-
-                print *, 'did set msk from msk default: ', self%msk
-
             endif
         else
             self%mskdiam = mskdiam_default
             self%msk     = msk_default
         endif
 
-        print *, '*************************************'
-        print *, 'smpd                 : ', self%smpd
-        print *, 'box size             : ', self%box
-        print *, 'mskdiam_default      : ', mskdiam_default
-        print *, 'msk_default          : ', msk_default
-        print *, 'mask diameter in A   : ', self%mskdiam
-        print *, 'mask radius in pixels: ', self%msk
-        print *, '*************************************'
+        ! print *, '*************************************'
+        ! print *, 'smpd                 : ', self%smpd
+        ! print *, 'box size             : ', self%box
+        ! print *, 'mskdiam_default      : ', mskdiam_default
+        ! print *, 'msk_default          : ', msk_default
+        ! print *, 'mask diameter in A   : ', self%mskdiam
+        ! print *, 'mask radius in pixels: ', self%msk
+        ! print *, '*************************************'
 
         ! set mode of masking
         if( cline%defined('inner') )then
