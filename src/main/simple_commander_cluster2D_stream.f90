@@ -30,7 +30,7 @@ character(len=STDLEN), parameter   :: SPPROJ_SNAPSHOT     = 'SIMPLE_PROJECT_SNAP
 character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
 character(len=STDLEN), parameter   :: PROJNAME_CHUNK      = 'chunk'
 character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
-logical,               parameter   :: DEBUG_HERE          = .true.
+logical,               parameter   :: DEBUG_HERE          = .false.
 
 type, extends(commander_base) :: cluster2D_commander_stream
   contains
