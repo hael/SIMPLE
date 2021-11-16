@@ -2315,7 +2315,7 @@ contains
         class(cmdline),                intent(out)   :: cline_scale
         character(len=*), optional,    intent(in)    :: dir
         character(len=:), allocatable :: projfile, projname, new_projname
-        real    :: scale_factor, smpd_sc, mskdiam_sc, smpd, mskdiam
+        real    :: scale_factor, smpd_sc, smpd
         integer :: box, box_sc, istk, n_os_stk
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk == 0 ) THROW_HARD('Empty stack object! scale_projfile')
@@ -2340,11 +2340,6 @@ contains
             return
         endif
         ! parameter updates
-        if( cline%defined('mskdiam') )then
-            mskdiam = cline%get_rarg('mskdiam')
-            mskdiam_sc = mskdiam * scale_factor
-            call cline%set('mskdiam', mskdiam_sc)
-        endif
         do istk = 1,n_os_stk
             call self%os_stk%set(istk, 'smpd', real(smpd_sc))
             call self%os_stk%set(istk, 'box', real(box_sc))

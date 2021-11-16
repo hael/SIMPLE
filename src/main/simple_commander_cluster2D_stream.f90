@@ -299,9 +299,9 @@ contains
         endif
     end function has_converged
 
-    subroutine reject( self, res_thresh, ndev, mskdiam, box )
+    subroutine reject( self, res_thresh, ndev, box )
         class(chunk), intent(inout) :: self
-        real,          intent(in)    :: res_thresh, ndev, mskdiam
+        real,          intent(in)    :: res_thresh, ndev
         integer,       intent(in)    :: box
         type(image) :: img
         logical,          allocatable :: cls_mask(:)
@@ -412,7 +412,7 @@ contains
         character(len=:),      allocatable :: spproj_list_fname, orig_projfile
         character(len=LONGSTRLEN)          :: prev_snapshot_frcs, prev_snapshot_cavgs
         real    :: SMPD_TARGET = 4.       ! target sampling distance
-        real    :: orig_smpd, mskdiam, scale_factor, orig_mskdiam, smpd, large_mskdiam, lp_greedy, lpstart_stoch
+        real    :: orig_smpd, scale_factor, smpd, lp_greedy, lpstart_stoch
         integer :: nptcls_per_chunk, ncls_glob, last_injection, max_ncls,ichunk, time_iter
         integer :: iter, orig_box, box, boxpd, n_spprojs, pool_iter, origproj_time, time_start_iter
         logical :: do_autoscale, l_maxed, l_greedy, l_forced_exit, l_once
@@ -466,7 +466,7 @@ contains
         call cline%delete('refine')
         call cline%delete('nptcls_per_cls')
         call cline%delete('ncls_start')
-        cline_cluster2D         = cline
+        cline_cluster2D        = cline
         cline_cluster2D_chunk  = cline
         ! chunk classification
         ! Greedy optimisation, no match filter, no centering
@@ -548,7 +548,6 @@ contains
             call simple_sleep(WAIT_WATCHER)
         enddo
         ! getting general parameters from the first sp_project
-        orig_mskdiam = params%mskdiam
         orig_box     = chunks(1)%spproj%get_box()
         orig_smpd    = chunks(1)%spproj%get_smpd()
         if( orig_box == 0 ) THROW_HARD('FATAL ERROR')
@@ -564,35 +563,20 @@ contains
                 if( box == orig_box ) do_autoscale = .false.
             endif
         endif
-        if( do_autoscale )then
-            mskdiam = orig_mskdiam * scale_factor
-        else
+        if( .not. do_autoscale )then
             smpd         = orig_smpd
             box          = orig_box
-            mskdiam      = orig_mskdiam
             scale_factor = 1.
         endif
-        boxpd         = 2 * round2even(params%alpha * real(box/2)) ! logics from parameters
-        large_mskdiam = max(mskdiam, mskdiam + (real(box) - COSMSKHALFWIDTH) * smpd)
+        boxpd = 2 * round2even(params%alpha * real(box/2)) ! logics from parameters
         if( DEBUG_HERE )then
             print *,'box         ' ,box
-            print *,'mskdiam     ' ,mskdiam
             print *,'smpd        ' ,smpd
             print *,'scale_factor' ,scale_factor
         endif
         call cline_cluster2D_chunk%set('box',  real(box))
-        call cline_cluster2D_chunk%set('mskdiam',  large_mskdiam)
         call cline_cluster2D%set('box',  real(box)) ! strictly required
         call cline_cluster2D%set('smpd', smpd)      ! strictly required
-        if( l_greedy )then
-            if( .not.cline%defined('mskdiam') )then
-                call cline_cluster2D%set('mskdiam', large_mskdiam)
-            else
-                call cline_cluster2D%set('mskdiam', mskdiam)
-            endif
-        else
-            call cline_cluster2D%set('mskdiam', mskdiam)
-        endif
         ! MAIN LOOP
         last_injection = simple_gettime()
         origproj_time  = last_injection
@@ -628,7 +612,7 @@ contains
                     if( chunks(ichunk)%has_converged() )then
                         call chunks(ichunk)%display_iter
                         ! rejection
-                        call chunks(ichunk)%reject(params%lpthresh, params%ndev, mskdiam, box)
+                        call chunks(ichunk)%reject(params%lpthresh, params%ndev, box)
                         ! updates list of chunks to import
                         if( allocated(converged_chunks) )then
                             converged_chunks = [converged_chunks(:), chunks(ichunk)]
