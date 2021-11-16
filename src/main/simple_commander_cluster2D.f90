@@ -175,7 +175,7 @@ contains
         type(class_frcs)                    :: frcs, frcs_sc
         character(len=:),       allocatable :: projfile, orig_projfile
         character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
-        real                                :: scale_factor, smpd, mskdiam, lp1, lp2
+        real                                :: scale_factor, smpd, lp1, lp2
         integer                             :: last_iter, box, status
         logical                             :: do_scaling
         ! parameters
@@ -287,11 +287,6 @@ contains
             status   = simple_rename(projfile,orig_projfile)
             projfile = trim(orig_projfile)
         endif
-        if( cline%defined('mskdiam') )then
-            mskdiam = params%mskdiam * scale_factor
-        else
-            mskdiam = (real(box) - COSMSKHALFWIDTH) * smpd
-        endif
         lp1   = max(2.*smpd, max(params%lp,TARGET_LP))
         lp2   = max(2.*smpd, params%lp)
         ! execute initialiser
@@ -319,9 +314,7 @@ contains
         endif
         ! updates command-lines
         call cline_cluster2D1%set('refs', params%refs)
-        call cline_cluster2D1%set('mskdiam',  mskdiam)
         call cline_cluster2D1%set('lp',   lp1)
-        call cline_cluster2D2%set('mskdiam',  mskdiam)
         call cline_cluster2D2%set('lp',   lp2)
         ! execution 1
         write(logfhandle,'(A)') '>>>'
@@ -565,7 +558,7 @@ contains
                 status = simple_rename(projfile_sc,orig_projfile)
                 deallocate(projfile_sc)
             endif
-            trs_stage2 = MSK_FRAC * cline_cluster2D_stage2%get_rarg('mskdiam') / (2 * params%smpd_targets2D(2))
+            trs_stage2 = MSK_FRAC * params%mskdiam / (2 * params%smpd_targets2D(2))
             trs_stage2 = min(MAXSHIFT,max(MINSHIFT,trs_stage2))
             call cline_cluster2D_stage2%set('trs', trs_stage2)
             ! execution
