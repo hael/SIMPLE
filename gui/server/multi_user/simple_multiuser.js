@@ -94,7 +94,7 @@ function startMultiuserServer() {
   }
 	
   console.log('Server pid ' + process.pid)
-  fs.writeFileSync(global.userdata + '/server.pid', process.pid)
+  fs.writeFileSync(global.userdata + '/server.pid', process.pid.toString())
   httpServer = new HTTPServer({multiuser:true})
   httpServer.start(multiuserport)
   url = "http://localhost:" + multiuserport
