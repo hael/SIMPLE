@@ -38,9 +38,9 @@ contains
         if( cline%defined('stk') )then
             ! 2D
             call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-            if( cline%defined('msk') .or. cline%defined('inner') )then
+            if( cline%defined('mskdiam') .or. cline%defined('innerdiam') )then
                 ! spherical
-                if( cline%defined('inner') )then
+                if( cline%defined('innerdiam') )then
                     if( cline%defined('width') )then
                         call mask_imgfile(params%stk, params%outstk, params%msk, params%smpd, inner=params%inner, width=params%width, which=params%msktype)
                     else
@@ -73,9 +73,9 @@ contains
                 endif
                 call mskvol%kill
                 if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
-            else if( cline%defined('msk') )then
+            else if( cline%defined('mskdiam') )then
                 ! spherical
-                if( cline%defined('inner') )then
+                if( cline%defined('innerdiam') )then
                     if( cline%defined('width') )then
                         call build%vol%mask(params%msk, params%msktype, inner=params%inner, width=params%width)
                     else

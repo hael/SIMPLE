@@ -1045,7 +1045,7 @@ contains
     !>  \brief  is for applying a soft circular mask to all images in stack
     !! \param fname2mask  output filename
     !! \param fname  input filename
-    !! \param mskrad masking radius
+    !! \param mskrad masking radius in pixels
     !! \param smpd sampling distance
     !! \param inner,width masking parameters
     !! \param which  file type

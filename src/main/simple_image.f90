@@ -6325,7 +6325,7 @@ contains
     end subroutine shift2Dserial_2
 
     !> \brief mask  is for spherical masking
-    !! \param mskrad mask radius
+    !! \param mskrad mask radius in pixels 
     !! \param which mask type
     !! \param inner include cosine edge material
     !! \param width width of inner patch
