@@ -340,7 +340,7 @@ contains
         end do
         deallocate(self%atominfo, strain_array)
         allocate(self%atominfo(cnt), source=atominfo_new)
-        allocate(strain_array, source=strain_array_new)
+        allocate(strain_array(cnt,NSTRAIN_COMPS), source=strain_array_new)
         deallocate(centers_A, mask, imat_cc, imat_cc_new, imat_bin_new, atominfo_new)
         ! (3) update number of connected components
         self%n_cc = cnt
