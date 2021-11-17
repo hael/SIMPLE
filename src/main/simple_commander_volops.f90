@@ -299,7 +299,7 @@ contains
         ! fix volumes and stacks
         call build%vol%read(params%vols(1))
         ! masking
-        if(cline%defined('msk')) call build%vol%mask(params%msk, 'soft')
+        if(cline%defined('mskdiam')) call build%vol%mask(params%msk, 'soft')
         ! generate projections
         imgs     = reproject(build%vol, build%spproj_field)
         if( file_exists(params%outstk) ) call del_file(params%outstk)
@@ -364,7 +364,7 @@ contains
             end if
             if( cline%defined('e1') .or. cline%defined('e2') .or. cline%defined('e3') )then
                 if( .not. cline%defined('smpd') ) THROW_HARD('need smpd (sampling distance) input for volume rotation')
-                if( .not. cline%defined('msk')  ) THROW_HARD('need msk (mask radius) input for volume rotation')
+                if( .not. cline%defined('mskdiam')  ) THROW_HARD('need mskdiam (mask diameter in A) input for volume rotation')
                 call o%new(is_ptcl=.false.)
                 call o%set_euler([params%e1,params%e2,params%e3])
                 shvec     = [params%xsh,params%ysh,params%zsh]

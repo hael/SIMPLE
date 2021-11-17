@@ -524,7 +524,7 @@ contains
                 call norm_imgfile(params%stk, params%outstk, params%smpd)
             else if( params%noise_norm.eq.'yes' )then
                 ! Noise normalization
-                if( cline%defined('msk') )then
+                if( cline%defined('mskdiam') )then
                     call noise_norm_imgfile(params%stk, params%msk, params%outstk, params%smpd)
                 else
                     THROW_HARD('need msk parameter for noise normalization')
@@ -1157,7 +1157,7 @@ contains
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir','yes')
         call params%new(cline)
         ! set radius for hard mask of binary image
-        if(cline%defined('msk') )  then
+        if(cline%defined('mskdiam') )  then
             msk_rad = params%msk
         else
             msk_rad = 0.45*params%box
