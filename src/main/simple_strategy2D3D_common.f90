@@ -580,16 +580,17 @@ contains
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_estimate_ssnr,    only: fsc2optlp_sub
         use simple_projector,        only: projector
+        use simple_tvfilter,         only: tvfilter
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: s
         logical,                 intent(in)    :: do_center
         real,                    intent(in)    :: xyz(3)
         logical,                 intent(in)    :: iseven
+        type(tvfilter)                :: tvfilt
         type(projector),  pointer     :: vol_ptr => null()
-        ! type(image)                   :: mskvol
         character(len=:), allocatable :: fname_opt_filter
-
+        real,             parameter   :: LAMBDA_HERE = 1.0
         real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
         integer :: iref, iproj, iprojred, filtsz
         if( iseven )then
@@ -637,22 +638,13 @@ contains
         endif
         ! back to real space
         call vol_ptr%ifft()
+        ! total variation regularization
+        call tvfilt%new
+        call tvfilt%apply_filter_3d(vol_ptr, LAMBDA_HERE)
+        call tvfilt%kill
         ! masking
         if( cline%defined('mskfile') )then
-
             ! masking performed in readrefvols_ran_phases_below_noise, above
-
-            ! mask provided
-            ! call mskvol%new([params_glob%box, params_glob%box, params_glob%box], &
-            !     params_glob%smpd)
-            ! call mskvol%read(params_glob%mskfile)
-            ! if( cline%defined('lp_backgr') )then
-            !     call vol_ptr%lp_background(mskvol, params_glob%lp_backgr)
-            ! else
-            !     call vol_ptr%zero_env_background(mskvol)
-            !     call vol_ptr%mul(mskvol)
-            ! endif
-            ! call mskvol%kill
         else
             ! circular masking
             if( params_glob%l_innermsk )then
