@@ -139,6 +139,7 @@ type :: polarft_corrcalc
     procedure          :: vis_ref
     ! MODIFIERS
     procedure          :: zero_refs_beyond_kstop
+    procedure          :: shift_ptcl
     procedure, private :: shellnorm_and_filter_ref
     procedure, private :: shellnorm_and_filter_ref_8
     procedure, private :: shellnorm_and_filter_ref_dref_8
@@ -751,6 +752,19 @@ contains
         self%pfts_refs_odd( :,params_glob%kstop+1:params_glob%kfromto(2),:) = zero
         !$omp end workshare
     end subroutine zero_refs_beyond_kstop
+
+    subroutine shift_ptcl( self, iptcl, shvec)
+        class(polarft_corrcalc),  intent(inout) :: self
+        integer,                  intent(in)    :: iptcl
+        real(sp),                 intent(in)    :: shvec(2)
+        complex(sp), pointer :: shmat(:,:)
+        integer  :: ithr, i
+        ithr  =  omp_get_thread_num() + 1
+        i     = self%pinds(iptcl)
+        shmat => self%heap_vars(ithr)%shmat
+        call self%gen_shmat(ithr, shvec, shmat)
+        self%pfts_ptcls(:,:,i) = self%pfts_ptcls(:,:,i) * shmat
+    end subroutine shift_ptcl
 
     subroutine shellnorm_and_filter_ref( self, iptcl, iref, pft )
         class(polarft_corrcalc), intent(in)    :: self

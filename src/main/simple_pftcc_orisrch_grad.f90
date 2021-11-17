@@ -40,7 +40,7 @@ contains
         lims = 0.
         lims(:,2) = 360
         ! specify & set cost / gradient function
-        call self%ospec%specify('lbfgsb', 5, ftol=1e-4, gtol=1e-4, limits=lims)
+        call self%ospec%specify('lbfgsb', 5, ftol=1e-4, gtol=1e-4, limits=lims, maxits=100)
         call self%ospec%set_fdfcostfun_8(fdfcostfun)
         call self%ospec%set_costfun_8(costfun)
         call self%ospec%set_gcostfun_8(gcostfun)
@@ -122,7 +122,6 @@ contains
             cxy(2:)      = 0.
             found_better = .false.
         endif
-
         ! put back references
         call pftcc_glob%set_ref_pft(ithr, pft_ref_even, iseven=.true.)
         call pftcc_glob%set_ref_pft(ithr, pft_ref_odd,  iseven=.false.)
