@@ -103,15 +103,17 @@ contains
         use simple_estimate_ssnr, only: fsc2optlp
         class(postprocess_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(parameters)  :: params
-        type(image)       :: vol, vol_copy
-        type(masker)      :: mskvol
-        type(sp_project)  :: spproj
-        character(len=:), allocatable :: vol_fname, fsc_fname, mskfile_fname, even_fname, odd_fname
+        character(len=:), allocatable :: fname_vol, fname_fsc, fname_msk, fname_mirr
+        character(len=:), allocatable :: fname_even, fname_odd, fname_pproc, fname_lp
         real,             allocatable :: fsc(:), optlp(:), res(:)
-        real              :: fsc0143, fsc05, smpd, mskfile_smpd
-        integer           :: state, box, fsc_box, mskfile_box, ldim(3)
-        logical           :: has_fsc, has_mskfile
+        real,             parameter   :: HPLIM = 20.
+        type(parameters) :: params
+        type(image)      :: vol, vol_copy
+        type(masker)     :: mskvol
+        type(sp_project) :: spproj
+        real    :: fsc0143, fsc05, smpd, mskfile_smpd, lplim
+        integer :: state, box, fsc_box, mskfile_box, ldim(3)
+        logical :: has_fsc, has_mskfile
         ! set defaults
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call cline%set('oritype', 'out')
@@ -125,29 +127,52 @@ contains
         else
             state = 1
         endif
-        ! check volume, gets correct smpd & box
+        ! check volume, get correct smpd & box
         if( cline%defined('imgkind') )then
-            call spproj%get_vol(params%imgkind, state, vol_fname, smpd, box)
+            call spproj%get_vol(params%imgkind, state, fname_vol, smpd, box)
         else
-            call spproj%get_vol('vol', state, vol_fname, smpd, box)
+            call spproj%get_vol('vol', state, fname_vol, smpd, box)
         endif
-        if( .not.file_exists(vol_fname) )then
-            THROW_HARD('volume: '//trim(vol_fname)//' does not exist; exec_postprocess')
+        if( .not.file_exists(fname_vol) )then
+            THROW_HARD('volume: '//trim(fname_vol)//' does not exist; exec_postprocess')
         endif
-        even_fname = add2fbody(vol_fname, params%ext, '_even')
-        odd_fname  = add2fbody(vol_fname, params%ext, '_odd' )
-        ! check fsc filter
+        ! generate file names
+        fname_even  = basename(add2fbody(trim(fname_vol),   params%ext, '_even'))
+        fname_odd   = basename(add2fbody(trim(fname_vol),   params%ext, '_odd' ))
+        fname_pproc = basename(add2fbody(trim(fname_vol),   params%ext, PPROC_SUFFIX))
+        fname_mirr  = basename(add2fbody(trim(fname_pproc), params%ext, MIRR_SUFFIX))
+        fname_lp    = basename(add2fbody(trim(fname_vol),   params%ext, LP_SUFFIX))
+        ! read volume
+        ldim = [box,box,box]
+        call vol%new(ldim, smpd)
+        call vol%read(fname_vol)
+        ! check fsc filter & determine resolution
         has_fsc = .false.
         if( cline%defined('lp') )then
-            ! all good
+            lplim = params%lp
         else
-            call spproj%get_fsc(state, fsc_fname, fsc_box)
-            params%fsc = trim(fsc_fname)
+            call spproj%get_fsc(state, fname_fsc, fsc_box)
+            params%fsc = trim(fname_fsc)
             if( .not.file_exists(params%fsc) )then
                 THROW_HARD('FSC file: '//trim(params%fsc)//' not found')
             else
                 has_fsc = .true.
             endif
+        endif
+        if( has_fsc )then
+            ! resolution & optimal low-pass filter from FSC
+            res   = vol%get_res()
+            fsc   = file2rarr(params%fsc)
+            optlp = fsc2optlp(fsc)
+            call get_resolution( fsc, res, fsc05, fsc0143 )
+            where( res < TINY ) optlp = 0.
+            lplim = fsc0143
+        endif
+        if( cline%defined('bfac') )then
+            ! already in params%bfac
+        else
+            params%bfac = vol%guinier_bfac(HPLIM, lplim)
+            write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', params%bfac
         endif
         ! check volume mask
         has_mskfile = .false.
@@ -158,39 +183,34 @@ contains
                 has_mskfile = .true.
             endif
         else
-            call spproj%get_vol('vol_msk', 1, mskfile_fname, mskfile_smpd, mskfile_box)
-            params%mskfile = trim(mskfile_fname)
+            call spproj%get_vol('vol_msk', 1, fname_msk, mskfile_smpd, mskfile_box)
+            params%mskfile = trim(fname_msk)
             if( file_exists(params%mskfile) ) has_mskfile = .true.
         endif
-        ! read volume
-        params%outvol = basename(add2fbody(trim(vol_fname), params%ext, PPROC_SUFFIX))
-        ldim = [box,box,box]
-        call vol%new(ldim, smpd)
-        call vol%read(vol_fname)
-        call vol_copy%copy(vol)
+        ! B-factor
         call vol%fft()
-        ! B-factor goes first if present
-        if( cline%defined('bfac') ) call vol%apply_bfac(params%bfac)
-        if( has_fsc )then
-            ! resolution & optimal low-pass filter from FSC
-            fsc = file2rarr(params%fsc)
-            optlp = fsc2optlp(fsc)
-            res   = vol%get_res()
-            call get_resolution( fsc, res, fsc05, fsc0143 )
-            where( res < TINY ) optlp = 0.
-        endif
+        call vol_copy%copy(vol)
+        call vol%apply_bfac(params%bfac)
+        ! low-pass filter
         if( cline%defined('lp') )then
             ! low-pass overrides all input
             call vol%bp(0., params%lp)
+            call vol_copy%bp(0., params%lp)
         else if( has_fsc )then
             ! optimal low-pass filter from FSC
             call vol%apply_filter(optlp)
+            call vol_copy%apply_filter(optlp)
             ! final low-pass filtering for smoothness
             call vol%bp(0., fsc0143)
+            call vol_copy%bp(0., fsc0143)
         else
             THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; exec_postprocess')
         endif
-        ! masking
+        ! write low-pass filtered without B-factor & read the original back in
+        call vol_copy%ifft
+        call vol_copy%write(fname_lp)
+        call vol_copy%read(fname_vol)
+        ! mask
         call vol%ifft()
         if( cline%defined('automsk') )then
             if( cline%get_carg('automsk').eq.'no' ) has_mskfile = .false. ! turn off masking
@@ -237,12 +257,11 @@ contains
             endif
         endif
         ! output in cwd
-        call vol%write(params%outvol)
+        call vol%write(fname_pproc)
         ! also output mirrored by default (unless otherwise stated on command line)
         if( .not. cline%defined('mirr') .or. params%mirr .ne. 'no' )then
             call vol%mirror('x')
-            params%outvol = add2fbody(params%outvol, params%ext, MIRR_SUFFIX)
-            call vol%write(params%outvol)
+            call vol%write(fname_mirr)
         endif
         ! destruct
         call spproj%kill

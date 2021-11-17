@@ -117,7 +117,7 @@ contains
         integer,                   allocatable :: state_pops(:), tmp_iarr(:)
         real,                      allocatable :: res(:), tmp_rarr(:), fsc(:)
         character(len=STDLEN)     :: vol, vol_iter, str, str_iter, fsc_templ
-        character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc
+        character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
         logical :: l_projection_matching, l_switch2euclid, l_continue, l_multistates
@@ -492,10 +492,15 @@ contains
                         ! for gui visualization
                         if( params%refine .ne. 'snhc' )then
                             volpproc = trim(VOL_FBODY)//trim(str_state)//PPROC_SUFFIX//params%ext
+                            vollp    = trim(VOL_FBODY)//trim(str_state)//LP_SUFFIX//params%ext
                             vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//PPROC_SUFFIX//params%ext
-                            call simple_copy_file(volpproc, vol_iter) ! for GUI visualization
+                            call simple_copy_file(volpproc, vol_iter)
+                            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//LP_SUFFIX//params%ext
+                            call simple_copy_file(vollp, vol_iter)
                             if( iter > 1 )then
                                 vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter-1,3)//PPROC_SUFFIX//params%ext
+                                call del_file(vol_iter)
+                                vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter-1,3)//LP_SUFFIX//params%ext
                                 call del_file(vol_iter)
                             endif
                         endif

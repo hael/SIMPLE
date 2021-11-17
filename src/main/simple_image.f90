@@ -2935,22 +2935,23 @@ contains
     !>  \brief guinier_bfac  generates the bfactor from the Guinier plot of the unfiltered volume
     function guinier_bfac( self, hp, lp ) result( bfac )
         class(image), intent(inout) :: self
-        real, intent(in)            :: hp, lp
-        real, allocatable           :: plot(:,:)
-        integer                     :: fromk, tok, nk
-        real                        :: slope, intercept, corr, bfac
-        plot  = self%guinier()
+        real,         intent(in)    :: hp, lp
+        real, allocatable :: plot(:,:)
+        integer :: fromk, tok, nk
+        real    :: slope, intercept, corr, bfac
+        plot  = self%guinier(.false.)
         fromk = self%get_find(hp)
         tok   = self%get_find(lp)
         nk    = tok-fromk+1
         call fit_straight_line(nk, plot(fromk:tok,:), slope, intercept, corr)
-        bfac=4.*slope
+        bfac  = 4. * slope
         deallocate(plot)
     end function guinier_bfac
 
     !>  \brief guinier generates the Guinier plot for a volume, which should be unfiltered
-    function guinier( self ) result( plot )
+    function guinier( self, verbose ) result( plot )
         class(image), intent(inout) :: self
+        logical,      intent(in)    :: verbose
         real, allocatable :: spec(:), plot(:,:)
         integer           :: lfny, k
         if( .not. self%is_3d() ) THROW_HARD('Only for 3D images; guinier')
@@ -2961,7 +2962,7 @@ contains
         do k=1,lfny
             plot(k,1) = 1./(self%get_lp(k)**2.)
             plot(k,2) = log(spec(k))
-            write(logfhandle,'(A,1X,F8.4,1X,A,1X,F7.3)') '>>> RECIPROCAL SQUARE RES:', plot(k,1), '>>> LOG(ABS(REAL(F))):', plot(k,2)
+            if( verbose ) write(logfhandle,'(A,1X,F8.4,1X,A,1X,F7.3)') '>>> RECIPROCAL SQUARE RES:', plot(k,1), '>>> LOG(ABS(REAL(F))):', plot(k,2)
         end do
         deallocate(spec)
     end function guinier
