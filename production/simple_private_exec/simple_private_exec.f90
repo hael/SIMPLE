@@ -18,6 +18,8 @@ use simple_commander_rec
 use simple_commander_sim
 use simple_commander_volops
 use simple_commander_tseries
+use simple_environment
+
 implicit none
 #include "simple_local_flags.inc"
 
@@ -101,6 +103,8 @@ call make_user_interface
 call make_private_user_interface
 ! this parses all key=value pairs on the command line
 call cline%parse_private
+
+call print_environment
 
 select case(prg)
 
