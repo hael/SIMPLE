@@ -203,7 +203,7 @@ contains
             if( L_BENCH ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
             ! Particles loop
             if( L_BENCH ) t_align = tic()
-            !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,ithr,updatecnt)&
+            !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,ithr,updatecnt,orientation)&
             !$omp schedule(static) proc_bind(close)
             do iptcl_batch = 1,batchsz                     ! particle batch index
                 iptcl_map  = batch_start + iptcl_batch - 1 ! masked global index (cumulative)
