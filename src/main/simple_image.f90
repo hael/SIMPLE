@@ -6335,10 +6335,11 @@ contains
         real,             intent(in)    :: mskrad
         character(len=*), intent(in)    :: which
         real, optional,   intent(in)    :: inner, width, backgr
-        real    :: e, wwidth
-        real    :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3))
-        integer :: i, j, k, minlen, ir, jr, kr
-        logical :: didft, doinner, soft
+        real(dp) :: sumv
+        real     :: e, wwidth, d_sq, rad_sq, ave
+        real     :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3))
+        integer  :: i, j, k, minlen, ir, jr, kr, npix
+        logical  :: didft, doinner, soft, avg_backgr
         ! width
         wwidth = 10.
         if( present(width) ) wwidth = width
@@ -6360,7 +6361,8 @@ contains
         ! soft mask width limited to +/- COSMSKHALFWIDTH pixels
         minlen = min(nint(2.*(mskrad+COSMSKHALFWIDTH)), minlen)
         ! soft/hard
-        soft  = .true.
+        soft       = .true.
+        avg_backgr = .false.
         select case(trim(which))
             case('soft')
                 soft  = .true.
@@ -6370,6 +6372,14 @@ contains
                 else
                     call self%zero_background
                 endif
+            case('softavg')
+                ! background is set to its average value
+                if( doinner )THROW_HARD('Inner masking not supported with softavg; simple_image :: mask')
+                soft       = .true.
+                avg_backgr = .true.
+                rad_sq     = mskrad*mskrad
+                sumv       = 0.d0
+                npix       = 0
             case('hard')
                 soft  = .false.
                 if(present(backgr))THROW_HARD('no backround subtraction with hard masking; simple_image :: mask')
@@ -6384,42 +6394,100 @@ contains
         if( soft )then
             ! Soft masking
             if( self%is_3d() )then
-                ! 3d
-                do i=1,self%ldim(1)/2
-                    ir = self%ldim(1)+1-i
-                    do j=1,self%ldim(2)/2
-                        jr = self%ldim(2)+1-j
-                        do k=1,self%ldim(3)/2
-                            e = cosedge(cis(i),cjs(j),cks(k),minlen,mskrad)
-                            if( doinner )e = e * cosedge_inner(cis(i),cjs(j),cks(k),wwidth,inner)
-                            if(e > 0.9999) cycle
-                            kr = self%ldim(3)+1-k
-                            self%rmat(i,j,k)    = e * self%rmat(i,j,k)
-                            self%rmat(i,j,kr)   = e * self%rmat(i,j,kr)
-                            self%rmat(i,jr,k)   = e * self%rmat(i,jr,k)
-                            self%rmat(i,jr,kr)  = e * self%rmat(i,jr,kr)
-                            self%rmat(ir,j,k)   = e * self%rmat(ir,j,k)
-                            self%rmat(ir,j,kr)  = e * self%rmat(ir,j,kr)
-                            self%rmat(ir,jr,k)  = e * self%rmat(ir,jr,k)
-                            self%rmat(ir,jr,kr) = e * self%rmat(ir,jr,kr)
+                if( avg_backgr )then
+                    do k=1,self%ldim(3)
+                        do j=1,self%ldim(2)
+                            do i=1,self%ldim(1)
+                                d_sq = cis(i)*cis(i) + cjs(j)*cjs(j) + cks(k)*cks(k)
+                                if( d_sq > rad_sq )then
+                                    npix = npix + 1
+                                    sumv = sumv + real(self%rmat(i,j,k),dp)
+                                endif
+                            enddo
                         enddo
                     enddo
-                enddo
+                    if( npix > 0 )then
+                        ave = real(sumv/real(npix,dp))
+                        do i=1,self%ldim(1)
+                            do j=1,self%ldim(2)
+                                do k=1,self%ldim(3)
+                                    e = cosedge(cis(i),cjs(j),cks(k),minlen,mskrad)
+                                    if( e < 0.0001 )then
+                                        self%rmat(i,j,k) = ave
+                                    else
+                                        if( e < 0.9999 )then
+                                            self%rmat(i,j,k) = e*self%rmat(i,j,k) + (1.-e)*ave
+                                        endif
+                                    endif
+                                enddo
+                            enddo
+                        enddo
+                    endif
+                else
+                    ! 3d
+                    do i=1,self%ldim(1)/2
+                        ir = self%ldim(1)+1-i
+                        do j=1,self%ldim(2)/2
+                            jr = self%ldim(2)+1-j
+                            do k=1,self%ldim(3)/2
+                                e = cosedge(cis(i),cjs(j),cks(k),minlen,mskrad)
+                                if( doinner )e = e * cosedge_inner(cis(i),cjs(j),cks(k),wwidth,inner)
+                                if(e > 0.9999) cycle
+                                kr = self%ldim(3)+1-k
+                                self%rmat(i,j,k)    = e * self%rmat(i,j,k)
+                                self%rmat(i,j,kr)   = e * self%rmat(i,j,kr)
+                                self%rmat(i,jr,k)   = e * self%rmat(i,jr,k)
+                                self%rmat(i,jr,kr)  = e * self%rmat(i,jr,kr)
+                                self%rmat(ir,j,k)   = e * self%rmat(ir,j,k)
+                                self%rmat(ir,j,kr)  = e * self%rmat(ir,j,kr)
+                                self%rmat(ir,jr,k)  = e * self%rmat(ir,jr,k)
+                                self%rmat(ir,jr,kr) = e * self%rmat(ir,jr,kr)
+                            enddo
+                        enddo
+                    enddo
+                endif
             else
                 ! 2d
-                do i=1,self%ldim(1)/2
-                    ir = self%ldim(1)+1-i
-                    do j=1,self%ldim(2)/2
-                        e = cosedge(cis(i),cjs(j),minlen,mskrad)
-                        if( doinner )e = e * cosedge_inner(cis(i),cjs(j),wwidth,inner)
-                        if(e > 0.9999)cycle
-                        jr = self%ldim(2)+1-j
-                        self%rmat(i,j,1)   = e * self%rmat(i,j,1)
-                        self%rmat(i,jr,1)  = e * self%rmat(i,jr,1)
-                        self%rmat(ir,j,1)  = e * self%rmat(ir,j,1)
-                        self%rmat(ir,jr,1) = e * self%rmat(ir,jr,1)
+                if( avg_backgr )then
+                    do j=1,self%ldim(2)
+                        do i=1,self%ldim(1)
+                            d_sq = cis(i)*cis(i) + cjs(j)*cjs(j)
+                            if( d_sq > rad_sq )then
+                                npix = npix + 1
+                                sumv = sumv + real(self%rmat(i,j,1),dp)
+                            endif
+                        enddo
                     enddo
-                enddo
+                    if( npix > 0 )then
+                        ave  = real(sumv/real(npix,dp))
+                        do i=1,self%ldim(1)
+                            do j=1,self%ldim(2)
+                                e = cosedge(cis(i),cjs(j),minlen,mskrad)
+                                if( e < 0.0001 )then
+                                    self%rmat(i,j,1) = ave
+                                else
+                                    if( e < 0.9999 )then
+                                        self%rmat(i,j,1) = e*self%rmat(i,j,1) + (1.-e)*ave
+                                    endif
+                                endif
+                            enddo
+                        enddo
+                    endif
+                else
+                    do i=1,self%ldim(1)/2
+                        ir = self%ldim(1)+1-i
+                        do j=1,self%ldim(2)/2
+                            e = cosedge(cis(i),cjs(j),minlen,mskrad)
+                            if( doinner )e = e * cosedge_inner(cis(i),cjs(j),wwidth,inner)
+                            if(e > 0.9999)cycle
+                            jr = self%ldim(2)+1-j
+                            self%rmat(i,j,1)   = e * self%rmat(i,j,1)
+                            self%rmat(i,jr,1)  = e * self%rmat(i,jr,1)
+                            self%rmat(ir,j,1)  = e * self%rmat(ir,j,1)
+                            self%rmat(ir,jr,1) = e * self%rmat(ir,jr,1)
+                        enddo
+                    enddo
+                endif
             endif
         else
             ! Hard masking
