@@ -342,6 +342,8 @@ contains
             even = self%even
             call self%even%set_cmat(cmat)
             deallocate(cmat)
+            ! should be using fsc_scaled instead to avoid clipping and Fourier artefacts
+            ! for FSC calculation
             call even%ifft()
             call even%clip_inplace([self%box,self%box,self%box])
             ! odd
@@ -354,7 +356,7 @@ contains
             call odd%clip_inplace([self%box,self%box,self%box])
             ! masking
             if( self%automsk )then
-                ! mask provided
+                ! mask provided, no phase-randomization just yet
                 call even%zero_env_background(self%envmask)
                 call odd%zero_env_background(self%envmask)
                 call even%mul(self%envmask)
@@ -365,8 +367,8 @@ contains
                     call even%mask(msk, 'soft', inner=self%inner, width=self%width)
                     call odd%mask(msk, 'soft', inner=self%inner, width=self%width)
                 else
-                    call even%mask(msk, 'soft')
-                    call odd%mask(msk, 'soft')
+                    call even%mask(msk, 'soft',backgr=0.)
+                    call odd%mask(msk, 'soft',backgr=0.)
                 endif
             endif
             ! forward FT

@@ -345,7 +345,11 @@ contains
             if( params_glob%l_focusmsk )then
                 call img_out%mask(params_glob%focusmsk, 'soft')
             else
-                call img_out%mask(params_glob%msk, 'soft')
+                if( params_glob%l_needs_sigma )then
+                    call img_out%mask(params_glob%msk, 'softavg')
+                else
+                    call img_out%mask(params_glob%msk, 'soft')
+                endif
             endif
         endif
         ! gridding prep
@@ -629,29 +633,46 @@ contains
                     enddo
                 endif
             else
-                call vol_ptr%fft()
-                if( any(build_glob%fsc(s,:) > 0.143) )then
-                    call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
-                    call vol_ptr%apply_filter(filter)
+                if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+                    ! no filtering
+                else
+                    call vol_ptr%fft()
+                    if( any(build_glob%fsc(s,:) > 0.143) )then
+                        call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
+                        call vol_ptr%apply_filter(filter)
+                    endif
                 endif
             endif
         endif
         ! back to real space
         call vol_ptr%ifft()
         ! total variation regularization
-        call tvfilt%new
-        call tvfilt%apply_filter_3d(vol_ptr, LAMBDA_HERE)
-        call tvfilt%kill
+        if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+            ! no filtering
+        else
+            call tvfilt%new
+            call tvfilt%apply_filter_3d(vol_ptr, LAMBDA_HERE)
+            call tvfilt%kill
+        endif
         ! masking
         if( cline%defined('mskfile') )then
             ! masking performed in readrefvols_ran_phases_below_noise, above
         else
             ! circular masking
-            if( params_glob%l_innermsk )then
-                call vol_ptr%mask(params_glob%msk, 'soft', &
-                    inner=params_glob%inner, width=params_glob%width)
+            if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+                if( params_glob%l_innermsk )then
+                    call vol_ptr%mask(params_glob%msk, 'soft', &
+                        inner=params_glob%inner, width=params_glob%width, backgr=0.0)
+                else
+                    call vol_ptr%mask(params_glob%msk, 'soft', backgr=0.0)
+                endif
             else
-                call vol_ptr%mask(params_glob%msk, 'soft')
+                if( params_glob%l_innermsk )then
+                    call vol_ptr%mask(params_glob%msk, 'soft', &
+                        inner=params_glob%inner, width=params_glob%width)
+                else
+                    call vol_ptr%mask(params_glob%msk, 'soft')
+                endif
             endif
         endif
         ! gridding prep
