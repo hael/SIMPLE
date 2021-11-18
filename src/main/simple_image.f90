@@ -267,7 +267,7 @@ contains
     procedure, private :: real_corr_prenorm_1
     procedure, private :: real_corr_prenorm_2
     generic            :: real_corr_prenorm => real_corr_prenorm_1, real_corr_prenorm_2
-    procedure          :: fsc
+    procedure          :: fsc, fsc_scaled
     procedure          :: get_res
     procedure, private :: oshift_1
     procedure, private :: oshift_2
@@ -4973,6 +4973,52 @@ contains
         ! return single-precision corrs
         corrs = corrs_8
     end subroutine fsc
+
+    !> \brief fsc is for calculation of Fourier ring/shell correlation in double precision
+    subroutine fsc_scaled( self1, self2, sz, corrs )
+        class(image), intent(inout) :: self1, self2
+        integer,      intent(in)    :: sz
+        real,         intent(out)   :: corrs(sz)
+        real(dp)    :: corrs_8(sz), sumasq(sz), sumbsq(sz)
+        real        :: scale, rsh
+        complex(dp) :: comp1, comp2
+        integer     :: lims(3,2), phys(3), sh, sh_sc, h, k, l, n
+        scale = real(sz) / real(fdim(self1%ldim(1))-1)
+        corrs_8 = 0.d0
+        sumasq  = 0.d0
+        sumbsq  = 0.d0
+        lims    = self1%fit%loop_lims(2)
+        n       = self1%get_filtsz()
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,sh,sh_sc,rsh,comp1,comp2)&
+        !$omp schedule(static) reduction(+:corrs_8,sumasq,sumbsq) proc_bind(close)
+        do k=lims(2,1),lims(2,2)
+            do h=lims(1,1),lims(1,2)
+                do l=lims(3,1),lims(3,2)
+                    ! shell
+                    rsh = sqrt(real(h*h) + real(k*k) + real(l*l))
+                    sh  = nint(rsh)
+                    if( sh == 0 .or. sh > n ) cycle
+                    sh_sc = nint(scale*rsh)
+                    if( sh_sc == 0 .or. sh_sc > sz ) cycle
+                    ! compute physical address
+                    phys = self1%fit%comp_addr_phys(h,k,l)
+                    ! real part of the complex mult btw self1 and targ*
+                    comp1 = self1%cmat(phys(1),phys(2),phys(3))
+                    comp2 = self2%cmat(phys(1),phys(2),phys(3))
+                    corrs_8(sh_sc) = corrs_8(sh_sc)+ real(comp1 * conjg(comp2), kind=dp)
+                    sumasq(sh_sc) = sumasq(sh_sc) + csq_fast(comp1)
+                    sumbsq(sh_sc) = sumbsq(sh_sc) + csq_fast(comp2)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        ! normalize correlations and compute resolutions
+        where( sumasq>DTINY.and. sumbsq>DTINY )
+            corrs = real(corrs_8/dsqrt(sumasq * sumbsq))
+        else where
+            corrs = 0.
+        end where
+    end subroutine fsc_scaled
 
     !>  \brief get array of resolution steps
     function get_res( self ) result( res )
