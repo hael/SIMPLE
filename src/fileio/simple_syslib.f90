@@ -1128,4 +1128,31 @@ contains
         RE_match = INT(res)
     end function RE_match
 
+    ! SLURM
+
+    subroutine print_slurm_env()
+        character(len=255) :: env_value
+        character(len=63), allocatable :: env_vars(:);
+        integer :: i, stat, len
+        len = 63
+        allocate (env_vars(7))
+        env_vars = [character(len=63) :: "slurm_jobid", "slurm_job_user", "slurm_job_cpus_per_node", "slurm_mem_per_cpu", "slurmd_nodename", "slurm_job_account", "slurm_submit_dir"]
+        call get_environment_variable("slurm_jobid", env_value, len, stat)
+        if( stat .eq. 0 )then
+            write(logfhandle,*) ""
+            write(logfhandle,*) "##### simple slurm env #####"
+            write(logfhandle,*) ""
+            do i = 1, 7
+                call get_environment_variable(trim(env_vars(i)), env_value, len, stat)
+                if(stat .eq. 0) then
+                    write(logfhandle,*) trim(env_vars(i)), achar(9), " : ", achar(9), trim(env_value)
+                    endif
+                end do
+                write(logfhandle,*) ""
+                write(logfhandle,*) "############################"
+                write(logfhandle,*) ""
+        endif
+        deallocate (env_vars)
+    end subroutine print_slurm_env
+
 end module simple_syslib

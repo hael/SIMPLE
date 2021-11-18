@@ -946,7 +946,6 @@ contains
         real, allocatable    :: centers_A(:,:) ! coordinates of the atoms in ANGSTROMS
         integer :: cscores(self%n_cc), cc, n_discard, cthresh, new_cthresh
         type(stats_struct)   :: cscore_stats
-        write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS'
         centers_A = self%atominfo2centers_A()
         call calc_contact_scores(self%element,centers_A,cscores)
         call calc_stats(real(cscores), cscore_stats)
@@ -957,12 +956,13 @@ contains
         write(logfhandle,'(A,F8.4)') 'Max    : ', cscore_stats%maxv
         write(logfhandle,'(A,F8.4)') 'Min    : ', cscore_stats%minv
         cthresh = min(5,max(3,nint(cscore_stats%avg - cscore_stats%sdev)))
-        write(logfhandle,'(A,I3)') 'CONTACT SCORE TRESHOLD: ', cthresh
+        write(logfhandle,'(A,I3)') 'CONTACT SCORE THRESHOLD: ', cthresh
         use_cn_thresh = .false.
         if( cthresh == 5 )then ! highly crystalline
             use_cn_thresh = .true.
             return
         endif
+        write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS BASED ON CONTACT SCORE'
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
         ! Removing outliers from the binary image and the connected components image
@@ -984,7 +984,7 @@ contains
         endif
         deallocate(imat_bin, imat_cc, centers_A)
         write(logfhandle, *) 'Numbers of atoms discarded because of low cscore ', n_discard
-        write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS, COMPLETED'
+        write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS BASED ON CONTACT SCORE, COMPLETED'
 
         contains
 
@@ -1021,7 +1021,7 @@ contains
         real, allocatable    :: centers_A(:,:) ! coordinates of the atoms in ANGSTROMS
         real    :: cn_gen(self%n_cc)
         integer :: cn(self%n_cc), cc, n_discard, new_cn_thresh
-        write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS'
+        write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS BASED ON CN'
         centers_A = self%atominfo2centers_A()
         if( l_fit_lattice ) call fit_lattice(self%element, centers_A, a) ! else use inputted lattice params
         call run_cn_analysis(self%element,centers_A,a,cn,cn_gen)
@@ -1046,7 +1046,7 @@ contains
         endif
         deallocate(imat_bin, imat_cc, centers_A)
         write(logfhandle, *) 'Numbers of atoms discarded because of low cn ', n_discard
-        write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS, COMPLETED'
+        write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS BASED ON CN, COMPLETED'
 
         contains
 
