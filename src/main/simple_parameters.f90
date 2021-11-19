@@ -48,7 +48,7 @@ type :: parameters
     character(len=3)      :: for3D='yes'          !< for 3D analysis(yes|no){yes}
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)      :: graphene_filt='no'   !< filter out graphene bands in correcation search
-    character(len=3)      :: gridding='no'         !< to test gridding correction
+    character(len=3)      :: gridding='no'        !< to test gridding correction
     character(len=3)      :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
     character(len=3)      :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)      :: kmeans='yes'
@@ -1185,7 +1185,7 @@ contains
         if( cline%defined('mskdiam') )then
             self%msk = round2even((self%mskdiam / self%smpd) / 2.)
             if( self%msk > msk_default )then
-                THROW_WARN('Mask diameter too large, falling back on default value')
+                if( msk_default > 0. ) THROW_WARN('Mask diameter too large, falling back on default value')
                 self%mskdiam = mskdiam_default
                 self%msk     = msk_default
             endif
