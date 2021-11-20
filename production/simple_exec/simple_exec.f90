@@ -82,22 +82,21 @@ type(postprocess_commander)         :: xpostprocess
 type(remoc_commander)               :: xremoc
 
 ! IMAGE PROCESSING PROGRAMS
-type(pspec_stats_commander)   :: xpspecstats
-type(mask_commander)          :: xmask
-type(fsc_commander)           :: xfsc
-! type(local_res_commander)     :: xlocal_res
+type(pspec_stats_commander)          :: xpspecstats
+type(mask_commander)                 :: xmask
+type(fsc_commander)                  :: xfsc
 type(nonuniform_phase_ran_commander) :: xnonuniform_phase_ran
-type(centervol_commander)     :: xcenter
-type(reproject_commander)     :: xreproject
-type(volops_commander)        :: xvolops
-type(convert_commander)       :: xconvert
-type(ctfops_commander)        :: xctfops
-type(filter_commander)        :: xfilter
-type(normalize_commander)     :: xnormalize
-type(scale_commander)         :: xscale
-type(stack_commander)         :: xstack
-type(stackops_commander)      :: xstackops
-type(shift_commander)         :: xshift
+type(centervol_commander)            :: xcenter
+type(reproject_commander)            :: xreproject
+type(volops_commander)               :: xvolops
+type(convert_commander)              :: xconvert
+type(ctfops_commander)               :: xctfops
+type(filter_commander)               :: xfilter
+type(normalize_commander)            :: xnormalize
+type(scale_commander)                :: xscale
+type(stack_commander)                :: xstack
+type(stackops_commander)             :: xstackops
+type(shift_commander)                :: xshift
 
 ! ORIENTATION PROCESSING PROGRAMS
 type(make_oris_commander) :: xmake_oris
@@ -248,8 +247,6 @@ select case(prg)
         call xmask%execute(cline)
     case( 'fsc' )
         call xfsc%execute(cline)
-    ! case( 'local_resolution' )
-    !     call xlocal_res%execute(cline)
     case( 'nonuniform_phase_ran' )
         call xnonuniform_phase_ran%execute(cline)
     case( 'center' )

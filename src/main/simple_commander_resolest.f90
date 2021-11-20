@@ -161,7 +161,7 @@ contains
     subroutine exec_nonuniform_phase_ran( self, cline )
         use simple_estimate_ssnr, only: nonuniform_phase_ran
         class(nonuniform_phase_ran_commander), intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
+        class(cmdline),                        intent(inout) :: cline
         type(parameters) :: params
         type(image)      :: even, odd
         type(masker)     :: mskvol
