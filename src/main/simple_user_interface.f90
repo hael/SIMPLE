@@ -120,7 +120,7 @@ type(simple_program), target :: motion_correct
 type(simple_program), target :: motion_correct_tomo
 type(simple_program), target :: nano_softmask
 type(simple_program), target :: new_project
-type(simple_program), target :: nonuniform_lp
+type(simple_program), target :: nonuniform_phase_ran
 type(simple_program), target :: normalize_
 type(simple_program), target :: orisops
 type(simple_program), target :: oristats
@@ -342,7 +342,7 @@ contains
         call new_motion_correct_tomo
         call new_nano_softmask
         call new_new_project
-        call new_nonuniform_lp
+        call new_nonuniform_phase_ran
         call new_normalize
         call new_orisops
         call new_oristats
@@ -444,7 +444,7 @@ contains
         call push2prg_ptr_array(motion_correct_tomo)
         call push2prg_ptr_array(nano_softmask)
         call push2prg_ptr_array(new_project)
-        call push2prg_ptr_array(nonuniform_lp)
+        call push2prg_ptr_array(nonuniform_phase_ran)
         call push2prg_ptr_array(normalize_)
         call push2prg_ptr_array(orisops)
         call push2prg_ptr_array(oristats)
@@ -603,8 +603,8 @@ contains
                 ptr2prg => nano_softmask
             case('new_project')
                 ptr2prg => new_project
-            case('nonuniform_lp')
-                ptr2prg => nonuniform_lp
+            case('nonuniform_phase_ran')
+                ptr2prg => nonuniform_phase_ran
             case('normalize')
                 ptr2prg => normalize_
             case('orisops')
@@ -753,7 +753,7 @@ contains
         write(logfhandle,'(A)') motion_correct%name
         write(logfhandle,'(A)') motion_correct_tomo%name
         write(logfhandle,'(A)') new_project%name
-        write(logfhandle,'(A)') nonuniform_lp%name
+        write(logfhandle,'(A)') nonuniform_phase_ran%name
         write(logfhandle,'(A)') normalize_%name
         write(logfhandle,'(A)') orisops%name
         write(logfhandle,'(A)') oristats%name
@@ -905,7 +905,7 @@ contains
         call set_param(qsys_name,     'qsys_name',     'multi',  'Queue system kind', 'Queue system kind(local|slurm|pbs)', '(local|slurm|pbs)', .false., 'local')
         call set_param(qsys_partition,'qsys_partition','str',    'Name of SLURM/PBS partition', 'Name of target partition of distributed computer system (SLURM/PBS)', 'give part name', .false., '')
         call set_param(qsys_qos,      'qsys_qos',      'str',    'Schedule priority', 'Job scheduling priority (SLURM/PBS)', 'give priority', .false., '')
-        call set_param(qsys_reservation, 'qsys_reservation', 'str', 'Name of reserved partition', 'Name of reserved target partition of distributed computer system (SLURM/PBS)', 'give yourpart', .false., '')
+        call set_param(qsys_reservation, 'qsys_reservation', 'str', 'Name of reserved partition', 'Name of reserved target partition of distributed computer system (SLURM/PBS)', 'give your part', .false., '')
         call set_param(box,            'box',          'num',    'Particle box size','Particle box size(in pixels)', '# pixels of box', .true., 0.)
         call set_param(nptcls,         'nptcls',       'num',    'Number of particles', 'Number of particle images', '# particles', .true., 0.)
         call set_param(outstk,         'outstk',       'file',   'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
@@ -2538,20 +2538,20 @@ contains
         ! <empty>
     end subroutine new_nano_softmask
 
-    subroutine new_nonuniform_lp
+    subroutine new_nonuniform_phase_ran
         ! PROGRAM SPECIFICATION
-        call nonuniform_lp%new(&
-        &'nonuniform_lp',&                                      ! name
+        call nonuniform_phase_ran%new(&
+        &'nonuniform_phase_ran',&                               ! name
         &'Nonuniform low-pass filtering',&                      ! descr_short
         &'is a program for nonuniform low-pass filtering by zeroing F-comps below noise in e/o maps',& ! descr_long
         &'simple_exec',&                                        ! executable
         &2, 1, 0, 0, 0, 2, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call nonuniform_lp%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
-        call nonuniform_lp%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
+        call nonuniform_phase_ran%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
+        call nonuniform_phase_ran%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
         ! parameter input/output
-        call nonuniform_lp%set_input('parm_ios', 1, smpd)
+        call nonuniform_phase_ran%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2559,11 +2559,11 @@ contains
         ! filter controls
         ! <empty>
         ! mask controls
-        call nonuniform_lp%set_input('mask_ctrls', 1, mskdiam)
-        call nonuniform_lp%set_input('mask_ctrls', 2, mskfile)
+        call nonuniform_phase_ran%set_input('mask_ctrls', 1, mskdiam)
+        call nonuniform_phase_ran%set_input('mask_ctrls', 2, mskfile)
         ! computer controls
-        call nonuniform_lp%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_nonuniform_lp
+        call nonuniform_phase_ran%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_nonuniform_phase_ran
 
     subroutine new_new_project
         ! PROGRAM SPECIFICATION

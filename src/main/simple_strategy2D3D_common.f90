@@ -365,6 +365,7 @@ contains
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_estimate_ssnr,    only: fsc2optlp_sub
         use simple_polarizer,        only: polarizer
+        use simple_tvfilter,         only: tvfilter
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(image),            intent(inout) :: img_in
         class(polarizer),        intent(inout) :: img_out
@@ -372,10 +373,12 @@ contains
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
-        real    :: frc(build_glob%img%get_filtsz()), filter(build_glob%img%get_filtsz())
-        real    :: xyz(3), sharg
-        integer :: filtsz
-        logical :: do_center
+        real,              parameter     :: LAMBDA_HERE = 1.0
+        type(tvfilter) :: tvfilt
+        real           :: frc(build_glob%img%get_filtsz()), filter(build_glob%img%get_filtsz())
+        real           :: xyz(3), sharg
+        integer        :: filtsz
+        logical        :: do_center
         filtsz    = build_glob%img%get_filtsz()
         do_center = (params_glob%center .eq. 'yes')
         ! centering only performed if params_glob%center.eq.'yes'
@@ -413,6 +416,11 @@ contains
         endif
         ! ensure we are in real-space before clipping
         call img_in%ifft()
+        !!!!!!!!!!!!!!!!!!!!!!!!!! <<< 2TST
+        ! call tvfilt%new
+        ! call tvfilt%apply_filter(img_in, LAMBDA_HERE)
+        ! call tvfilt%kill
+        !<<< !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         ! clip image if needed
         call img_in%clip(img_out)
         ! apply mask
@@ -533,7 +541,7 @@ contains
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
     subroutine readrefvols_ran_phases_below_noise( cline, fname_even, fname_odd )
-        use simple_estimate_ssnr, only: nonuniform_lp
+        use simple_estimate_ssnr, only: nonuniform_phase_ran
         class(cmdline),             intent(in) :: cline
         character(len=*),           intent(in) :: fname_even
         character(len=*), optional, intent(in) :: fname_odd
@@ -545,11 +553,11 @@ contains
             call build_glob%vol_odd%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
             call build_glob%vol_odd%read(fname_odd)
             if( cline%defined('mskfile') )then
-                ! zero Fourier components below noise power in a nonuniform manner
+                ! randomize Fourier phases below noise power in a nonuniform manner
                 call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
                 call mskvol%read(params_glob%mskfile)
                 call mskvol%one_at_edge ! to expand before masking of reference
-                call nonuniform_lp(build_glob%vol, build_glob%vol_odd, mskvol)
+                call nonuniform_phase_ran(build_glob%vol, build_glob%vol_odd, mskvol)
                 ! envelope masking
                 call mskvol%read(params_glob%mskfile) ! to bring back the edge
                 call build_glob%vol%zero_env_background(mskvol)
@@ -568,7 +576,7 @@ contains
                 call build_glob%vol%expand_cmat(params_glob%alpha,norm4proj=.true.)
                 call build_glob%vol_odd%fft
                 call build_glob%vol_odd%expand_cmat(params_glob%alpha,norm4proj=.true.)
-                ! zero Fourier components below noise power in a global manner
+                ! randomize Fourier phases below noise power in a global manner
                 if( params_glob%clsfrcs.eq.'no' )&
                 &call build_glob%vol%ran_phases_below_noise_power(build_glob%vol_odd)
             endif
@@ -650,9 +658,11 @@ contains
         if( params_glob%cc_objfun == OBJFUN_EUCLID )then
             ! no filtering
         else
-            call tvfilt%new
-            call tvfilt%apply_filter_3d(vol_ptr, LAMBDA_HERE)
-            call tvfilt%kill
+            !!!!!!!!!!!!!!!!!!!!!!!!!! <<< 2TST
+            ! call tvfilt%new
+            ! call tvfilt%apply_filter_3d(vol_ptr, LAMBDA_HERE)
+            ! call tvfilt%kill
+            !<<< !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         endif
         ! masking
         if( cline%defined('mskfile') )then

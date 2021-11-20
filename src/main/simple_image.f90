@@ -3689,8 +3689,8 @@ contains
         real    :: noise_pow, even_pow, odd_pow, phase
         complex :: diff
         lims  = self_even%fit%loop_lims(2)
-        if( .not.self_even%is_ft() ) THROW_HARD('even vol needs to be FTed')
-        if( .not.self_odd%is_ft()  ) THROW_HARD('odd  vol needs to be FTed')
+        if( .not.self_even%is_ft() ) THROW_HARD('even image needs to be FTed')
+        if( .not.self_odd%is_ft()  ) THROW_HARD('odd  image needs to be FTed')
         !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,diff,noise_pow,even_pow,odd_pow,phase)&
         !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
@@ -6372,7 +6372,7 @@ contains
     end subroutine shift2Dserial_2
 
     !> \brief mask  is for spherical masking
-    !! \param mskrad mask radius in pixels 
+    !! \param mskrad mask radius in pixels
     !! \param which mask type
     !! \param inner include cosine edge material
     !! \param width width of inner patch

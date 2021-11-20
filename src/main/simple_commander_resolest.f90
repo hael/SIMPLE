@@ -11,7 +11,7 @@ implicit none
 
 public :: fsc_commander
 ! public :: local_res_commander
-public :: nonuniform_lp_commander
+public :: nonuniform_phase_ran_commander
 private
 #include "simple_local_flags.inc"
 
@@ -23,10 +23,10 @@ end type fsc_commander
 !   contains
 !     procedure :: execute      => exec_local_res
 ! end type local_res_commander
-type, extends(commander_base) :: nonuniform_lp_commander
+type, extends(commander_base) :: nonuniform_phase_ran_commander
   contains
-    procedure :: execute      => exec_nonuniform_lp
-end type nonuniform_lp_commander
+    procedure :: execute      => exec_nonuniform_phase_ran
+end type nonuniform_phase_ran_commander
 
 contains
 
@@ -158,9 +158,9 @@ contains
     !     call simple_end('**** SIMPLE_LOCAL_RES NORMAL STOP ****')
     ! end subroutine exec_local_res
 
-    subroutine exec_nonuniform_lp( self, cline )
-        use simple_estimate_ssnr, only: nonuniform_lp
-        class(nonuniform_lp_commander), intent(inout) :: self
+    subroutine exec_nonuniform_phase_ran( self, cline )
+        use simple_estimate_ssnr, only: nonuniform_phase_ran
+        class(nonuniform_phase_ran_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(parameters) :: params
         type(image)      :: even, odd
@@ -180,7 +180,7 @@ contains
                 call mskvol%read(params%mskfile)
                 have_mask_file = .true.
             else
-                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_nonuniform_lp')
+                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_nonuniform_phase_ran')
             endif
         else
             ! spherical masking
@@ -197,20 +197,20 @@ contains
         else
             call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
         endif
-        call nonuniform_lp(even, odd, mskvol)
+        call nonuniform_phase_ran(even, odd, mskvol)
         if( have_mask_file )then
             call mskvol%read(params%mskfile)
             call even%mul(mskvol)
             call odd%mul(mskvol)
             call mskvol%kill
         endif
-        call even%write('nonuniform_lp_even.mrc')
-        call odd%write('nonuniform_lp_odd.mrc')
+        call even%write('nonuniform_phase_ran_even.mrc')
+        call odd%write('nonuniform_phase_ran_odd.mrc')
         ! destruct
         call even%kill
         call odd%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_NONUNIFORM_LP NORMAL STOP ****')
-    end subroutine exec_nonuniform_lp
+        call simple_end('**** SIMPLE_NONUNIFORM_PHASE_RAN NORMAL STOP ****')
+    end subroutine exec_nonuniform_phase_ran
 
 end module simple_commander_resolest

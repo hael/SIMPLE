@@ -6,7 +6,7 @@ include 'simple_lib.f08'
 implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
-public :: acc_dose2filter, dose_weight, nonuniform_lp, nonuniform_fsc_lp, local_res_lp
+public :: acc_dose2filter, dose_weight, nonuniform_phase_ran, nonuniform_fsc_lp, local_res_lp
 public :: plot_fsc
 private
 #include "simple_local_flags.inc"
@@ -146,7 +146,7 @@ contains
         dose_weight = exp(-acc_dose/(2.0*critical_exp))
     end function dose_weight
 
-    subroutine nonuniform_lp( even, odd, mskimg )
+    subroutine nonuniform_phase_ran( even, odd, mskimg )
         use simple_image, only: image
         class(image), intent(inout) :: even, odd, mskimg
         integer,      parameter     :: SUBBOX=32, LSHIFT=15, RSHIFT=16, CPIX=LSHIFT + 1, CHUNKSZ=20
@@ -157,12 +157,12 @@ contains
         integer     :: ldim(3), i, j, k, ithr, cnt, npix, lb(3), ub(3)
         real        :: smpd
         ! check input
-        if( even%is_ft()   ) THROW_HARD('even vol FTed; nonuniform_lp')
-        if( odd%is_ft()    ) THROW_HARD('odd  vol FTed; nonuniform_lp')
-        if( mskimg%is_ft() ) THROW_HARD('msk  vol FTed; nonuniform_lp')
+        if( even%is_ft()   ) THROW_HARD('even vol FTed; nonuniform_phase_ran')
+        if( odd%is_ft()    ) THROW_HARD('odd  vol FTed; nonuniform_phase_ran')
+        if( mskimg%is_ft() ) THROW_HARD('msk  vol FTed; nonuniform_phase_ran')
         ! set parameters
         ldim    = even%get_ldim()
-        if( ldim(3) == 1 ) THROW_HARD('not intended for 2D images; nonuniform_lp')
+        if( ldim(3) == 1 ) THROW_HARD('not intended for 2D images; nonuniform_phase_ran')
         smpd    = even%get_smpd()
         l_mask  = mskimg%bin2logical()
         npix    = count(l_mask)
@@ -239,7 +239,7 @@ contains
                 call subvols_odd(ithr)%ifft
             end subroutine set_subvols_msk_fft_filter_ifft
 
-    end subroutine nonuniform_lp
+    end subroutine nonuniform_phase_ran
 
     subroutine nonuniform_fsc_lp( even, odd, mskimg, map2filt, fsc_crit, locres_finds )
         use simple_image, only: image
