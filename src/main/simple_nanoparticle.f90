@@ -1342,8 +1342,8 @@ contains
        if( present(fname) ) then
            call centers_pdb%writepdb(fname)
        else
-           call centers_pdb%writepdb(trim(self%fbody)//'_atom_centers')
-           write(logfhandle,*) 'output, atomic coordinates:       ', trim(self%fbody)//'_atom_centers.pdb'
+           call centers_pdb%writepdb(trim(self%fbody)//'ATMS')
+           write(logfhandle,*) 'output, atomic coordinates:       ', trim(self%fbody)//'ATMS'
        endif
    end subroutine write_centers_1
 

@@ -86,7 +86,7 @@ type(pspec_stats_commander)   :: xpspecstats
 type(mask_commander)          :: xmask
 type(fsc_commander)           :: xfsc
 ! type(local_res_commander)     :: xlocal_res
-type(nonuniform_lp_commander) :: xnonuniform_lp
+type(nonuniform_phase_ran_commander) :: xnonuniform_phase_ran
 type(centervol_commander)     :: xcenter
 type(reproject_commander)     :: xreproject
 type(volops_commander)        :: xvolops
@@ -250,8 +250,8 @@ select case(prg)
         call xfsc%execute(cline)
     ! case( 'local_resolution' )
     !     call xlocal_res%execute(cline)
-    case( 'nonuniform_lp' )
-        call xnonuniform_lp%execute(cline)
+    case( 'nonuniform_phase_ran' )
+        call xnonuniform_phase_ran%execute(cline)
     case( 'center' )
         call xcenter%execute(cline)
     case( 'reproject' )
