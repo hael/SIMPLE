@@ -80,7 +80,9 @@ contains
         if( .not. cline%defined('ptclw') )     call cline%set('ptclw',      'no')
         ! hard set oritype
         call cline%set('oritype', 'out') ! because cavgs are part of out segment
-        ! class averages, so no CTF!!
+        ! hard set bfactor
+        call cline%set('bfac', 0.)       ! because initial models should not be sharpened
+        ! class averages, so no CTF
         ctfvars%ctfflag = CTFFLAG_NO
         ! auto-scaling prep
         do_autoscale = (cline%get_carg('autoscale').eq.'yes')
