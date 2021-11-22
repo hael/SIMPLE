@@ -477,14 +477,14 @@ contains
         call self%discard_atoms_with_low_contact_score(use_cn_thresh)
         if( use_cn_thresh ) call self%discard_lowly_coordinated(CN_THRESH_XTAL, a, l_fit_lattice)
         ! WRITE OUTPUT
-        call self%img_bin%write_bimg(trim(self%fbody)//'BIN.mrc')
-        write(logfhandle,*) 'output, binarized map:            ', trim(self%fbody)//'BIN.mrc'
-        call self%img_cc%write_bimg(trim(self%fbody)//'CC.mrc')
-        write(logfhandle,*) 'output, connected components map: ', trim(self%fbody)//'CC.mrc'
+        call self%img_bin%write_bimg(trim(self%fbody)//'_BIN.mrc')
+        write(logfhandle,*) 'output, binarized map:            ', trim(self%fbody)//'_BIN.mrc'
+        call self%img_cc%write_bimg(trim(self%fbody)//'_CC.mrc')
+        write(logfhandle,*) 'output, connected components map: ', trim(self%fbody)//'_CC.mrc'
         call self%write_centers
         call self%simulate_atoms(atoms_obj, simatms)
-        call simatms%write(trim(self%fbody)//'SIM.mrc')
-        write(logfhandle,*) 'output, simulated atomic density: ', trim(self%fbody)//'SIM.mrc'
+        call simatms%write(trim(self%fbody)//'_SIM.mrc')
+        write(logfhandle,*) 'output, simulated atomic density: ', trim(self%fbody)//'_SIM.mrc'
         ! destruct
         call simatms%kill
         call atoms_obj%kill
