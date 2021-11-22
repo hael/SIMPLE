@@ -10,6 +10,7 @@ cd build_gcc5.5.0
 cmake ..
 make -j 8 install
 cd ..
+chmod a+rx -R build_gcc5.5.0/
 module unload gcc/5.5.0
 
 echo "Compiling SIMPLE with gcc9.3.0"
@@ -20,6 +21,7 @@ cd build_gcc9.3.0
 cmake ..
 make -j 8 install
 cd ..
+chmod a+rx -R build_gcc9.3.0/
 module unload gcc/9.3.0
 
 echo "Compiling SIMPLE with gcc10.2.0"
@@ -30,6 +32,7 @@ cd build_gcc10.2.0
 cmake ..
 make -j 8 install
 cd ..
+chmod a+rx -R build_gcc10.2.0
 module unload gcc/10.2.0
 
 exit
