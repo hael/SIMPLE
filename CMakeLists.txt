@@ -30,6 +30,7 @@ option(BUILD_SHARED_LIBS "Build the simple library as shared or static (default)
 option(BUILD_DOCS "Enable the generation of PDF manuals and doxygen API documentation" OFF)
 option(USE_SYSTEM_JPEG_SQLite "Compile libjpeg9 and sqlite3 from source (default) or use system libraries." OFF)
 option(GUI "Install the GUI" ON)
+option(BUILD_GUI "Build single user GUI from source" OFF)
 # We probably don't want these to run on every build.
 option(COVERALLS "Generate coveralls data" OFF) #coveralls.io
 OPTION(USE_CODE_COVERAGE "Added code coverage flags" OFF)
