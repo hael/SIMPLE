@@ -30,6 +30,7 @@ character(len=STDLEN), parameter   :: SPPROJ_SNAPSHOT     = 'SIMPLE_PROJECT_SNAP
 character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
 character(len=STDLEN), parameter   :: PROJNAME_CHUNK      = 'chunk'
 character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
+character(len=STDLEN), parameter   :: DISTR_EXEC_FNAME    = './distr_cluster2D_pool'
 logical,               parameter   :: DEBUG_HERE          = .false.
 
 type, extends(commander_base) :: cluster2D_commander_stream
@@ -58,6 +59,7 @@ type chunk
         procedure :: reject
         procedure :: has_converged
         procedure :: print_info
+        procedure :: terminate
         procedure :: kill
 end type chunk
 
@@ -262,6 +264,26 @@ contains
         call debug_print('end chunk%remove_folder '//int2str(self%id))
     end subroutine remove_folder
 
+    subroutine terminate( self )
+        class(chunk), intent(inout) :: self
+        character(len=XLONGSTRLEN)  :: cwd
+        integer                     :: ipart, numlen
+        if( self%id == 0 )   return
+        if( file_exists(self%path) )then
+            numlen = len(int2str(params_glob%nparts_chunk))
+            do ipart = 1,params_glob%nparts_chunk
+                call chdir(self%path)
+                call simple_getcwd(cwd)
+                cwd_glob = trim(cwd)
+                call qsys_cleanup(keep2D=.false.)
+                call simple_touch('JOB_FINISHED_'//int2str_pad(ipart,numlen),errmsg="chunk%terminate")
+                call simple_touch('CAVGASSEMBLE_FINISHED',errmsg="chunk%terminate")
+                call chdir('..')
+                call simple_getcwd(cwd_glob)
+            enddo
+        endif
+    end subroutine terminate
+
     subroutine display_iter( self )
         class(chunk), intent(inout) :: self
         type(oris)                 :: os
@@ -413,7 +435,7 @@ contains
         character(len=LONGSTRLEN)          :: prev_snapshot_frcs, prev_snapshot_cavgs
         real    :: SMPD_TARGET = 4.       ! target sampling distance
         real    :: orig_smpd, scale_factor, smpd, lp_greedy, lpstart_stoch
-        integer :: nptcls_per_chunk, ncls_glob, last_injection, max_ncls,ichunk, time_iter
+        integer :: nptcls_per_chunk, ncls_glob, last_injection, max_ncls,ichunk, time_iter, ipart
         integer :: iter, orig_box, box, boxpd, n_spprojs, pool_iter, origproj_time, time_start_iter
         logical :: do_autoscale, l_maxed, l_greedy, l_forced_exit, l_once
         if( cline%defined('refine') )then
@@ -691,10 +713,17 @@ contains
             endif
         enddo
         call debug_print('exited global iter '//int2str(iter))
-        call qsys_cleanup(keep2D=.false.)
+        call qsys_cleanup
+        do ichunk = 1,params%nchunks
+            call chunks(ichunk)%terminate
+        enddo
         if( .not.pool_converged )then
             pool_iter = pool_iter-1
             refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params%ext)
+            ! tricking the asynchronous master process to come to a hard stop
+            do ipart = 1,params%nparts
+                call simple_touch('JOB_FINISHED_'//int2str_pad(ipart,params%numlen))
+            enddo
         endif
         if( pool_iter >= 1 )then
             ! updates project
@@ -1224,7 +1253,7 @@ contains
                 call debug_print('in exec_classify_pool 4')
                 deallocate(update_cnts,transfer_mask)
                 call transfer_spproj%kill
-                call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D, './distr_cluster2D_pool', 'simple_log_cluster2D_pool')
+                call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D, DISTR_EXEC_FNAME, 'simple_log_cluster2D_pool')
                 pool_available = .false.
                 pool_converged = .false.
                 write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',n2update,&
