@@ -19,7 +19,6 @@ private
 type(polarizer), allocatable :: match_ptcl_imgs(:)
 type(polarft_corrcalc)       :: pftcc
 integer                      :: batchsz_max
-logical, parameter           :: L_BENCH = .false.
 real(timer_int_kind)         :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio, rt_tot
 integer(timer_int_kind)      ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
 character(len=STDLEN)        :: benchfname
@@ -50,7 +49,7 @@ contains
         integer              :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
         logical              :: doprint, l_partial_sums, l_frac_update, l_ctf
         logical              :: l_snhc, l_greedy, l_stream, l_np_cls_defined
-        if( L_BENCH )then
+        if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
         endif
@@ -189,7 +188,7 @@ contains
         batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
 
         ! GENERATE REFERENCES
-        if( L_BENCH )then
+        if( L_BENCH_GLOB )then
             rt_init = toc(t_init)
             t_prep_pftcc = tic()
         endif
@@ -204,7 +203,7 @@ contains
             call match_ptcl_imgs(iptcl_batch)%copy_polarizer(build_glob%img_match)
         end do
         !$omp end parallel do
-        if( L_BENCH ) rt_prep_pftcc = toc(t_prep_pftcc)
+        if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
 
         ! STOCHASTIC IMAGE ALIGNMENT
         rt_align         = 0.
@@ -217,16 +216,16 @@ contains
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
             ! Prep particles in pftcc
-            if( L_BENCH ) t_prep_pftcc = tic()
+            if( L_BENCH_GLOB ) t_prep_pftcc = tic()
             call build_pftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
             if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
-            if( L_BENCH ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
+            if( L_BENCH_GLOB ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
             ! batch strategy2D objects
-            if( L_BENCH ) t_init = tic()
+            if( L_BENCH_GLOB ) t_init = tic()
             call prep_strategy2D_batch( pftcc, which_iter, batchsz, pinds(batch_start:batch_end))
-            if( L_BENCH ) rt_init = rt_init + toc(t_init)
+            if( L_BENCH_GLOB ) rt_init = rt_init + toc(t_init)
             ! Particles threaded loop
-            if( L_BENCH ) t_align = tic()
+            if( L_BENCH_GLOB ) t_align = tic()
             !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,updatecnt)&
             !$omp schedule(static) proc_bind(close)
             do iptcl_batch = 1,batchsz                     ! particle batch index
@@ -280,7 +279,7 @@ contains
                 call strategy2Dsrch(iptcl_batch)%ptr%kill
             enddo ! Particles threaded loop
             !$omp end parallel do
-            if( L_BENCH ) rt_align = rt_align + toc(t_align)
+            if( L_BENCH_GLOB ) rt_align = rt_align + toc(t_align)
         enddo ! Batch loop
 
         ! CLEAN-UP
@@ -293,22 +292,22 @@ contains
         deallocate(strategy2Dsrch,pinds,strategy2Dspecs,match_ptcl_imgs,batches,ptcl_mask)
 
         ! OUTPUT ORIENTATIONS
-        if( L_BENCH ) t_projio = tic()
+        if( L_BENCH_GLOB ) t_projio = tic()
         call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%spproj_field, &
             &[params_glob%fromp,params_glob%top], isegment=PTCL2D_SEG)
         params_glob%oritab = params_glob%outfile
-        if( L_BENCH ) rt_projio = toc(t_projio)
+        if( L_BENCH_GLOB ) rt_projio = toc(t_projio)
 
         ! WIENER RESTORATION OF CLASS AVERAGES
-        if( L_BENCH ) t_cavg = tic()
+        if( L_BENCH_GLOB ) t_cavg = tic()
         call cavger_transf_oridat( build_glob%spproj )
         call cavger_assemble_sums( l_partial_sums )
         ! write results to disk
         call cavger_readwrite_partial_sums('write')
         call cavger_kill
-        if( L_BENCH ) rt_cavg = toc(t_cavg)
+        if( L_BENCH_GLOB ) rt_cavg = toc(t_cavg)
         call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')
-        if( L_BENCH )then
+        if( L_BENCH_GLOB )then
             rt_tot  = toc(t_tot)
             doprint = .true.
             if( params_glob%part /= 1 ) doprint = .false.

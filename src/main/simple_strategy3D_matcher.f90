@@ -45,7 +45,6 @@ type(sym)                      :: c1_symop
 integer                        :: nptcls2update
 type(euclid_sigma2)            :: eucl_sigma
 ! benchmarking
-logical, parameter             :: L_BENCH = .false.
 integer(timer_int_kind)        :: t_init,   t_prep_pftcc,  t_prep_orisrch,  t_align,  t_rec,  t_tot,  t_projio
 real(timer_int_kind)           :: rt_init, rt_prep_pftcc, rt_prep_orisrch, rt_align, rt_rec, rt_tot, rt_projio
 character(len=STDLEN)          :: benchfname
@@ -75,7 +74,7 @@ contains
         integer :: iptcl, fnr, ithr, updatecnt, state, n_nozero, iptcl_batch, iptcl_map
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
         logical :: doprint, do_extr, l_ctf
-        if( L_BENCH )then
+        if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
         endif
@@ -151,14 +150,14 @@ contains
         batchsz_max = maxval(batches(:,2)-batches(:,1)+1)
 
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
-        if( L_BENCH )then
+        if( L_BENCH_GLOB )then
             rt_init = toc(t_init)
             t_prep_pftcc = tic()
         endif
         call preppftcc4align(cline, batchsz_max)
-        if( L_BENCH ) rt_prep_pftcc = toc(t_prep_pftcc)
+        if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
 
-        if( L_BENCH ) t_prep_orisrch = tic()
+        if( L_BENCH_GLOB ) t_prep_orisrch = tic()
         ! clean big objects before starting to allocate new big memory chunks
         ! cannot kill build_glob%vol since used in continuous search
         call build_glob%vol2%kill
@@ -187,7 +186,7 @@ contains
             l_ctf = .false.
         endif
         write(logfhandle,'(A,1X,I3)') '>>> REFINE3D SEARCH, ITERATION:', which_iter
-        if( L_BENCH )then
+        if( L_BENCH_GLOB )then
             rt_prep_orisrch = toc(t_prep_orisrch)
             rt_align        = 0.
         endif
@@ -197,12 +196,12 @@ contains
             batch_end   = batches(ibatch,2)
             batchsz     = batch_end - batch_start + 1
             ! Prep particles in pftcc
-            if( L_BENCH ) t_prep_pftcc = tic()
+            if( L_BENCH_GLOB ) t_prep_pftcc = tic()
             call build_pftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
             if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
-            if( L_BENCH ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
+            if( L_BENCH_GLOB ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
             ! Particles loop
-            if( L_BENCH ) t_align = tic()
+            if( L_BENCH_GLOB ) t_align = tic()
             !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,ithr,updatecnt,orientation)&
             !$omp schedule(static) proc_bind(close)
             do iptcl_batch = 1,batchsz                     ! particle batch index
@@ -269,7 +268,7 @@ contains
                 end if
             enddo ! Particles loop
             !$omp end parallel do
-            if( L_BENCH ) rt_align = rt_align + toc(t_align)
+            if( L_BENCH_GLOB ) rt_align = rt_align + toc(t_align)
         enddo
         ! cleanup
         do iptcl_batch = 1,batchsz_max
@@ -306,7 +305,7 @@ contains
         if( allocated(het_mask) ) deallocate(het_mask)
 
         ! OUTPUT ORIENTATIONS
-        if( L_BENCH ) t_projio = tic()
+        if( L_BENCH_GLOB ) t_projio = tic()
         select case(trim(params_glob%oritype))
             case('ptcl3D')
                 call binwrite_oritab(params_glob%outfile, build_glob%spproj, &
@@ -318,18 +317,18 @@ contains
                 THROW_HARD('unsupported oritype: '//trim(params_glob%oritype)//'; refine3D_exec')
         end select
         params_glob%oritab = params_glob%outfile
-        if( L_BENCH ) rt_projio = toc(t_projio)
+        if( L_BENCH_GLOB ) rt_projio = toc(t_projio)
 
         ! VOLUMETRIC 3D RECONSTRUCTION
-        if( L_BENCH ) t_rec = tic()
+        if( L_BENCH_GLOB ) t_rec = tic()
         call calc_3Drec( cline, which_iter )
         call eucl_sigma%kill
-        if( L_BENCH ) rt_rec = toc(t_rec)
+        if( L_BENCH_GLOB ) rt_rec = toc(t_rec)
 
         ! REPORT CONVERGENCE
         call qsys_job_finished(  'simple_strategy3D_matcher :: refine3D_exec')
         if( .not. params_glob%l_distr_exec ) converged = conv%check_conv3D(cline, params_glob%msk)
-        if( L_BENCH )then
+        if( L_BENCH_GLOB )then
             rt_tot  = toc(t_tot)
             doprint = .true.
             if( params_glob%part /= 1 ) doprint = .false.
