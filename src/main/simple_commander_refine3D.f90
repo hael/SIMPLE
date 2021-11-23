@@ -101,8 +101,6 @@ contains
         type(cmdline)    :: cline_check_3Dconv
         type(cmdline)    :: cline_volassemble
         type(cmdline)    :: cline_postprocess
-        ! benchmarking
-        logical, parameter      :: L_BENCH = .false.
         integer(timer_int_kind) :: t_init,   t_scheduled,  t_merge_algndocs,  t_volassemble,  t_tot
         real(timer_int_kind)    :: rt_init, rt_scheduled, rt_merge_algndocs, rt_volassemble, rt_tot
         character(len=STDLEN)   :: benchfname
@@ -338,7 +336,7 @@ contains
         iter   = params%startit - 1
         corr   = -1.
         do
-            if( L_BENCH )then
+            if( L_BENCH_GLOB )then
                 t_init = tic()
                 t_tot  = t_init
             endif
@@ -398,18 +396,18 @@ contains
                 call job_descr%set('frcs', trim(FRCS_FILE))
             endif
             ! schedule
-            if( L_BENCH )then
+            if( L_BENCH_GLOB )then
                 rt_init = toc(t_init)
                 t_scheduled = tic()
             endif
             call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
             ! assemble alignment docs
-            if( L_BENCH )then
+            if( L_BENCH_GLOB )then
                 rt_scheduled = toc(t_scheduled)
                 t_merge_algndocs = tic()
             endif
             call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
-            if( L_BENCH )then
+            if( L_BENCH_GLOB )then
                 rt_merge_algndocs = toc(t_merge_algndocs)
                 t_volassemble = tic()
             endif
@@ -506,7 +504,7 @@ contains
                         endif
                     enddo
             end select
-            if( L_BENCH ) rt_volassemble = toc(t_volassemble)
+            if( L_BENCH_GLOB ) rt_volassemble = toc(t_volassemble)
 
             ! CONVERGENCE
             converged = .false.
@@ -579,7 +577,7 @@ contains
                 params%cc_objfun = OBJFUN_EUCLID
                 l_switch2euclid  = .false.
             endif
-            if( L_BENCH )then
+            if( L_BENCH_GLOB )then
                 rt_tot  = toc(t_init)
                 benchfname = 'REFINE3D_DISTR_BENCH_ITER'//int2str_pad(iter,3)//'.txt'
                 call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')

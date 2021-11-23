@@ -155,12 +155,11 @@ contains
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
         integer                       :: part, s, n, ss, state, find4eoavg, fnr
-        logical, parameter            :: L_BENCH = .false.
         integer(timer_int_kind)       :: t_init, t_assemble, t_sum_eos, t_sampl_dens_correct_eos
         integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_tot
         real(timer_int_kind)          :: rt_init, rt_assemble, rt_sum_eos, rt_sampl_dens_correct_eos
         real(timer_int_kind)          :: rt_sampl_dens_correct_sum, rt_eoavg, rt_tot
-        if( L_BENCH )then
+        if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
         endif
@@ -174,7 +173,7 @@ contains
         call eorecvol_read%new( build%spproj)
         call eorecvol_read%kill_exp ! reduced memory usage
         n = params%nstates*params%nparts
-        if( L_BENCH )then
+        if( L_BENCH_GLOB )then
             ! end of init
             rt_init = toc(t_init)
             ! initialise incremental timers before loop
@@ -192,7 +191,7 @@ contains
                 s     = ss
                 state = ss
             endif
-            if( L_BENCH ) t_assemble = tic()
+            if( L_BENCH_GLOB ) t_assemble = tic()
             call build%eorecvol%reset_all
             ! assemble volumes
             do part=1,params%nparts
@@ -200,31 +199,31 @@ contains
                 ! sum the Fourier coefficients
                 call build%eorecvol%sum_reduce(eorecvol_read)
             end do
-            if( L_BENCH ) rt_assemble = rt_assemble + toc(t_assemble)
+            if( L_BENCH_GLOB ) rt_assemble = rt_assemble + toc(t_assemble)
             ! correct for sampling density and estimate resolution
             allocate(recname, source=trim(VOL_FBODY)//int2str_pad(state,2))
             allocate(volname, source=recname//params%ext)
             eonames(1) = trim(recname)//'_even'//params%ext
             eonames(2) = trim(recname)//'_odd'//params%ext
             resmskname = params%mskfile
-            if( L_BENCH ) t_sum_eos = tic()
+            if( L_BENCH_GLOB ) t_sum_eos = tic()
             call build%eorecvol%sum_eos
-            if( L_BENCH )then
+            if( L_BENCH_GLOB )then
                 rt_sum_eos               = rt_sum_eos + toc(t_sum_eos)
                 t_sampl_dens_correct_eos = tic()
             endif
             call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
-            if( L_BENCH )then
+            if( L_BENCH_GLOB )then
                 rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
             endif
             call build%eorecvol%get_res(res05s(s), res0143s(s))
-            if( L_BENCH ) t_sampl_dens_correct_sum = tic()
+            if( L_BENCH_GLOB ) t_sampl_dens_correct_sum = tic()
             call build%eorecvol%sampl_dens_correct_sum( build%vol )
-            if( L_BENCH ) rt_sampl_dens_correct_sum = rt_sampl_dens_correct_sum + toc(t_sampl_dens_correct_sum)
+            if( L_BENCH_GLOB ) rt_sampl_dens_correct_sum = rt_sampl_dens_correct_sum + toc(t_sampl_dens_correct_sum)
             call build%vol%write( volname, del_if_exists=.true. )
             call wait_for_closure( volname )
             ! need to put the sum back at lowres for the eo pairs
-            if( L_BENCH ) t_eoavg = tic()
+            if( L_BENCH_GLOB ) t_eoavg = tic()
             call build%vol%fft()
             call build%vol2%zero_and_unflag_ft
             call build%vol2%read(eonames(1))
@@ -238,7 +237,7 @@ contains
             call build%vol2%insert_lowres(build%vol, find4eoavg)
             call build%vol2%ifft()
             call build%vol2%write(eonames(2), del_if_exists=.true.)
-            if( L_BENCH ) rt_eoavg = rt_eoavg + toc(t_eoavg)
+            if( L_BENCH_GLOB ) rt_eoavg = rt_eoavg + toc(t_eoavg)
             deallocate(recname, volname)
             if( cline%defined('state') )exit
         end do
@@ -256,7 +255,7 @@ contains
             allocate( finished_fname, source='VOLASSEMBLE_FINISHED' )
         endif
         call simple_touch( finished_fname , errmsg='In: commander_rec::volassemble')
-        if( L_BENCH )then
+        if( L_BENCH_GLOB )then
             rt_tot     = toc(t_tot)
             benchfname = 'VOLASSEMBLE_BENCH.txt'
             call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
