@@ -149,8 +149,7 @@ contains
     generic            :: add => add_1, add_2, add_3, add_4, add_5
     procedure, private :: add_workshare_1
     procedure, private :: add_workshare_2
-    procedure, private :: add_workshare_3
-    generic            :: add_workshare => add_workshare_1, add_workshare_2, add_workshare_3
+    generic            :: add_workshare => add_workshare_1, add_workshare_2
     procedure, private :: subtr_1
     procedure, private :: subtr_2
     procedure, private :: subtr_3
@@ -2194,18 +2193,7 @@ contains
         endif
     end subroutine add_5
 
-    subroutine add_workshare_1( self1, self1_to_add, self2, self2_to_add, self3, self3_to_add, self4, self4_to_add )
-        class(image),   intent(inout) :: self1, self2, self3, self4
-        class(image),   intent(in)    :: self1_to_add, self2_to_add, self3_to_add, self4_to_add
-        !$omp parallel workshare proc_bind(close)
-        self1%cmat = self1%cmat + self1_to_add%cmat
-        self2%cmat = self2%cmat + self2_to_add%cmat
-        self3%cmat = self3%cmat + self3_to_add%cmat
-        self4%cmat = self4%cmat + self4_to_add%cmat
-        !$omp end parallel workshare
-    end subroutine add_workshare_1
-
-    subroutine add_workshare_2( self, self_to_add, rho, rho_to_add )
+    subroutine add_workshare_1( self, self_to_add, rho, rho_to_add )
         class(image),       intent(inout) :: self
         class(image),       intent(in)    :: self_to_add
         real(kind=c_float), intent(inout) :: rho(:,:,:)
@@ -2221,9 +2209,9 @@ contains
             rho       = rho + rho_to_add
             !$omp end parallel workshare
         endif
-    end subroutine add_workshare_2
+    end subroutine add_workshare_1
 
-    subroutine add_workshare_3( self, self_to_add )
+    subroutine add_workshare_2( self, self_to_add )
         class(image),   intent(inout) :: self
         class(image),   intent(in)    :: self_to_add
         if( self%ft )then
@@ -2235,7 +2223,7 @@ contains
             self%rmat = self%rmat + self_to_add%rmat
             !$omp end parallel workshare
         endif
-    end subroutine add_workshare_3
+    end subroutine add_workshare_2
 
     !>  \brief subtraction is for image subtraction(-)
     function subtraction( self_from, self_to ) result( self )

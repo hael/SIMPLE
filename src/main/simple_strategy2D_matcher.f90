@@ -179,7 +179,7 @@ contains
         if( file_exists(params_glob%frcs) ) call build_glob%clsfrcs%read(params_glob%frcs)
 
         ! SET FOURIER INDEX RANGE
-        call set_bp_range2D(cline, which_iter, frac_srch_space )
+        call set_bp_range2D(cline, which_iter, frac_srch_space)
 
         ! PREP BATCH ALIGNEMENT
         batchsz_max = min(nptcls2update,params_glob%nthr*BATCHTHRSZ)
