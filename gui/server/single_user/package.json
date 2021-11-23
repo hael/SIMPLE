@@ -40,12 +40,12 @@
     "http-auth": "^3.2.3",
     "is-running": "^2.1.0",
     "morgan": "^1.9.1",
-    "mrchandler": "^1.0.0",
+    "mrchandler": "^1.0.1",
     "node-fetch": "^2.2.0",
-    "pug": "^2.0.3",
+    "pug": "^3.0.2",
     "require": "^2.4.20",
-    "sharp": "^0.21.3",
-    "sqlite3": "^4.0.2"
+    "sharp": "^0.25.1",
+    "sqlite3": "^5.0.2"
   },
   "devDependencies": {
     "electron": "^3.0.11",
