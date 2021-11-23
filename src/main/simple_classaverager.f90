@@ -352,7 +352,7 @@ contains
         complex :: fcomp
         real    :: loc(2), mat(2,2), dist(2), pw, add_phshift
         integer :: lims(3,2), phys_cmat(3), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
-        integer :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, sh, iwinsz, nyq
+        integer :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, sh, iwinsz, nyq
         integer :: alloc_stat, wdim, h, k, l, m, ll, mm, incr, icls, iptcl, batchsz_max, interp_shlim, interp_shlim_sq
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
@@ -372,7 +372,7 @@ contains
             ! batch planning
             icls_pop = class_pop(icls)
             if( icls_pop < 1 ) cycle
-            nbatches = ceiling(real(icls_pop)/real(params_glob%nthr*BATCHTHRSZ))
+            nbatches = ceiling(real(icls_pop)/real(nthr_glob*BATCHTHRSZ))
             batches  = split_nobjs_even(icls_pop, nbatches)
             ! batch loop
             do batch=1,nbatches
@@ -417,7 +417,7 @@ contains
             rho_even  = 0.
             rho_odd   = 0.
             ! batch planning
-            nbatches = ceiling(real(icls_pop)/real(params_glob%nthr*BATCHTHRSZ))
+            nbatches = ceiling(real(icls_pop)/real(nthr_glob*BATCHTHRSZ))
             batches  = split_nobjs_even(icls_pop, nbatches)
             ! batch loop, prep
             do batch=1,nbatches
@@ -805,51 +805,63 @@ contains
 
     !>  \brief  re-generates the object after distributed execution
     subroutine cavger_assemble_sums_from_parts
-        type(image), allocatable :: imgs4read(:)
+        complex,          allocatable :: cmats(:,:,:,:,:)
+        complex,          allocatable :: csums(:,:,:,:,:)
         character(len=:), allocatable :: cae, cao, cte, cto
-        integer :: ipart,  icls
+        type(image) :: img4read
+        integer     :: ipart, icls, array_shape(3)
         call init_cavgs_sums
-        allocate(imgs4read(4))
-        call imgs4read(1)%new(ldim_pd, smpd)
-        call imgs4read(1)%set_ft(.true.)
-        call imgs4read(2)%new(ldim_pd, smpd)
-        call imgs4read(2)%set_ft(.true.)
-        call imgs4read(3)%new(ldim_pd, smpd)
-        call imgs4read(3)%set_ft(.true.)
-        call imgs4read(4)%new(ldim_pd, smpd)
-        call imgs4read(4)%set_ft(.true.)
+        ! construct image for read
+        call img4read%new(ldim_pd, smpd)
+        call img4read%set_ft(.true.)
+        ! construct complex matrices for parallel summation
+        array_shape = img4read%get_array_shape()
+        allocate(cmats(4, ncls, array_shape(1), array_shape(2), array_shape(3)), source=cmplx(0.,0.))
+        allocate(csums(4, ncls, array_shape(1), array_shape(2), array_shape(3)), source=cmplx(0.,0.))
         do ipart=1,params_glob%nparts
-            allocate(cae, source='cavgs_even_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
-            allocate(cao, source='cavgs_odd_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
+            ! look for files
+            allocate(cae, source='cavgs_even_part'    //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
+            allocate(cao, source='cavgs_odd_part'     //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
             allocate(cte, source='ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
-            allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
-            if( .not. file_exists(cae) )then
-                THROW_HARD('file: '//trim(cae)//' does not exist; cavger_assemble_sums_from_parts')
-            endif
-            if( .not. file_exists(cao) )then
-                THROW_HARD('file: '//trim(cao)//' does not exist; cavger_assemble_sums_from_parts')
-            endif
-            if( .not. file_exists(cte) )then
-                THROW_HARD('file: '//trim(cte)//' does not exist; cavger_assemble_sums_from_parts')
-            endif
-            if( .not. file_exists(cto) )then
-                THROW_HARD('file: '//trim(cto)//' does not exist; cavger_assemble_sums_from_parts')
-            endif
+            allocate(cto, source='ctfsqsums_odd_part' //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
+            if( .not. file_exists(cae) ) THROW_HARD('file: '//trim(cae)//' does not exist; cavger_assemble_sums_from_parts')
+            if( .not. file_exists(cao) ) THROW_HARD('file: '//trim(cao)//' does not exist; cavger_assemble_sums_from_parts')
+            if( .not. file_exists(cte) ) THROW_HARD('file: '//trim(cte)//' does not exist; cavger_assemble_sums_from_parts')
+            if( .not. file_exists(cto) ) THROW_HARD('file: '//trim(cto)//' does not exist; cavger_assemble_sums_from_parts')
+            ! serial read
             do icls=1,ncls
-                call imgs4read(1)%read(cae, icls)
-                call imgs4read(2)%read(cao, icls)
-                call imgs4read(3)%read(cte, icls)
-                call imgs4read(4)%read(cto, icls)
-                call cavgs_even(icls)%add_workshare(imgs4read(1), cavgs_odd(icls),imgs4read(2),&
-                    &ctfsqsums_even(icls), imgs4read(3), ctfsqsums_odd(icls), imgs4read(4))
+                call img4read%read(cae,icls)
+                call img4read%get_cmat_sub(cmats(1,icls,:,:,:))
+                call img4read%read(cao,icls)
+                call img4read%get_cmat_sub(cmats(2,icls,:,:,:))
+                call img4read%read(cte,icls)
+                call img4read%get_cmat_sub(cmats(3,icls,:,:,:))
+                call img4read%read(cto,icls)
+                call img4read%get_cmat_sub(cmats(4,icls,:,:,:))
             end do
+            ! parallel summation
+            !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
+            do icls=1,ncls
+                csums(1,icls,:,:,:) = csums(1,icls,:,:,:) + cmats(1,icls,:,:,:)
+                csums(2,icls,:,:,:) = csums(2,icls,:,:,:) + cmats(2,icls,:,:,:)
+                csums(3,icls,:,:,:) = csums(3,icls,:,:,:) + cmats(3,icls,:,:,:)
+                csums(4,icls,:,:,:) = csums(4,icls,:,:,:) + cmats(4,icls,:,:,:)
+            end do
+            !$omp end parallel do
             deallocate(cae, cao, cte, cto)
         end do
-        call imgs4read(1)%kill
-        call imgs4read(2)%kill
-        call imgs4read(3)%kill
-        call imgs4read(4)%kill
-        deallocate(imgs4read)
+        ! update image objects in parallel
+        !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
+        do icls=1,ncls
+            call cavgs_even(icls)    %set_cmat(csums(1,icls,:,:,:))
+            call cavgs_odd(icls)     %set_cmat(csums(2,icls,:,:,:))
+            call ctfsqsums_even(icls)%set_cmat(csums(3,icls,:,:,:))
+            call ctfsqsums_odd(icls) %set_cmat(csums(4,icls,:,:,:))
+        end do
+        !$omp end parallel do
+        ! destruct
+        call img4read%kill
+        deallocate(cmats, csums)
         call cavger_merge_eos_and_norm()
     end subroutine cavger_assemble_sums_from_parts
 

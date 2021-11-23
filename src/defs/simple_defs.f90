@@ -134,7 +134,7 @@ real, parameter    :: KBALPHA              = 2.        !< interpolation alpha (o
 real, parameter    :: RECWINSZ             = 1.5       !< half-window size for 3D reconstruction
 
 ! real constants that control search and convergence
-real, parameter    :: FRAC_SH_LIM          = 80.0      !< at what frac to turn on the shift search
+real, parameter    :: FRAC_SH_LIM          = 75.0      !< at what frac to turn on the shift search
 real, parameter    :: NEIGH_MINFRAC        = 0.3       !< minimum fraction of search space scanned in refine=neigh
 real, parameter    :: FRAC_GREEDY_LIM      = 99.0      !< at what frac to turn to greedy search
 real, parameter    :: EXTRINITHRESH        = 0.5       !< initial randomization threshold for extremal search
