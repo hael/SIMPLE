@@ -809,10 +809,17 @@ contains
         complex(kind=c_float_complex), pointer :: cmat_ptr2(:,:,:) => null()
         complex(kind=c_float_complex), pointer :: cmat_ptr3(:,:,:) => null()
         complex(kind=c_float_complex), pointer :: cmat_ptr4(:,:,:) => null()
+        integer(timer_int_kind)       ::  t_init,  t_io,  t_workshare_sum,  t_set_sums,  t_merge_eos_and_norm,  t_tot
+        real(timer_int_kind)          :: rt_init, rt_io, rt_workshare_sum, rt_set_sums, rt_merge_eos_and_norm, rt_tot
         complex,          allocatable :: csums(:,:,:,:)
         character(len=:), allocatable :: cae, cao, cte, cto
+        character(len=STDLEN)         :: benchfname
         type(image) :: imgs4read(4)
-        integer     :: ipart, icls, array_shape(3), ldim_here(3)
+        integer     :: ipart, icls, array_shape(3), ldim_here(3), fnr
+        if( L_BENCH_GLOB )then
+            t_init = tic()
+            t_tot  = t_init
+        endif
         call init_cavgs_sums
         ! construct image objs for read/sum
         ldim_here    = ldim_pd
@@ -832,7 +839,15 @@ contains
         ! construct complex matrices for parallel summation
         array_shape = imgs4read(1)%get_array_shape()
         allocate(csums(4, array_shape(1), array_shape(2), array_shape(3)), source=cmplx(0.,0.))
+        if( L_BENCH_GLOB )then
+            ! end of init
+            rt_init = toc(t_init)
+            ! initialise incremental timers before loop
+            rt_io            = 0.
+            rt_workshare_sum = 0.
+        endif
         do ipart=1,params_glob%nparts
+            if( L_BENCH_GLOB ) t_io = tic()
             ! look for files
             allocate(cae, source='cavgs_even_part'    //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
             allocate(cao, source='cavgs_odd_part'     //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
@@ -847,6 +862,11 @@ contains
             call imgs4read(2)%read(cao)
             call imgs4read(3)%read(cte)
             call imgs4read(4)%read(cto)
+            deallocate(cae, cao, cte, cto)
+            if( L_BENCH_GLOB )then
+                rt_io = rt_io + toc(t_io)
+                t_workshare_sum = tic()
+            endif
             ! parallel summation
             !$omp parallel workshare proc_bind(close)
             csums(1,:,:,:) = csums(1,:,:,:) + cmat_ptr1(:,:,:)
@@ -854,8 +874,9 @@ contains
             csums(3,:,:,:) = csums(3,:,:,:) + cmat_ptr3(:,:,:)
             csums(4,:,:,:) = csums(4,:,:,:) + cmat_ptr4(:,:,:)
             !$omp end parallel workshare
-            deallocate(cae, cao, cte, cto)
+            if( L_BENCH_GLOB ) rt_workshare_sum = rt_workshare_sum + toc(t_workshare_sum)
         end do
+        if( L_BENCH_GLOB ) t_set_sums = tic()
         ! update image objects in parallel
         !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
         do icls=1,ncls
@@ -865,6 +886,7 @@ contains
             call ctfsqsums_odd(icls) %set_cmat(csums(4,:,:,icls))
         end do
         !$omp end parallel do
+        if( L_BENCH_GLOB ) rt_set_sums = rt_set_sums + toc(t_set_sums)
         ! destruct
         call imgs4read(1)%kill
         call imgs4read(2)%kill
@@ -872,7 +894,31 @@ contains
         call imgs4read(4)%kill
         deallocate(csums)
         ! merge eo-pairs and normalize
+        if( L_BENCH_GLOB ) t_merge_eos_and_norm = tic()
         call cavger_merge_eos_and_norm()
+        if( L_BENCH_GLOB )then
+            rt_merge_eos_and_norm = toc(t_merge_eos_and_norm)
+            rt_tot                = toc(t_tot)
+            benchfname = 'CAVGASSEMBLE_BENCH.txt'
+            call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+            write(fnr,'(a)') '*** TIMINGS (s) ***'
+            write(fnr,'(a,1x,f9.2)') 'initialisation       : ', rt_init
+            write(fnr,'(a,1x,f9.2)') 'I/O                  : ', rt_io
+            write(fnr,'(a,1x,f9.2)') 'workshare sum        : ', rt_workshare_sum
+            write(fnr,'(a,1x,f9.2)') 'set sums             : ', rt_set_sums
+            write(fnr,'(a,1x,f9.2)') 'merge eo-pairs & norm: ', rt_merge_eos_and_norm
+            write(fnr,'(a,1x,f9.2)') 'total time           : ', rt_tot
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
+            write(fnr,'(a,1x,f9.2)') 'initialisation        : ', (rt_init/rt_tot)               * 100.
+            write(fnr,'(a,1x,f9.2)') 'I/O                   : ', (rt_io/rt_tot)                 * 100.
+            write(fnr,'(a,1x,f9.2)') 'workshare sum         : ', (rt_workshare_sum/rt_tot)      * 100.
+            write(fnr,'(a,1x,f9.2)') 'set sums              : ', (rt_set_sums/rt_tot)           * 100.
+            write(fnr,'(a,1x,f9.2)') 'merge eo-pairs & norm : ', (rt_merge_eos_and_norm/rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') '% accounted for       : ',&
+            &((rt_init+rt_io+rt_workshare_sum+rt_set_sums+rt_merge_eos_and_norm)/rt_tot) * 100.
+            call fclose(fnr)
+        endif
     end subroutine cavger_assemble_sums_from_parts
 
     !>  \brief  corrects for Fourier domain bilinear interpolation
