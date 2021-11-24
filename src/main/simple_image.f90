@@ -84,7 +84,8 @@ contains
     procedure, private :: set_cmat_1
     procedure, private :: set_cmat_2
     procedure, private :: set_cmat_3
-    generic            :: set_cmat => set_cmat_1, set_cmat_2, set_cmat_3
+    procedure, private :: set_cmat_4
+    generic            :: set_cmat => set_cmat_1, set_cmat_2, set_cmat_3, set_cmat_4
     procedure, private :: set_cmat_at_1
     procedure, private :: set_cmat_at_2
     generic            :: set_cmat_at => set_cmat_at_1, set_cmat_at_2
@@ -1432,6 +1433,13 @@ contains
         self%ft   = .true.
         self%cmat = self2copy%cmat
     end subroutine set_cmat_3
+
+    pure subroutine set_cmat_4( self, cmat )
+        class(image), intent(inout) :: self
+        complex,      intent(in)    :: cmat(self%array_shape(1),self%array_shape(2))
+        self%ft          = .true.
+        self%cmat(:,:,1) = cmat
+    end subroutine set_cmat_4
 
     ! set comp to cmat at index phys
     subroutine set_cmat_at_1( self , phys , comp)
