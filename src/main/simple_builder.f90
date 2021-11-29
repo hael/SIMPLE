@@ -274,13 +274,13 @@ contains
             ! generate logical circular 2D mask
             call mskimg%disc([params%box,params%box,1], params%smpd, params%msk, self%lmsk)
             call mskimg%kill
+            ! resolution mask for correlation calculation (omitting shells corresponding to the graphene signal if params%l_graphene = .true.)
+            self%l_resmsk = calc_graphene_mask(params%box, params%smpd)
+            if( .not. params%l_graphene ) self%l_resmsk = .true.
         endif
         if( params%projstats .eq. 'yes' )then
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         endif
-        ! resolution mask for correlation calculation (omitting shells corresponding to the graphene signal if params%l_graphene = .true.)
-        self%l_resmsk = calc_graphene_mask(params%box, params%smpd)
-        if( .not. params%l_graphene ) self%l_resmsk = .true.
         ! associate global build pointer
         if( .not. associated(build_glob) ) build_glob => self
         self%general_tbox_exists = .true.
