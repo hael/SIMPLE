@@ -279,12 +279,13 @@ contains
 
     !>  \brief  reads a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
-    subroutine rSlices( self, first_slice, last_slice, rarr )
+    subroutine rSlices( self, first_slice, last_slice, rarr, is_mrc )
         use, intrinsic :: iso_c_binding
         class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
         integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
         integer,                intent(in)    :: last_slice   !< Last slice
         real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
+        logical,                intent(in)    :: is_mrc
         character(len=100)          :: io_message
         integer                     :: io_stat,dims(3),tmparrdims(3)
         integer(kind=8)             :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte,byteperpix
@@ -293,109 +294,97 @@ contains
         byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
         dims       = self%overall_head%getDims()
         dims(3)    = last_slice - first_slice + 1
-        if( byteperpix == 4 )then
+        if( byteperpix == 4 .and. is_mrc )then
             ! fast read
             first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
                 &*int(product(dims(1:2)),kind=8)*byteperpix
             read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) rarr(:dims(1),:,:)
         else
             ! slower, polymorphic read with more checkpoints
-            ! Check that the first and last slice numbers given make sense
-            if( first_slice > 0 .and. (first_slice .gt. last_slice) ) THROW_HARD('last < first slice')
             ! set pointer to overall header
-            ptr  => self%overall_head
-            if( is_odd(dims(1)) )then
-                arr_is_ready = (size(rarr,1) .eq. dims(1) + 1) .and. size(rarr,2) .eq. dims(2)
-            else
-                arr_is_ready = (size(rarr,1) .eq. dims(1) + 2) .and. size(rarr,2) .eq. dims(2)
-            endif
-            if( .not. arr_is_ready )then
-                write(logfhandle,*) 'Array size: ', size(rarr,1), size(rarr,2), size(rarr,3)
-                write(logfhandle,*) 'Dimensions: ', dims(1), dims(2), dims(3)
-                THROW_HARD('array not properly allocated')
-            endif
+            ptr => self%overall_head
             ! Tiff format
-            select type(ptr)
-            type is( TiffImgHead )
-                call self%rTiffSlices(first_slice, rarr)
-                return
+            select type( ptr )
+                type is( TiffImgHead )
+                    call self%rTiffSlices(first_slice, rarr)
+                    return
             end select
             ! Work out the position of the first byte
             select case(self%head_format)
-            case('M','F')
-                first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
-                    &*int(product(dims(1:2)),kind=8)*byteperpix
-            case('S')
-                if( self%isvol )then
+                case('M','F')
                     first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
+                    &*int(product(dims(1:2)),kind=8)*byteperpix
+                case('S')
+                    if( self%isvol )then
+                        first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
                         &*int(product(dims(1:2)),kind=8)*byteperpix
-                else
-                    call self%slice2bytepos(first_slice, hedbyteinds, imbyteinds)
-                    first_byte    = imbyteinds(1)  ! first image byte
-                    first_hedbyte = hedbyteinds(1) ! first header byte
-                endif
-            case DEFAULT
-                THROW_HARD('format not supported')
+                    else
+                        call self%slice2bytepos(first_slice, hedbyteinds, imbyteinds)
+                        first_byte    = imbyteinds(1)  ! first image byte
+                        first_hedbyte = hedbyteinds(1) ! first header byte
+                    endif
+                case DEFAULT
+                    THROW_HARD('format not supported')
             end select
             rarr = 0. ! initialize to zero
             select case(byteperpix)
-            case(1) ! Byte data
-                if( allocated(tmp_byte_array) )then
-                    tmparrdims(1) = size(tmp_byte_array,1)
-                    tmparrdims(2) = size(tmp_byte_array,2)
-                    tmparrdims(3) = size(tmp_byte_array,3)
-                    alloc_tmparr  = .false.
-                    if( any(tmparrdims .ne. dims) )then
-                        deallocate(tmp_byte_array)
+                case(1) ! Byte data
+                    if( allocated(tmp_byte_array) )then
+                        tmparrdims(1) = size(tmp_byte_array,1)
+                        tmparrdims(2) = size(tmp_byte_array,2)
+                        tmparrdims(3) = size(tmp_byte_array,3)
+                        alloc_tmparr  = .false.
+                        if( any(tmparrdims .ne. dims) )then
+                            deallocate(tmp_byte_array)
+                            alloc_tmparr = .true.
+                        endif
+                    else
                         alloc_tmparr = .true.
                     endif
-                else
-                    alloc_tmparr = .true.
-                endif
-                if( alloc_tmparr )then
-                    allocate(tmp_byte_array(dims(1),dims(2),dims(3)),stat=alloc_stat)
-                    if(alloc_stat/=0)call allocchk("In simple_imgfile:: rSlices ;  Byte data ", alloc_stat)
-                endif
-                read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_byte_array(:dims(1),:dims(2),:dims(3))
-                ! Conversion from unsigned byte integer (which MRC appears to be) is tricky because Fortran
-                ! doesn't do unsigned integer natively. The following IAND trick is courtesy of Jim Dempsey
-                ! at http://software.intel.com/en-us/forums/showthread.php?t=64400 Confusingly, the MRC format
-                ! documentation implies that one should expect signed integers, which seems to be incorrect:
-                ! http://www2.mrc-lmb.cam.ac.uk/image2000.html IMOD documentation indicates that prior to IMOD
-                ! 4.2.23, unsigned bytes were used and that one needs to inspect the imodStamp head to check
-                if( self%overall_head%pixIsSigned() )then
-                    rarr(1:dims(1),:,:) = tmp_byte_array(:dims(1),:dims(2),:dims(3))
-                else
-                    rarr(1:dims(1),:,:) = real(iand(int(tmp_byte_array(:dims(1),:dims(2),:dims(3)),kind=4),int(255,kind=4)))
-                endif
-            case(2) ! 16-bit data, assumed to be integer
-                if( allocated(tmp_16bit_int_array) )then
-                    tmparrdims(1) = size(tmp_16bit_int_array,1)
-                    tmparrdims(2) = size(tmp_16bit_int_array,2)
-                    tmparrdims(3) = size(tmp_16bit_int_array,3)
-                    alloc_tmparr  = .false.
-                    if( any(tmparrdims .ne. dims) )then
-                        deallocate(tmp_16bit_int_array)
+                    if( alloc_tmparr )then
+                        allocate(tmp_byte_array(dims(1),dims(2),dims(3)),stat=alloc_stat)
+                        if(alloc_stat/=0)call allocchk("In simple_imgfile:: rSlices ;  Byte data ", alloc_stat)
+                    endif
+                    read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_byte_array(:dims(1),:dims(2),:dims(3))
+                    ! Conversion from unsigned byte integer (which MRC appears to be) is tricky because Fortran
+                    ! doesn't do unsigned integer natively. The following IAND trick is courtesy of Jim Dempsey
+                    ! at http://software.intel.com/en-us/forums/showthread.php?t=64400 Confusingly, the MRC format
+                    ! documentation implies that one should expect signed integers, which seems to be incorrect:
+                    ! http://www2.mrc-lmb.cam.ac.uk/image2000.html IMOD documentation indicates that prior to IMOD
+                    ! 4.2.23, unsigned bytes were used and that one needs to inspect the imodStamp head to check
+                    if( self%overall_head%pixIsSigned() )then
+                        rarr(1:dims(1),:,:) = tmp_byte_array(:dims(1),:dims(2),:dims(3))
+                    else
+                        rarr(1:dims(1),:,:) = real(iand(int(tmp_byte_array(:dims(1),:dims(2),:dims(3)),kind=4),int(255,kind=4)))
+                    endif
+                case(2) ! 16-bit data, assumed to be integer
+                    if( allocated(tmp_16bit_int_array) )then
+                        tmparrdims(1) = size(tmp_16bit_int_array,1)
+                        tmparrdims(2) = size(tmp_16bit_int_array,2)
+                        tmparrdims(3) = size(tmp_16bit_int_array,3)
+                        alloc_tmparr  = .false.
+                        if( any(tmparrdims .ne. dims) )then
+                            deallocate(tmp_16bit_int_array)
+                            alloc_tmparr = .true.
+                        endif
+                    else
                         alloc_tmparr = .true.
                     endif
-                else
-                    alloc_tmparr = .true.
-                endif
-                if( alloc_tmparr )then
-                    allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)),stat=alloc_stat)
-                    if(alloc_stat/=0)call allocchk("In simple_imgfile:: rSlices ; 16-bit data ", alloc_stat )
-                endif
-                read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_16bit_int_array(:dims(1),:dims(2),:dims(3))
-                if( self%overall_head%pixIsSigned() )then
-                    rarr(1:dims(1),:,:) = real(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)))
-                else
-                    rarr(1:dims(1),:,:) = real(iand(int(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)),kind=4),&
-                        &int(huge(int(1,kind=2)), kind=4)))
-                endif
-            case DEFAULT
-                write(logfhandle,'(2a)') 'fname: ', trim(self%fname)
-                write(logfhandle,'(a,i0,a)') 'bit depth: ', self%overall_head%bytesPerPix(), ' bytes'
-                THROW_HARD('unsupported bit-depth')
+                    if( alloc_tmparr )then
+                        allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)),stat=alloc_stat)
+                        if(alloc_stat/=0)call allocchk("In simple_imgfile:: rSlices ; 16-bit data ", alloc_stat )
+                    endif
+                    read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_16bit_int_array(:dims(1),:dims(2),:dims(3))
+                    if( self%overall_head%pixIsSigned() )then
+                        rarr(1:dims(1),:,:) = real(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)))
+                    else
+                        rarr(1:dims(1),:,:) = real(iand(int(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)),kind=4),&
+                            &int(huge(int(1,kind=2)), kind=4)))
+                    endif
+                case DEFAULT
+                    write(logfhandle,'(2a)') 'fname: ', trim(self%fname)
+                    write(logfhandle,'(a,i0,a)') 'bit depth: ', self%overall_head%bytesPerPix(), ' bytes'
+                    THROW_HARD('unsupported bit-depth')
             end select
         endif
         ! Check the read was successful
