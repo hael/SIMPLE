@@ -34,14 +34,13 @@ type(tseries_track_particles_commander_distr) :: xtrack_distr
 type(graphene_subtr_commander)                :: xgraphene_subtr
 
 ! PARTICLE 3D RECONSTRUCTION PROGRAMS
-type(center2D_nano_commander)           :: xcenter2D_distr
-type(cluster2D_nano_commander)           :: xcluster2D_distr
+type(center2D_nano_commander)                 :: xcenter2D_distr
+type(cluster2D_nano_commander)                :: xcluster2D_distr
 type(map_cavgs_selection_commander)           :: xmap_cavgs_selection
 type(estimate_diam_commander)                 :: xestimate_diam
-
-
 type(simulate_atoms_commander)                :: xsimulate_atoms
-type(refine3D_nano_commander)           :: xrefine3D_distr
+type(refine3D_nano_commander)                 :: xrefine3D_nano
+type(autorefine3D_nano_commander)             :: xautorefine3D_nano
 type(tseries_reconstruct3D_distr)             :: xtseries_reconstruct3D_distr
 
 ! VALIDATION PROGRAMS
@@ -117,7 +116,9 @@ select case(prg)
         call cline%set('mkdir', 'no')
         call xsimulate_atoms%execute(cline)
     case( 'refine3D_nano')
-        call xrefine3D_distr%execute(cline)
+        call xrefine3D_nano%execute(cline)
+    case( 'autorefine3D_nano')
+        call xautorefine3D_nano%execute(cline)
     case( 'tseries_reconstruct3D')
         call xtseries_reconstruct3D_distr%execute(cline)
 
