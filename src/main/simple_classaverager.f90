@@ -730,9 +730,6 @@ contains
     subroutine cavger_read( fname, which )
         character(len=*),  intent(in) :: fname, which
         integer :: icls
-        if( .not. file_exists(fname) )then
-            THROW_HARD(trim(fname)//' not in cwd')
-        endif
         select case(which)
             case('even')
                 do icls=1,ncls
@@ -765,12 +762,6 @@ contains
         allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
         select case(trim(which))
             case('read')
-                if( .not. file_exists(cae) )then
-                    THROW_HARD(trim(cae)//' does not exist')
-                endif
-                if( .not. file_exists(cao) )then
-                    THROW_HARD(trim(cao)//' does not exist')
-                endif
                 do icls=1,ncls
                     call cavgs_even( icls)%read(cae, icls)
                     call cavgs_odd( icls)%read(cao, icls)
@@ -853,10 +844,6 @@ contains
             allocate(cao, source='cavgs_odd_part'     //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
             allocate(cte, source='ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
             allocate(cto, source='ctfsqsums_odd_part' //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
-            if( .not. file_exists(cae) ) THROW_HARD('file: '//trim(cae)//' does not exist; cavger_assemble_sums_from_parts')
-            if( .not. file_exists(cao) ) THROW_HARD('file: '//trim(cao)//' does not exist; cavger_assemble_sums_from_parts')
-            if( .not. file_exists(cte) ) THROW_HARD('file: '//trim(cte)//' does not exist; cavger_assemble_sums_from_parts')
-            if( .not. file_exists(cto) ) THROW_HARD('file: '//trim(cto)//' does not exist; cavger_assemble_sums_from_parts')
             ! serial read
             call imgs4read(1)%read(cae)
             call imgs4read(2)%read(cao)
