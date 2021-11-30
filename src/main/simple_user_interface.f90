@@ -4,7 +4,7 @@ use simple_ansi_ctrls
 implicit none
 
 public :: simple_program, make_user_interface, get_prg_ptr, list_simple_prgs_in_ui
-public :: write_ui_json, print_ui_latex, list_quant_prgs_in_ui, list_single_prgs_in_ui
+public :: write_ui_json, print_ui_latex, list_single_prgs_in_ui
 private
 #include "simple_local_flags.inc"
 
@@ -75,7 +75,6 @@ type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
 ! declare simple_exec and single_exec program specifications here
 type(simple_program), target :: atom_cluster_analysis
-! type(simple_program), target :: atoms_mask
 type(simple_program), target :: calc_pspec
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
@@ -134,7 +133,6 @@ type(simple_program), target :: print_project_field
 type(simple_program), target :: print_project_info
 type(simple_program), target :: prune_project
 type(simple_program), target :: atoms_stats
-type(simple_program), target :: random_rec
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: reextract
 type(simple_program), target :: refine3D
@@ -160,7 +158,6 @@ type(simple_program), target :: symmetry_test
 type(simple_program), target :: tseries_atoms_analysis
 type(simple_program), target :: tseries_import
 type(simple_program), target :: tseries_import_particles
-type(simple_program), target :: tseries_ctf_estimate
 type(simple_program), target :: tseries_make_pickavg
 type(simple_program), target :: tseries_motion_correct
 type(simple_program), target :: tseries_swap_stack
@@ -296,7 +293,6 @@ contains
         call set_common_params
         call set_prg_ptr_array
         call new_atom_cluster_analysis
-        ! call new_atoms_mask
         call new_calc_pspec
         call new_center
         call new_cleanup2D
@@ -356,7 +352,6 @@ contains
         call new_prune_project
         call new_atoms_stats
         call new_reproject
-        call new_random_rec
         call new_reconstruct3D
         call new_reextract
         call new_refine3D
@@ -381,7 +376,6 @@ contains
         call new_tseries_atoms_analysis
         call new_tseries_import
         call new_tseries_import_particles
-        call new_tseries_ctf_estimate
         call new_tseries_motion_correct
         call new_tseries_make_pickavg
         call new_tseries_swap_stack
@@ -399,7 +393,6 @@ contains
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0
         call push2prg_ptr_array(atom_cluster_analysis)
-        ! call push2prg_ptr_array(atoms_mask)
         call push2prg_ptr_array(calc_pspec)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
@@ -457,7 +450,6 @@ contains
         call push2prg_ptr_array(prune_project)
         call push2prg_ptr_array(atoms_stats)
         call push2prg_ptr_array(reproject)
-        call push2prg_ptr_array(random_rec)
         call push2prg_ptr_array(reconstruct3D)
         call push2prg_ptr_array(reextract)
         call push2prg_ptr_array(refine3D)
@@ -481,7 +473,6 @@ contains
         call push2prg_ptr_array(tseries_atoms_analysis)
         call push2prg_ptr_array(tseries_import)
         call push2prg_ptr_array(tseries_import_particles)
-        call push2prg_ptr_array(tseries_ctf_estimate)
         call push2prg_ptr_array(tseries_make_pickavg)
         call push2prg_ptr_array(tseries_motion_correct)
         call push2prg_ptr_array(tseries_swap_stack)
@@ -510,8 +501,6 @@ contains
         select case(trim(which_program))
             case('atom_cluster_analysis')
                 ptr2prg => atom_cluster_analysis
-            ! case('atoms_mask')
-            !     ptr2prg => atoms_mask
             case('calc_pspec')
                 ptr2prg => calc_pspec
             case('center')
@@ -630,8 +619,6 @@ contains
                 ptr2prg => atoms_stats
             case('reproject')
                 ptr2prg => reproject
-            case('random_rec')
-                ptr2prg => random_rec
             case('reconstruct3D')
                 ptr2prg => reconstruct3D
             case('reextract')
@@ -680,8 +667,6 @@ contains
                 ptr2prg => tseries_import
             case('tseries_import_particles')
                 ptr2prg => tseries_import_particles
-            case('tseries_ctf_estimate')
-                ptr2prg => tseries_ctf_estimate
             case('tseries_make_pickavg')
                 ptr2prg => tseries_make_pickavg
             case('tseries_motion_correct')
@@ -761,7 +746,6 @@ contains
         write(logfhandle,'(A)') print_project_info%name
         write(logfhandle,'(A)') print_project_field%name
         write(logfhandle,'(A)') prune_project%name
-        write(logfhandle,'(A)') random_rec%name
         write(logfhandle,'(A)') reconstruct3D%name
         write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') refine3D%name
@@ -792,43 +776,39 @@ contains
     subroutine list_single_prgs_in_ui
         write(logfhandle,'(A)') format_str('PROJECT MANAGEMENT PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') new_project%name
-        write(logfhandle,'(A)') tseries_import%name
-        write(logfhandle,'(A)') tseries_import_particles%name
-        write(logfhandle,'(A)') import_particles%name
         write(logfhandle,'(A)') update_project%name
-        write(logfhandle,'(A)') print_project_field%name
         write(logfhandle,'(A)') print_project_info%name
+        write(logfhandle,'(A)') print_project_field%name
+        write(logfhandle,'(A)') tseries_import%name
+        write(logfhandle,'(A)') import_particles%name
+        write(logfhandle,'(A)') tseries_import_particles%name
         write(logfhandle,'(A)') prune_project%name
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('TIME-SERIES PRE-PROCESSING PROGRAMS:', C_UNDERLINED)
-        write(logfhandle,'(A)') tseries_motion_correct%name
-        write(logfhandle,'(A)') tseries_ctf_estimate%name
         write(logfhandle,'(A)') tseries_make_pickavg%name
+        write(logfhandle,'(A)') tseries_motion_correct%name
         write(logfhandle,'(A)') tseries_track_particles%name
         write(logfhandle,'(A)') graphene_subtr%name
-        write(logfhandle,'(A)') tseries_swap_stack%name
+        write(logfhandle,'(A)') ''
+        write(logfhandle,'(A)') format_str('PARTICLE 3D RECONSTRUCTION PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') center2D_nano%name
         write(logfhandle,'(A)') cluster2D_nano%name
         write(logfhandle,'(A)') map_cavgs_selection%name
         write(logfhandle,'(A)') estimate_diam%name
-        write(logfhandle,'(A)') ''
-        write(logfhandle,'(A)') format_str('PARTICLE 3D RECONSTRUCTION PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') simulate_atoms%name
-        write(logfhandle,'(A)') random_rec%name
         write(logfhandle,'(A)') refine3D_nano%name
         write(logfhandle,'(A)') tseries_reconstruct3D%name
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('VALIDATION PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') validate_nano%name
-    end subroutine list_single_prgs_in_ui
-
-    subroutine list_quant_prgs_in_ui
+        write(logfhandle,'(A)') ''
+        write(logfhandle,'(A)') format_str('MODEL BULDING/ANALYSIS PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') atoms_stats%name
         write(logfhandle,'(A)') tseries_atoms_analysis%name
         write(logfhandle,'(A)') nano_softmask%name
-    end subroutine list_quant_prgs_in_ui
+    end subroutine list_single_prgs_in_ui
 
     ! private class methods
 
@@ -1035,33 +1015,6 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_atom_cluster_analysis
-
-    ! subroutine new_atoms_mask
-    !     ! PROGRAM SPECIFICATION
-    !     call atoms_mask%new(&
-    !     &'atoms_mask', &                             ! name
-    !     &'Remove the atoms outside a given radius',& ! descr_short
-    !     &'is a program that takes a pdb file input, removes all atoms beyond a given diameter, &
-    !     & outputs a new pdb file with the coordinates removed and reports how many atoms were removed.',& ! descr long
-    !     &'quant_exec',&                 ! executable
-    !     &0, 2, 0, 0, 0, 1, 0, .false.)  ! # entries in each group, requires sp_project
-    !     ! INPUT PARAMETER SPECIFICATIONS
-    !     ! image input/output
-    !     ! <empty>
-    !     ! parameter input/output
-    !     call atoms_mask%set_input('parm_ios', 1, 'pdbfile',  'file', 'PDB', 'Input coords file in PDB format',  'Input coords file in PDB format', .true., '')
-    !     call atoms_mask%set_input('parm_ios', 2, 'pdbfile2', 'file', 'PDB', 'Output coords file in PDB format', 'Output coords file in PDB format', .true., '')
-    !     ! alternative inputs
-    !     ! <empty>
-    !     ! search controls
-    !     ! <empty>
-    !     ! filter controls
-    !     ! <empty>
-    !     ! mask controls
-    !     call atoms_mask%set_input('mask_ctrls', 1, 'max_rad', 'num', 'Maximum radius in A', 'Atoms outside a shell with this radius will be removed{20.} ', '{20.}', .true., 20.)
-    !     ! computer controls
-    !     ! <empty>
-    ! end subroutine new_atoms_mask
 
     subroutine new_calc_pspec
         ! PROGRAM SPECIFICATION
@@ -3150,33 +3103,6 @@ contains
         call prune_project%set_input('comp_ctrls', 1, nparts)
     end subroutine new_prune_project
 
-    subroutine new_random_rec
-        ! PROGRAM SPECIFICATION
-        call random_rec%new(&
-        &'random_rec',&                                                        ! name
-        &'3D reconstruction from random orientations',&                        ! descr_long
-        &'is a distributed workflow for reconstructing a volume from MRC and SPIDER stacks,&
-        & with random orientations. The algorithm is based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation kernel',&
-        &'single_exec',&                                                       ! executable
-        &0, 0, 0, 1, 0, 1, 2, .true.)         ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call random_rec%set_input('srch_ctrls', 1, pgrp)
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        call random_rec%set_input('mask_ctrls', 1, mskdiam)
-        ! computer controls
-        call random_rec%set_input('comp_ctrls', 1, nparts)
-        call random_rec%set_input('comp_ctrls', 2, nthr)
-    end subroutine new_random_rec
-
     subroutine new_reconstruct3D
         ! PROGRAM SPECIFICATION
         call reconstruct3D%new(&
@@ -3986,47 +3912,47 @@ contains
         ! <empty>
     end subroutine new_tseries_import_particles
 
-    subroutine new_tseries_ctf_estimate
-        ! PROGRAM SPECIFICATION
-        call tseries_ctf_estimate%new(&
-        &'tseries_ctf_estimate', &                             ! name
-        &'Time-series CTF parameter fitting',&                 ! descr_short
-        &'is a SIMPLE application for CTF parameter fitting',& ! descr_long
-        &'single_exec',&                                       ! executable
-        &1, 0, 0, 3, 2, 0, 1, .true.)                          ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call tseries_ctf_estimate%set_input('img_ios', 1, stk)
-        tseries_ctf_estimate%img_ios(1)%required = .true.
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call tseries_ctf_estimate%set_input('srch_ctrls', 1, dfmin)
-        tseries_ctf_estimate%srch_ctrls(1)%rval_default = -0.05
-        tseries_ctf_estimate%srch_ctrls(1)%descr_placeholder = 'Expected minimum defocus; in microns{-0.05}'
-        call tseries_ctf_estimate%set_input('srch_ctrls', 2, dfmax)
-        tseries_ctf_estimate%srch_ctrls(2)%rval_default = 0.05
-        tseries_ctf_estimate%srch_ctrls(2)%descr_placeholder = 'Expected maximum defocus; in microns{0.05}'
-        call tseries_ctf_estimate%set_input('srch_ctrls', 3, astigtol)
-        tseries_ctf_estimate%srch_ctrls(3)%rval_default = 0.001
-        tseries_ctf_estimate%srch_ctrls(3)%descr_placeholder = 'Expected astigmatism; in microns{0.005}'
-        ! filter controls
-        call tseries_ctf_estimate%set_input('filt_ctrls', 1, lp)
-        tseries_ctf_estimate%filt_ctrls(1)%required     = .false.
-        tseries_ctf_estimate%filt_ctrls(1)%rval_default = 2.3
-        tseries_ctf_estimate%filt_ctrls(1)%descr_placeholder = 'Low-pass limit in Angstroms{1.}'
-        call tseries_ctf_estimate%set_input('filt_ctrls', 2, hp)
-        tseries_ctf_estimate%filt_ctrls(2)%required     = .false.
-        tseries_ctf_estimate%filt_ctrls(2)%rval_default = 5.
-        tseries_ctf_estimate%filt_ctrls(2)%descr_placeholder = 'High-pass limit in Angstroms{5.}'
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call tseries_ctf_estimate%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_tseries_ctf_estimate
+    ! subroutine new_tseries_ctf_estimate
+    !     ! PROGRAM SPECIFICATION
+    !     call tseries_ctf_estimate%new(&
+    !     &'tseries_ctf_estimate', &                             ! name
+    !     &'Time-series CTF parameter fitting',&                 ! descr_short
+    !     &'is a SIMPLE application for CTF parameter fitting',& ! descr_long
+    !     &'single_exec',&                                       ! executable
+    !     &1, 0, 0, 3, 2, 0, 1, .true.)                          ! # entries in each group, requires sp_project
+    !     ! INPUT PARAMETER SPECIFICATIONS
+    !     ! image input/output
+    !     call tseries_ctf_estimate%set_input('img_ios', 1, stk)
+    !     tseries_ctf_estimate%img_ios(1)%required = .true.
+    !     ! <empty>
+    !     ! parameter input/output
+    !     ! <empty>
+    !     ! alternative inputs
+    !     ! <empty>
+    !     ! search controls
+    !     call tseries_ctf_estimate%set_input('srch_ctrls', 1, dfmin)
+    !     tseries_ctf_estimate%srch_ctrls(1)%rval_default = -0.05
+    !     tseries_ctf_estimate%srch_ctrls(1)%descr_placeholder = 'Expected minimum defocus; in microns{-0.05}'
+    !     call tseries_ctf_estimate%set_input('srch_ctrls', 2, dfmax)
+    !     tseries_ctf_estimate%srch_ctrls(2)%rval_default = 0.05
+    !     tseries_ctf_estimate%srch_ctrls(2)%descr_placeholder = 'Expected maximum defocus; in microns{0.05}'
+    !     call tseries_ctf_estimate%set_input('srch_ctrls', 3, astigtol)
+    !     tseries_ctf_estimate%srch_ctrls(3)%rval_default = 0.001
+    !     tseries_ctf_estimate%srch_ctrls(3)%descr_placeholder = 'Expected astigmatism; in microns{0.005}'
+    !     ! filter controls
+    !     call tseries_ctf_estimate%set_input('filt_ctrls', 1, lp)
+    !     tseries_ctf_estimate%filt_ctrls(1)%required     = .false.
+    !     tseries_ctf_estimate%filt_ctrls(1)%rval_default = 2.3
+    !     tseries_ctf_estimate%filt_ctrls(1)%descr_placeholder = 'Low-pass limit in Angstroms{1.}'
+    !     call tseries_ctf_estimate%set_input('filt_ctrls', 2, hp)
+    !     tseries_ctf_estimate%filt_ctrls(2)%required     = .false.
+    !     tseries_ctf_estimate%filt_ctrls(2)%rval_default = 5.
+    !     tseries_ctf_estimate%filt_ctrls(2)%descr_placeholder = 'High-pass limit in Angstroms{5.}'
+    !     ! mask controls
+    !     ! <empty>
+    !     ! computer controls
+    !     call tseries_ctf_estimate%set_input('comp_ctrls', 1, nthr)
+    ! end subroutine new_tseries_ctf_estimate
 
     subroutine new_tseries_motion_correct
         ! PROGRAM SPECIFICATION

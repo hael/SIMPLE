@@ -12,6 +12,7 @@ use simple_commander_project
 use simple_commander_cluster2D
 use simple_commander_tseries
 use simple_commander_oris
+use simple_commander_quant
 use simple_spproj_hlev
 implicit none
 #include "simple_local_flags.inc"
@@ -25,26 +26,33 @@ type(tseries_import_commander)                :: xtseries_import
 type(import_particles_commander)              :: ximport_particles
 type(tseries_import_particles_commander)      :: xtseries_import_particles
 type(prune_project_commander_distr)           :: xprune_project
-type(tseries_swap_stack_commander)            :: xtseries_swap_stack
 
-! RECONSTRUCTION PROGRAMS
-type(tseries_ctf_estimate_commander)          :: xtseries_ctf_estimate
+! TIME-SERIES PRE-PROCESSING PROGRAMS
 type(tseries_make_pickavg_commander)          :: xtseries_make_pickavg
 type(tseries_motion_correct_commander_distr)  :: xmcorr_distr
 type(tseries_track_particles_commander_distr) :: xtrack_distr
 type(graphene_subtr_commander)                :: xgraphene_subtr
-type(center2D_nano_commander_distr)           :: xcenter2D_distr
-type(cluster2D_nano_commander_hlev)           :: xcluster2D_distr
+
+! PARTICLE 3D RECONSTRUCTION PROGRAMS
+type(center2D_nano_commander)           :: xcenter2D_distr
+type(cluster2D_nano_commander)           :: xcluster2D_distr
 type(map_cavgs_selection_commander)           :: xmap_cavgs_selection
 type(estimate_diam_commander)                 :: xestimate_diam
+
+
 type(simulate_atoms_commander)                :: xsimulate_atoms
-type(random_rec_commander_distr)              :: xrndrec
-type(refine3D_nano_commander_distr)           :: xrefine3D_distr
+type(refine3D_nano_commander)           :: xrefine3D_distr
 type(tseries_reconstruct3D_distr)             :: xtseries_reconstruct3D_distr
 
 ! VALIDATION PROGRAMS
 type(vizoris_commander)                       :: xvizoris
 type(validate_nano_commander)                 :: xvalidate_nano
+
+! MODEL BUILDING/ANALYSIS PROGRAMS
+type(detect_atoms_commander)                  :: xdetect_atoms
+type(atoms_stats_commander)                   :: xatoms_stats
+type(tseries_atoms_analysis_commander)        :: xtseries_atoms_analysis
+type(nano_softmask_commander)                 :: xnano_softmask
 
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: args, prg, entire_line
@@ -79,20 +87,16 @@ select case(prg)
         call xprint_project_field%execute(cline)
     case( 'tseries_import' )
         call xtseries_import%execute(cline)
-    case( 'tseries_import_particles' )
-        call xtseries_import_particles%execute(cline)
     case( 'import_particles')
         call ximport_particles%execute(cline)
+    case( 'tseries_import_particles' )
+        call xtseries_import_particles%execute(cline)
     case( 'prune_project' )
         call xprune_project%execute( cline )
-    case( 'tseries_swap_stack')
-        call xtseries_swap_stack%execute(cline)
 
     ! RECONSTRUCTION PROGRAMS
     case( 'tseries_make_pickavg')
         call xtseries_make_pickavg%execute(cline)
-    case( 'tseries_ctf_estimate' )
-        call xtseries_ctf_estimate%execute(cline)
     case( 'tseries_motion_correct' )
         call xmcorr_distr%execute( cline )
     case( 'tseries_track_particles' )
@@ -112,10 +116,8 @@ select case(prg)
     case( 'simulate_atoms' )
         call cline%set('mkdir', 'no')
         call xsimulate_atoms%execute(cline)
-    case( 'random_rec')
-        call xrndrec%execute(cline)
     case( 'refine3D_nano')
-        call execute_commander(xrefine3D_distr, cline)
+        call xrefine3D_distr%execute(cline)
     case( 'tseries_reconstruct3D')
         call xtseries_reconstruct3D_distr%execute(cline)
 
@@ -124,6 +126,18 @@ select case(prg)
         call xvizoris%execute(cline)
     case( 'validate_nano')
         call xvalidate_nano%execute(cline)
+
+    ! MODEL BUILDING/ANALYSIS PROGRAMS
+    case( 'detect_atoms' )
+        call cline%set('mkdir', 'no')
+        call xdetect_atoms%execute(cline)
+    case( 'atoms_stats' )
+        call cline%set('mkdir', 'yes')
+        call xatoms_stats%execute(cline)
+    case( 'tseries_atoms_analysis' )
+        call xtseries_atoms_analysis%execute(cline)
+    case( 'nano_softmask' )
+        call xnano_softmask%execute(cline)
 
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')

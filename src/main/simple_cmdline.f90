@@ -107,9 +107,6 @@ contains
                 case('single_exec')
                     call list_single_prgs_in_ui
                     call exit(EXIT_FAILURE2)
-                case('quant_exec')
-                    call list_quant_prgs_in_ui
-                    call exit(EXIT_FAILURE2)
                 case DEFAULT
                     THROW_HARD('Program '//prgname//' not supported; parse')
             end select

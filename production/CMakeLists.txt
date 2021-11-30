@@ -1,17 +1,15 @@
 # Add the source files
 add_executable(${SIMPLE_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/simple_exec/simple_exec.f90")
 add_executable(${SINGLE_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/single_exec/single_exec.f90")
-add_executable(${QUANT_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/quant_exec/quant_exec.f90")
 add_executable(${SIMPLE_PRIVATE_EXE}
 "${CMAKE_CURRENT_SOURCE_DIR}/simple_private_exec/simple_private_exec.f90")
-set(SIMPLE_MAIN_TARGETS ${SIMPLE_EXE} ${SINGLE_EXE} ${SIMPLE_PRIVATE_EXE} ${QUANT_EXE})
+set(SIMPLE_MAIN_TARGETS ${SIMPLE_EXE} ${SINGLE_EXE} ${SIMPLE_PRIVATE_EXE})
 # This links foo to the bar library
 
 #target_link_libraries(${SIMPLE_MAIN_TARGETS} LINK_PUBLIC ${EXTRA_LIBS})
 target_link_libraries(${SIMPLE_EXE} LINK_PUBLIC ${EXTRA_LIBS})
 target_link_libraries(${SINGLE_EXE} LINK_PUBLIC ${EXTRA_LIBS})
 target_link_libraries(${SIMPLE_PRIVATE_EXE} LINK_PUBLIC ${EXTRA_LIBS})
-target_link_libraries(${QUANT_EXE} LINK_PUBLIC ${EXTRA_LIBS})
 
 if(USE_OPENMPI AND USE_MPI)
   set_target_properties(${SIMPLE_MAIN_TARGETS}
