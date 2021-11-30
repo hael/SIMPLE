@@ -22,11 +22,11 @@ public :: tseries_motion_correct_commander_distr
 public :: tseries_motion_correct_commander
 public :: tseries_track_particles_commander_distr
 public :: tseries_track_particles_commander
-public :: center2D_nano_commander_distr
-public :: cluster2D_nano_commander_hlev
+public :: center2D_nano_commander
+public :: cluster2D_nano_commander
 public :: tseries_ctf_estimate_commander
 public :: autorefine3D_nano_commander
-public :: refine3D_nano_commander_distr
+public :: refine3D_nano_commander
 public :: graphene_subtr_commander
 public :: validate_nano_commander
 public :: tseries_swap_stack_commander
@@ -62,14 +62,14 @@ type, extends(commander_base) :: tseries_track_particles_commander
   contains
     procedure :: execute      => exec_tseries_track_particles
 end type tseries_track_particles_commander
-type, extends(commander_base) :: center2D_nano_commander_distr
+type, extends(commander_base) :: center2D_nano_commander
   contains
-    procedure :: execute      => exec_center2D_nano_distr
-end type center2D_nano_commander_distr
-type, extends(commander_base) :: cluster2D_nano_commander_hlev
+    procedure :: execute      => exec_center2D_nano
+end type center2D_nano_commander
+type, extends(commander_base) :: cluster2D_nano_commander
   contains
-    procedure :: execute      => exec_cluster2D_nano_hlev
-end type cluster2D_nano_commander_hlev
+    procedure :: execute      => exec_cluster2D_nano
+end type cluster2D_nano_commander
 type, extends(commander_base) :: tseries_backgr_subtr_commander
   contains
     procedure :: execute      => exec_tseries_backgr_subtr
@@ -82,10 +82,10 @@ type, extends(commander_base) :: autorefine3D_nano_commander
   contains
     procedure :: execute      => exec_autorefine3D_nano
 end type autorefine3D_nano_commander
-type, extends(commander_base) :: refine3D_nano_commander_distr
+type, extends(commander_base) :: refine3D_nano_commander
   contains
-    procedure :: execute      => exec_refine3D_nano_distr
-end type refine3D_nano_commander_distr
+    procedure :: execute      => exec_refine3D_nano
+end type refine3D_nano_commander
 type, extends(commander_base) :: graphene_subtr_commander
   contains
     procedure :: execute      => exec_graphene_subtr
@@ -532,10 +532,10 @@ contains
         call simple_end('**** SIMPLE_TSERIES_TRACK_PARTICLES NORMAL STOP ****')
     end subroutine exec_tseries_track_particles
 
-    subroutine exec_center2D_nano_distr( self, cline )
+    subroutine exec_center2D_nano( self, cline )
         use simple_commander_cluster2D, only: make_cavgs_commander_distr,cluster2D_commander_distr
         use simple_commander_imgproc,   only: pspec_int_rank_commander
-        class(center2D_nano_commander_distr), intent(inout) :: self
+        class(center2D_nano_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         ! commanders
         type(cluster2D_commander_distr) :: xcluster2D_distr
@@ -614,11 +614,11 @@ contains
         call del_file('start2Drefs'//params%ext)
         ! end gracefully
         call simple_end('**** SIMPLE_CENTER2D_NANO NORMAL STOP ****')
-    end subroutine exec_center2D_nano_distr
+    end subroutine exec_center2D_nano
 
-    subroutine exec_cluster2D_nano_hlev( self, cline )
+    subroutine exec_cluster2D_nano( self, cline )
         use simple_commander_cluster2D, only: cluster2D_autoscale_commander_hlev
-        class(cluster2D_nano_commander_hlev), intent(inout) :: self
+        class(cluster2D_nano_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         ! commander
         type(cluster2D_autoscale_commander_hlev) :: xcluster2D_distr
@@ -656,7 +656,7 @@ contains
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',   'ptcl2D')
         call xcluster2D_distr%execute(cline)
         call simple_end('**** SIMPLE_CLUSTER2D_NANO NORMAL STOP ****')
-    end subroutine exec_cluster2D_nano_hlev
+    end subroutine exec_cluster2D_nano
 
     subroutine exec_tseries_backgr_subtr( self, cline )
         ! for background subtraction in time-series data. The goal is to subtract the two graphene
@@ -796,7 +796,7 @@ contains
         class(autorefine3D_nano_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         ! commanders
-        type(refine3D_nano_commander_distr) :: xrefine
+        type(refine3D_nano_commander) :: xrefine
         type(detect_atoms_commander)        :: xdetect_atms
         integer,          parameter :: MOD_BLD_FREQ = 5
         character(len=*), parameter :: STARTVOL     = 'recvol_state01SIM.mrc'
@@ -818,9 +818,9 @@ contains
         call xdetect_atms%execute(cline_detect_atms)
     end subroutine exec_autorefine3D_nano
 
-    subroutine exec_refine3D_nano_distr( self, cline )
+    subroutine exec_refine3D_nano( self, cline )
         use simple_commander_refine3D, only: refine3D_commander_distr
-        class(refine3D_nano_commander_distr), intent(inout) :: self
+        class(refine3D_nano_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         ! commander
         type(refine3D_commander_distr) :: xrefine3D_distr
@@ -838,7 +838,7 @@ contains
         if( .not. cline%defined('maxits')        ) call cline%set('maxits',          15.)
         if( .not. cline%defined('oritype')       ) call cline%set('oritype',    'ptcl3D')
         call xrefine3D_distr%execute(cline)
-    end subroutine exec_refine3D_nano_distr
+    end subroutine exec_refine3D_nano
 
     subroutine exec_graphene_subtr( self, cline )
         use simple_tseries_graphene_subtr
@@ -934,7 +934,7 @@ contains
         class(cmdline),                 intent(inout) :: cline
         type(new_project_commander)         :: xnew_project
         type(import_particles_commander)    :: ximport_ptcls
-        type(refine3D_nano_commander_distr) :: xrefine3D
+        type(refine3D_nano_commander) :: xrefine3D
         type(reproject_commander)           :: xreproject
         type(sp_project)                    :: spproj
         character(len=:), allocatable       :: vol_fname
