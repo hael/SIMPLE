@@ -68,7 +68,7 @@ type simple_prg_ptr
     type(simple_program), pointer :: ptr2prg => null()
 end type simple_prg_ptr
 
-! array of pointers to all simple_exec, simple_distr_exec  and quant_exec programs
+! array of pointers to all programs
 integer, parameter   :: NMAX_PTRS  = 200
 integer              :: n_prg_ptrs = 0
 type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
@@ -85,30 +85,24 @@ type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster3D
 type(simple_program), target :: cluster3D_refine
 type(simple_program), target :: cluster_cavgs
-type(simple_program), target :: cluster_smat
 type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
 type(simple_program), target :: detect_atoms
-type(simple_program), target :: dock_coords
 type(simple_program), target :: dock_volpair
 type(simple_program), target :: estimate_diam
 type(simple_program), target :: export_relion
-type(simple_program), target :: export_starproject
 type(simple_program), target :: extract
 type(simple_program), target :: filter
 type(simple_program), target :: fsc
-type(simple_program), target :: geometry_analysis
 type(simple_program), target :: gen_pspecs_and_thumbs
 type(simple_program), target :: import_boxes
 type(simple_program), target :: import_cavgs
 type(simple_program), target :: import_movies
 type(simple_program), target :: import_particles
-type(simple_program), target :: import_starproject
 type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
 type(simple_program), target :: initial_3Dmodel
-type(simple_program), target :: local_resolution
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
 type(simple_program), target :: map_cavgs_selection
@@ -303,20 +297,16 @@ contains
         call new_cluster3D
         call new_cluster3D_refine
         call new_cluster_cavgs
-        call new_cluster_smat
         call new_convert
         call new_ctf_estimate
         call new_ctfops
         call new_detect_atoms
-        call new_dock_coords
         call new_dock_volpair
         call new_estimate_diam
         call new_extract
         call new_export_relion
-        call new_export_starproject
         call new_filter
         call new_fsc
-        call new_geometry_analysis
         call new_gen_pspecs_and_thumbs
         call new_info_image
         call new_info_stktab
@@ -325,8 +315,6 @@ contains
         call new_import_cavgs
         call new_import_movies
         call new_import_particles
-        call new_import_starproject
-        call new_local_resolution
         call new_make_cavgs
         call new_make_oris
         call new_map_cavgs_selection
@@ -403,19 +391,15 @@ contains
         call push2prg_ptr_array(cluster3D)
         call push2prg_ptr_array(cluster3D_refine)
         call push2prg_ptr_array(cluster_cavgs)
-        call push2prg_ptr_array(cluster_smat)
         call push2prg_ptr_array(convert)
         call push2prg_ptr_array(ctf_estimate)
         call push2prg_ptr_array(ctfops)
         call push2prg_ptr_array(detect_atoms)
-        call push2prg_ptr_array(dock_coords)
         call push2prg_ptr_array(dock_volpair)
         call push2prg_ptr_array(extract)
         call push2prg_ptr_array(export_relion)
-        call push2prg_ptr_array(export_starproject)
         call push2prg_ptr_array(filter)
         call push2prg_ptr_array(fsc)
-        call push2prg_ptr_array(geometry_analysis)
         call push2prg_ptr_array(gen_pspecs_and_thumbs)
         call push2prg_ptr_array(info_image)
         call push2prg_ptr_array(info_stktab)
@@ -424,8 +408,6 @@ contains
         call push2prg_ptr_array(import_cavgs)
         call push2prg_ptr_array(import_movies)
         call push2prg_ptr_array(import_particles)
-        call push2prg_ptr_array(import_starproject)
-        call push2prg_ptr_array(local_resolution)
         call push2prg_ptr_array(make_cavgs)
         call push2prg_ptr_array(make_oris)
         call push2prg_ptr_array(map_cavgs_selection)
@@ -521,8 +503,6 @@ contains
                 ptr2prg => cluster3D_refine
             case('cluster_cavgs')
                 ptr2prg => cluster_cavgs
-            case('cluster_smat')
-                ptr2prg => cluster_smat
             case('convert')
                 ptr2prg => convert
             case('ctf_estimate')
@@ -531,8 +511,6 @@ contains
                 ptr2prg => ctfops
             case('detect_atoms')
                 ptr2prg => detect_atoms
-            case('dock_coords')
-                ptr2prg => dock_coords
             case('dock_volpair')
                 ptr2prg => dock_volpair
             case('estimate_diam')
@@ -541,14 +519,10 @@ contains
                 ptr2prg => extract
             case('export_relion')
                 ptr2prg => export_relion
-            case('export_starproject')
-                ptr2prg => export_starproject
             case('filter')
                 ptr2prg => filter
             case('fsc')
                 ptr2prg => fsc
-            case('geometry_analysis')
-                ptr2prg => geometry_analysis
             case('gen_pspecs_and_thumbs')
                 ptr2prg => gen_pspecs_and_thumbs
             case('info_image')
@@ -565,10 +539,6 @@ contains
                 ptr2prg => import_movies
             case('import_particles')
                 ptr2prg => import_particles
-            case('import_starproject')
-                ptr2prg => import_starproject
-            case('local_resolution')
-                ptr2prg => local_resolution
             case('make_cavgs')
                 ptr2prg => make_cavgs
             case('make_oris')
@@ -699,7 +669,6 @@ contains
         write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') cleanup2D%name
         write(logfhandle,'(A)') cluster_cavgs%name
-        write(logfhandle,'(A)') cluster_smat%name
         write(logfhandle,'(A)') cluster2D%name
         write(logfhandle,'(A)') cluster2D_stream%name
         write(logfhandle,'(A)') cluster3D%name
@@ -707,11 +676,9 @@ contains
         write(logfhandle,'(A)') convert%name
         write(logfhandle,'(A)') ctf_estimate%name
         write(logfhandle,'(A)') ctfops%name
-        write(logfhandle,'(A)') dock_coords%name
         write(logfhandle,'(A)') dock_volpair%name
         write(logfhandle,'(A)') extract%name
         write(logfhandle,'(A)') export_relion%name
-        write(logfhandle,'(A)') export_starproject%name
         write(logfhandle,'(A)') filter%name
         write(logfhandle,'(A)') fsc%name
         write(logfhandle,'(A)') gen_pspecs_and_thumbs%name
@@ -722,8 +689,6 @@ contains
         write(logfhandle,'(A)') import_cavgs%name
         write(logfhandle,'(A)') import_movies%name
         write(logfhandle,'(A)') import_particles%name
-        write(logfhandle,'(A)') import_starproject%name
-        write(logfhandle,'(A)') local_resolution%name
         write(logfhandle,'(A)') make_cavgs%name
         write(logfhandle,'(A)') make_oris%name
         write(logfhandle,'(A)') map_cavgs_selection%name
@@ -991,11 +956,11 @@ contains
     subroutine new_autorefine3D_nano
         ! PROGRAM SPECIFICATION
         call autorefine3D_nano%new(&
-        &'autorefine3D_nano',&                                                                                                    ! name
-        &'auto 3D refinement of metallic nanoparticles',&                                                                          ! descr_short
+        &'autorefine3D_nano',&                                                            ! name
+        &'auto 3D refinement of metallic nanoparticles',&                                 ! descr_short
         &'is a distributed workflow for automated 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
-        &'single_exec',&                                                                                                ! executable
-        &1, 2, 0, 8, 5, 4, 2, .true.)                                                                                        ! # entries in each group, requires sp_project
+        &'single_exec',&                                                                  ! executable
+        &1, 2, 0, 8, 5, 4, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call autorefine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -1435,31 +1400,6 @@ contains
         call cluster_cavgs%set_input('comp_ctrls', 1, nthr)
     end subroutine new_cluster_cavgs
 
-    subroutine new_cluster_smat
-        ! PROGRAM SPECIFICATION
-        call cluster_smat%new(&
-        &'cluster_smat',&                                                             ! name
-        &'Clustering of a similarity matrix with affinity propagation',&              ! descr_short
-        &'is a program for analyzing a similarity matrix with affinity propagation',& ! descr_long
-        &'simple_exec',&                                                              ! executable
-        &0, 1, 0, 0, 0, 0, 0, .false.)                                                ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call cluster_smat%set_input('parm_ios', 1, 'fname', 'file', 'Name of similarity matrix file', 'Name of similarity matrix text file', 'e.g. xxx.txt file', .true., '')
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-    end subroutine new_cluster_smat
-
     subroutine new_convert
         ! PROGRAM SPECIFICATION
         call convert%new(&
@@ -1559,7 +1499,7 @@ contains
         &'detect_atoms', &                                      ! name
         &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-comp map',& ! descr long
-        &'quant_exec',&                                        ! executable
+        &'single_exec',&                                        ! executable
         &2, 1, 0, 0, 1, 1, 1, .false.)                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1580,32 +1520,6 @@ contains
         ! computer controls
         call detect_atoms%set_input('comp_ctrls', 1, nthr)
     end subroutine new_detect_atoms
-
-    subroutine new_dock_coords
-        ! PROGRAM SPECIFICATION
-        call dock_coords%new(&
-        &'dock_coords', &                              ! name
-        &'Dock two set of coords',&                     ! descr_short
-        &'is a program for docking two set of coords in a pdb file',& ! descr long
-        &'quant_exec',&                                ! executable
-        &0, 2, 0, 1, 0, 0, 0, .false.)                  ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call dock_coords%set_input('parm_ios', 1, 'pdbfile', 'file', 'PDB', 'Input coords file in PDB format of one set of coords', 'Input coords file in PDB format of one set of coords', .true., '')
-        call dock_coords%set_input('parm_ios', 2, 'pdbfile2', 'file', 'PDB', 'Input coords file in PDB format of another set of coords', 'Input coords file in PDB format of another set of coords', .true., '')
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call dock_coords%set_input('srch_ctrls', 1, 'thres', 'num', 'Minimiser range for shift search','Minimiser range for shift search in A', 'in A', .true., 1.1)
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-    end subroutine new_dock_coords
 
     subroutine new_dock_volpair
         ! PROGRAM SPECIFICATION
@@ -1776,34 +1690,6 @@ contains
         ! computer controls
         call fsc%set_input('comp_ctrls', 1, nthr)
     end subroutine new_fsc
-
-    subroutine new_geometry_analysis
-        ! PROGRAM SPECIFICATION
-        call geometry_analysis%new(&
-        &'geometry_analysis', &                                      ! name
-        &'geometry_analysis in atomic-resolution nanoparticle map',& ! descr_short
-        &'is a program generating atom columns/planes for the analysis of an atomic-res nanoparticle 3D map',& ! descr long
-        &'quant_exec',&                                        ! executable
-        &1, 2, 2, 1, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call geometry_analysis%set_input('img_ios', 1, 'pdbfile2', 'file', 'PDB', 'Input coordinates file in PDB format of the selected atoms', 'Input coordinates file, 2 or 3 selected atoms', .true., '')
-        ! parameter input/output
-        call geometry_analysis%set_input('parm_ios', 1, smpd)
-        call geometry_analysis%set_input('parm_ios', 2, 'outvol', 'file', 'Name of image file', 'Name of image file', 'xxx.mrc file', .false. ,'')
-        ! alternative inputs
-        call geometry_analysis%set_input('alt_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
-        & 'input volume e.g. vol.mrc', .false., '')
-        call geometry_analysis%set_input('alt_ios', 2, 'pdbfile', 'file', 'PDB', 'Input coordinates file in PDB format of all the atoms', 'Input coordinates file', .false., '')
-        ! search controls
-        call geometry_analysis%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold','Distance filter (in A)', 'in A', .false., 1.1)
-        ! filter controls
-        call geometry_analysis%set_input('filt_ctrls', 1, element)
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-    end subroutine new_geometry_analysis
 
     subroutine new_gen_pspecs_and_thumbs
         ! PROGRAM SPECIFICATION
@@ -2013,7 +1899,7 @@ contains
         &'import_particles',&                                       ! name
         &'Import particles to SIMPLE project',&                     ! descr_short
         &'is a program for importing extracted particle images to the project',&
-        &'simple_exec',&                                            ! executable
+        &'all',&                                                   ! executable
         &0, 12, 2, 0, 0, 0, 0, .true.)                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2050,76 +1936,6 @@ contains
         ! <empty>
     end subroutine new_import_particles
 
-    subroutine new_import_starproject
-        ! PROGRAM SPECIFICATION
-        call import_starproject%new(&
-            &'import_starproject',&                  ! name
-            &'Import STAR file to SIMPLE project ',& ! descr_short
-            &'is a program for importing STAR-formatted EM project files to the current SIMPLE project and saving as a SIMPLE project',&
-            &'simple_exec',&                         ! executable
-            &0, 16, 2, 0, 0, 0, 0, .true.)           ! # entries in each group, requires sp_project
-        call import_starproject%set_input('parm_ios', 1, 'starfile', 'file', 'STAR-formatted text file of input parameters',&
-            'STAR-formatted text file of input parameters ', 'e.g. params.star', .false., 'NONE')
-        import_starproject%parm_ios(1)%required = .true.
-        call import_starproject%set_input('parm_ios', 2, 'startype', 'str', 'Export type for STAR project',&
-            'STAR export type that sets tabulated export parameters: dfx, dfy, angast, phshift', 'e.g. m|micrographs or ctf|ctf_estimation or p|ptcl|particles or cavgs|classaverages', .false., '')
-        import_starproject%parm_ios(2)%required = .true.
-        call import_starproject%set_input('parm_ios', 3, 'star_datadir', 'file', 'Pathname of STAR data/image files',&
-            'Pathname of STAR generated data files or micrographs ', 'e.g. Micrographs/ ', .false., 'NONE')
-        call import_starproject%set_input('parm_ios', 4, smpd) !! default required
-        call import_starproject%set_input('parm_ios', 5, kv)
-        call import_starproject%set_input('parm_ios', 6, cs)
-        call import_starproject%set_input('parm_ios', 7, fraca)
-        call import_starproject%set_input('parm_ios', 8, ctf_yes)
-        call import_starproject%set_input('parm_ios', 9, phaseplate)
-        call import_starproject%set_input('parm_ios', 10, oritab)
-        call import_starproject%set_input('parm_ios', 11, deftab)
-        call import_starproject%set_input('parm_ios', 12, 'plaintexttab', 'file', &
-            'Plain text file of input parameters',&
-            'Plain text file of tabulated per-particle input parameters: dfx, dfy, angast, phshift', &
-            'e.g. params.txt', .false., ' params-star.txt')
-        call import_starproject%set_input('parm_ios', 13, 'boxtab', 'file', 'List of box files', &
-            'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .false., '')
-        call import_starproject%set_input('parm_ios', 14,  'dose_rate', 'num', 'Dose rate', &
-            'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
-        call import_starproject%set_input('parm_ios', 15,  'exp_time', 'num', 'Exposure time', &
-            'Exposure time in seconds', 'in seconds', .false., 10.)
-        call import_starproject%set_input('parm_ios', 16,  scale_movies)
-        !! alternative inputs
-        call import_starproject%set_input('alt_ios', 1, 'stktab', 'file', &
-            'List of per-micrograph particle stacks',&
-            'List of per-micrograph particle image stacks to import', &
-            'per-micrograph stack list; e.g. stktab.txt', .false., '')
-        call import_starproject%set_input('alt_ios', 2, 'stk', 'file', 'Stack of particles',&
-            'Stack of particle images to import', 'e.g. stk.mrcs', .false., '')
-    end subroutine new_import_starproject
-
-    subroutine new_export_starproject
-        ! PROGRAM SPECIFICATION
-        call export_starproject%new(&
-        &'export_starproject',&                                       ! name
-        &'Import STAR project ',&                                     ! descr_short
-        &'is a program for exporting a SIMPLE project as a STAR-formatted EM project',&
-        &'simple_exec',&                                              ! executable
-        &0, 2, 0, 0, 0, 0, 0, .true.)                                 ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call export_starproject%set_input('parm_ios', 1, 'starfile', 'file', 'STAR-formatted project filename for export',&
-            'Export filename (*.star) with STAR-formatting', 'e.g. myproj.star', .false., '')
-        call export_starproject%set_input('parm_ios', 2, 'startype', 'str', 'Export type for STAR project',&
-            'STAR export type that sets tabulated export parameters: dfx, dfy, angast, phshift', 'e.g. micrographs or class2D', .false., '')
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-    end subroutine new_export_starproject
-
     subroutine new_export_relion
         ! PROGRAM SPECIFICATION
         call export_relion%new(&
@@ -2152,34 +1968,6 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_export_relion
-
-    subroutine new_local_resolution
-        ! PROGRAM SPECIFICATION
-        call local_resolution%new(&
-        &'local_resolution', &                                          ! name
-        &'Estimate local resolution in map',&                           ! descr_short
-        &'is a program for estimating local resolution based on neighbourhood correlation analysis in e/o maps',& ! descr_long
-        &'simple_exec',&                                                ! executable
-        &3, 1, 0, 0, 1, 2, 1, .false.)                                  ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call local_resolution%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
-        call local_resolution%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
-        call local_resolution%set_input('img_ios', 3, 'vol3', 'file', 'Volume to filter', 'Volume to filter', 'vol3.mrc file', .false., '')
-        ! parameter input/output
-        call local_resolution%set_input('parm_ios', 1, smpd)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call local_resolution%set_input('filt_ctrls', 1, lplim_crit)
-        ! mask controls
-        call local_resolution%set_input('mask_ctrls', 1, mskdiam)
-        call local_resolution%set_input('mask_ctrls', 2, mskfile)
-        ! computer controls
-        call local_resolution%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_local_resolution
 
     subroutine new_make_cavgs
         ! PROGRAM SPECIFICATION
@@ -2257,7 +2045,7 @@ contains
         &'map_cavgs_selection',&                                         ! name
         &'Map class average selection to particles in project file',&    ! descr_short
         &'is a program for mapping selection based on class averages to the individual particles using correlation matching',& ! descr_long
-        &'simple_exec',&                                                 ! executable
+        &'all',&                                                         ! executable
         &2, 0, 0, 0, 0, 0, 0, .true.)                                    ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2479,7 +2267,7 @@ contains
         &'nano_softmask', &                                      ! name
         &'nano_softmask in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program generating soft mask for 3D refinement of an atomic-res nanoparticle 3D map',& ! descr long
-        &'quant_exec',&                                        ! executable
+        &'single_exec',&                                        ! executable
         &2, 2, 0, 0, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2540,7 +2328,7 @@ contains
         &information about the project as well as all meta data generated by the different SIMPLE programs. This &
         &file is mirrored by an abstract data type in the back-end, which manages the parameters and &
         &meta-data I/O required for execution of SIMPLE',& ! descr_longg
-        &'simple_exec',&                     ! executable
+        &'all',&                          ! executable
         &0, 1, 2, 0, 0, 0, 8, .false.)       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2858,7 +2646,7 @@ contains
         &'print_project_field', &                                             ! name
         &'Print project field',&                                              ! descr_short
         &'is a program for printing an orientation field in the project data structure (segment in *.simple project file)',&  ! descr_long
-        &'simple_exec',&                                                     ! executable
+        &'all',&                                                          ! executable
         &0, 1, 0, 0, 0, 0, 0, .true.)                                        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2881,11 +2669,11 @@ contains
     subroutine new_print_project_info
         ! PROGRAM SPECIFICATION
         call print_project_info%new(&
-        &'print_project_info', &                                             ! name
-        &'Print project info',&                                              ! descr_short
-        &'is a program prints information about a *.simple project file',&   ! descr_long
-        &'simple_exec',&                                                     ! executable
-        &0, 0, 0, 0, 0, 0, 0, .true.)                                        ! # entries in each group, requires sp_project
+        &'print_project_info', &                                           ! name
+        &'Print project info',&                                            ! descr_short
+        &'is a program prints information about a *.simple project file',& ! descr_long
+        &'all',&                                                        ! executable
+        &0, 0, 0, 0, 0, 0, 0, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3101,8 +2889,8 @@ contains
         &'prune_project',&                            ! name
         &'discards deselected data from a project',&  ! descr_short
         &'is a program for discarding deselected data (particles,stacks) from a project',& ! descr_long
-        &'simple_exec',&                       ! executable
-        &0, 0, 0, 0, 0, 0, 1, .true.)          ! # entries in each group, requires sp_project
+        &'all',&                                      ! executable
+        &0, 0, 0, 0, 0, 0, 1, .true.)                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3821,7 +3609,7 @@ contains
         &'atoms_stats',&                                                                              ! name
         &'Statistical test for radial dependent symmetry',&                                           ! descr_short
         &'is a program that generates statistics at different radii and across the whold nano map.',& ! descr long
-        &'quant_exec',&                                                                               ! executable
+        &'single_exec',&                                                                               ! executable
         &3, 3, 0, 0, 1, 1, 1, .false.)                                                                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3853,7 +3641,7 @@ contains
         &'tseries_atoms_analysis',&                                                    ! name
         &'Analysis of results obtianed with tseries_reconstruct3D and detect_atoms',& ! descr_short
         &'is a program that analysis atomic time-series coordinates',&                ! descr long
-        &'quant_exec',&                                                               ! executable
+        &'single_exec',&                                                               ! executable
         &0, 2, 0, 0, 1, 0, 0, .false.)                                                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -4186,7 +3974,7 @@ contains
         &'update_project',&                  ! name
         &'Update an existing project',&      ! descr_short
         &'is a program for updating an existing project: changing the name/user_email/computer controls',& ! descr_long
-        &'simple_exec',&                     ! executable
+        &'all',&                          ! executable
         &0, 2, 0, 0, 0, 0, 8, .true.)        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -4219,7 +4007,7 @@ contains
         &'vizoris',&                                                                                               ! name
         &'Visualization of orientation distribution',&                                                             ! descr_short
         &'is a program for extracting projection directions from orientations for visualization in UCSF Chimera',& ! descr_long
-        &'simple_exec',&                                                                                           ! executable
+        &'all',&                                                                                                   ! executable
         &0, 5, 0, 0, 0, 0, 0, .false.)                                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
