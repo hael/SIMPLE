@@ -10,6 +10,7 @@ public :: cmdarg, cmdline, cmdline_err
 #include "simple_local_flags.inc"
 
 integer, parameter :: MAX_CMDARGS = 60
+logical, parameter :: DEBUG_HERE  = .false.
 !> cmdarg key/value pair command-line type
 type cmdarg
     character(len=:), allocatable :: key, carg
@@ -81,7 +82,7 @@ contains
         type(simple_program), pointer :: ptr2prg => null()
         character(len=LONGSTRLEN)     :: arg
         character(len=STDLEN)         :: exec_cmd
-        character(len=:), allocatable :: prgname
+        character(len=:), allocatable :: prgname, exec_cmd_ui
         integer :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
         ! parse command line
         self%argcnt = command_argument_count()
@@ -89,18 +90,29 @@ contains
         cmdline_glob = trim(self%entire_line)
         if( .not. str_has_substr(self%entire_line,'prg=') ) THROW_HARD('prg= flag must be set on command line')
         call get_command_argument(0,exec_cmd)
+        if( DEBUG_HERE ) print *, 'exec_cmd from get_command_argument in cmdline class: ', trim(exec_cmd)
         ! parse program name
         call get_command_argument(1, arg, cmdlen, cmdstat)
         pos = index(arg, '=') ! position of '='
         call cmdline_err(cmdstat, cmdlen, arg, pos)
         allocate(prgname, source=arg(pos+1:))
+        if( DEBUG_HERE ) print *, 'prgname from command-line in cmdline class: ', trim(prgname)
         if( str_has_substr(prgname, 'report_selection') ) prgname = 'selection' ! FIX4NOW
         ! obtain pointer to the program in the simple_user_interface specification
         call get_prg_ptr(prgname, ptr2prg)
-        if( .not. associated(ptr2prg) ) THROW_HARD(trim(prgname)//' is not part of this executable')
+        if( .not. associated(ptr2prg) ) THROW_HARD(trim(prgname)//' is not part of any executable in the code base')
+        if( DEBUG_HERE ) print *, 'prgname from UI in cmdline class: ', trim(prgname)
+        exec_cmd_ui = ptr2prg%get_executable()
+        if( DEBUG_HERE ) print *, 'exec_cmd from UI in cmdline class: ', exec_cmd_ui
+
+        if( trim(exec_cmd_ui) .ne. 'all' )then
+            if( trim(exec_cmd) .ne. trim(exec_cmd_ui) )then
+                THROW_HARD(trim(prgname)//' is not executed by '//trim(exec_cmd)//' but by '//exec_cmd_ui)
+            endif
+        endif
         ! list programs if so instructed
         if( str_has_substr(self%entire_line, 'prg=list') )then
-            select case(prgname)
+            select case(trim(exec_cmd))
                 case('simple_exec')
                     call list_simple_prgs_in_ui
                     call exit(EXIT_FAILURE2)

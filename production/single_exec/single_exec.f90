@@ -93,7 +93,7 @@ select case(prg)
     case( 'prune_project' )
         call xprune_project%execute( cline )
 
-    ! RECONSTRUCTION PROGRAMS
+    ! TIME-SERIES PRE-PROCESSING PROGRAMS
     case( 'tseries_make_pickavg')
         call xtseries_make_pickavg%execute(cline)
     case( 'tseries_motion_correct' )
@@ -103,6 +103,8 @@ select case(prg)
     case( 'graphene_subtr' )
         call cline%set('mkdir', 'no')
         call xgraphene_subtr%execute( cline )
+
+    ! PARTICLE 3D RECONSTRUCTION PROGRAMS
     case( 'center2D_nano' )
         call xcenter2D_distr%execute(cline)
     case( 'cluster2D_nano' )
@@ -140,6 +142,7 @@ select case(prg)
     case( 'nano_softmask' )
         call xnano_softmask%execute(cline)
 
+    ! UNSUPPORTED
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select

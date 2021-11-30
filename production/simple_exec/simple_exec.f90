@@ -28,18 +28,18 @@ implicit none
 #include "simple_local_flags.inc"
 
 ! PROJECT MANAGEMENT PROGRAMS
-type(new_project_commander)           :: xnew_project
-type(update_project_commander)        :: xupdate_project
-type(print_project_info_commander)    :: xprint_project_info
-type(print_project_field_commander)   :: xprint_project_field
-type(import_movies_commander)         :: ximport_movies
-type(import_boxes_commander)          :: ximport_boxes
-type(import_particles_commander)      :: ximport_particles
-type(import_cavgs_commander)          :: ximport_cavgs
-type(merge_stream_projects_commander) :: xmerge_stream_projects
-type(replace_project_field_commander) :: xreplace_project_field
-type(selection_commander)             :: xselection
-type(export_relion_commander)         :: xexport_relion
+type(new_project_commander)                 :: xnew_project
+type(update_project_commander)              :: xupdate_project
+type(print_project_info_commander)          :: xprint_project_info
+type(print_project_field_commander)         :: xprint_project_field
+type(import_movies_commander)               :: ximport_movies
+type(import_boxes_commander)                :: ximport_boxes
+type(import_particles_commander)            :: ximport_particles
+type(import_cavgs_commander)                :: ximport_cavgs
+type(merge_stream_projects_commander)       :: xmerge_stream_projects
+type(replace_project_field_commander)       :: xreplace_project_field
+type(selection_commander)                   :: xselection
+type(export_relion_commander)               :: xexport_relion
 
 ! PRE-PROCESSING WORKFLOWS
 type(preprocess_commander_distr)            :: xpreprocess
@@ -59,74 +59,74 @@ type(cluster2D_commander_stream)            :: xcluster2D_stream
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
-type(initial_3Dmodel_commander_hlev) :: xinitial_3Dmodel
+type(initial_3Dmodel_commander_hlev)        :: xinitial_3Dmodel
 
 ! REFINE3D WORKFLOWS
-type(calc_pspec_commander_distr)    :: xcalc_pspec_distr
-type(refine3D_commander_distr)      :: xrefine3D_distr
-type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
+type(calc_pspec_commander_distr)            :: xcalc_pspec_distr
+type(refine3D_commander_distr)              :: xrefine3D_distr
+type(reconstruct3D_commander_distr)         :: xreconstruct3D_distr
 
 ! CLUSTER3D WORKFLOWS
-type(cluster3D_commander)           :: xcluster3D
-type(cluster3D_refine_commander)    :: xcluster3D_refine
+type(cluster3D_commander)                   :: xcluster3D
+type(cluster3D_refine_commander)            :: xcluster3D_refine
 
 ! OTHER SINGLE-PARTICLE WORKFLOW PROGRAMS
-type(map_cavgs_selection_commander) :: xmap_cavgs_selection
-type(cluster_cavgs_commander)       :: xcluster_cavgs
-type(write_classes_commander)       :: xwrite_classes
-type(symaxis_search_commander)      :: xsymsrch
-type(symmetry_test_commander)       :: xsymtst
-type(symmetrize_map_commander)      :: xsymmetrize_map
-type(dock_volpair_commander)        :: xdock_volpair
-type(postprocess_commander)         :: xpostprocess
-type(remoc_commander)               :: xremoc
+type(map_cavgs_selection_commander)         :: xmap_cavgs_selection
+type(cluster_cavgs_commander)               :: xcluster_cavgs
+type(write_classes_commander)               :: xwrite_classes
+type(symaxis_search_commander)              :: xsymsrch
+type(symmetry_test_commander)               :: xsymtst
+type(symmetrize_map_commander)              :: xsymmetrize_map
+type(dock_volpair_commander)                :: xdock_volpair
+type(postprocess_commander)                 :: xpostprocess
+type(remoc_commander)                       :: xremoc
 
 ! IMAGE PROCESSING PROGRAMS
-type(mask_commander)                 :: xmask
-type(fsc_commander)                  :: xfsc
-type(nonuniform_phase_ran_commander) :: xnonuniform_phase_ran
-type(centervol_commander)            :: xcenter
-type(reproject_commander)            :: xreproject
-type(volops_commander)               :: xvolops
-type(convert_commander)              :: xconvert
-type(ctfops_commander)               :: xctfops
-type(filter_commander)               :: xfilter
-type(normalize_commander)            :: xnormalize
-type(scale_commander)                :: xscale
-type(stack_commander)                :: xstack
-type(stackops_commander)             :: xstackops
-type(shift_commander)                :: xshift
+type(mask_commander)                        :: xmask
+type(fsc_commander)                         :: xfsc
+type(nonuniform_phase_ran_commander)        :: xnonuniform_phase_ran
+type(centervol_commander)                   :: xcenter
+type(reproject_commander)                   :: xreproject
+type(volops_commander)                      :: xvolops
+type(convert_commander)                     :: xconvert
+type(ctfops_commander)                      :: xctfops
+type(filter_commander)                      :: xfilter
+type(normalize_commander)                   :: xnormalize
+type(scale_commander)                       :: xscale
+type(stack_commander)                       :: xstack
+type(stackops_commander)                    :: xstackops
+type(shift_commander)                       :: xshift
 
 ! ORIENTATION PROCESSING PROGRAMS
-type(make_oris_commander) :: xmake_oris
-type(orisops_commander)   :: xorisops
-type(oristats_commander)  :: xoristats
-type(vizoris_commander)   :: xvizoris
+type(make_oris_commander)                   :: xmake_oris
+type(orisops_commander)                     :: xorisops
+type(oristats_commander)                    :: xoristats
+type(vizoris_commander)                     :: xvizoris
 
 ! PRINT INFO PROGRAMS
-type(info_image_commander)        :: xinfo_image
-type(info_stktab_commander)       :: xinfo_stktab
-type(print_fsc_commander)         :: xprint_fsc
-type(print_magic_boxes_commander) :: xprint_magic_boxes
+type(info_image_commander)                  :: xinfo_image
+type(info_stktab_commander)                 :: xinfo_stktab
+type(print_fsc_commander)                   :: xprint_fsc
+type(print_magic_boxes_commander)           :: xprint_magic_boxes
 
 ! SIMULATOR PROGRAMS
-type(simulate_noise_commander)       :: xsimulate_noise
-type(simulate_particles_commander)   :: xsimulate_particles
-type(simulate_movie_commander)       :: xsimulate_movie
-type(simulate_subtomogram_commander) :: xsimulate_subtomogram
+type(simulate_noise_commander)              :: xsimulate_noise
+type(simulate_particles_commander)          :: xsimulate_particles
+type(simulate_movie_commander)              :: xsimulate_movie
+type(simulate_subtomogram_commander)        :: xsimulate_subtomogram
 
 ! MISCELLANEOUS WORKFLOWS
-type(scale_project_commander_distr) :: xscale_project
-type(prune_project_commander_distr) :: xprune_project
-type(cluster_smat_commander)        :: xcluster_smat
+type(scale_project_commander_distr)         :: xscale_project
+type(prune_project_commander_distr)         :: xprune_project
 
 ! SYSTEM INTERACTION PROGRAMS
-type(mkdir_commander) :: xmkdir
+type(mkdir_commander)                       :: xmkdir
 
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: xarg, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
+logical, parameter    :: DEBUG_HERE = .true.
 
 ! parse command-line
 call get_command_argument(1, xarg, cmdlen, cmdstat)
@@ -143,6 +143,7 @@ endif
 ! parse command line into cline object
 call cline%parse
 
+if( DEBUG_HERE ) print *, 'prg: ', prg
 select case(prg)
 
     ! PROJECT MANAGEMENT PROGRAMS
@@ -304,8 +305,6 @@ select case(prg)
         call xscale_project%execute( cline )
     case( 'prune_project' )
         call xprune_project%execute( cline )
-    case( 'cluster_smat' )
-        call xcluster_smat%execute( cline )
 
     ! SYSTEM INTERACTION PROGRAMS
     case( 'mkdir' )
