@@ -6,7 +6,6 @@ use simple_cmdline,      only: cmdline
 use simple_parameters,   only: params_glob
 use simple_ori,          only: ori
 use simple_stackops,     only: frameavg_stack
-use simple_pspec_stats,  only: pspec_stats
 use simple_motion_correct
 implicit none
 
@@ -24,7 +23,6 @@ type :: motion_correct_iter
     type(image)       :: moviesum, moviesum_corrected
     type(image)       :: moviesum_ctf, pspec_sum, pspec_ctf, img_jpg
     type(image)       :: pspec_half_n_half, thumbnail
-    type(pspec_stats) :: ps_stats
     ! these strings are part of the instance for reporting purposes
     character(len=STDLEN) :: moviename, moviename_intg
     character(len=STDLEN) :: moviename_forctf, moviename_thumb
@@ -206,16 +204,6 @@ contains
         ! jpeg output
         call self%pspec_half_n_half%collage(self%thumbnail, self%img_jpg)
         call self%img_jpg%write_jpg(self%moviename_thumb, norm=.true., quality=92)
-        ! power spectrum scoring
-        if( l_tseries )then
-            !
-        else
-            ! call self%ps_stats%new(self%moviesum_ctf, ctfvars%smpd)
-            ! call self%ps_stats%process_ps()
-            ! call orientation%set('CTF_ccscore',   self%ps_stats%get_score())
-            ! call orientation%set('CTF_curvature', self%ps_stats%get_curvature())
-            ! call self%ps_stats%kill
-        endif
         ! report to ori object
         if( .not. l_tseries )then
             call make_relativepath(CWD_GLOB,self%moviename,rel_fname)

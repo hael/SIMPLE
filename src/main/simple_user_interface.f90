@@ -133,7 +133,6 @@ type(simple_program), target :: print_magic_boxes
 type(simple_program), target :: print_project_field
 type(simple_program), target :: print_project_info
 type(simple_program), target :: prune_project
-type(simple_program), target :: pspec_stats
 type(simple_program), target :: atoms_stats
 type(simple_program), target :: random_rec
 type(simple_program), target :: reconstruct3D
@@ -355,7 +354,6 @@ contains
         call new_print_project_info
         call new_print_project_field
         call new_prune_project
-        call new_pspec_stats
         call new_atoms_stats
         call new_reproject
         call new_random_rec
@@ -457,7 +455,6 @@ contains
         call push2prg_ptr_array(print_project_info)
         call push2prg_ptr_array(print_project_field)
         call push2prg_ptr_array(prune_project)
-        call push2prg_ptr_array(pspec_stats)
         call push2prg_ptr_array(atoms_stats)
         call push2prg_ptr_array(reproject)
         call push2prg_ptr_array(random_rec)
@@ -629,8 +626,6 @@ contains
                 ptr2prg => print_project_field
             case('prune_project')
                 ptr2prg => prune_project
-            case('pspec_stats')
-                ptr2prg => pspec_stats
             case('atoms_stats')
                 ptr2prg => atoms_stats
             case('reproject')
@@ -766,7 +761,6 @@ contains
         write(logfhandle,'(A)') print_project_info%name
         write(logfhandle,'(A)') print_project_field%name
         write(logfhandle,'(A)') prune_project%name
-        write(logfhandle,'(A)') pspec_stats%name
         write(logfhandle,'(A)') random_rec%name
         write(logfhandle,'(A)') reconstruct3D%name
         write(logfhandle,'(A)') reextract%name
@@ -2938,30 +2932,6 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_print_project_info
-
-    subroutine new_pspec_stats
-        ! PROGRAM SPECIFICATION
-        call pspec_stats%new(&
-        &'pspec_stats', &                                    ! name
-        &'Analyse powerspectra images stack',&               ! descr_short
-        &'is a program for validation statistic on powerspectra images prior ctf estimation',& ! descr long
-        &'simple_exec',&                                     ! executable
-        &1, 1, 0, 0, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call pspec_stats%set_input('img_ios', 1, 'filetab', 'file', 'List of files to select from', 'List of files to select from', 'e.g. filetab.txt', .true., '')
-        ! parameter input/output
-        call pspec_stats%set_input('parm_ios', 1, smpd)
-        ! search controls
-        ! <empty>
-        ! alternative inputs
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-    end subroutine new_pspec_stats
 
     subroutine new_reextract
         ! PROGRAM SPECIFICATION
