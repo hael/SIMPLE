@@ -82,7 +82,6 @@ type(postprocess_commander)         :: xpostprocess
 type(remoc_commander)               :: xremoc
 
 ! IMAGE PROCESSING PROGRAMS
-type(pspec_stats_commander)          :: xpspecstats
 type(mask_commander)                 :: xmask
 type(fsc_commander)                  :: xfsc
 type(nonuniform_phase_ran_commander) :: xnonuniform_phase_ran
@@ -241,8 +240,6 @@ select case(prg)
         call xremoc%execute(cline)
 
     ! IMAGE PROCESSING PROGRAMS
-    case('pspec_stats')
-        call xpspecstats%execute(cline)
     case( 'mask' )
         call xmask%execute(cline)
     case( 'fsc' )

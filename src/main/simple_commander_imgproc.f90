@@ -15,7 +15,6 @@ public :: convert_commander
 public :: ctfops_commander
 public :: filter_commander
 public :: normalize_commander
-public :: pspec_stats_commander
 public :: scale_commander
 public :: stack_commander
 public :: stackops_commander
@@ -48,10 +47,6 @@ type, extends(commander_base) :: normalize_commander
   contains
     procedure :: execute      => exec_normalize
 end type normalize_commander
-type, extends(commander_base) :: pspec_stats_commander
-  contains
-    procedure :: execute      => exec_pspec_stats
-end type pspec_stats_commander
 type, extends(commander_base) :: scale_commander
   contains
     procedure :: execute      => exec_scale
@@ -557,42 +552,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_NORMALIZE NORMAL STOP ****')
     end subroutine exec_normalize
-
-    !> for online power spectra analysis through statistic calculation
-    !! to perform prior ctf estimation.
-    subroutine exec_pspec_stats( self, cline )
-        use simple_pspec_stats, only: pspec_stats
-        class(pspec_stats_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline !< command line input
-        type(pspec_stats) :: pspec
-        type(parameters)  :: params
-        integer :: nfiles,n_mic
-        character(len=LONGSTRLEN), allocatable :: filenames(:)
-        real, allocatable    :: score(:)
-        character(len = 100) :: iom
-        integer :: status
-        logical :: keep
-        ! sanity checks
-        if( .not. cline%defined('filetab') )then
-            THROW_HARD('ERROR! filetab needs to be present; exec_pspec_stats')
-        endif
-        if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_pspec_stats')
-        endif
-        call params%new(cline)
-        call read_filetable(params%filetab, filenames)
-        nfiles = size(filenames)
-        allocate(score(nfiles), source = 0.)
-        do n_mic = 1, nfiles
-            call pspec%new(filenames(n_mic),params%smpd)
-            call pspec%process_ps()
-            call pspec%get_output(keep)
-            write(logfhandle,*) trim(filenames(n_mic)), ' keep: ', keep , '  CTF_ccscore: ', pspec%get_score(), '  CTF_curvature: ', pspec%get_curvature(), 'CTF_value: ', pspec%get_value()
-            call pspec%kill()
-        enddo
-        ! end gracefully
-        call simple_end('**** SIMPLE_PSPEC_STATS NORMAL STOP ****')
-    end subroutine exec_pspec_stats
 
     !> provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )

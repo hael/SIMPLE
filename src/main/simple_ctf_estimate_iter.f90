@@ -3,9 +3,7 @@ module simple_ctf_estimate_iter
 include 'simple_lib.f08'
 use simple_parameters,       only: params_glob
 use simple_image,            only: image
-use simple_pspec_score,      only: pspec_score
 use simple_ctf_estimate_fit, only: ctf_estimate_fit
-
 implicit none
 
 public :: ctf_estimate_iter
@@ -31,7 +29,6 @@ contains
         character(len=*),         intent(in)    :: dir_out
         logical,                  intent(in)    :: l_gen_thumb
         type(ctf_estimate_fit)        :: ctffit
-        type(pspec_score)             :: pspecscore
         character(len=:), allocatable :: fname_diag
         character(len=LONGSTRLEN)     :: moviename_thumb, rel_moviename_thumb, rel_fname, epsname, docname, tmpl_fname
         integer                       :: nframes, ldim(3)
@@ -79,12 +76,6 @@ contains
         endif
         call ctffit%write_diagnostic(fname_diag)
         call make_relativepath(CWD_GLOB,fname_diag, rel_fname)
-        !score pspec
-        ! call pspecscore%score(ctfvars, moviename_forctf)
-        ! call orientation%set('icescore',       pspecscore%icescore)
-        ! call orientation%set('grapheneindex',  real(pspecscore%grapheneindex))
-        ! call orientation%set('graphenescore',  pspecscore%graphenescore)
-        ! call pspecscore%kill
         ! reporting
         call orientation%set('dfx',            ctfvars%dfx)
         call orientation%set('dfy',            ctfvars%dfy)
