@@ -74,7 +74,7 @@ integer              :: n_prg_ptrs = 0
 type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
 ! declare simple_exec and single_exec program specifications here
-type(simple_program), target :: atom_cluster_analysis
+type(simple_program), target :: autorefine3D_nano
 type(simple_program), target :: calc_pspec
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
@@ -292,7 +292,7 @@ contains
     subroutine make_user_interface
         call set_common_params
         call set_prg_ptr_array
-        call new_atom_cluster_analysis
+        call new_autorefine3D_nano
         call new_calc_pspec
         call new_center
         call new_cleanup2D
@@ -392,7 +392,7 @@ contains
 
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0
-        call push2prg_ptr_array(atom_cluster_analysis)
+        call push2prg_ptr_array(autorefine3D_nano)
         call push2prg_ptr_array(calc_pspec)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
@@ -499,8 +499,8 @@ contains
         character(len=*), intent(in)  :: which_program
         type(simple_program), pointer :: ptr2prg
         select case(trim(which_program))
-            case('atom_cluster_analysis')
-                ptr2prg => atom_cluster_analysis
+            case ('autorefine3D_nano')
+                ptr2prg => autorefine3D_nano
             case('calc_pspec')
                 ptr2prg => calc_pspec
             case('center')
@@ -797,6 +797,7 @@ contains
         write(logfhandle,'(A)') estimate_diam%name
         write(logfhandle,'(A)') simulate_atoms%name
         write(logfhandle,'(A)') refine3D_nano%name
+        write(logfhandle,'(A)') autorefine3D_nano%name
         write(logfhandle,'(A)') tseries_reconstruct3D%name
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('VALIDATION PROGRAMS:', C_UNDERLINED)
@@ -987,34 +988,50 @@ contains
     ! computer controls
     ! <empty>
 
-    subroutine new_atom_cluster_analysis
+    subroutine new_autorefine3D_nano
         ! PROGRAM SPECIFICATION
-        call atom_cluster_analysis%new(&
-        &'atom_cluster_analysis', &                                   ! name
-        &'Cluster the atoms in the nanoparticle',& ! descr_short
-        &'is a program for determine atom clustering of nanoparticle atomic-resolution map. &
-        & Clusters with respect to aspect ratio, distances distribution, angle between a fixed &
-        & vector and the direction of the longest dim of each atom, atoms intensities.',& ! descr long
-        &'quant_exec',&                                     ! executable
-        &1, 1, 0, 2, 1, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        call autorefine3D_nano%new(&
+        &'autorefine3D_nano',&                                                                                                    ! name
+        &'auto 3D refinement of metallic nanoparticles',&                                                                          ! descr_short
+        &'is a distributed workflow for automated 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
+        &'single_exec',&                                                                                                ! executable
+        &1, 2, 0, 8, 5, 4, 2, .true.)                                                                                        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call atom_cluster_analysis%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume', &
-        & 'input volume e.g. vol.mrc', .true., '')
+        call autorefine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
+        & sections for nanoparticle image matching', 'input volume e.g. vol.mrc', .true., '')
         ! parameter input/output
-        call atom_cluster_analysis%set_input('parm_ios', 1, smpd)
+        call autorefine3D_nano%set_input('parm_ios', 1, smpd)
+        call autorefine3D_nano%set_input('parm_ios', 2, element)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call atom_cluster_analysis%set_input('srch_ctrls', 1, clustermode)
-        call atom_cluster_analysis%set_input('srch_ctrls', 2, 'thres', 'num', 'Threshold for cluster merging','Threshold for cluster merging', 'in unit of measure of the feature', .false., 1.)
+        call autorefine3D_nano%set_input('srch_ctrls', 1, nspace)
+        call autorefine3D_nano%set_input('srch_ctrls', 2, trs)
+        call autorefine3D_nano%set_input('srch_ctrls', 3, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call autorefine3D_nano%set_input('srch_ctrls', 4, maxits)
+        call autorefine3D_nano%set_input('srch_ctrls', 5, update_frac)
+        call autorefine3D_nano%set_input('srch_ctrls', 6, frac)
+        call autorefine3D_nano%set_input('srch_ctrls', 7, pgrp)
+        call autorefine3D_nano%set_input('srch_ctrls', 8, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! filter controls
-        call atom_cluster_analysis%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition vol1  e.g. Pt', .true., '  ')
+        call autorefine3D_nano%set_input('filt_ctrls', 1, hp)
+        call autorefine3D_nano%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
+        &Angstroms{5}', .false., 5.)
+        call autorefine3D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms{1.0}', .false., 1.)
+        call autorefine3D_nano%set_input('filt_ctrls', 4, lp_backgr)
+        call autorefine3D_nano%set_input('filt_ctrls', 5, ptclw)
         ! mask controls
-        ! <empty>
+        call autorefine3D_nano%set_input('mask_ctrls', 1, mskdiam)
+        call autorefine3D_nano%set_input('mask_ctrls', 2, innerdiam)
+        call autorefine3D_nano%set_input('mask_ctrls', 3, mskfile)
+        call autorefine3D_nano%set_input('mask_ctrls', 4, width)
         ! computer controls
-        ! <empty>
-    end subroutine new_atom_cluster_analysis
+        call autorefine3D_nano%set_input('comp_ctrls', 1, nparts)
+        call autorefine3D_nano%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_autorefine3D_nano
 
     subroutine new_calc_pspec
         ! PROGRAM SPECIFICATION
@@ -1557,7 +1574,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call detect_atoms%set_input('filt_ctrls', 1, 'element', 'str', 'Atom name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        call detect_atoms%set_input('filt_ctrls', 1, element)
         ! mask controls
         call detect_atoms%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
@@ -1781,7 +1798,7 @@ contains
         ! search controls
         call geometry_analysis%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold','Distance filter (in A)', 'in A', .false., 1.1)
         ! filter controls
-        call geometry_analysis%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        call geometry_analysis%set_input('filt_ctrls', 1, element)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -2478,7 +2495,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! filter controls
-        call nano_softmask%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        call nano_softmask%set_input('filt_ctrls', 1, element)
         ! mask controls
         ! <empty>
         ! computer controls

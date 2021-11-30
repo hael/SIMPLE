@@ -403,8 +403,8 @@ contains
 
     !> \brief  for setting a command line argument with cmdarg object
     subroutine set_3( self, cmarg )
-        class(cmdline),   intent(inout) :: self
-        type(cmdarg), intent(in)    :: cmarg
+        class(cmdline), intent(inout) :: self
+        type(cmdarg),   intent(in)    :: cmarg
         integer :: which
         which = self%lookup(cmarg%key)
         if( which == 0 )then
@@ -432,8 +432,8 @@ contains
 
     !> \brief  for setting a command line argument with a list of cmdarg objects
     subroutine set_4( self, cmarg )
-        class(cmdline),   intent(inout) :: self
-        type(cmdarg), intent(in)    :: cmarg(:)
+        class(cmdline), intent(inout) :: self
+        type(cmdarg),   intent(in)    :: cmarg(:)
         integer :: which, n
         do n=1,size(cmarg)
             which = self%lookup(cmarg(n)%key)
