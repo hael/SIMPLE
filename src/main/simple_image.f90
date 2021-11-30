@@ -1002,18 +1002,17 @@ contains
     end subroutine open
 
     !>  \brief read: for reading 2D images from stack or volumes from volume files
-    subroutine read( self, fname, i, formatchar, readhead )
+    subroutine read( self, fname, i, readhead )
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         integer,          optional, intent(in)    :: i
-        character(len=1), optional, intent(in)    :: formatchar
         logical,          optional, intent(in)    :: readhead
-        type(imgfile)         :: ioimg
-        character(len=1)      :: form
-        integer               :: ldim(3), iform, first_slice
-        integer               :: last_slice, ii
-        real                  :: smpd
-        logical               :: isvol
+        type(imgfile)    :: ioimg
+        character(len=1) :: form
+        integer          :: ldim(3), iform, first_slice
+        integer          :: last_slice, ii
+        real             :: smpd
+        logical          :: isvol
         ldim  = self%ldim
         smpd  = self%smpd
         isvol = .true. ! assume volume by default
@@ -1024,38 +1023,29 @@ contains
             isvol = .false.
             ii = i ! replace default location
         endif
-        if( present(formatchar) )then
-            form = formatchar
-        else
-            form = fname2format(fname)
-        endif
+        form = fname2format(fname)
         select case(form)
-        case('M', 'F', 'S', 'J', 'L')
-            call self%open(fname, ioimg, formatchar, readhead, rwaction='READ')
-        case DEFAULT
-            write(logfhandle,*) 'Trying to read from file: ', trim(fname)
-            THROW_HARD('unsupported file format; read')
+            case('M', 'F', 'S', 'J', 'L')
+                call self%open(fname, ioimg, form, readhead, rwaction='READ')
+            case DEFAULT
+                write(logfhandle,*) 'Trying to read from file: ', trim(fname)
+                THROW_HARD('unsupported file format; read')
         end select
-        call exception_handler(ioimg)
+        ! call exception_handler(ioimg)
         call read_local(ioimg)
 
     contains
 
-        !> read_local
-        !! \param ioimg Image file object
-        !!
         subroutine read_local( ioimg )
             class(imgfile) :: ioimg
-            ! work out the slice range
             if( isvol )then
-                if( ii .gt. 1 ) THROW_HARD('stacks of volumes not supported; read')
                 first_slice = 1
                 last_slice = ldim(3)
             else
                 first_slice = ii
                 last_slice = ii
             endif
-            call ioimg%rSlices(first_slice,last_slice,self%rmat)
+            call ioimg%rSlices(first_slice,last_slice,self%rmat,is_mrc=form.eq.'M')
             call ioimg%close
         end subroutine read_local
 
