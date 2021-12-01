@@ -126,7 +126,6 @@ type(mkdir_commander)                       :: xmkdir
 character(len=STDLEN) :: xarg, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
-logical, parameter    :: DEBUG_HERE = .true.
 
 ! parse command-line
 call get_command_argument(1, xarg, cmdlen, cmdstat)
@@ -143,7 +142,6 @@ endif
 ! parse command line into cline object
 call cline%parse
 
-if( DEBUG_HERE ) print *, 'prg: ', prg
 select case(prg)
 
     ! PROJECT MANAGEMENT PROGRAMS
