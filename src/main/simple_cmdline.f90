@@ -24,6 +24,7 @@ interface cmdarg
 end interface
 
 type cmdline
+    private
     type(cmdarg)          :: cmds(MAX_CMDARGS)
     character(len=KEYLEN) :: checker(MAX_CMDARGS)
     character(len=8192)   :: entire_line        !! PATH_MAX is 4096 https://github.com/torvalds/linux/blob/master/include/uapi/linux/limits.h
