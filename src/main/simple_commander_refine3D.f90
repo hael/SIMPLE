@@ -308,7 +308,7 @@ contains
                 THROW_HARD('LP needs be defined for the first step of projection matching!')
                 call cline%delete('update_frac')
             endif
-            if( .not.str_has_substr(params%refine, 'neigh') )then
+            if( (.not.str_has_substr(params%refine, 'neigh')) .and. (trim(params%refine).ne.'cont') )then
                 ! this forces the first round of alignment on the starting model(s)
                 ! to be greedy and the subseqent ones to be whatever the refinement flag is set to
                 call build%spproj%os_ptcl3D%delete_3Dalignment(keepshifts=.true.)
