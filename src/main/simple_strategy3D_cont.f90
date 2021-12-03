@@ -54,10 +54,6 @@ contains
             call build_glob%spproj_field%get_ori(self%s%iptcl, self%o)
             cxy       = self%cont_srch%minimize(self%o, params_glob%athres/2., params_glob%trs, found_better)
             self%corr = cxy(1)
-            if( .not. found_better )then
-                ! put back the original one
-                call build_glob%spproj_field%get_ori(self%s%iptcl, self%o)
-            endif
             call self%oris_assign
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
@@ -68,7 +64,11 @@ contains
         use simple_ori,  only: ori
         class(strategy3D_cont), intent(inout) :: self
         type(ori) :: osym, o_tmp
-        real      :: dist_inpl, euldist, mi_proj, frac
+        real      :: shvec_incr(2), dist_inpl, euldist, mi_proj, frac
+        ! shift update
+        shvec_incr = self%o%get_2Dshift() - build_glob%spproj_field%get_2Dshift(self%s%iptcl)
+        call build_glob%spproj_field%set_shift_incr(self%s%iptcl, shvec_incr)
+        call build_glob%spproj_field%set(self%s%iptcl, 'shincarg', arg(shvec_incr))
         ! angular distances
         call build_glob%spproj_field%get_ori(self%s%iptcl, o_tmp)
         call build_glob%pgrpsyms%sym_dists(o_tmp, self%o, osym, euldist, dist_inpl)
