@@ -789,14 +789,11 @@ contains
         call simple_end('**** SIMPLE_TSERIES_CTF_ESTIMATE NORMAL STOP ****')
     end subroutine exec_tseries_ctf_estimate
 
-    ! smpd must be default input
-    ! element must be default input
     subroutine exec_autorefine3D_nano( self, cline )
         use simple_commander_quant, only: detect_atoms_commander
         class(autorefine3D_nano_commander), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline
+        class(cmdline),                     intent(inout) :: cline ! I don't instantiate it in here so not declared as type
         type(parameters)              :: params
-        ! commanders
         type(refine3D_nano_commander) :: xrefine3D_nano
         type(detect_atoms_commander)  :: xdetect_atms
         integer,          parameter :: MOD_BLD_FREQ = 1
@@ -806,7 +803,7 @@ contains
         type(cmdline) :: cline_refine3D_nano, cline_detect_atms
         integer       :: i
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_autorefine3D_nano & copy the project file
-        call params%new(cline)         ! because the parameters class manages directory creation and project file copying
+        call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
         call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
         ! copy the input command line as templates for the refine3D_nano/detect_atoms command lines
         cline_refine3D_nano = cline
@@ -815,19 +812,15 @@ contains
         call cline_refine3D_nano%set( 'prg',    'refine3D_nano')        ! need to know which program to run
         call cline_refine3D_nano%set('maxits',   real(MOD_BLD_FREQ))    ! need to know how many iterations before building atomic model
         call cline_refine3D_nano%set('projfile', trim(params%projfile)) ! since we are not making directories (non-standard execution) we better keep track of project file
-        ! print *, 'cline for refine3D_nano'
-        ! call cline_refine3D_nano%printline
         ! then update cline_detect_atoms accordingly
         call cline_detect_atms%set('prg', 'detect_atoms') ! need to know which program to run
         call cline_detect_atms%set('vol1', RECVOL)        ! RECVOL will always be overwritten recvol_state01.mrc from refine3D_nano
-        ! print *, 'cline for detect atoms'
-        ! call cline_detect_atms%printline
         do i=1,MAXITS
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user
             call xrefine3D_nano%execute(cline_refine3D_nano)
             if( i == 1 )then
                 ! the iterations after the 1st uses the default 1.0 A low-pass limit
-                call cline_refine3D_nano%delete('lp')          ! 1.0 by default
+                call cline_refine3D_nano%delete('lp')
                 call cline_refine3D_nano%set('vol1', STARTVOL) ! STARTVOL will always be overwritten (recvol_state01_SIM.mrc from detect_atoms)
             endif
             call cline_refine3D_nano%delete('endit') ! used internally but not technically allowed
@@ -836,6 +829,7 @@ contains
             ! file renaming
 
             ! covergence test
+
         end do
     end subroutine exec_autorefine3D_nano
 
