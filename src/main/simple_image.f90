@@ -265,6 +265,7 @@ contains
     procedure, private :: real_corr_prenorm_1
     procedure, private :: real_corr_prenorm_2
     generic            :: real_corr_prenorm => real_corr_prenorm_1, real_corr_prenorm_2
+    procedure          :: sqeuclid
     procedure          :: fsc, fsc_scaled
     procedure          :: get_res
     procedure, private :: oshift_1
@@ -4894,6 +4895,14 @@ contains
             r = 0.
         endif
     end function real_corr_prenorm_2
+
+    function sqeuclid( self1, self2, mask ) result( r )
+        class(image), intent(inout) :: self1, self2
+        logical,      intent(in)    :: mask(self1%ldim(1),self1%ldim(2),self1%ldim(3))
+        real :: r
+        r = sum((self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) -&
+        &self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)))**2.0, mask=mask)
+    end function sqeuclid
 
     !> \brief fsc is for calculation of Fourier ring/shell correlation in double precision
     subroutine fsc( self1, self2, corrs )
