@@ -381,6 +381,8 @@ contains
                         rarr(1:dims(1),:,:) = real(iand(int(tmp_16bit_int_array(:dims(1),:dims(2),:dims(3)),kind=4),&
                             &int(huge(int(1,kind=2)), kind=4)))
                     endif
+                case(4)
+                    read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) rarr(:dims(1),:,:)
                 case DEFAULT
                     write(logfhandle,'(2a)') 'fname: ', trim(self%fname)
                     write(logfhandle,'(a,i0,a)') 'bit depth: ', self%overall_head%bytesPerPix(), ' bytes'
