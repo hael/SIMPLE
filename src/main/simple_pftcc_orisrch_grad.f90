@@ -72,7 +72,6 @@ contains
         ithr         = omp_get_thread_num() + 1
         pft_ref_even = pftcc_glob%get_ref_pft(ithr, iseven=.true.)
         pft_ref_odd  = pftcc_glob%get_ref_pft(ithr, iseven=.false.)
-
         ! PREPARATION
         ! initialize with input projection direction
         self%ospec%x(1) = o_inout%e1get()
@@ -90,31 +89,21 @@ contains
         self%ospec%limits(4,1) = -maxHWshift
         self%ospec%limits(4,2) =  maxHWshift
         self%ospec%limits(5,:) = self%ospec%limits(4,:)
-
         ! MINIMISATION
         self%ospec%nevals = 0
         vec = self%ospec%x
         cost_init = real(costfun(self, vec, 5)) ! for later comparison
-
-        print *, 'cost_init: ', cost_init
-
         call self%nlopt%minimize(self%ospec, self, cost)
-
-        print *, 'cost_opt: ', cost
-        print *, '*************************'
-
         ! OUTPUT
         if( cost < cost_init )then
-            ! set corr
-            cxy(1)  = -cost ! correlation
-            ! set Euler
-            call o_inout%set_euler(self%ospec%x(1:3))
-            ! rotate the shift vector to the frame of reference
+             ! correlation
+            cxy(1)  = -cost
+            ! There is no need to rotate here as the reference was extracted at required angle
+            ! unlike in pftcc_shsrch_grad where it was extracted at 0.0
             cxy(2:) = self%ospec%x(4:5)
-            call rotmat2d(self%ospec%x(3), rotmat)
-            cxy(2:) = matmul(cxy(2:), rotmat)
-            ! update ori
-            call o_inout%set_shift(cxy(2:))
+            ! update ori with angles, shift addition
+            call o_inout%set_euler(self%ospec%x(1:3))
+            call o_inout%set_shift(o_inout%get_2Dshift()+cxy(2:))
             ! indicate that better was found
             found_better = .true.
         else
