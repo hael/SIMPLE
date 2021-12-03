@@ -404,8 +404,8 @@ contains
             call even%new([self%box,self%box,self%box],self%smpd)
             call odd%new([self%box,self%box,self%box],self%smpd)
             ! correct for the uneven sampling density
-            call self%even%sampl_dens_correct
-            call self%odd%sampl_dens_correct
+            call self%even%sampl_dens_correct(do_gridcorr=L_DO_GRIDCORR_GLOB)
+            call self%odd%sampl_dens_correct(do_gridcorr=L_DO_GRIDCORR_GLOB)
             ! reverse FT
             call self%even%ifft()
             call self%odd%ifft()
@@ -524,7 +524,7 @@ contains
         class(image),            intent(inout) :: reference !< reference volume
         write(logfhandle,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
         call reference%set_ft(.false.)
-        call self%eosum%sampl_dens_correct
+        call self%eosum%sampl_dens_correct(do_gridcorr=L_DO_GRIDCORR_GLOB)
         call self%eosum%ifft()
         call self%eosum%div(self%pad_correction)
         call self%eosum%clip(reference)
