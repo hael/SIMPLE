@@ -9,7 +9,7 @@ implicit none
 
 public :: read_img, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
 &norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, readrefvols_ran_phases_below_noise,&
-&preprefvol, prep2Dref, preprecvols, killrecvols, prepimgbatch, build_pftcc_particles
+&preprefvol, prep2Dref, prep2Drefs_eo, preprecvols, killrecvols, prepimgbatch, build_pftcc_particles
 private
 #include "simple_local_flags.inc"
 
@@ -373,7 +373,7 @@ contains
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
-        real,              parameter     :: LAMBDA_HERE = 1.0
+        real,              parameter     :: LAMBDA_HERE = 3.0
         type(tvfilter) :: tvfilt
         real           :: frc(build_glob%img%get_filtsz()), filter(build_glob%img%get_filtsz())
         real           :: xyz(3), sharg
@@ -416,11 +416,10 @@ contains
         endif
         ! ensure we are in real-space before clipping
         call img_in%ifft()
-        !!!!!!!!!!!!!!!!!!!!!!!!!! <<< 2TST
-        ! call tvfilt%new
-        ! call tvfilt%apply_filter(img_in, LAMBDA_HERE)
-        ! call tvfilt%kill
-        !<<< !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        ! TV regularization with fixed lambda = 3
+        call tvfilt%new
+        call tvfilt%apply_filter(img_out, LAMBDA_HERE)
+        call tvfilt%kill
         ! clip image if needed
         call img_in%clip(img_out)
         ! apply mask
@@ -437,6 +436,87 @@ contains
         ! move to Fourier space
         call img_out%fft()
     end subroutine prep2Dref
+
+    !>  \brief  prepares one cluster centre image for alignment
+    subroutine prep2Drefs_eo( pftcc, img_odd, img_even, imgs_out, icls, center, xyz_in )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_estimate_ssnr,    only: fsc2optlp_sub
+        use simple_polarizer,        only: polarizer
+        use simple_tvfilter,         only: tvfilter
+        use simple_tvlam_opt,        only: tvlam_opt
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        class(image),            intent(inout) :: img_odd, img_even
+        class(polarizer),        intent(inout) :: imgs_out(2)
+        integer,                 intent(in)    :: icls
+        logical,                 intent(in)    :: center
+        real,                    intent(in)    :: xyz_in(3)
+        real,              parameter     :: LAMBDA_HERE = 3.0
+        type(tvlam_opt) :: tvlamfind
+        type(tvfilter)  :: tvfilt
+        real            :: frc(build_glob%img%get_filtsz()), filter(build_glob%img%get_filtsz())
+        real            :: xyz(3), sharg, lam
+        integer         :: filtsz
+        logical         :: do_center
+        ! randomize Fourier phases below noise power in a global manner
+        call img_odd%fft
+        call img_even%fft
+        call img_odd%ran_phases_below_noise_power(img_even)
+        ! centering only performed if params_glob%center.eq.'yes'
+        do_center = (params_glob%center .eq. 'yes')
+        do_center = do_center .and. center
+        if( do_center )then
+            sharg = arg(xyz_in)
+            if( sharg > CENTHRESH )then
+                ! apply shift and do NOT update the corresponding class parameters
+                call img_odd%fft()
+                call img_odd%shift2Dserial(xyz_in(1:2))
+                call img_even%fft()
+                call img_even%shift2Dserial(xyz_in(1:2))
+            endif
+        endif
+        ! filter
+        call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+        if( any(frc > 0.143) )then
+            call fsc2optlp_sub(build_glob%clsfrcs%get_filtsz(), frc, filter)
+            if( params_glob%l_match_filt )then
+                call pftcc%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kstop))
+            else
+                call img_odd%fft() ! needs to be here in case the shift was never applied and do_eo == .false. (above)
+                call img_odd%apply_filter_serial(filter)
+                call img_even%fft()
+                call img_even%apply_filter_serial(filter)
+            endif
+        endif
+        ! ensure we are in real-space before clipping
+        call img_odd%ifft()
+        call img_odd%clip(imgs_out(1)) ! clip if needed
+        call img_even%ifft()
+        call img_even%clip(imgs_out(2))
+        ! TV regularization with automatic lambda estimation
+        call tvlamfind%new([params_glob%box,params_glob%box,1], params_glob%smpd, params_glob%msk)
+        call tvlamfind%set_img_ptrs(imgs_out(2), imgs_out(1)) ! even first, odd second
+        call tvlamfind%minimize(lam)
+        call tvlamfind%get_tvfiltered(imgs_out(2), is_even=.true.)
+        call tvlamfind%get_tvfiltered(imgs_out(1), is_even=.false.)
+        ! apply mask
+        if( params_glob%l_innermsk )then
+            call imgs_out(1)%mask(params_glob%msk, 'soft', &
+                inner=params_glob%inner, width=params_glob%width)
+            call imgs_out(2)%mask(params_glob%msk, 'soft', &
+                inner=params_glob%inner, width=params_glob%width)
+        else
+            call imgs_out(1)%mask(params_glob%msk, 'soft')
+            call imgs_out(2)%mask(params_glob%msk, 'soft')
+        endif
+        ! gridding prep
+        if( params_glob%gridding.eq.'yes' )then
+            call imgs_out(1)%div_by_instrfun
+            call imgs_out(2)%div_by_instrfun
+        endif
+        ! move to Fourier space
+        call imgs_out(1)%fft()
+        call imgs_out(2)%fft()
+    end subroutine prep2Drefs_eo
 
     !>  \brief  initializes all volumes for reconstruction
     subroutine preprecvols( wcluster )
@@ -616,7 +696,7 @@ contains
         endif
         ! Volume filtering
         if( .not.params_glob%l_lpset )then
-            filtsz    = build_glob%img%get_filtsz()
+            filtsz = build_glob%img%get_filtsz()
             if( params_glob%l_match_filt )then
                 ! stores filters in pftcc
                 if( params_glob%clsfrcs.eq.'yes')then

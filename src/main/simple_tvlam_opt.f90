@@ -56,14 +56,14 @@ contains
         self%img_o => img_o
     end subroutine set_img_ptrs
 
-    subroutine get_tvfiltered( self, img, even )
+    subroutine get_tvfiltered( self, img, is_even )
         class(tvlam_opt), intent(inout) :: self
         class(image),     intent(inout) :: img
-        logical, optional,   intent(in) :: even
-        logical :: l_even
-        l_even = .true.
-        if( present(even) ) l_even = even
-        if( l_even )then
+        logical, optional,   intent(in) :: is_even
+        logical :: l_is_even
+        l_is_even = .true.
+        if( present(is_even) ) l_is_even = is_even
+        if( l_is_even )then
             call img%copy(self%img_e_tv)
         else    
             call img%copy(self%img_o_tv)

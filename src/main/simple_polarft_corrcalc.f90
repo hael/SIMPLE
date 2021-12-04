@@ -113,6 +113,7 @@ type :: polarft_corrcalc
     procedure          :: set_ptcl_fcomp
     procedure          :: set_ref_optlp
     procedure          :: cp_even2odd_ref
+    procedure          :: cp_odd2even_ref
     procedure          :: cp_even_ref2ptcl
     procedure          :: cp_refs
     procedure          :: swap_ptclsevenodd
@@ -487,6 +488,12 @@ contains
         integer,                 intent(in)    :: iref
         self%pfts_refs_odd(:,:,iref) = self%pfts_refs_even(:,:,iref)
     end subroutine cp_even2odd_ref
+
+    subroutine cp_odd2even_ref( self, iref )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref
+        self%pfts_refs_even(:,:,iref) = self%pfts_refs_odd(:,:,iref)
+    end subroutine cp_odd2even_ref
 
     subroutine cp_refs( self, self2 )
         class(polarft_corrcalc), intent(inout) :: self, self2
