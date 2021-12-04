@@ -8,19 +8,18 @@ public :: tvfilter, test_tvfilter, test_tvfilter_3d
 #include "simple_local_flags.inc"
 
 type :: tvfilter
-    logical       :: existence
+    type(image)   :: r_img, b_img
     type(image)   :: interpolate_coeffs
     real, pointer :: interpolate_coeffs_rmat(:,:,:) => null()
-    integer       :: img_dims(2), img_dims_3d(3)
-    type(image)   :: r_img, b_img
-    integer       :: ldim(2)
+    integer       :: img_dims(2), img_dims_3d(3), ldim(2)
+    logical       :: existence
 contains
-    procedure :: new => new_tvfilter
-    procedure :: apply_filter ! 2D by default
-    procedure :: apply_filter_3d
-    procedure :: prepare_interpolation
-    procedure :: interp_val
-    procedure :: kill => kill_tvfilter
+    procedure          :: new => new_tvfilter
+    procedure          :: apply_filter ! 2D by default
+    procedure          :: apply_filter_3d
+    procedure          :: prepare_interpolation
+    procedure          :: interp_val
+    procedure          :: kill => kill_tvfilter
     procedure, private :: fill_r
     procedure, private :: fill_b
     procedure, private :: fill_r_3d
@@ -563,6 +562,5 @@ contains
         call self%interpolate_coeffs%kill
         self%existence = .false.
     end subroutine kill_tvfilter
-
 
 end module simple_tvfilter
