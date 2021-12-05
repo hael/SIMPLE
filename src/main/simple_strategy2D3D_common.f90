@@ -537,7 +537,7 @@ contains
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
     subroutine readrefvols_filter_nonuniformly( cline, fname_even, fname_odd )
-        use simple_estimate_ssnr, only: nonuniform_phase_ran_tv
+        use simple_estimate_ssnr, only: nonuniform_phase_ran, nonuniform_phase_ran_tv
         use simple_tvfilter,      only: tvfilter
         class(cmdline),             intent(in) :: cline
         character(len=*),           intent(in) :: fname_even
@@ -557,7 +557,7 @@ contains
                 call mskvol%one_at_edge ! to expand before masking of reference
                 if( params_glob%cc_objfun == OBJFUN_EUCLID )then
                     ! no TV regularization
-                    call nonuniform_phase_ran(build_glob%vol, build_glob%vol_odd, mskvol, params_glob%lambda)
+                    call nonuniform_phase_ran(build_glob%vol, build_glob%vol_odd, mskvol)
                 else
                     call nonuniform_phase_ran_tv(build_glob%vol, build_glob%vol_odd, mskvol, params_glob%lambda)
                 endif
