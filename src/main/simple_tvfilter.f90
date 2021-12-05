@@ -45,7 +45,7 @@ contains
         integer :: dims1
         img_ldim = img%get_ldim()
         if ( img_ldim(3) /= 1 )then
-            write(logfhandle,*) 'ldim in tvfilter apply_filter: ', ldim(1), ldim(2), ldim(3)
+            write(logfhandle,*) 'ldim in tvfilter apply_filter: ', img_ldim(1), img_ldim(2), img_ldim(3)
             THROW_HARD('only for 2D images; tvfilter::apply_filter')
         endif
         self%img_dims(1:2) = img_ldim(1:2)
