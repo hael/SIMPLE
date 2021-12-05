@@ -7,7 +7,7 @@ implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
 public :: acc_dose2filter, dose_weight, nonuniform_phase_ran, nonuniform_fsc_lp, local_res_lp
-public :: plot_fsc
+public :: plot_fsc, nonuniform_phase_ran_tv
 private
 #include "simple_local_flags.inc"
 
@@ -240,6 +240,109 @@ contains
             end subroutine set_subvols_msk_fft_filter_ifft
 
     end subroutine nonuniform_phase_ran
+
+    subroutine nonuniform_phase_ran_tv( even, odd, mskimg, lambda )
+        use simple_image,    only: image
+        use simple_tvfilter, only: tvfilter
+        class(image),   intent(inout) :: even, odd, mskimg
+        real,           intent(in)    :: lambda
+        integer,        parameter     :: SUBBOX=32, LSHIFT=15, RSHIFT=16, CPIX=LSHIFT + 1, CHUNKSZ=20
+        real,           parameter     :: SUBMSK=real(SUBBOX)/2. - COSMSKHALFWIDTH - 1.
+        type(image),    allocatable   :: subvols_even(:) ! one per thread
+        type(image),    allocatable   :: subvols_odd(:)  ! one per thread
+        type(tvfilter), allocatable   :: tvfilts(:)      ! one per thread
+        logical,        allocatable   :: l_mask(:,:,:)
+        integer     :: ldim(3), i, j, k, ithr, cnt, npix, lb(3), ub(3)
+        real        :: smpd
+        ! check input
+        if( even%is_ft()   ) THROW_HARD('even vol FTed; nonuniform_phase_ran')
+        if( odd%is_ft()    ) THROW_HARD('odd  vol FTed; nonuniform_phase_ran')
+        if( mskimg%is_ft() ) THROW_HARD('msk  vol FTed; nonuniform_phase_ran')
+        ! set parameters
+        ldim   = even%get_ldim()
+        if( ldim(3) == 1 ) THROW_HARD('not intended for 2D images; nonuniform_phase_ran')
+        smpd   = even%get_smpd()
+        l_mask = mskimg%bin2logical()
+        npix   = count(l_mask)
+        ! construct
+        allocate(subvols_even(nthr_glob), subvols_odd(nthr_glob), tvfilts(nthr_glob))
+        do ithr = 1, nthr_glob
+            call subvols_even(ithr)%new([SUBBOX,SUBBOX,SUBBOX], smpd, wthreads=.false.)
+            call subvols_odd(ithr)%new( [SUBBOX,SUBBOX,SUBBOX], smpd, wthreads=.false.)
+            call tvfilts(ithr)%new
+        end do
+        ! determine loop bounds for better load balancing in the following parallel loop
+        call bounds_from_mask3D( l_mask, lb, ub )
+        ! loop over pixels
+        !$omp parallel do collapse(3) default(shared) private(i,j,k,ithr) schedule(dynamic,CHUNKSZ) proc_bind(close)
+        do k = lb(3), ub(3)
+            do j = lb(2), ub(2)
+                do i = lb(1), ub(1)
+                    if( .not.l_mask(i,j,k) ) cycle
+                    ithr = omp_get_thread_num() + 1
+                    call set_subvols_msk_fft_filter_ifft_tv([i,j,k], ithr)
+                    call even%set_rmat_at(i,j,k, subvols_even(ithr)%get_rmat_at(CPIX,CPIX,CPIX))
+                    call odd%set_rmat_at(i,j,k, subvols_odd(ithr)%get_rmat_at(CPIX,CPIX,CPIX))
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        ! destruct
+        do ithr = 1, nthr_glob
+            call subvols_even(ithr)%kill
+            call subvols_odd(ithr)%kill
+            call tvfilts(ithr)%kill
+        end do
+        deallocate(l_mask)
+
+        contains
+
+            subroutine set_subvols_msk_fft_filter_ifft_tv( loc, ithr )
+                integer, intent(in) :: loc(3), ithr
+                integer  :: lb(3), ub(3), i, j, k, ii, jj, kk, isub, jsub, ksub
+                call subvols_even(ithr)%zero_and_unflag_ft
+                call subvols_odd(ithr)%zero_and_unflag_ft
+                ! set bounds
+                lb = loc - LSHIFT
+                ub = loc + RSHIFT
+                ! extract components
+                kk  = -LSHIFT
+                do k = lb(3), ub(3)
+                    if( k < 1 .and. k > ldim(3) ) cycle
+                    jj = -LSHIFT
+                    do j = lb(2), ub(2)
+                        if( j < 1 .and. j > ldim(2) ) cycle
+                        ii = -LSHIFT
+                        do i = lb(1), ub(1)
+                            if( i < 1 .and. i > ldim(1) ) cycle
+                            isub = ii + LSHIFT + 1
+                            jsub = jj + LSHIFT + 1
+                            ksub = kk + LSHIFT + 1
+                            call subvols_even(ithr)%set_rmat_at(isub,jsub,ksub, even%get_rmat_at(i,j,k))
+                            call subvols_odd(ithr)%set_rmat_at( isub,jsub,ksub, odd%get_rmat_at(i,j,k))
+                            ii = ii + 1
+                        enddo
+                        jj = jj + 1
+                    enddo
+                    kk = kk + 1
+                enddo
+                ! mask
+                call subvols_even(ithr)%mask(SUBMSK, 'soft')
+                call subvols_odd(ithr)%mask( SUBMSK, 'soft')
+                ! fft
+                call subvols_even(ithr)%fft
+                call subvols_odd(ithr)%fft
+                ! filter
+                call subvols_even(ithr)%ran_phases_below_noise_power(subvols_odd(ithr))
+                ! back to real space
+                call subvols_even(ithr)%ifft
+                call subvols_odd(ithr)%ifft
+                ! TV regularization
+                call tvfilts(ithr)%apply_filter(subvols_even(ithr), lambda)
+                call tvfilts(ithr)%apply_filter(subvols_odd(ithr),  lambda)
+            end subroutine set_subvols_msk_fft_filter_ifft_tv
+
+    end subroutine nonuniform_phase_ran_tv
 
     subroutine nonuniform_fsc_lp( even, odd, mskimg, map2filt, fsc_crit, locres_finds )
         use simple_image, only: image

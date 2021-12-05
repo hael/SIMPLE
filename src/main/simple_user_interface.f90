@@ -113,7 +113,7 @@ type(simple_program), target :: motion_correct
 type(simple_program), target :: motion_correct_tomo
 type(simple_program), target :: nano_softmask
 type(simple_program), target :: new_project
-type(simple_program), target :: nonuniform_phase_ran
+type(simple_program), target :: nonuniform_filter
 type(simple_program), target :: normalize_
 type(simple_program), target :: orisops
 type(simple_program), target :: oristats
@@ -325,7 +325,7 @@ contains
         call new_motion_correct_tomo
         call new_nano_softmask
         call new_new_project
-        call new_nonuniform_phase_ran
+        call new_nonuniform_filter
         call new_normalize
         call new_orisops
         call new_oristats
@@ -417,7 +417,7 @@ contains
         call push2prg_ptr_array(motion_correct_tomo)
         call push2prg_ptr_array(nano_softmask)
         call push2prg_ptr_array(new_project)
-        call push2prg_ptr_array(nonuniform_phase_ran)
+        call push2prg_ptr_array(nonuniform_filter)
         call push2prg_ptr_array(normalize_)
         call push2prg_ptr_array(orisops)
         call push2prg_ptr_array(oristats)
@@ -559,8 +559,8 @@ contains
                 ptr2prg => nano_softmask
             case('new_project')
                 ptr2prg => new_project
-            case('nonuniform_phase_ran')
-                ptr2prg => nonuniform_phase_ran
+            case('nonuniform_filter')
+                ptr2prg => nonuniform_filter
             case('normalize')
                 ptr2prg => normalize_
             case('orisops')
@@ -698,7 +698,7 @@ contains
         write(logfhandle,'(A)') motion_correct%name
         write(logfhandle,'(A)') motion_correct_tomo%name
         write(logfhandle,'(A)') new_project%name
-        write(logfhandle,'(A)') nonuniform_phase_ran%name
+        write(logfhandle,'(A)') nonuniform_filter%name
         write(logfhandle,'(A)') normalize_%name
         write(logfhandle,'(A)') orisops%name
         write(logfhandle,'(A)') oristats%name
@@ -2290,20 +2290,20 @@ contains
         ! <empty>
     end subroutine new_nano_softmask
 
-    subroutine new_nonuniform_phase_ran
+    subroutine new_nonuniform_filter
         ! PROGRAM SPECIFICATION
-        call nonuniform_phase_ran%new(&
-        &'nonuniform_phase_ran',&                               ! name
+        call nonuniform_filter%new(&
+        &'nonuniform_filter',&                               ! name
         &'Nonuniform low-pass filtering',&                      ! descr_short
         &'is a program for nonuniform low-pass filtering by zeroing F-comps below noise in e/o maps',& ! descr_long
         &'simple_exec',&                                        ! executable
         &2, 1, 0, 0, 0, 2, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call nonuniform_phase_ran%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
-        call nonuniform_phase_ran%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
+        call nonuniform_filter%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
+        call nonuniform_filter%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
         ! parameter input/output
-        call nonuniform_phase_ran%set_input('parm_ios', 1, smpd)
+        call nonuniform_filter%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2311,11 +2311,11 @@ contains
         ! filter controls
         ! <empty>
         ! mask controls
-        call nonuniform_phase_ran%set_input('mask_ctrls', 1, mskdiam)
-        call nonuniform_phase_ran%set_input('mask_ctrls', 2, mskfile)
+        call nonuniform_filter%set_input('mask_ctrls', 1, mskdiam)
+        call nonuniform_filter%set_input('mask_ctrls', 2, mskfile)
         ! computer controls
-        call nonuniform_phase_ran%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_nonuniform_phase_ran
+        call nonuniform_filter%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_nonuniform_filter
 
     subroutine new_new_project
         ! PROGRAM SPECIFICATION

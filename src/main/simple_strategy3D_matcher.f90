@@ -401,7 +401,7 @@ contains
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
             if( params_glob%l_lpset )then
                 ! low-pass set or multiple states
-                call readrefvols_ran_phases_below_noise( cline, params_glob%vols(s) )
+                call readrefvols_filter_nonuniformly( cline, params_glob%vols(s) )
                 call preprefvol(pftcc, cline, s, do_center, xyz, .true.)
                 !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
                 do iref=1,params_glob%nspace
@@ -413,7 +413,7 @@ contains
                 !$omp end parallel do
             else
                 if( params_glob%nstates.eq.1 )then
-                    call readrefvols_ran_phases_below_noise( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
+                    call readrefvols_filter_nonuniformly( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
                     ! PREPARE ODD REFERENCES
                     call preprefvol(pftcc, cline, s, do_center, xyz, .false.)
                     !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
@@ -435,7 +435,7 @@ contains
                     end do
                     !$omp end parallel do
                 else
-                    call readrefvols_ran_phases_below_noise( cline, params_glob%vols(s) )
+                    call readrefvols_filter_nonuniformly( cline, params_glob%vols(s) )
                     call preprefvol(pftcc, cline, s, do_center, xyz, .true.)
                     !$omp parallel do default(shared) private(iref, ind, o_tmp) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
