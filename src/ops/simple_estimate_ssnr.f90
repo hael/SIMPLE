@@ -338,8 +338,8 @@ contains
                 call subvols_even(ithr)%ifft
                 call subvols_odd(ithr)%ifft
                 ! TV regularization
-                call tvfilts(ithr)%apply_filter(subvols_even(ithr), lambda)
-                call tvfilts(ithr)%apply_filter(subvols_odd(ithr),  lambda)
+                call tvfilts(ithr)%apply_filter_3d(subvols_even(ithr), lambda)
+                call tvfilts(ithr)%apply_filter_3d(subvols_odd(ithr),  lambda)
             end subroutine set_subvols_msk_fft_filter_ifft_tv
 
     end subroutine nonuniform_phase_ran_tv
