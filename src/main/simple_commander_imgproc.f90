@@ -1013,6 +1013,10 @@ contains
             call prep_imgfile4movie(params%stk, params%smpd)
             goto 999
         endif
+        if( cline%defined('bfac') )then
+            call sharpen_imgfile(params%stk, params%outstk, params%smpd, params%bfac)
+            goto 999
+        endif
         ! default
         write(logfhandle,*)'Nothing to do!'
         ! end gracefully

@@ -3,7 +3,6 @@ program single_exec
 include 'simple_lib.f08'
 use simple_user_interface,       only: make_user_interface, list_single_prgs_in_ui
 use simple_cmdline,              only: cmdline, cmdline_err
-use simple_commander_base,       only: execute_commander
 use simple_commander_sim,        only: simulate_atoms_commander
 use simple_commander_preprocess, only: map_cavgs_selection_commander
 use simple_commander_imgproc,    only: estimate_diam_commander, pspec_int_rank_commander

@@ -3,7 +3,6 @@ program simple_exec
 include 'simple_lib.f08'
 use simple_user_interface, only: make_user_interface,list_simple_prgs_in_ui
 use simple_cmdline,        only: cmdline, cmdline_err
-use simple_commander_base, only: execute_commander
 use simple_spproj_hlev
 use simple_commander_project
 use simple_commander_checks
@@ -196,19 +195,19 @@ select case(prg)
     case( 'cleanup2D' )
         call xcleanup2D_distr%execute(cline)
     case( 'cluster2D' )
-        call execute_commander(xcluster2D_hlev, cline)
+        call xcluster2D_hlev%execute(cline)
     case( 'cluster2D_stream' )
         call xcluster2D_stream%execute(cline)
 
     ! AB INITIO 3D RECONSTRUCTION WORKFLOW
     case( 'initial_3Dmodel' )
-        call execute_commander(xinitial_3Dmodel, cline)
+        call xinitial_3Dmodel%execute(cline)
 
     ! REFINE3D WORKFLOWS
     case( 'calc_pspec' )
-        call execute_commander(xcalc_pspec_distr, cline)
+        call xcalc_pspec_distr%execute(cline)
     case( 'refine3D' )
-        call execute_commander(xrefine3D_distr, cline)
+        call xrefine3D_distr%execute(cline)
     case( 'reconstruct3D' )
         call xreconstruct3D_distr%execute( cline )
 

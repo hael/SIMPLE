@@ -2921,17 +2921,15 @@ contains
         logical,      intent(in)    :: verbose
         real, allocatable :: spec(:), plot(:,:)
         integer           :: lfny, k
-        if( .not. self%is_3d() ) THROW_HARD('Only for 3D images; guinier')
         call self%spectrum('absreal',spec=spec)
         lfny = self%get_lfny(1)
-        allocate( plot(lfny,2), stat=alloc_stat )
-        if(alloc_stat/=0)call allocchk("In: guinier; simple_image")
+        allocate( plot(lfny,2) )
         do k=1,lfny
             plot(k,1) = 1./(self%get_lp(k)**2.)
             plot(k,2) = log(spec(k))
             if( verbose ) write(logfhandle,'(A,1X,F8.4,1X,A,1X,F7.3)') '>>> RECIPROCAL SQUARE RES:', plot(k,1), '>>> LOG(ABS(REAL(F))):', plot(k,2)
         end do
-        deallocate(spec)
+        deallocate( spec )
     end function guinier
 
     !>  \brief spectrum generates the rotationally averaged spectrum of an image

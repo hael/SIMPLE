@@ -20,7 +20,7 @@ public :: mask_imgfile, taper_edges_imgfile
 !! Filters
 public :: ft2img_imgfile, masscen_imgfile, cure_imgfile, apply_bfac_imgfile
 public :: shift_imgfile, bp_imgfile, shrot_imgfile, add_noise_imgfile, nlmean_imgfile, corrfilt_imgfile
-public :: corrfilt_tseries_imgfile, tvfilt_tseries_imgfile, real_filter_imgfile, phase_rand_imgfile
+public :: corrfilt_tseries_imgfile, tvfilt_tseries_imgfile, real_filter_imgfile, sharpen_imgfile, phase_rand_imgfile
 public :: apply_ctf_imgfile, tvfilter_imgfile
 private
 
@@ -771,6 +771,27 @@ contains
         end do
         call img%kill
     end subroutine real_filter_imgfile
+
+    subroutine sharpen_imgfile( fname2filter, fname, smpd, bfac )
+        character(len=*), intent(in) :: fname2filter, fname
+        real,             intent(in) :: smpd, bfac
+        type(image)     :: img
+        integer         :: n, i, ldim(3)
+        call find_ldim_nptcls(fname2filter, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile( n, ldim, 'sharpen_imgfile' )
+        call img%new(ldim,smpd)
+        write(logfhandle,'(a)') '>>> SHARPENING IMAGES'
+        do i=1,n
+            call progress(i,n)
+            call img%read(fname2filter, i)
+            call img%fft
+            call img%apply_bfac(bfac)
+            call img%ifft
+            call img%write(fname, i)
+        end do
+        call img%kill
+    end subroutine sharpen_imgfile
 
     !>  \brief  is for phase randomization
     subroutine phase_rand_imgfile( fname2process, fname, smpd, lp )
