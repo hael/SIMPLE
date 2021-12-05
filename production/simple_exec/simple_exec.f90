@@ -84,7 +84,7 @@ type(remoc_commander)                       :: xremoc
 ! IMAGE PROCESSING PROGRAMS
 type(mask_commander)                        :: xmask
 type(fsc_commander)                         :: xfsc
-type(nonuniform_phase_ran_commander)        :: xnonuniform_phase_ran
+type(nonuniform_filter_commander)           :: xnonuniform_filter
 type(centervol_commander)                   :: xcenter
 type(reproject_commander)                   :: xreproject
 type(volops_commander)                      :: xvolops
@@ -243,8 +243,8 @@ select case(prg)
         call xmask%execute(cline)
     case( 'fsc' )
         call xfsc%execute(cline)
-    case( 'nonuniform_phase_ran' )
-        call xnonuniform_phase_ran%execute(cline)
+    case( 'nonuniform_filter' )
+        call xnonuniform_filter%execute(cline)
     case( 'center' )
         call xcenter%execute(cline)
     case( 'reproject' )
