@@ -411,8 +411,9 @@ contains
                 call img_in%apply_filter_serial(filter)
             endif
         endif
-        ! ensure we are in real-space before clipping
+        ! ensure we are in real-space
         call img_in%ifft()
+        ! TV regularization
         call tvfilt%new
         call tvfilt%apply_filter(img_in, params_glob%lambda)
         call tvfilt%kill
@@ -554,7 +555,12 @@ contains
                 call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
                 call mskvol%read(params_glob%mskfile)
                 call mskvol%one_at_edge ! to expand before masking of reference
-                call nonuniform_phase_ran_tv(build_glob%vol, build_glob%vol_odd, mskvol, params_glob%lambda)
+                if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+                    ! no TV regularization
+                    call nonuniform_phase_ran(build_glob%vol, build_glob%vol_odd, mskvol, params_glob%lambda)
+                else
+                    call nonuniform_phase_ran_tv(build_glob%vol, build_glob%vol_odd, mskvol, params_glob%lambda)
+                endif
                 ! envelope masking
                 call mskvol%read(params_glob%mskfile) ! to bring back the edge
                 call build_glob%vol%zero_env_background(mskvol)
