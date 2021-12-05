@@ -366,6 +366,7 @@ contains
         use simple_strategy2D3D_common, only: prep2dref, prep2Drefs_eo
         integer,          intent(in) :: which_iter
         type(polarizer), allocatable :: match_imgs(:,:)
+        ! real,            allocatable :: lambdas(:)
         real      :: xyz(3)
         integer   :: icls, pop, pop_even, pop_odd
         logical   :: do_center, has_been_searched
@@ -374,7 +375,8 @@ contains
         call pftcc%new(params_glob%ncls, [1,batchsz_max])
         ! prepare the polarizer images
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
-        allocate(match_imgs(params_glob%ncls,2))
+        allocate(match_imgs(params_glob%ncls,2)) !, lambdas(params_glob%ncls))
+        ! lambdas = 0.
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,do_center,xyz)&
@@ -401,7 +403,7 @@ contains
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! here we are passing in the shifts and do NOT map them back to classes
-                        call prep2Drefs_eo(pftcc, cavgs_odd(icls), cavgs_even(icls), match_imgs(icls,:), icls, do_center, xyz)
+                        call prep2Drefs_eo(pftcc, cavgs_odd(icls), cavgs_even(icls), match_imgs(icls,:), icls, do_center, xyz) !, lambdas(icls))
                         call match_imgs(icls,1)%polarize(pftcc, icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk) ! 2 polar coords
                         call match_imgs(icls,2)%polarize(pftcc, icls, isptcl=.false., iseven=.true.,  mask=build_glob%l_resmsk)
                     else
@@ -422,7 +424,9 @@ contains
         end do
         !$omp end parallel do
         ! CLEANUP
+        ! if( params_glob%part == 1 ) call arr2txtfile(lambdas, 'lambdas.txt')
         deallocate(match_imgs)
+
     end subroutine preppftcc4align
 
 end module simple_strategy2D_matcher

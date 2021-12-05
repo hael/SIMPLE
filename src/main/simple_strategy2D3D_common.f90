@@ -373,7 +373,6 @@ contains
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
-        real,              parameter     :: LAMBDA_HERE = 3.0
         type(tvfilter) :: tvfilt
         real           :: frc(build_glob%img%get_filtsz()), filter(build_glob%img%get_filtsz())
         real           :: xyz(3), sharg
@@ -418,7 +417,7 @@ contains
         call img_in%ifft()
         ! TV regularization with fixed lambda = 3
         call tvfilt%new
-        call tvfilt%apply_filter(img_out, LAMBDA_HERE)
+        call tvfilt%apply_filter(img_out, params_glob%lambda)
         call tvfilt%kill
         ! clip image if needed
         call img_in%clip(img_out)
@@ -438,7 +437,7 @@ contains
     end subroutine prep2Dref
 
     !>  \brief  prepares one cluster centre image for alignment
-    subroutine prep2Drefs_eo( pftcc, img_odd, img_even, imgs_out, icls, center, xyz_in )
+    subroutine prep2Drefs_eo( pftcc, img_odd, img_even, imgs_out, icls, center, xyz_in)!, lam )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_estimate_ssnr,    only: fsc2optlp_sub
         use simple_polarizer,        only: polarizer
@@ -450,11 +449,11 @@ contains
         integer,                 intent(in)    :: icls
         logical,                 intent(in)    :: center
         real,                    intent(in)    :: xyz_in(3)
-        real,              parameter     :: LAMBDA_HERE = 3.0
-        type(tvlam_opt) :: tvlamfind
+        ! real,                    intent(out)   :: lam
+        ! type(tvlam_opt) :: tvlamfind
         type(tvfilter)  :: tvfilt
         real            :: frc(build_glob%img%get_filtsz()), filter(build_glob%img%get_filtsz())
-        real            :: xyz(3), sharg, lam
+        real            :: xyz(3), sharg
         integer         :: filtsz
         logical         :: do_center
         ! randomize Fourier phases below noise power in a global manner
@@ -492,12 +491,19 @@ contains
         call img_odd%clip(imgs_out(1)) ! clip if needed
         call img_even%ifft()
         call img_even%clip(imgs_out(2))
+        ! TV regularization with fixed lambda = 3
+        call tvfilt%new
+        call tvfilt%apply_filter(imgs_out(1), params_glob%lambda)
+        call tvfilt%apply_filter(imgs_out(2), params_glob%lambda)
+        call tvfilt%kill
+
         ! TV regularization with automatic lambda estimation
-        call tvlamfind%new([params_glob%box,params_glob%box,1], params_glob%smpd, params_glob%msk)
-        call tvlamfind%set_img_ptrs(imgs_out(2), imgs_out(1)) ! even first, odd second
-        call tvlamfind%minimize(lam)
-        call tvlamfind%get_tvfiltered(imgs_out(2), is_even=.true.)
-        call tvlamfind%get_tvfiltered(imgs_out(1), is_even=.false.)
+        ! call tvlamfind%new([params_glob%box,params_glob%box,1], params_glob%smpd, params_glob%msk)
+        ! call tvlamfind%set_img_ptrs(imgs_out(2), imgs_out(1)) ! even first, odd second
+        ! call tvlamfind%minimize(lam)
+        ! call tvlamfind%get_tvfiltered(imgs_out(2), is_even=.true.)
+        ! call tvlamfind%get_tvfiltered(imgs_out(1), is_even=.false.)
+
         ! apply mask
         if( params_glob%l_innermsk )then
             call imgs_out(1)%mask(params_glob%msk, 'soft', &
@@ -682,7 +688,6 @@ contains
         type(tvfilter)                :: tvfilt
         type(projector),  pointer     :: vol_ptr => null()
         character(len=:), allocatable :: fname_opt_filter
-        real,             parameter   :: LAMBDA_HERE = 1.0
         real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
         integer :: iref, iproj, iprojred, filtsz
         if( iseven )then
@@ -738,11 +743,9 @@ contains
         if( params_glob%cc_objfun == OBJFUN_EUCLID )then
             ! no filtering
         else
-            !!!!!!!!!!!!!!!!!!!!!!!!!! <<< 2TST
-            ! call tvfilt%new
-            ! call tvfilt%apply_filter_3d(vol_ptr, LAMBDA_HERE)
-            ! call tvfilt%kill
-            !<<< !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            call tvfilt%new
+            call tvfilt%apply_filter_3d(vol_ptr, params_glob%lambda)
+            call tvfilt%kill
         endif
         ! masking
         if( cline%defined('mskfile') )then

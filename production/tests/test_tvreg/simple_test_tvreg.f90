@@ -4,18 +4,18 @@ use simple_tvlam_opt, only: tvlam_opt
 use simple_image,     only: image
 implicit none
 
-character(len=*), parameter :: stk_e  = 'cavgs_iter015_even.mrc'
-character(len=*), parameter :: stk_o  = 'cavgs_iter015_odd.mrc'
+character(len=*), parameter :: stk_e  = 'cavgs_iter030_even.mrc'
+character(len=*), parameter :: stk_o  = 'cavgs_iter030_odd.mrc'
 character(len=*), parameter :: stk_f  = 'tvfiltered.mrc'
-integer,          parameter :: box    = 104, ncls = 90
-real,             parameter :: smpd   = 3.138
+integer,          parameter :: box    = 256, ncls = 90
+real,             parameter :: smpd   = 1.275
 real,             parameter :: msk    = 200. / smpd
 type(image)     :: img_e, img_o, img
 integer         :: icls
 real            :: lam
 type(tvlam_opt) :: tvlamfind
 
-call img_e%new([box,box,1], smpd) 
+call img_e%new([box,box,1], smpd)
 call img_o%new([box,box,1], smpd)
 call img%new([box,box,1], smpd)
 call tvlamfind%new([box,box,1], smpd, msk)
