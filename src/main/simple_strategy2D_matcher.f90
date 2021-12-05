@@ -363,10 +363,9 @@ contains
 
     !>  \brief  prepares the polarft corrcalc object for search and imports the references
     subroutine preppftcc4align( which_iter )
-        use simple_strategy2D3D_common, only: prep2dref, prep2Drefs_eo
+        use simple_strategy2D3D_common, only: prep2dref
         integer,          intent(in) :: which_iter
-        type(polarizer), allocatable :: match_imgs(:,:)
-        ! real,            allocatable :: lambdas(:)
+        type(polarizer), allocatable :: match_imgs(:)
         real      :: xyz(3)
         integer   :: icls, pop, pop_even, pop_odd
         logical   :: do_center, has_been_searched
@@ -375,8 +374,7 @@ contains
         call pftcc%new(params_glob%ncls, [1,batchsz_max])
         ! prepare the polarizer images
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
-        allocate(match_imgs(params_glob%ncls,2)) !, lambdas(params_glob%ncls))
-        ! lambdas = 0.
+        allocate(match_imgs(params_glob%ncls))
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read references and transform into polar coordinates
         !$omp parallel do default(shared) private(icls,pop,pop_even,pop_odd,do_center,xyz)&
@@ -391,42 +389,44 @@ contains
                 pop_odd  = build_glob%spproj_field%get_pop(icls, 'class', eo=1)
             endif
             if( pop > 0 )then
-                call match_imgs(icls,1)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
-                call match_imgs(icls,2)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
-                call match_imgs(icls,1)%copy_polarizer(build_glob%img_match)
-                call match_imgs(icls,2)%copy_polarizer(build_glob%img_match)
+                call match_imgs(icls)%new([params_glob%box, params_glob%box, 1], params_glob%smpd, wthreads=.false.)
+                call match_imgs(icls)%copy_polarizer(build_glob%img_match)
                 ! prepare the references
                 ! here we are determining the shifts and map them back to classes
                 do_center = (has_been_searched .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2)&
                     &.and. .not.params_glob%l_frac_update)
-                call prep2Dref(pftcc, cavgs_merged(icls), match_imgs(icls,2), icls, center=do_center, xyz_out=xyz)
+                call prep2Dref(pftcc, cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
+                        ! randomize Fourier phases below noise power in a global manner
+                        call cavgs_even(icls)%fft
+                        call cavgs_odd(icls)%fft
+                        call cavgs_even(icls)%ran_phases_below_noise_power(cavgs_odd(icls))
+                        call cavgs_even(icls)%ifft
+                        call cavgs_odd(icls)%ifft
                         ! here we are passing in the shifts and do NOT map them back to classes
-                        call prep2Drefs_eo(pftcc, cavgs_odd(icls), cavgs_even(icls), match_imgs(icls,:), icls, do_center, xyz) !, lambdas(icls))
-                        call match_imgs(icls,1)%polarize(pftcc, icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk) ! 2 polar coords
-                        call match_imgs(icls,2)%polarize(pftcc, icls, isptcl=.false., iseven=.true.,  mask=build_glob%l_resmsk)
+                        call prep2Dref(pftcc, cavgs_even(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
+                        ! here we are passing in the shifts and do NOT map them back to classes
+                        call prep2Dref(pftcc, cavgs_odd(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk) ! 2 polar coords
                     else
                         ! put the merged class average in both even and odd positions
-                        call match_imgs(icls,2)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk) ! 2 polar coords
+                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk) ! 2 polar coords
                         call pftcc%cp_even2odd_ref(icls)
                     endif
                 else
-                    call prep2Dref(pftcc, cavgs_merged(icls), match_imgs(icls,2), icls, center=do_center, xyz_in=xyz)
-                    call match_imgs(icls,2)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk) ! 2 polar coords
+                    call prep2Dref(pftcc, cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                    call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk) ! 2 polar coords
                     call pftcc%cp_even2odd_ref(icls)
                 endif
-                call match_imgs(icls,1)%kill_polarizer
-                call match_imgs(icls,2)%kill_polarizer
-                call match_imgs(icls,1)%kill
-                call match_imgs(icls,2)%kill
+                call match_imgs(icls)%kill_polarizer
+                call match_imgs(icls)%kill
             endif
         end do
         !$omp end parallel do
         ! CLEANUP
-        ! if( params_glob%part == 1 ) call arr2txtfile(lambdas, 'lambdas.txt')
         deallocate(match_imgs)
-
     end subroutine preppftcc4align
 
 end module simple_strategy2D_matcher
