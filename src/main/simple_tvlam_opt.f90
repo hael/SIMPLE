@@ -14,8 +14,8 @@ type tvlam_opt
     private
     class(image), pointer :: img_e => null() !< img_e to compare with img_o
     class(image), pointer :: img_o => null() !< img_o to compare with img_e
-    type(image)           :: img_e_tv         !< tv regularized version of img_e
-    type(image)           :: img_o_tv         !< tv regularized version of img_o
+    type(image)           :: img_e_tv        !< tv regularized version of img_e
+    type(image)           :: img_o_tv        !< tv regularized version of img_o
     type(tvfilter)        :: tvfilt          !< TV filter instance
     logical, allocatable  :: lmsk(:,:,:)     !< logical mask for distance calc
     logical               :: is3D = .false.  !< indicates whether 3D/2D
@@ -28,7 +28,7 @@ contains
 end type tvlam_opt
 
 real, parameter :: lam_bounds(2) = [0.5,5.0]
-real, parameter :: CORR_THRES = 0.99
+real, parameter :: CORR_THRES = 0.96
 
 contains
 
@@ -65,7 +65,7 @@ contains
         if( present(is_even) ) l_is_even = is_even
         if( l_is_even )then
             call img%copy(self%img_e_tv)
-        else    
+        else
             call img%copy(self%img_o_tv)
         endif
     end subroutine get_tvfiltered
@@ -81,7 +81,8 @@ contains
         lam          = lam_trial(1)
         found_opt    = .false.
         do while( lam_trial(1) < lam_bounds(2) )
-            corr = tvlam_corr(self, lam_trial, 1)           
+            corr = tvlam_corr(self, lam_trial, 1)
+            print *, corr
             if( corr > CORR_THRES )then
                 lam = lam_trial(1)
                 corr_best = corr
@@ -112,7 +113,7 @@ contains
         select type( self )
             class is (tvlam_opt)
                 call self%img_e_tv%copy(self%img_e)
-                call self%img_o_tv%copy(self%img_o) 
+                call self%img_o_tv%copy(self%img_o)
                 if( self%is3D )then
                     call self%tvfilt%apply_filter_3d(self%img_e_tv, vec(1)) ! vec(1) is lambda
                     call self%tvfilt%apply_filter_3d(self%img_o_tv, vec(1))
