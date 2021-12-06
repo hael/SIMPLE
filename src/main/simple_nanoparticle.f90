@@ -17,7 +17,7 @@ private
 integer,          parameter :: NBIN_THRESH         = 15      ! number of thresholds for binarization
 integer,          parameter :: CN_THRESH_XTAL      = 5       ! cn-threshold highly crystalline NPs
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
-real,             parameter :: VALID_CORR_THRESH   = 0.5     ! min valid_corr value allowed
+real,             parameter :: VALID_CORR_THRESH   = 0.3     ! min valid_corr value allowed
 logical,          parameter :: DEBUG               = .false. ! for debugging purposes
 logical,          parameter :: GENERATE_FIGS       = .false. ! for figures generation
 integer,          parameter :: SOFT_EDGE           = 6
@@ -441,7 +441,7 @@ contains
         ! validation through per-atom correlation with the simulated density
         call self%simulate_atoms(atoms_obj, simatms)
         call self%validate_atoms( simatms )
-        ! discard atoms with valid_corr < 0.5
+        ! discard atoms with valid_corr < VALID_CORR_THRESH
         call self%discard_low_valid_corr_atoms
         ! fit lattice
         centers_A = self%atominfo2centers_A()
@@ -469,7 +469,7 @@ contains
         ! validation through per-atom correlation with the simulated density
         call self%simulate_atoms(atoms_obj, simatms)
         call self%validate_atoms( simatms )
-        ! discard atoms with valid_corr < 0.5
+        ! discard atoms with valid_corr < VALID_CORR_THRESH
         call self%discard_low_valid_corr_atoms
         ! discard lowly coordinated atoms
         call self%discard_atoms_with_low_contact_score(use_cn_thresh)
@@ -918,7 +918,7 @@ contains
         class(nanoparticle), intent(inout) :: self
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
         integer :: cc, n_discard
-        write(logfhandle, '(A)') '>>> DISCARDING ATOMS WITH VALID_CORR < 0.5'
+        write(logfhandle, '(A)') '>>> DISCARDING ATOMS WITH VALID_CORR < 0.3'
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
         n_discard = 0
@@ -934,7 +934,7 @@ contains
         call self%find_centers()
         deallocate(imat_bin, imat_cc)
         write(logfhandle, *) 'Numbers of atoms discarded because of low valid_corr ', n_discard
-        write(logfhandle, '(A)') '>>> DISCARDING ATOMS WITH VALID_CORR < 0.5, COMPLETED'
+        write(logfhandle, '(A)') '>>> DISCARDING ATOMS WITH VALID_CORR < 0.3, COMPLETED'
     end subroutine discard_low_valid_corr_atoms
 
     subroutine discard_atoms_with_low_contact_score( self, use_cn_thresh )

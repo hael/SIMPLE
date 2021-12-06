@@ -55,7 +55,7 @@ contains
         real,                      allocatable :: corrs(:), x(:), z(:), res(:), tmp_rarr(:)
         integer,                   allocatable :: labels(:), states(:), tmp_iarr(:)
         real     :: trs, extr_init, lp_cls3D, smpdfoo
-        integer  :: i, iter, startit, rename_stat, ncls, boxfoo, iptcl, ipart
+        integer  :: i, iter, startit, ncls, boxfoo, iptcl, ipart
         integer  :: nptcls_part, istate, n_nozero
         logical  :: fall_over, cavgs_import
         if( nint(cline%get_rarg('nstates')) <= 1 ) THROW_HARD('Non-sensical NSTATES argument for heterogeneity analysis!')
@@ -214,10 +214,10 @@ contains
             work_proj%os_ptcl3D = os
             call work_proj%write
             call xreconstruct3D_distr%execute(cline_reconstruct3D_mixed_distr)
-            rename_stat = simple_rename(trim(VOL_FBODY)//one//params%ext, trim(CLUSTER3D_VOL)//params%ext)
-            rename_stat = simple_rename(trim(VOL_FBODY)//one//'_even'//params%ext, trim(CLUSTER3D_VOL)//'_even'//params%ext)
-            rename_stat = simple_rename(trim(VOL_FBODY)//one//'_odd'//params%ext,  trim(CLUSTER3D_VOL)//'_odd'//params%ext)
-            rename_stat = simple_rename(trim(FSC_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FSC))
+            call simple_rename(trim(VOL_FBODY)//one//params%ext, trim(CLUSTER3D_VOL)//params%ext)
+            call simple_rename(trim(VOL_FBODY)//one//'_even'//params%ext, trim(CLUSTER3D_VOL)//'_even'//params%ext)
+            call simple_rename(trim(VOL_FBODY)//one//'_odd'//params%ext,  trim(CLUSTER3D_VOL)//'_odd'//params%ext)
+            call simple_rename(trim(FSC_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FSC))
         endif
 
         ! calculate extremal initial ratio
@@ -513,7 +513,6 @@ contains
 
         contains
 
-            ! stash docs, volumes , etc.
             subroutine stash_state(s)
                 integer, intent(in) :: s
                 character(len=2),            parameter :: one = '01'
@@ -521,7 +520,7 @@ contains
                 character(len=LONGSTRLEN) :: src, dest, vol, fsc!, volfilt
                 character(len=2)          :: str_state
                 character(len=8)          :: str_iter
-                integer                   :: i, final_it, stat, l, pos
+                integer                   :: i, final_it, l, pos
                 final_it  = nint(cline_refine3D(s)%get_rarg('endit'))
                 str_state = int2str_pad(s,2)
                 str_iter  = '_ITER'//int2str_pad(final_it,3)
@@ -537,7 +536,7 @@ contains
                          l    = len_trim(dest)
                          pos  = index(dest(1:l),'_state01',back=.true.)
                          dest(pos:pos+7) = '_state' // str_state
-                         stat = simple_rename(src, filepath(trim(dirs(s)),dest))
+                         call simple_rename(src, filepath(trim(dirs(s)),dest))
                      enddo
                      deallocate(files)
                      call simple_list_files(trim(dirs(s))//'/*STATE01*', files)
@@ -547,7 +546,7 @@ contains
                          l    = len_trim(dest)
                          pos  = index(dest(1:l),'_STATE01',back=.true.)
                          dest(pos:pos+7) = '_STATE' // str_state
-                         stat = simple_rename(src, filepath(trim(dirs(s)),dest))
+                         call simple_rename(src, filepath(trim(dirs(s)),dest))
                      enddo
                      deallocate(files)
                      vol     = filepath(dirs(s), trim(VOL_FBODY)//str_state//trim(params%ext))

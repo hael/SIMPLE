@@ -73,7 +73,7 @@ contains
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine
         real                  :: iter, smpd_target, lplims(2), orig_smpd
         real                  :: scale_factor1, scale_factor2
-        integer               :: icls, ncavgs, orig_box, box, istk, status, cnt
+        integer               :: icls, ncavgs, orig_box, box, istk, cnt
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
@@ -433,11 +433,9 @@ contains
             call vol%write(add2fbody(vol_iter,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX)))
             call vol%kill
         endif
-        status = simple_rename(vol_iter, trim(REC_FBODY)//params%ext)
-        status = simple_rename(add2fbody(vol_iter,params%ext,PPROC_SUFFIX),&
-            &trim(REC_PPROC_FBODY)//params%ext)
-        status = simple_rename(add2fbody(vol_iter,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX)),&
-            &trim(REC_PPROC_MIRR_FBODY)//params%ext)
+        call simple_rename(vol_iter, trim(REC_FBODY)//params%ext)
+        call simple_rename(add2fbody(vol_iter,params%ext,PPROC_SUFFIX), trim(REC_PPROC_FBODY)//params%ext)
+        call simple_rename(add2fbody(vol_iter,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX)), trim(REC_PPROC_MIRR_FBODY)//params%ext)
         ! updates original cls3D segment
         call work_proj2%os_ptcl3D%delete_entry('stkind')
         call work_proj2%os_ptcl3D%delete_entry('eo')

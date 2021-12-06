@@ -1279,7 +1279,7 @@ contains
                 character(len=*), intent(in) :: src, dest
                 type(image)          :: img, img_pad
                 integer, allocatable :: cls_pop(:)
-                integer              :: ldim(3),icls, iostat, ncls_here
+                integer              :: ldim(3),icls, ncls_here
                 call debug_print('in rescale_cavgs '//trim(src))
                 call debug_print('in rescale_cavgs '//trim(dest))
                 call img%new([box,box,1],smpd)
@@ -1298,7 +1298,7 @@ contains
                     endif
                     call img_pad%write('tmp_cavgs.mrc',icls)
                 enddo
-                iostat = simple_rename('tmp_cavgs.mrc',dest)
+                call simple_rename('tmp_cavgs.mrc',dest)
                 call img%kill
                 call img_pad%kill
                 call debug_print('end rescale_cavgs')

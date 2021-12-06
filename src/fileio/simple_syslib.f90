@@ -368,7 +368,7 @@ contains
     end subroutine syslib_copy_file
 
     !> \brief  Rename or move file
-    function simple_rename( filein, fileout, overwrite, errmsg ) result(file_status)
+    subroutine simple_rename( filein, fileout, overwrite, errmsg )
         character(len=*), intent(in)               :: filein, fileout !< input filename
         logical,          intent(in),     optional :: overwrite       !< default true
         character(len=*), intent(in),     optional :: errmsg          !< message
@@ -398,7 +398,7 @@ contains
             THROW_ERROR("designated input file doesn't exist "//trim(filein)//trim(errormsg))
         end if
         deallocate(errormsg)
-    end function simple_rename
+    end subroutine simple_rename
 
     function simple_chmod(pathname, mode ) result( status )
         character(len=*), intent(in) :: pathname, mode
