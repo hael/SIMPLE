@@ -775,7 +775,7 @@ contains
         character(len=1) :: junk
         integer :: sz, funit, ios, i, nlines
         tmpfile = '__simple_filelist_'//int2str(part_glob)//'__'
-        cmd = 'ls '//trim(pattern)//' > '//trim(tmpfile)
+        cmd = 'ls -1a '//trim(pattern)//' > '//trim(tmpfile)
         call exec_cmdline( cmd, suppress_errors=.true.)
         inquire(file=trim(tmpfile), size=sz)
         if( allocated(list) ) deallocate(list)
@@ -814,7 +814,7 @@ contains
         if( len_trim(adjustl(regexp)) == 0) return
         tmpfile = '__simple_filelist_'//int2str(part_glob)//'__'
         ! builds command
-        cmd = 'ls -rt '//adjustl(trim(dir))//' | grep -E '''//adjustl(trim(regexp))//''' > '//trim(tmpfile)
+        cmd = 'ls -1a '//adjustl(trim(dir))//' | grep -E '''//adjustl(trim(regexp))//''' > '//trim(tmpfile)
         call exec_cmdline( cmd, suppress_errors=.true.)
         inquire(file=trim(tmpfile), size=sz)
         if( allocated(list) ) deallocate(list)
