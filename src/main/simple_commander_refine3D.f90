@@ -118,12 +118,13 @@ contains
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
-        logical :: l_projection_matching, l_switch2euclid, l_continue, l_multistates
+        logical :: l_projmatch, l_lp_iters, l_switch2euclid, l_continue, l_multistates
         real    :: corr, corr_prev, smpd, lplim
         integer :: ldim(3), i, state, iter, box, nfiles, niters, iter_switch2euclid, ifoo
         integer :: ncls, icls, ind, fnr
         l_multistates = .false.
         if( cline%defined('nstates') ) l_multistates = .true.
+        l_lp_iters = cline%defined('lp_iters')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
         if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
@@ -277,7 +278,7 @@ contains
             have_oris = .true.
             call build%spproj%write_segment_inside(params%oritype)
         endif
-        l_projection_matching = .false.
+        l_projmatch = .false.
         if( have_oris .and. .not. vol_defined )then
             ! reconstructions needed
             call xreconstruct3D_distr%execute( cline_reconstruct3D_distr )
@@ -298,7 +299,7 @@ contains
             enddo
         else if( vol_defined .and. params%continue .ne. 'yes' )then
             ! projection matching
-            l_projection_matching = .true.
+            l_projmatch = .true.
             if( .not. have_oris )then
                 if( str_has_substr(params%refine, 'neigh')) then
                     THROW_HARD('neigh refinement mode requires input orientations')
@@ -326,7 +327,7 @@ contains
         if( l_switch2euclid )then
             iter_switch2euclid = 1
             if( cline%defined('update_frac') ) iter_switch2euclid = ceiling(1./(params%update_frac+0.001))
-            if( l_projection_matching .and. cline%defined('lp_iters') ) iter_switch2euclid = params%lp_iters
+            if( l_projmatch .and. l_lp_iters ) iter_switch2euclid = params%lp_iters
             call cline%set('needs_sigma','yes')
         endif
         ! prepare job description
@@ -533,27 +534,27 @@ contains
                 call job_descr%set( 'trs', trim(str) )
                 call cline%set( 'trs', cline_check_3Dconv%get_rarg('trs') )
             endif
-            if( l_projection_matching .and. (niters == params%lp_iters ) )then
-                if( cline%defined('lp_iters') )then
-                    ! e/o projection matching
-                    write(logfhandle,'(A)')'>>>'
-                    write(logfhandle,'(A)')'>>> SWITCHING TO EVEN/ODD RESOLUTION LIMIT'
-                    l_projection_matching = .false.
-                    if( cline%defined('match_filt') )then
-                        if( cline%get_carg('match_filt').eq.'no' )then
-                            ! flags are kept so match_filt is not used
-                            call job_descr%set('match_filt','no')
-                        else
-                            call cline%delete('lp')
-                            call job_descr%delete('lp')
-                            call cline_postprocess%delete('lp')
-                        endif
+            if( l_lp_iters .and. (niters == params%lp_iters ) )then
+                ! e/o projection matching
+                write(logfhandle,'(A)')'>>>'
+                write(logfhandle,'(A)')'>>> SWITCHING TO EVEN/ODD RESOLUTION LIMIT'
+                l_projmatch = .false.
+                if( cline%defined('match_filt') )then
+                    if( cline%get_carg('match_filt').eq.'no' )then
+                        ! flags are kept so match_filt is not used
+                        call job_descr%set('match_filt','no')
                     else
                         call cline%delete('lp')
                         call job_descr%delete('lp')
                         call cline_postprocess%delete('lp')
                     endif
+                else
+                    call cline%delete('lp')
+                    call job_descr%delete('lp')
+                    call cline_postprocess%delete('lp')
                 endif
+            endif
+            if( l_projmatch )then
                 if( params%l_frac_update )then
                     call job_descr%set('update_frac', real2str(params%update_frac))
                     call cline%set('update_frac', params%update_frac)
