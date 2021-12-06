@@ -214,7 +214,7 @@ contains
                         allocate(strategy3D_snhc                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc')
                         updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-                        if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt == 1 )then
+                        if( .not.build_glob%spproj_field%has_been_searched(iptcl) )then
                             allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)
                         else
                             if( ran3() < GREEDY_FREQ )then
