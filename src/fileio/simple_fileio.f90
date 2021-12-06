@@ -711,7 +711,7 @@ contains
         wait_time = 0
         do
             if( wait_time == 60 )then
-                call simple_exception('been waiting for a minute for file: '//trim(adjustl(filetable)), 'simple_syslib.f90', __LINE__, l_stop=.false.)
+                call simple_exception('been waiting for a minute for file: '//trim(adjustl(filetable)), 'simple_fileio.f90', __LINE__, l_stop=.false.)
                 wait_time = 0
                 flush(OUTPUT_UNIT)
             endif
