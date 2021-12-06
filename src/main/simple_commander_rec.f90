@@ -155,9 +155,9 @@ contains
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
         integer                       :: part, s, n, ss, state, find4eoavg, fnr
-        integer(timer_int_kind)       :: t_init, t_assemble, t_sum_eos, t_sampl_dens_correct_eos
+        integer(timer_int_kind)       :: t_init, t_read, t_sum_reduce, t_sum_eos, t_sampl_dens_correct_eos
         integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_tot
-        real(timer_int_kind)          :: rt_init, rt_assemble, rt_sum_eos, rt_sampl_dens_correct_eos
+        real(timer_int_kind)          :: rt_init, rt_read, rt_sum_reduce, rt_sum_eos, rt_sampl_dens_correct_eos
         real(timer_int_kind)          :: rt_sampl_dens_correct_sum, rt_eoavg, rt_tot
         if( L_BENCH_GLOB )then
             t_init = tic()
@@ -177,7 +177,8 @@ contains
             ! end of init
             rt_init = toc(t_init)
             ! initialise incremental timers before loop
-            rt_assemble                = 0.
+            rt_read                    = 0.
+            rt_sum_reduce              = 0.
             rt_sum_eos                 = 0.
             rt_sampl_dens_correct_eos  = 0.
             rt_sampl_dens_correct_sum  = 0.
@@ -191,15 +192,23 @@ contains
                 s     = ss
                 state = ss
             endif
-            if( L_BENCH_GLOB ) t_assemble = tic()
+            if( L_BENCH_GLOB )then
+                rt_read       = 0.
+                rt_sum_reduce = 0.
+            endif
             call build%eorecvol%reset_all
             ! assemble volumes
             do part=1,params%nparts
+                if( L_BENCH_GLOB ) t_read = tic()
                 call eorecvol_read%read_eos(trim(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,params%numlen))
                 ! sum the Fourier coefficients
+                if( L_BENCH_GLOB )then
+                    rt_read       = rt_read + toc(t_read)
+                    t_sum_reduce  = tic()
+                endif
                 call build%eorecvol%sum_reduce(eorecvol_read)
+                if( L_BENCH_GLOB ) rt_sum_reduce = rt_sum_reduce + toc(t_sum_reduce)
             end do
-            if( L_BENCH_GLOB ) rt_assemble = rt_assemble + toc(t_assemble)
             ! correct for sampling density and estimate resolution
             allocate(recname, source=trim(VOL_FBODY)//int2str_pad(state,2))
             allocate(volname, source=recname//params%ext)
@@ -261,7 +270,8 @@ contains
             call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f9.2)') 'initialisation           : ', rt_init
-            write(fnr,'(a,1x,f9.2)') 'assemble of volumes (I/O): ', rt_assemble
+            write(fnr,'(a,1x,f9.2)') 'reading of volumes (I/O) : ', rt_read
+            write(fnr,'(a,1x,f9.2)') 'summing partial volumes  : ', rt_sum_reduce
             write(fnr,'(a,1x,f9.2)') 'sum of eo-paris          : ', rt_sum_eos
             write(fnr,'(a,1x,f9.2)') 'gridding correction (eos): ', rt_sampl_dens_correct_eos
             write(fnr,'(a,1x,f9.2)') 'gridding correction (sum): ', rt_sampl_dens_correct_sum
@@ -270,13 +280,14 @@ contains
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
             write(fnr,'(a,1x,f9.2)') 'initialisation           : ', (rt_init/rt_tot)                   * 100.
-            write(fnr,'(a,1x,f9.2)') 'assemble of volumes (I/O): ', (rt_assemble/rt_tot)               * 100.
+            write(fnr,'(a,1x,f9.2)') 'reading of volumes (I/O) : ', (rt_read/rt_tot)                   * 100.
+            write(fnr,'(a,1x,f9.2)') 'summing partial volumes  : ', (rt_sum_reduce/rt_tot)             * 100.
             write(fnr,'(a,1x,f9.2)') 'sum of eo-paris          : ', (rt_sum_eos/rt_tot)                * 100.
             write(fnr,'(a,1x,f9.2)') 'gridding correction (eos): ', (rt_sampl_dens_correct_eos/rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') 'gridding correction (sum): ', (rt_sampl_dens_correct_sum/rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') 'averaging eo-pairs       : ', (rt_eoavg/rt_tot)                  * 100.
             write(fnr,'(a,1x,f9.2)') '% accounted for          : ',&
-            &((rt_init+rt_assemble+rt_sum_eos+rt_sampl_dens_correct_eos+rt_sampl_dens_correct_sum+rt_eoavg)/rt_tot) * 100.
+            &((rt_init+rt_read+rt_sum_reduce+rt_sum_eos+rt_sampl_dens_correct_eos+rt_sampl_dens_correct_sum+rt_eoavg)/rt_tot) * 100.
             call fclose(fnr)
         endif
     end subroutine exec_volassemble
