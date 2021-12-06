@@ -546,18 +546,6 @@ contains
                     nimported  = 0
                     return
                 endif
-                ! write to temporary file...
-                ! call write_filetable('tmp.txt', completed_fnames)
-                ! ! ...and rename it when safe
-                ! i = 0
-                ! do while( file_exists(IOLOCK) )
-                !     call simple_sleep(1)
-                !     i = i + 1
-                !     if( mod(i,5)==0 ) write(logfhandle,'(A,I3,A)')'>>> IO has been locked for ',i,' seconds...'
-                ! enddo
-                ! call simple_touch(IOLOCK)
-                ! i = simple_rename('tmp.txt',STREAM_SPPROJFILES,overwrite=.true.)
-                ! call del_file(IOLOCK)
                 call write_filetable(STREAM_SPPROJFILES, completed_fnames)
             end subroutine update_projects_list
 

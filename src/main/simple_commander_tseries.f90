@@ -797,11 +797,18 @@ contains
         type(refine3D_nano_commander) :: xrefine3D_nano
         type(detect_atoms_commander)  :: xdetect_atms
         integer,          parameter :: MOD_BLD_FREQ = 1
-        integer,          parameter :: MAXITS       = 2
-        character(len=*), parameter :: STARTVOL     = 'recvol_state01_SIM.mrc'
-        character(len=*), parameter :: RECVOL       = 'recvol_state01.mrc'
+        integer,          parameter :: MAXITS       = 3
+        character(len=*), parameter :: RECVOL   = 'recvol_state01.mrc'
+        character(len=*), parameter :: SIMVOL   = 'recvol_state01_SIM.mrc'
+        character(len=*), parameter :: ATOMS    = 'recvol_state01_ATMS.pdb'
+        character(len=*), parameter :: BINARY   = 'recvol_state01_BIN.mrc'
+        character(len=*), parameter :: CCS      = 'recvol_state01_CC.mrc'
+        character(len=*), parameter :: SPLITTED = 'split_ccs.mrc'
+        character(len=STDLEN)       :: fbody, fbody_split
         type(cmdline) :: cline_refine3D_nano, cline_detect_atms
         integer       :: i
+        fbody       = get_fbody(RECVOL,   'mrc')
+        fbody_split = get_fbody(SPLITTED, 'mrc')
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_autorefine3D_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
         call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
@@ -809,26 +816,41 @@ contains
         cline_refine3D_nano = cline
         cline_detect_atms   = cline
         ! then update cline_refine3D_nano accordingly
-        call cline_refine3D_nano%set( 'prg',    'refine3D_nano')        ! need to know which program to run
+        call cline_refine3D_nano%set('prg',     'refine3D_nano')        ! need to know which program to run
         call cline_refine3D_nano%set('maxits',   real(MOD_BLD_FREQ))    ! need to know how many iterations before building atomic model
         call cline_refine3D_nano%set('projfile', trim(params%projfile)) ! since we are not making directories (non-standard execution) we better keep track of project file
+        call cline_refine3D_nano%set('keepvol',  'no')                  ! not to fill-up the root refinement directory
         ! then update cline_detect_atoms accordingly
-        call cline_detect_atms%set('prg', 'detect_atoms') ! need to know which program to run
-        call cline_detect_atms%set('vol1', RECVOL)        ! RECVOL will always be overwritten recvol_state01.mrc from refine3D_nano
+        call cline_detect_atms%set('prg', 'detect_atoms')    ! need to know which program to run
+        call cline_detect_atms%set('vol1', RECVOL)           ! this is ALWYAS going to be the input volume to detect_atoms
         do i=1,MAXITS
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user
             call xrefine3D_nano%execute(cline_refine3D_nano)
+            ! the iterations after the 1st uses the default 1.0 A low-pass limit
             if( i == 1 )then
-                ! the iterations after the 1st uses the default 1.0 A low-pass limit
-                call cline_refine3D_nano%delete('lp')
-                call cline_refine3D_nano%set('vol1', STARTVOL) ! STARTVOL will always be overwritten (recvol_state01_SIM.mrc from detect_atoms)
+                call cline_refine3D_nano%delete('lp')        ! uses the default 1.0 A low-pass limit
+                call cline_refine3D_nano%set('vol1', SIMVOL) ! the reference volume is ALWAYS SIMVOL
             endif
             call cline_refine3D_nano%delete('endit') ! used internally but not technically allowed
+            call cline_refine3D_nano%set('prg', 'refine3D_nano') ! because the command line is modified refine3D_nano -> refine3D internally
             call xdetect_atms%execute(cline_detect_atms)
-
-            ! file renaming
-
+            ! copy critical output
+            if( .not. dir_exists('final_results') ) call simple_mkdir('final_results')
+            call simple_copy_file(RECVOL,   './final_results/'//trim(fbody)      //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(SIMVOL,   './final_results/'//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_SIM.mrc')
+            call simple_copy_file(ATOMS,    './final_results/'//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_ATMS.pdb')
+            call simple_copy_file(BINARY,   './final_results/'//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
+            call simple_copy_file(CCS,      './final_results/'//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_CC.mrc')
+            call simple_copy_file(SPLITTED, './final_results/'//trim(fbody_split)//'_iter'//int2str_pad(i,3)//'.mrc')
+            ! clean
+            call exec_cmdline('rm -f recvol_state01_iter* *part*')
+            call del_file(ATOMS)
+            call del_file(BINARY)
+            call del_file(CCS)
+            call del_file(SPLITTED)
             ! covergence test
+
+            ! <INPUT>
 
         end do
     end subroutine exec_autorefine3D_nano
@@ -836,14 +858,14 @@ contains
     subroutine exec_refine3D_nano( self, cline )
         use simple_commander_refine3D, only: refine3D_commander_distr
         class(refine3D_nano_commander), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
+        class(cmdline),                 intent(inout) :: cline
         ! commander
         type(refine3D_commander_distr) :: xrefine3D_distr
         ! static parameters
-        call cline%set('prg',      'refine3D')
-        call cline%set('match_filt',     'no')
-        call cline%set('keepvol',       'yes')
+        call cline%set('prg', 'refine3D')
+        call cline%set('match_filt','no')
         ! dynamic parameters
+        if( .not. cline%defined('keepvol')       ) call cline%set('keepvol',       'yes')
         if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
         if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('nspace')        ) call cline%set('nspace',       10000.)

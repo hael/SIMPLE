@@ -120,7 +120,7 @@ contains
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
         logical :: l_projection_matching, l_switch2euclid, l_continue, l_multistates
         real    :: corr, corr_prev, smpd, lplim
-        integer :: ldim(3), i, state, iter, iostat, box, nfiles, niters, iter_switch2euclid, ifoo
+        integer :: ldim(3), i, state, iter, box, nfiles, niters, iter_switch2euclid, ifoo
         integer :: ncls, icls, ind, fnr
         l_multistates = .false.
         if( cline%defined('nstates') ) l_multistates = .true.
@@ -286,15 +286,15 @@ contains
                 str_state = int2str_pad(state,2)
                 vol       = trim(VOL_FBODY)//trim(str_state)//params%ext
                 str       = trim(STARTVOL_FBODY)//trim(str_state)//params%ext
-                iostat    = simple_rename( trim(vol), trim(str) )
+                call      simple_rename( trim(vol), trim(str) )
                 vol       = 'vol'//trim(int2str(state))
-                call cline%set( trim(vol), trim(str) )
+                call      cline%set( trim(vol), trim(str) )
                 vol_even  = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
                 str       = trim(STARTVOL_FBODY)//trim(str_state)//'_even'//params%ext
-                iostat    = simple_rename( trim(vol_even), trim(str) )
+                call      simple_rename( trim(vol_even), trim(str) )
                 vol_odd   = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
                 str       = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//params%ext
-                iostat    =  simple_rename( trim(vol_odd), trim(str) )
+                call      simple_rename( trim(vol_odd), trim(str) )
             enddo
         else if( vol_defined .and. params%continue .ne. 'yes' )then
             ! projection matching
@@ -445,7 +445,7 @@ contains
                             vol = trim(VOL_FBODY)//trim(str_state)//params%ext
                             if( params%refine .eq. 'snhc' )then
                                 vol_iter = trim(SNHCVOL)//trim(str_state)//params%ext
-                                iostat   = simple_rename( vol, vol_iter )
+                                call simple_rename( vol, vol_iter )
                             else
                                 vol_iter = trim(vol)
                             endif

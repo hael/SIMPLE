@@ -1239,7 +1239,7 @@ contains
         character(len=:), allocatable :: dest_stkpart
         character(len=LONGSTRLEN) :: stk_relpath, cwd
         integer :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
-        integer :: nptcls, nptcls_part, numlen, status
+        integer :: nptcls, nptcls_part, numlen
         real    :: smpd
         if( nparts < 2 )return
         ! check that stk field is not empty
@@ -1296,7 +1296,7 @@ contains
             else
                 allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
             endif
-            status = simple_rename(trim(stkpart), trim(dest_stkpart))
+            call simple_rename(trim(stkpart), trim(dest_stkpart))
             call make_relativepath(cwd, dest_stkpart, stk_relpath)
             nptcls_part = parts(istk,2) - parts(istk,1) + 1
             ! set original before overriding

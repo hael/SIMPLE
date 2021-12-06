@@ -176,7 +176,7 @@ contains
         character(len=:),       allocatable :: projfile, orig_projfile
         character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
         real                                :: scale_factor, smpd, lp1, lp2
-        integer                             :: last_iter, box, status
+        integer                             :: last_iter, box
         logical                             :: do_scaling
         ! parameters
         character(len=STDLEN) :: orig_projfile_bak = 'orig_bak.simple'
@@ -284,7 +284,7 @@ contains
             call spproj%projinfo%set(1,'projfile',orig_projfile)
             call spproj%write_non_data_segments(projfile)
             call spproj%kill
-            status   = simple_rename(projfile,orig_projfile)
+            call simple_rename(projfile,orig_projfile)
             projfile = trim(orig_projfile)
         endif
         lp1   = max(2.*smpd, max(params%lp,TARGET_LP))
@@ -386,8 +386,8 @@ contains
 
             subroutine rescale_cavgs(cavgs)
                 character(len=*), intent(in) :: cavgs
-                type(image)                  :: img, img_pad
-                integer                      :: icls, iostat
+                type(image) :: img, img_pad
+                integer     :: icls
                 call img%new([box,box,1],smpd)
                 call img_pad%new([params%box,params%box,1],params%smpd)
                 do icls = 1,params%ncls
@@ -397,10 +397,10 @@ contains
                     call img_pad%ifft
                     call img_pad%write('tmp_cavgs.mrc',icls)
                 enddo
-                iostat = simple_rename('tmp_cavgs.mrc',cavgs)
+                call simple_rename('tmp_cavgs.mrc',cavgs)
                 call img%kill
                 call img_pad%kill
-            end subroutine
+            end subroutine rescale_cavgs
 
     end subroutine exec_cleanup2D
 
@@ -431,7 +431,7 @@ contains
         character(len=:), allocatable :: projfile_sc, orig_projfile
         character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
         real     :: scale_stage1, scale_stage2, trs_stage2
-        integer  :: nparts, last_iter_stage1, last_iter_stage2, status
+        integer  :: nparts, last_iter_stage1, last_iter_stage2
         logical  :: scaling
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
@@ -500,7 +500,7 @@ contains
                 call spproj%projinfo%set(1,'projfile',orig_projfile)
                 call spproj%write_non_data_segments(projfile_sc)
                 call spproj%kill
-                status = simple_rename(projfile_sc,orig_projfile)
+                call simple_rename(projfile_sc,orig_projfile)
                 deallocate(projfile_sc)
                 ! scale references
                 if( cline%defined('refs') )then
@@ -555,7 +555,7 @@ contains
                 call spproj%projinfo%set(1,'projfile',orig_projfile)
                 call spproj%write_non_data_segments(projfile_sc)
                 call spproj%kill
-                status = simple_rename(projfile_sc,orig_projfile)
+                call simple_rename(projfile_sc,orig_projfile)
                 deallocate(projfile_sc)
             endif
             trs_stage2 = MSK_FRAC * params%mskdiam / (2 * params%smpd_targets2D(2))
@@ -576,7 +576,7 @@ contains
                 call spproj%write_segment_inside('ptcl2D',fname=orig_projfile_bak)
                 call spproj%kill()
                 call spproj_sc%kill()
-                status = simple_rename(orig_projfile_bak,orig_projfile)
+                call simple_rename(orig_projfile_bak,orig_projfile)
                 ! clean stacks
                 call simple_rmdir(STKPARTSDIR)
                 ! original scale references
