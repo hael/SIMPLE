@@ -368,30 +368,30 @@ contains
     end subroutine syslib_copy_file
 
     !> \brief  Rename or move file
-    function simple_rename( filein, fileout , overwrite, errmsg ) result(file_status)
-        character(len=*), intent(in)  :: filein, fileout !< input filename
-        logical, intent(in), optional :: overwrite      !< default true
-        character(len=*), intent(in), optional  :: errmsg !< message
-        integer                       :: file_status
-        logical                       :: force_overwrite
+    function simple_rename( filein, fileout, overwrite, errmsg ) result(file_status)
+        character(len=*), intent(in)               :: filein, fileout !< input filename
+        logical,          intent(in),     optional :: overwrite       !< default true
+        character(len=*), intent(in),     optional :: errmsg          !< message
         character(kind=c_char, len=:), allocatable :: f1, f2
-        character(len=:), allocatable :: msg, errormsg
+        character(len=:),              allocatable :: msg, errormsg
+        integer :: file_status
+        logical :: force_overwrite
         force_overwrite=.true.
         if(present(overwrite)) force_overwrite=overwrite
-        if( file_exists(trim(fileout)) .and. (force_overwrite) )&
-            call del_file(trim(fileout))
+        if( file_exists(trim(fileout)) .and. (force_overwrite) ) call del_file(trim(fileout))
         if (present(errmsg))then
             allocate(errormsg,source=". Message: "//trim(errmsg))
         else
             allocate(errormsg,source=". ")
         end if
         if( file_exists(filein) )then
-            allocate(msg,source="simple_rename failed to rename file "//trim(filein)//trim(errormsg))
             allocate(f1, source=trim(adjustl(filein))//achar(0))
             allocate(f2, source=trim(adjustl(fileout))//achar(0))
             file_status = rename(trim(f1), trim(f2))
-            if(file_status /= 0)&
-                call simple_error_check(file_status,trim(msg))
+            if(file_status /= 0)then
+                allocate(msg,source="simple_rename failed to rename file "//trim(filein)//trim(errormsg))
+                call simple_error_check(file_status, trim(msg))
+            endif
             deallocate(f1,f2,msg)
         else
             THROW_ERROR("designated input file doesn't exist "//trim(filein)//trim(errormsg))
