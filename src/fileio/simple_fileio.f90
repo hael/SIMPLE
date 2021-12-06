@@ -725,20 +725,26 @@ contains
     subroutine read_filetable( filetable, filenames )
         character(len=*),                       intent(in)  :: filetable    !< input table filename
         character(len=LONGSTRLEN), allocatable, intent(out) :: filenames(:) !< array of filenames
-        integer :: nl, funit, iline,io_stat
-        call wait_for_closure(filetable)
+        character(len=LONGSTRLEN), allocatable  :: fnames_tmp(:)
+        character(len=LONGSTRLEN) :: fname
+        integer :: nl, funit, iline, io_stat, cnt
         nl = nlines(trim(filetable))
         if( nl == 0 ) return
-        call fopen(funit,filetable,'old','unknown',io_stat)
-        call fileiochk("read_filetable failed to open file "//trim(filetable),io_stat )
-        allocate( filenames(nl), stat=alloc_stat )
-        if(alloc_stat /= 0) call allocchk ('In: read_filetable; simple_fileio  ', alloc_stat)
-        do iline=1,nl
-            call wait_for_closure(filenames(iline))
-            read(funit,'(a1024)') filenames(iline)
+        call fopen(funit, filetable, 'old', 'unknown', io_stat)
+        call fileiochk("read_filetable failed to open file "//trim(filetable), io_stat)
+        allocate( fnames_tmp(nl) )
+        cnt = 0
+        do iline = 1, nl
+            read(funit,'(a1024)') fname
+            if( file_exists(trim(fname)) )then
+                cnt = cnt + 1
+                fnames_tmp(cnt) = fname
+            endif
         end do
         call fclose_1(funit,io_stat)
         call fileiochk("read_filetable failed to close",io_stat)
+        if( allocated(filenames) ) deallocate(filenames)
+        if( cnt > 0 ) allocate(filenames(cnt), source=fnames_tmp(:cnt))
     end subroutine read_filetable
 
     !>  \brief  writes a filetable array to a text file
