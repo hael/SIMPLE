@@ -705,7 +705,24 @@ contains
     subroutine read_filetable( filetable, filenames )
         character(len=*),                       intent(in)  :: filetable    !< input table filename
         character(len=LONGSTRLEN), allocatable, intent(out) :: filenames(:) !< array of filenames
-        integer :: nl, funit, iline,io_stat
+        integer :: nl, funit, iline,io_stat, wait_time
+        logical :: exists, closed
+        ! make sure this file is closed before operating on it
+        wait_time = 0
+        do
+            if( wait_time == 60 )then
+                call simple_exception('been waiting for a minute for file: '//trim(adjustl(filetable)), 'simple_syslib.f90', __LINE__, l_stop=.false.)
+                wait_time = 0
+                flush(OUTPUT_UNIT)
+            endif
+            exists = file_exists(filetable)
+            closed = .false.
+            if( exists )closed = .not. is_file_open(filetable)
+            if( exists .and. closed )exit
+            call sleep(1)
+            wait_time = wait_time + 1
+        enddo
+        ! now, go
         nl = nlines(trim(filetable))
         if( nl == 0 ) return
         call fopen(funit,filetable,'old','unknown',io_stat)
