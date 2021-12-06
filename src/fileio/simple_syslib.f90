@@ -391,8 +391,9 @@ contains
             if(file_status /= 0)then
                 allocate(msg,source="simple_rename failed to rename file "//trim(filein)//trim(errormsg))
                 call simple_error_check(file_status, trim(msg))
+                deallocate(msg)
             endif
-            deallocate(f1,f2,msg)
+            deallocate(f1,f2)
         else
             THROW_ERROR("designated input file doesn't exist "//trim(filein)//trim(errormsg))
         end if
