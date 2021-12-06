@@ -120,7 +120,7 @@ contains
         class(preprocess_commander_stream), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                       :: params
-        integer,                   parameter   :: SHORTTIME       = 30   ! folder watched every 30 seconds
+        integer,                   parameter   :: WAITTIME       = 30   ! folder watched every 30 seconds
         integer,                   parameter   :: LONGTIME        = 300  ! time lag after which a movie is processed
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
         logical,                   parameter   :: DEBUG_HERE      = .false.
@@ -238,7 +238,7 @@ contains
                 if( file_exists(trim(TERM_STREAM)) ) exit
                 call write_singlelineoftext(PAUSE_STREAM, 'PAUSED')
                 write(logfhandle,'(A,A)')'>>> PREPROCESS STREAM PAUSED ',cast_time_char(simple_gettime())
-                call simple_sleep(SHORTTIME)
+                call simple_sleep(WAITTIME)
             enddo
             iter = iter + 1
             call movie_buff%watch( nmovies, movies )
@@ -307,7 +307,7 @@ contains
                         l_haschanged = .false.
                     else
                         ! ...or wait
-                        call simple_sleep(SHORTTIME)
+                        call simple_sleep(WAITTIME)
                     endif
                 endif
             endif
@@ -329,7 +329,7 @@ contains
                 type(sp_project)          :: stream_proj
                 integer, allocatable      :: states(:)
                 character(len=STDLEN)     :: ext
-                character(len=LONGSTRLEN) :: movie, projfile
+                character(len=LONGSTRLEN) :: iimovie, projfile
                 integer :: i, nsel, funit, nmics, n, nptcls
                 if( DEBUG_HERE ) print *,'in report_selection'; call flush(6)
                 ! sanity checks
@@ -360,9 +360,9 @@ contains
                 end do
                 ! report selection to individual projects
                 do i = 1,nsel
-                    movie    = basename(spproj%os_mic%get_static(i,'movie'))
-                    ext      = fname2ext(movie)
-                    projfile = trim(PREPROCESS_PREFIX)//trim(get_fbody(movie,ext))//trim(METADATA_EXT)
+                    iimovie  = basename(spproj%os_mic%get_static(i,'movie'))
+                    ext      = fname2ext(iimovie)
+                    projfile = trim(PREPROCESS_PREFIX)//trim(get_fbody(iimovie,ext))//trim(METADATA_EXT)
                     call stream_proj%read_segment('mic', projfile)
                     if( stream_proj%os_mic%isthere(1,'intg') .and. stream_proj%os_mic%get_state(1) /= states(i) )then
                         call stream_proj%os_mic%set(1,'state',0.)
@@ -483,17 +483,17 @@ contains
             end subroutine submit_jobs
 
             ! returns list of completed jobs + updates for cluster2D_stream
-            subroutine update_projects_list( completed_fnames, n_imported )
-                character(len=LONGSTRLEN), allocatable, intent(inout) :: completed_fnames(:)
-                integer,                                intent(inout) :: n_imported
-                type(sp_project)                       :: stream_spproj
+            subroutine update_projects_list( completedfnames, nimported )
+                character(len=LONGSTRLEN), allocatable, intent(inout) :: completedfnames(:)
+                integer,                                intent(inout) :: nimported
+                type(sp_project)                       :: streamspproj
                 character(len=:),          allocatable :: fname, abs_fname
                 character(len=LONGSTRLEN), allocatable :: old_fnames(:)
                 logical, allocatable :: spproj_mask(:)
                 integer :: i, n_spprojs, n_old, nptcls_here, state, j, n2import, nprev_imports, n_completed
                 n_completed = 0
-                n_imported  = 0
-                if( allocated(completed_fnames) ) deallocate(completed_fnames)
+                nimported   = 0
+                if( allocated(completedfnames) ) deallocate(completedfnames)
                 n_spprojs = size(completed_jobs_clines)
                 if( n_spprojs == 0 )return
                 allocate(spproj_mask(n_spprojs),source=.true.)
@@ -517,16 +517,16 @@ contains
                 endif
                 if( n2import > 0 )then
                     n_completed = n_old + n2import
-                    n_imported  = n2import
+                    nimported   = n2import
                     nprev_imports = spproj%os_mic%get_noris()
                     if( nprev_imports == 0 )then
                         call spproj%os_mic%new(n2import, is_ptcl=.false.) ! first time
                     else
                         call spproj%os_mic%reallocate(n_completed)
                     endif
-                    allocate(completed_fnames(n_completed))
+                    allocate(completedfnames(n_completed))
                     if( n_old > 0 )then
-                        completed_fnames(1:n_old) = old_fnames(:)
+                        completedfnames(1:n_old) = old_fnames(:)
                     endif
                     j = 0
                     nptcls_here = 0
@@ -535,29 +535,30 @@ contains
                         j = j+1
                         fname     = trim(completed_jobs_clines(i)%get_carg('projfile'))
                         abs_fname = simple_abspath(fname, errmsg='preprocess_stream :: update_projects_list 1')
-                        completed_fnames(n_old+j) = trim(abs_fname)
-                        call stream_spproj%read_segment('mic', abs_fname)
-                        if( l_pick ) nptcls_here = nptcls_here + nint(stream_spproj%os_mic%get(1,'nptcls'))
-                        call spproj%os_mic%transfer_ori(n_old+j, stream_spproj%os_mic, 1)
-                        call stream_spproj%kill
+                        completedfnames(n_old+j) = trim(abs_fname)
+                        call streamspproj%read_segment('mic', abs_fname)
+                        if( l_pick ) nptcls_here = nptcls_here + nint(streamspproj%os_mic%get(1,'nptcls'))
+                        call spproj%os_mic%transfer_ori(n_old+j, streamspproj%os_mic, 1)
+                        call streamspproj%kill
                     enddo
                     if( l_pick ) nptcls_glob = nptcls_glob + nptcls_here
                 else
-                    n_imported  = 0
+                    nimported  = 0
                     return
                 endif
                 ! write to temporary file...
-                call write_filetable('tmp.txt', completed_fnames)
-                ! ...and rename it when safe
-                i = 0
-                do while( file_exists(IOLOCK) )
-                    call simple_sleep(1)
-                    i = i + 1
-                    if( mod(i,5)==0 ) write(logfhandle,'(A,I3,A)')'>>> IO has been locked for ',i,' seconds...'
-                enddo
-                call simple_touch(IOLOCK)
-                i = simple_rename('tmp.txt',STREAM_SPPROJFILES,overwrite=.true.)
-                call del_file(IOLOCK)
+                ! call write_filetable('tmp.txt', completed_fnames)
+                ! ! ...and rename it when safe
+                ! i = 0
+                ! do while( file_exists(IOLOCK) )
+                !     call simple_sleep(1)
+                !     i = i + 1
+                !     if( mod(i,5)==0 ) write(logfhandle,'(A,I3,A)')'>>> IO has been locked for ',i,' seconds...'
+                ! enddo
+                ! call simple_touch(IOLOCK)
+                ! i = simple_rename('tmp.txt',STREAM_SPPROJFILES,overwrite=.true.)
+                ! call del_file(IOLOCK)
+                call write_filetable(STREAM_SPPROJFILES, completed_fnames)
             end subroutine update_projects_list
 
             subroutine check_nptcls( fname, nptcls, state )
@@ -601,12 +602,12 @@ contains
             !>  import previous run to the current project based on past single project files
             subroutine import_prev_streams
                 use simple_ori, only: ori
-                type(sp_project) :: stream_spproj
+                type(sp_project) :: streamspproj
                 type(ori)        :: o, o_stk
                 character(len=LONGSTRLEN), allocatable :: sp_files(:)
                 character(len=:), allocatable :: mic, mov
                 logical,          allocatable :: spproj_mask(:)
-                integer :: iproj,nprojs,cnt,nptcls
+                integer :: iproj,nprojs,icnt,nptcls
                 logical :: err
                 if( .not.cline%defined('dir_prev') ) return
                 err = .false.
@@ -616,14 +617,14 @@ contains
                 allocate(spproj_mask(nprojs),source=.false.)
                 nptcls = 0
                 do iproj = 1,nprojs
-                    call stream_spproj%read_segment('mic', sp_files(iproj) )
-                    if( stream_spproj%os_mic%get_noris() /= 1 )then
+                    call streamspproj%read_segment('mic', sp_files(iproj) )
+                    if( streamspproj%os_mic%get_noris() /= 1 )then
                         THROW_WARN('Ignoring previous project'//trim(sp_files(iproj)))
                         cycle
                     endif
-                    if( .not. stream_spproj%os_mic%isthere(1,'intg') )cycle
+                    if( .not. streamspproj%os_mic%isthere(1,'intg') )cycle
                     if( l_pick )then
-                        if( stream_spproj%os_mic%get(1,'nptcls') < 0.5 )cycle
+                        if( streamspproj%os_mic%get(1,'nptcls') < 0.5 )cycle
                     endif
                     spproj_mask(iproj) = .true.
                 enddo
@@ -631,12 +632,11 @@ contains
                     nptcls_glob = 0
                     return
                 endif
-                call spproj%os_mic%new(count(spproj_mask), is_ptcl=.false.)
-                cnt = 0
+                icnt = 0
                 do iproj = 1,nprojs
                     if( .not.spproj_mask(iproj) )cycle
-                    call stream_spproj%read_segment('mic',sp_files(iproj))
-                    call stream_spproj%os_mic%get_ori(1, o)
+                    call streamspproj%read_segment('mic',sp_files(iproj))
+                    call streamspproj%os_mic%get_ori(1, o)
                     ! import mic segment
                     call movefile2folder('intg',        output_dir_motion_correct, o, err)
                     call movefile2folder('forctf',      output_dir_motion_correct, o, err)
@@ -650,20 +650,20 @@ contains
                         ! import mic & updates stk segment
                         call movefile2folder('boxfile', output_dir_picker, o, err)
                         nptcls = nptcls + nint(o%get('nptcls'))
-                        call stream_spproj%os_mic%set_ori(1, o)
+                        call streamspproj%os_mic%set_ori(1, o)
                         if( .not.err )then
-                            call stream_spproj%read_segment('stk', sp_files(iproj))
-                            if( stream_spproj%os_stk%get_noris() == 1 )then
-                                call stream_spproj%os_stk%get_ori(1, o_stk)
+                            call streamspproj%read_segment('stk', sp_files(iproj))
+                            if( streamspproj%os_stk%get_noris() == 1 )then
+                                call streamspproj%os_stk%get_ori(1, o_stk)
                                 call movefile2folder('stk', output_dir_extract, o_stk, err)
-                                call stream_spproj%os_stk%set_ori(1, o_stk)
-                                call stream_spproj%read_segment('ptcl2D', sp_files(iproj))
-                                call stream_spproj%read_segment('ptcl3D', sp_files(iproj))
+                                call streamspproj%os_stk%set_ori(1, o_stk)
+                                call streamspproj%read_segment('ptcl2D', sp_files(iproj))
+                                call streamspproj%read_segment('ptcl3D', sp_files(iproj))
                             endif
                         endif
                     else
                         ! import mic segment
-                        call stream_spproj%os_mic%set_ori(1, o)
+                        call streamspproj%os_mic%set_ori(1, o)
                     endif
                     ! add to history
                     call o%getter('movie', mov)
@@ -671,23 +671,19 @@ contains
                     call movie_buff%add2history(mov)
                     call movie_buff%add2history(mic)
                     ! write updated individual project file
-                    call stream_spproj%write(basename(sp_files(iproj)))
+                    call streamspproj%write(basename(sp_files(iproj)))
                     ! count
-                    cnt = cnt + 1
-                    call spproj%os_mic%set_ori(cnt, o)
+                    icnt = icnt + 1
                 enddo
-                ! updates online records
-                call spproj%write(micspproj_fname)
-                ! update total number of particles
-                nptcls_glob = nptcls_glob + nptcls
-                if( cnt > 0 )then
+                if( icnt > 0 )then
                     ! updating STREAM_SPPROJFILES for Cluster2D_stream
-                    allocate(completed_jobs_clines(cnt))
-                    cnt = 0
+                    allocate(completed_jobs_clines(icnt))
+                    icnt = 0
                     do iproj = 1,nprojs
                         if(spproj_mask(iproj))then
-                            cnt = cnt+1
-                            call completed_jobs_clines(cnt)%set('projfile',basename(sp_files(iproj)))
+                            icnt = icnt+1
+                            call completed_jobs_clines(icnt)%set('projfile',basename(sp_files(iproj)))
+                            call completed_jobs_clines(icnt)%printline
                         endif
                     enddo
                     call update_projects_list(completed_fnames, n_imported)
@@ -695,8 +691,8 @@ contains
                 endif
                 call o%kill
                 call o_stk%kill
-                call stream_spproj%kill
-                write(*,'(A,I3)')'>>> IMPORTED PREVIOUS PROCESSED MOVIES: ', cnt
+                call streamspproj%kill
+                write(*,'(A,I3)')'>>> IMPORTED PREVIOUS PROCESSED MOVIES: ', icnt
             end subroutine import_prev_streams
 
             subroutine movefile2folder(key, folder, o, err)
@@ -2053,8 +2049,8 @@ contains
 
         contains
 
-            function box_inside( ldim, coord, box ) result( inside )
-                integer, intent(in) :: ldim(3), coord(2), box
+            function box_inside( ildim, coord, ibox ) result( inside )
+                integer, intent(in) :: ildim(3), coord(2), ibox
                 integer             :: fromc(2), toc(2)
                 logical             :: inside
                 if( params%outside .eq. 'yes' )then
@@ -2062,9 +2058,9 @@ contains
                     return
                 endif
                 fromc  = coord+1       ! compensate for the c-range that starts at 0
-                toc    = fromc+(box-1) ! the lower left corner is 1,1
+                toc    = fromc+(ibox-1) ! the lower left corner is 1,1
                 inside = .true.        ! box is inside
-                if( any(fromc < 1) .or. toc(1) > ldim(1) .or. toc(2) > ldim(2) ) inside = .false.
+                if( any(fromc < 1) .or. toc(1) > ildim(1) .or. toc(2) > ildim(2) ) inside = .false.
             end function box_inside
     end subroutine exec_extract
 
@@ -2474,14 +2470,14 @@ contains
 
         contains
 
-            function box_inside( ldim, coord, box ) result( inside )
-                integer, intent(in) :: ldim(3), coord(2), box
+            function box_inside( ildim, coord, box ) result( inside )
+                integer, intent(in) :: ildim(3), coord(2), box
                 integer             :: fromc(2), toc(2)
                 logical             :: inside
                 fromc  = coord+1       ! compensate for the c-range that starts at 0
                 toc    = fromc+(box-1) ! the lower left corner is 1,1
                 inside = .true.        ! box is inside
-                if( any(fromc < 1) .or. toc(1) > ldim(1) .or. toc(2) > ldim(2) ) inside = .false.
+                if( any(fromc < 1) .or. toc(1) > ildim(1) .or. toc(2) > ildim(2) ) inside = .false.
             end function box_inside
     end subroutine exec_reextract
 
