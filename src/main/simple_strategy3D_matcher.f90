@@ -177,7 +177,7 @@ contains
             call match_imgs(imatch)%copy_polarizer(build_glob%img_match)
         end do
         !$omp end parallel do
-
+        
         ! STOCHASTIC IMAGE ALIGNMENT
         if( trim(params_glob%oritype) .eq. 'ptcl3D' )then
             l_ctf = build_glob%spproj%get_ctfflag('ptcl3D').ne.'no'
