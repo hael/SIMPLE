@@ -7,7 +7,7 @@ use simple_syslib,  only: file_exists, is_open, is_file_open, is_io, simple_absp
 &exec_cmdline, del_file, syslib_copy_file
 implicit none
 
-public :: fileiochk, fopen, fclose, nlines,  filelength, funit_size, is_funit_open, get_open_funits
+public :: fileiochk, fopen, fclose, wait_for_closure, nlines, filelength, funit_size, is_funit_open, get_open_funits
 public :: add2fbody, swap_suffix, get_fbody, fname_new_ext, fname2ext, fname2iter, basename,  get_fpath
 public :: make_dirnames, make_filenames, filepath, del_files, fname2format, read_filetable, write_filetable
 public :: write_singlelineoftext, arr2file, arr2txtfile, file2rarr, simple_copy_file, make_relativepath
@@ -282,6 +282,26 @@ contains
         if( present(errmsg) ) write(msg_this,'(A)') errmsg
         if( is_open(funit) ) close(funit,IOSTAT=iostat,STATUS=status_this)
     end subroutine fclose_2
+
+    subroutine wait_for_closure( fname )
+        character(len=*), intent(in)  :: fname
+        logical :: exists, closed
+        integer :: wait_time
+        wait_time = 0
+        do
+            if( wait_time == 60 )then
+                call simple_exception('been waiting for a minute for file: '//trim(adjustl(fname)), 'simple_fileio.f90', __LINE__,l_stop=.false.)
+                wait_time = 0
+                flush(OUTPUT_UNIT)
+            endif
+            exists = file_exists(fname)
+            closed = .false.
+            if( exists )closed = .not. is_file_open(fname)
+            if( exists .and. closed )exit
+            call sleep(1)
+            wait_time = wait_time + 1
+        enddo
+    end subroutine wait_for_closure
 
     !> \brief return the number of lines in a textfile
     function nlines( fname ) result( n )
@@ -705,24 +725,8 @@ contains
     subroutine read_filetable( filetable, filenames )
         character(len=*),                       intent(in)  :: filetable    !< input table filename
         character(len=LONGSTRLEN), allocatable, intent(out) :: filenames(:) !< array of filenames
-        integer :: nl, funit, iline,io_stat, wait_time
-        logical :: exists, closed
-        ! make sure this file is closed before operating on it
-        wait_time = 0
-        do
-            if( wait_time == 60 )then
-                call simple_exception('been waiting for a minute for file: '//trim(adjustl(filetable)), 'simple_fileio.f90', __LINE__, l_stop=.false.)
-                wait_time = 0
-                flush(OUTPUT_UNIT)
-            endif
-            exists = file_exists(filetable)
-            closed = .false.
-            if( exists )closed = .not. is_file_open(filetable)
-            if( exists .and. closed )exit
-            call sleep(1)
-            wait_time = wait_time + 1
-        enddo
-        ! now, go
+        integer :: nl, funit, iline,io_stat
+        call wait_for_closure(filetable)
         nl = nlines(trim(filetable))
         if( nl == 0 ) return
         call fopen(funit,filetable,'old','unknown',io_stat)
@@ -730,6 +734,7 @@ contains
         allocate( filenames(nl), stat=alloc_stat )
         if(alloc_stat /= 0) call allocchk ('In: read_filetable; simple_fileio  ', alloc_stat)
         do iline=1,nl
+            call wait_for_closure(filenames(iline))
             read(funit,'(a1024)') filenames(iline)
         end do
         call fclose_1(funit,io_stat)

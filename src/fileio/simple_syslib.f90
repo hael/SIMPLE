@@ -518,26 +518,26 @@ contains
         endif
     end function is_file_open
 
-    !>  \brief  waits for file to be closed
-    subroutine wait_for_closure( fname )
-        character(len=*), intent(in)  :: fname
-        logical :: exists, closed
-        integer :: wait_time
-        wait_time = 0
-        do
-            if( wait_time == 60 )then
-                call simple_exception('been waiting for a minute for file: '//trim(adjustl(fname)), 'simple_syslib.f90', __LINE__,l_stop=.false.)
-                wait_time = 0
-                flush(OUTPUT_UNIT)
-            endif
-            exists = file_exists(fname)
-            closed = .false.
-            if( exists )closed = .not. is_file_open(fname)
-            if( exists .and. closed )exit
-            call simple_sleep(1)
-            wait_time = wait_time + 1
-        enddo
-    end subroutine wait_for_closure
+    ! !>  \brief  waits for file to be closed
+    ! subroutine wait_for_closure( fname )
+    !     character(len=*), intent(in)  :: fname
+    !     logical :: exists, closed
+    !     integer :: wait_time
+    !     wait_time = 0
+    !     do
+    !         if( wait_time == 60 )then
+    !             call simple_exception('been waiting for a minute for file: '//trim(adjustl(fname)), 'simple_syslib.f90', __LINE__,l_stop=.false.)
+    !             wait_time = 0
+    !             flush(OUTPUT_UNIT)
+    !         endif
+    !         exists = file_exists(fname)
+    !         closed = .false.
+    !         if( exists )closed = .not. is_file_open(fname)
+    !         if( exists .and. closed )exit
+    !         call simple_sleep(1)
+    !         wait_time = wait_time + 1
+    !     enddo
+    ! end subroutine wait_for_closure
 
     !> \brief  Get current working directory
     subroutine simple_getcwd( cwd )
