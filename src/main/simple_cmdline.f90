@@ -107,7 +107,7 @@ contains
         if( DEBUG_HERE ) print *, 'exec_cmd from UI in cmdline class: ', exec_cmd_ui
 
         if( trim(exec_cmd_ui) .ne. 'all' )then
-            if( trim(exec_cmd) .ne. trim(exec_cmd_ui) )then
+            if( basename(trim(exec_cmd)) .ne. trim(exec_cmd_ui) )then
                 THROW_HARD(trim(prgname)//' is not executed by '//trim(exec_cmd)//' but by '//exec_cmd_ui)
             endif
         endif
