@@ -4,13 +4,10 @@ add_executable(${SINGLE_EXE} "${CMAKE_CURRENT_SOURCE_DIR}/single_exec/single_exe
 add_executable(${SIMPLE_PRIVATE_EXE}
 "${CMAKE_CURRENT_SOURCE_DIR}/simple_private_exec/simple_private_exec.f90")
 set(SIMPLE_MAIN_TARGETS ${SIMPLE_EXE} ${SINGLE_EXE} ${SIMPLE_PRIVATE_EXE})
-# This links foo to the bar library
-
-#target_link_libraries(${SIMPLE_MAIN_TARGETS} LINK_PUBLIC ${EXTRA_LIBS})
+# target_link_libraries(${SIMPLE_MAIN_TARGETS} LINK_PUBLIC ${EXTRA_LIBS})
 target_link_libraries(${SIMPLE_EXE} LINK_PUBLIC ${EXTRA_LIBS})
 target_link_libraries(${SINGLE_EXE} LINK_PUBLIC ${EXTRA_LIBS})
 target_link_libraries(${SIMPLE_PRIVATE_EXE} LINK_PUBLIC ${EXTRA_LIBS})
-
 if(USE_OPENMPI AND USE_MPI)
   set_target_properties(${SIMPLE_MAIN_TARGETS}
     PROPERTIES
@@ -38,68 +35,24 @@ install(TARGETS ${SIMPLE_MAIN_TARGETS}
   CONFIGURATIONS DEBUG|RELEASE
 )
 
-#################################################################
-#
 # ENABLE TESTING
-#
-#################################################################
 if (${PROJECT_NAME}_BUILD_TESTS)
   if(VERBOSE)
     include(CTest)
   endif()
 endif()
-#  add_subdirectory(tests)
 
-
-########################################
 # Set up how to compile the tests
-########################################
 file(GLOB TESTDIRS
   LIST_DIRECTORIES true
   RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
   "tests/test_*"
   )
-if (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
-  list(REMOVE_ITEM TESTDIRS "tests/test_pgi")
-else()
-  list(REMOVE_ITEM TESTDIRS "tests/test_pgi"
-    "tests/test_cufft")
-endif()
-
-if (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
-  list(REMOVE_ITEM TESTDIRS "tests/test_openacc"
-   "tests/test_laplace_solver"
-   "tests/test_accuracy")
-else()
-  list(REMOVE_ITEM TESTDIRS "tests/test_intel")
-endif()
-set(EXTRA_FFLAGS "")
 set(DONT_CHECK_RANGE "-fno-range-check")
-if(NOT USE_CUDA)
- list(REMOVE_ITEM TESTDIRS "tests/test_cuda")
- list(REMOVE_ITEM TESTDIRS "tests/test_cublas")
-else()
- list(REMOVE_ITEM TESTDIRS "tests/test_img_export")
-endif()
-if(NOT USE_OPENMP)
- list(REMOVE_ITEM TESTDIRS "tests/test_omp")
-endif()
 if(NOT USE_MPI)
-  list(REMOVE_ITEM TESTDIRS "tests/test_mpi"
-    "tests/test_mpimp_benchmark")
+  list(REMOVE_ITEM TESTDIRS "tests/test_mpi")
 endif()
  list(REMOVE_ITEM TESTDIRS "tests/test_mpimp_benchmark")
-
-# if(USE_OPENACC)
-#   message(STATUS "Searching for BLAS to test OpenACC")
-#   set(BLA_F95 ON)
-#   set(BLA_VENDOR "ATLAS")
-#   find_package(BLAS QUIET)
-#   if (BLAS_FOUND AND USE_OPENACC)
-#     message(STATUS "Adding BLAS library to tests: L${BLAS_LINKER_FLAGS} ${BLAS_blas_LIBRARY}")
-#     endif()
-# endif()
-
 
 if(USE_MPI AND USE_OPENMP)
     set(EXTRA_FFLAGS "${EXTRA_FFLAGS} ${OpenMP_Fortran_FLAGS} ${MPI_Fortran_FLAGS}")
@@ -122,7 +75,6 @@ foreach(TESTNAME ${TESTDIRS})
   if("" STREQUAL "${TESTSOURCES}")
     # message(STATUS " skipping ${TESTNAME} -- no files in dir")
   else()
-
     add_executable(${TESTEXE} ${TESTSOURCES})
     target_link_libraries(${TESTEXE} ${EXTRA_LIBS})
     if(USE_MPI AND USE_OPENMP)
@@ -143,32 +95,6 @@ foreach(TESTNAME ${TESTDIRS})
           LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
           LANGUAGE Fortran)
     endif()
-    if(USE_CUDA)
-      file(GLOB_RECURSE TESTCUDASOURCES LIST_DIRECTORIES true
-          "tests/${TESTNAME}/*.cu")
-       if("" STREQUAL "${TESTCUDASOURCES}")
-         # message(STATUS " skipping ${TESTNAME} -- no files in dir")
-       else()
-         CUDA_COMPILE( ${TESTEXE}_cuda_kernels ${TESTCUDASOURCES}
-           OPTIONS
-         DEBUG -g
-         RELEASE --use_fast_math
-         RELWITHDEBINFO --use_fast_math;-g
-         MINSIZEREL --use_fast_math)
-       target_link_libraries(${TESTEXE} ${TESTEXE}_cuda_kernels)
-     endif()
-     CUDA_ADD_CUBLAS_TO_TARGET(${TESTEXE})
-     target_link_libraries(${TESTEXE} cuda_kernels stdc++)
-    endif()
-    # if(BLAS_FOUND AND USE_OPENACC)
-    #   message(STATUS "Adding  ${BLAS_blas_LIBRARY} library to ${TESTEXE}")
-    #   target_link_libraries(${TESTEXE} ${BLAS_blas_LIBRARY})
-    #   set_target_properties(${TESTEXE} PROPERTIES
-    #     COMPILE_FLAGS "${OpenMP_Fortran_FLAGS} -fno-range-check"
-    #     LINK_FLAGS "${OpenMP_Fortran_FLAGS} -L${BLAS_LINKER_FLAGS}"
-    #     LANGUAGE Fortran)
-    # else()
-   # endif()
     install(TARGETS ${TESTEXE}
       ARCHIVE DESTINATION ${CMAKE_INSTALL_BINDIR}
       RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
@@ -186,10 +112,7 @@ endforeach()
   endif()
 endforeach(TESTNAME)
 
-#
 # Default CTest tests
-#
-
 list(APPEND CTESTDIRS
   simple_test_ansi_colors
   simple_test_binoris
@@ -207,7 +130,6 @@ list(APPEND CTESTDIRS
   simple_test_sp_project
   simple_test_sym
   simple_test_units )
-
 
 foreach(CHECKUNIT ${CTESTDIRS})
 add_test(NAME ${CHECKUNIT}

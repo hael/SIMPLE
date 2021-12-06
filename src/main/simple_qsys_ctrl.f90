@@ -458,7 +458,7 @@ contains
             if( all(self%jobs_done) ) exit
             call self%update_queue
             call self%submit_scripts
-            call simple_sleep(SHORTTIME)
+            call sleep(SHORTTIME)
         end do
     end subroutine schedule_jobs
 

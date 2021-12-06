@@ -1,7 +1,7 @@
 !!
 !! System library functions and error checking
 !!
-!! System routines:  exec_cmdline, simple_sleep, simple_isenv simple_getcwd, simple_chdir simple_chmod
+!! System routines:  exec_cmdline, simple_isenv simple_getcwd, simple_chdir simple_chmod
 !! File routines:    simple_file_stat, wait_for_closure, is_io, is_open, file_exists, is_file_open
 !! Memory routines:  simple_mem_usage, simple_dump_mem_usage
 
@@ -183,13 +183,8 @@ contains
         else
             allocate(cmdstr, source=trim(adjustl(cmdline)))
         endif
-#ifdef USE_F08
         call execute_command_line(trim(adjustl(cmdstr)), wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=errmsg)
         if( .not. l_suppress_errors ) call raise_sys_error( cmdstr, exec_stat, cstat, errmsg )
-#else
-        ! Fortran 2003
-        exec_stat = system(trim(adjustl(cmdstr)))
-#endif
         if( l_doprint )then
             write(logfhandle,*) 'command            : ', cmdstr
             write(logfhandle,*) 'status of execution: ', exec_stat
@@ -270,17 +265,6 @@ contains
         end if
         envval = trim(retval)
     end function simple_getenv_2
-
-    subroutine simple_sleep( secs )
-        integer, intent(in) :: secs
-#if defined(INTEL)
-        integer             :: msecs
-        msecs = 1000*INT(secs)
-        call sleepqq(msecs)  !! milliseconds
-#else
-        call sleep(INT(secs)) !! intrinsic
-#endif
-    end subroutine simple_sleep
 
     !! SYSTEM FILE OPERATIONS
 
@@ -403,25 +387,16 @@ contains
     function simple_chmod(pathname, mode ) result( status )
         character(len=*), intent(in) :: pathname, mode
         integer :: status, imode
-#if defined(INTEL)
-        ! Function method
-        status = chmod(pathname, mode)
-#else
         imode = INT(o'000') ! convert symbolic to octal
         if ( index(mode, 'x') /=0) imode=IOR(imode,INT(o'111'))
         if ( index(mode, 'w') /=0) imode=IOR(imode,INT(o'222'))
         if ( index(mode, 'r') /=0) imode=IOR(imode,INT(o'444'))
         status = chmod(pathname, mode) !! intrinsic GNU
-#endif
-        if(status/=0)&
-            call simple_error_check(status,"simple_syslib::simple_chmod chmod failed "//trim(pathname))
+        if( status/=0 ) call simple_error_check(status,"simple_syslib::simple_chmod chmod failed "//trim(pathname))
     end function simple_chmod
 
     !>  Wrapper for POSIX system call stat
     subroutine simple_file_stat( filename, status, buffer, doprint )
-#if defined(INTEL)
-        use ifposix
-#endif
         character(len=*),     intent(in)    :: filename
         integer,              intent(inout) :: status
         integer, allocatable, intent(inout) :: buffer(:)  !< POSIX stat struct
@@ -430,25 +405,8 @@ contains
         integer :: funit
         l_print = .false.
         currently_opened=.false.
-#if defined(GNU)
         allocate(buffer(13), source=0)
         status = stat(trim(adjustl(filename)), buffer)
-#elif defined(INTEL)
-        inquire(file=trim(adjustl(filename)), opened=currently_opened, iostat=status)
-        if(status /= 0)&
-            call simple_error_check(status,"simple_syslib::simple_sys_stat inquire failed "//trim(filename))
-        if(.not.currently_opened)&
-            open(newunit=funit,file=trim(adjustl(filename)),status='old',iostat=status)
-        if(status /= 0)&
-            call simple_error_check(status,"simple_syslib::simple_sys_stat open failed "//trim(filename))
-        !allocate(buffer(13), source=0)
-        status = STAT (trim(adjustl(filename)) , buffer)
-        if (status /= 0) then
-            call simple_error_check(status, "In simple_syslib::simple_file_stat "//trim(filename))
-            write(logfhandle,*) buffer
-        end if
-        if(.not.currently_opened) close(funit)
-#endif
         if( present(doprint) )l_print = doprint
         if( l_print )then
             write(logfhandle,*) 'command: stat ', trim(adjustl(filename))
@@ -518,27 +476,6 @@ contains
         endif
     end function is_file_open
 
-    ! !>  \brief  waits for file to be closed
-    ! subroutine wait_for_closure( fname )
-    !     character(len=*), intent(in)  :: fname
-    !     logical :: exists, closed
-    !     integer :: wait_time
-    !     wait_time = 0
-    !     do
-    !         if( wait_time == 60 )then
-    !             call simple_exception('been waiting for a minute for file: '//trim(adjustl(fname)), 'simple_syslib.f90', __LINE__,l_stop=.false.)
-    !             wait_time = 0
-    !             flush(OUTPUT_UNIT)
-    !         endif
-    !         exists = file_exists(fname)
-    !         closed = .false.
-    !         if( exists )closed = .not. is_file_open(fname)
-    !         if( exists .and. closed )exit
-    !         call simple_sleep(1)
-    !         wait_time = wait_time + 1
-    !     enddo
-    ! end subroutine wait_for_closure
-
     !> \brief  Get current working directory
     subroutine simple_getcwd( cwd )
         character(len=*), intent(inout) :: cwd   !< output pathname
@@ -551,9 +488,6 @@ contains
     !> \brief  Change working directory
     !! return optional status 0=success
     subroutine simple_chdir( newd, oldd, status, errmsg )
-#if defined(INTEL)
-        use ifposix
-#endif
         character(len=*),           intent(in)  :: newd   !< target pathname
         character(len=*), optional, intent(out) :: oldd
         integer,          optional, intent(out) :: status
@@ -573,11 +507,7 @@ contains
         targetdir = simple_abspath(trim(newd), errmsg=eemsg, check_exists=check_exists)
         inquire(file=trim(targetdir), EXIST=dir_e, IOSTAT=io_status)
         if(dir_e) then
-#if defined(INTEL)
-            call pxfchdir(trim(adjustl(targetdir)), len_trim(targetdir), io_status)
-#else
             io_status = chdir(trim(targetdir))
-#endif
             if(io_status /= 0)then
                 if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
                 select case (io_status)
@@ -602,9 +532,6 @@ contains
     !> \brief  Make directory -- fail when ignore is false
     !! return optional status 0=success
     subroutine simple_mkdir( dir, ignore, status, errmsg)
-#if defined(INTEL)
-        use ifposix
-#endif
         character(len=*), intent(in)               :: dir
         logical,          intent(in), optional     :: ignore
         integer,          intent(out), optional    :: status
@@ -627,11 +554,7 @@ contains
         if(.not. dir_exists(trim(adjustl(tmpdir)))) then
             ! prepare path for C function
             allocate(path, source=trim(tmpdir)//c_null_char)
-#if defined(INTEL)
-            call pxfmkdir( trim(adjustl(path)), len_trim(path), INT(o'777'), io_status )
-#else
             io_status = makedir(trim(adjustl(path)), len_trim(tmpdir))
-#endif
             if(.not. dir_exists(trim(adjustl(path)))) then
                 if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
                 write(logfhandle,*)" syslib:: simple_mkdir failed to create "//trim(path)
@@ -671,16 +594,10 @@ contains
             count=0
             allocate(path, source=trim(adjustl(d))//c_null_char)
             length = len_trim(adjustl(path))
-#ifdef INTEL
-            qq =  deldirqq(trim(adjustl(path)))
-            if(.not. qq) call simple_error_check(io_status, &
-                "syslib:: deldirqq failed  "//trim(path))
-#else
             io_status = removedir(trim(adjustl(path)), length, count)
-#endif
             if(io_status /= 0)then
                 if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
-                err = int(IERRNO(), kind=4 ) !!  EXTERNAL;  no implicit type in INTEL
+                err = int(IERRNO(), kind=4 )
                 call simple_error_check(io_status, "syslib:: simple_rmdir failed to remove "//trim(d))
                 io_status=0
             endif
@@ -952,12 +869,8 @@ contains
         end if
         write( file_unit_op, '(A,A)' ) 'CMAKE Fortran COMPILER VERSION ',&
             trim(FC_COMPILER_CMAKE_VERSION)
-
-#ifdef USE_F08_ISOENV
-        ! F2003 does not have compiler_version/OPTIONS in iso_fortran_env
         compilation_cmd = COMPILER_OPTIONS()
         compiler_ver = COMPILER_VERSION()
-#endif
         if(allocated(compiler_ver))then
             if(len(compiler_ver) <= 0) THROW_ERROR('simple_syslib compiler_version str le 0')
 
@@ -1002,7 +915,6 @@ contains
         character(len=8)   :: pid_char=' '
         integer            :: pid,unit
         logical            :: ifxst
-
         valueRSS=-1    ! return negative number if not found
         if(present(valuePeak))valuePeak=-1
         if(present(valueSize))valueSize=-1

@@ -575,7 +575,7 @@ contains
                     endif
                 endif
             endif
-            call simple_sleep(WAIT_WATCHER)
+            call sleep(WAIT_WATCHER)
         enddo
         ! getting general parameters from the first sp_project
         orig_box     = chunks(1)%spproj%get_box()
@@ -704,7 +704,7 @@ contains
                 if( n_new_chunks > 0 ) last_injection = simple_gettime()
                 ! wait a bit if necessary
                 time_iter = simple_gettime() - time_start_iter
-                if( time_iter < WAIT_WATCHER ) call simple_sleep(WAIT_WATCHER-time_iter)
+                if( time_iter < WAIT_WATCHER ) call sleep(WAIT_WATCHER-time_iter)
                 ! optionally pause
                 l_once = .false.
                 do while( file_exists(trim(PAUSE_STREAM)) )
@@ -714,7 +714,7 @@ contains
                         call write_singlelineoftext(PAUSE_STREAM, 'PAUSED')
                         write(logfhandle,'(A,A)')'>>> CLUSTER2D STREAM PAUSED ',cast_time_char(simple_gettime())
                     endif
-                    call simple_sleep(WAIT_WATCHER)
+                    call sleep(WAIT_WATCHER)
                 enddo
                 call debug_print('end new chunk section global iter '//int2str(iter))
             endif
@@ -833,16 +833,6 @@ contains
                 call debug_print('in generate_new_chunks 1 '//int2str(n_avail)//' '//int2str(nmics_imported))
                 if(n_avail == 0) return
                 call debug_print('in generate_new_chunks reading '//trim(spproj_list_fname))
-                ! cnt = 0
-                ! do while( file_exists(trim(params%dir_target)//trim(IOLOCK)) )
-                !     call simple_sleep(1)
-                !     cnt = cnt + 1
-                !     if( cnt > 5 )then
-                !         write(logfhandle,*)'>>> List of individual projects not accessible yet! ',trim(spproj_list_fname)
-                !         return ! better luck next time
-                !     endif
-                ! enddo
-                ! call simple_touch(trim(params%dir_target)//trim(IOLOCK))
                 call read_filetable(spproj_list_fname, spproj_list)
                 ! call del_file(trim(params%dir_target)//trim(IOLOCK))
                 ! call debug_print('in generate_new_chunks read cnt '//int2str(cnt))
