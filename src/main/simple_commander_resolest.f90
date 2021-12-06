@@ -210,7 +210,7 @@ contains
         call even%kill
         call odd%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_nonuniform_filter NORMAL STOP ****')
+        call simple_end('**** SIMPLE_NONUNIFORM_FILTER NORMAL STOP ****')
     end subroutine exec_nonuniform_filter
 
 end module simple_commander_resolest
