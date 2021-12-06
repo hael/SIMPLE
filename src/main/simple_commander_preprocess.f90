@@ -238,7 +238,7 @@ contains
                 if( file_exists(trim(TERM_STREAM)) ) exit
                 call write_singlelineoftext(PAUSE_STREAM, 'PAUSED')
                 write(logfhandle,'(A,A)')'>>> PREPROCESS STREAM PAUSED ',cast_time_char(simple_gettime())
-                call simple_sleep(WAITTIME)
+                call sleep(WAITTIME)
             enddo
             iter = iter + 1
             call movie_buff%watch( nmovies, movies )
@@ -307,7 +307,7 @@ contains
                         l_haschanged = .false.
                     else
                         ! ...or wait
-                        call simple_sleep(WAITTIME)
+                        call sleep(WAITTIME)
                     endif
                 endif
             endif

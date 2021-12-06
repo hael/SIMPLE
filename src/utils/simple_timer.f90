@@ -21,13 +21,9 @@
 ! -----------------------------------------------------------------------------!
 
 module simple_timer
-use simple_defs   ! singleton, fp_kind declared
+use simple_defs
 use simple_error
-#if defined(INTEL)
-use ifport
-#endif
 implicit none
-!  private :: raise_sys_error
 
 private
 #include "simple_local_flags.inc"

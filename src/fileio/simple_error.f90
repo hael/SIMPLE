@@ -23,9 +23,7 @@ contains
             write(logfhandle,'(A,I5)') '; '//trim(file)//'; line: ', line
         endif
         if( ll_stop )then
-#if defined(GNU) && defined(_DEBUG)
-                    call backtrace()
-#endif
+            call backtrace()
             call exit(EXIT_FAILURE)
         endif
     end subroutine simple_exception

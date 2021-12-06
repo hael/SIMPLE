@@ -109,10 +109,6 @@ contains
     end subroutine test_shifted_correlator
 
     subroutine profile_corrs
-#ifdef INTEL
-        use ifport
-#endif
-
         integer, parameter   :: NTSTS=1000, NTHR=8
         integer              :: itst
         type(image)          :: img_ref, img_ptcl

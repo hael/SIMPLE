@@ -6,16 +6,11 @@ use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters
 implicit none
 
-public :: merge_similarities_commander
 public :: split_pairs_commander
 public :: split_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: merge_similarities_commander
-  contains
-    procedure :: execute      => exec_merge_similarities
-end type merge_similarities_commander
 type, extends(commander_base) :: split_pairs_commander
   contains
     procedure :: execute      => exec_split_pairs
@@ -26,27 +21,6 @@ type, extends(commander_base) :: split_commander
 end type split_commander
 
 contains
-
-    subroutine exec_merge_similarities( self, cline )
-        use simple_map_reduce, only: merge_similarities_from_parts
-        class(merge_similarities_commander), intent(inout) :: self
-        class(cmdline),                      intent(inout) :: cline
-        type(parameters)  :: params
-        real, allocatable :: simmat(:,:)
-        integer           :: filnum, io_stat
-        call params%new(cline)
-        simmat = merge_similarities_from_parts(params%nptcls, params%nparts) !! intel realloc warning
-        call fopen(filnum, status='REPLACE', action='WRITE', file='smat.bin', access='STREAM', iostat=io_stat)
-        call fileiochk('exec_merge_similarities ; fopen error when opening smat.bin  ', io_stat)
-        write(unit=filnum,pos=1,iostat=io_stat) simmat
-        if( io_stat .ne. 0 )then
-            write(logfhandle,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to smat.bin'
-            THROW_HARD('I/O; exec_merge_similarities')
-        endif
-        call fclose(filnum,errmsg='exec_merge_similarities ; error when closing smat.bin ')
-        ! end gracefully
-        call simple_end('**** SIMPLE_MERGE_SIMILARITIES NORMAL STOP ****', print_simple=.false.)
-    end subroutine exec_merge_similarities
 
     !> for splitting calculations between pairs of objects into balanced partitions
     subroutine exec_split_pairs( self, cline )

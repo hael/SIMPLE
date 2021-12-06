@@ -68,7 +68,7 @@ contains
         do
             there = file_exists(trim(fname))
             if( there ) exit
-            call simple_sleep(wwtime)
+            call sleep(wwtime)
         end do
     end subroutine qsys_watcher_1
 
@@ -91,7 +91,7 @@ contains
             if( doreturn )then
                 return
             else
-                call simple_sleep(wwtime)
+                call sleep(wwtime)
             endif
         end do
     end subroutine qsys_watcher_2
