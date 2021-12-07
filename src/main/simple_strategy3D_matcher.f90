@@ -60,7 +60,6 @@ contains
         !---> The below is to allow particle-dependent decision about which 3D strategy to use
         type :: strategy3D_per_ptcl
             class(strategy3D), pointer :: ptr  => null()
-            class(strategy3D), pointer :: ptr2 => null()
         end type strategy3D_per_ptcl
         type(strategy3D_per_ptcl), allocatable :: strategy3Dsrch(:)
         !<---- hybrid or combined search strategies can then be implemented as extensions of the
@@ -229,7 +228,8 @@ contains
                         else
                             allocate(strategy3D_neigh        :: strategy3Dsrch(iptcl_batch)%ptr)
                         endif
-                        allocate(strategy3D_cont             :: strategy3Dsrch(iptcl_batch)%ptr2)
+                    case('cont')
+                        allocate(strategy3D_cont             :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('cluster','clustersym')
                         allocate(strategy3D_cluster          :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('eval')
@@ -244,19 +244,9 @@ contains
                 if( allocated(het_mask) ) strategy3Dspecs(iptcl_batch)%do_extr =  het_mask(iptcl)
                 if( allocated(symmat)   ) strategy3Dspecs(iptcl_batch)%symmat  => symmat
                 ! search object(s) & search
-                select case(trim(params_glob%refine))
-                    case('neigh')
-                        call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch))
-                        call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
-                        call strategy3Dsrch(iptcl_batch)%ptr2%new(strategy3Dspecs(iptcl_batch))
-                        call strategy3Dsrch(iptcl_batch)%ptr2%srch(ithr)
-                        call strategy3Dsrch(iptcl_batch)%ptr%kill
-                        call strategy3Dsrch(iptcl_batch)%ptr2%kill
-                    case DEFAULT
-                        call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch))
-                        call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
-                        call strategy3Dsrch(iptcl_batch)%ptr%kill
-                end select
+                call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch))
+                call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
+                call strategy3Dsrch(iptcl_batch)%ptr%kill
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
                     if( params_glob%which_iter > 1 )then
@@ -272,7 +262,6 @@ contains
         ! cleanup
         do iptcl_batch = 1,batchsz_max
             nullify(strategy3Dsrch(iptcl_batch)%ptr)
-            nullify(strategy3Dsrch(iptcl_batch)%ptr2)
         end do
         deallocate(strategy3Dsrch,strategy3Dspecs,batches)
 

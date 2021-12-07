@@ -103,7 +103,7 @@ contains
             cxy(2:) = self%ospec%x(4:5)
             ! update ori with angles, shift addition
             call o_inout%set_euler(self%ospec%x(1:3))
-            call o_inout%set_shift(o_inout%get_2Dshift()+cxy(2:))
+            call o_inout%set_shift(o_inout%get_2Dshift()+cxy(2:)) ! note the vector addition
             ! indicate that better was found
             found_better = .true.
         else
