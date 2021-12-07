@@ -41,7 +41,6 @@ contains
         call self%env%push('job_ntasks',            '#SBATCH --ntasks')
         call self%env%push('job_ntasks_per_socket', '#SBATCH --ntasks-per-socket')
         call self%env%push('job_cpus_per_task',     '#SBATCH --cpus-per-task') ! overridden by p%nthr
-        ! call self%env%push('job_gpus_per_task',     '#SBATCH --gpus-per-task') ! not a thing
         call self%env%push('job_memory_per_task',   '#SBATCH --mem')
         call self%env%push('job_time',              '#SBATCH --time')
         ! standard error & output folder

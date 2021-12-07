@@ -1400,6 +1400,7 @@ contains
             case('snhc')
             case('shc')
             case('neigh')
+            case('cont')
             case('cluster','clustersym')
             case('eval')
             case DEFAULT

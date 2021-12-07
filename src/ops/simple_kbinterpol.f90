@@ -233,15 +233,9 @@ contains
         if ( ax < 3.75d0 ) then
             y= x / 3.75d0
             y=y*y
-#ifdef USE_FMA
-            bessi0= fma(y,fma(y,fma(y,fma(y,fma(y,fma(y,0.0045813d0,&
-                 0.0360768d0),0.2659732d0),1.2067492d0),3.0899424d0),&
-                 3.5156229d0),1.0d0)
-#else
             bessi0=1.0d0+&
                 y*(3.5156229d0 + y*(3.0899424d0 + y*(1.2067492d0 +&
                 y*(0.2659732d0 + y*(0.0360768d0 + y* 0.0045813d0)))))
-#endif
                    else
             y=3.75d0/ax
             bessi0=( 0.39894228d0 + y*(  0.01328592d0 +&
@@ -260,15 +254,9 @@ contains
         if ( ax < 3.75d0 ) then
             y= x / 3.75d0
             y=y*y
-#ifdef USE_FMA
-            bessi0_dp= fma(y,fma(y,fma(y,fma(y,fma(y,fma(y,0.0045813d0,&
-                 0.0360768d0),0.2659732d0),1.2067492d0),3.0899424d0),&
-                 3.5156229d0),1.0d0)
-#else
             bessi0_dp=1.0d0+&
                 y*(3.5156229d0 + y*(3.0899424d0 + y*(1.2067492d0 +&
                 y*(0.2659732d0 + y*(0.0360768d0 + y* 0.0045813d0)))))
-#endif
                    else
             y=3.75d0/ax
             bessi0_dp=( 0.39894228d0 + y*(  0.01328592d0 +&
@@ -278,7 +266,6 @@ contains
         end if
     end function bessi0_dp
 
-
     elemental pure real(dp) function bessi1( x )
         real(dp), intent(in) :: x
         real(dp) :: y, ax, bx
@@ -286,17 +273,10 @@ contains
         if ( ax < 3.75d0) then
             y = x / 3.75d0
             y = y*y
-#ifdef USE_FMA
-            bessi1 = x*( &
-                fma(y,fma(y,fma(y,fma(y,fma(y,fma(y,0.32411d-3, &
-                0.301532d-2),0.2658733d-1),0.15084934d0), &
-                0.51498869d0),0.87890594d0),0.5d0) )
-#else
             bessi1 = x*(                                             &
                 0.5d0 + y*(0.87890594d0 + y*(0.51498869d0 +          &
                 y*(0.15084934d0 + y*(0.2658733d-1 + y*(0.301532d-2 + &
                 y* 0.32411d-3))))))
-#endif
         else
             y   = 3.75d0 / ax
             bx  = exp(ax) / sqrt(ax)
@@ -306,7 +286,6 @@ contains
             bessi1 = ax*bx
         end if
     end function bessi1
-
 
     elemental pure real(dp) function bessi0f( x )
         real(dp), intent(in) :: x

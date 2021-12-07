@@ -5,25 +5,15 @@ project(SIMPLE Fortran)
 
 set(PROJECT_BRIEF "SIMPLE is a program package for cryo-EM image processing (https://simplecryoem.com)")
 
-#################################################################
-#
 # VERSION
-#
-#################################################################
 set(SIMPLE_VERSION_MAJOR 3)
 set(SIMPLE_VERSION_MINOR 0)
 set(SIMPLE_VERSION_PATCH 0)
 set(SIMPLE_VERSION "${SIMPLE_VERSION_MAJOR}.${SIMPLE_VERSION_MINOR}.${SIMPLE_VERSION_PATCH}")
 
-#################################################################
-#
 # OPTIONS
-#
-#################################################################
 option(USE_OPENMP  "Use OpenMP for parallelization - debugging may disable OpemMP" ON )
 option(USE_MPI     "Use OpenMPI for parallelization - in developement" OFF )
-option(USE_OPENACC "Use OpenACC for auto GPU parallelization - debugging may disable OpenMP" OFF)
-option(USE_CUDA    "GPU NVIDIA - in development" OFF)
 option(USE_LIBTIFF "Use libtiff" ON)
 option(${PROJECT_NAME}_BUILD_TESTS "Build the test examples" ON)
 option(BUILD_SHARED_LIBS "Build the simple library as shared or static (default)" OFF)
@@ -37,14 +27,6 @@ OPTION(USE_CODE_COVERAGE "Added code coverage flags" OFF)
 OPTION(USE_PROFILING "enable symbol generation without debug support" OFF)
 option(USE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
 
-#################################################################
-#
-# SET default flags
-#
-#################################################################
-# Add our local modules to the module path
-#set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
-
 set(EXTRA_LIBS "")
 set(NUM_JOBS 1)
 include(ProcessorCount)
@@ -53,9 +35,7 @@ ProcessorCount(NUM_JOBS)
 set(BUILD_NAME "${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE}" CACHE STRING "Build name with compiler, type and FFT backend ")
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
-############################################################
 # Define the main targets
-############################################################
 # Have the .mod files placed in the lib folder
 include_directories(${CMAKE_Fortran_MODULE_DIRECTORY})
 set(EXECUTABLE_OUTPUT_DIRECTORY "${CMAKE_INSTALL_BINDIR}")
@@ -74,10 +54,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src/inc)
 include_directories(${CMAKE_BINARY_DIR}/lib/simple)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-#################################################################
 # INCLUDES
-#################################################################
-# include(CMakeAddFortranSubdirectory)
 include(CheckIncludeFiles)
 include(SimpleFortranOptions)
 
@@ -94,7 +71,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "DEBUG")
   add_definitions("-D_DEBUG")
 endif()
 
-
 #   cmake_add_fortran_subdirectory(
 #    ${SRC}                  # name of subdirectory
 #    PROJECT libSIMPLE       # project name in subdir top CMakeLists.txt
@@ -107,12 +83,7 @@ endif()
 #    NO_EXTERNAL_INSTALL     # skip installation of external project
 #    )
 
-
-#################################################################
-#
 # CREATE libSIMPLE<VERSION>
-#
-#################################################################
 add_subdirectory(src lib)
 list(APPEND EXTRA_LIBS
   ${SIMPLELIB}
@@ -121,42 +92,22 @@ list(APPEND EXTRA_LIBS
 link_directories(lib)
 message(STATUS " EXTRA_LIBS  ${EXTRA_LIBS}")
 
-
-#################################################################
-#
 # ADD SCRIPTS
-#
-#################################################################
 # The script folder contains some handy perl scripts for running SIMPLE
 add_subdirectory(scripts)
 
-
-#################################################################
-#
 # INSTALL GUI
-#
-#################################################################
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/gui)
   add_subdirectory(gui ${CMAKE_INSTALL_BINDIR}/gui)
 endif()
 
-
-
-#################################################################
-#
 # STATIC LIBRARIES
-#
-#################################################################
 # Try to search first static libraries
 if(NOT ${BUILD_SHARED_LIBS})
   set(CMAKE_FIND_LIBRARY_SUFFIXES "${CMAKE_FIND_LIBRARY_SUFFIXES} .a")
 endif()
 
-#################################################################
-#
 # Add a distclean target to the Makefile
-#
-#################################################################
 add_custom_target(distclean
   COMMAND ${CMAKE_COMMAND} -P ${CMAKE_SOURCE_DIR}/cmake/distclean.cmake
   )
@@ -243,18 +194,12 @@ if(VERBOSE) #only for the fool-hardy
   include(CMakeGraphVizOptions)
 endif()
 
-#################################################################
 # CTest
-#################################################################
 enable_testing()
 # emulate GNU Autotools `make check`
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND})
 
-#################################################################
-#
 # ADD PRODUCTION EXECUTABLES
-#
-#################################################################
 # The source for the SIMPLE binary and have it placed in the bin folder
 add_subdirectory(production bin)
 

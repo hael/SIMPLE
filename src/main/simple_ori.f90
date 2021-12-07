@@ -37,7 +37,6 @@ type :: ori
     procedure          :: e3set
     procedure          :: swape1e3
     procedure          :: set_shift
-    procedure          :: set_shift_incr
     procedure, private :: set_1
     procedure, private :: set_2
     generic            :: set => set_1, set_2
@@ -65,7 +64,6 @@ type :: ori
     generic            :: getter => getter_1, getter_2
     procedure          :: get_2Dshift
     procedure          :: get_3Dshift
-    procedure          :: get_2Dshift_incr
     procedure          :: get_state
     procedure          :: get_class
     procedure          :: isthere
@@ -154,7 +152,6 @@ contains
         class(ori), intent(inout) :: self
         call self%set_euler([0., 0., 0.])
         call self%set_shift([0., 0.])
-        call self%set_shift_incr([0., 0.])
         if( self%is_ptcl )then
             self%pparms(I_STATE)     =  0.
             self%pparms(I_CORR)      = -1.
@@ -397,18 +394,6 @@ contains
             call self%htab%set('y', shvec(2))
         endif
     end subroutine set_shift
-
-    subroutine set_shift_incr( self, shvec )
-        class(ori), intent(inout) :: self
-        real,       intent(in)    :: shvec(2)
-        if( self%is_ptcl )then
-            self%pparms(I_XINCR) = shvec(1)
-            self%pparms(I_YINCR) = shvec(2)
-        else
-            call self%htab%set('xincr', shvec(1))
-            call self%htab%set('yincr', shvec(2))
-        endif
-    end subroutine set_shift_incr
 
     subroutine set_1( self, key, val )
         class(ori),       intent(inout) :: self
@@ -706,18 +691,6 @@ contains
             vec(3) = self%htab%get('z')
         endif
     end function get_3Dshift
-
-    function get_2Dshift_incr( self ) result( vec )
-        class(ori), intent(in) :: self
-        real :: vec(2)
-        if( self%is_ptcl )then
-            vec(1) = self%pparms(I_XINCR)
-            vec(2) = self%pparms(I_YINCR)
-        else
-            vec(1) = self%htab%get('xincr')
-            vec(2) = self%htab%get('yincr')
-        endif
-    end function get_2Dshift_incr
 
     pure integer function get_state( self )
         class(ori), intent(in) :: self

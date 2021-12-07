@@ -40,7 +40,6 @@ contains
         end if
         where( abs(shvec) < 1e-6 ) shvec = 0.
         call build_glob%spproj_field%set_shift(s%iptcl, shvec)
-        call build_glob%spproj_field%set_shift_incr(s%iptcl, shvec_incr)
         call build_glob%spproj_field%set(s%iptcl, 'shincarg', arg(shvec_incr))
         ! state
         state = 1

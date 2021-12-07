@@ -63,36 +63,9 @@ contains
     subroutine oris_assign_cont( self )
         use simple_ori,  only: ori
         class(strategy3D_cont), intent(inout) :: self
-        type(ori) :: osym, o_tmp
-        real      :: shvec_incr(2), dist_inpl, euldist, mi_proj, frac
-        ! shift update
-        shvec_incr = self%o%get_2Dshift() - build_glob%spproj_field%get_2Dshift(self%s%iptcl)
-        call build_glob%spproj_field%set_shift_incr(self%s%iptcl, shvec_incr)
-        call build_glob%spproj_field%set(self%s%iptcl, 'shincarg', arg(shvec_incr))
-        ! angular distances
-        call build_glob%spproj_field%get_ori(self%s%iptcl, o_tmp)
-        call build_glob%pgrpsyms%sym_dists(o_tmp, self%o, osym, euldist, dist_inpl)
-        ! generate convergence stats
-        mi_proj  = 0.
-        if( euldist < 0.5 ) mi_proj  = 1.
-        call build_glob%spproj_field%set(self%s%iptcl, 'mi_proj',   mi_proj)
-        call build_glob%spproj_field%set(self%s%iptcl, 'mi_state',  1.)
-        ! fraction of search space scanned
-        frac = 100.
-        ! set the distances before we update the orientation
-        if( build_glob%spproj_field%isthere(self%s%iptcl,'dist') )then
-            call build_glob%spproj_field%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*build_glob%spproj_field%get(self%s%iptcl,'dist'))
-        else
-            call build_glob%spproj_field%set(self%s%iptcl, 'dist', euldist)
-        endif
-        call build_glob%spproj_field%set(self%s%iptcl, 'dist_inpl', dist_inpl)
+        ! no update of convergence stats, only ori info
         call build_glob%spproj_field%set_euler(self%s%iptcl, self%o%get_euler())
-        call build_glob%spproj_field%set_shift(self%s%iptcl, self%o%get_2Dshift())
-        call build_glob%spproj_field%set(self%s%iptcl, 'frac',      frac)
-        call build_glob%spproj_field%set(self%s%iptcl, 'corr',      self%corr)
-        call build_glob%spproj_field%set(self%s%iptcl, 'specscore', self%s%specscore)
-        call osym%kill
-        call o_tmp%kill
+        call build_glob%spproj_field%set_shift(self%s%iptcl, self%o%get_2Dshift()) ! vector addition in pftcc_orisrch_grad class
     end subroutine oris_assign_cont
 
     subroutine kill_cont( self )
