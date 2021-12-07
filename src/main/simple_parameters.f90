@@ -204,7 +204,7 @@ type :: parameters
     character(len=STDLEN) :: ptclw='yes'          !< use particle weights(yes|no){yes}
     character(len=STDLEN) :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
     character(len=STDLEN) :: real_filter=''
-    character(len=STDLEN) :: refine='shc'         !< refinement mode(snhc|shc|greedy|neigh|cont|cluster|clustersym){shc}
+    character(len=STDLEN) :: refine='shc'         !< refinement mode(snhc|shc|neigh|cluster|clustersym){shc}
     character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stats='no'           !< provide statistics(yes|no|print){no}
@@ -1399,18 +1399,15 @@ contains
         select case(trim(self%refine))
             case('snhc')
             case('shc')
-            case('greedy')
             case('neigh')
-            case('greedy_neigh')
-            case('cont')
             case('cluster','clustersym')
             case('eval')
             case DEFAULT
                 THROW_HARD('refinement mode: '//trim(self%refine)//' unsupported')
         end select
         if( str_has_substr(self%refine, 'neigh') )then
-            if( .not. cline%defined('nspace')    ) self%nspace = 10000
-            if( .not. cline%defined('athres')    ) self%athres = 10.
+            if( .not. cline%defined('nspace')    ) self%nspace = 5000
+            if( .not. cline%defined('athres')    ) self%athres = 15.
         endif
         ! motion correction
         if( self%tomo .eq. 'yes' ) self%mcpatch = 'no'

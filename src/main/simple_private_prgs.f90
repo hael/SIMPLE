@@ -427,7 +427,7 @@ contains
         call cmd_dict%push('qsys_reservation', 'Name of reserved target partition of distributed computer system (SLURM/PBS)')
         call cmd_dict%push('real_filter',   'real-space filter kind(median|average|bman)')
         call cmd_dict%push('recvol_sigma',  'noise(sigma)-weighted volume reconstruction strategy(yes|no){no}')
-        call cmd_dict%push('refine',        'refinement mode(shc|greedy|neigh|cont|cluster|clustersym|cont){no}')
+        call cmd_dict%push('refine',        'refinement mode(shc|neigh|cluster|clustersym){shc}')
         call cmd_dict%push('refs',          'initial2Dreferences.ext')
         call cmd_dict%push('remap_cls',     'remove empty and renumber and/or expand # clusters(yes|no){no}')
         call cmd_dict%push('rnd',           'random(yes|no){no}')
