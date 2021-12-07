@@ -71,7 +71,7 @@ contains
         integer, allocatable  :: batches(:,:)
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj, anneal_ratio
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz, imatch
-        integer :: iptcl, fnr, ithr, updatecnt, state, n_nozero, iptcl_batch, iptcl_map
+        integer :: iptcl, fnr, ithr, state, n_nozero, iptcl_batch, iptcl_map
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
         logical :: doprint, do_extr, l_ctf
         if( L_BENCH_GLOB )then
@@ -177,7 +177,7 @@ contains
             call match_imgs(imatch)%copy_polarizer(build_glob%img_match)
         end do
         !$omp end parallel do
-        
+
         ! STOCHASTIC IMAGE ALIGNMENT
         if( trim(params_glob%oritype) .eq. 'ptcl3D' )then
             l_ctf = build_glob%spproj%get_ctfflag('ptcl3D').ne.'no'
@@ -202,7 +202,7 @@ contains
             if( L_BENCH_GLOB ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
             ! Particles loop
             if( L_BENCH_GLOB ) t_align = tic()
-            !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,ithr,updatecnt,orientation)&
+            !$omp parallel do default(shared) private(iptcl,iptcl_batch,iptcl_map,ithr,orientation)&
             !$omp schedule(static) proc_bind(close)
             do iptcl_batch = 1,batchsz                     ! particle batch index
                 iptcl_map  = batch_start + iptcl_batch - 1 ! masked global index (cumulative)
@@ -213,8 +213,7 @@ contains
                     case('snhc')
                         allocate(strategy3D_snhc                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc')
-                        updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-                        if( .not.build_glob%spproj_field%has_been_searched(iptcl) )then
+                        if( .not. has_been_searched )then
                             allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)
                         else
                             if( ran3() < GREEDY_FREQ )then

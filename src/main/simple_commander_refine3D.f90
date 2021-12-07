@@ -374,22 +374,6 @@ contains
             call cline%set(     'which_iter', real(params%which_iter))
             call job_descr%set( 'startit',    trim(int2str(iter)))
             call cline%set(     'startit',    real(iter))
-            ! switch to refine=greedy_* when frac >= 99 and iter >= 5
-            if( cline_check_3Dconv%defined('frac_srch') )then
-                if( iter >= MIN_ITERS_SHC )then
-                    if( cline_check_3Dconv%get_rarg('frac_srch') >= FRAC_GREEDY_LIM )then
-                        select case(trim(params%refine))
-                            case('shc')
-                                params%refine = 'greedy'
-                            case('neigh')
-                                params%refine = 'greedy_neigh'
-                        end select
-                        call job_descr%set('refine', params%refine)
-                        call cline%set('refine', params%refine)
-                        call cline_check_3Dconv%set('refine',params%refine)
-                    endif
-                endif
-            endif
             ! FRCs
             if( cline%defined('frcs') )then
                 ! all good
@@ -547,11 +531,15 @@ contains
                         call cline%delete('lp')
                         call job_descr%delete('lp')
                         call cline_postprocess%delete('lp')
+                        call cline%delete('lp_iters')
+                        call job_descr%delete('lp_iters')
                     endif
                 else
                     call cline%delete('lp')
                     call job_descr%delete('lp')
                     call cline_postprocess%delete('lp')
+                    call cline%delete('lp_iters')
+                    call job_descr%delete('lp_iters')
                 endif
             endif
             if( l_projmatch )then
