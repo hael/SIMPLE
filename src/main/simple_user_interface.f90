@@ -2945,7 +2945,7 @@ contains
         &'refine3D',&                                                                               ! name
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
-        &'simple_exec',&                                                                      ! executable
+        &'simple_exec',&                                                                            ! executable
         &1, 0, 0, 12, 8, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2967,7 +2967,7 @@ contains
         call refine3D%set_input('srch_ctrls', 8, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to reconstruct',&
         '# states to reconstruct', .false., 1.0)
         call refine3D%set_input('srch_ctrls', 9, objfun)
-        call refine3D%set_input('srch_ctrls', 10, 'refine', 'multi', 'Refinement mode', 'Refinement mode(shc|greedy|neigh|cont|cluster|clustersym){shc}', '(snhc|shc|greedy|neigh|cluster|clustersym){shc}', .false., 'single')
+        call refine3D%set_input('srch_ctrls', 10, 'refine', 'multi', 'Refinement mode', 'Refinement mode(shc|neigh|cluster|clustersym){shc}', '(snhc|shc|neigh|cluster|clustersym){shc}', .false., 'shc')
         call refine3D%set_input('srch_ctrls', 11, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
         call refine3D%set_input('srch_ctrls', 12, 'lp_iters', 'num', '# iterations lp refinement', '# iterations lp refinement', '# of iterations for low-pass limited refinement', .false., 20.)
         ! filter controls

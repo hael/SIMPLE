@@ -60,6 +60,7 @@ contains
         !---> The below is to allow particle-dependent decision about which 3D strategy to use
         type :: strategy3D_per_ptcl
             class(strategy3D), pointer :: ptr  => null()
+            class(strategy3D), pointer :: ptr2 => null()
         end type strategy3D_per_ptcl
         type(strategy3D_per_ptcl), allocatable :: strategy3Dsrch(:)
         !<---- hybrid or combined search strategies can then be implemented as extensions of the
@@ -211,35 +212,26 @@ contains
                 ! switch for per-particle polymorphic strategy3D construction
                 select case(trim(params_glob%refine))
                     case('snhc')
-                        allocate(strategy3D_snhc                 :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_snhc             :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc')
                         if( .not. has_been_searched )then
-                            allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)
+                            allocate(strategy3D_greedy       :: strategy3Dsrch(iptcl_batch)%ptr)
                         else
                             if( ran3() < GREEDY_FREQ )then
-                                allocate(strategy3D_greedy       :: strategy3Dsrch(iptcl_batch)%ptr)
+                                allocate(strategy3D_greedy   :: strategy3Dsrch(iptcl_batch)%ptr)
                             else
-                                allocate(strategy3D_shc          :: strategy3Dsrch(iptcl_batch)%ptr)
+                                allocate(strategy3D_shc      :: strategy3Dsrch(iptcl_batch)%ptr)
                             endif
                         endif
-                    case('greedy')
-                        allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neigh')
-                        if( ran3() < GLOB_FREQ )then
-                            allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)
+                        if( ran3() < GREEDY_FREQ )then
+                            allocate(strategy3D_greedy_neigh :: strategy3Dsrch(iptcl_batch)%ptr)
                         else
-                            if( ran3() < GREEDY_FREQ )then
-                                allocate(strategy3D_greedy_neigh :: strategy3Dsrch(iptcl_batch)%ptr)
-                            else
-                                allocate(strategy3D_neigh        :: strategy3Dsrch(iptcl_batch)%ptr)
-                            endif
+                            allocate(strategy3D_neigh        :: strategy3Dsrch(iptcl_batch)%ptr)
                         endif
-                    case('greedy_neigh')
-                        allocate(strategy3D_greedy_neigh         :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('cont')
-                        allocate(strategy3D_cont                 :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_cont             :: strategy3Dsrch(iptcl_batch)%ptr2)
                     case('cluster','clustersym')
-                        allocate(strategy3D_cluster              :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_cluster          :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('eval')
                         call eval_ptcl(pftcc, iptcl)
                         cycle
@@ -251,12 +243,20 @@ contains
                 strategy3Dspecs(iptcl_batch)%extr_score_thresh = extr_score_thresh
                 if( allocated(het_mask) ) strategy3Dspecs(iptcl_batch)%do_extr =  het_mask(iptcl)
                 if( allocated(symmat)   ) strategy3Dspecs(iptcl_batch)%symmat  => symmat
-                ! search object
-                call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch))
-                ! search
-                call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
-                ! cleanup
-                call strategy3Dsrch(iptcl_batch)%ptr%kill
+                ! search object(s) & search
+                select case(trim(params_glob%refine))
+                    case('neigh')
+                        call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch))
+                        call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
+                        call strategy3Dsrch(iptcl_batch)%ptr2%new(strategy3Dspecs(iptcl_batch))
+                        call strategy3Dsrch(iptcl_batch)%ptr2%srch(ithr)
+                        call strategy3Dsrch(iptcl_batch)%ptr%kill
+                        call strategy3Dsrch(iptcl_batch)%ptr2%kill
+                    case DEFAULT
+                        call strategy3Dsrch(iptcl_batch)%ptr%new(strategy3Dspecs(iptcl_batch))
+                        call strategy3Dsrch(iptcl_batch)%ptr%srch(ithr)
+                        call strategy3Dsrch(iptcl_batch)%ptr%kill
+                end select
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
                     if( params_glob%which_iter > 1 )then
@@ -272,6 +272,7 @@ contains
         ! cleanup
         do iptcl_batch = 1,batchsz_max
             nullify(strategy3Dsrch(iptcl_batch)%ptr)
+            nullify(strategy3Dsrch(iptcl_batch)%ptr2)
         end do
         deallocate(strategy3Dsrch,strategy3Dspecs,batches)
 
