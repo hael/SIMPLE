@@ -1137,7 +1137,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                  ! executable
-        &1, 0, 0, 11, 7, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 0, 0, 11, 8, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
@@ -1177,6 +1177,7 @@ contains
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
         '(yes|no){yes}', .false., 'yes')
         call cluster2D%set_input('filt_ctrls', 7, graphene_filt)
+        call cluster2D%set_input('filt_ctrls', 8, 'lambda', 'num', 'TV regularization lambda parameter', 'Strength of noise reduction', '(0.5-3.0){1.0}', .false., 1.0)
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D%set_input('mask_ctrls', 2, innerdiam)
@@ -1648,7 +1649,7 @@ contains
         call filter%set_input('filt_ctrls', 9, 'vol_filt', 'file', 'Volume filter', 'Volume filter',          'e.g. aniso_optlp.mrc file', .false., '')
         call filter%set_input('filt_ctrls',10, frcs)
         call filter%set_input('filt_ctrls',11, 'filter', 'multi', 'Filter type(tv|nlmean|corr|no){no}', 'Filter type(tv|nlmean|corr|no){no}', '(tv|nlmean|corr|no){no}', .false., 'no')
-        call filter%set_input('filt_ctrls',12, 'lambda', 'num', 'Tv filter lambda', 'Strength of noise reduction', '{0.5}', .false., 0.5)
+        call filter%set_input('filt_ctrls',12, 'lambda', 'num', 'Tv filter lambda', 'Strength of noise reduction', '(0.5-3.0){1.0}', .false., 1.0)
         call filter%set_input('filt_ctrls',13, envfsc)
         call filter%set_input('filt_ctrls',14, element)
         filter%filt_ctrls(14)%required = .false.

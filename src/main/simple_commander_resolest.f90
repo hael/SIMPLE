@@ -159,7 +159,7 @@ contains
     ! end subroutine exec_local_res
 
     subroutine exec_nonuniform_filter( self, cline )
-        use simple_estimate_ssnr, only: nonuniform_phase_ran_tv
+        use simple_estimate_ssnr, only: nonuniform_phase_ran
         class(nonuniform_filter_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         type(parameters) :: params
@@ -197,7 +197,7 @@ contains
         else
             call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
         endif
-        call nonuniform_phase_ran_tv(even, odd, mskvol, params%lambda)
+        call nonuniform_phase_ran(even, odd, mskvol)
         if( have_mask_file )then
             call mskvol%read(params%mskfile)
             call even%mul(mskvol)

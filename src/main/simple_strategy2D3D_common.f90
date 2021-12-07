@@ -537,12 +537,10 @@ contains
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
     subroutine readrefvols_filter_nonuniformly( cline, fname_even, fname_odd )
-        use simple_estimate_ssnr, only: nonuniform_phase_ran, nonuniform_phase_ran_tv
-        use simple_tvfilter,      only: tvfilter
+        use simple_estimate_ssnr, only: nonuniform_phase_ran
         class(cmdline),             intent(in) :: cline
         character(len=*),           intent(in) :: fname_even
         character(len=*), optional, intent(in) :: fname_odd
-        type(tvfilter) :: tvfilt
         type(image)    :: mskvol
         ! ensure correct build_glob%vol dim
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
@@ -551,16 +549,11 @@ contains
             call build_glob%vol_odd%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
             call build_glob%vol_odd%read(fname_odd)
             if( cline%defined('mskfile') )then
-                ! randomize Fourier phases below noise power and TV filter in a nonuniform manner
+                ! randomize Fourier phases below noise power in a nonuniform manner
                 call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
                 call mskvol%read(params_glob%mskfile)
                 call mskvol%one_at_edge ! to expand before masking of reference
-                if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-                    ! no TV regularization
-                    call nonuniform_phase_ran(build_glob%vol, build_glob%vol_odd, mskvol)
-                else
-                    call nonuniform_phase_ran_tv(build_glob%vol, build_glob%vol_odd, mskvol, params_glob%lambda)
-                endif
+                call nonuniform_phase_ran(build_glob%vol, build_glob%vol_odd, mskvol)
                 ! envelope masking
                 call mskvol%read(params_glob%mskfile) ! to bring back the edge
                 call build_glob%vol%zero_env_background(mskvol)
@@ -574,15 +567,6 @@ contains
                 call build_glob%vol_odd%fft
                 call build_glob%vol_odd%expand_cmat(params_glob%alpha,norm4proj=.true.)
             else
-                ! total variation regularization
-                if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-                    ! no filtering
-                else
-                    call tvfilt%new
-                    call tvfilt%apply_filter_3d(build_glob%vol, params_glob%lambda)
-                    call tvfilt%apply_filter_3d(build_glob%vol_odd, params_glob%lambda)
-                    call tvfilt%kill
-                endif
                 ! expand for fast interpolation
                 call build_glob%vol%fft
                 call build_glob%vol%expand_cmat(params_glob%alpha,norm4proj=.true.)
@@ -604,14 +588,17 @@ contains
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_estimate_ssnr,    only: fsc2optlp_sub
         use simple_projector,        only: projector
+        use simple_tvfilter,         only: tvfilter
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: s
         logical,                 intent(in)    :: do_center
         real,                    intent(in)    :: xyz(3)
         logical,                 intent(in)    :: iseven
+
         type(projector),  pointer     :: vol_ptr => null()
         character(len=:), allocatable :: fname_opt_filter
+        type(tvfilter) :: tvfilt
         real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
         integer :: iref, iproj, iprojred, filtsz
         if( iseven )then
@@ -658,6 +645,10 @@ contains
                         call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
                         call vol_ptr%apply_filter(filter)
                     endif
+                    ! total variation regularization
+                    call tvfilt%new
+                    call tvfilt%apply_filter_3d(vol_ptr, params_glob%lambda)
+                    call tvfilt%kill
                 endif
             endif
         endif
