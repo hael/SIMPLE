@@ -182,13 +182,13 @@ type :: nanoparticle
     ! calc stats
     procedure          :: fillin_atominfo
     procedure, private :: masscen
-    procedure, private :: calc_longest_dist
+    procedure, private :: calc_longest_atm_dist
     ! visualization and output
     procedure, private :: simulate_atoms
     procedure, private :: write_centers_1
     procedure, private :: write_centers_2
     generic            :: write_centers => write_centers_1, write_centers_2
-    procedure          :: write_atoms
+    procedure          :: write_individual_atoms
     procedure          :: write_csv_files
     procedure, private :: write_atominfo
     procedure, private :: write_np_stats
@@ -756,7 +756,7 @@ contains
             rank = size(x) - m(1)
             deallocate(x)
             ! calculate radius
-            call self%calc_longest_dist(icc, radius)
+            call self%calc_longest_atm_dist(icc, radius)
             ! split
             if( rank > RANK_THRESH .or. radius > 1.5 * self%theoretical_radius )then
                 where(imat == icc)
@@ -1129,7 +1129,7 @@ contains
             ! distance from the centre of mass of the nanoparticle
             self%atominfo(cc)%cendist = euclid(self%atominfo(cc)%center(:), self%NPcen) * self%smpd
             ! atom diameter
-            call self%calc_longest_dist(cc, self%atominfo(cc)%diam)
+            call self%calc_longest_atm_dist(cc, self%atominfo(cc)%diam)
             self%atominfo(cc)%diam = 2.*self%atominfo(cc)%diam ! radius --> diameter in A
             ! maximum grey level intensity across the connected component
             self%atominfo(cc)%max_int = maxval(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
@@ -1259,7 +1259,7 @@ contains
        m = m / real(self%n_cc)
     end function masscen
 
-    subroutine calc_longest_dist( self, label, longest_dist )
+    subroutine calc_longest_atm_dist( self, label, longest_dist )
        class(nanoparticle), intent(inout) :: self
        integer,             intent(in)    :: label
        real,                intent(out)   :: longest_dist
@@ -1282,7 +1282,7 @@ contains
            longest_dist  = pixels_dist(self%atominfo(label)%center(:), real(pos),'max', mask_dist, location) * self%smpd
        endif
        deallocate(imat_cc, pos, mask_dist)
-    end subroutine calc_longest_dist
+    end subroutine calc_longest_atm_dist
 
     ! visualization and output
 
@@ -1290,7 +1290,7 @@ contains
         class(nanoparticle), intent(inout) :: self
         class(atoms),        intent(inout) :: atoms_obj
         class(image),        intent(inout) :: simatms
-        real, optional,      intent(in)    :: betas(self%n_cc)
+        real, optional,      intent(in)    :: betas(self%n_cc) ! in pdb file b-factor
         logical :: betas_present
         integer :: i
         betas_present = present(betas)
@@ -1311,7 +1311,7 @@ contains
             endif
         enddo
         call simatms%new(self%ldim,self%smpd)
-        call atoms_obj%convolve(simatms, cutoff = 8.*self%smpd)
+        call atoms_obj%convolve(simatms, cutoff = 8.*self%smpd) ! con
     end subroutine simulate_atoms
 
     subroutine write_centers_1( self, fname, coords )
@@ -1369,7 +1369,7 @@ contains
      call centers_pdb%writepdb(fname)
   end subroutine write_centers_2
 
-    subroutine write_atoms( self )
+    subroutine write_individual_atoms( self )
         class(nanoparticle), intent(inout) :: self
         type(binimage)       :: img_atom
         integer, allocatable :: imat(:,:,:), imat_atom(:,:,:)
@@ -1388,7 +1388,7 @@ contains
         enddo
         deallocate(imat,imat_atom)
         call img_atom%kill_bimg
-    end subroutine write_atoms
+    end subroutine write_individual_atoms
 
     subroutine write_csv_files( self )
         class(nanoparticle), intent(in) :: self
