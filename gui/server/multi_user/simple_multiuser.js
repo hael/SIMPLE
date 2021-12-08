@@ -109,6 +109,12 @@ switch(process.argv[2]){
 	console.log('execute')
 	var arg = JSON.parse(process.argv[3])
 	console.log(arg)
+
+	if(arg['executable'] == "all"){
+		console.log("Executable all modified to simple_exec")
+		arg['executable'] = "simple_exec"
+	}
+
 	if(arg['executable'] == "simple_exec"){
 		return simpleexec.exec(arg, arg['jobid'])
 		.then(() => {
