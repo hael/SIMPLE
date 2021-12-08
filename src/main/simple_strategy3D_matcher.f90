@@ -211,27 +211,31 @@ contains
                 ! switch for per-particle polymorphic strategy3D construction
                 select case(trim(params_glob%refine))
                     case('snhc')
-                        allocate(strategy3D_snhc             :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_snhc                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc')
                         if( .not. has_been_searched )then
-                            allocate(strategy3D_greedy       :: strategy3Dsrch(iptcl_batch)%ptr)
+                            allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)
                         else
                             if( ran3() < GREEDY_FREQ )then
-                                allocate(strategy3D_greedy   :: strategy3Dsrch(iptcl_batch)%ptr)
+                                allocate(strategy3D_greedy       :: strategy3Dsrch(iptcl_batch)%ptr)
                             else
-                                allocate(strategy3D_shc      :: strategy3Dsrch(iptcl_batch)%ptr)
+                                allocate(strategy3D_shc          :: strategy3Dsrch(iptcl_batch)%ptr)
                             endif
                         endif
                     case('neigh')
-                        if( ran3() < GREEDY_FREQ )then
-                            allocate(strategy3D_greedy_neigh :: strategy3Dsrch(iptcl_batch)%ptr)
+                        if( ran3() < GLOB_FREQ )then
+                            allocate(strategy3D_shc              :: strategy3Dsrch(iptcl_batch)%ptr)
                         else
-                            allocate(strategy3D_neigh        :: strategy3Dsrch(iptcl_batch)%ptr)
+                            if( ran3() < GREEDY_FREQ )then
+                                allocate(strategy3D_greedy_neigh :: strategy3Dsrch(iptcl_batch)%ptr)
+                            else
+                                allocate(strategy3D_neigh        :: strategy3Dsrch(iptcl_batch)%ptr)
+                            endif
                         endif
                     case('cont')
-                        allocate(strategy3D_cont             :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_cont                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('cluster','clustersym')
-                        allocate(strategy3D_cluster          :: strategy3Dsrch(iptcl_batch)%ptr)
+                        allocate(strategy3D_cluster              :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('eval')
                         call eval_ptcl(pftcc, iptcl)
                         cycle
