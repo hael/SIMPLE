@@ -372,7 +372,7 @@ type :: parameters
     real    :: inner=0.            !< inner mask radius(in pixels)
     real    :: innerdiam=0.        !< inner mask diameter(in A)
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
-    real    :: lambda=1.0
+    real    :: lambda=2.0
     real    :: lp=20.              !< low-pass limit(in A)
     real    :: lp_backgr=20.       !< low-pass for solvent blurring (in A)
     real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
