@@ -372,7 +372,7 @@ type :: parameters
     real    :: inner=0.            !< inner mask radius(in pixels)
     real    :: innerdiam=0.        !< inner mask diameter(in A)
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
-    real    :: lambda=2.0
+    real    :: lambda=1.0
     real    :: lp=20.              !< low-pass limit(in A)
     real    :: lp_backgr=20.       !< low-pass for solvent blurring (in A)
     real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
@@ -1394,17 +1394,6 @@ contains
             case DEFAULT
                 write(logfhandle,*) 'imgkind: ', trim(self%imgkind)
                 THROW_HARD('unsupported imgkind; new')
-        end select
-        ! refinement modes
-        select case(trim(self%refine))
-            case('snhc')
-            case('shc')
-            case('neigh')
-            case('cont')
-            case('cluster','clustersym')
-            case('eval')
-            case DEFAULT
-                THROW_HARD('refinement mode: '//trim(self%refine)//' unsupported')
         end select
         if( str_has_substr(self%refine, 'neigh') )then
             if( .not. cline%defined('nspace')    ) self%nspace = 5000
