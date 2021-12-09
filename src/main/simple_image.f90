@@ -1075,8 +1075,7 @@ contains
         select case(form)
             case('M','F')
                 ! pixel size of object overrides pixel size in header
-                call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die,&
-                    formatchar=form, readhead=.false.)
+                call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die, formatchar=form, readhead=.false.)
                 if( self%ft )then
                     call ioimg%setMode(4)
                 else
@@ -1090,8 +1089,7 @@ contains
                 call ioimg%close
             case('S')
                 ! pixel size of object overrides pixel size in header
-                call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die,&
-                    formatchar=form, readhead=.false.)
+                call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die, formatchar=form, readhead=.false.)
                 ! iform file type specifier:
                 !   1 = 2D image
                 !   3 = 3D volume

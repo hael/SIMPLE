@@ -43,7 +43,6 @@ contains
     procedure          :: open
     procedure, private :: open_local
     procedure          :: close
-    procedure, private :: close_nowrite
     procedure, private :: slice2recpos
     procedure, private :: slice2bytepos
     procedure          :: rSlices
@@ -81,7 +80,6 @@ contains
         character(len=*), optional, intent(in)    :: rwaction      !< action flag
         character(len=1) :: format_descriptor
         logical          :: rreadhead, write_enabled
-        call self%close_nowrite
         rreadhead = .true.
         if( present(readhead) ) rreadhead = readhead
         write_enabled = .true.
@@ -103,19 +101,19 @@ contains
         endif
         ! Allocate head object
         select case(self%head_format)
-        case ('M')
-            allocate(MrcImgHead :: self%overall_head)
-            call self%overall_head%new(ldim)
-        case ('S')
-            allocate(SpiImgHead :: self%overall_head)
-            call self%overall_head%new(ldim)
-            if( ldim(3) > 1 ) self%isvol = .true.
-        case ('J','L')
-            if( write_enabled ) THROW_HARD('TIFF format is only for reading; open')
-            allocate(TiffImgHead :: self%overall_head)
-            call self%overall_head%new(ldim)
-        case DEFAULT
-            THROW_HARD('unsupported file format')
+            case ('M')
+                allocate(MrcImgHead :: self%overall_head)
+                call self%overall_head%new(ldim)
+            case ('S')
+                allocate(SpiImgHead :: self%overall_head)
+                call self%overall_head%new(ldim)
+                if( ldim(3) > 1 ) self%isvol = .true.
+            case ('J','L')
+                if( write_enabled ) THROW_HARD('TIFF format is only for reading; open')
+                allocate(TiffImgHead :: self%overall_head)
+                call self%overall_head%new(ldim)
+            case DEFAULT
+                THROW_HARD('unsupported file format')
         end select
         ! open the file
         call self%open_local(del_if_exists, rwaction)
@@ -124,10 +122,10 @@ contains
             ! read header
             if( rreadhead )then
                 select case(self%head_format)
-                case ('M','S')
-                    call self%overall_head%read(self%funit)
-                case('J','L')
-                    call self%overall_head%read_tiff(self%fname)
+                    case ('M','S')
+                        call self%overall_head%read(self%funit)
+                    case('J','L')
+                        call self%overall_head%read_tiff(self%fname)
                 end select
             endif
         else
@@ -181,39 +179,23 @@ contains
         integer :: ios
         ptr => self%overall_head
         select type(ptr)
-        type is (TiffImgHead)
-            call self%overall_head%CloseTiff
-        class DEFAULT
-            if( is_open(self%funit) )then
-                if( self%was_written_to )then
-                    call self%overall_head%write(self%funit)
+            type is (TiffImgHead)
+                call self%overall_head%CloseTiff
+            class DEFAULT
+                if( is_open(self%funit) )then
+                    if( self%was_written_to )then
+                        call self%overall_head%write(self%funit)
+                    endif
+                    call fclose(self%funit, ios,errmsg="simple_imgfile::close error")
                 endif
-                call fclose(self%funit, ios,errmsg="simple_imgfile::close error")
-            endif
         end select
-        if( allocated(self%overall_head) ) call self%overall_head%kill
-        if( allocated(self%overall_head) ) deallocate(self%overall_head)
+        if( allocated(self%overall_head) )then
+            call self%overall_head%kill
+            deallocate(self%overall_head)
+        endif
         self%was_written_to = .false.
         self%existence      = .false.
     end subroutine close
-
-    !>  \brief  close the file(s)
-    subroutine close_nowrite( self )
-        class(imgfile), target, intent(inout) :: self
-        class(ImgHead), pointer :: ptr=>null()
-        integer :: ios
-        ptr => self%overall_head
-        select type(ptr)
-        type is (TiffImgHead)
-            call self%overall_head%CloseTiff
-        class DEFAULT
-            call fclose( self%funit, ios,errmsg="simple_imgfile close nowrite error")
-        end select
-        if( allocated(self%overall_head) ) call self%overall_head%kill
-        if( allocated(self%overall_head) ) deallocate(self%overall_head)
-        self%was_written_to = .false.
-        self%existence      = .false.
-    end subroutine close_nowrite
 
     !>  \brief  for translating an image index to record indices in the stack
     !! \param[out] hedinds,iminds header and image indices in the stack
