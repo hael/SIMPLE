@@ -140,7 +140,7 @@ contains
         character(len=*),  intent(in)    :: fname
         integer, optional, intent(in)    :: i
         if( .not. self%bimat_is_set ) call self%set_imat
-        call self%set_rmat(real(self%bimat))
+        call self%set_rmat(real(self%bimat),.false.)
         call self%write(fname,i)
     end subroutine write_bimg
 

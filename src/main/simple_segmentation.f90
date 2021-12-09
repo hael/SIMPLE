@@ -25,7 +25,7 @@ contains
         allocate(grad(ldim(1),ldim(2),ldim(3)), rmat(ldim(1),ldim(2),ldim(3)), source=0.)
         call img_in%calc_gradient(grad)
         where(grad > thresh(1) ) rmat = 1.
-        call img_in%set_rmat(rmat)
+        call img_in%set_rmat(rmat,.false.)
         deallocate(grad,rmat)
     end subroutine sobel
 
@@ -295,7 +295,7 @@ contains
         !STEP 4: DOUBLE THRESHOLDING
         call double_thresh(grad,thresh)
         !STEP 5: EDGE TRACKING BY HYSTERESIS
-        call Gr%set_rmat(grad)
+        call Gr%set_rmat(grad,.false.)
         do i = 1, ldim(1) !now grad is in {0,0.5,1}
             do j = 1, ldim(2)
                 if( abs( Gr%get([i,j,1]) - 0.5 ) < TINY ) then

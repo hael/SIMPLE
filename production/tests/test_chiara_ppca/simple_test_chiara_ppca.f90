@@ -41,7 +41,7 @@ call img_msk%disc([box_shrunken,box_shrunken,1], 1., mskrad, l_mask)
 if(.not. do_discextract ) then
   l_mask = .true.                 !extract every pixel in the window
  matrix = logical2bin(l_mask)
- call img_msk%set_rmat(matrix)    !update img_msk
+ call img_msk%set_rmat(matrix,.false.)    !update img_msk
  deallocate(matrix)
 endif
 

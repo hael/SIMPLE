@@ -49,6 +49,7 @@ contains
     procedure          :: rSlices
     procedure, private :: rTiffSlices
     procedure          :: wSlices
+    procedure          :: wmrcSlices
     procedure          :: update_MRC_stats
     procedure          :: getDims
     procedure          :: getDim
@@ -668,6 +669,54 @@ contains
         ! Remember that we wrote to the file
         self%was_written_to = .true.
     end subroutine wSlices
+
+    !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
+    !!          The array of reals should have +2 elements in the first dimension.
+    subroutine wmrcSlices( self, first_slice, last_slice, rarr, ldim, is_ft )
+        use, intrinsic :: iso_c_binding
+        class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
+        integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
+        integer,                intent(in)    :: last_slice   !< Last slice
+        real,                   intent(inout) :: rarr(:,:,:)  !< Array of reals. Will be (re)allocated if needed
+        integer,                intent(in)    :: ldim(3)      !< Logical size of the array
+        logical,                intent(in)    :: is_ft        !< to indicate FT status of image
+        integer         :: io_stat,itmp,dims(3)
+        integer(kind=8) :: first_byte,first_hedbyte,byteperpix
+        real            :: min_val,max_val
+        ! Get the dims of the image file
+        dims = self%overall_head%getDims()
+        ! Redefine the file dims (to keep track of the index of the last image of the stack)
+        ! dims_stored = dims
+        dims(1)     = ldim(1)
+        dims(2)     = size(rarr,2)
+        dims(3)     = max(last_slice,dims(3))
+        call self%overall_head%setDims(dims)
+        ! dims = dims_stored ! safety
+        byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
+        ! Work out the position of the first byte
+        first_byte = int(self%overall_head%firstDataByte(),kind=8)+int((first_slice-1),kind=8)&
+            &*int(product(dims(1:2)),kind=8)*byteperpix
+        ! find minmax
+        max_val = maxval(rarr)
+        min_val = minval(rarr)
+        max_val = max(max_val, self%overall_head%getMaxPixVal())
+        min_val = min(min_val, self%overall_head%getMinPixVal())
+        call self%overall_head%setMinPixVal(min_val)
+        call self%overall_head%setMaxPixVal(max_val)
+        write(unit=self%funit,pos=first_byte,iostat=io_stat) rarr(1:dims(1),:,:)
+        ! Check the write was successful
+        if( io_stat .ne. 0 )then
+            write(logfhandle,'(a,i0,2a)') '**ERROR(wSlices): I/O error ', io_stat, ' when writing to: ', trim(self%fname)
+            THROW_HARD('I/O')
+        endif
+        ! May need to update file dims
+        dims(3) = max(dims(3),last_slice)
+        call self%overall_head%setDims(dims)
+        ! May need to update FT status in the overall header head
+        if( is_ft ) call self%overall_head%setMode(4)
+        ! Remember that we wrote to the file
+        self%was_written_to = .true.
+    end subroutine wmrcSlices
 
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.

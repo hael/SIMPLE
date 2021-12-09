@@ -227,7 +227,7 @@ contains
                         call img%scale_pixels([0.,255.])
                         call img%calc_gradient(grad)
                         call img_grad%new(ldim, smpd)
-                        call img_grad%set_rmat(grad)
+                        call img_grad%set_rmat(grad,.false.)
                         call img_grad%stats( ave, sdev, maxv, minv )
                         call img_grad%kill
                         thresh(1) = ave + 0.7*sdev

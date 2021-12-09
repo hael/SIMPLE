@@ -1111,7 +1111,7 @@ contains
                 call imgs_class(i)%shift2Dserial([-inpls(i,2),-inpls(i,3)])
                 call imgs_class(i)%ifft
                 call imgs_class(i)%rtsq_serial(inpls(i,1), 0., 0., rmat_rot)
-                call imgs_class(i)%set_rmat(rmat_rot)
+                call imgs_class(i)%set_rmat(rmat_rot,.false.)
             end do
             !$omp end parallel do
             ! make a filename for the class
