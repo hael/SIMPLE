@@ -683,10 +683,8 @@ contains
         integer         :: io_stat,itmp,dims(3)
         integer(kind=8) :: first_byte,first_hedbyte,byteperpix
         real            :: min_val,max_val
-        ! Get the dims of the image file
-        dims = self%overall_head%getDims()
         ! Redefine the file dims (to keep track of the index of the last image of the stack)
-        ! dims_stored = dims
+        dims = self%overall_head%getDims()
         dims(1)     = ldim(1)
         dims(2)     = size(rarr,2)
         dims(3)     = max(last_slice,dims(3))
