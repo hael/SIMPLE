@@ -1274,8 +1274,6 @@ contains
             do iptcl = parts(istk,1), parts(istk,2)
                 cnt = cnt + 1
                 call self%get_stkname_and_ind('ptcl2D', iptcl, stk, ind_in_stk)
-                ! print *,iptcl, iptcl, stk, ind_in_stk
-                ! call self%os_ptcl2D%print_(iptcl)
                 call img%read(stk, ind_in_stk)
                 call img%write(stkpart, cnt)
             enddo

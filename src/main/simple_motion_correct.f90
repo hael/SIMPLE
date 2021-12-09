@@ -740,7 +740,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        call img_out%set_rmat(rmat_sum)
+        call img_out%set_rmat(rmat_sum,.false.)
         ! average
         call img_out%div(real(n))
         ! post-process

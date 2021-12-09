@@ -3,7 +3,7 @@ module simple_phasecorr_picker
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_image,        only: image
+use simple_image, only: image
 implicit none
 
 public :: init_phasecorr_picker_refs, init_phasecorr_picker_gauss, exec_phasecorr_picker, kill_phasecorr_picker
@@ -213,19 +213,19 @@ contains
                                  call refs(nrefs)%rtsq_serial( 45., 0., 0., rmat_out )
                                  nrefs = nrefs + 1
                                  call refs(nrefs)%new(ldim_refs,smpd_shrunken)
-                                 call refs(nrefs)%set_rmat(rmat_out)
+                                 call refs(nrefs)%set_rmat(rmat_out,.false.)
                                  if(DOWRITEIMGS) call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
                                  if(DEBUG_HERE) write(logfhandle,*) 'rotating 45 degrees ref:  ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
                                  call refs(nrefs)%rtsq_serial( 90., 0., 0., rmat_out )
                                  nrefs = nrefs + 1
                                  call refs(nrefs)%new(ldim_refs,smpd_shrunken)
-                                 call refs(nrefs)%set_rmat(rmat_out)
+                                 call refs(nrefs)%set_rmat(rmat_out,.false.)
                                  if(DOWRITEIMGS) call refs(nrefs)%write(PATH_HERE//'_GaussianReference.mrc',nrefs)
                                  if(DEBUG_HERE) write(logfhandle,*) 'rotating 90 degrees ref:  ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
                                  call refs(nrefs)%rtsq_serial( 135., 0., 0., rmat_out )
                                  nrefs = nrefs + 1
                                  call refs(nrefs)%new(ldim_refs,smpd_shrunken)
-                                 call refs(nrefs)%set_rmat(rmat_out)
+                                 call refs(nrefs)%set_rmat(rmat_out,.false.)
                                  if(DOWRITEIMGS) call refs(nrefs)%write(PATH_HERE//'_GaussianReference.mrc',nrefs)
                                  if(DEBUG_HERE) write(logfhandle,*) 'rotating 135 degrees ref:  ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
                               endif
@@ -290,13 +290,13 @@ contains
                                  call refs(nrefs)%rtsq_serial( 45., 0., 0., rmat_out )
                                  nrefs = nrefs + 1
                                  call refs(nrefs)%new(ldim_refs,smpd_shrunken)
-                                 call refs(nrefs)%set_rmat(rmat_out)
+                                 call refs(nrefs)%set_rmat(rmat_out,.false.)
                                  if(DOWRITEIMGS) call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
                                  if(DEBUG_HERE) write(logfhandle,*)  'rotating 45 degrees ref:  ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
                                  call refs(nrefs)%rtsq_serial( 90., 0., 0., rmat_out )
                                  nrefs = nrefs + 1
                                  call refs(nrefs)%new(ldim_refs,smpd_shrunken)
-                                 call refs(nrefs)%set_rmat(rmat_out)
+                                 call refs(nrefs)%set_rmat(rmat_out,.false.)
                                  if(DOWRITEIMGS) call refs(nrefs)%write(PATH_HERE//'_GaussianReference.mrc',nrefs)
                                  if(DEBUG_HERE)  write(logfhandle,*) 'rotating 90 degrees ref:  ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
                              endif

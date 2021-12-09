@@ -1030,126 +1030,53 @@ contains
                 write(logfhandle,*) 'Trying to read from file: ', trim(fname)
                 THROW_HARD('unsupported file format; read')
         end select
-        ! call exception_handler(ioimg)
-        call read_local(ioimg)
-
-    contains
-
-        subroutine read_local( ioimg )
-            class(imgfile) :: ioimg
-            if( isvol )then
-                first_slice = 1
-                last_slice = ldim(3)
-            else
-                first_slice = ii
-                last_slice = ii
-            endif
-            call ioimg%rSlices(first_slice,last_slice,self%rmat,is_mrc=form.eq.'M')
-            call ioimg%close
-        end subroutine read_local
-
-        !> exception_handler
-        !! \param ioimg Image file object
-        !!
-        subroutine exception_handler( ioimg )
-            class(imgfile) :: ioimg
-            if( form .eq. 'S' ) call spider_exception_handler(ioimg)
-            if( form .ne. 'F' )then
-                ! make sure that the logical image dimensions of self are consistent with the overall header
-                ldim = ioimg%getDims()
-                if( .not. all(ldim(1:2) == self%ldim(1:2)) )then
-                    write(logfhandle,*) 'ldim of image object: ', self%ldim
-                    write(logfhandle,*) 'ldim in ioimg (fhandle) object: ', ldim
-                    THROW_HARD('logical dims of overall header & image object do not match; read')
-                endif
-            endif
-        end subroutine exception_handler
-
-        !> spider_exception_handler
-        !! \param ioimg Image IO object to get Iform
-        !! iform file type specifier:
-        !!   1 = 2D image
-        !!   3 = 3D volume
-        !! -11 = 2D Fourier odd
-        !! -12 = 2D Fourier even
-        !! -21 = 3D Fourier odd
-        !! -22 = 3D Fourier even
-        subroutine spider_exception_handler(ioimg)
-            class(imgfile) :: ioimg
-            iform = ioimg%getIform()
-            select case(iform)
-            case(1,-11,-12)
-                ! we are processing a stack of 2D images (single 2D images not allowed in SIMPLE)
-                if( present(i) )then
-                    ! all good
-                else
-                    THROW_HARD('optional argument i required for reading from stack; read')
-                endif
-                if( self%ldim(3) == 1 )then
-                    ! all good
-                else if( self%ldim(3) > 1 )then
-                    THROW_HARD('trying to read from a stack into a volume; read')
-                else
-                    THROW_HARD('nonconforming logical dimension of image; read')
-                endif
-                if( iform == -11 .or. iform == -12 ) self%ft = .true.
-            case(3,-21,-22)
-                ! we are processing a 3D image (stacks of 3D volumes not allowed in SIMPLE)
-                if( present(i) )then
-                    THROW_HARD('stacks of 3D volumes not allowed in SIMPLE; read')
-                endif
-                if( self%ldim (3) > 1 )then
-                    ! all good
-                else if( self%ldim(3) == 1)then
-                    THROW_HARD('trying to read from a volume into a 2D image; read')
-                else
-                    THROW_HARD('nonconforming logical dimension of image; read')
-                endif
-                if( iform == -21 .or. iform == -22 ) self%ft = .true.
-            case DEFAULT
-                write(logfhandle,*) 'iform = ', iform
-                THROW_HARD('unsupported iform flag; read')
-            end select
-        end subroutine spider_exception_handler
-
+        if( isvol )then
+            first_slice = 1
+            last_slice = ldim(3)
+        else
+            first_slice = ii
+            last_slice = ii
+        endif
+        call ioimg%rSlices(first_slice,last_slice,self%rmat,is_mrc=form.eq.'M')
+        call ioimg%close
     end subroutine read
 
     !>  \brief  for writing any kind of images to stack or volumes to volume files
     subroutine write( self, fname, i, del_if_exists)
-        class(image),               intent(inout) :: self
-        character(len=*),           intent(in)    :: fname
-        integer,          optional, intent(in)    :: i
-        logical,          optional, intent(in)    :: del_if_exists
+        class(image),      intent(inout) :: self
+        character(len=*),  intent(in)    :: fname
+        integer, optional, intent(in)    :: i
+        logical, optional, intent(in)    :: del_if_exists
         real             :: dev, mean
         type(imgfile)    :: ioimg
         character(len=1) :: form
         integer          :: first_slice, last_slice, iform, ii
         logical          :: isvol, die
         isvol = .false.
-        if( self%existence )then
-            die   = .false.
-            isvol = self%is_3d()
-            if( present(del_if_exists) ) die = del_if_exists
-            ii = 1 ! default location
-            if( present(i) )then
-                ! we are writing to a stack & in SIMPLE volumes are not allowed
-                ! to be stacked so the image object must be 2D
-                if( isvol )then
-                    THROW_HARD('trying to write 3D image to stack ; write')
-                endif
-                ii = i ! replace default location
-            endif
-            form = fname2format(fname)
-            select case(form)
+        die   = .false.
+        isvol = self%is_3d()
+        if( present(del_if_exists) ) die = del_if_exists
+        ii = 1 ! default location
+        if( present(i) )then
+            ! we are writing to a stack & in SIMPLE volumes are not allowed
+            ! to be stacked so the image object must be 2D
+            if( isvol ) THROW_HARD('trying to write 3D image to stack ; write')
+            ii = i ! replace default location
+        endif
+        ! work out the slice range
+        if( isvol )then
+            first_slice = 1
+            last_slice = self%ldim(3)
+        else
+            first_slice = ii
+            last_slice = ii
+        endif
+        form = fname2format(fname)
+        select case(form)
             case('M','F')
                 ! pixel size of object overrides pixel size in header
                 call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die,&
                     formatchar=form, readhead=.false.)
-                ! data type: 0 image: signed 8-bit bytes rante -128 to 127
-                !            1 image: 16-bit halfwords
-                !            2 image: 32-bit reals (DEFAULT MODE)
-                !            3 transform: complex 16-bit integers
-                !            4 transform: complex 32-bit reals (THIS WOULD BE THE DEFAULT FT MODE)
                 if( self%ft )then
                     call ioimg%setMode(4)
                 else
@@ -1158,6 +1085,9 @@ contains
                 call self%rmsd(dev, mean=mean)
                 call ioimg%setRMSD(dev)
                 call ioimg%setMean(mean)
+                ! write slice(s) to disk & close
+                call ioimg%wmrcSlices(first_slice,last_slice,self%rmat,self%ldim,self%ft)
+                call ioimg%close
             case('S')
                 ! pixel size of object overrides pixel size in header
                 call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die,&
@@ -1191,25 +1121,13 @@ contains
                     endif
                 endif
                 call ioimg%setIform(iform)
+                ! write slice(s) to disk & close
+                call ioimg%wSlices(first_slice,last_slice,self%rmat,self%ldim,self%ft,self%smpd)
+                call ioimg%close
             case DEFAULT
                 write(logfhandle,*) 'format descriptor: ', form
                 THROW_HARD('unsupported file format; write')
-            end select
-            ! work out the slice range
-            if( isvol )then
-                if( ii .gt. 1 ) THROW_HARD('stacks of volumes not supported; write')
-                first_slice = 1
-                last_slice = self%ldim(3)
-            else
-                first_slice = ii
-                last_slice = ii
-            endif
-            ! write slice(s) to disk & close
-            call ioimg%wSlices(first_slice,last_slice,self%rmat,self%ldim,self%ft,self%smpd)
-            call ioimg%close
-        else
-            THROW_HARD('nonexisting image cannot be written to disk; write')
-        endif
+        end select
     end subroutine write
 
     !>  \brief  for updating header stast in a real space MRC image file only
@@ -1638,22 +1556,13 @@ contains
     end subroutine set_2
 
     !>  \brief  set (replace) image data with new 3D data
-    subroutine set_rmat( self, rmat )
+    subroutine set_rmat( self, rmat, ft )
         class(image), intent(inout) :: self
         real,         intent(in)    :: rmat(:,:,:)
-        integer :: ldim(3)
-        ldim(1) = size(rmat,1)
-        ldim(2) = size(rmat,2)
-        ldim(3) = size(rmat,3)
-        if( all(self%ldim .eq. ldim) )then
-            self%ft   = .false.
-            self%rmat = 0.
-            self%rmat(:ldim(1),:ldim(2),:ldim(3)) = rmat
-        else
-            write(logfhandle,*) 'ldim(rmat): ', ldim
-            write(logfhandle,*) 'ldim(img): ', self%ldim
-            THROW_HARD('nonconforming dims; set_rmat')
-        endif
+        logical,      intent(in)    :: ft
+        self%rmat = 0.
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))
+        self%ft   = ft
     end subroutine set_rmat
 
     !>  \brief  set (replace) image data with new 3D data
@@ -3708,7 +3617,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        call img%set_rmat(rmat_t)
+        call img%set_rmat(rmat_t,.false.)
         deallocate(rmat, rmat_t, shifted_filt)
     end subroutine imfilter1
 
@@ -3744,7 +3653,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        call img%set_rmat(rmat_t)
+        call img%set_rmat(rmat_t,.false.)
         deallocate(rmat, rmat_t, shifted_filt)
     end subroutine imfilter2
 
@@ -3785,7 +3694,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        call img%set_rmat(rmat_t)
+        call img%set_rmat(rmat_t,.false.)
         deallocate(rmat, rmat_t, shifted_filt)
     end subroutine imfilter3
 
@@ -6908,7 +6817,7 @@ contains
         avgs_rmat(1,:,:,:) = avgs_rmat(1,:,:,:) + self%rmat(:self%ldim(1),:self%ldim(2),:)
         ! set output image object
         call avg%new(self%ldim, self%smpd)
-        call avg%set_rmat(sum(avgs_rmat, dim=1))
+        call avg%set_rmat(sum(avgs_rmat, dim=1),.false.)
         ! normalise
         call avg%div(real(360/angstep))
     end subroutine roavg

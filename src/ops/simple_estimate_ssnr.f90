@@ -406,7 +406,7 @@ contains
                 where( locres_finds == k ) rmat_filt = rmat_lp
             endif
         enddo
-        call img2filter%set_rmat(rmat_filt)
+        call img2filter%set_rmat(rmat_filt,.false.)
         call resimg%kill
     end subroutine local_res_lp
 

@@ -838,7 +838,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        call vol%set_rmat(rmat)
+        call vol%set_rmat(rmat,.false.)
         deallocate(rmat)
     contains
         ! potential assuming static atoms (eq B.6)
