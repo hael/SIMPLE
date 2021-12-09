@@ -27,6 +27,7 @@ contains
     procedure          :: close
 end type stack_io
 
+! integer, parameter :: BUFSZ_DEFAULT = 6000
 integer, parameter :: BUFSZ_DEFAULT = 1024
 
 contains
@@ -47,9 +48,6 @@ contains
         self%smpd   = smpd
         self%nptcls = 0.
         self%ft     = .false.
-
-        ! print *, 'form/smpd/nptcls/ft: ', form, self%smpd, self%nptcls, self%ft
-
         select case(trim(rwaction))
             case('READ','read')
                 if( .not. file_exists(trim(stkname)) ) THROW_HARD('input stack file does not exists')
@@ -62,13 +60,7 @@ contains
             case DEFAULT
                 if( present(box) )then
                     self%ldim = [box,box,1]
-
-                    ! print *, 'stkname/ldim: ', trim(stkname), self%ldim
-
                     call self%ioimg%open(trim(stkname), self%ldim, self%smpd, formatchar=form, readhead=.false.)
-
-                    ! print *, 'opened stack'
-
                 else
                     THROW_HARD('optional box dummy argument needed to write to stack')
                 endif
@@ -79,13 +71,7 @@ contains
         self%bufsz = BUFSZ_DEFAULT
         if( present(bufsz) )   self%bufsz = bufsz
         if( self%nptcls /= 0 ) self%bufsz = min(self%bufsz, self%nptcls)
-
-        ! print *, 'trying to allocate buffer: ', [self%ldim(1),self%ldim(2),self%bufsz]
-
         call self%buffer%new([self%ldim(1),self%ldim(2),self%bufsz], self%smpd)
-
-        ! print *, 'allocated buffer: ', [self%ldim(1),self%ldim(2),self%bufsz]
-
         call self%buffer%get_rmat_ptr(self%rmat_ptr)
         self%is_open = .true.
     end subroutine open
@@ -137,24 +123,17 @@ contains
             self%fromp = 1
             self%top   = self%bufsz
         endif
-
-        ! print *, 'i/fromp/top: ', i, self%fromp, self%top
-
         if( i >= self%fromp .and. i <= self%top )then
             ! the buffer can be set
             call img%get_rmat_ptr(rmat_ptr)
             ind_in_buf = i - self%fromp + 1
             self%rmat_ptr(:self%ldim(1),:self%ldim(2),ind_in_buf:ind_in_buf) = rmat_ptr(:self%ldim(1),:self%ldim(2),1:1)
             self%n_in_buf  = self%n_in_buf + 1
-
-            ! print *, 'did set ind_in_buf: ', ind_in_buf
-            ! print *, 'did set n_in_buf  : ', self%n_in_buf
-
         else
             call self%write_buffer
             ! update range
             self%fromp = self%top + 1
-            self%top   = min(self%fromp + self%bufsz - 1, self%nptcls)
+            self%top   = self%fromp + self%bufsz - 1
             if( self%fromp == self%nptcls ) return
             if( i >= self%fromp .and. i <= self%top )then
                 ! the index is within the range, so the buffer can be set
@@ -163,6 +142,9 @@ contains
                 self%rmat_ptr(:self%ldim(1),:self%ldim(2),ind_in_buf:ind_in_buf) = rmat_ptr(:self%ldim(1),:self%ldim(2),1:1)
                 self%n_in_buf  = self%n_in_buf + 1
             else
+
+                print *, 'index: ', i
+
                 THROW_HARD('index i is out of range')
             endif
         endif
@@ -174,9 +156,6 @@ contains
         if( self%n_in_buf > 0 )then
             top = self%fromp + self%n_in_buf - 1
             call self%ioimg%wmrcSlices(self%fromp,top,self%rmat_ptr(:self%ldim(1),:self%ldim(2),:self%n_in_buf),self%ldim,is_ft=self%ft)
-
-            ! print *, 'wrote buffer of #images', self%n_in_buf
-
             self%n_in_buf = 0
         endif
     end subroutine write_buffer
