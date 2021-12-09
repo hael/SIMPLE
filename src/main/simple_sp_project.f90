@@ -1229,12 +1229,14 @@ contains
     subroutine split_stk( self, nparts, dir )
         use simple_map_reduce, only: split_nobjs_even
         use simple_image,      only: image
+        use simple_stack_io,   only: stack_io
         class(sp_project),          intent(inout) :: self
         integer,                    intent(in)    :: nparts
         character(len=*), optional, intent(in)    :: dir
         character(len=*), parameter   :: EXT = '.mrc'
         type(image)                   :: img
         type(ori)                     :: orig_stk
+        type(stack_io)                :: stkio_r, stkio_w
         character(len=:), allocatable :: stk, tmp_dir, stkpart
         character(len=:), allocatable :: dest_stkpart
         character(len=LONGSTRLEN) :: stk_relpath, cwd
@@ -1267,18 +1269,24 @@ contains
         endif
         call simple_mkdir(trim(tmp_dir),errmsg="sp_project::split_stk")
         write(logfhandle,'(a)') '>>> SPLITTING STACK INTO PARTS'
+        ! just to get the name of the stack to read from
+        call self%get_stkname_and_ind('ptcl2D', 1, stk, ind_in_stk)
+        call stkio_r%open(stk, smpd, 'read')
         do istk = 1,nparts
             call progress(istk,nparts)
             stkpart = filepath(trim(tmp_dir),'stack_part'//int2str_pad(istk,numlen)//EXT)
+            call stkio_w%open(stkpart, smpd, 'write', box=box, is_ft=.false.)
             cnt = 0
             do iptcl = parts(istk,1), parts(istk,2)
                 cnt = cnt + 1
                 call self%get_stkname_and_ind('ptcl2D', iptcl, stk, ind_in_stk)
-                call img%read(stk, ind_in_stk)
-                call img%write(stkpart, cnt)
+                call stkio_r%read(ind_in_stk, img)
+                call stkio_w%write(cnt, img)
             enddo
             deallocate(stkpart)
+            call stkio_w%close
         enddo
+        call stkio_r%close
         call img%kill
         call self%os_stk%new(nparts, is_ptcl=.false.)
         if( present(dir) )then
@@ -1290,7 +1298,7 @@ contains
             ! file stuff
             stkpart = filepath(trim(tmp_dir),'stack_part'//int2str_pad(istk,numlen)//EXT)
             if( present(dir) )then
-               dest_stkpart = filepath(trim(dir),trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
+                dest_stkpart = filepath(trim(dir),trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
             else
                 allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
             endif
