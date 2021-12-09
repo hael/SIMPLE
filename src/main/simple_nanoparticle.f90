@@ -934,6 +934,7 @@ contains
         call self%find_centers()
         deallocate(imat_bin, imat_cc)
         write(logfhandle, *) 'Numbers of atoms discarded because of low valid_corr ', n_discard
+        write(logfhandle, *) 'Total number of atoms after discarding atoms with low valid_corr ', self%n_cc
         write(logfhandle, '(A)') '>>> DISCARDING ATOMS WITH VALID_CORR < 0.3, COMPLETED'
     end subroutine discard_low_valid_corr_atoms
 
@@ -982,6 +983,7 @@ contains
         endif
         deallocate(imat_bin, imat_cc, centers_A)
         write(logfhandle, *) 'Numbers of atoms discarded because of low cscore ', n_discard
+        write(logfhandle, *) 'Total number of atoms after discarding outliers based on cscore  ', self%n_cc
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS BASED ON CONTACT SCORE, COMPLETED'
 
         contains
@@ -1044,6 +1046,7 @@ contains
         endif
         deallocate(imat_bin, imat_cc, centers_A)
         write(logfhandle, *) 'Numbers of atoms discarded because of low cn ', n_discard
+        write(logfhandle, *) 'Total number of atoms after discarding outliers based on cn      ', self%n_cc
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS BASED ON CN, COMPLETED'
 
         contains
