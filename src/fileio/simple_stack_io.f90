@@ -27,7 +27,6 @@ contains
     procedure          :: close
 end type stack_io
 
-! integer, parameter :: BUFSZ_DEFAULT = 6000
 integer, parameter :: BUFSZ_DEFAULT = 1024
 
 contains
@@ -142,9 +141,6 @@ contains
                 self%rmat_ptr(:self%ldim(1),:self%ldim(2),ind_in_buf:ind_in_buf) = rmat_ptr(:self%ldim(1),:self%ldim(2),1:1)
                 self%n_in_buf  = self%n_in_buf + 1
             else
-
-                print *, 'index: ', i
-
                 THROW_HARD('index i is out of range')
             endif
         endif
