@@ -1,8 +1,9 @@
 ! stack image processing routines for SPIDER/MRC files
 module simple_procimgfile
 include 'simple_lib.f08'
-use simple_image,   only: image
-use simple_oris,    only: oris
+use simple_image,    only: image
+use simple_oris,     only: oris
+use simple_stack_io, only: stack_io
 use simple_tvfilter
 implicit none
 
@@ -58,20 +59,25 @@ contains
         character(len=*), intent(in) :: fname2copy, fname
         real,             intent(in) :: smpd       !< sampling distance
         integer,          intent(in) :: fromto(2)  !< range
-        type(image) :: img
-        integer     :: n, i, cnt, ldim(3)
+        type(stack_io) :: stkio_r, stkio_w
+        type(image)    :: img
+        integer        :: n, i, cnt, ldim(3)
         call find_ldim_nptcls(fname2copy, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile(n, ldim, 'copy_imgfile')
+        call stkio_r%open(fname2copy, smpd, 'read')
+        call stkio_w%open(fname, smpd, 'write', box=ldim(1), is_ft=.false.)
         call img%new(ldim,smpd)
         write(logfhandle,'(a)') '>>> COPYING IMAGES'
         cnt = 0
         do i=fromto(1),fromto(2)
             cnt = cnt+1
             call progress(cnt, fromto(2)-fromto(1)+1)
-            call img%read(fname2copy, i)
-            call img%write(fname, cnt)
+            call stkio_r%read(i, img)
+            call stkio_w%write(cnt, img)
         end do
+        call stkio_r%close
+        call stkio_w%close
         call img%kill
     end subroutine copy_imgfile
 
