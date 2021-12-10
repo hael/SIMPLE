@@ -509,7 +509,6 @@ contains
         call one_atom%fft()
         call img_copy%fft()
         call img_copy%phase_corr(one_atom,phasecorr,1.)
-        if( GENERATE_FIGS ) call phasecorr%write(trim(self%fbody)//'CorrFiltered.mrc')
         ! Save Output
         call out_img%kill() ! if it exists already
         call out_img%new(self%ldim, self%smpd)
