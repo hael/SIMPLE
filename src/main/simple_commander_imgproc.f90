@@ -365,25 +365,12 @@ contains
             if( cline%defined('filter') )then
                 select case(trim(params%filter))
                     case('tv')
-                        if( trim(params%tseries) .eq. 'yes' )then
-                            call tvfilt_tseries_imgfile(params%stk, params%outstk, params%smpd, params%lambda)
-                        else
-                            call tvfilter_imgfile(params%stk, params%outstk, params%smpd, params%lambda)
-                        endif
+                        call tvfilter_imgfile(params%stk, params%outstk, params%smpd, params%lambda)
                     case('nlmean')
                         if( cline%defined('sigma') )then
                             call nlmean_imgfile(params%stk, params%outstk, params%smpd, params%sigma)
                         else
                             call nlmean_imgfile(params%stk, params%outstk, params%smpd)
-                        endif
-                    case('corr')
-                        if( .not. cline%defined('lp') ) THROW_HARD('correlation filter requires lp (low-pass limit) input; exec_filter')
-                        sigma = SIGMA_DEFAULT
-                        if( cline%defined('sigma') ) sigma = params%sigma
-                        if( trim(params%tseries) .eq. 'yes' )then
-                            call corrfilt_tseries_imgfile(params%stk, params%outstk, params%smpd, sigma, params%lp)
-                        else
-                            call corrfilt_imgfile(params%stk, params%outstk, params%smpd, sigma, params%lp, isvol=.false.)
                         endif
                     case DEFAULT
                         THROW_HARD('Unknown filter!')
@@ -399,9 +386,6 @@ contains
                     call bp_imgfile(params%stk, params%outstk, params%smpd, 0., params%lp, width=width)
                 else if( cline%defined('hp') )then
                     call bp_imgfile(params%stk, params%outstk, params%smpd, params%hp, 0., width=width)
-                ! B-factor
-            else if( cline%defined('bfac') )then
-                    call apply_bfac_imgfile(params%stk, params%outstk, params%smpd, params%bfac)
                 ! real-space
                 else if( cline%defined('real_filter') )then
                     if( .not. cline%defined('winsz') .and. trim(params%real_filter) .ne. 'NLmean') THROW_HARD('need winsz input for real-space filtering')
@@ -431,21 +415,6 @@ contains
                     call build%vol%bp(params%hp, 0., width=width)
                 else if( params%tophat .eq. 'yes' .and. cline%defined('find') )then
                     call build%vol%tophat(params%find)
-                else if( cline%defined('lp') )then
-                    if(cline%defined('filter') .and. (trim(params%filter) .eq. 'corr')) then
-                        if(cline%defined('sigma')) then
-                            call corrfilt_imgfile(params%vols(1), params%outvol, params%smpd, params%sigma, lp=params%lp, isvol=.true.)
-                            call build%vol%read(params%outvol)
-                        elseif(cline%defined('element')) then
-                            call corrfilt_imgfile(params%vols(1), params%outvol, params%element(1:2), params%smpd, lp=params%lp)
-                            call build%vol%read(params%outvol)
-                        else
-                            call corrfilt_imgfile(params%vols(1),params%outvol, params%smpd, SIGMA_DEFAULT, lp=params%lp, isvol=.true.)
-                            call build%vol%read(params%outvol)
-                        endif
-                    else
-                        call build%vol%bp(0., params%lp, width=width)
-                    endif
                 ! real-space
                 else if( cline%defined('real_filter') )then
                     if( .not. cline%defined('winsz') ) THROW_HARD('need winsz input for real-space filtering')
@@ -474,10 +443,6 @@ contains
                             call tvfilt%kill
                         case('nlmean')
                             call build%vol%NLmean3D()
-                        case('corr')
-                            if(.not. cline%defined('lp')) then
-                                THROW_HARD('Correlation filter needs lp as input!; exec_filter')
-                            endif
                         case DEFAULT
                             THROW_HARD('Unknown filter!')
                     end select
@@ -1004,17 +969,8 @@ contains
             call mirror_imgfile(params%stk, params%outstk, params%mirr, params%smpd)
             goto 999
         endif
-        if( params%subtr_backgr .eq. 'yes' )then
-            if( .not. cline%defined('lp') ) THROW_HARD('need lp arg for background subtraction; exec_stackops')
-            call subtr_backgr_imgfile(params%stk, params%outstk, params%smpd, params%lp)
-            goto 999
-        endif
         if( params%makemovie .eq. 'yes' )then
             call prep_imgfile4movie(params%stk, params%smpd)
-            goto 999
-        endif
-        if( cline%defined('bfac') )then
-            call sharpen_imgfile(params%stk, params%outstk, params%smpd, params%bfac)
             goto 999
         endif
         ! default
