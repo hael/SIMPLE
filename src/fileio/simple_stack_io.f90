@@ -38,14 +38,14 @@ contains
         logical, optional, intent(in)    :: is_ft
         integer, optional, intent(in)    :: box
         integer, optional, intent(in)    :: bufsz
-        character(len=1) :: form
-        integer          :: mode
+        character(len=1) :: form ! one character file format descriptor
+        integer          :: mode ! FT or not in MRC file lingo
         call self%close
         ! extract info about the stack file and open it
         form        = fname2format(trim(stkname))
         if( form .ne. 'M') THROW_HARD('non MRC stacks unsupported')
         self%smpd   = smpd
-        self%nptcls = 0.
+        self%nptcls = 0
         self%ft     = .false.
         select case(trim(rwaction))
             case('READ','read')
@@ -103,7 +103,7 @@ contains
             else
                 self%fromp = self%top + 1
                 self%top   = min(self%fromp + self%bufsz - 1, self%nptcls)
-                if( self%fromp == self%nptcls ) return
+                if( self%fromp > self%nptcls ) return
             endif
             bufsz = self%top - self%fromp + 1
             call self%ioimg%rSlices(self%fromp,self%top,self%rmat_ptr(:self%ldim(1),:self%ldim(2),:bufsz),is_mrc=.true.)
@@ -133,7 +133,6 @@ contains
             ! update range
             self%fromp = self%top + 1
             self%top   = self%fromp + self%bufsz - 1
-            if( self%fromp == self%nptcls ) return
             if( i >= self%fromp .and. i <= self%top )then
                 ! the index is within the range, so the buffer can be set
                 call img%get_rmat_ptr(rmat_ptr)
