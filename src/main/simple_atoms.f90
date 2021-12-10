@@ -29,7 +29,7 @@ type :: atoms
     character(len=3), allocatable :: resname(:)
     character(len=2), allocatable :: element(:)
     real,             allocatable :: charge(:)
-    real,             allocatable :: xyz(:,:)
+    real,             allocatable :: xyz(:,:) ! dim1 -> 1:#atms, dime2 -> 1:3 Cartesian dims
     real,             allocatable :: mw(:)
     real,             allocatable :: occupancy(:)
     real,             allocatable :: beta(:)
@@ -76,6 +76,7 @@ type :: atoms
     procedure          :: get_geom_center
     procedure          :: convolve
     procedure          :: geometry_analysis_pdb
+    procedure          :: find_masscen
     ! MODIFIERS
     procedure          :: translate
     procedure          :: rotate
@@ -1066,6 +1067,24 @@ contains
           c(3) = a(1) * b(2) - a(2) * b(1)
       end function cross
     end subroutine geometry_analysis_pdb
+
+    function find_masscen( self ) result( m )
+        class(atoms), intent(in) :: self
+        real    :: m(3) ! mass center vector
+        integer :: i
+        m = 0.
+        do i = 1, self%n ! #atms set in the constructor
+            m = m + self%xyz(i,:)
+        end do
+        m = m / real(self%n)
+    end function find_masscen
+
+    ! subroutine shift2masscen( self, m )
+    !     class(atoms), intent(in) :: self
+    !     real, intent(in)         :: m(3)
+    !     call translate(m)
+    !
+    ! end subroutine shift2masscen
 
     ! MODIFIERS
 
