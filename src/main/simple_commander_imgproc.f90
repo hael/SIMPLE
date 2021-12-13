@@ -406,26 +406,19 @@ contains
             call build%vol%read(params%vols(1))
             if( params%phrand.eq.'no')then
                 if( cline%defined('bfac') )then
-                ! bfactor
+                    ! bfactor
                     call build%vol%apply_bfac(params%bfac)
-                ! Band pass
+                    ! Band pass
                 else if( cline%defined('hp') .and. cline%defined('lp') )then
                     call build%vol%bp(params%hp, params%lp, width=width)
                 else if( cline%defined('hp') )then
                     call build%vol%bp(params%hp, 0., width=width)
                 else if( params%tophat .eq. 'yes' .and. cline%defined('find') )then
                     call build%vol%tophat(params%find)
-                ! real-space
+                    ! real-space
                 else if( cline%defined('real_filter') )then
                     if( .not. cline%defined('winsz') ) THROW_HARD('need winsz input for real-space filtering')
                     call build%vol%real_space_filter(nint(params%winsz), params%real_filter)
-                else if( cline%defined('vol_filt') )then
-                    if( .not.file_exists(params%vol_filt)) THROW_HARD('cannot find volume filter (vol_filt)')
-                    call build%vol2%read(params%vol_filt)
-                    call build%vol%fft
-                    call build%vol%apply_filter(build%vol2)
-                    call build%vol2%kill
-                    call build%vol%ifft
                 else if( cline%defined('fsc') )then
                     if( .not.file_exists(params%fsc)) THROW_HARD('Cannot find FSC filter (vol_filt)')
                     ! resolution & optimal low-pass filter from FSC
@@ -732,8 +725,6 @@ contains
         call simple_end('**** SIMPLE_STACK NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_stack
 
-    !> provides standard single-particle image
-    !> processing routines that are applied to MRC or SPIDER stacks.
     subroutine exec_stackops( self, cline )
         use simple_oris, only: oris
         use simple_ori,  only: ori

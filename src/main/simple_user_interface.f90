@@ -1501,7 +1501,7 @@ contains
         &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-comp map',& ! descr long
         &'single_exec',&                                        ! executable
-        &2, 1, 0, 0, 1, 1, 1, .false.)                         ! # entries in each group, requires sp_project
+        &2, 2, 0, 0, 1, 1, 1, .false.)                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
@@ -1510,6 +1510,8 @@ contains
         & 'input volume 4 lattice fit e.g. vol2.mrc', .false., '')
         ! parameter input/output
         call detect_atoms%set_input('parm_ios', 1, smpd)
+        call detect_atoms%set_input('parm_ios', 2, 'corr_thres', 'num', 'Per-atom corr threshold', 'Per-atom validation correlation threshold for discarding atoms(0.3-0.5){0.5}', &
+        & 'Corr threshold for discarding atoms(0.3-0.5){0.5}', .false., 0.5)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -1621,14 +1623,13 @@ contains
         &'Filter stack/volume',&                      ! descr_short
         &'is a program for filtering stack/volume',&  ! descr_long
         &'simple_exec',&                              ! executable
-        &2, 2, 2, 0, 15, 0, 1, .false.)               ! # entries in each group, requires sp_project
+        &2, 1, 2, 0, 12, 0, 1, .false.)               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call filter%set_input('img_ios', 1, outstk)
         call filter%set_input('img_ios', 2, outvol)
         ! parameter input/output
         call filter%set_input('parm_ios', 1, smpd)
-        call filter%set_input('parm_ios', 2, tseries)
         ! alternative inputs
         call filter%set_input('alt_ios', 1, 'stk',  'file', 'Stack to filter',  'Stack of images to filter', 'e.g. refs.mrc',     .false., '')
         call filter%set_input('alt_ios', 2, 'vol1', 'file', 'Volume to filter', 'Volume to filter',          'e.g. vol.mrc file', .false., '')
@@ -1646,14 +1647,10 @@ contains
         call filter%set_input('filt_ctrls', 7, 'real_filter', 'multi', 'Real-space filter',&
         &'Real-space filter(median|average|stdev|bman|NLmean|no){no}', '(median|average|stdev|bman|NLmean|no){no}', .false., 'no')
         call filter%set_input('filt_ctrls', 8, 'fsc', 'file', 'FSC file', 'FSC file',          'e.g. fsc_state01.bin file', .false., '')
-        call filter%set_input('filt_ctrls', 9, 'vol_filt', 'file', 'Volume filter', 'Volume filter',          'e.g. aniso_optlp.mrc file', .false., '')
-        call filter%set_input('filt_ctrls',10, frcs)
-        call filter%set_input('filt_ctrls',11, 'filter', 'multi', 'Filter type(tv|nlmean|corr|no){no}', 'Filter type(tv|nlmean|corr|no){no}', '(tv|nlmean|corr|no){no}', .false., 'no')
-        call filter%set_input('filt_ctrls',12, 'lambda', 'num', 'Tv filter lambda', 'Strength of noise reduction', '(0.5-3.0){1.0}', .false., 1.0)
-        call filter%set_input('filt_ctrls',13, envfsc)
-        call filter%set_input('filt_ctrls',14, element)
-        filter%filt_ctrls(14)%required = .false.
-        call filter%set_input('filt_ctrls',15, 'sigma', 'num', 'sigma, for Gaussian generation', 'sigma, for Gaussian generation(in pixels)', &
+        call filter%set_input('filt_ctrls', 9, frcs)
+        call filter%set_input('filt_ctrls',10, 'filter', 'multi', 'Filter type(tv|nlmean|no){no}', 'Filter type(tv|nlmean|corr|no){no}', '(tv|nlmean|no){no}', .false., 'no')
+        call filter%set_input('filt_ctrls',11, 'lambda', 'num', 'Tv filter lambda', 'Strength of noise reduction', '(0.5-3.0){1.0}', .false., 1.0)
+        call filter%set_input('filt_ctrls',12, 'sigma', 'num', 'sigma, for Gaussian generation', 'sigma, for Gaussian generation(in pixels)', &
         & '{1.}', .false., 1.0)
         ! mask controls
         ! <empty>
@@ -3484,10 +3481,9 @@ contains
         call stackops%set_input('parm_ios', 15, 'top',   'num', 'To particle index', 'Stop index for stack copy', 'stop index', .false., 1.0)
         call stackops%set_input('parm_ios', 16, outfile)
         call stackops%set_input('parm_ios', 17, 'stats', 'binary', 'Provide statistics', 'Provide statistics about images in stack(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call stackops%set_input('parm_ios', 18, 'subtr_backr', 'binary', 'Subtract background', 'Subtract background through real-space filtering(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call stackops%set_input('parm_ios', 19, 'roavg', 'binary', 'Rotationally average', 'Rotationally average images in stack(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call stackops%set_input('parm_ios', 20, 'angstep', 'num', 'Angular stepsize', 'Angular stepsize for rotational averaging(in degrees)', 'give degrees', .false., 5.)
-        call stackops%set_input('parm_ios', 21, 'makemovie', 'binary', 'Whether to make a movie', 'Generates images and script to make a movie with FFmpeg(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call stackops%set_input('parm_ios', 18, 'roavg', 'binary', 'Rotationally average', 'Rotationally average images in stack(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call stackops%set_input('parm_ios', 19, 'angstep', 'num', 'Angular stepsize', 'Angular stepsize for rotational averaging(in degrees)', 'give degrees', .false., 5.)
+        call stackops%set_input('parm_ios', 20, 'makemovie', 'binary', 'Whether to make a movie', 'Generates images and script to make a movie with FFmpeg(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
         ! <empty>
         ! search controls
