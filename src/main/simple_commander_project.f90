@@ -931,11 +931,12 @@ contains
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
         type(chash),      allocatable :: part_params(:)
-        integer,          allocatable :: parts(:,:)
+        integer,          allocatable :: parts(:,:), pinds(:)
+        real,             allocatable :: states(:)
         character(len=:), allocatable :: fname
         logical,          allocatable :: part_mask(:)
         integer :: imic,nmics,cnt,istk,nstks,ipart,nptcls,nparts,iptcl
-        integer :: nstks_orig, nptcls_orig, nmics_orig
+        integer :: nstks_orig,nptcls_orig,nmics_orig,i
         ! init
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
@@ -946,7 +947,13 @@ contains
         if( nstks == 0 ) THROW_HARD('No stack to process!')
         nptcls = spproj%get_n_insegment('ptcl2D')
         if( nstks == 0 ) THROW_HARD('No particles to process!')
-        nmics = spproj%get_nintgs()
+        ! identify the particle indices with state .ne. 0
+        states = spproj%os_ptcl2D%get_all('state')
+        allocate(pinds(nptcls), source=(/(i,i=1,nptcls)/))
+        pinds = pack(pinds, mask=states > 0.5)
+        call arr2txtfile(pinds, 'selected_indices.txt')
+        deallocate(states, pinds)
+        nmics       = spproj%get_nintgs()
         nstks_orig  = nstks
         nptcls_orig = nptcls
         nmics_orig  = nmics
