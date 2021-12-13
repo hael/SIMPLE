@@ -334,6 +334,7 @@ type :: parameters
     real    :: cenlp=20.           !< low-pass limit for binarisation in centering(in A){30 A}
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
     real    :: cn_thres=5.         !< threshold (outliers removal based on coordination number)
+    real    :: corr_thres=0.5      !< per-atom validation correlation threshold for discarding atoms
     real    :: ctfreslim=8.
     real    :: dcrit_rel=0.5       !< critical distance relative to box(0-1){0.5}
     real    :: deflim=4.
@@ -751,6 +752,7 @@ contains
         call check_rarg('cenlp',          self%cenlp)
         call check_rarg('cs',             self%cs)
         call check_rarg('cn_thres',       self%cn_thres)
+        call check_rarg('corr_thres',     self%corr_thres)
         call check_rarg('ctfreslim',      self%ctfreslim)
         call check_rarg('dcrit_rel',      self%dcrit_rel)
         call check_rarg('deflim',         self%deflim)
