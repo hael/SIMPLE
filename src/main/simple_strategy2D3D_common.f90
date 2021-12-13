@@ -5,6 +5,7 @@ use simple_image,      only: image
 use simple_cmdline,    only: cmdline
 use simple_builder,    only: build_glob
 use simple_parameters, only: params_glob
+use simple_stack_io,   only: stack_io
 implicit none
 
 public :: read_img, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
@@ -12,11 +13,6 @@ public :: read_img, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prep
 &preprefvol, prep2Dref, preprecvols, killrecvols, prepimgbatch, build_pftcc_particles
 private
 #include "simple_local_flags.inc"
-
-interface read_img
-    module procedure read_img_1
-    module procedure read_img_2
-end interface read_img
 
 interface read_imgbatch
     module procedure read_imgbatch_1
@@ -31,24 +27,35 @@ end interface grid_ptcl
 real, parameter :: SHTHRESH  = 0.001
 real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg centering in pixels
 
+type(stack_io)  :: stkio_r
+
 contains
 
-    subroutine read_img_1( iptcl )
-        integer,       intent(in)     :: iptcl
-        character(len=:), allocatable :: stkname
-        integer :: ind_in_stk
-        call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, iptcl, stkname, ind_in_stk)
-        call build_glob%img%read(stkname, ind_in_stk)
-    end subroutine read_img_1
-
-    subroutine read_img_2( iptcl, img )
+    subroutine read_img( iptcl, img )
         integer,        intent(in)    :: iptcl
         class(image),   intent(inout) :: img
         character(len=:), allocatable :: stkname
         integer :: ind_in_stk
         call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, iptcl, stkname, ind_in_stk)
         call img%read(stkname, ind_in_stk)
-    end subroutine read_img_2
+    end subroutine read_img
+
+    ! NOT POSSIBLE TO DO IN THIS WAY SINCE THE CLASSAVERAGER NEED TO ACCESS THE IMAGES IN RANDOM ORDER
+    ! CONSIDER MANAGING A SET OF OPEN IMAGE STACKS TO REMOVE OVERHEADS DUE TO OPEN/CLOSE
+    ! subroutine read_img( iptcl, img )
+    !     integer,        intent(in)    :: iptcl
+    !     class(image),   intent(inout) :: img
+    !     character(len=:), allocatable :: stkname
+    !     integer :: ind_in_stk
+    !     call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, iptcl, stkname, ind_in_stk)
+    !     if( .not. stkio_r%stk_is_open() )then
+    !         call stkio_r%open(stkname, params_glob%smpd, 'read')
+    !     else if( .not. stkio_r%same_stk(stkname, [params_glob%box,params_glob%box,1]) )then
+    !         call stkio_r%close
+    !         call stkio_r%open(stkname, params_glob%smpd, 'read')
+    !     endif
+    !     call stkio_r%read(ind_in_stk, img)
+    ! end subroutine read_img
 
     subroutine read_imgbatch_1( fromptop, ptcl_mask )
         integer,           intent(in) :: fromptop(2)

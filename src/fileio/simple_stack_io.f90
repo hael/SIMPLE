@@ -10,17 +10,20 @@ private
 
 type stack_io
     private
-    real(kind=c_float), pointer :: rmat_ptr(:,:,:) => null()
+    real(kind=c_float), pointer   :: rmat_ptr(:,:,:) => null()
+    character(len=:), allocatable :: stkname
     type(image)   :: buffer
     type(imgfile) :: ioimg
     integer       :: nptcls  = 0, fromp = 0, top = 0, bufsz = 0, n_in_buf = 0
     integer       :: ldim(3) = [0,0,0]
     real          :: smpd    = 0.
-    logical       :: ft = .false., l_read = .false., is_open = .false.
+    logical       :: ft = .false., l_read = .false., l_open = .false.
 contains
     procedure          :: open
+    procedure          :: stk_is_open
     procedure          :: get_nptcls
     procedure          :: get_ldim
+    procedure          :: same_stk
     procedure          :: read
     procedure          :: write
     procedure, private :: write_buffer
@@ -42,24 +45,25 @@ contains
         integer          :: mode ! FT or not in MRC file lingo
         call self%close
         ! extract info about the stack file and open it
-        form        = fname2format(trim(stkname))
+        allocate(self%stkname, source=trim(stkname))
+        form        = fname2format(self%stkname)
         if( form .ne. 'M') THROW_HARD('non MRC stacks unsupported')
         self%smpd   = smpd
         self%nptcls = 0
         self%ft     = .false.
         select case(trim(rwaction))
             case('READ','read')
-                if( .not. file_exists(trim(stkname)) ) THROW_HARD('input stack file does not exists')
-                call find_ldim_nptcls(trim(stkname), self%ldim, self%nptcls)
+                if( .not. file_exists(self%stkname) ) THROW_HARD('input stack file does not exists')
+                call find_ldim_nptcls(self%stkname, self%ldim, self%nptcls)
                 self%ldim(3) = 1
-                call self%ioimg%open(trim(stkname), self%ldim, self%smpd, formatchar=form, readhead=.true., rwaction='READ')
+                call self%ioimg%open(self%stkname, self%ldim, self%smpd, formatchar=form, readhead=.true., rwaction='READ')
                 mode = self%ioimg%getMode()
                 if( mode == 3 .or. mode == 4 ) self%ft = .true.
                 self%l_read = .true.
             case DEFAULT
                 if( present(box) )then
                     self%ldim = [box,box,1]
-                    call self%ioimg%open(trim(stkname), self%ldim, self%smpd, formatchar=form, readhead=.false.)
+                    call self%ioimg%open(self%stkname, self%ldim, self%smpd, formatchar=form, readhead=.false.)
                 else
                     THROW_HARD('optional box dummy argument needed to write to stack')
                 endif
@@ -68,12 +72,18 @@ contains
         if( present(is_ft) ) self%ft = is_ft
         ! allocate the buffer
         self%bufsz = BUFSZ_DEFAULT
-        if( present(bufsz) )   self%bufsz = bufsz
-        if( self%nptcls /= 0 ) self%bufsz = min(self%bufsz, self%nptcls)
+        if( present(bufsz) ) self%bufsz = bufsz
+        ! need to have the full stack in buffer on read, since most of it is asynchronuous 
+        if( self%nptcls /= 0 ) self%bufsz = self%nptcls
         call self%buffer%new([self%ldim(1),self%ldim(2),self%bufsz], self%smpd)
         call self%buffer%get_rmat_ptr(self%rmat_ptr)
-        self%is_open = .true.
+        self%l_open = .true.
     end subroutine open
+
+    logical function stk_is_open( self )
+        class(stack_io), intent(in) :: self
+        stk_is_open = self%l_open
+    end function stk_is_open
 
     function get_nptcls( self ) result( nptcls )
         class(stack_io), intent(in) :: self
@@ -87,11 +97,20 @@ contains
         ldim = self%ldim
     end function get_ldim
 
+    function same_stk( self, stkname, ldim ) result( l_same )
+        class(stack_io),  intent(in) :: self
+        character(len=*), intent(in) :: stkname
+        integer,          intent(in) :: ldim(3)
+        logical :: l_same
+        l_same = (self%stkname .eq. trim(stkname)) .and. all(ldim == self%ldim)
+    end function same_stk
+
     subroutine read( self, i, img )
         class(stack_io), intent(inout) :: self
         integer,         intent(in)    :: i
         class(image),    intent(inout) :: img
         integer :: ind_in_buf, bufsz
+        if( .not. self%l_open ) THROW_HARD('stack not open')
         if( i < 1 .or. i > self%nptcls ) THROW_HARD('index i out of range')
         if( i >= self%fromp .and. i <= self%top )then
             ! the image is in buffer
@@ -118,6 +137,7 @@ contains
         class(image),    intent(inout) :: img
         real(kind=c_float), pointer :: rmat_ptr(:,:,:) => null()
         integer :: ind_in_buf
+        if( .not. self%l_open ) THROW_HARD('stack not open')
         if( self%fromp == 0 )then
             self%fromp = 1
             self%top   = self%bufsz
@@ -157,9 +177,10 @@ contains
 
     subroutine close( self )
         class(stack_io), intent(inout) :: self
-        if( self%is_open )then
+        if( self%l_open )then
             if( .not. self%l_read ) call self%write_buffer
             call self%ioimg%close
+            deallocate(self%stkname)
             self%nptcls   = 0
             self%fromp    = 0
             self%top      = 0
@@ -171,7 +192,7 @@ contains
             self%l_read   = .false.
             self%rmat_ptr => null()
             call self%buffer%kill
-            self%is_open  = .false.
+            self%l_open  = .false.
         endif
     end subroutine close
 
