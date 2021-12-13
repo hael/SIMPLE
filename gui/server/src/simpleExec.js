@@ -626,7 +626,7 @@ class SimpleExec {
 			var childprocess = promise.childProcess
 			childprocess.stdout.on('data', data => {
 				var lines = data.toString().split("\n")
-				console.log(lines)
+			//	console.log(lines)
 				for (var line of lines) {
 					if ( !line.includes("state=0") && line.length > 0 ){
 						count++
@@ -711,9 +711,11 @@ class SimpleExec {
 		}
 		
 		this.progress = Math.round(100 * donefiles / count)
-		
-		console.log(this.progress)
-		
+			
+		if(this.progress != Infinity && Number.isInteger(this.progress)){
+			console.log(this.progress)
+		}
+
 		sqlite.sqlQuery("UPDATE " + projecttable + " SET view='" + this.progress  + "' WHERE id=" + jobid)
 		
 	}
@@ -738,7 +740,10 @@ class SimpleExec {
 						this.progress = progress
 					}
 					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET view='" + this.progress  + "' WHERE id=" + this.jobid)
-					console.log('progress', this.progress)
+					
+					if(this.progress != Infinity && Number.isInteger(this.progress)){	
+						console.log('progress', this.progress)
+					}
 				}
 			}
 		}else if(arg['type'] == 'cleanup2D'){
@@ -752,7 +757,10 @@ class SimpleExec {
 						this.progress = progress
 					}
 					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET view='" + this.progress  + "' WHERE id=" + this.jobid)
-					console.log('progress', this.progress)
+					
+					if(this.progress != Infinity && Number.isInteger(this.progress)){
+						console.log('progress', this.progress)
+					}
 				}
 			}
 		}else if(arg['type'] == 'initial_3Dmodel'){
@@ -775,7 +783,11 @@ class SimpleExec {
 						}
 					}
 					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET view='" + this.progress  + "' WHERE id=" + this.jobid)
-					console.log('progress', this.progress)
+					
+					if(this.progress != Infinity && Number.isInteger(this.progress)){
+						console.log('progress', this.progress)
+					}
+
 				}else if(line.includes("PROBABILISTIC REFINEMENT")){
 					this.probabilistic = true
 				}

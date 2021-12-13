@@ -144,11 +144,13 @@ class View{
 			.then(metadata => {
 				if(metadata.width > 1000){
 					return image.extract({left:511, top:0, width:512, height:512})
-						.overlayWith(Buffer.from(svg), {})
+					//	.overlayWith(Buffer.from(svg), {})
+						.composite([{input:Buffer.from(svg)}])
 						.sharpen()
 						.toBuffer()
 				}else{
-					return image.overlayWith(Buffer.from(svg), {})
+					//	return image.overlayWith(Buffer.from(svg), {})
+					return image.composite([{input:Buffer.from(svg)}])
 					.sharpen()
 					.toBuffer()
 				}
