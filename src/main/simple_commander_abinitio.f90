@@ -5,6 +5,7 @@ use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters
 use simple_sp_project,     only: sp_project
+use simple_stack_io,       only: stack_io
 use simple_qsys_funs
 implicit none
 
@@ -70,6 +71,7 @@ contains
         type(ori)             :: o_tmp
         type(sym)             :: se1,se2
         type(image)           :: img, vol
+        type(stack_io)        :: stkio_r, stkio_r2, stkio_w
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine
         real                  :: iter, smpd_target, lplims(2), orig_smpd
         real                  :: scale_factor1, scale_factor2
@@ -469,16 +471,22 @@ contains
         call xreproject%execute(cline_reproject)
         ! write alternated stack
         call img%new([orig_box,orig_box,1], orig_smpd)
+        call stkio_r%open(orig_stk,            params%smpd, 'read',                                 bufsz=500)
+        call stkio_r2%open('reprojs.mrc',      params%smpd, 'read',                                 bufsz=500)
+        call stkio_w%open('cavgs_reprojs.mrc', params%smpd, 'write', box=params%box, is_ft=.false., bufsz=500)
         cnt = -1
         do icls=1,ncavgs
             cnt = cnt + 2
-            call img%read(orig_stk,icls)
+            call stkio_r%read(icls, img)
             call img%norm
-            call img%write('cavgs_reprojs.mrc',cnt)
-            call img%read('reprojs.mrc',icls)
+            call stkio_w%write(cnt, img)
+            call stkio_r2%read(icls, img)
             call img%norm
-            call img%write('cavgs_reprojs.mrc',cnt+1)
+            call stkio_w%write(cnt + 1, img)
         enddo
+        call stkio_r%close
+        call stkio_r2%close
+        call stkio_w%close
         ! end gracefully
         call se1%kill
         call se2%kill
