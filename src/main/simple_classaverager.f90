@@ -424,7 +424,6 @@ contains
                 ! prep batch
                 batchsz = batches(batch,2) - batches(batch,1) + 1
                 ! read images
-
                 do i=1,batchsz
                     iptcl = ptcls_inds(batches(batch,1) + i - 1)
                     call read_img( iptcl, batch_imgs(i) )

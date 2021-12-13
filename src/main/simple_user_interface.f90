@@ -3457,7 +3457,7 @@ contains
         & If nframesgrp is set to some integer number >1, averages with chunk sizes of nframesgrp are produced,&
         & which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images',& ! descr_long
         &'simple_exec',&                             ! executable
-        &2, 21, 0, 0, 0, 0, 1, .false.)              ! # entries in each group, requires sp_project
+        &2, 20, 0, 0, 0, 0, 1, .false.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call stackops%set_input('img_ios', 1, stk)
