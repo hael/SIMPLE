@@ -157,10 +157,7 @@ contains
             if(alloc_stat.ne.0)call allocchk("In: simple_moviewatcher%add2history 1", alloc_stat)
         else
             n = size(self%history)
-            allocate(tmp_farr(n), stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("In: simple_moviewatcher%add2history 2", alloc_stat)
-            tmp_farr(:) = self%history
-            deallocate(self%history)
+            call move_alloc(self%history, tmp_farr)
             allocate(self%history(n+1), stat=alloc_stat)
             if(alloc_stat.ne.0)call allocchk("In: simple_moviewatcher%add2history 3",alloc_stat)
             self%history(:n) = tmp_farr

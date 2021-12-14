@@ -120,7 +120,7 @@ contains
         class(preprocess_commander_stream), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                       :: params
-        integer,                   parameter   :: WAITTIME       = 30   ! folder watched every 30 seconds
+        integer,                   parameter   :: WAITTIME        = 5   ! folder watched every 5 seconds
         integer,                   parameter   :: LONGTIME        = 300  ! time lag after which a movie is processed
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
         logical,                   parameter   :: DEBUG_HERE      = .false.
@@ -248,7 +248,6 @@ contains
                 do imovie = 1, nmovies
                     movie = trim(adjustl(movies(imovie)))
                     if( movie_buff%is_past(movie) )cycle
-                    if( .not.file_exists(movie) )cycle ! petty triple checking
                     call create_individual_project
                     call qenv%qscripts%add_to_streaming( cline )
                     call qenv%qscripts%schedule_streaming( qenv%qdescr )
