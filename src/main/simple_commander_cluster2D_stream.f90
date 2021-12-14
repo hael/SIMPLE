@@ -761,7 +761,7 @@ contains
                 integer :: i, it
                 call debug_print('in update_pool pool_iter '//int2str(pool_iter))
                 ! iteration info
-                fname = trim(STATS_FILE )
+                fname = trim(STATS_FILE)
                 if( file_exists(fname) )then
                     call os%new(1,is_ptcl=.false.)
                     call os%read(fname)
@@ -885,7 +885,6 @@ contains
                 call debug_print('in generate_new_chunks 4 '//int2str(n2fill))
                 ! enough ?
                 if( n2fill == 0 )then
-                    write(logfhandle,*)'>>> Insufficient number of particles to generate chunk: ',nptcls
                     return
                 endif
                 do iichunk =  1,params%nchunks
@@ -910,8 +909,7 @@ contains
                     if( nmics_imported == 0 )then
                         allocate(imported_spprojs(n_new))
                     else
-                        tmp = imported_spprojs(:)
-                        deallocate(imported_spprojs)
+                        call move_alloc(imported_spprojs, tmp)
                         allocate(imported_spprojs(nmics_imported+n_new))
                         imported_spprojs(1:nmics_imported) = tmp(:)
                         deallocate(tmp)
@@ -964,8 +962,7 @@ contains
                     call pool_proj%os_stk%reallocate(nmics_imported+nmics2import)
                     call pool_proj%os_ptcl2D%reallocate(nptcls_imported+nptcls2import)
                     fromp = nint(pool_proj%os_stk%get(nmics_imported,'top'))+1
-                    tmp   = imported_stks
-                    deallocate(imported_stks)
+                    call move_alloc(imported_stks, tmp)
                     allocate(imported_stks(nmics_imported+nmics2import))
                     imported_stks(1:nmics_imported) = tmp(:)
                     deallocate(tmp)
@@ -1246,7 +1243,6 @@ contains
                 if( sum(prev_eo_pops) == 0 )then
                     call cline_cluster2D%set('stream','no')
                     call cline_cluster2D%delete('update_frac')
-                    call cline_cluster2D%delete('update_frac')
                 else
                     frac_update = real(nptcls_old-sum(prev_eo_pops)) / real(nptcls_old)
                     call cline_cluster2D%set('stream',      'yes')
@@ -1431,21 +1427,6 @@ contains
                 call img%kill
                 call debug_print('end transfer_cavg')
             end subroutine transfer_cavg
-
-            ! unused
-            logical function is_timeout( time_now )
-                integer, intent(in) :: time_now
-                is_timeout = .false.
-                if( nint(real(time_now-last_injection)/60.) > params%time_inactive)then
-                    write(logfhandle,'(A,A)')'>>> TIME LIMIT WITHOUT NEW IMAGES REACHED: ',cast_time_char(time_now)
-                    is_timeout = .true.
-                    if( .not.cline_cluster2D%defined('converged') )is_timeout = .false.
-                    if( .not.is_timeout) write(logfhandle,'(A,A)')'>>> WAITING FOR CONVERGENCE'
-                else if(time_now-last_injection > 3600)then
-                    write(logfhandle,'(A,A)')'>>> OVER ONE HOUR WITHOUT NEW PARTICLES: ',cast_time_char(time_now)
-                    call flush(6)
-                endif
-            end function is_timeout
 
             !> produces consolidated project at original scale
             subroutine write_snapshot( force, add_suffix )

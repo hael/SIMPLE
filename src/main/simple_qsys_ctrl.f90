@@ -497,17 +497,18 @@ contains
 
             ! move everything up so '1' is index for next job to be run
             subroutine updatestack
-                type(cmdline), allocatable :: tmp_stack(:)
+                class(cmdline), allocatable :: tmp_stack(:)
                 integer :: i
                 if( self%cline_stacksz > 1 )then
-                    tmp_stack = self%stream_cline_stack(2:)
-                    self%cline_stacksz = self%cline_stacksz-1
-                    deallocate(self%stream_cline_stack)
-                    allocate(self%stream_cline_stack(self%cline_stacksz))
-                    do i = 1, self%cline_stacksz
-                        self%stream_cline_stack(i) = tmp_stack(i)
+                    allocate(tmp_stack(self%cline_stacksz-1))
+                    call self%stream_cline_stack(1)%kill
+                    do i = 1, self%cline_stacksz-1
+                        tmp_stack(i) = self%stream_cline_stack(i+1)
+                        call self%stream_cline_stack(i+1)%kill
                     enddo
-                    deallocate(tmp_stack)
+                    deallocate(self%stream_cline_stack)
+                    self%cline_stacksz = self%cline_stacksz-1
+                    call move_alloc(tmp_stack,self%stream_cline_stack)
                 else
                     deallocate(self%stream_cline_stack)
                     self%cline_stacksz = 0
@@ -520,7 +521,7 @@ contains
     subroutine add_to_streaming( self, cline )
         class(qsys_ctrl),  intent(inout) :: self
         class(cmdline),    intent(in)    :: cline
-        type(cmdline), allocatable :: tmp_stack(:)
+        class(cmdline), allocatable :: tmp_stack(:)
         integer :: i
         if( .not. allocated(self%stream_cline_stack) )then
             ! empty stack
@@ -529,12 +530,12 @@ contains
             self%cline_stacksz = 1
         else
             ! append
-            tmp_stack = self%stream_cline_stack
-            deallocate(self%stream_cline_stack)
+            call move_alloc(self%stream_cline_stack, tmp_stack)
             self%cline_stacksz = self%cline_stacksz + 1
             allocate( self%stream_cline_stack(self%cline_stacksz) )
             do i = 1, self%cline_stacksz-1
                 self%stream_cline_stack(i) = tmp_stack(i)
+                call tmp_stack(i)%kill
             enddo
             self%stream_cline_stack(self%cline_stacksz) = cline
             deallocate(tmp_stack)
@@ -545,7 +546,7 @@ contains
     subroutine add_to_stream_done_stack( self, cline )
         class(qsys_ctrl),  intent(inout) :: self
         class(cmdline),    intent(in)    :: cline
-        type(cmdline), allocatable :: tmp_stack(:)
+        class(cmdline), allocatable :: tmp_stack(:)
         integer :: i, stacksz
         if( .not.cline%defined('prg') )return
         if( .not. allocated(self%stream_cline_done_stack) )then
@@ -554,31 +555,25 @@ contains
             self%stream_cline_done_stack(1) = cline
         else
             ! append
-            stacksz   = size(self%stream_cline_done_stack)
-            tmp_stack = self%stream_cline_done_stack
-            deallocate(self%stream_cline_done_stack)
+            stacksz = size(self%stream_cline_done_stack)
+            call move_alloc(self%stream_cline_done_stack, tmp_stack)
             stacksz = stacksz + 1
             allocate( self%stream_cline_done_stack(stacksz) )
             do i = 1, stacksz-1
                 self%stream_cline_done_stack(i) = tmp_stack(i)
+                call tmp_stack(i)%kill
             enddo
             self%stream_cline_done_stack(stacksz) = cline
             deallocate(tmp_stack)
         endif
     end subroutine add_to_stream_done_stack
 
-    !>  \brief  is to get the streaming command-line stack of DONE jobs, which also flushes it
+    !>  \brief  is to get the streaming command-line stack of DONE jobs, which also deallocates it
     subroutine get_stream_done_stack( self, clines )
         class(qsys_ctrl),            intent(inout) :: self
         class(cmdline), allocatable, intent(out)   :: clines(:)
-        integer :: i,n
         if( .not. allocated(self%stream_cline_done_stack) )return
-        n = size(self%stream_cline_done_stack)
-        allocate(clines(n))
-        do i=1,n
-            clines(i) = self%stream_cline_done_stack(i)
-        enddo
-        deallocate(self%stream_cline_done_stack)
+        call move_alloc(self%stream_cline_done_stack, clines)
     end subroutine get_stream_done_stack
 
     !>  \brief  returns streaming jobs stack size
