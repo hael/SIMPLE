@@ -86,9 +86,7 @@ contains
             else
                 converged = ( self%mi_class > MI_CLASS_LIM_2D .and. self%frac_srch%avg > FRAC_LIM )
             endif
-            if( params_glob%refine.eq.'fast' )then
-                converged = converged .and. (params_glob%which_iter >= 4*FAST2D_ITER_BATCH)
-            else if( params_glob%refine.eq.'inpl' )then
+            if( params_glob%refine.eq.'inpl' )then
                 converged = self%dist_inpl%avg < 0.02
             endif
             if( converged )then

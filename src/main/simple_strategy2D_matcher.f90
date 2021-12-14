@@ -75,7 +75,7 @@ contains
             l_frac_update  = .false.
             l_greedy       = .false.
             l_snhc         = .true.
-            if( (params_glob%refine.eq.'greedy') .or. (params_glob%refine.eq.'fast') )then
+            if( (params_glob%refine.eq.'greedy') )then
                 l_greedy = .true.
                 l_snhc   = .false.
             endif
@@ -85,12 +85,6 @@ contains
             l_frac_update  = params_glob%l_frac_update
             l_snhc         = .false.
             l_greedy       = (params_glob%refine.eq.'greedy') .or.(params_glob%cc_objfun.eq.OBJFUN_EUCLID)
-            if( (params_glob%refine.eq.'fast') )then
-                l_greedy       = .true.
-                l_snhc         = .false.
-                l_partial_sums = .false.
-                l_frac_update  = .false.
-            endif
         endif
         if( l_stream )then
             l_frac_update             = .false.
@@ -117,24 +111,6 @@ contains
                 [params_glob%fromp,params_glob%top], params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
         else
             call build_glob%spproj_field%mask_from_state(1, ptcl_mask, pinds, fromto=[params_glob%fromp,params_glob%top])
-            if( params_glob%refine.eq.'fast' )then
-                if( which_iter <= 3*FAST2D_ITER_BATCH )then
-                    nptcls2update = count(ptcl_mask)
-                    deallocate(pinds)
-                    if( which_iter <= FAST2D_ITER_BATCH )then
-                        min_nsamples               = nint(real(FAST2D_MINSZ)/real(params_glob%nparts))
-                        params_glob%nptcls_per_cls = nint(real(FAST2D_NPTCLS_PER_CLS)/real(params_glob%nparts))
-                    else if( which_iter <= 2*FAST2D_ITER_BATCH )then
-                        min_nsamples               = nint(real(2*FAST2D_MINSZ)/params_glob%nparts)
-                        params_glob%nptcls_per_cls = nint(real(2*FAST2D_NPTCLS_PER_CLS)/params_glob%nparts)
-                    else
-                        min_nsamples               = nint(0.35*real(nptcls2update))
-                        params_glob%nptcls_per_cls = nint(real(4*FAST2D_NPTCLS_PER_CLS)/params_glob%nparts)
-                    endif
-                    call build_glob%spproj_field%sample_rnd_subset(params_glob%ncls, [params_glob%fromp,params_glob%top],&
-                        &min_nsamples, params_glob%nptcls_per_cls, params_glob%nparts, ptcl_mask, pinds)
-                endif
-            endif
             call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], mask=ptcl_mask)
             nptcls2update = count(ptcl_mask)
         endif

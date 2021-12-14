@@ -111,6 +111,7 @@ contains
     procedure          :: read_ctfparams_state_eo
     procedure          :: read_segment
     procedure, private :: segreader
+    procedure          :: read_segments_info
     ! writers
     procedure          :: write
     procedure          :: write_segment_inside
@@ -3163,6 +3164,27 @@ contains
                 call self%bos%read_segment(isegment, self%compenv)
         end select
     end subroutine segreader
+
+
+    subroutine read_segments_info( self, fname, seginds, seginfos )
+        class(sp_project),                  intent(inout) :: self
+        character(len=*),                   intent(in)  :: fname
+        type(binoris_seginfo), allocatable, intent(out) :: seginfos(:)
+        integer,               allocatable, intent(out) :: seginds(:)
+        character(len=:), allocatable :: projfile
+        integer :: i
+        if( fname2format(fname) .ne. 'O' )then
+            THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: print_info')
+        endif
+        projfile = trim(fname)
+        if( file_exists(projfile) )then
+            call self%bos%open(projfile)
+            call self%bos%get_segments_info(seginds, seginfos)
+            call self%bos%close
+        else
+            THROW_HARD('projfile: '//trim(projfile)//' nonexistent; print_info')
+        endif
+    end subroutine read_segments_info
 
     ! writers
 
