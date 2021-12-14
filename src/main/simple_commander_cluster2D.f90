@@ -198,13 +198,8 @@ contains
         call params%new(cline)
         orig_projfile = params%projfile
         if( .not. cline%defined('maxits') )then
-            if( params%refine.eq.'fast' )then
-                params%maxits = nint(MAXITS_FAST)
-                call cline%set('maxits', MAXITS_FAST)
-            else
-                params%maxits = nint(MAXITS)
-                call cline%set('maxits', MAXITS)
-            endif
+            params%maxits = nint(MAXITS)
+            call cline%set('maxits', MAXITS)
         endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -228,11 +223,7 @@ contains
         cline_cluster2D2 = cline
         cline_scale      = cline
         call cline_cluster2D1%set('prg', 'cluster2D')
-        if( params%refine.eq.'fast' )then
-            call cline_cluster2D1%set('maxits', MINITS_FAST)
-        else
-            call cline_cluster2D1%set('maxits', MINITS)
-        endif
+        call cline_cluster2D1%set('maxits', MINITS)
         call cline_cluster2D1%set('objfun',     'cc')
         call cline_cluster2D1%set('match_filt', 'no')
         call cline_cluster2D1%set('center',     'no')
@@ -249,11 +240,7 @@ contains
         call cline_cluster2D2%set('trs',         MINSHIFT)
         call cline_cluster2D2%set('objfun',     'cc')
         if( .not.cline%defined('maxits') )then
-            if( params%refine.eq.'fast' )then
-                call cline_cluster2D2%set('maxits', MAXITS_FAST)
-            else
-                call cline_cluster2D2%set('maxits', MAXITS)
-            endif
+            call cline_cluster2D2%set('maxits', MAXITS)
         endif
         if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
         ! Scaling
