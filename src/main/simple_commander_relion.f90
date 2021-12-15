@@ -5,7 +5,6 @@ use simple_cmdline,        only: cmdline
 use simple_sp_project,     only: sp_project
 use simple_relion,         only: relion_project
 use simple_oris,           only: oris
-use simple_binoris_io,     only: binread_nlines, binread_oritab
 use simple_parameters,     only: parameters, params_glob
 implicit none
 

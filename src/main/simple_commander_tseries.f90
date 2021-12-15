@@ -13,6 +13,7 @@ use simple_qsys_env,         only: qsys_env
 use simple_commander_volops, only: reproject_commander
 use simple_nanoparticle
 use simple_qsys_funs
+use simple_binoris_io
 implicit none
 
 public :: tseries_import_commander
@@ -242,7 +243,6 @@ contains
     end subroutine exec_tseries_motion_correct_distr
 
     subroutine exec_tseries_motion_correct( self, cline )
-        use simple_binoris_io,          only: binwrite_oritab
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_ori,                 only: ori
         class(tseries_motion_correct_commander), intent(inout) :: self

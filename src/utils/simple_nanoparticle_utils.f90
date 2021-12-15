@@ -6,7 +6,6 @@ module simple_nanoparticle_utils
 include 'simple_lib.f08'
 use simple_qr_solve
 use simple_atoms, only: atoms
-use simple_defs_atoms
 implicit none
 
 public :: fit_lattice, calc_contact_scores, run_cn_analysis, strain_analysis

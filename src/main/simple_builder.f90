@@ -1,6 +1,7 @@
 ! centralised builder (the main object constructor in SIMPLE)
 module simple_builder
 include 'simple_lib.f08'
+use simple_binoris_io
 use simple_image,            only: image
 use simple_binimage,         only: binimage
 use simple_sp_project,       only: sp_project
@@ -166,7 +167,6 @@ contains
     ! LOW-LEVEL BUILDERS
 
     subroutine build_spproj( self, params, cline, wthreads )
-        use simple_binoris_io,     only: binread_ctfparams_state_eo, binread_oritab
         use simple_user_interface, only: get_prg_ptr
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params

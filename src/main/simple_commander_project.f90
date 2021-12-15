@@ -1,7 +1,7 @@
 ! concrete commander: operations on projects (spproject) and associated files
 module simple_commander_project
 include 'simple_lib.f08'
-use simple_binoris_io,     only: binread_nlines, binread_oritab
+use simple_binoris_io
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_oris,           only: oris
@@ -418,7 +418,6 @@ contains
     subroutine exec_import_particles( self, cline )
         use simple_oris,      only: oris
         use simple_nrtxtfile, only: nrtxtfile
-        use simple_binoris_io ! use all in there
         class(import_particles_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         character(len=:),      allocatable :: phaseplate, ctfstr
@@ -1085,7 +1084,6 @@ contains
         !$ use omp_lib
         !$ use omp_lib_kinds
         use simple_qsys_funs,  only: qsys_job_finished
-        use simple_binoris_io, only: binwrite_oritab
         use simple_ori,        only: ori
         use simple_image,      only: image
         use simple_cmdline,    only: cmdline

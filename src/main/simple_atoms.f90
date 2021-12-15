@@ -5,7 +5,6 @@ module simple_atoms
 include 'simple_lib.f08'
 use simple_strings
 use simple_fileio
-use simple_defs_atoms
 implicit none
 
 public :: atoms

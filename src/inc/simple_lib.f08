@@ -1,9 +1,12 @@
 !! Simple cryo-EM core library
 
 !! Config and constants
-use simple_defs
-use simple_defs_fname
+use simple_ansi_ctrls
+use simple_defs_atoms
 use simple_defs_conv
+use simple_defs_fname
+use simple_defs_ori
+use simple_defs
 !! File I/O and system utilities
 use simple_error
 use simple_syslib

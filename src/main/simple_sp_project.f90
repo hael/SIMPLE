@@ -2989,7 +2989,6 @@ contains
     ! printers
 
     subroutine print_info( self, fname )
-        use simple_ansi_ctrls
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: fname
         character(len=:),      allocatable :: projfile, record

@@ -1,6 +1,7 @@
 ! concrete commander: pre-processing routines
 module simple_commander_preprocess
 include 'simple_lib.f08'
+use simple_binoris_io
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
 use simple_parameters,     only: parameters, params_glob
@@ -801,7 +802,6 @@ contains
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_ctf_estimate_iter,   only: ctf_estimate_iter
         use simple_picker_iter,         only: picker_iter
-        use simple_binoris_io,          only: binwrite_oritab
         class(preprocess_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters)              :: params
@@ -1069,7 +1069,6 @@ contains
 
     subroutine exec_motion_correct( self, cline )
         use simple_sp_project,          only: sp_project
-        use simple_binoris_io,          only: binwrite_oritab
         use simple_motion_correct_iter, only: motion_correct_iter
         class(motion_correct_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline !< command line input
@@ -1202,7 +1201,6 @@ contains
 
     subroutine exec_gen_pspecs_and_thumbs( self, cline )
         use simple_sp_project,       only: sp_project
-        use simple_binoris_io,       only: binwrite_oritab
         use simple_pspec_thumb_iter, only: pspec_thumb_iter
         class(gen_pspecs_and_thumbs_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline !< command line input
@@ -1301,7 +1299,6 @@ contains
 
     subroutine exec_ctf_estimate( self, cline )
         use simple_sp_project,          only: sp_project
-        use simple_binoris_io,          only: binwrite_oritab
         use simple_ctf_estimate_iter,   only: ctf_estimate_iter
         class(ctf_estimate_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline  !< command line input
@@ -1501,8 +1498,7 @@ contains
     end subroutine exec_pick_distr
 
     subroutine exec_pick( self, cline )
-        use simple_binoris_io,     only: binwrite_oritab
-        use simple_picker_iter,    only: picker_iter
+        use simple_picker_iter, only: picker_iter
         class(pick_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline !< command line input
         type(parameters)              :: params
@@ -2466,9 +2462,8 @@ contains
     end subroutine exec_reextract
 
     subroutine exec_pick_extract( self, cline )
-        use simple_sp_project,          only: sp_project
-        use simple_picker_iter,         only: picker_iter
-        use simple_binoris_io,          only: binwrite_oritab
+        use simple_sp_project,  only: sp_project
+        use simple_picker_iter, only: picker_iter
         class(pick_extract_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters)              :: params

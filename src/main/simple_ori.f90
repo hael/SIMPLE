@@ -1,7 +1,6 @@
 ! an orientation
 module simple_ori
 include 'simple_lib.f08'
-use simple_defs_ori
 implicit none
 
 public :: ori, test_ori, euler2m, m2euler

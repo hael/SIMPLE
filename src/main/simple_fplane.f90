@@ -5,7 +5,6 @@ include 'simple_lib.f08'
 use simple_image,         only: image
 use simple_parameters,    only: params_glob
 use simple_euclid_sigma2, only: euclid_sigma2, eucl_sigma2_glob
-use simple_fftw3
 use simple_ctf, only: ctf
 implicit none
 

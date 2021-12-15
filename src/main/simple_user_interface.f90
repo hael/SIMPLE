@@ -1,6 +1,5 @@
 module simple_user_interface
 include 'simple_lib.f08'
-use simple_ansi_ctrls
 implicit none
 
 public :: simple_program, make_user_interface, get_prg_ptr, list_simple_prgs_in_ui
@@ -4354,7 +4353,6 @@ contains
     end subroutine print_ui_latex
 
     subroutine print_cmdline( self )
-        use simple_ansi_ctrls
         class(simple_program), intent(in) :: self
         logical     :: l_distr_exec
         l_distr_exec = self%executable .eq. 'simple_exec'
@@ -4382,7 +4380,6 @@ contains
     end subroutine print_cmdline
 
     subroutine print_cmdline_latex( self )
-        use simple_ansi_ctrls
         class(simple_program), intent(in) :: self
         logical     :: l_distr_exec
         l_distr_exec = self%executable .eq. 'simple_exec'
