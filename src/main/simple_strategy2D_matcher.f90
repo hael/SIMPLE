@@ -105,14 +105,13 @@ contains
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
+        allocate(ptcl_mask(params_glob%fromp:params_glob%top))
         if( l_frac_update )then
-            allocate(ptcl_mask(params_glob%fromp:params_glob%top))
-            call build_glob%spproj_field%sample4update_and_incrcnt2D(params_glob%ncls, &
-                [params_glob%fromp,params_glob%top], params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
+            call build_glob%spproj_field%sample4update_and_incrcnt([params_glob%fromp,params_glob%top],&
+            &params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
         else
-            call build_glob%spproj_field%mask_from_state(1, ptcl_mask, pinds, fromto=[params_glob%fromp,params_glob%top])
-            call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], mask=ptcl_mask)
-            nptcls2update = count(ptcl_mask)
+            call build_glob%spproj_field%sample4update_and_incrcnt([params_glob%fromp,params_glob%top],&
+            &1.0, nptcls2update, pinds, ptcl_mask)
         endif
 
         ! SNHC LOGICS
