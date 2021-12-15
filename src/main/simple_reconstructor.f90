@@ -204,7 +204,7 @@ contains
         write(filnum, pos=1, iostat=ierr) self%rho
         if( ierr .ne. 0 ) &
             call fileiochk('read_rho; simple_reconstructor writing '//trim(kernam), ierr)
-        call fclose(filnum,errmsg='simple_reconstructor ; write rho  fclose ')
+        call fclose(filnum)
     end subroutine write_rho
 
     !> Read sampling density matrix
@@ -218,7 +218,7 @@ contains
         if( ierr .ne. 0 ) &
             call fileiochk('simple_reconstructor::read_rho; simple_reconstructor reading '&
             &// trim(kernam), ierr)
-        call fclose(filnum,errmsg='read_rho; simple_reconstructor closing '//trim(kernam))
+        call fclose(filnum)
     end subroutine read_rho
 
     ! CONVOLUTION INTERPOLATION

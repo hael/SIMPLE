@@ -79,7 +79,7 @@ contains
             write(fnum,rec=i) pcavec
         end do
         deallocate(pcavec)
-        call fclose(fnum,errmsg='make_pattern_stack; simple_procimgfile')
+        call fclose(fnum)
         call img%kill
     end subroutine make_pattern_stack
 

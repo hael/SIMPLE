@@ -186,7 +186,7 @@ contains
                     if( self%was_written_to )then
                         call self%overall_head%write(self%funit)
                     endif
-                    call fclose(self%funit, ios,errmsg="simple_imgfile::close error")
+                    call fclose(self%funit)
                 endif
         end select
         if( allocated(self%overall_head) )then

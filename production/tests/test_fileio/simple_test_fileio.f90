@@ -1,9 +1,8 @@
 program simple_test_fileio
     include 'simple_lib.f08'
     use iso_fortran_env
-    use simple_testfuns          ! use all in there
-    use simple_image,            only: image
-
+    use simple_testfuns
+    use simple_image, only: image
     implicit none
     type( image )         :: cube, img
     real                  :: smpd
@@ -12,12 +11,10 @@ program simple_test_fileio
     character(len=8)      :: datestr
     character(len=STDLEN) :: folder,  oldfolder, curDir, cmd
     character(len=30)     :: fname
-
     global_verbose=.true.
     call seed_rnd
     call date_and_time(date=datestr)
     folder = trim('./SIMPLE_TEST_FILEIO_'//datestr)
-
     call simple_mkdir( trim(folder) )
     call simple_mkdir( trim(folder) ) !! double checking creation to print ignore statement
     print *," Listing of ", folder
@@ -35,7 +32,6 @@ program simple_test_fileio
         call fopen(un,file=trim(adjustl(fname)),iostat=istat)
         if(istat/=0) then
             print *, "   Maximum number of open file objects: ", i, " newunit: ",un
-            !!        call simple_error_check()
             exit
         end if
         u(i)=un
@@ -43,12 +39,9 @@ program simple_test_fileio
     print *,">>> Number of files opened: ", i
     print *,">>> Testing FCLOSE"
     do j=i,1,-1
-        !!   print *," Closing ", u(j)
         call fclose(u(j))
     end do
-
     print *,">>> Testing FOPEN/FCLOSE completed"
-
     ! dummy data
     box    = 96
     smpd   = 2.
@@ -69,31 +62,19 @@ program simple_test_fileio
     call img%write( 'cubes.mrc' )
     call img%kill
     write(logfhandle,*)'>>> WROTE TEST VOLUME cubes.mrc'
-    ! test units
-    !command = 'simple_test_units'
-    !call exec_cmdline( trim(command) )
-    ! test search
-    !command = 'simple_test_srch vol1=cubes.mrc msk='//int2str(msk)//&
-    !    & ' smpd='//real2str(smpd)//' verbose=no'
-    !call exec_cmdline( trim(command) )
-    ! end
-
     write(logfhandle,*)'>>> Testing Read/Write accuracy (floats)'
     call test_readwrite_accuracy
     call simple_chdir(PATH_PARENT)
     call simple_end('**** SIMPLE_TEST_FILEIO NORMAL STOP ****')
 
-
 contains
 
     subroutine  test_readwrite_accuracy
-
         character(len=128) :: teststring
         integer, parameter :: nformats=4
         character(len=20), parameter :: formats(nformats) =   &
             [ '( E11.4)', '( E13.6)', '( E15.8)', '(E17.10)' ]
         real, dimension(nformats) :: errors
-
         real :: output, back
         real, parameter :: delta=epsilon(output)
         integer :: i,j
@@ -112,11 +93,9 @@ contains
             enddo
             output = output + spac(j) ! delta
         end do
-
         print *, 'Maximum errors: '
         print *, formats
         print *, errors
-
         print *, 'Trying with default format: '
         j=0
         errors = 0.
@@ -127,9 +106,7 @@ contains
             read(teststring,*) back
             if (abs(back-output) > errors(1)) errors(1) = abs(back-output)
             output = output + spac(j) ! delta
-
         end do
-
         print *, 'Error = ', errors(1)
     end subroutine test_readwrite_accuracy
 

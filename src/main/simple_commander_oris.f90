@@ -472,7 +472,7 @@ contains
                 write(funit,'(A,F7.3,F7.3,F7.3,F7.3,F7.3,F7.3,F6.3)')&
                 &'.cylinder ', xyz_start, xyz_end, radius
             enddo
-            call fclose(funit, errmsg="simple_commander_oris::exec_vizoris closing "//trim(fname))
+            call fclose(funit)
         else
             ! time series
             ! unit sphere tracking
@@ -506,7 +506,7 @@ contains
                 xyz_start = xyz
             enddo
             write(funit,'(A,F7.3,F7.3,F7.3,A)')".sphere ", xyz, " 0.08"
-            call fclose(funit, errmsg="simple_commander_oris::exec_vizoris closing "//trim(fname))
+            call fclose(funit)
             ! distance output
             avg_geodist = 0.
             avg_euldist = 0.
@@ -532,7 +532,7 @@ contains
                 write(funit,'(I7,A1,F8.3,A1,F8.3)')i, ',', ang, ',', geodist
                 o_prev = o
             enddo
-            call fclose(funit, errmsg="simple_commander_oris::exec_vizoris closing "//trim(fname))
+            call fclose(funit)
             avg_geodist = avg_geodist / real(n-1)
             avg_euldist = avg_euldist / real(n-1)
             write(logfhandle,'(A,F8.3)')'>>> AVERAGE EULER    DISTANCE: ',avg_euldist

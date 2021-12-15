@@ -203,7 +203,7 @@ contains
         class(nrtxtfile), intent(inout) :: self
         integer :: ios
         if( is_open(self%funit) )then
-            call fclose(self%funit,iostat=ios,errmsg="nrtxtfile; kill;  ")
+            call fclose(self%funit)
         end if
         self%recs_per_line = 0
         self%ndatalines = 0

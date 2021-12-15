@@ -1480,7 +1480,7 @@ contains
                     deallocate(abs_name)
                 endif
             end do
-            call fclose(fnr,errmsg="parameters ; read_vols error closing "//trim(filename))
+            call fclose(fnr)
         end subroutine read_vols
 
         subroutine read_masks
@@ -1503,7 +1503,7 @@ contains
                     deallocate(abs_name)
                 endif
             end do
-            call fclose(fnr,errmsg="parameters ; read_masks error closing "//trim(filename))
+            call fclose(fnr)
         end subroutine read_masks
 
         subroutine check_file( file, var, allowed1, allowed2, notAllowed )
@@ -1625,8 +1625,7 @@ contains
                     call fileiochk("In parameters:: double_check_file_formats fopen failed "//trim(self%filetab) , io_stat)
                     read(funit,'(a256)') fname
                     form = fname2format(fname)
-                    call fclose(funit, &
-                        errmsg="In parameters:: double_check_file_formats fclose failed "//trim(self%filetab) )
+                    call fclose(funit)
                     call self%set_img_format(form)
                 endif
             endif

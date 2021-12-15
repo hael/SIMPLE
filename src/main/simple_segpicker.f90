@@ -395,7 +395,7 @@ contains
             write(funit,'(I7,I7,I7,I7,I7)') int(self%particles_coord(n_cc,1)),&
             int(self%particles_coord(n_cc,2)), self%orig_box, self%orig_box, -3
         end do
-        call fclose(funit,errmsg='picker; write_boxfile end')
+        call fclose(funit)
         ! returns absolute path
         call make_relativepath(CWD_GLOB, self%boxname, boxfile)
     end subroutine write_boxfile

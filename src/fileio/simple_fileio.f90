@@ -1,4 +1,3 @@
-! generic fileio module
 module simple_fileio
 use simple_defs
 use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
@@ -19,11 +18,6 @@ interface arr2txtfile
     module procedure arr2txtfile_2
 end interface arr2txtfile
 
-interface fclose
-    module procedure fclose_1
-    module procedure fclose_2
-end interface fclose
-
 interface filepath
     module procedure filepath_1
     module procedure filepath_2
@@ -33,7 +27,6 @@ integer, parameter :: MAX_UNIT_NUMBER = 1000
 
 contains
 
-    !> \brief  is for checking file IO status
     subroutine fileiochk( message, iostat , die)
         character(len=*),  intent(in) :: message  !< error message
         integer,           intent(in) :: iostat   !< error status
@@ -52,11 +45,6 @@ contains
         endif
     end subroutine fileiochk
 
-    !> FOPEN enforce F2008 style open
-    !!
-    !! Usage: if(.not.fopen(fnr, fname, STATUS='REPLACE', action='WRITE', iostat=file_stat))&
-    !!        call fileiochk('In: commander_rec :: volassemble', file_stat )
-    !!
     subroutine fopen(funit, file, status, action, iostat, access, form, recl, async, pad,&
         &decimal, round, delim, blank, convert, iomsg, position, errmsg)
         integer,                    intent(inout) :: funit
@@ -249,44 +237,10 @@ contains
         if(present(recl))recl=recl_this
     end subroutine fopen
 
-    !> FCLOSE replacement for intrinsic close
-    !!
-    !! Usage: call fclose( fnr,file_stat,errmsg='In: <src>::<func> failed ' )
-    !!
-    subroutine fclose_1 (funit,iostat,errmsg)
-        integer,          intent(in)           :: funit
-        integer,          intent(inout)        :: iostat
-        character(len=*), intent(in), optional :: errmsg
-        character(len=STDLEN) :: msg_this
-        if (is_open(funit)) then
-            msg_this="SIMPLE_FILEIO::fclose_1 failed closing unit "//int2str(funit)
-            if (present(errmsg)) write(msg_this,'(A)') trim(adjustl(errmsg))
-            CLOSE (funit,IOSTAT=iostat)
-            call simple_error_check(iostat, trim(msg_this))
-        end if
-    end subroutine fclose_1
-
-    subroutine fclose_2 (funit,errmsg,dispose,status)
-        integer,          intent(in)           :: funit
-        character(len=*), intent(in), optional :: status,dispose,errmsg
-        character(len=30)     :: status_this
-        character(len=STDLEN) :: msg_this
-        integer               :: iostat
-        if(is_io(funit)) then
-            return !true
-        end if
-        !! status or dispose: 'KEEP' or 'DELETE', unless file was opened with status=SCRATCH
-        write(status_this,'(A)')'KEEP'
-        if (present(dispose))then
-            if (stringsAreEqual(dispose, 'DELETE',.false.))  write(status_this ,'(A)') upperCase(dispose)
-        end if
-        if (present(status))then
-            if (stringsAreEqual(status, 'DELETE',.false.))  write(status_this ,'(A)') upperCase(status)
-        end if
-        msg_this=" no message"
-        if( present(errmsg) ) write(msg_this,'(A)') errmsg
-        if( is_open(funit) ) close(funit,IOSTAT=iostat,STATUS=status_this)
-    end subroutine fclose_2
+    subroutine fclose( funit )
+        integer, intent(in) :: funit
+        if( is_open(funit) ) close(funit)
+    end subroutine fclose
 
     subroutine wait_for_closure( fname )
         character(len=*), intent(in)  :: fname
@@ -308,7 +262,6 @@ contains
         enddo
     end subroutine wait_for_closure
 
-    !> \brief return the number of lines in a textfile
     function nlines( fname ) result( n )
         use simple_strings
         character(len=*), intent(in)  :: fname !< input filename
@@ -328,13 +281,12 @@ contains
                     if(.not. strIsComment(junk))  n = n + 1
                 endif
             end do
-            call fclose_1( funit, io_status ,errmsg=" Error closing file in ::nlines "//trim(tfile))
+            call fclose(funit)
         else
             n = 0
         endif
     end function nlines
 
-    !> \brief  return the size of a binary file
     function filelength( fname ) result( filesz )
         character(len=*), intent(in) :: fname !< input filename
         integer                      :: filesz, funit, ios, cnt,recl
@@ -355,20 +307,18 @@ contains
                     filesz = filesz+1
                 endif
             end do
-            call fclose_1( funit, ios ,errmsg=" Error closing file in ::filelength "//trim(fname))
+            call fclose(funit)
         else
             filesz = 0
         endif
     end function filelength
 
-    !> \brief  return file size in bytes
     function funit_size(unit) result(sz)
         integer, intent(in) :: unit !< input file unit
         integer(kind=8)     :: sz
         inquire(unit=unit,size=sz)
     end function funit_size
 
-    !> \brief  return file opened state
     logical function is_funit_open(funit)
         integer, intent(in) :: funit !< input file unit
         inquire(unit=funit, OPENED=is_funit_open)
@@ -406,7 +356,6 @@ contains
         enddo
     end subroutine get_open_funits
 
-    !> \brief  is for adding to filebody
     function add2fbody( fname, suffix, str ) result( newname )
         character(len=*), intent(in)  :: fname, suffix, str
         character(len=:), allocatable :: newname
@@ -415,7 +364,6 @@ contains
         allocate(newname, source=fname(:pos-1)//trim(str)//trim(suffix))
     end function add2fbody
 
-    !> \brief  is for substituting suffices
     function swap_suffix( fname, suffix, old_suffix ) result( newname )
         character(len=*), intent(in)  :: fname, suffix, old_suffix
         character(len=:), allocatable :: newname
@@ -424,7 +372,6 @@ contains
         allocate(newname, source=fname(:pos-1)//trim(suffix))
     end function swap_suffix
 
-    !> \brief  is for extracting the body of a file
     function get_fbody( fname, suffix, separator ) result( fbody )
         character(len=*), intent(in) :: fname, suffix !< file extension
         character(len=STDLEN)        :: fbody
@@ -441,8 +388,6 @@ contains
         fbody = fname(:pos-1)
     end function get_fbody
 
-    !> \brief  is for putting a new extension on filename
-    !! \param fname Input filename
     function fname_new_ext( fname, suffix ) result( new_fname )
         character(len=*), intent(in)  :: fname, suffix !< filename and new file extension
         character(len=STDLEN)         :: fbody, new_fname
@@ -452,7 +397,6 @@ contains
         new_fname = trim(fbody)//'.'//trim(suffix)
     end function fname_new_ext
 
-    !>  \brief  Return the 3-letter extension of a fname if present (without the period)
     pure function fname2ext( fname )
         character(len=*), intent(in)  :: fname    !< filename
         character(len=:), allocatable :: fname2ext
@@ -486,7 +430,6 @@ contains
         call str2int(nrstr, istat, fname2iter)
     end function fname2iter
 
-    !> strip directory from filenames (POSIX basename)
     pure function basename( fname ) result( new_fname)
         character(len=*), intent(in)  :: fname     !< abs filename
         character(len=:), allocatable :: new_fname
@@ -500,7 +443,6 @@ contains
         endif
     end function basename
 
-    !> get path from file name  (POSIX dirname)
     pure function get_fpath( fname ) result( path )
         character(len=*), intent(in)  :: fname !< abs filename
         character(len=:), allocatable :: path
@@ -732,7 +674,7 @@ contains
         character(len=LONGSTRLEN), allocatable, intent(out) :: filenames(:) !< array of filenames
         character(len=LONGSTRLEN), allocatable  :: fnames_tmp(:)
         character(len=LONGSTRLEN) :: fname
-        integer :: nl, funit, iline, io_stat, cnt
+        integer :: nl, funit, iline, cnt, io_stat
         nl = nlines(trim(filetable))
         if( nl == 0 ) return
         call fopen(funit, filetable, 'old', 'unknown', io_stat)
@@ -746,8 +688,7 @@ contains
                 fnames_tmp(cnt) = fname
             endif
         end do
-        call fclose_1(funit,io_stat)
-        call fileiochk("read_filetable failed to close",io_stat)
+        call fclose(funit)
         if( allocated(filenames) ) deallocate(filenames)
         if( cnt > 0 ) allocate(filenames(cnt), source=fnames_tmp(:cnt))
     end subroutine read_filetable
@@ -763,7 +704,7 @@ contains
         do iline=1,nl
             write(funit,'(a)') trim(filenames(iline))
         end do
-        call fclose_1(funit,io_stat)
+        call fclose(funit)
         call fileiochk("write_filetable failed to close",io_stat)
     end subroutine write_filetable
 
@@ -774,8 +715,7 @@ contains
         call fopen(funit,filename, 'replace', 'unknown', io_stat)
         call fileiochk("write_singlelineoftext failed to open file: "//filename,io_stat )
         write(funit,'(A)')trim(text)
-        call fclose_1(funit,io_stat)
-        call fileiochk("write_singlelineoftext failed to close: "//filename,io_stat)
+        call fclose(funit)
     end subroutine write_singlelineoftext
 
     !> \brief  for converting a real array 2 file
@@ -793,7 +733,7 @@ contains
         do i=1,size(arr)
             write(funit, rec=i+1) arr(i)
         end do
-        call fclose_1(funit,io_stat, errmsg="arr2file_1 fclose_1 failed "//trim(fnam))
+        call fclose(funit)
     end subroutine arr2file
 
     subroutine arr2txtfile_1( arr, fnam )
@@ -806,7 +746,7 @@ contains
         do i=1,size(arr)
             write(funit,*) arr(i)
         end do
-        call fclose_1(funit,io_stat, errmsg="arr2txtfile fclose_1 failed "//trim(fnam))
+        call fclose(funit)
     end subroutine arr2txtfile_1
 
     subroutine arr2txtfile_2( arr, fnam )
@@ -819,7 +759,7 @@ contains
         do i=1,size(arr)
             write(funit,*) arr(i)
         end do
-        call fclose_1(funit,io_stat, errmsg="arr2txtfile fclose_1 failed "//trim(fnam))
+        call fclose(funit)
     end subroutine arr2txtfile_2
 
     !> \brief  for converting a file generated by arr2file back to an array
@@ -838,7 +778,7 @@ contains
             do i=1,n
                 read(funit, rec=i+1) arr(i)
             end do
-            call fclose_1(funit,io_stat,errmsg="file2rarr fclose_1 failed "//trim(fnam))
+            call fclose(funit)
         else
             THROW_HARD(trim(fnam)//' does not exist')
         endif

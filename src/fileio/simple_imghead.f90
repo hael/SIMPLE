@@ -1293,7 +1293,7 @@ contains
                     call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
                     call fileiochk(" get_mrcfile_info fopen error "//trim(fname),ios)
                     call hed%read(filnum)
-                    call fclose(filnum,errmsg=" get_mrcfile_info close error "//trim(fname))
+                    call fclose(filnum)
                     ldim = hed%getDims()
                     smpd = hed%getPixSz()
                     if( doprint )then
@@ -1311,7 +1311,7 @@ contains
                     call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
                     call fileiochk(" get_mrcfile_info fopen error "//trim(fname),ios)
                     call hed%read(filnum)
-                    call fclose(filnum, errmsg=" get_mrcfile_info fclose error "//trim(fname))
+                    call fclose(filnum)
                     if( doprint )then
                         call hed%print_imghead
                         write(logfhandle,'(a,1x,f10.6)')  'Minimum value: ', hed%getMinPixVal()
@@ -1341,7 +1341,7 @@ contains
                 call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM',iostat=ios)
                 if(ios/=0)call fileiochk(" get_spifile_info fopen error "//trim(fname),ios)
                 call read_spihed
-                call fclose(filnum,errmsg=" get_spifile_info fclose error "//trim(fname))
+                call fclose(filnum)
                 if( .not. any(ldim < 1) )then
                     allocate(conv, source='NATIVE')
                     call print_spihed
@@ -1350,7 +1350,7 @@ contains
                 call fopen(filnum, status='OLD', action='READ', file=fname, access='STREAM', iostat=ios)
                 if(ios/=0)call fileiochk(" get_spifile_info fopen error "//trim(fname),ios)
                 call read_spihed
-                call fclose(filnum,errmsg=" get_spifile_info fclose error "//trim(fname))
+                call fclose(filnum)
                 if( .not. any(ldim < 1) )then
                     allocate(conv, source='BIG_ENDIAN')
                     call print_spihed
@@ -1360,7 +1360,7 @@ contains
                 &access='STREAM', iostat=ios)
                 if(ios/=0)call fileiochk(" get_spifile_info fopen error "//trim(fname),ios)
                 call read_spihed
-                call fclose(filnum,errmsg=" get_spifile_info fclose error "//trim(fname))
+                call fclose(filnum)
                 if( .not. any(ldim < 1) )then
                     allocate(conv, source='LITTLE_ENDIAN')
                     call print_spihed
@@ -1549,7 +1549,7 @@ contains
         if(ios/=0)call fileiochk("test_imghead fopen error",ios)
         call hed%write(funit)
         call hed2%read(funit)
-        call fclose(funit,ios,errmsg="test_imghead fclose error")
+        call fclose(funit)
         write(logfhandle,*) '>>> PRINTING HEADER THAT WAS WRITTEN TO DISK'
         call hed%print_imghead
         write(logfhandle,*) ''

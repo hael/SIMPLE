@@ -617,7 +617,7 @@ contains
                 exit ! we found the end...
             endif
         enddo
-        call fclose(funit, errmsg='simple_chash :: read; ')
+        call fclose(funit)
     end subroutine read
 
     !>  \brief  for writing key-vals to a text file
@@ -629,7 +629,7 @@ contains
         call fileiochk('simple_chash :: write; Error when opening file for writing: '&
             //trim(fname), ios)
         call self%print_key_val_pairs(funit)
-        call fclose(funit, errmsg='simple_chash :: write; ')
+        call fclose(funit)
     end subroutine write
 
     ! DESTRUCTORS
