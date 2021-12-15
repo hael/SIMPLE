@@ -156,7 +156,7 @@ contains
 
     subroutine exec_cleanup2D( self, cline )
         use simple_commander_project, only: scale_project_commander_distr
-        use simple_procimgfile,       only: random_selection_from_imgfile, random_cls_from_imgfile
+        use simple_procimgstk,       only: random_selection_from_imgfile, random_cls_from_imgfile
         use simple_commander_imgproc, only: scale_commander
         use simple_class_frcs,        only: class_frcs
         class(cleanup2D_commander_hlev), intent(inout) :: self
@@ -618,7 +618,7 @@ contains
     end subroutine exec_cluster2D_autoscale
 
     subroutine exec_cluster2D_distr( self, cline )
-        use simple_procimgfile
+        use simple_procimgstk
         class(cluster2D_commander_distr), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! commanders

@@ -63,7 +63,7 @@ contains
 
     !> centers base on centre of mass
      subroutine exec_masscen( self, cline )
-        use simple_procimgfile, only: masscen_imgfile
+        use simple_procimgstk, only: masscen_imgfile
         class(masscen_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline
         type(parameters) :: params
@@ -118,7 +118,7 @@ contains
 
     !> for shifting a stack according to shifts in oritab
     subroutine exec_shift( self, cline )
-        use simple_procimgfile, only: shift_imgfile
+        use simple_procimgstk, only: shift_imgfile
         class(shift_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
         type(parameters) :: params
