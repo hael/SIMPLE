@@ -428,11 +428,6 @@ contains
         if (status == 1) then
             dir_exists = .true.
             call simple_file_stat( trim(adjustl(dname)), status, buffer, .false. )
-            if(global_debug)then
-                write(logfhandle,*) " status ", status
-                write(logfhandle,*) " file mode ", buffer(3)
-                write(logfhandle,*) " last modified ", buffer(10)
-            endif
         endif
     end function dir_exists
 
@@ -537,20 +532,12 @@ contains
             if(.not. dir_exists(trim(adjustl(path)))) then
                 if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
                 write(logfhandle,*)" syslib:: simple_mkdir failed to create "//trim(path)
-
                 if(.not. ignore_here)then
-
                     if(io_status /= 0) call simple_error_check(io_status, &
                         "syslib:: simple_mkdir failed to create "//trim(path))
                 endif
-            else
-                if(global_verbose)then
-                    write(logfhandle,*)" Directory ", trim(path), " created."
-                endif
             endif
             deallocate(path)
-        else
-            if(global_verbose) write(logfhandle,*)" Directory ", trim(dir), " already exists, simple_mkdir ignoring request"
         end if
         if(present(status)) status = io_status
     end subroutine simple_mkdir
@@ -580,10 +567,7 @@ contains
                 call simple_error_check(io_status, "syslib:: simple_rmdir failed to remove "//trim(d))
                 io_status=0
             endif
-            if(global_debug) write(logfhandle,*)' simple_rmdir removed ', count, ' items'
             deallocate(path)
-        else
-            if(global_debug) write(logfhandle,*)" Directory ", d, " does not exists, simple_rmdir ignoring request"
         end if
         if(present(status)) status = io_status
     end subroutine simple_rmdir
@@ -871,13 +855,6 @@ contains
         valuePeak = totRAM
         valueSize = shRAM
         valueHWM = HWM
-        if(global_debug)then
-            write(logfhandle,*)" simple_sysinfo_usage :"
-            write(logfhandle,*)" Total usable main memory size (bytes):", valuePeak
-            write(logfhandle,*)" Amount of shared memory:              ", valueSize
-            write(logfhandle,*)" Memory used by buffers:               ", valueRSS
-            write(logfhandle,*)" High water mark:                      ", valueHWM
-        endif
     end subroutine simple_sysinfo_usage
 
     ! Suggestion from https://stackoverflow.com/a/30241280
@@ -900,7 +877,6 @@ contains
         pid=getpid()
         write(pid_char,'(I8)') pid
         filename='/proc/'//trim(adjustl(pid_char))//'/status'
-        if(global_debug) write(logfhandle,*)'simple_mem_usage:debug:  Fetching ', trim(filename)
         !--- read system file
         inquire (file=trim(filename),exist=ifxst)
         if (.not.ifxst) then
@@ -914,7 +890,6 @@ contains
                 read (unit,'(a)',end=110) line
                 if (line(1:7).eq.'VmPeak:') then
                     read (line(8:),*) valuePeak
-                    if(global_debug) write(logfhandle,*)'simple_mem_usage:debug:  Peak ', valuePeak
                     exit
                 endif
             enddo
@@ -925,7 +900,6 @@ contains
                 read (unit,'(a)',end=120) line
                 if (line(1:7).eq.'VmSize:') then
                     read (line(8:),*) valueSize
-                    if(global_debug) write(logfhandle,*)'simple_mem_usage:debug:  VM Size ', valueSize
                     exit
                 endif
             enddo
@@ -936,7 +910,6 @@ contains
                 read (unit,'(a)',end=130) line
                 if (line(1:6).eq.'VmHWM:') then
                     read (line(7:),*) valueHWM
-                    if(global_debug) write(logfhandle,*)'simple_mem_usage:debug:  peak RAM ', valueHWM
                     exit
                 endif
             enddo
@@ -946,7 +919,6 @@ contains
             read (unit,'(a)',end=140) line
             if (line(1:6).eq.'VmRSS:') then
                 read (line(7:),*) valueRSS
-                if(global_debug) write(logfhandle,*)'simple_mem_usage:debug: RSS ', valueRSS
                 exit
             endif
         enddo

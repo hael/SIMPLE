@@ -27,26 +27,17 @@ contains
         call take_step(x, p , stepb, lambda, x1)
         if (vect_equal(x, x1)) then
             ! Take fast exit if trial point does not move from initial point
-            if (global_debug .and. global_verbose) then
-                write (*,*) 'fast exit x == x1 for stepb = ', stepb
-            end if
             step = 0
             f = fa
             call spec%eval_df(fun_self, x1, gradient)
             return
         end if
         fb = spec%eval_f(fun_self,x1)
-        if (global_debug .and. global_verbose) then
-            write (*,*) 'trying stepb = ', stepb, 'fb = ', fb
-        end if
         if ((fb >= fa) .and. (is_gt_zero(stepb))) then
             ! downhill step failed, reduce step-size and try again
             fc = fb
             stepc = stepb
             go to 10  ! goto trial
-        end if
-        if (global_debug .and. global_verbose) then
-            write (*,*) 'ok!'
         end if
         step = stepb
         f = fb
@@ -97,9 +88,6 @@ contains
         end if
         call take_step(x, p, stepm, lambda, x1)
         fm = spec%eval_f(fun_self,x1)
-        if (global_debug .and. global_verbose) then
-            write (*,*) 'trying stepm = ', stepm, ' fm = ', fm
-        end if
         if (fm > fb) then
             if (fm < fv) then
                 w = v
@@ -131,20 +119,10 @@ contains
             call spec%eval_df(fun_self, x1, gradient)
             pg = dot_product(p, gradient)
             gnorm1 = norm_2(gradient)
-            if (global_debug .and. global_verbose) then
-                write (*,*) 'p: ', p
-                write (*,*) 'g: ', gradient
-                write (*,*) 'gnorm: ', gnorm1
-                write (*,*) 'pg: ', pg
-                write (*,*) 'orth: ', abs(pg * lambda / gnorm1)
-            end if
             f = fm
             step = stepm
             gnorm = gnorm1
             if (abs(pg * lambda / gnorm1) < spec%ftol) then
-                if (global_debug .and. global_verbose) then
-                    write (*,*) 'ok!'
-                end if
                 return  ! SUCCESS
             end if
             if (stepm < stepb) then

@@ -201,20 +201,6 @@ integer, parameter :: img_kind = SP
 #endif
 integer, parameter :: fp_kind  = DP
 
-! debugging and print verbosity flags
-#ifdef _DEBUG
-logical :: global_debug   = .true.  !< global debugging flag
-logical :: global_verbose = .true.  !< global flag for verbosity set to TRUE in debug mode
-#else
-logical :: global_debug   = .false. !< global flag for debugging disabled
-#ifdef VERBOSE
-logical :: global_verbose = .true.  !< global flag for verbosity TRUE with VERBOSE compilation flag
-#else
-logical :: global_verbose = .false. !< global flag for verbosity FALSE by default
-#endif
-#endif
-logical :: global_warn    = .false. !< warning flag
-
 ! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
 #include "SimpleGitVersion.h"
 end module simple_defs
