@@ -1,6 +1,7 @@
 ! concrete commander: operations on volumes
 module simple_commander_volops
 include 'simple_lib.f08'
+use simple_binoris_io
 use simple_parameters,     only: parameters, params_glob
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
@@ -287,7 +288,6 @@ contains
 
     !> exec_project generate projections from volume
     subroutine exec_reproject( self, cline )
-        use simple_binoris_io, only: binread_nlines
         class(reproject_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)         :: params

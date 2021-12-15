@@ -379,7 +379,6 @@ contains
 
     subroutine exec_simulate_atoms( self, cline )
         use simple_atoms, only: atoms
-        use simple_defs_atoms
         class(simulate_atoms_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         real, parameter  :: NPIX_CUTOFF = 12.

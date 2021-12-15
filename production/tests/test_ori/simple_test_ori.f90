@@ -3,7 +3,6 @@ include 'simple_lib.f08'
 use simple_ori,  only: ori
 use simple_oris, only: oris
 use simple_binoris
-use simple_binoris_io,   only: binwrite_oritab
 use simple_sp_project
 
 implicit none

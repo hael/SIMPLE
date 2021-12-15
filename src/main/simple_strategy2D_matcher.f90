@@ -3,6 +3,7 @@ module simple_strategy2D_matcher
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
+use simple_binoris_io
 use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_cmdline,          only: cmdline
 use simple_builder,          only: build_glob
@@ -28,7 +29,6 @@ contains
     !>  \brief  is the prime2D algorithm
     subroutine cluster2D_exec( cline, which_iter )
         use simple_qsys_funs,             only: qsys_job_finished
-        use simple_binoris_io,            only: binwrite_oritab
         use simple_strategy2D3D_common,   only: set_bp_range2d, prepimgbatch
         use simple_strategy2D,            only: strategy2D, strategy2D_per_ptcl
         use simple_strategy2D_srch,       only: strategy2D_spec

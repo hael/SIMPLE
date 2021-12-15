@@ -2,6 +2,7 @@
 module simple_commander_misc
 include 'simple_lib.f08'
 include "starfile/starfile_enum.inc"
+use simple_binoris_io
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_oris,           only: oris
@@ -10,7 +11,6 @@ use simple_sym,            only: sym
 use simple_projector_hlev, only: rotvol
 use simple_sp_project,     only: sp_project
 use simple_image,          only: image
-use simple_binoris_io,     only: binwrite_oritab
 use simple_builder,        only: builder
 use simple_parameters,     only: parameters
 implicit none

@@ -7,7 +7,6 @@ use simple_binimage,   only: binimage
 use simple_atoms,      only: atoms
 use simple_parameters, only: params_glob
 use simple_nanoparticle_utils
-use simple_defs_atoms
 implicit none
 
 public :: nanoparticle

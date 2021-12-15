@@ -4,7 +4,6 @@ module simple_oris
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_ori, only: ori
-use simple_defs_ori
 implicit none
 
 public :: oris, test_oris
