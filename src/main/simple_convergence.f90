@@ -41,7 +41,7 @@ contains
         real,    allocatable :: updatecnts(:)
         logical, allocatable :: mask(:)
         real    :: avg_updatecnt
-        logical :: converged
+        logical :: converged, chk4conv
         601 format(A,1X,F8.3)
         604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
         updatecnts    = os%get_all('updatecnt')
@@ -76,31 +76,44 @@ contains
                 params_glob%l_doshift = .true.
             endif
         endif
-        ! determine convergence
-        if( ncls > 1 )then
-            converged = .false.
-            if( (params_glob%l_frac_update) .or. (params_glob%stream.eq.'yes') )then
-                converged = ( self%mi_class > MI_CLASS_LIM_2D_FRAC .and. self%frac_srch%avg > FRAC_LIM_FRAC )
-            else if( trim(params_glob%tseries) .eq. 'yes' )then
-                converged = self%mi_class > MI_CLASS_LIM_2D_NANO
+        converged = .false.
+        chk4conv  = .true.
+        if( cline%defined('converge') )then
+            if( cline%get_carg('converge') .eq. 'no' )then
+                ! never converge
+                chk4conv = .false.
             else
-                converged = ( self%mi_class > MI_CLASS_LIM_2D .and. self%frac_srch%avg > FRAC_LIM )
+                ! to indicate that we need to check for convergence
+                chk4conv = .true.
             endif
-            if( params_glob%refine.eq.'inpl' )then
-                converged = self%dist_inpl%avg < 0.02
-            endif
-            if( converged )then
-                write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
-            else
-                write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
-            endif
-        else
-            if( self%dist_inpl%avg < 0.5 )then
-                write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
-                converged = .true.
-            else
-                write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
+        endif
+        if( chk4conv )then
+            ! determine convergence
+            if( ncls > 1 )then
                 converged = .false.
+                if( (params_glob%l_frac_update) .or. (params_glob%stream.eq.'yes') )then
+                    converged = ( self%mi_class > MI_CLASS_LIM_2D_FRAC .and. self%frac_srch%avg > FRAC_LIM_FRAC )
+                else if( trim(params_glob%tseries) .eq. 'yes' )then
+                    converged = self%mi_class > MI_CLASS_LIM_2D_NANO
+                else
+                    converged = ( self%mi_class > MI_CLASS_LIM_2D .and. self%frac_srch%avg > FRAC_LIM )
+                endif
+                if( params_glob%refine.eq.'inpl' )then
+                    converged = self%dist_inpl%avg < 0.02
+                endif
+                if( converged )then
+                    write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
+                else
+                    write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
+                endif
+            else
+                if( self%dist_inpl%avg < 0.5 )then
+                    write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
+                    converged = .true.
+                else
+                    write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
+                    converged = .false.
+                endif
             endif
         endif
         ! stats
