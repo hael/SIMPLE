@@ -325,8 +325,7 @@ contains
                         alloc_tmparr = .true.
                     endif
                     if( alloc_tmparr )then
-                        allocate(tmp_byte_array(dims(1),dims(2),dims(3)),stat=alloc_stat)
-                        if(alloc_stat/=0)call allocchk("In simple_imgfile:: rSlices ;  Byte data ", alloc_stat)
+                        allocate(tmp_byte_array(dims(1),dims(2),dims(3)))
                     endif
                     read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_byte_array(:dims(1),:dims(2),:dims(3))
                     ! Conversion from unsigned byte integer (which MRC appears to be) is tricky because Fortran
@@ -354,8 +353,7 @@ contains
                         alloc_tmparr = .true.
                     endif
                     if( alloc_tmparr )then
-                        allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)),stat=alloc_stat)
-                        if(alloc_stat/=0)call allocchk("In simple_imgfile:: rSlices ; 16-bit data ", alloc_stat )
+                        allocate(tmp_16bit_int_array(dims(1),dims(2),dims(3)))
                     endif
                     read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) tmp_16bit_int_array(:dims(1),:dims(2),:dims(3))
                     if( self%overall_head%pixIsSigned() )then

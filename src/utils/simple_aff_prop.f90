@@ -4,7 +4,6 @@ use simple_defs
 use simple_math,  only: euclid
 use simple_rnd,   only: ran3
 use simple_stat,  only: analyze_smat
-use simple_error, only: allocchk
 implicit none
 
 public :: aff_prop, test_aff_prop
@@ -68,8 +67,7 @@ contains
         ! allocate
         allocate( self%A(N,N), self%R(N,N), self%Aold(N,N), self%Rp(N,N),&
         self%Rold(N,N), self%AS(N,N), self%Y(N), self%Y2(N), self%tmp(N),&
-        self%I(N), self%I2(N), self%dA(N) , stat=alloc_stat)
-        if(alloc_stat/=0) call allocchk("simple_aff_prop::new  1 ")
+        self%I(N), self%I2(N), self%dA(N) )
         self%A      = 0.
         self%R      = 0.
         self%Aold   = 0.
@@ -154,8 +152,7 @@ contains
         end do
         if( allocated(centers) ) deallocate(centers)
         if( allocated(labels) )  deallocate(labels)
-        allocate( centers(ncls), similarities(ncls), labels(self%N) , stat=alloc_stat)
-        if(alloc_stat/=0) call allocchk("simple_aff_prop::propagate  1 ")
+        allocate( centers(ncls), similarities(ncls), labels(self%N) )
         ! set the cluster centers
         ncls = 0
         do j=1,self%N

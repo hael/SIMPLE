@@ -51,8 +51,7 @@ contains
             &s3D%proj_space_refinds_sorted_highest(nthr_glob,nrefs),&
             &s3D%proj_space_corrs_srchd(nthr_glob,nrefs), s3D%proj_space_corrs_calcd(nthr_glob,nrefs),&
             &s3D%proj_space_inplinds(nthr_glob,nrefs),&
-            &s3D%proj_space_proj(nrefs), stat=alloc_stat )
-        if(alloc_stat/=0)call allocchk("strategy3D_alloc failed")
+            &s3D%proj_space_proj(nrefs))
         ! states existence
         if( .not.build_glob%spproj%is_virgin_field(params_glob%oritype) )then
             if( str_has_substr(params_glob%refine,'greedy') )then

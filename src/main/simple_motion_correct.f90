@@ -139,13 +139,10 @@ contains
         lp      = params_glob%lpstart
         resstep = (params_glob%lpstart - params_glob%lpstop) / 3.
         ! allocate abstract data structures
-        allocate( movie_frames(nframes), movie_frames_scaled(nframes),stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('motion_correct_init 1; simple_motion_correct')
-        allocate( shifts_toplot(nframes, 2), source=0., stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('motion_correct_init 2; simple_motion_correct')
+        allocate( movie_frames(nframes), movie_frames_scaled(nframes) )
+        allocate( shifts_toplot(nframes, 2), source=0. )
         ! additional allocations
-        allocate(opt_shifts(nframes,2),frameweights(nframes), source=0.,stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('motion_correct_init 4; simple_motion_correct')
+        allocate(opt_shifts(nframes,2),frameweights(nframes), source=0. )
         frameweights = 1./real(nframes)
         ! check gain reference existence
         if( present(gainref) )then
@@ -223,7 +220,7 @@ contains
         ! check if we are doing dose weighting
         if( params_glob%l_dose_weight )then
             if( allocated(acc_doses) ) deallocate(acc_doses)
-            allocate( acc_doses(nframes), stat=alloc_stat )
+            allocate( acc_doses(nframes) )
             kV = ctfvars%kv
             time_per_frame = params_glob%exp_time/real(nframes)  ! unit: s
             dose_rate      = params_glob%dose_rate

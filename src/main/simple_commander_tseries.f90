@@ -423,7 +423,7 @@ contains
         type(nrtxtfile)               :: boxfile
         real,        allocatable      :: boxdata(:,:)
         type(chash), allocatable      :: part_params(:)
-        integer :: ndatlines, numlen, alloc_stat, j, orig_box, ipart
+        integer :: ndatlines, numlen, j, orig_box, ipart
         if( .not. cline%defined('neg')       ) call cline%set('neg',      'yes')
         if( .not. cline%defined('lp')        ) call cline%set('lp',         2.3)
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      5.0)
@@ -439,8 +439,7 @@ contains
             call boxfile%new(params%boxfile, 1)
             ndatlines = boxfile%get_ndatalines()
             numlen    = len(int2str(ndatlines))
-            allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('In: simple_commander_tseries :: exec_tseries_track_particles', alloc_stat)
+            allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()) )
             do j=1,ndatlines
                 call boxfile%readNextDataLine(boxdata(j,:))
                 orig_box = nint(boxdata(j,3))

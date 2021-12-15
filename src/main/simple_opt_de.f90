@@ -61,8 +61,7 @@ contains
                 self%CR   = X_MULTIMODAL
         end select
         ! allocate
-        allocate(self%pop(spec%npop,spec%ndim), self%costs(spec%npop), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In: new_de; simple_opt_de",alloc_stat)
+        allocate(self%pop(spec%npop,spec%ndim), self%costs(spec%npop))
         self%exists = .true. ! indicates existence
         if( spec%DEBUG ) write(logfhandle,*) 'created new differential evolution population'
     end subroutine new_de

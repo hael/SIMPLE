@@ -173,10 +173,7 @@ contains
                 deallocate( self%ftexp_tmp_cmat12 )
             end if
         end if
-        if ( do_alloc ) then
-            allocate(self%ftexp_tmp_cmat12(1:ref_flims(1,2),1:ref_flims(2,2)), stat=alloc_stat )
-            if (alloc_stat /= 0) call allocchk('In: set_dims_and_alloc; simple_ftexp_shsrch')
-        end if
+        if( do_alloc ) allocate(self%ftexp_tmp_cmat12(1:ref_flims(1,2),1:ref_flims(2,2)))
     end subroutine set_dims_and_alloc
 
     subroutine set_shsrch_tol( self, shsrch_tol )

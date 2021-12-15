@@ -4,7 +4,7 @@ module simple_corrmat
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
-use simple_error,  only: allocchk, simple_exception
+use simple_error,  only: simple_exception
 use simple_jiffys, only: progress
 use simple_image,  only: image
 implicit none
@@ -41,8 +41,7 @@ contains
             endif
         end do
         if( allocated(corrmat) ) deallocate(corrmat)
-        allocate(corrmat(nptcls,nptcls), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: calc_cartesian_corrmat_1; simple_corrmat, 1',alloc_stat)
+        allocate(corrmat(nptcls,nptcls))
         corrmat = 1.
         ntot = (nptcls*(nptcls-1))/2
         if( present(lp) )then ! Fourier correlation
@@ -57,8 +56,7 @@ contains
             end do
         else ! Real-space correlation
             ! first make the pairs to balance the parallel section
-            allocate(pairs(ntot,2), stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('In: calc_cartesian_corrmat_1; simple_corrmat, 2',alloc_stat)
+            allocate(pairs(ntot,2))
             cnt = 0
             do iptcl=1,nptcls-1
                 do jptcl=iptcl+1,nptcls
@@ -111,8 +109,7 @@ contains
             endif
         end do
         if( allocated(corrmat) ) deallocate(corrmat)
-        allocate(corrmat(nsel,norig), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: calc_cartesian_corrmat_2; simple_corrmat, 1',alloc_stat)
+        allocate(corrmat(nsel,norig))
         if( doftcalc )then ! Fourier correlation
             do isel=1,nsel
                 call progress(isel,nsel)

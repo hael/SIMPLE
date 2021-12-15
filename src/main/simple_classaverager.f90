@@ -62,7 +62,7 @@ contains
     !>  \brief  is a constructor
     subroutine cavger_new( ptcl_mask )
         logical, optional, intent(in) :: ptcl_mask(params_glob%fromp:params_glob%top)
-        integer :: alloc_stat, icls
+        integer :: icls
         ! destruct possibly pre-existing instance
         call cavger_kill
         if( present(ptcl_mask) )then
@@ -94,8 +94,7 @@ contains
         ! build arrays
         allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
         &cavgs_merged(ncls), ctfsqsums_even(ncls),&
-        &ctfsqsums_odd(ncls), ctfsqsums_merged(ncls), prev_eo_pops(ncls,2), stat=alloc_stat)
-        if(alloc_stat .ne. 0)call allocchk('cavger_new; simple_classaverager', alloc_stat)
+        &ctfsqsums_odd(ncls), ctfsqsums_merged(ncls), prev_eo_pops(ncls,2))
         prev_eo_pops = 0
         !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
         do icls=1,ncls
@@ -118,7 +117,7 @@ contains
         use simple_sp_project, only: sp_project
         class(sp_project), intent(inout) :: spproj
         type(ctfparams)   :: ctfvars(nthr_glob)
-        integer           :: i, icls, alloc_stat, cnt, iptcl, ithr
+        integer           :: i, icls, cnt, iptcl, ithr
         ! build index map
         cnt = 0
         do iptcl=istart,iend
@@ -154,7 +153,7 @@ contains
             if( allocated(precs(cnt)%e3s)      )  deallocate(precs(cnt)%e3s)
             if( allocated(precs(cnt)%shifts)   )  deallocate(precs(cnt)%shifts)
             allocate( precs(cnt)%classes(1),  precs(cnt)%states(1),    precs(cnt)%ows(1), precs(cnt)%e3s(1),&
-                     &precs(cnt)%shifts(1,2), precs(cnt)%inpl_inds(1), precs(cnt)%eos(1), stat=alloc_stat )
+                     &precs(cnt)%shifts(1,2), precs(cnt)%inpl_inds(1), precs(cnt)%eos(1) )
             precs(cnt)%classes(1)   = nint(spproj%os_ptcl2D%get(iptcl, 'class'))
             precs(cnt)%inpl_inds(1) = nint(spproj%os_ptcl2D%get(iptcl, 'inpl'))
             precs(cnt)%states(1)    = nint(spproj%os_ptcl2D%get(iptcl, 'state'))
@@ -269,14 +268,13 @@ contains
         integer, allocatable, intent(out) :: pinds(:)
         integer, allocatable, intent(out) :: iprecs(:)
         integer, allocatable, intent(out) :: ioris(:)
-        integer :: pop, alloc_stat, i, sz, iprec, cnt
+        integer :: pop, i, sz, iprec, cnt
         logical, allocatable :: l_state_class(:)
         pop = class_pop(class)
         if( allocated(pinds) )  deallocate(pinds)
         if( allocated(iprecs) ) deallocate(iprecs)
         if( allocated(ioris)  ) deallocate(ioris)
-        allocate(pinds(pop), iprecs(pop), ioris(pop), stat=alloc_stat)
-        if(alloc_stat .ne. 0)call allocchk('get_iprecs_ioris; simple_classaverager', alloc_stat)
+        allocate(pinds(pop), iprecs(pop), ioris(pop))
         cnt = 0
         do iprec=1,partsz
             if( allocated(precs(iprec)%classes) )then
@@ -353,7 +351,7 @@ contains
         real    :: loc(2), mat(2,2), dist(2), pw, add_phshift
         integer :: lims(3,2), phys_cmat(3), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
         integer :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, sh, iwinsz, nyq
-        integer :: alloc_stat, wdim, h, k, l, m, ll, mm, incr, icls, iptcl, batchsz_max, interp_shlim, interp_shlim_sq
+        integer :: wdim, h, k, l, m, ll, mm, incr, icls, iptcl, batchsz_max, interp_shlim, interp_shlim_sq
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
         call init_cavgs_sums
@@ -401,7 +399,7 @@ contains
         cyc_limsR(:,2) = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
         allocate( rho(lims(1,1):lims(1,2),lims(2,1):lims(2,2)),&
                  &rho_even(lims(1,1):lims(1,2),lims(2,1):lims(2,2)),&
-                 &rho_odd( lims(1,1):lims(1,2),lims(2,1):lims(2,2)), stat=alloc_stat)
+                 &rho_odd( lims(1,1):lims(1,2),lims(2,1):lims(2,2)))
         cnt_progress = 0
         ! class loop
         do icls=1,ncls

@@ -421,8 +421,7 @@ contains
         if( params%tseries.eq.'no' )then
             ! Discretization of the projection directions
             ! init
-            allocate(pops(params%nspace), source=0,stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("In commander_oris:: vizoris allocating pops ", alloc_stat)
+            allocate(pops(params%nspace), source=0)
             ang = 3.6 / sqrt(real(params%nsym*params%nspace))
             maxradius = 0.75 * sqrt( (1.-cos(ang))**2. + sin(ang)**2. )
             ! projection direction attribution
@@ -511,7 +510,7 @@ contains
             ! distance output
             avg_geodist = 0.
             avg_euldist = 0.
-            allocate(euldists(n), stat=alloc_stat)
+            allocate(euldists(n))
             fname  = trim(params%fbody)//'_motion.csv'
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
             if(io_stat/=0)call fileiochk("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)

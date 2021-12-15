@@ -745,8 +745,7 @@ contains
         ! random selection
         if( cline%defined('nran') )then
             write(logfhandle,'(a)') '>>> RANDOMLY SELECTING IMAGES'
-            allocate( pinds(params%nran), stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk('In: simple_commander; stackops',alloc_stat)
+            allocate( pinds(params%nran) )
             rt = ran_tabu(params%nptcls)
             call rt%ne_ran_iarr(pinds)
             if( cline%defined('oritab') .or. cline%defined('deftab') )then

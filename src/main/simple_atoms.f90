@@ -3,7 +3,6 @@ module simple_atoms
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_error, only: allocchk
 use simple_strings
 use simple_fileio
 use simple_defs_atoms
@@ -160,15 +159,14 @@ contains
         class(atoms),      intent(inout) :: self
         integer,           intent(in)    :: n
         logical, optional, intent(in)    :: dummy
-        integer :: i,alloc_stat
+        integer :: i
         logical :: ddummy
         ddummy = .false.
         if(present(dummy)) ddummy = dummy
         call self%kill
         allocate(self%name(n), self%chain(n), self%resname(n), self%xyz(n,3), self%mw(n),&
             self%occupancy(n), self%beta(n), self%num(n), self%Z(n), self%het(n), self%icode(n),&
-            self%altloc(n), self%resnum(n), self%element(n), self%radius(n), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('new_instance :: simple_atoms', alloc_stat)
+            self%altloc(n), self%resnum(n), self%element(n), self%radius(n))
         self%name(:)    = '    '
         self%resname(:) = '   '
         self%chain(:)   = ' '

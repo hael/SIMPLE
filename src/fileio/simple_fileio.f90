@@ -2,7 +2,7 @@
 module simple_fileio
 use simple_defs
 use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
-use simple_error,   only: allocchk, simple_exception, simple_error_check
+use simple_error,   only: simple_exception, simple_error_check
 use simple_syslib,  only: file_exists, is_open, is_file_open, is_io, simple_abspath,&
 &exec_cmdline, del_file, syslib_copy_file
 implicit none
@@ -834,8 +834,7 @@ contains
             call fileiochk("file2rarr fopen failed "//trim(fnam),io_stat)
             read(funit, rec=1,iostat=io_stat) rval
             n = nint(rval)
-            allocate( arr(n), stat=alloc_stat )
-            if(alloc_stat /= 0) call allocchk('In: file2arr; simple_fileio ', alloc_stat)
+            allocate( arr(n) )
             do i=1,n
                 read(funit, rec=i+1) arr(i)
             end do

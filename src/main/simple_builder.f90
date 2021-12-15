@@ -264,8 +264,7 @@ contains
             ! build arrays
             lfny       = self%img%get_lfny(1)
             cyc_lims   = self%img_pad%loop_lims(3)
-            allocate( self%fsc(params%nstates,lfny), stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk("In: build_general_tbox; simple_builder, 1", alloc_stat)
+            allocate( self%fsc(params%nstates,lfny) )
             self%fsc  = 0.
             ! set default amsklp
             if( .not. cline%defined('amsklp') .and. cline%defined('lp') )then
@@ -356,8 +355,7 @@ contains
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
         call self%kill_strategy3D_tbox
-        allocate( self%eorecvols(params%nstates), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_builder, 1', alloc_stat)
+        allocate( self%eorecvols(params%nstates) )
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy3D_tbox_exists = .true.

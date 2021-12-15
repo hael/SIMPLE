@@ -153,13 +153,11 @@ contains
         if( .not.file_exists(fname) )return ! petty triple checking
         if( .not.allocated(self%history) )then
             n = 0
-            allocate(self%history(1), stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("In: simple_moviewatcher%add2history 1", alloc_stat)
+            allocate(self%history(1))
         else
             n = size(self%history)
             call move_alloc(self%history, tmp_farr)
-            allocate(self%history(n+1), stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("In: simple_moviewatcher%add2history 3",alloc_stat)
+            allocate(self%history(n+1))
             self%history(:n) = tmp_farr
             deallocate(tmp_farr)
         endif

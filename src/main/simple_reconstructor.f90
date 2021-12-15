@@ -112,11 +112,9 @@ contains
             self%ldim_exp(2,:) = [-dim, dim]
             self%ldim_exp(3,:) = [-dim, dim]
             allocate(self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),self%ldim_exp(2,1):self%ldim_exp(2,2),&
-                &self%ldim_exp(3,1):self%ldim_exp(3,2)), source=cmplx(0.,0.), stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("In: alloc_rho; simple_reconstructor cmat_exp")
+                &self%ldim_exp(3,1):self%ldim_exp(3,2)), source=cmplx(0.,0.))
             allocate(self%rho_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),self%ldim_exp(2,1):self%ldim_exp(2,2),&
-                &self%ldim_exp(3,1):self%ldim_exp(3,2)), source=0., stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("In: alloc_rho; simple_reconstructor rho_exp")
+                &self%ldim_exp(3,1):self%ldim_exp(3,2)), source=0.)
         end if
         call self%reset
     end subroutine alloc_rho
@@ -710,7 +708,7 @@ contains
         call self_in%get_cmat_ptr(ptr_self_in)
         !$omp parallel workshare proc_bind(close)
         ptr_self = ptr_self + ptr_self_in
-        self%rho = self%rho + self_in%rho    
+        self%rho = self%rho + self_in%rho
         !$omp end parallel workshare
     end subroutine sum_reduce
 

@@ -886,8 +886,7 @@ contains
         else
             npix = (2*winsz+1)**2
         endif
-        allocate(pixels(npix), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: win2arr; simple_image',alloc_stat)
+        allocate(pixels(npix))
         cnt = 1
         do s=i-winsz,i+winsz
             ss = cyci_1d_static(self%ldim(1), s)
@@ -1247,8 +1246,7 @@ contains
         real, allocatable :: rmat(:,:,:)
         integer :: ldim(3)
         ldim = self%ldim
-        allocate(rmat(ldim(1),ldim(2),ldim(3)), source=self%rmat(:ldim(1),:ldim(2),:ldim(3)), stat=alloc_stat)
-        if (alloc_stat /= 0)call allocchk("simple_image::get_rmat ",alloc_stat)
+        allocate(rmat(ldim(1),ldim(2),ldim(3)), source=self%rmat(:ldim(1),:ldim(2),:ldim(3)))
     end function get_rmat
 
     subroutine get_rmat_ptr( self, rmat_ptr )
@@ -1774,8 +1772,7 @@ contains
                     pack = .false.
                 else
                     pack = .true.
-                    allocate( pcavec(npix), stat=alloc_stat )
-                    if(alloc_stat.ne.0)call allocchk('winserialize; simple_image',alloc_stat)
+                    allocate( pcavec(npix) )
                     pcavec = 0.
                 endif
             end subroutine set_action
@@ -2861,8 +2858,7 @@ contains
         endif
         lfny = self%get_lfny(1)
         if(allocated(spec))deallocate(spec)
-        allocate( spec(lfny), counts(lfny), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('spectrum; simple_image',alloc_stat)
+        allocate( spec(lfny), counts(lfny) )
         spec   = 0.
         counts = 0.
         lims   = self%fit%loop_lims(2)
@@ -3747,8 +3743,7 @@ contains
         lims = self%loop_lims(2)
         maxl = maxval(lims)
         kmax = maxl+int(oshoot*real(maxl))
-        allocate( w(kmax), stat=alloc_stat )
-        if(alloc_stat/=0)call allocchk("In: hannw; simple_image")
+        allocate( w(kmax) )
         wstr = 'hann'
         wfuns = winfuns(wstr, real(kmax), 2.)
         do k=1,kmax
@@ -4050,7 +4045,7 @@ contains
         real,    optional, intent(in)    :: msk
         real,    optional, intent(out)   :: med
         logical, optional, intent(out)   :: errout
-        integer           :: i, j, k, npix, alloc_stat, minlen
+        integer           :: i, j, k, npix, minlen
         real              :: ci, cj, ck, mskrad, e, var
         logical           :: err, didft, background
         real, allocatable :: pixels(:)
@@ -4080,8 +4075,7 @@ contains
         else
             THROW_HARD('unrecognized parameter: which; stats_1')
         endif
-        allocate( pixels(product(self%ldim)), stat=alloc_stat )
-        if(alloc_stat/=0)call allocchk('backgr; simple_image')
+        allocate( pixels(product(self%ldim)) )
         pixels = 0.
         npix   = 0
         if( self%ldim(3) > 1 )then
@@ -4906,8 +4900,7 @@ contains
         real, allocatable        :: res(:)
         integer                  :: n, k
         n = self%get_filtsz()
-        allocate( res(n), stat=alloc_stat )
-        if(alloc_stat/=0)call allocchk('In: get_res, module: simple_image')
+        allocate( res(n) )
         do k=1,n
             res(k) = self%fit%get_lp(1,k)
         end do
@@ -5405,9 +5398,7 @@ contains
                 avg_curr_edge_stop (self%ldim(dim2),self%ldim(dim3)),&
                 avg_curr_edge_avg(self%ldim(dim2),self%ldim(dim3)),&
                 smooth_avg_curr_edge_start(self%ldim(dim2),self%ldim(dim3)),&
-                smooth_avg_curr_edge_stop (self%ldim(dim2),self%ldim(dim3)),&
-                stat=alloc_stat)
-            if(alloc_stat/=0)call allocchk("In simple_image::taper_edges avg_curr etc.")
+                smooth_avg_curr_edge_stop (self%ldim(dim2),self%ldim(dim3)))
             avg_curr_edge_start        = 0.0e0
             avg_curr_edge_stop         = 0.0e0
             avg_curr_edge_avg          = 0.0e0
@@ -7030,8 +7021,7 @@ contains
         deadhot  = 0
         if( present_outliers )then
             if( allocated(outliers) ) deallocate(outliers)
-            allocate( outliers(self%ldim(1),self%ldim(2)),source =.false.,stat=alloc_stat)
-            if(alloc_stat/=0)call allocchk("In simple_image::cure_outliers ")
+            allocate( outliers(self%ldim(1),self%ldim(2)),source =.false. )
         endif
         call moment( self%rmat(1:self%ldim(1),1:self%ldim(2),1), ave, sdev, var, err )
         if( sdev<TINY )return
@@ -7040,9 +7030,7 @@ contains
         if( any(self%rmat(1:self%ldim(1),1:self%ldim(2),1)<lthresh).or.&
             &any(self%rmat(1:self%ldim(1),1:self%ldim(2),1)>uthresh) )then
             winsz = 2*hwinsz+1
-            allocate(rmat_pad(1-hwinsz:self%ldim(1)+hwinsz,1-hwinsz:self%ldim(2)+hwinsz),&
-                &win(winsz,winsz), stat=alloc_stat)
-            if(alloc_stat/=0)call allocchk('In: cure_outliers; simple_image 1')
+            allocate(rmat_pad(1-hwinsz:self%ldim(1)+hwinsz,1-hwinsz:self%ldim(2)+hwinsz), win(winsz,winsz))
             rmat_pad(:,:) = median( reshape(self%rmat(1:self%ldim(1),1:self%ldim(2),1), (/(self%ldim(1)*self%ldim(2))/)) )
             rmat_pad(1:self%ldim(1), 1:self%ldim(2)) = self%rmat(1:self%ldim(1),1:self%ldim(2),1)
             !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j,win)&

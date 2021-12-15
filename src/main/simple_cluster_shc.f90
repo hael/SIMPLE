@@ -47,8 +47,7 @@ contains
         else
             self%MINS = -1.
         endif
-        allocate(self%labels(self%N), self%SPS(self%N), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: nsimple_cluster_shc::new', alloc_stat)
+        allocate(self%labels(self%N), self%SPS(self%N))
         self%labels = 0
         self%SPS    = 0.
         self%existence = .true.
@@ -219,8 +218,7 @@ contains
         if( self%existence )then
             self%o_ptr => null()
             self%S     => null()
-            deallocate( self%labels, self%SPS , stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('In: nsimple_cluster_shc::kill ', alloc_stat)
+            deallocate( self%labels, self%SPS )
             self%existence = .false.
         endif
     end subroutine kill

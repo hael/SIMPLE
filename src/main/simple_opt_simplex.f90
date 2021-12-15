@@ -30,8 +30,7 @@ contains
         class(opt_spec),    intent(inout) :: spec !< specification
         real :: x
         call self%kill
-        allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In: new_opt_simplex",alloc_stat)
+        allocate(self%p(spec%ndim+1,spec%ndim), self%y(spec%ndim+1), self%pb(spec%ndim))
         ! initialize best cost to huge number
         self%yb     = huge(x)
         self%exists = .true. ! indicates existence
@@ -125,19 +124,9 @@ contains
     !> \brief  is a destructor
     subroutine kill_opt_simplex( self )
         class(opt_simplex), intent(inout) :: self
-        alloc_stat=0
-        if( allocated(self%p) )then
-            deallocate(self%p, stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("In: kill_simplex_opt p",alloc_stat)
-        end if
-        if( allocated(self%y) )then
-            deallocate(self%y, stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("In: kill_simplex_opt y ",alloc_stat)
-        end if
-        if( allocated(self%pb) )then
-            deallocate(self%pb, stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("In: kill_simplex_opt pb ",alloc_stat)
-        end if
+        if( allocated(self%p)  ) deallocate(self%p)
+        if( allocated(self%y)  ) deallocate(self%y)
+        if( allocated(self%pb) ) deallocate(self%pb)
         self%exists = .false.
     end subroutine kill_opt_simplex
 

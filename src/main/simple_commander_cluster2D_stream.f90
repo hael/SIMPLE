@@ -840,8 +840,7 @@ contains
                 n_spprojs = size(spproj_list)
                 call debug_print('in generate_new_chunks 1b  '//int2str(n_spprojs))
                 ! whether the projects have been processed
-                allocate(spproj_mask(n_spprojs),source=.false.,stat=alloc_stat)
-                if(alloc_stat /= 0) call allocchk('In: generate_new_chunks ', alloc_stat)
+                allocate(spproj_mask(n_spprojs),source=.false.)
                 do iproj = 1,n_spprojs
                     isnew = .true.
                     do jproj = 1,nmics_imported

@@ -2,7 +2,6 @@
 module simple_map_reduce
 use simple_defs
 use simple_strings, only: int2str, int2str_pad
-use simple_error,   only: allocchk
 use simple_fileio,  only: fopen, fileiochk, fclose, file2rarr
 use simple_jiffys,  only: progress
 use simple_math,    only: hpsort
@@ -19,8 +18,7 @@ contains
         integer, optional, intent(out) :: szmax
         integer, allocatable :: parts(:,:)
         integer :: nobjs_per_part, leftover, istop, istart, ipart, sszmax
-        allocate(parts(nparts,2), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: simple_map_reduce :: split_nobjs_even',alloc_stat)
+        allocate(parts(nparts,2))
         nobjs_per_part = nobjs/nparts
         leftover = nobjs-nobjs_per_part*nparts
         istop  = 0
@@ -57,8 +55,7 @@ contains
         character(len=:), allocatable :: fname
         ! generate all pairs
         npairs = (nobjs*(nobjs-1))/2
-        allocate( pairs(npairs,2), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('mapreduce ;split_pairs_in_parts  1',alloc_stat)
+        allocate( pairs(npairs,2))
         cnt = 0
         do i=1,nobjs-1
             do j=i+1,nobjs
@@ -73,8 +70,7 @@ contains
         ! write the partitions
         do ipart=1,nparts
             call progress(ipart,nparts)
-            allocate(fname, source='pairs_part' // int2str_pad(ipart,numlen) // '.bin', stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("mapreduce ;split_pairs_in_parts creating fname ",alloc_stat)
+            allocate(fname, source='pairs_part' // int2str_pad(ipart,numlen) // '.bin')
             call fopen(funit, status='REPLACE', action='WRITE', file=fname, access='STREAM',iostat=io_stat)
             call fileiochk('mapreduce ;split_pairs_in_parts '//trim(fname), io_stat)
             write(unit=funit,pos=1,iostat=io_stat) pairs(parts(ipart,1):parts(ipart,2),:)

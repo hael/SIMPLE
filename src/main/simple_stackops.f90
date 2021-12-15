@@ -51,14 +51,12 @@ contains
         ! build and initialise objects
         call img%new(ldim,1.)
         D = count(l_mask)
-        allocate(pcavec(D), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('make_pattern_stack; simple_procimgfile, 1', alloc_stat)
+        allocate(pcavec(D))
         pcavec = 0.
         inquire(iolength=recsz) pcavec
         deallocate(pcavec)
         if( allocated(avg) ) deallocate(avg)
-        allocate(avg(D), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('make_pattern_stack; simple_procimgfile, 2', alloc_stat)
+        allocate(avg(D))
         avg = 0.
         ! extract patterns and write to file
         call fopen(fnum, status='replace', action='readwrite', file=fnamePatterns,&
@@ -74,8 +72,7 @@ contains
             deallocate(pcavec)
         end do
         avg = avg/real(n)
-        allocate(pcavec(D), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('make_pattern_stack; simple_procimgfile, 3', alloc_stat)
+        allocate(pcavec(D))
         do i=1,n
             read(fnum,rec=i) pcavec
             pcavec = pcavec-avg

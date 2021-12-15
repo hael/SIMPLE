@@ -1,7 +1,7 @@
 ! character hash
 module simple_chash
 use simple_defs
-use simple_error,   only: allocchk, simple_exception
+use simple_error,   only: simple_exception
 use simple_fileio,  only: fopen, fileiochk, fclose
 use simple_strings, only: strisblank, striscomment, lexsort
 use simple_syslib,  only: is_open
@@ -425,8 +425,7 @@ contains
             tmp%chash_index = self%chash_index
             tmp%exists      = .true.
             ! fill in keys
-            allocate(keys_sorted(self%chash_index),stat=alloc_stat)
-            if(alloc_stat /= 0) call allocchk("In simple_chash::sort", alloc_stat)
+            allocate(keys_sorted(self%chash_index))
             do ikey=1,self%chash_index
                 keys_sorted(ikey) = self%keys(ikey)%str
             end do

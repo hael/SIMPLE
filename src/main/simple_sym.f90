@@ -527,8 +527,7 @@ contains
         else
             n_os = asym_os%get_noris()
             nsym = self%n
-            allocate( nnmat(n_os,nsym), dists(n_os), stat=alloc_stat )
-            if(alloc_stat/=0)call allocchk("In: nearest_proj_neighbors; simple_sym")
+            allocate( nnmat(n_os,nsym), dists(n_os) )
             do i = 1, n_os
                 call asym_os%get_ori(i, oasym)
                 do isym = 1, nsym
@@ -650,8 +649,8 @@ contains
                 integer   :: j, north_pole_ind
                 type(ori) :: o, o2, o_tmp, north_pole
                 real      :: min_dist, dist
-                if( allocated(avail) )deallocate(avail, stat=alloc_stat)
-                allocate(avail(n), source=.false., stat=alloc_stat)
+                if( allocated(avail) )deallocate(avail)
+                allocate(avail(n), source=.false.)
                 call tmp%new(n, is_ptcl=.false.)
                 call tmp%spiral
                 call north_pole%new(is_ptcl=.false.)
@@ -1630,7 +1629,7 @@ contains
                 endif
             endif
             call hpsort(symorders, inds)
-            allocate( self%subgrps(cnt), stat=alloc_stat )
+            allocate( self%subgrps(cnt) )
             do i=1,cnt
                 self%subgrps(i) = pgrps(inds(self%n-i+1))
             enddo

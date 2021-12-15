@@ -137,8 +137,7 @@ contains
         self%resstep = (self%lpstart-self%lpstop) / real(NRESUPDATES-1)
         allocate(self%frames_sh(self%nframes),self%frames(self%nframes),&
                 &self%shifts_toplot(self%nframes,2), self%opt_shifts(self%nframes,2),&
-                &self%corrs(self%nframes), self%frameweights(self%nframes), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('new; simple_motion_align_hybrid')
+                &self%corrs(self%nframes), self%frameweights(self%nframes))
         self%shifts_toplot    = 0.
         self%opt_shifts       = 0.
         self%corrs            = -1.

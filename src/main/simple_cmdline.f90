@@ -505,8 +505,7 @@ contains
         integer               :: i, nstates
         character(len=STDLEN) :: str
         logical               :: vol_defined
-        allocate( cmderr(self%ncheck), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('check; simple_cmdline',alloc_stat)
+        allocate( cmderr(self%ncheck) )
         cmderr = .false.
         do i=1,self%ncheck
            cmderr(i) = .not. self%defined(self%checker(i))

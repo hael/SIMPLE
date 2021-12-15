@@ -651,12 +651,7 @@ contains
         if( present(CaseSens) ) LCaseSens = CaseSens
         low          = 1
         high         = size(strArr)
-        allocate(indexarray(high), stat=alloc_stat)
-        if( alloc_stat /= 0 ) then
-            write(logfhandle,'(a)') 'ERROR: Allocation failure!'
-            write(logfhandle,'(a)') 'In: lexSort; simple_strings'
-            stop
-        endif
+        allocate(indexarray(high))
         indexarray = (/(k,k=low,high)/)
         call quicksort(low, high)
         strArr = strArr(indexarray)

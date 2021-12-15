@@ -103,11 +103,9 @@ contains
         endif
         ! allocate instance variables
         allocate(self%cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)),&
-                 &self%bandmsk(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)),&
-                 &stat=alloc_stat)
+                 &self%bandmsk(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)))
         self%cmat    = cmplx(0.,0.)
         self%bandmsk = .false.
-        if(alloc_stat.ne.0)call allocchk("In: new_1; simple_ft_expanded",alloc_stat)
         ! init matrices
         if( fetch_comps .and. l_bfac )then
             allocate(wh(self%flims(1,1):self%flims(1,2)))

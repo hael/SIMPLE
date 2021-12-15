@@ -4,7 +4,6 @@ module simple_sauron
 use simple_defs
 use simple_defs_ori
 use simple_strings, only: str2format, str2real, str2int, parsestr, split_str, compact
-use simple_error,   only: allocchk
 use simple_hash,    only: hash
 use simple_chash,   only: chash
 use simple_syslib,  only: sscanf

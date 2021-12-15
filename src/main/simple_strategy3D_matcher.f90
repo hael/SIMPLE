@@ -168,8 +168,7 @@ contains
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D, DONE'
         ! generate particles image objects
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
-        allocate(match_imgs(batchsz_max),strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max),stat=alloc_stat)
-        if(alloc_stat.ne.0) call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch",alloc_stat)
+        allocate(match_imgs(batchsz_max),strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))
         call prepimgbatch(batchsz_max)
         !$omp parallel do default(shared) private(imatch) schedule(static) proc_bind(close)
         do imatch=1,batchsz_max

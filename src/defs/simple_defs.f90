@@ -214,7 +214,6 @@ logical :: global_verbose = .false. !< global flag for verbosity FALSE by defaul
 #endif
 #endif
 logical :: global_warn    = .false. !< warning flag
-integer :: alloc_stat
 
 ! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
 #include "SimpleGitVersion.h"

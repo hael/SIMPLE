@@ -628,8 +628,7 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         update_res = .false.
-        allocate( maplp(params%nstates), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In simple_commander_refine3D:: exec_check3D_conv", alloc_stat)
+        allocate( maplp(params%nstates))
         maplp = 0.
         do istate=1,params%nstates
             if( build%spproj_field%get_pop( istate, 'state' ) == 0 )cycle ! empty state

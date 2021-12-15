@@ -28,8 +28,7 @@ contains
         class(opt_spec), intent(inout) :: spec !< specification
         call self%kill
         allocate(self%p(spec%ndim),self%dg(spec%ndim),self%hdg(spec%ndim),&
-        self%hessin(spec%ndim,spec%ndim),self%pnew(spec%ndim),self%xi(spec%ndim),stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: new_bfgs_opt; simple_opt_bfgs', alloc_stat)
+        self%hessin(spec%ndim,spec%ndim),self%pnew(spec%ndim),self%xi(spec%ndim))
         self%dg     = 0.
         self%hdg    = 0.
         self%hessin = 0.
