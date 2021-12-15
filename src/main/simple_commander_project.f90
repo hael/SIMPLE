@@ -522,11 +522,12 @@ contains
         endif
         if( cline%defined('stktab') )then
             ! importing from stktab
-            call read_filetable(params%stktab, stkfnames)
+            call read_filetable(params%stktab, stkfnames, check_if_exists=.false.)
             nstks = size(stkfnames)
             if( params%mkdir.eq.'yes' )then
                 do i=1,nstks
                     if(stkfnames(i)(1:1).ne.'/') stkfnames(i) = PATH_PARENT//trim(stkfnames(i))
+                    if( .not. file_exists(stkfnames(i)) ) THROW_HARD('modified filetable entry '//trim(stkfnames(i))//' does not exist')
                 enddo
             endif
             l_stktab_per_stk_parms = (os%get_noris() == nstks)
@@ -601,7 +602,6 @@ contains
             endif
         endif
         if( cline%defined('stk') .or. (cline%defined('stktab').and..not.l_stktab_per_stk_parms) )then
-            ! getting ctf parameters from command-line if stk import or stktab & per particle info
             ctfvars%smpd = params%smpd
             select case(trim(params%ctf))
                 case('yes')
@@ -615,7 +615,6 @@ contains
                     THROW_HARD('unsupported ctf flag: '//trim(params%ctf)//'; exec_import_particles')
             end select
             if( ctfvars%ctfflag .ne. CTFFLAG_NO )then
-                ! if importing single stack of extracted particles, these are hard requirements
                 if( .not. cline%defined('kv')    ) THROW_HARD('kv (acceleration voltage in kV{300}) input required when importing movies; exec_import_particles')
                 if( .not. cline%defined('cs')    ) THROW_HARD('cs (spherical aberration constant in mm{2.7}) input required when importing movies; exec_import_particles')
                 if( .not. cline%defined('fraca') ) THROW_HARD('fraca (fraction of amplitude contrast{0.1}) input required when importing movies; exec_import_particles')

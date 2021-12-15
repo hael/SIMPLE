@@ -143,6 +143,7 @@ type(simple_program), target :: simulate_movie
 type(simple_program), target :: simulate_noise
 type(simple_program), target :: simulate_particles
 type(simple_program), target :: simulate_subtomogram
+type(simple_program), target :: split_
 type(simple_program), target :: stack
 type(simple_program), target :: stackops
 type(simple_program), target :: symaxis_search
@@ -355,6 +356,7 @@ contains
         call new_simulate_noise
         call new_simulate_particles
         call new_simulate_subtomogram
+        call new_split_
         call new_stack
         call new_stackops
         call new_symaxis_search
@@ -446,6 +448,7 @@ contains
         call push2prg_ptr_array(simulate_noise)
         call push2prg_ptr_array(simulate_particles)
         call push2prg_ptr_array(simulate_subtomogram)
+        call push2prg_ptr_array(split_)
         call push2prg_ptr_array(stack)
         call push2prg_ptr_array(stackops)
         call push2prg_ptr_array(symaxis_search)
@@ -620,6 +623,8 @@ contains
                 ptr2prg => simulate_particles
             case('simulate_subtomogram')
                 ptr2prg => simulate_subtomogram
+            case('split')
+                ptr2prg => split_
             case('stack')
                 ptr2prg => stack
             case('stackops')
@@ -726,6 +731,7 @@ contains
         write(logfhandle,'(A)') simulate_subtomogram%name
         write(logfhandle,'(A)') scale%name
         write(logfhandle,'(A)') scale_project%name
+        write(logfhandle,'(A)') split_%name
         write(logfhandle,'(A)') stack%name
         write(logfhandle,'(A)') stackops%name
         write(logfhandle,'(A)') symaxis_search%name
@@ -3411,6 +3417,23 @@ contains
         ! computer controls
         call simulate_subtomogram%set_input('comp_ctrls', 1, nthr)
     end subroutine new_simulate_subtomogram
+
+    subroutine new_split_
+        call split_%new(&
+        &'split',&                                   ! name
+        &'Split stack into substacks',&              ! descr_short
+        &'is a program for splitting a stack into evenly partitioned substacks',& ! descr_long
+        &'simple_exec',&               ! executable
+        &1, 1, 0, 0, 0, 0, 1, .false.) ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call split_%set_input('img_ios', 1, stk)
+        split_%img_ios(1)%required = .true.
+        ! parameter input/output
+        call split_%set_input('parm_ios', 1, smpd)
+        ! computer controls
+        call split_%set_input('comp_ctrls', 1, nparts)
+    end subroutine new_split_
 
     subroutine new_stack
         ! PROGRAM SPECIFICATION

@@ -121,6 +121,9 @@ type(prune_project_commander_distr)         :: xprune_project
 ! SYSTEM INTERACTION PROGRAMS
 type(mkdir_commander)                       :: xmkdir
 
+! PARALLEL PROCESSING PROGRAMS
+type(split_commander)                       :: xsplit
+
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: xarg, prg, entire_line
 type(cmdline)         :: cline
@@ -307,6 +310,9 @@ select case(prg)
     case( 'mkdir' )
         call xmkdir%execute(cline)
 
+    ! PARALLEL PROCESSING PROGRAMS
+    case( 'split' )
+        call xsplit%execute(cline)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select
