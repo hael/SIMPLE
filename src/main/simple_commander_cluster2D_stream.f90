@@ -661,7 +661,7 @@ contains
             call update_user_params
             if( .not.pool_available )then
                 call debug_print('pool unavailable '//int2str(iter))
-                pool_converged = file_exists(CLUSTER2D_FINISHED)
+                ! pool_converged = file_exists(CLUSTER2D_FINISHED)
                 if( pool_iter > 1 ) refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params%ext)
                 pool_available = pool_converged
             endif
@@ -943,7 +943,7 @@ contains
                 nchunks2import = size(converged_chunks)
                 do iichunk = 1,nchunks2import
                     nptcls2import = nptcls2import + converged_chunks(iichunk)%nptcls
-                    nmics2import  = nmics2import + converged_chunks(iichunk)%nmics
+                    nmics2import  = nmics2import  + converged_chunks(iichunk)%nmics
                 enddo
                 if( nptcls2import == 0 ) return
                 call debug_print('in import_chunks_into_pool 1 '//int2str(nptcls2import))
@@ -1248,8 +1248,6 @@ contains
                     call cline_cluster2D%set('update_frac', frac_update)
                     call cline_cluster2D%set('center',      'no')
                 endif
-                ! NEVER let the pool converge
-                call cline_cluster2D%set('converge', 'no')
                 call debug_print('in exec_classify_pool 4')
                 deallocate(update_cnts,transfer_mask)
                 call transfer_spproj%kill
