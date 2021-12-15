@@ -94,14 +94,13 @@ contains
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
+        allocate(ptcl_mask(params_glob%fromp:params_glob%top))
         if( params_glob%l_frac_update )then
-            allocate(ptcl_mask(params_glob%fromp:params_glob%top))
             call build_glob%spproj_field%sample4update_and_incrcnt([params_glob%fromp,params_glob%top],&
             &params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
         else
-            allocate(ptcl_mask(params_glob%fromp:params_glob%top))
-            call build_glob%spproj_field%sample4update_and_incrcnt_nofrac([params_glob%fromp,params_glob%top],&
-            nptcls2update, pinds, ptcl_mask)
+            call build_glob%spproj_field%sample4update_and_incrcnt([params_glob%fromp,params_glob%top],&
+            &1.0, nptcls2update, pinds, ptcl_mask)
         endif
 
         ! EXTREMAL LOGICS

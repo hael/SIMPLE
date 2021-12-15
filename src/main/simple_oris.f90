@@ -64,10 +64,7 @@ type :: oris
     procedure, private :: get_nodd
     procedure          :: print_
     procedure          :: print_matrices
-    procedure          :: sample4update_and_incrcnt_nofrac
     procedure          :: sample4update_and_incrcnt
-    procedure          :: sample4update_and_incrcnt2D
-    procedure          :: sample_rnd_subset
     procedure          :: incr_updatecnt
     procedure          :: has_been_searched
     procedure          :: any_state_zero
@@ -910,8 +907,8 @@ contains
     subroutine mask_from_state( self, state, l_mask, pinds, fromto )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: state
-        logical, allocatable, intent(out)   :: l_mask(:)
-        integer, allocatable, intent(out)   :: pinds(:)
+        logical, allocatable, intent(inout) :: l_mask(:)
+        integer, allocatable, intent(inout) :: pinds(:)
         integer, optional,    intent(in)    :: fromto(2)
         integer :: i, cnt, ffromto(2)
         ffromto(1) = 1
@@ -1134,202 +1131,69 @@ contains
         end do
     end subroutine print_matrices
 
-    subroutine sample4update_and_incrcnt_nofrac( self, fromto, nsamples, inds, mask )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: fromto(2)
-        integer,              intent(out)   :: nsamples
-        integer, allocatable, intent(out)   :: inds(:)
-        logical,              intent(out)   :: mask(fromto(1):fromto(2))
-        real, allocatable :: states(:)
-        real    :: val
-        integer :: iptcl, cnt
-        ! gather info
-        allocate( states(fromto(1):fromto(2)) )
-        do iptcl=fromto(1),fromto(2)
-            states(iptcl) = self%o(iptcl)%get('state')
-        end do
-        ! figure out how many samples
-        nsamples = count(states > 0.5)
-        ! allocate output index array
-        if( allocated(inds) ) deallocate(inds)
-        allocate( inds(nsamples) )
-        ! update mask & count
-        mask = .false.
-        cnt  = 0
-        do iptcl = fromto(1),fromto(2)
-            if( states(iptcl) > 0.5 )then
-                cnt         = cnt + 1
-                inds(cnt)   = iptcl
-                mask(iptcl) = .true.
-                val         = self%o(iptcl)%get('updatecnt')
-                call self%o(iptcl)%set('updatecnt', val+1.0)
-            endif
-        end do
-    end subroutine sample4update_and_incrcnt_nofrac
-
     subroutine sample4update_and_incrcnt( self, fromto, update_frac, nsamples, inds, mask )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
         real,                 intent(in)    :: update_frac
-        integer,              intent(out)   :: nsamples
-        integer, allocatable, intent(out)   :: inds(:)
-        logical,              intent(out)   :: mask(fromto(1):fromto(2))
+        integer,              intent(inout) :: nsamples
+        integer, allocatable, intent(inout) :: inds(:)
+        logical,              intent(inout) :: mask(fromto(1):fromto(2))
         real,    allocatable :: counts(:), states(:)
         integer, allocatable :: inds_here(:)
-        integer :: i, iptcl, cnt
+        integer :: i, cnt, n_nozero, ifirst, ilast, sz, mincnt
         real    :: val
-        ! gather info
-        allocate( states(fromto(1):fromto(2)), counts(fromto(1):fromto(2)), inds_here(fromto(1):fromto(2)))
-        do iptcl=fromto(1),fromto(2)
-            if( self%o(iptcl)%isthere('updatecnt') )then
-                counts(iptcl) = self%o(iptcl)%get('updatecnt')
+        ! gather info (states & counts & indices)
+        allocate(states(fromto(1):fromto(2)), counts(fromto(1):fromto(2)), inds_here(fromto(1):fromto(2)))
+        do i = fromto(1), fromto(2)
+            if( self%o(i)%isthere('updatecnt') )then
+                counts(i) = self%o(i)%get('updatecnt')
             else
-                counts(iptcl) = 0
+                counts(i) = 0
             endif
-            states(iptcl)    = self%o(iptcl)%get('state')
-            inds_here(iptcl) = iptcl
+            states(i)     = self%o(i)%get_state()
+            inds_here(i)  = i
         end do
-        ! order counts
-        call hpsort(counts, inds_here)
-        ! figure out how many samples
-        nsamples = nint(update_frac * real(count(states > 0.5)))
-        ! allocate output index array
-        if( allocated(inds) ) deallocate(inds)
-        allocate( inds(nsamples) )
-        ! update mask, index range & count
-        mask = .false.
-        cnt  = 0
-        do i = fromto(1),fromto(2)
-            iptcl = inds_here(i)
-            if( states(iptcl) > 0.5 )then
-                cnt         = cnt + 1
-                inds(cnt)   = iptcl
-                mask(iptcl) = .true.
-                val         = self%o(iptcl)%get('updatecnt')
-                call self%o(iptcl)%set('updatecnt', val+1.0)
-            endif
-            if( cnt == nsamples ) exit
-        end do
-    end subroutine sample4update_and_incrcnt
-
-    subroutine sample4update_and_incrcnt2D( self, ncls, fromto, update_frac, nsamples, inds, mask )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: ncls, fromto(2)
-        real,                 intent(in)    :: update_frac
-        integer,              intent(out)   :: nsamples
-        integer, allocatable, intent(out)   :: inds(:)
-        logical,              intent(out)   :: mask(fromto(1):fromto(2))
-        real,    allocatable :: counts(:)
-        integer, allocatable :: clsarr(:)
-        logical :: state_mask(fromto(1):fromto(2))
-        integer :: i, cnt, icls, sz
-        real    :: val, update_frac_here
-        state_mask = .false.
-        mask       = .false.
-        do i=fromto(1),fromto(2)
-            if(self%o(i)%get_state() > 0) state_mask(i) = .true.
-        enddo
-        update_frac_here = update_frac * real(count(state_mask)) / real(self%n)
-        do icls=1,ncls
-            call self%get_pinds(icls, 'class', clsarr)
-            if( allocated(clsarr) )then
-                sz       = size(clsarr)
-                nsamples = max(1,nint(real(sz) * update_frac_here ))
-                allocate(counts(sz), source=0.)
-                do i=1,sz
-                    if( self%o(clsarr(i))%isthere('updatecnt'))then
-                        counts(i) = self%o(clsarr(i))%get('updatecnt')
-                    endif
-                end do
-                ! order counts
-                call hpsort(counts, clsarr)
-                cnt = 0
-                do i=1,sz
-                    if( clsarr(i) >= fromto(1) .and. clsarr(i) <= fromto(2) )then
-                        if( .not.state_mask(clsarr(i)) )cycle
-                        cnt = cnt +1
-                        if( cnt > nsamples )exit
-                        mask(clsarr(i)) = .true.
-                    endif
-                end do
-                deallocate(counts,clsarr)
-            endif
-        end do
-        nsamples = count(mask)
-        if( nsamples > 0 )then
-            allocate(inds(nsamples), source=0)
-            ! increment update counter and set mask
+        n_nozero  = count(states > 0)
+        nsamples  = nint(update_frac * real(n_nozero))
+        if( n_nozero == nsamples .or. all(counts == 0) )then ! update_frac is 1.0 .or. all(counts == 0)
+            mask = .false.
             cnt  = 0
-            do i=fromto(1),fromto(2)
-                if( mask(i) )then
-                    cnt       = cnt + 1
-                    inds(cnt) = i
-                    val       = self%o(i)%get('updatecnt')
-                    val       = val + 1.0
-                    call self%o(i)%set('updatecnt', val)
-                endif
+            do i = fromto(1), fromto(2)
+                if( states(i) < 1 ) cycle
+                cnt     = cnt + 1
+                mask(i) = .true.
+                val     = self%o(i)%get('updatecnt')
+                call self%o(i)%set('updatecnt', val + 1.0)
+                if( cnt == nsamples ) exit
             end do
         else
-            nsamples = count(state_mask)
-            allocate(inds(nsamples), source=0)
-            cnt = 0
-            do i=fromto(1),fromto(2)
-                mask(i) = state_mask(i)
-                if(mask(i))then
-                    cnt       = cnt+1
-                    inds(cnt) = i
-                    call self%o(i)%set('updatecnt', 1.)
+            ! find the minimum updatecnt
+            mincnt = minval(counts, mask=states > 0)
+            ! identify the first & last occurence of mincnt
+            ifirst = 0
+            do i = fromto(1), fromto(2)
+                if( states(i) < 1 ) cycle
+                if( counts(i) == mincnt )then
+                    if( ifirst == 0 ) ifirst = i
+                    ilast = i
+                    if( ilast - ifirst + 1 == nsamples ) exit
                 endif
             end do
+            ! update nsamples in case fewer were found
+            nsamples = ilast - ifirst + 1 
+            ! update mask & counters
+            mask = .false.
+            do i = ifirst, ilast
+                if( states(i) < 1 ) cycle
+                mask(i) = .true.
+                val     = self%o(i)%get('updatecnt')
+                call self%o(i)%set('updatecnt', val + 1.0)
+            end do
         endif
-    end subroutine sample4update_and_incrcnt2D
-
-    subroutine sample_rnd_subset( self, ncls, fromto, min_nsamples, nptcls_per_cls, nparts, mask, inds )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: ncls, fromto(2), min_nsamples, nptcls_per_cls, nparts
-        logical,              intent(out)   :: mask(fromto(1):fromto(2))
-        integer, allocatable, intent(out)   :: inds(:)
-        real    :: counts(fromto(1):fromto(2)), a
-        integer :: order(1:fromto(2)-fromto(1)+1)
-        integer :: i,j, nptcls_mask, nsamples, cnt
-        nptcls_mask = 0
-        !$omp parallel do default(shared) private(i,j) schedule(static) proc_bind(close) reduction(+:nptcls_mask)
-        do i=fromto(1),fromto(2)
-            j = i - fromto(1) + 1
-            order(j) = j
-            mask(i)  = self%o(i)%get_state() > 0
-            if( mask(i) )then
-                nptcls_mask = nptcls_mask + 1
-                if( self%o(i)%isthere('updatecnt') )then
-                    counts(i) = self%o(i)%get('updatecnt')
-                else
-                    counts(i) = 0.
-                endif
-            else
-                counts(i) = huge(a)
-            endif
-        enddo
-        !$omp end parallel do
-        nsamples    = nint(max(real(min_nsamples)/real(nparts), real(nptcls_per_cls*ncls)/real(nparts)))
-        if( nsamples >= nptcls_mask )then
-            ! all included
-        else
-            call hpsort(counts,order)
-            do i = nsamples+1,nptcls_mask
-                j = fromto(1) + order(i) - 1
-                if( mask(j) ) mask(j) = .false.
-            enddo
-        endif
-        nsamples = count(mask)
-        allocate(inds(nsamples), source=0)
-        cnt = 0
-        do i=fromto(1),fromto(2)
-            if(mask(i))then
-                cnt       = cnt+1
-                inds(cnt) = i
-            endif
-        end do
-    end subroutine sample_rnd_subset
+        if( allocated(inds) ) deallocate(inds)
+        inds = pack(inds_here, mask=mask)
+        deallocate(states, counts, inds_here)
+    end subroutine sample4update_and_incrcnt
 
     subroutine incr_updatecnt( self, fromto, mask )
         class(oris), intent(inout) :: self
