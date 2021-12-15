@@ -21,10 +21,10 @@ private
 
 real,                  parameter   :: GREEDY_TARGET_LP    = 15.
 integer,               parameter   :: MINBOXSZ            = 72    ! minimum boxsize for scaling
-integer,               parameter   :: WAIT_WATCHER        = 5    ! seconds prior to new stack detection
-! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 1800   ! dev settings
+integer,               parameter   :: WAIT_WATCHER        = 5     ! seconds prior to new stack detection
+! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 1800  ! dev settings
 integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
-integer,               parameter   :: FREQ_POOL_REJECTION = 5   !
+integer,               parameter   :: FREQ_POOL_REJECTION = 5     !
 character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter   :: SPPROJ_SNAPSHOT     = 'SIMPLE_PROJECT_SNAPSHOT'
 character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
@@ -49,18 +49,18 @@ type chunk
     integer                                :: nptcls
     logical                                :: converged = .false.
     logical                                :: available = .true.
-    contains
-        procedure :: init
-        procedure :: generate
-        procedure :: exec_classify
-        procedure :: read
-        procedure :: remove_folder
-        procedure :: display_iter
-        procedure :: reject
-        procedure :: has_converged
-        procedure :: print_info
-        procedure :: terminate
-        procedure :: kill
+contains
+    procedure :: init
+    procedure :: generate
+    procedure :: exec_classify
+    procedure :: read
+    procedure :: remove_folder
+    procedure :: display_iter
+    procedure :: reject
+    procedure :: has_converged
+    procedure :: print_info
+    procedure :: terminate
+    procedure :: kill
 end type chunk
 
 contains
@@ -74,7 +74,7 @@ contains
     end subroutine debug_print
 
     subroutine init( self, id, master_spproj )
-        class(chunk),     intent(inout) :: self
+        class(chunk),      intent(inout) :: self
         integer,           intent(in)    :: id
         class(sp_project), intent(in)    :: master_spproj
         call debug_print('in chunk%init '//int2str(id))
@@ -86,7 +86,7 @@ contains
         self%path      = './chunk_'//int2str(id)//'/'
         self%projfile_out = ''
         ! we need to override the qsys_name for non local distributed execution
-        call self%qenv%new(params_glob%nparts_chunk,exec_bin='simple_private_exec',qsys_name='local')
+        call self%qenv%new(params_glob%nparts_chunk, exec_bin='simple_private_exec', qsys_name='local')
         self%spproj%projinfo = master_spproj%projinfo
         self%spproj%compenv  = master_spproj%compenv
         call self%spproj%projinfo%delete_entry('projname')
@@ -1152,7 +1152,7 @@ contains
             end subroutine import_chunks_into_pool
 
             subroutine exec_classify_pool
-                logical,      parameter :: L_BENCH = .false.
+                logical, parameter      :: L_BENCH = .false.
                 logical, allocatable    :: transfer_mask(:)
                 integer, allocatable    :: update_cnts(:), prev_eo_pops(:,:)
                 real                    :: srch_frac, frac_update
@@ -1166,8 +1166,8 @@ contains
                 if( nptcls_tot == 0 ) return
                 call debug_print('in exec_classify_pool '//int2str(nptcls_tot))
                 pool_iter = pool_iter + 1
-                call cline_cluster2D%set('refs', refs_glob)
-                call cline_cluster2D%set('ncls', real(ncls_glob))
+                call cline_cluster2D%set('refs',    refs_glob)
+                call cline_cluster2D%set('ncls',    real(ncls_glob))
                 call cline_cluster2D%set('startit', real(pool_iter))
                 call cline_cluster2D%set('maxits',  real(pool_iter))
                 call cline_cluster2D%set('frcs',    trim(FRCS_FILE))
@@ -1248,6 +1248,8 @@ contains
                     call cline_cluster2D%set('update_frac', frac_update)
                     call cline_cluster2D%set('center',      'no')
                 endif
+                ! NEVER let the pool converge
+                call cline_cluster2D%set('converge', 'no')
                 call debug_print('in exec_classify_pool 4')
                 deallocate(update_cnts,transfer_mask)
                 call transfer_spproj%kill
