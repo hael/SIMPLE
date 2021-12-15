@@ -40,23 +40,23 @@ type eer_decoder
     logical                       :: l_hasbeenread = .false.    !< whether file has been parsed
     logical                       :: l_7bit        = .false.    !< compression
     logical                       :: l_exists      = .false.    !< whether object exists
-    contains
-        ! Constructor
-        procedure          :: new
-        procedure, private :: read
-        ! Doers
-        procedure          :: decode
-        procedure, private :: decode_frames
-        procedure          :: prep_gainref
-        ! Setter
-        procedure          :: set_dims
-        ! Getter
-        procedure          :: get_nframes
-        procedure          :: get_ldim
-        procedure          :: get_smpd_out
-        procedure          :: get_smpd
-        ! Destructor
-        procedure          :: kill
+contains
+    ! Constructor
+    procedure          :: new
+    procedure, private :: read
+    ! Doers
+    procedure          :: decode
+    procedure, private :: decode_frames
+    procedure          :: prep_gainref
+    ! Setter
+    procedure          :: set_dims
+    ! Getter
+    procedure          :: get_nframes
+    procedure          :: get_ldim
+    procedure          :: get_smpd_out
+    procedure          :: get_smpd
+    ! Destructor
+    procedure          :: kill
 end type eer_decoder
 
 contains
@@ -165,8 +165,6 @@ contains
         end select
         self%upsampling = upsampling
     end subroutine set_dims
-
-    ! DOERS
 
     subroutine decode( self, imgs, fraction )
         class(eer_decoder), intent(in)    :: self
@@ -374,9 +372,6 @@ contains
             end subroutine flipY
 
     end subroutine prep_gainref
-
-
-    ! SETTERS
 
     integer function get_nframes( self )
         class(eer_decoder), intent(in) :: self

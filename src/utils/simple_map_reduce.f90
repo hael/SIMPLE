@@ -77,7 +77,7 @@ contains
             ! Check if the write was successful
             if( io_stat .ne. 0 )&
                 call fileiochk('mapreduce ;split_pairs_in_parts writing to '//trim(fname), io_stat)
-            call fclose(funit,errmsg='mapreduce ;split_pairs_in_parts ')
+            call fclose(funit)
             deallocate(fname)
         end do
         deallocate(pairs, parts)

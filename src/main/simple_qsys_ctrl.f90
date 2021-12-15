@@ -269,8 +269,7 @@ contains
         ! exit shell when done
         write(funit,'(a)') ''
         write(funit,'(a)') 'exit'
-        call fclose(funit, errmsg='simple_qsys_ctrl :: gen_qsys_script; Error when close file: '&
-             //trim(self%script_names(ipart)) )
+        call fclose(funit)
         if( q_descr%get('qsys_name').eq.'local' )then
             ios = simple_chmod(trim(self%script_names(ipart)),'+x')
             if( ios .ne. 0 )then
@@ -330,9 +329,7 @@ contains
         ! exit shell when done
         write(funit,'(a)') ''
         write(funit,'(a)') 'exit'
-        call fclose(funit, ios, &
-            &errmsg='simple_qsys_ctrl :: generate_script_2; Error when closing file: '&
-            &//trim(script_name))
+        call fclose(funit)
         !!!!!!!!!
         call wait_for_closure(script_name)
         !!!!!!!!!

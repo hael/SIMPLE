@@ -324,7 +324,7 @@ contains
         ! re-create the object according to file_header info
         call self%new(nint(self%file_header(1)), nint(self%file_header(2)), self%file_header(3), nint(self%file_header(4)))
         read(unit=funit,pos=self%headsz + 1) self%frcs
-        call fclose(funit, errmsg='class_frcs; read; fhandle close')
+        call fclose(funit)
     end subroutine read
 
     subroutine write( self, fname )
@@ -335,7 +335,7 @@ contains
         call fileiochk('class_frcs; write; open for write '//trim(fname), io_stat)
         write(unit=funit,pos=1) self%file_header
         write(unit=funit,pos=self%headsz + 1) self%frcs
-        call fclose(funit, errmsg='class_frcs; write; fhandle close')
+        call fclose(funit)
     end subroutine write
 
     subroutine print_frcs( self, fname, state )

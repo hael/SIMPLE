@@ -2075,7 +2075,7 @@ contains
                 nst   = max(1,max(state,nst))
             endif
         end do
-        call fclose(fnr,errmsg="oris ; read ,Error when closing file")
+        call fclose(fnr)
     end subroutine read
 
     !>  \brief  reads CTF parameters and state info from file
@@ -2136,7 +2136,7 @@ contains
             cnt = cnt + 1
             call self%o(i)%write(fnr)
         end do
-        call fclose(fnr, errmsg=' Error closing file for writing: '//trim(orifile))
+        call fclose(fnr)
     end subroutine write_1
 
     !>  \brief  writes orientation info to file
@@ -2148,7 +2148,7 @@ contains
         call fopen(fnr, orifile, status='UNKNOWN', action='WRITE', position='APPEND', iostat=file_stat)
         call fileiochk( 'In: write_2, module: simple_oris.f90  opening '//trim(orifile), file_stat )
         call self%o(i)%write(fnr)
-        call fclose(fnr, errmsg=' Error closing file for writing: '//trim(orifile))
+        call fclose(fnr)
     end subroutine write_2
 
     !>  \brief  writes object to BILD Chimera readable format
@@ -2186,7 +2186,7 @@ contains
         do i=1,self%n
             call self%o(i)%write2bild(funit)
         enddo
-        call fclose(funit, errmsg=' Error closing file for writing: '//trim(file))
+        call fclose(funit)
     end subroutine write2bild
 
     ! CALCULATORS

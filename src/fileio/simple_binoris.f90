@@ -12,7 +12,7 @@ use simple_map_reduce, only: split_nobjs_even
 implicit none
 
 public :: binoris, binoris_seginfo
-! private
+private
 #include "simple_local_flags.inc"
 
 integer(kind(ENUM_ORISEG)), parameter :: MAX_N_SEGMENTS     = 20
@@ -144,7 +144,7 @@ contains
         if( self%l_open )then
             io_stat = fsync(fnum(self%funit))
             if( io_stat /= 0 ) write(logfhandle,'(a)')'FSYNC ERROR FILE UNIT: '//int2str(self%funit)
-            call fclose(self%funit,io_stat,errmsg='binoris ; close ')
+            call fclose(self%funit)
             self%l_open = .false.
         end if
     end subroutine close

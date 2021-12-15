@@ -86,7 +86,7 @@ contains
             read(unit=funit,pos=addr) sigma2_noise_n
             sigma2(:,iptcl) = sigma2_noise_n
         end do
-        call fclose(funit, errmsg='sigma2_binfile; read; fhandle close')
+        call fclose(funit)
     end subroutine read
 
     subroutine write( self, sigma2 )
@@ -114,7 +114,7 @@ contains
             addr = self%headsz + (iptcl - self%fromp) * self%sigmassz + 1
             write(funit,pos=addr) sigma2(:,iptcl)
         end do
-        call fclose(funit, errmsg='sigma2_binfile; write; fhandle close')
+        call fclose(funit)
     end subroutine
 
     function open_and_check_header( self, funit, readonly ) result ( success )

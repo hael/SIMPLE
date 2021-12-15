@@ -439,7 +439,7 @@ contains
             if(io_stat/=0) then
                 call fileiochk('**ERROR(simple_volume_smat): I/O error reading file: '//trim(fname), io_stat)
             endif
-            call fclose(funit, errmsg='volops; vol_smat closing '//trim(fname))
+            call fclose(funit)
             deallocate(fname)
             cnt = 0
             do ipair=params%fromp,params%top
@@ -462,7 +462,7 @@ contains
             ! Check if the write was successful
             if(io_stat/=0) &
                 call fileiochk('**ERROR(simple_volume_smat): I/O error writing file: '//trim(fname), io_stat)
-            call fclose(funit, errmsg='volops; volume smat 2  closing ')
+            call fclose(funit)
             deallocate(fname, corrs, pairs)
         else
             ! generate similarity matrix
@@ -508,7 +508,7 @@ contains
             if(io_stat/=0) &
                 call fileiochk('**ERROR(simple_volume_smat): I/O error writing to vol_smat.bin', io_stat)
 
-            call fclose(funit, errmsg='volops; volume smat 3 closing ')
+            call fclose(funit)
             if(allocated(corrmat))deallocate(corrmat)
         endif
         ! end gracefully

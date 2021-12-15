@@ -1,15 +1,3 @@
-!!
-!! System library functions and error checking
-!!
-!! System routines:  exec_cmdline, simple_isenv simple_getcwd, simple_chdir simple_chmod
-!! File routines:    simple_file_stat, wait_for_closure, is_io, is_open, file_exists, is_file_open
-!! Memory routines:  simple_mem_usage, simple_dump_mem_usage
-
-!! Function:  get_sys_error, simple_getenv, get_lunit, cpu_usage, get_process_id
-
-!! New interface: get_file_list, list_dirs, glob_list_tofile, show_dir_content_recursive
-!! New OS calls:  simple_list_dirs, simple_list_files, simple_rmdir, simple_del_files
-
 module simple_syslib
 use simple_defs
 use simple_error
@@ -22,8 +10,6 @@ implicit none
 !> glibc interface CONFORMING TO POSIX.1-2001, POSIX.1-2008, SVr4, 4.3BSD.
 interface
 
-    !! rmdir() deletes a directory, which must be empty. On success, zero is
-    !! returned. On error, -1 is returned, and errno is set appropriately.
     function rmdir(dirname) bind(C, name="rmdir")
         use, intrinsic :: iso_c_binding
         integer(c_int) :: rmdir
@@ -60,9 +46,7 @@ interface
         integer(c_int) :: fsync
     end function fsync
 
-    ! String utils
-
-    ! For float paring only!
+    ! For float parsing only!
     function sscanf(str, fmt, val) bind(C)
         use iso_c_binding, only : c_int, c_char, c_float
         integer(kind=c_int) :: sscanf
@@ -164,7 +148,6 @@ end interface
 
 contains
 
-    !>  Wrapper for system call
     subroutine exec_cmdline( cmdline, waitflag, suppress_errors, exitstat)
         character(len=*),  intent(in)  :: cmdline
         logical, optional, intent(in)  :: waitflag, suppress_errors
@@ -210,8 +193,6 @@ contains
             err = .true.
         endif
     end subroutine raise_sys_error
-
-    !! ENVIRONMENT FUNCTIONS
 
     !> isenv; return 0 if environment variable is present
     logical function simple_isenv( name )
@@ -265,8 +246,6 @@ contains
         end if
         envval = trim(retval)
     end function simple_getenv_2
-
-    !! SYSTEM FILE OPERATIONS
 
     !> \brief Touch file, create file if necessary
     subroutine simple_touch( fname , errmsg, status)
@@ -847,8 +826,6 @@ contains
         cpu_usage=percent
     end function cpu_usage
 
-    !! SYSTEM INFO ROUTINES
-
     integer(4) function get_process_id( )
         get_process_id = getpid()
     end function get_process_id
@@ -1040,8 +1017,6 @@ contains
         res = regexp_match(source_c,len_trim(source),  regex_c, len_trim(regex))
         RE_match = INT(res)
     end function RE_match
-
-    ! SLURM
 
     subroutine print_slurm_env()
         character(len=255) :: env_value

@@ -243,8 +243,8 @@ contains
             if( l_neg ) call ptcl_target%neg()
             call ptcl_target%write(stkframes_name, iframe)
         end do
-        call fclose(funit, errmsg="tseries tracker ; write_tracked_series end")
-        call fclose(funit2, errmsg="tseries tracker ; write_tracked_series end")
+        call fclose(funit)
+        call fclose(funit2)
         ! average and write power spectrum for CTF estimation
         fname_forctf = trim(dir)//'/'//trim(fbody)//'_pspec4ctf_estimation.mrc'
         call pspec%dampen_pspec_central_cross

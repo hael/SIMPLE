@@ -143,7 +143,7 @@ contains
         enddo
         call self%guess_element
         ! done
-        call fclose(filnum, errmsg='new_from_pdb; simple_atoms closing '//trim(fname))
+        call fclose(filnum)
         contains
 
             elemental logical function is_valid_entry( str )
@@ -435,7 +435,7 @@ contains
             endif
 
         enddo
-        call fclose(funit, errmsg='writepdb; simple_atoms closing '//trim(fname))
+        call fclose(funit)
     end subroutine writepdb
 
     ! CALCULATORS

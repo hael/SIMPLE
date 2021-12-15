@@ -210,7 +210,7 @@ subroutine test_args()
             THROW_HARD( 'part 1 of the unit test failed')
         endif
     end do
-    call fclose(funit, errmsg=\"simple_args::test close\")
+    call fclose(funit)
     errarg1 = 'XXXXXXX'
     errarg2 = 'YYYYYY'
     errarg3 = 'ZZZZZZ'

@@ -351,7 +351,7 @@ contains
                 peak_positions_refined(ipeak,2), orig_box, orig_box, -3
             endif
         end do
-        call fclose(funit,errmsg='picker; write_boxfile end')
+        call fclose(funit)
     end subroutine write_boxfile
 
     subroutine kill_picker
