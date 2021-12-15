@@ -105,7 +105,6 @@ contains
         if( DEBUG_HERE ) print *, 'prgname from UI in cmdline class: ', trim(prgname)
         exec_cmd_ui = ptr2prg%get_executable()
         if( DEBUG_HERE ) print *, 'exec_cmd from UI in cmdline class: ', exec_cmd_ui
-
         if( trim(exec_cmd_ui) .ne. 'all' )then
             if( basename(trim(exec_cmd)) .ne. trim(exec_cmd_ui) )then
                 THROW_HARD(trim(prgname)//' is not executed by '//trim(exec_cmd)//' but by '//exec_cmd_ui)
@@ -116,10 +115,10 @@ contains
             select case(trim(exec_cmd))
                 case('simple_exec')
                     call list_simple_prgs_in_ui
-                    call exit(EXIT_FAILURE2)
+                    stop
                 case('single_exec')
                     call list_single_prgs_in_ui
-                    call exit(EXIT_FAILURE2)
+                    stop
                 case DEFAULT
                     THROW_HARD('Program '//prgname//' not supported; parse')
             end select
@@ -127,7 +126,7 @@ contains
         ! describe program if so instructed
         if( str_has_substr(self%entire_line, 'describe=yes') )then
             call ptr2prg%print_prg_descr_long()
-            call exit(EXIT_FAILURE2)
+            stop
         endif
         if( .not. associated(ptr2prg) )then
             THROW_HARD('inputted prg not supported, use prg=list to list all available programs')
@@ -142,7 +141,7 @@ contains
         endif
         if( self%argcnt < nargs_required )then
             call ptr2prg%print_cmdline()
-            call exit(EXIT_FAILURE2)
+            stop
         else
             ! indicate which variables are required
             if( sz_keys_req > 0 )then
@@ -159,7 +158,7 @@ contains
                 write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
                 write(logfhandle,*) 'which likely exceeds the length limit LONGSTRLEN'
                 write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
-                call exit(EXIT_FAILURE3)
+                stop
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
         end do
@@ -202,7 +201,7 @@ contains
                     endif
                     if( self%argcnt < nargs_required )then
                         call ptr2prg%print_cmdline()
-                        call exit(EXIT_FAILURE2)
+                        stop
                     else
                         ! indicate which variables are required
                         if( sz_keys_req > 0 )then
@@ -222,7 +221,7 @@ contains
                     endif
                     if( self%argcnt < nargs_required .or. (sz_keys_req == 0 .and. self%argcnt == 1) )then
                         call print_private_cmdline(arg(pos+1:))
-                        call exit(EXIT_FAILURE2)
+                        stop
                     else
                         ! indicate which variables are required
                         if( sz_keys_req > 0 )then
@@ -241,7 +240,7 @@ contains
                 write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
                 write(logfhandle,*) 'which likely exceeds the length limit LONGSTRLEN'
                 write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
-                call exit(EXIT_FAILURE3)
+                stop
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
         end do
@@ -272,7 +271,7 @@ contains
             endif
             if( cmdargcnt < nreq )then
                 call print_cmdline_oldschool(keys_required, keys_optional, distr=distr_exec)
-                call exit(EXIT_FAILURE5)
+                stop
             else
                 ! indicate which variables are required
                 do ikey=1,size(keys_required)
@@ -282,7 +281,7 @@ contains
         else
             if( cmdargcnt < 2 )then
                 call print_cmdline_oldschool(keys_required, keys_optional, distr=distr_exec)
-                call exit(EXIT_FAILURE5)
+                stop
             endif
         endif
         allowed_args = args()
@@ -294,7 +293,7 @@ contains
                 write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
                 write(logfhandle,*) 'which likely exceeds the length limit LONGSTRLEN'
                 write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
-                call exit(EXIT_FAILURE5)
+                stop
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
         end do
@@ -316,7 +315,7 @@ contains
             if( .not. allowed_args%is_present(self%cmds(i)%key) )then
                 write(logfhandle,'(a,a)') trim(self%cmds(i)%key), ' argument is not allowed'
                 write(logfhandle,'(a)') 'Perhaps you have misspelled?'
-                call exit(EXIT_FAILURE4)
+                stop
             endif
             call str2format(arg(pos1+1:), form, rval, ival)
             select case(form)
@@ -538,7 +537,7 @@ contains
         ! output
         if( any(cmderr) )then
             write(logfhandle,'(a)') 'ERROR, not enough input variables defined!'
-            call exit(EXIT_FAILURE6)
+            stop
         endif
         deallocate( cmderr )
     end subroutine check
@@ -672,7 +671,7 @@ contains
             write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
             write(logfhandle,*) 'which likely exeeds the lenght limit LONGSTRLEN'
             write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
-            call exit(EXIT_FAILURE7)
+            stop
         endif
         if( arg(:pos-1) .ne. 'prg' )then
             write(logfhandle,'(a)') 'ERROR!'
@@ -684,7 +683,7 @@ contains
             write(logfhandle,'(a)') 'Please, execute with prg flag and describe=yes to obtain a short description'
             write(logfhandle,'(a)') ''
             write(logfhandle,'(a)') 'Executing with prg flag only prints all available command-line options'
-            call exit(EXIT_FAILURE7)
+            stop
         endif
     end subroutine cmdline_err
 
