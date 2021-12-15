@@ -303,7 +303,7 @@ contains
 
     !> for applying CTF to stacked images
     subroutine exec_ctfops( self, cline )
-        use simple_procimgfile, only: apply_ctf_imgfile
+        use simple_procimgstk, only: apply_ctf_imgfile
         class(ctfops_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters) :: params
@@ -341,7 +341,7 @@ contains
     end subroutine exec_ctfops
 
     subroutine exec_filter( self, cline )
-        use simple_procimgfile
+        use simple_procimgstk
         use simple_estimate_ssnr, only: fsc2optlp
         use simple_tvfilter,      only: tvfilter
         class(filter_commander), intent(inout) :: self
@@ -461,7 +461,7 @@ contains
     !! radius msk (pixels). If you want to normalize your images or volume
     !! (vol1) with respect to their power spectrum set shell_norm=yes
     subroutine exec_normalize( self, cline )
-        use simple_procimgfile, only: norm_imgfile, noise_norm_imgfile, shellnorm_imgfile
+        use simple_procimgstk, only: norm_imgfile, noise_norm_imgfile, shellnorm_imgfile
         class(normalize_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)  :: params
@@ -513,7 +513,7 @@ contains
 
     !> provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )
-        use simple_procimgfile, only: resize_and_clip_imgfile, resize_imgfile, pad_imgfile, clip_imgfile
+        use simple_procimgstk, only: resize_and_clip_imgfile, resize_imgfile, pad_imgfile, clip_imgfile
         use simple_qsys_funs, only: qsys_job_finished
         class(scale_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
@@ -729,7 +729,7 @@ contains
         use simple_oris, only: oris
         use simple_ori,  only: ori
         use simple_stackops
-        use simple_procimgfile
+        use simple_procimgstk
         class(stackops_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(parameters)              :: params

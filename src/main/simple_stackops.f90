@@ -61,7 +61,7 @@ contains
         ! extract patterns and write to file
         call fopen(fnum, status='replace', action='readwrite', file=fnamePatterns,&
              access='direct', form='unformatted', recl=recsz, iostat=ier)
-        call fileiochk('make_pattern_stack; simple_procimgfile', ier)
+        call fileiochk('make_pattern_stack; simple_procimgstk', ier)
         write(logfhandle,'(a)') '>>> MAKING PATTERN STACK'
         do i=1,n
             call progress(i,n)

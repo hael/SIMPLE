@@ -41,7 +41,7 @@ logical                       :: template_based = .false.
 contains
 
     subroutine init_phasecorr_picker_refs( micfname, refsfname, smpd_in, lp_in, distthr_in, ndev_in, dir_out )
-        use simple_procimgfile, only :  clip_imgfile
+        use simple_procimgstk, only :  clip_imgfile
         character(len=*),           intent(in) :: micfname, refsfname
         real,                       intent(in) :: smpd_in
         real,             optional, intent(in) :: lp_in, distthr_in, ndev_in
@@ -108,7 +108,7 @@ contains
       end subroutine init_phasecorr_picker_refs
 
       subroutine init_phasecorr_picker_gauss( micfname, minrad, maxrad, stepsz, eelongated, smpd_in, lp_in, distthr_in, ndev_in, dir_out )
-          use simple_procimgfile, only :  clip_imgfile
+          use simple_procimgstk, only :  clip_imgfile
           character(len=*),           intent(in) :: micfname
           real,                       intent(in) :: minrad, maxrad, stepsz ! in A
           character(len=3),           intent(in) :: eelongated

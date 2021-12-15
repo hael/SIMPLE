@@ -1,5 +1,5 @@
 ! stack image processing routines for SPIDER/MRC files
-module simple_procimgfile
+module simple_procimgstk
 include 'simple_lib.f08'
 use simple_image,    only: image
 use simple_oris,     only: oris
@@ -25,8 +25,8 @@ contains
 
     subroutine copy_imgfile( fname2copy, fname, smpd, fromto )
         character(len=*), intent(in) :: fname2copy, fname
-        real,             intent(in) :: smpd       !< sampling distance
-        integer,          intent(in) :: fromto(2)  !< range
+        real,             intent(in) :: smpd
+        integer,          intent(in) :: fromto(2)
         type(stack_io) :: stkio_r, stkio_w
         type(image)    :: img
         integer        :: n, i, cnt, ldim(3)
@@ -53,6 +53,7 @@ contains
         character(len=*), intent(in) :: fname2pad, fname
         integer,          intent(in) :: ldim_pad(3)
         real,             intent(in) :: smpd
+        type(stack_io)               :: stkio_r, stkio_w, stkio_w2
         type(image)                  :: img, img_pad
         integer                      :: n, i, ldim(3)
         real                         :: ave, sdev, maxv, minv, med
@@ -61,21 +62,28 @@ contains
         call raise_exception_imgfile( n, ldim, 'pad_imgfile' )
         if( ldim_pad(1) >= ldim(1) .and. ldim(2) >= ldim(2)&
              .and. ldim(3) >= ldim(3) )then
+            call stkio_r%open(fname2pad, smpd, 'read')
+            call stkio_w%open(fname,     smpd, 'write', box=ldim_pad(1), is_ft=.false.)
+            call stkio_w2%open(fname,    smpd, 'write', box=ldim_pad(1), is_ft=.true.)
             call img%new(ldim,smpd)
             call img_pad%new(ldim_pad,smpd)
             write(logfhandle,'(a)') '>>> PADDING IMAGES'
             do i=1,n
                 call progress(i,n)
-                call img%read(fname2pad, i)
+                call stkio_r%read(i, img)
                 if( img%is_ft() )then
                     call img%pad(img_pad) ! FT state preserved
+                    call stkio_w2%write(i, img_pad)
                 else
                     ! get background statistics
                     call img%stats('background', ave, sdev, maxv, minv, med=med)
                     call img%pad(img_pad, backgr=med) ! FT state preserved
+                    call stkio_w%write(i, img_pad)
                 endif
-                call img_pad%write(fname, i)
             end do
+            call stkio_r%close
+            call stkio_w%close
+            call stkio_w2%close
             call img%kill
             call img_pad%kill
         end if
@@ -87,11 +95,14 @@ contains
         integer,           intent(in)  :: ldim_new(3)
         real,              intent(out) :: smpd_new
         integer, optional, intent(in)  :: fromptop(2)
-        type(image) :: img, img_resized, blank_img
+        type(stack_io) :: stkio_r, stkio_w
+        type(image) :: img, img_resized
         integer     :: n, i, ldim(3), prange(2), cnt, sz
         call find_ldim_nptcls(fname2resize, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
+        call stkio_r%open(fname2resize, smpd, 'read')
+        call stkio_w%open(fname, smpd, 'write', box=ldim_new(1))
         call img%new(ldim,smpd,wthreads=.false.)
         call img_resized%new(ldim_new,smpd,wthreads=.false.) ! this sampling distance will be overwritten
         write(logfhandle,'(a)') '>>> RESIZING IMAGES'
@@ -101,15 +112,15 @@ contains
             prange(1) = 1
             prange(2) = n
         endif
-        sz  = prange(2)-prange(1)+1
-        if( all(prange == 0) )then
-            call simple_touch(fname)
+        sz = prange(2) - prange(1) + 1
+        if( sz == 0 )then
+            THROW_WARN('no images to operate on given input range')
         else
             cnt = 0
             do i=prange(1),prange(2)
                 cnt = cnt+1
                 call progress(cnt,sz)
-                call img%read(fname2resize, i)
+                call stkio_r%read(i, img)
                 call img%fft()
                 if( ldim_new(1) <= ldim(1) .and. ldim_new(2) <= ldim(2)&
                      .and. ldim_new(3) <= ldim(3) )then
@@ -118,13 +129,14 @@ contains
                     call img%pad(img_resized)
                 endif
                 call img_resized%ifft()
-                call img_resized%write(fname, cnt)
+                call stkio_r%write(i, img_resized)
             end do
             smpd_new = img_resized%get_smpd()
         endif
+        call stkio_r%close
+        call stkio_w%close
         call img%kill
         call img_resized%kill
-        call blank_img%kill
     end subroutine resize_imgfile
 
     subroutine clip_imgfile( fname2clip, fname, ldim_clip, smpd )
@@ -793,4 +805,4 @@ contains
         call img_avg%kill
     end subroutine random_cls_from_imgfile
 
-end module simple_procimgfile
+end module simple_procimgstk

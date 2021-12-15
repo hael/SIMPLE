@@ -237,7 +237,7 @@ contains
     !! \param[out] hedinds,iminds  indices in the stack
     subroutine slice2bytepos( self, nr, hedinds, iminds )
         class(imgfile), target, intent(in)    :: self
-        integer,               intent(in)     :: nr
+        integer,                intent(in)    :: nr
         integer(kind=8),        intent(inout) :: hedinds(2), iminds(2)
         class(ImgHead), pointer :: ptr=>null()
         ptr => self%overall_head
