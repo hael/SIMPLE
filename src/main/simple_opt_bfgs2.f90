@@ -93,12 +93,6 @@ contains
                     return
                 end if
                 status = test_gradient(self%gradient, real(spec%gtol, dp))
-                if ((global_debug).and.(global_verbose)) then
-                    if (status == OPT_STATUS_SUCCESS) then
-                        write (*,*) 'Minimum found at:'
-                    end if
-                    write (*,*) iter, 'x = ', spec%x_8, 'f = ', self%f
-                end if
                 if ((status .ne. OPT_STATUS_CONTINUE) .or. (iter > spec%maxits)) then
                     exit
                 end if

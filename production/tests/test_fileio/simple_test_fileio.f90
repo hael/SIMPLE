@@ -11,7 +11,6 @@ program simple_test_fileio
     character(len=8)      :: datestr
     character(len=STDLEN) :: folder,  oldfolder, curDir, cmd
     character(len=30)     :: fname
-    global_verbose=.true.
     call seed_rnd
     call date_and_time(date=datestr)
     folder = trim('./SIMPLE_TEST_FILEIO_'//datestr)

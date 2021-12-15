@@ -74,12 +74,6 @@ contains
                         return
                     end if
                     status = test_gradient(self%gradient, real(spec%gtol, kind=8))
-                    if ((global_debug).and.(global_verbose)) then
-                        if (status == OPT_STATUS_SUCCESS) then
-                            write (*,*) 'Minimum found at:'
-                        end if
-                        write (*,*) iter, 'x = ', spec%x_8, 'f = ', self%f
-                    end if
                     if ((status .ne. OPT_STATUS_CONTINUE) .or. (iter > spec%maxits)) then
                         exit
                     end if
@@ -137,9 +131,6 @@ contains
                     status = OPT_STATUS_CONTINUE
                     return
                 end if
-                if (global_debug .and. global_verbose) then
-                    write (*,*) 'got stepc = ', stepc, 'fc = ', fc
-                end if
                 ! Do a line minimisation in the region (xa,fa) (xc,fc) to find an
                 ! intermediate (xb,fb) satisifying fa > fb < fc.  Choose an initial
                 ! xb based on parabolic interpolation
@@ -168,11 +159,6 @@ contains
                 end if
                 self%g0norm = g1norm
                 self%g0 = self%gradient
-                if (global_debug .and. global_verbose) then
-                    write (*,*) 'updated conjugate directions'
-                    write (*,*) 'p: ', self%p
-                    write (*,*) 'g: ', self%gradient
-                end if
                 status = OPT_STATUS_CONTINUE
             end function fr_cg_iterate
     end subroutine
