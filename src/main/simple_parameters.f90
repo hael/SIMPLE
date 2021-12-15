@@ -28,6 +28,7 @@ type :: parameters
     character(len=3)      :: clustvalid='no'      !< validate clustering(yes|homo|no){no}
     character(len=3)      :: compare='no'         !< do comparison(yes|no){no}
     character(len=3)      :: continue='no'        !< continue previous refinement(yes|no){no}
+    character(len=3)      :: converge='yes'       !< whether to converge or not (4 stream)(yes|no){yes}
     character(len=3)      :: countvox='no'        !< count # voxels(yes|no){no}
     character(len=3)      :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)      :: ctfpatch='yes'       !< whether to perform patched CTF estimation(yes|no){yes}
@@ -495,6 +496,7 @@ contains
         call check_carg('cn_type',        self%cn_type)
         call check_carg('compare',        self%compare)
         call check_carg('continue',       self%continue)
+        call check_carg('converge',       self%converge)
         call check_carg('countvox',       self%countvox)
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfpatch',       self%ctfpatch)
