@@ -74,8 +74,7 @@ contains
         self%file_header(4) = real(self%nstates)
         self%headsz         = sizeof(self%file_header)
         ! alloc
-        allocate( self%frcs(self%nstates,self%nprojs,self%filtsz), stat=alloc_stat)
-        if(alloc_stat .ne. 0)call allocchk('new; simple_class_frcs', alloc_stat)
+        allocate( self%frcs(self%nstates,self%nprojs,self%filtsz) )
         self%frcs   = 0.0
         self%exists = .true.
     end subroutine new
@@ -168,8 +167,7 @@ contains
         real    :: dist
         filtsz_orig   = size(filt_orig)
         filtsz_resamp = size(res_new)
-        allocate(filt_resamp(filtsz_resamp),stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("simple_estimate_ssnr::resample_filter ",alloc_stat)
+        allocate(filt_resamp(filtsz_resamp))
         do k=1,filtsz_resamp
             call find(res_orig, filtsz_orig, res_new(k), ind, dist)
             filt_resamp(k) = filt_orig(ind)

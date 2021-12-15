@@ -79,8 +79,7 @@ contains
         self%kfromto_vpft(2) = vol_ref%get_find(lp)
         allocate( self%vpft_ref_nonred(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred  ), &
                   self%locs_ref       (self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace,       3), &
-                  self%locs_ref_nonred(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred,3), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In: simple_volpft_corrcalc :: new",alloc_stat)
+                  self%locs_ref_nonred(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred,3))
         ! generate sampling space
         do ispace=1,self%nspace
             ! get sampling space rotation matrix
@@ -142,8 +141,7 @@ contains
         self%kfromto_vpft(2) = self%vol_ref%get_find(lp)
         allocate( self%vpft_ref_nonred(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred  ),  &
                   self%locs_ref       (self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace,       3),  &
-                  self%locs_ref_nonred(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred,3), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In: simple_volpft_corrcalc :: new",alloc_stat)
+                  self%locs_ref_nonred(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred,3) )
         ! generate sampling space
         do ispace=1,self%nspace
             ! get sampling space rotation matrix

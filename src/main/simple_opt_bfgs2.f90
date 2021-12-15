@@ -49,8 +49,7 @@ contains
         allocate(self%x0(spec%ndim),self%p(spec%ndim),self%g0(spec%ndim),&
             & self%gradient(spec%ndim), self%dx0(spec%ndim), self%dg0(spec%ndim),&
             & self%dx(spec%ndim), self%wrapper%x_alpha(spec%ndim), &
-            & self%wrapper%g_alpha(spec%ndim), stat=alloc_stat)
-        if(alloc_stat/=0)call allocchk('In: new_opt_bfgs2; simple_opt_bfgs2')
+            & self%wrapper%g_alpha(spec%ndim))
         self%exists = .true.
     end subroutine new_opt_bfgs2
 

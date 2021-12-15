@@ -28,26 +28,6 @@ contains
         endif
     end subroutine simple_exception
 
-    subroutine allocchk( message, alloc_err, file, line, iomsg )
-        character(len=*), intent(in)           :: message
-        integer,          intent(in), optional :: alloc_err
-        character(len=*), intent(in), optional :: file  !< filename of caller
-        integer,          intent(in), optional :: line  !< line number from calling file
-        character(len=*), intent(in), optional :: iomsg !< IO message
-        integer                                :: alloc_status
-        alloc_status=alloc_stat    !! global variable from simple_defs
-        if(present(alloc_err))alloc_status=alloc_err
-        if (alloc_status/=0)then
-            write(logfhandle,'(a)') 'ERROR: Allocation failure!'
-            call simple_error_check(alloc_status)
-            if(present(iomsg))&
-                write(logfhandle,'("IO Message ",A)') trim(adjustl(iomsg))
-            if(present(file).and.present(line))&
-                write(logfhandle,'("Stopping in file ",/,A,/," at line ",I0)') file,line
-            call simple_exception(message,__FILENAME__,__LINE__)
-        endif
-    end subroutine allocchk
-
     subroutine simple_error_check(io_stat, msg)
         integer,                    intent(in) :: io_stat
         character(len=*), optional, intent(in) :: msg

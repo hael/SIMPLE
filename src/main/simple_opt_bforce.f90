@@ -29,8 +29,7 @@ contains
         class(opt_spec), intent(inout)   :: spec !< specification
         real                             :: x
         call self%kill
-        allocate(self%pb(spec%ndim), self%pc(spec%ndim), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In: new_opt_bforce", alloc_stat)
+        allocate(self%pb(spec%ndim), self%pc(spec%ndim))
         self%pb = spec%limits(:,1)
         self%pc = spec%limits(:,1)
         if( all(spec%stepsz == 0.) ) THROW_HARD('step size (stepsz) not set in specification (opt_spec); new_opt_bforce')

@@ -85,7 +85,7 @@ contains
         self%nxpatch     = params_glob%nxpatch
         self%nypatch     = params_glob%nypatch
         self%poly_coeffs = poly_coeffs
-        allocate(self%corrs(self%nframes), source=-1., stat=alloc_stat )
+        allocate(self%corrs(self%nframes), source=-1.)
         ! patch positions
         self%patch_pos = patch_centers
         allocate(self%patch_coords(self%nxpatch,self%nypatch,2))

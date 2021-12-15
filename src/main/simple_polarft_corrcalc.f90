@@ -257,8 +257,7 @@ contains
         allocate(self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,self%nrefs),source=1.)
         ! generate polar coordinates & eo assignment
         allocate( self%polar(2*self%nrots,params_glob%kfromto(1):params_glob%kfromto(2)),&
-                 &self%angtab(self%nrots), self%iseven(1:self%nptcls), polar_here(2*self%nrots), stat=alloc_stat)
-        if(alloc_stat/=0)call allocchk('polar coordinate arrays; new; simple_polarft_corrcalc, 1')
+                 &self%angtab(self%nrots), self%iseven(1:self%nptcls), polar_here(2*self%nrots))
         ang = twopi/real(self%nrots)
         do irot=1,self%nrots
             self%angtab(irot) = real(irot-1)*ang
@@ -274,8 +273,7 @@ contains
             self%angtab(irot) = rad2deg(self%angtab(irot))
         end do
         ! index translation table
-        allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0, stat=alloc_stat)
-        if(alloc_stat/=0)call allocchk('polar coordinate arrays; new; simple_polarft_corrcalc, 2')
+        allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
         if( present(ptcl_mask) )then
             cnt = 0
             do i=self%pfromto(1),self%pfromto(2)
@@ -307,8 +305,7 @@ contains
         endif
         ! generate the argument transfer constants for shifting reference polarfts
         allocate( self%argtransf(self%nrots,params_glob%kfromto(1):params_glob%kfromto(2)),&
-            &self%argtransf_shellone(self%nrots), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('shift argument transfer arrays; new; simple_polarft_corrcalc')
+            &self%argtransf_shellone(self%nrots) )
         A = DPI / real(self%ldim(1:2)/2,dp) ! argument transfer matrix normalization constant
         ! shell = 1
         self%argtransf_shellone(:self%pftsz  ) = real(polar_here(:self%pftsz),dp)                        * A(1) ! x-part
@@ -324,8 +321,7 @@ contains
                  &self%pfts_ptcls(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls),&
                  &self%sqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
                  &self%fftdat_ptcls(1:self%nptcls,params_glob%kfromto(1):params_glob%kfromto(2)),&
-                 &self%heap_vars(params_glob%nthr), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('shared arrays; new; simple_polarft_corrcalc')
+                 &self%heap_vars(params_glob%nthr) )
         local_stat=0
         do ithr=1,params_glob%nthr
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2)),&
@@ -343,11 +339,8 @@ contains
                 &self%heap_vars(ithr)%argmat_8(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2)),&
                 &self%heap_vars(ithr)%fdf_y_8(params_glob%kfromto(1):params_glob%kfromto(2)),&
                 &self%heap_vars(ithr)%fdf_T1_8(params_glob%kfromto(1):params_glob%kfromto(2),3),&
-                &self%heap_vars(ithr)%fdf_T2_8(params_glob%kfromto(1):params_glob%kfromto(2),3),&
-                &stat=alloc_stat)
-            if(alloc_stat.ne.0) exit
+                &self%heap_vars(ithr)%fdf_T2_8(params_glob%kfromto(1):params_glob%kfromto(2),3))
         end do
-        if(alloc_stat.ne.0)call allocchk('polarfts and sqsums; new; simple_polarft_corrcalc')
         self%pfts_refs_even = zero
         self%pfts_refs_odd  = zero
         self%pfts_ptcls     = zero
@@ -540,8 +533,7 @@ contains
             endif
             allocate( self%pfts_ptcls(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls),&
                       &self%sqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls),&
-                      &self%fftdat_ptcls(1:self%nptcls,params_glob%kfromto(1):params_glob%kfromto(2)),stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('shared arrays; reallocate_ptcls 1; simple_polarft_corrcalc')
+                      &self%fftdat_ptcls(1:self%nptcls,params_glob%kfromto(1):params_glob%kfromto(2)) )
             do i = 1,self%nptcls
                 do ik = params_glob%kfromto(1),params_glob%kfromto(2)
                     self%fftdat_ptcls(i,ik)%p_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
@@ -669,8 +661,7 @@ contains
         integer,                 intent(in) :: iptcl
         complex(sp), allocatable :: pft(:,:)
         allocate(pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2)),&
-        source=self%pfts_ptcls(:,:,self%pinds(iptcl)), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In: get_ptcl_pft; simple_polarft_corrcalc",alloc_stat)
+        source=self%pfts_ptcls(:,:,self%pinds(iptcl)))
     end function get_ptcl_pft
 
     !>  \brief  returns polar Fourier transform of reference iref
@@ -681,12 +672,11 @@ contains
         complex(sp), allocatable :: pft(:,:)
         if( iseven )then
             allocate(pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2)),&
-            source=self%pfts_refs_even(:,:,iref), stat=alloc_stat)
+            source=self%pfts_refs_even(:,:,iref))
         else
             allocate(pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2)),&
-            source=self%pfts_refs_odd(:,:,iref), stat=alloc_stat)
+            source=self%pfts_refs_odd(:,:,iref))
         endif
-        if(alloc_stat.ne.0)call allocchk("In: get_ref_pft; simple_polarft_corrcalc")
     end function get_ref_pft
 
     integer function get_nrefs( self )
@@ -924,8 +914,7 @@ contains
         ppfromto = self%pfromto
         if( present_pfromto ) ppfromto = pfromto
         if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
-        allocate(self%ctfmats(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls), source=0., stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In: simple_polarft_corrcalc :: create_polar_absctfmats",alloc_stat)
+        allocate(self%ctfmats(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls), source=0.)
         inv_ldim = 1./real(self%ldim)
         !$omp parallel do default(shared) private(irot,k,hinv,kinv) schedule(static) proc_bind(close)
         do irot=1,self%pftsz
@@ -2138,8 +2127,7 @@ contains
         integer :: iref, iptcl, loc(1)
         if( self%nptcls /= self%nrefs ) THROW_HARD('nptcls == nrefs in pftcc required; calc_roinv_corrmat')
         if( allocated(corrmat) ) deallocate(corrmat)
-        allocate(corrmat(self%nptcls,self%nptcls), stat=alloc_stat)
-        if(alloc_stat/=0)call allocchk('In: calc_roinv_corrmat; simple_corrmat')
+        allocate(corrmat(self%nptcls,self%nptcls))
         corrmat = 1.
         !$omp parallel do default(shared) schedule(guided) private(iref,iptcl,corrs,loc) proc_bind(close)
         do iref=1,self%nptcls - 1

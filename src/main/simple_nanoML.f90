@@ -41,7 +41,6 @@ contains
     subroutine new( self, N, K )
         class(nanoML), intent(inout) :: self
         integer, intent(in)          :: N, K
-        integer :: alloc_stat
         if( self%exists ) call self%kill
         self%N = N
         self%K = K

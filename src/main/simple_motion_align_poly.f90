@@ -123,9 +123,8 @@ contains
         self%nxpatch     = params_glob%nxpatch
         self%nypatch     = params_glob%nypatch
         self%l_aniso_success = .false.
-        allocate(self%corrs(self%nframes), source=-1., stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('new; simple_motion_align_poly')
-        allocate(self%tiles_mask(self%nxpatch,self%nypatch), source=.true., stat=alloc_stat)
+        allocate(self%corrs(self%nframes), source=-1.)
+        allocate(self%tiles_mask(self%nxpatch,self%nypatch), source=.true.)
         self%existence   = .true.
     end subroutine new
 
@@ -665,7 +664,7 @@ contains
         real     :: iso_shifts(self%nxpatch,self%nypatch,self%nframes,2), ini_shifts(self%nxpatch,self%nypatch,self%nframes,2)
         real     :: opt_lims(POLYDIM*2,2), lowest_cost, rmsd_cumul, rmsd
         integer  :: t, i, j, iter, ithr, ntot, itmp(2)
-        ntot       = count(self%tiles_mask)*self%nframes 
+        ntot       = count(self%tiles_mask)*self%nframes
         iso_shifts = self%iso_shifts
         call self%center_shifts_to_frame(iso_shifts, self%align_frame)
         allocate(self%ftexp_tiles(self%nframes,self%nxpatch,self%nypatch),&

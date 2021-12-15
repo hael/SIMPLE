@@ -29,9 +29,7 @@ contains
         class(opt_pr_cg), intent(inout) :: self !< instance
         class(opt_spec), intent(inout)  :: spec !< specification
         call self%kill
-        allocate(self%x1(spec%ndim),self%x2(spec%ndim),self%p(spec%ndim),self%g0(spec%ndim),&
-            & self%gradient(spec%ndim),stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: new_pr_cg_opt; simple_opt_pr_cg')
+        allocate(self%x1(spec%ndim),self%x2(spec%ndim),self%p(spec%ndim),self%g0(spec%ndim),self%gradient(spec%ndim))
         self%exists = .true.
     end subroutine
 

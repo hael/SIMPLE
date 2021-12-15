@@ -233,8 +233,7 @@ contains
         endif
         angast = ran3()*360.
         ! generate shifts
-        allocate( shifts(params%nframes,2), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('In: simple_simulate_movie; shifts')
+        allocate( shifts(params%nframes,2))
         x = 0.
         y = 0.
         do i=1,params%nframes
@@ -316,8 +315,7 @@ contains
                 integer, allocatable          :: pos(:,:)
                 logical                       :: occupied(xdim,ydim)
                 integer                       :: ix, iy, cnt, i, j
-                allocate( pos(npos,2), stat=alloc_stat )
-                if(alloc_stat.ne.0)call allocchk("In: gen_ptcl_pos, simple_math")
+                allocate( pos(npos,2) )
                 occupied = .false.
                 cnt = 0
                 do

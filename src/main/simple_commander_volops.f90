@@ -428,8 +428,7 @@ contains
         call find_ldim_nptcls(vollist(1), ldim, ifoo)
         if( cline%defined('part') )then
             npairs = params%top-params%fromp+1
-            allocate(corrs(params%fromp:params%top), pairs(params%fromp:params%top,2), stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('In: simple_volume_smat, 1',alloc_stat)
+            allocate(corrs(params%fromp:params%top), pairs(params%fromp:params%top,2))
             ! read the pairs
             allocate(fname, source='pairs_part'//int2str_pad(params%part,params%numlen)//'.bin')
             if( .not. file_exists(fname) ) THROW_HARD('I/O; simple_volume_smat')
@@ -455,8 +454,7 @@ contains
                 corrs(ipair) = o%get('corr')
             end do
             ! write the similarities
-            allocate(fname, source='similarities_part'//int2str_pad(params%part,params%numlen)//'.bin',stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk( 'volops; volume smat ',alloc_stat)
+            allocate(fname, source='similarities_part'//int2str_pad(params%part,params%numlen)//'.bin')
             call fopen(funit, status='REPLACE', action='WRITE', &
                  file=fname, access='STREAM', iostat=io_stat)
             if(io_stat/=0) call fileiochk('volops; volume smat 2  opening ', io_stat)
@@ -468,8 +466,7 @@ contains
             deallocate(fname, corrs, pairs)
         else
             ! generate similarity matrix
-            allocate(corrmat(nvols,nvols), corrs_avg(nvols), stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('In: simple_volume_smat, 2',alloc_stat)
+            allocate(corrmat(nvols,nvols), corrs_avg(nvols))
             corrmat = -1.
             forall(i=1:nvols) corrmat(i,i) = 1.0
             cnt = 0

@@ -63,7 +63,6 @@ contains
         real, intent(in), dimension(:,:), optional, target :: Dmat
         integer, intent(in)                :: N, D, Q
         logical, intent(in), optional      :: dorot, doprint
-        integer                            :: alloc_stat
         call self%kill
         if( present(doprint) )self%doprint = doprint
         if( present(dorot) )  self%dorot   = dorot
@@ -78,13 +77,10 @@ contains
         allocate( self%W(self%D,self%Q), self%E_zn(self%N,self%Q,1), self%W_1(self%D,self%Q),&
         self%W_2(self%Q,self%Q), self%W_3(self%Q,self%Q), self%Wt(self%Q,self%D),&
         self%M(self%Q,self%Q), self%Minv(self%Q,self%Q), self%MinvWt(self%Q,self%D),&
-        self%E_znzn(self%Q,self%Q), source = 0.d0, stat=alloc_stat )
-        if(alloc_stat/=0)call allocchk('new; simple_ppca 1')
-        allocate(self%X(self%D,1), source = 0., stat=alloc_stat )
-        if(alloc_stat/=0)call allocchk('new; simple_ppca 2')
+        self%E_znzn(self%Q,self%Q), source = 0.d0)
+        allocate(self%X(self%D,1), source = 0.)
         if( self%dorot )then
-            allocate( self%evals(self%Q), stat=alloc_stat )
-            if(alloc_stat/=0)call allocchk('new; simple_ppca 3')
+            allocate( self%evals(self%Q) )
         endif
         self%existence = .true.
     end subroutine new

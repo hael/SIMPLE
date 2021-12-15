@@ -223,8 +223,7 @@ contains
         integer :: i
         call self%kill
         self%n = n
-        allocate( self%o(self%n), stat=alloc_stat )
-        if( alloc_stat.ne.0 ) call allocchk('new; simple_oris', alloc_stat)
+        allocate( self%o(self%n) )
         do i=1,n
             call self%o(i)%new(is_ptcl)
         end do
@@ -363,8 +362,7 @@ contains
         ffromto(2) = self%n
         if( present(fromto) ) ffromto = fromto
         if(allocated(arr))deallocate(arr)
-        allocate( arr(ffromto(1):ffromto(2)), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('get_all; simple_oris',alloc_stat)
+        allocate( arr(ffromto(1):ffromto(2)) )
         do i=ffromto(1),ffromto(2)
             arr(i) = self%o(i)%get(key)
         enddo
@@ -528,8 +526,7 @@ contains
         integer :: i,n
         n = self%n
         if(allocated(mat))deallocate(mat)
-        allocate(mat(n,3,3),source=0.,stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: geteulmats, module: simple_oris')
+        allocate(mat(n,3,3),source=0.)
         do i=1,self%n
             mat(i,:,:) = self%o(i)%get_mat()
         end do
@@ -557,8 +554,7 @@ contains
             n = max(n, maxn)
         endif
         if(allocated(pops))deallocate(pops)
-        allocate(pops(n),source=0,stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: get_pops, module: simple_oris')
+        allocate(pops(n),source=0)
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
             if( consider_eo )then
@@ -578,7 +574,7 @@ contains
         class(oris), intent(inout) :: self
         real, allocatable :: normals(:,:)
         integer :: i
-        allocate(normals(self%n,3), stat=alloc_stat)
+        allocate(normals(self%n,3))
         do i=1,self%n
             normals(i,:) = self%o(i)%get_normal()
         end do
@@ -635,8 +631,7 @@ contains
         endif
         call self%get_pinds(which, 'state', ptcls_in_which)
         n = size(ptcls_in_which)
-        allocate(states(n), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("simple_oris::split_state",alloc_stat)
+        allocate(states(n))
         rt = ran_tabu(n)
         call rt%balanced(2, states)
         do iptcl=1,n
@@ -664,8 +659,7 @@ contains
         endif
         call self%get_pinds(which, 'class', ptcls_in_which)
         n = size(ptcls_in_which)
-        allocate(members(n), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("simple_oris::split_class",alloc_stat)
+        allocate(members(n))
         rt = ran_tabu(n)
         call rt%balanced(2, members)
         do iptcl=1,n
@@ -688,8 +682,7 @@ contains
         ncls = self%get_n('class')
         if( ncls_target <= ncls ) THROW_HARD('nr of target classes cannot be <= original number')
         ! calculate class populations
-        allocate(pops(ncls_target),stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: expand_classes, module: simple_oris',alloc_stat)
+        allocate(pops(ncls_target))
         pops = 0
         do icls=1,ncls
             pops(icls) = self%get_pop(icls, 'class')
@@ -819,8 +812,7 @@ contains
         integer :: ncls, clsind_remap, pop, icls, iptcl, old_cls
         integer , allocatable :: clspops(:)
         ncls = self%get_n('class')
-        allocate(clspops(ncls),stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: remap_cls, module: simple_oris',alloc_stat)
+        allocate(clspops(ncls))
         do icls=1,ncls
             clspops(icls) = self%get_pop(icls, 'class')
         end do
@@ -870,8 +862,7 @@ contains
         if( allocated(indices) )deallocate(indices)
         pop = self%get_pop(ind, label, cconsider_w )
         if( pop > 0 )then
-            allocate( indices(pop), stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk('get_pinds; simple_oris',alloc_stat)
+            allocate( indices(pop) )
             cnt = 0
             do i=1,self%n
                 mystate = nint(self%o(i)%get('state'))
@@ -964,8 +955,7 @@ contains
             pop = self%n
         endif
         if( pop > 0 )then
-            allocate( vals(pop), stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk('get_arr; simple_oris',alloc_stat)
+            allocate( vals(pop) )
             cnt = 0
             do i=1,self%n
                 val = self%get(i, which)
@@ -1095,8 +1085,7 @@ contains
         if( cconsider_w )then
             if( .not. self%isthere('w') ) THROW_HARD('included with optional consider_w assumes w set')
         endif
-        if(.not.allocated(incl))allocate(incl(self%n), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('In: included, module: simple_oris',alloc_stat)
+        if(.not.allocated(incl))allocate(incl(self%n))
         incl = .false.
         do i=1,self%n
             istate = nint(self%o(i)%get('state'))
@@ -1847,8 +1836,7 @@ contains
         type(ran_tabu)             :: rt
         integer :: i, state
         if( nstates > 1 )then
-            allocate( states(self%n), stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk("simple_oris::rnd_states",alloc_stat)
+            allocate( states(self%n) )
             rt = ran_tabu(self%n)
             call rt%balanced(nstates, states)
             do i=1,self%n
@@ -2470,8 +2458,8 @@ contains
 
             subroutine gen_c1
                 integer :: i
-                if( allocated(avail) )deallocate(avail, stat=alloc_stat)
-                allocate(avail(n), source=.false., stat=alloc_stat)
+                if( allocated(avail) )deallocate(avail)
+                allocate(avail(n), source=.false.)
                 call tmp%new(n, self%o(1)%is_particle())
                 call tmp%spiral_1
                 do i = 1, n
@@ -2488,16 +2476,12 @@ contains
         real,    allocatable :: specscores(:)
         integer, allocatable :: inds(:)
         integer :: i
-        allocate( inds(self%n), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('order; simple_oris',alloc_stat)
+        allocate( inds(self%n) )
         specscores = self%get_all('specscore')
         inds = (/(i,i=1,self%n)/)
         call hpsort(specscores, inds)
         call reverse(inds)
-        if(allocated(specscores))then
-            deallocate( specscores, stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk('order; simple_oris dealloc ',alloc_stat)
-        end if
+        if( allocated(specscores) ) deallocate( specscores )
     end function order
 
     !>  \brief  orders oris according to corr
@@ -2506,8 +2490,7 @@ contains
         real,    allocatable :: corrs(:)
         integer, allocatable :: inds(:)
         integer :: i
-        allocate( inds(self%n), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('order; simple_oris',alloc_stat)
+        allocate( inds(self%n) )
         corrs = self%get_all('corr')
         inds = (/(i,i=1,self%n)/)
         call hpsort(corrs, inds)
@@ -2522,8 +2505,7 @@ contains
         real    :: classpops(ncls)
         integer :: i
         if(ncls <= 0) THROW_HARD('invalid number of classes; order_cls')
-        allocate(inds(ncls), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('order_cls; simple_oris',alloc_stat)
+        allocate(inds(ncls))
         classpops = 0.0
         ! calculate class populations
         do i=1,ncls
@@ -3315,8 +3297,7 @@ contains
             do i=1,self%n
                 call self%o(i)%kill
             end do
-            deallocate( self%o , stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('In: kill, module: simple_oris o')
+            deallocate( self%o )
             self%n = 0
         endif
     end subroutine kill

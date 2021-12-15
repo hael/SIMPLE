@@ -166,8 +166,7 @@ contains
         call build%init_params_and_build_general_tbox(cline,params)
         call build%build_rec_eo_tbox(params) ! reconstruction toolbox built
         call build%eorecvol%kill_exp         ! reduced meory usage
-        allocate(res05s(params%nstates), res0143s(params%nstates), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In: simple_eo_volassemble res05s res0143s",alloc_stat)
+        allocate(res05s(params%nstates), res0143s(params%nstates))
         res0143s = 0.
         res05s   = 0.
         call eorecvol_read%new( build%spproj)

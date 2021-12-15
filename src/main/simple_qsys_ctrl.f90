@@ -120,8 +120,7 @@ contains
                     self%jobs_submitted(fromto_part(1):fromto_part(2)),&
                     self%script_names(fromto_part(1):fromto_part(2)),&
                     self%jobs_done_fnames(fromto_part(1):fromto_part(2)),&
-                    self%stream_cline_submitted(fromto_part(1):fromto_part(2)), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In: simple_qsys_ctrl :: new")
+                    self%stream_cline_submitted(fromto_part(1):fromto_part(2)))
         if( self%stream )then
             self%jobs_done = .true.
         else

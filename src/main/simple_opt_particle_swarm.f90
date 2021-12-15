@@ -34,8 +34,7 @@ contains
         ! destruct if exists
         call self%kill
         ! allocate
-        allocate(self%swarm(spec%npop,spec%ndim), self%velocities(spec%npop,spec%ndim), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In: new_particle_swarm, 1",alloc_stat)
+        allocate(self%swarm(spec%npop,spec%ndim), self%velocities(spec%npop,spec%ndim))
         self%exists = .true. ! indicates existence
     end subroutine new_particle_swarm
 
@@ -150,8 +149,7 @@ contains
     subroutine kill_particle_swarm( self )
         class(opt_particle_swarm), intent(inout) :: self !< instance
         if( self%exists )then
-            deallocate(self%swarm, self%velocities, stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("simple_opt_particle_swarm::kill",alloc_stat)
+            deallocate(self%swarm, self%velocities)
             self%exists = .false.
         endif
     end subroutine kill_particle_swarm

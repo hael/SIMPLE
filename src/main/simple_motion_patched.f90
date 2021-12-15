@@ -111,7 +111,6 @@ contains
 
     subroutine allocate_fields( self )
         class(motion_patched), intent(inout) :: self
-        integer :: alloc_stat
         logical :: do_allocate
         integer :: i, j
         do_allocate = .true.
@@ -125,14 +124,12 @@ contains
         if (do_allocate) then
             allocate(self%shifts_patches   (2, self%nframes, params_glob%nxpatch, params_glob%nypatch),&
                 self%shifts_patches_for_fit(2, self%nframes, params_glob%nxpatch, params_glob%nypatch),&
-                self%frame_patches(params_glob%nxpatch, params_glob%nypatch), stat=alloc_stat )
-            if (alloc_stat /= 0) call allocchk('allocate_fields 1; simple_motion_patched')
+                self%frame_patches(params_glob%nxpatch, params_glob%nypatch) )
             self%shifts_patches         = 0.
             self%shifts_patches_for_fit = 0.
             do i = 1, params_glob%nxpatch
                 do j = 1, params_glob%nypatch
-                    allocate( self%frame_patches(i, j)%stack(self%nframes), stat=alloc_stat )
-                    if (alloc_stat /= 0) call allocchk('allocate_fields 2; simple_motion_patched')
+                    allocate( self%frame_patches(i, j)%stack(self%nframes) )
                 end do
             end do
         end if
@@ -227,7 +224,7 @@ contains
         real,        allocatable :: opt_shifts(:,:), res(:)
         real(dp)                 :: poly_coeffs(2*PATCH_PDIM)
         real                     :: corr_avg, rmsd(2)
-        integer                  :: ldim_frames(3), iframe, i, j, alloc_stat, fixed_frame_bak
+        integer                  :: ldim_frames(3), iframe, i, j, fixed_frame_bak
         self%hp          = hp
         self%lp          = params_glob%lpstart
         self%resstep     = resstep
@@ -254,8 +251,7 @@ contains
         call self%set_size_frames_ref()
         ! determine shifts for patches
         self%shifts_patches = 0.
-        allocate(align_hybrid(params_glob%nxpatch, params_glob%nypatch), stat=alloc_stat )
-        if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched')
+        allocate(align_hybrid(params_glob%nxpatch, params_glob%nypatch))
         ! initialize transfer matrix to correct dimensions
         call self%frame_patches(1,1)%stack(1)%new(self%ldim_patch, self%smpd, wthreads=.false.)
         call ftexp_transfmat_init(self%frame_patches(1,1)%stack(1), params_glob%lpstop)
@@ -374,12 +370,11 @@ contains
         type(motion_align_hybrid), allocatable :: align_hybrid(:,:)
         real, allocatable :: opt_shifts(:,:), res(:)
         real              :: corr_avg
-        integer           :: iframe, i, j, alloc_stat
+        integer           :: iframe, i, j
         logical           :: l_groupframes
         l_groupframes = trim(params_glob%groupframes).eq.'yes'
         self%shifts_patches = 0.
-        allocate(align_hybrid(params_glob%nxpatch, params_glob%nypatch), stat=alloc_stat )
-        if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched')
+        allocate(align_hybrid(params_glob%nxpatch, params_glob%nypatch))
         corr_avg = 0.
         ! initialize transfer matrix to correct dimensions
         call self%frame_patches(1,1)%stack(1)%new(self%ldim_patch, self%smpd, wthreads=.false.)

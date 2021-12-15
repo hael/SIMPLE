@@ -44,8 +44,7 @@ contains
         else
             n = o%get_noris()
         endif
-        allocate( imgs(n), imgs_pad(nthr_glob), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('project; simple_projector')
+        allocate( imgs(n), imgs_pad(nthr_glob) )
         ! construct thread safe images
         do i=1,n
             call imgs(i)%new([box,box,1], smpd, wthreads=.false.)

@@ -121,11 +121,9 @@ contains
         endif
         ! allocate instance variables
         allocate(self%cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)),&
-                 &self%bandmsk(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)),&
-                 &stat=alloc_stat)
+                 &self%bandmsk(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)))
         self%cmat    = cmplx(0.,0.)
         self%bandmsk = .false.
-        if(alloc_stat.ne.0)call allocchk("In: new_1; simple_ft_expanded",alloc_stat)
         ! init matrices
         if( fetch_comps .and. l_bfac )then
             allocate(wh(self%lims(1,1):self%lims(1,2)))
@@ -522,9 +520,7 @@ contains
             endif
         end do
         allocate(ftexp_transfmat(ftexp_transf_flims(1,1):ftexp_transf_flims(1,2),&
-                                &ftexp_transf_flims(2,1):ftexp_transf_flims(2,2), 2),&
-                &source=0., stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In: ftexp_transfmat_init; simple_ft_expanded, 2",alloc_stat)
+                                &ftexp_transf_flims(2,1):ftexp_transf_flims(2,2), 2), source=0.)
         !$omp parallel do collapse(2) default(shared) private(h,k,hcnt,kcnt) proc_bind(close) schedule(static)
         do k=flims(2,1),flims(2,2)
             do h=flims(1,1),flims(1,2)

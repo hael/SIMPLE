@@ -3,7 +3,7 @@ module simple_stat
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs   ! singleton
-use simple_error, only: allocchk, simple_exception
+use simple_error, only: simple_exception
 use simple_math,  only: hpsort, median, median_nocopy, reverse
 implicit none
 
@@ -535,7 +535,7 @@ contains
         if( present(norm_sigm) ) nnorm_sigm = norm_sigm
         ncorrs = size(corrs)
         allocate(weights(ncorrs), source=0.)
-        allocate(corrs_copy(ncorrs), source=corrs,stat=alloc_stat)
+        allocate(corrs_copy(ncorrs), source=corrs)
         corrmax = maxval(corrs_copy)
         if( corrmax <= 0. )then
             ! weighting does not make sense, put them all to 0.

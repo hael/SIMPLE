@@ -75,8 +75,7 @@ contains
         self%lp          =  params_glob%lp
         allocate(self%frames_sh(self%nframes),self%frames(self%nframes),&
                 &self%opt_shifts(self%nframes,2),&
-                &self%frameweights(self%nframes), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('new; simple_motion_align_nano')
+                &self%frameweights(self%nframes))
         self%opt_shifts   = 0.
         self%frameweights = 1./real(self%nframes)
         self%l_bfac       = .false.

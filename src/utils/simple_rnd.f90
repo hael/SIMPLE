@@ -3,7 +3,7 @@
 module simple_rnd
 use simple_defs ! singleton
 use simple_math
-use simple_error,  only: allocchk, simple_exception
+use simple_error,  only: simple_exception
 use simple_syslib, only: get_process_id
 implicit none
 

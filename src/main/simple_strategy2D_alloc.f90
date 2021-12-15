@@ -36,8 +36,7 @@ contains
             s2D%cls_pops = build_glob%spproj%os_cls2D%get_all('pop')
         else
             ! first iteration, no class assignment: all classes are up for grab
-            allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1, stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("simple_strategy2D_alloc :: prep_strategy2D_glob")
+            allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1)
         endif
         if( all(s2D%cls_pops == 0) ) THROW_HARD('All class pops cannot be zero!')
     end subroutine prep_strategy2D_glob

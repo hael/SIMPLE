@@ -15,9 +15,9 @@ integer,          parameter   :: SDEV     = 2
 integer,          parameter   :: DYNRANGE = 3
 integer,          parameter   :: SSCORE   = 4
 ! OTHER PARAMS
-integer,          parameter   :: NSTAT   = 4
-integer,          parameter   :: MAXKMIT = 20
-real,             parameter   :: BOXFRAC = 0.5
+integer,          parameter   :: NSTAT    = 4
+integer,          parameter   :: MAXKMIT  = 20
+real,             parameter   :: BOXFRAC  = 0.5
 logical,          parameter   :: DOWRITEIMGS = .true.
 ! VARS
 type(image)                   :: micrograph, mic_shrunken, mic_shrunken_copy, mic_shrunken_refine, ptcl_target, mic_saved
@@ -43,10 +43,8 @@ contains
         type(image)       :: refimg
         integer           :: ifoo, iref
         real              :: sigma, hp
-        allocate(micname,  source=trim(micfname), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('picker;init, 1',alloc_stat)
-        allocate(refsname, source=trim(refsfname), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('picker;init, 2')
+        allocate(micname,  source=trim(micfname))
+        allocate(refsname, source=trim(refsfname))
         boxname = basename( fname_new_ext(micname,'box') )
         if( present(dir_out) )boxname = trim(dir_out)//trim(boxname)
         smpd = smpd_in
@@ -88,8 +86,7 @@ contains
         distthr               = BOXFRAC*real(ldim_refs(1))
         if( present(distthr_in) ) distthr = distthr_in/smpd_shrunken
         ! read and shrink references
-        allocate( refs(nrefs), refs_refine(nrefs), sxx(nrefs), sxx_refine(nrefs), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk( "In: simple_picker :: init_picker, refs etc. ",alloc_stat)
+        allocate( refs(nrefs), refs_refine(nrefs), sxx(nrefs), sxx_refine(nrefs) )
         do iref=1,nrefs
             call refs(iref)%new(ldim_refs, smpd_shrunken)
             call refs_refine(iref)%new(ldim_refs_refine, smpd_shrunken_refine)
@@ -163,7 +160,7 @@ contains
 
     subroutine extract_peaks
         real    :: means(2), corrs(nrefs)
-        integer :: xind, yind, alloc_stat, iref, i, loc(1)
+        integer :: xind, yind, iref, i, loc(1)
         integer, allocatable :: labels(:), target_positions(:,:)
         real,    allocatable :: target_corrs(:)
         logical :: outside
@@ -175,8 +172,7 @@ contains
             end do
         end do
         allocate( target_corrs(ntargets), target_positions(ntargets,2),&
-                  corrmat(0:nx,0:ny), refmat(0:nx,0:ny), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk( 'In: simple_picker :: gen_corr_peaks, 1',alloc_stat)
+                  corrmat(0:nx,0:ny), refmat(0:nx,0:ny))
         target_corrs     = 0.
         target_positions = 0
         corrmat          = -1.
@@ -205,8 +201,7 @@ contains
         end do
         call sortmeans(target_corrs, MAXKMIT, means, labels)
         nmax = count(labels == 2)
-        allocate( peak_positions(nmax,2),  stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk( 'In: simple_picker :: gen_corr_peaks, 2',alloc_stat)
+        allocate( peak_positions(nmax,2) )
         peak_positions = 0
         nmax = 0
         do i=1,ntargets
@@ -223,8 +218,7 @@ contains
         logical, allocatable :: mask(:)
         real,    allocatable :: corrs(:)
         write(logfhandle,'(a)') '>>> DISTANCE FILTERING'
-        allocate( mask(nmax), corrs(nmax), selected_peak_positions(nmax), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk( 'In: simple_picker :: distance_filter',alloc_stat)
+        allocate( mask(nmax), corrs(nmax), selected_peak_positions(nmax) )
         selected_peak_positions = .true.
         do ipeak=1,nmax
             ipos = peak_positions(ipeak,:)
@@ -323,8 +317,7 @@ contains
         real, allocatable :: dmat(:,:)
         integer           :: i_median, i, j, cnt, ipeak
         real              :: ddev
-        allocate(dmat(nmax_sel,nmax_sel), source=0., stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('picker::one_cluster_clustering dmat ',alloc_stat)
+        allocate(dmat(nmax_sel,nmax_sel), source=0.)
         do i=1,nmax_sel - 1
             do j=i + 1,nmax_sel
                 dmat(i,j) = euclid(peak_stats(i,:), peak_stats(j,:))
@@ -368,16 +361,13 @@ contains
             call mic_shrunken%kill
             call mic_shrunken_refine%kill
             call ptcl_target%kill
-            deallocate(selected_peak_positions,sxx,sxx_refine,corrmat, stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('picker kill, 1',alloc_stat)
-            deallocate(peak_positions,peak_positions_refined,refmat,micname,refsname,peak_stats, stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('picker kill, 2',alloc_stat)
+            deallocate(selected_peak_positions,sxx,sxx_refine,corrmat)
+            deallocate(peak_positions,peak_positions_refined,refmat,micname,refsname,peak_stats)
             do iref=1,nrefs
                 call refs(iref)%kill
                 call refs_refine(iref)%kill
             end do
-            deallocate(refs, refs_refine, stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('picker; kill 3',alloc_stat)
+            deallocate(refs, refs_refine)
         endif
     end subroutine kill_picker
 

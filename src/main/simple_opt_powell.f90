@@ -31,8 +31,7 @@ contains
         class(opt_spec), intent(inout)   :: spec !< specification
         real                             :: x
         call self%kill
-        allocate(self%direction_set(spec%ndim,spec%ndim), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In: new; simple_opt_powell",alloc_stat)
+        allocate(self%direction_set(spec%ndim,spec%ndim))
         self%direction_set = 0.
         self%yb            = huge(x) ! initialize best cost to huge number
         ! make line minimizer
@@ -121,8 +120,7 @@ contains
                 real, allocatable :: pt(:),ptt(:)
                 integer :: i,ibig,j,iter
                 real    :: del,fp,fptt,t
-                allocate(pt(spec%ndim),ptt(spec%ndim), stat=alloc_stat)
-                if(alloc_stat.ne.0)call allocchk("In: powell; simple_opt_powell",alloc_stat)
+                allocate(pt(spec%ndim),ptt(spec%ndim))
                 cost=spec%costfun(fun_self,self%spec_linmin%x,spec%ndim) ! set initial costfun val
                 spec%nevals = spec%nevals+1
                 do j=1,spec%ndim

@@ -60,8 +60,7 @@ contains
                   &self%polcyc2_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),&
                   &self%polweights_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wlen),&
                   &w(1:self%wdim,1:self%wdim), self%comps(1:self%wdim,1:self%wdim),&
-                  &self%pft(self%pdim(1),self%pdim(2):self%pdim(3)), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('in simple_projector :: init_imgpolarizer',alloc_stat)
+                  &self%pft(self%pdim(1),self%pdim(2):self%pdim(3)))
         ! instrument function
         if( params_glob%gridding.eq.'yes' )then
             call self%instrfun_img%new(self%get_ldim(), self%get_smpd())

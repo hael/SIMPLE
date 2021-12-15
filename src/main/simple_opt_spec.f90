@@ -178,7 +178,6 @@ contains
         real,             optional, intent(in)    :: max_step            !< initial step size
         real(dp),         optional, intent(in)    :: factr               !< factr (f-tolerance) for lbfgsb optimizer
         real(dp),         optional, intent(in)    :: pgtol               !< pgtol (g-tolerance) for lbfgsb optimizer
-        integer :: alloc_stat
         call self%kill
         ! take care of optimizer specifics
         select case(str_opt)
@@ -235,15 +234,13 @@ contains
         if(present(max_step))    self%max_step  = max_step
         if(present(limits))      call self%set_limits(limits)
         if(present(limits_init)) call self%set_limits_init(limits_init)
-        allocate( self%cyclic(self%ndim), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('In: specify; simple_opt_spec, cyclic',alloc_stat)
+        allocate( self%cyclic(self%ndim) )
         self%cyclic = .false.
         if( present(cyclic) )then
             self%cyclic = cyclic
         endif
         if(present(stepsz))then
-            allocate( self%stepsz(ndim), stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk('In: specify; simple_opt_spec, stepsz',alloc_stat)
+            allocate( self%stepsz(ndim) )
             self%stepsz = stepsz
         endif
  !       if(present(verbose_arg)) self%verbose = verbose_arg
@@ -253,19 +250,16 @@ contains
         if(present(warn_arg))    self%warn    = warn_arg
         ! allocate
         if( self%npeaks > 0 )then
-            allocate( self%peaks(self%npeaks,self%ndim+1), source=1., stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk('In: specify; simple_opt_spec, peaks',alloc_stat)
+            allocate( self%peaks(self%npeaks,self%ndim+1), source=1. )
         endif
         select case(str_opt)
             case('linmin')
-                allocate( self%x(self%ndim), self%x_8(self%ndim),self%xi(self%ndim), self%xt(self%ndim), stat=alloc_stat )
-                if(alloc_stat.ne.0)call allocchk('In: specify; simple_opt_spec, linmin',alloc_stat)
+                allocate( self%x(self%ndim), self%x_8(self%ndim),self%xi(self%ndim), self%xt(self%ndim) )
                 self%xi = 0.
                 self%xt = 0.
             case DEFAULT
                 allocate( self%x(self%ndim), self%grad_4_tmp(self%ndim), &
-                    & self%x_4_tmp(self%ndim), self%x_8(self%ndim),stat=alloc_stat )
-                if(alloc_stat.ne.0)call allocchk('In: specify; simple_opt_spec, DEFAULT',alloc_stat)
+                    & self%x_4_tmp(self%ndim), self%x_8(self%ndim) )
         end select
         self%x        = 0.
         self%lbfgsb_m = 15
@@ -294,15 +288,14 @@ contains
             endif
         end do
         if( allocated(self%limits) ) deallocate(self%limits)
-        allocate( self%limits(self%ndim,2), source=lims, stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('In: specify; simple_opt_spec, limits',alloc_stat)
+        allocate( self%limits(self%ndim,2), source=lims )
     end subroutine set_limits
 
     !>  \brief  sets the limits for initialisation (randomized bounds)
     subroutine set_limits_init( self, lims_init )
         class(opt_spec), intent(inout) :: self                   !< instance
         real,            intent(in)    :: lims_init(self%ndim,2) !< new limits
-        integer :: i, alloc_stat
+        integer :: i
         do i=1,self%ndim
             if(lims_init(i,2) >= lims_init(i,1)) then
             else
@@ -313,8 +306,7 @@ contains
             endif
         end do
         if( allocated(self%limits_init) ) deallocate(self%limits_init)
-        allocate( self%limits_init(self%ndim,2), source=lims_init, stat=alloc_stat )
-        if(alloc_stat .ne. 0)call allocchk('In: set_limits_init; simple_opt_spec', alloc_stat)
+        allocate( self%limits_init(self%ndim,2), source=lims_init )
     end subroutine set_limits_init
 
     !>  \brief  sets the initialization population for de

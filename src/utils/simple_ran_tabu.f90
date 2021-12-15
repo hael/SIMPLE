@@ -1,7 +1,7 @@
 ! routines for generation of directed random numbers
 module simple_ran_tabu
 use simple_defs
-use simple_error, only: allocchk, simple_exception
+use simple_error, only: simple_exception
 use simple_rnd,   only: multinomal, irnd_gasdev, irnd_uni
 implicit none
 
@@ -45,8 +45,7 @@ contains
         call self%kill
         self%NP = NP
         self%N_tabus = 0
-        allocate( self%avail(NP), stat=alloc_stat )
-        if(alloc_stat /= 0) call allocchk('In: new_ran_tabu, module: simple_ran_tabu.f90', alloc_stat)
+        allocate( self%avail(NP) )
         self%avail = .true. ! all integers from 1 to NP made available
     end function constructor
 
@@ -266,10 +265,7 @@ contains
     !>  \brief  is a destructor
     subroutine kill( self )
         class(ran_tabu), intent(inout) :: self
-        if( allocated(self%avail) )then
-            deallocate( self%avail, stat=alloc_stat )
-            if(alloc_stat /= 0) call allocchk('In: simple_ran_tabu; kill ', alloc_stat)
-        end if
+        if( allocated(self%avail) ) deallocate( self%avail )
     end subroutine kill
 
 end module simple_ran_tabu

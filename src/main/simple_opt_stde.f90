@@ -29,9 +29,7 @@ contains
         class(opt_stde), intent(inout)  :: self !< instance
         class(opt_spec), intent(inout)  :: spec !< specification
         call self%kill
-        allocate(self%x1(spec%ndim),self%g1(spec%ndim), self%gradient(spec%ndim), &
-            & stat=alloc_stat)
-        if(alloc_stat/=0)call allocchk('In: new_opt_stde; simple_opt_stde')
+        allocate(self%x1(spec%ndim),self%g1(spec%ndim), self%gradient(spec%ndim))
         self%exists = .true.
     end subroutine new_opt_stde
 

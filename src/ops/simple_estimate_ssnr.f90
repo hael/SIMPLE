@@ -20,8 +20,7 @@ contains
         integer :: nyq, k
         real    :: fsc
         nyq = size(corrs)
-        allocate( ssnr(nyq),stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("in simple_estimate_ssnr::fsc2ssnr ssnr ",alloc_stat)
+        allocate( ssnr(nyq) )
         do k=1,nyq
             fsc     = min(abs(corrs(k)), 0.999)
             ssnr(k) = (2. * fsc) / (1. - fsc)
@@ -34,8 +33,7 @@ contains
         real, allocatable :: filt(:)  !< output filter coefficients
         integer :: nyq
         nyq = size(corrs)
-        allocate( filt(nyq),stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("in simple_estimate_ssnr::fsc2optlp filt ",alloc_stat)
+        allocate( filt(nyq) )
         filt = 0.
         where( corrs > 0. )     filt = 2. * corrs / (corrs + 1.)
         where( filt  > 0.9999 ) filt = 0.99999
@@ -82,8 +80,7 @@ contains
         real, allocatable :: corrs(:) !< output FSC result
         integer :: nyq, k
         nyq = size(ssnr)
-        allocate( corrs(nyq),stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("in simple_estimate_ssnr::ssnr2fsc corrs ",alloc_stat)
+        allocate( corrs(nyq) )
         do k=1,nyq
             corrs(k) = ssnr(k) / (ssnr(k) + 1.)
         end do
@@ -95,8 +92,7 @@ contains
         real, allocatable :: w(:) !<  FIR low-pass filter
         integer :: nyq, k
         nyq = size(ssnr)
-        allocate( w(nyq),stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("in simple_estimate_ssnr::ssnr2optlp w ",alloc_stat)
+        allocate( w(nyq) )
         do k=1,nyq
             w(k) = ssnr(k) / (ssnr(k) + 1.)
         end do
@@ -114,8 +110,7 @@ contains
         integer,     intent(in) :: filtsz
         real, allocatable       :: filter(:)
         integer :: find
-        allocate(filter(filtsz),stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("simple_estimate_ssnr::acc_dose2filter ",alloc_stat)
+        allocate(filter(filtsz))
         do find=1,filtsz
             filter(find) = dose_weight(acc_dose, img%get_spat_freq(find), kV)
         end do

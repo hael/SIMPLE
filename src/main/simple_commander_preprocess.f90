@@ -1047,8 +1047,7 @@ contains
         params%nparts = nseries
         params%nptcls = nseries
         ! prepare part-dependent parameters
-        allocate(part_params(params%nparts), stat=alloc_stat) ! -1. is default excluded value
-        if(alloc_stat.ne.0)call allocchk("exec_motion_correct_tomo_distr ", alloc_stat)
+        allocate(part_params(params%nparts))
         do ipart=1,params%nparts
             call part_params(ipart)%new(4)
             call part_params(ipart)%set('filetab', trim(tomonames(ipart)))
@@ -1864,7 +1863,7 @@ contains
                     call spproj%os_mic%set(imic, 'nptcls', 0.)
                     cycle
                 endif
-                allocate( boxdata(nptcls,boxfile%get_nrecs_per_line()), stat=alloc_stat)
+                allocate( boxdata(nptcls,boxfile%get_nrecs_per_line()) )
                 call boxfile%readNextDataLine(boxdata(1,:))
                 call boxfile%kill
                 params%box = nint(boxdata(1,3))
@@ -1908,12 +1907,10 @@ contains
                 call progress(imic,nmics_tot)
                 ! box checks
                 if(allocated(oris_mask))deallocate(oris_mask)
-                allocate(oris_mask(nptcls), source=.false., stat=alloc_stat)
-                if(alloc_stat.ne.0)call allocchk("In exec_extract oris_mask")
+                allocate(oris_mask(nptcls), source=.false.)
                 ! read box data & update mask
                 if(allocated(boxdata))deallocate(boxdata)
-                allocate( boxdata(nptcls,boxfile%get_nrecs_per_line()), stat=alloc_stat)
-                if(alloc_stat.ne.0)call allocchk('In: exec_extract; boxdata etc., 2',alloc_stat)
+                allocate( boxdata(nptcls,boxfile%get_nrecs_per_line()))
                 do iptcl=1,nptcls
                     call boxfile%readNextDataLine(boxdata(iptcl,:))
                     box = nint(boxdata(iptcl,3))

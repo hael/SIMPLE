@@ -51,10 +51,8 @@ contains
         integer              :: ifoo, iref
         real                 :: sdev_noise
         template_based = .true.
-        allocate(micname,  source=trim(micfname), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('picker;init, 1',alloc_stat)
-        allocate(refsname, source=trim(refsfname), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('picker;init, 2')
+        allocate(micname,  source=trim(micfname))
+        allocate(refsname, source=trim(refsfname))
         boxname = basename( fname_new_ext(micname,'box') )
         if( present(dir_out) )boxname = trim(dir_out)//trim(boxname)
         smpd = smpd_in
@@ -82,8 +80,7 @@ contains
         distthr               = BOXFRAC*real(ldim_refs(1))
         if( present(distthr_in) ) distthr = distthr_in / smpd_shrunken ! pixels
         ! read and shrink references
-        allocate( refs(nrefs), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk( "In: simple_picker :: init_picker, refs etc. ",alloc_stat)
+        allocate( refs(nrefs) )
         call mskimg%disc([orig_box,orig_box,1], smpd, msk*real(orig_box)/real(ldim_refs(1)), lmsk)
         call mskimg%kill
         do iref=1,nrefs
@@ -121,8 +118,7 @@ contains
           integer           :: ifoo
           real              :: hp
           template_based = .false.  ! reset to be sure
-          allocate(micname,  source=trim(micfname), stat=alloc_stat)
-          if(alloc_stat.ne.0)call allocchk('picker;init, 1',alloc_stat)
+          allocate(micname,  source=trim(micfname) )
           boxname = basename( fname_new_ext(micname,'box') )
           if( present(dir_out) )boxname = trim(dir_out)//trim(boxname)
           smpd = smpd_in
@@ -357,7 +353,7 @@ contains
         real,    allocatable     :: target_corrs(:)
         logical, allocatable     :: mask(:,:), l_mask(:,:,:)
         real                     :: means(2), ave, sdev, maxv, minv, msk_shrunken
-        integer                  :: xind, yind, alloc_stat, i, border, j, l, r, u, d, iref, ithr
+        integer                  :: xind, yind, i, border, j, l, r, u, d, iref, ithr
         logical :: outside, l_err
         write(logfhandle,'(a)') '>>> EXTRACTING PEAKS'
         write(logfhandle,'(a)') '>>> FOURIER CORRELATIONS'
@@ -454,8 +450,7 @@ contains
             write(logfhandle,'(a,1x,I7)') 'peak positions after sortmeans:              ',nmax
          endif
         ! get peak positions
-        allocate( peak_positions(nmax,2),  stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk( 'In: simple_picker :: gen_corr_peaks, 2',alloc_stat)
+        allocate( peak_positions(nmax,2) )
         peak_positions = 0
         nmax = 0
         do i=1,ntargets
@@ -529,8 +524,7 @@ contains
         logical, allocatable :: mask(:)
         real,    allocatable :: corrs(:)
         write(logfhandle,'(a)') '>>> DISTANCE FILTERING'
-        allocate( mask(nmax), corrs(nmax), selected_peak_positions(nmax), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk( 'In: simple_picker :: distance_filter',alloc_stat)
+        allocate( mask(nmax), corrs(nmax), selected_peak_positions(nmax) )
         selected_peak_positions = .true.
         distthr_sq = nint(distthr*distthr)
         !$omp parallel do schedule(static) default(shared) private(ipeak,jpeak,ipos,jpos,dist,mask,loc,corr) proc_bind(close)
@@ -598,8 +592,7 @@ contains
         real, allocatable :: dmat(:,:)
         integer           :: i_median, i, j, cnt, ipeak
         real              :: ddev
-        allocate(dmat(nmax_sel,nmax_sel), source=0., stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('picker::one_cluster_clustering dmat ',alloc_stat)
+        allocate(dmat(nmax_sel,nmax_sel), source=0.)
         do i=1,nmax_sel - 1
             do j=i + 1,nmax_sel
                 dmat(i,j) = euclid(peak_stats(i,:), peak_stats(j,:))
@@ -642,43 +635,16 @@ contains
             call micrograph%kill
             call mic_shrunken%kill
             call mic_saved%kill
-            if( allocated(selected_peak_positions) ) deallocate(selected_peak_positions, stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('phasecorr_picker kill, 1',alloc_stat)
-            if( allocated(corrmat) ) deallocate(corrmat, stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('phasecorr_picker kill, 2',alloc_stat)
-            if( allocated(peak_positions) ) deallocate(peak_positions, stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('phasecorr_picker kill, 3',alloc_stat)
-            if( allocated(peak_stats) ) deallocate(peak_stats, stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('phasecorr_picker kill, 4',alloc_stat)
-            deallocate(micname, stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('phasecorr_picker kill, 5',alloc_stat)
-            if(allocated(refsname)) deallocate(refsname)
+            if( allocated(selected_peak_positions) ) deallocate(selected_peak_positions)
+            if( allocated(corrmat)                 ) deallocate(corrmat)
+            if( allocated(peak_positions)          ) deallocate(peak_positions)
+            if( allocated(peak_stats)              ) deallocate(peak_stats)
+            if( allocated(micname)                 ) deallocate(micname)
+            if(allocated(refsname)                 ) deallocate(refsname)
             do iref=1,nrefs
                 call refs(iref)%kill
             end do
-            deallocate(refs, stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('phasecorr_picker; kill 3',alloc_stat)
+            deallocate(refs)
         endif
     end subroutine kill_phasecorr_picker
 end module simple_phasecorr_picker
-
-! IN distance filtering previous implementation of the loop
-! do ipeak=1,nmax
-!     ipos = peak_positions(ipeak,:)
-!     mask = .false.
-!     !$omp parallel do schedule(static) default(shared) private(jpeak,jpos,dist) proc_bind(close)
-!     do jpeak=1,nmax
-!         jpos = peak_positions(jpeak,:)
-!         dist_sq = sum((ipos-jpos)**2)
-!         if( dist_sq < distthr_sq ) mask(jpeak) = .true.
-!         corrs(jpeak) = corrmat(jpos(1),jpos(2))
-!     end do
-!     !$omp end parallel do
-!     ! find best match in the neigh
-!     loc = maxloc(corrs, mask=mask)
-!     ! eliminate all but the best
-!     mask(loc(1)) = .false.
-!     where( mask )
-!         selected_peak_positions = .false.
-!     end where
-! end do

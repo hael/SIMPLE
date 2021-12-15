@@ -1,7 +1,7 @@
 ! various mathematical subroutines and functions
 module simple_math
 use simple_defs
-use simple_error, only: allocchk, simple_exception
+use simple_error, only: simple_exception
 implicit none
 
 private :: ludcmp, lubksb
@@ -610,8 +610,7 @@ contains
         ncls = size(means)
         ndat = size(dat)
         if( allocated(labels) ) deallocate(labels)
-        allocate(  mask(ndat), labels(ndat), stat=alloc_stat )
-        if(alloc_stat /= 0) call allocchk("sortmeans; simple_math", alloc_stat)
+        allocate( mask(ndat), labels(ndat) )
         ! initialization by sorting
         dat_sorted = dat
         call hpsort(dat_sorted)
@@ -1328,10 +1327,9 @@ contains
         integer, intent(in) :: box
         real,    intent(in) :: smpd
         real, allocatable   :: res(:)
-        integer :: n, k, alloc_stat
+        integer :: n, k
         n = fdim(box) - 1
-        allocate( res(n), stat=alloc_stat )
-        if(alloc_stat .ne. 0)call allocchk('In: get_res, module: simple_math', alloc_stat)
+        allocate( res(n) )
         do k=1,n
             res(k) = calc_lowpass_lim(k, box, smpd)
         end do

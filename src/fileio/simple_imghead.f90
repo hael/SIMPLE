@@ -13,7 +13,7 @@
 
 module simple_imghead
 use simple_defs
-use simple_error,   only: allocchk, simple_exception
+use simple_error,   only: simple_exception
 use simple_fileio,  only: fopen, fileiochk, fclose, fname2format
 use simple_strings, only: int2str, toCstring
 use simple_syslib,  only: file_exists
@@ -238,8 +238,7 @@ contains
                     if( size(self%byte_array) .ne. llength ) deallocate(self%byte_array)
                 endif
                 if( .not. allocated(self%byte_array) )then
-                    allocate(self%byte_array(llength),stat=alloc_stat)
-                    if(alloc_stat .ne. 0) call allocchk("simple_imghead::new byte_array ", alloc_stat)
+                    allocate(self%byte_array(llength))
                 endif
                 ! zero the byte array
                 self%byte_array = 0
@@ -363,8 +362,7 @@ contains
         if( present(pos) ) ppos = pos
         select type( self )
             type is( SpiImgHead )
-                allocate(spihed(self%getLabbyt()/4), stat=alloc_stat)
-                if(alloc_stat/=0) call allocchk("In simple_imghead::read spihed ", alloc_stat)
+                allocate(spihed(self%getLabbyt()/4))
                 cnt = 0
                 do i=ppos,ppos+self%getLabbyt()-1,4
                     cnt = cnt+1
@@ -1525,8 +1523,7 @@ contains
             select type(self)
                 type is (MrcImgHead)
                     if( allocated(self%byte_array) )then
-                        deallocate(self%byte_array, stat=alloc_stat)
-                        if(alloc_stat /= 0) call allocchk('In: simple_imghead; kill ', alloc_stat)
+                        deallocate(self%byte_array)
                     end if
                 type is (SpiImgHead)
                     return
