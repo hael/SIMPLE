@@ -165,7 +165,7 @@ subroutine test_args()
     if( .not. dir_exists(SIMPLE_BUILD_PATH) .and. &
     .not. dir_exists(filepath(trim(SIMPLE_BUILD_PATH),'lib/simple'))) then
     write(*,*)'test_args SIMPLE_BUILD_PATH  not found'
-    call exit(EXIT_FAILURE)
+    stop
     else
         bpath= filepath( trim(adjustl(SIMPLE_BUILD_PATH)),'lib/simple')
     endif

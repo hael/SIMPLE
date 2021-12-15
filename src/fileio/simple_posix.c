@@ -406,7 +406,7 @@ int wait_pid(int* cpid)
             w = waitpid(c , &status, WNOHANG | WUNTRACED | WCONTINUED);
             if(w == -1) {
                 perror("waitpid");
-                exit(EXIT_FAILURE);
+                exit(1);
             }
 
             if(WIFEXITED(status)) {

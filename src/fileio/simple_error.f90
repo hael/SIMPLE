@@ -24,16 +24,15 @@ contains
         endif
         if( ll_stop )then
             call backtrace()
-            call exit(EXIT_FAILURE)
+            stop
         endif
     end subroutine simple_exception
 
-    !> \brief  is for checking allocation
     subroutine allocchk( message, alloc_err, file, line, iomsg )
         character(len=*), intent(in)           :: message
         integer,          intent(in), optional :: alloc_err
-        character(len=*), intent(in), optional :: file !< filename of caller
-        integer,          intent(in), optional :: line !< line number from calling file
+        character(len=*), intent(in), optional :: file  !< filename of caller
+        integer,          intent(in), optional :: line  !< line number from calling file
         character(len=*), intent(in), optional :: iomsg !< IO message
         integer                                :: alloc_status
         alloc_status=alloc_stat    !! global variable from simple_defs
@@ -52,15 +51,11 @@ contains
     subroutine simple_error_check(io_stat, msg)
         integer,                    intent(in) :: io_stat
         character(len=*), optional, intent(in) :: msg
-
-        !! Intel and GNU
         if (io_stat==IOSTAT_END)  write(logfhandle,'(a,1x,I0 )') 'ERRCHECK: EOF reached, end-of-file reached IOS# ', io_stat
         if (io_stat==IOSTAT_EOR)  write(logfhandle,'(a,1x,I0 )') 'ERRCHECK: EOR reached, read was short, IOS# ', io_stat
         if( io_stat /= 0 ) then
             write(logfhandle,'(a,1x,I0 )') 'ERROR: IOS# ', io_stat
             if(present(msg)) write(logfhandle,'(a)') trim(adjustl(msg))
-            !! do not stop yet -- let the fopen/fclose call to finish
-            !! stop
         endif
     end subroutine simple_error_check
 
