@@ -1180,7 +1180,7 @@ contains
                 endif
             end do
             ! update nsamples in case fewer were found
-            nsamples = ilast - ifirst + 1 
+            nsamples = ilast - ifirst + 1
             ! update mask & counters
             mask = .false.
             do i = ifirst, ilast
