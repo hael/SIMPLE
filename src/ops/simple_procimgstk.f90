@@ -129,7 +129,7 @@ contains
                     call img%pad(img_resized)
                 endif
                 call img_resized%ifft()
-                call stkio_r%write(i, img_resized)
+                call stkio_w%write(cnt, img_resized)
             end do
             smpd_new = img_resized%get_smpd()
         endif
@@ -311,7 +311,6 @@ contains
         end do
         call img%kill
     end subroutine shellnorm_imgfile
-
 
     subroutine matchfilt_imgfile( fname2filt, fname, frcs_fname, smpd )
         use simple_class_frcs,    only: class_frcs

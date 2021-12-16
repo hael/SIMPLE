@@ -73,7 +73,7 @@ contains
         ! allocate the buffer
         self%bufsz = BUFSZ_DEFAULT
         if( present(bufsz) ) self%bufsz = bufsz
-        ! need to have the full stack in buffer on read, since most of it is asynchronuous 
+        ! need to have the full stack in buffer on read, since most of it is asynchronuous
         if( self%nptcls /= 0 ) self%bufsz = self%nptcls
         call self%buffer%new([self%ldim(1),self%ldim(2),self%bufsz], self%smpd)
         call self%buffer%get_rmat_ptr(self%rmat_ptr)
@@ -111,6 +111,7 @@ contains
         class(image),    intent(inout) :: img
         integer :: ind_in_buf, bufsz
         if( .not. self%l_open ) THROW_HARD('stack not open')
+        if( .not. self%l_read ) THROW_HARD('stack not open for read')
         if( i < 1 .or. i > self%nptcls ) THROW_HARD('index i out of range')
         if( i >= self%fromp .and. i <= self%top )then
             ! the image is in buffer
@@ -138,6 +139,7 @@ contains
         real(kind=c_float), pointer :: rmat_ptr(:,:,:) => null()
         integer :: ind_in_buf
         if( .not. self%l_open ) THROW_HARD('stack not open')
+        if(       self%l_read ) THROW_HARD('stack not open for write')
         if( self%fromp == 0 )then
             self%fromp = 1
             self%top   = self%bufsz
