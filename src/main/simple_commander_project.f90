@@ -522,7 +522,7 @@ contains
         endif
         if( cline%defined('stktab') )then
             ! importing from stktab
-            call read_filetable(params%stktab, stkfnames, check_if_exists=.false.)
+            call read_filetable(params%stktab, stkfnames)
             nstks = size(stkfnames)
             if( params%mkdir.eq.'yes' )then
                 do i=1,nstks
