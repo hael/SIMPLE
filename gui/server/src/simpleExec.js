@@ -438,6 +438,7 @@ class SimpleExec {
 		this.execdir = false
 		this.jobid = false
 		this.buffer = false
+		this.errbuffer = false
 		this.progress = 0
 		this.iteration = 0
 		var commandargs
@@ -484,6 +485,18 @@ class SimpleExec {
 				}else{
 					this.buffer = this.buffer + data.toString()
 				}
+			})
+
+			childprocess.stderr.on('data', data => {
+				 if(this.execdir){
+                                        if(this.errbuffer != false){
+                                                fs.appendFile(this.execdir + '/simple.error', this.errbuffer)
+                                                this.errbuffer = false
+                                        }
+                                        fs.appendFile(this.execdir + '/simple.error', data.toString())
+                                }else{
+                                        this.errbuffer = this.errbuffer + data.toString()
+                                }
 			})
 			console.log(`Spawned child pid: ${childprocess.pid}`)
 			return promise
