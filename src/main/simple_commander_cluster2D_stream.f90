@@ -236,7 +236,9 @@ contains
         call img%kill
         call avg%kill
         call debug_print('end chunk%read '//int2str(self%id))
+
         contains
+
             subroutine average_into(tmpl)
                 character(len=*), intent(in) :: tmpl
                 character(len=XLONGSTRLEN) :: fname
@@ -254,6 +256,7 @@ contains
                     call avg%write(trim(tmpl)//trim(params_glob%ext),icls)
                 enddo
             end subroutine average_into
+
     end subroutine read
 
     subroutine remove_folder( self )
@@ -624,115 +627,159 @@ contains
             call update_user_params
             if( file_exists(TERM_STREAM) )then
                 write(logfhandle,'(A,A)')'>>> TERMINATING CLUSTER2D STREAM ',trim(cast_time_char(simple_gettime()))
-                l_forced_exit = .true.
+                l_forced_exit = .true. ! HE... this means the remaining statements of the do loop are to be skipped and loop ended
                 exit
             endif
-            if( l_forced_exit )then
-                n_converged_chunks = 0
-                call debug_print('forced exit')
-            else
-                ! classify chunks
-                call debug_print('chunk section global iter '//int2str(iter))
-                do ichunk = 1,params%nchunks
-                    call chunks(ichunk)%exec_classify(cline_cluster2D_chunk, orig_smpd, orig_box, box)
-                enddo
-                ! deal with chunk completion, rejection, reset
-                do ichunk = 1,params%nchunks
-                    if( chunks(ichunk)%has_converged() )then
-                        call chunks(ichunk)%display_iter
-                        ! rejection
-                        call chunks(ichunk)%reject(params%lpthresh, params%ndev, box)
-                        ! updates list of chunks to import
-                        if( allocated(converged_chunks) )then
-                            converged_chunks = [converged_chunks(:), chunks(ichunk)]
-                        else
-                            allocate(converged_chunks(1),source=[chunks(ichunk)])
-                        endif
-                        ! free chunk
-                        glob_chunk_id = glob_chunk_id + 1
-                        call chunks(ichunk)%init(glob_chunk_id, pool_proj)
+            ! if( l_forced_exit )then ! ...HE so why do we have this condition here
+
+            !     print *, 'I SHOULD NOT BE HERE'
+
+            !     n_converged_chunks = 0
+            !     call debug_print('forced exit')
+            ! else
+            ! classify chunks
+            call debug_print('chunk section global iter '//int2str(iter))
+            do ichunk = 1,params%nchunks
+                call chunks(ichunk)%exec_classify(cline_cluster2D_chunk, orig_smpd, orig_box, box)
+            enddo
+            ! deal with chunk completion, rejection, reset
+            do ichunk = 1,params%nchunks
+
+                print *, 'chunk ', chunks(ichunk)%id, ' has converged ', chunks(ichunk)%has_converged()
+
+                if( chunks(ichunk)%has_converged() )then
+                    call chunks(ichunk)%display_iter
+                    ! rejection
+                    call chunks(ichunk)%reject(params%lpthresh, params%ndev, box)
+                    ! updates list of chunks to import
+                    if( allocated(converged_chunks) )then
+                        converged_chunks = [converged_chunks(:), chunks(ichunk)]
+                    else
+                        allocate(converged_chunks(1),source=[chunks(ichunk)])
                     endif
-                enddo
-                n_converged_chunks = 0
-                if( allocated(converged_chunks) ) n_converged_chunks = size(converged_chunks)
-                call debug_print('end chunk section global iter '//int2str(iter))
-            endif
+                    ! free chunk
+                    glob_chunk_id = glob_chunk_id + 1
+                    call chunks(ichunk)%init(glob_chunk_id, pool_proj)
+                endif
+            enddo
+            n_converged_chunks = 0
+            if( allocated(converged_chunks) ) n_converged_chunks = size(converged_chunks)
+
+            print *, 'n_converged_chunks: ', n_converged_chunks
+
+            call debug_print('end chunk section global iter '//int2str(iter))
+            ! endif
             ! deal with pool completion, rejection, execution
             call update_user_params
             if( .not.pool_available )then
                 call debug_print('pool unavailable '//int2str(iter))
-                ! pool_converged = file_exists(CLUSTER2D_FINISHED)
+                pool_converged = file_exists(CLUSTER2D_FINISHED)
                 if( pool_iter > 1 ) refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params%ext)
                 pool_available = pool_converged
             endif
+
+            print *, 'pool_available: ', pool_available
+
             if( pool_available )then
                 call debug_print('pool available '//int2str(iter))
                 call del_file(CLUSTER2D_FINISHED)
                 ! read in previous iteration
+
+                print *, 'updating pool'
+
                 call update_pool
                 ! reject
                 if( pool_iter > 2*FREQ_POOL_REJECTION .and. mod(pool_iter,FREQ_POOL_REJECTION)==0 )then
                     call reject_from_pool
                 endif
-                if( l_forced_exit )then
-                    ! exit after final update
-                    exit
-                else
-                    ! writes spnapshot every ORIGPROJ_WRITEFREQ seconds
-                    if( (simple_gettime()-origproj_time) > ORIGPROJ_WRITEFREQ .and. pool_iter>1)then
-                        call write_snapshot( .true., .true.)
-                        origproj_time = simple_gettime()
-                    endif
-                    ! append new chunks
-                    if( n_converged_chunks > 0) call import_chunks_into_pool
-                    ! execute
-                    call exec_classify_pool
-                    ! tidy
-                    if( pool_iter > 3 )then
-                        call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_even'//trim(params%ext))
-                        call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_odd'//trim(params%ext))
-                    endif
+                ! if( l_forced_exit )then ! HE ... this makes no sense given the specification of exit (never executed)
+                !     ! exit after final update
+
+                !     print *, 'I SHOULD NOT BE HERE EITHER'
+                    
+                !     exit
+                ! else
+                ! writes spnapshot every ORIGPROJ_WRITEFREQ seconds
+                if( (simple_gettime()-origproj_time) > ORIGPROJ_WRITEFREQ .and. pool_iter>1)then
+                    call write_snapshot( .true., .true.)
+
+                    print *, 'wrote snapshot'
+
+                    origproj_time = simple_gettime()
                 endif
+                ! append new chunks
+                if( n_converged_chunks > 0)then
+                    call import_chunks_into_pool
+
+                    print *, 'imported chunks into pool'
+
+                endif
+                ! execute
+                call exec_classify_pool
+                ! tidy
+                if( pool_iter > 3 )then
+                    call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_even'//trim(params%ext))
+                    call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_odd'//trim(params%ext))
+                endif
+                ! endif
                 call debug_print('end pool available '//int2str(iter))
             endif
-            if( l_forced_exit )then
-                ! do nothing
-            else
-                call debug_print('new chunk section global iter '//int2str(iter))
-                ! generate new chunk projects
-                call generate_new_chunks(n_new_chunks)
-                if( n_new_chunks > 0 ) last_injection = simple_gettime()
-                ! wait a bit if necessary
-                time_iter = simple_gettime() - time_start_iter
-                if( time_iter < WAIT_WATCHER ) call sleep(WAIT_WATCHER-time_iter)
-                ! optionally pause
-                l_once = .false.
-                do while( file_exists(trim(PAUSE_STREAM)) )
-                    if( file_exists(trim(TERM_STREAM)) ) exit
-                    if( .not.l_once )then
-                        l_once = .true.
-                        call write_singlelineoftext(PAUSE_STREAM, 'PAUSED')
-                        write(logfhandle,'(A,A)')'>>> CLUSTER2D STREAM PAUSED ',cast_time_char(simple_gettime())
-                    endif
-                    call sleep(WAIT_WATCHER)
-                enddo
-                call debug_print('end new chunk section global iter '//int2str(iter))
-            endif
+            ! if( l_forced_exit )then ! ... HE see above
+            !     ! do nothing
+                
+            !     print *, 'NOR HERE!!!'
+
+            ! else
+            call debug_print('new chunk section global iter '//int2str(iter))
+            ! generate new chunk projects
+            call generate_new_chunks(n_new_chunks)
+            if( n_new_chunks > 0 ) last_injection = simple_gettime()
+            ! wait a bit if necessary
+            time_iter = simple_gettime() - time_start_iter
+            if( time_iter < WAIT_WATCHER ) call sleep(WAIT_WATCHER-time_iter)
+            ! optionally pause
+            l_once = .false.
+            do while( file_exists(trim(PAUSE_STREAM)) )
+                if( file_exists(trim(TERM_STREAM)) ) exit
+                if( .not.l_once )then
+                    l_once = .true.
+                    call write_singlelineoftext(PAUSE_STREAM, 'PAUSED')
+                    write(logfhandle,'(A,A)')'>>> CLUSTER2D STREAM PAUSED ',cast_time_char(simple_gettime())
+                endif
+                call sleep(WAIT_WATCHER)
+            enddo
+            call debug_print('end new chunk section global iter '//int2str(iter))
+            ! endif
         enddo
         call debug_print('exited global iter '//int2str(iter))
         call qsys_cleanup
         do ichunk = 1,params%nchunks
+
+            print *, 'terminating chunk: ', ichunk
+
             call chunks(ichunk)%terminate
         enddo
+
+        print *, 'pool_converged ', pool_converged
+
         if( .not.pool_converged )then
             pool_iter = pool_iter-1
             refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params%ext)
+
+            print *, 'updated global references to ', refs_glob
+
             ! tricking the asynchronous master process to come to a hard stop
             do ipart = 1,params%nparts
                 call simple_touch('JOB_FINISHED_'//int2str_pad(ipart,params%numlen))
             enddo
         endif
+
+        print *, 'pool_iter: ', pool_iter
+
         if( pool_iter >= 1 )then
+
+            print *, 'updating project'
+
             ! updates project
             call write_snapshot( .true., .false.)
             ! ranking
@@ -750,6 +797,7 @@ contains
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER2D_STREAM NORMAL STOP ****')
+
         contains
 
             subroutine update_pool
@@ -1164,6 +1212,9 @@ contains
                 endif
                 nptcls_tot = pool_proj%os_ptcl2D%get_noris()
                 if( nptcls_tot == 0 ) return
+
+                print *, 'classifying pool'
+
                 call debug_print('in exec_classify_pool '//int2str(nptcls_tot))
                 pool_iter = pool_iter + 1
                 call cline_cluster2D%set('refs',    refs_glob)
