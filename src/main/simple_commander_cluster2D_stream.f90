@@ -414,7 +414,6 @@ contains
         self%available = .false.
     end subroutine kill
 
-    !> Cluster2D_stream commander
     subroutine exec_cluster2D_stream( self, cline )
         use simple_class_frcs, only: class_frcs
         class(cluster2D_commander_stream), intent(inout) :: self
@@ -440,7 +439,7 @@ contains
         real    :: orig_smpd, scale_factor, smpd, lp_greedy, lpstart_stoch
         integer :: nptcls_per_chunk, ncls_glob, last_injection, max_ncls,ichunk, time_iter, ipart, iotest
         integer :: iter, orig_box, box, boxpd, n_spprojs, pool_iter, origproj_time, time_start_iter
-        logical :: do_autoscale, l_greedy, l_forced_exit, l_once
+        logical :: do_autoscale, l_greedy, l_once
         if( cline%defined('refine') )then
             if( trim(cline%get_carg('refine')).ne.'greedy' )then
                 if( .not.cline%defined('mskdiam') ) THROW_HARD('MSKDIAM must be defined!')
@@ -616,7 +615,6 @@ contains
         pool_iter      = 0
         pool_converged = .false.
         pool_available = .true.
-        l_forced_exit  = .false.
         call simple_touch(CLUSTER2D_FINISHED)
         iter = 0
         do
@@ -627,16 +625,8 @@ contains
             call update_user_params
             if( file_exists(TERM_STREAM) )then
                 write(logfhandle,'(A,A)')'>>> TERMINATING CLUSTER2D STREAM ',trim(cast_time_char(simple_gettime()))
-                l_forced_exit = .true. ! HE... this means the remaining statements of the do loop are to be skipped and loop ended
                 exit
             endif
-            ! if( l_forced_exit )then ! ...HE so why do we have this condition here
-
-            !     print *, 'I SHOULD NOT BE HERE'
-
-            !     n_converged_chunks = 0
-            !     call debug_print('forced exit')
-            ! else
             ! classify chunks
             call debug_print('chunk section global iter '//int2str(iter))
             do ichunk = 1,params%nchunks
@@ -644,9 +634,6 @@ contains
             enddo
             ! deal with chunk completion, rejection, reset
             do ichunk = 1,params%nchunks
-
-                print *, 'chunk ', chunks(ichunk)%id, ' has converged ', chunks(ichunk)%has_converged()
-
                 if( chunks(ichunk)%has_converged() )then
                     call chunks(ichunk)%display_iter
                     ! rejection
@@ -664,9 +651,6 @@ contains
             enddo
             n_converged_chunks = 0
             if( allocated(converged_chunks) ) n_converged_chunks = size(converged_chunks)
-
-            print *, 'n_converged_chunks: ', n_converged_chunks
-
             call debug_print('end chunk section global iter '//int2str(iter))
             ! endif
             ! deal with pool completion, rejection, execution
@@ -677,43 +661,22 @@ contains
                 if( pool_iter > 1 ) refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params%ext)
                 pool_available = pool_converged
             endif
-
-            print *, 'pool_available: ', pool_available
-
             if( pool_available )then
                 call debug_print('pool available '//int2str(iter))
                 call del_file(CLUSTER2D_FINISHED)
                 ! read in previous iteration
-
-                print *, 'updating pool'
-
                 call update_pool
                 ! reject
                 if( pool_iter > 2*FREQ_POOL_REJECTION .and. mod(pool_iter,FREQ_POOL_REJECTION)==0 )then
                     call reject_from_pool
                 endif
-                ! if( l_forced_exit )then ! HE ... this makes no sense given the specification of exit (never executed)
-                !     ! exit after final update
-
-                !     print *, 'I SHOULD NOT BE HERE EITHER'
-                    
-                !     exit
-                ! else
                 ! writes spnapshot every ORIGPROJ_WRITEFREQ seconds
                 if( (simple_gettime()-origproj_time) > ORIGPROJ_WRITEFREQ .and. pool_iter>1)then
                     call write_snapshot( .true., .true.)
-
-                    print *, 'wrote snapshot'
-
                     origproj_time = simple_gettime()
                 endif
                 ! append new chunks
-                if( n_converged_chunks > 0)then
-                    call import_chunks_into_pool
-
-                    print *, 'imported chunks into pool'
-
-                endif
+                if( n_converged_chunks > 0) call import_chunks_into_pool
                 ! execute
                 call exec_classify_pool
                 ! tidy
@@ -724,12 +687,6 @@ contains
                 ! endif
                 call debug_print('end pool available '//int2str(iter))
             endif
-            ! if( l_forced_exit )then ! ... HE see above
-            !     ! do nothing
-                
-            !     print *, 'NOR HERE!!!'
-
-            ! else
             call debug_print('new chunk section global iter '//int2str(iter))
             ! generate new chunk projects
             call generate_new_chunks(n_new_chunks)
@@ -754,32 +711,17 @@ contains
         call debug_print('exited global iter '//int2str(iter))
         call qsys_cleanup
         do ichunk = 1,params%nchunks
-
-            print *, 'terminating chunk: ', ichunk
-
             call chunks(ichunk)%terminate
         enddo
-
-        print *, 'pool_converged ', pool_converged
-
         if( .not.pool_converged )then
             pool_iter = pool_iter-1
             refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params%ext)
-
-            print *, 'updated global references to ', refs_glob
-
             ! tricking the asynchronous master process to come to a hard stop
             do ipart = 1,params%nparts
                 call simple_touch('JOB_FINISHED_'//int2str_pad(ipart,params%numlen))
             enddo
         endif
-
-        print *, 'pool_iter: ', pool_iter
-
         if( pool_iter >= 1 )then
-
-            print *, 'updating project'
-
             ! updates project
             call write_snapshot( .true., .false.)
             ! ranking
@@ -865,7 +807,7 @@ contains
                 character(len=LONGSTRLEN), allocatable :: tmp(:), spprojs_for_chunk(:), spproj_list(:)
                 integer,                   allocatable :: spproj_nptcls(:)
                 logical,                   allocatable :: spproj_mask(:)
-                integer :: nptcls, iproj, jproj, cnt, nmics_imported, iichunk, first_new, n_new, n_avail, n2fill
+                integer :: nptcls, iproj, jproj, cnt, nmics_imported, iichunk, first_new, n_new, n_avail, n2fill, iostat
                 logical :: isnew, enough
                 call debug_print('in generate_new_chunks')
                 nmics_imported = 0
@@ -881,9 +823,9 @@ contains
                 call debug_print('in generate_new_chunks 1 '//int2str(n_avail)//' '//int2str(nmics_imported))
                 if(n_avail == 0) return
                 call debug_print('in generate_new_chunks reading '//trim(spproj_list_fname))
-                call read_filetable(spproj_list_fname, spproj_list)
-                ! call del_file(trim(params%dir_target)//trim(IOLOCK))
-                ! call debug_print('in generate_new_chunks read cnt '//int2str(cnt))
+                call simple_copy_file(spproj_list_fname, trim(STREAM_SPPROJFILES), iostat)
+                call fileiochk('failure to copy '//spproj_list_fname, iostat)
+                call read_filetable(trim(STREAM_SPPROJFILES), spproj_list)
                 if( .not.allocated(spproj_list) )return
                 n_spprojs = size(spproj_list)
                 call debug_print('in generate_new_chunks 1b  '//int2str(n_spprojs))
@@ -1212,9 +1154,6 @@ contains
                 endif
                 nptcls_tot = pool_proj%os_ptcl2D%get_noris()
                 if( nptcls_tot == 0 ) return
-
-                print *, 'classifying pool'
-
                 call debug_print('in exec_classify_pool '//int2str(nptcls_tot))
                 pool_iter = pool_iter + 1
                 call cline_cluster2D%set('refs',    refs_glob)
@@ -1390,7 +1329,6 @@ contains
                         call img%write(refs_glob, ncls_glob)
                         deallocate(cls_mask)
                         write(logfhandle,'(A,I4,A,I6,A)')'>>> REJECTED FROM POOL: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTER(S)'
-                        ! if( debug_here )call pool_proj%os_cls2D%write('classdoc_pool_aftersel_'//int2str(pool_iter)//'.txt')
                     endif
                 else
                     write(logfhandle,'(A,I4,A,I6,A)')'>>> NO PARTICLES FLAGGED FOR REJECTION FROM POOL'
