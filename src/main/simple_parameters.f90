@@ -41,7 +41,6 @@ type :: parameters
     character(len=3)      :: dopca='yes'
     character(len=3)      :: doprint='no'
     character(len=3)      :: dorec='yes'
-    character(len=3)      :: elongated='no'       !< elongated particles(yes|no){no}
     character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)      :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
@@ -515,7 +514,6 @@ contains
         call check_carg('doprint',        self%doprint)
         call check_carg('draw_color',     self%draw_color)
         call check_carg('element',        self%element)
-        call check_carg('elongated',      self%elongated)
         call check_carg('even',           self%even)
         call check_carg('exp_doc',        self%exp_doc)
         call check_carg('startype',       self%startype)

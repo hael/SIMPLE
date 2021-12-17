@@ -189,7 +189,6 @@ type(simple_input_param) :: e1, e2, e3
 type(simple_input_param) :: eer_fraction
 type(simple_input_param) :: eer_upsampling
 type(simple_input_param) :: element
-type(simple_input_param) :: elongated
 type(simple_input_param) :: eo
 type(simple_input_param) :: focusmskdiam
 type(simple_input_param) :: frac
@@ -868,7 +867,6 @@ contains
         call set_param(e3,             'e3',           'num',    'Rotation along Psi',  'Psi Euler angle',   'in degrees', .false., 0.)
         call set_param(eer_fraction,   'eer_fraction', 'num',    '# of EER frames to fraction together', 'Number of raw EER frames to fraction together', '# EER frames{20}', .false., 20.)
         call set_param(eer_upsampling, 'eer_upsampling','multi', 'EER up-sampling', 'EER up-sampling(1=4K|2=8K){1}', '(1|2){1}', .false., 1.)
-        call set_param(elongated,      'elongated',    'binary', 'Elongated particles', 'Whether to perform generate only elliptical gaussian references during picking averaging, for phasecorr picker only(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(groupframes,    'groupframes',  'binary', 'Patch motion correction frames averaging', 'Whether to perform frames averaging during motion correction - for patchesonly(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(mcpatch,        'mcpatch',      'binary', 'Patch-based motion correction', 'Whether to perform Patch-based motion correction(yes|no){no}', '(yes|no){yes}', .false., 'yes')
         call set_param(mcconvention,   'mcconvention', 'str',    'Frame of reference during movie alignment', 'Frame of reference during movie alignment; simple/unblur:central; relion/motioncorr:first(simple|unblur|relion|motioncorr){simple}', '(simple|unblur|relion|motioncorr){simple}', .false., 'simple')
@@ -905,7 +903,7 @@ contains
         call set_param(cn_min,         'cn_min',       'num',    'Minimum std coordination number', 'Minimum std cn to consider ', '4',  .false., 4.)
         call set_param(cn_max,         'cn_max',       'num',    'Maximum std coordination number', 'Maximum std cn to consider ', '12', .false., 12.)
         call set_param(stepsz,         'stepsz',       'num',    'Steps size in A', 'Step size in A {10.} ', '{10.}',  .true., 10.)
-        call set_param(picker,         'picker',       'multi',  'Picking approach','Picking approach(seg|phasecorr|old_school){phasecorr}','(seg|phasecorr|old_school){phasecorr}', .false.,'phasecorr')
+        call set_param(picker,         'picker',       'multi',  'Picking approach','Picking approach(phasecorr|old_school){phasecorr}','(phasecorr|old_school){phasecorr}', .false.,'phasecorr')
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
         call set_param(mul,            'mul',          'num',    'Multiplication factor', 'Multiplication factor{1.}','{1.}',.false., 1.)
         call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(patch|wpatch|poly|poly2){patch}','(patch|wpatch|poly|poly2){patch}', .false.,'patch')
@@ -2367,7 +2365,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                             ! executable
-        &2, 3, 0, 9, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &2, 3, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call pick%set_input('img_ios', 1, 'refs', 'file', 'Stack of class-averages for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
@@ -2383,15 +2381,6 @@ contains
         call pick%set_input('srch_ctrls', 2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
         call pick%set_input('srch_ctrls', 3, pgrp)
         pick%srch_ctrls(3)%required = .false.
-        call pick%set_input('srch_ctrls', 4, elongated)
-        pick%srch_ctrls(4)%required = .false.
-        call pick%set_input('srch_ctrls', 5, detector)
-        pick%srch_ctrls(5)%required = .false.
-        call pick%set_input('srch_ctrls', 6, draw_color)
-        pick%srch_ctrls(6)%required = .false.
-        call pick%set_input('srch_ctrls', 7, 'min_rad', 'num', 'Minimum radius in A', 'Minimum expected radius of the particles in A {50.} ',  '{50.}',  .false., 50.)
-        call pick%set_input('srch_ctrls', 8, 'max_rad', 'num', 'Maximum radius in A', 'Maximum expected radius of the particles in A {300.} ', '{300.}', .false., 300.)
-        call pick%set_input('srch_ctrls', 9, 'stepsz',  'num', 'Step size in A', 'Step size for gaussian reference generation in A {10.} ',    '{10.}',  .false., 10.)
         ! filter controls
         call pick%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
         ! mask controls

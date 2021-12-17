@@ -6,7 +6,7 @@ include 'simple_lib.f08'
 use simple_image, only: image
 implicit none
 
-public :: init_phasecorr_picker_refs, init_phasecorr_picker_gauss, exec_phasecorr_picker, kill_phasecorr_picker
+public :: init_phasecorr_picker, exec_phasecorr_picker, kill_phasecorr_picker
 private
 
 ! PEAK STATS INDICES
@@ -17,9 +17,8 @@ integer,          parameter   :: SSCORE   = 3
 integer,          parameter   :: NSTAT   = 3
 integer,          parameter   :: MAXKMIT = 20
 real,             parameter   :: BOXFRAC = 0.5
-logical,          parameter   :: DOWRITEIMGS = .false., DEBUG_HERE = .false.
+logical,          parameter   :: DEBUG_HERE = .false.
 integer,          parameter   :: PICKER_OFFSET_HERE = 3, OFFSET_HWIN = 1
-
 ! VARS
 type(image)                   :: micrograph, mic_shrunken, mic_saved
 type(image),      allocatable :: refs(:)
@@ -34,13 +33,10 @@ integer                       :: nrefs, nmax, nmax_sel, orig_box
 real                          :: smpd, smpd_shrunken
 real                          :: msk, hp,lp, distthr, ndev
 real                          :: min_rad, max_rad, step_sz
-character(len=3)              :: elongated  !additional info inputted by the user
-logical                       :: template_based = .false.
-
 
 contains
 
-    subroutine init_phasecorr_picker_refs( micfname, refsfname, smpd_in, lp_in, distthr_in, ndev_in, dir_out )
+    subroutine init_phasecorr_picker( micfname, refsfname, smpd_in, lp_in, distthr_in, ndev_in, dir_out )
         use simple_procimgstk, only :  clip_imgfile
         character(len=*),           intent(in) :: micfname, refsfname
         real,                       intent(in) :: smpd_in
@@ -50,7 +46,6 @@ contains
         type(image)          :: refimg, mskimg
         integer              :: ifoo, iref
         real                 :: sdev_noise
-        template_based = .true.
         allocate(micname,  source=trim(micfname))
         allocate(refsname, source=trim(refsfname))
         boxname = basename( fname_new_ext(micname,'box') )
@@ -105,206 +100,7 @@ contains
         mic_saved = mic_shrunken
         call mic_shrunken%bp(hp, lp)
         call mic_saved%ifft
-      end subroutine init_phasecorr_picker_refs
-
-      subroutine init_phasecorr_picker_gauss( micfname, minrad, maxrad, stepsz, eelongated, smpd_in, lp_in, distthr_in, ndev_in, dir_out )
-          use simple_procimgstk, only :  clip_imgfile
-          character(len=*),           intent(in) :: micfname
-          real,                       intent(in) :: minrad, maxrad, stepsz ! in A
-          character(len=3),           intent(in) :: eelongated
-          real,                       intent(in) :: smpd_in
-          real,             optional, intent(in) :: lp_in, distthr_in, ndev_in
-          character(len=*), optional, intent(in) :: dir_out
-          integer           :: ifoo
-          real              :: hp
-          template_based = .false.  ! reset to be sure
-          allocate(micname,  source=trim(micfname) )
-          boxname = basename( fname_new_ext(micname,'box') )
-          if( present(dir_out) )boxname = trim(dir_out)//trim(boxname)
-          smpd = smpd_in
-          orig_box = round2even(2.7*maxrad/smpd)    !in pixel, original dimensions
-          min_rad  = minrad/(PICKER_SHRINK*smpd)    !in pixel, shrunken dimensions
-          max_rad  = maxrad/(PICKER_SHRINK*smpd)    !in pixel, shrunken dimensions
-          step_sz  = stepsz/(PICKER_SHRINK*smpd)    !in pixel, shrunken dimensions
-          lp   = 20.0
-          if( present(lp_in) ) lp = lp_in
-          ndev = 2.0
-          if( present(ndev_in)) ndev = ndev_in
-          ! read micrograph
-          call find_ldim_nptcls(micname, ldim, ifoo)
-          call micrograph%new(ldim, smpd)
-          call micrograph%read(micname)
-          ldim_refs(1:2)   = round2even(orig_box/PICKER_SHRINK)
-          ldim_refs(3)     = 1
-          msk              = real(ldim_refs(1)/2-5)
-          msk              = max(msk, real(ldim_refs(1)/2-2)) ! for tiny particles
-          ! modify according to PICKER_SHRINK_HERE
-          ldim_shrink(1)   = round2even(real(ldim(1))/PICKER_SHRINK)
-          ldim_shrink(2)   = round2even(real(ldim(2))/PICKER_SHRINK)
-          ldim_shrink(3)   = 1
-          smpd_shrunken    = PICKER_SHRINK*smpd
-          distthr          = BOXFRAC*real(ldim_refs(1)) !In shrunken dimensions
-          if( present(distthr_in) ) distthr = distthr_in/PICKER_SHRINK/smpd_shrunken ! pixels
-          elongated = eelongated
-          ! generate references
-          if(elongated .eq. 'yes') then
-              call generate_gaussian_refs_elongated(refs,min_rad,max_rad,step_sz)
-          else
-              call generate_gaussian_refs(refs,min_rad,max_rad,step_sz)
-          endif
-          ! pre-process micrograph
-          call micrograph%fft()
-          call mic_shrunken%new(ldim_shrink, smpd_shrunken)
-          call mic_shrunken%set_ft(.true.)
-          call micrograph%clip(mic_shrunken)
-          hp = real(ldim_shrink(1) / 2) * smpd_shrunken
-          call mic_shrunken%fft
-          mic_saved = mic_shrunken
-          call mic_shrunken%bp(hp, lp)
-          call mic_saved%ifft
-
-        contains
-
-        subroutine generate_gaussian_refs_elongated(refs,min_rad,max_rad,step_sz)
-            type(image), allocatable, intent(inout) :: refs(:)
-            real, intent(in)  :: min_rad, max_rad, step_sz
-            real, allocatable :: rmat_out(:,:,:) !to use rtsq_serial
-            real    :: sigma_x, sigma_y
-            real    :: rad_x, rad_y
-            integer :: i, j, max_nrefs
-            nrefs = 0
-            max_nrefs = ceiling((max_rad-min_rad)/step_sz)*4 ! possibility to rotate 3 times
-            do i = 0, max_nrefs-1
-                rad_x   = (min_rad + real(i)*step_sz)
-                if(rad_x <= max_rad) then
-                    do j = i+1, max_nrefs
-                        rad_y   = (min_rad + real(j)*step_sz)
-                        if(rad_y <= max_rad) then
-                            if(rad_y/rad_x >= 2.) then
-                              nrefs = nrefs + 4 !total 4 references (original and 3 rotations)
-                            endif
-                        endif
-                    enddo
-                endif
-            enddo
-            if(allocated(refs)) deallocate(refs)
-            allocate( refs(nrefs) )
-            allocate(rmat_out(ldim_refs(1),ldim_refs(2),1), source = 0.)
-            nrefs = 0
-            do i = 0, max_nrefs-1
-                rad_x   = (min_rad + real(i)*step_sz)
-                if(rad_x <= max_rad) then
-                    do j = i+1, max_nrefs
-                        rad_y   = (min_rad + real(j)*step_sz)
-                        if(rad_y <= max_rad) then
-                             if(rad_y/rad_x >= 2.) then
-                                 sigma_x = rad_x/2.!(2.*sqrt(2.*log(2.))) ! FWHM = rad (see Wiki formula)
-                                 sigma_y = rad_y/2.!(2.*sqrt(2.*log(2.))) ! FWHM = rad (see Wiki formula)
-                                 nrefs = nrefs + 1
-                                 call refs(nrefs)%new(ldim_refs,smpd_shrunken)
-                                 call refs(nrefs)%gauimg2D(sigma_x,sigma_y)! cutoff is hard mask, so we do soft mask afterwards
-                                 call refs(nrefs)%mask(max_rad,'soft',backgr=0.)
-                                 if(DOWRITEIMGS) call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
-                                 if(DEBUG_HERE)  write(logfhandle,*) 'generating ref with rads: ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
-                                 call refs(nrefs)%rtsq_serial( 45., 0., 0., rmat_out )
-                                 nrefs = nrefs + 1
-                                 call refs(nrefs)%new(ldim_refs,smpd_shrunken)
-                                 call refs(nrefs)%set_rmat(rmat_out,.false.)
-                                 if(DOWRITEIMGS) call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
-                                 if(DEBUG_HERE) write(logfhandle,*) 'rotating 45 degrees ref:  ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
-                                 call refs(nrefs)%rtsq_serial( 90., 0., 0., rmat_out )
-                                 nrefs = nrefs + 1
-                                 call refs(nrefs)%new(ldim_refs,smpd_shrunken)
-                                 call refs(nrefs)%set_rmat(rmat_out,.false.)
-                                 if(DOWRITEIMGS) call refs(nrefs)%write(PATH_HERE//'_GaussianReference.mrc',nrefs)
-                                 if(DEBUG_HERE) write(logfhandle,*) 'rotating 90 degrees ref:  ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
-                                 call refs(nrefs)%rtsq_serial( 135., 0., 0., rmat_out )
-                                 nrefs = nrefs + 1
-                                 call refs(nrefs)%new(ldim_refs,smpd_shrunken)
-                                 call refs(nrefs)%set_rmat(rmat_out,.false.)
-                                 if(DOWRITEIMGS) call refs(nrefs)%write(PATH_HERE//'_GaussianReference.mrc',nrefs)
-                                 if(DEBUG_HERE) write(logfhandle,*) 'rotating 135 degrees ref:  ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
-                              endif
-                        endif
-                    enddo
-                endif
-            enddo
-            deallocate(rmat_out)
-            if(nrefs == 0) then
-                write(logfhandle, *) 'Min_rad and max_rad have to have ratio > 2 to generate elongated refs; generate_gaussian_refs_elongated'
-                stop
-            endif
-            if(DEBUG_HERE) write(logfhandle,*) 'Elongated refs generation completed'
-        end subroutine generate_gaussian_refs_elongated
-
-        subroutine generate_gaussian_refs(refs,min_rad,max_rad,step_sz)
-            type(image), allocatable, intent(inout) :: refs(:)
-            real, intent(in)  :: min_rad, max_rad, step_sz
-            real, allocatable :: rmat_out(:,:,:) !to use rtsq_serial
-            real    :: sigma_x, sigma_y
-            real    :: rad_x, rad_y
-            integer :: i, j, max_nrefs
-            logical :: rotate_ref
-            nrefs = 0
-            max_nrefs = ceiling((max_rad-min_rad)/step_sz)
-            do i = 0, max_nrefs
-                rad_x   = (min_rad + real(i)*step_sz)
-                if(rad_x <= max_rad) then
-                    do j = 0, max_nrefs
-                        rad_y   = (min_rad + real(j)*step_sz)
-                        if(rad_y <= max_rad) then
-                            nrefs = nrefs + 1
-                            if(rad_y/rad_x >= 1.5) then
-                              rotate_ref = .true.
-                              nrefs = nrefs + 2 !total 3 references
-                            endif
-                        endif
-                        rotate_ref = .false.                 !restore
-                    enddo
-                endif
-            enddo
-            if(allocated(refs)) deallocate(refs)
-            allocate( refs(nrefs) )
-            allocate(rmat_out(ldim_refs(1),ldim_refs(2),1), source = 0.)
-            nrefs = 0
-            do i = 0, max_nrefs
-                rad_x = (min_rad + real(i)*step_sz)
-                if(rad_x <= max_rad) then
-                    do j = 0, max_nrefs
-                        rad_y = (min_rad + real(j)*step_sz)
-                        if(rad_y <= max_rad) then
-                             if(rad_y/rad_x >= 1.5) rotate_ref = .true.
-                             sigma_x = rad_x/2.!(2.*sqrt(2.*log(2.))) ! FWHM = rad (see Wiki formula)
-                             sigma_y = rad_y/2.!(2.*sqrt(2.*log(2.))) ! FWHM = rad (see Wiki formula)
-                             nrefs = nrefs + 1
-                             call refs(nrefs)%new(ldim_refs,smpd_shrunken)
-                             call refs(nrefs)%gauimg2D(sigma_x,sigma_y)!,(rad_x+rad_y)/2.+5.) !five pxls cutoff
-                             call refs(nrefs)%mask(max_rad,'soft',backgr=0.)
-                             if(DOWRITEIMGS) call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
-                             if(DEBUG_HERE)  write(logfhandle,*)  'generating ref with rads: ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
-                             if(rotate_ref) then
-                                 call refs(nrefs)%rtsq_serial( 45., 0., 0., rmat_out )
-                                 nrefs = nrefs + 1
-                                 call refs(nrefs)%new(ldim_refs,smpd_shrunken)
-                                 call refs(nrefs)%set_rmat(rmat_out,.false.)
-                                 if(DOWRITEIMGS) call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
-                                 if(DEBUG_HERE) write(logfhandle,*)  'rotating 45 degrees ref:  ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
-                                 call refs(nrefs)%rtsq_serial( 90., 0., 0., rmat_out )
-                                 nrefs = nrefs + 1
-                                 call refs(nrefs)%new(ldim_refs,smpd_shrunken)
-                                 call refs(nrefs)%set_rmat(rmat_out,.false.)
-                                 if(DOWRITEIMGS) call refs(nrefs)%write(PATH_HERE//'_GaussianReference.mrc',nrefs)
-                                 if(DEBUG_HERE)  write(logfhandle,*) 'rotating 90 degrees ref:  ', rad_x*smpd_shrunken, rad_y*smpd_shrunken, ' A'
-                             endif
-                        endif
-                        rotate_ref = .false. !restore
-                    enddo
-                endif
-            enddo
-            deallocate(rmat_out)
-            if(DEBUG_HERE) write(logfhandle,*)  'Refs generation completed'
-        end subroutine generate_gaussian_refs
-    end subroutine init_phasecorr_picker_gauss
+      end subroutine init_phasecorr_picker
 
     subroutine exec_phasecorr_picker( boxname_out, nptcls_out )
         character(len=LONGSTRLEN), intent(out) :: boxname_out
@@ -321,23 +117,6 @@ contains
         call gather_stats
         call one_cluster_clustering
         nptcls_out = count(selected_peak_positions)
-        if(DOWRITEIMGS) then
-            call mic_saved%get_rmat_ptr(prmat)
-            maxv = 5.*maxval(prmat)
-            do i=1,size(selected_peak_positions)
-                if(.not.selected_peak_positions(i))cycle
-                call mic_saved%set([peak_positions(i,1)-1,peak_positions(i,2)-1,1],maxv)
-                call mic_saved%set([peak_positions(i,1)-1,peak_positions(i,2),1],maxv)
-                call mic_saved%set([peak_positions(i,1)-1,peak_positions(i,2)+1,1],maxv)
-                call mic_saved%set([peak_positions(i,1),  peak_positions(i,2)-1,1],maxv)
-                call mic_saved%set([peak_positions(i,1),  peak_positions(i,2),1],maxv)
-                call mic_saved%set([peak_positions(i,1),  peak_positions(i,2)+1,1],maxv)
-                call mic_saved%set([peak_positions(i,1)+1,peak_positions(i,2)-1,1],maxv)
-                call mic_saved%set([peak_positions(i,1)+1,peak_positions(i,2),1],maxv)
-                call mic_saved%set([peak_positions(i,1)+1,peak_positions(i,2)+1,1],maxv)
-            enddo
-            call mic_saved%write(PATH_HERE//basename(trim(micname))//'_picked.mrc')
-        endif
         ! bring back coordinates to original sampling
         peak_positions = nint(PICKER_SHRINK*(real(peak_positions)))-orig_box/2
         call write_boxfile
@@ -386,7 +165,6 @@ contains
         rmat_phasecorr(ldim_shrink(1)-border:ldim_shrink(1),:,1) = 0. !set to zero the borders
         rmat_phasecorr(:,1:border,1) = 0. !set to zero the borders
         rmat_phasecorr(:,ldim_shrink(2)-border:ldim_shrink(2),1) = 0. !set to zero the borders
-        if(DOWRITEIMGS) call mic_shrunken%write(PATH_HERE//basename(trim(micname))//'_shrunken_bin.mrc')
         allocate(mask(1:ldim_shrink(1), 1:ldim_shrink(2)), source = .false.)
         ! Select initial peaks
         ntargets = 0
@@ -422,10 +200,6 @@ contains
         msk_shrunken = msk*real(orig_box)/real(ldim_refs(1))
         call circ_mask%disc(ldim_refs, smpd_shrunken, msk_shrunken, l_mask)
         call circ_mask%kill
-        if(DOWRITEIMGS) then
-            sdevimg = mic_shrunken
-            call sdevimg%zero_and_unflag_ft
-        endif
         tmp_mic = mic_saved
         call tmp_mic%bp(hp,lp)
         !$omp parallel do default(shared) private(i,outside,xind,yind,ithr) proc_bind(close) schedule(static)
@@ -435,13 +209,8 @@ contains
             yind = target_positions(i,2)
             call tmp_mic%window_slim([xind,yind]-ldim_refs(1)/2-1, ldim_refs(1), ptcls(ithr), outside)
             target_corrs(i) = ptcls(ithr)%real_corr(refs(ref_inds(xind,yind)),l_mask)
-            if(DOWRITEIMGS) call sdevimg%set([xind,yind,1],target_corrs(i))
         enddo
         !$omp end parallel do
-        if(DOWRITEIMGS) then
-            call sdevimg%write(PATH_HERE//basename(trim(micname))//'_corrs.mrc')
-            call sdevimg%kill
-        endif
         write(logfhandle,'(a)') '>>> PEAKS SELECTION'
         call sortmeans(target_corrs, MAXKMIT, means, labels)
         nmax = count(labels == 2)
@@ -466,7 +235,9 @@ contains
             call ptcls(i)%kill
         enddo
         deallocate(ptcls)
+
     contains
+
         ! Reference generation and Phase Correlation calculation
         ! FORMULA: phasecorr = ifft2(fft2(field).*conj(fft2(reference)));
         subroutine gen_phase_correlation(field,mask)
@@ -504,9 +275,7 @@ contains
                 endif
                 call aux%fft
             enddo
-            if(.not. template_based) call phasecorr%neg()
             call field%copy(phasecorr)
-            if(DOWRITEIMGS) call field%write(PATH_HERE//basename(trim(micname))//'MaxValPhaseCorr.mrc')
             if(present(mask)) then
                 call mask%new(ldim_shrink, smpd_shrunken)
                 call mask%get_rmat_ptr(mask_rmat)
@@ -583,7 +352,6 @@ contains
         end do
         call ptcl_target%kill()
     end subroutine gather_stats
-
 
     ! In the old school picker there are 4 stats. In picker there are 3.
     ! The disregarded stat is the correlation (CC2REF). The effect it has, if put

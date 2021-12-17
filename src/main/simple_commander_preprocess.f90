@@ -1440,9 +1440,7 @@ contains
         call params%new(cline)
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
-        if( spproj%get_nintgs() ==0 )then
-            THROW_HARD('No micrograph to process! exec_pick_distr')
-        endif
+        if( spproj%get_nintgs() ==0 ) THROW_HARD('No micrograph to process! exec_pick_distr')
         call spproj%kill
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -1450,38 +1448,16 @@ contains
         call cline%set('numlen', real(params%numlen))
         ! more sanity checks
         templates_provided = cline%defined('refs') .or. cline%defined('vol1')
-        select case(trim(params%picker))
-        case('old_school')
-            ! template based picking, computationally intensive
-            if( .not.templates_provided ) THROW_HARD('Need to have references or volume for old_school picker!')
-        case('phasecorr')
-            ! phase correlation-based
-            if( templates_provided )then
-                ! all good
-            else
-                if( .not.cline%defined('min_rad') ) THROW_HARD('Phase correlation segmentation-based picker requires the minimum radius MIN_RAD input')
-                if( .not.cline%defined('max_rad') ) THROW_HARD('Phase correlation segmentation-based picker requires the maximum radius MAX_RAD input')
-                if( .not.cline%defined('stepsz')  ) THROW_HARD('Phase correlation segmentation-based picker requires the step size STEPSZ input')
-            endif
-        case('seg')
-            ! segmentation based reference free picking
-            if( templates_provided )            THROW_HARD('Picker by segmentation cannot have refs/vol1')
-            if( .not.cline%defined('min_rad') ) THROW_HARD('Segmentation-based picker requires the minimum radius MIN_RAD input')
-            if( .not.cline%defined('max_rad') ) THROW_HARD('Segmentation-based picker requires the maximum radius MAX_RAD input')
-        case DEFAULT
-            THROW_HARD('Invalid picker parameter!')
-        end select
+        if( .not.templates_provided ) THROW_HARD('Need to references or volume as input')
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
         ! prepares picking references
-        if( templates_provided )then
-            cline_make_pickrefs = cline
-            call cline_make_pickrefs%set('prg','make_pickrefs')
-            call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-            call cline%set('refs', trim(PICKREFS)//params%ext)
-            call cline%delete('vol1')
-            write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
-        endif
+        cline_make_pickrefs = cline
+        call cline_make_pickrefs%set('prg','make_pickrefs')
+        call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
+        call cline%set('refs', trim(PICKREFS)//params%ext)
+        call cline%delete('vol1')
+        write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
@@ -1552,7 +1528,7 @@ contains
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         call o%kill
         ! end gracefully
-        call qsys_job_finished(  'simple_commander_preprocess :: exec_pick' )
+        call qsys_job_finished( 'simple_commander_preprocess :: exec_pick' )
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
     end subroutine exec_pick
 

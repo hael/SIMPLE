@@ -668,44 +668,6 @@ contains
         end select
     end function fname2format
 
-    !>  \brief  reads a filetable into an array
-    ! subroutine read_filetable( filetable, filenames, check_if_exists )
-    !     character(len=*),                       intent(in)  :: filetable    !< input table filename
-    !     character(len=LONGSTRLEN), allocatable, intent(out) :: filenames(:) !< array of filenames
-    !     logical, optional,                      intent(in)  :: check_if_exists
-    !     character(len=LONGSTRLEN), allocatable  :: fnames_tmp(:)
-    !     character(len=LONGSTRLEN) :: fname
-    !     logical :: ccheck_if_exists
-    !     integer :: nl, funit, iline, cnt, io_stat
-    !     ccheck_if_exists = .true.
-    !     if( present(check_if_exists) ) ccheck_if_exists = check_if_exists
-    !     nl = nlines(trim(filetable))
-    !     if( nl == 0 ) return
-    !     call fopen(funit, filetable, 'old', 'unknown', io_stat)
-    !     call fileiochk("read_filetable failed to open file "//trim(filetable), io_stat)
-    !     allocate( fnames_tmp(nl) )
-    !     if( ccheck_if_exists )then
-    !         cnt = 0
-    !         do iline = 1, nl
-    !             read(funit,'(a1024)') fname
-    !             if( file_exists(trim(fname)) )then
-    !                 cnt = cnt + 1
-    !                 fnames_tmp(cnt) = fname
-    !             endif
-    !         end do
-    !     else
-    !         cnt = 0
-    !         do iline = 1, nl
-    !             read(funit,'(a1024)') fname
-    !             cnt = cnt + 1
-    !             fnames_tmp(cnt) = fname
-    !         end do
-    !     endif
-    !     call fclose(funit)
-    !     if( allocated(filenames) ) deallocate(filenames)
-    !     if( cnt > 0 ) allocate(filenames(cnt), source=fnames_tmp(:cnt))
-    ! end subroutine read_filetable
-
     subroutine read_filetable( filetable, filenames )
         character(len=*),                       intent(in)    :: filetable    !< input table filename
         character(len=LONGSTRLEN), allocatable, intent(inout) :: filenames(:) !< array of filenames
