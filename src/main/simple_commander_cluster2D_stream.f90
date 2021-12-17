@@ -652,7 +652,6 @@ contains
             n_converged_chunks = 0
             if( allocated(converged_chunks) ) n_converged_chunks = size(converged_chunks)
             call debug_print('end chunk section global iter '//int2str(iter))
-            ! endif
             ! deal with pool completion, rejection, execution
             call update_user_params
             if( .not.pool_available )then
@@ -684,7 +683,6 @@ contains
                     call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_even'//trim(params%ext))
                     call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_odd'//trim(params%ext))
                 endif
-                ! endif
                 call debug_print('end pool available '//int2str(iter))
             endif
             call debug_print('new chunk section global iter '//int2str(iter))

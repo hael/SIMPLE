@@ -3,7 +3,7 @@ module simple_picker
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_image,        only: image
+use simple_image, only: image
 implicit none
 
 public :: init_picker, exec_picker, kill_picker
@@ -18,7 +18,6 @@ integer,          parameter   :: SSCORE   = 4
 integer,          parameter   :: NSTAT    = 4
 integer,          parameter   :: MAXKMIT  = 20
 real,             parameter   :: BOXFRAC  = 0.5
-logical,          parameter   :: DOWRITEIMGS = .true.
 ! VARS
 type(image)                   :: micrograph, mic_shrunken, mic_shrunken_copy, mic_shrunken_refine, ptcl_target, mic_saved
 type(image),      allocatable :: refs(:), refs_refine(:)
@@ -133,23 +132,6 @@ contains
         call gather_stats
         call one_cluster_clustering
         nptcls_out = count(selected_peak_positions)
-        if(DOWRITEIMGS) then
-            call mic_saved%get_rmat_ptr(prmat)
-            maxv = 5.*maxval(prmat)
-            do i=1,size(selected_peak_positions)
-                if(.not.selected_peak_positions(i))cycle
-                call mic_saved%set([peak_positions(i,1)-1,peak_positions_refined(i,2)-1,1],maxv)
-                call mic_saved%set([peak_positions(i,1)-1,peak_positions_refined(i,2),1],maxv)
-                call mic_saved%set([peak_positions(i,1)-1,peak_positions_refined(i,2)+1,1],maxv)
-                call mic_saved%set([peak_positions(i,1),  peak_positions_refined(i,2)-1,1],maxv)
-                call mic_saved%set([peak_positions(i,1),  peak_positions_refined(i,2),1],maxv)
-                call mic_saved%set([peak_positions(i,1),  peak_positions_refined(i,2)+1,1],maxv)
-                call mic_saved%set([peak_positions(i,1)+1,peak_positions_refined(i,2)-1,1],maxv)
-                call mic_saved%set([peak_positions(i,1)+1,peak_positions_refined(i,2),1],maxv)
-                call mic_saved%set([peak_positions(i,1)+1,peak_positions_refined(i,2)+1,1],maxv)
-            enddo
-            call mic_saved%write(PATH_HERE//basename(trim(micname))//'_picked.mrc')
-        endif
         call mic_saved%kill
         ! bring back coordinates to original sampling
         peak_positions_refined = nint(PICKER_SHRINK_REFINE)*peak_positions_refined
