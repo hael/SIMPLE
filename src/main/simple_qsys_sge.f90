@@ -113,10 +113,10 @@ contains
     end subroutine write_sge_header
 
     !> \brief  writes the array header instructions
-    subroutine write_sge_array_header( self, q_descr, nparts, fhandle, nactive )
+    subroutine write_sge_array_header( self, q_descr, parts_fromto, fhandle, nactive )
         class(qsys_sge),   intent(in) :: self
         class(chash),      intent(in) :: q_descr
-        integer,           intent(in) :: nparts
+        integer,           intent(in) :: parts_fromto(2)
         integer, optional, intent(in) :: fhandle, nactive
     end subroutine write_sge_array_header
 

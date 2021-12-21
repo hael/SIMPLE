@@ -39,12 +39,12 @@ abstract interface
     end subroutine generic_write_instr
 
     !>  \brief  writes a header instruction for the array submit script
-    subroutine generic_write_array_instr( self, q_descr, nparts, fhandle, nactive )
+    subroutine generic_write_array_instr( self, q_descr, parts_fromto, fhandle, nactive )
         use simple_chash, only: chash
         import :: qsys_base
         class(qsys_base),  intent(in) :: self
         class(chash),      intent(in) :: q_descr
-        integer,           intent(in) :: nparts
+        integer,           intent(in) :: parts_fromto(2)
         integer, optional, intent(in) :: fhandle, nactive
     end subroutine generic_write_array_instr
 

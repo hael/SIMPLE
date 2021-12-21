@@ -94,10 +94,10 @@ contains
     end subroutine write_slurm_header
 
     !> \brief  writes the array header instructions
-    subroutine write_slurm_array_header( self, q_descr, nparts, fhandle, nactive )
+    subroutine write_slurm_array_header( self, q_descr, parts_fromto, fhandle, nactive )
         class(qsys_slurm), intent(in) :: self
         class(chash),      intent(in) :: q_descr
-        integer,           intent(in) :: nparts
+        integer,           intent(in) :: parts_fromto(2)
         integer, optional, intent(in) :: fhandle, nactive
         character(len=:), allocatable :: key, sbatch_cmd, sbatch_val
         integer :: i, which
@@ -125,9 +125,9 @@ contains
             write(fhandle,'(a)') '#SBATCH --error='//trim(stderrout)//'errfile.%A_%a'
             write(fhandle,'(a)') '#SBATCH --mail-type=FAIL'
             if( present(nactive) )then
-                write(fhandle,'(a)') '#SBATCH --array=1-'//int2str(nparts)//'%'//int2str(nactive)
+                write(fhandle,'(a)') '#SBATCH --array='//int2str(parts_fromto(1))//'-'//int2str(parts_fromto(2))//'%'//int2str(nactive)
             else
-                write(fhandle,'(a)') '#SBATCH --array=1-'//int2str(nparts)
+                write(fhandle,'(a)') '#SBATCH --array='//int2str(parts_fromto(1))//'-'//int2str(parts_fromto(2))
             endif
             write(fhandle,'(a)') 'echo $SLURM_ARRAY_JOB_ID > SLURM_ARRAY_JOB_ID'
         else
@@ -135,9 +135,9 @@ contains
             write(logfhandle,'(a)') '#SBATCH --error='//trim(stderrout)//'errfile.%A_%a'
             write(logfhandle,'(a)') '#SBATCH --mail-type=FAIL'
             if( present(nactive) )then
-                write(logfhandle,'(a)') '#SBATCH --array=1-'//int2str(nparts)//'%'//int2str(nactive)
+                write(logfhandle,'(a)') '#SBATCH --array='//int2str(parts_fromto(1))//'-'//int2str(parts_fromto(2))//'%'//int2str(nactive)
             else
-                write(logfhandle,'(a)') '#SBATCH --array=1-'//int2str(nparts)
+                write(logfhandle,'(a)') '#SBATCH --array='//int2str(parts_fromto(1))//'-'//int2str(parts_fromto(2))
             endif
             write(logfhandle,'(a)') 'echo $SLURM_ARRAY_JOB_ID > SLURM_ARRAY_JOB_ID'
         endif
