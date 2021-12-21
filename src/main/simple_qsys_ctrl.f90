@@ -264,7 +264,6 @@ contains
         ! compose the command line
         write(funit,'(a)',advance='no') trim(self%exec_binary)//' '//trim(job_descr%chash2str())
         ! direct output
-        !write(funit,'(a)') ' >> '//SIMPLE_SUBPROC_OUT//' '//STDERR2STDOUT
         write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT
         ! exit shell when done
         write(funit,'(a)') ''
@@ -310,7 +309,6 @@ contains
         ! compose the command line
         if( present(job_descr2) )then
             write(funit,'(a)',advance='no') trim(exec_bin)//' '//trim(job_descr%chash2str())
-           ! write(funit,'(a)') ' >> '//SIMPLE_SUBPROC_OUT//' '//STDERR2STDOUT
             write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT
             write(funit,'(a)') ''
             write(funit,'(a)',advance='no') trim(exec_bin)//' '//trim(job_descr2%chash2str())
@@ -323,7 +321,6 @@ contains
             write(funit,'(a)') ' > '//trim(outfile)//' '//STDERR2STDOUT
         else
             ! subprocess, global output
-            !write(funit,'(a)') ' >> '//SIMPLE_SUBPROC_OUT//' '//STDERR2STDOUT
             write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT
         endif
         ! exit shell when done

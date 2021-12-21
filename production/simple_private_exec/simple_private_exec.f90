@@ -61,7 +61,7 @@ type(automask_commander)              :: xautomask
 
 ! GENERAL IMAGE PROCESSING PROGRAMS
 type(scale_commander)                 :: xscale
-type(binarise_commander)              :: xbinarise
+type(binarize_commander)              :: xbinarize
 type(edge_detect_commander)           :: xdetector
 
 ! MISCELLANOUS PROGRAMS
@@ -181,8 +181,8 @@ select case(prg)
     ! GENERAL IMAGE PROCESSING PROGRAMS
     case( 'scale' )
         call xscale%execute(cline)
-    case( 'binarise' )
-        call xbinarise%execute(cline)
+    case( 'binarize' )
+        call xbinarize%execute(cline)
     case('edge_detect')
         call xdetector%execute(cline)
 

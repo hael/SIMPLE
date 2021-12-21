@@ -7,7 +7,7 @@ use simple_binimage, only: binimage
 use simple_neighs
 implicit none
 
-public :: sobel, automatic_thresh_sobel, canny, otsu_img, otsu_robust_fast
+public :: sobel, automatic_thresh_sobel, canny, otsu_img, otsu_robust_fast, sauvola
 private
 #include "simple_local_flags.inc"
 
@@ -317,7 +317,7 @@ contains
 
     ! otsu binarization for images, based on the implementation
     ! of otsu algo for 1D vectors
-    subroutine otsu_img(img, thresh, positive)
+    subroutine otsu_img( img, thresh, positive )
         use simple_math, only : otsu
         class(image),      intent(inout) :: img
         real,    optional, intent(inout) :: thresh
@@ -325,10 +325,13 @@ contains
         real, pointer     :: rmat(:,:,:)
         real, allocatable :: x(:)
         integer           :: ldim(3)
-        real :: selected_t
+        logical           :: ppositive
+        real              :: selected_t
+        ppositive = .false.
+        if( present(positive) ) ppositive = positive
         ldim = img%get_ldim()
         call img%get_rmat_ptr(rmat)
-        if(present(positive) .and. positive .eqv. .true.) then
+        if( ppositive ) then
             x = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), rmat(1:ldim(1),1:ldim(2),1:ldim(3)) > 0.)
         else
             x = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), .true.)
@@ -413,7 +416,7 @@ contains
         endif
         deallocate(neigh_8_pixs)
         ! Apply otsu1D to each img
-        if(noneg .eqv. .true. ) then
+        if( noneg .eqv. .true. )then
             call otsu_img(img_copy, thresh(1), positive = .true.)
             call otsu_img(img_avg,  thresh(2), positive = .true.)
             call otsu_img(img_med,  thresh(3), positive = .true.)
@@ -446,5 +449,60 @@ contains
         call img_avg%kill
         call img_med%kill
     end subroutine otsu_robust_fast
+
+    subroutine sauvola( img, winsz, img_sdevs, bias )
+        class(image),   intent(inout) :: img
+        integer,        intent(in)    :: winsz
+        class(image),   intent(inout) :: img_sdevs ! local standard deviations
+        real, optional, intent(in)    :: bias
+        real, allocatable :: rmat(:,:,:), sdevs(:,:,:), avgs(:,:,:)
+        integer :: ldim(3), ir(2), jr(2), isz, jsz, npix, i, j
+        real    :: bbias, smpd, sdev_max, t
+        bbias = 0.34 ! [0.2,0.5]
+        if( present(bias) ) bbias = bias
+        ldim = img%get_ldim()
+        smpd = img%get_smpd()
+        rmat = img%get_rmat()
+        ! calculate the local standard deviations
+        allocate(avgs(ldim(1),ldim(2),ldim(3)), sdevs(ldim(1),ldim(2),ldim(3)), source=0.)
+        if( ldim(3) == 1 )then ! 2d
+            !$omp parallel do default(shared) private(i,ir,isz,j,jr,jsz,npix) schedule(static) proc_bind(close)
+            do i = 1, ldim(1)
+                ir(1)            = max(1,       i - winsz)
+                ir(2)            = min(ldim(1), i + winsz)
+                isz              = ir(2) - ir(1) + 1
+                do j = 1, ldim(2)
+                    jr(1)        = max(1,       j - winsz)
+                    jr(2)        = min(ldim(2), j + winsz)
+                    jsz          = jr(2) - jr(1) + 1
+                    npix         = isz * jsz
+                    avgs(i,j,1)  = sum(rmat(ir(1):ir(2),jr(1):jr(2),1)) / real(npix)
+                    sdevs(i,j,1) = sqrt(sum((rmat(ir(1):ir(2),jr(1):jr(2),1) - avgs(i,j,1))**2.0) / real(npix - 1))
+                end do
+            end do
+            !$omp end parallel do
+        else ! 3d
+            THROW_HARD('not yet implemented for 3d')
+        endif
+        call img_sdevs%new(ldim, smpd)
+        call img_sdevs%set_rmat(sdevs, .false.)
+        sdev_max = maxval(sdevs)
+        ! do the thresholding
+        if( ldim(3) == 1 )then ! 2d
+            !$omp parallel do default(shared) private(i,j,t) schedule(static) proc_bind(close)
+            do i = 1, ldim(1)
+                do j = 1, ldim(2)
+                    t = avgs(i,j,1) * (1.0 + bbias * (sdevs(i,j,1) / sdev_max - 1.0))
+                    if( rmat(i,j,1) >= t )then
+                        rmat(i,j,1) = 1.0
+                    else
+                        rmat(i,j,1) = 0.
+                    endif
+                end do
+            end do
+            !$omp end parallel do
+        endif
+        call img%set_rmat(rmat, .false.)
+    end subroutine sauvola
 
 end module simple_segmentation

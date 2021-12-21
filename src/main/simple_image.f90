@@ -1551,7 +1551,6 @@ contains
         self%wthreads = self2set%wthreads
     end subroutine set_2
 
-    !>  \brief  set (replace) image data with new 3D data
     subroutine set_rmat( self, rmat, ft )
         class(image), intent(inout) :: self
         real,         intent(in)    :: rmat(:,:,:)
@@ -2545,43 +2544,23 @@ contains
         n = product(self%ldim)-self%nforeground()
     end function nbackground
 
-    !>  \brief  is for binarizing an image with given threshold value
-    !!          binary normalization (norm_bin) assumed!> bin_1
-    ! In case of binarization failure, it tries to adjust the
-    ! by setting a new treshold equal to half of the selected one.
-    subroutine binarize_1( self_in, thres, self_out, err )
+    subroutine binarize_1( self_in, thres, self_out )
         class(image),           intent(inout) :: self_in
         real,                   intent(in)    :: thres
         class(image), optional, intent(inout) :: self_out
-        logical,      optional, intent(out)   :: err
-        integer :: n_foreground ! number of
-        real    :: refined_thres
-        if( present(err) ) err = .false.
+        integer :: n_foreground
         n_foreground = count(self_in%rmat > thres)
-        if(n_foreground < 1) then ! empty
-            write(logfhandle, *) 'Threshold refinement for binarization'
-            refined_thres = thres/2.
-            if(count(self_in%rmat > refined_thres) < 1)then
-                if( present(err) )then
-                    err = .true.
-                    return
-                else
-                    THROW_HARD('Binarization produces empty image!; binarize_1')
-                endif
-            endif
-        else
-            refined_thres = thres
-        endif
+        if( n_foreground < 1 ) THROW_HARD('Binarization produces empty image!; binarize_1')
         if( self_in%ft ) THROW_HARD('only for real images; bin_1')
-        if(present(self_out)) then
-            if( any(self_in%ldim /= self_out%ldim)) THROW_HARD('Images dimensions are not compatible; bin_1')
-            where( self_in%rmat >= refined_thres )
+        if( present(self_out) )then
+            if( any(self_in%ldim /= self_out%ldim)) THROW_HARD('Images dimensions are not compatible; binarize_1')
+            where( self_in%rmat >= thres )
                 self_out%rmat  = 1.
             elsewhere
                 self_out%rmat  = 0.
             end where
         else
-            where( self_in%rmat >= refined_thres )
+            where( self_in%rmat >= thres )
                 self_in%rmat = 1.
             elsewhere
                 self_in%rmat = 0.
@@ -2589,13 +2568,12 @@ contains
         endif
     end subroutine binarize_1
 
-    !>  \brief  bin_2 is for binarizing an image using nr of pixels/voxels threshold
     subroutine binarize_2( self, npix )
         class(image), intent(inout) :: self
-        integer, intent(in)         :: npix
-        real, allocatable           :: forsort(:)
-        real                        :: thres
-        integer                     :: npixtot
+        integer,      intent(in)    :: npix
+        real, allocatable :: forsort(:)
+        real    :: thres
+        integer :: npixtot
         if( self%ft ) THROW_HARD('only for real images; bin_2')
         npixtot = product(self%ldim)
         forsort = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)

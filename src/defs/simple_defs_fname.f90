@@ -32,9 +32,9 @@ character(len=*), parameter :: CLUSTER2D_ITER_FBODY = 'cluster2Ddoc_'
 character(len=*), parameter :: CAVGS_ITER_FBODY     = 'cavgs_iter'
 character(len=*), parameter :: CLUSTER2D_FINISHED   = 'CLUSTER2D_FINISHED'
 ! AUTOMASK2D
-character(len=*), parameter :: BIN_OTSU             = 'binarised_otsu.mrc'
-character(len=*), parameter :: BIN_OTSU_GROW        = 'binarised_otsu_grown.mrc'
-character(len=*), parameter :: BIN_OTSU_GROW_MED    = 'binarised_otsu_grown_median.mrc'
+character(len=*), parameter :: BIN_OTSU             = 'binarized_otsu.mrc'
+character(len=*), parameter :: BIN_OTSU_GROW        = 'binarized_otsu_grown.mrc'
+character(len=*), parameter :: BIN_OTSU_GROW_MED    = 'binarized_otsu_grown_median.mrc'
 character(len=*), parameter :: MSK_OTSU             = 'masks_otsu.mrc'
 character(len=*), parameter :: AMSK_OTSU            = 'automasked_otsu.mrc'
 ! REFINE3D

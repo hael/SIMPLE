@@ -10,14 +10,15 @@ public :: init_phasecorr_picker, exec_phasecorr_picker, kill_phasecorr_picker
 private
 
 ! PEAK STATS INDICES
-integer,          parameter   :: SDEV     = 1
-integer,          parameter   :: DYNRANGE = 2
-integer,          parameter   :: SSCORE   = 3
+integer,          parameter   :: SDEV       = 1
+integer,          parameter   :: DYNRANGE   = 2
+integer,          parameter   :: SSCORE     = 3
 ! OTHER PARAMS
-integer,          parameter   :: NSTAT   = 3
-integer,          parameter   :: MAXKMIT = 20
-real,             parameter   :: BOXFRAC = 0.5
+integer,          parameter   :: NSTAT      = 3
+integer,          parameter   :: MAXKMIT    = 20
+real,             parameter   :: BOXFRAC    = 0.5
 logical,          parameter   :: DEBUG_HERE = .false.
+logical,          parameter   :: DOWRITE    = .true.
 integer,          parameter   :: PICKER_OFFSET_HERE = 3, OFFSET_HWIN = 1
 ! VARS
 type(image)                   :: micrograph, mic_shrunken, mic_saved
@@ -140,6 +141,7 @@ contains
         call gen_phase_correlation(mic_shrunken,mask_img)
         call mic_shrunken%stats( ave=ave, sdev=sdev, maxv=maxv, minv=minv,mskimg=mask_img)
         call mic_shrunken%get_rmat_ptr(rmat_phasecorr)
+        if( DOWRITE ) call mic_shrunken%write('phasecorr.mrc')
         allocate(corrmat(1:ldim_shrink(1),1:ldim_shrink(2)))
         corrmat(1:ldim_shrink(1),1:ldim_shrink(2)) = rmat_phasecorr(1:ldim_shrink(1),1:ldim_shrink(2),1)
         !$omp parallel do default(shared) private(xind,yind,l,r,u,d) proc_bind(close) schedule(static)
@@ -154,7 +156,7 @@ contains
         enddo
         !$omp end parallel do
         write(logfhandle,'(a)') '>>> BINARIZATION'
-        call mic_shrunken%binarize(ave+.8*sdev, err=l_err)
+        call mic_shrunken%binarize(ave+.8*sdev)
         if( l_err )then
             ! binarization failed because of uniform values
             ntargets = 0

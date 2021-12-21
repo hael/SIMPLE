@@ -74,6 +74,7 @@ type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
 ! declare simple_exec and single_exec program specifications here
 type(simple_program), target :: autorefine3D_nano
+type(simple_program), target :: binarize
 type(simple_program), target :: calc_pspec
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
@@ -179,11 +180,9 @@ type(simple_input_param) :: ctf
 type(simple_input_param) :: ctfpatch
 type(simple_input_param) :: ctf_yes
 type(simple_input_param) :: deftab
-type(simple_input_param) :: detector
 type(simple_input_param) :: dferr
 type(simple_input_param) :: dfmax
 type(simple_input_param) :: dfmin
-type(simple_input_param) :: draw_color
 type(simple_input_param) :: e1, e2, e3
 type(simple_input_param) :: eer_fraction
 type(simple_input_param) :: eer_upsampling
@@ -285,6 +284,7 @@ contains
         call set_common_params
         call set_prg_ptr_array
         call new_autorefine3D_nano
+        call new_binarize
         call new_calc_pspec
         call new_center
         call new_cleanup2D
@@ -379,6 +379,7 @@ contains
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0
         call push2prg_ptr_array(autorefine3D_nano)
+        call push2prg_ptr_array(binarize)
         call push2prg_ptr_array(calc_pspec)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
@@ -479,8 +480,10 @@ contains
         character(len=*), intent(in)  :: which_program
         type(simple_program), pointer :: ptr2prg
         select case(trim(which_program))
-            case ('autorefine3D_nano')
+            case('autorefine3D_nano')
                 ptr2prg => autorefine3D_nano
+            case('binarize')
+                ptr2prg => binarize
             case('calc_pspec')
                 ptr2prg => calc_pspec
             case('center')
@@ -663,6 +666,7 @@ contains
     end subroutine get_prg_ptr
 
     subroutine list_simple_prgs_in_ui
+        write(logfhandle,'(A)') binarize%name
         write(logfhandle,'(A)') calc_pspec%name
         write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') cleanup2D%name
@@ -818,8 +822,6 @@ contains
         'fraction of particles(0.1-0.9){1.0}', .false., 1.0)
         call set_param(mskfile,       'mskfile',       'file',   'Input mask file', 'Input mask file to apply to reference volume(s) before projection', 'e.g. automask.mrc from postprocess', .false., 'mskfile.mrc')
         call set_param(pgrp,          'pgrp',          'str',    'Point-group symmetry', 'Point-group symmetry of particle(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .true., 'c1')
-        call set_param(detector,      'detector',      'str',    'Detector mode', 'Detector mode for binarization(bin|otsu){bin}', 'detector (bin|otsu){bin}', .false., 'bin')
-        call set_param(draw_color,    'draw_color',    'str',    'Output color', 'color of the cross that identify the picked particle (white|black){white}', 'output color  (white|black){white}', .false., 'white')
         call set_param(nspace,        'nspace',        'num',    'Number of projection directions', 'Number of projection directions &
         &used', '# projections', .false., 2500.)
         call set_param(objfun,        'objfun',        'multi',  'Objective function', 'Objective function(cc|euclid){cc}', '(cc|euclid){cc}', .false., 'cc')
@@ -995,6 +997,36 @@ contains
         call autorefine3D_nano%set_input('comp_ctrls', 2, nthr)
     end subroutine new_autorefine3D_nano
 
+    subroutine new_binarize
+        call binarize%new(&
+        &'binarize',&                                     ! name
+        &'Binarization routines for volumes and stacks',& ! descr_long
+        &'Binarization routines for volumes and stacks',& ! descr_long
+        &'simple_exec',&                                  ! executable
+        &0, 3, 2, 0, 0, 0, 1, .false.)                    ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call binarize%set_input('parm_ios', 1, 'fill_holes', 'binary', 'Fill holes', 'Fill holes(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call binarize%set_input('parm_ios', 2, 'ndev', 'num', 'Binarization threshold', 'Binarization threshold in # sigmas', '# sigmas', .false., 0.)
+        call binarize%set_input('parm_ios', 3, 'winsz', 'num', 'Half-window size', 'Half-window size(in pixels)', 'winsz in pixels', .false., 15.0)
+        ! alternative inputs
+        call binarize%set_input('alt_ios', 1, 'vol1', 'file', 'Volume', 'Volume to binarize',&
+        & 'input volume e.g. vol.mrc', .false., '')
+        call binarize%set_input('alt_ios', 2, 'stk', 'file', 'Stack', 'Stack to binarize',&
+        & 'input stack e.g. imgs.mrcs', .false., '')
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+        call binarize%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_binarize
+
     subroutine new_calc_pspec
         ! PROGRAM SPECIFICATION
         call calc_pspec%new(&
@@ -1058,7 +1090,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images',& ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after picking',&               ! descr_long
-        &'simple_exec',&                                                  ! executable
+        &'simple_exec',&                                                        ! executable
         &0, 0, 0, 6, 3, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
