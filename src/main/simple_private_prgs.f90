@@ -435,7 +435,7 @@ contains
         call cmd_dict%push('scale',         'image scale factor{1}')
         call cmd_dict%push('shalgn',        'do 2D shift alignment(yes|no){no}')
         call cmd_dict%push('shbarrier',     'use shift search barrier constraint(yes|no){yes}')
-        call cmd_dict%push('shell_norm',    'normalise based on power spectrum (yes|no){no}')
+        call cmd_dict%push('shellnorm',    'normalise based on power spectrum (yes|no){no}')
         call cmd_dict%push('sherr',         'shift error(in pixels){2}')
         call cmd_dict%push('single',        'simulate a single image(yes|no){no}')
         call cmd_dict%push('smpd',          'sampling distance, same as EMANs apix(in A)')

@@ -18,7 +18,6 @@ implicit none
 public :: masscen_commander
 public :: print_fsc_commander
 public :: print_magic_boxes_commander
-public :: shift_commander
 public :: stk_corr_commander
 public :: kstest_commander
 public :: mkdir_commander
@@ -38,10 +37,6 @@ type, extends(commander_base) :: print_magic_boxes_commander
   contains
     procedure :: execute       => exec_print_magic_boxes
 end type print_magic_boxes_commander
-type, extends(commander_base) :: shift_commander
-  contains
-    procedure :: execute       => exec_shift
-end type shift_commander
 type, extends(commander_base) :: stk_corr_commander
   contains
     procedure :: execute       => exec_stk_corr
@@ -115,21 +110,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRINT_MAGIC_BOXES NORMAL STOP ****')
     end subroutine exec_print_magic_boxes
-
-    !> for shifting a stack according to shifts in oritab
-    subroutine exec_shift( self, cline )
-        use simple_procimgstk, only: shift_imgfile
-        class(shift_commander), intent(inout) :: self
-        class(cmdline),         intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        call shift_imgfile(params%stk, params%outstk, build%spproj_field, params%smpd, params%mul)
-        call build%spproj_field%zero_shifts
-        call binwrite_oritab('shiftdoc'//trim(METADATA_EXT), build%spproj, build%spproj_field, [1,params%nptcls])
-        call simple_end('**** SIMPLE_SHIFT NORMAL STOP ****')
-    end subroutine exec_shift
 
     subroutine exec_stk_corr( self, cline )
         class(stk_corr_commander), intent(inout) :: self
