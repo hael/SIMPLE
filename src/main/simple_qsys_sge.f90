@@ -14,10 +14,11 @@ type, extends(qsys_base) :: qsys_sge
     private
     type(chash) :: env !< defines the SGE environment
   contains
-    procedure :: new         => new_sge_env
-    procedure :: submit_cmd  => get_sge_submit_cmd
-    procedure :: write_instr => write_sge_header
-    procedure :: kill        => kill_sge_env
+    procedure :: new               => new_sge_env
+    procedure :: submit_cmd        => get_sge_submit_cmd
+    procedure :: write_instr       => write_sge_header
+    procedure :: write_array_instr => write_sge_array_header
+    procedure :: kill              => kill_sge_env
 end type qsys_sge
 
 contains
@@ -48,9 +49,9 @@ contains
     end function get_sge_submit_cmd
 
     !> \brief  writes the header instructions
-    subroutine write_sge_header( self, job_descr, fhandle )
+    subroutine write_sge_header( self, q_descr, fhandle )
         class(qsys_sge), intent(in)   :: self
-        class(chash),      intent(in) :: job_descr
+        class(chash),      intent(in) :: q_descr
         integer, optional, intent(in) :: fhandle
         character(len=:), allocatable :: addon_line
         character(len=:), allocatable :: key, qsub_cmd, qsub_val, bind2socket
@@ -58,12 +59,12 @@ contains
         logical :: write2file
         write2file = .false.
         if( present(fhandle) ) write2file = .true.
-        do i=1,job_descr%size_of()
-            key   = job_descr%get_key(i)
+        do i=1,q_descr%size_of()
+            key   = q_descr%get_key(i)
             which = self%env%lookup(key)
             if( which > 0 )then
                 qsub_cmd = self%env%get(which)
-                qsub_val = job_descr%get(i)
+                qsub_val = q_descr%get(i)
                 if( key .eq. 'job_addon_line' )then
                     if( allocated(addon_line) ) deallocate(addon_line)
                     allocate( addon_line, source=qsub_val )
@@ -110,6 +111,14 @@ contains
             endif
         endif
     end subroutine write_sge_header
+
+    !> \brief  writes the array header instructions
+    subroutine write_sge_array_header( self, q_descr, nparts, fhandle, nactive )
+        class(qsys_sge),   intent(in) :: self
+        class(chash),      intent(in) :: q_descr
+        integer,           intent(in) :: nparts
+        integer, optional, intent(in) :: fhandle, nactive
+    end subroutine write_sge_array_header
 
     !> \brief  is a destructor
     subroutine kill_sge_env( self )

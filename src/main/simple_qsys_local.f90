@@ -14,10 +14,11 @@ type, extends(qsys_base) :: qsys_local
     private
     type(chash) :: env !< defines the local environment
   contains
-    procedure :: new         => new_local_env
-    procedure :: submit_cmd  => get_local_submit_cmd
-    procedure :: write_instr => write_local_header
-    procedure :: kill        => kill_local_env
+    procedure :: new               => new_local_env
+    procedure :: submit_cmd        => get_local_submit_cmd
+    procedure :: write_instr       => write_local_header
+    procedure :: write_array_instr => write_local_array_header
+    procedure :: kill              => kill_local_env
 end type qsys_local
 
 contains
@@ -39,11 +40,19 @@ contains
     end function get_local_submit_cmd
 
     !> \brief  writes the header instructions
-    subroutine write_local_header( self, job_descr, fhandle )
+    subroutine write_local_header( self, q_descr, fhandle )
         class(qsys_local), intent(in) :: self
-        class(chash),      intent(in) :: job_descr
+        class(chash),      intent(in) :: q_descr
         integer, optional, intent(in) :: fhandle
     end subroutine write_local_header
+
+    !> \brief  writes the array header instructions
+    subroutine write_local_array_header( self, q_descr, nparts, fhandle, nactive )
+        class(qsys_local), intent(in) :: self
+        class(chash),      intent(in) :: q_descr
+        integer,           intent(in) :: nparts
+        integer, optional, intent(in) :: fhandle, nactive
+    end subroutine write_local_array_header
 
     !> \brief  is a destructor
     subroutine kill_local_env( self )
