@@ -47,6 +47,7 @@ character(len=*), parameter :: FSC_FBODY            = 'fsc_state'
 character(len=*), parameter :: PSSNR_FBODY          = 'pssnr_state'
 character(len=*), parameter :: FRCS_FILE            = 'frcs'//BIN_EXT
 character(len=*), parameter :: ALGN_FBODY           = 'algndoc_'
+character(len=*), parameter :: ARRAY_SCRIPT         = 'simple_script_array'
 ! STATS
 character(len=*), parameter :: STATS_FILE           = 'simple_stats'//trim(TXT_EXT)
 ! LOCAL RESOLUTION

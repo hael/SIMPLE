@@ -123,15 +123,25 @@ contains
         is = self%existence
     end function exists
 
-    subroutine gen_scripts_and_schedule_jobs( self,  job_descr, part_params, algnfbody )
+    subroutine gen_scripts_and_schedule_jobs( self,  job_descr, part_params, algnfbody, array )
         class(qsys_env)            :: self
         class(chash)               :: job_descr
         class(chash),     optional :: part_params(self%nparts)
         character(len=*), optional :: algnfbody
+        logical,          optional :: array
+        logical :: aarray
+        aarray = .false.
+        if( present(array) ) aarray = array
         call qsys_cleanup
-        call self%qscripts%generate_scripts(job_descr, trim(params_glob%ext), self%qdescr,&
-        outfile_body=algnfbody, part_params=part_params)
-        call self%qscripts%schedule_jobs
+        if( aarray )then
+            call self%qscripts%generate_array_script(job_descr, trim(params_glob%ext), self%qdescr,&
+            &outfile_body=algnfbody, part_params=part_params)
+            call self%qscripts%schedule_array_jobs
+        else
+            call self%qscripts%generate_scripts(job_descr, trim(params_glob%ext), self%qdescr,&
+            &outfile_body=algnfbody, part_params=part_params)
+            call self%qscripts%schedule_jobs
+        endif
     end subroutine gen_scripts_and_schedule_jobs
 
     subroutine exec_simple_prg_in_queue( self, cline, finish_indicator )
