@@ -21,7 +21,7 @@ contains
     !> for masking images and volumes
     subroutine exec_mask( self, cline )
         use simple_image,       only: image
-        use simple_procimgstk, only: mask_imgfile, taper_edges_imgfile
+        use simple_procimgstk,  only: mask_imgfile, taper_edges_imgfile
         use simple_atoms,       only: atoms
         use simple_masker,      only: masker
         class(mask_commander), intent(inout) :: self

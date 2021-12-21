@@ -137,7 +137,6 @@ type(simple_program), target :: reproject
 type(simple_program), target :: scale
 type(simple_program), target :: scale_project
 type(simple_program), target :: select_
-type(simple_program), target :: shift
 type(simple_program), target :: simulate_atoms
 type(simple_program), target :: simulate_movie
 type(simple_program), target :: simulate_noise
@@ -349,7 +348,6 @@ contains
         call new_scale
         call new_scale_project
         call new_select_
-        call new_shift
         call new_simulate_atoms
         call new_simulate_movie
         call new_simulate_noise
@@ -441,7 +439,6 @@ contains
         call push2prg_ptr_array(scale)
         call push2prg_ptr_array(scale_project)
         call push2prg_ptr_array(select_)
-        call push2prg_ptr_array(shift)
         call push2prg_ptr_array(simulate_atoms)
         call push2prg_ptr_array(simulate_movie)
         call push2prg_ptr_array(simulate_noise)
@@ -610,8 +607,6 @@ contains
                 ptr2prg => scale_project
             case('select')
                 ptr2prg => select_
-            case('shift')
-                ptr2prg => shift
             case('simulate_atoms')
                 ptr2prg => simulate_atoms
             case('simulate_movie')
@@ -723,7 +718,6 @@ contains
         write(logfhandle,'(A)') selection%name
         write(logfhandle,'(A)') reproject%name
         write(logfhandle,'(A)') select_%name
-        write(logfhandle,'(A)') shift%name
         write(logfhandle,'(A)') simulate_movie%name
         write(logfhandle,'(A)') simulate_noise%name
         write(logfhandle,'(A)') simulate_particles%name
@@ -2766,7 +2760,7 @@ contains
         call normalize_%set_input('parm_ios', 1, smpd)
         call normalize_%set_input('parm_ios', 2, 'norm',       'binary', 'Normalize',       'Statistical normalization: avg=zero, var=1(yes|no){no}',     '(yes|no){no}', .false., 'no')
         call normalize_%set_input('parm_ios', 3, 'noise_norm', 'binary', 'Noise normalize', 'Statistical normalization based on background(yes|no){no}',  '(yes|no){no}', .false., 'no')
-        call normalize_%set_input('parm_ios', 4, 'shell_norm', 'binary', 'Power whitening', 'Normalisation of each Fourier shell to power=1(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call normalize_%set_input('parm_ios', 4, 'shellnorm', 'binary', 'Power whitening', 'Normalisation of each Fourier shell to power=1(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
         call normalize_%set_input('alt_ios', 1, 'stk',  'file', 'Stack to normalize',  'Stack of images to normalize', 'e.g. imgs.mrc', .false., '')
         call normalize_%set_input('alt_ios', 2, 'vol1', 'file', 'Volume to normalize', 'Volume to normalize',          'e.g. vol.mrc',  .false., '')
@@ -3212,36 +3206,6 @@ contains
         ! computer controls
         call select_%set_input('comp_ctrls', 1, nthr)
     end subroutine new_select_
-
-    subroutine new_shift
-        ! PROGRAM SPECIFICATION
-        call shift%new(&
-        &'shift',&                                                                  ! name
-        &'Shift images to rotational origin',&                                      ! descr_short
-        &'is a program for shifting a stack according to origin shifts in oritab',& ! descr_long
-        &'simple_exec',&                                                            ! executable
-        &2, 4, 0, 0, 0, 0, 1, .false.)                                              ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call shift%set_input('img_ios', 1, stk)
-        shift%img_ios(1)%required = .true.
-        call shift%set_input('img_ios', 2, outstk)
-        ! parameter input/output
-        call shift%set_input('parm_ios', 1, smpd)
-        call shift%set_input('parm_ios', 2, 'mul', 'num', 'Shift multiplication factor', 'Shift multiplication factor{1.0}', 'multiplier', .false., 1.0)
-        call shift%set_input('parm_ios', 3, oritype)
-        call shift%set_input('parm_ios', 4, oritab)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call shift%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_shift
 
     subroutine new_simulate_atoms
         ! PROGRAM SPECIFICATION

@@ -94,7 +94,6 @@ type(normalize_commander)                   :: xnormalize
 type(scale_commander)                       :: xscale
 type(stack_commander)                       :: xstack
 type(stackops_commander)                    :: xstackops
-type(shift_commander)                       :: xshift
 
 ! ORIENTATION PROCESSING PROGRAMS
 type(make_oris_commander)                   :: xmake_oris
@@ -267,8 +266,6 @@ select case(prg)
         call xstack%execute(cline)
     case( 'stackops' )
         call xstackops%execute(cline)
-    case( 'shift' )
-        call xshift%execute(cline)
 
     ! ORIENTATION PROCESSING PROGRAMS
     case( 'make_oris' )

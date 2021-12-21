@@ -459,7 +459,7 @@ contains
     !! hfun (e.g. hfun=sigm) controls the normalization function. If you want to
     !! perform noise normalization of the images set noise_norm=yes given a mask
     !! radius msk (pixels). If you want to normalize your images or volume
-    !! (vol1) with respect to their power spectrum set shell_norm=yes
+    !! (vol1) with respect to their power spectrum set shellnorm=yes
     subroutine exec_normalize( self, cline )
         use simple_procimgstk, only: norm_imgfile, noise_norm_imgfile, shellnorm_imgfile
         class(normalize_commander), intent(inout) :: self
@@ -513,7 +513,7 @@ contains
 
     !> provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     subroutine exec_scale( self, cline )
-        use simple_procimgstk, only: resize_and_clip_imgfile, resize_imgfile, pad_imgfile, clip_imgfile
+        use simple_procimgstk, only: scale_and_clip_imgfile, scale_imgfile, pad_imgfile, clip_imgfile
         use simple_qsys_funs, only: qsys_job_finished
         class(scale_commander), intent(inout) :: self
         class(cmdline),         intent(inout) :: cline
@@ -557,7 +557,7 @@ contains
                 else
                     stkout = add2fbody(trim(stkin),ext,SCALE_SUFFIX)
                 endif
-                call resize_imgfile(stkin, stkout, params%smpd, ldim_scaled, smpd_new)
+                call scale_imgfile(stkin, stkout, params%smpd, ldim_scaled, smpd_new)
             enddo
         else
             if( cline%defined('stk') )then
@@ -570,10 +570,10 @@ contains
                     ! Rescaling
                     ldim_scaled = [params%newbox,params%newbox,1] ! dimension of scaled
                     if( cline%defined('clip') )then
-                        call resize_and_clip_imgfile(params%stk,params%outstk,params%smpd,ldim_scaled,&
+                        call scale_and_clip_imgfile(params%stk,params%outstk,params%smpd,ldim_scaled,&
                         [params%clip,params%clip,1],smpd_new)
                     else
-                        call resize_imgfile(params%stk,params%outstk,params%smpd,ldim_scaled,smpd_new)
+                        call scale_imgfile(params%stk,params%outstk,params%smpd,ldim_scaled,smpd_new)
                         write(logfhandle,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', ldim_scaled(1)
                     endif
                     write(logfhandle,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
