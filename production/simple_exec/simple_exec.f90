@@ -81,6 +81,7 @@ type(postprocess_commander)                 :: xpostprocess
 type(remoc_commander)                       :: xremoc
 
 ! IMAGE PROCESSING PROGRAMS
+type(binarize_commander)                    :: xbinarize
 type(mask_commander)                        :: xmask
 type(fsc_commander)                         :: xfsc
 type(nonuniform_filter_commander)           :: xnonuniform_filter
@@ -240,6 +241,8 @@ select case(prg)
         call xremoc%execute(cline)
 
     ! IMAGE PROCESSING PROGRAMS
+    case('binarize')
+        call xbinarize%execute(cline)
     case( 'mask' )
         call xmask%execute(cline)
     case( 'fsc' )

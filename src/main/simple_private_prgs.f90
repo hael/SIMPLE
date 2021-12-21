@@ -232,7 +232,7 @@ contains
         call cmd_dict%push('bfac',          'bfactor for sharpening/low-pass filtering(in A**2){200.}')
         call cmd_dict%push('bfacerr',       'bfactor error in simulated images(in A**2){0}')
         call cmd_dict%push('balance',       'max pop for balancing restraint{0}')
-        call cmd_dict%push('bin',           'binarise image(yes|no){no}')
+        call cmd_dict%push('bin',           'binarize image(yes|no){no}')
         call cmd_dict%push('binwidth',      'binary layers grown for molecular envelope(in pixels){1}')
         call cmd_dict%push('box',           'square image size(in pixels)')
         call cmd_dict%push('box_extract',   'square image box size for extraction(in pixels)')
@@ -516,8 +516,8 @@ contains
         call private_prgs(1)%push_opt_key('binwidth')
         call private_prgs(1)%push_opt_key('nthr')
 
-        ! BINARISE, for binarisation of stacks and volumes
-        call private_prgs(2)%set_name('binarise')
+        ! binarize, for binarisation of stacks and volumes
+        call private_prgs(2)%set_name('binarize')
         ! optional keys
         call private_prgs(2)%push_opt_key('nthr')
         call private_prgs(2)%push_opt_key('stk')

@@ -22,7 +22,7 @@ type :: parameters
     character(len=3)      :: async='no'           !< asynchronous (yes|no){no}
     character(len=3)      :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
     character(len=3)      :: avg='no'             !< calculate average (yes|no){no}
-    character(len=3)      :: bin='no'             !< binarise image(yes|no){no}
+    character(len=3)      :: bin='no'             !< binarize image(yes|no){no}
     character(len=3)      :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)      :: classtats='no'       !< calculate class population statistics(yes|no){no}
     character(len=3)      :: clustvalid='no'      !< validate clustering(yes|homo|no){no}
@@ -65,6 +65,7 @@ type :: parameters
     character(len=3)      :: neg='no'             !< invert contrast of images(yes|no)
     character(len=3)      :: noise_norm ='no'
     character(len=3)      :: norm='no'            !< do statistical normalisation avg
+    character(len=3)      :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
     character(len=3)      :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)      :: pad='no'
@@ -550,6 +551,7 @@ contains
         call check_carg('noise_norm',     self%noise_norm)
         call check_carg('norm',           self%norm)
         call check_carg('objfun',         self%objfun)
+        call check_carg('omit_neg',       self%omit_neg)
         call check_carg('opt',            self%opt)
         call check_carg('order',          self%order)
         call check_carg('oritype',        self%oritype)

@@ -228,7 +228,7 @@ contains
             if( mask(i) )then
                 ! filter with non-local means
                 call img_bin%NLmean
-                ! binarise with robust Otsu
+                ! binarize with robust Otsu
                 call otsu_robust_fast(img_bin, is2D=.true., noneg=.true., thresh=thresh)
                 if( l_write ) call img_bin%write(BIN_OTSU, i)
                 ! find the largest connected component

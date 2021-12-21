@@ -9,7 +9,7 @@ use simple_image,          only: image
 use simple_binimage,       only: binimage
 implicit none
 
-public :: binarise_commander
+public :: binarize_commander
 public :: edge_detect_commander
 public :: convert_commander
 public :: ctfops_commander
@@ -23,10 +23,10 @@ public :: estimate_diam_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: binarise_commander
+type, extends(commander_base) :: binarize_commander
   contains
-    procedure :: execute      => exec_binarise
-end type binarise_commander
+    procedure :: execute      => exec_binarize
+end type binarize_commander
 type, extends(commander_base) :: edge_detect_commander
   contains
     procedure :: execute      => exec_edge_detect
@@ -70,42 +70,41 @@ end type estimate_diam_commander
 
 contains
 
-    !> for binarisation of stacks and volumes
-    subroutine exec_binarise( self, cline )
-        use simple_segmentation, only: otsu_robust_fast
-        class(binarise_commander), intent(inout) :: self
+    !> for binarization of stacks and volumes
+    subroutine exec_binarize( self, cline )
+        use simple_segmentation
+        class(binarize_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(parameters) :: params
         type(binimage)   :: img_or_vol
+        type(image)      :: img_sdevs
         integer :: igrow, iptcl
-        logical :: is2D, otsu, fill_holes
+        logical :: is2D, otsu, fill_holes, l_sauvola
         ! error check
         if( .not. cline%defined('stk') .and. .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! stk or vol1 needs to be present; simple_binarise')
+            THROW_HARD('ERROR! stk or vol1 needs to be present; binarize')
         endif
         if( cline%defined('stk') .and. cline%defined('vol1') )then
-            THROW_HARD('either stk or vol1 key can be present, not both; simple_binarise')
+            THROW_HARD('either stk or vol1 key can be present, not both; binarize')
         endif
         if( cline%defined('thres') .and. cline%defined('npix') )then
-            THROW_HARD('either thres-based or npix-based binarisation; both keys cannot be present; simple_binarise')
+            THROW_HARD('either thres-based or npix-based binarisation; both keys cannot be present; binarize')
         endif
         call params%new(cline)
+        fill_holes = .false.
         if( cline%defined('fill_holes') )then
-          if(params%fill_holes .eq. 'yes') then
-            fill_holes = .true.
-          else
-            fill_holes = .false.
-          endif
+            if( params%fill_holes .eq. 'yes' ) fill_holes = .true.
         endif
+        l_sauvola = .false.
+        if( cline%defined('winsz') ) l_sauvola = .true.
         if( cline%defined('stk') )then
             is2D = .true.
             call img_or_vol%new_bimg([params%box,params%box,1], params%smpd)
             do iptcl=1,params%nptcls
                 call img_or_vol%read(params%stk, iptcl)
-                call doit(otsu)
-                if(fill_holes) then
-                  call img_or_vol%fill_holes
-                endif
+                call doit( otsu )
+                if( fill_holes ) call img_or_vol%fill_holes
+                if( l_sauvola  ) call img_sdevs%write('local_sdevs.mrc', iptcl)
                 call img_or_vol%write(params%outstk, iptcl)
             end do
             if(otsu) write(logfhandle,*) 'Method applied for binarisation: OTSU algorithm'
@@ -113,13 +112,13 @@ contains
             is2D = .false.
             call img_or_vol%new_bimg([params%box,params%box,params%box], params%smpd)
             call img_or_vol%read(params%vols(1))
-            call doit(otsu)
+            call doit( otsu )
             call img_or_vol%write(params%outvol)
             if(otsu) write(logfhandle,*) 'Method applied for binarisation: OTSU algorithm'
         endif
         call img_or_vol%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_BINARISE NORMAL STOP ****')
+        call simple_end('**** SIMPLE_BINARIZE NORMAL STOP ****')
 
         contains
 
@@ -136,8 +135,18 @@ contains
                     call img_or_vol%stats( ave, sdev, maxv, minv)
                     call img_or_vol%binarize(ave + params%ndev * sdev)
                 else
-                    call otsu_robust_fast(img_or_vol, is2D, noneg=.false., thresh=thresh)
-                    otsu = .true.
+                    if( cline%defined('winsz') )then
+                        call sauvola(img_or_vol, nint(params%winsz), img_sdevs, params%nsig)
+                    else
+                        if( trim(params%omit_neg) .eq. 'yes' )then
+                            call otsu_img(img_or_vol)
+                            ! call otsu_robust_fast(img_or_vol, is2D, noneg=.true., thresh=thresh)
+                        else
+                            call otsu_img(img_or_vol)
+                            ! call otsu_robust_fast(img_or_vol, is2D, noneg=.false., thresh=thresh)
+                        endif
+                        otsu = .true.
+                    endif
                 endif
                 write(logfhandle,'(a,1x,i9)') '# FOREGROUND PIXELS:', img_or_vol%nforeground()
                 write(logfhandle,'(a,1x,i9)') '# BACKGROUND PIXELS:', img_or_vol%nbackground()
@@ -150,7 +159,7 @@ contains
                 if( cline%defined('neg')  ) call img_or_vol%bin_inv
             end subroutine doit
 
-    end subroutine exec_binarise
+    end subroutine exec_binarize
 
     !> for edge detection of stacks
     subroutine exec_edge_detect( self, cline )
@@ -170,7 +179,7 @@ contains
             THROW_HARD('ERROR! automatic needs to be present; exec_edge_detect')
         endif
         if(.not. cline%defined('outstk') )then
-            params%outstk = 'Outstk.mrc'
+            params%outstk = 'outstk.mrc'
         endif
         if( cline%defined('thres') .and. cline%defined('npix') )then
             THROW_HARD('either thres-based or npix-based edge detection; both keys cannot be present; exec_edge_detect')
@@ -1096,7 +1105,7 @@ contains
                 call imgs_mask(i)%roavg(params%angstep, roavg)
                 call imgs_mask(i)%copy(roavg)
             endif
-            ! binarise with Otsu
+            ! binarize with Otsu
             call otsu_robust_fast(imgs_mask(i), is2D=.true., noneg=.false., thresh=thresh)
             ! hard mask for removing noise, default diameter 90% of the box size
             call imgs_mask(i)%mask(msk_rad,'hard')
