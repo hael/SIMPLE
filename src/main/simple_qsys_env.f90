@@ -4,6 +4,10 @@ include 'simple_lib.f08'
 use simple_qsys_funs,    only: qsys_watcher,qsys_cleanup
 use simple_qsys_factory, only: qsys_factory
 use simple_qsys_base,    only: qsys_base
+use simple_qsys_local,   only: qsys_local
+use simple_qsys_slurm,   only: qsys_slurm
+use simple_qsys_pbs,     only: qsys_pbs
+use simple_qsys_sge,     only: qsys_sge
 use simple_qsys_ctrl,    only: qsys_ctrl
 use simple_parameters,   only: params_glob
 implicit none
@@ -132,6 +136,17 @@ contains
         logical :: aarray
         aarray = .false.
         if( present(array) ) aarray = array
+        ! we only support array execution by SLURM
+        select type(pmyqsys => self%myqsys)
+            class is(qsys_local)
+                aarray = .false.
+            class is(qsys_slurm)
+                ! keep aarray value
+            class is(qsys_sge)
+                aarray = .false.
+            class is(qsys_pbs)
+                aarray = .false.
+        end select
         call qsys_cleanup
         if( aarray )then
             call self%qscripts%generate_array_script(job_descr, trim(params_glob%ext), self%qdescr,&
@@ -182,10 +197,6 @@ contains
     end subroutine exec_simple_prg_in_queue_async
 
     function get_qsys( self )result( qsys )
-        use simple_qsys_local, only: qsys_local
-        use simple_qsys_slurm, only: qsys_slurm
-        use simple_qsys_pbs,   only: qsys_pbs
-        use simple_qsys_sge,   only: qsys_sge
         class(qsys_env), intent(in)   :: self
         character(len=:), allocatable :: qsys
         select type(pmyqsys => self%myqsys)
