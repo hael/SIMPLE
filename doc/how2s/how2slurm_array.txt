@@ -1,0 +1,73 @@
+A job array can be submitted simply by adding
+
+#SBATCH --array=x-y
+
+to the job script where x and y are the array bounds. SLURM's job array handling is very versatile. Instead of providing a task range a comma-separated list of task numbers can be provided, for example, to rerun a few failed jobs from a previously completed job array as in
+
+sbatch --array=4,8,15,16,23,42  job_script.sbatch
+
+You can limit the number of tasks that run at once certain number of tasks active at a time use the %N suffix where N is the number of active tasks. For example
+
+$SBATCH --array1-200%10
+
+Naming output and error files
+
+SLURM uses the %A and %a replacement strings for the master job ID and task ID, respectively.
+
+#SBATCH --output=Array_test.%A_%a.out
+#SBATCH --error=Array_test.%A_%a.error
+
+! get the SLURM array task id from Fortran
+CHARACTER(len=255) :: task_id
+CALL get_environment_variable("SLURM_ARRAY_TASK_ID", task_id)
+
+Deleting job arrays and tasks
+
+To delete all of the tasks of an array job, use scancel with the job ID:
+
+scancel 292441
+
+To delete a single task, add the task ID:
+
+scancel 292441_5
+
+Job arrays will have two additional environment variable set. SLURM_ARRAY_JOB_ID will be set to the first job ID of the array. SLURM_ARRAY_TASK_ID will be set to the job array index value. SLURM_ARRAY_TASK_COUNT will be set to the number of tasks in the job array. SLURM_ARRAY_TASK_MAX will be set to the highest job array index value. SLURM_ARRAY_TASK_MIN will be set to the lowest job array index value.
+
+Running multiple arrays at once
+
+#!/bin/sh
+#SBATCH --job-name=mega_array       # Job name
+#SBATCH --mail-type=ALL             # Mail events (NONE, BEGIN, END, FAIL, ALL)
+#SBATCH --mail-user=gatorlink@ufl.edu # Where to send mail	
+#SBATCH --nodes=1                   # Use one node,           resourse per task
+#SBATCH --ntasks=1                  # Run a single task,      resourse per task
+#SBATCH --mem-per-cpu=1gb           # Memory per processor,   resourse per task
+#SBATCH --time=00:10:00             # Time limit hrs:min:sec, time per task
+#SBATCH --output=array_%A-%a.out    # Standard output and error log
+#SBATCH --array=1-5                 # Array range, 5000 things to do in five tasks, each job 1000 individual tasks
+# This is an example script that combines array tasks with
+# bash loops to process many short runs. Array jobs are convenient
+# for running lots of tasks, but if each task is short, they
+# quickly become inefficient, taking more time to schedule than
+# they spend doing any work and bogging down the scheduler for
+# all users. 
+pwd; hostname; date
+
+#Set the number of runs that each SLURM task should do
+PER_TASK=1000
+
+# Calculate the starting and ending values for this task based
+# on the SLURM task and the number of runs per task.
+START_NUM=$(( ($SLURM_ARRAY_TASK_ID - 1) * $PER_TASK + 1 ))
+END_NUM=$(( $SLURM_ARRAY_TASK_ID * $PER_TASK ))
+
+# Print the task and run range
+echo This is task $SLURM_ARRAY_TASK_ID, which will do runs $START_NUM to $END_NUM
+
+# Run the loop of runs for this task.
+for (( run=$START_NUM; run<=END_NUM; run++ )); do
+  echo This is SLURM task $SLURM_ARRAY_TASK_ID, run number $run
+  #Do your stuff here
+done
+
+date
