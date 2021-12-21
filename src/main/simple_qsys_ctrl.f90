@@ -266,7 +266,7 @@ contains
         ! need to specify shell
         write(funit,'(a)') '#!/bin/bash'
         ! write instructions to SLURM
-        call self%myqsys%write_array_instr(job_descr, self%fromto_part, fhandle=funit)
+        call self%myqsys%write_array_instr(q_descr, self%fromto_part, fhandle=funit)
         write(funit,'(a)') 'cd '//trim(cwd_glob)
         write(funit,'(a)') ''
         do ipart=self%fromto_part(1),self%fromto_part(2)
