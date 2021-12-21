@@ -13,10 +13,11 @@ type, extends(qsys_base) :: qsys_pbs
     private
     type(chash) :: env !< defines the PBS environment
   contains
-    procedure :: new         => new_pbs_env
-    procedure :: submit_cmd  => get_pbs_submit_cmd
-    procedure :: write_instr => write_pbs_header
-    procedure :: kill        => kill_pbs_env
+    procedure :: new               => new_pbs_env
+    procedure :: submit_cmd        => get_pbs_submit_cmd
+    procedure :: write_instr       => write_pbs_header
+    procedure :: write_array_instr => write_pbs_array_header
+    procedure :: kill              => kill_pbs_env
 end type qsys_pbs
 
 contains
@@ -52,9 +53,9 @@ contains
     end function get_pbs_submit_cmd
 
     !> \brief  writes the header instructions
-    subroutine write_pbs_header( self, job_descr, fhandle )
+    subroutine write_pbs_header( self, q_descr, fhandle )
         class(qsys_pbs),   intent(in) :: self
-        class(chash),      intent(in) :: job_descr
+        class(chash),      intent(in) :: q_descr
         integer, optional, intent(in) :: fhandle
         character(len=:), allocatable :: key, pbs_cmd, pbs_val
         real    :: rval
@@ -62,13 +63,13 @@ contains
         logical :: write2file
         write2file = .false.
         if( present(fhandle) ) write2file = .true.
-        do i=1,job_descr%size_of()
+        do i=1,q_descr%size_of()
             if(allocated(key))deallocate(key)
-            key     = job_descr%get_key(i)
+            key     = q_descr%get_key(i)
             which   = self%env%lookup(key)
             if(which == 0)cycle
             pbs_cmd = self%env%get(which)
-            pbs_val = job_descr%get(i)
+            pbs_val = q_descr%get(i)
             select case(key)
                 case('job_time', 'job_cpus_per_task', 'qsys_qos')
                     call write_formatted(pbs_cmd, pbs_val, '=')
@@ -116,7 +117,16 @@ contains
                     endif
                 endif
             end subroutine write_formatted
+
     end subroutine write_pbs_header
+
+    !> \brief  writes the array header instructions
+    subroutine write_pbs_array_header( self, q_descr, nparts, fhandle, nactive )
+        class(qsys_pbs),   intent(in) :: self
+        class(chash),      intent(in) :: q_descr
+        integer,           intent(in) :: nparts
+        integer, optional, intent(in) :: fhandle, nactive
+    end subroutine write_pbs_array_header
 
     !> \brief  is a destructor
     subroutine kill_pbs_env( self )

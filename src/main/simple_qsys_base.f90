@@ -7,10 +7,11 @@ private
 
 type, abstract :: qsys_base
   contains
-    procedure(generic_new),         deferred :: new
-    procedure(generic_submit_cmd),  deferred :: submit_cmd
-    procedure(generic_write_instr), deferred :: write_instr
-    procedure(generic_kill),        deferred :: kill
+    procedure(generic_new),               deferred :: new
+    procedure(generic_submit_cmd),        deferred :: submit_cmd
+    procedure(generic_write_instr),       deferred :: write_instr
+    procedure(generic_write_array_instr), deferred :: write_array_instr
+    procedure(generic_kill),              deferred :: kill
 end type qsys_base
 
 abstract interface
@@ -29,13 +30,23 @@ abstract interface
     end function generic_submit_cmd
 
     !>  \brief  writes a header instruction for the submit script
-    subroutine generic_write_instr( self, job_descr, fhandle )
+    subroutine generic_write_instr( self, q_descr, fhandle )
         use simple_chash, only: chash
         import :: qsys_base
         class(qsys_base),  intent(in) :: self
-        class(chash),      intent(in) :: job_descr
+        class(chash),      intent(in) :: q_descr
         integer, optional, intent(in) :: fhandle
     end subroutine generic_write_instr
+
+    !>  \brief  writes a header instruction for the array submit script
+    subroutine generic_write_array_instr( self, q_descr, nparts, fhandle, nactive )
+        use simple_chash, only: chash
+        import :: qsys_base
+        class(qsys_base),  intent(in) :: self
+        class(chash),      intent(in) :: q_descr
+        integer,           intent(in) :: nparts
+        integer, optional, intent(in) :: fhandle, nactive
+    end subroutine generic_write_array_instr
 
     !>  \brief  destructor
     subroutine generic_kill( self )

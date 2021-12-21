@@ -14,10 +14,11 @@ type, extends(qsys_base) :: qsys_slurm
     private
     type(chash) :: env !< defines the SLURM environment
   contains
-    procedure :: new         => new_slurm_env
-    procedure :: submit_cmd  => get_slurm_submit_cmd
-    procedure :: write_instr => write_slurm_header
-    procedure :: kill        => kill_slurm_env
+    procedure :: new               => new_slurm_env
+    procedure :: submit_cmd        => get_slurm_submit_cmd
+    procedure :: write_instr       => write_slurm_header
+    procedure :: write_array_instr => write_slurm_array_header
+    procedure :: kill              => kill_slurm_env
 end type qsys_slurm
 
 contains
@@ -56,21 +57,21 @@ contains
     end function get_slurm_submit_cmd
 
     !> \brief  writes the header instructions
-    subroutine write_slurm_header( self, job_descr, fhandle )
+    subroutine write_slurm_header( self, q_descr, fhandle )
         class(qsys_slurm), intent(in) :: self
-        class(chash),      intent(in) :: job_descr
+        class(chash),      intent(in) :: q_descr
         integer, optional, intent(in) :: fhandle
         character(len=:), allocatable :: key, sbatch_cmd, sbatch_val
         integer :: i, which
         logical :: write2file
         write2file = .false.
         if( present(fhandle) ) write2file = .true.
-        do i=1,job_descr%size_of()
-            key   = job_descr%get_key(i)
+        do i=1,q_descr%size_of()
+            key   = q_descr%get_key(i)
             which = self%env%lookup(key)
             if( which > 0 )then
                 sbatch_cmd = self%env%get(which)
-                sbatch_val = job_descr%get(i)
+                sbatch_val = q_descr%get(i)
                 if( write2file )then
                     write(fhandle,'(a)') sbatch_cmd//'='//sbatch_val
                 else
@@ -91,6 +92,56 @@ contains
             write(logfhandle,'(a)') '#SBATCH --mail-type=FAIL'
         endif
     end subroutine write_slurm_header
+
+    !> \brief  writes the array header instructions
+    subroutine write_slurm_array_header( self, q_descr, nparts, fhandle, nactive )
+        class(qsys_slurm), intent(in) :: self
+        class(chash),      intent(in) :: q_descr
+        integer,           intent(in) :: nparts
+        integer, optional, intent(in) :: fhandle, nactive
+        character(len=:), allocatable :: key, sbatch_cmd, sbatch_val
+        integer :: i, which
+        logical :: write2file
+        write2file = .false.
+        if( present(fhandle) ) write2file = .true.
+        do i=1,q_descr%size_of()
+            key   = q_descr%get_key(i)
+            which = self%env%lookup(key)
+            if( which > 0 )then
+                sbatch_cmd = self%env%get(which)
+                sbatch_val = q_descr%get(i)
+                if( write2file )then
+                    write(fhandle,'(a)') sbatch_cmd//'='//sbatch_val
+                else
+                    write(logfhandle,'(a)') sbatch_cmd//'='//sbatch_val
+                endif
+                deallocate(sbatch_cmd,sbatch_val)
+            endif
+            deallocate(key)
+        end do
+        ! write default instructions
+        if( write2file )then
+            write(fhandle,'(a)') '#SBATCH --output='//trim(stderrout)//'outfile.%A_%a'
+            write(fhandle,'(a)') '#SBATCH --error='//trim(stderrout)//'errfile.%A_%a'
+            write(fhandle,'(a)') '#SBATCH --mail-type=FAIL'
+            if( present(nactive) )then
+                write(fhandle,'(a)') '#SBATCH --array=1-'//int2str(nparts)//'%'//int2str(nactive)
+            else
+                write(fhandle,'(a)') '#SBATCH --array=1-'//int2str(nparts)
+            endif
+            write(fhandle,'(a)') 'echo $SLURM_ARRAY_JOB_ID > SLURM_ARRAY_JOB_ID'
+        else
+            write(logfhandle,'(a)') '#SBATCH --output='//trim(stderrout)//'outfile.%A_%a'
+            write(logfhandle,'(a)') '#SBATCH --error='//trim(stderrout)//'errfile.%A_%a'
+            write(logfhandle,'(a)') '#SBATCH --mail-type=FAIL'
+            if( present(nactive) )then
+                write(logfhandle,'(a)') '#SBATCH --array=1-'//int2str(nparts)//'%'//int2str(nactive)
+            else
+                write(logfhandle,'(a)') '#SBATCH --array=1-'//int2str(nparts)
+            endif
+            write(logfhandle,'(a)') 'echo $SLURM_ARRAY_JOB_ID > SLURM_ARRAY_JOB_ID'
+        endif
+    end subroutine write_slurm_array_header
 
     !> \brief  is a destructor
     subroutine kill_slurm_env( self )
