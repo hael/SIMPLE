@@ -266,7 +266,11 @@ contains
         ! need to specify shell
         write(funit,'(a)') '#!/bin/bash'
         ! write instructions to SLURM
-        call self%myqsys%write_array_instr(q_descr, self%fromto_part, fhandle=funit)
+        if( self%nparts_tot /= self%ncomputing_units )then
+            call self%myqsys%write_array_instr(q_descr, self%fromto_part, fhandle=funit, nactive=self%ncomputing_units)
+        else
+            call self%myqsys%write_array_instr(q_descr, self%fromto_part, fhandle=funit)
+        endif
         write(funit,'(a)') 'cd '//trim(cwd_glob)
         write(funit,'(a)') ''
         do ipart=self%fromto_part(1),self%fromto_part(2)
@@ -291,7 +295,6 @@ contains
             write(funit,'(a)') ''
         end do
         ! exit shell when done
-        write(funit,'(a)') ''
         write(funit,'(a)') 'exit'
         call fclose(funit)
         call job_descr%delete('fromp')
@@ -506,7 +509,7 @@ contains
     ! THE MASTER SCHEDULERS
 
     subroutine schedule_jobs( self )
-        class(qsys_ctrl),  intent(inout) :: self
+        class(qsys_ctrl), intent(inout) :: self
         do
             if( all(self%jobs_done) ) exit
             call self%update_queue
@@ -516,7 +519,7 @@ contains
     end subroutine schedule_jobs
 
     subroutine schedule_array_jobs( self )
-        class(qsys_ctrl),  intent(inout) :: self
+        class(qsys_ctrl), intent(inout) :: self
         call self%submit_script(ARRAY_SCRIPT)
         do
             if( all(self%jobs_done) ) exit
@@ -582,8 +585,8 @@ contains
 
     !>  \brief  is to append to the streaming command-line stack
     subroutine add_to_streaming( self, cline )
-        class(qsys_ctrl),  intent(inout) :: self
-        class(cmdline),    intent(in)    :: cline
+        class(qsys_ctrl), intent(inout) :: self
+        class(cmdline),   intent(in)    :: cline
         class(cmdline), allocatable :: tmp_stack(:)
         integer :: i
         if( .not. allocated(self%stream_cline_stack) )then

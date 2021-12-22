@@ -89,7 +89,7 @@ contains
         cline_cavgassemble = cline
         call cline_cavgassemble%set('prg', 'cavgassemble')
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(job_descr)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, array=.true.)
         ! assemble class averages
         call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE_FINISHED')
         call qsys_cleanup
