@@ -641,7 +641,8 @@ contains
         do i = 1,num_dirs
             read( luntmp, '(a)' ) list(i)
         enddo
-        close( luntmp, status = 'delete' )
+        close(luntmp)
+        call del_file(list_fname)
         deallocate(pathhere)
         if(present(status)) status= stat
     end function simple_list_dirs
