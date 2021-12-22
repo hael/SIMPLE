@@ -905,7 +905,7 @@ contains
         call job_descr%set('nthr',     int2str(1))
         call job_descr%set('nparts',   int2str(nparts))
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, array=.true.)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params)
         ! delete copy in working directory
         if( gen_sc_project ) call del_file(params%projfile)
         ! clean
@@ -975,7 +975,7 @@ contains
         ! prepare job description
         call cline_distr%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, array=.true.)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params)
         ! ASSEMBLY
         do ipart = 1,nparts
             fname = trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT

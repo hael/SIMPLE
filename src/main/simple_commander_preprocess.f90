@@ -784,7 +784,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=.true.)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -992,7 +992,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=.true.)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -1062,7 +1062,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, part_params=part_params, array=.true.)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params)
         call qsys_cleanup
         call simple_end('**** SIMPLE_DISTR_MOTION_CORRECT_TOMO NORMAL STOP ****')
     end subroutine exec_motion_correct_tomo_distr
@@ -1186,7 +1186,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=.true.)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -1284,7 +1284,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=.true.)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -1461,7 +1461,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=.true.)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -1639,7 +1639,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=.true.)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
         ! ASSEMBLY
         allocate(parts_fname(params%nparts))
         numlen = len(int2str(params%nparts))
@@ -2094,7 +2094,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), part_params=part_params, array=.true.)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), part_params=part_params)
         ! ASSEMBLY
         allocate(spproj_parts(params%nparts),parts_fname(params%nparts))
         numlen = len(int2str(params%nparts))
