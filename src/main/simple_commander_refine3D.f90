@@ -385,7 +385,7 @@ contains
                 rt_init = toc(t_init)
                 t_scheduled = tic()
             endif
-            call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=.true.)
+            call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
             ! assemble alignment docs
             if( L_BENCH_GLOB )then
                 rt_scheduled = toc(t_scheduled)
@@ -731,7 +731,7 @@ contains
         call qenv%new(params%nparts)
         call cline%gen_job_descr(job_descr)
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, array=.true.)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr)
         ! assemble
         call qenv%exec_simple_prg_in_queue(cline_calc_pspec_assemble, 'CALC_PSPEC_FINISHED')
         ! end gracefully

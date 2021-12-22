@@ -230,7 +230,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=.true.)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -476,7 +476,7 @@ contains
         call qenv%new(params%nparts)
         ! schedule & clean
         call cline%gen_job_descr(job_descr)
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, part_params=part_params, array=.true.)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, part_params=part_params)
         call qsys_cleanup
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_TRACK_PARTICLES NORMAL STOP ****')
@@ -1119,7 +1119,7 @@ contains
             call build%spproj%write_segment_inside(params%oritype)
         endif
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, array=.true.)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr)
         ! assemble volumes
         allocate(state_assemble_finished(nparts), vol_fnames(nparts))
         do state = 1, nparts
