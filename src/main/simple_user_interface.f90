@@ -3008,6 +3008,7 @@ contains
         call refine3D%set_input('mask_ctrls', 5, width)
         ! computer controls
         call refine3D%set_input('comp_ctrls', 1, nparts)
+        refine3D%comp_ctrls(1)%required = .false.
         call refine3D%set_input('comp_ctrls', 2, nthr)
     end subroutine new_refine3D
 
@@ -4362,14 +4363,8 @@ contains
 
     subroutine print_cmdline( self )
         class(simple_program), intent(in) :: self
-        logical     :: l_distr_exec
-        l_distr_exec = self%executable .eq. 'simple_exec'
         write(logfhandle,'(a)') format_str('USAGE', C_UNDERLINED)
-        if( l_distr_exec )then
-            write(logfhandle,'(a)') format_str('bash-3.2$ simple_exec prg=' //self%name // ' key1=val1 key2=val2 ...', C_ITALIC)
-        else
-            write(logfhandle,'(a)') format_str('bash-3.2$ simple_exec prg='       //self%name // ' key1=val1 key2=val2 ...', C_ITALIC)
-        endif
+        write(logfhandle,'(a)') format_str('bash-3.2$ simple_exec prg=' //self%name // ' key1=val1 key2=val2 ...', C_ITALIC)
         write(logfhandle,'(a)') 'Required input parameters in ' // format_str('bold', C_BOLD) // ' (ensure terminal support)'
         if( allocated(self%img_ios) )    write(logfhandle,'(a)') format_str('IMAGE INPUT/OUTPUT',     C_UNDERLINED)
         call print_param_hash(self%img_ios)

@@ -1195,16 +1195,6 @@ contains
             self%mskdiam = mskdiam_default
             self%msk     = msk_default
         endif
-
-        ! print *, '*************************************'
-        ! print *, 'smpd                 : ', self%smpd
-        ! print *, 'box size             : ', self%box
-        ! print *, 'mskdiam_default      : ', mskdiam_default
-        ! print *, 'msk_default          : ', msk_default
-        ! print *, 'mask diameter in A   : ', self%mskdiam
-        ! print *, 'mask radius in pixels: ', self%msk
-        ! print *, '*************************************'
-
         ! set mode of masking
         if( cline%defined('inner') )then
             THROW_HARD('inner (inner mask radius in pixels) is depreciated! Use innerdiam (inner mask diameter in A)')

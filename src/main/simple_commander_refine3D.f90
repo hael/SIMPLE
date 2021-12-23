@@ -602,14 +602,39 @@ contains
         class(cmdline),            intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        integer :: startit
-        logical :: converged
+        integer          :: startit
+        logical          :: converged
+        real             :: corr, corr_prev
         call build%init_params_and_build_strategy3D_tbox(cline,params)
         startit = 1
-        if( cline%defined('startit') ) startit = params%startit
-        if( startit == 1 ) call build%spproj_field%clean_updatecnt
-        if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
-        call refine3D_exec( cline, startit, converged) ! partition or not, depending on 'part'
+        if( params%l_distr_exec )then
+            if( cline%defined('startit') ) startit = params%startit
+            if( startit == 1 ) call build%spproj_field%clean_updatecnt
+            if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
+            call refine3D_exec(cline, startit, converged)
+        else
+            params%startit     = startit
+            params%outfile     = trim(ALGN_FBODY)//'1'//METADATA_EXT
+            params%extr_iter   = params%startit - 1
+            corr               = -1.
+            do
+                write(logfhandle,'(A)')   '>>>'
+                write(logfhandle,'(A,I6)')'>>> ITERATION ', params%startit
+                write(logfhandle,'(A)')   '>>>'
+                if( params%startit == 1 ) call build%spproj_field%clean_updatecnt
+                if( params%refine .eq. 'snhc' .and. params%startit > 1 )then
+                    ! update stochastic neighborhood size if corr is not improving
+                    corr_prev = corr
+                    corr      = build%spproj_field%get_avg('corr')
+                    if( corr <= corr_prev ) params%szsn = min(SZSN_MAX,params%szsn + SZSN_STEP)
+                endif
+                ! exponential cooling of the randomization rate
+                params%extr_iter = params%extr_iter + 1
+                call refine3D_exec(cline, params%startit, converged)
+                params%startit = params%startit + 1
+                if( converged ) exit
+            end do
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D

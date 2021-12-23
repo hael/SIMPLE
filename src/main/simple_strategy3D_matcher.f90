@@ -80,7 +80,11 @@ contains
         endif
 
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
-        if( build_glob%spproj_field%get_nevenodd() == 0 ) THROW_HARD('no eo partitioning available; refine3D_exec')
+        if( build_glob%spproj_field%get_nevenodd() == 0 )then
+            if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; refine3D_exec')
+            call build_glob%spproj_field%partition_eo
+            call build_glob%spproj%write_segment_inside(params_glob%oritype)
+        endif
 
         ! CHECK WHETHER WE HAVE PREVIOUS 3D ORIENTATIONS
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
