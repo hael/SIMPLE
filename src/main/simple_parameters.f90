@@ -83,6 +83,7 @@ type :: parameters
     character(len=3)      :: rnd='no'             !< random(yes|no){no}
     character(len=3)      :: roalgn='no'
     character(len=3)      :: round='no'
+    character(len=3)      :: silence_fsc='no'     !< dont print FSC plot to stdout(yes|no){no}
     character(len=3)      :: shalgn='no'          !< do 2D shift alignment(yes|no){no}
     character(len=3)      :: shellnorm='no'
     character(len=3)      :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
@@ -581,6 +582,7 @@ contains
         call check_carg('roalgn',         self%roalgn)
         call check_carg('roavg',          self%roavg)
         call check_carg('round',          self%round)
+        call check_carg('silence_fsc',    self%silence_fsc)
         call check_carg('shalgn',         self%shalgn)
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('shellnorm',      self%shellnorm)

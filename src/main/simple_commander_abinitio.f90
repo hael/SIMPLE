@@ -3,28 +3,28 @@ module simple_commander_abinitio
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
-use simple_parameters,     only: parameters
+use simple_parameters,     only: parameters, params_glob
 use simple_sp_project,     only: sp_project
 use simple_stack_io,       only: stack_io
 use simple_qsys_funs
 implicit none
 
-public :: initial_3Dmodel_commander_hlev
+public :: initial_3Dmodel_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: initial_3Dmodel_commander_hlev
+type, extends(commander_base) :: initial_3Dmodel_commander
   contains
-    procedure :: execute      => exec_initial_3Dmodel
-end type initial_3Dmodel_commander_hlev
+    procedure :: execute => exec_initial_3Dmodel
+end type initial_3Dmodel_commander
 
 contains
 
     !> for generation of an initial 3d model from class averages
     subroutine exec_initial_3Dmodel( self, cline )
-        use simple_commander_rec,      only: reconstruct3D_commander_distr
+        use simple_commander_rec,      only: reconstruct3D_commander, reconstruct3D_commander_distr
         use simple_commander_project,  only: scale_project_commander_distr
-        use simple_commander_refine3D, only: refine3D_commander_distr
+        use simple_commander_refine3D, only: refine3D_commander, refine3D_commander_distr
         use simple_oris,               only: oris
         use simple_ori,                only: ori
         use simple_image,              only: image
@@ -32,8 +32,9 @@ contains
         use simple_parameters,         only: params_glob
         use simple_qsys_env,           only: qsys_env
         use simple_sym,                only: sym
-        class(initial_3Dmodel_commander_hlev), intent(inout) :: self
-        class(cmdline),                        intent(inout) :: cline
+        use simple_builder,            only: builder
+        class(initial_3Dmodel_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
         ! constants
         real,                  parameter :: SCALEFAC2_TARGET = 0.5
         real,                  parameter :: CENLP=30. !< consistency with refine3D
@@ -46,12 +47,14 @@ contains
         character(len=2) :: str_state
         ! distributed commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
-        type(scale_project_commander_distr) :: xscale_distr
+        type(scale_project_commander_distr) :: xscale
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         ! shared-mem commanders
-        type(symaxis_search_commander) :: xsymsrch
-        type(reproject_commander)      :: xreproject
-        type(postprocess_commander)    :: xpostprocess
+        type(refine3D_commander)            :: xrefine3D
+        type(reconstruct3D_commander)       :: xreconstruct3D
+        type(symaxis_search_commander)      :: xsymsrch
+        type(reproject_commander)           :: xreproject
+        type(postprocess_commander)         :: xpostprocess
         ! command lines
         type(cmdline) :: cline_refine3D_snhc, cline_refine3D_init, cline_refine3D_refine
         type(cmdline) :: cline_symsrch
@@ -63,6 +66,7 @@ contains
         character(len=:), allocatable :: WORK_PROJFILE
         real,             allocatable :: res(:), tmp_rarr(:)
         integer,          allocatable :: states(:), tmp_iarr(:)
+        class(parameters), pointer    :: params_ptr => null()
         type(qsys_env)        :: qenv
         type(parameters)      :: params
         type(ctfparams)       :: ctfvars ! ctf=yes by default
@@ -76,10 +80,21 @@ contains
         real                  :: iter, smpd_target, lplims(2), orig_smpd
         real                  :: scale_factor1, scale_factor2
         integer               :: icls, ncavgs, orig_box, box, istk, cnt
-        logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset
+        logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset, l_shmem
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        if( .not. cline%defined('ptclw') )     call cline%set('ptclw',      'no')
+        if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',      'no')
+        ! set shared-memory flag
+        if( cline%defined('nparts') )then
+            if( nint(cline%get_rarg('nparts')) == 1 )then
+                l_shmem = .true.
+                call cline%delete('nparts')
+            else
+                l_shmem = .false.
+            endif
+        else
+            l_shmem = .true.
+        endif
         ! hard set oritype
         call cline%set('oritype', 'out') ! because cavgs are part of out segment
         ! hard set bfactor
@@ -112,15 +127,13 @@ contains
             se2 = sym(pgrp_refine)
             if(se1%get_nsym() > se2%get_nsym())then
                 ! ensure se2 is a subgroup of se1
-                if( .not. se1%has_subgrp(pgrp_refine) )&
-                    &THROW_HARD('Incompatible symmetry groups; simple_commander_abinitio')
+                if( .not. se1%has_subgrp(pgrp_refine) ) THROW_HARD('Incompatible symmetry groups; simple_commander_abinitio')
                 ! set flag for symmetry randomisation before refinmement
                 ! in case we are moving from a higher to lower group
                 symran_before_refine = .true.
-            else if(se2%get_nsym() > se1%get_nsym())then
+            else if( se2%get_nsym() > se1%get_nsym() )then
                 ! ensure se1 is a subgroup of se2
-                if( .not. se2%has_subgrp(pgrp_init) )&
-                    &THROW_HARD('Incompatible symmetry groups; simple_commander_abinitio')
+                if( .not. se2%has_subgrp(pgrp_init) ) THROW_HARD('Incompatible symmetry groups; simple_commander_abinitio')
             endif
         endif
         ! read project & update sampling distance
@@ -182,12 +195,9 @@ contains
         call cline%set('projfile', trim(WORK_PROJFILE))
         call cline%set('projname', trim(get_fbody(trim(WORK_PROJFILE),trim('simple'))))
         call work_proj1%update_projinfo(cline)
+        call work_proj1%write()
         ! split
-        if(params%nparts == 1 )then
-            call work_proj1%write()
-        else
-            call work_proj1%split_stk(params%nparts)
-        endif
+        if( .not. l_shmem ) call work_proj1%split_stk(params%nparts)
         ! down-scale
         orig_box      = work_proj1%get_box()
         smpd_target   = max(params%smpd, lplims(2)*LP2SMPDFAC)
@@ -200,9 +210,9 @@ contains
             scale_factor1 = cline_scale1%get_rarg('scale')
             box           = nint(cline_scale1%get_rarg('newbox'))
             call cline_scale1%delete('smpd')
-            call xscale_distr%execute( cline_scale1 )
+            call xscale%execute( cline_scale1 )
         else
-            box     = orig_box
+            box = orig_box
         endif
         ! prepare command lines from prototype
         ! projects names are subject to change depending on scaling and are updated individually
@@ -218,7 +228,7 @@ contains
         ! in stage 2 it follows optional user input and defaults to cc
         call cline_refine3D_snhc%set('objfun', 'cc')
         call cline_refine3D_init%set('objfun', 'cc')
-        ! reconstruct3D & project are not distributed executions, so remove the nparts flag
+        ! re-project is never a distributed executions, so remove the nparts flag if there
         call cline_reproject%delete('nparts')
         ! initialise command line parameters
         ! (1) INITIALIZATION BY STOCHASTIC NEIGHBORHOOD HILL-CLIMBING
@@ -230,8 +240,8 @@ contains
         call cline_refine3D_snhc%set('nspace',     real(NSPACE_SNHC))
         call cline_refine3D_snhc%set('maxits',     real(MAXITS_SNHC))
         call cline_refine3D_snhc%set('match_filt', 'no')
-        call cline_refine3D_snhc%set('ptclw',      'no') ! no soft particle weights in first phase
-        call cline_refine3D_snhc%delete('update_frac')   ! no fractional update in first phase
+        call cline_refine3D_snhc%set('ptclw',      'no')  ! no soft particle weights in first phase
+        call cline_refine3D_snhc%set('silence_fsc','yes') ! no FSC plot printing in snhc phase
         ! (2) REFINE3D_INIT
         call cline_refine3D_init%set('projfile', trim(WORK_PROJFILE))
         call cline_refine3D_init%set('box',      real(box))
@@ -300,13 +310,31 @@ contains
             write(logfhandle,'(A)') '>>> INITIALIZATION WITH STOCHASTIC NEIGHBORHOOD HILL-CLIMBING'
             write(logfhandle,'(A,F6.1,A)') '>>> LOW-PASS LIMIT FOR ALIGNMENT: ', lplims(1),' ANGSTROMS'
             write(logfhandle,'(A)') '>>>'
-            call xrefine3D_distr%execute(cline_refine3D_snhc)
+            if( l_shmem )then
+                call rec(cline_refine3D_snhc, l_rnd=.true.)
+                params_ptr  => params_glob
+                params_glob => null()
+                call xrefine3D%execute(cline_refine3D_snhc)
+                params_glob => params_ptr
+                params_ptr  => null()
+            else
+                call xrefine3D_distr%execute(cline_refine3D_snhc)
+            endif
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH REFINE3D'
             write(logfhandle,'(A)') '>>>'
-            call xrefine3D_distr%execute(cline_refine3D_init)
+            if( l_shmem )then
+                params_ptr  => params_glob
+                params_glob => null()
+                call xrefine3D%execute(cline_refine3D_init)
+                params_glob => params_ptr
+                params_ptr  => null()
+            else
+                call xrefine3D_distr%execute(cline_refine3D_init)
+            endif
             iter     = cline_refine3D_init%get_rarg('endit')
             vol_iter = trim(VOL_FBODY)//trim(str_state)//params%ext
+            if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to symmetry axis search does not exist')
             if( symran_before_refine )then
                 call work_proj1%read_segment('ptcl3D', trim(WORK_PROJFILE))
                 call se1%symrandomize(work_proj1%os_ptcl3D)
@@ -317,7 +345,7 @@ contains
                 write(logfhandle,'(A)') '>>> SYMMETRY AXIS SEARCH'
                 write(logfhandle,'(A)') '>>>'
                 call cline_symsrch%set('vol1', trim(vol_iter))
-                if( qenv%get_qsys() .eq. 'local' )then
+                if( l_shmem .or. qenv%get_qsys() .eq. 'local' )then
                     call xsymsrch%execute(cline_symsrch)
                 else
                     call qenv%exec_simple_prg_in_queue(cline_symsrch, 'SYMAXIS_SEARCH_FINISHED')
@@ -368,7 +396,7 @@ contains
         call work_proj2%write
         ! split
         if( l_lpset )then
-            if( params%nparts == 1 )then
+            if( l_shmem )then
                 ! all good
             else
                 call work_proj2%split_stk(params%nparts)
@@ -382,14 +410,14 @@ contains
                 call work_proj2%scale_projfile(smpd_target, WORK_PROJFILE, cline, cline_scale2, dir=trim(STKPARTSDIR))
                 scale_factor2 = cline_scale2%get_rarg('scale')
                 box = nint(cline_scale2%get_rarg('newbox'))
-                call cline_scale2%delete('smpd') !!
-                call xscale_distr%execute( cline_scale2 )
+                call cline_scale2%delete('smpd')
+                call xscale%execute( cline_scale2 )
                 call work_proj2%os_ptcl3D%mul_shifts(scale_factor2)
                 call work_proj2%write
                 if( .not.l_lpset ) call rescale_2Dfilter
             else
                 do_autoscale = .false.
-                box     = orig_box
+                box = orig_box
             endif
         endif
         call cline_refine3D_refine%set('box', real(box))
@@ -399,7 +427,16 @@ contains
         write(logfhandle,'(A)') '>>> REFINEMENT'
         write(logfhandle,'(A)') '>>>'
         call cline_refine3D_refine%set('startit', iter + 1.)
-        call xrefine3D_distr%execute(cline_refine3D_refine)
+        if( l_shmem )then
+            call rec(cline_refine3D_refine, l_rnd=.false.)
+            params_ptr  => params_glob
+            params_glob => null()
+            call xrefine3D%execute(cline_refine3D_refine)
+            params_glob => params_ptr
+            params_ptr  => null()
+        else
+            call xrefine3D_distr%execute(cline_refine3D_refine)
+        endif
         iter = cline_refine3D_refine%get_rarg('endit')
         ! updates shifts & deals with final volume
         call work_proj2%read_segment('ptcl3D', WORK_PROJFILE)
@@ -415,7 +452,15 @@ contains
             work_proj2%os_ptcl3D = os
             call work_proj2%write_segment_inside('ptcl3D', ORIG_WORK_PROJFILE)
             ! reconstruction
-            call xreconstruct3D_distr%execute(cline_reconstruct3D)
+            if( l_shmem )then
+                params_ptr  => params_glob
+                params_glob => null()
+                call xreconstruct3D%execute(cline_reconstruct3D)
+                params_glob => params_ptr
+                params_ptr  => null()
+            else
+                call xreconstruct3D_distr%execute(cline_reconstruct3D)
+            endif
             vol_iter = trim(VOL_FBODY)//trim(str_state)//params%ext
             ! because postprocess only updates project file when mkdir=yes
             call work_proj2%read_segment('out', ORIG_WORK_PROJFILE)
@@ -499,6 +544,35 @@ contains
         call simple_end('**** SIMPLE_INITIAL_3DMODEL NORMAL STOP ****')
 
         contains
+
+            subroutine rec( cline, l_rnd )
+                class(cmdline), intent(inout) :: cline
+                logical,        intent(in)    :: l_rnd
+                type(parameters) :: params
+                type(builder)    :: build
+                call build%init_params_and_build_spproj(cline, params)
+                if( l_rnd )then
+                    call build%spproj%os_ptcl3D%rnd_oris
+                    call build%spproj_field%zero_shifts
+                    call build%spproj%write_segment_inside('ptcl3D', params%projfile)
+                endif
+                call cline%set('mkdir', 'no') ! to avoid nested dirs
+                params_ptr  => params_glob
+                params_glob => null()
+                call xreconstruct3D%execute(cline)
+                params_glob => params_ptr
+                params_ptr  => null()
+                call build%spproj_field%kill
+                if( l_rnd )then
+                    call del_file('recvol_state01_even.mrc')
+                    call del_file('recvol_state01_odd.mrc')
+                else
+                    call simple_rename('recvol_state01_even.mrc', 'startvol_even.mrc')
+                    call simple_rename('recvol_state01_odd.mrc',  'startvol_odd.mrc')
+                endif
+                call simple_rename('recvol_state01.mrc', 'startvol.mrc')
+                call cline%set('vol1', 'startvol.mrc')
+            end subroutine rec
 
             subroutine prep_eo_stks_refine
                 use simple_ori, only: ori

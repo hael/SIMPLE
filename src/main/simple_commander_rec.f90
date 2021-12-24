@@ -41,6 +41,7 @@ contains
         character(len=LONGSTRLEN), allocatable :: list(:)
         character(len=:),          allocatable :: target_name
         character(len=STDLEN),     allocatable :: state_assemble_finished(:)
+        type(reconstruct3D_commander)          :: xrec3D_shmem
         character(len=LONGSTRLEN) :: refine_path
         character(len=STDLEN)     :: volassemble_output, str_state, fsc_file
         type(parameters) :: params
@@ -50,6 +51,10 @@ contains
         type(chash)      :: job_descr
         integer          :: state, ipart, sz_list
         logical          :: fall_over
+        if( .not. cline%defined('nparts') )then
+            call xrec3D_shmem%execute(cline)
+            return
+        endif
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
@@ -132,10 +137,23 @@ contains
         character(len=:), allocatable :: fbody
         call build%init_params_and_build_general_tbox(cline, params)
         call build%build_rec_eo_tbox(params)
+        if( .not. cline%defined('nparts') )then ! shared-memory implementation
+            ! eo partitioning
+            if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
+            ! particle weights
+            select case(trim(params%ptclw))
+                case('yes')
+                    call build%spproj_field%calc_soft_weights(params%frac)
+                case DEFAULT
+                    call build%spproj_field%calc_hard_weights(params%frac)
+            end select
+            ! to update eo flags and weights
+            call build%spproj%write_segment_inside(params%oritype)
+        endif
         do s=1,params%nstates
             if( build%spproj_field%get_pop(s, 'state') == 0 ) cycle ! empty state
             fbody = 'recvol_state'
-            call build%eorecvol%eorec_distr(build%spproj, build%spproj_field, build%pgrpsyms, s, fbody=fbody)
+            call build%eorecvol%eorec(build%spproj, build%spproj_field, build%pgrpsyms, s, fbody=fbody)
         end do
         call qsys_job_finished( 'simple_rec_master :: exec_eorec')
         write(logfhandle,'(a,1x,a)') "GENERATED VOLUMES: reconstruct3D*.ext"
