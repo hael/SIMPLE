@@ -157,6 +157,7 @@ contains
             rt_init = toc(t_init)
             t_prep_pftcc = tic()
         endif
+
         call preppftcc4align(cline, batchsz_max)
         if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
 

@@ -602,26 +602,28 @@ contains
         class(cmdline),            intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        integer          :: startit
+        integer          :: startit, i
         logical          :: converged
         real             :: corr, corr_prev
         call build%init_params_and_build_strategy3D_tbox(cline,params)
         startit = 1
+        if( cline%defined('startit') ) startit = params%startit
+        if( startit == 1 ) call build%spproj_field%clean_updatecnt
         if( params%l_distr_exec )then
-            if( cline%defined('startit') ) startit = params%startit
-            if( startit == 1 ) call build%spproj_field%clean_updatecnt
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
             call refine3D_exec(cline, startit, converged)
         else
+            if( trim(params%objfun) == 'euclid' ) THROW_HARD('shared-memory implementation of refine3D does not support objfun-euclid')
+            if( trim(params%continue) == 'yes'  ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
+            if( .not. cline%defined('vol1')     ) THROW_HARD('shared-memory implementation of refine3D needs a starting volume')
             params%startit     = startit
-            params%outfile     = trim(ALGN_FBODY)//'1'//METADATA_EXT
+            params%outfile     = 'algndoc'//METADATA_EXT
             params%extr_iter   = params%startit - 1
             corr               = -1.
-            do
+            do i = 1, params%maxits
                 write(logfhandle,'(A)')   '>>>'
                 write(logfhandle,'(A,I6)')'>>> ITERATION ', params%startit
                 write(logfhandle,'(A)')   '>>>'
-                if( params%startit == 1 ) call build%spproj_field%clean_updatecnt
                 if( params%refine .eq. 'snhc' .and. params%startit > 1 )then
                     ! update stochastic neighborhood size if corr is not improving
                     corr_prev = corr
@@ -630,9 +632,17 @@ contains
                 endif
                 ! exponential cooling of the randomization rate
                 params%extr_iter = params%extr_iter + 1
+                ! in strategy3D_matcher:
                 call refine3D_exec(cline, params%startit, converged)
+                ! set last iteration nr
+                call cline%set('endit', real(params%startit))
+                ! update iteration counter
                 params%startit = params%startit + 1
-                if( converged ) exit
+                if( converged .or. i == params%maxits )then
+                    ! update project with the new orientations
+                    call build%spproj%write_segment_inside(params%oritype)
+                    exit
+                endif
             end do
         endif
         ! end gracefully

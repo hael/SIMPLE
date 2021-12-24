@@ -58,12 +58,12 @@ type(cluster2D_commander_stream)            :: xcluster2D_stream
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
-type(initial_3Dmodel_commander_hlev)        :: xinitial_3Dmodel
+type(initial_3Dmodel_commander)        :: xinitial_3Dmodel
 
 ! REFINE3D WORKFLOWS
 type(calc_pspec_commander_distr)            :: xcalc_pspec_distr
 type(refine3D_commander_distr)              :: xrefine3D_distr
-type(reconstruct3D_commander_distr)         :: xreconstruct3D_distr
+type(reconstruct3D_commander_distr)         :: xreconstruct3D
 
 ! CLUSTER3D WORKFLOWS
 type(cluster3D_commander)                   :: xcluster3D
@@ -212,7 +212,7 @@ select case(prg)
     case( 'refine3D' )
         call xrefine3D_distr%execute(cline)
     case( 'reconstruct3D' )
-        call xreconstruct3D_distr%execute( cline )
+        call xreconstruct3D%execute( cline )
 
     ! CLUSTER3D WORKFLOWS
     case( 'cluster3D' )

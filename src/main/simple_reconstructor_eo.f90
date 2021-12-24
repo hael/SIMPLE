@@ -63,7 +63,7 @@ type :: reconstructor_eo
     procedure          :: sampl_dens_correct_eos
     procedure          :: sampl_dens_correct_sum
     ! RECONSTRUCTION
-    procedure          :: eorec_distr
+    procedure          :: eorec
     ! DESTRUCTORS
     procedure          :: kill_exp
     procedure          :: kill
@@ -441,7 +441,7 @@ contains
                 if( k_rand > filtsz-3 )then
                     ! reverts to provided sherical masking
                     call even%mask(self%msk, 'soft')
-                    call odd%mask(self%msk, 'soft')
+                    call odd%mask(self%msk,  'soft')
                     call even%fft()
                     call odd%fft()
                     call even%fsc(odd, corrs)
@@ -495,16 +495,18 @@ contains
         find_plate = 0
         if( self%phaseplate ) call phaseplate_correct_fsc(corrs, find_plate)
         if( self%hpind_fsc > 0 ) corrs(:self%hpind_fsc) = corrs(self%hpind_fsc + 1)
-        do k=1,size(res)
-           write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(k), '>>> CORRELATION:', corrs(k)
-        end do
         ! save, get & print resolution
         call arr2file(corrs, 'fsc_state'//int2str_pad(state,2)//BIN_EXT)
         call get_resolution(corrs, res, self%res_fsc05, self%res_fsc0143)
         self%res_fsc05   = max(self%res_fsc05,self%fny)
         self%res_fsc0143 = max(self%res_fsc0143,self%fny)
-        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%res_fsc05
-        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%res_fsc0143
+        if( trim(params_glob%silence_fsc) .eq. 'no' )then
+            do k=1,size(res)
+               write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(k), '>>> CORRELATION:', corrs(k)
+            end do
+            write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%res_fsc05
+            write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%res_fsc0143
+        endif
         ! Fourier index for eo averaging
         if( self%hpind_fsc > 0 )then
             find4eoavg = self%hpind_fsc
@@ -533,7 +535,7 @@ contains
     ! RECONSTRUCTION
 
     !> \brief  for distributed reconstruction of even/odd maps
-    subroutine eorec_distr( self, spproj, o, se, state, fbody )
+    subroutine eorec( self, spproj, o, se, state, fbody )
         use simple_fplane,   only: fplane
         class(reconstructor_eo),    intent(inout) :: self   !< object
         class(sp_project),          intent(inout) :: spproj !< project description
@@ -541,17 +543,20 @@ contains
         class(sym),                 intent(inout) :: se     !< symmetry element
         integer,                    intent(in)    :: state  !< state to reconstruct
         character(len=*), optional, intent(in)    :: fbody  !< body of output file
+        character(len=:), allocatable :: recname, volname
+        character(len=LONGSTRLEN)     :: eonames(2)
         type(fplane)         :: fpl
-        type(image)          :: img, mskimg
-        type(ctfparams)      :: ctfvars
+        type(image)          :: img, mskimg, vol
         logical, allocatable :: lmsk(:,:,:)
+        type(ctfparams)      :: ctfvars
         real                 :: sdev_noise
-        integer              :: statecnt(params_glob%nstates), i, cnt, state_here, state_glob
+        integer              :: statecnt(params_glob%nstates), i, cnt, state_here, state_glob, find4eoavg
         ! stash global state index
         state_glob = state
         ! make the images
         call img%new([params_glob%box,params_glob%box,1],params_glob%smpd)
         call mskimg%disc([params_glob%box,params_glob%box,1], params_glob%smpd, params_glob%msk, lmsk)
+        call vol%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
         call fpl%new(img, spproj)
         ! zero the Fourier volumes and rhos
         call self%reset_all
@@ -579,11 +584,20 @@ contains
             else
                 call self%write_eos('recvol_state'//int2str_pad(state,2)//'_part'//int2str_pad(params_glob%part,self%numlen))
             endif
+        else
+            allocate(recname, source=trim(VOL_FBODY)//int2str_pad(state,2))
+            allocate(volname, source=recname//params_glob%ext)
+            eonames(1) = trim(recname)//'_even'//params_glob%ext
+            eonames(2) = trim(recname)//'_odd'//params_glob%ext
+            call self%sum_eos
+            call self%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
+            call self%sampl_dens_correct_sum(vol)
+            call vol%write(volname, del_if_exists=.true.)
         endif
         call img%kill
         call mskimg%kill
+        call vol%kill
         call fpl%kill
-        if( allocated(lmsk) ) deallocate(lmsk)
         ! report how many particles were used to reconstruct each state
         if( params_glob%nstates > 1 )then
             write(logfhandle,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
@@ -618,7 +632,7 @@ contains
                 call orientation%kill
             end subroutine rec_dens
 
-    end subroutine eorec_distr
+    end subroutine eorec
 
     ! DESTRUCTORS
 

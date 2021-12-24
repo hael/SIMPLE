@@ -1803,9 +1803,9 @@ contains
         &'initial_3Dmodel',&                                                          ! name
         &'3D ab initio model generation from class averages',&                        ! descr_short
         &'is a distributed workflow for generating an initial 3D model from class&
-        & averages obtained with cluster2D',&                                        ! descr_long
-        &'simple_exec',&                                                        ! executable
-        &0, 0, 0, 7, 4, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
+        & averages obtained with cluster2D',&                                         ! descr_long
+        &'simple_exec',&                                                              ! executable
+        &0, 0, 0, 5, 4, 2, 2, .true.)                                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1816,13 +1816,11 @@ contains
         ! search controls
         call initial_3Dmodel%set_input('srch_ctrls', 1, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
         &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call initial_3Dmodel%set_input('srch_ctrls', 2, update_frac)
-        call initial_3Dmodel%set_input('srch_ctrls', 3, frac)
-        call initial_3Dmodel%set_input('srch_ctrls', 4, pgrp)
-        call initial_3Dmodel%set_input('srch_ctrls', 5, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        call initial_3Dmodel%set_input('srch_ctrls', 2, frac)
+        call initial_3Dmodel%set_input('srch_ctrls', 3, pgrp)
+        call initial_3Dmodel%set_input('srch_ctrls', 4, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false., 'yes')
-        call initial_3Dmodel%set_input('srch_ctrls', 6, nrestarts)
-        call initial_3Dmodel%set_input('srch_ctrls', 7, 'pgrp_start','str', 'Initial point-group symmetry',&
+        call initial_3Dmodel%set_input('srch_ctrls', 5, 'pgrp_start','str', 'Initial point-group symmetry',&
         &'Initial point-group symmetry(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .false., 'c1')
         ! filter controls
         call initial_3Dmodel%set_input('filt_ctrls', 1, hp)
@@ -1835,10 +1833,10 @@ contains
             &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 8.)
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, mskdiam)
-        call initial_3Dmodel%set_input('mask_ctrls', 2, innerdiam)
-        call initial_3Dmodel%set_input('mask_ctrls', 3, width)
+        call initial_3Dmodel%set_input('mask_ctrls', 2, width)
         ! computer controls
         call initial_3Dmodel%set_input('comp_ctrls', 1, nparts)
+        initial_3Dmodel%comp_ctrls(1)%required = .false.
         call initial_3Dmodel%set_input('comp_ctrls', 2, nthr)
     end subroutine new_initial_3Dmodel
 
@@ -2954,6 +2952,7 @@ contains
         call reconstruct3D%set_input('mask_ctrls', 2, mskfile)
         ! computer controls
         call reconstruct3D%set_input('comp_ctrls', 1, nparts)
+        reconstruct3D%comp_ctrls(1)%required = .false.
         call reconstruct3D%set_input('comp_ctrls', 2, nthr)
     end subroutine new_reconstruct3D
 

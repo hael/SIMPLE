@@ -715,11 +715,15 @@ contains
                 call build_glob%eorecvols(s)%write_eos('recvol_state'//int2str_pad(s,2)//'_part'//&
                     int2str_pad(params_glob%part,params_glob%numlen))
             else
-                if( present(which_iter) )then
-                    params_glob%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//&
-                        int2str_pad(which_iter,3)//params_glob%ext
+                if( trim(params_glob%refine) .eq. 'snhc' )then
+                    params_glob%vols(s) = trim(SNHCVOL)//trim(int2str_pad(s,2))//params_glob%ext
                 else
-                    params_glob%vols(s) = 'startvol_state'//int2str_pad(s,2)//params_glob%ext
+                    if( present(which_iter) )then
+                        params_glob%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//&
+                            int2str_pad(which_iter,3)//params_glob%ext
+                    else
+                        params_glob%vols(s) = 'startvol_state'//int2str_pad(s,2)//params_glob%ext
+                    endif
                 endif
                 params_glob%vols_even(s) = add2fbody(params_glob%vols(s), params_glob%ext, '_even')
                 params_glob%vols_odd(s)  = add2fbody(params_glob%vols(s), params_glob%ext, '_odd')
@@ -729,6 +733,7 @@ contains
                 call build_glob%eorecvols(s)%get_res(res05s(s), res0143s(s))
                 call build_glob%eorecvols(s)%sampl_dens_correct_sum(build_glob%vol)
                 call build_glob%vol%write(params_glob%vols(s), del_if_exists=.true.)
+                call simple_copy_file(trim(params_glob%vols(s)),trim(VOL_FBODY)//int2str_pad(s,2)//params_glob%ext)
                  ! need to put the sum back at lowres for the eo pairs
                 call build_glob%vol%fft()
                 call build_glob%vol2%zero_and_unflag_ft
