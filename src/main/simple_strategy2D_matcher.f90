@@ -4,18 +4,28 @@ module simple_strategy2D_matcher
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_binoris_io
-use simple_polarft_corrcalc, only: polarft_corrcalc
-use simple_cmdline,          only: cmdline
-use simple_builder,          only: build_glob
-use simple_parameters,       only: params_glob
-use simple_polarizer,        only: polarizer
+use simple_polarft_corrcalc,    only: polarft_corrcalc
+use simple_cmdline,             only: cmdline
+use simple_builder,             only: build_glob
+use simple_parameters,          only: params_glob
+use simple_polarizer,           only: polarizer
+use simple_qsys_funs,           only: qsys_job_finished
+use simple_convergence,         only: convergence
+use simple_strategy2D3D_common, only: set_bp_range2d, prepimgbatch
+use simple_strategy2D,          only: strategy2D, strategy2D_per_ptcl
+use simple_strategy2D_srch,     only: strategy2D_spec
+use simple_strategy2D_alloc,    only: prep_strategy2d_batch, clean_strategy2d, prep_strategy2D_glob
+use simple_strategy2D_greedy,   only: strategy2D_greedy
+use simple_strategy2D_tseries,  only: strategy2D_tseries
+use simple_strategy2D_snhc,     only: strategy2D_snhc
+use simple_strategy2D_inpl,     only: strategy2D_inpl
+use simple_strategy2D_eval,     only: strategy2D_eval
 use simple_classaverager
 implicit none
 
 public :: cluster2D_exec
 private
 #include "simple_local_flags.inc"
-
 
 type(polarizer), allocatable :: match_ptcl_imgs(:)
 type(polarft_corrcalc)       :: pftcc
@@ -27,23 +37,15 @@ character(len=STDLEN)        :: benchfname
 contains
 
     !>  \brief  is the prime2D algorithm
-    subroutine cluster2D_exec( cline, which_iter )
-        use simple_qsys_funs,             only: qsys_job_finished
-        use simple_strategy2D3D_common,   only: set_bp_range2d, prepimgbatch
-        use simple_strategy2D,            only: strategy2D, strategy2D_per_ptcl
-        use simple_strategy2D_srch,       only: strategy2D_spec
-        use simple_strategy2D_alloc,      only: prep_strategy2d_batch, clean_strategy2d, prep_strategy2D_glob
-        use simple_strategy2D_greedy,     only: strategy2D_greedy
-        use simple_strategy2D_tseries,    only: strategy2D_tseries
-        use simple_strategy2D_snhc,       only: strategy2D_snhc
-        use simple_strategy2D_inpl,       only: strategy2D_inpl
-        use simple_strategy2D_eval,       only: strategy2D_eval
+    subroutine cluster2D_exec( cline, which_iter, converged )
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: which_iter
+        logical,                 intent(inout) :: converged
         type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
         type(strategy2D_spec),     allocatable :: strategy2Dspecs(:)
         integer, allocatable :: pinds(:), batches(:,:)
         logical, allocatable :: ptcl_mask(:)
+        type(convergence)    :: conv
         real                 :: frac_srch_space, snhc_sz, frac
         integer              :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update, min_nsamples
         integer              :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
@@ -134,7 +136,9 @@ contains
         ! PREP REFERENCES
         call cavger_new(ptcl_mask)
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
-            THROW_HARD('no eo partitioning available; cluster2D_exec')
+            if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; cluster2D_exec')
+            call build_glob%spproj_field%partition_eo
+            call build_glob%spproj%write_segment_inside(params_glob%oritype)
         endif
         if( .not. cline%defined('refs') )         THROW_HARD('need refs to be part of command line for cluster2D execution')
         if( .not. file_exists(params_glob%refs) ) THROW_HARD('input references (refs) does not exist in cwd')
@@ -281,6 +285,8 @@ contains
         call cavger_kill
         if( L_BENCH_GLOB ) rt_cavg = toc(t_cavg)
         call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')
+        if( .not. params_glob%l_distr_exec )&
+        &converged = conv%check_conv2D(cline, build_glob%spproj_field, build_glob%spproj_field%get_n('class'), params_glob%msk)
         if( L_BENCH_GLOB )then
             rt_tot  = toc(t_tot)
             doprint = .true.

@@ -837,9 +837,11 @@ contains
         use simple_strategy2D_matcher, only: cluster2D_exec
         class(cluster2D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        integer :: startit, ncls_from_refs, lfoo(3)
+        type(parameters)          :: params
+        type(builder)             :: build
+        character(len=LONGSTRLEN) :: finalcavgs
+        logical                   :: converged
+        integer                   :: startit, ncls_from_refs, lfoo(3), i
         call cline%set('oritype', 'ptcl2D')
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
         if( cline%defined('refs') )then
@@ -850,12 +852,41 @@ contains
         startit = 1
         if( cline%defined('startit') )startit = params%startit
         if( startit == 1 )call build%spproj_field%clean_updatecnt
-        ! execute
-        if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
-        call cluster2D_exec( cline, startit ) ! partition or not, depending on 'part'
-        ! end gracefully
-        call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
-        call qsys_job_finished('simple_commander_cluster2D :: exec_cluster2D')
+        if( params%l_distr_exec )then
+            if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
+            call cluster2D_exec( cline, startit, converged )
+            ! end gracefully
+            call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
+            call qsys_job_finished('simple_commander_cluster2D :: exec_cluster2D')
+        else
+            params%startit = startit
+            params%outfile = 'algndoc'//METADATA_EXT
+            ! variable neighbourhood size
+            if( cline%defined('extr_iter') )then
+                params%extr_iter = params%extr_iter - 1
+            else
+                params%extr_iter = params%startit - 1
+            endif
+            do i = 1, params%maxits
+                call cluster2D_exec( cline, params%startit, converged )
+                if( converged .or. i == params%maxits )then
+                    ! report the last iteration on exit
+                    call cline%delete( 'startit' )
+                    call cline%set('endit', real(params%startit))
+                    ! update project with the new orientations
+                    call build%spproj%write_segment_inside(params%oritype)
+                    ! update os_out
+                    finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%startit,3)//params%ext
+                    call build%spproj%add_cavgs2os_out(trim(finalcavgs), build%spproj%get_smpd(), imgkind='cavg')
+                    call build%spproj%write_segment_inside('out', params%projfile)
+                    exit
+                endif
+                ! update iteration counter
+                params%startit = params%startit + 1
+            end do
+            ! end gracefully
+            call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
+        endif
     end subroutine exec_cluster2D
 
     subroutine exec_cavgassemble( self, cline )
