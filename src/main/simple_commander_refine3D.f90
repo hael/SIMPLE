@@ -600,11 +600,12 @@ contains
         use simple_strategy3D_matcher, only: refine3D_exec
         class(refine3D_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        integer          :: startit, i
-        logical          :: converged
-        real             :: corr, corr_prev
+        type(parameters)      :: params
+        type(builder)         :: build
+        integer               :: startit, i, state
+        character(len=STDLEN) :: str_state, fsc_file, vol, vol_iter
+        logical               :: converged
+        real                  :: corr, corr_prev
         call build%init_params_and_build_strategy3D_tbox(cline,params)
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
@@ -634,15 +635,35 @@ contains
                 params%extr_iter = params%extr_iter + 1
                 ! in strategy3D_matcher:
                 call refine3D_exec(cline, params%startit, converged)
-                ! set last iteration nr
-                call cline%set('endit', real(params%startit))
-                ! update iteration counter
-                params%startit = params%startit + 1
                 if( converged .or. i == params%maxits )then
+                    ! report the last iteration on exit
+                    call cline%delete( 'startit' )
+                    call cline%set('endit', real(params%startit))
                     ! update project with the new orientations
                     call build%spproj%write_segment_inside(params%oritype)
+                    do state = 1, params%nstates
+                        str_state = int2str_pad(state,2)
+                        fsc_file = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                        call build%spproj%add_fsc2os_out(fsc_file, state, params%box)
+                        ! add state volume to os_out
+                        vol = trim(VOL_FBODY)//trim(str_state)//params%ext
+                        if( params%refine .eq. 'snhc' )then
+                            vol_iter = trim(SNHCVOL)//trim(str_state)//params%ext
+                        else
+                            vol_iter = trim(vol)
+                        endif
+                        if( trim(params%oritype).eq.'cls3D' )then
+                            call build%spproj%add_vol2os_out(vol_iter, params%smpd, state, 'vol_cavg')
+                        else
+                            call build%spproj%add_vol2os_out(vol_iter, params%smpd, state, 'vol')
+                        endif! volume mask, one for all states
+                    end do
+                    if( cline%defined('mskfile') )call build%spproj%add_vol2os_out(trim(params%mskfile), params%smpd, 1, 'vol_msk')
+                    call build%spproj%write_segment_inside('out')
                     exit
                 endif
+                ! update iteration counter
+                params%startit = params%startit + 1
             end do
         endif
         ! end gracefully
