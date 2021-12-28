@@ -1119,6 +1119,7 @@ contains
         cleanup2D%mask_ctrls(1)%required = .false.
         ! computer controls
         call cleanup2D%set_input('comp_ctrls', 1, nparts)
+        cleanup2D%comp_ctrls(1)%required = .false.
         call cleanup2D%set_input('comp_ctrls', 2, nthr)
     end subroutine new_cleanup2D
 
@@ -1212,6 +1213,7 @@ contains
         call cluster2D%set_input('mask_ctrls', 2, innerdiam)
         ! computer controls
         call cluster2D%set_input('comp_ctrls', 1, nparts)
+        cluster2D%comp_ctrls(1)%required = .false.
         call cluster2D%set_input('comp_ctrls', 2, nthr)
     end subroutine new_cluster2D
 

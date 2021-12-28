@@ -23,7 +23,7 @@ contains
 
     subroutine clean_strategy2D
         ! per class
-        if( allocated(s2D%cls_pops)  ) deallocate(s2D%cls_pops)
+        if( allocated(s2D%cls_pops)   ) deallocate(s2D%cls_pops)
         ! per particle
         if( allocated(s2D%srch_order) ) deallocate(s2D%srch_order)
         if( allocated(s2D%do_inplsrch)) deallocate(s2D%do_inplsrch)

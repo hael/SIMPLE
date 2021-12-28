@@ -915,7 +915,7 @@ contains
         params_glob%ncunits = ncunits_orig
         params_glob%nthr    = nthr_orig
         call build%spproj%kill
-        call simple_end('**** SIMPLE_DISTR_SCALE NORMAL STOP ****')
+        call simple_end('**** SIMPLE_SCALE_PROJECT_DISTR NORMAL STOP ****')
     end subroutine exec_scale_project_distr
 
     subroutine exec_prune_project_distr( self, cline )

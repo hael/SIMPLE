@@ -737,7 +737,7 @@ contains
             call progress(i, nran)
             ii = rt%irnd()
             call rt%insert(ii)
-            call spproj%get_stkname_and_ind('ptcl2D', ii, stkname, ind)
+            call spproj%get_stkname_and_ind('ptcl2D', ii, stkname, ind)            
             call img%read(stkname, ind)
             call img%norm()
             if( doscale )then

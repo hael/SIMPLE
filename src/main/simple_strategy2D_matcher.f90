@@ -280,8 +280,27 @@ contains
         if( L_BENCH_GLOB ) t_cavg = tic()
         call cavger_transf_oridat( build_glob%spproj )
         call cavger_assemble_sums( l_partial_sums )
-        ! write results to disk
-        call cavger_readwrite_partial_sums('write')
+        if( l_distr_exec_glob )then
+            ! write results to disk
+            call cavger_readwrite_partial_sums('write')
+        else
+            if( cline%defined('which_iter') )then
+                params_glob%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
+                params_glob%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_even'//params_glob%ext
+                params_glob%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_odd'//params_glob%ext
+            else if( .not. cline%defined('refs') )then
+                params_glob%refs      = 'start2Drefs'//params_glob%ext
+                params_glob%refs_even = 'start2Drefs_even'//params_glob%ext
+                params_glob%refs_odd  = 'start2Drefs_odd'//params_glob%ext
+            endif
+            call cavger_calc_and_write_frcs_and_eoavg(params_glob%frcs)
+            ! classdoc gen needs to be after calc of FRCs
+            call cavger_gen2Dclassdoc(build_glob%spproj)
+            ! write references
+            call cavger_write(trim(params_glob%refs),      'merged')
+            call cavger_write(trim(params_glob%refs_even), 'even'  )
+            call cavger_write(trim(params_glob%refs_odd),  'odd'   )
+        endif
         call cavger_kill
         if( L_BENCH_GLOB ) rt_cavg = toc(t_cavg)
         call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')

@@ -156,13 +156,14 @@ contains
 
     subroutine exec_cleanup2D( self, cline )
         use simple_commander_project, only: scale_project_commander_distr
-        use simple_procimgstk,       only: random_selection_from_imgfile, random_cls_from_imgfile
+        use simple_procimgstk,        only: random_selection_from_imgfile, random_cls_from_imgfile
         use simple_commander_imgproc, only: scale_commander
         use simple_class_frcs,        only: class_frcs
         class(cleanup2D_commander_hlev), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
         type(cluster2D_commander_distr)     :: xcluster2D_distr
+        type(cluster2D_commander)           :: xcluster2D ! shared-memory implementation
         type(scale_project_commander_distr) :: xscale_distr
         type(scale_commander)               :: xscale
         type(rank_cavgs_commander)          :: xrank_cavgs
@@ -170,6 +171,7 @@ contains
         type(cmdline)                       :: cline_cluster2D1, cline_cluster2D2
         type(cmdline)                       :: cline_rank_cavgs, cline_scale, cline_scalerefs
         ! other variables
+        class(parameters),      pointer     :: params_ptr => null()
         type(parameters)                    :: params
         type(sp_project)                    :: spproj, spproj_sc
         type(class_frcs)                    :: frcs, frcs_sc
@@ -177,7 +179,7 @@ contains
         character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
         real                                :: scale_factor, smpd, lp1, lp2
         integer                             :: last_iter, box
-        logical                             :: do_scaling
+        logical                             :: do_scaling, l_shmem
         ! parameters
         character(len=STDLEN) :: orig_projfile_bak = 'orig_bak.simple'
         integer, parameter    :: MINBOX      = 92
@@ -195,11 +197,25 @@ contains
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
         call cline%set('ptclw','no')
         call cline%set('stream', 'no')
+        ! set shared-memory flag
+        if( cline%defined('nparts') )then
+            if( nint(cline%get_rarg('nparts')) == 1 )then
+                l_shmem = .true.
+                call cline%delete('nparts')
+            else
+                l_shmem = .false.
+            endif
+        else
+            l_shmem = .true.
+        endif
         call params%new(cline)
         orig_projfile = params%projfile
         if( .not. cline%defined('maxits') )then
             params%maxits = nint(MAXITS)
             call cline%set('maxits', MAXITS)
+        endif
+        if( .not. cline%defined('mskdiam') )then
+            call cline%set('mskdiam', (real(params%box) * 0.8) * params%smpd)
         endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -223,7 +239,7 @@ contains
         cline_cluster2D2 = cline
         cline_scale      = cline
         call cline_cluster2D1%set('prg', 'cluster2D')
-        call cline_cluster2D1%set('maxits', MINITS)
+        call cline_cluster2D1%set('maxits',   MINITS)
         call cline_cluster2D1%set('objfun',     'cc')
         call cline_cluster2D1%set('match_filt', 'no')
         call cline_cluster2D1%set('center',     'no')
@@ -274,8 +290,8 @@ contains
             call simple_rename(projfile,orig_projfile)
             projfile = trim(orig_projfile)
         endif
-        lp1   = max(2.*smpd, max(params%lp,TARGET_LP))
-        lp2   = max(2.*smpd, params%lp)
+        lp1 = max(2.*smpd, max(params%lp,TARGET_LP))
+        lp2 = max(2.*smpd, params%lp)
         ! execute initialiser
         if( cline%defined('refs') )then
             if( params%autoscale.eq.'yes')then
@@ -308,9 +324,18 @@ contains
         write(logfhandle,'(A,F6.1)') '>>> STAGE 1, LOW-PASS LIMIT: ',lp1
         write(logfhandle,'(A)') '>>>'
         call cline_cluster2D1%set('projfile', trim(projfile))
-        call xcluster2D_distr%execute(cline_cluster2D1)
+        if( l_shmem )then
+            params_ptr  => params_glob
+            params_glob => null()
+            call xcluster2D%execute(cline_cluster2D1)
+            params_glob => params_ptr
+            params_ptr  => null()
+        else
+            call xcluster2D_distr%execute(cline_cluster2D1)
+        endif
         last_iter  = nint(cline_cluster2D1%get_rarg('endit'))
         finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
+        if( .not. file_exists(trim(finalcavgs)) ) THROW_HARD('File '//trim(finalcavgs)//' does not exist')
         ! execution 2
         if( cline%defined('maxits') )then
             if( last_iter < params%maxits )then
@@ -320,7 +345,15 @@ contains
                 call cline_cluster2D2%set('projfile', trim(projfile))
                 call cline_cluster2D2%set('startit',  real(last_iter+1))
                 call cline_cluster2D2%set('refs',     trim(finalcavgs))
-                call xcluster2D_distr%execute(cline_cluster2D2)
+                if( l_shmem )then
+                    params_ptr  => params_glob
+                    params_glob => null()
+                    call xcluster2D%execute(cline_cluster2D2)
+                    params_glob => params_ptr
+                    params_ptr  => null()
+                else
+                    call xcluster2D_distr%execute(cline_cluster2D2)
+                endif
                 last_iter  = nint(cline_cluster2D2%get_rarg('endit'))
                 finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
             endif
@@ -837,6 +870,7 @@ contains
         use simple_strategy2D_matcher, only: cluster2D_exec
         class(cluster2D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
+        real, allocatable         :: states(:)
         type(parameters)          :: params
         type(builder)             :: build
         character(len=LONGSTRLEN) :: finalcavgs
@@ -868,7 +902,17 @@ contains
                 params%extr_iter = params%startit - 1
             endif
             do i = 1, params%maxits
+                params%which_iter = params%startit
+                call cline%set('which_iter', real(params%which_iter))
                 call cluster2D_exec( cline, params%startit, converged )
+                ! the below needs to be here because prep_strategy2D_glob in strategy2D_alloc fetches class populations for the cls2D field
+                ! and when cls2D is written the class populations are update
+                ! write project: cls2D and state congruent cls3D
+                call build%spproj%os_cls3D%new(params%ncls, is_ptcl=.false.)
+                states = build%spproj%os_cls2D%get_all('state')
+                call build%spproj%os_cls3D%set_all('state',states)
+                call build%spproj%write_segment_inside('cls2D', params%projfile)
+                call build%spproj%write_segment_inside('cls3D', params%projfile)
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
                     call cline%delete( 'startit' )
