@@ -810,6 +810,7 @@ contains
         fbody_split = get_fbody(SPLITTED, 'mrc')
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_autorefine3D_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
+        params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
         call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
         ! copy the input command line as templates for the refine3D_nano/detect_atoms command lines
         cline_refine3D_nano = cline

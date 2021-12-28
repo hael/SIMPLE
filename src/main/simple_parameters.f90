@@ -1433,7 +1433,7 @@ contains
                         ! with respect to parent folder
                         ! needs to be done here because not part of the check_file list
                         vol = PATH_PARENT//trim(vol)
-                        call cline%set(key, vol)
+                        call cline%set(key, vol)                        
                     endif
                     call check_file(key, self%vols(i), notAllowed='T')
                     if( .not. file_exists(self%vols(i)) )then
