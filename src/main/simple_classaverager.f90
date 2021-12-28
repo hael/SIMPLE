@@ -350,7 +350,7 @@ contains
         complex :: fcomp
         real    :: loc(2), mat(2,2), dist(2), pw, add_phshift
         integer :: lims(3,2), phys_cmat(3), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
-        integer :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, sh, iwinsz, nyq
+        integer :: nbatches, batch, icls_pop, iprec, iori, i, batchsz, sh, iwinsz, nyq
         integer :: wdim, h, k, l, m, ll, mm, incr, icls, iptcl, batchsz_max, interp_shlim, interp_shlim_sq
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
@@ -400,11 +400,8 @@ contains
         allocate( rho(lims(1,1):lims(1,2),lims(2,1):lims(2,2)),&
                  &rho_even(lims(1,1):lims(1,2),lims(2,1):lims(2,2)),&
                  &rho_odd( lims(1,1):lims(1,2),lims(2,1):lims(2,2)))
-        cnt_progress = 0
         ! class loop
         do icls=1,ncls
-            cnt_progress = cnt_progress + 1
-            call progress(cnt_progress, ncls)
             icls_pop = class_pop(icls)
             if( icls_pop == 0 ) cycle
             call get_indices(icls, ptcls_inds, iprecs, ioris)

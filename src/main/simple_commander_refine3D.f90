@@ -641,6 +641,7 @@ contains
                     call cline%set('endit', real(params%startit))
                     ! update project with the new orientations
                     call build%spproj%write_segment_inside(params%oritype)
+                    call del_file(params%outfile)
                     do state = 1, params%nstates
                         str_state = int2str_pad(state,2)
                         fsc_file = FSC_FBODY//trim(str_state)//trim(BIN_EXT)

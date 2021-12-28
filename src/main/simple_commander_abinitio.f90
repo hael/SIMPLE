@@ -242,6 +242,7 @@ contains
         call cline_refine3D_snhc%set('match_filt', 'no')
         call cline_refine3D_snhc%set('ptclw',      'no')  ! no soft particle weights in first phase
         call cline_refine3D_snhc%set('silence_fsc','yes') ! no FSC plot printing in snhc phase
+        call cline_refine3D_snhc%delete('frac')           ! no rejections in first phase
         ! (2) REFINE3D_INIT
         call cline_refine3D_init%set('projfile', trim(WORK_PROJFILE))
         call cline_refine3D_init%set('box',      real(box))
@@ -252,8 +253,10 @@ contains
         endif
         call cline_refine3D_init%set('maxits',   real(MAXITS_INIT))
         call cline_refine3D_init%set('match_filt','no')
-        call cline_refine3D_init%set('ptclw',     'no')  ! no soft particle weights in init phase
+        call cline_refine3D_init%set('ptclw',     'no')   ! no soft particle weights in init phase
+        call cline_refine3D_init%set('silence_fsc','yes') ! no FSC plot printing in 2nd phase
         call cline_refine3D_init%set('vol1',     trim(SNHCVOL)//trim(str_state)//params%ext)
+        call cline_refine3D_init%delete('frac')           ! no rejections in 2nd phase
         ! (3) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
             ! need to replace original point-group flag with c1/pgrp_start

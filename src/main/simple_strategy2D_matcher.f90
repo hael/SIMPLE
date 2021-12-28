@@ -288,10 +288,8 @@ contains
                 params_glob%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
                 params_glob%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_even'//params_glob%ext
                 params_glob%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_odd'//params_glob%ext
-            else if( .not. cline%defined('refs') )then
-                params_glob%refs      = 'start2Drefs'//params_glob%ext
-                params_glob%refs_even = 'start2Drefs_even'//params_glob%ext
-                params_glob%refs_odd  = 'start2Drefs_odd'//params_glob%ext
+            else
+                THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
             endif
             call cavger_calc_and_write_frcs_and_eoavg(params_glob%frcs)
             ! classdoc gen needs to be after calc of FRCs
@@ -300,12 +298,15 @@ contains
             call cavger_write(trim(params_glob%refs),      'merged')
             call cavger_write(trim(params_glob%refs_even), 'even'  )
             call cavger_write(trim(params_glob%refs_odd),  'odd'   )
+            ! update command line
+            call cline%set('refs', trim(params_glob%refs))
+            ! check convergence
+            converged = conv%check_conv2D(cline, build_glob%spproj_field, build_glob%spproj_field%get_n('class'), params_glob%msk)
         endif
         call cavger_kill
+        call pftcc%kill ! necessary for shared mem implementation, which otherwise bugs out when the bp-range changes
         if( L_BENCH_GLOB ) rt_cavg = toc(t_cavg)
         call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')
-        if( .not. params_glob%l_distr_exec )&
-        &converged = conv%check_conv2D(cline, build_glob%spproj_field, build_glob%spproj_field%get_n('class'), params_glob%msk)
         if( L_BENCH_GLOB )then
             rt_tot  = toc(t_tot)
             doprint = .true.
