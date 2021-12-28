@@ -893,6 +893,7 @@ contains
             call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
             call qsys_job_finished('simple_commander_cluster2D :: exec_cluster2D')
         else
+            if( .not. cline%defined('refs') ) THROW_HARD('shared-memory implementation of cluster2D needs starting references')
             params%startit = startit
             params%outfile = 'algndoc'//METADATA_EXT
             ! variable neighbourhood size
@@ -919,6 +920,7 @@ contains
                     call cline%set('endit', real(params%startit))
                     ! update project with the new orientations
                     call build%spproj%write_segment_inside(params%oritype)
+                    call del_file(params%outfile)
                     ! update os_out
                     finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%startit,3)//params%ext
                     call build%spproj%add_cavgs2os_out(trim(finalcavgs), build%spproj%get_smpd(), imgkind='cavg')
