@@ -1,7 +1,8 @@
 const pug = require(global.base + '/node_modules/pug')
 const running = require(global.base + '/node_modules/is-running')
 const path = require('path')
-const spawn = require(global.base + '/node_modules/child-process-promise').spawn
+//const spawn = require(global.base + '/node_modules/child-process-promise').spawn
+const { spawn } = require('child_process')
 const fs = require(global.base + '/node_modules/fs-extra')
 
 const filesystem = require('./fileSystem')
@@ -119,20 +120,33 @@ class Task{
   start(arg){
         arg['userdata'] = global.userdata
         if(global.exe.includes('simple_multiuser')){
-		var promise = spawn("export", ["PKG_EXECPATH=''", '&&', 'simple_multiuser', 'execute', "'" + JSON.stringify(arg) + "'"], {detached: true, shell: true, cwd:arg['projectfolder']})
+		//var promise = spawn("export", ["PKG_EXECPATH=''", '&&', 'simple_multiuser', 'execute', "'" + JSON.stringify(arg) + "'"], {detached: true, shell: true, cwd:arg['projectfolder']})
+		var executeprocess = spawn("export", ["PKG_EXECPATH=''", '&&', 'simple_multiuser', 'execute', "'" + JSON.stringify(arg) + "'"], {detached: true, shell: true, cwd:arg['projectfolder']})
 	}else{
-		var promise = spawn(global.exe, ['execute', JSON.stringify(arg)], {detached: true, cwd:global.appPath})
+		//var promise = spawn(global.exe, ['execute', JSON.stringify(arg)], {detached: true, cwd:global.appPath})
+		var executeprocess = spawn(global.exe, ['execute', JSON.stringify(arg)], {detached: true, cwd:global.appPath})
 	}
-        var executeprocess = promise.childProcess
-	promise.catch(error => {
-		console.log('ERROR', error)
+        //var executeprocess = promise.childProcess
+	//promise.catch(error => {
+	//	console.log('ERROR', error)
+	//})
+        executeprocess.stdout.on('data', _data => {
+		try {
+                        var data=new Buffer(_data,'utf-8');
+                        console.log('DATA', data.toString());
+                } catch(error) {
+			console.log('STDOUT ERRROR', error)
+		}
 	})
-        executeprocess.stdout.on('data', data => {
-			console.log('DATA', data.toString())
-		})
 	executeprocess.stderr.on('data', data => {
                         console.log('DATA ERROR', data.toString())
                 })
+	executeprocess.on('close', (code) => {
+ 			console.log('Subprocess exited with code', code)
+		});
+	executeprocess.on('error', (err) => {
+  			console.error('Failed to start subprocess.', err);
+		});
 	return sqlite.sqlQuery("SELECT seq FROM sqlite_sequence WHERE name='" + arg['projecttable'] + "'")
 	.then(rows => {
 		if(rows != undefined){

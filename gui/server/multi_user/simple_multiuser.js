@@ -13,7 +13,7 @@ const auth = require('http-auth')
 const pug = require('pug')
 const bodyParser = require('body-parser')
 const sqlite3 = require('sqlite3').verbose()
-const spawn = require('child-process-promise').spawn
+//const spawn = require('child-process-promise').spawn
 const grepit = require('grepit')
 const running = require('is-running')
 const sharp = require('sharp');
@@ -24,6 +24,10 @@ const {getHeader, toPixels} = require('mrchandler')
 //const simpleexec = require('./server/simpleExec')
 
 var multiuserport = 8095
+
+if(process.env.SIMPLE_PORT){
+  multiuserport = process.env.SIMPLE_PORT
+}
 
 let httpServer
 let url

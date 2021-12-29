@@ -2,7 +2,8 @@ const fs = require(global.base + '/node_modules/fs-extra');
 const pug = require(global.base + '/node_modules/pug')
 const simpleexec = require('./simpleExec')
 const path = require('path')
-const spawn = require(global.base + '/node_modules/child-process-promise').spawn
+//const spawn = require(global.base + '/node_modules/child-process-promise').spawn
+const { spawn } = require('child_process')
 
 class Widget{
 
@@ -63,7 +64,7 @@ class Widget{
 	return simpleexec.getProjectVals(arg['file'], 'out', 'vol,smpd,imgkind')
 	.then(result => {
 		var volumes = []
-		for(var line of result.stdout.split("\n")){
+		for(var line of result.split("\n")){
 			var elements = line.split((/[ ]+/))
 			if(elements.length == 7 && elements[3] != "0.0000" && elements[5] == "vol"){
 				volumes.push({vol:elements[3], name : path.basename(elements[3]), smpd:elements[4]})
@@ -85,9 +86,27 @@ class Widget{
     commandargs.push("lp=" + arg['lp'])
     commandargs.push("hp=" + arg['hp'])
     commandargs.push("nthr=1")
-    return spawn(command, commandargs, {cwd: path.dirname(arg['projfile']), capture: ['stdout']})
+
+    return new Promise((resolve, reject) => {
+	var res = ''
+	var execprocess = spawn(command, commandargs, {cwd: path.dirname(arg['projfile'])})
+	
+	execprocess.stdout.on('data', function(_data) {
+        	try {
+                        var data=new Buffer(_data,'utf-8');
+                        res+=data.toString();
+                } catch(error) {} // ignore
+        })
+        execprocess.on('close', function(_) {
+               return resolve(res);
+        });
+        execprocess.on('error', function(error) {
+               return reject(error);
+        });
+    
+    })	
     .then((result) => {
-      var lines = result.stdout.split("\n")
+      var lines = result.split("\n")
       var bfac
       var plot = []
       for(var line of lines){

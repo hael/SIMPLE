@@ -2,7 +2,7 @@ const fs = require(global.base + '/node_modules/fs-extra');
 const pug = require(global.base + '/node_modules/pug')
 const simpleexec = require('./simpleExec')
 const path = require('path')
-const spawn = require(global.base + '/node_modules/child-process-promise').spawn
+//const spawn = require(global.base + '/node_modules/child-process-promise').spawn
 
 class Relion{
 	
