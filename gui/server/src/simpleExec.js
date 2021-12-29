@@ -1,5 +1,6 @@
 const fs = require(global.base + '/node_modules/fs-extra')
-const spawn = require(global.base + '/node_modules/child-process-promise').spawn
+//const spawn = require(global.base + '/node_modules/child-process-promise').spawn
+const { spawn } = require('child_process')
 const path = require('path')
 const grepit = require(global.base + '/node_modules/grepit')
 
@@ -30,7 +31,24 @@ class SimpleExec {
       if(filestat.isFile()){
         var command = "simple_exec"
         var commandargs = ["prg=print_project_info", "projfile=" + file]
-        return spawn(command, commandargs, {capture: ['stdout']})
+	return new Promise((resolve, reject) => {
+      		var res = ''
+       		var execprocess = spawn(command, commandargs)
+
+       		execprocess.stdout.on('data', function(_data) {
+                	try {
+                        	var data=new Buffer(_data,'utf-8');
+                        	res+=data.toString();
+                	} catch(error) {} // ignore
+        	})
+        	execprocess.on('close', function(_) {
+               		return resolve(res);
+        	});
+        	execprocess.on('error', function(error) {
+               		return reject(error);
+        	});
+
+    	})
       }else{
         return
       }
@@ -43,7 +61,24 @@ class SimpleExec {
       if(filestat.isFile()){
         var command = "simple_exec"
         var commandargs = ["prg=print_project_field", "projfile=" + file, "oritype=" + oritype]
-        return spawn(command, commandargs, {capture: ['stdout']})
+        return new Promise((resolve, reject) => {
+                var res = ''
+                var execprocess = spawn(command, commandargs)
+
+                execprocess.stdout.on('data', function(_data) {
+                        try {
+                                var data=new Buffer(_data,'utf-8');
+                                res+=data.toString();
+                        } catch(error) {} // ignore
+                })
+                execprocess.on('close', function(_) {
+                        return resolve(res);
+                });
+                execprocess.on('error', function(error) {
+                        return reject(error);
+                });
+
+        })
       }else{
         return
       }
@@ -61,7 +96,24 @@ class SimpleExec {
           "oritype=" + oritype,
           "keys=" + keys,
         ]
-        return spawn(command, commandargs, {capture: ['stdout']})
+	return new Promise((resolve, reject) => {
+                var res = ''
+                var execprocess = spawn(command, commandargs)
+
+                execprocess.stdout.on('data', function(_data) {
+                        try {
+                                var data=new Buffer(_data,'utf-8');
+                                res+=data.toString();
+                        } catch(error) {} // ignore
+                })
+                execprocess.on('close', function(_) {
+                        return resolve(res);
+                });
+                execprocess.on('error', function(error) {
+                        return reject(error);
+                });
+
+        })
       }else{
         return
       }
@@ -88,12 +140,46 @@ class SimpleExec {
   }
   
   createProject(name, folder){
-	  return(spawn("simple_exec", ["prg=new_project", "projname=" + name], {cwd: folder, capture: ['stdout']}))
+	return new Promise((resolve, reject) => {
+                var res = ''
+                var execprocess = spawn("simple_exec", ["prg=new_project", "projname=" + name], {cwd: folder})
+
+                execprocess.stdout.on('data', function(_data) {
+                        try {
+                                var data=new Buffer(_data,'utf-8');
+                                res+=data.toString();
+                        } catch(error) {} // ignore
+                })
+                execprocess.on('close', function(_) {
+                        return resolve(res);
+                });
+                execprocess.on('error', function(error) {
+                        return reject(error);
+                });
+
+        })
   }
   
   createCavgs(projfile){
 	  console.log(path.dirname(projfile) + '/selected_clusters.mrc')
-	  return(spawn("simple_private_exec", ["prg=export_cavgs", "projfile=" + projfile, "outstk=" + path.dirname(projfile) + '/selected_clusters.mrc'], {cwd: path.dirname(projfile), capture: ['stdout']}))
+	return new Promise((resolve, reject) => {
+                var res = ''
+                var execprocess = spawn("simple_private_exec", ["prg=export_cavgs", "projfile=" + projfile, "outstk=" + path.dirname(projfile) + '/selected_clusters.mrc'], {cwd: path.dirname(projfile)})
+                
+                execprocess.stdout.on('data', function(_data) {
+                        try {   
+                                var data=new Buffer(_data,'utf-8');
+                                res+=data.toString();
+                        } catch(error) {} // ignore
+                })
+                execprocess.on('close', function(_) {
+                        return resolve(res);
+                });
+                execprocess.on('error', function(error) {
+                        return reject(error);
+                });
+        
+        })
   }
   
   relionExport(projfile){
@@ -109,8 +195,8 @@ class SimpleExec {
 	  return this.getProjectInfo(projfile)
 	})
 	.then(projinfo => {
-		micrographspresent = (projinfo.stdout.includes('mic')) ? true : false
-		particlespresent = (projinfo.stdout.includes('ptcl2D')) ? true : false
+		micrographspresent = (projinfo.includes('mic')) ? true : false
+		particlespresent = (projinfo.includes('ptcl2D')) ? true : false
 		return
 	})
 	.then(() => {
@@ -120,7 +206,7 @@ class SimpleExec {
 				return this.getProjectField(projfile, 'mic')
 			})
 			.then(projvals => {
-				return this.valsToArray(projvals.stdout)
+				return this.valsToArray(projvals)
 			})
 			.then(projvalarray => {
 				mics = projvalarray
@@ -141,7 +227,7 @@ class SimpleExec {
 				return this.getProjectField(projfile, 'stk')
 			})
 			.then(projvals => {
-				return this.valsToArray(projvals.stdout)
+				return this.valsToArray(projvals)
 			})
 			.then(projvalarray => {
 				stks = projvalarray
@@ -155,7 +241,7 @@ class SimpleExec {
 				return this.getProjectField(projfile, 'ptcl2D')
 			})
 			.then(projvals => {
-				return this.valsToArray(projvals.stdout)
+				return this.valsToArray(projvals)
 			})
 			.then(projvalarray => {
 				ptcls2D = projvalarray
@@ -456,53 +542,82 @@ class SimpleExec {
 		})
 		.then(commandarguments => {
 			commandargs = commandarguments
-			return spawn("simple_exec", commandargs[1], {cwd: arg['projectfolder']})
+			return new Promise((resolve, reject) => {
+                		var execprocess = spawn("simple_exec", commandargs[1], {cwd: arg['projectfolder']})
+
+                		execprocess.on('close', function(_) {
+                        		return resolve();
+               		 	});
+                		execprocess.on('error', function(error) {
+                        		return reject(error);
+                		});
+
+        		})
 		})
 		.then(output => {
-			var promise = spawn("simple_exec", commandargs[0], {cwd: arg['projectfolder']})
-			var childprocess = promise.childProcess
-			childprocess.stdout.on('data', data => {
-				var lines = data.toString().split("\n")
-				if(!this.execdir){
-					for (var line of lines){
-						if(line.includes("EXECUTION DIRECTORY")){
-							this.execdir = arg['projectfolder'] + "/" + line.split(" ").pop()
-							this.startProgressWatcher(this.execdir, arg['projfile'], arg['projecttable'], this.jobid)
-							console.log('PID', childprocess.pid)
-							sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET folder='" + this.execdir  + "', pid='" + childprocess.pid + "', status='running' WHERE id=" + this.jobid)
-						//	sqlite.sqlQuery("INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type, parent, folder, pid) VALUES ('" + arg['name'] + "','" + arg['description'] + "','" + JSON.stringify(arg) + "','running', '" + JSON.stringify(arg['view']) + "', '" + arg['type'] + "', '" + arg['projfile'] + "', '" + this.execdir + "', '" + childprocess.pid + "')")
-							break
-						}
-					}
-				}
-				this.updateProgress(lines, arg)
-				if(this.execdir){
-					if(this.buffer != false){
-						fs.appendFile(this.execdir + '/simple.log', this.buffer)
-						this.buffer = false
-					}
-					fs.appendFile(this.execdir + '/simple.log', data.toString())
-				}else{
-					this.buffer = this.buffer + data.toString()
-				}
-			})
+			return new Promise((resolve, reject) => {
+          			var res = ''
+                		var execprocess = spawn("simple_exec", commandargs[0], {cwd: arg['projectfolder']})
 
-			childprocess.stderr.on('data', data => {
-				 if(this.execdir){
-                                        if(this.errbuffer != false){
-                                                fs.appendFile(this.execdir + '/simple.error', this.errbuffer)
-                                                this.errbuffer = false
-                                        }
-                                        fs.appendFile(this.execdir + '/simple.error', data.toString())
-                                }else{
-                                        this.errbuffer = this.errbuffer + data.toString()
-                                }
+                		execprocess.stdout.on('data', (_data) => {
+                       			try {
+                                		var data=new Buffer(_data,'utf-8');
+                        			var lines = data.toString().split("\n")
+						if(!this.execdir){
+                                        		for (var line of lines){
+                                                		if(line.includes("EXECUTION DIRECTORY")){
+                                                        		this.execdir = arg['projectfolder'] + "/" + line.split(" ").pop()
+									console.log("Execution Directory:", this.execdir)
+                                                        		this.startProgressWatcher(this.execdir, arg['projfile'], arg['projecttable'], this.jobid)
+                                                        		console.log('PID', execprocess.pid)
+                                                        		sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET folder='" + this.execdir  + "', pid='" + execprocess.pid + "', status='running' WHERE id=" + this.jobid)
+									break
+								}
+							}
+						}
+						this.updateProgress(lines, arg)
+                                		if(this.execdir){
+                                        		if(this.buffer != false){
+                                                		fs.appendFile(this.execdir + '/simple.log', this.buffer)
+                                                		this.buffer = false
+                                        		}
+                                        		fs.appendFile(this.execdir + '/simple.log', data.toString())
+                               	 		}else{
+                                        		this.buffer = this.buffer + data.toString()
+                                		}
+					} catch(error) {
+						console.log("Execution error:", error)
+					}
+                		});
+	
+				execprocess.stderr.on('data',(_data) => {
+					try {
+						var data=new Buffer(_data,'utf-8');
+						if(this.execdir){
+                                 		       if(this.errbuffer != false){
+                                                		fs.appendFile(this.execdir + '/simple.error', this.errbuffer)
+                                                		this.errbuffer = false
+                                        		}
+                                        		fs.appendFile(this.execdir + '/simple.error', data.toString())
+                                		}else{
+                                        		this.errbuffer = this.errbuffer + data.toString()
+                                		}	
+					} catch(error) {} 
+        			});
+
+			        execprocess.on('close', function(code) {
+                		        return resolve(code);
+               			});
+
+                		execprocess.on('error', function(error) {
+                        		return reject(error);
+                		});
+
+				console.log(`Spawned child pid: ${execprocess.pid}`)
 			})
-			console.log(`Spawned child pid: ${childprocess.pid}`)
-			return promise
 		})
-		.then(output =>{
-			if(output.childProcess.exitCode == 0 && this.execdir && this.jobid){
+		.then(code =>{
+			if(code == 0 && this.execdir && this.jobid){
 				if(arg['saveclusters']){
 					console.log('clusters')
 					return sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Finished' WHERE id=" + this.jobid)
@@ -542,7 +657,7 @@ class SimpleExec {
 		})
 	}
 	
-	distrExec(arg){
+/*	distrExec(arg){
 		this.execdir = false
 		this.jobid = false
 		this.buffer = false
@@ -630,27 +745,40 @@ class SimpleExec {
 			})
 		})
 	}
-	
+*/	
 	startProgressWatcher(execdir, projfile, projecttable, jobid){
 		var folder = path.basename(execdir);
 		var count = 0
 		if(folder.includes('motion_correct') || folder.includes('ctf_estimate') || folder.includes('extract') || folder.includes('preprocess') || folder.includes('pick') ){
-			var promise = spawn("simple_exec", ['prg=print_project_field', 'oritype=mic', 'projfile=' + projfile ], {cwd:execdir})
-			var childprocess = promise.childProcess
-			childprocess.stdout.on('data', data => {
-				var lines = data.toString().split("\n")
-			//	console.log(lines)
-				for (var line of lines) {
-					if ( !line.includes("state=0") && line.length > 0 ){
-						count++
-					}
-				}
-			})
-			promise.then(() => {
+			return new Promise((resolve, reject) => {
+                		var execprocess = spawn("simple_exec", ['prg=print_project_field', 'oritype=mic', 'projfile=' + projfile ], {cwd:execdir})
+                
+                		execprocess.stdout.on('data', function(_data) {
+                        		try {   
+                                		var data=new Buffer(_data,'utf-8');
+						var lines = data.toString().split("\n")
+						for (var line of lines) {
+							if ( !line.includes("state=0") && line.length > 0 ){
+								count++
+							}
+						}
+                        		} catch(error) {} // ignore
+                		})
+                		
+				execprocess.on('close', function(_) {
+                        		return resolve();
+                		});
+
+  		              	execprocess.on('error', function(error) {
+                        		return reject(error);
+                		});
+        
+        		})	
+			.then(() => {
 				if ( count < 50 && count > 0 ){
 					this.watcher = setInterval(() => {this.progressWatch(execdir, count, projecttable, jobid)}, 10000);
 				} else {
-					this.watcher = setInterval(() => {this.progressWatch(execdir, count, projecttable, jobid)}, 60000);
+					this.watcher = setInterval(() => {this.progressWatch(execdir, count, projecttable, jobid)}, 120000);
 				}
 			})
 		}
