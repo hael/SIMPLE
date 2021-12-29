@@ -45,6 +45,7 @@ contains
         type(strategy2D_spec),     allocatable :: strategy2Dspecs(:)
         integer, allocatable :: pinds(:), batches(:,:)
         logical, allocatable :: ptcl_mask(:)
+        real,    allocatable :: states(:)
         type(convergence)    :: conv
         real                 :: frac_srch_space, snhc_sz, frac
         integer              :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update, min_nsamples
@@ -283,7 +284,7 @@ contains
         if( l_distr_exec_glob )then
             ! write results to disk
             call cavger_readwrite_partial_sums('write')
-        else
+        else            
             if( cline%defined('which_iter') )then
                 params_glob%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
                 params_glob%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_even'//params_glob%ext
@@ -300,6 +301,13 @@ contains
             call cavger_write(trim(params_glob%refs_odd),  'odd'   )
             ! update command line
             call cline%set('refs', trim(params_glob%refs))
+            ! write project: cls2D and state congruent cls3D
+            call build_glob%spproj%os_cls3D%new(params_glob%ncls, is_ptcl=.false.)
+            states = build_glob%spproj%os_cls2D%get_all('state')
+            call build_glob%spproj%os_cls3D%set_all('state',states)
+            call build_glob%spproj%write_segment_inside('cls2D', params_glob%projfile)
+            call build_glob%spproj%write_segment_inside('cls3D', params_glob%projfile)
+            deallocate(states)
             ! check convergence
             converged = conv%check_conv2D(cline, build_glob%spproj_field, build_glob%spproj_field%get_n('class'), params_glob%msk)
         endif

@@ -1,7 +1,7 @@
 ! concrete commander: cluster2D for simultanous 2D alignment and clustering of single-particle images
 module simple_commander_cluster2D
 include 'simple_lib.f08'
-use simple_builder,        only: builder
+use simple_builder,        only: builder, build_glob
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters, params_glob
@@ -9,6 +9,7 @@ use simple_sp_project,     only: sp_project
 use simple_qsys_env,       only: qsys_env
 use simple_image,          only: image
 use simple_qsys_funs
+use simple_procimgstk
 implicit none
 
 public :: cleanup2D_commander_hlev
@@ -103,7 +104,20 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         integer :: ncls_here
+        logical :: l_shmem
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        ! set shared-memory flag
+        if( cline%defined('nparts') )then
+            if( nint(cline%get_rarg('nparts')) == 1 )then
+                l_shmem = .true.
+                call cline%delete('nparts')
+            else
+                l_shmem = .false.
+            endif
+        else
+            l_shmem = .true.
+        endif
+        if( l_shmem .and. .not. cline%defined('refs') ) THROW_HARD('need input refs (filename) for shared-memory execution')
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
         write(logfhandle,'(a)') '>>> GENERATING CLUSTER CENTERS'
         ! deal with the orientations
@@ -127,16 +141,16 @@ contains
             call build%spproj_field%proj2class
         endif
         ! shift multiplication
-        if( params%mul > 1. )then
-            call build%spproj_field%mul_shifts(params%mul)
-        endif
+        if( params%mul > 1. ) call build%spproj_field%mul_shifts(params%mul)
         ! setup weights
         call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)
         ! even/odd partitioning
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
         ! write
-        if( nint(cline%get_rarg('part')) .eq. 1 )then
+        if( l_shmem )then
             call build%spproj%write_segment_inside(params%oritype)
+        else
+            if( params%part .eq. 1 ) call build%spproj%write_segment_inside(params%oritype)
         endif
         ! create class averager
         call cavger_new
@@ -144,9 +158,19 @@ contains
         call cavger_transf_oridat(build%spproj)
         ! standard cavg assembly
         call cavger_assemble_sums( .false. )
-        ! write sums
-        call cavger_readwrite_partial_sums('write')
-        call qsys_job_finished('simple_commander_cluster2D :: exec_make_cavgs')
+        if( l_shmem )then
+            call cavger_calc_and_write_frcs_and_eoavg(params%frcs)
+            ! classdoc gen needs to be after calc of FRCs
+            call cavger_gen2Dclassdoc(build%spproj)
+            ! write references
+            call cavger_write(trim(params%refs),      'merged')
+            call cavger_write(trim(params%refs_even), 'even'  )
+            call cavger_write(trim(params%refs_odd),  'odd'   )
+        else
+            ! write partital sums
+            call cavger_readwrite_partial_sums('write')
+            call qsys_job_finished('simple_commander_cluster2D :: exec_make_cavgs')
+        endif
         call cavger_kill
         ! end gracefully
         call build%kill_strategy2D_tbox
@@ -164,18 +188,18 @@ contains
         ! commanders
         type(cluster2D_commander_distr)     :: xcluster2D_distr
         type(cluster2D_commander)           :: xcluster2D ! shared-memory implementation
-        type(scale_project_commander_distr) :: xscale_distr
+        type(scale_project_commander_distr) :: xscale_proj
         type(scale_commander)               :: xscale
         type(rank_cavgs_commander)          :: xrank_cavgs
         ! command lines
         type(cmdline)                       :: cline_cluster2D1, cline_cluster2D2
         type(cmdline)                       :: cline_rank_cavgs, cline_scale, cline_scalerefs
         ! other variables
-        class(parameters),      pointer     :: params_ptr => null()
+        class(parameters), pointer          :: params_ptr => null()
         type(parameters)                    :: params
         type(sp_project)                    :: spproj, spproj_sc
         type(class_frcs)                    :: frcs, frcs_sc
-        character(len=:),       allocatable :: projfile, orig_projfile
+        character(len=:), allocatable       :: projfile, orig_projfile
         character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, cavgs, refs_sc
         real                                :: scale_factor, smpd, lp1, lp2
         integer                             :: last_iter, box
@@ -278,7 +302,7 @@ contains
             call cline_scale%set('state',1.)
             call cline_scale%delete('smpd') !!
             call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
-            call xscale_distr%execute( cline_scale )
+            call xscale_proj%execute( cline_scale )
             ! rename scaled projfile and stash original project file
             ! such that the scaled project file has the same name as the original and can be followed from the GUI
             call simple_copy_file(orig_projfile, orig_projfile_bak)
@@ -434,25 +458,27 @@ contains
         integer,               parameter :: MAXITS_STAGE1_EXTR = 15
         character(len=STDLEN), parameter :: orig_projfile_bak  = 'orig_bak.simple'
         ! commanders
-        type(make_cavgs_commander_distr)    :: xmake_cavgs
+        type(make_cavgs_commander_distr)    :: xmake_cavgs_distr
+        type(make_cavgs_commander)          :: xmake_cavgs
         type(cluster2D_commander_distr)     :: xcluster2D_distr
+        type(cluster2D_commander)           :: xcluster2D
         type(pspec_int_rank_commander)      :: xpspec_rank
         type(rank_cavgs_commander)          :: xrank_cavgs
         type(scale_commander)               :: xscale
-        type(scale_project_commander_distr) :: xscale_distr
+        type(scale_project_commander_distr) :: xscale_proj
         ! command lines
-        type(cmdline) :: cline_cluster2D_stage1
-        type(cmdline) :: cline_cluster2D_stage2
+        type(cmdline) :: cline_cluster2D_stage1, cline_cluster2D_stage2
         type(cmdline) :: cline_scalerefs, cline_scale1, cline_scale2
         type(cmdline) :: cline_make_cavgs, cline_rank_cavgs, cline_pspec_rank
         ! other variables
+        class(parameters), pointer    :: params_ptr => null()
         type(parameters)              :: params
         type(sp_project)              :: spproj, spproj_sc
         character(len=:), allocatable :: projfile_sc, orig_projfile
         character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
         real     :: scale_stage1, scale_stage2, trs_stage2
-        integer  :: nparts, last_iter_stage1, last_iter_stage2
-        logical  :: scaling
+        integer  :: last_iter_stage1, last_iter_stage2
+        logical  :: scaling, l_shmem
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',     15. )
@@ -462,9 +488,19 @@ contains
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
         call cline%set('ptclw','no')
         call cline%delete('clip')
+        ! set shared-memory flag
+        if( cline%defined('nparts') )then
+            if( nint(cline%get_rarg('nparts')) == 1 )then
+                l_shmem = .true.
+                call cline%delete('nparts')
+            else
+                l_shmem = .false.
+            endif
+        else
+            l_shmem = .true.
+        endif
         ! master parameters
         call params%new(cline)
-        nparts = params%nparts
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! read project file
@@ -477,15 +513,16 @@ contains
             THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cluster2D_autoscale')
         endif
         ! delete any previous solution
+
         if( .not. spproj%is_virgin_field(params%oritype) .and. trim(params%refine).ne.'inpl' )then
             ! removes previous cluster2D solution (states are preserved)
             call spproj%os_ptcl2D%delete_2Dclustering
             call spproj%write_segment_inside(params%oritype)
         endif
         ! refinement flag
-        if(.not.cline%defined('refine')) call cline%set('refine','snhc')
+        if( .not.cline%defined('refine') ) call cline%set('refine', 'snhc')
         ! splitting
-        call spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        if( .not. l_shmem ) call spproj%split_stk(params%nparts, dir=PATH_PARENT)
         ! general options planning
         if( params%l_autoscale )then
             ! this workflow executes two stages of CLUSTER2D
@@ -511,7 +548,7 @@ contains
                 call cline_scale1%delete('smpd') !!
                 call cline_scale1%set('state',1.)
                 call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
-                call xscale_distr%execute( cline_scale1 )
+                call xscale_proj%execute( cline_scale1 )
                 ! rename scaled projfile and stash original project file
                 ! such that the scaled project file has the same name as the original and can be followed from the GUI
                 call simple_copy_file(orig_projfile, orig_projfile_bak)
@@ -535,15 +572,25 @@ contains
             endif
             ! execution
             call cline_cluster2D_stage1%set('projfile', trim(orig_projfile))
-            call xcluster2D_distr%execute(cline_cluster2D_stage1)
+            if( l_shmem )then
+                params_ptr  => params_glob
+                params_glob => null()
+                call xcluster2D%execute(cline_cluster2D_stage1)
+                params_glob => params_ptr
+                params_ptr  => null()
+            else
+                call xcluster2D_distr%execute(cline_cluster2D_stage1)
+            endif
             last_iter_stage1 = nint(cline_cluster2D_stage1%get_rarg('endit'))
             ! update original project backup and copy to original project file
             if( scaling )then
-                call spproj_sc%read_segment('ptcl2D', orig_projfile)
+                call spproj_sc%read(orig_projfile)
                 call spproj_sc%os_ptcl2D%mul_shifts(1./scale_stage1)
                 call spproj%read(orig_projfile_bak)
                 spproj%os_ptcl2D = spproj_sc%os_ptcl2D
-                call spproj%write_segment_inside('ptcl2D',fname=orig_projfile_bak)
+                spproj%os_cls2D  = spproj_sc%os_cls2D
+                spproj%os_cls3D  = spproj_sc%os_cls3D
+                call spproj%write(orig_projfile_bak)
                 call spproj%kill()
                 call simple_copy_file(orig_projfile_bak, orig_projfile)
                 ! clean stacks
@@ -567,7 +614,7 @@ contains
             if( scaling )then
                 call cline_scale2%delete('smpd') !!
                 call cline_scale2%set('state',1.)
-                call xscale_distr%execute( cline_scale2 )
+                call xscale_proj%execute( cline_scale2 )
                 ! rename scaled projfile and stash original project file
                 ! such that the scaled project file has the same name as the original and can be followed from the GUI
                 call spproj%read_non_data_segments(projfile_sc)
@@ -583,17 +630,27 @@ contains
             call cline_cluster2D_stage2%set('trs', trs_stage2)
             ! execution
             call cline_cluster2D_stage2%set('projfile', trim(orig_projfile))
-            call xcluster2D_distr%execute(cline_cluster2D_stage2)
+            if( l_shmem )then
+                params_ptr  => params_glob
+                params_glob => null()
+                call xcluster2D%execute(cline_cluster2D_stage2)
+                params_glob => params_ptr
+                params_ptr  => null()
+            else
+                call xcluster2D_distr%execute(cline_cluster2D_stage2)
+            endif
             last_iter_stage2 = nint(cline_cluster2D_stage2%get_rarg('endit'))
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
             ! Updates project and references
             if( scaling )then
                 ! shift modulation
-                call spproj_sc%read_segment('ptcl2D', orig_projfile)
+                call spproj_sc%read(orig_projfile)
                 call spproj_sc%os_ptcl2D%mul_shifts(1./scale_stage2)
                 call spproj%read(orig_projfile_bak)
                 spproj%os_ptcl2D = spproj_sc%os_ptcl2D
-                call spproj%write_segment_inside('ptcl2D',fname=orig_projfile_bak)
+                spproj%os_cls2D  = spproj_sc%os_cls2D
+                spproj%os_cls3D  = spproj_sc%os_cls3D
+                call spproj%write(orig_projfile_bak)
                 call spproj%kill()
                 call spproj_sc%kill()
                 call simple_rename(orig_projfile_bak,orig_projfile)
@@ -605,13 +662,29 @@ contains
                 call cline_make_cavgs%delete('balance')
                 call cline_make_cavgs%set('prg',      'make_cavgs')
                 call cline_make_cavgs%set('projfile', orig_projfile)
-                call cline_make_cavgs%set('nparts',   real(nparts))
+                call cline_make_cavgs%set('nparts',   real(params%nparts))
                 call cline_make_cavgs%set('refs',     trim(finalcavgs))
-                call xmake_cavgs%execute(cline_make_cavgs)
+                if( l_shmem )then
+                    params_ptr  => params_glob
+                    params_glob => null()
+                    call xmake_cavgs%execute(cline_make_cavgs)
+                    params_glob => params_ptr
+                    params_ptr  => null()
+                else
+                    call xmake_cavgs_distr%execute(cline_make_cavgs)
+                endif
             endif
         else
             ! no auto-scaling
-            call xcluster2D_distr%execute(cline)
+            if( l_shmem )then
+                params_ptr  => params_glob
+                params_glob => null()
+                call xcluster2D%execute(cline)
+                params_glob => params_ptr
+                params_ptr  => null()
+            else
+                call xcluster2D_distr%execute(cline)
+            endif
             last_iter_stage2 = nint(cline%get_rarg('endit'))
             finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
         endif
@@ -621,9 +694,6 @@ contains
         call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
         call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
         call spproj%write_segment_inside('out', params%projfile)
-        ! re-activating CTF correction for time series
-        if( trim(params%tseries).eq.'yes' )then
-        endif
         ! clean
         call spproj%kill()
         ! ranking
@@ -646,12 +716,14 @@ contains
         endif
         ! cleanup
         call del_file('start2Drefs'//params%ext)
+        call del_file('start2Drefs_even'//params%ext)
+        call del_file('start2Drefs_odd'//params%ext)
+        call del_file('__simple_filelist__')
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
     end subroutine exec_cluster2D_autoscale
 
     subroutine exec_cluster2D_distr( self, cline )
-        use simple_procimgstk
         class(cluster2D_commander_distr), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! commanders
@@ -709,7 +781,7 @@ contains
         call cline_make_cavgs%set('prg',   'make_cavgs')
         ! execute initialiser
         if( .not. cline%defined('refs') )then
-            refs             = 'start2Drefs' // params%ext
+            refs             = 'start2Drefs'//params%ext
             params%refs      = trim(refs)
             params%refs_even = 'start2Drefs_even'//params%ext
             params%refs_odd  = 'start2Drefs_odd'//params%ext
@@ -870,13 +942,16 @@ contains
         use simple_strategy2D_matcher, only: cluster2D_exec
         class(cluster2D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        real, allocatable         :: states(:)
-        type(parameters)          :: params
-        type(builder)             :: build
-        character(len=LONGSTRLEN) :: finalcavgs
-        logical                   :: converged
-        integer                   :: startit, ncls_from_refs, lfoo(3), i
+        type(make_cavgs_commander) :: xmake_cavgs
+        type(cmdline)              :: cline_make_cavgs
+        real, allocatable          :: states(:)
+        type(parameters)           :: params
+        type(builder), target      :: build
+        character(len=LONGSTRLEN)  :: finalcavgs
+        logical                    :: converged
+        integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind
         call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('maxits') ) call cline%set('maxits', 30.)
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
         if( cline%defined('refs') )then
             call find_ldim_nptcls(params%refs, lfoo, ncls_from_refs)
@@ -893,7 +968,54 @@ contains
             call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
             call qsys_job_finished('simple_commander_cluster2D :: exec_cluster2D')
         else
-            if( .not. cline%defined('refs') ) THROW_HARD('shared-memory implementation of cluster2D needs starting references')
+            if( .not. cline%defined('refs') )then
+                cline_make_cavgs = cline ! ncls is transferred here
+                params%refs      = 'start2Drefs'//params%ext
+                params%refs_even = 'start2Drefs_even'//params%ext
+                params%refs_odd  = 'start2Drefs_odd'//params%ext
+                if( build%spproj%is_virgin_field('ptcl2D') .or. params%startit == 1 )then
+                    if( params%tseries .eq. 'yes' )then
+                        if( cline%defined('nptcls_per_cls') )then
+                            if( build%spproj%os_ptcl2D%any_state_zero() )then
+                                THROW_HARD('cluster2D_nano does not allow state=0 particles, prune project before execution; exec_cluster2D_distr')
+                            endif
+                            cnt = 0
+                            do iptcl=1,params%nptcls,params%nptcls_per_cls
+                                cnt = cnt + 1
+                                params%ncls = cnt
+                                do ptclind=iptcl,min(params%nptcls, iptcl + params%nptcls_per_cls - 1)
+                                    call build%spproj%os_ptcl2D%set(ptclind, 'class', real(cnt))
+                                end do
+                            end do
+                            call cline%set('ncls', real(params%ncls))
+                            call cline_make_cavgs%set('ncls', real(params%ncls))
+                            call cline_make_cavgs%set('refs', params%refs)
+                            call xmake_cavgs%execute(cline_make_cavgs)
+                        else
+                            if( trim(params%refine).eq.'inpl' )then
+                                params%ncls = build%spproj%os_ptcl2D%get_n('class')
+                                call cline%set('ncls', real(params%ncls))
+                                call cline_make_cavgs%set('ncls', real(params%ncls))
+                                call cline_make_cavgs%delete('tseries')
+                                call cline_make_cavgs%set('refs', params%refs)
+                                call xmake_cavgs%execute(cline_make_cavgs)
+                            else
+                                call selection_from_tseries_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                            endif
+                        endif
+                    else
+                        call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                    endif
+                    call copy_imgfile(trim(params%refs), trim(params%refs_even), params%smpd, [1,params%ncls])
+                    call copy_imgfile(trim(params%refs), trim(params%refs_odd),  params%smpd, [1,params%ncls])
+                else
+                    call cline_make_cavgs%set('refs', params%refs)
+                    call xmake_cavgs%execute(cline_make_cavgs)
+                endif
+                call cline%set('refs', params%refs)
+                ! put back the pointer to builder (no idea why this is needed but it bugs out otherwise)
+                build_glob => build
+            endif
             params%startit = startit
             params%outfile = 'algndoc'//METADATA_EXT
             ! variable neighbourhood size
@@ -904,22 +1026,19 @@ contains
             endif
             do i = 1, params%maxits
                 params%which_iter = params%startit
+                write(logfhandle,'(A)')   '>>>'
+                write(logfhandle,'(A,I6)')'>>> ITERATION ', params%which_iter
+                write(logfhandle,'(A)')   '>>>'
                 call cline%set('which_iter', real(params%which_iter))
                 call cluster2D_exec( cline, params%startit, converged )
-                ! the below needs to be here because prep_strategy2D_glob in strategy2D_alloc fetches class populations for the cls2D field
-                ! and when cls2D is written the class populations are update
-                ! write project: cls2D and state congruent cls3D
-                call build%spproj%os_cls3D%new(params%ncls, is_ptcl=.false.)
-                states = build%spproj%os_cls2D%get_all('state')
-                call build%spproj%os_cls3D%set_all('state',states)
-                call build%spproj%write_segment_inside('cls2D', params%projfile)
-                call build%spproj%write_segment_inside('cls3D', params%projfile)
+                ! cooling of the randomization rate
+                params%extr_iter = params%extr_iter + 1
+                ! update project with the new orientations (this needs to be here rather than after convergence for the current implementation to work)
+                call build%spproj%write_segment_inside(params%oritype)
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
                     call cline%delete( 'startit' )
                     call cline%set('endit', real(params%startit))
-                    ! update project with the new orientations
-                    call build%spproj%write_segment_inside(params%oritype)
                     call del_file(params%outfile)
                     ! update os_out
                     finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(params%startit,3)//params%ext

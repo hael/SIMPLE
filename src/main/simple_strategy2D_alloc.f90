@@ -31,8 +31,23 @@ contains
 
     !>  prep class & global parameters
     subroutine prep_strategy2D_glob
+        logical :: zero_oris, ncls_diff
+        zero_oris = build_glob%spproj%os_cls2D%get_noris() == 0
+        ncls_diff = build_glob%spproj%os_cls2D%get_noris() /= params_glob%ncls
         ! gather class populations
         if( build_glob%spproj_field%isthere('class') )then
+            if( zero_oris .or. ncls_diff  )then
+                ! the ==0    is to overcome bug in shared-memory version
+                ! the ==ncls is to be able to restart after having run cleanup with fewer classes
+                if( zero_oris )then
+                    call build_glob%spproj%os_ptcl2D%get_pops(s2D%cls_pops, 'class', consider_w=.false., maxn=params_glob%ncls)
+                    return
+                endif
+                if( ncls_diff )then
+                    allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1)
+                    return
+                endif
+            endif
             s2D%cls_pops = build_glob%spproj%os_cls2D%get_all('pop')
         else
             ! first iteration, no class assignment: all classes are up for grab
