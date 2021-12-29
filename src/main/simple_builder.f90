@@ -36,7 +36,7 @@ type :: builder
     type(projector)                     :: vol, vol_odd
     type(image)                         :: vol2                   !< -"-
     type(masker)                        :: mskimg                 !< mask image
-    type(class_frcs)                    :: clsfrcs               !< projection FRC's used cluster2D
+    type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
     type(image),            allocatable :: imgbatch(:)            !< batch of images
     ! RECONSTRUCTION TOOLBOX
     type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction
