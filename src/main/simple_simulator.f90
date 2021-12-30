@@ -4,29 +4,33 @@ implicit none
 
 contains
 
-    subroutine simimg( img, orientation, tfun, ctfflag, snr, snr_pink, snr_detector, bfac )
+    subroutine simimg( img, orientation, tfun, ctfflag, snr, snr_pink, snr_detector, bfac, apply_ctf )
         use simple_image, only: image
         use simple_ori,   only: ori
         use simple_ctf,   only: ctf
-        class(image),     intent(inout) :: img
-        class(ori),       intent(inout) :: orientation
-        class(ctf),       intent(inout) :: tfun
-        character(len=*), intent(in)    :: ctfflag
-        real,             intent(in)    :: snr, snr_pink, snr_detector
-        real, optional,   intent(in)    :: bfac
+        class(image),      intent(inout) :: img
+        class(ori),        intent(inout) :: orientation
+        class(ctf),        intent(inout) :: tfun
+        character(len=*),  intent(in)    :: ctfflag
+        real,              intent(in)    :: snr, snr_pink, snr_detector
+        real,    optional, intent(in)    :: bfac
+        logical, optional, intent(in)    :: apply_ctf
+        logical :: aapply_ctf
         real :: dfx, dfy, angast
+        aapply_ctf = .true.
+        if( present(apply_ctf) ) aapply_ctf = apply_ctf
         ! back FT (to make sure)
         call img%ifft()
         ! add pink noise
         if( snr < 3. ) call img%add_gauran(snr_pink)
         call img%fft()
         ! apply ctf/bfactor
-        if( orientation%isthere('dfx') .and. orientation%isthere('dfy') )then
+        if( orientation%isthere('dfx') .and. orientation%isthere('dfy') .and. aapply_ctf )then
             dfx = orientation%get('dfx')
             dfy = orientation%get('dfy')
             angast = orientation%get('angast')
             call tfun%apply(img, dfx, 'ctf', dfy, angast, bfac=bfac)
-        else if( orientation%isthere('dfx') )then
+        else if( orientation%isthere('dfx') .and. aapply_ctf )then
             dfx = orientation%get('dfx')
             dfy = dfx
             angast = 0.
@@ -37,6 +41,7 @@ contains
         ! add detector noise
         call img%ifft()
         if( snr < 3. ) call img%add_gauran(snr_detector)
+        if( .not. aapply_ctf ) return
         if( ctfflag .eq. 'flip' )then
             ! simulate phase-flipped images
             call img%fft()
