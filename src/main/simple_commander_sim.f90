@@ -80,6 +80,7 @@ contains
         type(projector)  :: vol_pad
         real             :: snr_pink, snr_detector, bfac, bfacerr
         integer          :: i, cnt, ntot
+        logical          :: apply_ctf
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir', 'yes')
         call cline%set('nspace', cline%get_rarg('nptcls'))
         if( .not. cline%defined('sherr') .and. .not. cline%defined('oritab') ) call cline%set('sherr', 2.)
@@ -92,6 +93,7 @@ contains
         call cline%set('alpha',  2.)
         call cline%set('eo', '  no')
         call build%init_params_and_build_general_tbox(cline,params)
+        apply_ctf = trim(params%ctf) .eq. 'yes'
         if( .not. cline%defined('outstk') ) params%outstk = 'simulated_particles'//params%ext
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
@@ -113,7 +115,7 @@ contains
             call build%spproj_field%rnd_oris(params%sherr, params%eullims)
         endif
         if( .not. build%spproj_field%isthere('dfx') )then
-            if( params%ctf .ne. 'no' ) call build%spproj_field%rnd_ctf(params%kv, params%cs, params%fraca, params%defocus, params%dferr, params%astigerr)
+            if( apply_ctf ) call build%spproj_field%rnd_ctf(params%kv, params%cs, params%fraca, params%defocus, params%dferr, params%astigerr)
         endif
         call build%spproj_field%write(params%outfile, [1,params%nptcls])
         ! calculate snr:s
@@ -150,9 +152,9 @@ contains
                 else
                     bfac = params%bfac+bfacerr
                 endif
-                call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, snr_pink, snr_detector)
+                call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, snr_pink, snr_detector, apply_ctf=apply_ctf)
             else
-                call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, snr_pink, snr_detector, bfac)
+                call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, snr_pink, snr_detector, bfac=bfac, apply_ctf=apply_ctf)
             endif
             ! clip
             call build%img_pad%clip(build%img)
