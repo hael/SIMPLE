@@ -235,6 +235,14 @@ contains
                                 allocate(strategy3D_neigh        :: strategy3Dsrch(iptcl_batch)%ptr)
                             endif
                         endif
+                    case('greedy')
+                        allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('greedy_neigh')
+                        if( ran3() < GLOB_FREQ )then
+                            allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)
+                        else
+                            allocate(strategy3D_greedy_neigh     :: strategy3Dsrch(iptcl_batch)%ptr)
+                        endif
                     case('cont')
                         allocate(strategy3D_cont                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('cluster','clustersym')
