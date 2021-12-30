@@ -99,6 +99,7 @@ type :: parameters
     character(len=3)      :: time='no'
     character(len=3)      :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)      :: tseries='no'         !< images represent a time-series(yes|no){no}
+    character(len=3)      :: use_thres='yes'      !< Use contact-based thresholding(yes|no){yes}
     character(len=3)      :: vis='no'             !< visualise(yes|no)
     character(len=3)      :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
@@ -601,6 +602,7 @@ contains
         call check_carg('tophat',         self%tophat)
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
+        call check_carg('use_thres',      self%use_thres)
         call check_carg('vis',            self%vis)
         call check_carg('wcrit',          self%wcrit)
         call check_carg('wfun',           self%wfun)
@@ -1433,7 +1435,7 @@ contains
                         ! with respect to parent folder
                         ! needs to be done here because not part of the check_file list
                         vol = PATH_PARENT//trim(vol)
-                        call cline%set(key, vol)                        
+                        call cline%set(key, vol)
                     endif
                     call check_file(key, self%vols(i), notAllowed='T')
                     if( .not. file_exists(self%vols(i)) )then

@@ -450,10 +450,11 @@ contains
         call atoms_obj%kill
     end subroutine identify_lattice_params
 
-    subroutine identify_atomic_pos( self, a, l_fit_lattice )
+    subroutine identify_atomic_pos( self, a, l_fit_lattice, use_thres )
         class(nanoparticle), intent(inout) :: self
         real,                intent(inout) :: a(3)          ! lattice parameters
         logical,             intent(in)    :: l_fit_lattice ! fit lattice or use inputted
+        logical,             intent(in)    :: use_thres     ! use or not contact score thres
         logical     :: use_cn_thresh
         type(image) :: simatms
         type(atoms) :: atoms_obj
@@ -471,8 +472,10 @@ contains
         ! discard atoms with low valid_corr
         call self%discard_low_valid_corr_atoms
         ! discard lowly coordinated atoms
-        call self%discard_atoms_with_low_contact_score(use_cn_thresh)
-        if( use_cn_thresh ) call self%discard_lowly_coordinated(CN_THRESH_XTAL, a, l_fit_lattice)
+        if( use_thres )then
+            call self%discard_atoms_with_low_contact_score(use_cn_thresh)
+            if( use_cn_thresh ) call self%discard_lowly_coordinated(CN_THRESH_XTAL, a, l_fit_lattice)
+        endif
         ! WRITE OUTPUT
         call self%img_bin%write_bimg(trim(self%fbody)//'_BIN.mrc')
         write(logfhandle,*) 'output, binarized map:            ', trim(self%fbody)//'_BIN.mrc'
