@@ -796,7 +796,7 @@ contains
         type(refine3D_nano_commander) :: xrefine3D_nano
         type(detect_atoms_commander)  :: xdetect_atms
         integer,          parameter :: MOD_BLD_FREQ = 10 ! run 10 iters on the starting model
-        integer,          parameter :: MAXITS       = 20  !
+        integer,          parameter :: MAXITS       = 10  !
         character(len=*), parameter :: RECVOL   = 'recvol_state01.mrc'
         character(len=*), parameter :: SIMVOL   = 'recvol_state01_SIM.mrc'
         character(len=*), parameter :: ATOMS    = 'recvol_state01_ATMS.pdb'

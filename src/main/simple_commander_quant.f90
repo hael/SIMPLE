@@ -59,7 +59,7 @@ contains
         type(parameters)   :: params
         type(nanoparticle) :: nano
         real               :: a(3) ! lattice parameters
-        logical            :: prefit_lattice
+        logical            :: prefit_lattice, use_thres
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
         endif
@@ -68,6 +68,7 @@ contains
         endif
         prefit_lattice = cline%defined('vol2')
         call params%new(cline)
+        use_thres = trim(params%use_thres) .eq. 'yes'
         if( prefit_lattice )then
             call nano%new(params%vols(2), params%smpd, params%element, params%msk)
             ! execute
@@ -76,13 +77,13 @@ contains
             call nano%kill
             call nano%new(params%vols(1), params%smpd, params%element, params%msk)
             ! execute
-            call nano%identify_atomic_pos(a, l_fit_lattice=.false.)
+            call nano%identify_atomic_pos(a, l_fit_lattice=.false., use_thres=use_thres)
             ! kill
             call nano%kill
         else
             call nano%new(params%vols(1), params%smpd, params%element, params%msk)
             ! execute
-            call nano%identify_atomic_pos(a, l_fit_lattice=.true.)
+            call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_thres=use_thres)
             ! kill
             call nano%kill
         endif
