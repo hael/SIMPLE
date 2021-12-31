@@ -84,8 +84,8 @@ contains
      end subroutine copy_bimg
 
     subroutine transfer2bimg( self, self_in )
-        class(binimage),         intent(inout) :: self
-        class(image),    target, intent(in)    :: self_in
+        class(binimage),      intent(inout) :: self
+        class(image), target, intent(in)    :: self_in
         call self%kill_bimg
         call self%copy(self_in)
         self%bldim = self_in%get_ldim()
@@ -165,10 +165,10 @@ contains
         integer, allocatable :: mat4compare(:,:,:), neigh_8_pixs(:)
         integer :: i, j, k, n_it, n_maxit, nsz, cnt, diff, tmp
         logical :: finished_job, black_present
-        if( .not. self%bimat_is_set ) call self%set_imat
         if( present(update_imat) ) then
-          if( update_imat .eqv. .true. ) call self%set_imat
+          if( update_imat ) call self%set_imat
         endif
+        if( .not. self%bimat_is_set ) call self%set_imat
         black_present = present(black)
         call ccimage_unordered%new_bimg(self%bldim,self%bsmpd)
         call ccimage%new_bimg          (self%bldim,self%bsmpd)

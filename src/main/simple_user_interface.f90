@@ -73,6 +73,7 @@ integer              :: n_prg_ptrs = 0
 type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
 ! declare simple_exec and single_exec program specifications here
+type(simple_program), target :: automask
 type(simple_program), target :: autorefine3D_nano
 type(simple_program), target :: binarize
 type(simple_program), target :: calc_pspec
@@ -283,6 +284,7 @@ contains
     subroutine make_user_interface
         call set_common_params
         call set_prg_ptr_array
+        call new_automask
         call new_autorefine3D_nano
         call new_binarize
         call new_calc_pspec
@@ -378,6 +380,7 @@ contains
 
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0
+        call push2prg_ptr_array(automask)
         call push2prg_ptr_array(autorefine3D_nano)
         call push2prg_ptr_array(binarize)
         call push2prg_ptr_array(calc_pspec)
@@ -480,6 +483,8 @@ contains
         character(len=*), intent(in)  :: which_program
         type(simple_program), pointer :: ptr2prg
         select case(trim(which_program))
+            case('automask')
+                ptr2prg => automask
             case('autorefine3D_nano')
                 ptr2prg => autorefine3D_nano
             case('binarize')
@@ -666,6 +671,7 @@ contains
     end subroutine get_prg_ptr
 
     subroutine list_simple_prgs_in_ui
+        write(logfhandle,'(A)') automask%name
         write(logfhandle,'(A)') binarize%name
         write(logfhandle,'(A)') calc_pspec%name
         write(logfhandle,'(A)') center%name
@@ -951,6 +957,40 @@ contains
     ! <empty>
     ! computer controls
     ! <empty>
+
+    subroutine new_automask
+        ! PROGRAM SPECIFICATION
+        call automask%new(&
+        &'automask',&                                    ! name
+        &'envelope masking',&                            ! descr_short
+        &'is a program for automated envelope masking',& ! descr_long
+        &'simple_exec',&                                 ! executable
+        &1, 1, 0, 0, 1, 5, 1, .false.)                   ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call automask%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
+        & sections for nanoparticle image matching', 'input volume e.g. vol.mrc', .true., '')
+        ! parameter input/output
+        call automask%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call automask%set_input('filt_ctrls', 1, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12.)
+        ! mask controls
+        call automask%set_input('mask_ctrls', 1, mskdiam)
+        call automask%set_input('mask_ctrls', 2, 'binwidth', 'num', 'Envelope binary layers width',&
+        &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false., 1.)
+        call automask%set_input('mask_ctrls', 3, 'thres', 'num', 'Volume threshold',&
+        &'Volume threshold for enevloppe mask generation', 'Volume threshold', .false., 0.)
+        call automask%set_input('mask_ctrls', 4, 'edge', 'num', 'Envelope mask soft edge',&
+        &'Cosine edge size for softening molecular envelope in pixels{6}', '# pixels cosine edge{6}', .false., 6.)
+        call automask%set_input('mask_ctrls', 5, mw)
+        ! computer controls
+        call automask%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_automask
 
     subroutine new_autorefine3D_nano
         ! PROGRAM SPECIFICATION
@@ -2102,7 +2142,7 @@ contains
         &'is a program for masking of 2D images and volumes. If you want to mask your images with a spherical mask with a soft &
         & falloff, set mskdiam to the diameter in A',&                   ! descr_long
         &'simple_exec',&                                                 ! executable
-        &0, 3, 2, 1, 2, 9, 1, .false.)                                   ! # entries in each group, requires sp_project
+        &0, 3, 2, 1, 1, 9, 1, .false.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2118,9 +2158,7 @@ contains
         call mask%set_input('srch_ctrls', 1, 'center', 'binary', 'Center input volume', 'Center input volume by its &
         &center of gravity(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         ! filter controls
-        call mask%set_input('filt_ctrls', 1, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
-        call mask%set_input('filt_ctrls', 2, lp_backgr)
+        call mask%set_input('filt_ctrls', 1, lp_backgr)
         ! mask controls
         call mask%set_input('mask_ctrls', 1, mskdiam)
         mask%mask_ctrls(1)%required = .false.
@@ -2437,7 +2475,7 @@ contains
         ! <empty>
         ! filter controls
         call postprocess%set_input('filt_ctrls', 1, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
+        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12.)
         call postprocess%set_input('filt_ctrls', 2, 'lp', 'num', 'Low-pass limit for map filtering', 'Low-pass limit for map filtering', 'low-pass limit in Angstroms', .false., 20.)
         call postprocess%set_input('filt_ctrls', 3, bfac)
         call postprocess%set_input('filt_ctrls', 4, mirr)
