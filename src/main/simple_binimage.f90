@@ -246,7 +246,7 @@ contains
         call ccimage_unordered%kill_bimg
         if( black_present ) then
             ! flip foreground to background and vice versa
-            if( black .eqv. .true. )self%bimat = -1 * (self%bimat - 1)
+            if( black .eqv. .true. ) self%bimat = -1 * (self%bimat - 1)
         endif
         call self%update_img_rmat
     end subroutine find_ccs
@@ -257,10 +257,10 @@ contains
         class(binimage), intent(in) :: self
         integer, allocatable :: sz(:)
         integer :: n_cc, imax
-        if(.not. any(self%bimat > 0)) then
-          allocate(sz(1), source=0)
-          THROW_WARN('Inputted non-existent cc; size_ccs')
-          return
+        if( .not. any(self%bimat > 0) )then
+            allocate(sz(1), source=0)
+            THROW_WARN('Inputted non-existent cc; size_ccs')
+            return
         endif
         if( allocated(sz) ) deallocate( sz )
         imax = maxval(self%bimat)
