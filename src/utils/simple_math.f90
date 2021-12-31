@@ -248,7 +248,6 @@ contains
         integer          :: nvox             !< nr of voxels
         double precision , parameter :: prot_d = 1.43d0            ! g/cm**3
         double precision , parameter :: one_da = 1.66053892173e-27 ! kg/Da
-        ! nvox = nint( ( ( (mwkda * 1e3) * one_da ) * 1e3 ) / ( prot_d * 1e-24 * (smpd**3) )  )
         nvox = nint((mwkda*one_da*1e30) / (prot_d * (smpd**3.)))
     end function nvoxfind_1
 
@@ -263,6 +262,16 @@ contains
         vol = (mwkda*1000.)/dens
         nvox = nint(vol/vol_per_pix)
     end function nvoxfind_2
+
+    pure function mwkdafind( smpd, nvox ) result( mwkda )
+        real,    intent(in) :: smpd !< sampling distance
+        integer, intent(in) :: nvox !< # voxels
+        double precision , parameter :: prot_d = 1.43d0            ! g/cm**3
+        double precision , parameter :: one_da = 1.66053892173e-27 ! kg/Da
+        real :: pixv, mwkda
+        pixv = smpd * smpd * smpd
+        mwkda = (prot_d * pixv * real(nvox)) / (one_da * 1e30)
+    end function mwkdafind
 
     !>   converts between radians and degrees
     elemental function deg2rad_sp( deg ) result( rad )

@@ -4,6 +4,7 @@ include 'simple_lib.f08'
 use simple_image,      only: image
 use simple_binimage,   only: binimage
 use simple_parameters, only: params_glob
+use simple_segmentation
 implicit none
 
 public :: masker, automask2D
@@ -25,6 +26,7 @@ type, extends(binimage) :: masker
     integer :: idim(3)   = 0    !< image dimension
   contains
     procedure          :: automask3D
+    procedure          :: automask3D_otsu
     procedure          :: mask_from_pdb
     procedure, private :: bin_vol_thres
     procedure, private :: env_rproject
@@ -63,7 +65,57 @@ contains
         if( was_ft )call vol_inout%fft()
     end subroutine automask3D
 
-    subroutine mask_from_pdb( self,  pdb, vol_inout, os, pdbout)
+    subroutine automask3D_otsu( self, vol_inout )
+        class(masker), intent(inout) :: self
+        class(image),  intent(inout) :: vol_inout
+        integer, allocatable :: ccsizes(:), imat_cc(:,:,:)
+        logical        :: was_ft
+        integer        :: npix, imax
+        real           :: mwkda
+        type(binimage) :: ccimage
+        if( vol_inout%is_2d() )THROW_HARD('automask3D is intended for volumes only; automask3D')
+        self%msk       = params_glob%msk
+        self%amsklp    = params_glob%amsklp
+        self%binwidth  = params_glob%binwidth
+        self%edge      = params_glob%edge
+        self%pix_thres = params_glob%thres
+        write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK LOW-PASS:           ', self%amsklp,  ' ANGSTROMS'
+        write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,    ' PIXEL(S)'
+        write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,' PIXEL(S)'
+        was_ft = vol_inout%is_ft()
+        if( was_ft ) call vol_inout%ifft()
+        call self%copy(vol_inout)
+        ! binarize volume
+        call otsu_img(self)
+        ! extract all cc sizes (in # pixels)
+        call self%find_ccs(ccimage, update_imat=.true.)
+        ccsizes = self%size_ccs()
+        if( size(ccsizes) > 1 )then
+            ! identify the largest connected component
+            imax = maxval(ccsizes)
+            ! eliminate all but the largest one
+            call self%elim_ccs([imax,imax])
+            call self%get_imat(imat_cc)
+            ! convert to binary
+            where( imat_cc > 0 ) imat_cc = 1
+            ! this also updates the real-valued image object
+            call self%set_imat(imat_cc)
+        endif
+        npix = self%nforeground()
+        mwkda = mwkdafind(self%get_smpd(), npix)
+        write(logfhandle,'(A,F7.1,A)') '>>> MOLECULAR WEIGHT:            ', mwkda,        ' kDa'
+        ! add layers
+        call self%grow_bins(self%binwidth)
+        ! add volume soft edge
+        call self%cos_edge(self%edge)
+        ! apply mask to volume
+        call vol_inout%zero_background()
+        call vol_inout%mul(self)
+        ! the end
+        if( was_ft )call vol_inout%fft()
+    end subroutine automask3D_otsu
+
+    subroutine mask_from_pdb( self,  pdb, vol_inout, os, pdbout )
         use simple_oris,  only: oris
         use simple_atoms, only: atoms
         class(masker),              intent(inout) :: self

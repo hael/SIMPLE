@@ -168,7 +168,7 @@ contains
         call vol_pad%kill_expanded
         call orientation%kill
         ! end gracefully
-        call simple_end('**** SIMLE_SIMULATE_PARTICLES NORMAL STOP ****')
+        call simple_end('**** SIMPLE_SIMULATE_PARTICLES NORMAL STOP ****')
     end subroutine exec_simulate_particles
 
     subroutine exec_simulate_movie( self, cline )
