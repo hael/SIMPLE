@@ -70,7 +70,7 @@ contains
         class(image),  intent(inout) :: vol_inout
         integer, allocatable :: ccsizes(:), imat_cc(:,:,:)
         logical        :: was_ft
-        integer        :: npix, imax
+        integer        :: npix, imax, sz
         real           :: mwkda
         type(binimage) :: ccimage
         if( vol_inout%is_2d() )THROW_HARD('automask3D is intended for volumes only; automask3D')
@@ -84,13 +84,20 @@ contains
         write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,' PIXEL(S)'
         was_ft = vol_inout%is_ft()
         if( was_ft ) call vol_inout%ifft()
-        call self%copy(vol_inout)
+        call self%transfer2bimg(vol_inout)
         ! binarize volume
+        write(logfhandle,'(A)') '>>> BINARIZING VOLUME'
+        call self%bp(0., self%amsklp)
         call otsu_img(self)
-        ! extract all cc sizes (in # pixels)
+        call self%set_imat
+        ! identify connected components
+        write(logfhandle,'(A)') '>>> IDENTIFYING CONNECTED COMPONENTS (CCS)'
         call self%find_ccs(ccimage, update_imat=.true.)
+        ! extract all cc sizes (in # pixels)
         ccsizes = self%size_ccs()
-        if( size(ccsizes) > 1 )then
+        sz      = size(ccsizes)
+        write(logfhandle,'(A,I7)'  ) '>>> FOUND '//int2str(sz)//' CONNECTED COMPONENTS'
+        if( sz > 1 )then
             ! identify the largest connected component
             imax = maxval(ccsizes)
             ! eliminate all but the largest one
@@ -100,8 +107,11 @@ contains
             where( imat_cc > 0 ) imat_cc = 1
             ! this also updates the real-valued image object
             call self%set_imat(imat_cc)
+            npix = count(imat_cc == 1)
+        else
+            npix = self%nforeground()
         endif
-        npix = self%nforeground()
+        write(logfhandle,'(A,I7)'    ) '>>> # FOREGROUND PIXELS:         ', npix
         mwkda = mwkdafind(self%get_smpd(), npix)
         write(logfhandle,'(A,F7.1,A)') '>>> MOLECULAR WEIGHT:            ', mwkda,        ' kDa'
         ! add layers

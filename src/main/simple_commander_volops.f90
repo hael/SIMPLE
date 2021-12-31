@@ -277,12 +277,20 @@ contains
         type(builder)    :: build
         type(parameters) :: params
         type(masker)     :: mskvol
+        character(len=:), allocatable :: fname_out
         call params%new(cline)
         call build%build_spproj(params, cline)
         call build%build_general_tbox(params, cline)
         call build%vol%read(params%vols(1))
-        call mskvol%automask3D(build%vol)
+        if( cline%defined('mw') .and. cline%defined('thres') )then
+            call mskvol%automask3D(build%vol)
+        else
+            call mskvol%automask3D_otsu(build%vol)
+        endif
         call mskvol%write('automask'//params%ext)
+        fname_out = basename(add2fbody(trim(params%vols(1)), params%ext, '_automsk'))
+        call build%vol%write(fname_out)
+        write(logfhandle,'(A)') '>>> WROTE OUTPUT '//'automask'//params%ext//' & '//fname_out
         call simple_end('**** SIMPLE_AUTOMASK NORMAL STOP ****')
     end subroutine exec_automask
 

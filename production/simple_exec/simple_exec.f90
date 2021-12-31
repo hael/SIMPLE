@@ -78,6 +78,7 @@ type(symmetry_test_commander)               :: xsymtst
 type(symmetrize_map_commander)              :: xsymmetrize_map
 type(dock_volpair_commander)                :: xdock_volpair
 type(postprocess_commander)                 :: xpostprocess
+type(automask_commander)                    :: xautomask
 type(remoc_commander)                       :: xremoc
 
 ! IMAGE PROCESSING PROGRAMS
@@ -237,6 +238,8 @@ select case(prg)
         call xdock_volpair%execute(cline)
     case( 'postprocess' )
         call xpostprocess%execute(cline)
+    case( 'automask' )
+        call xautomask%execute(cline)
     case( 'remoc' )
         call xremoc%execute(cline)
 

@@ -323,7 +323,7 @@ type :: parameters
     integer :: ydim=0              !< y dimension(in pixles)
     ! real variables in ascending alphabetical order
     real    :: alpha=KBALPHA
-    real    :: amsklp=15.          !< low-pass limit for envelope mask generation(in A)
+    real    :: amsklp=12.          !< low-pass limit for envelope mask generation(in A)
     real    :: angerr=0.           !< angular error(in degrees){0}
     real    :: ares=7.
     real    :: astigerr=0.         !< astigmatism error(in microns)
