@@ -220,8 +220,8 @@ switch(process.argv[1]){
 				app.exit(1)
 			}, 3000)
 		})
-	}else if(arg['executable'] == "simple_distr_exec"){
-		return simpleexec.distrExec(arg, arg['jobid'])
+	}else if(arg['executable'] == "single_exec"){
+		return simpleexec.singleExec(arg, arg['jobid'])
 		.then(() => {
 			console.log('RUNNER Closing')
 			app.quit()
