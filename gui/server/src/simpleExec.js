@@ -681,7 +681,7 @@ class SimpleExec {
                 .then(commandarguments => {
                         commandargs = commandarguments
                         return new Promise((resolve, reject) => {
-                                var execprocess = spawn("single_exec", commandargs[1], {cwd: arg['projectfolder']})
+                                var execprocess = spawn("simple_exec", commandargs[1], {cwd: arg['projectfolder']})
                                 
                                 execprocess.on('close', function(_) {
                                         return resolve();
@@ -695,7 +695,7 @@ class SimpleExec {
                 .then(output => {
                         return new Promise((resolve, reject) => {
                                 var res = ''
-                                var execprocess = spawn("simple_exec", commandargs[0], {cwd: arg['projectfolder']})
+                                var execprocess = spawn("single_exec", commandargs[0], {cwd: arg['projectfolder']})
                                 
                                 execprocess.stdout.on('data', (_data) => {
                                         try {   
