@@ -657,6 +657,144 @@ class SimpleExec {
 		})
 	}
 	
+
+     singleExec(arg){
+                this.execdir = false
+                this.jobid = false
+                this.buffer = false
+                this.errbuffer = false
+                this.progress = 0
+                this.iteration = 0
+                var commandargs
+                
+                return sqlite.sqlQuery("INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type, parent) VALUES ('" + arg['name'] + "','" + arg['description'] + "','" + JSON.stringify(arg) + "','pending', '" + JSON.stringify(arg['view']) + "', '" + arg['type'] + "', '" + arg['projfile'] + "')")
+                .then(rows => {
+                        return sqlite.sqlQuery("SELECT seq FROM sqlite_sequence WHERE name='" + arg['projecttable'] + "'")
+                })
+                .then(rows => {
+                        this.jobid = rows[0]['seq']
+                        console.log('JOBID', this.jobid)
+                })
+                .then(() => {
+                        return this.getCommandArgs(arg)
+                })
+                .then(commandarguments => {
+                        commandargs = commandarguments
+                        return new Promise((resolve, reject) => {
+                                var execprocess = spawn("single_exec", commandargs[1], {cwd: arg['projectfolder']})
+                                
+                                execprocess.on('close', function(_) {
+                                        return resolve();
+                                });
+                                execprocess.on('error', function(error) {
+                                        return reject(error);
+                                });
+                        
+                        })
+                })
+                .then(output => {
+                        return new Promise((resolve, reject) => {
+                                var res = ''
+                                var execprocess = spawn("simple_exec", commandargs[0], {cwd: arg['projectfolder']})
+                                
+                                execprocess.stdout.on('data', (_data) => {
+                                        try {   
+                                                var data=new Buffer(_data,'utf-8');
+                                                var lines = data.toString().split("\n")
+                                                if(!this.execdir){
+                                                        for (var line of lines){
+                                                                if(line.includes("EXECUTION DIRECTORY")){
+                                                                        this.execdir = arg['projectfolder'] + "/" + line.split(" ").pop()
+                                                                        console.log("Execution Directory:", this.execdir)
+                                                                        this.startProgressWatcher(this.execdir, arg['projfile'], arg['projecttable'], this.jobid)
+                                                                        console.log('PID', execprocess.pid)
+                                                                        sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET folder='" + this.execdir  + "', pid='" + execprocess.pid + "', status='running' WHERE id=" + this.jobid)
+                                                                        break
+                                                                }
+                                                        }
+                                                }
+                                                this.updateProgress(lines, arg)
+                                                if(this.execdir){
+                                                        if(this.buffer != false){
+                                                                fs.appendFile(this.execdir + '/simple.log', this.buffer)
+                                                                this.buffer = false
+                                                        }
+                                                        fs.appendFile(this.execdir + '/simple.log', data.toString())
+                                                }else{  
+                                                        this.buffer = this.buffer + data.toString()
+                                                }
+                                        } catch(error) {
+                                                console.log("Execution error:", error)
+                                        }
+                                });
+                                
+                                execprocess.stderr.on('data',(_data) => {
+                                        try {   
+                                                var data=new Buffer(_data,'utf-8');
+                                                if(this.execdir){
+                                                       if(this.errbuffer != false){
+                                                                fs.appendFile(this.execdir + '/simple.error', this.errbuffer)
+                                                                this.errbuffer = false
+                                                        }
+                                                        fs.appendFile(this.execdir + '/simple.error', data.toString())
+                                                }else{  
+                                                        this.errbuffer = this.errbuffer + data.toString()
+                                                }       
+                                        } catch(error) {}
+                                });
+                                
+                                execprocess.on('close', function(code) {
+                                        return resolve(code);
+                                });
+                                
+                                execprocess.on('error', function(error) {
+                                        return reject(error);
+                                });
+                                
+                                console.log(`Spawned child pid: ${execprocess.pid}`)
+                        })
+                })
+                .then(code =>{
+                        if(code == 0 && this.execdir && this.jobid){
+                                if(arg['saveclusters']){
+                                        console.log('clusters')
+                                        return sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Finished' WHERE id=" + this.jobid)
+                                        .then(() => {
+                                                return this.createCavgs(this.execdir + '/' + path.basename(arg['projfile']))
+                                        })
+                                }else{  
+                                        return sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Finished' WHERE id=" + this.jobid)
+                                }
+                        }else{  
+                                this.execdir = arg['projectfolder'] + '/' + this.jobid + '_' + arg['type']
+                                return fs.ensureDir(this.execdir)
+                                .then(() => {
+                                        return fs.appendFile(this.execdir + '/simple.log', this.buffer)
+                                })
+                                .then(() => {   
+                                        return sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Error', folder='" + this.execdir + "' WHERE id=" + this.jobid)
+                                })
+                        }
+                })
+                .catch((err) => {
+                        this.execdir = arg['projectfolder'] + '/' + this.jobid + '_' + arg['type']
+                        return fs.ensureDir(this.execdir)
+                        .then(() => {
+                                return fs.appendFile(this.execdir + '/simple.log', err)
+                        })
+                        .then(() => {
+                                if(this.buffer != false){
+                                        return fs.appendFile(this.execdir + '/simple.log', this.buffer)
+                                }else{  
+                                        return
+                                }
+                        })
+                        .then(() => {   
+                                return sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Error', folder='" + this.execdir + "' WHERE id=" + this.jobid)
+                        })
+                })
+        }
+
 /*	distrExec(arg){
 		this.execdir = false
 		this.jobid = false
