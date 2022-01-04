@@ -33,6 +33,7 @@ type :: reconstructor_eo
     ! CONSTRUCTOR
     procedure          :: new
     ! SETTERS
+    procedure          :: set_automsk
     procedure          :: reset_all
     procedure          :: reset_eos
     procedure, private :: reset_eoexp
@@ -113,6 +114,12 @@ contains
     end subroutine new
 
     ! SETTERS
+
+    subroutine set_automsk( self, l_which )
+        class(reconstructor_eo), intent(inout) :: self
+        logical,                 intent(in)    :: l_which
+        self%automsk = l_which
+    end subroutine set_automsk
 
     !>  \brief  resets all
     subroutine reset_all( self )

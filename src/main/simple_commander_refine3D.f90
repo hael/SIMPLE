@@ -1,16 +1,17 @@
 ! concrete commander: refine3D for ab initio 3D reconstruction and 3D refinement
 module simple_commander_refine3D
 include 'simple_lib.f08'
-use simple_builder,        only: builder
-use simple_cmdline,        only: cmdline
-use simple_commander_base, only: commander_base
-use simple_ori,            only: ori
-use simple_oris,           only: oris
-use simple_parameters,     only: parameters
-use simple_sigma2_binfile, only: sigma2_binfile
-use simple_qsys_env,       only: qsys_env
-use simple_euclid_sigma2,  only: write_groups_starfile
-use simple_cluster_seed,   only: gen_labelling
+use simple_builder,          only: builder
+use simple_cmdline,          only: cmdline
+use simple_commander_base,   only: commander_base
+use simple_ori,              only: ori
+use simple_oris,             only: oris
+use simple_parameters,       only: parameters
+use simple_sigma2_binfile,   only: sigma2_binfile
+use simple_qsys_env,         only: qsys_env
+use simple_euclid_sigma2,    only: write_groups_starfile
+use simple_cluster_seed,     only: gen_labelling
+use simple_commander_volops, only: postprocess_commander
 use simple_qsys_funs
 implicit none
 
@@ -83,7 +84,6 @@ contains
     end subroutine exec_nspace
 
     subroutine exec_refine3D_distr( self, cline )
-        use simple_commander_volops, only: postprocess_commander
         use simple_commander_rec,    only: reconstruct3D_commander_distr
         use simple_estimate_ssnr,    only: plot_fsc
         class(refine3D_commander_distr), intent(inout) :: self
@@ -93,6 +93,7 @@ contains
         type(calc_pspec_commander_distr)    :: xcalc_pspec_distr
         type(check_3Dconv_commander)        :: xcheck_3Dconv
         type(postprocess_commander)         :: xpostprocess
+        type(refine3D_commander)            :: xrefine3D_shmem
         ! command lines
         type(cmdline)    :: cline_reconstruct3D_distr
         type(cmdline)    :: cline_calc_pspec_distr
@@ -118,10 +119,14 @@ contains
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
-        logical :: l_projmatch, l_lp_iters, l_switch2euclid, l_continue, l_multistates
+        logical :: l_projmatch, l_lp_iters, l_switch2euclid, l_continue, l_multistates, l_automsk
         real    :: corr, corr_prev, smpd, lplim
         integer :: ldim(3), i, state, iter, box, nfiles, niters, iter_switch2euclid, ifoo
         integer :: ncls, icls, ind, fnr
+        if( .not. cline%defined('nparts') )then
+            call xrefine3D_shmem%execute(cline)
+            return
+        endif
         l_multistates = .false.
         if( cline%defined('nstates') ) l_multistates = .true.
         l_lp_iters = cline%defined('lp_iters')
@@ -155,6 +160,13 @@ contains
         end select
         if( fall_over ) THROW_HARD('no particles found! exec_refine3D_distr')
         if( .not. l_multistates .and. params%nstates >  1 ) THROW_HARD('nstates > 1 but refine mode is single')
+        ! take care of automask flag
+        l_automsk = .false.
+        if( cline%defined('automsk') )then
+            l_automsk = trim(params%automsk) .eq. 'yes'
+            call cline%delete('automsk')
+        endif
+        if( l_automsk .and. l_multistates ) THROW_HARD('automsk=yes not currenty supported for multi-state refinement')
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
@@ -465,6 +477,14 @@ contains
                     if( cline%defined('mskfile') )call build%spproj%add_vol2os_out(trim(params%mskfile), params%smpd, 1, 'vol_msk')
                     ! writes os_out
                     call build%spproj%write_segment_inside('out')
+                    ! automasking in postprocess
+                    if( l_automsk )then
+                        if( mod(iter,AUTOMSK_FREQ) == 0 .or. iter == params%startit )then
+                            call cline%delete('mskfile')
+                            call cline_postprocess%delete('mskfile')
+                            call cline_postprocess%set('automsk', 'yes')
+                        endif
+                    endif
                     ! per state post-process
                     do state = 1,params%nstates
                         str_state = int2str_pad(state,2)
@@ -488,6 +508,14 @@ contains
                             endif
                         endif
                     enddo
+                    ! update command-lines to use the mskfile for the next AUTOMSK_FREQ - 1 iterations
+                    if( l_automsk )then
+                        if( mod(iter,AUTOMSK_FREQ) == 0 .or. iter == params%startit )then
+                            call cline_postprocess%set('mskfile', 'automask'//params%ext)
+                            call cline%set('mskfile', 'automask'//params%ext)
+                            call cline_postprocess%delete('automsk')
+                        endif
+                    endif
             end select
             if( L_BENCH_GLOB ) rt_volassemble = toc(t_volassemble)
 
@@ -587,6 +615,8 @@ contains
                 call fclose(fnr)
             endif
         end do
+        ! put back automsk flag if needed
+        if( l_automsk ) call cline%set('automsk', 'yes')
         call qsys_cleanup
         ! report the last iteration on exit
         call cline%delete( 'startit' )
@@ -600,12 +630,12 @@ contains
         use simple_strategy3D_matcher, only: refine3D_exec
         class(refine3D_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
-        type(parameters)      :: params
-        type(builder)         :: build
-        integer               :: startit, i, state
-        character(len=STDLEN) :: str_state, fsc_file, vol, vol_iter
-        logical               :: converged
-        real                  :: corr, corr_prev
+        type(parameters)         :: params
+        type(builder)            :: build
+        integer                  :: startit, i, state
+        character(len=STDLEN)    :: str_state, fsc_file, vol, vol_iter
+        logical                  :: converged, l_automsk
+        real                     :: corr, corr_prev
         call build%init_params_and_build_strategy3D_tbox(cline,params)
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
@@ -617,6 +647,13 @@ contains
             if( trim(params%objfun) == 'euclid' ) THROW_HARD('shared-memory implementation of refine3D does not support objfun-euclid')
             if( trim(params%continue) == 'yes'  ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
             if( .not. cline%defined('vol1')     ) THROW_HARD('shared-memory implementation of refine3D needs a starting volume')
+            ! take care of automask flag
+            l_automsk = .false.
+            if( cline%defined('automsk') )then
+                l_automsk = trim(params%automsk) .eq. 'yes'
+                call cline%delete('automsk')
+            endif
+            if( l_automsk .and. params%nstates > 1 ) THROW_HARD('automsk=yes not currenty supported for multi-state refinement')
             params%startit     = startit
             params%outfile     = 'algndoc'//METADATA_EXT
             params%extr_iter   = params%startit - 1
@@ -633,6 +670,14 @@ contains
                 endif
                 ! exponential cooling of the randomization rate
                 params%extr_iter = params%extr_iter + 1
+                ! to control the masking behaviour in simple_strategy2D3D_common :: norm_struct_facts
+                if( l_automsk )then
+                    if( mod(params%startit,AUTOMSK_FREQ) == 0 .or. i == 1 )then
+                        call cline%set('automsk', 'yes')
+                    else
+                        call cline%delete('automsk')
+                    endif
+                endif
                 ! in strategy3D_matcher:
                 call refine3D_exec(cline, params%startit, converged)
                 if( converged .or. i == params%maxits )then
@@ -666,6 +711,8 @@ contains
                 ! update iteration counter
                 params%startit = params%startit + 1
             end do
+            ! put back automsk flag if needed
+            if( l_automsk ) call cline%set('automsk', 'yes')
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')

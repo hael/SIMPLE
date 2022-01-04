@@ -17,7 +17,7 @@ logical, parameter :: DEBUG = .false.
 type, extends(binimage) :: masker
     private
     real    :: msk       = 0.   !< maximum circular mask
-    real    :: amsklp    = 0.   !< maximum circular mask
+    real    :: amsklp    = 0.   !< low-pass limit
     real    :: mw        = 0.   !< moleclular weight (in kDa)
     real    :: pix_thres = 0.   !< binarisation threshold
     integer :: edge      = 3    !< edge width
@@ -65,14 +65,17 @@ contains
         if( was_ft )call vol_inout%fft()
     end subroutine automask3D
 
-    subroutine automask3D_otsu( self, vol_inout )
-        class(masker), intent(inout) :: self
-        class(image),  intent(inout) :: vol_inout
+    subroutine automask3D_otsu( self, vol_inout, do_apply )
+        class(masker),     intent(inout) :: self
+        class(image),      intent(inout) :: vol_inout
+        logical, optional, intent(in)    :: do_apply
         integer, allocatable :: ccsizes(:), imat_cc(:,:,:)
-        logical        :: was_ft
+        logical        :: was_ft, ddo_apply
         integer        :: npix, imax, sz
         real           :: mwkda
         type(binimage) :: ccimage
+        ddo_apply = .true.
+        if( present(do_apply) ) ddo_apply = do_apply
         if( vol_inout%is_2d() )THROW_HARD('automask3D is intended for volumes only; automask3D')
         self%msk       = params_glob%msk
         self%amsklp    = params_glob%amsklp
@@ -118,9 +121,11 @@ contains
         call self%grow_bins(self%binwidth)
         ! add volume soft edge
         call self%cos_edge(self%edge)
-        ! apply mask to volume
-        call vol_inout%zero_background()
-        call vol_inout%mul(self)
+        if( ddo_apply )then
+            ! apply mask to volume
+            call vol_inout%zero_background()
+            call vol_inout%mul(self)
+        endif
         ! the end
         if( was_ft )call vol_inout%fft()
     end subroutine automask3D_otsu
