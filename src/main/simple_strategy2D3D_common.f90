@@ -693,21 +693,33 @@ contains
     end subroutine preprefvol
 
     subroutine norm_struct_facts( cline, which_iter )
-        class(cmdline),    intent(inout) :: cline
-        integer, optional, intent(in)    :: which_iter
-        integer               :: s, find4eoavg
-        real                  :: res05s(params_glob%nstates), res0143s(params_glob%nstates)
-        character(len=STDLEN) :: pprocvol
-        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
-        call build_glob%vol2%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
+        use simple_masker,        only: masker
+        use simple_estimate_ssnr, only: fsc2optlp
+        class(cmdline), intent(inout) :: cline
+        integer,        intent(in)    :: which_iter
+        character(len=:), allocatable :: mskfile
+        character(len=STDLEN) :: pprocvol, lpvol
+        real, allocatable     :: optlp(:), res(:)
+        type(masker)          :: envmsk
+        integer               :: s, find4eoavg, ldim(3)
+        real                  :: res05s(params_glob%nstates), res0143s(params_glob%nstates), lplim, bfac
+        logical               :: l_automsk
+        ! set automask flag
+        l_automsk = .false.
+        if( cline%defined('automsk') )then
+            l_automsk = cline%get_carg('automsk') .eq. 'yes'
+        endif
         ! init
+        ldim = [params_glob%box,params_glob%box,params_glob%box]
+        call build_glob%vol%new(ldim,params_glob%smpd)
+        call build_glob%vol2%new(ldim,params_glob%smpd)
         res0143s = 0.
         res05s   = 0.
         ! cycle through states
         do s=1,params_glob%nstates
             if( build_glob%spproj_field%get_pop(s, 'state') == 0 )then
                 ! empty state
-                if( present(which_iter) ) build_glob%fsc(s,:) = 0.
+                build_glob%fsc(s,:) = 0.
                 cycle
             endif
             call build_glob%eorecvols(s)%compress_exp
@@ -718,12 +730,10 @@ contains
                 if( trim(params_glob%refine) .eq. 'snhc' )then
                     params_glob%vols(s) = trim(SNHCVOL)//trim(int2str_pad(s,2))//params_glob%ext
                 else
-                    if( present(which_iter) )then
-                        params_glob%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//&
-                            int2str_pad(which_iter,3)//params_glob%ext
-                    else
-                        params_glob%vols(s) = 'startvol_state'//int2str_pad(s,2)//params_glob%ext
-                    endif
+                    params_glob%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//params_glob%ext
+                endif
+                if( cline%defined('mskfile') .and. params_glob%l_envfsc )then
+                    call build_glob%eorecvols(s)%set_automsk(.true.)
                 endif
                 params_glob%vols_even(s) = add2fbody(params_glob%vols(s), params_glob%ext, '_even')
                 params_glob%vols_odd(s)  = add2fbody(params_glob%vols(s), params_glob%ext, '_odd')
@@ -748,26 +758,82 @@ contains
                 call build_glob%vol2%insert_lowres(build_glob%vol, find4eoavg)
                 call build_glob%vol2%ifft()
                 call build_glob%vol2%write(params_glob%vols_odd(s), del_if_exists=.true.)
-                if( present(which_iter) )then
-                    ! post-process volume
-                    pprocvol   = add2fbody(trim(params_glob%vols(s)), params_glob%ext, PPROC_SUFFIX)
-                    build_glob%fsc(s,:) = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
-                    ! low-pass filter
-                    call build_glob%vol%bp(0., params_glob%lp)
-                    call build_glob%vol%ifft()
-                    ! mask
-                    call build_glob%vol%mask(params_glob%msk, 'soft')
-                    call build_glob%vol%write(pprocvol)
+                ! post-process volume
+                pprocvol = add2fbody(trim(params_glob%vols(s)), params_glob%ext, PPROC_SUFFIX)
+                lpvol    = add2fbody(trim(params_glob%vols(s)), params_glob%ext, LP_SUFFIX)
+                build_glob%fsc(s,:) = file2rarr('fsc_state'//int2str_pad(s,2)//'.bin')
+                ! low-pass limit
+                if( params_glob%l_lpset )then
+                    lplim = params_glob%lp
                 else
-                    call build_glob%vol%zero_and_unflag_ft
+                    lplim = res0143s(s)
                 endif
+                ! B-factor estimation
+                if( cline%defined('bfac') )then
+                    bfac = params_glob%bfac
+                else
+                    bfac = build_glob%vol%guinier_bfac(HPLIM_GUINIER, lplim)
+                    write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', bfac
+                endif
+                ! B-factor application
+                call build_glob%vol2%copy(build_glob%vol)
+                call build_glob%vol%apply_bfac(bfac)
+                ! low-pass filter
+                if( params_glob%l_lpset )then
+                    call build_glob%vol%bp(0., lplim)
+                    call build_glob%vol2%bp(0., lplim)
+                else
+                    res   = build_glob%vol%get_res()
+                    optlp = fsc2optlp(build_glob%fsc(s,:))
+                    where( res < TINY ) optlp = 0.
+                    lplim = res0143s(s)
+                    ! optimal low-pass filter from FSC
+                    call build_glob%vol%apply_filter(optlp)
+                    call build_glob%vol2%apply_filter(optlp)
+                    ! final low-pass filtering for smoothness
+                    call build_glob%vol%bp(0., res0143s(s))
+                    call build_glob%vol2%bp(0., res0143s(s))
+                endif
+                call build_glob%vol%ifft()
+                call build_glob%vol2%ifft()
+                ! write low-pass filtered without B-factor or mask
+                call build_glob%vol2%write(lpvol)
+                ! masking
+                if( l_automsk .or. cline%defined('mskfile') )then
+                    if( l_automsk )then
+                        call cline%delete('mskfile')
+                        ! use the non-sharpened volume to make a mask
+                        call envmsk%automask3D_otsu(build_glob%vol2, do_apply=.false.)
+                        mskfile = 'automask'//params_glob%ext
+                        call envmsk%write(mskfile)
+                        call cline%set('mskfile', mskfile)
+                        params_glob%mskfile = mskfile
+                    endif
+                    if( cline%defined('mskfile') )then
+                        mskfile = cline%get_carg('mskfile')
+                        if( .not. file_exists(mskfile) ) THROW_HARD('File '//mskfile//' does not exist')
+                        params_glob%mskfile = mskfile
+                        call envmsk%new(ldim, params_glob%smpd)
+                        call envmsk%read(mskfile)
+                    endif
+                    call build_glob%vol%zero_background
+                    if( cline%defined('lp_backgr') )then
+                        call build_glob%vol%lp_background(envmsk,params_glob%lp_backgr)
+                    else
+                        call build_glob%vol%mul(envmsk)
+                    endif
+                    call envmsk%kill
+                else
+                    call build_glob%vol%mask(params_glob%msk, 'soft')
+                endif
+                ! write
+                call build_glob%vol%write(pprocvol)
             endif
         end do
         if( .not. params_glob%l_distr_exec )then
             ! set the resolution limit according to the worst resolved model
             params_glob%lp = min(params_glob%lp,max(params_glob%lpstop,maxval(res0143s)))
         endif
-        call build_glob%vol%kill
         call build_glob%vol2%kill
     end subroutine norm_struct_facts
 

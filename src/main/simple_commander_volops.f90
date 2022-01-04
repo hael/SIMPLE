@@ -107,7 +107,6 @@ contains
         character(len=:), allocatable :: fname_vol, fname_fsc, fname_msk, fname_mirr
         character(len=:), allocatable :: fname_even, fname_odd, fname_pproc, fname_lp
         real,             allocatable :: fsc(:), optlp(:), res(:)
-        real,             parameter   :: HPLIM = 20.
         type(parameters) :: params
         type(image)      :: vol, vol_copy
         type(masker)     :: mskvol
@@ -172,7 +171,7 @@ contains
         if( cline%defined('bfac') )then
             ! already in params%bfac
         else
-            params%bfac = vol%guinier_bfac(HPLIM, lplim)
+            params%bfac = vol%guinier_bfac(HPLIM_GUINIER, lplim)
             write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', params%bfac
         endif
         ! check volume mask
@@ -207,7 +206,7 @@ contains
         else
             THROW_HARD('no method for low-pass filtering defined; give fsc|lp on command line; exec_postprocess')
         endif
-        ! write low-pass filtered without B-factor & read the original back in
+        ! write low-pass filtered without B-factor or mask & read the original back in
         call vol_copy%ifft
         call vol_copy%write(fname_lp)
         call vol_copy%read(fname_vol)
@@ -217,7 +216,7 @@ contains
             if( cline%get_carg('automsk').eq.'no' ) has_mskfile = .false. ! turn off masking
         endif
         if( params%automsk .eq. 'yes' )then
-            if( .not. cline%defined('thres') )then
+            if( .not. cline%defined('thres') .and. cline%defined('mw') )then
                 write(logfhandle,*) 'Need a pixel threshold > 0. for the binarisation'
                 write(logfhandle,*) 'Procedure for obtaining thresh:'
                 write(logfhandle,*) '(1) postproc vol without bfac or automsk'
@@ -225,10 +224,14 @@ contains
                 write(logfhandle,*) '(3) Identify the pixel threshold that excludes any background noise'
                 THROW_HARD('postprocess')
             endif
-            if( .not. cline%defined('mw') )then
-                THROW_HARD('molecular weight must be provided for auto-masking (MW); postprocess')
+            if( cline%defined('thres') .and. .not. cline%defined('mw') )then
+                THROW_HARD('molecular weight must be provided for threshold-based auto-masking; postprocess')
             endif
-            call mskvol%automask3D(vol_copy)
+            if( cline%defined('thres') .and. cline%defined('mw') )then
+                call mskvol%automask3D(vol_copy)
+            else
+                call mskvol%automask3D_otsu(vol_copy)
+            endif
             call mskvol%write('automask'//params%ext)
             call vol%zero_background
             call vol%mul(mskvol)

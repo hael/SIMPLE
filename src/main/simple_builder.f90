@@ -266,10 +266,6 @@ contains
             cyc_lims   = self%img_pad%loop_lims(3)
             allocate( self%fsc(params%nstates,lfny) )
             self%fsc  = 0.
-            ! set default amsklp
-            if( .not. cline%defined('amsklp') .and. cline%defined('lp') )then
-                params%amsklp = self%img%get_lp(self%img%get_find(params%lp)-2)
-            endif
             ! generate logical circular 2D mask
             call mskimg%disc([params%box,params%box,1], params%smpd, params%msk, self%lmsk)
             call mskimg%kill
