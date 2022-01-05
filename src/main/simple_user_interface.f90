@@ -169,6 +169,7 @@ type(simple_program), target :: write_classes
 type(simple_input_param) :: algorithm
 type(simple_input_param) :: angerr
 type(simple_input_param) :: astigtol
+type(simple_input_param) :: automsk
 type(simple_input_param) :: bfac
 type(simple_input_param) :: box
 type(simple_input_param) :: clip
@@ -910,6 +911,7 @@ contains
         call set_param(mul,            'mul',          'num',    'Multiplication factor', 'Multiplication factor{1.}','{1.}',.false., 1.)
         call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(patch|wpatch|poly|poly2){patch}','(patch|wpatch|poly|poly2){patch}', .false.,'patch')
         call set_param(width,          'width',        'num',    'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
+        call set_param(automsk,        'automsk',      'multi',  'Perform envelope masking', 'Whether to generate/apply an envelope mask(yes|no|file){no}', '(yes|no|file){no}', .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -999,7 +1001,7 @@ contains
         &'auto 3D refinement of metallic nanoparticles',&                                 ! descr_short
         &'is a distributed workflow for automated 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                  ! executable
-        &1, 2, 0, 8, 5, 4, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &1, 2, 0, 8, 5, 3, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call autorefine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -1031,7 +1033,6 @@ contains
         call autorefine3D_nano%set_input('mask_ctrls', 1, mskdiam)
         call autorefine3D_nano%set_input('mask_ctrls', 2, innerdiam)
         call autorefine3D_nano%set_input('mask_ctrls', 3, mskfile)
-        call autorefine3D_nano%set_input('mask_ctrls', 4, width)
         ! computer controls
         call autorefine3D_nano%set_input('comp_ctrls', 1, nparts)
         call autorefine3D_nano%set_input('comp_ctrls', 2, nthr)
@@ -1358,7 +1359,7 @@ contains
         &'3D heterogeneity analysis',&                                             ! descr_short
         &'is a distributed workflow for heterogeneity analysis by 3D clustering',& ! descr_long
         &'simple_exec',&                                                     ! executable
-        &0, 1, 0, 7, 6, 5, 2, .true.)                                              ! # entries in each group, requires sp_project
+        &0, 1, 0, 7, 6, 4, 2, .true.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1389,7 +1390,6 @@ contains
         call cluster3D%set_input('mask_ctrls', 2, innerdiam)
         call cluster3D%set_input('mask_ctrls', 3, mskfile)
         call cluster3D%set_input('mask_ctrls', 4, focusmskdiam)
-        call cluster3D%set_input('mask_ctrls', 5, width)
         ! computer controls
         call cluster3D%set_input('comp_ctrls', 1, nparts)
         call cluster3D%set_input('comp_ctrls', 2, nthr)
@@ -1403,7 +1403,7 @@ contains
         &'is a distributed workflow based on probabilistic projection matching &
         &for refinement of 3D heterogeneity analysis by cluster3D ',&        ! descr_long
         &'simple_exec',&                                                     ! executable
-        &2, 1, 0, 9, 6, 3, 2, .true.)                                        ! # entries in each group
+        &2, 1, 0, 9, 6, 2, 2, .true.)                                        ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster3D_refine%set_input('img_ios', 1, 'msklist', 'file', 'List of mask files', 'List (.txt file) of mask files for the different states', 'e.g. mskfiles.txt', .false., '')
@@ -1436,7 +1436,6 @@ contains
         ! mask controls
         call cluster3D_refine%set_input('mask_ctrls', 1, mskdiam)
         call cluster3D_refine%set_input('mask_ctrls', 2, innerdiam)
-        call cluster3D_refine%set_input('mask_ctrls', 3, width)
         ! computer controls
         call cluster3D_refine%set_input('comp_ctrls', 1, nparts)
         call cluster3D_refine%set_input('comp_ctrls', 2, nthr)
@@ -1849,7 +1848,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class&
         & averages obtained with cluster2D',&                                         ! descr_long
         &'simple_exec',&                                                              ! executable
-        &0, 0, 0, 5, 4, 2, 2, .true.)                                                 ! # entries in each group, requires sp_project
+        &0, 0, 0, 5, 5, 2, 2, .true.)                                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1875,9 +1874,12 @@ contains
             &'low-pass limit in Angstroms', .false., 0.)
         call initial_3Dmodel%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
             &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 8.)
+        call initial_3Dmodel%set_input('filt_ctrls', 5, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+            & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, mskdiam)
-        call initial_3Dmodel%set_input('mask_ctrls', 2, width)
+        call initial_3Dmodel%set_input('mask_ctrls', 2, 'automsk', 'binary', 'Perform envelope masking',&
+        &'Whether to generate & apply an envelope mask(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         ! computer controls
         call initial_3Dmodel%set_input('comp_ctrls', 1, nparts)
         initial_3Dmodel%comp_ctrls(1)%required = .false.
@@ -2463,7 +2465,7 @@ contains
         &'Post-processing of volume',&                                        ! descr_short
         &'is a program for map post-processing. Use program volops to estimate the B-factor with the Guinier plot',& ! descr_long
         &'simple_exec',&                                                      ! executable
-        &0, 1, 0, 0, 5, 9, 1, .true.)                                         ! # entries in each group, requires sp_project
+        &0, 1, 0, 0, 5, 8, 1, .true.)                                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2488,11 +2490,9 @@ contains
         &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false., 1.)
         call postprocess%set_input('mask_ctrls', 5, 'thres', 'num', 'Volume threshold',&
         &'Volume threshold for enevloppe mask generation', 'Volume threshold', .false., 0.)
-        call postprocess%set_input('mask_ctrls', 6, 'automsk', 'multi', 'Perform envelope masking',&
-        &'Whether to generate/apply an envelope mask(yes|no|file){no}', '(yes|no|file){no}', .false., 'no')
+        call postprocess%set_input('mask_ctrls', 6, automsk)
         call postprocess%set_input('mask_ctrls', 7, mw)
-        call postprocess%set_input('mask_ctrls', 8, width)
-        call postprocess%set_input('mask_ctrls', 9, 'edge', 'num', 'Envelope mask soft edge',&
+        call postprocess%set_input('mask_ctrls', 8, 'edge', 'num', 'Envelope mask soft edge',&
         &'Cosine edge size for softening molecular envelope in pixels{6}', '# pixels cosine edge{6}', .false., 6.)
         ! computer controls
         call postprocess%set_input('comp_ctrls', 1, nthr)
@@ -3046,7 +3046,7 @@ contains
         call refine3D%set_input('mask_ctrls', 2, innerdiam)
         call refine3D%set_input('mask_ctrls', 3, mskfile)
         call refine3D%set_input('mask_ctrls', 4, focusmskdiam)
-        call refine3D%set_input('mask_ctrls', 5, width)
+        call refine3D%set_input('mask_ctrls', 5, automsk)
         ! computer controls
         call refine3D%set_input('comp_ctrls', 1, nparts)
         refine3D%comp_ctrls(1)%required = .false.
@@ -3060,7 +3060,7 @@ contains
         &'3D refinement of metallic nanoparticles',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                                                ! executable
-        &1, 0, 0, 8, 5, 4, 2, .true.)                                                                                        ! # entries in each group, requires sp_project
+        &1, 0, 0, 8, 5, 3, 2, .true.)                                                                                        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -3091,7 +3091,6 @@ contains
         call refine3D_nano%set_input('mask_ctrls', 1, mskdiam)
         call refine3D_nano%set_input('mask_ctrls', 2, innerdiam)
         call refine3D_nano%set_input('mask_ctrls', 3, mskfile)
-        call refine3D_nano%set_input('mask_ctrls', 4, width)
         ! computer controls
         call refine3D_nano%set_input('comp_ctrls', 1, nparts)
         call refine3D_nano%set_input('comp_ctrls', 2, nthr)

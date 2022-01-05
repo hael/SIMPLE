@@ -38,17 +38,9 @@ contains
         if( cline%defined('stk') )then
             ! 2D
             call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-            if( cline%defined('mskdiam') .or. cline%defined('innerdiam') )then
+            if( cline%defined('mskdiam') )then
                 ! spherical
-                if( cline%defined('innerdiam') )then
-                    if( cline%defined('width') )then
-                        call mask_imgfile(params%stk, params%outstk, params%msk, params%smpd, inner=params%inner, width=params%width, which=params%msktype)
-                    else
-                        call mask_imgfile(params%stk, params%outstk, params%msk, params%smpd, inner=params%inner, which=params%msktype)
-                    endif
-                else
-                    call mask_imgfile(params%stk, params%outstk, params%msk, params%smpd, which=params%msktype)
-                endif
+                call mask_imgfile(params%stk, params%outstk, params%msk, params%smpd, which=params%msktype)
             else if( params%taper_edges.eq.'yes' )then
                 call taper_edges_imgfile(params%stk, params%outstk, params%smpd)
             else
@@ -75,15 +67,7 @@ contains
                 if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
             else if( cline%defined('mskdiam') )then
                 ! spherical
-                if( cline%defined('innerdiam') )then
-                    if( cline%defined('width') )then
-                        call build%vol%mask(params%msk, params%msktype, inner=params%inner, width=params%width)
-                    else
-                        call build%vol%mask(params%msk, params%msktype, inner=params%inner)
-                    endif
-                else
-                    call build%vol%mask(params%msk, params%msktype)
-                endif
+                call build%vol%mask(params%msk, params%msktype)
                 if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
             else if( cline%defined('pdbfile') )then
                 ! focus masking

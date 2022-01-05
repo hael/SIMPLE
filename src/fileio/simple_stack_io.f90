@@ -117,14 +117,17 @@ contains
             ! the image is in buffer
         else
             ! read buffer
-            if( self%fromp == 0 )then
-                self%fromp = 1
-                self%top   = self%bufsz
-            else
-                self%fromp = self%top + 1
-                self%top   = min(self%fromp + self%bufsz - 1, self%nptcls)
-                if( self%fromp > self%nptcls ) return
-            endif
+            do ! needed in case the first read is not in the start
+                if( self%fromp == 0 )then
+                    self%fromp = 1
+                    self%top   = self%bufsz
+                else
+                    self%fromp = self%top + 1
+                    self%top   = min(self%fromp + self%bufsz - 1, self%nptcls)
+                    if( self%fromp > self%nptcls ) return
+                endif
+                if( i >= self%fromp .and. i <= self%top ) exit ! when we are within the bounds
+            end do
             bufsz = self%top - self%fromp + 1
             call self%ioimg%rSlices(self%fromp,self%top,self%rmat_ptr(:self%ldim(1),:self%ldim(2),:bufsz),is_mrc=.true.)
         endif

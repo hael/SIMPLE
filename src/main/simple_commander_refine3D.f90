@@ -893,14 +893,10 @@ contains
                 ! normalize
                 call build%imgbatch(imatch)%noise_norm(build%lmsk, sdev_noise)
                 !  mask
-                if( params%l_innermsk )then
-                    call build%imgbatch(imatch)%mask(params%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
+                if( params%l_focusmsk )then
+                    call build%imgbatch(imatch)%mask(params%focusmsk, 'soft')
                 else
-                    if( params%l_focusmsk )then
-                        call build%imgbatch(imatch)%mask(params%focusmsk, 'soft')
-                    else
-                        call build%imgbatch(imatch)%mask(params%msk, 'soft')
-                    endif
+                    call build%imgbatch(imatch)%mask(params%msk, 'soft')
                 endif
                 call build%imgbatch(imatch)%fft
                 ! power spectrum

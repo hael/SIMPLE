@@ -616,13 +616,8 @@ contains
         end do
         !$omp parallel do default(shared) private(icls,frc,find,find_plate) schedule(static) proc_bind(close)
         do icls=1,ncls
-            if( params_glob%l_innermsk )then
-                call even_imgs(icls)%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
-                call odd_imgs(icls)%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
-            else
-                call even_imgs(icls)%mask(params_glob%msk, 'soft')
-                call odd_imgs(icls)%mask(params_glob%msk, 'soft')
-            endif
+            call even_imgs(icls)%mask(params_glob%msk, 'soft')
+            call odd_imgs(icls)%mask(params_glob%msk, 'soft')
             call even_imgs(icls)%fft()
             call odd_imgs(icls)%fft()
             call even_imgs(icls)%fsc(odd_imgs(icls), frc)

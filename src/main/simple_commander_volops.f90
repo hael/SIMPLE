@@ -253,11 +253,7 @@ contains
                 call vol%mul(mskvol)
                 call mskvol%kill
             else
-                if( params%l_innermsk )then
-                    call vol%mask(params%msk, 'soft', inner=params%inner, width=params%width)
-                else
-                    call vol%mask(params%msk, 'soft')
-                endif
+                call vol%mask(params%msk, 'soft')
             endif
         endif
         ! output in cwd
@@ -663,11 +659,7 @@ contains
             call build%vol%write(trim(fbody)//'_centered.mrc')
         endif
         ! mask volume
-        if( params_glob%l_innermsk )then
-            call build%vol%mask(params%msk, 'soft', inner=params%inner, width=params%width)
-        else
-            call build%vol%mask(params%msk, 'soft')
-        endif
+        call build%vol%mask(params%msk, 'soft')
         ! init search object
         call volpft_symsrch_init(build%vol, params%pgrp, params%hp, params%lp)
         ! search
@@ -725,7 +717,6 @@ contains
             call build%vol%ifft
             smpd         = build%vol%get_smpd()
             params%msk   = round2even(scale * params%msk)
-            params%inner = round2even(scale * params%inner)
             params%width = scale * params%width
         endif
         if( params%center.eq.'yes' )then
@@ -776,7 +767,6 @@ contains
             call build%vol%ifft
             smpd         = build%vol%get_smpd()
             params%msk   = round2even(scale * params%msk)
-            params%inner = round2even(scale * params%inner)
             params%width = scale * params%width
         endif
         ! low-pass limit safety
@@ -788,11 +778,7 @@ contains
             call build%vol%shift(shvec)
         endif
         ! mask volume
-        if( params_glob%l_innermsk )then
-            call build%vol%mask(params%msk, 'soft', inner=params%inner, width=params%width)
-        else
-            call build%vol%mask(params%msk, 'soft')
-        endif
+        call build%vol%mask(params%msk, 'soft')
         ! run test
         if(cline%defined('fname')) then
           call symmetry_tester(build%vol, params%msk, params%hp,&
