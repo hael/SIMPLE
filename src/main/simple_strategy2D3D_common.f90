@@ -346,17 +346,13 @@ contains
         ! clip image if needed
         call img_in%clip(img_out)
         ! soft-edged mask
-        if( params_glob%l_innermsk )then
-            call img_out%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
+        if( params_glob%l_focusmsk )then
+            call img_out%mask(params_glob%focusmsk, 'soft')
         else
-            if( params_glob%l_focusmsk )then
-                call img_out%mask(params_glob%focusmsk, 'soft')
+            if( params_glob%l_needs_sigma )then
+                call img_out%mask(params_glob%msk, 'softavg')
             else
-                if( params_glob%l_needs_sigma )then
-                    call img_out%mask(params_glob%msk, 'softavg')
-                else
-                    call img_out%mask(params_glob%msk, 'soft')
-                endif
+                call img_out%mask(params_glob%msk, 'soft')
             endif
         endif
         ! gridding prep
@@ -427,12 +423,7 @@ contains
         ! clip image if needed
         call img_in%clip(img_out)
         ! apply mask
-        if( params_glob%l_innermsk )then
-            call img_out%mask(params_glob%msk, 'soft', &
-                inner=params_glob%inner, width=params_glob%width)
-        else
-            call img_out%mask(params_glob%msk, 'soft')
-        endif
+        call img_out%mask(params_glob%msk, 'soft')
         ! gridding prep
         if( params_glob%gridding.eq.'yes' )then
             call img_out%div_by_instrfun
@@ -555,7 +546,7 @@ contains
         if( present(fname_odd) )then
             call build_glob%vol_odd%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
             call build_glob%vol_odd%read(fname_odd)
-            if( cline%defined('mskfile') )then
+            if( cline%defined('mskfile') .and. params_glob%l_nonuniform )then
                 ! randomize Fourier phases below noise power in a nonuniform manner
                 call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
                 call mskvol%read(params_glob%mskfile)
@@ -667,19 +658,9 @@ contains
         else
             ! circular masking
             if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-                if( params_glob%l_innermsk )then
-                    call vol_ptr%mask(params_glob%msk, 'soft', &
-                        inner=params_glob%inner, width=params_glob%width, backgr=0.0)
-                else
-                    call vol_ptr%mask(params_glob%msk, 'soft', backgr=0.0)
-                endif
+                call vol_ptr%mask(params_glob%msk, 'soft', backgr=0.0)
             else
-                if( params_glob%l_innermsk )then
-                    call vol_ptr%mask(params_glob%msk, 'soft', &
-                        inner=params_glob%inner, width=params_glob%width)
-                else
-                    call vol_ptr%mask(params_glob%msk, 'soft')
-                endif
+                call vol_ptr%mask(params_glob%msk, 'soft')
             endif
         endif
         ! gridding prep

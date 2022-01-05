@@ -24,7 +24,7 @@ type :: reconstructor_eo
     character(len=4)    :: ext
     real                :: res_fsc05          !< target resolution at FSC=0.5
     real                :: res_fsc0143        !< target resolution at FSC=0.143
-    real                :: smpd, msk, fny, inner=0., width=10., pad_correction=1.
+    real                :: smpd, msk, fny, pad_correction=1.
     integer             :: box=0, nstates=1, numlen=2, hpind_fsc=0
     logical             :: phaseplate = .false.
     logical             :: automsk    = .false.
@@ -86,8 +86,6 @@ contains
         self%box        = params_glob%box
         self%smpd       = params_glob%smpd
         self%nstates    = params_glob%nstates
-        self%inner      = params_glob%inner
-        self%width      = params_glob%width
         self%fny        = params_glob%fny
         self%ext        = params_glob%ext
         self%numlen     = params_glob%numlen
@@ -370,13 +368,8 @@ contains
                 call odd%mul(self%envmask)
             else
                 ! spherical masking
-                if( self%inner > 1. )then
-                    call even%mask(msk, 'soft', inner=self%inner, width=self%width)
-                    call odd%mask(msk, 'soft', inner=self%inner, width=self%width)
-                else
-                    call even%mask(msk, 'soft',backgr=0.)
-                    call odd%mask(msk, 'soft',backgr=0.)
-                endif
+                call even%mask(msk, 'soft', backgr=0.)
+                call odd%mask(msk, 'soft', backgr=0.)
             endif
             ! forward FT
             call even%fft()
@@ -484,13 +477,8 @@ contains
                 endif
             else
                 ! spherical masking
-                if( self%inner > 1. )then
-                    call even%mask(msk, 'soft', inner=self%inner, width=self%width)
-                    call odd%mask(msk, 'soft', inner=self%inner, width=self%width)
-                else
-                    call even%mask(msk, 'soft')
-                    call odd%mask(msk, 'soft')
-                endif
+                call even%mask(msk, 'soft')
+                call odd%mask(msk, 'soft')
                 ! forward FT
                 call even%fft()
                 call odd%fft()

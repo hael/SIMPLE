@@ -36,7 +36,7 @@ contains
         class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! constants
-        real,                  parameter :: SCALEFAC2_TARGET = 0.5
+        real,                  parameter :: SCALEFAC2_TARGET = 0.5, AMSKLP_DEFAULT = 15.
         real,                  parameter :: CENLP=30. !< consistency with refine3D
         integer,               parameter :: MAXITS_SNHC=20, MAXITS_INIT=15, MAXITS_REFINE=40
         integer,               parameter :: NSPACE_SNHC=1000, NSPACE_INIT=1000, NSPACE_REFINE=2500
@@ -44,7 +44,6 @@ contains
         character(len=STDLEN), parameter :: REC_FBODY            = 'rec_final'
         character(len=STDLEN), parameter :: REC_PPROC_FBODY      = trim(REC_FBODY)//trim(PPROC_SUFFIX)
         character(len=STDLEN), parameter :: REC_PPROC_MIRR_FBODY = trim(REC_PPROC_FBODY)//trim(MIRR_SUFFIX)
-        character(len=2) :: str_state
         ! distributed commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
         type(scale_project_commander_distr) :: xscale
@@ -67,6 +66,7 @@ contains
         real,             allocatable :: res(:), tmp_rarr(:)
         integer,          allocatable :: states(:), tmp_iarr(:)
         class(parameters), pointer    :: params_ptr => null()
+        character(len=2)      :: str_state
         type(qsys_env)        :: qenv
         type(parameters)      :: params
         type(ctfparams)       :: ctfvars ! ctf=yes by default
@@ -80,7 +80,7 @@ contains
         real                  :: iter, smpd_target, lplims(2), orig_smpd
         real                  :: scale_factor1, scale_factor2
         integer               :: icls, ncavgs, orig_box, box, istk, cnt
-        logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset, l_shmem
+        logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset, l_shmem, l_automsk
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',      'no')
@@ -104,13 +104,24 @@ contains
         ! auto-scaling prep
         do_autoscale = (cline%get_carg('autoscale').eq.'yes')
         if( cline%defined('vol1') ) do_autoscale = .false.
-        ! now, remove autoscale flag from command line, since no scaled partial stacks
-        ! will be produced (this program used shared-mem paralllelisation of scale)
+        ! remove autoscale flag from command line, since no scaled partial stacks
+        ! will be produced (this program always uses shared-mem paralllelisation of scale)
         call cline%delete('autoscale')
         ! whether to perform perform ab-initio reconstruction with e/o class averages
         l_lpset = cline%defined('lpstart') .and. cline%defined('lpstop')
         ! make master parameters
         call params%new(cline)
+        ! take care of automask flag
+        l_automsk = .true.
+        if( cline%defined('automsk') )then
+            l_automsk = trim(params%automsk) .eq. 'yes'
+            call cline%delete('automsk')
+        endif
+        ! ... and automsk low-pass limit
+        if( .not. cline%defined('amsklp') )then
+            params%amsklp = AMSKLP_DEFAULT
+            call cline%set('amsklp', AMSKLP_DEFAULT)
+        endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
@@ -290,6 +301,10 @@ contains
         if( .not. cline_refine3D_refine%defined('nspace') )then
             call cline_refine3D_refine%set('nspace', real(NSPACE_REFINE))
         endif
+        if( l_automsk )then
+            call cline_refine3D_refine%set('automsk',   'yes')
+            call cline_refine3D_refine%set('nonuniform', 'no') ! for speed
+        endif
         ! (5) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',     'reconstruct3D')
         call cline_reconstruct3D%set('box',      real(orig_box))
@@ -297,10 +312,14 @@ contains
         call cline_postprocess%set('prg',       'postprocess')
         call cline_postprocess%set('projfile',   ORIG_WORK_PROJFILE)
         call cline_postprocess%set('mkdir',      'no')
+        call cline_postprocess%set('bfac',       0.)
         if( l_lpset )then
             call cline_postprocess%set('lp', lplims(2))
         else
             call cline_postprocess%delete('lp')
+        endif
+        if( l_automsk )then
+            call cline_postprocess%set('automsk', 'yes')
         endif
         call cline_reproject%set('prg',     'reproject')
         call cline_reproject%set('pgrp',    trim(pgrp_refine))

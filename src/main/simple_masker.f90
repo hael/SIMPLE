@@ -85,6 +85,7 @@ contains
         write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK LOW-PASS:           ', self%amsklp,  ' ANGSTROMS'
         write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,    ' PIXEL(S)'
         write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,' PIXEL(S)'
+
         was_ft = vol_inout%is_ft()
         if( was_ft ) call vol_inout%ifft()
         call self%transfer2bimg(vol_inout)
@@ -94,12 +95,11 @@ contains
         call otsu_img(self)
         call self%set_imat
         ! identify connected components
-        write(logfhandle,'(A)') '>>> IDENTIFYING CONNECTED COMPONENTS (CCS)'
         call self%find_ccs(ccimage, update_imat=.true.)
         ! extract all cc sizes (in # pixels)
         ccsizes = self%size_ccs()
         sz      = size(ccsizes)
-        write(logfhandle,'(A,I7)'  ) '>>> FOUND '//int2str(sz)//' CONNECTED COMPONENTS'
+        write(logfhandle,'(A,I7,A)'  ) '>>> FOUND:                       ', sz, 'CONNECTED COMPONENT(S)'
         if( sz > 1 )then
             ! identify the largest connected component
             imax = maxval(ccsizes)
@@ -114,7 +114,6 @@ contains
         else
             npix = self%nforeground()
         endif
-        write(logfhandle,'(A,I7)'    ) '>>> # FOREGROUND PIXELS:         ', npix
         mwkda = mwkdafind(self%get_smpd(), npix)
         write(logfhandle,'(A,F7.1,A)') '>>> MOLECULAR WEIGHT:            ', mwkda,        ' kDa'
         ! add layers

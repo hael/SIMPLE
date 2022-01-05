@@ -60,13 +60,8 @@ contains
             endif
         else
             ! spherical masking
-            if( params%l_innermsk )then
-                call even%mask(params%msk, 'soft', inner=params%inner, width=params%width)
-                call odd%mask(params%msk, 'soft', inner=params%inner, width=params%width)
-            else
-                call even%mask(params%msk, 'soft')
-                call odd%mask(params%msk, 'soft')
-            endif
+            call even%mask(params%msk, 'soft')
+            call odd%mask(params%msk, 'soft')
         endif
         ! forward FT
         call even%fft()
@@ -125,13 +120,8 @@ contains
     !         endif
     !     else
     !         ! spherical masking
-    !         if( params%l_innermsk )then
-    !             call even%mask(params%msk, 'soft', inner=params%inner, width=params%width)
-    !             call odd%mask(params%msk, 'soft', inner=params%inner, width=params%width)
-    !         else
-    !             call even%mask(params%msk, 'soft')
-    !             call odd%mask(params%msk, 'soft')
-    !         endif
+    !         call even%mask(params%msk, 'soft')
+    !         call odd%mask(params%msk, 'soft')
     !     endif
     !     ! forward FT
     !     call even%fft()
@@ -184,13 +174,8 @@ contains
             endif
         else
             ! spherical masking
-            if( params%l_innermsk )then
-                call even%mask(params%msk, 'soft', inner=params%inner, width=params%width)
-                call odd%mask(params%msk, 'soft', inner=params%inner, width=params%width)
-            else
-                call even%mask(params%msk, 'soft')
-                call odd%mask(params%msk, 'soft')
-            endif
+            call even%mask(params%msk, 'soft')
+            call odd%mask(params%msk, 'soft')
         endif
         if( have_mask_file )then
             call mskvol%one_at_edge ! to expand before masking of reference internally (preprefvol)

@@ -41,6 +41,7 @@ type :: parameters
     character(len=3)      :: dopca='yes'
     character(len=3)      :: doprint='no'
     character(len=3)      :: dorec='yes'
+    character(len=3)      :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
     character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)      :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
@@ -60,10 +61,10 @@ type :: parameters
     character(len=3)      :: merge='no'
     character(len=3)      :: mirr='no'            !< mirror(no|x|y){no}
     character(len=3)      :: mkdir='no'           !< make auto-named execution directory(yes|no){no}
-    character(len=3)      :: envfsc='yes'         !< envelope mask even/odd pairs for FSC calculation(yes|no){yes}
-    character(len=3)      :: needs_sigma='no'     !< invert contrast of images(yes|no)
-    character(len=3)      :: neg='no'             !< invert contrast of images(yes|no)
+    character(len=3)      :: needs_sigma='no'     !< invert contrast of images(yes|no){no}
+    character(len=3)      :: neg='no'             !< invert contrast of images(yes|no){no}
     character(len=3)      :: noise_norm ='no'
+    character(len=3)      :: nonuniform='yes'     !< nonuniform filter(yes|no){yes}
     character(len=3)      :: norm='no'            !< do statistical normalisation avg
     character(len=3)      :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
@@ -372,8 +373,6 @@ type :: parameters
     real    :: hp=100.             !< high-pass limit(in A)
     real    :: hp_fsc=0.           !< FSC high-pass limit(in A)
     real    :: hp_ctf_estimate=30. !< high-pass limit 4 ctf_estimate(in A)
-    real    :: inner=0.            !< inner mask radius(in pixels)
-    real    :: innerdiam=0.        !< inner mask diameter(in A)
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
     real    :: lambda=1.0
     real    :: lp=20.              !< low-pass limit(in A)
@@ -413,7 +412,7 @@ type :: parameters
     real    :: time_per_frame=0.
     real    :: trs=0.              !< maximum halfwidth shift(in pixels)
     real    :: update_frac = 1.
-    real    :: width=10.           !< falloff of inner mask(in pixels){10}
+    real    :: width=10.           !< falloff of mask(in pixels){10}
     real    :: winsz=RECWINSZ
     real    :: xsh=0.              !< x shift(in pixels){0}
     real    :: ysh=0.              !< y shift(in pixels){0}
@@ -429,11 +428,11 @@ type :: parameters
     logical :: l_focusmsk       = .false.
     logical :: l_frac_update    = .false.
     logical :: l_graphene       = .false.
-    logical :: l_innermsk       = .false.
     logical :: l_lpset          = .false.
     logical :: l_locres         = .false.
     logical :: l_match_filt     = .true.
     logical :: l_needs_sigma    = .false.
+    logical :: l_nonuniform     = .true.
     logical :: l_phaseplate     = .false.
     logical :: l_remap_cls      = .false.
     logical :: l_wglob          = .true.
@@ -517,6 +516,7 @@ contains
         call check_carg('doprint',        self%doprint)
         call check_carg('draw_color',     self%draw_color)
         call check_carg('element',        self%element)
+        call check_carg('envfsc',         self%envfsc)
         call check_carg('even',           self%even)
         call check_carg('exp_doc',        self%exp_doc)
         call check_carg('startype',       self%startype)
@@ -545,12 +545,12 @@ contains
         call check_carg('merge',          self%merge)
         call check_carg('mirr',           self%mirr)
         call check_carg('mkdir',          self%mkdir)
-        call check_carg('envfsc',         self%envfsc)
         call check_carg('msktype',        self%msktype)
         call check_carg('mcconvention',   self%mcconvention)
         call check_carg('needs_sigma',    self%needs_sigma)
         call check_carg('neg',            self%neg)
         call check_carg('noise_norm',     self%noise_norm)
+        call check_carg('nonuniform',     self%nonuniform)
         call check_carg('norm',           self%norm)
         call check_carg('objfun',         self%objfun)
         call check_carg('omit_neg',       self%omit_neg)
@@ -786,8 +786,6 @@ contains
         call check_rarg('hp',             self%hp)
         call check_rarg('hp_ctf_estimate',self%hp_ctf_estimate)
         call check_rarg('hp_fsc',         self%hp_fsc)
-        call check_rarg('inner',          self%inner)
-        call check_rarg('innerdiam',      self%innerdiam)
         call check_rarg('kv',             self%kv)
         call check_rarg('lambda',         self%lambda)
         call check_rarg('lp',             self%lp)
@@ -1199,20 +1197,12 @@ contains
             self%mskdiam = mskdiam_default
             self%msk     = msk_default
         endif
-        ! set mode of masking
-        if( cline%defined('inner') )then
-            THROW_HARD('inner (inner mask radius in pixels) is depreciated! Use innerdiam (inner mask diameter in A)')
-        endif
-        if( cline%defined('innerdiam') )then
-            self%inner = round2even((self%innerdiam / self%smpd) / 2.)
-            self%l_innermsk = .true.
-        else
-            self%l_innermsk = .false.
-        endif
         ! set lpset flag
         self%l_lpset  = cline%defined('lp')
         ! set envfsc flag
         self%l_envfsc = self%envfsc .ne. 'no'
+        ! set nonuniform flag
+        self%l_nonuniform = self%nonuniform .ne. 'no'
         ! set correlation weighting scheme
         self%l_corrw = self%wcrit .ne. 'no'
         if( self%l_corrw )then
