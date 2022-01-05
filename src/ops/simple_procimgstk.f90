@@ -699,7 +699,7 @@ contains
         class(sp_project), intent(inout) :: spproj
         character(len=*),  intent(in)    :: fname
         integer,           intent(in)    :: nran, box
-        type(stack_io)                   :: stkio_w
+        type(stack_io)                   :: stkio_r, stkio_w
         type(ran_tabu)                   :: rt
         type(image)                      :: img, img_scaled
         character(len=:), allocatable    :: stkname
@@ -737,8 +737,14 @@ contains
             call progress(i, nran)
             ii = rt%irnd()
             call rt%insert(ii)
-            call spproj%get_stkname_and_ind('ptcl2D', ii, stkname, ind)            
-            call img%read(stkname, ind)
+            call spproj%get_stkname_and_ind('ptcl2D', ii, stkname, ind)
+            if( .not. stkio_r%stk_is_open() )then
+                call stkio_r%open(stkname, smpd, 'read')
+            else if( .not. stkio_r%same_stk(stkname, ldim) )then
+                call stkio_r%close
+                call stkio_r%open(stkname, smpd, 'read')
+            endif
+            call stkio_r%read(ind, img)
             call img%norm()
             if( doscale )then
                 call img%fft()
@@ -753,6 +759,7 @@ contains
                 call stkio_w%write(i, img)
             endif
         end do
+        call stkio_r%close
         call stkio_w%close
         call rt%kill
         call img%kill
@@ -764,7 +771,7 @@ contains
         class(sp_project), intent(inout) :: spproj
         character(len=*),  intent(in)    :: fname
         integer,           intent(in)    :: nsel, box
-        type(stack_io)                   :: stkio_w
+        type(stack_io)                   :: stkio_r, stkio_w
         type(image)                      :: img, img_scaled
         character(len=:), allocatable    :: stkname
         real,             allocatable    :: states(:)
@@ -804,7 +811,13 @@ contains
             cnt = cnt + 1
             if( cnt > nsel ) exit
             call spproj%get_stkname_and_ind('ptcl2D', inds_packed(i), stkname, ind)
-            call img%read(stkname, ind)
+            if( .not. stkio_r%stk_is_open() )then
+                call stkio_r%open(stkname, smpd, 'read')
+            else if( .not. stkio_r%same_stk(stkname, ldim) )then
+                call stkio_r%close        
+                call stkio_r%open(stkname, smpd, 'read')
+            endif
+            call stkio_r%read(ind, img)
             call img%norm()
             if( doscale )then
                 call img%fft()
@@ -821,6 +834,7 @@ contains
             endif
         end do
         deallocate(states, inds, inds_packed)
+        call stkio_r%close
         call stkio_w%close
         call img%kill
         call img_scaled%kill
@@ -831,7 +845,7 @@ contains
         class(sp_project), intent(inout) :: spproj
         character(len=*),  intent(in)    :: fname
         integer,           intent(in)    :: ncls
-        type(stack_io)                   :: stkio_w
+        type(stack_io)                   :: stkio_r, stkio_w
         type(image)                      :: img, img_avg
         character(len=:), allocatable    :: stkname
         real                             :: smpd
@@ -853,13 +867,20 @@ contains
             do j = 1,navg
                 ii = irnd_uni(nptcls)
                 call spproj%get_stkname_and_ind('ptcl2D', ii, stkname, ind)
-                call img%read(stkname, ind)
+                if( .not. stkio_r%stk_is_open() )then
+                    call stkio_r%open(stkname, smpd, 'read')
+                else if( .not. stkio_r%same_stk(stkname, ldim) )then
+                    call stkio_r%close
+                    call stkio_r%open(stkname, smpd, 'read')
+                endif
+                call stkio_r%read(ind, img)
                 call img%norm()
                 call img_avg%add(img)
             enddo
             call img_avg%norm()
             call stkio_w%write(i, img_avg)
         enddo
+        call stkio_r%close
         call stkio_w%close
         call img%kill
         call img_avg%kill
