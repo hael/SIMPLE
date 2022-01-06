@@ -26,6 +26,7 @@ integer,               parameter   :: WAIT_WATCHER        = 5     ! seconds prio
 integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
 integer,               parameter   :: FREQ_POOL_REJECTION = 5     !
 character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
+character(len=STDLEN), parameter   :: LAST_SNAPSHOT       = 'last_snapshot.txt'
 character(len=STDLEN), parameter   :: SPPROJ_SNAPSHOT     = 'SIMPLE_PROJECT_SNAPSHOT'
 character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
 character(len=STDLEN), parameter   :: PROJNAME_CHUNK      = 'chunk'
@@ -65,6 +66,8 @@ end type chunk
 
 contains
 
+    ! Utilities
+
     subroutine debug_print( string )
         character(len=*), intent(in) :: string
         if( DEBUG_HERE )then
@@ -72,6 +75,8 @@ contains
             call flush(logfhandle)
         endif
     end subroutine debug_print
+
+    ! Chunk type related routines
 
     subroutine init( self, id, master_spproj )
         class(chunk),      intent(inout) :: self
@@ -414,6 +419,8 @@ contains
         self%available = .false.
     end subroutine kill
 
+    ! Main routine
+
     subroutine exec_cluster2D_stream( self, cline )
         use simple_class_frcs, only: class_frcs
         class(cluster2D_commander_stream), intent(inout) :: self
@@ -439,7 +446,7 @@ contains
         real    :: orig_smpd, scale_factor, smpd, lp_greedy, lpstart_stoch
         integer :: nptcls_per_chunk, ncls_glob, last_injection, max_ncls,ichunk, time_iter, ipart, iotest
         integer :: iter, orig_box, box, boxpd, n_spprojs, pool_iter, origproj_time, time_start_iter
-        logical :: do_autoscale, l_greedy, l_once
+        logical :: do_autoscale, l_greedy, l_once, l_restart
         if( cline%defined('refine') )then
             if( trim(cline%get_carg('refine')).ne.'greedy' )then
                 if( .not.cline%defined('mskdiam') ) THROW_HARD('MSKDIAM must be defined!')
@@ -491,8 +498,7 @@ contains
         prev_snapshot_cavgs = ''
         call write_user_params
         call simple_mkdir(SCALE_DIR)
-        ! Automated exit after 2 hours without new particles
-        if(.not.cline%defined('time_inactive')) params%time_inactive = 2*60
+        ! call find_previous_snapshot
         ! init command-lines
         call cline%delete('lp')
         call cline%delete('refine')
@@ -671,8 +677,12 @@ contains
                 endif
                 ! writes spnapshot every ORIGPROJ_WRITEFREQ seconds
                 if( (simple_gettime()-origproj_time) > ORIGPROJ_WRITEFREQ .and. pool_iter>1)then
-                    call write_snapshot( .true., .true.)
+                    call write_snapshot(.true.)
                     origproj_time = simple_gettime()
+                endif
+                if( file_exists(SPPROJ_SNAPSHOT) )then
+                    call write_snapshot(.true.)
+                    call del_file(SPPROJ_SNAPSHOT)
                 endif
                 ! append new chunks
                 if( n_converged_chunks > 0) call import_chunks_into_pool
@@ -721,7 +731,7 @@ contains
         endif
         if( pool_iter >= 1 )then
             ! updates project
-            call write_snapshot( .true., .false.)
+            call write_snapshot(.false.)
             ! ranking
             refs_glob_ranked = add2fbody(refs_glob,params%ext,'_ranked')
             call cline_rank_cavgs%set('projfile', orig_projfile)
@@ -1415,25 +1425,16 @@ contains
             end subroutine transfer_cavg
 
             !> produces consolidated project at original scale
-            subroutine write_snapshot( force, add_suffix )
-                logical,           intent(in) :: force, add_suffix
+            subroutine write_snapshot( add_suffix )
+                logical,           intent(in) :: add_suffix
                 type(class_frcs)              :: frcs, frcs_sc
                 type(oris)                    :: os_backup2, os_backup3
                 character(len=:), allocatable :: projfile,projfname, cavgsfname, suffix, frcsfname, src, dest
                 integer :: istk
-                if( force )then
-                    call debug_print('in write_snapshot force T')
-                else
-                    call debug_print('in write_snapshot force F')
-                endif
                 if( add_suffix )then
                     call debug_print('in write_snapshot suffix T')
                 else
                     call debug_print('in write_snapshot suffix F')
-                endif
-                if( .not.force )then
-                    if( .not.file_exists(SPPROJ_SNAPSHOT) )return
-                    call del_file(SPPROJ_SNAPSHOT)
                 endif
                 projfname  = get_fbody(orig_projfile, METADATA_EXT, separator=.false.)
                 cavgsfname = get_fbody(refs_glob, params%ext, separator=.false.)
@@ -1526,6 +1527,8 @@ contains
                     call pool_proj%write(projfile)
                     call pool_proj%os_ptcl3D%kill
                 endif
+                ! we save the last snapshot name to simplify restarting
+                call write_singlelineoftext(LAST_SNAPSHOT, projfile)
                 ! cleanup previous snapshot
                 prev_snapshot_frcs  = trim(frcsfname)
                 prev_snapshot_cavgs = trim(cavgsfname)
@@ -1569,6 +1572,18 @@ contains
                 call os%kill
                 call debug_print('end update_user_params')
             end subroutine update_user_params
+
+            !> Sniffs for most recent snpashot in previous folder
+            subroutine find_previous_snapshot()
+                character(len=LONGSTRLEN), allocatable :: restart_snapshot(:)
+                l_restart = .false.
+                if( .not. cline%defined('dir_prev') ) return
+                if( .not.file_exists(trim(params%dir_prev)//trim(LAST_SNAPSHOT)) ) then
+                    THROW_HARD('Could not find previous project file for restart!')
+                endif
+                call read_filetable( trim(params%dir_prev)//trim(LAST_SNAPSHOT), restart_snapshot)
+                if( size(restart_snapshot) /= 1 ) THROW_HARD('Invalid format for: '//trim(LAST_SNAPSHOT))
+            end subroutine find_previous_snapshot
 
     end subroutine exec_cluster2D_stream
 
