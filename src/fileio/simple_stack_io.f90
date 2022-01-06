@@ -74,7 +74,7 @@ contains
         self%bufsz = BUFSZ_DEFAULT
         if( present(bufsz) ) self%bufsz = bufsz
         ! need to have the full stack in buffer on read, since most of it is asynchronuous
-        if( self%nptcls /= 0 ) self%bufsz = self%nptcls
+        if( self%nptcls /= 0 ) self%bufsz = min(self%bufsz, self%nptcls)
         call self%buffer%new([self%ldim(1),self%ldim(2),self%bufsz], self%smpd)
         call self%buffer%get_rmat_ptr(self%rmat_ptr)
         self%l_open = .true.
