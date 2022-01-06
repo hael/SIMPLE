@@ -85,7 +85,7 @@ call graphene_vol%read(graphene_fname)
 call graphene_vol%neg
 call vol_pad%new([params%boxpd, params%boxpd, params%boxpd], params%smpd)
 call graphene_vol%pad(vol_pad)
-if( params%gridding.eq.'yes' ) call vol_pad%div_w_instrfun(params%alpha)
+if( params%gridding.eq.'yes' ) call vol_pad%div_w_instrfun(params%interpfun, alpha=params%alpha)
 call graphene_vol%kill
 call del_file(graphene_fname)
 call vol_pad%fft
@@ -101,7 +101,7 @@ call img%new([params%box,params%box,1],params%smpd)
 call particle_vol%read(particle_fname)
 call particle_vol%neg
 call particle_vol%pad(vol_pad)
-if( params%gridding.eq.'yes' ) call vol_pad%div_w_instrfun(params%alpha)
+if( params%gridding.eq.'yes' ) call vol_pad%div_w_instrfun(params%interpfun, alpha=params%alpha)
 call vol_pad%mul(scalefactor)
 call particle_vol%kill
 ! call del_file(particle_fname)

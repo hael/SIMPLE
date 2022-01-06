@@ -35,6 +35,7 @@ type, extends(image) :: reconstructor
     integer                     :: rho_shape(3)   = 0           !< shape of sampling density matrix
     integer                     :: cyc_lims(3,2)  = 0           !< redundant limits of the 2D image
     integer(kind(ENUM_CTFFLAG)) :: ctfflag                      !< ctf flag <yes=1|no=0|flip=2>
+    logical                     :: linear_interp  = .false.     !< Reconstruction interpolation false=>kb|true=>trilinear
     logical                     :: phaseplate     = .false.     !< Volta phaseplate images or not
     logical                     :: rho_allocated  = .false.     !< existence of rho matrix
   contains
@@ -65,7 +66,6 @@ type, extends(image) :: reconstructor
 end type reconstructor
 
 integer(timer_int_kind) :: trec
-logical, parameter :: insert_plane_trilinear = .false.
 
 contains
 
@@ -97,6 +97,7 @@ contains
         self%lims        =  self%loop_lims(2)
         self%cyc_lims    =  self%loop_lims(3)
         self%shconst_rec =  self%get_shconst()
+        self%linear_interp = trim(params_glob%interpfun) == 'linear'
         ! Work out dimensions of the rho array
         self%rho_shape(1)   = fdim(self%ldim_img(1))
         self%rho_shape(2:3) = self%ldim_img(2:3)
@@ -252,7 +253,7 @@ contains
         ! scale & memoize for origin shifting
         scale        = real(self%ldim_img(1)) / real(fpl%ldim(1))
         shconst_here = -o%get_2Dshift() * fpl%shconst(1:2)
-        if( insert_plane_trilinear )then
+        if( self%linear_interp )then
             !$omp parallel default(shared) proc_bind(close)&
             !$omp private(h,k,sh,comp,arg,oshift,ctfval,vec,loc,dists,odists,floc,cloc,w000,w001,w010,w011,w100,w101,w110,w111)
             do isym=1,nsym
@@ -278,12 +279,12 @@ contains
                         dists  = loc - real(floc)
                         odists = 1.0 - dists
                         w000 = product(odists)
-                        w001 = odists(3) * odists(2) *  dists(1)
-                        w010 = odists(3) *  dists(2) * odists(1)
-                        w011 = odists(3) *  dists(2) *  dists(1)
-                        w100 =  dists(3) * odists(2) * odists(1)
-                        w101 =  dists(3) * odists(2) *  dists(1)
-                        w110 =  dists(3) *  dists(2) * odists(1)
+                        w001 = odists(1) * odists(2) *  dists(3) 
+                        w010 = odists(1) *  dists(2) * odists(3)
+                        w011 = odists(1) *  dists(2) *  dists(3)
+                        w100 =  dists(1) * odists(2) * odists(3)
+                        w101 =  dists(1) * odists(2) *  dists(3)
+                        w110 =  dists(1) *  dists(2) * odists(3)
                         w111 = product(dists)
                         self%cmat_exp(floc(1), floc(2), floc(3)) = self%cmat_exp(floc(1), floc(2), floc(3)) + w000 * comp
                         self%cmat_exp(floc(1), floc(2), cloc(3)) = self%cmat_exp(floc(1), floc(2), cloc(3)) + w001 * comp
@@ -398,7 +399,7 @@ contains
         ! the parallellisation must run over one plane @ the time to avoid race conditions
         ! but by starting the parallel section here we reduce thread creation O/H
         ! and lower the serial slack, while preserving a low memory footprint
-        if( insert_plane_trilinear )then
+        if( self%linear_interp )then
             !$omp parallel default(shared) proc_bind(close)&
             !$omp private(h,k,sh,comp,arg,oshift,ctfval,vec,loc,dists,odists,floc,cloc,w000,w001,w010,w011,w100,w101,w110,w111)
             do isym=1,nsym
@@ -427,12 +428,12 @@ contains
                             dists  = loc - real(floc)
                             odists = 1.0 - dists
                             w000 = product(odists)
-                            w001 = odists(3) * odists(2) *  dists(1)
-                            w010 = odists(3) *  dists(2) * odists(1)
-                            w011 = odists(3) *  dists(2) *  dists(1)
-                            w100 =  dists(3) * odists(2) * odists(1)
-                            w101 =  dists(3) * odists(2) *  dists(1)
-                            w110 =  dists(3) *  dists(2) * odists(1)
+                            w001 = odists(1) * odists(2) *  dists(3)
+                            w010 = odists(1) *  dists(2) * odists(3)
+                            w011 = odists(1) *  dists(2) *  dists(3)
+                            w100 =  dists(1) * odists(2) * odists(3)
+                            w101 =  dists(1) * odists(2) *  dists(3)
+                            w110 =  dists(1) *  dists(2) * odists(3)
                             w111 = product(dists)
                             self%cmat_exp(floc(1), floc(2), floc(3)) = self%cmat_exp(floc(1), floc(2), floc(3)) + w000 * comp
                             self%cmat_exp(floc(1), floc(2), cloc(3)) = self%cmat_exp(floc(1), floc(2), cloc(3)) + w001 * comp
@@ -521,7 +522,7 @@ contains
         type(kbinterpol)   :: kbwin
         type(image)        :: W_img, Wprev_img
         real, allocatable  :: antialw(:)
-        real               :: winsz, val_prev, val, invrho, rsh_sq, w
+        real               :: winsz, val_prev, val, invrho, rsh_sq
         integer            :: h,k,m, phys(3), iter, sh, cmat_shape(3), i,j,l
         logical            :: l_gridcorr, l_lastiter
         logical, parameter :: skip_pipemenon = .false.
@@ -555,37 +556,37 @@ contains
             end do
             !$omp end parallel do
             if( .not. skip_pipemenon )then
-            do iter = 1, GRIDCORR_MAXITS
-                l_lastiter = (iter == GRIDCORR_MAXITS)
-                ! W <- (W / rho) x kernel
-                call W_img%ifft()
-                call mul_w_instr(W_img, kbwin=kbwin)
-                call W_img%fft()
-                !$omp parallel do default(shared) private(i,j,l,val,val_prev) proc_bind(close)&
-                !$omp collapse(3) schedule(static)
-                do l = 1,cmat_shape(3)
-                    do j = 1,cmat_shape(2)
-                        do i = 1,cmat_shape(1)
-                            ! W <- Wprev / ((W / rho) x kernel)
-                            val      = mycabs(cmatW(i,j,l))
-                            if( val > 1.0e38 )then
-                                cmatW(i,j,l) = zero
-                            else
-                                val_prev     = real(cmatWprev(i,j,l))
-                                cmatW(i,j,l) = cmplx(min(val_prev/val, 1.e20),0.)
-                            endif
-                            if( l_lastiter )then
-                                cycle
-                            else
-                                ! W <- W * rho
-                                cmatWprev(i,j,l) = cmatW(i,j,l)
-                                cmatW(i,j,l)     = self%rho(i,j,l)*cmatW(i,j,l)
-                            endif
+                do iter = 1, GRIDCORR_MAXITS
+                    l_lastiter = (iter == GRIDCORR_MAXITS)
+                    ! W <- (W / rho) x kernel
+                    call W_img%ifft()
+                    call mul_w_instr(W_img, params_glob%interpfun, kbwin=kbwin)
+                    call W_img%fft()
+                    !$omp parallel do default(shared) private(i,j,l,val,val_prev) proc_bind(close)&
+                    !$omp collapse(3) schedule(static)
+                    do l = 1,cmat_shape(3)
+                        do j = 1,cmat_shape(2)
+                            do i = 1,cmat_shape(1)
+                                ! W <- Wprev / ((W / rho) x kernel)
+                                val      = mycabs(cmatW(i,j,l))
+                                if( val > 1.0e38 )then
+                                    cmatW(i,j,l) = zero
+                                else
+                                    val_prev     = real(cmatWprev(i,j,l))
+                                    cmatW(i,j,l) = cmplx(min(val_prev/val, 1.e20),0.)
+                                endif
+                                if( l_lastiter )then
+                                    cycle
+                                else
+                                    ! W <- W * rho
+                                    cmatWprev(i,j,l) = cmatW(i,j,l)
+                                    cmatW(i,j,l)     = self%rho(i,j,l)*cmatW(i,j,l)
+                                endif
+                            end do
                         end do
                     end do
-                end do
-                !$omp end parallel do
-            enddo
+                    !$omp end parallel do
+                enddo
             end if
             nullify(cmatW)
             nullify(cmatWprev)
@@ -806,6 +807,7 @@ contains
             call fftwf_free(self%kp)
             self%rho => null()
             self%rho_allocated = .false.
+            self%linear_interp = .false.
         endif
     end subroutine dealloc_rho
 

@@ -30,13 +30,13 @@ contains
         smpd    = vol%get_smpd()
         boxpd   = 2 * round2even(KBALPHA * real(box / 2))
         ldim_pd = [boxpd,boxpd,boxpd]
-        ! pre-gridding
-        if( params_glob%gridding.eq.'yes' )then
-            call vol%div_w_instrfun(alpha=KBALPHA)
-        endif
         ! padding & fft
         call vol_pad%new(ldim_pd, smpd)
         call vol%pad(vol_pad)
+        if( params_glob%gridding.eq.'yes' )then
+            ! corrects for interpolation function
+            call vol_pad%div_w_instrfun(params_glob%interpfun, alpha=KBALPHA, padded_dim=boxpd)
+        endif
         call vol_pad%fft
         call vol_pad%mul(real(boxpd)) ! correct for FFTW convention
         if( present(top) )then
@@ -100,12 +100,13 @@ contains
         call rovol_pad%new(ldim_pd, smpd)
         call vol_pad%new(ldim_pd, smpd)
         call vol%pad(vol_pad)
+        if( params_glob%gridding.eq.'yes' )then
+            ! corrects for interpolation function
+            call vol_pad%div_w_instrfun(params_glob%interpfun, alpha=KBALPHA, padded_dim=boxpd)
+        endif
         call vol_pad%fft
         call vol_pad%expand_cmat(KBALPHA)
         call rotvol_slim( vol_pad, rovol_pad, rovol, o, shvec )
-        if( params_glob%gridding.eq.'yes' )then
-            call rovol%div_w_instrfun(alpha=KBALPHA)
-        endif
         call vol_pad%kill_expanded
         call vol_pad%kill
         call rovol_pad%kill
@@ -118,8 +119,8 @@ contains
         class(image),     intent(inout) :: rovol_pad, rovol
         class(ori),       intent(inout) :: o
         real, optional,   intent(in)    :: shvec(3)
-        integer :: sh,h,k,l,nyq,lims(3,2),logi(3),phys(3),lim_sq
-        real    :: loc(3), rmat(3,3), rlim_sq
+        integer :: h,k,l,nyq,lims(3,2),logi(3),phys(3),lim_sq
+        real    :: loc(3), rmat(3,3)
         logical :: l_shvec_present
         l_shvec_present = present(shvec)
         rovol_pad = cmplx(0.,0.)
