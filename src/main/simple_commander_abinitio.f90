@@ -22,13 +22,14 @@ contains
 
     !> for generation of an initial 3d model from class averages
     subroutine exec_initial_3Dmodel( self, cline )
+        use simple_commander_volops,   only: reproject_commander, symaxis_search_commander, postprocess_commander
         use simple_commander_rec,      only: reconstruct3D_commander, reconstruct3D_commander_distr
-        use simple_commander_project,  only: scale_project_commander_distr
         use simple_commander_refine3D, only: refine3D_commander, refine3D_commander_distr
+        use simple_commander_project,  only: scale_project_commander_distr
+        use simple_commander_imgproc,  only: scale_commander
         use simple_oris,               only: oris
         use simple_ori,                only: ori
         use simple_image,              only: image
-        use simple_commander_volops,   only: reproject_commander, symaxis_search_commander, postprocess_commander
         use simple_parameters,         only: params_glob
         use simple_qsys_env,           only: qsys_env
         use simple_sym,                only: sym
@@ -47,6 +48,7 @@ contains
         ! distributed commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
         type(scale_project_commander_distr) :: xscale
+
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         ! shared-mem commanders
         type(refine3D_commander)            :: xrefine3D
@@ -54,12 +56,13 @@ contains
         type(symaxis_search_commander)      :: xsymsrch
         type(reproject_commander)           :: xreproject
         type(postprocess_commander)         :: xpostprocess
+        type(scale_commander)               :: xscale_msk
         ! command lines
         type(cmdline) :: cline_refine3D_snhc, cline_refine3D_init, cline_refine3D_refine
         type(cmdline) :: cline_symsrch
         type(cmdline) :: cline_reconstruct3D, cline_postprocess
         type(cmdline) :: cline_reproject
-        type(cmdline) :: cline_scale1, cline_scale2
+        type(cmdline) :: cline_scale1, cline_scale2, cline_scale_msk
         ! other
         character(len=:), allocatable :: stk, orig_stk, frcs_fname
         character(len=:), allocatable :: WORK_PROJFILE
@@ -312,7 +315,6 @@ contains
         call cline_postprocess%set('prg',       'postprocess')
         call cline_postprocess%set('projfile',   ORIG_WORK_PROJFILE)
         call cline_postprocess%set('mkdir',      'no')
-        call cline_postprocess%set('bfac',       0.)
         if( l_lpset )then
             call cline_postprocess%set('lp', lplims(2))
         else
@@ -466,6 +468,20 @@ contains
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
             write(logfhandle,'(A)') '>>>'
+            if( l_automsk )then
+                ! scale the mask
+                if( .not. file_exists('automask'//trim(params%ext)) ) THROW_HARD('file '//'automask'//trim(params%ext)//' does not exist')
+                call cline_scale_msk%set('smpd',   smpd_target)
+                call cline_scale_msk%set('vol1',   'automask'//trim(params%ext))
+                call cline_scale_msk%set('newbox', real(orig_box))
+                call cline_scale_msk%set('outvol', 'automask_scaled'//trim(params%ext))
+                call cline_scale_msk%set('mkdir',  'no')
+                call cline_scale_msk%set('nthr',   real(params%nthr))
+                call xscale_msk%execute(cline_scale_msk)
+                call del_file('automask'//trim(params%ext))
+                call simple_rename('automask_scaled'//trim(params%ext), 'automask'//trim(params%ext))
+                call cline_reconstruct3D%set('mskfile', 'automask'//trim(params%ext))
+            endif
             ! modulates shifts
             os = work_proj2%os_ptcl3D
             call os%mul_shifts(1./scale_factor2)

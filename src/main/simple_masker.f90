@@ -85,12 +85,10 @@ contains
         write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK LOW-PASS:           ', self%amsklp,  ' ANGSTROMS'
         write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,    ' PIXEL(S)'
         write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,' PIXEL(S)'
-
         was_ft = vol_inout%is_ft()
         if( was_ft ) call vol_inout%ifft()
         call self%transfer2bimg(vol_inout)
         ! binarize volume
-        write(logfhandle,'(A)') '>>> BINARIZING VOLUME'
         call self%bp(0., self%amsklp)
         call otsu_img(self)
         call self%set_imat
@@ -99,7 +97,7 @@ contains
         ! extract all cc sizes (in # pixels)
         ccsizes = self%size_ccs()
         sz      = size(ccsizes)
-        write(logfhandle,'(A,I7,A)'  ) '>>> FOUND:                       ', sz, 'CONNECTED COMPONENT(S)'
+        write(logfhandle,'(A,I7,A)'  ) '>>> FOUND:                       ', sz, ' CONNECTED COMPONENT(S)'
         if( sz > 1 )then
             ! identify the largest connected component
             imax = maxval(ccsizes)
