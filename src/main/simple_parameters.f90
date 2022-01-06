@@ -1122,6 +1122,8 @@ contains
             do istate=1,self%nstates
                 self%vols_even(istate) = add2fbody(self%vols(istate), self%ext, '_even')
                 self%vols_odd(istate)  = add2fbody(self%vols(istate), self%ext, '_odd' )
+                if( .not. file_exists(self%vols_even(istate)) ) call simple_copy_file(self%vols(istate), self%vols_even(istate))
+                if( .not. file_exists(self%vols_odd(istate))  ) call simple_copy_file(self%vols(istate), self%vols_odd(istate))
             end do
         endif
         !<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)
