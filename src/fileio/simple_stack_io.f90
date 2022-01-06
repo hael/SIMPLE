@@ -124,7 +124,6 @@ contains
                 else
                     self%fromp = self%top + 1
                     self%top   = min(self%fromp + self%bufsz - 1, self%nptcls)
-                    if( self%fromp > self%nptcls ) return
                 endif
                 if( i >= self%fromp .and. i <= self%top ) exit ! when we are within the bounds
             end do

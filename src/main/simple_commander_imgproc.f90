@@ -989,13 +989,12 @@ contains
         class(pspec_int_rank_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! varables
-        type(parameters)     :: params
-        type(image)          :: img, img_pspec, graphene_mask
+        type(parameters) :: params
+        type(image)      :: img, img_pspec, graphene_mask
         character(len=:), allocatable :: ranked_fname, good_fname, bad_fname
-        real,             allocatable :: peakvals(:), peakvals_copy(:)
+        real,             allocatable :: peakvals(:)
         integer,          allocatable :: order(:)
-        logical,          allocatable :: good_bad_msk(:)
-        integer :: i, cnt_good, cnt_bad, funit
+        integer :: i, funit
         real    :: thresh(3), ave, sdev, minv, mskrad
         if( .not. cline%defined('lp_backgr') ) call cline%set('lp_backgr', 7.)
         call params%new(cline)
@@ -1025,7 +1024,6 @@ contains
         end do
         call fclose(funit)
         ! write ranked cavgs
-        allocate(peakvals_copy(params%nptcls), source=peakvals)
         order = (/(i,i=1,params%nptcls)/)
         call hpsort(peakvals, order)
         call reverse(order) ! largest first
@@ -1033,21 +1031,6 @@ contains
             call img%read(params%stk, order(i))
             call img%write(ranked_fname, i)
         end do
-        ! make an automatic good/bad classification
-        call otsu(peakvals_copy, good_bad_msk)
-        cnt_good = 0
-        cnt_bad  = 0
-        do i=1,params%nptcls
-            call img%read(params%stk, i)
-            if( good_bad_msk(i) )then
-                cnt_good = cnt_good + 1
-                call img%write(good_fname, cnt_good)
-            else
-                cnt_bad = cnt_bad + 1
-                call img%write(bad_fname, cnt_bad)
-            endif
-        end do
-        if( allocated(good_bad_msk) ) deallocate(good_bad_msk)
         call img%kill
         call img_pspec%kill
         call graphene_mask%kill

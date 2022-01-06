@@ -48,7 +48,6 @@ contains
         ! distributed commanders
         type(refine3D_commander_distr)      :: xrefine3D_distr
         type(scale_project_commander_distr) :: xscale
-
         type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         ! shared-mem commanders
         type(refine3D_commander)            :: xrefine3D
@@ -601,13 +600,8 @@ contains
                 params_glob => params_ptr
                 params_ptr  => null()
                 call build%spproj_field%kill
-                if( l_rnd )then
-                    call del_file('recvol_state01_even.mrc')
-                    call del_file('recvol_state01_odd.mrc')
-                else
-                    call simple_rename('recvol_state01_even.mrc', 'startvol_even.mrc')
-                    call simple_rename('recvol_state01_odd.mrc',  'startvol_odd.mrc')
-                endif
+                call simple_rename('recvol_state01_even.mrc', 'startvol_even.mrc')
+                call simple_rename('recvol_state01_odd.mrc',  'startvol_odd.mrc')
                 call simple_rename('recvol_state01.mrc', 'startvol.mrc')
                 call cline%set('vol1', 'startvol.mrc')
             end subroutine rec

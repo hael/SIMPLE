@@ -403,19 +403,20 @@ contains
                 endif
             endif
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
-            if( params_glob%l_lpset )then
-                ! low-pass set or multiple states
-                call readrefvols_filter_nonuniformly( cline, params_glob%vols(s) )
-                call preprefvol(pftcc, cline, s, do_center, xyz, .true.)
-                !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
-                do iref=1,params_glob%nspace
-                    call build_glob%eulspace%get_ori(iref, o_tmp)
-                    call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
-                        &o_tmp, pftcc, iseven=.true., mask=build_glob%l_resmsk)
-                    call o_tmp%kill
-                end do
-                !$omp end parallel do
-            else
+!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            ! if( params_glob%l_lpset )then
+            !     ! low-pass set or multiple states
+            !     call readrefvols_filter_nonuniformly( cline, params_glob%vols(s) )
+            !     call preprefvol(pftcc, cline, s, do_center, xyz, .true.)
+            !     !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
+            !     do iref=1,params_glob%nspace
+            !         call build_glob%eulspace%get_ori(iref, o_tmp)
+            !         call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
+            !             &o_tmp, pftcc, iseven=.true., mask=build_glob%l_resmsk)
+            !         call o_tmp%kill
+            !     end do
+            !     !$omp end parallel do
+            ! else
                 if( params_glob%nstates.eq.1 )then
                     call readrefvols_filter_nonuniformly( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
                     ! PREPARE ODD REFERENCES
@@ -451,7 +452,7 @@ contains
                     end do
                     !$omp end parallel do
                 endif
-            endif
+            ! endif
         end do
         if( params_glob%l_needs_sigma .and. params_glob%cc_objfun /= OBJFUN_EUCLID ) then
             ! When calculating sigma2 prior to OBJFUN_EUCLID the references are zeroed out
@@ -479,11 +480,12 @@ contains
             ! transfer to polar coordinates
             call match_imgs(iptcl_batch)%polarize(pftcc, iptcl, .true., .true., mask=build_glob%l_resmsk)
             ! e/o flag
-            if( params_glob%l_lpset )then
-                call pftcc%set_eo(iptcl, .true. )
-            else
+            ! if( params_glob%l_lpset )then
+            !     call pftcc%set_eo(iptcl, .true. )
+            ! else
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 call pftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
-            endif
+            ! endif
         end do
         !$omp end parallel do
         ! Memoize particles FFT parameters

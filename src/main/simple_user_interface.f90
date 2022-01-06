@@ -222,6 +222,7 @@ type(simple_input_param) :: nrestarts
 type(simple_input_param) :: nsig
 type(simple_input_param) :: nspace
 type(simple_input_param) :: nthr
+type(simple_input_param) :: nonuniform
 type(simple_input_param) :: numlen
 type(simple_input_param) :: nxpatch
 type(simple_input_param) :: nypatch
@@ -820,6 +821,7 @@ contains
         &system. On a single-socket machine there may be speed benfits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', 'divide job into # parts', .true., 1.0)
         call set_param(nthr,          'nthr',          'num',    'Number of threads per part, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
         &logical threads in a socket.', '# shared-memory CPU threads', .true., 0.)
+        call set_param(nonuniform,    'nonuniform',    'binary', 'Nonuniform filter', 'Apply nonuniform filter (phase randomization below noise power)(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(update_frac,   'update_frac',   'num',    'Fractional update per iteration', 'Fraction of particles to update per iteration in incremental learning scheme for accelerated convergence &
         &rate(0.1-0.5){1.}', 'update this fraction per iter(0.1-0.5){1.0}', .false., 1.0)
         call set_param(frac,          'frac',          'num',    'Fraction of particles to include', 'Fraction of particles to include based on spectral score (median of FRC between reference and particle)',&
@@ -998,7 +1000,7 @@ contains
         &'auto 3D refinement of metallic nanoparticles',&                                 ! descr_short
         &'is a distributed workflow for automated 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                  ! executable
-        &1, 2, 0, 8, 5, 2, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &1, 2, 0, 8, 6, 3, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call autorefine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -1024,11 +1026,15 @@ contains
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{5}', .false., 5.)
         call autorefine3D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms{1.5}', .true., 1.5)
-        call autorefine3D_nano%set_input('filt_ctrls', 4, lp_backgr)
-        call autorefine3D_nano%set_input('filt_ctrls', 5, ptclw)
+
+        call autorefine3D_nano%set_input('filt_ctrls', 4, ptclw)
+        call autorefine3D_nano%set_input('filt_ctrls', 5, nonuniform)
+        call autorefine3D_nano%set_input('filt_ctrls', 6, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 3.)
         ! mask controls
         call autorefine3D_nano%set_input('mask_ctrls', 1, mskdiam)
         call autorefine3D_nano%set_input('mask_ctrls', 2, mskfile)
+        call autorefine3D_nano%set_input('mask_ctrls', 3, automsk)
         ! computer controls
         call autorefine3D_nano%set_input('comp_ctrls', 1, nparts)
         call autorefine3D_nano%set_input('comp_ctrls', 2, nthr)
@@ -2994,7 +3000,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_exec',&                                                                            ! executable
-        &1, 0, 0, 12, 8, 4, 2, .true.)                                                              ! # entries in each group, requires sp_project
+        &1, 0, 0, 12, 10, 4, 2, .true.)                                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -3030,6 +3036,9 @@ contains
         call refine3D%set_input('filt_ctrls', 6, lp_backgr)
         call refine3D%set_input('filt_ctrls', 7, ptclw)
         call refine3D%set_input('filt_ctrls', 8, envfsc)
+        call refine3D%set_input('filt_ctrls', 9, nonuniform)
+        call refine3D%set_input('filt_ctrls', 10, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12.)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, mskdiam)
         call refine3D%set_input('mask_ctrls', 2, mskfile)
@@ -3047,8 +3056,8 @@ contains
         &'refine3D_nano',&                                                                                                    ! name
         &'3D refinement of metallic nanoparticles',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
-        &'single_exec',&                                                                                                ! executable
-        &1, 0, 0, 8, 5, 2, 2, .true.)                                                                                        ! # entries in each group, requires sp_project
+        &'single_exec',&                                                                                                      ! executable
+        &1, 0, 0, 8, 7, 3, 2, .true.)                                                                                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -3075,9 +3084,13 @@ contains
         call refine3D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms{1.0}', .false., 1.)
         call refine3D_nano%set_input('filt_ctrls', 4, lp_backgr)
         call refine3D_nano%set_input('filt_ctrls', 5, ptclw)
+        call refine3D_nano%set_input('filt_ctrls', 6, nonuniform)
+        call refine3D_nano%set_input('filt_ctrls', 7, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 3.)
         ! mask controls
         call refine3D_nano%set_input('mask_ctrls', 1, mskdiam)
         call refine3D_nano%set_input('mask_ctrls', 2, mskfile)
+        call refine3D_nano%set_input('mask_ctrls', 3, automsk)
         ! computer controls
         call refine3D_nano%set_input('comp_ctrls', 1, nparts)
         call refine3D_nano%set_input('comp_ctrls', 2, nthr)
