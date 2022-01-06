@@ -176,7 +176,9 @@ contains
         is_past = .false.
         if( allocated(self%history) )then
             do i = 1, size(self%history)
-                if( trim(adjustl(fname)) .eq. trim(adjustl(self%history(i))) )then
+                ! need to use basename here since if movies are symbolic links ls -1f dereferences the links
+                ! which would cause all movies to be declared as new because of the path mismatch
+                if( trim(adjustl(basename(fname))) .eq. trim(adjustl(basename(self%history(i)))) )then
                     is_past = .true.
                     exit
                 endif
