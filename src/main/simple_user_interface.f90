@@ -969,8 +969,7 @@ contains
         &1, 1, 0, 0, 1, 5, 1, .false.)                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call automask%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
-        & sections for nanoparticle image matching', 'input volume e.g. vol.mrc', .true., '')
+        call automask%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume subjected to envelope masking', 'input volume e.g. vol.mrc', .true., '')
         ! parameter input/output
         call automask%set_input('parm_ios', 1, smpd)
         ! alternative inputs
@@ -1000,7 +999,7 @@ contains
         &'auto 3D refinement of metallic nanoparticles',&                                 ! descr_short
         &'is a distributed workflow for automated 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                  ! executable
-        &1, 2, 0, 8, 6, 3, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &1, 2, 0, 8, 6, 4, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call autorefine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -1030,11 +1029,13 @@ contains
         call autorefine3D_nano%set_input('filt_ctrls', 4, ptclw)
         call autorefine3D_nano%set_input('filt_ctrls', 5, nonuniform)
         call autorefine3D_nano%set_input('filt_ctrls', 6, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 3.)
+        & 'Low-pass limit for envelope mask generation in Angstroms{2.0}', 'low-pass limit in Angstroms', .false., 2.)
         ! mask controls
         call autorefine3D_nano%set_input('mask_ctrls', 1, mskdiam)
         call autorefine3D_nano%set_input('mask_ctrls', 2, mskfile)
         call autorefine3D_nano%set_input('mask_ctrls', 3, automsk)
+        call autorefine3D_nano%set_input('mask_ctrls', 4, 'edge', 'num', 'Envelope mask soft edge',&
+        &'Cosine edge size for softening molecular envelope in pixels{3}', '# pixels cosine edge{3}', .false., 3.)
         ! computer controls
         call autorefine3D_nano%set_input('comp_ctrls', 1, nparts)
         call autorefine3D_nano%set_input('comp_ctrls', 2, nthr)
@@ -3057,7 +3058,7 @@ contains
         &'3D refinement of metallic nanoparticles',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                                                      ! executable
-        &1, 0, 0, 8, 7, 3, 2, .true.)                                                                                         ! # entries in each group, requires sp_project
+        &1, 0, 0, 8, 6, 2, 2, .true.)                                                                                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -3085,12 +3086,9 @@ contains
         call refine3D_nano%set_input('filt_ctrls', 4, lp_backgr)
         call refine3D_nano%set_input('filt_ctrls', 5, ptclw)
         call refine3D_nano%set_input('filt_ctrls', 6, nonuniform)
-        call refine3D_nano%set_input('filt_ctrls', 7, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 3.)
         ! mask controls
         call refine3D_nano%set_input('mask_ctrls', 1, mskdiam)
         call refine3D_nano%set_input('mask_ctrls', 2, mskfile)
-        call refine3D_nano%set_input('mask_ctrls', 3, automsk)
         ! computer controls
         call refine3D_nano%set_input('comp_ctrls', 1, nparts)
         call refine3D_nano%set_input('comp_ctrls', 2, nthr)
