@@ -47,48 +47,84 @@ contains
         real,                    intent(in)    :: alpha  !< oversampling factor
         type(kbinterpol)  :: kbwin                 !< window function object
         real, allocatable :: w(:,:)
-        real              :: loc(2)
-        integer           :: win(2,2), lims(3,2), i, k, l, cnt
+        real              :: loc(2), d1, d2
+        integer           :: win(2,2), lims(3,2), i, k, l, cnt, f1, f2
+        logical           :: normalize_weights
         if( .not. pftcc%exists() ) THROW_HARD('polarft_corrcalc object needs to be created; init_polarizer')
         call self%kill_polarizer
         self%pdim  = pftcc%get_pdim()
-        kbwin      = kbinterpol(KBWINSZ, alpha)
-        self%wdim  = kbwin%get_wdim()
-        self%wlen  = self%wdim**2
         lims       = self%loop_lims(3)
+        select case(trim(params_glob%interpfun))
+        case('kb')
+            kbwin      = kbinterpol(KBWINSZ, alpha)
+            self%wdim  = kbwin%get_wdim()
+        case('linear')
+            self%wdim  = 2
+        case DEFAULT
+            THROW_HARD('Unsupported interpolation function: '//trim(params_glob%interpfun))
+        end select
+        self%wlen = self%wdim**2
         allocate( self%polcyc1_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),&
                   &self%polcyc2_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),&
                   &self%polweights_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wlen),&
                   &w(1:self%wdim,1:self%wdim), self%comps(1:self%wdim,1:self%wdim),&
                   &self%pft(self%pdim(1),self%pdim(2):self%pdim(3)))
         ! instrument function
+        normalize_weights = trim(params_glob%interpfun) == 'kb'
         if( params_glob%gridding.eq.'yes' )then
+            normalize_weights = .false.
             call self%instrfun_img%new(self%get_ldim(), self%get_smpd())
-            call gen_instrfun_img(self%instrfun_img, kbwin=kbwin)
+            call gen_instrfun_img(self%instrfun_img, params_glob%interpfun, kbwin=kbwin)
         endif
         ! cartesian to polar
-        !$omp parallel do collapse(2) schedule(static) private(i,k,l,w,loc,cnt,win) default(shared) proc_bind(close)
-        do i=1,self%pdim(1)
-            do k=self%pdim(2),self%pdim(3)
-                ! polar coordinates
-                loc = pftcc%get_coord(i,k)
-                call sqwin_2d(loc(1), loc(2), kbwin%get_winsz(), win)
-                w   = 1.
-                cnt = 0
-                do l=1,self%wdim
-                    cnt = cnt + 1
-                    ! interpolation weights
-                    w(l,:) = w(l,:) * kbwin%apod( real(win(1,1)+l-1)-loc(1) )
-                    w(:,l) = w(:,l) * kbwin%apod( real(win(2,1)+l-1)-loc(2) )
-                    ! cyclic addresses
-                    self%polcyc1_mat(i, k, cnt) = cyci_1d(lims(1,:), win(1,1)+l-1)
-                    self%polcyc2_mat(i, k, cnt) = cyci_1d(lims(2,:), win(2,1)+l-1)
-                end do
-                self%polweights_mat(i,k,:) = reshape(w,(/self%wlen/))
-                if( params_glob%gridding.ne.'yes') self%polweights_mat(i,k,:) = self%polweights_mat(i,k,:) / sum(w)
+        if( trim(params_glob%interpfun) == 'kb' )then
+            ! Kaiser-Bessel
+            !$omp parallel do collapse(2) schedule(static) private(i,k,l,w,loc,cnt,win) default(shared) proc_bind(close)
+            do i=1,self%pdim(1)
+                do k=self%pdim(2),self%pdim(3)
+                    ! polar coordinates
+                    loc = pftcc%get_coord(i,k)
+                    call sqwin_2d(loc(1), loc(2), kbwin%get_winsz(), win)
+                    w   = 1.
+                    cnt = 0
+                    do l=1,self%wdim
+                        cnt = cnt + 1
+                        ! interpolation weights
+                        w(l,:) = w(l,:) * kbwin%apod( real(win(1,1)+l-1)-loc(1) )
+                        w(:,l) = w(:,l) * kbwin%apod( real(win(2,1)+l-1)-loc(2) )
+                        ! cyclic addresses
+                        self%polcyc1_mat(i, k, cnt) = cyci_1d(lims(1,:), win(1,1)+l-1)
+                        self%polcyc2_mat(i, k, cnt) = cyci_1d(lims(2,:), win(2,1)+l-1)
+                    end do
+                    self%polweights_mat(i,k,:) = reshape(w,(/self%wlen/))
+                    if( normalize_weights ) self%polweights_mat(i,k,:) = self%polweights_mat(i,k,:) / sum(w)
+                enddo
             enddo
-        enddo
-        !$omp end parallel do
+            !$omp end parallel do
+        else
+            ! Bi-linear
+            !$omp parallel do collapse(2) schedule(static) private(i,k,w,loc,f1,f2,d1,d2) default(shared) proc_bind(close)
+            do i=1,self%pdim(1)
+                do k=self%pdim(2),self%pdim(3)
+                    loc = pftcc%get_coord(i,k)
+                    f1  = int(floor(loc(1)))
+                    d1  = loc(1) - f1
+                    f2  = int(floor(loc(2)))
+                    d2  = loc(2) - f2
+                    self%polcyc1_mat(i, k,  1)  = cyci_1d(lims(1,:), f1)
+                    self%polcyc1_mat(i, k,  2)  = cyci_1d(lims(1,:), f1+1)
+                    self%polcyc2_mat(i, k,  1)  = cyci_1d(lims(2,:), f2)
+                    self%polcyc2_mat(i, k,  2)  = cyci_1d(lims(2,:), f2+1)
+                    w      = 1.
+                    w(1,:) = w(1,:) * (1.0-d1)
+                    w(:,1) = w(:,1) * (1.0-d2)
+                    w(2,:) = w(2,:) * d1
+                    w(:,2) = w(:,2) * d2
+                    self%polweights_mat(i,k,:) = reshape(w,(/self%wlen/))
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
         deallocate(w)
     end subroutine init_polarizer
 

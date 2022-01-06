@@ -5244,25 +5244,31 @@ contains
         deallocate(vals)
     end subroutine zero_env_background
 
-    !>  \brief generates instrument function image for division of real-space images
-    subroutine div_w_instrfun( self, alpha )
+    !>  \brief generates instrument function divided image
+    subroutine div_w_instrfun( self, interpfun, alpha, padded_dim )
         use simple_kbinterpol, only: kbinterpol
         class(image),           intent(inout) :: self
+        character(len =*),      intent(in)    :: interpfun
         real,         optional, intent(in)    :: alpha
+        integer,      optional, intent(in)    :: padded_dim
         type(kbinterpol)  :: kbwin
         real, allocatable :: w(:)
         real    :: iarg, arg
-        integer :: ldim(3), center(3), i,j,k
+        integer :: center(3), i,j,k, dim
         if( any(self%ldim==0) .or. self%is_ft() .or. .not.self%square_dims() )then
             THROW_HARD('Erroneous image in div_w_instrfun')
         endif
         center = self%ldim/2+1
-        if( present(alpha) )then
+        dim    = self%ldim(1)
+        if( present(padded_dim) ) dim = padded_dim
+        select case(trim(interpfun))
+        case('kb')
             ! kaiser-bessel window
+            if(.not.present(alpha)) THROW_HARD('alpha must be given for KB interpolator')
             kbwin = kbinterpol(KBWINSZ,alpha)
             allocate(w(self%ldim(1)),source=1.)
             do i = 1,self%ldim(1)
-                arg  = real(i-center(1))/real(self%ldim(1))
+                arg  = real(i-center(1))/real(dim)
                 w(i) = kbwin%instr(arg)
             end do
             if( self%is_2d() )then
@@ -5284,21 +5290,25 @@ contains
                 enddo
                 !$omp end parallel do
             endif
-        else
-            ! linear interpolation
+        case('linear')
+            ! Tri-linear interpolation
             !$omp parallel do collapse(3) private(i,j,k,iarg,arg) default(shared) proc_bind(close) schedule(static)
-            do i = 1,ldim(1)
-                do j = 1,ldim(2)
-                    do k = 1,ldim(3)
+            do i = 1,self%ldim(1)
+                do j = 1,self%ldim(2)
+                    do k = 1,self%ldim(3)
                         iarg = sum(([i,j,k]-center)**2)
                         if( iarg == 0 )cycle
-                        arg = PI*sqrt(real(iarg))
-                        self%rmat(i,j,k) = self%rmat(i,j,k) / (sin(arg)/arg)
+                        arg = PI * sqrt(real(iarg)) / real(dim)
+                        arg = sin(arg) / arg
+                        arg = arg*arg ! normalized sinc^2
+                        self%rmat(i,j,k) = self%rmat(i,j,k) / arg
                     enddo
                 enddo
             enddo
             !$omp end parallel do
-        endif
+        case DEFAULT
+            THROW_HARD('Unsupported interpolation method')
+        end select
     end subroutine div_w_instrfun
 
     subroutine pad_fft( self, self_out )

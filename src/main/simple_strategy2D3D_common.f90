@@ -593,12 +593,10 @@ contains
         logical,                 intent(in)    :: do_center
         real,                    intent(in)    :: xyz(3)
         logical,                 intent(in)    :: iseven
-
         type(projector),  pointer     :: vol_ptr => null()
-        character(len=:), allocatable :: fname_opt_filter
         type(tvfilter) :: tvfilt
         real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
-        integer :: iref, iproj, iprojred, filtsz
+        integer :: iref, iproj, filtsz
         if( iseven )then
             vol_ptr => build_glob%vol
         else
@@ -665,7 +663,7 @@ contains
         endif
         ! gridding prep
         if( params_glob%gridding.eq.'yes' )then
-            call vol_ptr%div_w_instrfun(alpha=params_glob%alpha)
+            call vol_ptr%div_w_instrfun(params_glob%interpfun, alpha=params_glob%alpha)
         endif
         ! FT volume
         call vol_ptr%fft()

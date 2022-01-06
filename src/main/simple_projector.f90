@@ -132,13 +132,19 @@ contains
         enddo
         !$omp end parallel do
         deallocate( cych,cyck,cycm )
-        ! gridding correction
-        self%interp_fcomp     => interp_fcomp_norm
-        self%fdf_interp_fcomp => fdf_interp_fcomp_norm
-        if( params_glob%gridding.eq.'yes')then
-            self%interp_fcomp     => interp_fcomp_grid
-            self%fdf_interp_fcomp => fdf_interp_fcomp_grid
-        endif
+        ! gridding correction & interpolation
+        select case(trim(params_glob%interpfun))
+        case('linear')
+            self%interp_fcomp => interp_fcomp_trilinear
+        case DEFAULT
+            ! defaults to Kaiser-Bessel
+            self%interp_fcomp     => interp_fcomp_norm
+            self%fdf_interp_fcomp => fdf_interp_fcomp_norm
+            if( params_glob%gridding.eq.'yes')then
+                self%interp_fcomp     => interp_fcomp_grid
+                self%fdf_interp_fcomp => fdf_interp_fcomp_grid
+            endif
+        end select
         self%expanded_exists = .true.
     end subroutine expand_cmat
 

@@ -190,6 +190,7 @@ type :: parameters
     character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
     character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
     character(len=STDLEN) :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
+    character(len=STDLEN) :: interpfun='kb'       !< Interpolation function projection/reconstruction/polar representation(kb|linear){kb}
     character(len=STDLEN) :: keys=''
     character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
     character(len=STDLEN) :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
@@ -532,6 +533,7 @@ contains
         call check_carg('hfun',           self%hfun)
         call check_carg('hist',           self%hist)
         call check_carg('imgkind',        self%imgkind)
+        call check_carg('interpfun',        self%interpfun)
         call check_carg('keepvol',        self%keepvol)
         call check_carg('keys',           self%keys)
         call check_carg('kmeans',         self%kmeans)
@@ -1294,6 +1296,13 @@ contains
                 self%ncls = ncls
             endif
         endif
+        ! interpolation function
+        select case(trim(self%interpfun))
+        case('kb','linear')
+            ! supported
+        case DEFAULT
+            THROW_HARD('Unsupported interpolation function')
+        end select
         ! set remap_clusters flag
         self%l_remap_cls = .false.
         if( self%remap_cls .eq. 'yes' ) self%l_remap_cls = .true.
