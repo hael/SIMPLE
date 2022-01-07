@@ -11,7 +11,6 @@ integer,          parameter   :: NVOLRWS   = 10
 integer,          parameter   :: NSTKRWS   = 10
 integer,          parameter   :: NPTCLS    = 1024 * 10
 integer,          parameter   :: BOX       = 512
-! integer,          parameter   :: ONE_M = 1000000
 integer,          parameter   :: ONE_M     = 1024**2
 integer(kind=8),  parameter   :: NSTKBYTES = NSTKRWS * NPTCLS * BOX * BOX * 4
 integer(kind=8),  parameter   :: NVOLBYTES = NVOLRWS * BOX    * BOX * BOX * 4
