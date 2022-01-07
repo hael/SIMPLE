@@ -11,7 +11,8 @@ integer,          parameter   :: NVOLRWS   = 10
 integer,          parameter   :: NSTKRWS   = 10
 integer,          parameter   :: NPTCLS    = 1024 * 10
 integer,          parameter   :: BOX       = 512
-integer,          parameter   :: ONE_M = 1000000
+! integer,          parameter   :: ONE_M = 1000000
+integer,          parameter   :: ONE_M     = 1024**2
 integer(kind=8),  parameter   :: NSTKBYTES = NSTKRWS * NPTCLS * BOX * BOX * 4
 integer(kind=8),  parameter   :: NVOLBYTES = NVOLRWS * BOX    * BOX * BOX * 4
 real,             parameter   :: SMPD      = 1.0
@@ -74,12 +75,12 @@ rt_vol_r = toc(t_vol_r)
 rt_tot   = rt_tot + rt_vol_r
 
 ! calc MB / s
-mb_per_s_stk_w = real(NSTKBYTES               / ONE_M) / rt_stk_w
-mb_per_s_stk_r = real(NSTKBYTES               / ONE_M) / rt_stk_r
-mb_per_s_vol_w = real(NVOLBYTES               / ONE_M) / rt_vol_w
-mb_per_s_vol_r = real(NVOLBYTES               / ONE_M) / rt_vol_r
-mb_per_s_w     = real((NSTKBYTES + NVOLBYTES) / ONE_M) / (rt_stk_w + rt_vol_w)
-mb_per_s_r     = real((NSTKBYTES + NVOLBYTES) / ONE_M) / (rt_stk_r + rt_vol_r)
+mb_per_s_stk_w = real(real(NSTKBYTES,dp)             / real(ONE_M,dp) / rt_stk_w)
+mb_per_s_stk_r = real(real(NSTKBYTES,dp)             / real(ONE_M,dp) / rt_stk_r)
+mb_per_s_vol_w = real(real(NVOLBYTES,dp)             / real(ONE_M,dp) / rt_vol_w)
+mb_per_s_vol_r = real(real(NVOLBYTES,dp)             / real(ONE_M,dp) / rt_vol_r)
+mb_per_s_w     = real(real(NSTKBYTES + NVOLBYTES,dp) / real(ONE_M,dp) / (rt_stk_w + rt_vol_w))
+mb_per_s_r     = real(real(NSTKBYTES + NVOLBYTES,dp) / real(ONE_M,dp) / (rt_stk_r + rt_vol_r))
 
 ! write benchmark stats
 benchfname = 'SIMPLE_IO_BENCH.txt'
