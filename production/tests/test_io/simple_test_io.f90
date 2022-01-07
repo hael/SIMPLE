@@ -33,29 +33,29 @@ call vol%ran()
 call vol%write('random_vol.mrc')
 
 print *, 'writing the stack '//int2str(NSTKRWS)//' times'
-call stkio_w%open('stack_of_random_imgs.mrcs', SMPD, 'write', box=BOX)
 rt_tot  = 0.
 t_stk_w = tic()
 do i = 1, NSTKRWS
+    call stkio_w%open('stack_of_random_imgs.mrcs', SMPD, 'write', box=BOX)
     do iptcl = 1, NPTCLS
         call stkio_w%write(iptcl, imgs(iptcl))
     end do
+    call stkio_w%close
 end do
 rt_stk_w = toc(t_stk_w)
 rt_tot   = rt_tot + rt_stk_w
-call stkio_w%close
 
 print *, 'reading the stack '//int2str(NSTKRWS)//' times'
-call stkio_r%open('stack_of_random_imgs.mrcs', SMPD, 'read')
 t_stk_r = tic()
 do i = 1, NSTKRWS
+    call stkio_r%open('stack_of_random_imgs.mrcs', SMPD, 'read')
     do iptcl = 1, NPTCLS
         call stkio_r%read(iptcl, imgs(iptcl))
     end do
+    call stkio_r%close
 end do
 rt_stk_r = toc(t_stk_r)
 rt_tot   = rt_tot + rt_stk_r
-call stkio_r%close
 
 print *, 'writing the volume '//int2str(NVOLRWS)//' times'
 t_vol_w = tic()
