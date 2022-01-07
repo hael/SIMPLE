@@ -360,16 +360,14 @@ contains
         type(tvfilter)    :: tvfilt
         real, allocatable :: fsc(:), optlp(:), res(:)
         real, parameter   :: SIGMA_DEFAULT=1.0
-        real              :: width, fsc05, fsc0143, sigma
+        real              :: fsc05, fsc0143, sigma
         integer           :: find
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'filtered.mrcs')
         if( .not. cline%defined('outvol') ) call cline%set('outvol', 'filtered.mrc')
-        width = 10.
         if( cline%defined('stk') )then
             ! 2D
             call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-            if( cline%defined('width') ) width = params%width
             if( .not.file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk)')
             if( cline%defined('filter') )then
                 select case(trim(params%filter))
@@ -390,11 +388,11 @@ contains
                     call matchfilt_imgfile(params%stk, params%outstk, params%frcs, params%smpd)
                 ! Band pass
                 else if( cline%defined('lp') .and. cline%defined('hp') )then
-                    call bp_imgfile(params%stk, params%outstk, params%smpd, params%hp, params%lp, width=width)
+                    call bp_imgfile(params%stk, params%outstk, params%smpd, params%hp, params%lp)
                 else if( cline%defined('lp') )then
-                    call bp_imgfile(params%stk, params%outstk, params%smpd, 0., params%lp, width=width)
+                    call bp_imgfile(params%stk, params%outstk, params%smpd, 0., params%lp)
                 else if( cline%defined('hp') )then
-                    call bp_imgfile(params%stk, params%outstk, params%smpd, params%hp, 0., width=width)
+                    call bp_imgfile(params%stk, params%outstk, params%smpd, params%hp, 0.)
                 ! real-space
                 else if( cline%defined('real_filter') )then
                     if( .not. cline%defined('winsz') .and. trim(params%real_filter) .ne. 'NLmean') THROW_HARD('need winsz input for real-space filtering')
@@ -410,7 +408,6 @@ contains
         else
             ! 3D
             call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
-            if( cline%defined('width') ) width = params%width
             if( .not.file_exists(params%vols(1)) ) THROW_HARD('Cannot find input volume (vol1)')
             call build%vol%read(params%vols(1))
             if( params%phrand.eq.'no')then
@@ -419,9 +416,11 @@ contains
                     call build%vol%apply_bfac(params%bfac)
                     ! Band pass
                 else if( cline%defined('hp') .and. cline%defined('lp') )then
-                    call build%vol%bp(params%hp, params%lp, width=width)
+                    call build%vol%bp(params%hp, params%lp)
                 else if( cline%defined('hp') )then
-                    call build%vol%bp(params%hp, 0., width=width)
+                    call build%vol%bp(params%hp, 0.)
+                else if( cline%defined('lp') )then
+                    call build%vol%bp(0., params%lp)
                 else if( params%tophat .eq. 'yes' .and. cline%defined('find') )then
                     call build%vol%tophat(params%find)
                     ! real-space
