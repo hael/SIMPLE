@@ -8,7 +8,7 @@ use simple_math,  only: hpsort, median, median_nocopy, reverse
 implicit none
 
 public :: moment, pearsn, normalize, normalize_sigm, normalize_minmax
-public :: corrs2weights, analyze_smat, dev_from_dmat, mad, mad_gau, z_scores
+public :: corrs2weights, analyze_smat, dev_from_dmat, mad, mad_gau, robust_sigma_thres, z_scores
 public :: robust_z_scores, robust_normalization, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
 public :: conv2rank_weights, calc_stats, pearsn_serial
@@ -735,6 +735,17 @@ contains
         real, intent(in) :: med  ! median of data points
         mad_gau = 1.4826 * mad(x, med)
     end function mad_gau
+
+    function robust_sigma_thres( x, nsig ) result( t )
+        real, intent(in)    :: x(:) ! data points
+        real, intent(in)    :: nsig ! # sigmas, can be +/-
+        real, allocatable   :: absdevs(:)
+        real :: med, mad, t
+        med = median(x)
+        allocate(absdevs(size(x)), source=abs(x - med))
+        mad = median_nocopy(absdevs)
+        t = med + nsig * mad
+    end function robust_sigma_thres
 
     ! the Z-score calculates the number of standard deviations a data point is away from the mean
     function z_scores( x, mask ) result( zscores )

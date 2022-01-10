@@ -803,7 +803,7 @@ contains
         character(len=*), parameter :: BINARY   = 'recvol_state01_BIN.mrc'
         character(len=*), parameter :: CCS      = 'recvol_state01_CC.mrc'
         character(len=*), parameter :: SPLITTED = 'split_ccs.mrc'
-        character(len=LONGSTRLEN), allocatable :: map_names
+        character(len=LONGSTRLEN), allocatable :: map_names(:)
         character(len=:),          allocatable :: maps_dir
         character(len=STDLEN)       :: fbody, fbody_split
         type(cmdline) :: cline_refine3D_nano, cline_detect_atms

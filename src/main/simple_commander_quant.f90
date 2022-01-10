@@ -59,7 +59,7 @@ contains
         type(parameters)   :: params
         type(nanoparticle) :: nano
         real               :: a(3) ! lattice parameters
-        logical            :: prefit_lattice, use_thres
+        logical            :: prefit_lattice, use_cs_thres, use_auto_corr_thres
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
         endif
@@ -68,22 +68,23 @@ contains
         endif
         prefit_lattice = cline%defined('vol2')
         call params%new(cline)
-        use_thres = trim(params%use_thres) .eq. 'yes'
+        use_cs_thres        = trim(params%use_thres) .eq. 'yes'
+        use_auto_corr_thres = .not.cline%defined('corr_thres')
         if( prefit_lattice )then
             call nano%new(params%vols(2), params%smpd, params%element, params%msk)
             ! execute
-            call nano%identify_lattice_params( a )
+            call nano%identify_lattice_params(a, use_auto_corr_thres=use_auto_corr_thres)
             ! kill
             call nano%kill
             call nano%new(params%vols(1), params%smpd, params%element, params%msk)
             ! execute
-            call nano%identify_atomic_pos(a, l_fit_lattice=.false., use_thres=use_thres)
+            call nano%identify_atomic_pos(a, l_fit_lattice=.false., use_cs_thres=use_cs_thres, use_auto_corr_thres=use_auto_corr_thres)
             ! kill
             call nano%kill
         else
             call nano%new(params%vols(1), params%smpd, params%element, params%msk)
             ! execute
-            call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_thres=use_thres)
+            call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=use_cs_thres, use_auto_corr_thres=use_auto_corr_thres)
             ! kill
             call nano%kill
         endif
@@ -98,7 +99,7 @@ contains
         type(parameters)      :: params
         type(nanoparticle)    :: nano
         real                  :: a(3) ! lattice parameters
-        logical               :: prefit_lattice, use_subset_coords
+        logical               :: prefit_lattice, use_subset_coords, use_auto_corr_thres
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_atoms_stats')
         endif
@@ -111,13 +112,14 @@ contains
         if( .not. cline%defined('pdbfile') )then
             THROW_HARD('ERROR! pdbfile needs to be present; exec_atoms_stats')
         endif
-        prefit_lattice    = cline%defined('vol3')
-        use_subset_coords = cline%defined('pdbfile2')
+        prefit_lattice      = cline%defined('vol3')
+        use_subset_coords   = cline%defined('pdbfile2')
+        use_auto_corr_thres = .not.cline%defined('corr_thres')
         call params%new(cline)
         if( prefit_lattice )then
             ! fit lattice using vol3
             call nano%new(params%vols(3), params%smpd, params%element, params%msk)
-            call nano%identify_lattice_params( a )
+            call nano%identify_lattice_params(a, use_auto_corr_thres=use_auto_corr_thres)
             call nano%kill
             ! calc stats
             call nano%new(params%vols(1), params%smpd, params%element, params%msk)
