@@ -78,7 +78,7 @@ contains
         type(sym)             :: se1,se2
         type(image)           :: img, vol
         type(stack_io)        :: stkio_r, stkio_r2, stkio_w
-        character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine
+        character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine, vol_iter_pproc, vol_iter_pproc_mirr
         real                  :: iter, smpd_target, lplims(2), orig_smpd
         real                  :: scale_factor1, scale_factor2
         integer               :: icls, ncavgs, orig_box, box, istk, cnt
@@ -517,9 +517,12 @@ contains
             call vol%write(add2fbody(vol_iter,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX)))
             call vol%kill
         endif
-        call simple_rename(vol_iter, trim(REC_FBODY)//params%ext)
-        call simple_rename(add2fbody(vol_iter,params%ext,PPROC_SUFFIX), trim(REC_PPROC_FBODY)//params%ext)
-        call simple_rename(add2fbody(vol_iter,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX)), trim(REC_PPROC_MIRR_FBODY)//params%ext)
+
+        vol_iter_pproc      = add2fbody(vol_iter,params%ext,PPROC_SUFFIX)
+        vol_iter_pproc_mirr = add2fbody(vol_iter,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX))
+        if( file_exists(vol_iter)            ) call simple_rename(vol_iter,            trim(REC_FBODY)//params%ext)
+        if( file_exists(vol_iter_pproc)      ) call simple_rename(vol_iter_pproc,      trim(REC_PPROC_FBODY)//params%ext)
+        if( file_exists(vol_iter_pproc_mirr) ) call simple_rename(vol_iter_pproc_mirr, trim(REC_PPROC_MIRR_FBODY)//params%ext)
         ! updates original cls3D segment
         call work_proj2%os_ptcl3D%delete_entry('stkind')
         call work_proj2%os_ptcl3D%delete_entry('eo')

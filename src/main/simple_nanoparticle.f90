@@ -14,6 +14,7 @@ private
 #include "simple_local_flags.inc"
 
 ! module global constants
+real,             parameter :: CORR_THRES_SIGMA    = -3.0    ! sigma for valid_corr thresholding
 integer,          parameter :: NBIN_THRESH         = 15      ! number of thresholds for binarization
 integer,          parameter :: CN_THRESH_XTAL      = 5       ! cn-threshold highly crystalline NPs
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
@@ -423,10 +424,11 @@ contains
 
     ! atomic position determination
 
-    subroutine identify_lattice_params( self, a )
+    subroutine identify_lattice_params( self, a, use_auto_corr_thres )
         class(nanoparticle), intent(inout) :: self
-        real,                intent(inout) :: a(3) ! lattice parameters
-        real, allocatable :: centers_A(:,:)        ! coordinates of the atoms in ANGSTROMS
+        real,                intent(inout) :: a(3)                ! lattice parameters
+        logical,             intent(in)    :: use_auto_corr_thres ! true -> use automatic corr thres
+        real, allocatable :: centers_A(:,:)                       ! coordinates of the atoms in ANGSTROMS
         type(image)       :: simatms
         type(atoms)       :: atoms_obj
         ! MODEL BUILDING
@@ -441,7 +443,7 @@ contains
         call self%simulate_atoms(atoms_obj, simatms)
         call self%validate_atoms( simatms )
         ! discard atoms with low valid_corr
-        call self%discard_low_valid_corr_atoms
+        call self%discard_low_valid_corr_atoms(use_auto_corr_thres)
         ! fit lattice
         centers_A = self%atominfo2centers_A()
         call fit_lattice(self%element, centers_A, a)
@@ -450,13 +452,14 @@ contains
         call atoms_obj%kill
     end subroutine identify_lattice_params
 
-    subroutine identify_atomic_pos( self, a, l_fit_lattice, use_thres )
+    subroutine identify_atomic_pos( self, a, l_fit_lattice, use_cs_thres, use_auto_corr_thres )
         class(nanoparticle), intent(inout) :: self
-        real,                intent(inout) :: a(3)          ! lattice parameters
-        logical,             intent(in)    :: l_fit_lattice ! fit lattice or use inputted
-        logical,             intent(in)    :: use_thres     ! use or not contact score thres
+        real,                intent(inout) :: a(3)                ! lattice parameters
+        logical,             intent(in)    :: l_fit_lattice       ! fit lattice or use inputted
+        logical,             intent(in)    :: use_cs_thres        ! use or not contact score thres
+        logical,             intent(in)    :: use_auto_corr_thres ! true -> use automatic corr thres
         logical     :: use_cn_thresh
-        type(image) :: simatms
+        type(image) :: simatms, img_cos
         type(atoms) :: atoms_obj
         ! MODEL BUILDING
         ! Phase correlation approach
@@ -470,22 +473,27 @@ contains
         call self%simulate_atoms(atoms_obj, simatms)
         call self%validate_atoms( simatms )
         ! discard atoms with low valid_corr
-        call self%discard_low_valid_corr_atoms
+        call self%discard_low_valid_corr_atoms(use_auto_corr_thres)
         ! discard lowly coordinated atoms
-        if( use_thres )then
+        if( use_cs_thres )then
             call self%discard_atoms_with_low_contact_score(use_cn_thresh)
             if( use_cn_thresh ) call self%discard_lowly_coordinated(CN_THRESH_XTAL, a, l_fit_lattice)
         endif
         ! WRITE OUTPUT
         call self%img_bin%write_bimg(trim(self%fbody)//'_BIN.mrc')
-        write(logfhandle,*) 'output, binarized map:            ', trim(self%fbody)//'_BIN.mrc'
+        write(logfhandle,'(A)') 'output, binarized map:            ', trim(self%fbody)//'_BIN.mrc'
+        call self%img_bin%grow_bins(1)
+        call self%img_bin%cos_edge(SOFT_EDGE, img_cos)
+        call img_cos%write(trim(self%fbody)//'_MSK.mrc')
+        write(logfhandle,'(A)') 'output, envelope mask map:        ', trim(self%fbody)//'_MSK.mrc'
         call self%img_cc%write_bimg(trim(self%fbody)//'_CC.mrc')
-        write(logfhandle,*) 'output, connected components map: ', trim(self%fbody)//'_CC.mrc'
+        write(logfhandle,'(A)') 'output, connected components map: ', trim(self%fbody)//'_CC.mrc'
         call self%write_centers
         call self%simulate_atoms(atoms_obj, simatms)
         call simatms%write(trim(self%fbody)//'_SIM.mrc')
-        write(logfhandle,*) 'output, simulated atomic density: ', trim(self%fbody)//'_SIM.mrc'
+        write(logfhandle,'(A)') 'output, simulated atomic density: ', trim(self%fbody)//'_SIM.mrc'
         ! destruct
+        call img_cos%kill
         call simatms%kill
         call atoms_obj%kill
     end subroutine identify_atomic_pos
@@ -915,16 +923,26 @@ contains
         write(logfhandle,'(A,F8.4)') 'Min    : ', corr_stats%minv
     end subroutine validate_atoms
 
-    subroutine discard_low_valid_corr_atoms( self )
+    subroutine discard_low_valid_corr_atoms( self, use_auto_corr_thres )
+        use simple_stat, only: robust_sigma_thres
         class(nanoparticle), intent(inout) :: self
+        logical,             intent(in)    :: use_auto_corr_thres
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
         integer :: cc, n_discard
+        real    :: corr_thres
         write(logfhandle, '(A)') '>>> DISCARDING ATOMS WITH LOW VALID_CORR'
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
+        if( use_auto_corr_thres )then
+            corr_thres = max(robust_sigma_thres(self%atominfo(:)%valid_corr, CORR_THRES_SIGMA), 0.3)
+            write(logfhandle, *) 'Valid_corr threshold calculated: ', corr_thres
+        else
+            corr_thres = params_glob%corr_thres
+        endif
+        write(logfhandle, *) 'Valid_corr threshold applied:    ', corr_thres
         n_discard = 0
         do cc = 1, self%n_cc
-            if( self%atominfo(cc)%valid_corr < params_glob%corr_thres )then
+            if( self%atominfo(cc)%valid_corr < corr_thres )then
                 where(imat_cc == cc) imat_bin = 0
                 n_discard = n_discard + 1
             endif
