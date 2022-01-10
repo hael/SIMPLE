@@ -718,7 +718,7 @@ contains
         cnt = 0
         do ifile=1,nfiles
             if( .not. file_exists(filenames(ifile)) )then
-                write(logfhandle,*) 'inputted spec file does not exist: ', trim(adjustl(filenames(ifile)))
+                write(logfhandle,*) 'inputted file does not exist: ', trim(adjustl(filenames(ifile)))
             endif
             call find_ldim_nptcls(filenames(ifile),lfoo,nimgs)
             do iimg=1,nimgs
@@ -730,8 +730,12 @@ contains
                     call stkio_r%open(filenames(ifile), params%smpd, 'read')
                 endif
                 call stkio_r%read(iimg, img)
-                if( l_clip ) call img%clip(tmp)
-                call stkio_w%write(cnt, tmp)
+                if( l_clip )then
+                    call img%clip(tmp)
+                    call stkio_w%write(cnt, tmp)
+                else
+                    call stkio_w%write(cnt, img)
+                endif
             end do
             call progress(ifile, nfiles)
         end do
