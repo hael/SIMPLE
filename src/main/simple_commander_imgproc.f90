@@ -7,6 +7,7 @@ use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_image,          only: image
 use simple_binimage,       only: binimage
+use simple_stack_io,       only: stack_io
 implicit none
 
 public :: binarize_commander
@@ -694,8 +695,9 @@ contains
         type(parameters) :: params
         integer          :: nfiles, ldim(3), ifile, ifoo, cnt
         integer          :: lfoo(3), nimgs, iimg
+        type(stack_io)   :: stkio_r, stkio_w
         type(image)      :: img, tmp
-        real             :: mm(2)
+        logical          :: l_clip
         call cline%set('mkdir', 'no')
         call params%new(cline)
         call read_filetable(params%filetab, filenames)
@@ -705,7 +707,13 @@ contains
         params%box = ldim(1)
         ! prepare img and tmp for reading
         call img%new(ldim, params%smpd)
-        if( cline%defined('clip') ) call tmp%new([params%clip,params%clip,1], params%smpd)
+        l_clip = cline%defined('clip')
+        if( l_clip )then
+            call tmp%new([params%clip,params%clip,1], params%smpd)
+            call stkio_w%open(trim(params%outstk), params%smpd, 'write', box=params%clip)
+        else
+            call stkio_w%open(trim(params%outstk), params%smpd, 'write', box=ldim(1))
+        endif
         ! loop over files
         cnt = 0
         do ifile=1,nfiles
@@ -715,18 +723,20 @@ contains
             call find_ldim_nptcls(filenames(ifile),lfoo,nimgs)
             do iimg=1,nimgs
                 cnt = cnt+1
-                call img%read(filenames(ifile), iimg, readhead=.false.)
-                if( cline%defined('clip') )then
-                    call img%clip(tmp)
-                    mm = tmp%minmax()
-                    call tmp%write(params%outstk, cnt)
-                else
-                    call img%write(params%outstk, cnt)
+                if( .not. stkio_r%stk_is_open() )then
+                    call stkio_r%open(filenames(ifile), params%smpd, 'read')
+                else if( .not. stkio_r%same_stk(filenames(ifile), ldim) )then
+                    call stkio_r%close
+                    call stkio_r%open(filenames(ifile), params%smpd, 'read')
                 endif
+                call stkio_r%read(iimg, img)
+                if( l_clip ) call img%clip(tmp)
+                call stkio_w%write(cnt, tmp)
             end do
             call progress(ifile, nfiles)
         end do
-        ! cleanup
+        call stkio_r%close
+        call stkio_w%close
         call img%kill
         call tmp%kill
         ! end gracefully
