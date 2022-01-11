@@ -911,9 +911,11 @@ contains
         character(len=*),  intent(in)    :: stk
         type(ctfparams),   intent(in)    :: ctfvars ! CTF parameters associated with stk (smpd,kv,cs,fraca,phaseplate)
         class(oris),       intent(inout) :: os      ! parameters associated with stk (dfx,dfy,angast,phshift)
-        character(len=:), allocatable :: stk_abspath
+        character(len=:), allocatable :: stk_abspath, projname
         character(len=LONGSTRLEN)     :: stk_relpath
         integer                       :: n_os_stk, n_os_ptcl2D, n_os_ptcl3D, ldim(3), nptcls
+        call self%projinfo%getter(1, 'projname', projname)
+        if( str_has_substr(stk, projname) ) THROW_HARD('stack for import()'//trim(stk)//') not allowed to have same name as project')
         ! check that stk field is empty
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk > 0 )then
