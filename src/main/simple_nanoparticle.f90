@@ -166,7 +166,6 @@ type :: nanoparticle
     procedure, private :: atominfo2centers
     procedure, private :: atominfo2centers_A
     procedure, private :: center_on_atom
-    procedure          :: make_soft_mask
     procedure          :: update_ncc
     ! atomic position determination
     procedure          :: identify_lattice_params
@@ -395,23 +394,6 @@ contains
         call atom_centers%kill
     end subroutine center_on_atom
 
-    subroutine make_soft_mask( self, pdbfile )
-        class(nanoparticle), intent(inout) :: self
-        character(len=*),    intent(in)    :: pdbfile
-        type(binimage) :: simulated_density
-        type(image)    :: img_cos
-        type(atoms)    :: atomic_pos
-        call simulated_density%new_bimg(self%ldim, self%smpd)
-        call atomic_pos%new(trim(pdbfile))
-        call atomic_pos%convolve(simulated_density, cutoff=8.*self%smpd)
-        call simulated_density%grow_bins(nint(0.5*self%theoretical_radius/self%smpd)+1)
-        call simulated_density%cos_edge(SOFT_EDGE, img_cos)
-        call img_cos%write(trim(self%fbody)//'MSK.mrc')
-        call img_cos%kill
-        call simulated_density%kill_bimg
-        call atomic_pos%kill
-    end subroutine make_soft_mask
-
     subroutine update_ncc( self, img_cc )
         class(nanoparticle),      intent(inout) :: self
         type(binimage), optional, intent(inout) :: img_cc
@@ -481,17 +463,17 @@ contains
         endif
         ! WRITE OUTPUT
         call self%img_bin%write_bimg(trim(self%fbody)//'_BIN.mrc')
-        write(logfhandle,'(A)') 'output, binarized map:            ', trim(self%fbody)//'_BIN.mrc'
+        write(logfhandle,'(A)') 'output, binarized map:            '//trim(self%fbody)//'_BIN.mrc'
         call self%img_bin%grow_bins(1)
         call self%img_bin%cos_edge(SOFT_EDGE, img_cos)
         call img_cos%write(trim(self%fbody)//'_MSK.mrc')
-        write(logfhandle,'(A)') 'output, envelope mask map:        ', trim(self%fbody)//'_MSK.mrc'
+        write(logfhandle,'(A)') 'output, envelope mask map:        '//trim(self%fbody)//'_MSK.mrc'
         call self%img_cc%write_bimg(trim(self%fbody)//'_CC.mrc')
-        write(logfhandle,'(A)') 'output, connected components map: ', trim(self%fbody)//'_CC.mrc'
+        write(logfhandle,'(A)') 'output, connected components map: '//trim(self%fbody)//'_CC.mrc'
         call self%write_centers
         call self%simulate_atoms(atoms_obj, simatms)
         call simatms%write(trim(self%fbody)//'_SIM.mrc')
-        write(logfhandle,'(A)') 'output, simulated atomic density: ', trim(self%fbody)//'_SIM.mrc'
+        write(logfhandle,'(A)') 'output, simulated atomic density: '//trim(self%fbody)//'_SIM.mrc'
         ! destruct
         call img_cos%kill
         call simatms%kill
