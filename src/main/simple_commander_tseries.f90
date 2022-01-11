@@ -875,15 +875,16 @@ contains
         call cline%set('prg', 'refine3D')
         call cline%set('match_filt','no')
         ! dynamic parameters
-        if( .not. cline%defined('keepvol')       ) call cline%set('keepvol',       'yes')
-        if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
-        if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',          'no')
-        if( .not. cline%defined('nspace')        ) call cline%set('nspace',       10000.)
-        if( .not. cline%defined('trs')           ) call cline%set('trs',             5.0)
-        if( .not. cline%defined('lp')            ) call cline%set('lp',              1.0)
         if( .not. cline%defined('cenlp')         ) call cline%set('cenlp',            5.)
-        if( .not. cline%defined('maxits')        ) call cline%set('maxits',          15.)
+        if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
+        if( .not. cline%defined('keepvol')       ) call cline%set('keepvol',       'yes')
+        if( .not. cline%defined('lp')            ) call cline%set('lp',              1.0)
+        if( .not. cline%defined('maxits')        ) call cline%set('maxits',          30.)
+        if( .not. cline%defined('nspace')        ) call cline%set('nspace',       10000.)
+        if( .not. cline%defined('nonuniform')    ) call cline%set('nonuniform',     'no')
         if( .not. cline%defined('oritype')       ) call cline%set('oritype',    'ptcl3D')
+        if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',          'no')
+        if( .not. cline%defined('trs')           ) call cline%set('trs',             5.0)
         call xrefine3D_distr%execute(cline)
     end subroutine exec_refine3D_nano
 
