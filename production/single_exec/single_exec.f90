@@ -50,7 +50,6 @@ type(validate_nano_commander)                 :: xvalidate_nano
 type(detect_atoms_commander)                  :: xdetect_atoms
 type(atoms_stats_commander)                   :: xatoms_stats
 type(tseries_atoms_analysis_commander)        :: xtseries_atoms_analysis
-type(nano_softmask_commander)                 :: xnano_softmask
 
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: args, prg, entire_line
@@ -138,8 +137,6 @@ select case(prg)
         call xatoms_stats%execute(cline)
     case( 'tseries_atoms_analysis' )
         call xtseries_atoms_analysis%execute(cline)
-    case( 'nano_softmask' )
-        call xnano_softmask%execute(cline)
 
     ! UNSUPPORTED
     case DEFAULT

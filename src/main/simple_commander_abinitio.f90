@@ -517,7 +517,6 @@ contains
             call vol%write(add2fbody(vol_iter,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX)))
             call vol%kill
         endif
-
         vol_iter_pproc      = add2fbody(vol_iter,params%ext,PPROC_SUFFIX)
         vol_iter_pproc_mirr = add2fbody(vol_iter,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX))
         if( file_exists(vol_iter)            ) call simple_rename(vol_iter,            trim(REC_FBODY)//params%ext)
