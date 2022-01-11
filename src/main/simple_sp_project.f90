@@ -2495,10 +2495,9 @@ contains
         if( self%is_virgin_field('cls3D') )then
             THROW_HARD('os_cls3D is virgin field; nothing to map back; map2ptcls')
         endif
-        if( self%is_virgin_field('ptcl2D') )then
-            ! 2D was not done with SIMPLE but class averages imported from elsewhere
-            return
-        endif
+        ! in case 2D was not done with SIMPLE but class averages imported from elsewhere
+        if( self%os_ptcl2D%get_noris() == 0 ) return
+        if( self%is_virgin_field('ptcl2D')  ) return
         ! ensure ptcl3D field congruent with ptcl2D field
         noris_ptcl3D = self%os_ptcl3D%get_noris()
         noris_ptcl2D = self%os_ptcl2D%get_noris()

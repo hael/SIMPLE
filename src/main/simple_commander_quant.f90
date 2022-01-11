@@ -14,7 +14,6 @@ public :: detect_atoms_commander
 public :: atoms_stats_commander
 public :: tseries_atoms_analysis_commander
 public :: dock_coords_commander
-public :: nano_softmask_commander
 public :: atoms_mask_commander
 
 private
@@ -36,10 +35,6 @@ type, extends(commander_base) :: dock_coords_commander
   contains
     procedure :: execute      => exec_dock_coords
 end type dock_coords_commander
-type, extends(commander_base) :: nano_softmask_commander
-  contains
-    procedure :: execute      => exec_nano_softmask
-end type nano_softmask_commander
 type, extends(commander_base) :: atoms_mask_commander
   contains
     procedure :: execute      => exec_atoms_mask
@@ -277,36 +272,6 @@ contains
         call a_ref%kill
         call a_targ%kill
     end subroutine exec_dock_coords
-
-    subroutine exec_nano_softmask( self, cline )
-        class(nano_softmask_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline !< command line input
-        character(len=STDLEN) :: fname
-        type(parameters)      :: params
-        type(nanoparticle)    :: nano
-        call params%new(cline)
-        if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_nano_softmask')
-        endif
-        if( .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! vol1 (raw map) needs to be present; exec_nano_softmask')
-        endif
-        if( .not. cline%defined('vol2') )then
-            THROW_HARD('ERROR! vol2 (binary map *BIN.mrc) needs to be present; exec_nano_softmask')
-        endif
-        if( .not. cline%defined('pdbfile') )then
-            THROW_HARD('ERROR! pdbfile needs to be present; exec_nano_softmask')
-        endif
-        call nano%new(params%vols(1), params%smpd, params%element)
-        ! set binary image
-        call nano%set_img(params%vols(2),'img_bin')
-        ! execute
-        call nano%make_soft_mask(params%pdbfile)
-        ! kill
-        call nano%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_NANO_SOFTMASK NORMAL STOP ****')
-    end subroutine exec_nano_softmask
 
     subroutine exec_atoms_mask( self, cline )
         use simple_nanoparticle_utils, only: atoms_mask

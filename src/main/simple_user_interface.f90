@@ -112,7 +112,6 @@ type(simple_program), target :: mkdir_
 type(simple_program), target :: merge_stream_projects
 type(simple_program), target :: motion_correct
 type(simple_program), target :: motion_correct_tomo
-type(simple_program), target :: nano_softmask
 type(simple_program), target :: new_project
 type(simple_program), target :: nonuniform_filter
 type(simple_program), target :: normalize_
@@ -324,7 +323,6 @@ contains
         call new_mkdir_
         call new_motion_correct
         call new_motion_correct_tomo
-        call new_nano_softmask
         call new_new_project
         call new_nonuniform_filter
         call new_normalize
@@ -418,7 +416,6 @@ contains
         call push2prg_ptr_array(mkdir_)
         call push2prg_ptr_array(motion_correct)
         call push2prg_ptr_array(motion_correct_tomo)
-        call push2prg_ptr_array(nano_softmask)
         call push2prg_ptr_array(new_project)
         call push2prg_ptr_array(nonuniform_filter)
         call push2prg_ptr_array(normalize_)
@@ -562,8 +559,6 @@ contains
                 ptr2prg => motion_correct
             case('motion_correct_tomo')
                 ptr2prg => motion_correct_tomo
-            case('nano_softmask')
-                ptr2prg => nano_softmask
             case('new_project')
                 ptr2prg => new_project
             case('nonuniform_filter')
@@ -782,7 +777,6 @@ contains
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') atoms_stats%name
         write(logfhandle,'(A)') tseries_atoms_analysis%name
-        write(logfhandle,'(A)') nano_softmask%name
     end subroutine list_single_prgs_in_ui
 
     ! private class methods
@@ -2326,35 +2320,6 @@ contains
         ! computer controls
         call motion_correct_tomo%set_input('comp_ctrls', 1, nthr)
     end subroutine new_motion_correct_tomo
-
-    subroutine new_nano_softmask
-        ! PROGRAM SPECIFICATION
-        call nano_softmask%new(&
-        &'nano_softmask', &                                      ! name
-        &'nano_softmask in atomic-resolution nanoparticle map',& ! descr_short
-        &'is a program generating soft mask for 3D refinement of an atomic-res nanoparticle 3D map',& ! descr long
-        &'single_exec',&                                        ! executable
-        &2, 2, 0, 0, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call nano_softmask%set_input('img_ios', 1, 'vol1', 'file', 'Raw volume', 'Raw volume of grey valued pixel intensities', &
-        & 'input volume e.g. vol.mrc', .true., '')
-        call nano_softmask%set_input('img_ios', 2, 'vol2', 'file', 'Binary volume', 'Binary volume produced by detect atoms', &
-        & 'input volume e.g. *BIN.mrc', .true., '')
-        ! parameter input/output
-        call nano_softmask%set_input('parm_ios', 1, smpd)
-        call nano_softmask%set_input('parm_ios', 2, 'pdbfile', 'file', 'PDB', 'Input coords file in PDB format', 'Input coords file in PDB format', .true., '')
-        ! search controls
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! filter controls
-        call nano_softmask%set_input('filt_ctrls', 1, element)
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-    end subroutine new_nano_softmask
 
     subroutine new_nonuniform_filter
         ! PROGRAM SPECIFICATION
