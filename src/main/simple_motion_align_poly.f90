@@ -3,7 +3,7 @@ module simple_motion_align_poly
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_error
-use simple_image,           only: image
+use simple_image,           only: image, image_ptr
 use simple_ft_expanded_dp,  only: ft_expanded_dp
 use simple_parameters,      only: params_glob
 use CPlot2D_wrapper_module
@@ -93,11 +93,6 @@ contains
     ! Destructor
     procedure          :: kill
 end type motion_align_poly
-
-type image_ptr
-    real,    public, pointer :: rmat(:,:,:)
-    complex, public, pointer :: cmat(:,:,:)
-end type image_ptr
 
 contains
 
