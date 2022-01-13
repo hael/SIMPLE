@@ -41,12 +41,10 @@ type :: ftiter
     ! LOOPING LIMITS
     procedure :: loop_lims
     ! LOGICAL<->PHYSICAL ADDRESS CONVERTERS
-    procedure :: comp_addr_phys1
-    procedure :: comp_addr_phys2
-    generic   :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
-    procedure :: comp_addr_logi_1
-    procedure :: comp_addr_logi_2
-    generic   :: comp_addr_logi => comp_addr_logi_1, comp_addr_logi_2
+    procedure, private :: comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
+    generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
+    procedure, private :: comp_addr_logi_1, comp_addr_logi_2
+    generic            :: comp_addr_logi => comp_addr_logi_1, comp_addr_logi_2
     procedure, private :: comp_addr_phys_orig
     ! TESTS
     procedure, private :: test_addr
@@ -293,6 +291,19 @@ contains
             phys(3) = -m + 1 + MERGE(self%ldim(3),0, -m < 0)
         endif
     end function comp_addr_phys2
+
+    pure function comp_addr_phys3(self,h,k) result(phys)
+        class(ftiter), intent(in) :: self
+        integer,       intent(in) :: h,k   !<  Logical address
+        integer :: phys(2)                 !<  Physical address
+        if (h .ge. 0) then
+            phys(1) = h + 1
+            phys(2) = k + 1 + MERGE(self%ldim(2),0, k < 0)
+        else
+            phys(1) = -h + 1
+            phys(2) = -k + 1 + MERGE(self%ldim(2),0, -k < 0)
+        endif
+    end function comp_addr_phys3
 
     !> \brief Convert physical address to logical address. Complex image.
     ! this is erroneous when h<0, completely unused

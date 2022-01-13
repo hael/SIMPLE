@@ -11,8 +11,13 @@ use simple_fftw3
 use gnufor2
 implicit none
 private
-public :: image, test_image, imstack_type
+public :: image, image_ptr, test_image, imstack_type
 #include "simple_local_flags.inc"
+
+type image_ptr
+    real(kind=c_float),            public, pointer :: rmat(:,:,:)
+    complex(kind=c_float_complex), public, pointer :: cmat(:,:,:)
+end type image_ptr
 
 type :: image
     private
@@ -249,9 +254,8 @@ contains
     procedure          :: cure
     procedure          :: loop_lims
     procedure          :: calc_gradient
-    procedure          :: comp_addr_phys1
-    procedure          :: comp_addr_phys2
-    generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
+    procedure, private :: comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
+    generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     procedure          :: corr
     procedure          :: corr_shifted
     procedure, private :: real_corr_1
@@ -4402,6 +4406,14 @@ contains
         integer                  :: phys(3) !<  Physical address
         phys = self%fit%comp_addr_phys(h,k,m)
     end function comp_addr_phys2
+
+    !>  \brief  Convert 2D logical address to physical address. Complex image.
+    pure function comp_addr_phys3(self,h,k) result(phys)
+        class(image), intent(in) :: self
+        integer,      intent(in) :: h,k     !<  Logical address
+        integer                  :: phys(2) !<  Physical address
+        phys = self%fit%comp_addr_phys(h,k)
+    end function comp_addr_phys3
 
     !>  \brief corr is for correlating two images
     function corr( self1, self2, lp_dyn, hp_dyn ) result( r )

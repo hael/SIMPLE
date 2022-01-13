@@ -723,7 +723,7 @@ contains
                 call build_glob%eorecvols(s)%sampl_dens_correct_sum(build_glob%vol)
                 call build_glob%vol%write(params_glob%vols(s), del_if_exists=.true.)
                 call simple_copy_file(trim(params_glob%vols(s)),trim(VOL_FBODY)//int2str_pad(s,2)//params_glob%ext)
-                 ! need to put the sum back at lowres for the eo pairs
+                ! need to put the sum back at lowres for the eo pairs
                 call build_glob%vol%fft()
                 call build_glob%vol2%zero_and_unflag_ft
                 call build_glob%vol2%read(params_glob%vols_even(s))
