@@ -986,17 +986,17 @@ contains
             endif
             self%ft = .false.
             select case(form)
-            case('M')
-                call ioimg%open(fname, self%ldim, self%smpd, formatchar=formatchar, readhead=readhead, rwaction=rwaction)
-                ! data type: 0 image: signed 8-bit bytes range -128 to 127
-                !            1 image: 16-bit halfwords
-                !            2 image: 32-bit reals (DEFAULT MODE)
-                !            3 transform: complex 16-bit integers
-                !            4 transform: complex 32-bit reals (THIS WOULD BE THE DEFAULT FT MODE)
-                mode = ioimg%getMode()
-                if( mode == 3 .or. mode == 4 ) self%ft = .true.
-            case('F','S','J','L')
-                call ioimg%open(fname, self%ldim, self%smpd, formatchar=formatchar, readhead=readhead, rwaction=rwaction)
+                case('M')
+                    call ioimg%open(fname, self%ldim, self%smpd, formatchar=formatchar, readhead=readhead, rwaction=rwaction)
+                    ! data type: 0 image: signed 8-bit bytes range -128 to 127
+                    !            1 image: 16-bit halfwords
+                    !            2 image: 32-bit reals (DEFAULT MODE)
+                    !            3 transform: complex 16-bit integers
+                    !            4 transform: complex 32-bit reals (THIS WOULD BE THE DEFAULT FT MODE)
+                    mode = ioimg%getMode()
+                    if( mode == 3 .or. mode == 4 ) self%ft = .true.
+                case('F','S','J','L')
+                    call ioimg%open(fname, self%ldim, self%smpd, formatchar=formatchar, readhead=readhead, rwaction=rwaction)
             end select
         else
             THROW_HARD('image need to be constructed before read/write; open')
