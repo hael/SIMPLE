@@ -714,23 +714,30 @@ contains
     !>  \brief  reads class averages from disk
     subroutine cavger_read( fname, which )
         character(len=*),  intent(in) :: fname, which
-        integer :: icls
+        type(stack_io) :: stkio_r
+        integer        :: icls
         select case(which)
             case('even')
+                call stkio_r%open(trim(fname), smpd, 'read', bufsz=ncls)
                 do icls=1,ncls
                     call cavgs_even(icls)%new(ldim,smpd,wthreads=.false.)
-                    call cavgs_even(icls)%read(fname, icls)
+                    call stkio_r%read(icls, cavgs_even(icls))
                 end do
+                call stkio_r%close
             case('odd')
+                call stkio_r%open(trim(fname), smpd, 'read', bufsz=ncls)
                 do icls=1,ncls
                     call cavgs_odd(icls)%new(ldim,smpd,wthreads=.false.)
-                    call cavgs_odd(icls)%read(fname, icls)
+                    call stkio_r%read(icls, cavgs_odd(icls))
                 end do
+                call stkio_r%close
             case('merged')
-                    do icls=1,ncls
+                call stkio_r%open(trim(fname), smpd, 'read', bufsz=ncls)
+                do icls=1,ncls
                     call cavgs_merged(icls)%new(ldim,smpd,wthreads=.false.)
-                    call cavgs_merged(icls)%read(fname, icls)
+                    call stkio_r%read(icls, cavgs_merged(icls))
                 end do
+                call stkio_r%close
             case DEFAULT
                 THROW_HARD('unsupported which flag')
         end select
@@ -739,7 +746,9 @@ contains
     !>  \brief  writes partial class averages to disk (distributed execution)
     subroutine cavger_readwrite_partial_sums( which )
         character(len=*), intent(in)  :: which
-        integer                       ::  icls
+        integer                       :: icls, ithr
+        logical                       :: is_ft
+        type(stack_io)                :: stkio(4)
         character(len=:), allocatable :: cae, cao, cte, cto
         allocate(cae, source='cavgs_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
         allocate(cao, source='cavgs_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
@@ -747,19 +756,55 @@ contains
         allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
         select case(trim(which))
             case('read')
+                call stkio(1)%open(cae, params_glob%smpd, 'read', bufsz=ncls)
+                call stkio(2)%open(cao, params_glob%smpd, 'read', bufsz=ncls)
+                call stkio(3)%open(cte, params_glob%smpd, 'read', bufsz=ncls)
+                call stkio(4)%open(cto, params_glob%smpd, 'read', bufsz=ncls)
+                !$omp parallel do default(shared) private(icls,ithr) schedule(static) num_threads(4)
                 do icls=1,ncls
-                    call cavgs_even( icls)%read(cae, icls)
-                    call cavgs_odd( icls)%read(cao, icls)
-                    call ctfsqsums_even( icls)%read(cte, icls)
-                    call ctfsqsums_odd( icls)%read(cto, icls)
+                    ithr = omp_get_thread_num() + 1
+                    select case(ithr)
+                        case(1)
+                            call stkio(1)%read(icls, cavgs_even(icls))
+                        case(2)
+                            call stkio(2)%read(icls, cavgs_odd(icls))
+                        case(3)
+                            call stkio(3)%read(icls, ctfsqsums_even(icls))
+                        case(4)
+                            call stkio(4)%read(icls, ctfsqsums_odd(icls))
+                    end select
                 end do
+                !$omp end parallel do
+                call stkio(1)%close
+                call stkio(2)%close
+                call stkio(3)%close
+                call stkio(4)%close
             case('write')
+                is_ft = cavgs_even(1)%is_ft()
+                ldim  = cavgs_even(1)%get_ldim()
+                call stkio(1)%open(cae, params_glob%smpd, 'write', is_ft=is_ft, box=ldim(1), bufsz=ncls)
+                call stkio(2)%open(cao, params_glob%smpd, 'write', is_ft=is_ft, box=ldim(1), bufsz=ncls)
+                call stkio(3)%open(cte, params_glob%smpd, 'write', is_ft=is_ft, box=ldim(1), bufsz=ncls)
+                call stkio(4)%open(cto, params_glob%smpd, 'write', is_ft=is_ft, box=ldim(1), bufsz=ncls)
+                !$omp parallel do default(shared) private(icls,ithr) schedule(static) num_threads(4)
                 do icls=1,ncls
-                    call cavgs_even( icls)%write(cae, icls)
-                    call cavgs_odd( icls)%write(cao, icls)
-                    call ctfsqsums_even( icls)%write(cte, icls)
-                    call ctfsqsums_odd( icls)%write(cto, icls)
+                    ithr = omp_get_thread_num() + 1
+                    select case(ithr)
+                        case(1)
+                            call stkio(1)%write(icls, cavgs_even(icls))
+                        case(2)
+                            call stkio(2)%write(icls, cavgs_odd(icls))
+                        case(3)
+                            call stkio(3)%write(icls, ctfsqsums_even(icls))
+                        case(4)
+                            call stkio(4)%write(icls, ctfsqsums_odd(icls))
+                    end select
                 end do
+                !$omp end parallel do
+                call stkio(1)%close
+                call stkio(2)%close
+                call stkio(3)%close
+                call stkio(4)%close
             case DEFAULT
                 THROW_HARD('unknown which flag; only read & write supported; cavger_readwrite_partial_sums')
         end select
