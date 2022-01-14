@@ -915,7 +915,7 @@ contains
         character(len=LONGSTRLEN)     :: stk_relpath
         integer                       :: n_os_stk, n_os_ptcl2D, n_os_ptcl3D, ldim(3), nptcls
         call self%projinfo%getter(1, 'projname', projname)
-        if( str_has_substr(stk, projname) ) THROW_HARD('stack for import()'//trim(stk)//') not allowed to have same name as project')
+        if( str_has_substr(stk, projname) ) THROW_HARD('stack for import('//trim(stk)//') not allowed to have same name as project')
         ! check that stk field is empty
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk > 0 )then

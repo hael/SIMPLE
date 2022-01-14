@@ -6,6 +6,7 @@ use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters, params_glob
 use simple_sp_project,     only: sp_project
 use simple_stack_io,       only: stack_io
+use simple_qsys_env,       only: qsys_env
 use simple_qsys_funs
 implicit none
 
@@ -31,7 +32,6 @@ contains
         use simple_ori,                only: ori
         use simple_image,              only: image
         use simple_parameters,         only: params_glob
-        use simple_qsys_env,           only: qsys_env
         use simple_sym,                only: sym
         use simple_builder,            only: builder
         class(initial_3Dmodel_commander), intent(inout) :: self
@@ -314,11 +314,7 @@ contains
         call cline_postprocess%set('prg',       'postprocess')
         call cline_postprocess%set('projfile',   ORIG_WORK_PROJFILE)
         call cline_postprocess%set('mkdir',      'no')
-        if( l_lpset )then
-            call cline_postprocess%set('lp', lplims(2))
-        else
-            call cline_postprocess%delete('lp')
-        endif
+        call cline_postprocess%delete('lp')
         if( l_automsk )then
             call cline_postprocess%set('automsk', 'yes')
         endif

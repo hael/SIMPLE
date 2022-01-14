@@ -8,7 +8,7 @@ use simple_parameters, only: params_glob
 use simple_stack_io,   only: stack_io
 implicit none
 
-public :: read_img, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
+public :: read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
 &norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, readrefvols_filter_nonuniformly,&
 &preprefvol, prep2Dref, preprecvols, killrecvols, prepimgbatch, build_pftcc_particles
 private
@@ -31,32 +31,6 @@ type(stack_io)  :: stkio_r
 
 contains
 
-    subroutine read_img( iptcl, img )
-        integer,        intent(in)    :: iptcl
-        class(image),   intent(inout) :: img
-        character(len=:), allocatable :: stkname
-        integer :: ind_in_stk
-        call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, iptcl, stkname, ind_in_stk)
-        call img%read(stkname, ind_in_stk)
-    end subroutine read_img
-
-    ! NOT POSSIBLE TO DO IN THIS WAY SINCE THE CLASSAVERAGER NEED TO ACCESS THE IMAGES IN RANDOM ORDER
-    ! CONSIDER MANAGING A SET OF OPEN IMAGE STACKS TO REMOVE OVERHEADS DUE TO OPEN/CLOSE
-    ! subroutine read_img( iptcl, img )
-    !     integer,        intent(in)    :: iptcl
-    !     class(image),   intent(inout) :: img
-    !     character(len=:), allocatable :: stkname
-    !     integer :: ind_in_stk
-    !     call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, iptcl, stkname, ind_in_stk)
-    !     if( .not. stkio_r%stk_is_open() )then
-    !         call stkio_r%open(stkname, params_glob%smpd, 'read')
-    !     else if( .not. stkio_r%same_stk(stkname, [params_glob%box,params_glob%box,1]) )then
-    !         call stkio_r%close
-    !         call stkio_r%open(stkname, params_glob%smpd, 'read')
-    !     endif
-    !     call stkio_r%read(ind_in_stk, img)
-    ! end subroutine read_img
-
     subroutine read_imgbatch_1( fromptop, ptcl_mask )
         integer,           intent(in) :: fromptop(2)
         logical, optional, intent(in) :: ptcl_mask(params_glob%fromp:params_glob%top)
@@ -67,16 +41,29 @@ contains
                 if( ptcl_mask(iptcl) )then
                     ind_in_batch = iptcl - fromptop(1) + 1
                     call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, iptcl, stkname, ind_in_stk)
-                    call build_glob%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
+                    if( .not. stkio_r%stk_is_open() )then
+                        call stkio_r%open(stkname, params_glob%smpd, 'read')
+                    else if( .not. stkio_r%same_stk(stkname, [params_glob%box,params_glob%box,1]) )then
+                        call stkio_r%close
+                        call stkio_r%open(stkname, params_glob%smpd, 'read')
+                    endif
+                    call stkio_r%read(ind_in_stk, build_glob%imgbatch(ind_in_batch))
                 endif
             end do
+            call stkio_r%close
         else
             do iptcl=fromptop(1),fromptop(2)
                 ind_in_batch = iptcl - fromptop(1) + 1
-                call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, &
-                    iptcl, stkname, ind_in_stk)
-                call build_glob%imgbatch(ind_in_batch)%read(stkname, ind_in_stk)
+                call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, iptcl, stkname, ind_in_stk)
+                if( .not. stkio_r%stk_is_open() )then
+                    call stkio_r%open(stkname, params_glob%smpd, 'read')
+                else if( .not. stkio_r%same_stk(stkname, [params_glob%box,params_glob%box,1]) )then
+                    call stkio_r%close
+                    call stkio_r%open(stkname, params_glob%smpd, 'read')
+                endif
+                call stkio_r%read(ind_in_stk, build_glob%imgbatch(ind_in_batch))
             end do
+            call stkio_r%close
         endif
     end subroutine read_imgbatch_1
 
@@ -86,10 +73,16 @@ contains
         integer :: ind_in_stk, i, ii
         do i=batchlims(1),batchlims(2)
             ii = i - batchlims(1) + 1
-            call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, &
-                pinds(i), stkname, ind_in_stk)
-            call build_glob%imgbatch(ii)%read(stkname, ind_in_stk)
+            call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, pinds(i), stkname, ind_in_stk)
+            if( .not. stkio_r%stk_is_open() )then
+                call stkio_r%open(stkname, params_glob%smpd, 'read')
+            else if( .not. stkio_r%same_stk(stkname, [params_glob%box,params_glob%box,1]) )then
+                call stkio_r%close
+                call stkio_r%open(stkname, params_glob%smpd, 'read')
+            endif
+            call stkio_r%read(ind_in_stk, build_glob%imgbatch(ii))
         end do
+        call stkio_r%close
     end subroutine read_imgbatch_2
 
     subroutine set_bp_range( cline )
