@@ -699,7 +699,7 @@ contains
         class(sp_project), intent(inout) :: spproj
         character(len=*),  intent(in)    :: fname
         integer,           intent(in)    :: nran, box
-        type(stack_io)                   :: stkio_r, stkio_w
+        type(stack_io)                   :: stkio_w
         type(ran_tabu)                   :: rt
         type(image)                      :: img, img_scaled
         character(len=:), allocatable    :: stkname
@@ -738,13 +738,7 @@ contains
             ii = rt%irnd()
             call rt%insert(ii)
             call spproj%get_stkname_and_ind('ptcl2D', ii, stkname, ind)
-            if( .not. stkio_r%stk_is_open() )then
-                call stkio_r%open(stkname, smpd, 'read')
-            else if( .not. stkio_r%same_stk(stkname, ldim) )then
-                call stkio_r%close
-                call stkio_r%open(stkname, smpd, 'read')
-            endif
-            call stkio_r%read(ind, img)
+            call img%read(stkname, ind)
             call img%norm()
             if( doscale )then
                 call img%fft()
@@ -759,7 +753,6 @@ contains
                 call stkio_w%write(i, img)
             endif
         end do
-        call stkio_r%close
         call stkio_w%close
         call rt%kill
         call img%kill
@@ -814,7 +807,7 @@ contains
             if( .not. stkio_r%stk_is_open() )then
                 call stkio_r%open(stkname, smpd, 'read')
             else if( .not. stkio_r%same_stk(stkname, ldim) )then
-                call stkio_r%close        
+                call stkio_r%close
                 call stkio_r%open(stkname, smpd, 'read')
             endif
             call stkio_r%read(ind, img)

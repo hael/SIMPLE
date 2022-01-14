@@ -97,7 +97,6 @@ contains
         ! command lines
         type(cmdline)    :: cline_reconstruct3D_distr
         type(cmdline)    :: cline_calc_pspec_distr
-        type(cmdline)    :: cline_cls3D_distr
         type(cmdline)    :: cline_calc_group_sigmas
         type(cmdline)    :: cline_check_3Dconv
         type(cmdline)    :: cline_volassemble
@@ -175,7 +174,6 @@ contains
         if( trim(params%oritype).eq.'ptcl3D' ) call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
         ! prepare command lines from prototype master
         cline_reconstruct3D_distr = cline
-        cline_cls3D_distr         = cline
         cline_calc_pspec_distr    = cline
         cline_check_3Dconv        = cline
         cline_volassemble         = cline
@@ -232,7 +230,6 @@ contains
                     call build%spproj%get_vol('vol', state, vol_fname, smpd, box)
                 endif
                 call cline%set(trim(vol), vol_fname)
-                call cline_cls3D_distr%set(trim(vol), vol_fname)
                 params%vols(state) = vol_fname
             end do
             prev_refine_path = get_fpath(vol_fname)
@@ -276,7 +273,7 @@ contains
             vol = 'vol' // int2str(state)
             if( cline%defined(trim(vol)) )then
                 vol_defined = .true.
-                call find_ldim_nptcls(params%vols(state),ldim,ifoo)
+                call find_ldim_nptcls(trim(params%vols(state)),ldim,ifoo)
                 if( ldim(1) /= params%box )then
                     THROW_HARD('Incompatible dimensions between input volume and images: '//params%vols(state))
                 endif
@@ -467,14 +464,17 @@ contains
                             vol = 'vol'//trim(int2str(state))
                             call job_descr%set( vol, vol_iter )
                             call cline%set(vol, vol_iter)
-                            call cline_cls3D_distr%set(vol, vol_iter)
                             if( params%keepvol.ne.'no' )then
                                 call simple_copy_file(vol_iter,trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//params%ext)
                             endif
                         endif
                     enddo
                     ! volume mask, one for all states
-                    if( cline%defined('mskfile') )call build%spproj%add_vol2os_out(trim(params%mskfile), params%smpd, 1, 'vol_msk')
+                    if( cline%defined('mskfile') )then
+                        if( file_exists(trim(params%mskfile)) )then
+                            call build%spproj%add_vol2os_out(trim(params%mskfile), params%smpd, 1, 'vol_msk')
+                        endif
+                    endif
                     ! writes os_out
                     call build%spproj%write_segment_inside('out')
                     ! automasking in postprocess
@@ -513,6 +513,7 @@ contains
                         if( mod(iter,AUTOMSK_FREQ) == 0 .or. iter == params%startit )then
                             call cline_postprocess%set('mskfile', 'automask'//params%ext)
                             call cline%set('mskfile', 'automask'//params%ext)
+                            params%mskfile = 'automask'//params%ext
                             call cline_postprocess%delete('automsk')
                         endif
                     endif

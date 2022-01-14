@@ -302,7 +302,7 @@ contains
         use simple_kbinterpol,          only: kbinterpol
         logical,      intent(in)      :: do_frac_update
         integer, parameter            :: READBUFFSZ = 1024
-        complex, parameter            :: zero = cmplx(0.,0.)    
+        complex, parameter            :: zero = cmplx(0.,0.)
         type(kbinterpol)              :: kbwin
         type(stack_io)                :: stkio_r
         type(image_ptr)               :: pcmat(params_glob%nthr), prhomat(params_glob%nthr)
@@ -343,7 +343,7 @@ contains
                 iptcl = precs(i)%pind
                 exit
             endif
-        enddo    
+        enddo
         call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, iptcl, last_stkind,  ind_in_stk)
         nstks = last_stkind - first_stkind + 1
         ! Objects allocations
@@ -375,7 +375,6 @@ contains
         first_iprec  = 1 ! first particle record in current stack
         do istk = first_stkind,last_stkind
             cnt_progress = cnt_progress + 1
-            call progress(cnt_progress, ncls)
             ! Particles range
             stkind = first_stkind + istk - 1
             fromp  = max(precs(1)%pind,      nint(build_glob%spproj%os_stk%get(istk,'fromp')))
@@ -515,7 +514,7 @@ contains
                             prhomat(ithr)%cmat(:,:,1) = prhomat(ithr)%cmat(:,:,1) + pw * cmplx(rhos(:,:,i),0.0)
                         endif
                     enddo
-                enddo 
+                enddo
                 !$omp end do
                 !$omp end parallel
             enddo ! end read batches loop
@@ -546,7 +545,7 @@ contains
                     prhomat(ithr)%cmat(h,ok,1) = cswap
                 end do
             end do
-        enddo 
+        enddo
         !$omp end parallel do
         ! Cleanup
         do i = 1,READBUFFSZ
