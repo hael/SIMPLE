@@ -75,6 +75,9 @@ do j = 1, NVOLRWS
     end do
     !$omp end parallel do
 end do
+do i = 1, NVOLS
+    call ioimg(i)%close
+end do
 rt_vol_r_para = toc(t_vol_r_para)
 
 ! cleanup

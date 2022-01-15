@@ -746,61 +746,39 @@ contains
     !>  \brief  writes partial class averages to disk (distributed execution)
     subroutine cavger_readwrite_partial_sums( which )
         character(len=*), intent(in)  :: which
-        integer                       :: icls, ithr
-        logical                       :: is_ft
-        type(stack_io)                :: stkio(4)
+        integer                       ::  icls
         character(len=:), allocatable :: cae, cao, cte, cto
+        type(stack_io)                :: stkio(4)
+        logical                       :: is_ft
         allocate(cae, source='cavgs_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
         allocate(cao, source='cavgs_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
         allocate(cte, source='ctfsqsums_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
         allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
         select case(trim(which))
             case('read')
-                call stkio(1)%open(cae, params_glob%smpd, 'read', bufsz=ncls)
-                call stkio(2)%open(cao, params_glob%smpd, 'read', bufsz=ncls)
-                call stkio(3)%open(cte, params_glob%smpd, 'read', bufsz=ncls)
-                call stkio(4)%open(cto, params_glob%smpd, 'read', bufsz=ncls)
-                !$omp parallel do default(shared) private(icls,ithr) schedule(static) num_threads(4)
+                call stkio(1)%open(cae, smpd, 'read', bufsz=ncls)
+                call stkio(2)%open(cao, smpd, 'read', bufsz=ncls)
+                call stkio(3)%open(cte, smpd, 'read', bufsz=ncls)
+                call stkio(4)%open(cto, smpd, 'read', bufsz=ncls)
                 do icls=1,ncls
-                    ithr = omp_get_thread_num() + 1
-                    select case(ithr)
-                        case(1)
-                            call stkio(1)%read(icls, cavgs_even(icls))
-                        case(2)
-                            call stkio(2)%read(icls, cavgs_odd(icls))
-                        case(3)
-                            call stkio(3)%read(icls, ctfsqsums_even(icls))
-                        case(4)
-                            call stkio(4)%read(icls, ctfsqsums_odd(icls))
-                    end select
+                    call stkio(1)%read(icls, cavgs_even(icls))
+                    call stkio(2)%read(icls, cavgs_odd(icls))
+                    call stkio(3)%read(icls, ctfsqsums_even(icls))
+                    call stkio(4)%read(icls, ctfsqsums_odd(icls))
                 end do
-                !$omp end parallel do
-                call stkio(1)%close
-                call stkio(2)%close
-                call stkio(3)%close
-                call stkio(4)%close
             case('write')
                 is_ft = cavgs_even(1)%is_ft()
                 ldim  = cavgs_even(1)%get_ldim()
-                call stkio(1)%open(cae, params_glob%smpd, 'write', is_ft=is_ft, box=ldim(1), bufsz=ncls)
-                call stkio(2)%open(cao, params_glob%smpd, 'write', is_ft=is_ft, box=ldim(1), bufsz=ncls)
-                call stkio(3)%open(cte, params_glob%smpd, 'write', is_ft=is_ft, box=ldim(1), bufsz=ncls)
-                call stkio(4)%open(cto, params_glob%smpd, 'write', is_ft=is_ft, box=ldim(1), bufsz=ncls)
-                !$omp parallel do default(shared) private(icls,ithr) schedule(static) num_threads(4)
+                call stkio(1)%open(cae, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim(1))
+                call stkio(2)%open(cao, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim(1))
+                call stkio(3)%open(cte, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim(1))
+                call stkio(4)%open(cto, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim(1))
                 do icls=1,ncls
-                    ithr = omp_get_thread_num() + 1
-                    select case(ithr)
-                        case(1)
-                            call stkio(1)%write(icls, cavgs_even(icls))
-                        case(2)
-                            call stkio(2)%write(icls, cavgs_odd(icls))
-                        case(3)
-                            call stkio(3)%write(icls, ctfsqsums_even(icls))
-                        case(4)
-                            call stkio(4)%write(icls, ctfsqsums_odd(icls))
-                    end select
+                    call stkio(1)%write(icls, cavgs_even(icls))
+                    call stkio(2)%write(icls, cavgs_odd(icls))
+                    call stkio(3)%write(icls, ctfsqsums_even(icls))
+                    call stkio(4)%write(icls, ctfsqsums_odd(icls))
                 end do
-                !$omp end parallel do
                 call stkio(1)%close
                 call stkio(2)%close
                 call stkio(3)%close
