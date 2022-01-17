@@ -8,6 +8,7 @@ use simple_parameters,     only: parameters, params_glob
 use simple_sp_project,     only: sp_project
 use simple_qsys_env,       only: qsys_env
 use simple_image,          only: image
+use simple_stack_io,       only: stack_io
 use simple_qsys_funs
 use simple_procimgstk
 implicit none
@@ -430,17 +431,20 @@ contains
 
             subroutine rescale_cavgs(cavgs)
                 character(len=*), intent(in) :: cavgs
-                type(image) :: img, img_pad
-                integer     :: icls
+                type(image)    :: img, img_pad
+                type(stack_io) :: stkio_w
+                integer        :: icls
                 call img%new([box,box,1],smpd)
                 call img_pad%new([params%box,params%box,1],params%smpd)
+                call stkio_w%open('tmp_cavgs.mrc', params%smpd, 'write', is_ft=.false., box=params%box)
                 do icls = 1,params%ncls
                     call img%read(cavgs,icls)
                     call img%fft
                     call img%pad(img_pad, backgr=0.)
                     call img_pad%ifft
-                    call img_pad%write('tmp_cavgs.mrc',icls)
+                    call stkio_w%write(icls, img_pad)
                 enddo
+                call stkio_w%close
                 call simple_rename('tmp_cavgs.mrc',cavgs)
                 call img%kill
                 call img_pad%kill
@@ -1112,8 +1116,9 @@ contains
         type(builder)        :: build
         integer, allocatable :: order(:)
         real,    allocatable :: res(:)
-        integer    :: ldim(3), ncls, iclass
-        type(oris) :: clsdoc_ranked
+        integer        :: ldim(3), ncls, iclass
+        type(oris)     :: clsdoc_ranked
+        type(stack_io) :: stkio_r, stkio_w
         call cline%set('oritype', 'cls2D')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         call find_ldim_nptcls(params%stk, ldim, ncls)
@@ -1126,6 +1131,9 @@ contains
             allocate(order(params%ncls))
             order = (/(iclass,iclass=1,params%ncls)/)
             call hpsort(res, order)
+            call stkio_r%open(params%stk, params%smpd, 'read', bufsz=params%ncls)
+            call stkio_r%read_whole ! because need asynchronous access
+            call stkio_w%open(params%outstk, params%smpd, 'write', box=ldim(1), bufsz=params%ncls)
             do iclass=1,params%ncls
                 call clsdoc_ranked%set(iclass, 'class',     real(order(iclass)))
                 call clsdoc_ranked%set(iclass, 'rank',      real(iclass))
@@ -1137,9 +1145,11 @@ contains
                 write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', order(iclass),&
                     &'RANK:', iclass ,'POP:', nint(build%spproj_field%get(order(iclass), 'pop')),&
                     &'RES:', build%spproj_field%get(order(iclass), 'res')
-                call build%img%read(params%stk, order(iclass))
-                call build%img%write(params%outstk, iclass)
+                call stkio_r%get_image(order(iclass), build%img)
+                call stkio_w%write(iclass, build%img)
             end do
+            call stkio_r%close
+            call stkio_w%close
             call clsdoc_ranked%write('classdoc_ranked.txt')
         else
             ! nothing to do

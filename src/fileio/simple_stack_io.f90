@@ -24,7 +24,9 @@ contains
     procedure          :: get_nptcls
     procedure          :: get_ldim
     procedure          :: same_stk
+    procedure          :: get_image
     procedure          :: read
+    procedure          :: read_whole
     procedure          :: write
     procedure, private :: write_buffer
     procedure          :: close
@@ -105,6 +107,16 @@ contains
         l_same = (self%stkname .eq. trim(stkname)) .and. all(ldim == self%ldim)
     end function same_stk
 
+    subroutine get_image( self, i, img )
+        class(stack_io), intent(inout) :: self
+        integer,         intent(in)    :: i
+        class(image),    intent(inout) :: img
+        integer :: ind_in_buf
+        ind_in_buf = i - self%fromp + 1
+        if( ind_in_buf < 1 .or. ind_in_buf > self%bufsz ) THROW_HARD('buffer index out of range')
+        call img%set_rmat(self%rmat_ptr(:self%ldim(1),:self%ldim(2),ind_in_buf:ind_in_buf), self%ft)
+    end subroutine get_image
+
     subroutine read( self, i, img )
         class(stack_io), intent(inout) :: self
         integer,         intent(in)    :: i
@@ -133,6 +145,18 @@ contains
         ind_in_buf = i - self%fromp + 1
         call img%set_rmat(self%rmat_ptr(:self%ldim(1),:self%ldim(2),ind_in_buf:ind_in_buf), self%ft)
     end subroutine read
+
+    subroutine read_whole( self )
+        class(stack_io), intent(inout) :: self
+        type(image) :: img
+        integer     :: i
+        if( self%bufsz /= self%nptcls) THROW_HARD('it is assumed that the the buffer size equals the stack size on whole stack read')
+        call img%new(self%ldim, self%smpd)
+        do i = 1, self%nptcls
+            call self%read(i, img)
+        end do
+        call img%kill
+    end subroutine read_whole
 
     subroutine write( self, i, img )
         class(stack_io), intent(inout) :: self
