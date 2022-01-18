@@ -529,7 +529,8 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         type(image)      :: vol2, img, img2
-        real             :: ave, sdev, var, med, smpd_new, scale
+        type(stack_io)   :: stkio_r, stkio_w
+        real             :: ave, sdev, var, med, smpd_new, scale, smpd_sc
         integer          :: ldim(3), ldim_scaled(3), nfiles, nframes, iframe, ifile
         integer          :: istk, nstks, ptcl_fromp, ptcl_top
         character(len=:), allocatable :: fname, stkin, stkout
@@ -650,7 +651,8 @@ contains
                     THROW_HARD('filetab key only in combination with scale or newbox!')
                 endif
                 call img%new(ldim,params%smpd)
-                call img2%new(ldim_scaled,params%smpd/params%scale)
+                smpd_sc = params%smpd/params%scale
+                call img2%new(ldim_scaled, smpd_sc)
                 do ifile=1,nfiles
                     call progress(ifile, nfiles)
                     if( cline%defined('dir_target') )then
@@ -658,10 +660,17 @@ contains
                     else
                         fname = add2fbody(trim(filenames(ifile)), params%ext, SCALE_SUFFIX)
                     endif
+                    call stkio_w%open(fname, smpd_sc, 'write', box=ldim_scaled(1))
                     call find_ldim_nptcls(filenames(ifile),ldim,nframes)
                     ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
                     do iframe= 1, nframes
-                        call img%read(filenames(ifile), iframe)
+                        if( .not. stkio_r%stk_is_open() )then
+                            call stkio_r%open(trim(filenames(ifile)), params%smpd, 'read')
+                        else if( .not. stkio_r%same_stk(trim(filenames(ifile)), ldim) )then
+                            call stkio_r%close
+                            call stkio_r%open(trim(filenames(ifile)), params%smpd, 'read')
+                        endif
+                        call stkio_r%read(iframe, img)
                         call img%fft()
                         if( ldim_scaled(1) <= ldim(1) .and. ldim_scaled(2) <= ldim(2) .and. ldim_scaled(3) <= ldim(3) )then
                             call img%clip(img2)
@@ -669,9 +678,11 @@ contains
                             call img%pad(img2)
                         endif
                         call img2%ifft()
-                        call img2%write(fname, iframe)
+                        call stkio_w%write(iframe, img2)
                     end do
                     deallocate(fname)
+                    call stkio_w%close
+                    call stkio_r%close
                 end do
             else
                 THROW_HARD('SIMPLE_SCALE needs input image(s) or volume or filetable!')
