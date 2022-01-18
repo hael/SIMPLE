@@ -24,15 +24,26 @@ module load cmake/3.13.1
 #chmod a+rx,o+rx -R build_gcc9.3.0/
 #module unload gcc/9.3.0
 
-echo "Compiling SIMPLE with gcc10.2.0"
-module load gcc/10.2.0
-rm -r build_gcc10.2.0
-mkdir build_gcc10.2.0
-cd build_gcc10.2.0
+#echo "Compiling SIMPLE with gcc10.2.0"
+#module load gcc/10.2.0
+#rm -r build_gcc10.2.0
+#mkdir build_gcc10.2.0
+#cd build_gcc10.2.0
+#cmake ..
+#make -j 8 install
+#cd ..
+#chmod a+rx,o+rx -R build_gcc10.2.0
+#module unload gcc/10.2.0
+
+echo "Compiling SIMPLE with gcc11.2.0"
+module load gcc/11.2.0
+rm -r build_gcc11.2.0
+mkdir build_gcc11.2.0
+cd build_gcc11.2.0
 cmake ..
 make -j 8 install
 cd ..
-chmod a+rx,o+rx -R build_gcc10.2.0
-module unload gcc/10.2.0
+chmod a+rx,o+rx -R build_gcc11.2.0
+module unload gcc/11.2.0
 
 exit
