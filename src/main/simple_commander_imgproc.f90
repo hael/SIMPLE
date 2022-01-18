@@ -1015,6 +1015,7 @@ contains
         ! varables
         type(parameters) :: params
         type(image)      :: img, img_pspec, graphene_mask
+        type(stack_io)   :: stkio_r, stkio_w1, stkio_w2, stkio_w3
         character(len=:), allocatable :: ranked_fname, good_fname, bad_fname
         real,             allocatable :: peakvals(:)
         integer,          allocatable :: order(:)
@@ -1032,20 +1033,28 @@ contains
         call img_pspec%new([params%box,params%box,1], params%smpd)
         allocate(peakvals(params%nptcls), order(params%nptcls))
         call fopen(funit, file='power_spectrum_stats.txt', status='replace')
+        call stkio_r%open(trim(params%stk),                  params%smpd, 'read')
+        call stkio_w1%open('pspecs.mrc',                     params%smpd, 'write', box=params%box)
+        call stkio_w2%open('pspecs_graphene_msk.mrc',        params%smpd, 'write', box=params%box)
+        call stkio_w3%open('pspecs_graphene_msk_nlmean.mrc', params%smpd, 'write', box=params%box)
         do i=1,params%nptcls
             call progress(i,params%nptcls)
-            call img%read(params%stk, i)
+            call stkio_r%read(i, img)
             call img%norm
             call img%mask(mskrad, 'soft')
             call img%img2spec('sqrt', params%lp_backgr, img_pspec)
-            call img_pspec%write('pspecs.mrc', i)
+            call stkio_w1%write(i, img_pspec)
             call img_pspec%mul(graphene_mask)
-            call img_pspec%write('pspecs_graphene_msk.mrc', i)
+            call stkio_w2%write(i, img_pspec)
             call img_pspec%nlmean
-            call img_pspec%write('pspecs_graphene_msk_nlmean.mrc', i)
+            call stkio_w3%write(i, img_pspec)
             call img_pspec%stats(ave, sdev, peakvals(i), minv)
             write(funit, '(A,1X,F7.3,1X,F7.3,1X,F7.3,1X,F7.3)') 'AVE/SDEV/MAXV/MINV: ', ave, sdev, peakvals(i), minv
         end do
+        call stkio_r%close
+        call stkio_w1%close
+        call stkio_w2%close
+        call stkio_w3%close
         call fclose(funit)
         ! write ranked cavgs
         order = (/(i,i=1,params%nptcls)/)
@@ -1082,7 +1091,7 @@ contains
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir','yes')
         call params%new(cline)
         ! set radius for hard mask of binary image
-        if(cline%defined('mskdiam') )  then
+        if( cline%defined('mskdiam') ) then
             msk_rad = params%msk
         else
             msk_rad = 0.45*params%box
