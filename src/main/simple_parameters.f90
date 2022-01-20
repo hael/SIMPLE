@@ -1201,9 +1201,11 @@ contains
         if( cline%defined('mskdiam') )then
             self%msk = round2even((self%mskdiam / self%smpd) / 2.)
             if( self%msk > msk_default )then
-                if( msk_default > 0. ) THROW_WARN('Mask diameter too large, falling back on default value')
-                self%mskdiam = mskdiam_default
-                self%msk     = msk_default
+                if( msk_default > 0. )then
+                    THROW_WARN('Mask diameter too large, falling back on default value')
+                    self%mskdiam = mskdiam_default
+                    self%msk     = msk_default
+                endif
             endif
         else
             self%mskdiam = mskdiam_default
