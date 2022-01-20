@@ -1160,18 +1160,24 @@ contains
     end subroutine exec_rank_cavgs
 
     subroutine exec_cluster_cavgs( self, cline )
-        use simple_polarizer, only: polarizer
+        use simple_polarizer,     only: polarizer
+        use simple_class_frcs,    only: class_frcs
+        use simple_tvfilter,      only: tvfilter
+        use simple_estimate_ssnr, only: fsc2optlp_sub
         use simple_cluster_cavgs
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)             :: params
         type(sp_project)             :: spproj
+        type(class_frcs)             :: clsfrcs
+        type(tvfilter)               :: tvfilt
         type(polarizer), allocatable :: cavg_imgs(:)
-        character(len=:),allocatable :: cavgsstk, classname
+        character(len=:),allocatable :: cavgsstk, classname, frcs_fname
         integer,         allocatable :: centers(:), labels(:), cntarr(:)
-        real,            allocatable :: states(:), rtmparr(:), orig_cls_inds(:)
-        integer :: ncls, n, ldim(3), ncls_sel, i, icls, ncls_aff_prop
+        real,            allocatable :: states(:), orig_cls_inds(:), frc(:), filter(:)
+        integer :: ncls, n, ldim(3), ncls_sel, i, icls, ncls_aff_prop, cnt, filtsz
         real    :: smpd
+        logical :: l_apply_optlp
         ! defaults
         call cline%set('match_filt', 'no')
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
@@ -1189,34 +1195,60 @@ contains
         params%smpd = smpd
         ! get state flag array
         states = spproj%os_cls2D%get_all('state')
-        ! get ncls from ptcl2D field
-        n = spproj%os_ptcl2D%get_n('class')
-        if( n /= ncls ) THROW_HARD('Incosistent # classes in ptcl2D field of spproj vs cavgs stack; exec_cluster_cavgs')
         ! find out how many selected class averages
         ncls_sel = count(states > 0.5)
-        ! make class index array for the original classes excluding state=0 ones
-        rtmparr = spproj%os_cls2D%get_all('class')
-        if( allocated(rtmparr) )then
-            orig_cls_inds = pack(rtmparr, mask=states > 0.5)
-            deallocate(rtmparr)
+        ! get FRCs
+        l_apply_optlp = .false.
+        call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
+        if( file_exists(frcs_fname) )then
+            call clsfrcs%read(frcs_fname)
+            l_apply_optlp = .true.
         endif
-        ! allocate polarizer images and read
-        allocate(cavg_imgs(ncls_sel))
-        do i=1,ncls_sel
-            call cavg_imgs(i)%new(ldim, smpd, wthreads=.false.)
-            icls = nint(orig_cls_inds(i))
-            call cavg_imgs(i)%read(cavgsstk, icls)
+        ! create the stuff needed in the loop
+        call tvfilt%new
+        filtsz = clsfrcs%get_filtsz()
+        allocate(cavg_imgs(ncls_sel), frc(filtsz), filter(filtsz))
+        cnt = 0
+        do i = 1 , ncls
+            if( states(i) > 0.5 )then
+                cnt = cnt + 1
+            else
+                cycle
+            endif
+            call cavg_imgs(cnt)%new(ldim, smpd, wthreads=.false.)
+            call cavg_imgs(cnt)%read(cavgsstk, i)
+            ! FRC-based filter
+            ! if( l_apply_optlp )then
+            !     call clsfrcs%frc_getter(i, params%hpind_fsc, params%l_phaseplate, frc)
+            !     if( any(frc > 0.143) )then
+            !         call fsc2optlp_sub(clsfrcs%get_filtsz(), frc, filter)
+            !         call cavg_imgs(cnt)%fft()
+            !         call cavg_imgs(cnt)%apply_filter_serial(filter)
+            !         call cavg_imgs(cnt)%ifft()
+            !     endif
+            ! endif
+            ! TV regularization
+            ! call tvfilt%apply_filter(cavg_imgs(cnt), params%lambda)
+            ! normalization
+            call cavg_imgs(cnt)%norm
+            ! mask
+            call cavg_imgs(cnt)%mask(params%msk, 'soft')
         end do
-        ! rotationally invariant clustering of class averages with affinity propagation
-        call cluster_cavgs(cavg_imgs, centers, labels)
+        call tvfilt%kill
+        ! common lines-based clustering of class averages with affinity propagation
+        call cluster_cavgs_comlin(cavg_imgs, centers, labels)
         ncls_aff_prop = size(centers)
         write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION: ', ncls_aff_prop
         allocate(cntarr(ncls_aff_prop), source=0)
         ! read back the original (unprocessed) images
-        do i=1,ncls_sel
-            call cavg_imgs(i)%new(ldim, smpd, wthreads=.false.)
-            icls = nint(orig_cls_inds(i))
-            call cavg_imgs(i)%read(cavgsstk, icls)
+        cnt = 0
+        do i = 1 , ncls
+            if( states(i) > 0.5 )then
+                cnt = cnt + 1
+            else
+                cycle
+            endif
+            call cavg_imgs(cnt)%read(cavgsstk, i)
         end do
         ! write the classes
         do icls=1,ncls_aff_prop

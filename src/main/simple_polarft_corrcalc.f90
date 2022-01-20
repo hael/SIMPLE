@@ -14,28 +14,28 @@ private
 ! the fftw_arrs data structures are needed for thread-safe FFTW exec. Letting OpenMP copy out the per-threads
 ! arrays leads to bugs because of inconsistency between data in memory and the fftw_plan
 type fftw_carr
-    type(c_ptr)                            :: p_re                      !< pointer for C-style allocation
-    type(c_ptr)                            :: p_im                      !< -"-
-    real(kind=c_float),            pointer :: re(:) => null()           !< corresponding Fortran pointers
-    complex(kind=c_float_complex), pointer :: im(:) => null()           !< -"-
+    type(c_ptr)                            :: p_re                       !< pointer for C-style allocation
+    type(c_ptr)                            :: p_im                       !< -"-
+    real(kind=c_float),            pointer :: re(:) => null()            !< corresponding Fortran pointers
+    complex(kind=c_float_complex), pointer :: im(:) => null()            !< -"-
 end type fftw_carr
 
 type fftw_carr_fft
-    type(c_ptr)                            :: p_re                      !< pointer for C-style allocation
-    type(c_ptr)                            :: p_im                      !< -"-
-    complex(kind=c_float_complex), pointer :: re(:) => null()           !< corresponding Fortran pointers
-    complex(kind=c_float_complex), pointer :: im(:) => null()           !< -"-
+    type(c_ptr)                            :: p_re                       !< pointer for C-style allocation
+    type(c_ptr)                            :: p_im                       !< -"-
+    complex(kind=c_float_complex), pointer :: re(:) => null()            !< corresponding Fortran pointers
+    complex(kind=c_float_complex), pointer :: im(:) => null()            !< -"-
 end type fftw_carr_fft
 
 type fftw_arrs
-    type(c_ptr)                            :: p_ref_re                  !< pointer for C-style allocation
-    type(c_ptr)                            :: p_ref_im                  !< -"-
-    type(c_ptr)                            :: p_ref_fft_re              !< -"-
-    type(c_ptr)                            :: p_ref_fft_im              !< -"-
-    type(c_ptr)                            :: p_ref_fft_re_2            !< -"-
-    type(c_ptr)                            :: p_ref_fft_im_2            !< -"-
-    type(c_ptr)                            :: p_product_fft             !< -"-
-    type(c_ptr)                            :: p_backtransf              !< -"-
+    type(c_ptr)                            :: p_ref_re                   !< pointer for C-style allocation
+    type(c_ptr)                            :: p_ref_im                   !< -"-
+    type(c_ptr)                            :: p_ref_fft_re               !< -"-
+    type(c_ptr)                            :: p_ref_fft_im               !< -"-
+    type(c_ptr)                            :: p_ref_fft_re_2             !< -"-
+    type(c_ptr)                            :: p_ref_fft_im_2             !< -"-
+    type(c_ptr)                            :: p_product_fft              !< -"-
+    type(c_ptr)                            :: p_backtransf               !< -"-
     real(kind=c_float),            pointer :: ref_re(:)       => null()  !< corresponding Fortran pointers
     complex(kind=c_float_complex), pointer :: ref_im(:)       => null()  !< -"-
     complex(kind=c_float_complex), pointer :: ref_fft_re(:)   => null()  !< -"-
@@ -47,60 +47,60 @@ type fftw_arrs
 end type fftw_arrs
 
 type heap_vars
-    complex(sp), pointer :: pft_ref(:,:)        => null()
-    complex(sp), pointer :: pft_ref_tmp(:,:)    => null()
-    complex(sp), pointer :: pft_dref(:,:,:)     => null()
-    real,        pointer :: corrs_over_k(:)     => null()
-    real(dp),    pointer :: argvec(:)           => null()
-    complex(sp), pointer :: shmat(:,:)          => null()
-    real,        pointer :: kcorrs(:)           => null()
-    complex(dp), pointer :: pft_ref_8(:,:)      => null()
-    complex(dp), pointer :: pft_ref_tmp_8(:,:)  => null()
-    complex(dp), pointer :: pft_dref_8(:,:,:)   => null()
-    complex(dp), pointer :: shvec(:)            => null()
-    complex(dp), pointer :: shmat_8(:,:)        => null()
-    real(dp),    pointer :: argmat_8(:,:)       => null()
-    real(dp),    pointer :: fdf_y_8(:)          => null()
-    real(dp),    pointer :: fdf_T1_8(:,:)       => null()
-    real(dp),    pointer :: fdf_T2_8(:,:)       => null()
+    complex(sp), pointer :: pft_ref(:,:)       => null()
+    complex(sp), pointer :: pft_ref_tmp(:,:)   => null()
+    complex(sp), pointer :: pft_dref(:,:,:)    => null()
+    real,        pointer :: corrs_over_k(:)    => null()
+    real(dp),    pointer :: argvec(:)          => null()
+    complex(sp), pointer :: shmat(:,:)         => null()
+    real,        pointer :: kcorrs(:)          => null()
+    complex(dp), pointer :: pft_ref_8(:,:)     => null()
+    complex(dp), pointer :: pft_ref_tmp_8(:,:) => null()
+    complex(dp), pointer :: pft_dref_8(:,:,:)  => null()
+    complex(dp), pointer :: shvec(:)           => null()
+    complex(dp), pointer :: shmat_8(:,:)       => null()
+    real(dp),    pointer :: argmat_8(:,:)      => null()
+    real(dp),    pointer :: fdf_y_8(:)         => null()
+    real(dp),    pointer :: fdf_T1_8(:,:)      => null()
+    real(dp),    pointer :: fdf_T2_8(:,:)      => null()
 end type heap_vars
 
 type :: polarft_corrcalc
     private
-    integer                          :: nptcls     = 1        !< the total number of particles in partition (logically indexded [fromp,top])
-    integer                          :: nrefs      = 1        !< the number of references (logically indexded [1,nrefs])
-    integer                          :: nrots      = 0        !< number of in-plane rotations for one pft (determined by radius of molecule)
-    integer                          :: pftsz      = 0        !< size of reference and particle pft (nrots/2)
-    integer                          :: pfromto(2) = 0        !< particle index range
-    integer                          :: winsz      = 0        !< size of moving window in correlation calculations
-    integer                          :: ldim(3)    = 0        !< logical dimensions of original cartesian image
-    integer,             allocatable :: pinds(:)              !< index array (to reduce memory when frac_update < 1)
-    real,                allocatable :: pxls_p_shell(:)       !< number of (cartesian) pixels per shell
-    real(sp),            allocatable :: sqsums_ptcls(:)       !< memoized square sums for the correlation calculations (taken from kfromto(1):kstop)
-    real(sp),            allocatable :: angtab(:)             !< table of in-plane angles (in degrees)
-    real(dp),            allocatable :: argtransf(:,:)        !< argument transfer constants for shifting the references
-    real(sp),            allocatable :: polar(:,:)            !< table of polar coordinates (in Cartesian coordinates)
-    real(sp),            allocatable :: ctfmats(:,:,:)        !< expand set of CTF matrices (for efficient parallel exec)
-    real(sp),            allocatable :: ref_optlp(:,:)        !< references optimal filter
-    real(dp),            allocatable :: argtransf_shellone(:)  !< one dimensional argument transfer constants (shell k=1) for shifting the references
-    complex(sp),         allocatable :: pfts_refs_even(:,:,:) !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
-    complex(sp),         allocatable :: pfts_refs_odd(:,:,:)  !< -"-, odd
-    complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:) !< derivatives w.r.t. orientation angles of 3D complex matrices
-    complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)  !< derivatives w.r.t. orientation angles of 3D complex matrices
-    complex(sp),         allocatable :: pfts_ptcls(:,:,:)     !< 3D complex matrix of particle sections
-    complex(sp),         allocatable :: fft_factors(:)        !< phase factors for accelerated gencorrs routines
-    type(fftw_arrs),     allocatable :: fftdat(:)             !< arrays for accelerated gencorrs routines
-    type(fftw_carr_fft), allocatable :: fftdat_ptcls(:,:)     !< for memoization of particle  FFTs in accelerated gencorrs routines
-    type(fftw_carr),     allocatable :: fft_carray(:)         !< for on-the-fly memoization of particle  FFTs
-    logical,             allocatable :: iseven(:)             !< eo assignment for gold-standard FSC
-    real,                pointer     :: sigma2_noise(:,:)    => null() !< for euclidean distances
-    type(c_ptr)                      :: plan_fwd_1            !< FFTW plans for gencorrs
-    type(c_ptr)                      :: plan_fwd_2            !< -"-
-    type(c_ptr)                      :: plan_bwd              !< -"-
-    logical                          :: l_clsfrcs   = .false. !< CLS2D/3DRefs flag
-    logical                          :: with_ctf    = .false. !< CTF flag
-    logical                          :: existence   = .false. !< to indicate existence
-    type(heap_vars),     allocatable :: heap_vars(:)          !< allocated fields to save stack allocation in subroutines and functions
+    integer                          :: nptcls     = 1              !< the total number of particles in partition (logically indexded [fromp,top])
+    integer                          :: nrefs      = 1              !< the number of references (logically indexded [1,nrefs])
+    integer                          :: nrots      = 0              !< number of in-plane rotations for one pft (determined by radius of molecule)
+    integer                          :: pftsz      = 0              !< size of reference and particle pft (nrots/2)
+    integer                          :: pfromto(2) = 0              !< particle index range
+    integer                          :: winsz      = 0              !< size of moving window in correlation calculations
+    integer                          :: ldim(3)    = 0              !< logical dimensions of original cartesian image
+    integer,             allocatable :: pinds(:)                    !< index array (to reduce memory when frac_update < 1)
+    real,                allocatable :: pxls_p_shell(:)             !< number of (cartesian) pixels per shell
+    real(sp),            allocatable :: sqsums_ptcls(:)             !< memoized square sums for the correlation calculations (taken from kfromto(1):kstop)
+    real(sp),            allocatable :: angtab(:)                   !< table of in-plane angles (in degrees)
+    real(dp),            allocatable :: argtransf(:,:)              !< argument transfer constants for shifting the references
+    real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
+    real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
+    real(sp),            allocatable :: ref_optlp(:,:)              !< references optimal filter
+    real(dp),            allocatable :: argtransf_shellone(:)       !< one dimensional argument transfer constants (shell k=1) for shifting the references
+    complex(sp),         allocatable :: pfts_refs_even(:,:,:)       !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
+    complex(sp),         allocatable :: pfts_refs_odd(:,:,:)        !< -"-, odd
+    complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
+    complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)     !< derivatives w.r.t. orientation angles of 3D complex matrices
+    complex(sp),         allocatable :: pfts_ptcls(:,:,:)           !< 3D complex matrix of particle sections
+    complex(sp),         allocatable :: fft_factors(:)              !< phase factors for accelerated gencorrs routines
+    type(fftw_arrs),     allocatable :: fftdat(:)                   !< arrays for accelerated gencorrs routines
+    type(fftw_carr_fft), allocatable :: fftdat_ptcls(:,:)           !< for memoization of particle  FFTs in accelerated gencorrs routines
+    type(fftw_carr),     allocatable :: fft_carray(:)               !< for on-the-fly memoization of particle  FFTs
+    logical,             allocatable :: iseven(:)                   !< eo assignment for gold-standard FSC
+    real,                pointer     :: sigma2_noise(:,:) => null() !< for euclidean distances
+    type(c_ptr)                      :: plan_fwd_1                  !< FFTW plans for gencorrs
+    type(c_ptr)                      :: plan_fwd_2                  !< -"-
+    type(c_ptr)                      :: plan_bwd                    !< -"-
+    logical                          :: l_clsfrcs = .false.         !< CLS2D/3DRefs flag
+    logical                          :: with_ctf  = .false.         !< CTF flag
+    logical                          :: existence = .false.         !< to indicate existence
+    type(heap_vars),     allocatable :: heap_vars(:)                !< allocated fields to save stack allocation in subroutines and functions
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -168,6 +168,7 @@ type :: polarft_corrcalc
     procedure, private :: calc_euclidk_for_rot
     procedure, private :: gencorrs_cc_1
     procedure, private :: gencorrs_cc_2
+    procedure          :: genmaxcorr_comlin
     procedure, private :: gencorrs_euclid_1
     procedure, private :: gencorrs_euclid_2
     procedure, private :: gencorrs_1
@@ -1410,6 +1411,30 @@ contains
         call self%calc_corrs_over_k(pft_ref, self%pinds(iptcl), [params_glob%kfromto(1),params_glob%kstop], corrs_over_k)
         cc = corrs_over_k  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
     end subroutine gencorrs_cc_2
+
+    function genmaxcorr_comlin( self, ieven, jeven ) result( cc_max )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: ieven, jeven
+        complex(sp), pointer :: pft_ref_i(:,:), pft_ref_j(:,:)
+        real     :: sqsum_i, sqsum_j, cc, cc_max
+        integer  :: ithr, i, j
+        ithr      =       omp_get_thread_num() + 1
+        pft_ref_i =>      self%heap_vars(ithr)%pft_ref
+        pft_ref_j =>      self%heap_vars(ithr)%pft_ref_tmp
+        pft_ref_i =       self%pfts_refs_even(:,:,ieven)
+        pft_ref_j = conjg(self%pfts_refs_even(:,:,jeven))
+        ! no CTF to worry about since this is intended for class avgs
+        cc_max = -1.
+        do i = 1, self%pftsz
+            sqsum_i = sum(csq_fast(pft_ref_i(i,params_glob%kfromto(1):params_glob%kstop)))
+            do j = 1, self%pftsz
+                sqsum_j = sum(csq_fast(pft_ref_j(j,params_glob%kfromto(1):params_glob%kstop)))
+                cc      = sum( pft_ref_i(i,params_glob%kfromto(1):params_glob%kstop) *&
+                               pft_ref_j(j,params_glob%kfromto(1):params_glob%kstop) ) / sqrt(sqsum_i * sqsum_j)
+                if( cc > cc_max ) cc_max = cc
+            end do
+        end do
+    end function genmaxcorr_comlin
 
     subroutine gencorrs_euclid_1( self, iref, iptcl, euclids )
         class(polarft_corrcalc), intent(inout) :: self
