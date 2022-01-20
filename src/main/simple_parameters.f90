@@ -258,7 +258,8 @@ type :: parameters
     integer :: kstop=0
     integer :: ldim(3)=0
     integer :: lp_iters=1          !< # iters low-pass limited refinement
-    integer :: maxits=500          !< maximum # iterations
+    integer :: maxits=100          !< maximum # iterations
+    integer :: maxits_between=30   !< maximum # iterations in between model building steps
     integer :: maxp=0
     integer :: minp=10             !< minimum cluster population
     integer :: mrcmode=2
@@ -366,6 +367,7 @@ type :: parameters
     real    :: frac=1.             !< fraction of ptcls(0-1){1}
     real    :: fraca=0.1           !< fraction of amplitude contrast used for fitting CTF{0.1}
     real    :: fracdeadhot=0.05    !< fraction of dead or hot pixels{0.01}
+    real    :: fracsrch=0.9        !< fraction of serach space scanned for convergence
     real    :: frac_outliers=0.
     real    :: fraczero=0.
     real    :: ftol=1e-6
@@ -396,6 +398,7 @@ type :: parameters
     real    :: mw=0.               !< molecular weight(in kD)
     real    :: ndev=2.0            !< # deviations in one-cluster clustering
     real    :: nsig=2.5            !< # sigmas
+    real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
     real    :: scale=1.            !< image scale factor{1}
@@ -690,6 +693,7 @@ contains
         call check_iarg('jumpsz',         self%jumpsz)
         call check_iarg('lp_iters',       self%lp_iters)
         call check_iarg('maxits',         self%maxits)
+        call check_iarg('maxits_between', self%maxits_between)
         call check_iarg('maxp',           self%maxp)
         call check_iarg('minp',           self%minp)
         call check_iarg('mrcmode',        self%mrcmode)
@@ -782,6 +786,7 @@ contains
         call check_rarg('frac',           self%frac)
         call check_rarg('fraca',          self%fraca)
         call check_rarg('fracdeadhot',    self%fracdeadhot)
+        call check_rarg('fracsrch',       self%fracsrch)
         call check_rarg('frac_outliers',  self%frac_outliers)
         call check_rarg('fraczero',       self%fraczero)
         call check_rarg('ftol',           self%ftol)
@@ -807,6 +812,7 @@ contains
         call check_rarg('mw',             self%mw)
         call check_rarg('ndev',           self%ndev)
         call check_rarg('nsig',           self%nsig)
+        call check_rarg('overlap',        self%overlap)
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('power',          self%power)
         call check_rarg('scale',          self%scale)

@@ -795,8 +795,8 @@ contains
         type(parameters)              :: params
         type(refine3D_nano_commander) :: xrefine3D_nano
         type(detect_atoms_commander)  :: xdetect_atms
-        integer,          parameter :: MOD_BLD_FREQ = 5 ! run 10 iters on the starting model
-        integer,          parameter :: MAXITS       = 7 !
+        integer,          parameter :: MAXITS_BETWEEN = 30 ! run maximum 30 iters on the starting model (should converge long before)
+        integer,          parameter :: MAXITS         = 5  ! run 5 iterations overall
         character(len=*), parameter :: RECVOL   = 'recvol_state01.mrc'
         character(len=*), parameter :: SIMVOL   = 'recvol_state01_SIM.mrc'
         character(len=*), parameter :: ATOMS    = 'recvol_state01_ATMS.pdb'
@@ -820,7 +820,8 @@ contains
         cline_detect_atms   = cline
         ! then update cline_refine3D_nano accordingly
         call cline_refine3D_nano%set('prg',     'refine3D_nano')        ! need to know which program to run
-        call cline_refine3D_nano%set('maxits',   real(MOD_BLD_FREQ))    ! need to know how many iterations before building atomic model
+
+        call cline_refine3D_nano%set('maxits',   real(MAXITS_BETWEEN))  ! need to know how many iterations before building atomic model
         call cline_refine3D_nano%set('projfile', trim(params%projfile)) ! since we are not making directories (non-standard execution) we better keep track of project file
         call cline_refine3D_nano%set('keepvol',  'yes')                 ! set to 'no' if not to fill-up the root refinement directory, but 'yes' for now
         ! then update cline_detect_atoms accordingly
@@ -882,7 +883,7 @@ contains
         call del_file(BINARY)
         call del_file(CCS)
         call del_file(MSK)
-        call del_file(SPLITTED) 
+        call del_file(SPLITTED)
     end subroutine exec_autorefine3D_nano
 
     subroutine exec_refine3D_nano( self, cline )
