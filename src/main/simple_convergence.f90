@@ -40,7 +40,7 @@ contains
         real,               intent(in)    :: msk
         real,    allocatable :: updatecnts(:)
         logical, allocatable :: mask(:)
-        real    :: avg_updatecnt
+        real    :: avg_updatecnt, overlap_lim, fracsrch_lim
         logical :: converged, chk4conv
         601 format(A,1X,F8.3)
         604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
@@ -91,12 +91,26 @@ contains
             ! determine convergence
             if( ncls > 1 )then
                 converged = .false.
+                ! set limits for convergence
                 if( (params_glob%l_frac_update) .or. (params_glob%stream.eq.'yes') )then
-                    converged = ( self%mi_class > OVERLAP_2D_FRAC .and. self%frac_srch%avg > FRACSRCHSPACE_FRAC )
+                    overlap_lim  = OVERLAP_2D_FRAC
+                    fracsrch_lim = FRACSRCHSPACE_FRAC
                 else if( trim(params_glob%tseries) .eq. 'yes' )then
-                    converged = self%mi_class > OVERLAP_2D_NANO
+                    overlap_lim  = OVERLAP_2D_NANO
                 else
-                    converged = ( self%mi_class > OVERLAP_2D .and. self%frac_srch%avg > FRACSRCHSPACE_2D )
+                    overlap_lim  = OVERLAP_2D
+                    fracsrch_lim = FRACSRCHSPACE_2D
+                endif
+                ! override if present on command line
+                if( cline%defined('overlap')  ) overlap_lim  = cline%get_rarg('overlap')
+                if( cline%defined('fracsrch') ) fracsrch_lim = cline%get_rarg('fracsrch')
+                ! test for convergence
+                if( (params_glob%l_frac_update) .or. (params_glob%stream.eq.'yes') )then
+                    converged = ( self%mi_class > overlap_lim .and. self%frac_srch%avg > fracsrch_lim )
+                else if( trim(params_glob%tseries) .eq. 'yes' )then
+                    converged = self%mi_class > overlap_lim
+                else
+                    converged = ( self%mi_class > overlap_lim .and. self%frac_srch%avg > fracsrch_lim )
                 endif
                 if( params_glob%refine.eq.'inpl' )then
                     converged = self%dist_inpl%avg < 0.02
@@ -135,7 +149,7 @@ contains
         real,               intent(in)    :: msk
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), pws(:)
         logical, allocatable :: mask(:)
-        real    :: min_state_mi_joint, avg_updatecnt, percen_nonzero_pw
+        real    :: min_state_mi_joint, avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim
         logical :: converged
         integer :: iptcl, istate
         601 format(A,1X,F8.3)
@@ -186,9 +200,15 @@ contains
                 params_glob%l_doshift = .true.
             endif
         endif
+        ! set limits for convergence
+        overlap_lim  = OVERLAP_3D
+        fracsrch_lim = FRACSRCHSPACE_3D
+        ! override if present on command line
+        if( cline%defined('overlap')  ) overlap_lim  = cline%get_rarg('overlap')
+        if( cline%defined('fracsrch') ) fracsrch_lim = cline%get_rarg('fracsrch')
         ! determine convergence
         if( params_glob%nstates == 1 )then
-            if( self%frac_srch%avg > FRACSRCHSPACE_3D .and. self%mi_proj  > OVERLAP_3D )then
+            if( self%frac_srch%avg > fracsrch_lim .and. self%mi_proj  > overlap_lim )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else
@@ -219,7 +239,7 @@ contains
             end do
             if( min_state_mi_joint > OVERLAP_STATE_JOINT .and.&
                 self%mi_state      > OVERLAP_STATE       .and.&
-                self%frac_srch%avg > FRACSRCHSPACE_3D        )then
+                self%frac_srch%avg > fracsrch_lim        )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else
