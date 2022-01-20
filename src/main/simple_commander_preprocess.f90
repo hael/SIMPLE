@@ -11,6 +11,7 @@ use simple_ori,            only: ori
 use simple_oris,           only: oris
 use simple_sp_project,     only: sp_project
 use simple_qsys_env,       only: qsys_env
+use simple_stack_io,       only: stack_io
 use simple_qsys_funs
 implicit none
 
@@ -1744,6 +1745,7 @@ contains
         type(ctf)                               :: tfun
         type(ctfparams)                         :: ctfparms
         type(ctf_estimate_fit)                  :: ctffit
+        type(stack_io)                          :: stkio_w
         character(len=:),           allocatable :: output_dir, mic_name, imgkind
         real,                       allocatable :: boxdata(:,:)
         logical,                    allocatable :: oris_mask(:), mics_mask(:)
@@ -1935,8 +1937,9 @@ contains
                 stk_stats(1)   = huge(stk_stats(1))
                 stk_stats(2)   = -stk_stats(1)
                 stk_stats(3:4) = 0.
-                cnt_stats = 0
-                cnt       = 0
+                cnt_stats      = 0
+                cnt            = 0
+                call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=params%box)
                 do iptcl=1,nptcls ! loop over boxes
                     if( oris_mask(iptcl) )then
                         cnt = cnt + 1
@@ -1956,9 +1959,10 @@ contains
                             stk_stats(4) = stk_stats(4) + sddevv**2.
                         endif
                         ! write
-                        call build%img%write(trim(adjustl(stack)), cnt)
+                        call stkio_w%write(cnt, build%img)
                     endif
                 end do
+                call stkio_w%close
                 stk_stats(3) = stk_stats(3) / real(cnt_stats)
                 stk_stats(4) = sqrt(stk_stats(4) / real(cnt_stats))
                 call build%img%update_header_stats(trim(adjustl(stack)), stk_stats)
@@ -2187,7 +2191,7 @@ contains
     end subroutine exec_reextract_distr
 
     subroutine exec_reextract( self, cline )
-        use simple_ctf,   only: ctf
+        use simple_ctf, only: ctf
         class(reextract_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline !< command line input
         type(parameters)              :: params
@@ -2196,6 +2200,7 @@ contains
         type(ori)                     :: o_mic, o_stk
         type(ctf)                     :: tfun
         type(ctfparams)               :: ctfparms
+        type(stack_io)                :: stkio_w
         character(len=:), allocatable :: mic_name, imgkind
         logical,          allocatable :: pmsk(:,:,:), mic_mask(:), ptcl_mask(:)
         integer,          allocatable :: mic2stk_inds(:)
@@ -2312,6 +2317,7 @@ contains
                 stk_stats(1)   = huge(stk_stats(1))
                 stk_stats(2)   = -stk_stats(1)
                 stk_stats(3:4) = 0.
+                call stkio_w%open(trim(adjustl(stack)), params%smpd, 'write', box=params%box)
                 do iptcl=fromp,top
                     if( spproj_in%os_ptcl2D%get_state(iptcl) == 0 ) cycle
                     if( spproj_in%os_ptcl3D%get_state(iptcl) == 0 ) cycle
@@ -2349,7 +2355,7 @@ contains
                         if( params%pcontrast .eq. 'black' ) call img%neg()
                         call img%subtr_backgr_ramp(pmsk)
                         call img%noise_norm(pmsk, sdev_noise)
-                        call img%write(trim(adjustl(stack)), nptcls)
+                        call stkio_w%write(nptcls, img)
                         ! keep track of stats
                         call img%stats(meanv, sddevv, maxv, minv, errout=l_err)
                         if( .not.l_err )then
@@ -2365,6 +2371,7 @@ contains
                         call spproj_in%os_ptcl3D%set(iptcl,'state',0.)
                     endif
                 enddo
+                call stkio_w%close
                 if( nptcls == 0 )then
                     ! all particles in this micrograph excluded
                     call spproj_in%os_stk%set(stk_ind,'state',0.)
@@ -2434,6 +2441,7 @@ contains
                 inside = .true.        ! box is inside
                 if( any(fromc < 1) .or. toc(1) > ildim(1) .or. toc(2) > ildim(2) ) inside = .false.
             end function box_inside
+
     end subroutine exec_reextract
 
     subroutine exec_pick_extract( self, cline )
@@ -2527,6 +2535,7 @@ contains
         class(make_pickrefs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)              :: params
+        type(stack_io)                :: stkio_r, stkio_w
         type(oris)                    :: os
         type(sym)                     :: pgrpsyms
         type(image)                   :: ref3D, ref2D
@@ -2571,11 +2580,13 @@ contains
             if( smpd_here < 0.01 ) THROW_HARD('Invalid sampling distance for the cavgs (should be in MRC format)')
             ldim_here(3) = 1
             allocate( projs(ncavgs) )
+            call stkio_r%open(params%refs, params%smpd, 'read', bufsz=ncavgs)
             do icavg=1,ncavgs
                 call projs(icavg)%new(ldim_here, smpd_here)
-                call projs(icavg)%read(params%refs, icavg)
+                call stkio_r%read(icavg, projs(icavg))
                 call scale_ref(projs(icavg), params%smpd)
             end do
+            call stkio_r%close
             nrots  = nint( real(NREFS)/real(ncavgs) )
             norefs = ncavgs
         else
@@ -2606,6 +2617,7 @@ contains
         ! end gracefully
         call simple_touch('MAKE_PICKREFS_FINISHED', errmsg='In: commander_preprocess::exec_make_pickrefs')
         call simple_end('**** SIMPLE_MAKE_PICKREFS NORMAL STOP ****')
+
         contains
 
             subroutine scale_ref(refimg, smpd_target)

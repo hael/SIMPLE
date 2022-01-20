@@ -92,11 +92,11 @@ contains
             if( ncls > 1 )then
                 converged = .false.
                 if( (params_glob%l_frac_update) .or. (params_glob%stream.eq.'yes') )then
-                    converged = ( self%mi_class > MI_CLASS_LIM_2D_FRAC .and. self%frac_srch%avg > FRAC_LIM_FRAC )
+                    converged = ( self%mi_class > OVERLAP_2D_FRAC .and. self%frac_srch%avg > FRACSRCHSPACE_FRAC )
                 else if( trim(params_glob%tseries) .eq. 'yes' )then
-                    converged = self%mi_class > MI_CLASS_LIM_2D_NANO
+                    converged = self%mi_class > OVERLAP_2D_NANO
                 else
-                    converged = ( self%mi_class > MI_CLASS_LIM_2D .and. self%frac_srch%avg > FRAC_LIM_2D )
+                    converged = ( self%mi_class > OVERLAP_2D .and. self%frac_srch%avg > FRACSRCHSPACE_2D )
                 endif
                 if( params_glob%refine.eq.'inpl' )then
                     converged = self%dist_inpl%avg < 0.02
@@ -188,7 +188,7 @@ contains
         endif
         ! determine convergence
         if( params_glob%nstates == 1 )then
-            if( self%frac_srch%avg > FRAC_LIM_3D .and. self%mi_proj  > MI_CLASS_LIM_3D )then
+            if( self%frac_srch%avg > FRACSRCHSPACE_3D .and. self%mi_proj  > OVERLAP_3D )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else
@@ -217,9 +217,9 @@ contains
                 write(logfhandle,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I8)') '>>> STATE', istate,&
                 'JOINT DISTRIBUTION OVERLAP:', state_mi_joint(istate), 'POPULATION:', nint(statepops(istate))
             end do
-            if( min_state_mi_joint > MI_STATE_JOINT_LIM .and.&
-                self%mi_state      > MI_STATE_LIM       .and.&
-                self%frac_srch%avg > FRAC_LIM_3D        )then
+            if( min_state_mi_joint > OVERLAP_STATE_JOINT .and.&
+                self%mi_state      > OVERLAP_STATE       .and.&
+                self%frac_srch%avg > FRACSRCHSPACE_3D        )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else
@@ -269,8 +269,8 @@ contains
         do istate=1,params_glob%nstates
             write(logfhandle,'(A,I2,1X,A,1X,I8)') '>>> STATE ',istate,'POPULATION:', statepops(istate)
         end do
-        if( self%mi_state > HET_MI_STATE_LIM .and.&
-            self%frac_srch%avg > HET_FRAC_LIM     )then
+        if( self%mi_state > OVERLAP_STATE_HET .and.&
+            self%frac_srch%avg > FRACSRCHSPACE_HET     )then
             write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
             converged = .true.
         else
