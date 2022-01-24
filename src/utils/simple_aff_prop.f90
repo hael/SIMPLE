@@ -53,7 +53,7 @@ contains
         ! calculate similarity characteristics
         call analyze_smat(s, .false., self%Smin, self%Smax)
         ! low pref [0.1,1] leads to small numbers of clusters and
-        ! high pref leads to large numbers of clusters
+        ! high pref leads to large numbers of clusters. Frey suggests Smin - (Smax - Smin) as a threshold for fewer cluster
         ppref = self%Smin
         if( present(pref) ) ppref = pref
         ! remove degeneracies

@@ -1171,12 +1171,14 @@ contains
         type(sp_project)             :: spproj
         type(class_frcs)             :: clsfrcs
         type(tvfilter)               :: tvfilt
+        type(image)                  :: img_msk
         type(polarizer), allocatable :: cavg_imgs(:)
         character(len=:),allocatable :: cavgsstk, classname, frcs_fname
         integer,         allocatable :: centers(:), labels(:), cntarr(:)
         real,            allocatable :: states(:), orig_cls_inds(:), frc(:), filter(:)
+        logical,         allocatable :: l_msk(:,:,:)
         integer :: ncls, n, ldim(3), ncls_sel, i, icls, ncls_aff_prop, cnt, filtsz
-        real    :: smpd
+        real    :: smpd, sdev_noise
         logical :: l_apply_optlp
         ! defaults
         call cline%set('match_filt', 'no')
@@ -1190,7 +1192,7 @@ contains
         call spproj%get_cavgs_stk(cavgsstk, ncls, smpd)
         call find_ldim_nptcls(cavgsstk, ldim, n)
         ldim(3) = 1
-        if( n /= ncls ) THROW_HARD('Incosistent # classes in project file vs cavgs stack; exec_cluster_cavgs')
+        if( n /= ncls ) THROW_HARD('Inconsistent # classes in project file vs cavgs stack; exec_cluster_cavgs')
         ! ensure correct smpd in params class
         params%smpd = smpd
         ! get state flag array
@@ -1208,6 +1210,12 @@ contains
         call tvfilt%new
         filtsz = clsfrcs%get_filtsz()
         allocate(cavg_imgs(ncls_sel), frc(filtsz), filter(filtsz))
+        ! prep mask
+        call img_msk%new([params%box,params%box,1], params%smpd)
+        img_msk = 1.
+        call img_msk%mask(params%msk, 'hard')
+        l_msk = img_msk%bin2logical()
+        call img_msk%kill
         cnt = 0
         do i = 1 , ncls
             if( states(i) > 0.5 )then
@@ -1218,25 +1226,26 @@ contains
             call cavg_imgs(cnt)%new(ldim, smpd, wthreads=.false.)
             call cavg_imgs(cnt)%read(cavgsstk, i)
             ! FRC-based filter
-            ! if( l_apply_optlp )then
-            !     call clsfrcs%frc_getter(i, params%hpind_fsc, params%l_phaseplate, frc)
-            !     if( any(frc > 0.143) )then
-            !         call fsc2optlp_sub(clsfrcs%get_filtsz(), frc, filter)
-            !         call cavg_imgs(cnt)%fft()
-            !         call cavg_imgs(cnt)%apply_filter_serial(filter)
-            !         call cavg_imgs(cnt)%ifft()
-            !     endif
-            ! endif
+            if( l_apply_optlp )then
+                call clsfrcs%frc_getter(i, params%hpind_fsc, params%l_phaseplate, frc)
+                if( any(frc > 0.143) )then
+                    call fsc2optlp_sub(clsfrcs%get_filtsz(), frc, filter)
+                    where( filter > TINY ) filter = sqrt(filter) ! because the filter is applied to the average not the even or odd
+                    call cavg_imgs(cnt)%fft()
+                    call cavg_imgs(cnt)%apply_filter_serial(filter)
+                    call cavg_imgs(cnt)%ifft()
+                endif
+            endif
             ! TV regularization
-            ! call tvfilt%apply_filter(cavg_imgs(cnt), params%lambda)
+            call tvfilt%apply_filter(cavg_imgs(cnt), params%lambda)
             ! normalization
-            call cavg_imgs(cnt)%norm
+            call cavg_imgs(cnt)%noise_norm(l_msk, sdev_noise)
             ! mask
             call cavg_imgs(cnt)%mask(params%msk, 'soft')
         end do
         call tvfilt%kill
         ! common lines-based clustering of class averages with affinity propagation
-        call cluster_cavgs_comlin(cavg_imgs, centers, labels)
+        call cluster_cavgs(cavg_imgs, centers, labels)
         ncls_aff_prop = size(centers)
         write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION: ', ncls_aff_prop
         allocate(cntarr(ncls_aff_prop), source=0)

@@ -169,6 +169,7 @@ type :: polarft_corrcalc
     procedure, private :: gencorrs_cc_1
     procedure, private :: gencorrs_cc_2
     procedure          :: genmaxcorr_comlin
+    procedure          :: genmaxspecscore_comlin
     procedure, private :: gencorrs_euclid_1
     procedure, private :: gencorrs_euclid_2
     procedure, private :: gencorrs_1
@@ -1435,6 +1436,30 @@ contains
             end do
         end do
     end function genmaxcorr_comlin
+
+    function genmaxspecscore_comlin( self, ieven, jeven ) result( specscore_max )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: ieven, jeven
+        complex(sp), pointer :: pft_ref_i(:,:), pft_ref_j(:,:)
+        real     :: specscore, specscore_max, corrs(params_glob%kfromto(1):params_glob%kstop)
+        integer  :: ithr, i, j, k
+        ithr      =       omp_get_thread_num() + 1
+        pft_ref_i =>      self%heap_vars(ithr)%pft_ref
+        pft_ref_j =>      self%heap_vars(ithr)%pft_ref_tmp
+        pft_ref_i =       self%pfts_refs_even(:,:,ieven)
+        pft_ref_j = conjg(self%pfts_refs_even(:,:,jeven))
+        ! no CTF to worry about since this is intended for class avgs
+        specscore_max = -1.
+        do i = 1, self%pftsz
+            do j = 1, self%pftsz
+                do k = params_glob%kfromto(1), params_glob%kstop
+                    corrs(k) = ( pft_ref_i(i,k) * pft_ref_j(j,k) ) / sqrt( csq_fast(pft_ref_i(i,k)) * csq_fast(pft_ref_j(j,k)) )
+                end do
+                specscore = max(0.,median_nocopy(corrs))
+                if( specscore > specscore_max ) specscore_max = specscore
+            end do
+        end do
+    end function genmaxspecscore_comlin
 
     subroutine gencorrs_euclid_1( self, iref, iptcl, euclids )
         class(polarft_corrcalc), intent(inout) :: self
