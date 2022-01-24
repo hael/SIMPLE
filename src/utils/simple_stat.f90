@@ -41,6 +41,8 @@ interface normalize_sigm
     module procedure normalize_sigm_3
 end interface
 
+real, parameter :: NNET_CONST = exp(1.)-1.
+
 contains
 
     ! MOMENTS/NORMALIZATION
@@ -255,52 +257,46 @@ contains
         endif
     end subroutine calc_stats
 
-    !>    is for statistical normalization of an array
     subroutine normalize_1( arr, err )
-        real, intent(inout)  :: arr(:)           !< input data
-        logical, intent(out) :: err              !< error status
+        real, intent(inout)  :: arr(:)
+        logical, intent(out) :: err
         real :: ave, sdev, var
         call moment_1( arr, ave, sdev, var, err )
         if( err ) return
-        arr = (arr-ave)/sdev ! array op
+        arr = (arr-ave)/sdev
     end subroutine normalize_1
 
-    !>    is for statistical normalization of a 2D matrix
     subroutine normalize_2( arr, err )
-        real,    intent(inout)  :: arr(:,:)      !< input data
-        logical, intent(out) :: err              !< error status
+        real,    intent(inout)  :: arr(:,:)
+        logical, intent(out) :: err
         real :: ave, sdev, var
         call moment_2( arr, ave, sdev, var, err )
         if( err ) return
-        arr = (arr-ave)/sdev ! array op
+        arr = (arr-ave)/sdev
     end subroutine normalize_2
 
-    !>    is for statistical normalization of a 3D matrix
     subroutine normalize_3( arr, err )
-        real, intent(inout)  :: arr(:,:,:)       !< input data
-        logical, intent(out) :: err              !< error status
+        real, intent(inout)  :: arr(:,:,:)
+        logical, intent(out) :: err
         real :: ave, sdev, var
         call moment_3( arr, ave, sdev, var, err )
         if( err ) return
-        arr = (arr-ave)/sdev ! array op
+        arr = (arr-ave)/sdev
     end subroutine normalize_3
 
-    !>    is for statistical normalization of an array
     subroutine normalize_4( arr, err, mask )
-        real, intent(inout)  :: arr(:)           !< input data
-        logical, intent(out) :: err              !< error status
-        logical, intent(in)  :: mask(:)          !< logical mask
+        real, intent(inout)  :: arr(:)
+        logical, intent(out) :: err
+        logical, intent(in)  :: mask(:)
         real :: ave, sdev, var
         call moment_4( arr, ave, sdev, var, err, mask )
         if( err ) return
-        where( mask ) arr = (arr-ave)/sdev ! array op
+        where( mask ) arr = (arr-ave)/sdev
     end subroutine normalize_4
 
-    !>    is for sigmoid normalisation [0,1]
     subroutine normalize_sigm_1( arr )
         real, intent(inout) :: arr(:)
         real                :: smin, smax, delta
-        real, parameter     :: NNET_CONST = exp(1.)-1.
         if( size(arr) == 1 )then
             arr(1) = max(0., min(arr(1), 1.))
             return
@@ -319,11 +315,9 @@ contains
         endif
     end subroutine normalize_sigm_1
 
-    !>    is for sigmoid normalisation [0,1]
     subroutine normalize_sigm_2( arr )
-        real, intent(inout) :: arr(:,:) !< input data
+        real, intent(inout) :: arr(:,:)
         real                :: smin, smax, delta
-        real, parameter     :: NNET_CONST = exp(1.)-1.
         ! find minmax
         smin  = minval(arr)
         smax  = maxval(arr)
@@ -338,11 +332,9 @@ contains
         endif
     end subroutine normalize_sigm_2
 
-    !>    is for sigmoid normalisation [0,1]
     subroutine normalize_sigm_3( arr )
-        real, intent(inout) :: arr(:,:,:) !< input data
+        real, intent(inout) :: arr(:,:,:)
         real                :: smin, smax, delta
-        real, parameter     :: NNET_CONST = exp(1.)-1.
         ! find minmax
         smin  = minval(arr)
         smax  = maxval(arr)
@@ -379,9 +371,6 @@ contains
 
     ! CORRELATION
 
-    !>    calculates Pearson's correlation coefficient
-    !! \param x input reference array
-    !! \param y input test array
     function pearsn_1( x, y ) result( r )
         real, intent(in) :: x(:),y(:)
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
@@ -406,9 +395,6 @@ contains
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
     end function pearsn_1
 
-    !>    calculates Pearson's correlation coefficient
-    !! \param x input reference array
-    !! \param y input test array
     function pearsn_serial( x, y ) result( r )
         real, intent(in) :: x(:),y(:)
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
@@ -430,9 +416,6 @@ contains
         r = sxy / sqrt(sxx * syy)
     end function pearsn_serial
 
-    !>    calculates Pearson's correlation coefficient
-    !! \param x input reference array
-    !! \param y input test array
     function pearsn_serial_8( n, x, y ) result( r )
         integer,  intent(in) :: n
         real(dp), intent(in) :: x(:),y(:)
@@ -457,9 +440,6 @@ contains
         if( prod > 0.d0 ) r = real(max(-1.d0,min(1.d0,sxy/sqrt(prod))),kind=4)
     end function pearsn_serial_8
 
-    !>    calculates Pearson's correlation coefficient
-    !! \param x input reference array
-    !! \param y input test array
     function pearsn_2( x, y ) result( r )
         real, intent(in) :: x(:,:),y(:,:)
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
@@ -487,9 +467,6 @@ contains
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
     end function pearsn_2
 
-    !>    calculates Pearson's correlation coefficient
-    !! \param x input reference array
-    !! \param y input test array
     function pearsn_3( x, y ) result( r )
         real, intent(in) :: x(:,:,:),y(:,:,:)
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
@@ -587,10 +564,10 @@ contains
     !          different from that of data2. The input arrays are modified
     !          (sorted)
     subroutine kstwo( data1, n1, data2, n2, d, prob )
-        integer, intent(in) :: n1, n2
-        real, intent(inout) :: data1(n1), data2(n2), d, prob  !< significance
-        integer             :: j1, j2
-        real                :: d1, d2, dt, en1, en2, en, fn1, fn2
+        integer, intent(in)    :: n1, n2
+        real,    intent(inout) :: data1(n1), data2(n2), d, prob !< significance
+        integer                :: j1, j2
+        real                   :: d1, d2, dt, en1, en2, en, fn1, fn2
         call hpsort(data1)
         call hpsort(data2)
         en1 = n1
@@ -614,7 +591,7 @@ contains
             dt = abs(fn2-fn1)
             if(dt.gt.d) d = dt
         end do
-        en = sqrt(en1*en2/(en1+en2))
+        en   = sqrt(en1*en2/(en1+en2))
         prob = probks((en+0.12+0.11/en)*d) ! significance
 
         contains
@@ -641,16 +618,13 @@ contains
 
     end subroutine kstwo
 
-    !>    4 statistical analysis of similarity matrix, returns smin,smax
-    !! \param smin minimum similarity
-    !! \param smax maximum similarity
     subroutine analyze_smat( s, symmetrize, smin, smax )
         real, intent(inout) :: s(:,:)          !< similarity matrix
         logical, intent(in) :: symmetrize      !< force diag symmetry
         real, intent(out)   :: smin, smax
         integer             :: i, j, n, npairs
         if( size(s,1) .ne. size(s,2) )then
-            THROW_HARD('not a similarity matrix; analyze_smat')
+            THROW_HARD('not a similarity matrix')
         endif
         n      = size(s,1)
         npairs = (n*(n-1))/2
@@ -669,27 +643,27 @@ contains
     !!  (1) estimate median of cluster (member most similar to all others)
     !!  (2) calculate the median of the similarities between the median and all others
     !!  suggested exclusion based on 2 * ddev (sigma) criterion
-    ! subroutine dev_from_smat( smat, i_median, sdev )
-    !     real,    intent(in)  :: smat(:,:)
-    !     integer, intent(out) :: i_median
-    !     real,    intent(out) :: sdev
-    !     real, allocatable :: sims(:)
-    !     integer :: loc(1), i, j, n
-    !     n = size(smat,1)
-    !     if( n /= size(smat,2) ) THROW_HARD('symmetric similarity matrix assumed; stat :: dev_from_smat')
-    !     allocate(sims(n))
-    !     do i=1,n
-    !         sims(i) = 0.0
-    !         do j=1,n
-    !             if( i /= j )then
-    !                 sims(i) = sims(i) + smat(i,j)
-    !             endif
-    !         end do
-    !     end do
-    !     loc      = maxloc(sims)
-    !     i_median = loc(1)
-    !     sdev     = median(smat(i_median,:))
-    ! end subroutine dev_from_smat
+    subroutine dev_from_smat( smat, i_median, sdev )
+        real,    intent(in)  :: smat(:,:)
+        integer, intent(out) :: i_median
+        real,    intent(out) :: sdev
+        real, allocatable :: sims(:)
+        integer :: loc(1), i, j, n
+        n = size(smat,1)
+        if( n /= size(smat,2) ) THROW_HARD('symmetric similarity matrix assumed; stat :: dev_from_smat')
+        allocate(sims(n))
+        do i=1,n
+            sims(i) = 0.0
+            do j=1,n
+                if( i /= j )then
+                    sims(i) = sims(i) + smat(i,j)
+                endif
+            end do
+        end do
+        loc      = maxloc(sims)
+        i_median = loc(1)
+        sdev     = median(smat(i_median,:))
+    end subroutine dev_from_smat
 
     !>  measure of cluster spread (for use in one-class clustering)
     !!  (1) estimate median of cluster (member most similar to all others)

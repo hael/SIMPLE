@@ -3,7 +3,7 @@ use simple_defs
 use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
 use simple_error,   only: simple_exception, simple_error_check
 use simple_syslib,  only: file_exists, is_open, is_file_open, is_io, simple_abspath,&
-&exec_cmdline, del_file, syslib_copy_file
+&exec_cmdline, del_file
 implicit none
 
 public :: fileiochk, fopen, fclose, wait_for_closure, nlines, filelength, funit_size, is_funit_open, get_open_funits
@@ -778,7 +778,60 @@ contains
     subroutine simple_copy_file(fname1, fname2, status)
         character(len=*),  intent(in)  :: fname1, fname2 !< input filenames
         integer, optional, intent(out) :: status
-        call syslib_copy_file(fname1, fname2, status)
+        integer(dp),      parameter   :: MAXBUFSZ = nint(1e8) ! 100 MB max buffer size
+        character(len=1), allocatable :: byte_buffer(:)
+        integer(dp) :: sz, nchunks, leftover, bufsz, bytepos, in, out, ichunk
+        integer     :: ioerr
+        if( present(status) )status = 0
+        ! make sure the file is ready to read
+        call wait_for_closure(fname1)
+        ! process input file
+        ! we need to inquire size before opening file as stream access
+        ! does not allow inquire of size from file unit
+        inquire(file=trim(fname1),size=sz)
+        open(newunit=in, file=trim(fname1), status="old", action="read", access="stream", iostat=ioerr)
+        if( ioerr /= 0 )then
+            write(logfhandle,*) "In simple_copy_file, failed to open input file ", trim(fname1)
+            call simple_error_check(ioerr,"simple_copy_file input file not opened")
+            if( present(status) ) status = ioerr
+            return
+        endif
+        if( sz <= MAXBUFSZ )then
+            nchunks  = 1
+            leftover = 0
+            bufsz    = sz
+        else
+            nchunks  = sz / MAXBUFSZ
+            leftover = sz - nchunks * MAXBUFSZ
+            bufsz    = MAXBUFSZ
+        endif
+        ! allocate raw byte buffer
+        allocate(byte_buffer(bufsz))
+        ! process output file
+        open(newunit=out, file=trim(fname2), status="replace", action="write", access="stream", iostat=ioerr)
+        if( ioerr /= 0 )then
+            write(logfhandle,*)"In simple_copy_file, failed to open output file ", trim(fname2)
+            call simple_error_check(ioerr,"simple_copy_file output file not opened")
+            if( present(status) ) status = ioerr
+            return
+        endif
+        bytepos = 1
+        do ichunk=1,nchunks
+            read(in,   pos=bytepos, iostat=ioerr) byte_buffer
+            if( ioerr /= 0 ) THROW_HARD("failed to read byte buffer")
+            write(out, pos=bytepos, iostat=ioerr) byte_buffer
+            if( ioerr /= 0 ) THROW_HARD("failed to write byte buffer")
+            bytepos = bytepos + bufsz
+        end do
+        ! take care of leftover
+        if( leftover > 0 )then
+            read(in,   pos=bytepos, iostat=ioerr) byte_buffer(:leftover)
+            if( ioerr /= 0 ) THROW_HARD("failed to read byte buffer")
+            write(out, pos=bytepos, iostat=ioerr) byte_buffer(:leftover)
+            if( ioerr /= 0 ) THROW_HARD("failed to write byte buffer")
+        endif
+        close(in)
+        close(out)
     end subroutine simple_copy_file
 
     ! builds a relative path with respect to working directory
