@@ -316,7 +316,7 @@ contains
         complex :: fcomp, cswap
         real    :: loc(2), mat(2,2), dist(2), pw, add_phshift
         integer :: fdims(3), lims(3,2), phys_cmat(2), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
-        integer :: cnt_progress, iprec, i, j, sh, iwinsz, nyq, ind_in_stk, foffset, ok
+        integer :: iprec, i, j, sh, iwinsz, nyq, ind_in_stk, foffset, ok
         integer :: wdim, h, k, l, m, ll, mm, incr, icls, iptcl, interp_shlim, interp_shlim_sq
         integer :: first_iprec, first_stkind, fromp, top, istk, nptcls, nstks, last_stkind, stkind
         integer :: ibatch, nbatches, istart, iend, ithr, batch_nptcls
@@ -339,7 +339,11 @@ contains
                 exit
             endif
         enddo
-        call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, iptcl, first_stkind, ind_in_stk)
+        if( DEBUG_HERE )then
+            call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, precs(1)%pind, first_stkind, ind_in_stk)
+        else
+            call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, iptcl, first_stkind, ind_in_stk)
+        endif
         iptcl = 0
         do i = partsz,1,-1
             if( precs(i)%pind > 0 )then
@@ -347,10 +351,14 @@ contains
                 exit
             endif
         enddo
-        call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, iptcl, last_stkind,  ind_in_stk)
+        if( DEBUG_HERE )then
+            call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, precs(partsz)%pind, first_stkind, ind_in_stk)
+        else
+            call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, iptcl, last_stkind,  ind_in_stk)
+        endif
         nstks = last_stkind - first_stkind + 1
         ! Objects allocations
-        allocate(read_imgs(READBUFFSZ), cgrid_imgs(params_glob%nthr), cyc1(wdim), cyc2(wdim), w(wdim, wdim))
+        allocate(read_imgs(READBUFFSZ), cgrid_imgs(params_glob%nthr), cyc1(wdim), cyc2(wdim), w(wdim,wdim))
         !$omp parallel default(shared) proc_bind(close) private(i)
         !$omp do schedule(static)
         do i = 1,READBUFFSZ
@@ -361,32 +369,32 @@ contains
         do i = 1,params_glob%nthr
             call cgrid_imgs(i)%new(ldim_pd, params_glob%smpd, wthreads=.false.)
         enddo
-        !$omp end do
+        !$omp end do nowait
         !$omp end parallel
-        lims       = cgrid_imgs(1)%loop_lims(2)
-        cyc_lims   = cgrid_imgs(1)%loop_lims(3)
-        nyq        = cgrid_imgs(1)%get_lfny(1)
-        fdims      = cgrid_imgs(1)%get_array_shape()
-        foffset    = fdims(2)/2
+        lims            = cgrid_imgs(1)%loop_lims(2)
+        cyc_lims        = cgrid_imgs(1)%loop_lims(3)
+        nyq             = cgrid_imgs(1)%get_lfny(1)
+        fdims           = cgrid_imgs(1)%get_array_shape()
+        foffset         = fdims(2)/2
         interp_shlim    = nyq+1
         interp_shlim_sq = interp_shlim**2
-        cyc_limsR(:,1) = cyc_lims(1,:)  ! limits in fortran layered format
-        cyc_limsR(:,2) = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
-        allocate(cmats(fdims(1), fdims(2), READBUFFSZ), rhos(fdims(1), fdims(2), READBUFFSZ))
+        cyc_limsR(:,1)  = cyc_lims(1,:)  ! limits in fortran layered format
+        cyc_limsR(:,2)  = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
+        allocate(cmats(fdims(1),fdims(2),READBUFFSZ), rhos(fdims(1),fdims(2),READBUFFSZ))
         ! Main loop
-        cnt_progress = 0
         first_iprec  = 1 ! first particle record in current stack
         do istk = first_stkind, last_stkind
-            cnt_progress = cnt_progress + 1
             ! Particles range
             stkind = first_stkind + istk - 1
+            if( DEBUG_HERE ) print *, 'stkind ', stkind
             fromp  = max(precs(1)%pind,      nint(build_glob%spproj%os_stk%get(istk,'fromp')))
             top    = min(precs(partsz)%pind, nint(build_glob%spproj%os_stk%get(istk,'top')))
-            nptcls = top - fromp + 1 ! # particles in stack
+            if( DEBUG_HERE ) print *, 'fromp / top ', fromp, top
+            nptcls = top - fromp + 1 ! # particles in stack, but why are we out of bound in the precs(iprec)%pind == 0 statement below
             if( DEBUG_HERE ) print *, '# particles in stack ', nptcls
             if( nptcls == 0 ) cycle
             call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, fromp, stk_fname, ind_in_stk)
-            ind_in_stk = ind_in_stk - 1
+            ind_in_stk = ind_in_stk - 1 ! because incremented before read in loop
             ! open stack
             call stkio_r%open(stk_fname, smpd, 'read', bufsz=READBUFFSZ)
             ! Read batches loop
@@ -416,7 +424,7 @@ contains
                     iprec = first_iprec + istart + i - 2
                     if( precs(iprec)%pind == 0 ) cycle
                     iptcl = precs(iprec)%pind
-                    ithr  = omp_get_thread_num()+1
+                    ithr  = omp_get_thread_num() + 1
                     cmats(:,:,i) = zero
                     rhos(:,:,i)  = 0.
                     ! normalize & pad & FFT
@@ -530,7 +538,7 @@ contains
             ! close stack
             call stkio_r%close
             ! Keeeping track of particles records
-            first_iprec = first_iprec + nptcls
+            first_iprec = first_iprec + nptcls ! is this correct given that we are out of bounds in the precs(iprec)%pind == 0 statement above
         enddo
         ! performs final quadrant swap on e/o rhos
         !$omp parallel do schedule(static) private(icls,ithr,k,ok,h,cswap) default(shared) proc_bind(close)
