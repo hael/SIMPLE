@@ -84,7 +84,7 @@ contains
         do i = 1, ncls
             mask_median    = .true.
             mask_median(i) = .false. ! to remove the diagonal element
-            corrs = pack(specmat(i,:), mask_median)
+            corrs = pack(corrmat_comlin(i,:), mask_median)
 
 
             nloc = maxnloc(corrs, nsel)

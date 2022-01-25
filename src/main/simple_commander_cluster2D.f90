@@ -1175,7 +1175,7 @@ contains
         type(polarizer), allocatable :: cavg_imgs(:)
         character(len=:),allocatable :: cavgsstk, classname, frcs_fname
         integer,         allocatable :: centers(:), labels(:), cntarr(:)
-        real,            allocatable :: states(:), orig_cls_inds(:), frc(:), filter(:)
+        real,            allocatable :: states(:), orig_cls_inds(:), frc(:), filter(:), clspops(:), clsres(:)
         logical,         allocatable :: l_msk(:,:,:)
         integer :: ncls, n, ldim(3), ncls_sel, i, icls, ncls_aff_prop, cnt, filtsz
         real    :: smpd, sdev_noise
@@ -1195,8 +1195,12 @@ contains
         if( n /= ncls ) THROW_HARD('Inconsistent # classes in project file vs cavgs stack; exec_cluster_cavgs')
         ! ensure correct smpd in params class
         params%smpd = smpd
-        ! get state flag array
-        states = spproj%os_cls2D%get_all('state')
+        ! threshold based on states/population/resolution
+        states  = spproj%os_cls2D%get_all('state')
+        clspops = spproj%os_cls2D%get_all('pop')
+        clsres  = spproj%os_cls2D%get_all('res')
+        where( clsres  >= params%lpthresh    ) states = 0.
+        where( clspops <  real(MINCLSPOPLIM) ) states = 0.
         ! find out how many selected class averages
         ncls_sel = count(states > 0.5)
         ! get FRCs
