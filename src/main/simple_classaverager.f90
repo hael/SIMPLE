@@ -57,6 +57,7 @@ logical                        :: exists        = .false.       !< to flag insta
 integer(timer_int_kind) :: t_class_loop,t_batch_loop, t_gridding, t_init, t_tot
 real(timer_int_kind)    :: rt_class_loop,rt_batch_loop, rt_gridding, rt_init, rt_tot
 character(len=STDLEN)   :: benchfname
+logical,      parameter :: DEBUG_HERE = .true.
 
 contains
 
@@ -81,6 +82,7 @@ contains
             iend   = params_glob%nptcls
         endif
         partsz     = count(pptcl_mask)
+        if( DEBUG_HERE ) print *, 'count(.not. pptcl_mask) ', count(.not. pptcl_mask)
         ! CTF logics
         ctfflag    = build_glob%spproj%get_ctfflag_type('ptcl2D',iptcl=params_glob%fromp)
         ! set phaseplate flag
@@ -299,7 +301,7 @@ contains
     !>  \brief  is for assembling the sums in distributed/non-distributed mode
     !!          using gridding interpolation in Fourier space
     subroutine cavger_assemble_sums( do_frac_update )
-        use simple_kbinterpol,          only: kbinterpol
+        use simple_kbinterpol, only: kbinterpol
         logical,      intent(in)      :: do_frac_update
         integer, parameter            :: READBUFFSZ = 1024
         complex, parameter            :: zero = cmplx(0.,0.)
@@ -319,6 +321,7 @@ contains
         integer :: first_iprec, first_stkind, fromp, top, istk, nptcls, nstks, last_stkind, stkind
         integer :: ibatch, nbatches, istart, iend, ithr, batch_nptcls
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
+        if( DEBUG_HERE ) print *, 'do_frac_update ', do_frac_update
         ! init cavgs
         call init_cavgs_sums
         if( do_frac_update )then
@@ -373,14 +376,15 @@ contains
         ! Main loop
         cnt_progress = 0
         first_iprec  = 1 ! first particle record in current stack
-        do istk = first_stkind,last_stkind
+        do istk = first_stkind, last_stkind
             cnt_progress = cnt_progress + 1
             ! Particles range
             stkind = first_stkind + istk - 1
             fromp  = max(precs(1)%pind,      nint(build_glob%spproj%os_stk%get(istk,'fromp')))
             top    = min(precs(partsz)%pind, nint(build_glob%spproj%os_stk%get(istk,'top')))
-            nptcls = top-fromp+1 ! # of particles in stack
-            if( nptcls == 0 )cycle
+            nptcls = top - fromp + 1 ! # particles in stack
+            if( DEBUG_HERE ) print *, '# particles in stack ', nptcls
+            if( nptcls == 0 ) cycle
             call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, fromp, stk_fname, ind_in_stk)
             ind_in_stk = ind_in_stk - 1
             ! open stack
@@ -388,14 +392,19 @@ contains
             ! Read batches loop
             nbatches = ceiling(real(nptcls)/real(READBUFFSZ))
             do ibatch = 1,nbatches
-                istart = (ibatch-1)*READBUFFSZ + 1          ! first index in current batch
-                iend   = min(nptcls, istart+READBUFFSZ-1)   ! last  index in current batch
-                batch_nptcls = iend-istart+1
-                j      = 0                                  ! index in batch
+                if( DEBUG_HERE ) print *, 'batch index ', ibatch
+                istart = (ibatch - 1) * READBUFFSZ + 1          ! first index in current batch
+                if( DEBUG_HERE ) print *, 'first index in current batch ', istart
+                iend   = min(nptcls, istart + READBUFFSZ - 1)   ! last  index in current batch
+                if( DEBUG_HERE ) print *, 'last  index in current batch ', iend
+                batch_nptcls = iend - istart + 1
+                j      = 0                                      ! index in batch
                 do i = istart,iend
                     iprec      = first_iprec + i - 1
+                    if( DEBUG_HERE ) print *, 'i / first_iprec / iprec = first_iprec + i - 1 ', i, first_iprec, iprec
                     ind_in_stk = ind_in_stk + 1
                     j          = j + 1
+                    if( DEBUG_HERE ) print *, 'size(precs) ', size(precs)
                     if( precs(iprec)%pind == 0 ) cycle
                     call stkio_r%read(ind_in_stk, read_imgs(j))
                 enddo
@@ -488,7 +497,7 @@ contains
                         end do
                     endif
                 enddo
-                !$omp end do
+                !$omp end do nowait
                 ! Sum over classes
                 !$omp do schedule(static)
                 do icls = 1,ncls
