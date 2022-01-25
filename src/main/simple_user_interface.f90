@@ -1443,7 +1443,7 @@ contains
         &to apply a balancing restraint (on the class population). Adjust balance until you are &
         &satisfied with the shape of the histogram',&                              ! descr_long
         &'simple_exec',&                                                           ! executable
-        &0, 0, 0, 0, 2, 1, 1, .true.)                                              ! # entries in each group, requires sp_project
+        &0, 0, 0, 0, 3, 1, 1, .true.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1457,6 +1457,8 @@ contains
         call cluster_cavgs%set_input('filt_ctrls', 1, hp)
         call cluster_cavgs%set_input('filt_ctrls', 2, lp)
         cluster_cavgs%filt_ctrls(2)%required = .true.
+        call cluster_cavgs%set_input('filt_ctrls', 3, 'lpthresh', 'num', 'Resolution rejection threshold',&
+        &'Classes with lower resolution aren rejected{30}', 'Resolution rejection threshold in angstroms{30}', .false., 30.)
         ! mask controls
         call cluster_cavgs%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
