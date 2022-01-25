@@ -1160,11 +1160,12 @@ contains
     end subroutine exec_rank_cavgs
 
     subroutine exec_cluster_cavgs( self, cline )
-        use simple_polarizer,     only: polarizer
-        use simple_class_frcs,    only: class_frcs
-        use simple_tvfilter,      only: tvfilter
-        use simple_estimate_ssnr, only: fsc2optlp_sub
-        use simple_cluster_cavgs
+        use simple_polarizer,        only: polarizer
+        use simple_class_frcs,       only: class_frcs
+        use simple_tvfilter,         only: tvfilter
+        use simple_estimate_ssnr,    only: fsc2optlp_sub
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_aff_prop,         only: aff_prop
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)             :: params
@@ -1172,13 +1173,16 @@ contains
         type(class_frcs)             :: clsfrcs
         type(tvfilter)               :: tvfilt
         type(image)                  :: img_msk
-        type(polarizer), allocatable :: cavg_imgs(:)
+        type(polarft_corrcalc)       :: pftcc
+        type(aff_prop)               :: aprop
+        type(polarizer), allocatable :: cavg_imgs(:), cavg_imgs_good(:)
         character(len=:),allocatable :: cavgsstk, classname, frcs_fname
-        integer,         allocatable :: centers(:), labels(:), cntarr(:)
         real,            allocatable :: states(:), orig_cls_inds(:), frc(:), filter(:), clspops(:), clsres(:)
-        logical,         allocatable :: l_msk(:,:,:)
-        integer :: ncls, n, ldim(3), ncls_sel, i, icls, ncls_aff_prop, cnt, filtsz
-        real    :: smpd, sdev_noise
+        real,            allocatable :: corrs(:), corrmat_comlin(:,:), corrs_top_ranking(:)
+        logical,         allocatable :: l_msk(:,:,:), mask_top_ranking(:), mask_otsu(:), mask_icls(:)
+        integer,         allocatable :: order(:), nloc(:), centers(:), labels(:), cntarr(:), clsinds(:)
+        integer :: ncls, n, ldim(3), ncls_sel, i, j, icls, cnt, filtsz, pop1, pop2, nsel, ncls_aff_prop
+        real    :: smpd, sdev_noise, simsum, cmin, cmax, pref, corr_icls
         logical :: l_apply_optlp
         ! defaults
         call cline%set('match_filt', 'no')
@@ -1201,8 +1205,12 @@ contains
         clsres  = spproj%os_cls2D%get_all('res')
         where( clsres  >= params%lpthresh    ) states = 0.
         where( clspops <  real(MINCLSPOPLIM) ) states = 0.
-        ! find out how many selected class averages
+        ! find out how many selected class averages initially
         ncls_sel = count(states > 0.5)
+        ! keep track of the original class indices
+        allocate(clsinds(ncls))
+        clsinds = (/(i,i=1,ncls)/)
+        clsinds = pack(clsinds, mask=states > 0.5)
         ! get FRCs
         l_apply_optlp = .false.
         call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
@@ -1220,6 +1228,7 @@ contains
         call img_msk%mask(params%msk, 'hard')
         l_msk = img_msk%bin2logical()
         call img_msk%kill
+        write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
         cnt = 0
         do i = 1 , ncls
             if( states(i) > 0.5 )then
@@ -1247,13 +1256,134 @@ contains
             ! mask
             call cavg_imgs(cnt)%mask(params%msk, 'soft')
         end do
-        call tvfilt%kill
-        ! common lines-based clustering of class averages with affinity propagation
-        call cluster_cavgs(cavg_imgs, centers, labels)
+        ! create the polarft_corrcalc object
+        params%kfromto(1) = max(2, calc_fourier_index(params%hp, params%box, params%smpd))
+        params%kfromto(2) =        calc_fourier_index(params%lp, params%box, params%smpd)
+        params%kstop      = params%kfromto(2)
+        call pftcc%new(ncls_sel, [1,1])
+        ! initialize polarizer for the first image, then copy it to the rest
+        call cavg_imgs(1)%init_polarizer(pftcc, params%alpha)
+        !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
+        do icls = 1, ncls_sel
+            if( icls /= 1 ) call cavg_imgs(icls)%copy_polarizer(cavg_imgs(1))
+            call cavg_imgs(icls)%fft()
+            call cavg_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true.) ! 2 polar coords
+            call cavg_imgs(icls)%ifft()
+        end do
+        !$omp end parallel do
+        ! some allocations needed
+        nsel = ceiling(0.1 * real(ncls_sel))
+        allocate(nloc(nsel), order(ncls_sel),                                    source=0)
+        allocate(corrmat_comlin(ncls_sel,ncls_sel), corrs_top_ranking(ncls_sel), source=-1.)
+        allocate(mask_top_ranking(ncls_sel),                                     source=.true.)
+        write(logfhandle,'(A)') '>>> CALCULATING COMMON-LINE CORRELATION MATRIX'
+        !$omp parallel do default(shared) private(i,j) schedule(dynamic) proc_bind(close)
+        do i = 1, ncls_sel - 1
+            do j = i + 1, ncls_sel
+                ! Common line correlation
+                ! corrmat_comlin(i,j) = pftcc%genmaxcorr_comlin(i,j) ! gives worse result
+                corrmat_comlin(i,j) = pftcc%genmaxspecscore_comlin(i,j)
+                corrmat_comlin(j,i) = corrmat_comlin(i,j)
+            enddo
+            corrmat_comlin(i,i) = 1.
+        enddo
+        !$omp end parallel do
+        ! take care of the last diagonal element
+        corrmat_comlin(ncls_sel,ncls_sel) = 1.
+        write(logfhandle,'(A)') '>>> GOOD/BAD CLASSIFICATION AND RANKING OF CLASS AVERAGES'
+        ! average the nsel best correlations (excluding self) to create a scoring function for garbage removal
+        do i = 1, ncls_sel
+            mask_top_ranking    = .true.
+            mask_top_ranking(i) = .false. ! to remove the diagonal element
+            corrs = pack(corrmat_comlin(i,:), mask_top_ranking)
+            nloc = maxnloc(corrs, nsel)
+            corrs_top_ranking(i) = 0.
+            do j = 1, nsel
+                corrs_top_ranking(i) = corrs_top_ranking(i) + corrs(nloc(j))
+            end do
+            corrs_top_ranking(i) = corrs_top_ranking(i) / real(nsel)
+        end do
+        ! use Otsu's algorithm to remove the junk
+        call otsu(corrs_top_ranking, mask_otsu)
+        pop1 = count(      mask_otsu)
+        pop2 = count(.not. mask_otsu)
+        write(logfhandle,*) 'average corr cluster 1: ', sum(corrs_top_ranking, mask=      mask_otsu) / real(pop1), ' pop ', pop1
+        write(logfhandle,*) 'average corr cluster 2: ', sum(corrs_top_ranking, mask=.not. mask_otsu) / real(pop2), ' pop ', pop2
+        pop1 = 0
+        pop2 = 0
+        do i = 1, ncls_sel
+            if( mask_otsu(i) )then
+                pop1 = pop1 + 1
+                call cavg_imgs(i)%write('good.mrc', pop1)
+            else
+                pop2 = pop2 + 1
+                call cavg_imgs(i)%write('bad.mrc',  pop2)
+            endif
+        end do
+        ! rank
+        order = (/(i,i=1,ncls_sel)/)
+        call hpsort(corrs_top_ranking, order)
+        do i = 1, ncls_sel
+            call cavg_imgs(order(i))%write('ranked.mrc', i)
+        end do
+        ! update the states array according to the good/bad classification
+        do i = 1, ncls_sel
+            if( .not. mask_otsu(i) ) states(clsinds(i)) = 0.
+        end do
+        ! update the class indices (bookkeeping is getting hairy)
+        deallocate(clsinds)
+        allocate(clsinds(ncls))
+        clsinds = (/(i,i=1,ncls)/)
+        clsinds = pack(clsinds, mask=states > 0.5)
+        ! toss out the bad ones
+        allocate(cavg_imgs_good(pop1))
+        pop1 = 0
+        do i = 1, ncls_sel
+            if( mask_otsu(i) )then
+                pop1 = pop1 + 1
+                call cavg_imgs_good(pop1)%copy(cavg_imgs(i))
+            endif
+        end do
+        ! re-calculate the similarity matrix
+        write(logfhandle,'(A)') '>>> CALCULATING COMMON-LINE CORRELATION MATRIX FOR THE GOOD CLASS AVERAGES'
+        ! re-create the polarft_corrcalc object
+        call pftcc%kill
+        call pftcc%new(pop1, [1,1])
+        ! initialize polarizer for the first image, then copy it to the rest
+        call cavg_imgs_good(1)%init_polarizer(pftcc, params%alpha)
+        !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
+        do icls = 1, pop1
+            if( icls /= 1 ) call cavg_imgs_good(icls)%copy_polarizer(cavg_imgs_good(1))
+            call cavg_imgs_good(icls)%fft()
+            call cavg_imgs_good(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true.) ! 2 polar coords
+            call cavg_imgs_good(icls)%ifft()
+        end do
+        !$omp end parallel do
+        deallocate(corrmat_comlin)
+        allocate(corrmat_comlin(pop1,pop1), source=-1.)
+        !$omp parallel do default(shared) private(i,j) schedule(dynamic) proc_bind(close)
+        do i = 1, pop1 - 1
+            do j = i + 1, pop1
+                ! Common line orrelations
+                ! corrmat_comlin(i,j) = pftcc%genmaxcorr_comlin(i,j) ! gives worse result
+                corrmat_comlin(i,j) = pftcc%genmaxspecscore_comlin(i,j)
+                corrmat_comlin(j,i) = corrmat_comlin(i,j)
+            enddo
+            corrmat_comlin(i,i) = 1.
+        enddo
+        !$omp end parallel do
+        ! take care of the last diagonal element
+        corrmat_comlin(pop1,pop1) = 1.
+        ! calculate a preference that generates a small number of clusters
+        call analyze_smat(corrmat_comlin, .false., cmin, cmax)
+        pref = cmin - (cmax - cmin)
+        write(logfhandle,'(A)') '>>> CLUSTERING OF GOOD CLASS AVERAGES WITH AFFINITY PROPAGATION'
+        call aprop%new(pop1, corrmat_comlin, pref=pref)
+        call aprop%propagate(centers, labels, simsum)
         ncls_aff_prop = size(centers)
-        write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION: ', ncls_aff_prop
+        write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', ncls_aff_prop
         allocate(cntarr(ncls_aff_prop), source=0)
-        ! read back the original (unprocessed) images
+        ! put back the original (unprocessed) images
         cnt = 0
         do i = 1 , ncls
             if( states(i) > 0.5 )then
@@ -1264,26 +1394,63 @@ contains
             call cavg_imgs(cnt)%read(cavgsstk, i)
         end do
         ! write the classes
-        do icls=1,ncls_aff_prop
+        do icls = 1, ncls_aff_prop
             ! make a filename for the class
             do i=1,ncls_sel
                 if( labels(i) == icls )then
-                    classname = 'class'//int2str_pad(icls,5)//'.mrcs'
+                    classname = 'class'//int2str_pad(icls,3)//'.mrcs'
                     cntarr(labels(i)) = cntarr(labels(i)) + 1
                     call cavg_imgs(i)%write(classname, cntarr(labels(i)))
                 endif
             end do
         end do
+        ! calculate average common line correlation of the AP clusters
+        allocate( mask_icls(ncls_sel) )
+        do icls = 1, ncls_aff_prop
+            ! mask out the cluster
+            where( labels == icls )
+                mask_icls = .true.
+            elsewhere
+                mask_icls = .false.
+            end where
+            ! calculate the average common line correlation of the cluster
+            corr_icls = 0.
+            cnt       = 0
+            do i = 1, ncls_sel - 1
+                do j = i + 1, ncls_sel
+                    if( mask_icls(i) .and. mask_icls(j) )then
+                        corr_icls = corr_icls + corrmat_comlin(i,j)
+                        cnt       = cnt + 1
+                    endif
+                end do
+            end do
+            corr_icls = corr_icls / real(cnt)
+            write(logfhandle,*) 'average corr AP cluster '//int2str_pad(icls,3)//': ', corr_icls, ' pop ', count(mask_icls)
+        end do
         ! destruct
         call spproj%kill
+        call clsfrcs%kill
+        call tvfilt%kill
+        call pftcc%kill
+        call aprop%kill
         do icls=1,ncls_sel
             call cavg_imgs(icls)%kill
         end do
-        deallocate(cavg_imgs)
-        if( allocated(centers)       ) deallocate(centers)
-        if( allocated(labels)        ) deallocate(labels)
+        do icls=1,pop1
+            call cavg_imgs_good(icls)%kill
+        end do
+        ! deallocate
+        deallocate(cavg_imgs, cavg_imgs_good)
+        ! only need to deallocate stuff that was not explicitly allocated in this scope
         if( allocated(states)        ) deallocate(states)
         if( allocated(orig_cls_inds) ) deallocate(orig_cls_inds)
+        if( allocated(clspops)       ) deallocate(clspops)
+        if( allocated(clsres)        ) deallocate(clsres)
+        if( allocated(corrs)         ) deallocate(corrs)
+        if( allocated(l_msk)         ) deallocate(l_msk)
+        if( allocated(mask_otsu)     ) deallocate(mask_otsu)
+        if( allocated(centers)       ) deallocate(centers)
+        if( allocated(labels)        ) deallocate(labels)
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****')
     end subroutine exec_cluster_cavgs

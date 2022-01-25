@@ -993,7 +993,7 @@ contains
         &'auto 3D refinement of metallic nanoparticles',&                                 ! descr_short
         &'is a distributed workflow for automated 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                  ! executable
-        &1, 2, 0, 8, 6, 4, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &1, 2, 0, 8, 4, 2, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call autorefine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -1021,15 +1021,9 @@ contains
         call autorefine3D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms{1.5}', .true., 1.5)
 
         call autorefine3D_nano%set_input('filt_ctrls', 4, ptclw)
-        call autorefine3D_nano%set_input('filt_ctrls', 5, nonuniform)
-        call autorefine3D_nano%set_input('filt_ctrls', 6, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-        & 'Low-pass limit for envelope mask generation in Angstroms{2.0}', 'low-pass limit in Angstroms', .false., 2.)
         ! mask controls
         call autorefine3D_nano%set_input('mask_ctrls', 1, mskdiam)
         call autorefine3D_nano%set_input('mask_ctrls', 2, mskfile)
-        call autorefine3D_nano%set_input('mask_ctrls', 3, automsk)
-        call autorefine3D_nano%set_input('mask_ctrls', 4, 'edge', 'num', 'Envelope mask soft edge',&
-        &'Cosine edge size for softening molecular envelope in pixels{3}', '# pixels cosine edge{3}', .false., 3.)
         ! computer controls
         call autorefine3D_nano%set_input('comp_ctrls', 1, nparts)
         call autorefine3D_nano%set_input('comp_ctrls', 2, nthr)
@@ -3025,7 +3019,7 @@ contains
         &'3D refinement of metallic nanoparticles',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                                                      ! executable
-        &1, 0, 0, 8, 6, 2, 2, .true.)                                                                                         ! # entries in each group, requires sp_project
+        &1, 0, 0, 8, 5, 2, 2, .true.)                                                                                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -3050,9 +3044,7 @@ contains
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{5}', .false., 5.)
         call refine3D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms{1.0}', .false., 1.)
-        call refine3D_nano%set_input('filt_ctrls', 4, lp_backgr)
-        call refine3D_nano%set_input('filt_ctrls', 5, ptclw)
-        call refine3D_nano%set_input('filt_ctrls', 6, nonuniform)
+        call refine3D_nano%set_input('filt_ctrls', 4, ptclw)
         ! mask controls
         call refine3D_nano%set_input('mask_ctrls', 1, mskdiam)
         call refine3D_nano%set_input('mask_ctrls', 2, mskfile)
