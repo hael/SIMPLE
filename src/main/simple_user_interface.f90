@@ -3019,7 +3019,7 @@ contains
         &'3D refinement of metallic nanoparticles',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                                                      ! executable
-        &1, 0, 0, 8, 5, 2, 2, .true.)                                                                                         ! # entries in each group, requires sp_project
+        &1, 0, 0, 8, 4, 2, 2, .true.)                                                                                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -3048,8 +3048,9 @@ contains
         ! mask controls
         call refine3D_nano%set_input('mask_ctrls', 1, mskdiam)
         call refine3D_nano%set_input('mask_ctrls', 2, mskfile)
-        ! computer controls
+        ! computer controls        
         call refine3D_nano%set_input('comp_ctrls', 1, nparts)
+        refine3D_nano%comp_ctrls(1)%required = .false.
         call refine3D_nano%set_input('comp_ctrls', 2, nthr)
     end subroutine new_refine3D_nano
 
