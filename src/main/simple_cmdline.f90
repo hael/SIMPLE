@@ -547,9 +547,9 @@ contains
         integer :: i
         do i=1,self%argcnt
             if( self%cmds(i)%defined .and. allocated(self%cmds(i)%carg) )then
-                write(logfhandle,*) trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg)
+                write(logfhandle,*) trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg), ' xxx'
             else if( self%cmds(i)%defined )then
-                write(logfhandle,*) trim(self%cmds(i)%key), ' ', self%cmds(i)%rarg
+                write(logfhandle,*) trim(self%cmds(i)%key), ' ', self%cmds(i)%rarg, ' xxx'
             endif
         end do
     end subroutine printline
