@@ -28,26 +28,26 @@ type ptcl_record
     integer   :: class         !< class assignment
 end type ptcl_record
 
-integer                        :: ctfflag                       !< ctf flag <yes=1|no=0|flip=2>
-integer                        :: istart          = 0, iend = 0 !< particle index range
-integer                        :: partsz          = 0           !< size of partition
-integer                        :: ncls            = 0           !< # classes
-integer                        :: filtsz          = 0           !< size of filter function or FSC
-integer                        :: ldim(3)         = [0,0,0]     !< logical dimension of image
-integer                        :: ldim_pd(3)      = [0,0,0]     !< logical dimension of image, padded
-real                           :: smpd            = 0.          !< sampling distance
-type(ptcl_record), allocatable :: precs(:)                      !< particle records
-type(image),       allocatable :: cavgs_even(:)                 !< class averages
-type(image),       allocatable :: cavgs_odd(:)                  !< -"-
-type(image),       allocatable :: cavgs_merged(:)               !< -"-
-type(image),       allocatable :: ctfsqsums_even(:)             !< CTF**2 sums for Wiener normalisation
-type(image),       allocatable :: ctfsqsums_odd(:)              !< -"-
-type(image),       allocatable :: ctfsqsums_merged(:)           !< -"-
+integer                        :: ctfflag                  !< ctf flag <yes=1|no=0|flip=2>
+integer                        :: istart     = 0, iend = 0 !< particle index range
+integer                        :: partsz     = 0           !< size of partition
+integer                        :: ncls       = 0           !< # classes
+integer                        :: filtsz     = 0           !< size of filter function or FSC
+integer                        :: ldim(3)    = [0,0,0]     !< logical dimension of image
+integer                        :: ldim_pd(3) = [0,0,0]     !< logical dimension of image, padded
+real                           :: smpd       = 0.          !< sampling distance
+type(ptcl_record), allocatable :: precs(:)                 !< particle records
+type(image),       allocatable :: cavgs_even(:)            !< class averages
+type(image),       allocatable :: cavgs_odd(:)             !< -"-
+type(image),       allocatable :: cavgs_merged(:)          !< -"-
+type(image),       allocatable :: ctfsqsums_even(:)        !< CTF**2 sums for Wiener normalisation
+type(image),       allocatable :: ctfsqsums_odd(:)         !< -"-
+type(image),       allocatable :: ctfsqsums_merged(:)      !< -"-
 integer,           allocatable :: prev_eo_pops(:,:)
 logical,           allocatable :: pptcl_mask(:)
-logical                        :: phaseplate    = .false.       !< Volta phaseplate images or not
-logical                        :: l_bilinear    = .true.        !< whether to use bilinear or convolution interpolation
-logical                        :: exists        = .false.       !< to flag instance existence
+logical                        :: phaseplate = .false.     !< Volta phaseplate images or not
+logical                        :: l_bilinear = .true.      !< whether to use bilinear or convolution interpolation
+logical                        :: exists     = .false.     !< to flag instance existence
 
 integer(timer_int_kind) :: t_class_loop,t_batch_loop, t_gridding, t_init, t_tot
 real(timer_int_kind)    :: rt_class_loop,rt_batch_loop, rt_gridding, rt_init, rt_tot
@@ -75,10 +75,7 @@ contains
             istart = 1
             iend   = params_glob%nptcls
         endif
-        !>>>>>>>>>>>>>>>>>> AN ATTEMPT TO MAKE C#S NEW cavger_assemble_sums RUN WITH STATE=0S
-        ! partsz     = count(pptcl_mask)
         partsz     = size(pptcl_mask)
-        !<<<<<<<<<<<<<<<<<< ALL FORMS OF DESELECTION WILL NOW BE COMMUNICATED THROUGH precs(cnt)%pind = 0
         ! CTF logics
         ctfflag    = build_glob%spproj%get_ctfflag_type('ptcl2D',iptcl=params_glob%fromp)
         ! set phaseplate flag
@@ -464,7 +461,7 @@ contains
                         end do
                     endif
                 enddo
-                !$omp end do
+                !$omp end do nowait
                 ! Sum over classes
                 !$omp do schedule(static)
                 do icls = 1,ncls
@@ -487,7 +484,7 @@ contains
                         endif
                     enddo
                 enddo
-                !$omp end do
+                !$omp end do nowait
                 !$omp end parallel
             enddo ! end read batches loop
             ! close stack

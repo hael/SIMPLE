@@ -86,6 +86,9 @@ contains
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',      'no')
+        if( .not. cline%defined('overlap')   ) call cline%set('overlap',     0.8)
+        if( .not. cline%defined('fracsrch')  ) call cline%set('fracsrch',    0.9)
+        if( .not. cline%defined('envfsc')    ) call cline%set('envfsc',     'no')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
             if( nint(cline%get_rarg('nparts')) == 1 )then
@@ -314,7 +317,12 @@ contains
         call cline_postprocess%set('prg',       'postprocess')
         call cline_postprocess%set('projfile',   ORIG_WORK_PROJFILE)
         call cline_postprocess%set('mkdir',      'no')
-        call cline_postprocess%delete('lp')
+        call cline_postprocess%set('bfac',       0.)
+        if( l_lpset )then
+            call cline_postprocess%set('lp', lplims(2))
+        else
+            call cline_postprocess%delete('lp')
+        endif
         if( l_automsk )then
             call cline_postprocess%set('automsk', 'yes')
         endif
