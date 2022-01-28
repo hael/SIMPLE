@@ -838,7 +838,6 @@ contains
         call cline_detect_atms%set('vol1', RECVOL)               ! this is ALWYAS going to be the input volume to detect_atoms
         call cline_detect_atms%set('use_thres', 'no')            ! no thresholding during refinement
         iter = 0
-        if( .false. )then
         do i = 1, params%maxits
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user
 
@@ -897,7 +896,15 @@ contains
         call simple_copy_file(CCS,      './final_results/'//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'thres_CC.mrc')
         call simple_copy_file(MSK,      './final_results/'//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'thres_MSK.mrc')
         call simple_copy_file(SPLITTED, './final_results/'//trim(fbody_split)//'_iter'//int2str_pad(iter,3)//'.mrc')
-        endif
+
+
+        ! clean
+        call del_file(SIMVOL)
+        call del_file(ATOMS)
+        call del_file(BINARY)
+        call del_file(CCS)
+        call del_file(MSK)
+        call del_file(SPLITTED)
 
 
         ! cavgs vs RECVOL reprojs vs SIMVOL reprojections
@@ -977,15 +984,6 @@ contains
         end do
         call stkio_w%close
 
-
-
-        ! clean
-        call del_file(SIMVOL)
-        call del_file(ATOMS)
-        call del_file(BINARY)
-        call del_file(CCS)
-        call del_file(MSK)
-        call del_file(SPLITTED)
     end subroutine exec_autorefine3D_nano
 
     subroutine exec_refine3D_nano( self, cline )
