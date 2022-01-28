@@ -26,7 +26,6 @@ type ptcl_record
     integer   :: pind    = 0   !< particle index in stack
     integer   :: eo      = -1  !< even is 0, odd is 1, default is -1
     integer   :: class         !< class assignment
-    integer   :: state         !< state assignment
 end type ptcl_record
 
 integer                        :: ctfflag                       !< ctf flag <yes=1|no=0|flip=2>
@@ -76,7 +75,10 @@ contains
             istart = 1
             iend   = params_glob%nptcls
         endif
-        partsz     = count(pptcl_mask)
+        !>>>>>>>>>>>>>>>>>> AN ATTEMPT TO MAKE C#S NEW cavger_assemble_sums RUN WITH STATE=0S
+        ! partsz     = count(pptcl_mask)
+        partsz     = size(pptcl_mask)
+        !<<<<<<<<<<<<<<<<<< ALL FORMS OF DESELECTION WILL NOW BE COMMUNICATED THROUGH precs(cnt)%pind = 0
         ! CTF logics
         ctfflag    = build_glob%spproj%get_ctfflag_type('ptcl2D',iptcl=params_glob%fromp)
         ! set phaseplate flag
@@ -118,20 +120,20 @@ contains
         ! build index map
         cnt = 0
         do iptcl=istart,iend
-            if( .not.pptcl_mask(iptcl) ) cycle
             cnt = cnt + 1
             ! exclusion
             precs(cnt)%pind = 0
             if( spproj%os_ptcl2D%get_state(iptcl) == 0 ) cycle
             if( spproj%os_ptcl2D%get(iptcl,'w') < TINY ) cycle
+            if( .not.pptcl_mask(iptcl)                 ) cycle
             precs(cnt)%pind = iptcl
         enddo
         ! fetch data from project
         !$omp parallel do default(shared) private(cnt,iptcl,ithr) schedule(static) proc_bind(close)
         do cnt = 1,partsz
-            iptcl = precs(cnt)%pind
+            iptcl              = precs(cnt)%pind
             if( iptcl == 0 ) cycle
-            ithr  = omp_get_thread_num() + 1
+            ithr               = omp_get_thread_num() + 1
             precs(cnt)%eo      = nint(spproj%os_ptcl2D%get(iptcl,'eo'))
             precs(cnt)%pw      = spproj%os_ptcl2D%get(iptcl,'w')
             ctfvars(ithr)      = spproj%get_ctfparams('ptcl2D',iptcl)
@@ -142,7 +144,6 @@ contains
             precs(cnt)%phshift = 0.
             if( phaseplate ) precs(cnt)%phshift = ctfvars(ithr)%phshift
             precs(cnt)%class   = nint(spproj%os_ptcl2D%get(iptcl, 'class'))
-            precs(cnt)%state   = nint(spproj%os_ptcl2D%get(iptcl, 'state'))
             precs(cnt)%e3      = spproj%os_ptcl2D%e3get(iptcl)
             precs(cnt)%shift   = spproj%os_ptcl2D%get_2Dshift(iptcl)
         end do
@@ -257,7 +258,7 @@ contains
         integer :: pops(2), iprec
         pops = 0
         do iprec=1,partsz
-            if( precs(iprec)%state > 0 .and. precs(iprec)%class .eq. class )then
+            if( precs(iprec)%pind > 0 .and. precs(iprec)%class .eq. class )then
                 if( precs(iprec)%eo == 1 )then
                     pops(2) = pops(2) + 1
                 else
@@ -272,8 +273,8 @@ contains
     !>  \brief  is for assembling the sums in distributed/non-distributed mode
     !!          using gridding interpolation in Fourier space
     subroutine cavger_assemble_sums( do_frac_update )
-        use simple_kbinterpol,          only: kbinterpol
-        logical,      intent(in)      :: do_frac_update
+        use simple_kbinterpol, only: kbinterpol
+        logical, intent(in)           :: do_frac_update
         integer, parameter            :: READBUFFSZ = 1024
         complex, parameter            :: zero = cmplx(0.,0.)
         type(kbinterpol)              :: kbwin
@@ -287,10 +288,10 @@ contains
         complex :: fcomp, cswap
         real    :: loc(2), mat(2,2), dist(2), pw, add_phshift
         integer :: fdims(3), lims(3,2), phys_cmat(2), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
-        integer :: cnt_progress, iprec, i, j, sh, iwinsz, nyq, ind_in_stk, foffset, ok
+        integer :: iprec, i, j, sh, iwinsz, nyq, ind_in_stk, foffset, ok
         integer :: wdim, h, k, l, m, ll, mm, incr, icls, iptcl, interp_shlim, interp_shlim_sq
-        integer :: first_iprec, first_stkind, fromp, top, istk, nptcls, nstks, last_stkind, stkind
-        integer :: ibatch, nbatches, istart, iend, ithr, batch_nptcls
+        integer :: first_iprec, first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind, stkind
+        integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
         call init_cavgs_sums
@@ -331,41 +332,42 @@ contains
         do i = 1,params_glob%nthr
             call cgrid_imgs(i)%new(ldim_pd, params_glob%smpd, wthreads=.false.)
         enddo
-        !$omp end do
+        !$omp end do nowait
         !$omp end parallel
-        lims       = cgrid_imgs(1)%loop_lims(2)
-        cyc_lims   = cgrid_imgs(1)%loop_lims(3)
-        nyq        = cgrid_imgs(1)%get_lfny(1)
-        fdims      = cgrid_imgs(1)%get_array_shape()
-        foffset    = fdims(2)/2
-        interp_shlim    = nyq+1
+        lims            = cgrid_imgs(1)%loop_lims(2)
+        cyc_lims        = cgrid_imgs(1)%loop_lims(3)
+        nyq             = cgrid_imgs(1)%get_lfny(1)
+        fdims           = cgrid_imgs(1)%get_array_shape()
+        foffset         = fdims(2) / 2
+        interp_shlim    = nyq + 1
         interp_shlim_sq = interp_shlim**2
-        cyc_limsR(:,1) = cyc_lims(1,:)  ! limits in fortran layered format
-        cyc_limsR(:,2) = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
-        allocate(cmats(fdims(1), fdims(2), READBUFFSZ), rhos(fdims(1), fdims(2), READBUFFSZ))
+        cyc_limsR(:,1)  = cyc_lims(1,:)  ! limits in fortran layered format
+        cyc_limsR(:,2)  = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
+        allocate(cmats(fdims(1),fdims(2),READBUFFSZ), rhos(fdims(1),fdims(2),READBUFFSZ))
         ! Main loop
-        cnt_progress = 0
         first_iprec  = 1 ! first particle record in current stack
         do istk = first_stkind,last_stkind
-            cnt_progress = cnt_progress + 1
-            call progress(cnt_progress, ncls)
             ! Particles range
             stkind = first_stkind + istk - 1
             fromp  = max(precs(1)%pind,      nint(build_glob%spproj%os_stk%get(istk,'fromp')))
             top    = min(precs(partsz)%pind, nint(build_glob%spproj%os_stk%get(istk,'top')))
-            nptcls = top-fromp+1 ! # of particles in stack
-            if( nptcls == 0 )cycle
+            nptcls_in_stk = top - fromp + 1 ! # of particles in stack
+            if( nptcls_in_stk == 0 )cycle
             call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, fromp, stk_fname, ind_in_stk)
-            ind_in_stk = ind_in_stk - 1
+            ind_in_stk = ind_in_stk - 1 ! because incremented in the loop below
             ! open stack
-            call stkio_r%open(stk_fname, smpd, 'read', bufsz=READBUFFSZ)
+            if( nptcls_in_stk < READBUFFSZ )then
+                call stkio_r%open(stk_fname, smpd, 'read', bufsz=nptcls_in_stk)
+            else
+                call stkio_r%open(stk_fname, smpd, 'read', bufsz=READBUFFSZ)
+            endif
             ! Read batches loop
-            nbatches = ceiling(real(nptcls)/real(READBUFFSZ))
+            nbatches = ceiling(real(nptcls_in_stk)/real(READBUFFSZ)) ! will be 1 most of the tme
             do ibatch = 1,nbatches
-                istart = (ibatch-1)*READBUFFSZ + 1          ! first index in current batch
-                iend   = min(nptcls, istart+READBUFFSZ-1)   ! last  index in current batch
-                batch_nptcls = iend-istart+1
-                j      = 0                                  ! index in batch
+                istart = (ibatch - 1)              * READBUFFSZ + 1  ! first index in current batch, will be 1      most of the time
+                iend   = min(nptcls_in_stk, istart + READBUFFSZ - 1) ! last  index in current batch, will be nptcls most of the time
+                nptcls_in_batch = iend - istart + 1                  ! nptcls_in_batch will be nptcls_in_stk most of the rime
+                j      = 0                                           ! index in batch
                 do i = istart,iend
                     iprec      = first_iprec + i - 1
                     ind_in_stk = ind_in_stk + 1
@@ -377,11 +379,11 @@ contains
                 !$omp parallel default(shared) proc_bind(close)&
                 !$omp private(i,iprec,iptcl,fcomp,win_corner,add_phshift,mat,ithr,h,k,l,m,ll,mm,dist,loc,sh,phys_cmat,cyc1,cyc2,w,incr,pw)
                 !$omp do schedule(static)
-                do i = 1,batch_nptcls
-                    iprec = first_iprec + istart + i - 2
+                do i = 1,nptcls_in_batch
+                    iprec        = first_iprec + istart + i - 2
                     if( precs(iprec)%pind == 0 ) cycle
-                    iptcl = precs(iprec)%pind
-                    ithr  = omp_get_thread_num()+1
+                    iptcl        = precs(iprec)%pind
+                    ithr         = omp_get_thread_num()+1
                     cmats(:,:,i) = zero
                     rhos(:,:,i)  = 0.
                     ! normalize & pad & FFT
@@ -467,7 +469,7 @@ contains
                 !$omp do schedule(static)
                 do icls = 1,ncls
                     ithr = omp_get_thread_num() + 1
-                    do i = 1,batch_nptcls
+                    do i = 1,nptcls_in_batch
                         iprec = first_iprec + istart + i - 2
                         if( precs(iprec)%pind == 0 ) cycle
                         if( precs(iprec)%class == icls )then
@@ -491,7 +493,7 @@ contains
             ! close stack
             call stkio_r%close
             ! Keeeping track of particles records
-            first_iprec = first_iprec + nptcls
+            first_iprec = first_iprec + nptcls_in_stk
         enddo
         ! performs final quadrant swap on e/o rhos
         !$omp parallel do schedule(static) private(icls,ithr,k,ok,h,cswap) default(shared) proc_bind(close)
@@ -527,323 +529,6 @@ contains
         deallocate(read_imgs,cgrid_imgs)
         if( .not. params_glob%l_distr_exec ) call cavger_merge_eos_and_norm
     end subroutine cavger_assemble_sums
-
-    !>  \brief  is for assembling the sums in distributed/non-distributed mode
-    !!          using gridding interpolation in Fourier space
-    ! subroutine cavger_assemble_sums( do_frac_update )
-    !     use simple_kbinterpol, only: kbinterpol
-    !     logical, intent(in)      :: do_frac_update
-    !     integer, parameter       :: READBUFFSZ = 1024
-    !     complex, parameter       :: zero = cmplx(0.,0.)
-    !     type(kbinterpol)         :: kbwin
-    !     type(stack_io)           :: stkio_r
-    !     type(image_ptr)          :: pcmat(params_glob%nthr), prhomat(params_glob%nthr)
-    !     type(image), allocatable :: cgrid_imgs(:), read_imgs(:)
-    !     complex,     allocatable :: cmats(:,:,:)
-    !     real,        allocatable :: rhos(:,:,:), w(:,:)
-    !     integer,     allocatable :: cyc1(:), cyc2(:), iprecs(:)
-    !     complex :: fcomp, cswap
-    !     real    :: loc(2), mat(2,2), dist(2), add_phshift
-    !     integer :: fdims(3), lims(3,2), phys_cmat(2), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
-    !     integer :: iprec, iprec_start, iprec_end, i, j, sh, iwinsz, nyq, ind_in_stk, foffset, ok
-    !     integer :: wdim, h, k, l, m, ll, mm, incr, icls, iptcl, interp_shlim, interp_shlim_sq
-    !     integer :: first_stkind, fromp, top, istk, nstks, last_stkind, ithr, nptcls_read
-    !     logical :: all_imgs_read
-    !     if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
-    !     ! init cavgs
-    !     call init_cavgs_sums
-    !     if( do_frac_update )then
-    !         call cavger_readwrite_partial_sums( 'read' )
-    !         call cavger_apply_weights( 1. - params_glob%update_frac )
-    !     endif
-    !     kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
-    !     wdim   = kbwin%get_wdim()
-    !     iwinsz = ceiling(kbwin%get_winsz() - 0.5)
-    !     ! Number stacks
-    !     iptcl = 0
-    !     do i = 1,partsz
-    !         if( precs(i)%pind > 0 )then
-    !             iptcl = precs(i)%pind
-    !             exit
-    !         endif
-    !     enddo
-    !     call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, iptcl, first_stkind, ind_in_stk)
-    !     iptcl = 0
-    !     do i = partsz,1,-1
-    !         if( precs(i)%pind > 0 )then
-    !             iptcl = precs(i)%pind
-    !             exit
-    !         endif
-    !     enddo
-    !     call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, iptcl, last_stkind,  ind_in_stk)
-    !     nstks = last_stkind - first_stkind + 1
-    !     allocate(read_imgs(READBUFFSZ), cgrid_imgs(params_glob%nthr), cyc1(wdim), cyc2(wdim), w(wdim, wdim))
-    !     !$omp parallel default(shared) proc_bind(close) private(i)
-    !     !$omp do schedule(static)
-    !     do i = 1,READBUFFSZ
-    !         call read_imgs(i)%new(ldim, params_glob%smpd, wthreads=.false.)
-    !     enddo
-    !     !$omp end do nowait
-    !     !$omp do schedule(static)
-    !     do i = 1,params_glob%nthr
-    !         call cgrid_imgs(i)%new(ldim_pd, params_glob%smpd, wthreads=.false.)
-    !     enddo
-    !     !$omp end do nowait
-    !     !$omp end parallel
-    !     lims            = cgrid_imgs(1)%loop_lims(2)
-    !     cyc_lims        = cgrid_imgs(1)%loop_lims(3)
-    !     nyq             = cgrid_imgs(1)%get_lfny(1)
-    !     fdims           = cgrid_imgs(1)%get_array_shape()
-    !     foffset         = fdims(2) / 2
-    !     interp_shlim    = nyq + 1
-    !     interp_shlim_sq = interp_shlim**2
-    !     cyc_limsR(:,1)  = cyc_lims(1,:)  ! limits in fortran layered format
-    !     cyc_limsR(:,2)  = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
-    !     allocate(cmats(fdims(1),fdims(2),READBUFFSZ), rhos(fdims(1),fdims(2),READBUFFSZ))
-    !     istk          = first_stkind - 1 ! incremented in the loop in read_image_buffer (contained subroutine, below)
-    !     iprec         = 0                ! particle record index incremented in the loop in read_image_buffer (contained subroutine, below)
-    !     all_imgs_read = .false.          ! to indicate when we have finished all reads
-    !     do
-    !         iprec_start = max(1, iprec)
-    !         call read_image_buffer ! nptcls_read contains the number of images in the buffer
-    !         iprec_end   = iprec    ! iprec is incremented by the read_image_buffer call
-    !         if( allocated(iprecs) ) deallocate(iprecs)
-    !         allocate(iprecs(iprec_end - iprec_start + 1), source=(/(i, i = iprec_start, iprec_end)/))
-    !         ! Interpolation loop
-    !         !omp parallel default(shared) proc_bind(close)&
-    !         !omp private(i,iptcl,fcomp,win_corner,add_phshift,mat,ithr,h,k,l,m,ll,mm,dist,loc,sh,phys_cmat,cyc1,cyc2,w,incr)
-    !         !omp do schedule(static)
-    !         do i = 1, nptcls_read
-    !
-    !             print *, 'starting loop iteration ', i
-    !
-    !             if( precs(iprecs(i))%pind == 0 ) cycle
-    !             iptcl        = precs(iprecs(i))%pind
-    !             ithr         = omp_get_thread_num() + 1
-    !             cmats(:,:,i) = zero
-    !             rhos(:,:,i)  = 0.
-    !             ! normalize & pad & FFT
-    !             call read_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(ithr))
-    !
-    !             print *, 'done noise_norm_pad_fft'
-    !
-    !             ! apply CTF, shift
-    !             add_phshift = 0.
-    !             if( phaseplate ) add_phshift = precs(iprecs(i))%phshift
-    !             if( ctfflag /= CTFFLAG_NO )then
-    !                 if( ctfflag == CTFFLAG_FLIP )then
-    !                     call precs(iprecs(i))%tfun%apply_and_shift(cgrid_imgs(ithr), 1, lims, rhos(:,:,i), -precs(iprecs(i))%shift(1),&
-    !                     &-precs(iprecs(i))%shift(2), precs(iprecs(i))%dfx, precs(iprecs(i))%dfy, precs(iprecs(i))%angast, add_phshift)
-    !                 else
-    !                     call precs(iprecs(i))%tfun%apply_and_shift(cgrid_imgs(ithr), 2, lims, rhos(:,:,i), -precs(iprecs(i))%shift(1),&
-    !                     &-precs(iprecs(i))%shift(2), precs(iprecs(i))%dfx, precs(iprecs(i))%dfy, precs(iprecs(i))%angast, add_phshift)
-    !                 endif
-    !             else
-    !                 call precs(iprecs(i))%tfun%apply_and_shift(cgrid_imgs(ithr), 3, lims, rhos(:,:,i), -precs(iprecs(i))%shift(1),&
-    !                 &-precs(iprecs(i))%shift(2), precs(iprecs(i))%dfx, precs(iprecs(i))%dfy, precs(iprecs(i))%angast, add_phshift)
-    !             endif
-    !
-    !             print *, 'done apply CTF, shift'
-    !
-    !             ! Rotation matrix
-    !             call rotmat2d(-precs(iprecs(i))%e3, mat)
-    !             ! Interpolation
-    !             if( l_bilinear )then
-    !                 ! bi-linear interpolation
-    !                 do h = lims(1,1), lims(1,2)
-    !                     do k = lims(2,1), lims(2,2)
-    !                         sh = nint(hyp(real(h),real(k)))
-    !                         if( sh > interp_shlim ) cycle
-    !                         loc = matmul(real([h,k]), mat)
-    !                         ! interpolation
-    !                         win_corner = floor(loc) ! bottom left corner
-    !                         dist  = loc - real(win_corner)
-    !                         l     = cyci_1d(cyc_limsR(:,1), win_corner(1))
-    !                         ll    = cyci_1d(cyc_limsR(:,1), win_corner(1)+1)
-    !                         m     = cyci_1d(cyc_limsR(:,2), win_corner(2))
-    !                         mm    = cyci_1d(cyc_limsR(:,2), win_corner(2)+1)
-    !                         fcomp =         (1.-dist(1))*(1.-dist(2)) * cgrid_imgs(ithr)%get_fcomp2D(l, m)  ! bottom left corner
-    !                         fcomp = fcomp + (1.-dist(1))*dist(2)      * cgrid_imgs(ithr)%get_fcomp2D(l, mm) ! bottom right corner
-    !                         fcomp = fcomp + dist(1)*(1.-dist(2))      * cgrid_imgs(ithr)%get_fcomp2D(ll,m)  ! upper left corner
-    !                         fcomp = fcomp + dist(1)*dist(2)           * cgrid_imgs(ithr)%get_fcomp2D(ll,mm) ! upper right corner
-    !                         ! set
-    !                         phys_cmat = cgrid_imgs(ithr)%comp_addr_phys(h,k)
-    !                         cmats(phys_cmat(1),phys_cmat(2),i) = fcomp
-    !                     end do
-    !                 end do
-    !             else
-    !                 ! Kaiser-Bessel
-    !                 do h = lims(1,1),lims(1,2)
-    !                     do k = lims(2,1),lims(2,2)
-    !                         sh = nint(hyp(real(h),real(k)))
-    !                         if( sh > interp_shlim ) cycle
-    !                         loc = matmul(real([h,k]), mat)
-    !                         win_corner = nint(loc) - iwinsz
-    !                         ! weights kernel
-    !                         w = 1.
-    !                         do l = 1, wdim
-    !                             incr = l - 1
-    !                             ! circular addresses
-    !                             cyc1(l) = cyci_1d(cyc_limsR(:,1), win_corner(1) + incr)
-    !                             cyc2(l) = cyci_1d(cyc_limsR(:,2), win_corner(2) + incr)
-    !                             ! interpolation kernel matrix
-    !                             w(l,:) = w(l,:) * kbwin%apod( real(win_corner(1) + incr) - loc(1) )
-    !                             w(:,l) = w(:,l) * kbwin%apod( real(win_corner(2) + incr) - loc(2) )
-    !                         enddo
-    !                         w = w / sum(w)
-    !                         ! interpolation
-    !                         fcomp = zero
-    !                         do l = 1, wdim
-    !                             do m = 1, wdim
-    !                                 if( w(l,m) < TINY ) cycle
-    !                                 fcomp = fcomp + cgrid_imgs(ithr)%get_fcomp2D(cyc1(l),cyc2(m)) * w(l,m)
-    !                             end do
-    !                         end do
-    !                         ! set
-    !                         phys_cmat = cgrid_imgs(ithr)%comp_addr_phys(h,k)
-    !                         cmats(phys_cmat(1),phys_cmat(2),i) = fcomp
-    !                     end do
-    !                 end do
-    !             endif
-    !
-    !             print *, 'done interpolating'
-    !
-    !         enddo
-    !         !omp end do nowait
-    !         ! Sum over classes
-    !         !omp do schedule(static)
-    !         do icls = 1, ncls
-    !             ithr = omp_get_thread_num() + 1
-    !             do i = 1, nptcls_read
-    !                 if( precs(iprecs(i))%pind == 0 ) cycle
-    !                 if( precs(iprecs(i))%class == icls )then
-    !                     select case(precs(iprecs(i))%eo)
-    !                         case(0,-1)
-    !                             call cavgs_even(icls)%get_cmat_ptr(pcmat(ithr)%cmat)
-    !                             call ctfsqsums_even(icls)%get_cmat_ptr(prhomat(ithr)%cmat)
-    !                         case(1)
-    !                             call cavgs_odd(icls)%get_cmat_ptr(pcmat(ithr)%cmat)
-    !                             call ctfsqsums_odd(icls)%get_cmat_ptr(prhomat(ithr)%cmat)
-    !                     end select
-    !                     pcmat(ithr)%cmat(:,:,1)   = pcmat(ithr)%cmat(:,:,1)   + precs(iprecs(i))%pw * cmats(:,:,i)
-    !                     prhomat(ithr)%cmat(:,:,1) = prhomat(ithr)%cmat(:,:,1) + precs(iprecs(i))%pw * cmplx(rhos(:,:,i),0.0)
-    !                 endif
-    !             enddo
-    !         enddo
-    !         !omp end do nowait
-    !         !omp end parallel
-    !
-    !         print *, 'done updating cavgs'
-    !
-    !         if( all_imgs_read )then
-    !
-    !             print *, 'exiting loop'
-    !
-    !             exit
-    !         endif
-    !     end do
-    !
-    !     print *, 'final quadrant swap on e/o rhos'
-    !
-    !     ! performs final quadrant swap on e/o rhos
-    !     !omp parallel do schedule(static) private(icls,ithr,k,ok,h,cswap) default(shared) proc_bind(close)
-    !     do icls = 1, ncls
-    !
-    !         print *, 'icls ', icls
-    !
-    !         ithr = omp_get_thread_num() + 1
-    !         call ctfsqsums_even(icls)%get_cmat_ptr(prhomat(ithr)%cmat)
-    !         do k = 1, foffset
-    !             ok = k + foffset
-    !             do h = 1, fdims(1)
-    !                 cswap = prhomat(ithr)%cmat(h,k,1)
-    !                 prhomat(ithr)%cmat(h, k,1) = prhomat(ithr)%cmat(h,ok,1)
-    !                 prhomat(ithr)%cmat(h,ok,1) = cswap
-    !             end do
-    !         end do
-    !         call ctfsqsums_odd(icls)%get_cmat_ptr(prhomat(ithr)%cmat)
-    !         do k = 1,foffset
-    !             ok = k + foffset
-    !             do h = 1, fdims(1)
-    !                 cswap = prhomat(ithr)%cmat(h,k,1)
-    !                 prhomat(ithr)%cmat(h, k,1) = prhomat(ithr)%cmat(h,ok,1)
-    !                 prhomat(ithr)%cmat(h,ok,1) = cswap
-    !             end do
-    !         end do
-    !     enddo
-    !     !omp end parallel do
-    !
-    !     print *, 'done final quadrant swap on e/o rhos'
-    !
-    !     ! Cleanup
-    !     do i = 1,READBUFFSZ
-    !         call read_imgs(i)%kill
-    !     enddo
-    !     do i = 1,params_glob%nthr
-    !         call cgrid_imgs(i)%kill
-    !     enddo
-    !     deallocate(read_imgs,cgrid_imgs)
-    !     if( .not. params_glob%l_distr_exec ) call cavger_merge_eos_and_norm
-    !
-    !     contains
-    !
-    !         subroutine read_image_buffer
-    !             character(len=:), allocatable :: stk_fname
-    !             integer :: i, iptcl, fromp, top, nptcls_in_stk, ind_in_stk
-    !             nptcls_read = 0
-    !             do while( nptcls_read < READBUFFSZ )
-    !                 istk = min(last_stkind, istk + 1)
-    !
-    !                 print *, 'istk ', istk
-    !
-    !                 fromp = nint(build_glob%spproj%os_stk%get(istk,'fromp')) ! particle start index, not taking state=0s into account
-    !                 top   = nint(build_glob%spproj%os_stk%get(istk,'top'))   ! particle stop  index, not taking state=0s into account
-    !                 nptcls_in_stk = top - fromp + 1                          ! # particles in stack
-    !
-    !                 print *, 'fromp / top / nptcls_in_stk ', fromp, top, nptcls_in_stk
-    !
-    !                 if( nptcls_in_stk == 0 ) cycle
-    !                 call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, fromp, stk_fname, ind_in_stk)
-    !
-    !                 print *, 'stk_fname ', stk_fname
-    !
-    !                 call stkio_r%open(stk_fname, smpd, 'read', bufsz=nptcls_in_stk)
-    !                 call stkio_r%read_whole
-    !
-    !                 print *, 'read whole stack'
-    !
-    !                 do i = 1, nptcls_in_stk
-    !                     iptcl = fromp + i - 1
-    !
-    !                     print *, 'iptcl / pptcl_mask(iptcl) ', iptcl, pptcl_mask(iptcl)
-    !
-    !                     if( pptcl_mask(iptcl) )then
-    !                         iprec = iprec + 1
-    !
-    !                         print *, 'iprec / precs(iprec)%pind ', iprec, precs(iprec)%pind
-    !
-    !                         if( precs(iprec)%pind == 0 ) cycle
-    !                         nptcls_read = nptcls_read + 1
-    !
-    !                         print *, 'i / nptcls_read ', i, nptcls_read
-    !
-    !                         call stkio_r%get_image(i, read_imgs(nptcls_read))
-    !                         if( nptcls_read == READBUFFSZ .or. iprec == partsz ) exit
-    !                     endif
-    !                 end do
-    !                 call stkio_r%close
-    !                 if( iprec == partsz )then
-    !
-    !                     print *, 'all imgs read'
-    !                     print *, 'istk / last_stkind / iprec / partsz ', istk, last_stkind, iprec, partsz
-    !
-    !                     all_imgs_read = .true.
-    !                     return
-    !                 endif
-    !             end do
-    !         end subroutine read_image_buffer
-    !
-    ! end subroutine cavger_assemble_sums
 
     !>  \brief  merges the even/odd pairs and normalises the sums
     subroutine cavger_merge_eos_and_norm
