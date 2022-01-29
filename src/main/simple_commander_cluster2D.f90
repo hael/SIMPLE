@@ -1168,20 +1168,20 @@ contains
         use simple_aff_prop,         only: aff_prop
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(parameters)             :: params
-        type(sp_project)             :: spproj
-        type(class_frcs)             :: clsfrcs
-        type(tvfilter)               :: tvfilt
-        type(image)                  :: img_msk
-        type(polarft_corrcalc)       :: pftcc
-        type(aff_prop)               :: aprop
-        type(polarizer), allocatable :: cavg_imgs(:), cavg_imgs_good(:)
-        character(len=:),allocatable :: cavgsstk, classname, frcs_fname
-        real,            allocatable :: states(:), orig_cls_inds(:), frc(:), filter(:), clspops(:), clsres(:)
-        real,            allocatable :: corrs(:), corrmat_comlin(:,:), corrs_top_ranking(:)
-        logical,         allocatable :: l_msk(:,:,:), mask_top_ranking(:), mask_otsu(:), mask_icls(:)
-        integer,         allocatable :: order(:), nloc(:), centers(:), labels(:), cntarr(:), clsinds(:)
-        integer :: ncls, n, ldim(3), ncls_sel, i, j, icls, cnt, filtsz, pop1, pop2, nsel, ncls_aff_prop
+        type(parameters)              :: params
+        type(sp_project)              :: spproj
+        type(class_frcs)              :: clsfrcs
+        type(tvfilter)                :: tvfilt
+        type(image)                   :: img_msk
+        type(polarft_corrcalc)        :: pftcc
+        type(aff_prop)                :: aprop
+        type(polarizer),  allocatable :: cavg_imgs(:), cavg_imgs_good(:)
+        character(len=:), allocatable :: cavgsstk, classname, frcs_fname
+        real,             allocatable :: states(:), orig_cls_inds(:), frc(:), filter(:), clspops(:), clsres(:)
+        real,             allocatable :: corrs(:), corrmat_comlin(:,:), corrs_top_ranking(:)
+        logical,          allocatable :: l_msk(:,:,:), mask_top_ranking(:), mask_otsu(:), mask_icls(:)
+        integer,          allocatable :: order(:), nloc(:), centers(:), labels(:), cntarr(:), clsinds(:)
+        integer :: ncls, n, ldim(3), ncls_sel, i, j, icls, cnt, filtsz, pop1, pop2, nsel, ncls_aff_prop, icen, jcen
         real    :: smpd, sdev_noise, simsum, cmin, cmax, pref, corr_icls
         logical :: l_apply_optlp
         ! defaults
@@ -1256,96 +1256,105 @@ contains
             ! mask
             call cavg_imgs(cnt)%mask(params%msk, 'soft')
         end do
-        ! create the polarft_corrcalc object
-        params%kfromto(1) = max(2, calc_fourier_index(params%hp, params%box, params%smpd))
-        params%kfromto(2) =        calc_fourier_index(params%lp, params%box, params%smpd)
-        params%kstop      = params%kfromto(2)
-        call pftcc%new(ncls_sel, [1,1])
-        ! initialize polarizer for the first image, then copy it to the rest
-        call cavg_imgs(1)%init_polarizer(pftcc, params%alpha)
-        !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
-        do icls = 1, ncls_sel
-            if( icls /= 1 ) call cavg_imgs(icls)%copy_polarizer(cavg_imgs(1))
-            call cavg_imgs(icls)%fft()
-            call cavg_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true.) ! 2 polar coords
-            call cavg_imgs(icls)%ifft()
-        end do
-        !$omp end parallel do
-        ! some allocations needed
-        nsel = ceiling(0.1 * real(ncls_sel))
-        allocate(nloc(nsel), order(ncls_sel),                                    source=0)
-        allocate(corrmat_comlin(ncls_sel,ncls_sel), corrs_top_ranking(ncls_sel), source=-1.)
-        allocate(mask_top_ranking(ncls_sel),                                     source=.true.)
-        write(logfhandle,'(A)') '>>> CALCULATING COMMON-LINE CORRELATION MATRIX'
-        !$omp parallel do default(shared) private(i,j) schedule(dynamic) proc_bind(close)
-        do i = 1, ncls_sel - 1
-            do j = i + 1, ncls_sel
-                ! Common line correlation
-                ! corrmat_comlin(i,j) = pftcc%genmaxcorr_comlin(i,j) ! gives worse result
-                corrmat_comlin(i,j) = pftcc%genmaxspecscore_comlin(i,j)
-                corrmat_comlin(j,i) = corrmat_comlin(i,j)
-            enddo
-            corrmat_comlin(i,i) = 1.
-        enddo
-        !$omp end parallel do
-        ! take care of the last diagonal element
-        corrmat_comlin(ncls_sel,ncls_sel) = 1.
-        write(logfhandle,'(A)') '>>> GOOD/BAD CLASSIFICATION AND RANKING OF CLASS AVERAGES'
-        ! average the nsel best correlations (excluding self) to create a scoring function for garbage removal
-        do i = 1, ncls_sel
-            mask_top_ranking    = .true.
-            mask_top_ranking(i) = .false. ! to remove the diagonal element
-            corrs = pack(corrmat_comlin(i,:), mask_top_ranking)
-            nloc = maxnloc(corrs, nsel)
-            corrs_top_ranking(i) = 0.
-            do j = 1, nsel
-                corrs_top_ranking(i) = corrs_top_ranking(i) + corrs(nloc(j))
+        if( trim(params%bin_cls).eq.'yes' )then
+            ! create the polarft_corrcalc object
+            params%kfromto(1) = max(2, calc_fourier_index(params%hp, params%box, params%smpd))
+            params%kfromto(2) =        calc_fourier_index(params%lp, params%box, params%smpd)
+            params%kstop      = params%kfromto(2)
+            call pftcc%new(ncls_sel, [1,1])
+            ! initialize polarizer for the first image, then copy it to the rest
+            call cavg_imgs(1)%init_polarizer(pftcc, params%alpha)
+            !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
+            do icls = 1, ncls_sel
+                if( icls /= 1 ) call cavg_imgs(icls)%copy_polarizer(cavg_imgs(1))
+                call cavg_imgs(icls)%fft()
+                call cavg_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true.) ! 2 polar coords
+                call cavg_imgs(icls)%ifft()
             end do
-            corrs_top_ranking(i) = corrs_top_ranking(i) / real(nsel)
-        end do
-        ! use Otsu's algorithm to remove the junk
-        call otsu(corrs_top_ranking, mask_otsu)
-        pop1 = count(      mask_otsu)
-        pop2 = count(.not. mask_otsu)
-        write(logfhandle,*) 'average corr cluster 1: ', sum(corrs_top_ranking, mask=      mask_otsu) / real(pop1), ' pop ', pop1
-        write(logfhandle,*) 'average corr cluster 2: ', sum(corrs_top_ranking, mask=.not. mask_otsu) / real(pop2), ' pop ', pop2
-        pop1 = 0
-        pop2 = 0
-        do i = 1, ncls_sel
-            if( mask_otsu(i) )then
-                pop1 = pop1 + 1
-                call cavg_imgs(i)%write('good.mrc', pop1)
-            else
-                pop2 = pop2 + 1
-                call cavg_imgs(i)%write('bad.mrc',  pop2)
-            endif
-        end do
-        ! rank
-        order = (/(i,i=1,ncls_sel)/)
-        call hpsort(corrs_top_ranking, order)
-        do i = 1, ncls_sel
-            call cavg_imgs(order(i))%write('ranked.mrc', i)
-        end do
-        ! update the states array according to the good/bad classification
-        do i = 1, ncls_sel
-            if( .not. mask_otsu(i) ) states(clsinds(i)) = 0.
-        end do
-        ! update the class indices (bookkeeping is getting hairy)
-        deallocate(clsinds)
-        allocate(clsinds(ncls))
-        clsinds = (/(i,i=1,ncls)/)
-        clsinds = pack(clsinds, mask=states > 0.5)
-        ! toss out the bad ones
-        allocate(cavg_imgs_good(pop1))
-        pop1 = 0
-        do i = 1, ncls_sel
-            if( mask_otsu(i) )then
-                pop1 = pop1 + 1
-                call cavg_imgs_good(pop1)%copy(cavg_imgs(i))
-            endif
-        end do
+            !$omp end parallel do
+            ! some allocations needed
+            nsel = ceiling(0.1 * real(ncls_sel))
+            allocate(nloc(nsel), order(ncls_sel),                                    source=0)
+            allocate(corrmat_comlin(ncls_sel,ncls_sel), corrs_top_ranking(ncls_sel), source=-1.)
+            allocate(mask_top_ranking(ncls_sel),                                     source=.true.)
+            write(logfhandle,'(A)') '>>> CALCULATING COMMON-LINE CORRELATION MATRIX'
+            !$omp parallel do default(shared) private(i,j) schedule(dynamic) proc_bind(close)
+            do i = 1, ncls_sel - 1
+                do j = i + 1, ncls_sel
+                    ! Common line correlation
+                    ! corrmat_comlin(i,j) = pftcc%genmaxcorr_comlin(i,j) ! gives worse result
+                    corrmat_comlin(i,j) = pftcc%genmaxspecscore_comlin(i,j)
+                    corrmat_comlin(j,i) = corrmat_comlin(i,j)
+                enddo
+                corrmat_comlin(i,i) = 1.
+            enddo
+            !$omp end parallel do
+            ! take care of the last diagonal element
+            corrmat_comlin(ncls_sel,ncls_sel) = 1.
+            write(logfhandle,'(A)') '>>> GOOD/BAD CLASSIFICATION AND RANKING OF CLASS AVERAGES'
+            ! average the nsel best correlations (excluding self) to create a scoring function for garbage removal
+            do i = 1, ncls_sel
+                mask_top_ranking    = .true.
+                mask_top_ranking(i) = .false. ! to remove the diagonal element
+                corrs = pack(corrmat_comlin(i,:), mask_top_ranking)
+                nloc = maxnloc(corrs, nsel)
+                corrs_top_ranking(i) = 0.
+                do j = 1, nsel
+                    corrs_top_ranking(i) = corrs_top_ranking(i) + corrs(nloc(j))
+                end do
+                corrs_top_ranking(i) = corrs_top_ranking(i) / real(nsel)
+            end do
+            ! use Otsu's algorithm to remove the junk
+            call otsu(corrs_top_ranking, mask_otsu)
+            pop1 = count(      mask_otsu)
+            pop2 = count(.not. mask_otsu)
+            write(logfhandle,*) 'average corr cluster 1: ', sum(corrs_top_ranking, mask=      mask_otsu) / real(pop1), ' pop ', pop1
+            write(logfhandle,*) 'average corr cluster 2: ', sum(corrs_top_ranking, mask=.not. mask_otsu) / real(pop2), ' pop ', pop2
+            pop1 = 0
+            pop2 = 0
+            do i = 1, ncls_sel
+                if( mask_otsu(i) )then
+                    pop1 = pop1 + 1
+                    call cavg_imgs(i)%write('good.mrc', pop1)
+                else
+                    pop2 = pop2 + 1
+                    call cavg_imgs(i)%write('bad.mrc',  pop2)
+                endif
+            end do
+            ! rank
+            order = (/(i,i=1,ncls_sel)/)
+            call hpsort(corrs_top_ranking, order)
+            do i = 1, ncls_sel
+                call cavg_imgs(order(i))%write('ranked.mrc', i)
+            end do
+            ! update the states array according to the good/bad classification
+            do i = 1, ncls_sel
+                if( .not. mask_otsu(i) ) states(clsinds(i)) = 0.
+            end do
+            ! update the class indices (bookkeeping is getting hairy)
+            deallocate(clsinds)
+            allocate(clsinds(ncls))
+            clsinds = (/(i,i=1,ncls)/)
+            clsinds = pack(clsinds, mask=states > 0.5)
+            ! toss out the bad ones
+            allocate(cavg_imgs_good(pop1))
+            pop1 = 0
+            do i = 1, ncls_sel
+                if( mask_otsu(i) )then
+                    pop1 = pop1 + 1
+                    call cavg_imgs_good(pop1)%copy(cavg_imgs(i))
+                endif
+            end do
+
+        else
+            pop1 = ncls_sel
+            allocate(cavg_imgs_good(pop1))
+            do i = 1, ncls_sel
+                call cavg_imgs_good(i)%copy(cavg_imgs(i))
+            end do
+        endif
         ! re-calculate the similarity matrix
-        write(logfhandle,'(A)') '>>> CALCULATING COMMON-LINE CORRELATION MATRIX FOR THE GOOD CLASS AVERAGES'
+        write(logfhandle,'(A)') '>>> CALCULATING COMMON-LINE CORRELATION MATRIX'
         ! re-create the polarft_corrcalc object
         call pftcc%kill
         call pftcc%new(pop1, [1,1])
@@ -1359,7 +1368,7 @@ contains
             call cavg_imgs_good(icls)%ifft()
         end do
         !$omp end parallel do
-        deallocate(corrmat_comlin)
+        if( allocated(corrmat_comlin) ) deallocate(corrmat_comlin)
         allocate(corrmat_comlin(pop1,pop1), source=-1.)
         !$omp parallel do default(shared) private(i,j) schedule(dynamic) proc_bind(close)
         do i = 1, pop1 - 1
@@ -1377,7 +1386,7 @@ contains
         ! calculate a preference that generates a small number of clusters
         call analyze_smat(corrmat_comlin, .false., cmin, cmax)
         pref = cmin - (cmax - cmin)
-        write(logfhandle,'(A)') '>>> CLUSTERING OF GOOD CLASS AVERAGES WITH AFFINITY PROPAGATION'
+        write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
         call aprop%new(pop1, corrmat_comlin, pref=pref)
         call aprop%propagate(centers, labels, simsum)
         ncls_aff_prop = size(centers)
@@ -1426,6 +1435,15 @@ contains
             end do
             corr_icls = corr_icls / real(cnt)
             write(logfhandle,*) 'average corr AP cluster '//int2str_pad(icls,3)//': ', corr_icls, ' pop ', count(mask_icls)
+        end do
+        ! print the correlations between the cluster centers
+        write(logfhandle,'(A)') '>>> COMMON LINE CORRELATIONS BETEEN CLUSTER CENTERS'
+        do i = 1,ncls_aff_prop - 1
+            icen = centers(i)
+            do j = i + 1,ncls_aff_prop
+                jcen = centers(j)
+                write(logfhandle,*) 'corr btw cluster  '//int2str_pad(i,3)//' & '//int2str_pad(j,3)//': ', corrmat_comlin(icen,jcen)
+            end do
         end do
         ! destruct
         call spproj%kill

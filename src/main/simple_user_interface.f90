@@ -1437,12 +1437,13 @@ contains
         &to apply a balancing restraint (on the class population). Adjust balance until you are &
         &satisfied with the shape of the histogram',&                              ! descr_long
         &'simple_exec',&                                                           ! executable
-        &0, 0, 0, 0, 3, 1, 1, .true.)                                              ! # entries in each group, requires sp_project
+        &0, 1, 0, 0, 3, 1, 1, .true.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        ! <empty>
+        call cluster_cavgs%set_input('parm_ios', 1, 'bin_cls', 'num', 'Perform good/bad classification',&
+        &'Classes with lower resolution are rejected by Otsu(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3048,7 +3049,7 @@ contains
         ! mask controls
         call refine3D_nano%set_input('mask_ctrls', 1, mskdiam)
         call refine3D_nano%set_input('mask_ctrls', 2, mskfile)
-        ! computer controls        
+        ! computer controls
         call refine3D_nano%set_input('comp_ctrls', 1, nparts)
         refine3D_nano%comp_ctrls(1)%required = .false.
         call refine3D_nano%set_input('comp_ctrls', 2, nthr)
