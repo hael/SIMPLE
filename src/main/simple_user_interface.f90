@@ -1437,13 +1437,14 @@ contains
         &to apply a balancing restraint (on the class population). Adjust balance until you are &
         &satisfied with the shape of the histogram',&                              ! descr_long
         &'simple_exec',&                                                           ! executable
-        &0, 1, 0, 0, 3, 1, 1, .true.)                                              ! # entries in each group, requires sp_project
+        &0, 2, 0, 0, 3, 1, 1, .true.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call cluster_cavgs%set_input('parm_ios', 1, 'bin_cls', 'num', 'Perform good/bad classification',&
         &'Classes with lower resolution are rejected by Otsu(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call cluster_cavgs%set_input('parm_ios', 2,  'ncls', 'num', 'Number of highest populated AP clusters', 'Number of highest populated AP clusters to map the AP solution onto', '# classes', .false., 0.)
         ! alternative inputs
         ! <empty>
         ! search controls
