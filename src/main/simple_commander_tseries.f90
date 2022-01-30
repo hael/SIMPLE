@@ -625,11 +625,11 @@ contains
         ! static parameters
         call cline%set('prg',      'cluster2D')
         call cline%set('dir_exec', 'cluster2D_nano')
-        call cline%set('match_filt',     'no')
-        call cline%set('ptclw',          'no')
-        call cline%set('center',        'yes')
-        call cline%set('autoscale',      'no')
-        call cline%set('tseries',       'yes')
+        call cline%set('match_filt',      'no')
+        call cline%set('ptclw',           'no')
+        call cline%set('center',         'yes')
+        call cline%set('autoscale',       'no')
+        call cline%set('tseries',        'yes')
         ! dynamic parameters
         if( .not. cline%defined('refine') )then
             call cline%set('refine','greedy')
@@ -994,8 +994,8 @@ contains
         type(refine3D_commander_distr) :: xrefine3D_distr
         ! static parameters
         call cline%set('prg', 'refine3D')
-        call cline%set('match_filt','no')
         ! dynamic parameters
+        if( .not. cline%defined('match_filt')    ) call cline%set('match_filt',     'no')
         if( .not. cline%defined('cenlp')         ) call cline%set('cenlp',            5.)
         if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
         if( .not. cline%defined('keepvol')       ) call cline%set('keepvol',       'yes')

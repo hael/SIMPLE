@@ -1378,7 +1378,12 @@ contains
                 self%l_match_filt  = .false.
                 self%l_needs_sigma = .true.
             case(OBJFUN_CC)
-                self%l_match_filt  = (trim(self%match_filt) .eq.'yes') .and. (.not.self%l_lpset)
+                if( cline%defined('match_filt') )then
+                    self%l_match_filt  = (trim(self%match_filt) .eq.'yes')
+                else
+                    ! default behaviour
+                    self%l_match_filt  = (trim(self%match_filt) .eq.'yes') .and. (.not.self%l_lpset)
+                endif
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
                 if( self%l_needs_sigma )then
                     self%l_match_filt = .false.
