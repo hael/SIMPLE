@@ -1181,6 +1181,7 @@ contains
         real,             allocatable :: corrs(:), corrmat_comlin(:,:), corrs_top_ranking(:)
         logical,          allocatable :: l_msk(:,:,:), mask_top_ranking(:), mask_otsu(:), mask_icls(:)
         integer,          allocatable :: order(:), nloc(:), centers(:), labels(:), cntarr(:), clsinds(:), pops(:)
+        integer,          allocatable :: labels_mapped(:), classmapping(:)
         integer :: ncls, n, ldim(3), ncls_sel, i, j, icls, cnt, filtsz, pop1, pop2, nsel, ncls_aff_prop, icen, jcen, loc(1)
         real    :: smpd, sdev_noise, simsum, cmin, cmax, pref, corr_icls
         logical :: l_apply_optlp
@@ -1195,6 +1196,7 @@ contains
         ! get class average stack
         call spproj%get_cavgs_stk(cavgsstk, ncls, smpd)
         call find_ldim_nptcls(cavgsstk, ldim, n)
+        write(logfhandle,'(A,I3)') '# classes in stack ', n
         ldim(3) = 1
         if( n /= ncls ) THROW_HARD('Inconsistent # classes in project file vs cavgs stack; exec_cluster_cavgs')
         ! ensure correct smpd in params class
@@ -1207,6 +1209,7 @@ contains
         where( clspops <  real(MINCLSPOPLIM) ) states = 0.
         ! find out how many selected class averages initially
         ncls_sel = count(states > 0.5)
+        write(logfhandle,'(A,I3)') '# clsses left after standard rejection ', ncls_sel
         ! keep track of the original class indices
         allocate(clsinds(ncls))
         clsinds = (/(i,i=1,ncls)/)
@@ -1346,9 +1349,9 @@ contains
                 endif
             end do
             ncls_sel = pop1
+            write(logfhandle,'(A,I3)') '# classes left after binary classification rejection ', ncls_sel
         else
-            pop1 = ncls_sel
-            allocate(cavg_imgs_good(pop1))
+            allocate(cavg_imgs_good(ncls_sel))
             do i = 1, ncls_sel
                 call cavg_imgs_good(i)%copy(cavg_imgs(i))
             end do
@@ -1404,27 +1407,44 @@ contains
                 elsewhere
                     mask_icls = .false.
                 end where
-                cnt = 0
-                do i = 1, ncls_sel - 1
-                    do j = i + 1, ncls_sel
-                        if( mask_icls(i) .and. mask_icls(j) ) cnt = cnt + 1
-                    end do
-                end do
-                pops(icls) = cnt
+                pops(icls) = count(mask_icls)
             end do
             if( allocated(nloc) ) deallocate(nloc)
             allocate(nloc(params%ncls), source=0)
             nloc = maxnloc(real(pops), params%ncls)
             ! remap the AP clusters
             if( allocated(corrs) ) deallocate(corrs)
-            allocate(corrs(params%ncls), source=-1.)
+            allocate(corrs(params%ncls), classmapping(ncls_aff_prop))
+            ! put back the diagonal elements of the corrmat
+            do i = 1, ncls_sel
+                corrmat_comlin(i,i) = 1.
+            end do
+            ! make a per cluster mapping
             do icls = 1, ncls_aff_prop
                 do i = 1,params%ncls
                     corrs(i) = corrmat_comlin(nloc(i),icls)
                 end do
                 loc = maxloc(corrs)
-                labels(icls) = nloc(loc(1))
+                classmapping(icls) = nloc(loc(1))
+                write(logfhandle,*) 'mapped cluster ', icls, ' to ', classmapping(icls)
             end do
+            ! do the mapping
+            allocate(labels_mapped(ncls_sel), source = 0)
+            do i = 1, ncls_sel
+                do icls = 1, ncls_aff_prop
+                    if( labels(i) == icls ) labels_mapped(i) = classmapping(icls)
+                end do
+            end do
+            if( any(labels_mapped == 0) ) THROW_HARD('class mapping did not work, class=0 not allowed')
+            ! re-map agaian
+            cnt = 0
+            do i = 1, ncls_aff_prop
+                if( any(labels_mapped == i) )then
+                    cnt = cnt + 1
+                    where( labels_mapped == classmapping(i) ) labels = cnt
+                endif
+            end do
+            deallocate(labels_mapped)
             ! update # AP clusters
             ncls_aff_prop = params%ncls
         endif
