@@ -108,7 +108,6 @@ contains
         ctfvars%ctfflag = CTFFLAG_NO
         ! auto-scaling prep
         do_autoscale = (cline%get_carg('autoscale').eq.'yes')
-        if( cline%defined('vol1') ) do_autoscale = .false.
         ! remove autoscale flag from command line, since no scaled partial stacks
         ! will be produced (this program always uses shared-mem paralllelisation of scale)
         call cline%delete('autoscale')
@@ -332,56 +331,51 @@ contains
         call cline_reproject%set('smpd',    params%smpd)
         call cline_reproject%set('box',     real(orig_box))
         ! execute commanders
-        if( .not. cline%defined('vol1') )then
-            write(logfhandle,'(A)') '>>>'
-            write(logfhandle,'(A)') '>>> INITIALIZATION WITH STOCHASTIC NEIGHBORHOOD HILL-CLIMBING'
-            write(logfhandle,'(A,F6.1,A)') '>>> LOW-PASS LIMIT FOR ALIGNMENT: ', lplims(1),' ANGSTROMS'
-            write(logfhandle,'(A)') '>>>'
-            if( l_shmem )then
-                call rec(cline_refine3D_snhc, l_rnd=.true.)
-                params_ptr  => params_glob
-                params_glob => null()
-                call xrefine3D%execute(cline_refine3D_snhc)
-                params_glob => params_ptr
-                params_ptr  => null()
-            else
-                call xrefine3D_distr%execute(cline_refine3D_snhc)
-            endif
-            write(logfhandle,'(A)') '>>>'
-            write(logfhandle,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH REFINE3D'
-            write(logfhandle,'(A)') '>>>'
-            if( l_shmem )then
-                params_ptr  => params_glob
-                params_glob => null()
-                call xrefine3D%execute(cline_refine3D_init)
-                params_glob => params_ptr
-                params_ptr  => null()
-            else
-                call xrefine3D_distr%execute(cline_refine3D_init)
-            endif
-            iter     = cline_refine3D_init%get_rarg('endit')
-            vol_iter = trim(VOL_FBODY)//trim(str_state)//params%ext
-            if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to symmetry axis search does not exist')
-            if( symran_before_refine )then
-                call work_proj1%read_segment('ptcl3D', trim(WORK_PROJFILE))
-                call se1%symrandomize(work_proj1%os_ptcl3D)
-                call work_proj1%write_segment_inside('ptcl3D', trim(WORK_PROJFILE))
-            endif
-            if( srch4symaxis )then
-                write(logfhandle,'(A)') '>>>'
-                write(logfhandle,'(A)') '>>> SYMMETRY AXIS SEARCH'
-                write(logfhandle,'(A)') '>>>'
-                call cline_symsrch%set('vol1', trim(vol_iter))
-                if( l_shmem .or. qenv%get_qsys() .eq. 'local' )then
-                    call xsymsrch%execute(cline_symsrch)
-                else
-                    call qenv%exec_simple_prg_in_queue(cline_symsrch, 'SYMAXIS_SEARCH_FINISHED')
-                endif
-                call del_file('SYMAXIS_SEARCH_FINISHED')
-            endif
+        write(logfhandle,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>> INITIALIZATION WITH STOCHASTIC NEIGHBORHOOD HILL-CLIMBING'
+        write(logfhandle,'(A,F6.1,A)') '>>> LOW-PASS LIMIT FOR ALIGNMENT: ', lplims(1),' ANGSTROMS'
+        write(logfhandle,'(A)') '>>>'
+        if( l_shmem )then
+            call rec(cline_refine3D_snhc, l_rnd=.true.)
+            params_ptr  => params_glob
+            params_glob => null()
+            call xrefine3D%execute(cline_refine3D_snhc)
+            params_glob => params_ptr
+            params_ptr  => null()
         else
-            iter = 0
-            call cline_refine3D_refine%set('lp', lplims(2))
+            call xrefine3D_distr%execute(cline_refine3D_snhc)
+        endif
+        write(logfhandle,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH REFINE3D'
+        write(logfhandle,'(A)') '>>>'
+        if( l_shmem )then
+            params_ptr  => params_glob
+            params_glob => null()
+            call xrefine3D%execute(cline_refine3D_init)
+            params_glob => params_ptr
+            params_ptr  => null()
+        else
+            call xrefine3D_distr%execute(cline_refine3D_init)
+        endif
+        iter     = cline_refine3D_init%get_rarg('endit')
+        vol_iter = trim(VOL_FBODY)//trim(str_state)//params%ext
+        if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to symmetry axis search does not exist')
+        if( symran_before_refine )then
+            call work_proj1%read_segment('ptcl3D', trim(WORK_PROJFILE))
+            call se1%symrandomize(work_proj1%os_ptcl3D)
+            call work_proj1%write_segment_inside('ptcl3D', trim(WORK_PROJFILE))
+        endif
+        if( srch4symaxis )then
+            write(logfhandle,'(A)') '>>>'
+            write(logfhandle,'(A)') '>>> SYMMETRY AXIS SEARCH'
+            write(logfhandle,'(A)') '>>>'
+            call cline_symsrch%set('vol1', trim(vol_iter))
+            if( l_shmem .or. qenv%get_qsys() .eq. 'local' )then
+                call xsymsrch%execute(cline_symsrch)
+            else
+                call qenv%exec_simple_prg_in_queue(cline_symsrch, 'SYMAXIS_SEARCH_FINISHED')
+            endif
+            call del_file('SYMAXIS_SEARCH_FINISHED')
         endif
         ! prep refinement stage
         call work_proj1%read_segment('ptcl3D', trim(WORK_PROJFILE))

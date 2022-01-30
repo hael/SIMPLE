@@ -600,45 +600,43 @@ contains
             call vol_ptr%shift([xyz(1),xyz(2),xyz(3)])
         endif
         ! Volume filtering
-        if( .not.params_glob%l_lpset )then
-            filtsz = build_glob%img%get_filtsz()
-            if( params_glob%l_match_filt )then
-                ! stores filters in pftcc
-                if( params_glob%clsfrcs.eq.'yes')then
-                    if( file_exists(params_glob%frcs) )then
-                        iproj = 0
-                        do iref = 1,2*build_glob%clsfrcs%get_nprojs()
-                            iproj = iproj+1
-                            if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
-                            call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-                            call fsc2optlp_sub(filtsz, frc, filter)
-                            call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kstop))
-                        enddo
-                    endif
-                else
-                    if( any(build_glob%fsc(s,:) > 0.143) )then
-                        call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
-                    else
-                        filter = 1.
-                    endif
-                    do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
+        filtsz = build_glob%img%get_filtsz()
+        if( params_glob%l_match_filt )then
+            ! stores filters in pftcc
+            if( params_glob%clsfrcs.eq.'yes')then
+                if( file_exists(params_glob%frcs) )then
+                    iproj = 0
+                    do iref = 1,2*build_glob%clsfrcs%get_nprojs()
+                        iproj = iproj+1
+                        if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
+                        call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+                        call fsc2optlp_sub(filtsz, frc, filter)
                         call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kstop))
                     enddo
                 endif
             else
-                if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-                    ! no filtering
+                if( any(build_glob%fsc(s,:) > 0.143) )then
+                    call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
                 else
-                    call vol_ptr%fft()
-                    if( any(build_glob%fsc(s,:) > 0.143) )then
-                        call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
-                        call vol_ptr%apply_filter(filter)
-                    endif
-                    ! total variation regularization
-                    call tvfilt%new
-                    call tvfilt%apply_filter_3d(vol_ptr, params_glob%lambda)
-                    call tvfilt%kill
+                    filter = 1.
                 endif
+                do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
+                    call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kstop))
+                enddo
+            endif
+        else
+            if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+                ! no filtering
+            else
+                call vol_ptr%fft()
+                if( any(build_glob%fsc(s,:) > 0.143) )then
+                    call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
+                    call vol_ptr%apply_filter(filter)
+                endif
+                ! total variation regularization
+                call tvfilt%new
+                call tvfilt%apply_filter_3d(vol_ptr, params_glob%lambda)
+                call tvfilt%kill
             endif
         endif
         ! back to real space
