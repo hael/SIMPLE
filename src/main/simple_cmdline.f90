@@ -542,16 +542,28 @@ contains
     end subroutine check
 
     !> \brief  for writing the command line
-    subroutine printline( self )
-        class(cmdline), intent(inout) :: self
+    subroutine printline( self, tag )
+        class(cmdline),             intent(inout) :: self
+        character(len=*), optional, intent(in)    :: tag
         integer :: i
-        do i=1,self%argcnt
-            if( self%cmds(i)%defined .and. allocated(self%cmds(i)%carg) )then
-                write(logfhandle,*) trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg), ' xxx'
-            else if( self%cmds(i)%defined )then
-                write(logfhandle,*) trim(self%cmds(i)%key), ' ', self%cmds(i)%rarg, ' xxx'
-            endif
-        end do
+        if( present(tag) )then
+            do i=1,self%argcnt
+                if( self%cmds(i)%defined .and. allocated(self%cmds(i)%carg) )then
+                    write(logfhandle,*) trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg), trim(tag)
+                else if( self%cmds(i)%defined )then
+                    write(logfhandle,*) trim(self%cmds(i)%key), ' ', self%cmds(i)%rarg, trim(tag)
+                endif
+            end do
+
+        else
+            do i=1,self%argcnt
+                if( self%cmds(i)%defined .and. allocated(self%cmds(i)%carg) )then
+                    write(logfhandle,*) trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg)
+                else if( self%cmds(i)%defined )then
+                    write(logfhandle,*) trim(self%cmds(i)%key), ' ', self%cmds(i)%rarg
+                endif
+            end do
+        endif
     end subroutine printline
 
     !> \brief  for checking the existence of of arg
