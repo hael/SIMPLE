@@ -793,26 +793,28 @@ contains
         use simple_commander_quant, only: detect_atoms_commander
         class(autorefine3D_nano_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline ! I don't instantiate it in here so not declared as type
+        class(parameters), pointer                        :: params_ptr => null()
         type(parameters)              :: params
         type(refine3D_nano_commander) :: xrefine3D_nano
         type(detect_atoms_commander)  :: xdetect_atms
         type(reproject_commander)     :: xreproject
-        type(cmdline)                 :: cline_refine3D_nano, cline_detect_atms, cline_reproject
+        type(cmdline)                 :: cline_refine3D_nano, cline_detect_atms, cline_reproject, cline_refine3D_cavgs
         type(image), allocatable      :: imgs(:)
         type(stack_io)                :: stkio_w
         type(sp_project)              :: spproj
-        class(parameters), pointer    :: params_ptr => null()
-        character(len=*), parameter :: RECVOL   = 'recvol_state01.mrc'
-        character(len=*), parameter :: SIMVOL   = 'recvol_state01_SIM.mrc'
-        character(len=*), parameter :: ATOMS    = 'recvol_state01_ATMS.pdb'
-        character(len=*), parameter :: BINARY   = 'recvol_state01_BIN.mrc'
-        character(len=*), parameter :: CCS      = 'recvol_state01_CC.mrc'
-        character(len=*), parameter :: MSK      = 'recvol_state01_MSK.mrc'
-        character(len=*), parameter :: SPLITTED = 'split_ccs.mrc'
+        character(len=*), parameter            :: RECVOL   = 'recvol_state01.mrc'
+        character(len=*), parameter            :: SIMVOL   = 'recvol_state01_SIM.mrc'
+        character(len=*), parameter            :: ATOMS    = 'recvol_state01_ATMS.pdb'
+        character(len=*), parameter            :: BINARY   = 'recvol_state01_BIN.mrc'
+        character(len=*), parameter            :: CCS      = 'recvol_state01_CC.mrc'
+        character(len=*), parameter            :: MSK      = 'recvol_state01_MSK.mrc'
+        character(len=*), parameter            :: SPLITTED = 'split_ccs.mrc'
+        character(len=*), parameter            :: tag = 'xxx'
         character(len=LONGSTRLEN), allocatable :: map_names(:)
         character(len=:),          allocatable :: maps_dir, iter_dir, cavgs_stk
-        character(len=STDLEN)       :: fbody, fbody_split
-        integer       :: i, j, iter, ncavgs, cnt
+        character(len=STDLEN)                  :: fbody, fbody_split
+
+        integer       :: i, j, iter, cnt, ncavgs
         real          :: smpd
         fbody       = get_fbody(RECVOL,   'mrc')
         fbody_split = get_fbody(SPLITTED, 'mrc')
@@ -825,8 +827,12 @@ contains
         params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
         call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
         ! copy the input command line as templates for the refine3D_nano/detect_atoms command lines
+
+
         cline_refine3D_nano = cline
         cline_detect_atms   = cline
+
+
         ! then update cline_refine3D_nano accordingly
         call cline_refine3D_nano%set('prg',     'refine3D_nano')        ! need to know which program to run
         call cline_refine3D_nano%set('projfile', trim(params%projfile)) ! since we are not making directories (non-standard execution) we better keep track of project file
@@ -841,8 +847,8 @@ contains
         do i = 1, params%maxits
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user
 
-            print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-            call cline_refine3D_nano%printline
+            print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx INSIDE refine3D_nano"
+            call cline_refine3D_nano%printline(tag)
             print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
             call xrefine3D_nano%execute(cline_refine3D_nano)
@@ -862,8 +868,8 @@ contains
             end do
             ! model building
 
-            print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-            call cline_detect_atms%printline
+            print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx INSIDE detect_atoms"
+            call cline_detect_atms%printline(tag)
             print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
             call xdetect_atms%execute(cline_detect_atms)
             ! copy critical output
@@ -884,106 +890,103 @@ contains
         end do
         call cline_detect_atms%set('use_thres', 'yes')      ! use contact score threshold for final model building
 
-        print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-        call cline_detect_atms%printline
+        print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx OUTSIDE detect_atoms thres=yes"
+        call cline_detect_atms%printline(tag)
         print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
         call xdetect_atms%execute(cline_detect_atms)
         call simple_mkdir('final_results')
         call simple_copy_file(RECVOL,   './final_results/'//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'.mrc')
-        call simple_copy_file(SIMVOL,   './final_results/'//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'thres_SIM.mrc')
-        call simple_copy_file(ATOMS,    './final_results/'//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'thres_ATMS.pdb')
-        call simple_copy_file(BINARY,   './final_results/'//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'thres_BIN.mrc')
-        call simple_copy_file(CCS,      './final_results/'//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'thres_CC.mrc')
-        call simple_copy_file(MSK,      './final_results/'//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'thres_MSK.mrc')
+        call simple_copy_file(SIMVOL,   './final_results/'//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_SIM.mrc')
+        call simple_copy_file(ATOMS,    './final_results/'//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_ATMS.pdb')
+        call simple_copy_file(BINARY,   './final_results/'//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_BIN.mrc')
+        call simple_copy_file(CCS,      './final_results/'//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_CC.mrc')
+        call simple_copy_file(MSK,      './final_results/'//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_MSK.mrc')
         call simple_copy_file(SPLITTED, './final_results/'//trim(fbody_split)//'_iter'//int2str_pad(iter,3)//'.mrc')
-
+        print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx OUTSIDE COPIED"
 
         ! clean
+        print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx OUTSIDE DELEATE"
         call del_file(SIMVOL)
         call del_file(ATOMS)
         call del_file(BINARY)
         call del_file(CCS)
         call del_file(MSK)
         call del_file(SPLITTED)
-
+        print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx OUTSIDE DELEATED"
 
         ! cavgs vs RECVOL reprojs vs SIMVOL reprojections
 
         ! align cavgs to the final RECVOL
-        ! update cline_refine3D_nano accordingly
-        !call cline_refine3D_nano%set('vol1', './final_results/'//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc') !!!!
-        call cline_refine3D_nano%set('vol1', params%vols(1)) !!!!
-        call cline_refine3D_nano%set('keepvol',  'no')
-        call cline_refine3D_nano%set('oritype', 'cls3D')
-        call cline_refine3D_nano%set('lp', 1.5)
-        call cline_refine3D_nano%set('maxits',    1.)
-        call cline_refine3D_nano%delete('nparts')
-        call cline_refine3D_nano%delete('mskfile')
-        print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-        call cline_refine3D_nano%printline
-        print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-    !    call xrefine3D_nano%execute(cline_refine3D_nano)
-
-
-
-        params_ptr  => params_glob
-        params_glob => null()
-        call xrefine3D_nano%execute(cline_refine3D_nano)
-        params_glob => params_ptr
-        params_ptr  => null()
-
-
-
         !class average 3D oris now part of the project file but we need to access them here
         call spproj%read(params%projfile)
-        call spproj%os_cls3D%write('cavgs_oris.txt')
-
-        !reproject RECVOL and SIMVOL
-        !call cline_reproject%set('vol1',   './final_results/'//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
-                    call cline_reproject%set('vol1', params%vols(1)) !!!!
-        call cline_reproject%set('outstk', 'reprojs_recvol.mrc')
-        call cline_reproject%set('smpd', params%smpd)
-        call cline_reproject%set('oritab', 'cavgs_oris.txt')
-        call cline_reproject%set('pgrp', params%pgrp)
-        call cline_reproject%set('nthr', real(params%nthr))
-
-        print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-        call cline_reproject%printline
-        print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-        call xreproject%execute(cline_reproject)
-        !call cline_reproject%set('vol1',   './final_results/'//trim(fbody)//'_iter'//int2str_pad(iter,3)//'thres_SIM.mrc')
-                    call cline_reproject%set('vol1', params%vols(1)) !!!!
-        call cline_reproject%set('outstk', 'reprojs_thres_SIM.mrc')
-
-        print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-        call cline_reproject%printline
-        print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-        call xreproject%execute(cline_reproject)
-
-
         ! retrieve cavgs stack
         call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd)
-        ! write cavgs & reprojections in triplets
-        allocate(imgs(3*ncavgs))
-        cnt = 0
-        do i = 1,3*ncavgs,3
-            cnt = cnt + 1
-            call imgs(i    )%new([params%box,params%box,1], smpd)
-            call imgs(i + 1)%new([params%box,params%box,1], smpd)
-            call imgs(i + 2)%new([params%box,params%box,1], smpd)
-            call imgs(i    )%read(cavgs_stk,                 cnt)
-            call imgs(i + 1)%read('reprojs_recvol.mrc',      cnt)
-            call imgs(i + 2)%read('reprojs_thres_SIM.mrc',   cnt)
-            call imgs(i    )%norm
-            call imgs(i + 1)%norm
-            call imgs(i + 2)%norm
-        end do
-        call stkio_w%open('cavgs_reprojections_rec_and_thres_sim.mrc', smpd, 'write', box=params%box, bufsz=3*ncavgs)
-        do i = 1,3*ncavgs
-            call stkio_w%write(i, imgs(i))
-        end do
-        call stkio_w%close
+        if( ncavgs /= 0 )then
+            call spproj%os_cls3D%write('cavgs_oris.txt')
 
+
+            ! update cline_refine3D_cavgs accordingly
+            call cline_refine3D_cavgs%set('prg', 'refine3D_nano')
+            call cline_refine3D_cavgs%set('vol1', './final_results/'//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc') !!!!
+            !call cline_refine3D_cavgs%set('vol1', params%vols(1)) !!!!
+            call cline_refine3D_cavgs%set('pgrp',         params%pgrp)
+            call cline_refine3D_cavgs%set('mskdiam',   params%mskdiam)
+            call cline_refine3D_cavgs%set('nthr',         real(params%nthr))
+            call cline_refine3D_cavgs%set('mkdir',               'no')
+            call cline_refine3D_cavgs%set('maxits',                1.)
+            call cline_refine3D_cavgs%set('projfile', params%projfile)
+            call cline_refine3D_cavgs%set('oritype',          'cls3D')
+            call cline_refine3D_cavgs%set('lp',                   1.5)
+            print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx refine3D_nano CLASS AVGS"
+            call cline_refine3D_cavgs%printline(tag)
+            print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            params_ptr  => params_glob
+            params_glob => null()
+            call xrefine3D_nano%execute(cline_refine3D_cavgs)
+            params_glob => params_ptr
+            params_ptr  => null()
+            !reproject RECVOL and SIMVOL
+            call cline_reproject%set('vol1',   './final_results/'//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
+            !call cline_reproject%set('vol1', params%vols(1)) !!!!
+            call cline_reproject%set('outstk', 'reprojs_recvol.mrc')
+            call cline_reproject%set('smpd', params%smpd)
+            call cline_reproject%set('oritab', 'cavgs_oris.txt')
+            call cline_reproject%set('pgrp', params%pgrp)
+            call cline_reproject%set('nthr', real(params%nthr))
+
+            print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx reproj vol"
+            call cline_reproject%printline(tag)
+            print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            call xreproject%execute(cline_reproject)
+            call cline_reproject%set('vol1',   './final_results/'//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_thres_SIM.mrc')
+            call cline_reproject%set('outstk', 'reprojs_thres_SIM.mrc')
+
+            print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx reproj thres_SIM"
+            call cline_reproject%printline(tag)
+            print *, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            call xreproject%execute(cline_reproject)
+            ! write cavgs & reprojections in triplets
+            allocate(imgs(3*ncavgs))
+            cnt = 0
+            do i = 1,3*(int(ncavgs)),3
+                cnt = cnt + 1
+                call imgs(i    )%new([params%box,params%box,1], smpd)
+                call imgs(i + 1)%new([params%box,params%box,1], smpd)
+                call imgs(i + 2)%new([params%box,params%box,1], smpd)
+                call imgs(i    )%read(cavgs_stk,                 cnt)
+                call imgs(i + 1)%read('reprojs_recvol.mrc',      cnt)
+                call imgs(i + 2)%read('reprojs_thres_SIM.mrc',   cnt)
+                call imgs(i    )%norm
+                call imgs(i + 1)%norm
+                call imgs(i + 2)%norm
+            end do
+            call stkio_w%open('cavgs_vs_reprojections_rec_and_thres_sim.mrc', smpd, 'write', box=params%box, bufsz=3*ncavgs)
+            do i = 1,3*ncavgs
+                call stkio_w%write(i, imgs(i))
+            end do
+            call stkio_w%close
+        endif
+        call exec_cmdline('rm -f fsc* fft* recvol* RES*')
     end subroutine exec_autorefine3D_nano
 
     subroutine exec_refine3D_nano( self, cline )
