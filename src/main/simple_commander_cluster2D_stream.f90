@@ -433,7 +433,7 @@ contains
         type(sp_project)                   :: pool_proj
         character(LONGSTRLEN), allocatable :: imported_spprojs(:), imported_stks(:)
         character(len=STDLEN)              :: refs_glob, refs_glob_ranked
-        integer,               allocatable :: pool_inds(:)
+        logical,               allocatable :: pool_stack_mask(:)
         logical                            :: pool_converged, pool_available
         ! chunk-related variables
         type(chunk),           allocatable :: chunks(:), converged_chunks(:)
@@ -717,7 +717,7 @@ contains
             ! endif
         enddo
         call debug_print('exited global iter '//int2str(iter))
-        call qsys_cleanup
+        ! call qsys_cleanup
         do ichunk = 1,params%nchunks
             call chunks(ichunk)%terminate
         enddo
@@ -741,7 +741,7 @@ contains
         endif
         ! cleanup
         if( .not.debug_here )then
-            call qsys_cleanup
+            ! call qsys_cleanup
             call simple_rmdir(SCALE_DIR)
             call del_file(PROJFILE_POOL)
         endif
@@ -756,7 +756,7 @@ contains
                 integer, allocatable  :: pops(:)
                 character(len=STDLEN) :: fname
                 real    :: corr, frac, mi_class
-                integer :: i, it
+                integer :: i, it, jptcl, iptcl, istk
                 call debug_print('in update_pool pool_iter '//int2str(pool_iter))
                 ! iteration info
                 fname = trim(STATS_FILE)
@@ -775,25 +775,33 @@ contains
                 endif
                 call debug_print('in update_pool 1')
                 ! transfer to pool
+                call spproj%read_segment('stk',PROJFILE_POOL)
                 call spproj%read_segment('ptcl2D',PROJFILE_POOL)
                 call spproj%read_segment('cls2D', PROJFILE_POOL)
-                call spproj%os_ptcl2D%delete_entry('indstk')
                 if( spproj%os_cls2D%get_noris() == 0 )then
                     call debug_print('in update_pool 2')
                     ! not executed yet, do nothing
-                    call spproj%kill
                 else
                     call debug_print('in update_pool 3')
-                    if( .not.allocated(pool_inds) )then
+                    if( .not.allocated(pool_stack_mask) )then
                         ! first time
-                        pool_inds = (/(i,i=1,spproj%os_ptcl2D%get_noris())/)
+                        THROW_HARD('Critical ERROR 0')
                     endif
-                    do i = 1,size(pool_inds)
-                        call pool_proj%os_ptcl2D%transfer_ori(pool_inds(i), spproj%os_ptcl2D, i)
+                    i = 0
+                    do istk = 1,size(pool_stack_mask)
+                        if( pool_stack_mask(istk) )then
+                            i = i+1
+                            iptcl = nint(pool_proj%os_stk%get(istk,'fromp'))
+                            do jptcl = nint(spproj%os_stk%get(i,'fromp')),nint(spproj%os_stk%get(i,'top'))
+                                if( spproj%os_ptcl2D%get_state(jptcl) > 0 )then
+                                    call pool_proj%os_ptcl2D%transfer_2Dparams(iptcl, spproj%os_ptcl2D, jptcl)
+                                endif
+                                iptcl = iptcl+1
+                            enddo
+                        endif
                     enddo
                     call pool_proj%os_ptcl2D%get_pops(pops, 'class', consider_w=.false., maxn=ncls_glob)
                     pool_proj%os_cls2D = spproj%os_cls2D
-                    call pool_proj%os_cls2D%delete_entry('find')
                     call pool_proj%os_cls2D%set_all('pop', real(pops))
                     call debug_print('in update_pool 4')
                     ! for gui
@@ -1150,12 +1158,13 @@ contains
             end subroutine import_chunks_into_pool
 
             subroutine exec_classify_pool
+                use simple_ran_tabu
+                type(ran_tabu)          :: random_generator
                 logical, parameter      :: L_BENCH = .false.
-                logical, allocatable    :: transfer_mask(:)
-                integer, allocatable    :: update_cnts(:), prev_eo_pops(:,:)
-                real                    :: srch_frac, frac_update
-                integer                 :: cnt, iptcl,i, nptcls_tot, nptcls_old, n2update
-                integer                 :: indinstk, stkind, eo, icls, nptcls_sel
+                integer, allocatable    :: prev_eo_pops(:,:), min_update_cnts_per_stk(:), nptcls_per_stk(:), stk_order(:)
+                real                    :: frac_update
+                integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
+                integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update
                 integer(timer_int_kind) :: t_tot
                 if( L_BENCH )then
                     t_tot  = tic()
@@ -1174,68 +1183,83 @@ contains
                 call transfer_spproj%projinfo%delete_entry('projname')
                 call transfer_spproj%projinfo%delete_entry('projfile')
                 call transfer_spproj%update_projinfo( cline_cluster2D )
-                transfer_spproj%os_cls2D = pool_proj%os_cls2D
-                allocate(transfer_mask(nptcls_tot))
-                allocate(update_cnts(nptcls_tot), source=-1)
+                ! counting number of stacks & particles (old and newer)
+                nstks_tot  = pool_proj%os_stk%get_noris()
+                allocate(nptcls_per_stk(nstks_tot), min_update_cnts_per_stk(nstks_tot), source=0)
                 nptcls_old = 0
-                do iptcl = 1,nptcls_tot
-                    transfer_mask(iptcl) = pool_proj%os_ptcl2D%get(iptcl,'state') > 0.5
-                    if( transfer_mask(iptcl) )then
-                        update_cnts(iptcl) = nint(pool_proj%os_ptcl2D%get(iptcl,'updatecnt'))
-                        if( update_cnts(iptcl) >= STREAM_SRCHLIM ) nptcls_old = nptcls_old + 1
+                do istk = 1,nstks_tot
+                    fromp = nint(pool_proj%os_stk%get(istk,'fromp'))
+                    top   = nint(pool_proj%os_stk%get(istk,'top'))
+                    min_update_cnts_per_stk(istk) = huge(istk)
+                    do iptcl = fromp,top
+                        if( pool_proj%os_ptcl2D%get(iptcl,'state') > 0.5 )then
+                            nptcls_per_stk(istk)          = nptcls_per_stk(istk) + 1 ! # ptcls with state=1
+                            min_update_cnts_per_stk(istk) = min(min_update_cnts_per_stk(istk), nint(pool_proj%os_ptcl2D%get(iptcl,'updatecnt')))
+                        endif
+                    enddo
+                    if( min_update_cnts_per_stk(istk) >= STREAM_SRCHLIM )then
+                        nptcls_old = nptcls_old + nptcls_per_stk(istk)
                     endif
                 enddo
-                nptcls_sel = count(transfer_mask)
-                call debug_print('in exec_classify_pool 1 '//int2str(nptcls_sel))
+                ! flagging stacks to be skipped
+                if( allocated(pool_stack_mask) ) deallocate(pool_stack_mask)
+                allocate(pool_stack_mask(nstks_tot), source=.false.)
                 allocate(prev_eo_pops(ncls_glob,2),source=0)
                 if( nptcls_old > params%ncls_start*params%nptcls_per_cls )then
-                    srch_frac = STREAM_SRCHFRAC
-                    if( nint(real(nptcls_old)*STREAM_SRCHFRAC) > MAX_STREAM_NPTCLS )then
-                        ! cap reached
-                        srch_frac = real(MAX_STREAM_NPTCLS) / real(nptcls_old)
-                    endif
-                    ! randomly retires 'old' particles
-                    do iptcl = 1,nptcls_tot
-                        if( transfer_mask(iptcl) )then
-                            if( update_cnts(iptcl) >= STREAM_SRCHLIM )then
-                                transfer_mask(iptcl) = ran3() < srch_frac
-                                if( .not.transfer_mask(iptcl) )then
-                                    icls = nint(pool_proj%os_ptcl2D%get(iptcl,'class'))
-                                    eo   = nint(pool_proj%os_ptcl2D%get(iptcl,'eo')) + 1
-                                    prev_eo_pops(icls,eo) = prev_eo_pops(icls,eo) + 1
-                                endif
-                            endif
-                        endif
-                    end do
-                    n2update = count(transfer_mask)
-                    call debug_print('in exec_classify_pool 2 '//int2str(n2update)//' '//real2str(srch_frac))
-                    do icls = 1,ncls_glob
-                        call transfer_spproj%os_cls2D%set(icls,'prev_pop_even',real(prev_eo_pops(icls,1)))
-                        call transfer_spproj%os_cls2D%set(icls,'prev_pop_odd', real(prev_eo_pops(icls,2)))
+                    allocate(stk_order(nstks_tot))
+                    do istk = 1,nstks_tot
+                        stk_order(istk) = istk
                     enddo
-                    if(allocated(pool_inds)) deallocate(pool_inds)
-                    allocate(pool_inds(n2update),source=0)
-                    call transfer_spproj%os_ptcl2D%new(n2update, is_ptcl=.true.)
-                    cnt = 0
-                    do iptcl = 1,nptcls_tot
-                        if( transfer_mask(iptcl) )then
-                            cnt = cnt+1
-                            pool_inds(cnt) = iptcl
-                            call transfer_spproj%os_ptcl2D%transfer_ori(cnt, pool_proj%os_ptcl2D, iptcl)
-                            call pool_proj%map_ptcl_ind2stk_ind('ptcl2D', iptcl, stkind, indinstk)
-                            call transfer_spproj%os_ptcl2D%set(cnt,'indstk',real(indinstk)) ! to bypass stack indexing convention
-                        endif
+                    random_generator = ran_tabu(nstks_tot)
+                    call random_generator%shuffle(stk_order)
+                    nptcls2update = 0 ! # of ptcls including state=0 within selected stacks
+                    nptcls_sel    = 0 ! # of ptcls excluding state=0 within selected stacks
+                    do i = 1,nstks_tot
+                        istk = stk_order(i)
+                        if( (min_update_cnts_per_stk(istk) > STREAM_SRCHLIM) .and. (nptcls_sel > MAX_STREAM_NPTCLS) ) cycle
+                        nptcls_sel    = nptcls_sel + nptcls_per_stk(istk)
+                        nptcls2update = nptcls2update + nint(pool_proj%os_stk%get(istk,'nptcls'))
+                        pool_stack_mask(istk) = .true.
                     enddo
+                    call random_generator%kill
                 else
-                    n2update = nptcls_sel
-                    if( allocated(pool_inds) ) deallocate(pool_inds)
-                    pool_inds = (/(i,i=1,n2update)/)
-                    transfer_spproj%os_ptcl2D = pool_proj%os_ptcl2D
+                    nptcls2update   = nptcls_tot
+                    nptcls_sel      = sum(nptcls_per_stk)
+                    do istk = 1,nstks_tot
+                        pool_stack_mask(istk) = nptcls_per_stk(istk) > 0
+                    enddo
                 endif
-                call debug_print('in exec_classify_pool 3')
-                transfer_spproj%os_stk    = pool_proj%os_stk
-                transfer_spproj%os_ptcl3D = transfer_spproj%os_ptcl2D
-                call transfer_spproj%write(PROJFILE_POOL)
+                nstks2update = count(pool_stack_mask)
+                ! transfer stacks and particles
+                call transfer_spproj%os_stk%new(nstks2update, is_ptcl=.false.)
+                call transfer_spproj%os_ptcl2D%new(nptcls2update, is_ptcl=.true.)
+                i     = 0
+                jptcl = 0
+                do istk = 1,nstks_tot
+                    fromp = nint(pool_proj%os_stk%get(istk,'fromp'))
+                    top   = nint(pool_proj%os_stk%get(istk,'top'))
+                    if( pool_stack_mask(istk) )then
+                        ! transfer alignement parameters for selected particles
+                        i = i + 1 ! stack index in transfer_spproj
+                        call transfer_spproj%os_stk%transfer_ori(i, pool_proj%os_stk, istk)
+                        call transfer_spproj%os_stk%set(i, 'fromp', real(jptcl+1))
+                        do iptcl = fromp,top
+                            jptcl = jptcl+1
+                            call transfer_spproj%os_ptcl2D%transfer_ori(jptcl, pool_proj%os_ptcl2D, iptcl)
+                            call transfer_spproj%os_ptcl2D%set(jptcl, 'stkind', real(i))
+                        enddo
+                        call transfer_spproj%os_stk%set(i, 'top', real(jptcl))
+                    else
+                        ! keeps track of skipped particles
+                        do iptcl = fromp,top
+                            icls = nint(pool_proj%os_ptcl2D%get(iptcl,'class'))
+                            eo   = nint(pool_proj%os_ptcl2D%get(iptcl,'eo')) + 1
+                            prev_eo_pops(icls,eo) = prev_eo_pops(icls,eo) + 1
+                        enddo
+                    endif
+                enddo
+                call transfer_spproj%os_ptcl3D%new(nptcls2update, is_ptcl=.true.)
+                transfer_spproj%os_cls2D = pool_proj%os_cls2D
                 ! execution
                 if( sum(prev_eo_pops) == 0 )then
                     call cline_cluster2D%set('stream','no')
@@ -1245,15 +1269,19 @@ contains
                     call cline_cluster2D%set('stream',      'yes')
                     call cline_cluster2D%set('update_frac', frac_update)
                     call cline_cluster2D%set('center',      'no')
+                    do icls = 1,ncls_glob
+                        call transfer_spproj%os_cls2D%set(icls,'prev_pop_even',real(prev_eo_pops(icls,1)))
+                        call transfer_spproj%os_cls2D%set(icls,'prev_pop_odd', real(prev_eo_pops(icls,2)))
+                    enddo
                 endif
-                call debug_print('in exec_classify_pool 4')
-                deallocate(update_cnts,transfer_mask)
+                call transfer_spproj%write(PROJFILE_POOL)
                 call transfer_spproj%kill
+                call debug_print('in exec_classify_pool 4')
                 call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D, DISTR_EXEC_FNAME, 'simple_log_cluster2D_pool')
                 pool_available = .false.
                 pool_converged = .false.
-                write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',n2update,&
-                &' / ', nptcls_sel,' PARTICLES'
+                write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_sel,&
+                &' / ', sum(nptcls_per_stk),' PARTICLES'
                 if( L_BENCH ) print *,'timer exec_classify_pool tot : ',toc(t_tot)
                 call debug_print('end exec_classify_pool')
             end subroutine exec_classify_pool

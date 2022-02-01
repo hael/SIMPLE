@@ -2414,7 +2414,6 @@ contains
             do icls=1,self%n
                 res = self%get(icls, 'res')
                 rfinds(icls) = real(calc_fourier_index(res,box,smpd))
-                call self%set(icls,'find',rfinds(icls))
             enddo
             ave  = sum(rfinds,mask=msk)/real(nincl)
             sdev = sqrt(sum((rfinds-ave)**2.,mask=msk)/real(nincl))
