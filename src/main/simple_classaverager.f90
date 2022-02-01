@@ -85,7 +85,6 @@ contains
         ! set ldims
         ldim       = [params_glob%box,params_glob%box,1]
         ldim_pd    = [params_glob%boxpd,params_glob%boxpd,1]
-        ldim_pd(3) = 1
         filtsz     = build_glob%img%get_filtsz()
         ! build arrays
         allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
@@ -715,7 +714,7 @@ contains
     !>  \brief  writes partial class averages to disk (distributed execution)
     subroutine cavger_readwrite_partial_sums( which )
         character(len=*), intent(in)  :: which
-        integer                       :: icls
+        integer                       :: icls, ldim_here(3)
         character(len=:), allocatable :: cae, cao, cte, cto
         type(stack_io)                :: stkio(4)
         logical                       :: is_ft
@@ -735,13 +734,17 @@ contains
                     call stkio(3)%read(icls, ctfsqsums_even(icls))
                     call stkio(4)%read(icls, ctfsqsums_odd(icls))
                 end do
+                call stkio(1)%close
+                call stkio(2)%close
+                call stkio(3)%close
+                call stkio(4)%close
             case('write')
-                is_ft = cavgs_even(1)%is_ft()
-                ldim  = cavgs_even(1)%get_ldim()
-                call stkio(1)%open(cae, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim(1))
-                call stkio(2)%open(cao, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim(1))
-                call stkio(3)%open(cte, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim(1))
-                call stkio(4)%open(cto, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim(1))
+                is_ft     = cavgs_even(1)%is_ft()
+                ldim_here = cavgs_even(1)%get_ldim()
+                call stkio(1)%open(cae, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
+                call stkio(2)%open(cao, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
+                call stkio(3)%open(cte, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
+                call stkio(4)%open(cto, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
                 do icls=1,ncls
                     call stkio(1)%write(icls, cavgs_even(icls))
                     call stkio(2)%write(icls, cavgs_odd(icls))
