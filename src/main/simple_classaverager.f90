@@ -288,7 +288,7 @@ contains
         integer :: iprec, i, j, sh, iwinsz, nyq, ind_in_stk, foffset, ok
         integer :: wdim, h, k, l, m, ll, mm, incr, icls, iptcl, interp_shlim, interp_shlim_sq
         integer :: first_iprec, first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind, stkind
-        integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch
+        integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
         call init_cavgs_sums
@@ -300,8 +300,22 @@ contains
         wdim   = kbwin%get_wdim()
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         ! Number stacks
-        call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, precs(1)%pind,      first_stkind, ind_in_stk)
-        call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, precs(partsz)%pind, last_stkind,  ind_in_stk)
+        first_pind = 0
+        do i = 1,partsz
+            if( precs(i)%pind > 0 )then
+                first_pind = precs(i)%pind
+                exit
+            endif
+        enddo
+        call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, first_pind, first_stkind, ind_in_stk)
+        last_pind = 0
+        do i = partsz,1,-1
+            if( precs(i)%pind > 0 )then
+                last_pind = precs(i)%pind
+                exit
+            endif
+        enddo
+        call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, last_pind, last_stkind,  ind_in_stk)
         nstks = last_stkind - first_stkind + 1
         ! Objects allocations
         allocate(read_imgs(READBUFFSZ), cgrid_imgs(params_glob%nthr), cyc1(wdim), cyc2(wdim), w(wdim, wdim))
