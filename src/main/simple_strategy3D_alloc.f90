@@ -45,7 +45,7 @@ contains
         nrefs  = params_glob%nspace * params_glob%nstates
         ! shared-memory arrays
         allocate(master_proj_space_euls(nrefs,3), s3D%proj_space_euls(nthr_glob,nrefs,3),&
-            &s3D%proj_space_shift(nthr_glob,nrefs,2),s3D%proj_space_state(nrefs),&
+            &s3D%proj_space_shift(nthr_glob,nrefs,2), s3D%proj_space_state(nrefs),&
             &s3D%proj_space_corrs(nthr_glob,nrefs),&
             &s3D%proj_space_refinds_sorted(nthr_glob,nrefs),&
             &s3D%proj_space_refinds_sorted_highest(nthr_glob,nrefs),&
