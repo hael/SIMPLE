@@ -339,7 +339,7 @@ contains
         character(len=XLONGSTRLEN) :: projfile
         real                  :: smpd_here
         integer               :: nptcls_rejected, ncls_rejected, iptcl
-        integer               :: icls, ncls_here, cnt
+        integer               :: icls, ncls_here
         call debug_print('in chunk%reject '//int2str(self%id))
         projfile = trim(self%path)//self%projfile_out
         ncls_rejected   = 0
@@ -376,10 +376,8 @@ contains
             call self%spproj%write_segment_inside('cls2D',projfile)
             ! updates class averages
             call img%new([box,box,1],smpd_here)
-            cnt = 0
             do icls=1,ncls_here
                 if( cls_mask(icls) ) cycle
-                cnt = cnt+1
                 img = 0.
                 call img%write(cavgs,icls)
             enddo
@@ -1531,7 +1529,6 @@ contains
                     call pool_proj%os_ptcl2D%mul_shifts( scale_factor )
                     pool_proj%os_stk   = os_backup2
                     call os_backup2%kill
-                    call os_backup3%kill
                     call debug_print('in write_snapshot 6')
                 else
                     if( add_suffix )then
@@ -1546,9 +1543,7 @@ contains
                     endif
                     call pool_proj%os_out%kill
                     call pool_proj%add_cavgs2os_out(cavgsfname, orig_smpd, 'cavg')
-                    pool_proj%os_cls2D = os_backup3
                     call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
-                    call os_backup3%kill
                     ! write
                     pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
                     call pool_proj%os_ptcl3D%delete_2Dclustering
