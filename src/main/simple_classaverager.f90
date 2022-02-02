@@ -85,6 +85,7 @@ contains
         ! set ldims
         ldim       = [params_glob%box,params_glob%box,1]
         ldim_pd    = [params_glob%boxpd,params_glob%boxpd,1]
+        ldim_pd(3) = 1
         filtsz     = build_glob%img%get_filtsz()
         ! build arrays
         allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
@@ -287,7 +288,7 @@ contains
         integer :: iprec, i, j, sh, iwinsz, nyq, ind_in_stk, foffset, ok
         integer :: wdim, h, k, l, m, ll, mm, incr, icls, iptcl, interp_shlim, interp_shlim_sq
         integer :: first_iprec, first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind, stkind
-        integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
+        integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
         call init_cavgs_sums
@@ -299,22 +300,22 @@ contains
         wdim   = kbwin%get_wdim()
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         ! Number stacks
-        first_pind = 0
+        iptcl = 0
         do i = 1,partsz
             if( precs(i)%pind > 0 )then
-                first_pind = precs(i)%pind
+                iptcl = precs(i)%pind
                 exit
             endif
         enddo
-        call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, first_pind, first_stkind, ind_in_stk)
-        last_pind = 0
+        call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, iptcl, first_stkind, ind_in_stk)
+        iptcl = 0
         do i = partsz,1,-1
             if( precs(i)%pind > 0 )then
-                last_pind = precs(i)%pind
+                iptcl = precs(i)%pind
                 exit
             endif
         enddo
-        call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, last_pind, last_stkind,  ind_in_stk)
+        call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, iptcl, last_stkind,  ind_in_stk)
         nstks = last_stkind - first_stkind + 1
         ! Objects allocations
         allocate(read_imgs(READBUFFSZ), cgrid_imgs(params_glob%nthr), cyc1(wdim), cyc2(wdim), w(wdim, wdim))
@@ -345,8 +346,8 @@ contains
         do istk = first_stkind,last_stkind
             ! Particles range
             stkind = first_stkind + istk - 1
-            fromp  = max(first_pind, nint(build_glob%spproj%os_stk%get(istk,'fromp')))
-            top    = min(last_pind,  nint(build_glob%spproj%os_stk%get(istk,'top')))
+            fromp  = max(precs(1)%pind,      nint(build_glob%spproj%os_stk%get(istk,'fromp')))
+            top    = min(precs(partsz)%pind, nint(build_glob%spproj%os_stk%get(istk,'top')))
             nptcls_in_stk = top - fromp + 1 ! # of particles in stack
             if( nptcls_in_stk == 0 )cycle
             call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, fromp, stk_fname, ind_in_stk)
@@ -739,8 +740,8 @@ contains
                 call stkio(3)%close
                 call stkio(4)%close
             case('write')
-                is_ft     = cavgs_even(1)%is_ft()
-                ldim_here = cavgs_even(1)%get_ldim()
+                is_ft = cavgs_even(1)%is_ft()
+                ldim_here  = cavgs_even(1)%get_ldim()
                 call stkio(1)%open(cae, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
                 call stkio(2)%open(cao, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
                 call stkio(3)%open(cte, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))

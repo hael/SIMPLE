@@ -1165,7 +1165,7 @@ contains
         character(len=LONGSTRLEN), allocatable :: list(:)
         character(len=:),          allocatable :: target_name
         character(len=STDLEN),     allocatable :: state_assemble_finished(:), vol_fnames(:)
-        real,                      allocatable :: ccs(:,:,:), fsc(:)
+        real,                      allocatable :: ccs(:,:,:), fsc(:), rstates(:)
         integer,                   allocatable :: parts(:,:)
         character(len=LONGSTRLEN) :: fname
         character(len=STDLEN)     :: volassemble_output, str_state, fsc_file, optlp_file
@@ -1197,6 +1197,8 @@ contains
             THROW_HARD('unsupported ORITYPE')
         end select
         if( fall_over ) THROW_HARD('No images found!')
+        ! save a states array for putting pack later
+        rstates = build%spproj_field%get_all('state')
         ! states/stepz
         nptcls = build%spproj_field%get_noris(consider_state=.true.)
         nparts = ceiling(real(nptcls)/real(params%stepsz))
@@ -1330,6 +1332,10 @@ contains
             end do
             call fclose(funit)
         enddo
+        ! put back the original states
+        call build%spproj_field%set_all('state', rstates)
+        deallocate(rstates)
+        call build%spproj%write_segment_inside(params%oritype)
         ! termination
         call qsys_cleanup
         call build%spproj_field%kill
