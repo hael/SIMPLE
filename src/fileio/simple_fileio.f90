@@ -784,7 +784,7 @@ contains
         integer     :: ioerr
         if( present(status) )status = 0
         ! make sure the file is ready to read
-        ! call wait_for_closure(fname1) ! doesn't sort the issue so can be removed
+        call wait_for_closure(fname1)
         ! process input file
         ! we need to inquire size before opening file as stream access
         ! does not allow inquire of size from file unit

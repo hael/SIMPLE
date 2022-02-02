@@ -28,6 +28,7 @@ contains
         use simple_commander_refine3D, only: refine3D_commander, refine3D_commander_distr
         use simple_commander_project,  only: scale_project_commander_distr
         use simple_commander_imgproc,  only: scale_commander
+        use simple_procimgstk,         only: shift_imgfile
         use simple_oris,               only: oris
         use simple_ori,                only: ori
         use simple_image,              only: image
@@ -63,7 +64,7 @@ contains
         type(cmdline) :: cline_reproject
         type(cmdline) :: cline_scale1, cline_scale2, cline_scale_msk
         ! other
-        character(len=:), allocatable :: stk, orig_stk, frcs_fname
+        character(len=:), allocatable :: stk, orig_stk, frcs_fname, shifted_stk
         character(len=:), allocatable :: WORK_PROJFILE
         real,             allocatable :: res(:), tmp_rarr(:)
         integer,          allocatable :: states(:), tmp_iarr(:)
@@ -159,6 +160,7 @@ contains
         ctfvars%smpd = orig_smpd
         params%smpd  = orig_smpd
         orig_stk     = stk
+        shifted_stk  = add2fbody(stk, params%ext, '_shifted')
         if( .not.spproj%os_cls2D%isthere('state') )then
             ! start from import
             allocate(states(ncavgs), source=1)
@@ -569,6 +571,8 @@ contains
         call stkio_r%close
         call stkio_r2%close
         call stkio_w%close
+        ! produce shifted stack
+        call shift_imgfile(orig_stk, shifted_stk, spproj%os_cls3D, params%smpd)
         ! end gracefully
         call se1%kill
         call se2%kill

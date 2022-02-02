@@ -694,6 +694,45 @@ contains
         call img%kill
     end subroutine taper_edges_imgfile
 
+   subroutine shift_imgfile( fname2shift, fname, o, smpd, mul )
+       use simple_oris, only: oris
+       character(len=*),  intent(in)    :: fname2shift, fname
+       class(oris),       intent(inout) :: o
+       real,              intent(in)    :: smpd
+       real,    optional, intent(in)    :: mul
+       type(stack_io) :: stkio_r, stkio_w
+       type(image)    :: img
+       integer        :: n, i, ldim(3)
+       real           :: x, y, xhere, yhere
+       call find_ldim_nptcls(fname2shift, ldim, n)
+       ldim(3) = 1
+       call raise_exception_imgfile( n, ldim, 'shift_imgfile' )
+       if( n /= o%get_noris() ) THROW_HARD('inconsistent nr entries; shift_imgfile')
+       call stkio_r%open(fname2shift, smpd, 'read')
+       call stkio_w%open(fname,       smpd, 'write', box=ldim(1))
+       call img%new(ldim,smpd)
+       write(logfhandle,'(a)') '>>> SHIFTING IMAGES'
+       do i=1,n
+           call progress(i,n)
+           call stkio_r%read(i, img)
+           call img%read(fname2shift, i)
+           x = o%get(i, 'x')
+           y = o%get(i, 'y')
+           if( present(mul) )then
+               xhere = x * mul
+               yhere = y * mul
+           else
+               xhere = x
+               yhere = y
+           endif
+           call img%shift([-xhere,-yhere,0.])
+           call stkio_w%write(i, img)
+       end do
+       call stkio_r%close
+       call stkio_w%close
+       call img%kill
+   end subroutine shift_imgfile
+
     subroutine random_selection_from_imgfile( spproj, fname, box, nran )
         use simple_sp_project, only: sp_project
         class(sp_project), intent(inout) :: spproj
