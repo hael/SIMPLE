@@ -93,6 +93,7 @@ type(simple_program), target :: detect_atoms
 type(simple_program), target :: dock_volpair
 type(simple_program), target :: estimate_diam
 type(simple_program), target :: export_relion
+type(simple_program), target :: export_starproject
 type(simple_program), target :: extract
 type(simple_program), target :: filter
 type(simple_program), target :: fsc
@@ -101,6 +102,7 @@ type(simple_program), target :: import_boxes
 type(simple_program), target :: import_cavgs
 type(simple_program), target :: import_movies
 type(simple_program), target :: import_particles
+type(simple_program), target :: import_starproject
 type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
 type(simple_program), target :: initial_3Dmodel
@@ -305,6 +307,7 @@ contains
         call new_estimate_diam
         call new_extract
         call new_export_relion
+        call new_export_starproject
         call new_filter
         call new_fsc
         call new_gen_pspecs_and_thumbs
@@ -315,6 +318,7 @@ contains
         call new_import_cavgs
         call new_import_movies
         call new_import_particles
+        call new_import_starproject
         call new_make_cavgs
         call new_make_oris
         call new_map_cavgs_selection
@@ -399,6 +403,7 @@ contains
         call push2prg_ptr_array(dock_volpair)
         call push2prg_ptr_array(extract)
         call push2prg_ptr_array(export_relion)
+        call push2prg_ptr_array(export_starproject)
         call push2prg_ptr_array(filter)
         call push2prg_ptr_array(fsc)
         call push2prg_ptr_array(gen_pspecs_and_thumbs)
@@ -409,6 +414,7 @@ contains
         call push2prg_ptr_array(import_cavgs)
         call push2prg_ptr_array(import_movies)
         call push2prg_ptr_array(import_particles)
+        call push2prg_ptr_array(import_starproject)
         call push2prg_ptr_array(make_cavgs)
         call push2prg_ptr_array(make_oris)
         call push2prg_ptr_array(map_cavgs_selection)
@@ -523,6 +529,8 @@ contains
                 ptr2prg => extract
             case('export_relion')
                 ptr2prg => export_relion
+            case('export_starproject')
+                ptr2prg => export_starproject 
             case('filter')
                 ptr2prg => filter
             case('fsc')
@@ -543,6 +551,8 @@ contains
                 ptr2prg => import_movies
             case('import_particles')
                 ptr2prg => import_particles
+            case('import_starproject')
+                ptr2prg => import_starproject 
             case('make_cavgs')
                 ptr2prg => make_cavgs
             case('make_oris')
@@ -683,6 +693,7 @@ contains
         write(logfhandle,'(A)') dock_volpair%name
         write(logfhandle,'(A)') extract%name
         write(logfhandle,'(A)') export_relion%name
+        write(logfhandle,'(A)') export_starproject%name
         write(logfhandle,'(A)') filter%name
         write(logfhandle,'(A)') fsc%name
         write(logfhandle,'(A)') gen_pspecs_and_thumbs%name
@@ -693,6 +704,7 @@ contains
         write(logfhandle,'(A)') import_cavgs%name
         write(logfhandle,'(A)') import_movies%name
         write(logfhandle,'(A)') import_particles%name
+        write(logfhandle,'(A)') import_starproject%name
         write(logfhandle,'(A)') make_cavgs%name
         write(logfhandle,'(A)') make_oris%name
         write(logfhandle,'(A)') map_cavgs_selection%name
@@ -1677,7 +1689,30 @@ contains
         ! computer controls
         call extract%set_input('comp_ctrls', 1, nparts)
     end subroutine new_extract
-
+    
+    subroutine new_export_starproject
+        ! PROGRAM SPECIFICATION
+        call export_starproject%new(&
+        &'export_starproject', &                                                ! name
+        &'Export projectfile in star format',&                     				! descr_short
+        &'is a program to export a SIMPLE projectfile in star format',& 		! descr long
+        &'simple_exec',&                                                  		! executable
+        &0, 1, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call export_starproject%set_input('parm_ios', 1, projfile)
+        ! parameter input/output
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+    end subroutine new_export_starproject
+    
     subroutine new_filter
         ! PROGRAM SPECIFICATION
         call filter%new(&
@@ -1777,6 +1812,28 @@ contains
         call gen_pspecs_and_thumbs%set_input('comp_ctrls', 1, nparts)
         call gen_pspecs_and_thumbs%set_input('comp_ctrls', 2, nthr)
     end subroutine new_gen_pspecs_and_thumbs
+
+    subroutine new_import_starproject
+        ! PROGRAM SPECIFICATION
+        call import_starproject%new(&
+        &'import_starproject', &                                                ! name
+        &'Import project in in star format',&                     				! descr_short
+        &'is a program to import a SIMPLE projectfile from star format',& 		! descr long
+        &'simple_exec',&                                                  		! executable
+        &0, 0, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! parameter input/output
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+    end subroutine new_import_starproject
 
     subroutine new_info_image
         ! PROGRAM SPECIFICATION

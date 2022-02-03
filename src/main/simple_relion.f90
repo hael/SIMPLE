@@ -337,8 +337,16 @@ contains
         ptcldfx     = spproj%os_ptcl2D%isthere(i, 'dfx')
         ptcldfy     = spproj%os_ptcl2D%isthere(i, 'dfy')
         ptclangast  = spproj%os_ptcl2D%isthere(i, 'angast')
-        xpos        = spproj%os_ptcl2D%isthere(i, 'xpos')
-        ypos        = spproj%os_ptcl2D%isthere(i, 'ypos')
+
+        !trial up to 1000 particles for non 0 values of xpos and ypos
+
+        do j=i, i + 1000
+          if((spproj%os_ptcl2D%get(j, 'xpos') .GT. 0) .OR. (spproj%os_ptcl2D%get(j, 'ypos') .GT. 0)) then
+            xpos = .TRUE.
+            ypos = .TRUE.
+            exit
+          endif
+        end do
 
         do i=1, spproj%os_stk%get_noris()
             if(spproj%os_stk%isthere(i, 'state')) then

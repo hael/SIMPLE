@@ -5,6 +5,7 @@ use simple_user_interface, only: make_user_interface,list_simple_prgs_in_ui
 use simple_cmdline,        only: cmdline, cmdline_err
 use simple_spproj_hlev
 use simple_commander_project
+use simple_commander_starproject
 use simple_commander_checks
 use simple_commander_distr
 use simple_commander_imgproc
@@ -39,6 +40,8 @@ type(merge_stream_projects_commander)       :: xmerge_stream_projects
 type(replace_project_field_commander)       :: xreplace_project_field
 type(selection_commander)                   :: xselection
 type(export_relion_commander)               :: xexport_relion
+type(import_starproject_commander)          :: ximport_starproject
+type(export_starproject_commander)          :: xexport_starproject
 
 ! PRE-PROCESSING WORKFLOWS
 type(preprocess_commander_distr)            :: xpreprocess
@@ -172,7 +175,11 @@ select case(prg)
         call xselection%execute(cline)
     case( 'export_relion' )
         call xexport_relion%execute(cline)
-
+    case( 'import_starproject' )
+        call ximport_starproject%execute(cline)
+    case( 'export_starproject' )
+        call xexport_starproject%execute(cline)  
+            
     ! PRE-PROCESSING WORKFLOWS
     case( 'preprocess' )
         call xpreprocess%execute(cline)
