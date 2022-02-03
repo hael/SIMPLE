@@ -22,7 +22,8 @@ type sp_project
     type(oris) :: os_cls3D  ! per-cluster 3D os,        segment 5
     type(oris) :: os_ptcl3D ! per-particle 3D os,       segment 6
     type(oris) :: os_out    ! critical project outputs, segment 7
-
+    type(oris) :: os_optics ! optics groups, 			segment 8
+	
     ! ORIS REPRESENTATIONS OF PROJECT DATA / DISTRIBUTED SYSTEM INFO / SYSTEM MANAGEMENT STUFF
     ! segments 11-20 reserved for project info, job management etc.
     type(oris) :: projinfo  ! project information      segment 11
@@ -151,6 +152,9 @@ contains
             case('ptcl3D')
                 call self%os_ptcl3D%new(n, is_ptcl=.true.)
                 os_ptr => self%os_ptcl3D
+            case('optics')
+                call self%os_optics%new(n, is_ptcl=.false.)
+                os_ptr => self%os_optics  
             case('out')
                 call self%os_out%new(n,    is_ptcl=.false.)
                 os_ptr => self%os_out
