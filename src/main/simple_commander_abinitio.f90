@@ -571,7 +571,8 @@ contains
         call stkio_w%close
         ! produce shifted stack
         call shift_imgfile(orig_stk, shifted_stk, spproj%os_cls3D, params%smpd)
-        call spproj%add_cavgs2os_out(simple_abspath(shifted_stk), params%smpd, 'cavg_shifted' )
+        ! add shifted stack to project
+        call spproj%add_cavgs2os_out(simple_abspath(shifted_stk), params%smpd, 'cavg_shifted')
         ! write results (this needs to be a full write as multiple segments are updated)
         call spproj%write()
         ! end gracefully
