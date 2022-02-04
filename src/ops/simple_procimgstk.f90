@@ -715,7 +715,6 @@ contains
        do i=1,n
            call progress(i,n)
            call stkio_r%read(i, img)
-           call img%read(fname2shift, i)
            x = o%get(i, 'x')
            y = o%get(i, 'y')
            if( present(mul) )then

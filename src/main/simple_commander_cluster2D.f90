@@ -1176,7 +1176,7 @@ contains
         type(polarft_corrcalc)        :: pftcc
         type(aff_prop)                :: aprop
         type(polarizer),  allocatable :: cavg_imgs(:), cavg_imgs_good(:)
-        character(len=:), allocatable :: cavgsstk, classname, frcs_fname
+        character(len=:), allocatable :: cavgsstk, cavgsstk_shifted, classname, frcs_fname
         real,             allocatable :: states(:), orig_cls_inds(:), frc(:), filter(:), clspops(:), clsres(:)
         real,             allocatable :: corrs(:), corrmat_comlin(:,:), corrs_top_ranking(:)
         logical,          allocatable :: l_msk(:,:,:), mask_top_ranking(:), mask_otsu(:), mask_icls(:)
@@ -1184,7 +1184,7 @@ contains
         integer,          allocatable :: labels_mapped(:), classmapping(:)
         integer :: ncls, n, ldim(3), ncls_sel, i, j, icls, cnt, filtsz, pop1, pop2, nsel, ncls_aff_prop, icen, jcen, loc(1)
         real    :: smpd, sdev_noise, simsum, cmin, cmax, pref, corr_icls
-        logical :: l_apply_optlp
+        logical :: l_apply_optlp, use_shifted
         ! defaults
         call cline%set('match_filt', 'no')
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
@@ -1194,6 +1194,9 @@ contains
         ! need to turn off CTF since it may be on based on the imported images and now we operate on class averages
         params%ctf = 'no'
         ! get class average stack
+        call spproj%get_cavgs_stk(cavgsstk_shifted, ncls, smpd, imgkind='cavg_shifted', fail=.false.)
+        use_shifted = .true.
+        if( cavgsstk_shifted .eq. NIL ) use_shifted = .false.
         call spproj%get_cavgs_stk(cavgsstk, ncls, smpd)
         call find_ldim_nptcls(cavgsstk, ldim, n)
         write(logfhandle,'(A,I3)') '# classes in stack ', n
@@ -1240,7 +1243,11 @@ contains
                 cycle
             endif
             call cavg_imgs(cnt)%new(ldim, smpd, wthreads=.false.)
-            call cavg_imgs(cnt)%read(cavgsstk, i)
+            if( use_shifted )then
+                call cavg_imgs(cnt)%read(cavgsstk_shifted, i)
+            else
+                call cavg_imgs(cnt)%read(cavgsstk, i)
+            endif
             ! FRC-based filter
             if( l_apply_optlp )then
                 call clsfrcs%frc_getter(i, params%hpind_fsc, params%l_phaseplate, frc)

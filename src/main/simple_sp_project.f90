@@ -1409,7 +1409,7 @@ contains
         ! find dimension of inputted stack
         call find_ldim_nptcls(relpath, ldim, nptcls)
         ! add os_out entry
-        call self%add_entry2os_out('cavg', ind)
+        call self%add_entry2os_out(iimgkind, ind)
         ! fill-in field
         call self%os_out%set(ind, 'stk',     trim(relpath))
         call self%os_out%set(ind, 'box',     real(ldim(1)))
@@ -1631,16 +1631,17 @@ contains
         if( fail_here )then
             if( cnt > 1 )  THROW_HARD('multiple os_out entries with imgkind='//iimgkind//', aborting... get_cavgs_stk')
             if( cnt == 0 ) THROW_HARD('no os_out entry with imgkind='//iimgkind//' identified, aborting... get_cavgs_stk')
-            ! set return values
-            if( allocated(stkname) ) deallocate(stkname)
-            stkname = trim(self%os_out%get_static(ind,'stk'))
-            ncls = nint(self%os_out%get(ind, 'nptcls'))
-            smpd = self%os_out%get(ind, 'smpd')
-        else
+        else if( cnt > 1 .or. cnt == 0 )then
             stkname = NIL
             ncls    = 0
             smpd    = 0.
+            return
         endif
+        ! set return values
+        if( allocated(stkname) ) deallocate(stkname)
+        stkname = trim(self%os_out%get_static(ind,'stk'))
+        ncls = nint(self%os_out%get(ind, 'nptcls'))
+        smpd = self%os_out%get(ind, 'smpd')
     end subroutine get_cavgs_stk
 
     subroutine get_vol( self, imgkind, state, vol_fname, smpd, box)

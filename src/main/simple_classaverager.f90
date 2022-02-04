@@ -15,18 +15,18 @@ private
 #include "simple_local_flags.inc"
 
 type ptcl_record
-    type(ctf) :: tfun          !< transfer function
-    real      :: pw      = 0.0 !< particle weight
-    real      :: dfx     = 0.0 !< defocus in x (microns)
-    real      :: dfy     = 0.0 !< defocus in y (microns)
-    real      :: angast  = 0.0 !< angle of astigmatism (in degrees)
-    real      :: phshift = 0.0 !< additional phase shift from the Volta
-    real      :: e3            !< in-plane rotations
-    real      :: shift(2)      !< rotational origin shift
-    integer   :: pind    = 0   !< particle index in stack
-    integer   :: eo      = -1  !< even is 0, odd is 1, default is -1
-    integer   :: class         !< class assignment
-    integer   :: ind_in_stk= 0 !< index in stack
+    type(ctf) :: tfun            !< transfer function
+    real      :: pw        = 0.0 !< particle weight
+    real      :: dfx       = 0.0 !< defocus in x (microns)
+    real      :: dfy       = 0.0 !< defocus in y (microns)
+    real      :: angast    = 0.0 !< angle of astigmatism (in degrees)
+    real      :: phshift   = 0.0 !< additional phase shift from the Volta
+    real      :: e3              !< in-plane rotations
+    real      :: shift(2)        !< rotational origin shift
+    integer   :: pind       = 0  !< particle index in stack
+    integer   :: eo         = -1 !< even is 0, odd is 1, default is -1
+    integer   :: class           !< class assignment
+    integer   :: ind_in_stk = 0  !< index in stack
 end type ptcl_record
 
 integer                        :: ctfflag                  !< ctf flag <yes=1|no=0|flip=2>
@@ -56,7 +56,6 @@ character(len=STDLEN)   :: benchfname
 
 contains
 
-    !>  \brief  is a constructor
     subroutine cavger_new( ptcl_mask )
         logical, optional, intent(in) :: ptcl_mask(params_glob%fromp:params_glob%top)
         integer :: icls

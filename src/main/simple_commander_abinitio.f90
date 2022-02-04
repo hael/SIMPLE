@@ -160,7 +160,7 @@ contains
         ctfvars%smpd = orig_smpd
         params%smpd  = orig_smpd
         orig_stk     = stk
-        shifted_stk  = add2fbody(stk, params%ext, '_shifted')
+        shifted_stk  = basename(add2fbody(stk, params%ext, '_shifted'))
         if( .not.spproj%os_cls2D%isthere('state') )then
             ! start from import
             allocate(states(ncavgs), source=1)
@@ -543,8 +543,6 @@ contains
         call spproj%map2ptcls
         ! add rec_final to os_out
         call spproj%add_vol2os_out(trim(REC_FBODY)//params%ext, params%smpd, 1, 'vol_cavg')
-        ! write results (this needs to be a full write as multiple segments are updated)
-        call spproj%write()
         ! reprojections
         call spproj%os_cls3D%write('final_oris.txt')
         write(logfhandle,'(A)') '>>>'
@@ -573,6 +571,9 @@ contains
         call stkio_w%close
         ! produce shifted stack
         call shift_imgfile(orig_stk, shifted_stk, spproj%os_cls3D, params%smpd)
+        call spproj%add_cavgs2os_out(simple_abspath(shifted_stk), params%smpd, 'cavg_shifted' )
+        ! write results (this needs to be a full write as multiple segments are updated)
+        call spproj%write()
         ! end gracefully
         call se1%kill
         call se2%kill
