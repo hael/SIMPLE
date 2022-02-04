@@ -23,7 +23,7 @@ type sp_project
     type(oris) :: os_ptcl3D ! per-particle 3D os,       segment 6
     type(oris) :: os_out    ! critical project outputs, segment 7
     type(oris) :: os_optics ! optics groups, 			segment 8
-	
+
     ! ORIS REPRESENTATIONS OF PROJECT DATA / DISTRIBUTED SYSTEM INFO / SYSTEM MANAGEMENT STUFF
     ! segments 11-20 reserved for project info, job management etc.
     type(oris) :: projinfo  ! project information      segment 11
@@ -154,7 +154,7 @@ contains
                 os_ptr => self%os_ptcl3D
             case('optics')
                 call self%os_optics%new(n, is_ptcl=.false.)
-                os_ptr => self%os_optics  
+                os_ptr => self%os_optics
             case('out')
                 call self%os_out%new(n,    is_ptcl=.false.)
                 os_ptr => self%os_out
@@ -1421,9 +1421,11 @@ contains
         call self%os_out%set(ind, 'imgkind', iimgkind)
         call self%os_out%set(ind, 'ctf',     'no')
         ! add congruent os_cls2D & os_cls3D
-        call self%os_cls2D%new(nptcls, is_ptcl=.false.)
-        call self%os_cls2D%set_all2single('state',1.)
-        self%os_cls3D = self%os_cls2D
+        if( self%os_cls2D%get_noris() /= nptcls )then
+            call self%os_cls2D%new(nptcls, is_ptcl=.false.)
+            call self%os_cls2D%set_all2single('state',1.)
+        endif
+        if( self%os_cls3D%get_noris() /= nptcls ) self%os_cls3D = self%os_cls2D
     end subroutine add_cavgs2os_out
 
     subroutine add_frcs2os_out( self, frc, which_imgkind )
