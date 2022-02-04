@@ -1405,7 +1405,7 @@ contains
                         call img%write(stkin,indout)
                     enddo
                     do iipart = 1,params%nparts
-                        stkin = 'cavgs_even_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                        stkin = 'cavgs_odd_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
                         call img%read(stkin, indin)
                         call img%write(stkin,indout)
                     enddo
