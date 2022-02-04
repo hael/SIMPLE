@@ -26,6 +26,7 @@ type ptcl_record
     integer   :: pind    = 0   !< particle index in stack
     integer   :: eo      = -1  !< even is 0, odd is 1, default is -1
     integer   :: class         !< class assignment
+    integer   :: ind_in_stk= 0 !< index in stack
 end type ptcl_record
 
 integer                        :: ctfflag                  !< ctf flag <yes=1|no=0|flip=2>
@@ -113,7 +114,7 @@ contains
         use simple_sp_project, only: sp_project
         class(sp_project), intent(inout) :: spproj
         type(ctfparams)   :: ctfvars(nthr_glob)
-        integer           :: i, icls, cnt, iptcl, ithr
+        integer           :: i, icls, cnt, iptcl, ithr, stkind
         ! build index map
         cnt = 0
         do iptcl=istart,iend
@@ -126,7 +127,7 @@ contains
             precs(cnt)%pind = iptcl
         enddo
         ! fetch data from project
-        !$omp parallel do default(shared) private(cnt,iptcl,ithr) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(cnt,iptcl,ithr,stkind) schedule(static) proc_bind(close)
         do cnt = 1,partsz
             iptcl              = precs(cnt)%pind
             if( iptcl == 0 ) cycle
@@ -143,6 +144,7 @@ contains
             precs(cnt)%class   = nint(spproj%os_ptcl2D%get(iptcl, 'class'))
             precs(cnt)%e3      = spproj%os_ptcl2D%e3get(iptcl)
             precs(cnt)%shift   = spproj%os_ptcl2D%get_2Dshift(iptcl)
+            call spproj%map_ptcl_ind2stk_ind(params_glob%oritype, iptcl, stkind, precs(cnt)%ind_in_stk)
         end do
         !$omp end parallel do
         prev_eo_pops = 0
@@ -284,29 +286,42 @@ contains
         integer,          allocatable :: cyc1(:), cyc2(:)
         complex :: fcomp, cswap
         real    :: loc(2), mat(2,2), dist(2), pw, add_phshift
+        integer :: batch_iprecs(READBUFFSZ)
         integer :: fdims(3), lims(3,2), phys_cmat(2), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
-        integer :: iprec, i, j, sh, iwinsz, nyq, ind_in_stk, foffset, ok
-        integer :: wdim, h, k, l, m, ll, mm, incr, icls, iptcl, interp_shlim, interp_shlim_sq
-        integer :: first_iprec, first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind, stkind
+        integer :: iprec, i, sh, iwinsz, nyq, ind_in_stk, foffset, ok, iprec_glob, nptcls_eff
+        integer :: wdim, h, k, l, m, ll, mm, incr, icls, iptcl, interp_shlim, interp_shlim_sq, batchind
+        integer :: first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind
         integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
         call init_cavgs_sums
         if( do_frac_update )then
             call cavger_readwrite_partial_sums( 'read' )
+            ! perform quadrant swap prior to update and to mirror the behaviour after update.
+            ! to implement in the image class
+            fdims   = ctfsqsums_even(1)%get_array_shape()
+            foffset = fdims(2) / 2
+            !$omp parallel do schedule(static) private(icls,ithr,k,ok,h,cswap) default(shared) proc_bind(close)
+            do icls = 1,ncls
+                ithr = omp_get_thread_num() + 1
+                call ctfsqsums_even(icls)%get_cmat_ptr(prhomat(ithr)%cmat)
+                do k = 1,foffset
+                    ok = k + foffset
+                    do h = 1,fdims(1)
+                        cswap = prhomat(ithr)%cmat(h,k,1)
+                        prhomat(ithr)%cmat(h, k,1) = prhomat(ithr)%cmat(h,ok,1)
+                        prhomat(ithr)%cmat(h,ok,1) = cswap
+                    end do
+                end do
+            enddo
+            !$omp end parallel do
             call cavger_apply_weights( 1. - params_glob%update_frac )
         endif
         kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
         wdim   = kbwin%get_wdim()
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         ! Number stacks
-        first_pind = 0
-        do i = 1,partsz
-            if( precs(i)%pind > 0 )then
-                first_pind = precs(i)%pind
-                exit
-            endif
-        enddo
+        first_pind = params_glob%fromp
         call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, first_pind, first_stkind, ind_in_stk)
         last_pind = 0
         do i = partsz,1,-1
@@ -342,42 +357,44 @@ contains
         cyc_limsR(:,2)  = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
         allocate(cmats(fdims(1),fdims(2),READBUFFSZ), rhos(fdims(1),fdims(2),READBUFFSZ))
         ! Main loop
-        first_iprec  = 1 ! first particle record in current stack
+        iprec_glob = 0 ! global record index
         do istk = first_stkind,last_stkind
-            ! Particles range
-            stkind = first_stkind + istk - 1
-            fromp  = max(precs(1)%pind,      nint(build_glob%spproj%os_stk%get(istk,'fromp')))
-            top    = min(precs(partsz)%pind, nint(build_glob%spproj%os_stk%get(istk,'top')))
+            ! Particles range in stack
+            fromp  = nint(build_glob%spproj%os_stk%get(istk,'fromp'))
+            top    = nint(build_glob%spproj%os_stk%get(istk,'top'))
             nptcls_in_stk = top - fromp + 1 ! # of particles in stack
-            if( nptcls_in_stk == 0 )cycle
-            call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, fromp, stk_fname, ind_in_stk)
-            ind_in_stk = ind_in_stk - 1 ! because incremented in the loop below
-            ! open stack
-            if( nptcls_in_stk < READBUFFSZ )then
-                call stkio_r%open(stk_fname, smpd, 'read', bufsz=nptcls_in_stk)
-            else
-                call stkio_r%open(stk_fname, smpd, 'read', bufsz=READBUFFSZ)
-            endif
-            ! Read batches loop
+            call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, max(params_glob%fromp,fromp), stk_fname, ind_in_stk)
+            ! open buffer
+            call stkio_r%open(stk_fname, smpd, 'read', bufsz=min(nptcls_in_stk,READBUFFSZ))
+            ! batch loop
             nbatches = ceiling(real(nptcls_in_stk)/real(READBUFFSZ)) ! will be 1 most of the tme
             do ibatch = 1,nbatches
+                batch_iprecs = 0                                     ! records in batch, if zero skip
                 istart = (ibatch - 1)              * READBUFFSZ + 1  ! first index in current batch, will be 1      most of the time
-                iend   = min(nptcls_in_stk, istart + READBUFFSZ - 1) ! last  index in current batch, will be nptcls most of the time
-                nptcls_in_batch = iend - istart + 1                  ! nptcls_in_batch will be nptcls_in_stk most of the rime
-                j      = 0                                           ! index in batch
+                iend   = min(nptcls_in_stk, istart + READBUFFSZ - 1) ! last  index in current batch, will be nptcls_in_stk most of the time
+                nptcls_in_batch = iend-istart+1
+                batchind   = 0
+                nptcls_eff = 0                                       ! # particles to process in batch
                 do i = istart,iend
-                    iprec      = first_iprec + i - 1
-                    ind_in_stk = ind_in_stk + 1
-                    j          = j + 1
-                    if( precs(iprec)%pind == 0 ) cycle
-                    call stkio_r%read(ind_in_stk, read_imgs(j))
+                    iptcl    = fromp + i - 1                         ! global particle index
+                    batchind = batchind + 1                          ! index in batch
+                    if( iptcl < params_glob%fromp ) cycle            ! taking care of limits
+                    if( iptcl > params_glob%top )   cycle
+                    iprec_glob = iprec_glob + 1                      ! global particle record
+                    batch_iprecs(batchind) = iprec_glob              ! particle record in batch
+                    if( precs(iprec_glob)%pind == 0 ) cycle
+                    nptcls_eff = nptcls_eff + 1
+                    if( iptcl /= precs(iprec_glob)%pind ) THROW_HARD('Critical indexing error!')      ! debug, to remove
+                    call stkio_r%read(precs(iprec_glob)%ind_in_stk, read_imgs(batchind)) ! read
                 enddo
+                if( nptcls_eff == 0 ) cycle
                 ! Interpolation loop
                 !$omp parallel default(shared) proc_bind(close)&
                 !$omp private(i,iprec,iptcl,fcomp,win_corner,add_phshift,mat,ithr,h,k,l,m,ll,mm,dist,loc,sh,phys_cmat,cyc1,cyc2,w,incr,pw)
                 !$omp do schedule(static)
                 do i = 1,nptcls_in_batch
-                    iprec        = first_iprec + istart + i - 2
+                    iprec = batch_iprecs(i)
+                    if( iprec == 0 ) cycle
                     if( precs(iprec)%pind == 0 ) cycle
                     iptcl        = precs(iprec)%pind
                     ithr         = omp_get_thread_num()+1
@@ -467,7 +484,8 @@ contains
                 do icls = 1,ncls
                     ithr = omp_get_thread_num() + 1
                     do i = 1,nptcls_in_batch
-                        iprec = first_iprec + istart + i - 2
+                        iprec = batch_iprecs(i)
+                        if( iprec == 0 ) cycle
                         if( precs(iprec)%pind == 0 ) cycle
                         if( precs(iprec)%class == icls )then
                             pw = precs(iprec)%pw
@@ -489,10 +507,8 @@ contains
             enddo ! end read batches loop
             ! close stack
             call stkio_r%close
-            ! Keeeping track of particles records
-            first_iprec = first_iprec + nptcls_in_stk
         enddo
-        ! performs final quadrant swap on e/o rhos
+        ! performs final quadrant swap on per class e/o rhos
         !$omp parallel do schedule(static) private(icls,ithr,k,ok,h,cswap) default(shared) proc_bind(close)
         do icls = 1,ncls
             ithr = omp_get_thread_num() + 1
@@ -725,10 +741,10 @@ contains
         allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
         select case(trim(which))
             case('read')
-                call stkio(1)%open(cae, smpd, 'read', bufsz=ncls)
-                call stkio(2)%open(cao, smpd, 'read', bufsz=ncls)
-                call stkio(3)%open(cte, smpd, 'read', bufsz=ncls)
-                call stkio(4)%open(cto, smpd, 'read', bufsz=ncls)
+                call stkio(1)%open(cae, smpd, 'read', bufsz=ncls, is_ft=.true.)
+                call stkio(2)%open(cao, smpd, 'read', bufsz=ncls, is_ft=.true.)
+                call stkio(3)%open(cte, smpd, 'read', bufsz=ncls, is_ft=.true.)
+                call stkio(4)%open(cto, smpd, 'read', bufsz=ncls, is_ft=.true.)
                 do icls=1,ncls
                     call stkio(1)%read(icls, cavgs_even(icls))
                     call stkio(2)%read(icls, cavgs_odd(icls))
