@@ -329,7 +329,7 @@ contains
     procedure          :: roavg
     procedure          :: rtsq
     procedure          :: rtsq_serial
-    procedure, private :: shift_phorig
+    procedure          :: shift_phorig
     procedure          :: shift
     procedure, private :: shift2Dserial_1
     procedure, private :: shift2Dserial_2
@@ -6057,11 +6057,29 @@ contains
     !>  \brief  an image shifter to prepare for Fourier transformation
     subroutine shift_phorig( self )
         class(image), intent(inout) :: self
-        integer :: i, j, k, ii,jj
-        real    :: rswap
-        integer :: kfrom,kto
-        if( self%ft ) THROW_HARD('this method is intended for real images; shift_phorig')
-        if( self%even_dims() )then
+        complex(sp) :: cswap
+        real(sp)    :: rswap
+        integer     :: i, j, k, h, ok, ii,jj, kfrom, kto, koffset
+        if( .not.self%even_dims() )then
+            write(logfhandle,*) 'ldim: ', self%ldim
+            THROW_HARD('even dimensions assumed; shift_phorig')
+        endif
+        if( self%ft )then
+            if( self%ldim(3) == 1 )then
+                ! serial for now
+                koffset = self%array_shape(2) / 2
+                do k = 1,koffset
+                    ok = k + koffset
+                    do h = 1,self%array_shape(1)
+                        cswap             = self%cmat(h, k,1)
+                        self%cmat(h, k,1) = self%cmat(h,ok,1)
+                        self%cmat(h,ok,1) = cswap
+                    end do
+                end do
+            else
+                THROW_HARD('3D FT not supported yet; shift_phorig')
+            endif
+        else
             if( self%ldim(3) == 1 )then
                 if( self%wthreads )then
                     !$omp parallel do collapse(2) default(shared) private(rswap,i,j)&
@@ -6149,9 +6167,6 @@ contains
                     end do
                 endif
             endif
-        else
-            write(logfhandle,*) 'ldim: ', self%ldim
-            THROW_HARD('even dimensions assumed; shift_phorig')
         endif
     end subroutine shift_phorig
 
