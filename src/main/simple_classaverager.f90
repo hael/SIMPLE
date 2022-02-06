@@ -283,11 +283,11 @@ contains
         complex,          allocatable :: cmats(:,:,:)
         real,             allocatable :: rhos(:,:,:), w(:,:)
         integer,          allocatable :: cyc1(:), cyc2(:)
-        complex :: fcomp, cswap
+        complex :: fcomp
         real    :: loc(2), mat(2,2), dist(2), pw, add_phshift
         integer :: batch_iprecs(READBUFFSZ)
         integer :: fdims(3), lims(3,2), phys_cmat(2), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
-        integer :: iprec, i, sh, iwinsz, nyq, ind_in_stk, foffset, ok, iprec_glob, nptcls_eff
+        integer :: iprec, i, sh, iwinsz, nyq, ind_in_stk, iprec_glob, nptcls_eff
         integer :: wdim, h, k, l, m, ll, mm, incr, icls, iptcl, interp_shlim, interp_shlim_sq, batchind
         integer :: first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind
         integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
@@ -297,21 +297,10 @@ contains
         if( do_frac_update )then
             call cavger_readwrite_partial_sums( 'read' )
             ! perform quadrant swap prior to update and to mirror the behaviour after update.
-            ! to implement in the image class
-            fdims   = ctfsqsums_even(1)%get_array_shape()
-            foffset = fdims(2) / 2
-            !$omp parallel do schedule(static) private(icls,ithr,k,ok,h,cswap) default(shared) proc_bind(close)
+            !$omp parallel do schedule(static) private(icls) default(shared) proc_bind(close)
             do icls = 1,ncls
-                ithr = omp_get_thread_num() + 1
-                call ctfsqsums_even(icls)%get_cmat_ptr(prhomat(ithr)%cmat)
-                do k = 1,foffset
-                    ok = k + foffset
-                    do h = 1,fdims(1)
-                        cswap = prhomat(ithr)%cmat(h,k,1)
-                        prhomat(ithr)%cmat(h, k,1) = prhomat(ithr)%cmat(h,ok,1)
-                        prhomat(ithr)%cmat(h,ok,1) = cswap
-                    end do
-                end do
+                call ctfsqsums_even(icls)%shift_phorig
+                call ctfsqsums_odd(icls)%shift_phorig
             enddo
             !$omp end parallel do
             call cavger_apply_weights( 1. - params_glob%update_frac )
@@ -349,7 +338,7 @@ contains
         cyc_lims        = cgrid_imgs(1)%loop_lims(3)
         nyq             = cgrid_imgs(1)%get_lfny(1)
         fdims           = cgrid_imgs(1)%get_array_shape()
-        foffset         = fdims(2) / 2
+        ! foffset         = fdims(2) / 2
         interp_shlim    = nyq + 1
         interp_shlim_sq = interp_shlim**2
         cyc_limsR(:,1)  = cyc_lims(1,:)  ! limits in fortran layered format
@@ -508,27 +497,10 @@ contains
             call stkio_r%close
         enddo
         ! performs final quadrant swap on per class e/o rhos
-        !$omp parallel do schedule(static) private(icls,ithr,k,ok,h,cswap) default(shared) proc_bind(close)
+        !$omp parallel do schedule(static) private(icls) default(shared) proc_bind(close)
         do icls = 1,ncls
-            ithr = omp_get_thread_num() + 1
-            call ctfsqsums_even(icls)%get_cmat_ptr(prhomat(ithr)%cmat)
-            do k = 1,foffset
-                ok = k + foffset
-                do h = 1,fdims(1)
-                    cswap = prhomat(ithr)%cmat(h,k,1)
-                    prhomat(ithr)%cmat(h, k,1) = prhomat(ithr)%cmat(h,ok,1)
-                    prhomat(ithr)%cmat(h,ok,1) = cswap
-                end do
-            end do
-            call ctfsqsums_odd(icls)%get_cmat_ptr(prhomat(ithr)%cmat)
-            do k = 1,foffset
-                ok = k + foffset
-                do h = 1,fdims(1)
-                    cswap = prhomat(ithr)%cmat(h,k,1)
-                    prhomat(ithr)%cmat(h, k,1) = prhomat(ithr)%cmat(h,ok,1)
-                    prhomat(ithr)%cmat(h,ok,1) = cswap
-                end do
-            end do
+            call ctfsqsums_even(icls)%shift_phorig
+            call ctfsqsums_odd(icls)%shift_phorig
         enddo
         !$omp end parallel do
         ! Cleanup
