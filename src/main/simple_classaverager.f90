@@ -15,18 +15,18 @@ private
 #include "simple_local_flags.inc"
 
 type ptcl_record
-    type(ctf) :: tfun            !< transfer function
-    real      :: pw        = 0.0 !< particle weight
-    real      :: dfx       = 0.0 !< defocus in x (microns)
-    real      :: dfy       = 0.0 !< defocus in y (microns)
-    real      :: angast    = 0.0 !< angle of astigmatism (in degrees)
-    real      :: phshift   = 0.0 !< additional phase shift from the Volta
-    real      :: e3              !< in-plane rotations
-    real      :: shift(2)        !< rotational origin shift
-    integer   :: pind       = 0  !< particle index in stack
-    integer   :: eo         = -1 !< even is 0, odd is 1, default is -1
-    integer   :: class           !< class assignment
-    integer   :: ind_in_stk = 0  !< index in stack
+    type(ctf) :: tfun              !< transfer function
+    real      :: pw        = 0.0   !< particle weight
+    real      :: dfx       = 0.0   !< defocus in x (microns)
+    real      :: dfy       = 0.0   !< defocus in y (microns)
+    real      :: angast    = 0.0   !< angle of astigmatism (in degrees)
+    real      :: phshift   = 0.0   !< additional phase shift from the Volta
+    real      :: e3                !< in-plane rotations
+    real      :: shift(2)          !< rotational origin shift
+    integer   :: pind       = 0    !< particle index in stack
+    integer   :: eo         = -1   !< even is 0, odd is 1, default is -1
+    integer   :: class             !< class assignment
+    integer   :: ind_in_stk = 0    !< index in stack
 end type ptcl_record
 
 integer                        :: ctfflag                  !< ctf flag <yes=1|no=0|flip=2>
@@ -395,14 +395,14 @@ contains
                     if( phaseplate ) add_phshift = precs(iprec)%phshift
                     if( ctfflag /= CTFFLAG_NO )then
                         if( ctfflag == CTFFLAG_FLIP )then
-                            call precs(iprec)%tfun%apply_and_shift(cgrid_imgs(ithr), 1, lims, rhos(:,:,i), -precs(iprec)%shift(1),&
+                            call precs(iprec)%tfun%apply_and_shift_dev(cgrid_imgs(ithr), 1, lims, rhos(:,:,i), -precs(iprec)%shift(1),&
                             &-precs(iprec)%shift(2), precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift)
                         else
-                            call precs(iprec)%tfun%apply_and_shift(cgrid_imgs(ithr), 2, lims, rhos(:,:,i), -precs(iprec)%shift(1),&
+                            call precs(iprec)%tfun%apply_and_shift_dev(cgrid_imgs(ithr), 2, lims, rhos(:,:,i), -precs(iprec)%shift(1),&
                             &-precs(iprec)%shift(2), precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift)
                         endif
                     else
-                        call precs(iprec)%tfun%apply_and_shift(cgrid_imgs(ithr), 3, lims, rhos(:,:,i), -precs(iprec)%shift(1),&
+                        call precs(iprec)%tfun%apply_and_shift_dev(cgrid_imgs(ithr), 3, lims, rhos(:,:,i), -precs(iprec)%shift(1),&
                         &-precs(iprec)%shift(2), precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift)
                     endif
                     ! Rotation matrix

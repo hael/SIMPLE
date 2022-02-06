@@ -17,15 +17,15 @@ public :: ctf
 
 type ctf
     private
-    real    :: smpd        = 0.    !< sampling distance (input unit: A)
-    real    :: kV          = 0.    !< acceleration voltage of the electron microscope (input unit: kV)
-    real    :: Cs          = 0.    !< spherical aberration (input unit: mm)
-    real    :: wl          = 0.    !< wavelength (input unit: A)
-    real    :: amp_contr   = 0.07  !< fraction of amplitude contrast ([0.07,0.15] see Mindell 03)
-    real    :: amp_contr_const = 0.  !< Amplitude contrast derived term
-    real    :: dfx         = 0.    !< underfocus x-axis, underfocus is positive; larger value = more underfocus (input unit: microns)
-    real    :: dfy         = 0.    !< underfocus y-axis (input unit: microns)
-    real    :: angast      = 0.    !< azimuth of x-axis 0.0 means axis is at 3 o'clock (input unit: degrees)
+    real    :: smpd            = 0.    !< sampling distance (input unit: A)
+    real    :: kV              = 0.    !< acceleration voltage of the electron microscope (input unit: kV)
+    real    :: Cs              = 0.    !< spherical aberration (input unit: mm)
+    real    :: wl              = 0.    !< wavelength (input unit: A)
+    real    :: amp_contr       = 0.07  !< fraction of amplitude contrast ([0.07,0.15] see Mindell 03)
+    real    :: amp_contr_const = 0.    !< Amplitude contrast derived term
+    real    :: dfx             = 0.    !< underfocus x-axis, underfocus is positive; larger value = more underfocus (input unit: microns)
+    real    :: dfy             = 0.    !< underfocus y-axis (input unit: microns)
+    real    :: angast          = 0.    !< azimuth of x-axis 0.0 means axis is at 3 o'clock (input unit: degrees)
   contains
     procedure          :: init
     procedure, private :: evalPhSh
@@ -37,10 +37,12 @@ type ctf
     procedure          :: spafreqsqatnthzero
     procedure          :: apply
     procedure          :: ctf2img
+    procedure          :: ctf_1stzero2img
     procedure          :: apply_serial
     procedure          :: wienerlike_restoration
     procedure          :: phaseflip_and_shift_serial
     procedure          :: apply_and_shift
+    procedure          :: apply_and_shift_dev
     procedure, private :: kV2wl
     procedure          :: apply_convention
 end type ctf
@@ -202,7 +204,7 @@ contains
         class(ctf), intent(in)  :: self
         integer,    intent(in)  :: nzero
         real,       intent(in)  :: add_phshift
-        real,       intent(in) :: ang
+        real,       intent(in)  :: ang
         real :: phshift, A, B, C, determinant, one,two
         phshift = real(nzero) * PI
         A = -0.5 * PI * self%wl**3. * self%cs
@@ -278,8 +280,8 @@ contains
     !>  \brief  is for generating an image of CTF
     subroutine ctf2img( self, img, dfx, dfy, angast, phshift )
         use simple_image, only: image
-        class(ctf),       intent(inout) :: self  !< instance
-        class(image),     intent(inout) :: img   !< image (output)
+        class(ctf),       intent(inout) :: self
+        class(image),     intent(inout) :: img
         real,             intent(in)    :: dfx, dfy, angast
         real,   optional, intent(in)    :: phshift
         integer :: lims(3,2),h,k,phys(3),ldim(3)
@@ -306,6 +308,61 @@ contains
             end do
         end do
     end subroutine ctf2img
+
+    subroutine ctf_1stzero2img( self, img, dfx, dfy, angast, phshift )
+        use simple_image, only: image
+        class(ctf),     intent(inout) :: self
+        class(image),   intent(inout) :: img
+        real,           intent(in)    :: dfx, dfy, angast
+        real, optional, intent(in)    :: phshift
+        integer :: lims(3,2),h,k,phys(3),ldim(3),hlim,klim
+        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3),pphshift
+        pphshift = 0.
+        if( present(phshift) ) pphshift = phshift
+        ! init object
+        call self%init(dfx, dfy, angast)
+        ! initialize
+        lims     = img%loop_lims(2)
+        ldim     = img%get_ldim()
+        inv_ldim = 1./real(ldim)
+        ! initialize image and flag as FT
+        img = cmplx(0.,0.)
+        ! find limits
+        do h = 0,lims(1,2)
+            hinv      = real(h) * inv_ldim(1)
+            spaFreqSq = hinv * hinv
+            ang       = atan2(0.,real(h))
+            tval      = self%eval(spaFreqSq, ang, pphshift)
+            if( tval <= 0 )then
+                hlim = h
+                exit
+            endif
+        end do
+        do k = 0,lims(2,2)
+            kinv      = real(k) * inv_ldim(2)
+            spaFreqSq = kinv * kinv
+            ang       = atan2(real(k),0.)
+            tval      = self%eval(spaFreqSq, ang, pphshift)
+            if( tval <= 0 )then
+                klim = k
+                exit
+            endif
+        end do
+        ! generate image
+        do h = lims(1,1),lims(1,2)
+            if( abs(h) >= hlim ) cycle
+            do k=lims(2,1),lims(2,2)
+                if( abs(k) >= klim ) cycle
+                hinv        = real(h) * inv_ldim(1)
+                kinv        = real(k) * inv_ldim(2)
+                spaFreqSq   = hinv * hinv + kinv * kinv
+                ang         = atan2(real(k),real(h))
+                tval        = self%eval(spaFreqSq, ang, pphshift)
+                phys = img%comp_addr_phys([h,k,0])
+                if( tval > 0. ) call img%set_cmat_at(phys(1),phys(2),phys(3), cmplx(tval,0.))
+            end do
+        end do
+    end subroutine ctf_1stzero2img
 
     !>  \brief  is for optimised serial application of CTF
     !!          modes: abs, ctf, flip, flipneg, neg, square
@@ -398,7 +455,7 @@ contains
                 end do
             case DEFAULT
                 write(logfhandle,*) 'mode:', mode
-                THROW_HARD('unsupported mode in ctf2img')
+                THROW_HARD('unsupported mode in apply_serial')
         end select
     end subroutine apply_serial
 
@@ -518,6 +575,76 @@ contains
         ! shift image
         call img%shift2Dserial([x,y])
     end subroutine apply_and_shift
+
+    subroutine apply_and_shift_dev( self, img, imode, lims, rho, x, y, dfx, dfy, angast, add_phshift)
+        use simple_image, only: image
+        class(ctf),     intent(inout) :: self        !< instance
+        class(image),   intent(inout) :: img         !< modified image (output)
+        integer,        intent(in)    :: imode       !< 1=abs 2=ctf 3=no
+        integer,        intent(in)    :: lims(3,2)   !< loop limits
+        real,           intent(out)   :: rho(lims(1,1):lims(1,2),lims(2,1):lims(2,2))
+        real,           intent(in)    :: x, y        !< rotational origin shift
+        real,           intent(in)    :: dfx         !< defocus x-axis
+        real,           intent(in)    :: dfy         !< defocus y-axis
+        real,           intent(in)    :: angast      !< angle of astigmatism
+        real,           intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
+        integer :: ldim(3),logi(3),h,k,phys(3),hlim,klim
+        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3),rh,rk
+        ! initialize
+        call self%init(dfx, dfy, angast)
+        ldim     = img%get_ldim()
+        inv_ldim = 1./real(ldim)
+        ! find the limits that bound the central ellipse
+        do h = 0,lims(1,2)
+            hinv      = real(h) * inv_ldim(1)
+            spaFreqSq = hinv * hinv
+            ang       = atan2(0.,real(h))
+            tval      = self%eval(spaFreqSq, ang, add_phshift)
+            if( tval <= 0 )then
+                hlim = h
+                exit
+            endif
+        end do
+        do k = 0,lims(2,2)
+            kinv      = real(k) * inv_ldim(2)
+            spaFreqSq = kinv * kinv
+            ang       = atan2(real(k),0.)
+            tval      = self%eval(spaFreqSq, ang, add_phshift)
+            if( tval <= 0 )then
+                klim = k
+                exit
+            endif
+        end do
+        ! the intent here is to only do Wiener restoration after 1st CTF zero
+        do h=lims(1,1),lims(1,2)
+            rh   = real(h)
+            hinv = rh * inv_ldim(1)
+            do k=lims(2,1),lims(2,2)
+                rk    = real(k)
+                ! calculate CTF and CTF**2.0 values
+                kinv      = rk * inv_ldim(2)
+                spaFreqSq = hinv*hinv + kinv*kinv
+                ang       = atan2(rk,rh)
+                tval      = 1.0
+                if( imode <  3 ) tval = self%eval(spaFreqSq, ang, add_phshift)
+                rho(h,k) = tval * tval
+                if( imode == 1 ) tval = abs(tval)
+                ! multiply image with tval
+                logi   = [h,k,0]
+                phys   = img%comp_addr_phys(logi)
+                if( abs(h) >= hlim .and. abs(k) >= klim )then ! outside the rectangle that bounds the central ellipse
+                    call img%mul_cmat_at(phys(1),phys(2),phys(3), tval)
+                else if( tval < 0. )then                      ! inside  the rectangle that bounds the central ellipse
+                    ! we multiply if CTF < 0.
+                    call img%mul_cmat_at(phys(1),phys(2),phys(3), tval)
+                else
+                    rho(h,k) = 1.0
+                endif
+            end do
+        end do
+        ! shift image
+        call img%shift2Dserial([x,y])
+    end subroutine apply_and_shift_dev
 
     pure elemental real function kV2wl( self ) result (wavelength)
         class(ctf), intent(in) :: self

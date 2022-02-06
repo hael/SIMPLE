@@ -5875,9 +5875,9 @@ contains
         end select
         call img%zero_and_unflag_ft
         lims = self%loop_lims(3)
-        mh = abs(lims(1,1))
-        mk = abs(lims(2,1))
-        ml = abs(lims(3,1))
+        mh   = abs(lims(1,1))
+        mk   = abs(lims(2,1))
+        ml   = abs(lims(3,1))
         if( .not.self%wthreads .and. self%is_2d() )then
             do k=lims(2,1),lims(2,2)
                 inds(2) = min(max(1,k+mk+1),self%ldim(2))
@@ -5885,16 +5885,16 @@ contains
                     inds(1) = min(max(1,h+mh+1),self%ldim(1))
                     comp    = self%get_fcomp2D(h,k)
                     select case(which_flag)
-                    case(0)
-                        img%rmat(inds(1),inds(2),1) = real(comp)
-                    case(1)
-                        img%rmat(inds(1),inds(2),1) = csq(comp)
-                    case(2)
-                        img%rmat(inds(1),inds(2),1) = sqrt(csq(comp))
-                    case(3)
-                        img%rmat(inds(1),inds(2),1) = log(csq(comp))
-                    case(4)
-                        img%rmat(inds(1),inds(2),1) = phase_angle(comp)
+                        case(0)
+                            img%rmat(inds(1),inds(2),1) = real(comp)
+                        case(1)
+                            img%rmat(inds(1),inds(2),1) = csq(comp)
+                        case(2)
+                            img%rmat(inds(1),inds(2),1) = sqrt(csq(comp))
+                        case(3)
+                            img%rmat(inds(1),inds(2),1) = log(csq(comp))
+                        case(4)
+                            img%rmat(inds(1),inds(2),1) = phase_angle(comp)
                     end select
                 end do
             end do
