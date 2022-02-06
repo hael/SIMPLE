@@ -1186,6 +1186,8 @@ contains
         if( self%fny > 0. ) self%tofny = nint(self%dstep/self%fny) ! Nyqvist Fourier index
         self%hpind_fsc = 0                                         ! high-pass Fouirer index FSC
         if( cline%defined('hp_fsc') ) self%hpind_fsc = nint(self%dstep/self%hp_fsc)
+        self%lpstart = max(self%lpstart, self%fny)
+        self%lpstop  = max(self%lpstop,  self%fny)
         ! set 2D low-pass limits and smpd_targets 4 scaling
         self%lplims2D(1)       = max(self%fny, self%lpstart)
         self%lplims2D(2)       = max(self%fny, self%lplims2D(1) - (self%lpstart - self%lpstop)/2.)
