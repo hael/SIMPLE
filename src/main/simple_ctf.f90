@@ -600,7 +600,7 @@ contains
             spaFreqSq = hinv * hinv
             ang       = atan2(0.,real(h))
             tval      = self%eval(spaFreqSq, ang, add_phshift)
-            if( tval <= 0 )then
+            if( tval <= 0. )then
                 hlim = h
                 exit
             endif
@@ -610,7 +610,7 @@ contains
             spaFreqSq = kinv * kinv
             ang       = atan2(real(k),0.)
             tval      = self%eval(spaFreqSq, ang, add_phshift)
-            if( tval <= 0 )then
+            if( tval <= 0. )then
                 klim = k
                 exit
             endif

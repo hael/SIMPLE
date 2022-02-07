@@ -785,7 +785,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY))
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -993,7 +993,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY))
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -1063,7 +1063,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params, array=L_USE_SLURM_ARR)
         call qsys_cleanup
         call simple_end('**** SIMPLE_DISTR_MOTION_CORRECT_TOMO NORMAL STOP ****')
     end subroutine exec_motion_correct_tomo_distr
@@ -1187,7 +1187,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY))
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -1285,7 +1285,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -1462,7 +1462,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! merge docs
         call spproj%read(params%projfile)
         call spproj%update_projinfo(cline)
@@ -1640,7 +1640,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
         ! ASSEMBLY
         allocate(parts_fname(params%nparts))
         numlen = len(int2str(params%nparts))
@@ -2022,7 +2022,7 @@ contains
                 inside = .true.        ! box is inside
                 if( any(fromc < 1) .or. toc(1) > ildim(1) .or. toc(2) > ildim(2) ) inside = .false.
             end function box_inside
-            
+
     end subroutine exec_extract
 
     subroutine exec_reextract_distr( self, cline )
@@ -2099,7 +2099,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), part_params=part_params)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY), part_params=part_params, array=L_USE_SLURM_ARR)
         ! ASSEMBLY
         allocate(spproj_parts(params%nparts),parts_fname(params%nparts))
         numlen = len(int2str(params%nparts))
