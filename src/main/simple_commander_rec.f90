@@ -90,7 +90,7 @@ contains
         call qenv%new(params%nparts)
         call cline%gen_job_descr(job_descr)
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs(job_descr)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, array=L_USE_SLURM_ARR)
         ! assemble volumes
         ! this is for parallel volassemble over states
         allocate(state_assemble_finished(params%nstates) )
