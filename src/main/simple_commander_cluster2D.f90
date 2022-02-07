@@ -668,6 +668,7 @@ contains
                 call cline_make_cavgs%set('projfile', orig_projfile)
                 call cline_make_cavgs%set('nparts',   real(params%nparts))
                 call cline_make_cavgs%set('refs',     trim(finalcavgs))
+                call cline_make_cavgs%delete('wiener') ! to ensure that full Wiener restoration is doen for the final cavgs
                 if( l_shmem )then
                     params_ptr  => params_glob
                     params_glob => null()
