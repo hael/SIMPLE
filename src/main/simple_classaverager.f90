@@ -46,9 +46,10 @@ type(image),       allocatable :: ctfsqsums_odd(:)         !< -"-
 type(image),       allocatable :: ctfsqsums_merged(:)      !< -"-
 integer,           allocatable :: prev_eo_pops(:,:)
 logical,           allocatable :: pptcl_mask(:)
-logical                        :: phaseplate = .false.     !< Volta phaseplate images or not
-logical                        :: l_bilinear = .true.      !< whether to use bilinear or convolution interpolation
-logical                        :: exists     = .false.     !< to flag instance existence
+logical                        :: phaseplate    = .false.  !< Volta phaseplate images or not
+logical                        :: l_bilinear    = .true.   !< whether to use bilinear or convolution interpolation
+logical                        :: l_wiener_part = .false.  !< partial Wiener restoration (after 1st CTF zero)
+logical                        :: exists        = .false.  !< to flag instance existence
 
 integer(timer_int_kind) :: t_class_loop,t_batch_loop, t_gridding, t_init, t_tot
 real(timer_int_kind)    :: rt_class_loop,rt_batch_loop, rt_gridding, rt_init, rt_tot
@@ -66,27 +67,28 @@ contains
         else
             allocate(pptcl_mask(params_glob%fromp:params_glob%top), source=.true.)
         endif
-        ncls       = params_glob%ncls
+        ncls          = params_glob%ncls
         ! work out range and partsz
         if( params_glob%l_distr_exec )then
-            istart = params_glob%fromp
-            iend   = params_glob%top
+            istart    = params_glob%fromp
+            iend      = params_glob%top
         else
-            istart = 1
-            iend   = params_glob%nptcls
+            istart    = 1
+            iend      = params_glob%nptcls
         endif
-        partsz     = size(pptcl_mask)
+        partsz        = size(pptcl_mask)
         ! CTF logics
-        ctfflag    = build_glob%spproj%get_ctfflag_type('ptcl2D',iptcl=params_glob%fromp)
+        ctfflag       = build_glob%spproj%get_ctfflag_type('ptcl2D',iptcl=params_glob%fromp)
         ! set phaseplate flag
-        phaseplate = build_glob%spproj%has_phaseplate('ptcl2D')
+        phaseplate    = build_glob%spproj%has_phaseplate('ptcl2D')
         ! smpd
-        smpd       = params_glob%smpd
+        smpd          = params_glob%smpd
         ! set ldims
-        ldim       = [params_glob%box,params_glob%box,1]
-        ldim_pd    = [params_glob%boxpd,params_glob%boxpd,1]
-        ldim_pd(3) = 1
-        filtsz     = build_glob%img%get_filtsz()
+        ldim          = [params_glob%box,params_glob%box,1]
+        ldim_pd       = [params_glob%boxpd,params_glob%boxpd,1]
+        ldim_pd(3)    = 1
+        filtsz        = build_glob%img%get_filtsz()
+        l_wiener_part = trim(params_glob%wiener) .eq. 'partial'
         ! build arrays
         allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
         &cavgs_merged(ncls), ctfsqsums_even(ncls),&
@@ -393,17 +395,32 @@ contains
                     ! apply CTF, shift
                     add_phshift = 0.
                     if( phaseplate ) add_phshift = precs(iprec)%phshift
-                    if( ctfflag /= CTFFLAG_NO )then
-                        if( ctfflag == CTFFLAG_FLIP )then
-                            call precs(iprec)%tfun%apply_and_shift_dev(cgrid_imgs(ithr), 1, lims, rhos(:,:,i), -precs(iprec)%shift(1),&
-                            &-precs(iprec)%shift(2), precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift)
+                    if( l_wiener_part )then
+                        if( ctfflag /= CTFFLAG_NO )then
+                            if( ctfflag == CTFFLAG_FLIP )then
+                                call precs(iprec)%tfun%apply_partial_and_shift(cgrid_imgs(ithr), 1, lims, rhos(:,:,i), -precs(iprec)%shift(1),&
+                                &-precs(iprec)%shift(2), precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift)
+                            else
+                                call precs(iprec)%tfun%apply_partial_and_shift(cgrid_imgs(ithr), 2, lims, rhos(:,:,i), -precs(iprec)%shift(1),&
+                                &-precs(iprec)%shift(2), precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift)
+                            endif
                         else
-                            call precs(iprec)%tfun%apply_and_shift_dev(cgrid_imgs(ithr), 2, lims, rhos(:,:,i), -precs(iprec)%shift(1),&
+                            call precs(iprec)%tfun%apply_partial_and_shift(cgrid_imgs(ithr), 3, lims, rhos(:,:,i), -precs(iprec)%shift(1),&
                             &-precs(iprec)%shift(2), precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift)
                         endif
                     else
-                        call precs(iprec)%tfun%apply_and_shift_dev(cgrid_imgs(ithr), 3, lims, rhos(:,:,i), -precs(iprec)%shift(1),&
-                        &-precs(iprec)%shift(2), precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift)
+                        if( ctfflag /= CTFFLAG_NO )then
+                            if( ctfflag == CTFFLAG_FLIP )then
+                                call precs(iprec)%tfun%apply_and_shift(cgrid_imgs(ithr), 1, lims, rhos(:,:,i), -precs(iprec)%shift(1),&
+                                &-precs(iprec)%shift(2), precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift)
+                            else
+                                call precs(iprec)%tfun%apply_and_shift(cgrid_imgs(ithr), 2, lims, rhos(:,:,i), -precs(iprec)%shift(1),&
+                                &-precs(iprec)%shift(2), precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift)
+                            endif
+                        else
+                            call precs(iprec)%tfun%apply_and_shift(cgrid_imgs(ithr), 3, lims, rhos(:,:,i), -precs(iprec)%shift(1),&
+                            &-precs(iprec)%shift(2), precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift)
+                        endif
                     endif
                     ! Rotation matrix
                     call rotmat2d(-precs(iprec)%e3, mat)

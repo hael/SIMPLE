@@ -273,6 +273,7 @@ type(simple_input_param) :: user_email
 type(simple_input_param) :: user_project
 type(simple_input_param) :: wcrit
 type(simple_input_param) :: width
+type(simple_input_param) :: wiener
 
 interface set_param
     module procedure set_param_1
@@ -917,6 +918,9 @@ contains
         call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(patch|wpatch|poly|poly2){patch}','(patch|wpatch|poly|poly2){patch}', .false.,'patch')
         call set_param(width,          'width',        'num',    'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
         call set_param(automsk,        'automsk',      'multi',  'Perform envelope masking', 'Whether to generate/apply an envelope mask(yes|no|file){no}', '(yes|no|file){no}', .false., 'no')
+        call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (only after 1st CTF=0)(full|partial){full}',&
+        '(full|partial){full}', .false., 'full')
+        
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1135,7 +1139,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after picking',&               ! descr_long
         &'simple_exec',&                                                        ! executable
-        &0, 0, 0, 6, 3, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 0, 0, 6, 4, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1158,6 +1162,7 @@ contains
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
         call cleanup2D%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
+        call cleanup2D%set_input('filt_ctrls', 4, wiener)
         ! mask controls
         call cleanup2D%set_input('mask_ctrls', 1, mskdiam)
         cleanup2D%mask_ctrls(1)%required = .false.
@@ -1211,7 +1216,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                  ! executable
-        &1, 0, 0, 11, 8, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 0, 0, 11, 9, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
@@ -1250,8 +1255,9 @@ contains
         call cluster2D%set_input('filt_ctrls', 6, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
         '(yes|no){yes}', .false., 'yes')
-        call cluster2D%set_input('filt_ctrls', 7, graphene_filt)
-        call cluster2D%set_input('filt_ctrls', 8, 'lambda', 'num', 'TV regularization lambda parameter', 'Strength of noise reduction', '(0.5-3.0){1.0}', .false., 1.0)
+        call cluster2D%set_input('filt_ctrls', 7, wiener)
+        call cluster2D%set_input('filt_ctrls', 8, graphene_filt)
+        call cluster2D%set_input('filt_ctrls', 9, 'lambda', 'num', 'TV regularization lambda parameter', 'Strength of noise reduction', '(0.5-3.0){1.0}', .false., 1.0)
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls

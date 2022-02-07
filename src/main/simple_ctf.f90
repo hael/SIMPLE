@@ -42,7 +42,7 @@ type ctf
     procedure          :: wienerlike_restoration
     procedure          :: phaseflip_and_shift_serial
     procedure          :: apply_and_shift
-    procedure          :: apply_and_shift_dev
+    procedure          :: apply_partial_and_shift
     procedure, private :: kV2wl
     procedure          :: apply_convention
 end type ctf
@@ -576,7 +576,7 @@ contains
         call img%shift2Dserial([x,y])
     end subroutine apply_and_shift
 
-    subroutine apply_and_shift_dev( self, img, imode, lims, rho, x, y, dfx, dfy, angast, add_phshift)
+    subroutine apply_partial_and_shift( self, img, imode, lims, rho, x, y, dfx, dfy, angast, add_phshift)
         use simple_image, only: image
         class(ctf),     intent(inout) :: self        !< instance
         class(image),   intent(inout) :: img         !< modified image (output)
@@ -644,7 +644,7 @@ contains
         end do
         ! shift image
         call img%shift2Dserial([x,y])
-    end subroutine apply_and_shift_dev
+    end subroutine apply_partial_and_shift
 
     pure elemental real function kV2wl( self ) result (wavelength)
         class(ctf), intent(in) :: self

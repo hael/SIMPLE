@@ -216,6 +216,7 @@ type :: parameters
     character(len=STDLEN) :: stk_part=''
     character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
     character(len=STDLEN) :: wfun='kb'
+    character(len=STDLEN) :: wiener='full'        !< Wiener restoration (full|partial){full}
     character(len=:), allocatable :: last_prev_dir !< last previous execution directory
     ! special integer kinds
     integer(kind(ENUM_ORISEG))     :: spproj_iseg  = PTCL3D_SEG    !< sp-project segments that b%a points to
@@ -613,6 +614,7 @@ contains
         call check_carg('vis',            self%vis)
         call check_carg('wcrit',          self%wcrit)
         call check_carg('wfun',           self%wfun)
+        call check_carg('wiener',         self%wiener)
         call check_carg('zero',           self%zero)
         ! File args
         call check_file('boxfile',        self%boxfile,      'T')
