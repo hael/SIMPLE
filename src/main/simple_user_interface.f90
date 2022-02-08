@@ -531,7 +531,7 @@ contains
             case('export_relion')
                 ptr2prg => export_relion
             case('export_starproject')
-                ptr2prg => export_starproject 
+                ptr2prg => export_starproject
             case('filter')
                 ptr2prg => filter
             case('fsc')
@@ -553,7 +553,7 @@ contains
             case('import_particles')
                 ptr2prg => import_particles
             case('import_starproject')
-                ptr2prg => import_starproject 
+                ptr2prg => import_starproject
             case('make_cavgs')
                 ptr2prg => make_cavgs
             case('make_oris')
@@ -920,7 +920,7 @@ contains
         call set_param(automsk,        'automsk',      'multi',  'Perform envelope masking', 'Whether to generate/apply an envelope mask(yes|no|file){no}', '(yes|no|file){no}', .false., 'no')
         call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (only after 1st CTF=0)(full|partial){full}',&
         '(full|partial){full}', .false., 'full')
-        
+
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1698,7 +1698,7 @@ contains
         ! computer controls
         call extract%set_input('comp_ctrls', 1, nparts)
     end subroutine new_extract
-    
+
     subroutine new_export_starproject
         ! PROGRAM SPECIFICATION
         call export_starproject%new(&
@@ -1721,7 +1721,7 @@ contains
         ! <empty>
         ! computer controls
     end subroutine new_export_starproject
-    
+
     subroutine new_filter
         ! PROGRAM SPECIFICATION
         call filter%new(&
@@ -2104,7 +2104,7 @@ contains
         &'is a distributed workflow for generating class averages or initial random references&
         & for cluster2D execution',&                ! descr_long
         &'simple_exec',&                     ! executable
-        &1, 3, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
+        &1, 3, 0, 0, 1, 0, 2, .true.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call make_cavgs%set_input('img_ios', 1, 'refs', 'file', 'Output 2D references',&
@@ -2119,7 +2119,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        ! <empty>
+        call make_cavgs%set_input('filt_ctrls', 1, wiener)
         ! mask controls
         ! <empty>
         ! computer controls
