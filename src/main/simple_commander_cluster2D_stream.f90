@@ -552,6 +552,23 @@ contains
         else
             call cline_cluster2D%set('lpstart', lpstart_stoch)
         endif
+        ! wiener flag fork
+        select case(trim(params%wiener))
+        case('full')
+            call cline_cluster2D%set(      'wiener','full')
+            call cline_cluster2D_chunk%set('wiener','full')
+        case('partial')
+            call cline_cluster2D%set(      'wiener','partial')
+            call cline_cluster2D_chunk%set('wiener','partial')
+        case('partialchunk')
+            call cline_cluster2D%set(      'wiener','full')
+            call cline_cluster2D_chunk%set('wiener','partial')
+        case('partialpool')
+            call cline_cluster2D%set(      'wiener','partial')
+            call cline_cluster2D_chunk%set('wiener','full')
+        case DEFAULT
+            THROW_HARD('Unsupported WIENER option')
+        end select
         ! transfer project info
         call orig_proj%read(params%projfile)
         pool_proj%projinfo = orig_proj%projinfo
