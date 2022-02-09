@@ -18,10 +18,11 @@ type :: fplane
     real,    allocatable, public :: ctfsq_plane(:,:)             !< On output CTF normalization
     real,    allocatable         :: ctf_ang(:,:)                 !< CTF effective defocus
     integer,              public :: frlims(3,2), frlims_exp(2,2) !< Redundant Fourier limits
-    integer,              public :: ldim(3)    = 0               !< dimensions of original image
-    real,                 public :: shconst(3) = 0.              !< memoized constants for origin shifting
-    integer,              public :: nyq        = 0               !< Nyqvist Fourier index
-    logical                      :: exists     = .false.         !< Volta phaseplate images or not
+    integer,              public :: ldim(3)       = 0            !< dimensions of original image
+    real,                 public :: shconst(3)    = 0.           !< memoized constants for origin shifting
+    integer,              public :: nyq           = 0            !< Nyqvist Fourier index
+    logical                      :: l_wiener_part = .false.      !< partial Wiener restoration (after 1st CTF zero)
+    logical                      :: exists        = .false.      !< Volta phaseplate images or not
   contains
     ! CONSTRUCTOR
     procedure :: new
@@ -61,6 +62,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
+        self%l_wiener_part = trim(params_glob%wiener) .eq. 'partial'
         self%exists = .true.
     end subroutine new
 
@@ -77,8 +79,8 @@ contains
         integer, optional,intent(in)    :: iptcl
         type(ctf) :: tfun
         complex   :: c
-        real      :: invldim(2), inv(2), tval, tvalsq, sqSpatFreq
-        integer   :: h,k,sh
+        real      :: invldim(2),inv(2),tval,tvalsq,sqSpatFreq,add_phshift,kinv,hinv
+        integer   :: h,k,sh,hlim,klim
         logical   :: use_sigmas
         integer   :: sigma2_kfromto(2)
         if( ctfvars%ctfflag /= CTFFLAG_NO )then
@@ -91,6 +93,26 @@ contains
             sigma2_kfromto(1) = lbound(eucl_sigma2_glob%sigma2_noise,1)
             sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
         end if
+        if( ctfvars%l_phaseplate ) add_phshift = ctfvars%phshift
+        if( self%l_wiener_part )then
+            ! find the limits that bound the central ellipse
+            do h = 0,self%frlims(1,2)
+                hinv = real(h) * invldim(1)
+                tval = tfun%eval(hinv * hinv, self%ctf_ang(h,0), add_phshift)
+                if( tval <= 0. )then
+                    hlim = h
+                    exit
+                endif
+            end do
+            do k = 0,self%frlims(2,2)
+                kinv = real(k) * invldim(2)
+                tval = tfun%eval(kinv * kinv, self%ctf_ang(0,k), add_phshift)
+                if( tval <= 0. )then
+                    klim = k
+                    exit
+                endif
+            end do
+        endif
         !$omp parallel do collapse(2) default(shared) schedule(static) proc_bind(close)&
         !$omp private(h,k,sh,c,tval,tvalsq,inv,sqSpatFreq)
         do h = self%frlims(1,1),self%frlims(1,2)
@@ -104,12 +126,17 @@ contains
                     if( ctfvars%ctfflag /= CTFFLAG_NO )then
                         inv        = real([h,k]) * invldim
                         sqSpatFreq = dot_product(inv,inv)
-                        if( ctfvars%l_phaseplate )then
-                            tval = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), ctfvars%phshift)
-                        else
-                            tval = tfun%eval(sqSpatFreq, self%ctf_ang(h,k))
-                        endif
+                        tval = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
                         if( ctfvars%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
+                        if( self%l_wiener_part )then
+                            if( abs(h) >= hlim .and. abs(k) >= klim )then ! outside the rectangle that bounds the central ellipse
+                                ! tval = tval
+                            else if( tval < 0. )then                      ! inside  the rectangle that bounds the central ellipse
+                                ! tval = tval
+                            else
+                                tval = 1.0
+                            endif
+                        endif
                         tvalsq = tval * tval
                     else
                         tval   = 1.
