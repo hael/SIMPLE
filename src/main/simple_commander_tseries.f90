@@ -893,11 +893,6 @@ contains
         call del_file(CCS)
         call del_file(MSK)
         call del_file(SPLITTED)
-        ! cavgs vs RECVOL reprojs vs SIMVOL reprojs if cavgs exist in projfile
-        ! align cavgs to the final RECVOL
-        call spproj%read(params%projfile)
-        ! retrieve cavgs stack
-        call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd)
         if( ncavgs /= 0 )then
             ! update cline_refine3D_cavgs accordingly
             call cline_refine3D_cavgs%set('prg', 'refine3D_nano')
@@ -917,8 +912,14 @@ contains
             call xrefine3D_nano%execute(cline_refine3D_cavgs)
             params_glob => params_ptr
             params_ptr  => null()
-            !reproject RECVOL and SIMVOL
+            ! cavgs vs RECVOL reprojs vs SIMVOL reprojs if cavgs exist in projfile
+            ! align cavgs to the final RECVOL
+            call spproj%read(params%projfile) ! now the newly generated cls3D field will be read...
+            ! ...so write out its content
             call spproj%os_cls3D%write('cavgs_oris.txt')
+            ! retrieve cavgs stack
+            call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd)
+            ! prepare for re-projection
             call cline_reproject%set('vol1',   './final_results/'//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
             call cline_reproject%set('outstk', 'reprojs_recvol.mrc')
             call cline_reproject%set('smpd', params%smpd)
@@ -928,6 +929,7 @@ contains
             call xreproject%execute(cline_reproject)
             call cline_reproject%set('vol1',   './final_results/'//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_thres_SIM.mrc')
             call cline_reproject%set('outstk', 'reprojs_thres_SIM.mrc')
+            ! re-project
             call xreproject%execute(cline_reproject)
             ! write cavgs & reprojections in triplets
             allocate(imgs(3*ncavgs))
