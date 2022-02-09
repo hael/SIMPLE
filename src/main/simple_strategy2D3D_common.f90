@@ -19,11 +19,6 @@ interface read_imgbatch
     module procedure read_imgbatch_2
 end interface read_imgbatch
 
-interface grid_ptcl
-    module procedure grid_ptcl_1
-    module procedure grid_ptcl_2
-end interface grid_ptcl
-
 real, parameter :: SHTHRESH  = 0.001
 real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg centering in pixels
 
@@ -217,7 +212,7 @@ contains
     end subroutine set_bp_range2D
 
     !>  \brief  grids one particle image to the volume
-    subroutine grid_ptcl_1( fpl, se, o )
+    subroutine grid_ptcl( fpl, se, o )
         use simple_fplane, only: fplane
         use simple_sym,    only: sym
         use simple_ori,    only: ori
@@ -234,41 +229,8 @@ contains
         ! particle-weight
         pw = 1.0
         if( o%isthere('w') ) pw = o%get('w')
-        if( pw > TINY ) call build_glob%eorecvols(s)%grid_planes(se, o, fpl, eo, pwght=pw)
-    end subroutine grid_ptcl_1
-
-    !>  \brief  grids one particle image to the volume (distribution of weigted oris)
-    subroutine grid_ptcl_2( fpl, se, o, os )
-        use simple_fplane, only: fplane
-        use simple_sym,    only: sym
-        use simple_ori,    only: ori
-        use simple_oris,   only: oris
-        class(fplane), intent(in)    :: fpl
-        class(sym),    intent(inout) :: se
-        class(ori),    intent(inout) :: o
-        class(oris),   intent(inout) :: os
-        real, allocatable :: states(:)
-        real    :: pw
-        integer :: s, eo
-        ! eo flag
-        eo = nint(o%get('eo'))
-        ! particle-weight
-        pw = 1.0
-        if( o%isthere('w') ) pw = o%get('w')
-        if( pw > TINY )then
-            ! gridding
-            if( params_glob%nstates == 1 )then
-                call build_glob%eorecvols(1)%grid_planes(se, os, fpl, eo, pwght=pw)
-            else
-                states = os%get_all('state')
-                do s=1,params_glob%nstates
-                    if( count(nint(states) == s) > 0 )then
-                        call build_glob%eorecvols(s)%grid_planes(se, os, fpl, eo, pwght=pw, state=s)
-                    endif
-                end do
-            endif
-        endif
-    end subroutine grid_ptcl_2
+        if( pw > TINY ) call build_glob%eorecvols(s)%grid_plane(se, o, fpl, eo, pwght=pw)
+    end subroutine grid_ptcl
 
     !>  \brief  prepares all particle images for alignment
     subroutine build_pftcc_particles( pftcc, batchsz_max, match_imgs, ptcl_mask )

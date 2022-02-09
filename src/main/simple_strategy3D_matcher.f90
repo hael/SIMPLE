@@ -545,7 +545,7 @@ contains
                     do i=batchlims(1),batchlims(2)
                         iptcl  = pinds(i)
                         ibatch = i - batchlims(1) + 1
-                        if( .not.fpls(ibatch)%does_exist() ) call fpls(ibatch)%new(build_glob%imgbatch(1), build_glob%spproj)
+                        if( .not.fpls(ibatch)%does_exist() ) call fpls(ibatch)%new(build_glob%imgbatch(1))
                         call build_glob%imgbatch(ibatch)%noise_norm(build_glob%lmsk, sdev_noise)
                         call build_glob%imgbatch(ibatch)%fft
                         ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)

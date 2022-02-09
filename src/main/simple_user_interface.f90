@@ -2102,8 +2102,8 @@ contains
         &'make_cavgs', &                           ! name
         &'Make class averages',&                   ! descr_short
         &'is a distributed workflow for generating class averages or initial random references&
-        & for cluster2D execution',&                ! descr_long
-        &'simple_exec',&                     ! executable
+        & for cluster2D execution',&               ! descr_long
+        &'simple_exec',&                           ! executable
         &1, 3, 0, 0, 1, 0, 2, .true.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -3000,7 +3000,7 @@ contains
         & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
         & with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_exec',&                                                 ! executable
-        &0, 0, 0, 2, 2, 2, 2, .true.)                                    ! # entries in each group, requires sp_project
+        &0, 0, 0, 2, 3, 2, 2, .true.)                                    ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3014,6 +3014,7 @@ contains
         ! filter controls
         call reconstruct3D%set_input('filt_ctrls', 1, ptclw)
         call reconstruct3D%set_input('filt_ctrls', 2, envfsc)
+        call reconstruct3D%set_input('filt_ctrls', 3, wiener)
         ! mask controls
         call reconstruct3D%set_input('mask_ctrls', 1, mskdiam)
         call reconstruct3D%set_input('mask_ctrls', 2, mskfile)
