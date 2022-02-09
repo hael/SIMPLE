@@ -54,9 +54,7 @@ type :: reconstructor_eo
     procedure, private :: read_even
     procedure, private :: read_odd
     ! INTERPOLATION
-    procedure, private :: grid_planes_1
-    procedure, private :: grid_planes_2
-    generic            :: grid_planes => grid_planes_1, grid_planes_2
+    procedure          :: grid_plane
     procedure          :: compress_exp
     procedure          :: expand_exp
     procedure          :: sum_eos    !< for merging even and odd into sum
@@ -259,7 +257,7 @@ contains
     ! INTERPOLATION
 
     !> \brief  for gridding a Fourier plane
-    subroutine grid_planes_1( self, se, o, fpl, eo, pwght )
+    subroutine grid_plane( self, se, o, fpl, eo, pwght )
         use simple_fplane, only: fplane
         class(reconstructor_eo), intent(inout) :: self    !< instance
         class(sym),              intent(inout) :: se      !< symmetry elements
@@ -269,32 +267,13 @@ contains
         real,                    intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         select case(eo)
             case(-1,0)
-                call self%even%insert_planes(se, o, fpl, pwght)
+                call self%even%insert_plane(se, o, fpl, pwght)
             case(1)
-                call self%odd%insert_planes(se, o, fpl, pwght)
+                call self%odd%insert_plane(se, o, fpl, pwght)
             case DEFAULT
-                THROW_HARD('unsupported eo flag; grid_planes_1')
+                THROW_HARD('unsupported eo flag; grid_plane')
         end select
-    end subroutine grid_planes_1
-
-    subroutine grid_planes_2( self, se, os, fpl, eo, pwght, state )
-        use simple_fplane, only: fplane
-        class(reconstructor_eo), intent(inout) :: self    !< instance
-        class(sym),              intent(inout) :: se      !< symmetry elements
-        class(oris),             intent(inout) :: os      !< orientation
-        class(fplane),           intent(in)    :: fpl     !< Fourier plane
-        integer,                 intent(in)    :: eo      !< eo flag
-        real,                    intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
-        integer,       optional, intent(in)    :: state   !< state flag
-        select case(eo)
-            case(-1,0)
-                call self%even%insert_planes(se, os, fpl, pwght, state=state)
-            case(1)
-                call self%odd%insert_planes(se, os, fpl, pwght, state=state)
-            case DEFAULT
-                THROW_HARD('unsupported eo flag; grid_fplane_2')
-        end select
-    end subroutine grid_planes_2
+    end subroutine grid_plane
 
     !> \brief  for summing the even odd pairs, resulting sum in self%even
     subroutine sum_eos( self )
@@ -552,7 +531,7 @@ contains
         call img%new([params_glob%box,params_glob%box,1],params_glob%smpd)
         call mskimg%disc([params_glob%box,params_glob%box,1], params_glob%smpd, params_glob%msk, lmsk)
         call vol%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
-        call fpl%new(img, spproj)
+        call fpl%new(img)
         ! zero the Fourier volumes and rhos
         call self%reset_all
         call self%reset_eoexp
@@ -621,7 +600,7 @@ contains
                     call img%noise_norm(lmsk, sdev_noise)
                     call img%fft
                     call fpl%gen_planes(img, ctfvars)
-                    call self%grid_planes(se, orientation, fpl, eo, pw)
+                    call self%grid_plane(se, orientation, fpl, eo, pw)
                     deallocate(stkname)
                 endif
                 call orientation%kill

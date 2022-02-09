@@ -37,11 +37,9 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new( self, img, spproj )
-        use simple_sp_project, only: sp_project
+    subroutine new( self, img )
         class(fplane),     intent(inout) :: self
         class(image),      intent(inout) :: img
-        class(sp_project), intent(inout) :: spproj
         integer          :: h, k
         call self%kill
         ! fourier limits & dimensions
