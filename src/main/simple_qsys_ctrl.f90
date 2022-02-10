@@ -273,6 +273,10 @@ contains
         endif
         write(funit,'(a)') 'cd '//trim(cwd_glob)
         write(funit,'(a)') ''
+        
+        !start partsarray definition
+        write(funit,'(a)') 'partsarray=('
+        
         do ipart=self%fromto_part(1),self%fromto_part(2)
             call job_descr%set('fromp',  int2str(self%parts(ipart,1)))
             call job_descr%set('top',    int2str(self%parts(ipart,2)))
@@ -288,12 +292,21 @@ contains
                     call job_descr%set(key, val)
                 end do
             endif
-            ! compose the command line
-            write(funit,'(a)',advance='no') trim(self%exec_binary)//' '//trim(job_descr%chash2str())
+            ! compose the command line as array element inside partsarray. achar(39) is apostrophe
+            write(funit,'(a)',advance='no') achar(39)//trim(self%exec_binary)//' '//trim(job_descr%chash2str())
             ! direct output
-            write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT
+            write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT//achar(39)
             write(funit,'(a)') ''
         end do
+        
+        !close partsarray definition
+        write(funit,'(a)') ')'
+        write(funit,'(a)') ''
+        
+        !execute command in partsarray with index SLURM_ARRAY_TASK_ID
+        write(funit,'(a)') '${partsarray[$SLURM_ARRAY_TASK_ID]}'
+        write(funit,'(a)') ''
+
         ! exit shell when done
         write(funit,'(a)') 'exit'
         call fclose(funit)
