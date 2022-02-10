@@ -1436,7 +1436,7 @@ contains
         type(image),           allocatable :: imgs_sel(:), imgs_all(:)
         integer,               allocatable :: states(:)
         real,                  allocatable :: correlations(:,:)
-        character(len=:),      allocatable :: cavgstk
+        character(len=:),      allocatable :: cavgstk, fname
         character(LONGSTRLEN), allocatable :: stkfnames(:)
         integer :: iimg, isel, nall, nsel, loc(1), lfoo(3), s
         real    :: smpd
@@ -1461,12 +1461,13 @@ contains
         allocate(states(nall), source=0)
         do s = 1,size(stkfnames)
             ! find number of selected cavgs
-            call find_ldim_nptcls(stkfnames(s), lfoo, nsel)
+            fname = '../'//trim(stkfnames(s))
+            call find_ldim_nptcls(fname, lfoo, nsel)
             ! read images
             allocate(imgs_sel(nsel))
             do isel=1,nsel
                 call imgs_sel(isel)%new([params%box,params%box,1], params%smpd)
-                call imgs_sel(isel)%read(params%stk2, isel)
+                call imgs_sel(isel)%read(fname, isel)
             end do
             call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
             do isel=1,nsel

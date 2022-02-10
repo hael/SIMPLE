@@ -2208,9 +2208,9 @@ contains
         &2, 0, 0, 0, 0, 0, 0, .true.)                                    ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call map_cavgs_states%set_input('img_ios', 1, 'stk', 'file', 'Stack of cavgs to select from', 'Stack of cavgs to select from', 'e.g. cavgs_iter0XX.mrc', .false., '')
-        call map_cavgs_states%set_input('img_ios', 2, 'filetab', 'file', 'Stacks of class averages list',&
-        &'List of stacks of class averages to use for mapping', 'list input e.g. stktab.txt', .true., '')
+        call map_cavgs_states%set_input('img_ios', 1, 'stk',    'file', 'Stack of cavgs to select from', 'Stack of cavgs to select from', 'e.g. cavgs_iter0XX.mrc', .false., '')
+        call map_cavgs_states%set_input('img_ios', 2, 'stktab', 'file', 'Stacks of class averages list',&
+        &'List of stacks of class averages to use for mapping states', 'list input e.g. stktab.txt', .true., '')
         ! parameter input/output
         ! <empty>
         ! alternative inputs
