@@ -34,14 +34,14 @@ type qsys_ctrl
     logical                        :: stream    = .false.           !< stream flag
     logical                        :: existence = .false.           !< indicates existence
   contains
-    ! CONSTRUCTOR
+    ! CONSTRUCTORS
     procedure          :: new
-    ! GETTER
+    ! GETTERS
     procedure          :: get_exec_bin
     procedure          :: get_jobs_status
     procedure          :: print_jobs_status
     procedure          :: exists
-    ! SETTER
+    ! SETTERS
     procedure          :: free_all_cunits
     procedure          :: set_jobs_status
     ! SCRIPT GENERATORS
@@ -77,7 +77,6 @@ contains
 
     ! CONSTRUCTORS
 
-    !>  \brief  is a constructor
     function constructor( exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream ) result( self )
         character(len=*),         intent(in) :: exec_binary      !< the binary that we want to execute in parallel
         class(qsys_base), target, intent(in) :: qsys_obj         !< the object that defines the qeueuing system
@@ -89,7 +88,6 @@ contains
         call self%new(exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream )
     end function constructor
 
-    !>  \brief  is a constructor
     subroutine new( self, exec_binary, qsys_obj, parts, fromto_part, ncomputing_units, stream, numlen )
         class(qsys_ctrl),         intent(inout) :: self             !< the instance
         character(len=*),         intent(in)    :: exec_binary      !< the binary that we want to execute in parallel
@@ -141,16 +139,14 @@ contains
         self%existence = .true.
     end subroutine new
 
-    ! GETTER
+    ! GETTERS
 
-    !>  \brief  for getting the execute simple binary
     function get_exec_bin( self ) result( exec_bin )
         class(qsys_ctrl), intent(in) :: self
         character(len=STDLEN)        :: exec_bin
         exec_bin = self%exec_binary
     end function get_exec_bin
 
-    !>  \brief  for getting jobs status logical flags
     subroutine get_jobs_status( self, jobs_done, jobs_submitted )
         class(qsys_ctrl), intent(in) :: self
         logical, allocatable :: jobs_done(:), jobs_submitted(:)
@@ -160,7 +156,6 @@ contains
         allocate(jobs_submitted(size(self%jobs_submitted)), source=self%jobs_submitted)
     end subroutine get_jobs_status
 
-    !>  \brief  for printing jobs status logical flags
     subroutine print_jobs_status( self )
         class(qsys_ctrl), intent(in) :: self
         integer :: i
@@ -169,7 +164,6 @@ contains
         end do
     end subroutine print_jobs_status
 
-    !>  \brief  for checking existence
     logical function exists( self )
         class(qsys_ctrl), intent(in) :: self
         exists = self%existence
@@ -177,13 +171,11 @@ contains
 
     ! SETTERS
 
-    !> \brief for freeing all available computing units
     subroutine free_all_cunits( self )
         class(qsys_ctrl), intent(inout) :: self
         self%ncomputing_units_avail = self%ncomputing_units
     end subroutine free_all_cunits
 
-    !>  \brief  for setting jobs status logical flags
     subroutine set_jobs_status( self, jobs_done, jobs_submitted )
         class(qsys_ctrl), intent(inout) :: self
         logical,          intent(in)    :: jobs_done(:), jobs_submitted(:)
@@ -193,7 +185,6 @@ contains
 
     ! SCRIPT GENERATORS
 
-    !>  \brief  public script generator
     subroutine generate_scripts( self, job_descr, ext, q_descr, outfile_body, part_params )
         class(qsys_ctrl),           intent(inout) :: self
         class(chash),               intent(inout) :: job_descr
@@ -241,7 +232,6 @@ contains
         if( .not. self%stream ) self%ncomputing_units_avail = self%ncomputing_units
     end subroutine generate_scripts
 
-    !>  \brief  public array script generator
     subroutine generate_array_script( self, job_descr, ext, q_descr, outfile_body, part_params )
         class(qsys_ctrl),           intent(inout) :: self
         class(chash),               intent(inout) :: job_descr
@@ -273,10 +263,8 @@ contains
         endif
         write(funit,'(a)') 'cd '//trim(cwd_glob)
         write(funit,'(a)') ''
-        
-        !start partsarray definition
+        ! start partsarray definition
         write(funit,'(a)') 'partsarray=('
-        
         do ipart=self%fromto_part(1),self%fromto_part(2)
             call job_descr%set('fromp',  int2str(self%parts(ipart,1)))
             call job_descr%set('top',    int2str(self%parts(ipart,2)))
@@ -298,15 +286,12 @@ contains
             write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT//achar(39)
             write(funit,'(a)') ''
         end do
-        
-        !close partsarray definition
+        ! close partsarray definition
         write(funit,'(a)') ')'
         write(funit,'(a)') ''
-        
-        !execute command in partsarray with index SLURM_ARRAY_TASK_ID
+        ! execute command in partsarray with index SLURM_ARRAY_TASK_ID
         write(funit,'(a)') '${partsarray[$SLURM_ARRAY_TASK_ID]}'
         write(funit,'(a)') ''
-
         ! exit shell when done
         write(funit,'(a)') 'exit'
         call fclose(funit)

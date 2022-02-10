@@ -212,13 +212,13 @@ contains
         real,    parameter    :: MINITS      =  5., MINITS_FAST =  9.
         real,    parameter    :: MAXITS      = 15., MAXITS_FAST = 18.
         real                  :: SMPD_TARGET = 4.
-        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
-        if( .not. cline%defined('lp')        ) call cline%set('lp',         15. )
-        if( .not. cline%defined('ncls')      ) call cline%set('ncls',      200. )
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      20. )
-        if( .not. cline%defined('center')    ) call cline%set('center',     'no')
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        if( .not. cline%defined('refine')    ) call cline%set('refine', 'greedy')
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',      'yes')
+        if( .not. cline%defined('lp')        ) call cline%set('lp',           15.)
+        if( .not. cline%defined('ncls')      ) call cline%set('ncls',        200.)
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',        20.)
+        if( .not. cline%defined('center')    ) call cline%set('center',      'no')
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
+        if( .not. cline%defined('refine')    ) call cline%set('refine',  'greedy')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
         call cline%set('ptclw','no')
         call cline%set('stream', 'no')
@@ -278,7 +278,7 @@ contains
         call cline_cluster2D2%set('ptclw',      'no')
         call cline_cluster2D2%set('match_filt', 'no')
         call cline_cluster2D2%set('autoscale',  'no')
-        call cline_cluster2D2%set('trs',         MINSHIFT)
+        call cline_cluster2D2%set('trs',    MINSHIFT)
         call cline_cluster2D2%set('objfun',     'cc')
         if( .not.cline%defined('maxits') )then
             call cline_cluster2D2%set('maxits', MAXITS)
@@ -1213,7 +1213,7 @@ contains
         where( clspops <  real(MINCLSPOPLIM) ) states = 0.
         ! find out how many selected class averages initially
         ncls_sel = count(states > 0.5)
-        write(logfhandle,'(A,I3)') '# clsses left after standard rejection ', ncls_sel
+        write(logfhandle,'(A,I3)') '# classes left after standard rejection ', ncls_sel
         ! keep track of the original class indices
         allocate(clsinds(ncls))
         clsinds = (/(i,i=1,ncls)/)
