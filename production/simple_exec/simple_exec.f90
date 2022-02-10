@@ -74,6 +74,7 @@ type(cluster3D_refine_commander)            :: xcluster3D_refine
 
 ! OTHER SINGLE-PARTICLE WORKFLOW PROGRAMS
 type(map_cavgs_selection_commander)         :: xmap_cavgs_selection
+type(map_cavgs_states_commander)            :: xmap_cavgs_states
 type(cluster_cavgs_commander)               :: xcluster_cavgs
 type(write_classes_commander)               :: xwrite_classes
 type(symaxis_search_commander)              :: xsymsrch
@@ -178,8 +179,8 @@ select case(prg)
     case( 'import_starproject' )
         call ximport_starproject%execute(cline)
     case( 'export_starproject' )
-        call xexport_starproject%execute(cline)  
-            
+        call xexport_starproject%execute(cline)
+
     ! PRE-PROCESSING WORKFLOWS
     case( 'preprocess' )
         call xpreprocess%execute(cline)
@@ -231,6 +232,8 @@ select case(prg)
     ! OTHER SINGLE-PARTICLE WORKFLOW PROGRAMS
     case( 'map_cavgs_selection' )
         call xmap_cavgs_selection%execute(cline)
+    case( 'map_cavgs_states' )
+        call xmap_cavgs_states%execute(cline)
     case('cluster_cavgs')
         call xcluster_cavgs%execute(cline)
     case('write_classes')

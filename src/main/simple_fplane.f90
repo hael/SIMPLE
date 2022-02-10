@@ -44,10 +44,10 @@ contains
         integer          :: h, k
         call self%kill
         ! fourier limits & dimensions
-        self%frlims     = img%loop_lims(3)
-        self%ldim       = img%get_ldim()
-        self%nyq        = img%get_lfny(1)
-        self%shconst    = img%get_shconst()
+        self%frlims  = img%loop_lims(3)
+        self%ldim    = img%get_ldim()
+        self%nyq     = img%get_lfny(1)
+        self%shconst = img%get_shconst()
         ! allocations
         allocate(self%cmplx_plane(self%frlims(1,1):self%frlims(1,2),self%frlims(2,1):self%frlims(2,2)),&
                 &self%ctfsq_plane(self%frlims(1,1):self%frlims(1,2),self%frlims(2,1):self%frlims(2,2)))
@@ -124,7 +124,7 @@ contains
                 else
                     ! CTF
                     if( ctfvars%ctfflag /= CTFFLAG_NO )then
-                        inv        = real([h,k]) * invldim
+                        inv = real([h,k]) * invldim
                         sqSpatFreq = dot_product(inv,inv)
                         tval = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
                         if( ctfvars%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
@@ -166,6 +166,5 @@ contains
         if(allocated(self%ctf_ang)        ) deallocate(self%ctf_ang)
         self%exists = .false.
     end subroutine kill
-
 
 end module simple_fplane

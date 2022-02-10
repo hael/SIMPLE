@@ -503,7 +503,7 @@ contains
         end do
         ! map selection to self%os_ptcl2D & os_ptcl3D
         ncls = sz_states
-        if( self%os_ptcl2D%get_noris()>0 .and. self%os_ptcl3D%get_noris() > 0)then
+        if( self%os_ptcl2D%get_noris() > 0 .and. self%os_ptcl3D%get_noris() > 0)then
             do icls=1,ncls
                 call self%os_ptcl2D%get_pinds(icls, 'class', pinds)
                 if( allocated(pinds) )then
