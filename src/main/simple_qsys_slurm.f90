@@ -125,9 +125,11 @@ contains
             write(fhandle,'(a)') '#SBATCH --error='//trim(stderrout)//'errfile.%A_%a'
             write(fhandle,'(a)') '#SBATCH --mail-type=FAIL'
             if( present(nactive) )then
-                write(fhandle,'(a)') '#SBATCH --array='//int2str(parts_fromto(1))//'-'//int2str(parts_fromto(2))//'%'//int2str(nactive)
+                !subtract 1 from array indexes as bash arrays are zero indexed
+                write(fhandle,'(a)') '#SBATCH --array='//int2str(parts_fromto(1) - 1)//'-'//int2str(parts_fromto(2) - 1)//'%'//int2str(nactive)
             else
-                write(fhandle,'(a)') '#SBATCH --array='//int2str(parts_fromto(1))//'-'//int2str(parts_fromto(2))
+                !subtract 1 from array indexes as bash arrays are zero indexed
+                write(fhandle,'(a)') '#SBATCH --array='//int2str(parts_fromto(1) - 1)//'-'//int2str(parts_fromto(2) - 1)
             endif
             write(fhandle,'(a)') 'echo $SLURM_ARRAY_JOB_ID > SLURM_ARRAY_JOB_ID'
         else
@@ -135,9 +137,11 @@ contains
             write(logfhandle,'(a)') '#SBATCH --error='//trim(stderrout)//'errfile.%A_%a'
             write(logfhandle,'(a)') '#SBATCH --mail-type=FAIL'
             if( present(nactive) )then
-                write(logfhandle,'(a)') '#SBATCH --array='//int2str(parts_fromto(1))//'-'//int2str(parts_fromto(2))//'%'//int2str(nactive)
+                !subtract 1 from array indexes as bash arrays are zero indexed
+                write(logfhandle,'(a)') '#SBATCH --array='//int2str(parts_fromto(1) - 1)//'-'//int2str(parts_fromto(2) - 1)//'%'//int2str(nactive)
             else
-                write(logfhandle,'(a)') '#SBATCH --array='//int2str(parts_fromto(1))//'-'//int2str(parts_fromto(2))
+                !subtract 1 from array indexes as bash arrays are zero indexed
+                write(logfhandle,'(a)') '#SBATCH --array='//int2str(parts_fromto(1) - 1)//'-'//int2str(parts_fromto(2) - 1)
             endif
             write(logfhandle,'(a)') 'echo $SLURM_ARRAY_JOB_ID > SLURM_ARRAY_JOB_ID'
         endif

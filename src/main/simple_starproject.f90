@@ -404,6 +404,9 @@ contains
     call self%insert_flag(micrographsstar, micsblock, "rlnImageSizeX", "xdim")
     call self%insert_flag(micrographsstar, micsblock, "rlnImageSizeY", "ydim") 
     call self%insert_flag(micrographsstar, micsblock, "rlnImageSizeZ", "nframes")
+    call self%insert_flag(micrographsstar, micsblock, "rlnCtfImage", "ctfeps")
+    call self%insert_flag(micrographsstar, micsblock, "rlnCtfPowerSpectrum", "ctfjpg")
+    call self%insert_flag(micrographsstar, micsblock, "rlnMicrographCoordinates", "boxfile")
 
     call self%process_flags(micrographsstar, opticsblock, spproj%os_optics)
     call self%process_flags(micrographsstar, micsblock, spproj%os_mic)
@@ -502,9 +505,22 @@ contains
     class(star_project),  intent(inout)           :: self
     type(sp_project)                              :: spproj
     type(star_file)                               :: clustersstar
-    integer                                       :: generalblock, clustersblock
-    
-        
+    integer                                       :: generalblock, clustersblock, orisn, stkind
+    character(len=:), allocatable                 :: stkname
+    character(len=1024)                           :: stkaddr
+
+    stkname = "cluster2D.mrc"
+
+    do orisn = 1, spproj%os_cls2D%get_noris()
+
+      stkind = spproj%os_cls2D%get(orisn, 'class')
+
+      write(stkaddr, fmt="(I0,A,A)") stkind, "@", trim(adjustl(stkname))
+ 
+      call spproj%os_cls2D%set(orisn, 'stkaddr', trim(adjustl(stkaddr)))
+
+    end do
+   
     clustersstar%filename = "clusters2D.star"
   
     call self%insert_datablock(clustersstar, "general", .false., generalblock)
@@ -518,7 +534,7 @@ contains
     
     call self%insert_datablock(clustersstar, "clusters", .true., clustersblock)
     
-    call self%insert_flag(clustersstar, clustersblock, "rlnReferenceImage", "") !need to get this added to the projfile for each iteration
+    call self%insert_flag(clustersstar, clustersblock, "rlnReferenceImage", "stkaddr")
     call self%insert_flag(clustersstar, clustersblock, "rlnClassDistribution", "pop")
     call self%insert_flag(clustersstar, clustersblock, "rlnEstimatedResolution", "res")
 
