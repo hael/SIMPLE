@@ -647,18 +647,16 @@ contains
                     ! inside rectangle
                     if( (rh/hlim)**2. + (rk/klim)**2. < 1. )then
                         ! inside ellipse
-                        if( tval < 0.0 )then ! take care of negative values
-                            tval = self%eval(spaFreqSq, ang, add_phshift)
+                        if( tval < 0.0 )then
+                            ! take care of negative values
                         else
                             tval = 1.0
                         endif
                     else
                         ! outside ellipse
-                        tval = self%eval(spaFreqSq, ang, add_phshift)
                     endif
                 else
                     ! outside the rectangle
-                    tval = self%eval(spaFreqSq, ang, add_phshift)
                 endif
                 if( imode == CTFFLAG_FLIP ) tval = abs(tval)
                 call img%mul_cmat_at(phys(1),phys(2),1, tval)

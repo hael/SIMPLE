@@ -132,18 +132,16 @@ contains
                                 ! inside rectangle
                                 if( (real(h)/hlim)**2. + (real(k)/klim)**2. < 1. )then
                                     ! inside ellipse
-                                    if( tval < 0.0 )then ! take care of negative values
-                                        tval = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
+                                    if( tval < 0.0 )then
+                                        ! take care of negative values
                                     else
                                         tval = 1.0
                                     endif
                                 else
                                     ! outside ellipse
-                                    tval = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
                                 endif
                             else
                                 ! outside the rectangle
-                                tval = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
                             endif
                         endif
                         tvalsq = tval * tval
