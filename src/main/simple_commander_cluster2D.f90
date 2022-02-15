@@ -1183,6 +1183,7 @@ contains
         logical,          allocatable :: l_msk(:,:,:), mask_top_ranking(:), mask_otsu(:), mask_icls(:)
         integer,          allocatable :: order(:), nloc(:), centers(:), labels(:), cntarr(:), clsinds(:), pops(:)
         integer,          allocatable :: labels_mapped(:), classmapping(:)
+        logical,          parameter   :: DEBUG = .true.
         integer :: ncls, n, ldim(3), ncls_sel, i, j, icls, cnt, filtsz, pop1, pop2, nsel, ncls_aff_prop, icen, jcen, loc(1)
         real    :: smpd, sdev_noise, simsum, cmin, cmax, pref, corr_icls
         logical :: l_apply_optlp, use_shifted
@@ -1207,10 +1208,12 @@ contains
         params%smpd = smpd
         ! threshold based on states/population/resolution
         states  = spproj%os_cls2D%get_all('state')
-        clspops = spproj%os_cls2D%get_all('pop')
-        clsres  = spproj%os_cls2D%get_all('res')
-        where( clsres  >= params%lpthresh    ) states = 0.
-        where( clspops <  real(MINCLSPOPLIM) ) states = 0.
+        if( .not. DEBUG )then
+            clspops = spproj%os_cls2D%get_all('pop')
+            clsres  = spproj%os_cls2D%get_all('res')
+            where( clsres  >= params%lpthresh    ) states = 0.
+            where( clspops <  real(MINCLSPOPLIM) ) states = 0.
+        endif
         ! find out how many selected class averages initially
         ncls_sel = count(states > 0.5)
         write(logfhandle,'(A,I3)') '# classes left after standard rejection ', ncls_sel
@@ -1218,56 +1221,74 @@ contains
         allocate(clsinds(ncls))
         clsinds = (/(i,i=1,ncls)/)
         clsinds = pack(clsinds, mask=states > 0.5)
-        ! get FRCs
-        l_apply_optlp = .false.
-        call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
-        if( file_exists(frcs_fname) )then
-            call clsfrcs%read(frcs_fname)
-            l_apply_optlp = .true.
-        endif
-        ! create the stuff needed in the loop
-        call tvfilt%new
-        filtsz = clsfrcs%get_filtsz()
-        allocate(cavg_imgs(ncls_sel), frc(filtsz), filter(filtsz))
-        ! prep mask
-        call img_msk%new([params%box,params%box,1], params%smpd)
-        img_msk = 1.
-        call img_msk%mask(params%msk, 'hard')
-        l_msk = img_msk%bin2logical()
-        call img_msk%kill
-        write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
-        cnt = 0
-        do i = 1 , ncls
-            if( states(i) > 0.5 )then
-                cnt = cnt + 1
-            else
-                cycle
-            endif
-            call cavg_imgs(cnt)%new(ldim, smpd, wthreads=.false.)
-            if( use_shifted )then
-                call cavg_imgs(cnt)%read(cavgsstk_shifted, i)
-            else
-                call cavg_imgs(cnt)%read(cavgsstk, i)
-            endif
-            ! FRC-based filter
-            if( l_apply_optlp )then
-                call clsfrcs%frc_getter(i, params%hpind_fsc, params%l_phaseplate, frc)
-                if( any(frc > 0.143) )then
-                    call fsc2optlp_sub(clsfrcs%get_filtsz(), frc, filter)
-                    where( filter > TINY ) filter = sqrt(filter) ! because the filter is applied to the average not the even or odd
-                    call cavg_imgs(cnt)%fft()
-                    call cavg_imgs(cnt)%apply_filter_serial(filter)
-                    call cavg_imgs(cnt)%ifft()
+        if( DEBUG )then
+            allocate(cavg_imgs(ncls_sel))
+            cnt = 0
+            do i = 1 , ncls
+                if( states(i) > 0.5 )then
+                    cnt = cnt + 1
+                else
+                    cycle
                 endif
+                call cavg_imgs(cnt)%new(ldim, smpd, wthreads=.false.)
+                call cavg_imgs(cnt)%read(cavgsstk, i)
+                ! normalization
+                call cavg_imgs(cnt)%noise_norm(l_msk, sdev_noise)
+                ! mask
+                call cavg_imgs(cnt)%mask(params%msk, 'soft')
+            end do
+        else
+            ! get FRCs
+            l_apply_optlp = .false.
+            call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
+            if( file_exists(frcs_fname) )then
+                call clsfrcs%read(frcs_fname)
+                l_apply_optlp = .true.
             endif
-            ! TV regularization
-            call tvfilt%apply_filter(cavg_imgs(cnt), params%lambda)
-            ! normalization
-            call cavg_imgs(cnt)%noise_norm(l_msk, sdev_noise)
-            ! mask
-            call cavg_imgs(cnt)%mask(params%msk, 'soft')
-        end do
-        if( trim(params%bin_cls).eq.'yes' )then
+            ! create the stuff needed in the loop
+            call tvfilt%new
+            filtsz = clsfrcs%get_filtsz()
+            allocate(cavg_imgs(ncls_sel), frc(filtsz), filter(filtsz))
+            ! prep mask
+            call img_msk%new([params%box,params%box,1], params%smpd)
+            img_msk = 1.
+            call img_msk%mask(params%msk, 'hard')
+            l_msk = img_msk%bin2logical()
+            call img_msk%kill
+            write(logfhandle,'(A)') '>>> PREPARING CLASS AVERAGES'
+            cnt = 0
+            do i = 1 , ncls
+                if( states(i) > 0.5 )then
+                    cnt = cnt + 1
+                else
+                    cycle
+                endif
+                call cavg_imgs(cnt)%new(ldim, smpd, wthreads=.false.)
+                if( use_shifted )then
+                    call cavg_imgs(cnt)%read(cavgsstk_shifted, i)
+                else
+                    call cavg_imgs(cnt)%read(cavgsstk, i)
+                endif
+                ! FRC-based filter
+                if( l_apply_optlp )then
+                    call clsfrcs%frc_getter(i, params%hpind_fsc, params%l_phaseplate, frc)
+                    if( any(frc > 0.143) )then
+                        call fsc2optlp_sub(clsfrcs%get_filtsz(), frc, filter)
+                        where( filter > TINY ) filter = sqrt(filter) ! because the filter is applied to the average not the even or odd
+                        call cavg_imgs(cnt)%fft()
+                        call cavg_imgs(cnt)%apply_filter_serial(filter)
+                        call cavg_imgs(cnt)%ifft()
+                    endif
+                endif
+                ! TV regularization
+                call tvfilt%apply_filter(cavg_imgs(cnt), params%lambda)
+                ! normalization
+                call cavg_imgs(cnt)%noise_norm(l_msk, sdev_noise)
+                ! mask
+                call cavg_imgs(cnt)%mask(params%msk, 'soft')
+            end do
+        endif
+        if( trim(params%bin_cls).eq.'yes' .and. .not. DEBUG )then
             ! create the polarft_corrcalc object
             params%kfromto(1) = max(2, calc_fourier_index(params%hp, params%box, params%smpd))
             params%kfromto(2) =        calc_fourier_index(params%lp, params%box, params%smpd)
