@@ -124,23 +124,29 @@ contains
                 else
                     ! CTF
                     if( ctfvars%ctfflag /= CTFFLAG_NO )then
-                        inv = real([h,k]) * invldim
+                        inv    = real([h,k]) * invldim
                         sqSpatFreq = dot_product(inv,inv)
-                        tval = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
-                        if( ctfvars%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
-                        if( self%l_wiener_part )then
-                            if( abs(h) >= hlim .and. abs(k) >= klim )then ! outside the rectangle that bounds the central ellipse
-                                ! tval = tval
-                            else if( tval < 0. )then                      ! inside  the rectangle that bounds the central ellipse
-                                ! tval = tval
-                            else
-                                tval = 1.0
-                            endif
-                        endif
-                        tvalsq = tval * tval
-                    else
                         tval   = 1.
                         tvalsq = tval
+                        if( ctfvars%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
+                        if( self%l_wiener_part )then
+                            if( abs(h) < hlim .and. abs(k) < klim )then
+                                ! inside rectangle
+                                if( real(h/hlim)**2 + real(k/klim)**2 < 1.0 )then
+                                    ! inside ellipse
+                                    if( tval < 0.0 )then ! take care of negative values
+                                        tval = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
+                                    endif
+                                else
+                                    ! outside ellipse
+                                    tval = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
+                                endif
+                            else
+                                ! outside the rectangle
+                                tval = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
+                            endif
+                            tvalsq = tval * tval
+                        endif
                     endif
                     ! CTF pre-multiplied Fourier component
                     c = tval * img%get_fcomp2D(h,k)
