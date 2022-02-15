@@ -38,7 +38,6 @@ type ctf
     procedure          :: apply
     procedure          :: ctf2img
     procedure          :: ctf_1stzero2img
-    procedure          :: ctf_1stzero2img_and, ctf_1stzero2img_dev
     procedure          :: apply_serial
     procedure          :: wienerlike_restoration
     procedure          :: phaseflip_and_shift_serial
@@ -316,120 +315,6 @@ contains
         class(image),   intent(inout) :: img
         real,           intent(in)    :: dfx, dfy, angast
         real, optional, intent(in)    :: phshift
-        integer :: lims(3,2),h,k,phys(3),ldim(3),hlim,klim
-        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3),pphshift
-        pphshift = 0.
-        if( present(phshift) ) pphshift = phshift
-        ! init object
-        call self%init(dfx, dfy, angast)
-        ! initialize
-        lims     = img%loop_lims(2)
-        ldim     = img%get_ldim()
-        inv_ldim = 1./real(ldim)
-        ! initialize image and flag as FT
-        img = cmplx(0.,0.)
-        ! find limits
-        do h = 0,lims(1,2)
-            hinv      = real(h) * inv_ldim(1)
-            spaFreqSq = hinv * hinv
-            ang       = atan2(0.,real(h))
-            tval      = self%eval(spaFreqSq, ang, pphshift)
-            if( tval <= 0 )then
-                hlim = h
-                exit
-            endif
-        end do
-        do k = 0,lims(2,2)
-            kinv      = real(k) * inv_ldim(2)
-            spaFreqSq = kinv * kinv
-            ang       = atan2(real(k),0.)
-            tval      = self%eval(spaFreqSq, ang, pphshift)
-            if( tval <= 0 )then
-                klim = k
-                exit
-            endif
-        end do
-        ! generate image
-        do h = lims(1,1),lims(1,2)
-            if( abs(h) >= hlim ) cycle
-            do k=lims(2,1),lims(2,2)
-                if( abs(k) >= klim ) cycle
-                hinv        = real(h) * inv_ldim(1)
-                kinv        = real(k) * inv_ldim(2)
-                spaFreqSq   = hinv * hinv + kinv * kinv
-                ang         = atan2(real(k),real(h))
-                tval        = self%eval(spaFreqSq, ang, pphshift)
-                phys = img%comp_addr_phys([h,k,0])
-                if( tval > 0. ) call img%set_cmat_at(phys(1),phys(2),phys(3), cmplx(tval,0.))
-            end do
-        end do
-    end subroutine ctf_1stzero2img
-
-    subroutine ctf_1stzero2img_and( self, img, dfx, dfy, angast, phshift )
-        use simple_image, only: image
-        class(ctf),     intent(inout) :: self
-        class(image),   intent(inout) :: img
-        real,           intent(in)    :: dfx, dfy, angast
-        real, optional, intent(in)    :: phshift
-        integer :: lims(3,2),h,k,phys(2),ldim(3),hlim,klim
-        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3),pphshift
-        pphshift = 0.
-        if( present(phshift) ) pphshift = phshift
-        ! init object
-        call self%init(dfx, dfy, angast)
-        ! initialize
-        lims     = img%loop_lims(2)
-        ldim     = img%get_ldim()
-        inv_ldim = 1./real(ldim)
-        ! initialize image and flag as FT
-        img = cmplx(0.,0.)
-        ! find limits
-        do h = 0,lims(1,2)
-            hinv      = real(h) * inv_ldim(1)
-            spaFreqSq = hinv * hinv
-            ang       = atan2(0.,real(h))
-            tval      = self%eval(spaFreqSq, ang, pphshift)
-            if( tval <= 0 )then
-                hlim = h
-                exit
-            endif
-        end do
-        do k = 0,lims(2,2)
-            kinv      = real(k) * inv_ldim(2)
-            spaFreqSq = kinv * kinv
-            ang       = atan2(real(k),0.)
-            tval      = self%eval(spaFreqSq, ang, pphshift)
-            if( tval <= 0 )then
-                klim = k
-                exit
-            endif
-        end do
-        ! generate image
-        do h = lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                hinv        = real(h) * inv_ldim(1)
-                kinv        = real(k) * inv_ldim(2)
-                spaFreqSq   = hinv * hinv + kinv * kinv
-                ang         = atan2(real(k),real(h))
-                tval        = self%eval(spaFreqSq, ang, pphshift)
-                phys = img%comp_addr_phys(h,k)
-                if( abs(h) >= hlim .and. abs(k) >= klim )then ! outside the rectangle that bounds the central ellipse
-                    !
-                else if( tval < 0. )then                      ! inside  the rectangle that bounds the central ellipse
-                    !
-                else
-                    call img%set_cmat_at(phys(1),phys(2),1, cmplx(tval,0.0))
-                endif
-            end do
-        end do
-    end subroutine ctf_1stzero2img_and
-
-    subroutine ctf_1stzero2img_dev( self, img, dfx, dfy, angast, phshift )
-        use simple_image, only: image
-        class(ctf),     intent(inout) :: self
-        class(image),   intent(inout) :: img
-        real,           intent(in)    :: dfx, dfy, angast
-        real, optional, intent(in)    :: phshift
         integer :: lims(3,2),h,k,phys(2),ldim(3),hlim,klim
         real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3),pphshift
         pphshift = 0.
@@ -489,7 +374,7 @@ contains
                 endif
             end do
         end do
-    end subroutine ctf_1stzero2img_dev
+    end subroutine ctf_1stzero2img
 
     !>  \brief  is for optimised serial application of CTF
     !!          modes: abs, ctf, flip, flipneg, neg, square
@@ -752,26 +637,31 @@ contains
             rh   = real(h)
             hinv = rh * inv_ldim(1)
             do k=logi_lims(2,1),logi_lims(2,2)
-                rk    = real(k)
-                ! calculate CTF
+                rk        = real(k)
                 kinv      = rk * inv_ldim(2)
                 spaFreqSq = hinv*hinv + kinv*kinv
                 ang       = atan2(rk,rh)
-                tval      = self%eval(spaFreqSq, ang, add_phshift)
+                tval      = 1.0
                 ! store tval and multiply image with tval
                 phys = img%comp_addr_phys(h,k)
-                if( abs(h) >= hlim .and. abs(k) >= klim )then ! outside the rectangle that bounds the central ellipse
-                    if( imode == CTFFLAG_FLIP ) tval = abs(tval)
-                    call img%mul_cmat_at(phys(1),phys(2),1, tval)
-                    tvals(phys(1),phys(2)) = tval
-                else if( tval < 0. )then                      ! inside  the rectangle that bounds the central ellipse
-                    ! we multiply if CTF < 0.
-                    if( imode == CTFFLAG_FLIP ) tval = abs(tval)
-                    call img%mul_cmat_at(phys(1),phys(2),1, tval)
-                    tvals(phys(1),phys(2)) = tval
+                if( abs(h) < hlim .and. abs(k) < klim )then
+                    ! inside rectangle
+                    if( real(h/hlim)**2 + real(k/klim)**2 < 1.0 )then
+                        ! inside ellipse
+                        if( tval < 0.0 )then ! take care of negative values
+                            tval = self%eval(spaFreqSq, ang, add_phshift)
+                        endif
+                    else
+                        ! outside ellipse
+                        tval = self%eval(spaFreqSq, ang, add_phshift)
+                    endif
                 else
-                    tvals(phys(1),phys(2)) = 1.0
+                    ! outside the rectangle
+                    tval = self%eval(spaFreqSq, ang, add_phshift)
                 endif
+                if( imode == CTFFLAG_FLIP ) tval = abs(tval)
+                call img%mul_cmat_at(phys(1),phys(2),1, tval)
+                tvals(phys(1),phys(2)) = tval
             end do
         end do
     end subroutine eval_and_apply_partial
