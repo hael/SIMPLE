@@ -589,7 +589,7 @@ contains
         end do
     end subroutine eval_and_apply
 
-    subroutine eval_and_apply_partial( self, img, imode, logi_lims, tvalsdims, tvals, dfx, dfy, angast, add_phshift)
+    subroutine eval_and_apply_partial( self, img, imode, logi_lims, tvalsdims, tvals, dfx, dfy, angast, add_phshift )
         use simple_image, only: image
         class(ctf),     intent(inout) :: self           !< instance
         class(image),   intent(inout) :: img            !< modified image (output)
@@ -601,8 +601,8 @@ contains
         real,           intent(in)    :: dfy            !< defocus y-axis
         real,           intent(in)    :: angast         !< angle of astigmatism
         real,           intent(in)    :: add_phshift    !< aditional phase shift (radians), for phase plate
-        integer :: ldim(3),h,k,phys(2),hlim,klim
-        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3),rh,rk
+        integer :: ldim(3),h,k,phys(2)
+        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3),rh,rk,hlim,klim
         if( imode == CTFFLAG_NO )then
             tvals = 1.0
             return
@@ -618,7 +618,7 @@ contains
             ang       = atan2(0.,real(h))
             tval      = self%eval(spaFreqSq, ang, add_phshift)
             if( tval <= 0. )then
-                hlim = h
+                hlim = real(h)
                 exit
             endif
         end do
@@ -628,7 +628,7 @@ contains
             ang       = atan2(real(k),0.)
             tval      = self%eval(spaFreqSq, ang, add_phshift)
             if( tval <= 0. )then
-                klim = k
+                klim = real(k)
                 exit
             endif
         end do
@@ -641,14 +641,16 @@ contains
                 kinv      = rk * inv_ldim(2)
                 spaFreqSq = hinv*hinv + kinv*kinv
                 ang       = atan2(rk,rh)
-                tval      = 1.0
-                phys = img%comp_addr_phys(h,k)
+                tval      = self%eval(spaFreqSq, ang, add_phshift)
+                phys      = img%comp_addr_phys(h,k)
                 if( abs(h) < hlim .and. abs(k) < klim )then
                     ! inside rectangle
-                    if( real(h/hlim)**2 + real(k/klim)**2 < 1.0 )then
+                    if( (rh/hlim)**2. + (rk/klim)**2. < 1. )then
                         ! inside ellipse
                         if( tval < 0.0 )then ! take care of negative values
                             tval = self%eval(spaFreqSq, ang, add_phshift)
+                        else
+                            tval = 1.0
                         endif
                     else
                         ! outside ellipse
