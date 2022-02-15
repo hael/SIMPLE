@@ -100,7 +100,7 @@ contains
                 hinv = real(h) * invldim(1)
                 tval = tfun%eval(hinv * hinv, self%ctf_ang(h,0), add_phshift)
                 if( tval <= 0. )then
-                    hlim = h
+                    hlim = real(h)
                     exit
                 endif
             end do
@@ -108,7 +108,7 @@ contains
                 kinv = real(k) * invldim(2)
                 tval = tfun%eval(kinv * kinv, self%ctf_ang(0,k), add_phshift)
                 if( tval <= 0. )then
-                    klim = k
+                    klim = real(k)
                     exit
                 endif
             end do
@@ -124,18 +124,19 @@ contains
                 else
                     ! CTF
                     if( ctfvars%ctfflag /= CTFFLAG_NO )then
-                        inv    = real([h,k]) * invldim
+                        inv        = real([h,k]) * invldim
                         sqSpatFreq = dot_product(inv,inv)
-                        tval   = 1.
-                        tvalsq = tval
+                        tval       = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
                         if( ctfvars%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
                         if( self%l_wiener_part )then
                             if( abs(h) < hlim .and. abs(k) < klim )then
                                 ! inside rectangle
-                                if( real(h/hlim)**2 + real(k/klim)**2 < 1.0 )then
+                                if( (real(h)/hlim)**2. + (real(k)/klim)**2. < 1. )then
                                     ! inside ellipse
                                     if( tval < 0.0 )then ! take care of negative values
                                         tval = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
+                                    else
+                                        tval = 1.0
                                     endif
                                 else
                                     ! outside ellipse
