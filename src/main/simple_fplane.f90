@@ -119,7 +119,7 @@ contains
             do k = self%frlims(2,1),self%frlims(2,2)
                 sh = nint(sqrt(real(h*h + k*k)))
                 if( sh > self%nyq )then
-                    c      = cmplx(0.,0.)
+                    c = cmplx(0.,0.)
                     tvalsq = 0.
                 else
                     ! CTF
@@ -127,7 +127,6 @@ contains
                         inv        = real([h,k]) * invldim
                         sqSpatFreq = dot_product(inv,inv)
                         tval       = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
-                        if( ctfvars%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
                         if( self%l_wiener_part )then
                             if( abs(h) < hlim .and. abs(k) < klim )then
                                 ! inside rectangle
@@ -146,9 +145,13 @@ contains
                                 ! outside the rectangle
                                 tval = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
                             endif
-                            tvalsq = tval * tval
                         endif
+                        tvalsq = tval * tval
+                    else
+                        tval = 1.0
+                        tvalsq = tval
                     endif
+                    if( ctfvars%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
                     ! CTF pre-multiplied Fourier component
                     c = tval * img%get_fcomp2D(h,k)
                 endif
