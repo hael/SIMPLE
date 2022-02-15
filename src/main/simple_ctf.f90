@@ -591,16 +591,16 @@ contains
 
     subroutine eval_and_apply_partial( self, img, imode, logi_lims, tvalsdims, tvals, dfx, dfy, angast, add_phshift)
         use simple_image, only: image
-        class(ctf),     intent(inout) :: self        !< instance
-        class(image),   intent(inout) :: img         !< modified image (output)
-        integer,        intent(in)    :: imode       !< CTFFLAG_FLIP=abs CTFFLAG_YES=ctf CTFFLAG_NO=no
+        class(ctf),     intent(inout) :: self           !< instance
+        class(image),   intent(inout) :: img            !< modified image (output)
+        integer,        intent(in)    :: imode          !< CTFFLAG_FLIP=abs CTFFLAG_YES=ctf CTFFLAG_NO=no
         integer,        intent(in)    :: logi_lims(3,2) !< logical limits
         integer,        intent(in)    :: tvalsdims(2)   !< tvals dimensions
         real,           intent(out)   :: tvals(1:tvalsdims(1),1:tvalsdims(2))
-        real,           intent(in)    :: dfx         !< defocus x-axis
-        real,           intent(in)    :: dfy         !< defocus y-axis
-        real,           intent(in)    :: angast      !< angle of astigmatism
-        real,           intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
+        real,           intent(in)    :: dfx            !< defocus x-axis
+        real,           intent(in)    :: dfy            !< defocus y-axis
+        real,           intent(in)    :: angast         !< angle of astigmatism
+        real,           intent(in)    :: add_phshift    !< aditional phase shift (radians), for phase plate
         integer :: ldim(3),h,k,phys(2),hlim,klim
         real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3),rh,rk
         if( imode == CTFFLAG_NO )then
@@ -642,7 +642,6 @@ contains
                 spaFreqSq = hinv*hinv + kinv*kinv
                 ang       = atan2(rk,rh)
                 tval      = 1.0
-                ! store tval and multiply image with tval
                 phys = img%comp_addr_phys(h,k)
                 if( abs(h) < hlim .and. abs(k) < klim )then
                     ! inside rectangle
