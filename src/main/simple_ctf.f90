@@ -29,8 +29,8 @@ type ctf
     contains
     procedure          :: init
     procedure, private :: evalPhSh
-    procedure, private :: eval_1, eval_2, eval_3, eval_4
-    generic            :: eval => eval_1, eval_2, eval_3, eval_4
+    procedure, private :: eval_1, eval_2, eval_3, eval_4, eval_5
+    generic            :: eval => eval_1, eval_2, eval_3, eval_4, eval_5
     procedure, private :: eval_sign
     procedure, private :: eval_df
     procedure          :: nextrema
@@ -38,11 +38,11 @@ type ctf
     procedure          :: apply
     procedure          :: ctf2img
     procedure          :: ctf_1stzero2img
+    procedure          :: ctf_1stpeak2img
     procedure          :: apply_serial
     procedure          :: wienerlike_restoration
     procedure          :: phaseflip_and_shift_serial
     procedure          :: eval_and_apply
-    procedure          :: eval_and_apply_partial
     procedure, private :: kV2wl
     procedure          :: apply_convention
 end type ctf
@@ -163,6 +163,28 @@ contains
         ! compute phase shift + amplitude constrast term & compute value of CTF, assuming white particles
         eval_4 = sin( self%evalPhSh(spaFreqSq, ang, add_phshift) + self%amp_contr_const )
     end function eval_4
+
+    !>  \brief Returns the CTF with pre-initialize parameters
+    pure elemental real function eval_5( self, spaFreqSq, ang, add_phshift, before1stpeak )
+        class(ctf), intent(in) :: self        !< instance
+        real,       intent(in) :: spaFreqSq   !< squared reciprocal pixels
+        real,       intent(in) :: ang         !< Angle at which to compute the CTF (radians)
+        real,       intent(in) :: add_phshift !< aditional phase shift (radians), for phase plate
+        logical,    intent(in) :: before1stpeak !< whether of not the CTF value is calculated before the first peak
+        real :: totalphaseshift
+        ! compute phase shift + amplitude constrast term & compute value of CTF, assuming white particles
+        ! totalphaseshift is > 0 and not modulated by 2pi!
+        totalphaseshift = self%evalPhSh(spaFreqSq, ang, add_phshift) + self%amp_contr_const
+        if( before1stpeak )then
+            eval_5 = sin( totalphaseshift )
+        else
+            if( totalphaseshift > PIO2 )then
+                eval_5 = sin( totalphaseshift )
+            else
+                eval_5 = 1.0
+            endif
+        endif
+    end function eval_5
 
     !>  \brief Returns the sign of the CTF with pre-initialize parameters
     pure elemental integer function eval_sign( self, spaFreqSq, ang, add_phshift )
@@ -362,19 +384,51 @@ contains
                     if( real(h/hlim)**2 + real(k/klim)**2 < 1.0 )then
                         ! inside ellipse
                         if( tval < 0.0 )then
-                            !
-                        else
                             call img%set_cmat_at(phys(1),phys(2),1, cmplx(tval,0.0))
+                        else
+                            call img%set_cmat_at(phys(1),phys(2),1, cmplx(1.0,0.0))
                         endif
                     else
-                        ! outside ellipse
+                        call img%set_cmat_at(phys(1),phys(2),1, cmplx(tval,0.0))
                     endif
                 else
-                    ! outside the rectangle
+                    call img%set_cmat_at(phys(1),phys(2),1, cmplx(tval,0.0))
                 endif
             end do
         end do
     end subroutine ctf_1stzero2img
+
+    subroutine ctf_1stpeak2img( self, img, dfx, dfy, angast, phshift )
+        use simple_image, only: image
+        class(ctf),     intent(inout) :: self
+        class(image),   intent(inout) :: img
+        real,           intent(in)    :: dfx, dfy, angast
+        real, optional, intent(in)    :: phshift
+        integer :: lims(3,2),h,k,phys(2),ldim(3)
+        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3),pphshift
+        pphshift = 0.
+        if( present(phshift) ) pphshift = phshift
+        ! init object
+        call self%init(dfx, dfy, angast)
+        ! initialize
+        lims     = img%loop_lims(2)
+        ldim     = img%get_ldim()
+        inv_ldim = 1./real(ldim)
+        ! initialize image and flag as FT
+        img = cmplx(0.,0.)
+        ! generate image
+        do h = lims(1,1),lims(1,2)
+            hinv = real(h) * inv_ldim(1)
+            do k=lims(2,1),lims(2,2)
+                kinv      = real(k) * inv_ldim(2)
+                spaFreqSq = hinv * hinv + kinv * kinv
+                ang       = atan2(real(k),real(h))
+                tval      = self%eval(spaFreqSq, ang, pphshift, before1stpeak=.false.)
+                phys      = img%comp_addr_phys(h,k)
+                call img%set_cmat_at(phys(1),phys(2),1, cmplx(tval,0.0))
+            end do
+        end do
+    end subroutine ctf_1stpeak2img
 
     !>  \brief  is for optimised serial application of CTF
     !!          modes: abs, ctf, flip, flipneg, neg, square
@@ -547,7 +601,7 @@ contains
     end subroutine phaseflip_and_shift_serial
 
     ! apply CTF to image, CTF values are also returned
-    subroutine eval_and_apply( self, img, imode, logi_lims, tvalsdims, tvals, dfx, dfy, angast, add_phshift)
+    subroutine eval_and_apply( self, img, imode, logi_lims, tvalsdims, tvals, dfx, dfy, angast, add_phshift, before1stpeak)
         use simple_image, only: image
         class(ctf),     intent(inout) :: self        !< instance
         class(image),   intent(inout) :: img         !< modified image (output)
@@ -559,8 +613,9 @@ contains
         real,           intent(in)    :: dfy         !< defocus y-axis
         real,           intent(in)    :: angast      !< angle of astigmatism
         real,           intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
+        logical,        intent(in)    :: before1stpeak
         integer :: ldim(3),h,k,phys(2)
-        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3)
+        real    :: ang,tval,spaFreqSq,hinv,hinvsq,kinv,inv_ldim(3)
         real    :: rh,rk
         if( imode == CTFFLAG_NO )then
             tvals = 1.0
@@ -571,15 +626,16 @@ contains
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
         do h=logi_lims(1,1),logi_lims(1,2)
-            rh   = real(h)
-            hinv = rh * inv_ldim(1)
+            rh     = real(h)
+            hinv   = rh * inv_ldim(1)
+            hinvsq = hinv*hinv
             do k=logi_lims(2,1),logi_lims(2,2)
-                rk    = real(k)
+                rk = real(k)
                 ! calculate CTF
                 kinv      = rk * inv_ldim(2)
-                spaFreqSq = hinv*hinv + kinv*kinv
+                spaFreqSq = hinvsq + kinv*kinv
                 ang       = atan2(rk,rh)
-                tval      = self%eval(spaFreqSq, ang, add_phshift)
+                tval      = self%eval(spaFreqSq, ang, add_phshift, before1stpeak)
                 if( imode == CTFFLAG_FLIP ) tval = abs(tval)
                 ! store tval and multiply image with tval
                 phys = img%comp_addr_phys(h,k)
@@ -588,82 +644,6 @@ contains
             end do
         end do
     end subroutine eval_and_apply
-
-    subroutine eval_and_apply_partial( self, img, imode, logi_lims, tvalsdims, tvals, dfx, dfy, angast, add_phshift )
-        use simple_image, only: image
-        class(ctf),     intent(inout) :: self           !< instance
-        class(image),   intent(inout) :: img            !< modified image (output)
-        integer,        intent(in)    :: imode          !< CTFFLAG_FLIP=abs CTFFLAG_YES=ctf CTFFLAG_NO=no
-        integer,        intent(in)    :: logi_lims(3,2) !< logical limits
-        integer,        intent(in)    :: tvalsdims(2)   !< tvals dimensions
-        real,           intent(out)   :: tvals(1:tvalsdims(1),1:tvalsdims(2))
-        real,           intent(in)    :: dfx            !< defocus x-axis
-        real,           intent(in)    :: dfy            !< defocus y-axis
-        real,           intent(in)    :: angast         !< angle of astigmatism
-        real,           intent(in)    :: add_phshift    !< aditional phase shift (radians), for phase plate
-        integer :: ldim(3),h,k,phys(2)
-        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3),rh,rk,hlim,klim
-        if( imode == CTFFLAG_NO )then
-            tvals = 1.0
-            return
-        endif
-        ! initialize
-        call self%init(dfx, dfy, angast)
-        ldim     = img%get_ldim()
-        inv_ldim = 1./real(ldim)
-        ! find the limits that bound the central ellipse
-        do h = 0,logi_lims(1,2)
-            hinv      = real(h) * inv_ldim(1)
-            spaFreqSq = hinv * hinv
-            ang       = atan2(0.,real(h))
-            tval      = self%eval(spaFreqSq, ang, add_phshift)
-            if( tval <= 0. )then
-                hlim = real(h)
-                exit
-            endif
-        end do
-        do k = 0,logi_lims(2,2)
-            kinv      = real(k) * inv_ldim(2)
-            spaFreqSq = kinv * kinv
-            ang       = atan2(real(k),0.)
-            tval      = self%eval(spaFreqSq, ang, add_phshift)
-            if( tval <= 0. )then
-                klim = real(k)
-                exit
-            endif
-        end do
-        ! the intent here is to only do Wiener restoration after 1st CTF zero
-        do h=logi_lims(1,1),logi_lims(1,2)
-            rh   = real(h)
-            hinv = rh * inv_ldim(1)
-            do k=logi_lims(2,1),logi_lims(2,2)
-                rk        = real(k)
-                kinv      = rk * inv_ldim(2)
-                spaFreqSq = hinv*hinv + kinv*kinv
-                ang       = atan2(rk,rh)
-                tval      = self%eval(spaFreqSq, ang, add_phshift)
-                phys      = img%comp_addr_phys(h,k)
-                if( abs(h) < hlim .and. abs(k) < klim )then
-                    ! inside rectangle
-                    if( (rh/hlim)**2. + (rk/klim)**2. < 1. )then
-                        ! inside ellipse
-                        if( tval < 0.0 )then
-                            ! take care of negative values
-                        else
-                            tval = 1.0
-                        endif
-                    else
-                        ! outside ellipse
-                    endif
-                else
-                    ! outside the rectangle
-                endif
-                if( imode == CTFFLAG_FLIP ) tval = abs(tval)
-                call img%mul_cmat_at(phys(1),phys(2),1, tval)
-                tvals(phys(1),phys(2)) = tval
-            end do
-        end do
-    end subroutine eval_and_apply_partial
 
     pure elemental real function kV2wl( self ) result (wavelength)
         class(ctf), intent(in) :: self

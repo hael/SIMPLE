@@ -79,8 +79,8 @@ contains
         integer, optional,intent(in)    :: iptcl
         type(ctf) :: tfun
         complex   :: c
-        real      :: invldim(2),inv(2),tval,tvalsq,sqSpatFreq,add_phshift,kinv,hinv
-        integer   :: h,k,sh,hlim,klim
+        real      :: invldim(2),inv(2),tval,tvalsq,sqSpatFreq,add_phshift
+        integer   :: h,k,sh
         logical   :: use_sigmas
         integer   :: sigma2_kfromto(2)
         if( ctfvars%ctfflag /= CTFFLAG_NO )then
@@ -94,25 +94,25 @@ contains
             sigma2_kfromto(2) = ubound(eucl_sigma2_glob%sigma2_noise,1)
         end if
         if( ctfvars%l_phaseplate ) add_phshift = ctfvars%phshift
-        if( self%l_wiener_part )then
-            ! find the limits that bound the central ellipse
-            do h = 0,self%frlims(1,2)
-                hinv = real(h) * invldim(1)
-                tval = tfun%eval(hinv * hinv, self%ctf_ang(h,0), add_phshift)
-                if( tval <= 0. )then
-                    hlim = real(h)
-                    exit
-                endif
-            end do
-            do k = 0,self%frlims(2,2)
-                kinv = real(k) * invldim(2)
-                tval = tfun%eval(kinv * kinv, self%ctf_ang(0,k), add_phshift)
-                if( tval <= 0. )then
-                    klim = real(k)
-                    exit
-                endif
-            end do
-        endif
+        ! if( self%l_wiener_part )then
+        !     ! find the limits that bound the central ellipse
+        !     do h = 0,self%frlims(1,2)
+        !         hinv = real(h) * invldim(1)
+        !         tval = tfun%eval(hinv * hinv, self%ctf_ang(h,0), add_phshift)
+        !         if( tval <= 0. )then
+        !             hlim = real(h)
+        !             exit
+        !         endif
+        !     end do
+        !     do k = 0,self%frlims(2,2)
+        !         kinv = real(k) * invldim(2)
+        !         tval = tfun%eval(kinv * kinv, self%ctf_ang(0,k), add_phshift)
+        !         if( tval <= 0. )then
+        !             klim = real(k)
+        !             exit
+        !         endif
+        !     end do
+        ! endif
         !$omp parallel do collapse(2) default(shared) schedule(static) proc_bind(close)&
         !$omp private(h,k,sh,c,tval,tvalsq,inv,sqSpatFreq)
         do h = self%frlims(1,1),self%frlims(1,2)
@@ -126,25 +126,27 @@ contains
                     if( ctfvars%ctfflag /= CTFFLAG_NO )then
                         inv        = real([h,k]) * invldim
                         sqSpatFreq = dot_product(inv,inv)
-                        tval       = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
-                        if( self%l_wiener_part )then
-                            if( abs(h) < hlim .and. abs(k) < klim )then
-                                ! inside rectangle
-                                if( (real(h)/hlim)**2. + (real(k)/klim)**2. < 1. )then
-                                    ! inside ellipse
-                                    if( tval < 0.0 )then
-                                        ! take care of negative values
-                                    else
-                                        tval = 1.0
-                                    endif
-                                else
-                                    ! outside ellipse
-                                endif
-                            else
-                                ! outside the rectangle
-                            endif
-                        endif
-                        tvalsq = tval * tval
+                        tval       = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift, .not.self%l_wiener_part)
+                        tvalsq     = tval * tval
+                        ! tval       = tfun%eval(sqSpatFreq, self%ctf_ang(h,k), add_phshift)
+                        ! if( self%l_wiener_part )then
+                        !     if( abs(h) < hlim .and. abs(k) < klim )then
+                        !         ! inside rectangle
+                        !         if( (real(h)/hlim)**2. + (real(k)/klim)**2. < 1. )then
+                        !             ! inside ellipse
+                        !             if( tval < 0.0 )then
+                        !                 ! take care of negative values
+                        !             else
+                        !                 tval = 1.0
+                        !             endif
+                        !         else
+                        !             ! outside ellipse
+                        !         endif
+                        !     else
+                        !         ! outside the rectangle
+                        !     endif
+                        ! endif
+                        ! tvalsq = tval * tval
                     else
                         tval = 1.0
                         tvalsq = tval
