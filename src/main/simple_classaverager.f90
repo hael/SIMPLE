@@ -339,8 +339,8 @@ contains
         iprec_glob = 0 ! global record index
         do istk = first_stkind,last_stkind
             ! Particles range in stack
-            fromp  = nint(build_glob%spproj%os_stk%get(istk,'fromp'))
-            top    = nint(build_glob%spproj%os_stk%get(istk,'top'))
+            fromp = nint(build_glob%spproj%os_stk%get(istk,'fromp'))
+            top   = nint(build_glob%spproj%os_stk%get(istk,'top'))
             nptcls_in_stk = top - fromp + 1 ! # of particles in stack
             call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, max(params_glob%fromp,fromp), stk_fname, ind_in_stk)
             ! open buffer
@@ -349,7 +349,7 @@ contains
             nbatches = ceiling(real(nptcls_in_stk)/real(READBUFFSZ)) ! will be 1 most of the tme
             do ibatch = 1,nbatches
                 batch_iprecs = 0                                     ! records in batch, if zero skip
-                istart = (ibatch - 1)              * READBUFFSZ + 1  ! first index in current batch, will be 1      most of the time
+                istart = (ibatch - 1)              * READBUFFSZ + 1  ! first index in current batch, will be 1             most of the time
                 iend   = min(nptcls_in_stk, istart + READBUFFSZ - 1) ! last  index in current batch, will be nptcls_in_stk most of the time
                 nptcls_in_batch = iend-istart+1
                 batchind   = 0
@@ -363,8 +363,8 @@ contains
                     batch_iprecs(batchind) = iprec_glob              ! particle record in batch
                     if( precs(iprec_glob)%pind == 0 ) cycle
                     nptcls_eff = nptcls_eff + 1
-                    if( iptcl /= precs(iprec_glob)%pind ) THROW_HARD('Critical indexing error!')      ! debug, to remove
-                    call stkio_r%read(precs(iprec_glob)%ind_in_stk, read_imgs(batchind)) ! read
+                    if( iptcl /= precs(iprec_glob)%pind ) THROW_HARD('Critical indexing error!') ! debug, to remove
+                    call stkio_r%read(precs(iprec_glob)%ind_in_stk, read_imgs(batchind))
                 enddo
                 if( nptcls_eff == 0 ) cycle
                 ! Interpolation loop
@@ -376,7 +376,7 @@ contains
                     if( iprec == 0 ) cycle
                     if( precs(iprec)%pind == 0 ) cycle
                     iptcl        = precs(iprec)%pind
-                    ithr         = omp_get_thread_num()+1
+                    ithr         = omp_get_thread_num() + 1
                     cmats(:,:,i) = zero
                     rhos(:,:,i)  = 0.
                     ! normalize & pad & FFT
@@ -386,8 +386,8 @@ contains
                     ! apply CTF to image, stores CTF values
                     add_phshift = 0.
                     if( phaseplate ) add_phshift = precs(iprec)%phshift
-                    call precs(iprec)%tfun%eval_and_apply(cgrid_imgs(ithr), ctfflag, logi_lims, fdims(1:2), tvals(:,:,ithr), &
-                    & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, .not.l_wiener_part)
+                    call precs(iprec)%tfun%eval_and_apply(cgrid_imgs(ithr), ctfflag, logi_lims, fdims(1:2), tvals(:,:,ithr),&
+                    &precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, .not.l_wiener_part)
                     ! Rotation matrix
                     call rotmat2d(-precs(iprec)%e3, mat)
                     ! Interpolation
