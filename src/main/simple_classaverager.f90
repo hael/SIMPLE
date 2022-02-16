@@ -282,7 +282,7 @@ contains
         type(image),      allocatable :: cgrid_imgs(:), read_imgs(:)
         character(len=:), allocatable :: stk_fname
         complex,          allocatable :: cmats(:,:,:)
-        real,             allocatable :: rhos(:,:,:), trhos(:,:,:)
+        real,             allocatable :: rhos(:,:,:), tvals(:,:,:)
         complex :: fcompl, fcompll
         real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw
         integer :: batch_iprecs(READBUFFSZ)
@@ -334,7 +334,7 @@ contains
         interp_shlim    = nyq + 1
         cyc_limsR(:,1)  = cyc_lims(1,:)  ! limits in fortran layered format
         cyc_limsR(:,2)  = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
-        allocate(cmats(fdims(1),fdims(2),READBUFFSZ), rhos(fdims(1),fdims(2),READBUFFSZ),trhos(fdims(1),fdims(2),params_glob%nthr))
+        allocate(cmats(fdims(1),fdims(2),READBUFFSZ), rhos(fdims(1),fdims(2),READBUFFSZ),tvals(fdims(1),fdims(2),params_glob%nthr))
         ! Main loop
         iprec_glob = 0 ! global record index
         do istk = first_stkind,last_stkind
@@ -386,13 +386,8 @@ contains
                     ! apply CTF to image, stores CTF values
                     add_phshift = 0.
                     if( phaseplate ) add_phshift = precs(iprec)%phshift
-                    if( l_wiener_part )then
-                        call precs(iprec)%tfun%eval_and_apply_partial(cgrid_imgs(ithr), ctfflag, logi_lims, fdims(1:2), trhos(:,:,ithr), &
-                        & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift)
-                    else
-                        call precs(iprec)%tfun%eval_and_apply(cgrid_imgs(ithr), ctfflag, logi_lims, fdims(1:2), trhos(:,:,ithr), &
-                        & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift)
-                    endif
+                    call precs(iprec)%tfun%eval_and_apply(cgrid_imgs(ithr), ctfflag, logi_lims, fdims(1:2), tvals(:,:,ithr), &
+                    & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, .not.l_wiener_part)
                     ! Rotation matrix
                     call rotmat2d(-precs(iprec)%e3, mat)
                     ! Interpolation
@@ -413,23 +408,23 @@ contains
                             phys   = cgrid_imgs(ithr)%comp_addr_phys(l,m)
                             kw     = (1.-dist(1))*(1.-dist(2))   ! interpolation kernel weight
                             fcompl = kw * cgrid_imgs(ithr)%get_cmat_at(phys(1), phys(2),1)
-                            tval   = kw * trhos(phys(1),phys(2),ithr)
+                            tval   = kw * tvals(phys(1),phys(2),ithr)
                             ! l, bottom right corner
                             phys   = cgrid_imgs(ithr)%comp_addr_phys(l,mm)
                             kw     = (1.-dist(1))*dist(2)
                             fcompl = fcompl + kw * cgrid_imgs(ithr)%get_cmat_at(phys(1), phys(2),1)
-                            tval   = tval   + kw * trhos(phys(1),phys(2),ithr)
+                            tval   = tval   + kw * tvals(phys(1),phys(2),ithr)
                             if( l < 0 ) fcompl = conjg(fcompl) ! conjugaison when required!
                             ! ll, upper left corner
                             phys    = cgrid_imgs(ithr)%comp_addr_phys(ll,m)
                             kw      = dist(1)*(1.-dist(2))
                             fcompll =         kw * cgrid_imgs(ithr)%get_cmat_at(phys(1), phys(2),1)
-                            tval    = tval  + kw * trhos(phys(1),phys(2),ithr)
+                            tval    = tval  + kw * tvals(phys(1),phys(2),ithr)
                             ! ll, upper right corner
                             phys    = cgrid_imgs(ithr)%comp_addr_phys(ll,mm)
                             kw      = dist(1)*dist(2)
                             fcompll = fcompll + kw * cgrid_imgs(ithr)%get_cmat_at(phys(1), phys(2),1)
-                            tval    = tval    + kw * trhos(phys(1),phys(2),ithr)
+                            tval    = tval    + kw * tvals(phys(1),phys(2),ithr)
                             if( ll < 0 ) fcompll = conjg(fcompll) ! conjugaison when required!
                             ! update with interpolated values
                             phys = cgrid_imgs(ithr)%comp_addr_phys(h,k)
