@@ -1158,7 +1158,6 @@ contains
     end subroutine exec_tseries_swap_stack
 
     subroutine exec_tseries_reconstruct3D_distr( self, cline )
-        use gnufor2
         real, parameter :: LP_LIST(4) = [1.5,2.0,2.5,3.0]
         real, parameter :: HP_LIM = 5.0 ! no information at lower res for these kind of data
         class(tseries_reconstruct3D_distr), intent(inout) :: self
@@ -1170,16 +1169,16 @@ contains
         integer,                   allocatable :: parts(:,:)
         character(len=LONGSTRLEN) :: fname
         character(len=STDLEN)     :: volassemble_output, str_state, fsc_file, optlp_file
-        type(parameters) :: params
-        type(builder)    :: build
-        type(qsys_env)   :: qenv
-        type(cmdline)    :: cline_volassemble
-        type(chash)      :: job_descr
-        type(image)      :: vol1, vol2
-        real             :: w, sumw
-        integer          :: state, ipart, sz_list, istate, iptcl, cnt, nptcls, nptcls_per_state
-        integer          :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind
-        logical          :: fall_over
+        type(parameters)   :: params
+        type(builder)      :: build
+        type(qsys_env)     :: qenv
+        type(cmdline)      :: cline_volassemble
+        type(chash)        :: job_descr
+        type(image)        :: vol1, vol2
+        real               :: w, sumw
+        integer            :: state, ipart, sz_list, istate, iptcl, cnt, nptcls, nptcls_per_state
+        integer            :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind
+        logical            :: fall_over
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
         if( .not. cline%defined('trs')     ) call cline%set('trs',           5.) ! to assure that shifts are being used
@@ -1325,7 +1324,6 @@ contains
             enddo
             call fclose(funit)
             fname = 'lp'//trim(real2str(LP_LIST(ilp)))//'.txt'
-            call gnufor_image(ccs(ilp,:,:),palette='gray',filename=fname,persist='persist')
             fname = 'ccneigh_lp'//trim(real2str(LP_LIST(ilp)))//'.csv'
             call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=iostat)
             do istate = 1, nparts - 1
@@ -1339,6 +1337,7 @@ contains
         call build%spproj%write_segment_inside(params%oritype)
         ! termination
         call qsys_cleanup
+        call exec_cmdline('rm -f state_*')
         call build%spproj_field%kill
         call simple_end('**** SIMPLE_TSERIES_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_tseries_reconstruct3D_distr
