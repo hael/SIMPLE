@@ -793,8 +793,8 @@ contains
     subroutine exec_autorefine3D_nano( self, cline )
         use simple_commander_quant, only: detect_atoms_commander
         class(autorefine3D_nano_commander), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline ! I don't instantiate it in here so not declared as type
-        class(parameters), pointer                        :: params_ptr => null()
+        class(cmdline),                     intent(inout) :: cline
+        class(parameters), pointer    :: params_ptr => null()
         type(parameters)              :: params
         type(refine3D_nano_commander) :: xrefine3D_nano
         type(detect_atoms_commander)  :: xdetect_atms
@@ -804,20 +804,19 @@ contains
         type(image), allocatable      :: imgs(:)
         type(stack_io)                :: stkio_w
         type(sp_project)              :: spproj
-        character(len=*), parameter            :: RECVOL   = 'recvol_state01.mrc'
-        character(len=*), parameter            :: SIMVOL   = 'recvol_state01_SIM.mrc'
-        character(len=*), parameter            :: ATOMS    = 'recvol_state01_ATMS.pdb'
-        character(len=*), parameter            :: BINARY   = 'recvol_state01_BIN.mrc'
-        character(len=*), parameter            :: CCS      = 'recvol_state01_CC.mrc'
-        character(len=*), parameter            :: MSK      = 'recvol_state01_MSK.mrc'
-        character(len=*), parameter            :: SPLITTED = 'split_ccs.mrc'
-        character(len=*), parameter            :: tag = 'xxx'
+        character(len=*),          parameter   :: RECVOL   = 'recvol_state01.mrc'
+        character(len=*),          parameter   :: SIMVOL   = 'recvol_state01_SIM.mrc'
+        character(len=*),          parameter   :: ATOMS    = 'recvol_state01_ATMS.pdb'
+        character(len=*),          parameter   :: BINARY   = 'recvol_state01_BIN.mrc'
+        character(len=*),          parameter   :: CCS      = 'recvol_state01_CC.mrc'
+        character(len=*),          parameter   :: MSK      = 'recvol_state01_MSK.mrc'
+        character(len=*),          parameter   :: SPLITTED = 'split_ccs.mrc'
+        character(len=*),          parameter   :: TAG      = 'xxx'
         character(len=LONGSTRLEN), allocatable :: map_names(:)
         character(len=:),          allocatable :: maps_dir, iter_dir, cavgs_stk
         character(len=STDLEN)                  :: fbody, fbody_split
-
-        integer       :: i, j, iter, cnt, ncavgs
-        real          :: smpd
+        integer :: i, j, iter, cnt, ncavgs
+        real    :: smpd
         fbody       = get_fbody(RECVOL,   'mrc')
         fbody_split = get_fbody(SPLITTED, 'mrc')
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',          5.)
@@ -833,9 +832,9 @@ contains
         cline_detect_atms   = cline
         ! then update cline_refine3D_nano accordingly
         call cline_refine3D_nano%set('prg',     'refine3D_nano')
-        call cline_refine3D_nano%set('projfile', trim(params%projfile)) ! since we are not making directories (non-standard execution) we better keep track of project file
+        call cline_refine3D_nano%set('projfile', trim(params%projfile)) ! since we are not making directories (non-standard execution) we need to keep track of project file
         call cline_refine3D_nano%set('keepvol',  'yes')
-        call cline_refine3D_nano%set('maxits',    real(params%maxits_between)) ! turn maxits_between into maxits (max # iterations between model building)
+        call cline_refine3D_nano%set('maxits',   real(params%maxits_between)) ! turn maxits_between into maxits (max # iterations between model building)
         call cline_refine3D_nano%delete('maxits_between')
         ! then update cline_detect_atoms accordingly
         call cline_detect_atms%set('prg', 'detect_atoms')
@@ -876,7 +875,7 @@ contains
             call del_file(SPLITTED)
             iter = iter + 1
         end do
-        call cline_detect_atms%set('use_thres', 'yes')      ! use contact score threshold for final model building
+        call cline_detect_atms%set('use_thres', 'yes') ! use contact score threshold for final model building
         call xdetect_atms%execute(cline_detect_atms)
         call simple_mkdir('final_results')
         call simple_copy_file(RECVOL,   './final_results/'//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'.mrc')
@@ -893,10 +892,12 @@ contains
         call del_file(CCS)
         call del_file(MSK)
         call del_file(SPLITTED)
+        ! retrieve cavgs stack
+        call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd)
         if( ncavgs /= 0 )then
             ! update cline_refine3D_cavgs accordingly
             call cline_refine3D_cavgs%set('prg', 'refine3D_nano')
-            call cline_refine3D_cavgs%set('vol1', './final_results/'//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc') !!!!
+            call cline_refine3D_cavgs%set('vol1', './final_results/'//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
             !call cline_refine3D_cavgs%set('vol1', params%vols(1)) !!!!
             call cline_refine3D_cavgs%set('pgrp',         params%pgrp)
             call cline_refine3D_cavgs%set('mskdiam',   params%mskdiam)
@@ -917,8 +918,6 @@ contains
             call spproj%read(params%projfile) ! now the newly generated cls3D field will be read...
             ! ...so write out its content
             call spproj%os_cls3D%write('cavgs_oris.txt')
-            ! retrieve cavgs stack
-            call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd)
             ! prepare for re-projection
             call cline_reproject%set('vol1',   './final_results/'//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
             call cline_reproject%set('outstk', 'reprojs_recvol.mrc')
