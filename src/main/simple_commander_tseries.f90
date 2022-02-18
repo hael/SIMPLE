@@ -620,31 +620,31 @@ contains
     subroutine exec_cluster2D_nano( self, cline )
         use simple_commander_cluster2D, only: cluster2D_autoscale_commander_hlev
         class(cluster2D_nano_commander), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
+        class(cmdline),                  intent(inout) :: cline
         ! commander
         type(cluster2D_autoscale_commander_hlev) :: xcluster2D_distr
         ! static parameters
-        call cline%set('prg',      'cluster2D')
+        call cline%set('prg',           'cluster2D')
         call cline%set('dir_exec', 'cluster2D_nano')
-        call cline%set('match_filt',      'no')
-        call cline%set('ptclw',           'no')
-        call cline%set('center',         'yes')
-        call cline%set('autoscale',       'no')
-        call cline%set('tseries',        'yes')
+        call cline%set('match_filt',           'no')
+        call cline%set('ptclw',                'no')
+        call cline%set('center',              'yes')
+        call cline%set('autoscale',            'no')
+        call cline%set('tseries',             'yes')
         ! dynamic parameters
         if( .not. cline%defined('refine') )then
             call cline%set('refine','greedy')
         endif
         select case(trim(cline%get_carg('refine')))
-        case('no','greedy')
-            call cline%set('refine','greedy')
-            if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls', 35.)
-            if( .not. cline%defined('maxits')         ) call cline%set('maxits',        15.0)
-        case('inpl')
-            call cline%set('center','no')
-            if( .not. cline%defined('maxits')         ) call cline%set('maxits',         5.0)
-        case DEFAULT
-            THROW_HARD('Unsupported refinement mode!')
+            case('no','greedy')
+                call cline%set('refine','greedy')
+                if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls', 35.)
+                if( .not. cline%defined('maxits')         ) call cline%set('maxits',        15.0)
+            case('inpl')
+                call cline%set('center','no')
+                if( .not. cline%defined('maxits')         ) call cline%set('maxits',         5.0)
+            case DEFAULT
+                THROW_HARD('Unsupported refinement mode!')
         end select
         if( .not. cline%defined('center')         ) call cline%set('center',       'yes')
         if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt','yes')
@@ -893,12 +893,11 @@ contains
         call del_file(MSK)
         call del_file(SPLITTED)
         ! retrieve cavgs stack
-        call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd)
+        call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
         if( ncavgs /= 0 )then
             ! update cline_refine3D_cavgs accordingly
-            call cline_refine3D_cavgs%set('prg', 'refine3D_nano')
+            call cline_refine3D_cavgs%set('prg',      'refine3D_nano')
             call cline_refine3D_cavgs%set('vol1', './final_results/'//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
-            !call cline_refine3D_cavgs%set('vol1', params%vols(1)) !!!!
             call cline_refine3D_cavgs%set('pgrp',         params%pgrp)
             call cline_refine3D_cavgs%set('mskdiam',   params%mskdiam)
             call cline_refine3D_cavgs%set('nthr',   real(params%nthr))
@@ -921,10 +920,10 @@ contains
             ! prepare for re-projection
             call cline_reproject%set('vol1',   './final_results/'//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
             call cline_reproject%set('outstk', 'reprojs_recvol.mrc')
-            call cline_reproject%set('smpd', params%smpd)
-            call cline_reproject%set('oritab', 'cavgs_oris.txt')
-            call cline_reproject%set('pgrp', params%pgrp)
-            call cline_reproject%set('nthr', real(params%nthr))
+            call cline_reproject%set('smpd',            params%smpd)
+            call cline_reproject%set('oritab',     'cavgs_oris.txt')
+            call cline_reproject%set('pgrp',            params%pgrp)
+            call cline_reproject%set('nthr',      real(params%nthr))
             call xreproject%execute(cline_reproject)
             call cline_reproject%set('vol1',   './final_results/'//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_thres_SIM.mrc')
             call cline_reproject%set('outstk', 'reprojs_thres_SIM.mrc')
@@ -958,9 +957,9 @@ contains
         ! extract ptcls oritab
         call spproj%os_ptcl3D%write('ptcls_oris.txt')
         call cline_vizoris%set('oritab', 'ptcls_oris.txt')
-        call cline_vizoris%set('pgrp', params%pgrp)
-        call cline_vizoris%set('nspace', 10000.)
-        call cline_vizoris%set('tseries', 'yes')
+        call cline_vizoris%set('pgrp',        params%pgrp)
+        call cline_vizoris%set('nspace',           10000.)
+        call cline_vizoris%set('tseries',           'yes')
         call xvizoris%execute(cline_vizoris)
         ! deallocate
         if( allocated(map_names) ) deallocate(map_names)
@@ -976,9 +975,10 @@ contains
         ! commander
         type(refine3D_commander_distr) :: xrefine3D_distr
         ! static parameters
-        call cline%set('prg', 'refine3D')
+        call cline%set('prg',           'refine3D')
+        call cline%set('dir_exec', 'refine3D_nano')
+        call cline%set('match_filt',          'no')
         ! dynamic parameters
-        if( .not. cline%defined('match_filt')    ) call cline%set('match_filt',     'no')
         if( .not. cline%defined('cenlp')         ) call cline%set('cenlp',            5.)
         if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
         if( .not. cline%defined('keepvol')       ) call cline%set('keepvol',       'yes')
