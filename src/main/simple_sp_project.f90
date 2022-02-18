@@ -1624,7 +1624,16 @@ contains
         if( present(fail) )fail_here = fail
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
-        if( n_os_out == 0 ) THROW_HARD('trying to fetch from empty os_out field; get_cavgs_stk')
+        if( n_os_out == 0 )then
+            if( fail_here )then
+                THROW_HARD('trying to fetch from empty os_out field; get_cavgs_stk')
+            else
+                stkname = NIL
+                ncls    = 0
+                smpd    = 0.
+                return
+            endif
+        endif
         ! look for cavgs
         ind = 0
         cnt = 0
