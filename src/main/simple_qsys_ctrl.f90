@@ -49,7 +49,8 @@ type qsys_ctrl
     procedure          :: generate_array_script
     procedure, private :: generate_script_1
     procedure, private :: generate_script_2
-    generic            :: generate_script => generate_script_2
+    procedure, private :: generate_script_3
+    generic            :: generate_script => generate_script_2, generate_script_3
     ! SUBMISSION TO QSYS
     procedure          :: submit_scripts
     procedure          :: submit_script
@@ -317,7 +318,6 @@ contains
         call wait_for_closure(ARRAY_SCRIPT)
     end subroutine generate_array_script
 
-    !>  \brief  private part script generator
     subroutine generate_script_1( self, job_descr, ipart, q_descr )
         class(qsys_ctrl), intent(inout) :: self
         class(chash),     intent(in)    :: job_descr
@@ -414,6 +414,50 @@ contains
             end if
         endif
     end subroutine generate_script_2
+
+    subroutine generate_script_3( self, cline, q_descr, script_name, prgoutput )
+        class(qsys_ctrl), intent(inout) :: self
+        class(cmdline),   intent(in)    :: cline
+        class(chash),     intent(in)    :: q_descr
+        character(len=*), intent(in)    :: script_name, prgoutput
+        type(chash)        :: job_descr
+        character(len=512) :: io_msg
+        integer            :: ios, funit
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! open for write
+        call fopen(funit, file=trim(script_name), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
+        call fileiochk('simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing: '&
+        &//trim(script_name)//' ; '//trim(io_msg),ios )
+        ! need to specify shell
+        write(funit,'(a)') '#!/bin/bash'
+        ! write (run-time polymorphic) instructions to the qsys
+        if( q_descr%get('qsys_name').ne.'local' )then
+            call self%myqsys%write_instr(q_descr, fhandle=funit)
+        else
+            call self%myqsys%write_instr(job_descr, fhandle=funit)
+        endif
+        write(funit,'(a)') 'cd '//trim(cwd_glob)
+        write(funit,'(a)') ''
+        ! compose the command line
+        write(funit,'(a)', advance='no') trim(self%exec_binary)//' '//trim(job_descr%chash2str())
+        ! direct output
+        write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//trim(prgoutput)
+        ! exit shell when done
+        write(funit,'(a)') ''
+        write(funit,'(a)') 'exit'
+        call fclose(funit)
+        if( q_descr%get('qsys_name').eq.'local' )then
+            ios = simple_chmod(trim(script_name),'+x')
+            if( ios .ne. 0 )then
+                write(logfhandle,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'
+                write(logfhandle,'(a)') 'chmoding submit script'//trim(script_name)
+                stop
+            endif
+        endif
+        call wait_for_closure(trim(script_name))
+        call job_descr%kill
+    end subroutine generate_script_3
 
     ! SUBMISSION TO QSYS
 

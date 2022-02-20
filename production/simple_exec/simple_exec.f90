@@ -3,6 +3,8 @@ program simple_exec
 include 'simple_lib.f08'
 use simple_user_interface, only: make_user_interface,list_simple_prgs_in_ui
 use simple_cmdline,        only: cmdline, cmdline_err
+use simple_qsys_env,       only: qsys_env
+use simple_parameters,     only: parameters
 use simple_spproj_hlev
 use simple_commander_project
 use simple_commander_starproject
@@ -61,7 +63,7 @@ type(cluster2D_commander_stream)            :: xcluster2D_stream
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
-type(initial_3Dmodel_commander)        :: xinitial_3Dmodel
+type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
 
 ! REFINE3D WORKFLOWS
 type(calc_pspec_commander_distr)            :: xcalc_pspec_distr
@@ -130,9 +132,11 @@ type(mkdir_commander)                       :: xmkdir
 type(split_commander)                       :: xsplit
 
 ! OTHER DECLARATIONS
-character(len=STDLEN) :: xarg, prg, entire_line
-type(cmdline)         :: cline
-integer               :: cmdstat, cmdlen, pos
+type(qsys_env)                              :: qenv
+type(parameters)                            :: params
+character(len=STDLEN)                       :: xarg, prg, entire_line
+type(cmdline)                               :: cline
+integer                                     :: cmdstat, cmdlen, pos
 
 ! parse command-line
 call get_command_argument(1, xarg, cmdlen, cmdstat)
@@ -148,8 +152,22 @@ if( str_has_substr(entire_line, 'prg=list') )then
 endif
 ! parse command line into cline object
 call cline%parse
+! generate script for queue submission?
+if( cline%defined('script') )then
+    if( cline%get_carg('script').eq.'yes' )then
+        call cline%delete('script')
+        call cline%set('prg', trim(prg))
+        call cline%set('mkdir', 'no')
+        call params%new(cline)
+        call cline%delete('mkdir')
+        call cline%delete('projfile')
+        call qenv%new(1, exec_bin='simple_exec')
+        call qenv%gen_script(cline, trim(prg)//'_script', uppercase(trim(prg))//'_OUTPUT')
+        call exit
+    endif
+endif
 
-select case(prg)
+select case(trim(prg))
 
     ! PROJECT MANAGEMENT PROGRAMS
     case( 'new_project' )
