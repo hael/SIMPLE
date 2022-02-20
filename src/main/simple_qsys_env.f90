@@ -28,6 +28,7 @@ type :: qsys_env
   contains
     procedure :: new
     procedure :: exists
+    procedure :: gen_script
     procedure :: gen_scripts_and_schedule_jobs
     procedure :: exec_simple_prg_in_queue
     procedure :: exec_simple_prg_in_queue_async
@@ -126,6 +127,14 @@ contains
         logical         :: is
         is = self%existence
     end function exists
+
+    subroutine gen_script( self, cline, script_name, prg_output )
+        use simple_cmdline, only: cmdline
+        class(qsys_env)              :: self
+        class(cmdline)               :: cline
+        character(len=*), intent(in) :: script_name, prg_output
+        call self%qscripts%generate_script(cline, self%qdescr, script_name, prg_output)
+    end subroutine gen_script
 
     subroutine gen_scripts_and_schedule_jobs( self,  job_descr, part_params, algnfbody, array )
         class(qsys_env)            :: self
