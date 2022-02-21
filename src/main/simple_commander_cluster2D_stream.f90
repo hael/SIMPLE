@@ -533,6 +533,7 @@ contains
         call cline_cluster2D_chunk%set('startit',  1.)
         call cline_cluster2D_chunk%set('ncls',     real(params%ncls_start))
         call cline_cluster2D_chunk%set('nparts',   real(params%nparts_chunk))
+        call cline_cluster2D_chunk%set('wiener','partial')
         ! pool classification: optional stochastic optimisation, optional match filter
         ! automated incremental learning, objective function is standard cross-correlation (cc)
         call cline_cluster2D%set('prg',       'cluster2D_distr')
@@ -552,23 +553,7 @@ contains
         else
             call cline_cluster2D%set('lpstart', lpstart_stoch)
         endif
-        ! wiener flag fork
-        select case(trim(params%wiener))
-        case('full')
-            call cline_cluster2D%set(      'wiener','full')
-            call cline_cluster2D_chunk%set('wiener','full')
-        case('partial')
-            call cline_cluster2D%set(      'wiener','partial')
-            call cline_cluster2D_chunk%set('wiener','partial')
-        case('partialchunk')
-            call cline_cluster2D%set(      'wiener','full')
-            call cline_cluster2D_chunk%set('wiener','partial')
-        case('partialpool')
-            call cline_cluster2D%set(      'wiener','partial')
-            call cline_cluster2D_chunk%set('wiener','full')
-        case DEFAULT
-            THROW_HARD('Unsupported WIENER option')
-        end select
+        call cline_cluster2D%set('stream', 'yes') ! controls dual ctf treatment
         ! transfer project info
         call orig_proj%read(params%projfile)
         pool_proj%projinfo = orig_proj%projinfo
@@ -1043,7 +1028,7 @@ contains
                             call frcs_glob%read(FRCS_FILE)
                             do icls=1,ncls_glob
                                 if( cls_pop(icls)>0 ) cycle          ! class already filled
-                                if( all(cls_chunk_pop == 0 ) ) exit ! no more chunk class available
+                                if( all(cls_chunk_pop == 0 ) ) exit  ! no more chunk class available
                                 ind = irnd_uni(params%ncls_start)    ! selects chunk class stochastically
                                 do while( cls_chunk_pop(ind) == 0 )
                                     ind = irnd_uni(params%ncls_start)
@@ -1277,11 +1262,9 @@ contains
                 transfer_spproj%os_cls2D = pool_proj%os_cls2D
                 ! execution
                 if( sum(prev_eo_pops) == 0 )then
-                    call cline_cluster2D%set('stream','no')
                     call cline_cluster2D%delete('update_frac')
                 else
                     frac_update = real(nptcls_old-sum(prev_eo_pops)) / real(nptcls_old)
-                    call cline_cluster2D%set('stream',      'yes')
                     call cline_cluster2D%set('update_frac', frac_update)
                     call cline_cluster2D%set('center',      'no')
                     do icls = 1,ncls_glob
@@ -1404,6 +1387,8 @@ contains
                 call img%new([box,box,1],smpd)
                 call img%read( refs_in, indin)
                 call img%write(refs_out,indout)
+                stkout = add2fbody(refs_out,params%ext,'_wfilt')
+                call img%write(stkout,indout)
                 stkin  = add2fbody(refs_in, params%ext,'_even')
                 stkout = add2fbody(refs_out,params%ext,'_even')
                 call img%read( stkin, indin)
@@ -1420,19 +1405,25 @@ contains
                         stkin = 'cavgs_even_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
                         call img%read(stkin, indin)
                         call img%write(stkin,indout)
-                    enddo
-                    do iipart = 1,params%nparts
                         stkin = 'cavgs_odd_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
                         call img%read(stkin, indin)
                         call img%write(stkin,indout)
-                    enddo
-                    do iipart = 1,params%nparts
                         stkin = 'ctfsqsums_even_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
                         call img%read(stkin, indin)
                         call img%write(stkin,indout)
-                    enddo
-                    do iipart = 1,params%nparts
                         stkin = 'ctfsqsums_odd_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                        call img%read(stkin, indin)
+                        call img%write(stkin,indout)
+                        stkin = 'cavgs_even_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                        call img%read(stkin, indin)
+                        call img%write(stkin,indout)
+                        stkin = 'cavgs_odd_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                        call img%read(stkin, indin)
+                        call img%write(stkin,indout)
+                        stkin = 'ctfsqsums_even_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                        call img%read(stkin, indin)
+                        call img%write(stkin,indout)
+                        stkin = 'ctfsqsums_odd_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
                         call img%read(stkin, indin)
                         call img%write(stkin,indout)
                     enddo
@@ -1442,11 +1433,15 @@ contains
                     do iipart = 1,params%nparts
                         stkout = 'cavgs_even_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
                         call img%write(stkout,indout)
+                        stkout = 'cavgs_even_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                        call img%write(stkout,indout)
                     enddo
                     stkin  = trim(dir)//'/cavgs_odd_part'//trim(params%ext)
                     call img%read(stkin, indin)
                     do iipart = 1,params%nparts
                         stkout = 'cavgs_odd_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                        call img%write(stkout,indout)
+                        stkout = 'cavgs_odd_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
                         call img%write(stkout,indout)
                     enddo
                     stkin  = trim(dir)//'/ctfsqsums_even_part'//trim(params%ext)
@@ -1454,11 +1449,15 @@ contains
                     do iipart = 1,params%nparts
                         stkout = 'ctfsqsums_even_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
                         call img%write(stkout,indout)
+                        stkout = 'ctfsqsums_even_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                        call img%write(stkout,indout)
                     enddo
                     stkin  = trim(dir)//'/ctfsqsums_odd_part'//trim(params%ext)
                     call img%read(stkin, indin)
                     do iipart = 1,params%nparts
                         stkout = 'ctfsqsums_odd_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                        call img%write(stkout,indout)
+                        stkout = 'ctfsqsums_odd_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
                         call img%write(stkout,indout)
                     enddo
                 endif
@@ -1514,6 +1513,9 @@ contains
                     call rescale_cavgs(src, dest)
                     src  = add2fbody(refs_glob, params%ext,'_odd')
                     dest = add2fbody(cavgsfname,params%ext,'_odd')
+                    call rescale_cavgs(src, dest)
+                    src  = add2fbody(refs_glob, params%ext,'_wfilt')
+                    dest = add2fbody(cavgsfname,params%ext,'_wfilt')
                     call rescale_cavgs(src, dest)
                     call pool_proj%os_out%kill
                     call pool_proj%add_cavgs2os_out(cavgsfname, orig_smpd, 'cavg')
