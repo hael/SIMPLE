@@ -32,8 +32,6 @@ contains
     procedure          :: close
 end type stack_io
 
-integer, parameter :: BUFSZ_DEFAULT = 1024
-
 contains
 
     subroutine open( self, stkname, smpd, rwaction, is_ft, box, bufsz )
@@ -55,7 +53,7 @@ contains
         self%ft     = .false.
         select case(trim(rwaction))
             case('READ','read')
-                if( .not. file_exists(self%stkname) ) THROW_HARD('input stack file does not exists')
+                if( .not. file_exists(self%stkname) ) THROW_HARD('input stack file does not exists: '//trim(self%stkname))
                 call find_ldim_nptcls(self%stkname, self%ldim, self%nptcls)
                 self%ldim(3) = 1
                 call self%ioimg%open(self%stkname, self%ldim, self%smpd, formatchar=form, readhead=.true., rwaction='READ')
@@ -124,7 +122,7 @@ contains
         integer :: ind_in_buf, bufsz
         if( .not. self%l_open ) THROW_HARD('stack not open')
         if( .not. self%l_read ) THROW_HARD('stack not open for read')
-        if( i < 1 .or. i > self%nptcls ) THROW_HARD('index i out of range')
+        if( i < 1 .or. i > self%nptcls ) THROW_HARD('index i out of range: '//int2str(i)//' / '//int2str(self%nptcls))
         if( i >= self%fromp .and. i <= self%top )then
             ! the image is in buffer
         else

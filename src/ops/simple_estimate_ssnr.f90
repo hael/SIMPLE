@@ -36,7 +36,7 @@ contains
         allocate( filt(nyq) )
         filt = 0.
         where( corrs > 0. )     filt = 2. * corrs / (corrs + 1.)
-        where( filt  > 0.9999 ) filt = 0.99999
+        where( filt  > 0.99999 ) filt = 0.99999
     end function fsc2optlp
 
     !> \brief  converts the FSC to the optimal low-pass filter
@@ -46,7 +46,7 @@ contains
         real,    intent(out) :: filt(filtsz)  !< output filter coefficients
         filt = 0.
         where( corrs > 0. )     filt = 2. * corrs / (corrs + 1.)
-        where( filt  > 0.9999 ) filt = 0.99999
+        where( filt  > 0.99999 ) filt = 0.99999
     end subroutine fsc2optlp_sub
 
     subroutine subsample_optlp( filtsz, subfiltsz, filt, subfilt )

@@ -1317,7 +1317,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 2, 0, 7, 5, 1, 4, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 2, 0, 7, 4, 1, 4, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1354,9 +1354,6 @@ contains
         call cluster2D_stream%set_input('filt_ctrls', 4, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){no}',&
         '(yes|no){no}', .false., 'no')
-        call cluster2D_stream%set_input('filt_ctrls', 5, 'wiener', 'multi', 'Wiener restoration',&
-            &'Wiener restoration: full, partial (only after 1st CTF=0)(full|partial), partial for chunks only, partial for pool only(full|partial|partialchunk|partialpool){full}',&
-            &'(full|partial|partialchunk|partialpool){full}', .false., 'full')
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
