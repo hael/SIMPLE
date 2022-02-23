@@ -215,6 +215,7 @@ type :: parameters
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stats='no'           !< provide statistics(yes|no|print){no}
     character(len=STDLEN) :: stk_part=''
+    character(len=STDLEN) :: tag=''               !< just a tag
     character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
     character(len=STDLEN) :: wfun='kb'
     character(len=STDLEN) :: wiener='full'        !< Wiener restoration (full|partial){full}
@@ -604,6 +605,7 @@ contains
         call check_carg('subtr_backgr',   self%subtr_backgr)
         call check_carg('symrnd',         self%symrnd)
         call check_carg('swap',           self%swap)
+        call check_carg('tag',            self%tag)
         call check_carg('taper_edges',    self%taper_edges)
         call check_carg('test',           self%test)
         call check_carg('time',           self%time)

@@ -135,8 +135,10 @@ type(split_commander)                       :: xsplit
 type(qsys_env)                              :: qenv
 type(parameters)                            :: params
 character(len=STDLEN)                       :: xarg, prg, entire_line
+character(len=:), allocatable               :: projfile
 type(cmdline)                               :: cline
 integer                                     :: cmdstat, cmdlen, pos
+logical                                     :: has_projfile
 
 ! parse command-line
 call get_command_argument(1, xarg, cmdlen, cmdstat)
@@ -155,14 +157,21 @@ call cline%parse
 ! generate script for queue submission?
 if( cline%defined('script') )then
     if( cline%get_carg('script').eq.'yes' )then
+        has_projfile = cline%defined('projfile')
+        if( has_projfile ) projfile = cline%get_carg('projfile')
         call cline%delete('script')
         call cline%set('prg', trim(prg))
         call cline%set('mkdir', 'no')
         call params%new(cline)
         call cline%delete('mkdir')
         call cline%delete('projfile')
+        if( has_projfile ) call cline%set('projfile', projfile)
         call qenv%new(1, exec_bin='simple_exec')
-        call qenv%gen_script(cline, trim(prg)//'_script', uppercase(trim(prg))//'_OUTPUT')
+        if( cline%defined('tag') )then
+            call qenv%gen_script(cline, trim(prg)//'_script', uppercase(trim(prg))//'_OUTPUT'//trim(params%tag))
+        else
+            call qenv%gen_script(cline, trim(prg)//'_script', uppercase(trim(prg))//'_OUTPUT')
+        endif
         call exit
     endif
 endif
