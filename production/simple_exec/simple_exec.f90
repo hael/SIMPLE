@@ -168,7 +168,7 @@ if( cline%defined('script') )then
         if( has_projfile ) call cline%set('projfile', projfile)
         call qenv%new(1, exec_bin='simple_exec')
         if( cline%defined('tag') )then
-            call qenv%gen_script(cline, trim(prg)//'_script', uppercase(trim(prg))//'_OUTPUT'//'_'//trim(params%tag))
+            call qenv%gen_script(cline, trim(prg)//'_script'//'_'//trim(params%tag), uppercase(trim(prg))//'_OUTPUT'//'_'//trim(params%tag))
         else
             call qenv%gen_script(cline, trim(prg)//'_script', uppercase(trim(prg))//'_OUTPUT')
         endif
