@@ -1466,8 +1466,8 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call cluster_cavgs%set_input('parm_ios', 1, 'bin_cls', 'num', 'Perform good/bad classification',&
-        &'Classes with lower resolution are rejected by Otsu(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call cluster_cavgs%set_input('parm_ios', 1, 'bin_cls', 'multi', 'Perform good/bad classification based on common lines',&
+        &'Classes with lower common line correlation to the rest are rejected by Otsu(yes|no|only){yes}', '(yes|no|only){yes}', .false., 'yes')
         call cluster_cavgs%set_input('parm_ios', 2,  'ncls', 'num', 'Number of highest populated AP clusters', 'Number of highest populated AP clusters to map the AP solution onto', '# classes', .false., 0.)
         ! alternative inputs
         ! <empty>

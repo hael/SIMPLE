@@ -23,7 +23,6 @@ type :: parameters
     character(len=3)      :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
     character(len=3)      :: avg='no'             !< calculate average (yes|no){no}
     character(len=3)      :: bin='no'             !< binarize image(yes|no){no}
-    character(len=3)      :: bin_cls='yes'        !< binary clustering applied(yes|no){yes}
     character(len=3)      :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)      :: classtats='no'       !< calculate class population statistics(yes|no){no}
     character(len=3)      :: clustvalid='no'      !< validate clustering(yes|homo|no){no}
@@ -169,6 +168,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: xmlloc=''
     ! other character variables in ascending alphabetical order
     character(len=STDLEN) :: algorithm=''         !< algorithm to be used
+    character(len=STDLEN) :: bin_cls='yes'        !< binary clustering applied(yes|no|only){yes}
     character(len=STDLEN) :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
     character(len=4)      :: automatic='no'       !< automatic thres for edge detect (yes|no) {no}
