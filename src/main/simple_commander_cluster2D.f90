@@ -1279,7 +1279,8 @@ contains
         params%kfromto(1) = max(2, calc_fourier_index(params%hp, params%box, params%smpd))
         params%kfromto(2) =        calc_fourier_index(params%lp, params%box, params%smpd)
         params%kstop      = params%kfromto(2)
-        if( trim(params%bin_cls).eq.'yes' .and. .not. DEBUG )then
+        call pftcc%new(ncls_sel, [1,1])
+        if( trim(params%bin_cls).ne.'no' .and. .not. DEBUG )then
             ! initialize polarizer for the first image, then copy it to the rest
             call cavg_imgs(1)%init_polarizer(pftcc, params%alpha)
             !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
@@ -1372,50 +1373,123 @@ contains
                 if( DEBUG ) call cavg_imgs_good(i)%write('5_good_cavgs.mrc', i)
             end do
         endif
-        ! re-calculate the similarity matrix
-        write(logfhandle,'(A)') '>>> CALCULATING COMMON-LINE CORRELATION MATRIX'
-        ! re-create the polarft_corrcalc object
-        call pftcc%kill
-        call pftcc%new(ncls_sel, [1,1])
-        ! initialize polarizer for the first image, then copy it to the rest
-        call cavg_imgs_good(1)%init_polarizer(pftcc, params%alpha)
-        !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
-        do icls = 1, ncls_sel
-            if( icls /= 1 ) call cavg_imgs_good(icls)%copy_polarizer(cavg_imgs_good(1))
-            call cavg_imgs_good(icls)%fft()
-            call cavg_imgs_good(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true.) ! 2 polar coords
-            call cavg_imgs_good(icls)%ifft()
-        end do
-        !$omp end parallel do
-        if( allocated(corrmat_comlin) ) deallocate(corrmat_comlin)
-        allocate(corrmat_comlin(ncls_sel,ncls_sel), source=-1.)
-        !$omp parallel do default(shared) private(i,j) schedule(dynamic) proc_bind(close)
-        do i = 1, ncls_sel - 1
-            do j = i + 1, ncls_sel
-                ! Common line orrelations
-                ! corrmat_comlin(i,j) = pftcc%genmaxcorr_comlin(i,j) ! gives worse result
-                corrmat_comlin(i,j) = pftcc%genmaxspecscore_comlin(i,j)
-                corrmat_comlin(j,i) = corrmat_comlin(i,j)
+        if( trim(params%bin_cls).ne.'only' )then
+            ! re-calculate the similarity matrix
+            write(logfhandle,'(A)') '>>> CALCULATING COMMON-LINE CORRELATION MATRIX'
+            ! re-create the polarft_corrcalc object
+            call pftcc%kill
+            call pftcc%new(ncls_sel, [1,1])
+            ! initialize polarizer for the first image, then copy it to the rest
+            call cavg_imgs_good(1)%init_polarizer(pftcc, params%alpha)
+            !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
+            do icls = 1, ncls_sel
+                if( icls /= 1 ) call cavg_imgs_good(icls)%copy_polarizer(cavg_imgs_good(1))
+                call cavg_imgs_good(icls)%fft()
+                call cavg_imgs_good(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true.) ! 2 polar coords
+                call cavg_imgs_good(icls)%ifft()
+            end do
+            !$omp end parallel do
+            if( allocated(corrmat_comlin) ) deallocate(corrmat_comlin)
+            allocate(corrmat_comlin(ncls_sel,ncls_sel), source=-1.)
+            !$omp parallel do default(shared) private(i,j) schedule(dynamic) proc_bind(close)
+            do i = 1, ncls_sel - 1
+                do j = i + 1, ncls_sel
+                    ! Common line orrelations
+                    ! corrmat_comlin(i,j) = pftcc%genmaxcorr_comlin(i,j) ! gives worse result
+                    corrmat_comlin(i,j) = pftcc%genmaxspecscore_comlin(i,j)
+                    corrmat_comlin(j,i) = corrmat_comlin(i,j)
+                enddo
+                corrmat_comlin(i,i) = 1.
             enddo
-            corrmat_comlin(i,i) = 1.
-        enddo
-        !$omp end parallel do
-        ! take care of the last diagonal element
-        corrmat_comlin(ncls_sel,ncls_sel) = 1.
-        ! calculate a preference that generates a small number of clusters
-        call analyze_smat(corrmat_comlin, .false., cmin, cmax)
-        pref = cmin - (cmax - cmin)
-        write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
-        call aprop%new(ncls_sel, corrmat_comlin, pref=pref)
-        call aprop%propagate(centers, labels, simsum)
-        ncls_aff_prop = size(centers)
-        write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', ncls_aff_prop
-        allocate(cntarr(ncls_aff_prop), source=0)
-        if( cline%defined('ncls') )then
-            write(logfhandle,'(A,I3)') '>>> RE-MAPPING THE HIGHEST POPULATED AP CLUSTERS TO INPUT NCLS: ', params%ncls
-            ! identify params%ncls highest populated clusters
+            !$omp end parallel do
+            ! take care of the last diagonal element
+            corrmat_comlin(ncls_sel,ncls_sel) = 1.
+            ! calculate a preference that generates a small number of clusters
+            call analyze_smat(corrmat_comlin, .false., cmin, cmax)
+            pref = cmin - (cmax - cmin)
+            write(logfhandle,'(A)') '>>> CLUSTERING CLASS AVERAGES WITH AFFINITY PROPAGATION'
+            call aprop%new(ncls_sel, corrmat_comlin, pref=pref)
+            call aprop%propagate(centers, labels, simsum)
+            ncls_aff_prop = size(centers)
+            write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION (AP): ', ncls_aff_prop
+            allocate(cntarr(ncls_aff_prop), source=0)
+            if( cline%defined('ncls') )then
+                write(logfhandle,'(A,I3)') '>>> RE-MAPPING THE HIGHEST POPULATED AP CLUSTERS TO INPUT NCLS: ', params%ncls
+                ! identify params%ncls highest populated clusters
+                if( allocated(mask_icls) ) deallocate(mask_icls)
+                allocate( mask_icls(ncls_sel), pops(ncls_aff_prop) )
+                do icls = 1, ncls_aff_prop
+                    ! mask out the cluster
+                    where( labels == icls )
+                        mask_icls = .true.
+                    elsewhere
+                        mask_icls = .false.
+                    end where
+                    pops(icls) = count(mask_icls)
+                end do
+                if( allocated(nloc) ) deallocate(nloc)
+                allocate(nloc(params%ncls), source=0)
+                nloc = maxnloc(real(pops), params%ncls)
+                ! remap the AP clusters
+                if( allocated(corrs) ) deallocate(corrs)
+                allocate(corrs(params%ncls), classmapping(ncls_aff_prop))
+                ! put back the diagonal elements of the corrmat
+                do i = 1, ncls_sel
+                    corrmat_comlin(i,i) = 1.
+                end do
+                ! make a per cluster mapping
+                do icls = 1, ncls_aff_prop
+                    do i = 1,params%ncls
+                        corrs(i) = corrmat_comlin(nloc(i),icls)
+                    end do
+                    loc = maxloc(corrs)
+                    classmapping(icls) = nloc(loc(1))
+                    write(logfhandle,*) 'mapped cluster ', icls, ' to ', classmapping(icls)
+                end do
+                ! do the mapping
+                allocate(labels_mapped(ncls_sel), source = 0)
+                do i = 1, ncls_sel
+                    do icls = 1, ncls_aff_prop
+                        if( labels(i) == icls ) labels_mapped(i) = classmapping(icls)
+                    end do
+                end do
+                if( any(labels_mapped == 0) ) THROW_HARD('class mapping did not work, class=0 not allowed')
+                ! re-map agaian
+                cnt = 0
+                do i = 1, ncls_aff_prop
+                    if( any(labels_mapped == i) )then
+                        cnt = cnt + 1
+                        where( labels_mapped == classmapping(i) ) labels = cnt
+                    endif
+                end do
+                deallocate(labels_mapped)
+                ! update # AP clusters
+                ncls_aff_prop = params%ncls
+            endif
+            ! put back the original (unprocessed) images
+            cnt = 0
+            do i = 1 , ncls
+                if( states(i) > 0.5 )then
+                    cnt = cnt + 1
+                else
+                    cycle
+                endif
+                call cavg_imgs(cnt)%read(cavgsstk, i)
+            end do
+            ! write the classes
+            do icls = 1, ncls_aff_prop
+                ! make a filename for the class
+                do i=1,ncls_sel
+                    if( labels(i) == icls )then
+                        classname = 'class'//int2str_pad(icls,3)//'.mrcs'
+                        cntarr(labels(i)) = cntarr(labels(i)) + 1
+                        call cavg_imgs(i)%write(classname, cntarr(labels(i)))
+                    endif
+                end do
+            end do
+            ! calculate average common line correlation of the AP clusters
             if( allocated(mask_icls) ) deallocate(mask_icls)
-            allocate( mask_icls(ncls_sel), pops(ncls_aff_prop) )
+            allocate( mask_icls(ncls_sel) )
             do icls = 1, ncls_aff_prop
                 ! mask out the cluster
                 where( labels == icls )
@@ -1423,101 +1497,30 @@ contains
                 elsewhere
                     mask_icls = .false.
                 end where
-                pops(icls) = count(mask_icls)
-            end do
-            if( allocated(nloc) ) deallocate(nloc)
-            allocate(nloc(params%ncls), source=0)
-            nloc = maxnloc(real(pops), params%ncls)
-            ! remap the AP clusters
-            if( allocated(corrs) ) deallocate(corrs)
-            allocate(corrs(params%ncls), classmapping(ncls_aff_prop))
-            ! put back the diagonal elements of the corrmat
-            do i = 1, ncls_sel
-                corrmat_comlin(i,i) = 1.
-            end do
-            ! make a per cluster mapping
-            do icls = 1, ncls_aff_prop
-                do i = 1,params%ncls
-                    corrs(i) = corrmat_comlin(nloc(i),icls)
+                ! calculate the average common line correlation of the cluster
+                corr_icls = 0.
+                cnt       = 0
+                do i = 1, ncls_sel - 1
+                    do j = i + 1, ncls_sel
+                        if( mask_icls(i) .and. mask_icls(j) )then
+                            corr_icls = corr_icls + corrmat_comlin(i,j)
+                            cnt       = cnt + 1
+                        endif
+                    end do
                 end do
-                loc = maxloc(corrs)
-                classmapping(icls) = nloc(loc(1))
-                write(logfhandle,*) 'mapped cluster ', icls, ' to ', classmapping(icls)
+                corr_icls = corr_icls / real(cnt)
+                write(logfhandle,*) 'average corr AP cluster '//int2str_pad(icls,3)//': ', corr_icls, ' pop ', count(mask_icls)
             end do
-            ! do the mapping
-            allocate(labels_mapped(ncls_sel), source = 0)
-            do i = 1, ncls_sel
-                do icls = 1, ncls_aff_prop
-                    if( labels(i) == icls ) labels_mapped(i) = classmapping(icls)
+            ! print the correlations between the cluster centers
+            write(logfhandle,'(A)') '>>> COMMON LINE CORRELATIONS BETEEN CLUSTER CENTERS'
+            do i = 1,ncls_aff_prop - 1
+                icen = centers(i)
+                do j = i + 1,ncls_aff_prop
+                    jcen = centers(j)
+                    write(logfhandle,*) 'corr btw cluster  '//int2str_pad(i,3)//' & '//int2str_pad(j,3)//': ', corrmat_comlin(icen,jcen)
                 end do
             end do
-            if( any(labels_mapped == 0) ) THROW_HARD('class mapping did not work, class=0 not allowed')
-            ! re-map agaian
-            cnt = 0
-            do i = 1, ncls_aff_prop
-                if( any(labels_mapped == i) )then
-                    cnt = cnt + 1
-                    where( labels_mapped == classmapping(i) ) labels = cnt
-                endif
-            end do
-            deallocate(labels_mapped)
-            ! update # AP clusters
-            ncls_aff_prop = params%ncls
         endif
-        ! put back the original (unprocessed) images
-        cnt = 0
-        do i = 1 , ncls
-            if( states(i) > 0.5 )then
-                cnt = cnt + 1
-            else
-                cycle
-            endif
-            call cavg_imgs(cnt)%read(cavgsstk, i)
-        end do
-        ! write the classes
-        do icls = 1, ncls_aff_prop
-            ! make a filename for the class
-            do i=1,ncls_sel
-                if( labels(i) == icls )then
-                    classname = 'class'//int2str_pad(icls,3)//'.mrcs'
-                    cntarr(labels(i)) = cntarr(labels(i)) + 1
-                    call cavg_imgs(i)%write(classname, cntarr(labels(i)))
-                endif
-            end do
-        end do
-        ! calculate average common line correlation of the AP clusters
-        if( allocated(mask_icls) ) deallocate(mask_icls)
-        allocate( mask_icls(ncls_sel) )
-        do icls = 1, ncls_aff_prop
-            ! mask out the cluster
-            where( labels == icls )
-                mask_icls = .true.
-            elsewhere
-                mask_icls = .false.
-            end where
-            ! calculate the average common line correlation of the cluster
-            corr_icls = 0.
-            cnt       = 0
-            do i = 1, ncls_sel - 1
-                do j = i + 1, ncls_sel
-                    if( mask_icls(i) .and. mask_icls(j) )then
-                        corr_icls = corr_icls + corrmat_comlin(i,j)
-                        cnt       = cnt + 1
-                    endif
-                end do
-            end do
-            corr_icls = corr_icls / real(cnt)
-            write(logfhandle,*) 'average corr AP cluster '//int2str_pad(icls,3)//': ', corr_icls, ' pop ', count(mask_icls)
-        end do
-        ! print the correlations between the cluster centers
-        write(logfhandle,'(A)') '>>> COMMON LINE CORRELATIONS BETEEN CLUSTER CENTERS'
-        do i = 1,ncls_aff_prop - 1
-            icen = centers(i)
-            do j = i + 1,ncls_aff_prop
-                jcen = centers(j)
-                write(logfhandle,*) 'corr btw cluster  '//int2str_pad(i,3)//' & '//int2str_pad(j,3)//': ', corrmat_comlin(icen,jcen)
-            end do
-        end do
         ! destruct
         call spproj%kill
         call clsfrcs%kill
