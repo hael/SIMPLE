@@ -3003,12 +3003,12 @@ contains
         &'discards deselected data from a project',&  ! descr_short
         &'is a program for discarding deselected data (particles,stacks) from a project',& ! descr_long
         &'all',&                                      ! executable
-        &0, 0, 0, 0, 0, 0, 1, .true.)                 ! # entries in each group, requires sp_project
+        &0, 1, 0, 0, 0, 0, 1, .true.)                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        ! <empty>
+        call prune_project%set_input('parm_ios', 1, 'state', 'num', 'State index', 'Index of state to extract', 'give state index', .false., 1.)
         ! alternative inputs
         ! <empty>
         ! search controls
