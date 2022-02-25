@@ -945,10 +945,14 @@ contains
         if( nstks == 0 ) THROW_HARD('No stack to process!')
         nptcls = spproj%get_n_insegment('ptcl2D')
         if( nstks == 0 ) THROW_HARD('No particles to process!')
-        ! identify the particle indices with state .ne. 0
+        ! identify the particle indices with state .ne. 0 unless state is given on command line
         states = spproj%os_ptcl2D%get_all('state')
         allocate(pinds(nptcls), source=(/(i,i=1,nptcls)/))
-        pinds = pack(pinds, mask=states > 0.5)
+        if( cline%defined('state') )then
+            pinds = pack(pinds, mask=(states - real(params%state)) < 0.1)
+        else
+            pinds = pack(pinds, mask=states > 0.5)
+        endif
         call arr2txtfile(pinds, 'selected_indices.txt')
         deallocate(states, pinds)
         nmics       = spproj%get_nintgs()
