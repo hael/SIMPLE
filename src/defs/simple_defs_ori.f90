@@ -34,9 +34,10 @@ enum, bind(c)
     enumerator :: I_Y         = 30
     enumerator :: I_YINCR     = 31
     enumerator :: I_YPOS      = 32
+    enumerator :: I_GID       = 33
 end enum
 
-integer, parameter :: N_PTCL_ORIPARAMS = 32
+integer, parameter :: N_PTCL_ORIPARAMS = 33
 
 contains
 
@@ -108,6 +109,8 @@ contains
                 get_oriparam_ind = I_YINCR
             case('ypos')
                 get_oriparam_ind = I_YPOS
+            case('gid')
+                get_oriparam_ind = I_GID   
         end select
     end function get_oriparam_ind
 
@@ -179,6 +182,8 @@ contains
                 flag ='yincr'
             case(I_YPOS)
                 flag ='ypos'
+            case(I_GID)
+                flag ='gid'
         end select
     end function get_oriparam_flag
 
@@ -232,6 +237,8 @@ contains
             case(I_YINCR)
                 is_zero = abs(val) < TINY
             case(I_YPOS)
+                is_zero = abs(val) < TINY
+            case(I_GID)
                 is_zero = abs(val) < TINY
         end select
         oriparam_isthere = .not. is_zero
