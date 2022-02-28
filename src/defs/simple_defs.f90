@@ -46,6 +46,7 @@ character(len=:), allocatable :: cmdline_glob                 !< global command 
 logical,          parameter   :: L_BENCH_GLOB       = .false. !< global benchmarking flag
 logical,          parameter   :: L_DO_GRIDCORR_GLOB = .false. !< global gridding correction flag
 logical,          parameter   :: L_USE_SLURM_ARR    = .false. !< use SLURM arrays for jobs where we know nparts
+logical,          parameter   :: L_FSCFILT          = .true.  !< apply FSC/FRC-based low-pass filter to references
 real,             parameter   :: HPLIM_GUINIER      = 20.     !< high-pass limit for Guinier plot
 integer,          parameter   :: AUTOMSK_FREQ       = 5       !< frequency of automasking
 

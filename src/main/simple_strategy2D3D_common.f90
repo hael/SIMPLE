@@ -323,7 +323,6 @@ contains
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_estimate_ssnr,    only: fsc2optlp_sub
         use simple_polarizer,        only: polarizer
-        use simple_tvfilter,         only: tvfilter
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(image),            intent(inout) :: img_in
         class(polarizer),        intent(inout) :: img_out
@@ -331,7 +330,6 @@ contains
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
-        type(tvfilter) :: tvfilt
         real           :: frc(build_glob%img%get_filtsz()), filter(build_glob%img%get_filtsz())
         real           :: xyz(3), sharg
         logical        :: do_center
@@ -359,22 +357,20 @@ contains
             endif
         endif
         ! filter
-        call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-        if( any(frc > 0.143) )then
-            call fsc2optlp_sub(build_glob%clsfrcs%get_filtsz(), frc, filter)
-            if( params_glob%l_match_filt )then
-                call pftcc%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kstop))
-            else
-                call img_in%fft() ! needs to be here in case the shift was never applied (above)
-                call img_in%apply_filter_serial(filter)
+        if( L_FSCFILT )then
+            call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+            if( any(frc > 0.143) )then
+                call fsc2optlp_sub(build_glob%clsfrcs%get_filtsz(), frc, filter)
+                if( params_glob%l_match_filt )then
+                    call pftcc%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kstop))
+                else
+                    call img_in%fft() ! needs to be here in case the shift was never applied (above)
+                    call img_in%apply_filter_serial(filter)
+                endif
             endif
         endif
         ! ensure we are in real-space
         call img_in%ifft()
-        ! TV regularization
-        call tvfilt%new
-        call tvfilt%apply_filter(img_in, params_glob%lambda)
-        call tvfilt%kill
         ! clip image if needed
         call img_in%clip(img_out)
         ! apply mask
@@ -541,7 +537,6 @@ contains
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_estimate_ssnr,    only: fsc2optlp_sub
         use simple_projector,        only: projector
-        use simple_tvfilter,         only: tvfilter
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: s
@@ -549,7 +544,6 @@ contains
         real,                    intent(in)    :: xyz(3)
         logical,                 intent(in)    :: iseven
         type(projector),  pointer     :: vol_ptr => null()
-        type(tvfilter) :: tvfilt
         real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
         integer :: iref, iproj, filtsz
         if( iseven )then
@@ -587,7 +581,7 @@ contains
                 enddo
             endif
         else
-            if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+            if( params_glob%cc_objfun == OBJFUN_EUCLID .or. .not. L_FSCFILT )then
                 ! no filtering
             else
                 call vol_ptr%fft()
@@ -595,10 +589,6 @@ contains
                     call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
                     call vol_ptr%apply_filter(filter)
                 endif
-                ! total variation regularization
-                call tvfilt%new
-                call tvfilt%apply_filter_3d(vol_ptr, params_glob%lambda)
-                call tvfilt%kill
             endif
         endif
         ! back to real space

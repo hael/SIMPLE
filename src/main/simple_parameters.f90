@@ -1393,10 +1393,10 @@ contains
                     self%l_match_filt  = (trim(self%match_filt) .eq.'yes') .and. (.not.self%l_lpset)
                 endif
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
-                if( self%l_needs_sigma )then
-                    self%l_match_filt = .false.
-                endif
+                if( self%l_needs_sigma ) self%l_match_filt = .false.
         end select
+        ! global FSC/FRC filter flag overrrides
+        if( .not. L_FSCFILT ) self%l_match_filt = .false.
         ! atoms
         if( cline%defined('element') )then
             if( .not. atoms_obj%element_exists(self%element) )then
