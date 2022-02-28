@@ -126,6 +126,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: frcs=trim(FRCS_FILE) !< binary file with per-class/proj Fourier Ring Correlations(.bin)
     character(len=LONGSTRLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
     character(len=LONGSTRLEN) :: gainref=''           !< gain reference for movie alignment
+    character(len=LONGSTRLEN) :: import_dir=''       !< dir to import .star files from for import_starproject
     character(len=LONGSTRLEN) :: infile=''            !< file with inputs(.txt)
     character(len=LONGSTRLEN) :: infile2=''           !< file with inputs(.txt)
     character(len=LONGSTRLEN) :: mskfile=''           !< maskfile.ext

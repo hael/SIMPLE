@@ -926,7 +926,7 @@ contains
         call set_param(automsk,        'automsk',      'multi',  'Perform envelope masking', 'Whether to generate/apply an envelope mask(yes|no|file){no}', '(yes|no|file){no}', .false., 'no')
         call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (only after 1st CTF=0)(full|partial){full}',&
         '(full|partial){full}', .false., 'full')
-
+        
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1832,10 +1832,11 @@ contains
         &'Import project in in star format',&                     				! descr_short
         &'is a program to import a SIMPLE projectfile from star format',& 		! descr long
         &'simple_exec',&                                                  		! executable
-        &0, 0, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 1, 0, 0, 0, 0, 0, .false.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
+        call import_starproject%set_input('parm_ios', 1, 'import_dir', 'file', 'Import directory', 'Directory to read t.star files', 'e.g. 14_cluster2D/', .true., '')
         ! alternative inputs
         ! <empty>
         ! search controls

@@ -11,582 +11,759 @@ use simple_ori,                 only: ori
 
 implicit none
 
-private :: flag
-
 public :: star_project
 
-type flag
-
-  character(LEN=64)   :: rlnflag
-  character(LEN=64)   :: splflag
-  logical             :: enabled
-
-end type
+type stk_map
+    
+    character(LEN=2056) :: stkpath
+    integer             :: stkmax
 
 
+end type stk_map
+
+type star_flag
+
+    character(LEN=64) :: rlnflag
+    character(LEN=64) :: splflag
+    integer           :: ind        = 0
+    logical           :: present    = .false.
+    logical           :: string     = .false.
+    logical           :: int        = .false.
+    real              :: mult       = 0
+    logical           :: imagesplit = .false.
+    logical           :: addstk     = .false.
+    logical           :: appendroot = .false.
+
+end type star_flag
+    
+    
 type star_data
-
-  character(len=64)                               :: title
-  logical                                         :: loop
-  type(flag), dimension(:), allocatable           :: flags
-  character(len=1024), dimension(:), allocatable  :: datalines
-
-  contains
-    procedure :: kill_stardata
-
+    
+    type(star_flag),      dimension(:), allocatable   :: flags
+    integer                                           :: flagscount = 0
+    integer                                           :: datastart = 0
+    integer                                           :: dataend = 0
+        
 end type star_data
 
 
 type star_file
 
-  character(len=1024)                                :: filename
-  type(star_data), dimension(:), allocatable         :: datablocks
-
-  contains
-    procedure :: kill_starfile
-
+    character(len=1024)                             :: filename
+    character(len=2048)                             :: rootdir
+    type(star_data)                                 :: optics
+    type(star_data)                                 :: stacks
+    type(star_data)                                 :: micrographs
+    type(star_data)                                 :: particles2D
+    type(star_data)                                 :: particles3D
+    integer,            dimension(:), allocatable   :: opticsmap
+    integer,            dimension(:,:), allocatable :: stkmap ! (stkid : z)
+    integer                                         :: stkptclcount
+    logical                                         :: initialised = .false.
+        
 end type star_file
 
 
-type star_project
+type star_project 
 
+    type(star_file) :: starfile
+    
 contains
+  
+  procedure :: initialise
+  procedure :: enable_rlnflag
+  procedure :: enable_splflag
+  procedure :: get_rlnflagindex
+  procedure :: populate_opticsmap
+  procedure :: populate_stkmap
+  procedure :: split_dataline
+  procedure :: import_stardata
+  procedure :: read_starheaders
+  procedure :: import_ptcls2D
+  procedure :: import_ptcls3D
+  procedure :: import_mics
 
-  procedure :: assign_optics_single
-  procedure :: insert_flag
-  procedure :: process_flags
-  procedure :: process_data
-  procedure :: insert_datablock
-  procedure :: write_starfile
-  procedure :: mics2star
-  procedure :: ptcls2D2star
-  procedure :: clusters2D2star
-  procedure :: create
-
-
+  
 end type star_project
 
 contains
 
-  subroutine assign_optics_single(self, spproj)
-
-    class(star_project),  intent(inout)           :: self
-    class(sp_project)                             :: spproj
-    class(oris),      pointer                     :: os_ptr
-    integer                                       ::orisn
-
-    call spproj%new_seg_with_ptr(1, "optics", os_ptr)
-
-    call os_ptr%new(1, is_ptcl=.false.)
-    call os_ptr%set(1, "ogname", "opticsgroup1")
-    call os_ptr%set(1, "ogid", real(1))
-    call os_ptr%set(1, "state", real(1))
-    call os_ptr%set(1, "ogdim", real(2))
-
-    if(spproj%os_stk%get_noris() > 0) then
-
-      call os_ptr%set(1, "ogsize", spproj%os_stk%get(1,'box'))
-      call os_ptr%set(1, "smpd", spproj%os_stk%get(1,'smpd'))
-      call os_ptr%set(1, "cs", spproj%os_stk%get(1,'cs'))
-      call os_ptr%set(1, "kv", spproj%os_stk%get(1,'kv'))
-      call os_ptr%set(1, "fraca", spproj%os_stk%get(1,'fraca'))
-
-    else if(spproj%os_mic%get_noris() > 0) then
-
-      call os_ptr%set(1, "smpd", spproj%os_mic%get(1,'smpd'))
-      call os_ptr%set(1, "cs", spproj%os_mic%get(1,'cs'))
-      call os_ptr%set(1, "kv", spproj%os_mic%get(1,'kv'))
-      call os_ptr%set(1, "fraca", spproj%os_mic%get(1,'fraca'))
-
-    end if
-
-    ! Set all mics ogid=1
-    !$omp parallel do default(shared) private(orisn) schedule(static) proc_bind(close)
-    do orisn = 1, spproj%os_mic%get_noris()
-
-      call spproj%os_mic%set(orisn, 'ogid', real(1))
-
-    end do
-    !$omp end parallel do
-
-    ! Set all ptcls ogid=1
-    !$omp parallel do default(shared) private(orisn) schedule(static) proc_bind(close)
-    do orisn = 1, spproj%os_ptcl2D%get_noris()
-
-      call spproj%os_ptcl2D%set(orisn, 'ogid', real(1))
-
-    end do
-
-    !$omp end parallel do
-
-
-  end subroutine assign_optics_single
-
-
-
-  subroutine kill_stardata(self)
-
-    class(star_data), intent(inout) :: self
-
-    if(allocated(self%flags)) then
-
-      deallocate(self%flags)
-
-    end if
-
-    if(allocated(self%datalines)) then
-
-      deallocate(self%datalines)
-
-    end if
-
-  end subroutine kill_stardata
-
-  subroutine kill_starfile(self)
-
-    class(star_file), intent(inout) :: self
-    integer                         :: blockn
-
-    do blockn = 1, size(self%datablocks)
-
-      call self%datablocks(blockn)%kill_stardata()
-
-    end do
-
-    if(allocated(self%datablocks)) then
-
-      deallocate(self%datablocks)
-
-    end if
-
-  end subroutine kill_starfile
-
-  subroutine insert_flag(self, micrographscorrected, blockid, newrlnflag, newsplflag)
-
-    class(star_project),  intent(inout)                   :: self
-    type(star_file), intent(inout)                  :: micrographscorrected
-    character(*)                                    :: newrlnflag
-    character(*)                                    :: newsplflag
-    type(flag)                                      :: newflag
-    integer                                         :: blockid
-
-    newflag%rlnflag = newrlnflag
-    newflag%splflag = newsplflag
-    newflag%enabled = .false.
-
-    if (.not. allocated(micrographscorrected%datablocks(blockid)%flags)) then
-
-      allocate(micrographscorrected%datablocks(blockid)%flags(0))
-
-    end if
-
-    micrographscorrected%datablocks(blockid)%flags = [micrographscorrected%datablocks(blockid)%flags, newflag]
-
-  end subroutine insert_flag
-
-
-  subroutine insert_datablock(self, starfile, title, loop, blockid)
-
-    class(star_project),  intent(inout)           :: self
-    type(star_file), intent(inout)                :: starfile
-    type(star_data)                               :: newdata
-    logical                                       :: loop
-    character(*)                                  :: title
-    integer, intent(inout)                        :: blockid
-
-    if (.not. allocated(starfile%datablocks)) then
-
-      allocate(starfile%datablocks(0))
-
-    end if
-
-    newdata%title = trim(adjustl(title))
-    newdata%loop = loop
-
-    starfile%datablocks = [starfile%datablocks, newdata]
-
-    blockid = size(starfile%datablocks)
-
-  end subroutine insert_datablock
-
-
-  subroutine process_flags(self, starfile, blockid, section)
-
-    class(star_project),  intent(inout)   :: self
-    type(oris), intent(inout)             :: section
-    type(star_file),intent(inout)         :: starfile
-    type(chash)                           :: keys
-    type(ori)                             :: element
-    type(flag)                            :: newflag
-    integer                               :: blockid, n, keysn, flagsn
-
-    ! find first non state 0 ori
-    do n = 1, section%get_noris()
-
-      call section%get_ori(n, element)
-
-      if(element%get_state() > 0) then
-
-        keys =  element%ori2chash()
-        exit
-
-      endif
-
-    end do
-
-    ! set enabled to true on existing flags
-    do keysn = 1, keys%size_of()
-      write(*,*) keys%get_key(keysn)
-      do flagsn = 1, size(starfile%datablocks(blockid)%flags)
-
-        if(starfile%datablocks(blockid)%flags(flagsn)%splflag == keys%get_key(keysn)) then
-
-          starfile%datablocks(blockid)%flags(flagsn)%enabled = .true.
-
+  subroutine initialise(self)
+  
+    class(star_project),  intent(inout) :: self
+    
+    ! assign optics flags
+    if (.not. allocated(self%starfile%optics%flags)) allocate(self%starfile%optics%flags(0))
+    
+    self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnVoltage", splflag="kv")]
+    self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid", int=.true.)]
+    self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnOpticsGroupName", splflag="ogname", string=.true.)]
+    self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnAmplitudeContrast", splflag="fraca")]
+    self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnSphericalAberration", splflag="cs")]
+    self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnMicrographPixelSize", splflag="smpd")]
+    self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnImagePixelSize", splflag="smpd")]
+    self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnImageSize", splflag="box", int=.true.)]
+    
+    ! assign micrographs flags
+    if (.not. allocated(self%starfile%micrographs%flags)) allocate(self%starfile%micrographs%flags(0))
+    
+    self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnMicrographMovieName", splflag="movie", string=.true., appendroot=.true.)]
+    self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnMicrographName", splflag="intg", string=.true., appendroot=.true.)]
+    self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnMicrographMetadata", splflag="mc_starfile", string=.true., appendroot=.true.)]
+    self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnDefocusU", splflag="dfx", mult=0.0001)]
+    self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnDefocusV", splflag="dfy", mult=0.0001)]
+    self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnDefocusAngle", splflag="angast")]
+    self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnPhaseShift", splflag="phshift")]
+    self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnCtfMaxResolution", splflag="ctfres")]
+    self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid")]
+    self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnImageSizeX", splflag="xdim")]
+    self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnImageSizeY", splflag="ydim")]
+    self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnImageSizeZ", splflag="nframes")]
+    self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnCtfImage", splflag="ctfeps", string=.true., appendroot=.true.)]
+    self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnCtfPowerSpectrum", splflag="ctfjpg", string=.true., appendroot=.true.)]
+    self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnMicrographCoordinates", splflag="boxfile", string=.true., appendroot=.true.)]
+    
+    ! assign stk flags
+    if (.not. allocated(self%starfile%stacks%flags)) allocate(self%starfile%stacks%flags(0))
+    
+    self%starfile%stacks%flags = [self%starfile%stacks%flags, star_flag(rlnflag="rlnImageName", splflag="stk", string=.true., imagesplit=.true., appendroot=.true.)]
+    self%starfile%stacks%flags = [self%starfile%stacks%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid", int=.true.)]
+    
+    ! assign particles 2D flags
+    if (.not. allocated(self%starfile%particles2D%flags)) allocate(self%starfile%particles2D%flags(0))
+    
+    self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnDefocusU", splflag="dfx", mult=0.0001)]
+    self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnDefocusV", splflag="dfy", mult=0.0001)]
+    self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnDefocusAngle", splflag="angast")]
+    self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnAnglePsi", splflag="e3")]
+    self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnCoordinateX", splflag="xpos")]
+    self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnCoordinateY", splflag="ypos")]
+    self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnOriginXAngst", splflag="x")]
+    self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnOriginYAngst", splflag="y")]
+    self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnPhaseShift", splflag="phshift")]
+    self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid", int=.true.)]
+    self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnClassNumber", splflag="class", int=.true.)]
+    self%starfile%particles2D%flags = [self%starfile%particles2D%flags, star_flag(rlnflag="rlnGroupNumber", splflag="gid", int=.true.)]
+    
+    ! assign particles 3D flags
+    if (.not. allocated(self%starfile%particles3D%flags)) allocate(self%starfile%particles3D%flags(0))
+    
+    self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnDefocusU", splflag="dfx", mult=0.0001)]
+    self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnDefocusV", splflag="dfy", mult=0.0001)]
+    self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnDefocusAngle", splflag="angast")]
+    self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnAnglePsi", splflag="e3")]
+    self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnAngleRot", splflag="e1")]
+    self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnAngleTilt", splflag="e2")]
+    self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnCoordinateX", splflag="xpos")]
+    self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnCoordinateY", splflag="ypos")]
+    self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnOriginXAngst", splflag="x")]
+    self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnOriginYAngst", splflag="y")]
+    self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnPhaseShift", splflag="phshift")]
+    self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid", int=.true.)]
+    self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnClassNumber", splflag="class", int=.true.)]
+    self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnGroupNumber", splflag="gid", int=.true.)]
+    
+  end subroutine initialise
+
+  
+  subroutine enable_rlnflag(self, rlnflag, flags, flagindex)
+  
+    class(star_project),    intent(inout)           :: self
+    class(star_flag),       dimension(:)            :: flags
+    character(LEN=64)                               :: rlnflag
+    integer                                         :: flagindex, i
+    
+    do i = 1, size(flags)
+        if(index(flags(i)%rlnflag, trim(adjustl(rlnflag))) > 0 .AND. len_trim(flags(i)%splflag) > 0) then
+            flags(i)%present = .true.
+            flags(i)%ind = flagindex
+            print *, char(9), "Mapping ", trim(adjustl(flags(i)%rlnflag)), char(9), char(9), " => ", trim(adjustl(flags(i)%splflag))
+            exit
         end if
-
-      end do
+         
+    end do
+  
+  end subroutine enable_rlnflag
+  
+  
+  subroutine enable_splflag(self, splflag, flags, flagindex)
+  
+    class(star_project),    intent(inout)           :: self
+    class(star_flag),       dimension(:)            :: flags
+    character(LEN=64)                               :: splflag
+    integer                                         :: flagindex, i
+    
+    do i = 1, size(flags)
+        if(index(flags(i)%splflag, trim(adjustl(splflag))) > 0 .AND. len_trim(flags(i)%rlnflag) > 0) then
+            flags(i)%present = .true.
+            flags(i)%ind = flagindex
+            print *, char(9), "Mapping ", trim(adjustl(flags(i)%splflag)), char(9), char(9), " => ", trim(adjustl(flags(i)%rlnflag))
+            exit
+        end if
+         
+    end do
+  
+  end subroutine enable_splflag
+  
+  
+  subroutine get_rlnflagindex(self, rlnflag, flags, flagindex)
+  
+    class(star_project),    intent(inout)           :: self
+    class(star_flag),       dimension(:)            :: flags
+    character(LEN=*)                               :: rlnflag
+    integer,                intent(inout)           :: flagindex
+    integer                                         :: i
+    
+    flagindex = 0
+    
+    do i = 1, size(flags)
+      
+        if(index(flags(i)%rlnflag, trim(adjustl(rlnflag))) > 0) then
+        
+            flagindex = flags(i)%ind
+            exit
+            
+        end if
+        
+    end do
+    
+  end subroutine get_rlnflagindex
+  
+  
+  subroutine populate_opticsmap(self, opticsoris)
+      
+    class(star_project),    intent(inout)               :: self
+    class(oris),            intent(inout)               :: opticsoris
+    integer                                             :: i
+    
+    call self%import_stardata(self%starfile%optics, opticsoris, .false.)
+    
+    allocate(self%starfile%opticsmap(opticsoris%get_noris()))
+    
+    do i = 1, opticsoris%get_noris()
+        
+        self%starfile%opticsmap(int(opticsoris%get(i, "ogid"))) = i
 
     end do
-
-  end subroutine process_flags
-
-
-  subroutine process_data(self, starfile, blockid, section)
-
-    class(star_project),  intent(inout)   :: self
-    type(oris), intent(inout)             :: section
-    type(star_file),intent(inout)         :: starfile
-    type(ori)                             :: element
-    character(len=1024)                   :: line
-    real                                  :: value
-    integer                               :: blockid, orisn, flagsn
-
-    allocate(starfile%datablocks(blockid)%datalines(section%get_noris()))
-
-    write(*,*) "STARDATA SIZE : ", sizeof(starfile%datablocks(blockid)%datalines)
-
-    !$omp parallel do default(shared) private(orisn,flagsn,element,line,value) schedule(static) proc_bind(close)
-
-    do orisn = 1, section%get_noris()
-
-      call section%get_ori(orisn, element)
-
-      if(element%get_state() > 0) then
-
-        line = ""
-
-        do flagsn = 1, size(starfile%datablocks(blockid)%flags)
-
-          if(starfile%datablocks(blockid)%flags(flagsn)%enabled) then
-
-            ! IF LOOP FALSE, DO DIFFERENT HERE!
-            if(element%ischar(trim(adjustl(starfile%datablocks(blockid)%flags(flagsn)%splflag)))) then
-
-              write(line, fmt="(A,2X,A)")trim(adjustl(line)), element%get_static(trim(adjustl(starfile%datablocks(blockid)%flags(flagsn)%splflag)))
-
-            else
-
-              value = element%get(trim(adjustl(starfile%datablocks(blockid)%flags(flagsn)%splflag)))
-
-              if(ceiling(value) == value) then
-
-                write(line, fmt="(A,2X,I0)") trim(adjustl(line)), ceiling(value)
-
-              else
-
-                write(line, fmt="(A,2X,F8.2)") trim(adjustl(line)), value
-
-              end if
-
+    
+    
+  end subroutine populate_opticsmap
+  
+  
+  subroutine populate_stkmap(self, stkoris, opticsoris)
+      
+    class(star_project),    intent(inout)               :: self
+    class(oris),            intent(inout)               :: stkoris
+    class(oris),            intent(inout)               :: opticsoris
+    type(oris)                                          :: stktmp
+    type(ori)                                           :: oritmpin, oritmpout
+    character(len=2048),    dimension(:),allocatable    :: stknames
+    integer,                dimension(:),allocatable    :: stkzmax, stkoriids
+    integer                                             :: i, j, top, fromp
+    logical                                             :: newstack
+    
+    allocate(stknames(0))
+    allocate(stkzmax(0))
+    allocate(stkoriids(0))
+    
+    call self%import_stardata(self%starfile%stacks, stktmp, .false., opticsoris)
+   
+    allocate(self%starfile%stkmap(stktmp%get_noris(), 2))
+    
+    do i = 1, stktmp%get_noris()
+        
+        newstack = .true.
+        
+        do j = 1, size(stknames)
+        
+            if(trim(adjustl(stknames(j))) == trim(adjustl(stktmp%get_static(i, "stk")))) then
+                
+                newstack = .false.
+                
+                if(stkzmax(j) < int(stktmp%get(i, "stkind"))) then
+                
+                    stkzmax(j) = int(stktmp%get(i, "stkind"))
+                
+                end if
+                
+                self%starfile%stkmap(i, 1) = j
+                self%starfile%stkmap(i, 2) = int(stktmp%get(i, "stkind"))
+                
+                exit
+                
             end if
-
-          end if
-
+            
         end do
+        
+        if(newstack) then
+        
+            stknames = [stknames, trim(adjustl(stktmp%get_static(i, "stk")))]
+            stkzmax = [stkzmax, int(stktmp%get(i, "stkind"))]
+            stkoriids = [stkoriids, i]
+            
+            self%starfile%stkmap(i, 1) = size(stkoriids)
+            self%starfile%stkmap(i, 2) = int(stktmp%get(i, "stkind"))
+        
+        end if
+        
+    end do
+    
+    call stkoris%new(size(stknames), .false.)
+    
+    do i = 1, size(stknames)
+    
+        call stktmp%get_ori(stkoriids(i), oritmpin)
+        call stkoris%get_ori(i, oritmpout)
+        call oritmpout%append_ori(oritmpin)
+        call stkoris%set_ori(i, oritmpout)
+        
+    end do
+    
+    fromp = 1
+    
+    self%starfile%stkptclcount = 0
 
-        starfile%datablocks(blockid)%datalines(orisn) = line
+    do i = 1, size(stknames)
+        
+        top = fromp + stkzmax(i)
+        
+        call stkoris%set(i, "nptcls", real(stkzmax(i)))
+        call stkoris%set(i, "fromp", real(fromp))
+        call stkoris%set(i, "top",  real(top - 1))
+        call stkoris%set(i, "state",  real(1))
+        
+        fromp = top
+        
+        self%starfile%stkptclcount = self%starfile%stkptclcount + stkzmax(i)
+        
+    end do
+    
+    do i = 1, stktmp%get_noris()
+    
+        self%starfile%stkmap(i, 2) =  self%starfile%stkmap(i, 2) + int(stkoris%get(self%starfile%stkmap(i, 1), "fromp")) - 1
+        
+    end do
+    
+    deallocate(stknames)
+    deallocate(stkzmax)
+    deallocate(stkoriids)
+    
+  end subroutine populate_stkmap
+  
+  
+  subroutine split_dataline(self, line, splitline)
+  
+    class(star_project),    intent(inout)                           :: self
+    character(len=2048)                                 :: line
+    character(len=2048),     dimension(:),intent(inout)                           :: splitline
+    integer :: iend, istart, flagid
+     
+    flagid = 1
+    iend = 1
+    istart = 1
 
-      end if
+    do while (flagid <= size(splitline))
+    
+        do while (line(istart:istart + 1) .eq. " ") 
+                        
+            istart = istart + 1
+                          
+        end do
+                        
+        iend = index(line(istart + 1:), ' ') + istart
 
+        splitline(flagid) = trim(adjustl(line(istart:iend)))
+        
+        istart = iend + 1
+        
+        flagid = flagid + 1
     end do
 
-    !$omp end parallel do
-
-   ! call starfile%datablocks(blockid)%kill()
-
-
-  end subroutine process_data
-
-
-  subroutine write_starfile(self, starfile)
-
-    class(star_project),  intent(inout)   :: self
-    type(star_file),intent(inout)         :: starfile
-    integer                               :: blockn, flagsn, linen
-
-    open(1, file = trim(adjustl(starfile%filename)), status = 'new')
-
-    do blockn = 1, size(starfile%datablocks)
-
-      write(1,*) ""
-      write(1, fmt="(A,A)") "data_", trim(adjustl(starfile%datablocks(blockn)%title))
-
-      if(starfile%datablocks(blockn)%loop) then
-
-        write(1,*) ""
-        write(1, fmt="(A)") "loop_"
-
-        do flagsn = 1, size(starfile%datablocks(blockn)%flags)
-
-          if(starfile%datablocks(blockn)%flags(flagsn)%enabled) then
-
-            write(1, fmt="(A,A,A,I0)") "_", trim(adjustl(starfile%datablocks(blockn)%flags(flagsn)%rlnflag)), " #", flagsn
-
-          end if
-
-        end do
-
-        write(1,*) ""
-
-        do linen = 1, size(starfile%datablocks(blockn)%datalines)
-
-          ! only write if length is less that 1024 as these lines are empty
-          if(len(trim(adjustl(starfile%datablocks(blockn)%datalines(linen)))) < 1024) then
-
-            write(1, fmt="(A)") trim(adjustl(starfile%datablocks(blockn)%datalines(linen)))
-
-          end if
-
-        end do
-
-      else
-
-      end if
-
+  end subroutine split_dataline
+  
+  
+  subroutine import_stardata(self, stardata, sporis, isptcl, spoptics)
+  
+    class(star_project),    intent(inout)               :: self
+    class(star_data),       intent(inout)               :: stardata
+    class(oris),            intent(inout)               :: sporis
+    class(oris),            intent(inout),optional      :: spoptics
+    type(ori)                                           :: opticsori, spori
+    logical                                             :: isptcl
+    character(len=2048)                                 :: line, entrystr
+    character(len=2048)                                 :: splitimage
+    character(len=2048),    dimension(:), allocatable   :: splitline
+    real                                                :: rval
+    integer                                             :: ios, flagsindex, lineindex, ival, ogid, ogmapid, projindex
+    
+    allocate(splitline(stardata%flagscount))
+    
+    if(isptcl) then
+    
+        call sporis%new(self%starfile%stkptclcount, .true.)
+        
+    else
+    
+        call sporis%new(stardata%dataend - stardata%datastart, .false.)
+        
+    end if
+    
+    open(1, file = trim(adjustl(self%starfile%filename)), status = 'old') 
+    
+    do lineindex = 1, stardata%datastart - 1
+    
+        read(1, '(A)', iostat=ios) line
+        
     end do
+    
+    do lineindex = 1, stardata%dataend - stardata%datastart
+    
+        if(isptcl) then
+        
+            projindex = self%starfile%stkmap(lineindex, 2)
+        
+        else
+        
+            projindex = lineindex
+        
+        end if
+        
+        
+        read(1, '(A)', iostat=ios) line
+        
+        call self%split_dataline(line, splitline)
+        
+        do flagsindex = 1, size(stardata%flags)
+        
+            if(stardata%flags(flagsindex)%present) then
+                
+                if(stardata%flags(flagsindex)%imagesplit) then
+                    
+                    splitimage = trim(adjustl(splitline(stardata%flags(flagsindex)%ind)))
+                    
+                    entrystr = splitimage(1:index(splitimage, "@") - 1)
+                    
+                    read(entrystr,*) ival   
+                    
+                    call sporis%set(projindex, "stkind", real(ival))
+                    
+                    entrystr = splitimage(index(splitimage, "@") + 1:)
+                
+                else
+                    
+                    entrystr = trim(adjustl(splitline(stardata%flags(flagsindex)%ind)))
+                
+                end if 
+                
+                if(stardata%flags(flagsindex)%string) then
+                
+                    if(stardata%flags(flagsindex)%appendroot) then
+                        
+                        call sporis%set(projindex, stardata%flags(flagsindex)%splflag, trim(adjustl(self%starfile%rootdir)) // "/" // rev_basename(rev_basename(trim(adjustl(entrystr)))))
+                        
+                    else
+                    
+                        call sporis%set(projindex, stardata%flags(flagsindex)%splflag, trim(adjustl(entrystr)))
+                    
+                    end if
+                            
+                elseif(stardata%flags(flagsindex)%int) then
+                      
+                    read(entrystr,*) ival   
+                        
+                    if(stardata%flags(flagsindex)%mult > 0) then
+                            
+                        ival = ival * stardata%flags(flagsindex)%mult
+                                
+                    end if
+                            
+                    call sporis%set(projindex, stardata%flags(flagsindex)%splflag, real(ival))
+                            
+                else
 
+                    read(entrystr,*) rval   
+                        
+                    if(stardata%flags(flagsindex)%mult > 0) then
+                            
+                        rval = rval * stardata%flags(flagsindex)%mult
+                                
+                    end if
+                            
+                    call sporis%set(projindex, stardata%flags(flagsindex)%splflag, rval)
+                            
+                end if
+            
+                
+            end if
+            
+        end do
+    
+        if(present(spoptics)) then
+        
+            ogid = sporis%get(lineindex, "ogid")
+            
+            if(ogid > 0) then
+                ogmapid = self%starfile%opticsmap(ogid)
+              
+                call spoptics%get_ori(ogmapid, opticsori)
+                call sporis%get_ori(lineindex, spori)
+                call spori%append_ori(opticsori)
+                call sporis%set_ori(lineindex, spori)
+                
+            end if 
+            
+        end if
+        
+        if(isptcl) then
+            
+            call sporis%set(projindex, "stkind", real(self%starfile%stkmap(lineindex, 1)))
+        
+        end if
+        
+        call sporis%set(projindex, "state", real(1))
+        
+    end do
+    
+    deallocate(splitline)
+   
+   close(1)
+  
+  end subroutine import_stardata
+  
+  
+  subroutine read_starheaders(self)
+  
+    class(star_project),    target, intent(inout)       :: self
+    character(len=2048)                                 :: line, blockname, flagname, datastring
+    logical                                             :: flagsopen, dataopen
+    integer                                             :: ios, delimindex,flagindex, istart, iend, flagid, lineindex
+    
+    flagsopen = .false.
+    dataopen = .false.
+    lineindex = 1
+    
+    open(1, file = trim(adjustl(self%starfile%filename)), status = 'old')  
+    
+    do
+        read(1, '(A)', iostat=ios) line
+      
+        if(ios /= 0) then
+            exit
+        end if
+      
+        if(len_trim(line) > 0) then
+            
+            line = trim(adjustl(line))
+            
+            if (index(line, "data_") > 0) then
+                ! start data block
+                
+                flagindex = 0
+                flagsopen = .true.
+                dataopen = .false.
+                
+                delimindex = index(line, "data_ ") + 6
+                blockname = line(delimindex:)
+                
+                print *, ""
+                print *, "Reading ", trim(adjustl(blockname)), " ... " 
+                print *, ""
+
+            else if(flagsopen .AND. index(line, "_rln") > 0) then
+            
+                delimindex = index(line, "#")
+                flagname = line(2:delimindex - 1)
+                flagindex = flagindex + 1
+                
+                select case (blockname)
+                
+                    case ("optics")
+                    
+                        call self%enable_rlnflag(flagname, self%starfile%optics%flags, flagindex)
+                        self%starfile%optics%flagscount = self%starfile%optics%flagscount + 1
+                        
+                    case ("micrographs")
+                    
+                        call self%enable_rlnflag(flagname, self%starfile%micrographs%flags, flagindex)
+                        self%starfile%micrographs%flagscount = self%starfile%micrographs%flagscount + 1
+                        
+                    case ("particles")
+                    
+                        call self%enable_rlnflag(flagname, self%starfile%particles2D%flags, flagindex)
+                        self%starfile%particles2D%flagscount = self%starfile%particles2D%flagscount + 1
+                        
+                        call self%enable_rlnflag(flagname, self%starfile%particles3D%flags, flagindex)
+                        self%starfile%particles3D%flagscount = self%starfile%particles3D%flagscount + 1
+                        
+                        call self%enable_rlnflag(flagname, self%starfile%stacks%flags, flagindex)
+                        self%starfile%stacks%flagscount = self%starfile%stacks%flagscount + 1
+                        
+                end select
+                
+                
+            else if(flagsopen .AND. index(line, "loop_") == 0) then
+                
+                dataopen = .true.
+                flagsopen = .false.
+                
+                select case (blockname)
+                
+                    case ("optics")
+                    
+                        self%starfile%optics%datastart = lineindex
+                        
+                    case ("micrographs")
+                    
+                        self%starfile%micrographs%datastart = lineindex
+                        
+                    case ("particles")
+                    
+                        self%starfile%particles2D%datastart = lineindex
+                        self%starfile%particles3D%datastart = lineindex
+                        self%starfile%stacks%datastart = lineindex 
+                        
+                end select
+
+            
+            end if
+            
+            if (dataopen .AND. index(line, "# ") == 0) then
+            
+                select case (blockname)
+                
+                    case ("optics")
+                    
+                        self%starfile%optics%dataend = lineindex + 1
+                        
+                    case ("micrographs")
+                    
+                        self%starfile%micrographs%dataend = lineindex + 1
+                        
+                    case ("particles")
+                    
+                        self%starfile%particles2D%dataend = lineindex + 1
+                        self%starfile%particles3D%dataend = lineindex + 1
+                        self%starfile%stacks%dataend = lineindex + 1
+                         
+                end select
+                
+            end if
+            
+        end if
+        
+        lineindex = lineindex + 1
+        
+    end do
+    
+    print *, ""
+    
     close(1)
+    
+  end subroutine read_starheaders
 
-  end subroutine write_starfile
+  
+  subroutine import_ptcls2D(self, cline, spproj, filename)
+    
+    class(star_project),    target, intent(inout)   :: self
+    class(cmdline),         intent(inout)           :: cline
+    class(sp_project)                               :: spproj
+    character(len=*)                                :: filename
+    integer                                         :: i
+    
+    print *, "Importing " // filename
+    
+    if(.not. self%starfile%initialised) call self%initialise()
+    
+    self%starfile%filename = filename
+    self%starfile%rootdir = cline%get_carg("import_dir")
+    
+    call self%read_starheaders()
+    
+    call self%populate_opticsmap(spproj%os_optics)
+    call self%populate_stkmap(spproj%os_stk, spproj%os_optics)
 
-
-
-  subroutine mics2star(self, spproj)
-
-    class(star_project),  intent(inout)           :: self
-    type(sp_project)                              :: spproj
-    type(star_file)                               :: micrographsstar
-    integer                                       :: opticsblock, micsblock
-
-    micrographsstar%filename = "micrographs.star"
-
-    call self%insert_datablock(micrographsstar, "optics", .true., opticsblock)
-
-    call self%insert_flag(micrographsstar, opticsblock, "rlnOpticsGroup", "ogname")
-    call self%insert_flag(micrographsstar, opticsblock, "rlnOpticsGroupName", "ogid")
-    call self%insert_flag(micrographsstar, opticsblock, "rlnAmplitudeContrast", "fraca")
-    call self%insert_flag(micrographsstar, opticsblock, "rlnSphericalAberration", "cs")
-    call self%insert_flag(micrographsstar, opticsblock, "rlnVoltage", "kv")
-    call self%insert_flag(micrographsstar, opticsblock, "rlnImagePixelSize", "smpd")
-
-    call self%insert_datablock(micrographsstar, "micrographs", .true., micsblock)
-
-    call self%insert_flag(micrographsstar, micsblock, "rlnMicrographMovieName", "movie")
-    call self%insert_flag(micrographsstar, micsblock, "rlnMicrographName", "intg")
-    call self%insert_flag(micrographsstar, micsblock, "rlnMicrographMetadata", "mc_starfile")
-    call self%insert_flag(micrographsstar, micsblock, "rlnDefocusU", "dfx")
-    call self%insert_flag(micrographsstar, micsblock, "rlnDefocusV", "dfy")
-    call self%insert_flag(micrographsstar, micsblock, "rlnDefocusAngle", "angast")
-    call self%insert_flag(micrographsstar, micsblock, "rlnPhaseShift", "phshift")
-    call self%insert_flag(micrographsstar, micsblock, "rlnCtfMaxResolution", "ctfres")
-    call self%insert_flag(micrographsstar, micsblock, "rlnOpticsGroup", "ogid")
-    call self%insert_flag(micrographsstar, micsblock, "rlnImageSizeX", "xdim")
-    call self%insert_flag(micrographsstar, micsblock, "rlnImageSizeY", "ydim")
-    call self%insert_flag(micrographsstar, micsblock, "rlnImageSizeZ", "nframes")
-    call self%insert_flag(micrographsstar, micsblock, "rlnCtfImage", "ctfeps")
-    call self%insert_flag(micrographsstar, micsblock, "rlnCtfPowerSpectrum", "ctfjpg")
-    call self%insert_flag(micrographsstar, micsblock, "rlnMicrographCoordinates", "boxfile")
-
-    call self%process_flags(micrographsstar, opticsblock, spproj%os_optics)
-    call self%process_flags(micrographsstar, micsblock, spproj%os_mic)
-
-    call self%process_data(micrographsstar, opticsblock, spproj%os_optics)
-    call self%process_data(micrographsstar, micsblock, spproj%os_mic)
-
-    call self%write_starfile(micrographsstar)
-
-    call micrographsstar%kill_starfile()
-
-  end subroutine mics2star
-
-
-
-  subroutine ptcls2D2star(self, spproj)
-
-    class(star_project),  intent(inout)           :: self
-    type(sp_project)                              :: spproj
-    !type(flag), dimension(:), allocatable         :: ptclflags
-    type(star_file)                               :: ptclstar
-    character(len=:), allocatable                 :: stkname
-    character(len=1024)                           :: stkaddr, stkmic
-    integer                                       :: opticsblock, ptclblock, orisn, stkind, stkptclind, micind
-    integer, dimension(:), allocatable            :: mic2stk_inds, stk2mic_inds
-
-    call spproj%get_mic2stk_inds(mic2stk_inds, stk2mic_inds)
-
-    ! Assign stknames and ptcl indices
-
-    !$omp parallel do default(shared) private(orisn,stkname,stkind,stkaddr,stkptclind, micind) schedule(static) proc_bind(close)
-    do orisn = 1, spproj%os_ptcl2D%get_noris()
-
-      call spproj%get_stkname_and_ind('ptcl2D', orisn, stkname, stkptclind)
-
-      write(stkaddr, fmt="(I0,A,A)") stkptclind, "@", trim(adjustl(stkname))
-
-      call spproj%os_ptcl2D%set(orisn, 'stkaddr', trim(adjustl(stkaddr)))
-
-      stkind = spproj%os_ptcl2D%get(orisn, 'stkind')
-
-      micind = stk2mic_inds(stkind)
-
-      write(stkmic, fmt="(A)") trim(adjustl(spproj%os_mic%get_static(micind, 'intg')))
-
-      call spproj%os_ptcl2D%set(orisn, 'intg', trim(adjustl(stkmic)))
-
-      ! set intgs here for ptcls
-
+    call self%import_stardata(self%starfile%particles2D, spproj%os_ptcl2D, .true.)
+    
+    do i=1, spproj%os_stk%get_noris()
+        
+        call spproj%os_stk%set(i, "imgkind", "ptcl")
+        call spproj%os_stk%set(i, "ctf", "yes")
+        call spproj%os_stk%set(i, "stkkind", "split")
+     
     end do
-    !$omp end parallel do
+    
+    deallocate(self%starfile%opticsmap)
+    deallocate(self%starfile%stkmap)
+    
+  end subroutine import_ptcls2D
+  
+  
+  subroutine import_ptcls3D(self, cline, spproj, filename)
+    
+    class(star_project),    target, intent(inout)   :: self
+    class(cmdline),         intent(inout)           :: cline
+    class(sp_project)                               :: spproj
+    character(len=*)                                :: filename
+    integer                                         :: i
+    
+    print *, "Importing " // filename
+    
+    if(.not. self%starfile%initialised) call self%initialise()
+    
+    self%starfile%filename = filename
+    self%starfile%rootdir = cline%get_carg("import_dir")
+    
+    call self%read_starheaders()
+    
+    call self%populate_opticsmap(spproj%os_optics)
+    call self%populate_stkmap(spproj%os_stk, spproj%os_optics)
 
-    ptclstar%filename = "particles.star"
-
-    call self%insert_datablock(ptclstar, "optics", .true., opticsblock)
-
-    call self%insert_flag(ptclstar, opticsblock, "rlnOpticsGroup", "ogname")
-    call self%insert_flag(ptclstar, opticsblock, "rlnOpticsGroupName", "ogid")
-    call self%insert_flag(ptclstar, opticsblock, "rlnAmplitudeContrast", "fraca")
-    call self%insert_flag(ptclstar, opticsblock, "rlnSphericalAberration", "cs")
-    call self%insert_flag(ptclstar, opticsblock, "rlnVoltage", "kv")
-    call self%insert_flag(ptclstar, opticsblock, "rlnImagePixelSize", "smpd")
-    call self%insert_flag(ptclstar, opticsblock, "rlnImageDimensionality", "ogdim")
-    call self%insert_flag(ptclstar, opticsblock, "rlnImageSize", "ogsize")
-
-    call self%insert_datablock(ptclstar, "particles", .true., ptclblock)
-
-    call self%insert_flag(ptclstar, ptclblock, "rlnImageName", "stkaddr")
-    call self%insert_flag(ptclstar, ptclblock, "rlnMicrographName", "intg")
-    call self%insert_flag(ptclstar, ptclblock, "rlnCoordinateX", "xpos")
-    call self%insert_flag(ptclstar, ptclblock, "rlnCoordinateY", "ypos")
-    call self%insert_flag(ptclstar, ptclblock, "rlnDefocusU", "dfx")
-    call self%insert_flag(ptclstar, ptclblock, "rlnDefocusV", "dfy")
-    call self%insert_flag(ptclstar, ptclblock, "rlnDefocusAngle", "angast")
-    call self%insert_flag(ptclstar, ptclblock, "rlnOpticsGroup", "ogid")
-    call self%insert_flag(ptclstar, ptclblock, "rlnAngleRot", "e1")
-    call self%insert_flag(ptclstar, ptclblock, "rlnAngleTilt", "e2")
-    call self%insert_flag(ptclstar, ptclblock, "rlnAnglePsi", "e3")
-
-    call self%process_flags(ptclstar, opticsblock, spproj%os_optics)
-    call self%process_flags(ptclstar, ptclblock, spproj%os_ptcl2D)
-
-    call self%process_data(ptclstar, opticsblock, spproj%os_optics)
-    call self%process_data(ptclstar, ptclblock, spproj%os_ptcl2D)
-
-    call self%write_starfile(ptclstar)
-
-    call ptclstar%kill_starfile()
-
-  end subroutine ptcls2D2star
-
-
-
-  subroutine clusters2D2star(self, spproj)
-
-    class(star_project),  intent(inout)           :: self
-    type(sp_project)                              :: spproj
-    type(star_file)                               :: clustersstar
-    integer                                       :: generalblock, clustersblock, orisn, stkind
-    character(len=:), allocatable                 :: stkname
-    character(len=1024)                           :: stkaddr
-
-    stkname = "cluster2D.mrc"
-
-    do orisn = 1, spproj%os_cls2D%get_noris()
-
-      stkind = spproj%os_cls2D%get(orisn, 'class')
-
-      write(stkaddr, fmt="(I0,A,A)") stkind, "@", trim(adjustl(stkname))
-
-      call spproj%os_cls2D%set(orisn, 'stkaddr', trim(adjustl(stkaddr)))
-
+    call self%import_stardata(self%starfile%particles3D, spproj%os_ptcl3D, .true.)
+    
+    do i=1, spproj%os_stk%get_noris()
+        
+        call spproj%os_stk%set(i, "imgkind", "ptcl")
+        call spproj%os_stk%set(i, "ctf", "yes")
+        call spproj%os_stk%set(i, "stkkind", "split")
+     
     end do
+    
+    deallocate(self%starfile%opticsmap)
+    deallocate(self%starfile%stkmap)
+    
+  end subroutine import_ptcls3D 
+  
+  
+  subroutine import_mics(self, cline, spproj, filename)
+    
+    class(star_project),    target, intent(inout)   :: self
+    class(cmdline),         intent(inout)           :: cline
+    class(sp_project)                               :: spproj
+    character(len=*)                                :: filename
+    integer                                         :: i
+    
+    print *, "Importing " // filename
+    
+    if(.not. self%starfile%initialised) call self%initialise()
+    
+    self%starfile%filename = filename
+    self%starfile%rootdir = cline%get_carg("import_dir")
+    
+    call self%read_starheaders()
+    
+    call self%populate_opticsmap(spproj%os_optics)
 
-    clustersstar%filename = "clusters2D.star"
-
-    call self%insert_datablock(clustersstar, "general", .false., generalblock)
-
-    call self%insert_flag(clustersstar, generalblock, "rlnReferenceDimensionality", "")
-    call self%insert_flag(clustersstar, generalblock, "rlnDataDimensionality", "")
-    call self%insert_flag(clustersstar, generalblock, "rlnOriginalImageSize", "")
-    call self%insert_flag(clustersstar, generalblock, "rlnCurrentResolution", "")
-    call self%insert_flag(clustersstar, generalblock, "rlnCurrentImageSize", "")
-    call self%insert_flag(clustersstar, generalblock, "rlnNrClasses", "")
-
-    call self%insert_datablock(clustersstar, "clusters", .true., clustersblock)
-
-    call self%insert_flag(clustersstar, clustersblock, "rlnReferenceImage", "stkaddr")
-    call self%insert_flag(clustersstar, clustersblock, "rlnClassDistribution", "pop")
-    call self%insert_flag(clustersstar, clustersblock, "rlnEstimatedResolution", "res")
-
-    call self%process_flags(clustersstar, generalblock, spproj%os_cls2D)
-    call self%process_flags(clustersstar, clustersblock, spproj%os_cls2D)
-
-    call self%process_data(clustersstar, generalblock, spproj%os_cls2D)
-    call self%process_data(clustersstar, clustersblock, spproj%os_cls2D)
-
-    call self%write_starfile(clustersstar)
-
-    call clustersstar%kill_starfile()
-
-  end subroutine clusters2D2star
-
-
-  subroutine create(self, cline, spproj)
-
-    class(star_project),  intent(inout)   :: self
-    class(cmdline), intent(inout)         :: cline
-    type(sp_project)                      :: spproj
-
-    ! Assign single optic group if unset
-    if(spproj%os_optics%get_noris() == 0) then
-      call self%assign_optics_single(spproj)
-    endif
-
-
-    ! Process micrographs
-    if(spproj%os_mic%get_noris() > 0) then
-      !Need to assign optics groups else assume 1
-      call self%mics2star(spproj)
-
-    endif
-
-    if(spproj%os_ptcl2D%get_noris() > 0) then
-      !Need to assign optics groups else assume 1
-      call self%ptcls2D2star(spproj)
-
-    endif
-
-    if(spproj%os_cls2D%get_noris() > 0) then
-      !Need to assign optics groups else assume 1
-      call self%clusters2D2star(spproj)
-
-    endif
-
-   ! call spproj%os_mic%pparms2str(1)
-   ! call spproj%os_mic%ori2str(1)
-
-  end subroutine create
-
-
+    call self%import_stardata(self%starfile%micrographs, spproj%os_mic, .false., spproj%os_optics)
+    
+    do i=1, spproj%os_mic%get_noris()
+        
+        call spproj%os_mic%set(i, "imgkind", "mic")
+        call spproj%os_mic%set(i, "ctf", "yes")
+     
+    end do
+    
+    deallocate(self%starfile%opticsmap)
+    
+  end subroutine import_mics
 
 end module simple_starproject

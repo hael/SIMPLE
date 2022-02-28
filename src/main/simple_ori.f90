@@ -25,6 +25,7 @@ type :: ori
     generic            :: assignment(=) => assign_ori
     procedure          :: copy_ori
     procedure          :: copy => copy_ori
+    procedure          :: append_ori
     procedure          :: delete_entry
     procedure          :: delete_2Dclustering
     procedure          :: delete_3Dalignment
@@ -199,6 +200,34 @@ contains
             endif
         endif
     end subroutine copy_ori
+
+    subroutine append_ori( self_out, self_in )
+        class(ori), intent(in)     :: self_in
+        class(ori), intent(inout)  :: self_out
+        type(str4arr), allocatable :: keys(:)
+        integer :: sz, i
+        
+        if(.not. self_out%is_ptcl .and. .not. self_in%is_ptcl) then
+            sz   = self_in%htab%size_of()
+            keys = self_in%htab%get_keys()
+            
+            do i=1,sz
+            
+                call self_out%set(trim(keys(i)%str), self_in%get(trim(keys(i)%str)))
+
+            end do
+            
+            sz   = self_in%chtab%size_of()
+            
+            do i=1,sz
+            
+                call self_out%set(trim(self_in%chtab%get_key(i)), trim(self_in%chtab%get(i)))
+
+            end do
+        
+        end if
+            
+    end subroutine append_ori
 
     subroutine delete_entry( self, key )
         class(ori),       intent(inout) :: self

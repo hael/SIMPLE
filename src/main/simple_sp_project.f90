@@ -3340,6 +3340,12 @@ contains
                         else
                             THROW_WARN('no out-type oris available to write; write_segment2txt')
                         endif
+                    case('optics')
+                        if( self%os_optics%get_noris() > 0 )then
+                            call self%os_optics%write(fname)
+                        else
+                            THROW_WARN('no optics-type oris available to write; write_segment2txt')
+                        endif  
                     case('projinfo')
                         if( self%projinfo%get_noris() > 0 )then
                             call self%projinfo%write(fname, fromto)
@@ -3445,6 +3451,16 @@ contains
                 else
                     write(logfhandle,*) 'No out-type oris available to print; sp_project :: print_segment'
                 endif
+            case('optics')
+                noris = self%os_optics%get_noris()
+                if( noris > 0 )then
+                    if( .not. fromto_present ) ffromto = [1,noris]
+                    do iori=ffromto(1),ffromto(2)
+                        write(logfhandle,'(a)') self%os_optics%ori2str(iori)
+                    end do
+                else
+                    write(logfhandle,*) 'No optics-type oris available to print; sp_project :: print_segment'
+                endif  
             case('projinfo')
                 noris = self%projinfo%get_noris()
                 if( noris > 0 )then
@@ -3499,6 +3515,8 @@ contains
                 call self%bos%write_segment(isegment, self%os_ptcl3D, fromto)
             case(OUT_SEG)
                 call self%bos%write_segment(isegment, self%os_out)
+            case(OPTICS_SEG)
+                call self%bos%write_segment(isegment, self%os_optics)   
             case(PROJINFO_SEG)
                 call self%bos%write_segment(isegment, self%projinfo)
             case(JOBPROC_SEG)
@@ -3527,6 +3545,8 @@ contains
                 call self%bos%write_segment_inside(isegment, self%os_ptcl3D, fromto)
             case(OUT_SEG)
                 call self%bos%write_segment_inside(isegment, self%os_out)
+            case(OPTICS_SEG)
+                call self%bos%write_segment_inside(isegment, self%os_optics)
             case(PROJINFO_SEG)
                 call self%bos%write_segment_inside(isegment, self%projinfo)
             case(JOBPROC_SEG)
@@ -3546,6 +3566,7 @@ contains
         call self%os_cls3D%kill
         call self%os_ptcl3D%kill
         call self%os_out%kill
+        call self%os_optics%kill
         call self%projinfo%kill
         call self%jobproc%kill
         call self%compenv%kill
@@ -3570,6 +3591,8 @@ contains
                 oritype2segment = PTCL3D_SEG
             case('out')
                 oritype2segment = OUT_SEG
+            case('optics')
+                oritype2segment = OPTICS_SEG  
             case('projinfo')
                 oritype2segment = PROJINFO_SEG
             case('jobproc')
@@ -3599,6 +3622,8 @@ contains
                 oritype = 'ptcl3D'
             case(OUT_SEG)
                 oritype = 'out'
+            case(OPTICS_SEG)
+                oritype = 'optics'   
             case(PROJINFO_SEG)
                 oritype = 'projinfo'
             case(JOBPROC_SEG)
@@ -3632,6 +3657,8 @@ contains
                 info = info//'3D information, one per particle'
             case(OUT_SEG)
                 info = info//'crtitical project outputs: class averages, 3D volumes, FSC/FRC files etc.'
+            case(OPTICS_SEG)
+                info = info//'optics group information.'   
             case(PROJINFO_SEG)
                 info = info//'information about the project, project name etc.'
             case(JOBPROC_SEG)

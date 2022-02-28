@@ -93,7 +93,7 @@ end type stats_struct
 enum, bind(c)
     enumerator :: ENUM_ORISEG = 0
     enumerator :: MIC_SEG = 1, STK_SEG = 2, PTCL2D_SEG = 3, CLS2D_SEG = 4
-    enumerator :: CLS3D_SEG = 5, PTCL3D_SEG = 6, OUT_SEG = 7
+    enumerator :: CLS3D_SEG = 5, PTCL3D_SEG = 6, OUT_SEG = 7, OPTICS_SEG = 8
     enumerator :: PROJINFO_SEG = 11, JOBPROC_SEG = 12, COMPENV_SEG = 13
 end enum
 integer(kind=kind(ENUM_ORISEG)), parameter :: GENERIC_SEG = PTCL3D_SEG

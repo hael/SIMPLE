@@ -7,7 +7,7 @@ use simple_syslib,  only: file_exists, is_open, is_file_open, is_io, simple_absp
 implicit none
 
 public :: fileiochk, fopen, fclose, wait_for_closure, nlines, filelength, funit_size, is_funit_open, get_open_funits
-public :: add2fbody, swap_suffix, get_fbody, fname_new_ext, fname2ext, fname2iter, basename,  get_fpath
+public :: add2fbody, swap_suffix, get_fbody, fname_new_ext, fname2ext, fname2iter, basename, rev_basename, get_fpath
 public :: make_dirnames, make_filenames, filepath, del_files, fname2format, read_filetable, write_filetable
 public :: write_singlelineoftext, arr2file, arr2txtfile, file2rarr, simple_copy_file, make_relativepath
 private
@@ -442,7 +442,20 @@ contains
             allocate(new_fname, source=trim(fname(pos+1:length)))
         endif
     end function basename
-
+    
+    pure function rev_basename( fname ) result( new_fname)
+        character(len=*), intent(in)  :: fname     !< abs filename
+        character(len=:), allocatable :: new_fname
+        integer :: length, pos
+        length = len_trim(fname)
+        pos = scan(fname(1:length),PATH_SEPARATOR,back=.false.)
+        if( pos == 0 )then
+            allocate(new_fname, source=trim(fname))
+        else
+            allocate(new_fname, source=trim(fname(pos+1:length)))
+        endif
+    end function rev_basename
+    
     pure function get_fpath( fname ) result( path )
         character(len=*), intent(in)  :: fname !< abs filename
         character(len=:), allocatable :: path
