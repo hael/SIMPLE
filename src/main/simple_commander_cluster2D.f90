@@ -1163,7 +1163,6 @@ contains
     subroutine exec_cluster_cavgs( self, cline )
         use simple_polarizer,        only: polarizer
         use simple_class_frcs,       only: class_frcs
-        use simple_tvfilter,         only: tvfilter
         use simple_estimate_ssnr,    only: fsc2optlp_sub
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_aff_prop,         only: aff_prop
@@ -1172,7 +1171,6 @@ contains
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(class_frcs)              :: clsfrcs
-        type(tvfilter)                :: tvfilt
         type(image)                   :: img_msk
         type(polarft_corrcalc)        :: pftcc
         type(aff_prop)                :: aprop
@@ -1230,7 +1228,6 @@ contains
             l_apply_optlp = .true.
         endif
         ! create the stuff needed in the loop
-        call tvfilt%new
         filtsz = clsfrcs%get_filtsz()
         allocate(cavg_imgs(ncls_sel), frc(filtsz), filter(filtsz))
         ! prep mask
@@ -1265,9 +1262,6 @@ contains
                     call cavg_imgs(cnt)%ifft()
                 endif
             endif
-            ! TV regularization
-            call tvfilt%apply_filter(cavg_imgs(cnt), params%lambda)
-            if( DEBUG ) call cavg_imgs(cnt)%write('2_TVdenoised.mrc', cnt)
             ! normalization
             call cavg_imgs(cnt)%noise_norm(l_msk, sdev_noise)
             if( DEBUG ) call cavg_imgs(cnt)%write('3_noise_normalized.mrc', cnt)
@@ -1524,7 +1518,6 @@ contains
         ! destruct
         call spproj%kill
         call clsfrcs%kill
-        call tvfilt%kill
         call pftcc%kill
         call aprop%kill
         do icls=1,ncls_sel
