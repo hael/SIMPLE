@@ -357,16 +357,14 @@ contains
             endif
         endif
         ! filter
-        if( L_FSCFILT )then
-            call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-            if( any(frc > 0.143) )then
-                call fsc2optlp_sub(build_glob%clsfrcs%get_filtsz(), frc, filter)
-                if( params_glob%l_match_filt )then
-                    call pftcc%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kstop))
-                else
-                    call img_in%fft() ! needs to be here in case the shift was never applied (above)
-                    call img_in%apply_filter_serial(filter)
-                endif
+        call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+        if( any(frc > 0.143) )then
+            call fsc2optlp_sub(build_glob%clsfrcs%get_filtsz(), frc, filter)
+            if( params_glob%l_match_filt )then
+                call pftcc%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kstop))
+            else
+                call img_in%fft() ! needs to be here in case the shift was never applied (above)
+                call img_in%apply_filter_serial(filter)
             endif
         endif
         ! ensure we are in real-space
@@ -581,7 +579,7 @@ contains
                 enddo
             endif
         else
-            if( params_glob%cc_objfun == OBJFUN_EUCLID .or. .not. L_FSCFILT )then
+            if( params_glob%cc_objfun == OBJFUN_EUCLID )then
                 ! no filtering
             else
                 call vol_ptr%fft()

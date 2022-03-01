@@ -46,7 +46,8 @@ character(len=:), allocatable :: cmdline_glob                 !< global command 
 logical,          parameter   :: L_BENCH_GLOB       = .false. !< global benchmarking flag
 logical,          parameter   :: L_DO_GRIDCORR_GLOB = .false. !< global gridding correction flag
 logical,          parameter   :: L_USE_SLURM_ARR    = .false. !< use SLURM arrays for jobs where we know nparts
-logical,          parameter   :: L_FSCFILT          = .true.  !< apply FSC/FRC-based low-pass filter to references
+logical,          parameter   :: L_DEV_GLOB         = .true.  !< global development flag
+logical,          parameter   :: L_VERBOSE_GLOB     = .false. !< verbose output or not
 real,             parameter   :: HPLIM_GUINIER      = 20.     !< high-pass limit for Guinier plot
 integer,          parameter   :: AUTOMSK_FREQ       = 5       !< frequency of automasking
 
@@ -155,6 +156,7 @@ real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht
 real, parameter    :: STREAM_SRCHFRAC      = 0.4       !< fraction of times full 2D search is performed in the pool
 real, parameter    :: MC_PATCHSZ           = 740.      !< recommended patch size (in pixels) for motion correction
 real, parameter    :: ENVMSK_FSC_THRESH    = 0.8       !< FSC value after which phase-randomization and FSC correction is applied in enveloppe masking
+real, parameter    :: MAX_SMPD             = 2.67      !< maximum sampling distance in scaling
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)

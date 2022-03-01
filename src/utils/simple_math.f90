@@ -1234,7 +1234,7 @@ contains
                 exit
             endif
         end do
-        ires0143 = ires0143-1
+        ires0143 = ires0143 - 1
         if( ires0143 == 0 )then
             fsc0143 = 0.
         else
@@ -1249,7 +1249,7 @@ contains
                 exit
             endif
         end do
-        ires05 = ires05-1
+        ires05 = ires05 - 1
         if( ires05 == 0 )then
             fsc05 = 0.
         else

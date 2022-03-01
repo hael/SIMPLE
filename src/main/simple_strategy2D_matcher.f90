@@ -122,14 +122,14 @@ contains
             ! factorial decay, -2 because first step is always greedy
             snhc_sz = min(SNHC2D_INITFRAC,&
                 &max(0.,SNHC2D_INITFRAC*(1.-SNHC2D_DECAY)**real(params_glob%extr_iter-2)))
-            write(logfhandle,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):', 100.*(1.-snhc_sz)
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):', 100.*(1.-snhc_sz)
         else
             snhc_sz = 0. ! full neighbourhood
         endif
 
         ! ARRAY ALLOCATION FOR STRATEGY2D prior to weights
         call prep_strategy2D_glob
-        write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> STRATEGY2D OBJECTS ALLOCATED'
 
         ! SETUP WEIGHTS
         call build_glob%spproj_field%set_all2single('w', 1.0)
@@ -189,7 +189,7 @@ contains
         rt_align         = 0.
         l_ctf            = build_glob%spproj%get_ctfflag('ptcl2D',iptcl=params_glob%fromp).ne.'no'
         l_np_cls_defined = cline%defined('nptcls_per_cls')
-        write(logfhandle,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         ! Batch loop
         do ibatch=1,nbatches
             batch_start = batches(ibatch,1)
@@ -284,7 +284,7 @@ contains
         if( l_distr_exec_glob )then
             ! write results to disk
             call cavger_readwrite_partial_sums('write')
-        else            
+        else
             if( cline%defined('which_iter') )then
                 params_glob%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
                 params_glob%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_even'//params_glob%ext

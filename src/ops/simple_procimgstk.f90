@@ -36,7 +36,7 @@ contains
         call stkio_r%open(fname2copy, smpd, 'read')
         call stkio_w%open(fname, smpd, 'write', box=ldim(1), is_ft=.false.)
         call img%new(ldim,smpd)
-        write(logfhandle,'(a)') '>>> COPYING IMAGES'
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(a)') '>>> COPYING IMAGES'
         cnt = 0
         do i=fromto(1),fromto(2)
             cnt = cnt+1
@@ -104,7 +104,7 @@ contains
         call stkio_w%open(fname, smpd, 'write', box=ldim_new(1))
         call img%new(ldim,smpd,wthreads=.false.)
         call img_scaled%new(ldim_new,smpd,wthreads=.false.) ! this sampling distance will be overwritten
-        write(logfhandle,'(a)') '>>> SCALING IMAGES'
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(a)') '>>> SCALING IMAGES'
         if( present(fromptop) )then
             prange = fromptop
         else
@@ -236,7 +236,7 @@ contains
         call stkio_w%open(fname, smpd, 'write', box=ldim_clip(1))
         call img%new(ldim,smpd)
         call img_scaled%new(ldim_new,smpd) ! this sampling distance will be overwritten
-        write(logfhandle,'(a)') '>>> SCALING IMAGES'
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(a)') '>>> SCALING IMAGES'
         if( present(fromptop) )then
             prange = fromptop
         else
@@ -770,7 +770,7 @@ contains
         do i=1,nptcls
             if( .not. mask(i) ) call rt%insert(i)
         end do
-        write(logfhandle,'(a)') '>>> RANDOMLY SELECTING IMAGES'
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(a)') '>>> RANDOMLY SELECTING IMAGES'
         do i = 1,nran
             call progress(i, nran)
             ii = rt%irnd()

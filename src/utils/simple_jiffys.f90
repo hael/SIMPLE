@@ -14,7 +14,7 @@ contains
 
     subroutine progress( i, n )
         integer, intent(in) :: i, n
-        if( .not. l_distr_exec_glob )then
+        if( .not. l_distr_exec_glob .and. L_VERBOSE_GLOB )then
             write(logfhandle,'(a1,a,t21,i3,a)',advance="no") achar(13),&
                 &"Percent Complete: ", nint((real(i)/real(n))*100.0), "%"
             flush (OUTPUT_UNIT)
@@ -66,7 +66,7 @@ contains
         ! pretty ending
         pprint_simple = .true.
         if( present(print_simple) ) pprint_simple = print_simple
-        if( pprint_simple )then
+        if( pprint_simple .and. L_VERBOSE_GLOB )then
             write(logfhandle,'(A)') "       _______ _____ _______  _____         _______"
             write(logfhandle,'(A)') "       |______   |   |  |  | |_____] |      |______"
             write(logfhandle,'(A)') "       ______| __|__ |  |  | |       |_____ |______"
@@ -76,7 +76,7 @@ contains
             write(logfhandle,'(A)') "         (_                  (\   (_         _)      (_"
             write(logfhandle,'(A)') ""
         endif
-        write(logfhandle,'(A)') str
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') str
     end subroutine simple_end
 
     !> \brief  for pretty haloween ending

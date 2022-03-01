@@ -216,7 +216,7 @@ contains
             if( params%oritab /= '' ) call binread_oritab(params%oritab,              self%spproj, self%spproj_field, [1,params%nptcls])
         endif
         if( .not. associated(build_glob) ) build_glob => self
-        write(logfhandle,'(A)') '>>> DONE BUILDING SP PROJECT'
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING SP PROJECT'
     end subroutine build_spproj
 
     subroutine build_general_tbox( self, params, cline, do3d, wthreads )
@@ -279,7 +279,7 @@ contains
         ! associate global build pointer
         if( .not. associated(build_glob) ) build_glob => self
         self%general_tbox_exists = .true.
-        write(logfhandle,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
     end subroutine build_general_tbox
 
     subroutine kill_general_tbox( self )
@@ -318,7 +318,7 @@ contains
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         if( .not. associated(build_glob) ) build_glob => self
         self%eo_rec_tbox_exists = .true.
-        write(logfhandle,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
     end subroutine build_rec_eo_tbox
 
     subroutine kill_rec_eo_tbox( self )
@@ -336,7 +336,7 @@ contains
         call self%clsfrcs%new(params%ncls, params%box, params%smpd, params%nstates)
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy2D_tbox_exists = .true.
-        write(logfhandle,'(A)') '>>> DONE BUILDING STRATEGY2D TOOLBOX'
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING STRATEGY2D TOOLBOX'
     end subroutine build_strategy2D_tbox
 
     subroutine kill_strategy2D_tbox( self )
@@ -355,7 +355,7 @@ contains
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy3D_tbox_exists = .true.
-        write(logfhandle,'(A)') '>>> DONE BUILDING STRATEGY3D TOOLBOX'
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING STRATEGY3D TOOLBOX'
     end subroutine build_strategy3D_tbox
 
     subroutine kill_strategy3D_tbox( self )

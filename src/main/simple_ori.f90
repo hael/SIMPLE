@@ -246,7 +246,7 @@ contains
         class(ori),        intent(inout) :: self
         logical, optional, intent(in)    :: keepshifts
         logical :: kkeepshifts
-        kkeepshifts = .false.
+        kkeepshifts = .true.
         if( present(keepshifts) ) kkeepshifts = keepshifts
         if( self%is_ptcl )then
             self%pparms(I_CLASS) = 0.
