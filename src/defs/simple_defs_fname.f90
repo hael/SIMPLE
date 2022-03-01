@@ -14,6 +14,7 @@ character(len=*), parameter :: TXT_EXT              = '.txt'
 character(len=*), parameter :: BIN_EXT              = '.bin'
 character(len=*), parameter :: METADATA_EXT         = '.simple'
 character(len=*), parameter :: JPG_EXT              = '.jpg'
+character(len=*), parameter :: STK_EXT              = '.mrcs'
 ! SUFFIXES
 character(len=*), parameter :: SCALE_SUFFIX         = '_sc'
 character(len=*), parameter :: THUMBNAIL_SUFFIX     = '_thumb'
