@@ -190,10 +190,10 @@ contains
             lplim = params_glob%lp
             params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%box, params_glob%smpd)
         else
-            if( file_exists(params_glob%frcs) .and. which_iter > LPLIM1ITERBOUND )then
+            if( file_exists(params_glob%frcs) .and. which_iter >= LPLIM1ITERBOUND )then
                 lplim = build_glob%clsfrcs%estimate_lp_for_align()
             else
-                if( which_iter <= LPLIM1ITERBOUND )then
+                if( which_iter < LPLIM1ITERBOUND )then
                     lplim = params_glob%lplims2D(1)
                 else if( frac_srch_space >= FRAC_SH_LIM .and. which_iter > LPLIM3ITERBOUND )then
                     lplim = params_glob%lplims2D(3)

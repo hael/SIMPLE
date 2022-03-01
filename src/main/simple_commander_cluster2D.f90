@@ -453,6 +453,7 @@ contains
     end subroutine exec_cleanup2D
 
     subroutine exec_cluster2D_autoscale( self, cline )
+        use simple_estimate_ssnr,     only: mskdiam2lplimits
         use simple_commander_project, only: scale_project_commander_distr
         use simple_commander_imgproc, only: scale_commander, pspec_int_rank_commander
         class(cluster2D_autoscale_commander_hlev), intent(inout) :: self
@@ -484,9 +485,7 @@ contains
         integer  :: last_iter_stage1, last_iter_stage2
         logical  :: scaling, l_shmem
         mskdiam = cline%get_rarg('mskdiam')
-        lpstart = max(mskdiam/9., 20.)
-        lpstop  = max(mskdiam/22., 5.)
-        lpcen   = max(mskdiam/6., 30.)
+        call mskdiam2lplimits(cline%get_rarg('mskdiam'), lpstart, lpstop, lpcen)
         write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lpstart
         write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', lpstop
         write(logfhandle,'(A,F5.1)') '>>> DID SET CENTERING LOW-PASS LIMIT (IN A) TO: ', lpcen
@@ -1481,7 +1480,7 @@ contains
                 ! make a filename for the class
                 do i=1,ncls_sel
                     if( labels(i) == icls )then
-                        classname = 'class'//int2str_pad(icls,3)//'.mrcs'
+                        classname = 'class'//int2str_pad(icls,3)//trim(STK_EXT)
                         cntarr(labels(i)) = cntarr(labels(i)) + 1
                         call cavg_imgs(i)%write(classname, cntarr(labels(i)))
                     endif
@@ -1613,7 +1612,7 @@ contains
             end do
             !$omp end parallel do
             ! make a filename for the class
-            classname = 'class'//int2str_pad(icls,5)//'.mrcs'
+            classname = 'class'//int2str_pad(icls,5)//trim(STK_EXT)
             ! write the class average first, followed by the rotated and shifted particles
             call img_cavg%write(classname, 1)
             cnt = 1

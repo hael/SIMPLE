@@ -19,8 +19,7 @@ public :: cluster2D_commander_stream
 private
 #include "simple_local_flags.inc"
 
-real,                  parameter   :: GREEDY_TARGET_LP    = 15.
-integer,               parameter   :: MINBOXSZ            = 72    ! minimum boxsize for scaling
+integer,               parameter   :: MINBOXSZ            = 96    ! minimum boxsize for scaling
 integer,               parameter   :: WAIT_WATCHER        = 5     ! seconds prior to new stack detection
 ! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 1800  ! dev settings
 integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
@@ -420,7 +419,8 @@ contains
     ! Main routine
 
     subroutine exec_cluster2D_stream( self, cline )
-        use simple_class_frcs, only: class_frcs
+        use simple_class_frcs,    only: class_frcs
+        use simple_estimate_ssnr, only: mskdiam2lplimits
         class(cluster2D_commander_stream), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters)                   :: params
@@ -440,8 +440,8 @@ contains
         type(sp_project)                   :: orig_proj, transfer_spproj
         character(len=:),      allocatable :: spproj_list_fname, orig_projfile
         character(len=LONGSTRLEN)          :: prev_snapshot_frcs, prev_snapshot_cavgs
-        real    :: SMPD_TARGET = 4.       ! target sampling distance
-        real    :: orig_smpd, scale_factor, smpd, lp_greedy, lpstart_stoch
+        real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
+        real    :: orig_smpd, scale_factor, smpd, lp_greedy, lpstart_stoch, lpstart, lpstop, lpcen
         integer :: nptcls_per_chunk, ncls_glob, last_injection, max_ncls,ichunk, time_iter, ipart, iotest
         integer :: iter, orig_box, box, boxpd, n_spprojs, pool_iter, origproj_time, time_start_iter
         logical :: do_autoscale, l_greedy, l_once, l_restart
@@ -452,13 +452,14 @@ contains
         else
             if( .not.cline%defined('mskdiam') ) THROW_HARD('MSKDIAM must be defined!')
         endif
+        call mskdiam2lplimits(cline%get_rarg('mskdiam'), lpstart, lpstop, lpcen)
+        lpstart_stoch = (lpstart+lpstop) / 2.0
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
-        if( .not. cline%defined('lp')        ) call cline%set('lp',          15.)
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       20.)
-        if( .not. cline%defined('center')    ) call cline%set('center',     'no')
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',     lpcen)
+        if( .not. cline%defined('center')    ) call cline%set('center',    'yes')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        if( .not. cline%defined('lpthresh')  ) call cline%set('lpthresh',    30.)
-        if( .not. cline%defined('ndev')      ) call cline%set('ndev',        1.5)
+        if( .not. cline%defined('lpthresh')  ) call cline%set('lpthresh',  30.)
+        if( .not. cline%defined('ndev')      ) call cline%set('ndev',      1.5)
         if( .not. cline%defined('oritype')   ) call cline%set('oritype','ptcl2D')
         call cline%set('ptclw',      'no')
         call cline%set('stream','yes') ! only for parameters determination
@@ -489,10 +490,8 @@ contains
         spproj_list_fname = filepath(trim(params%dir_target), trim(STREAM_SPPROJFILES))
         ncls_glob         = 0
         l_greedy          = trim(params%refine).eq.'greedy'
-        lp_greedy         = GREEDY_TARGET_LP
+        lp_greedy         = lpstart_stoch
         if( cline%defined('lp') ) lp_greedy = params%lp
-        SMPD_TARGET       = lp_greedy/2.
-        lpstart_stoch     = (GREEDY_TARGET_LP+lp_greedy)/2.
         prev_snapshot_cavgs = ''
         call write_user_params
         call simple_mkdir(SCALE_DIR)
@@ -522,18 +521,21 @@ contains
         if( l_greedy )then
             call cline_cluster2D_chunk%set('maxits', 10.)
             call cline_cluster2D_chunk%set('refine', 'greedy')
-            call cline_cluster2D_chunk%set('lp',     GREEDY_TARGET_LP)
+            call cline_cluster2D_chunk%set('lp',     lp_greedy)
+            write(logfhandle,'(A,F5.1)') '>>> CHUNK           LOW-PASS LIMIT (IN A) TO: ', lp_greedy
         else
             call cline_cluster2D_chunk%set('refine', 'snhc')
             call cline_cluster2D_chunk%set('extr_iter', real(MAX_EXTRLIM2D-2))
             call cline_cluster2D_chunk%set('maxits',  12.)
-            call cline_cluster2D_chunk%set('lpstart', GREEDY_TARGET_LP)
-            call cline_cluster2D_chunk%set('lpstop',  lp_greedy)
+            call cline_cluster2D_chunk%set('lpstart', lpstart)
+            call cline_cluster2D_chunk%set('lpstop',  lpstop)
+            write(logfhandle,'(A,F5.1)') '>>> CHUNK STARTING LOW-PASS LIMIT (IN A) TO: ', lpstart
+            write(logfhandle,'(A,F5.1)') '>>> CHUNK HARD     LOW-PASS LIMIT (IN A) TO: ', lpstop
         endif
         call cline_cluster2D_chunk%set('startit',  1.)
-        call cline_cluster2D_chunk%set('ncls',     real(params%ncls_start))
-        call cline_cluster2D_chunk%set('nparts',   real(params%nparts_chunk))
-        call cline_cluster2D_chunk%set('wiener','partial')
+        call cline_cluster2D_chunk%set('ncls',   real(params%ncls_start))
+        call cline_cluster2D_chunk%set('nparts', real(params%nparts_chunk))
+        call cline_cluster2D_chunk%set('wiener', 'partial')
         ! pool classification: optional stochastic optimisation, optional match filter
         ! automated incremental learning, objective function is standard cross-correlation (cc)
         call cline_cluster2D%set('prg',       'cluster2D_distr')
@@ -547,11 +549,12 @@ contains
         call cline_cluster2D%set('extr_iter', 100.)
         call cline_cluster2D%set('mkdir',     'no')
         if( l_greedy )then
-            call cline_cluster2D%set('center', 'no')
             call cline_cluster2D%set('refine', 'greedy')
             call cline_cluster2D%set('lp',     lp_greedy)
+            write(logfhandle,'(A,F5.1)') '>>> POOL           LOW-PASS LIMIT (IN A) TO: ', lp_greedy
         else
             call cline_cluster2D%set('lpstart', lpstart_stoch)
+            write(logfhandle,'(A,F5.1)') '>>> POOL  STARTING LOW-PASS LIMIT (IN A) TO: ', lpstart_stoch
         endif
         call cline_cluster2D%set('stream', 'yes') ! controls dual ctf treatment
         ! transfer project info
@@ -598,7 +601,11 @@ contains
                     SMPD_TARGET = orig_smpd * real(orig_box) / real(MINBOXSZ)
                     call autoscale(orig_box, orig_smpd, SMPD_TARGET, box, smpd, scale_factor)
                 endif
-                if( box == orig_box ) do_autoscale = .false.
+                if( box >= orig_box )then
+                    do_autoscale = .false.
+                else
+                    write(logfhandle,'(A,I5,F5.2)') '>>> DOWNSCALED IMAGE SIZE & PIXEL SIZE (IN A): ', box, smpd
+                endif
             endif
         endif
         if( .not. do_autoscale )then

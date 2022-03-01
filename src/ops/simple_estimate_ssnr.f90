@@ -7,7 +7,7 @@ implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
 public :: acc_dose2filter, dose_weight, nonuniform_phase_ran, nonuniform_fsc_lp, local_res_lp
-public :: plot_fsc, lowpass_from_klim
+public :: plot_fsc, lowpass_from_klim, mskdiam2lplimits
 private
 #include "simple_local_flags.inc"
 
@@ -118,6 +118,14 @@ contains
             endif
         end do
     end subroutine lowpass_from_klim
+
+    subroutine mskdiam2lplimits( mskdiam, lpstart,lpstop, lpcen )
+        real, intent(in)  :: mskdiam
+        real, intent(out) :: lpstart,lpstop, lpcen
+        lpstart = max(mskdiam/9., 20.)
+        lpstop  = max(mskdiam/22., 5.)
+        lpcen   = max(mskdiam/6., 30.)
+    end subroutine mskdiam2lplimits
 
     !> DOSE FILTERING (Grant, Grigorieff eLife 2015)
     !! input is template image, accumulative dose (in e/A2) and acceleration voltage
