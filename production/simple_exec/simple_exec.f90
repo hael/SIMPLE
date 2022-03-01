@@ -114,6 +114,7 @@ type(info_image_commander)                  :: xinfo_image
 type(info_stktab_commander)                 :: xinfo_stktab
 type(print_fsc_commander)                   :: xprint_fsc
 type(print_magic_boxes_commander)           :: xprint_magic_boxes
+type(print_dose_weights_commander)          :: xprint_dose_weights
 
 ! SIMULATOR PROGRAMS
 type(simulate_noise_commander)              :: xsimulate_noise
@@ -329,6 +330,8 @@ select case(trim(prg))
         call xprint_fsc%execute(cline)
     case( 'print_magic_boxes' )
         call xprint_magic_boxes%execute(cline)
+    case( 'print_dose_weights' )
+        call xprint_dose_weights%execute(cline)
 
     ! SIMULATOR PROGRAMS
     case( 'simulate_noise' )
