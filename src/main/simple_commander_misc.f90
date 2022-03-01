@@ -18,6 +18,7 @@ implicit none
 public :: masscen_commander
 public :: print_fsc_commander
 public :: print_magic_boxes_commander
+public :: print_dose_weights_commander
 public :: stk_corr_commander
 public :: kstest_commander
 public :: mkdir_commander
@@ -37,6 +38,10 @@ type, extends(commander_base) :: print_magic_boxes_commander
   contains
     procedure :: execute       => exec_print_magic_boxes
 end type print_magic_boxes_commander
+type, extends(commander_base) :: print_dose_weights_commander
+  contains
+    procedure :: execute       => exec_print_dose_weights
+end type print_dose_weights_commander
 type, extends(commander_base) :: stk_corr_commander
   contains
     procedure :: execute       => exec_stk_corr
@@ -110,6 +115,28 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRINT_MAGIC_BOXES NORMAL STOP ****')
     end subroutine exec_print_magic_boxes
+
+    ! kv
+    ! acc_dose
+    ! box
+    ! smpd
+    subroutine exec_print_dose_weights( self, cline )
+        use simple_estimate_ssnr, only: acc_dose2filter
+        class(print_dose_weights_commander), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline
+        type(parameters)  :: params
+        real, allocatable :: filter(:), res(:)
+        integer           :: i, filtsz
+        call params%new(cline)
+
+        ! write(logfhandle,'(A)') 'RESOLUTION, DOSE_WEIGHT'
+        ! do i = 1,filtsz
+        !     write(logfhandle, '(F5.1,1X,A,1X,f5.1)') res(i), ', ', filter(i)
+        ! end do
+
+        ! end gracefully
+        call simple_end('**** SIMPLE_PRINT_DOSE_WEIGHTS_NORMAL STOP ****')
+    end subroutine exec_print_dose_weights
 
     subroutine exec_stk_corr( self, cline )
         class(stk_corr_commander), intent(inout) :: self
