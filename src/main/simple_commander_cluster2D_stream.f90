@@ -510,7 +510,6 @@ contains
         call cline_cluster2D_chunk%delete('projfile')
         call cline_cluster2D_chunk%delete('projname')
         call cline_cluster2D_chunk%set('objfun',    'cc')
-        call cline_cluster2D_chunk%set('center',    'no')
         call cline_cluster2D_chunk%set('match_filt','no')
         call cline_cluster2D_chunk%set('autoscale', 'no')
         call cline_cluster2D_chunk%set('ptclw',     'no')

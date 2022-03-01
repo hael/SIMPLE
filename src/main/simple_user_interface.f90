@@ -1338,7 +1338,7 @@ contains
         &for accelerated convergence rate. Initial/Final low-pass limits control the degree of down-scaling(yes|no){yes}',&
         &'(yes|no){yes}', .false., 'yes')
         call cluster2D_stream%set_input('srch_ctrls', 4, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
-            &gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no')
+            &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call cluster2D_stream%set_input('srch_ctrls', 5, 'ncls', 'num', 'Maximum number of 2D clusters',&
         &'Maximum number of groups to sort the particles into prior to averaging to create 2D class averages with improved SNR', 'Maximum # 2D clusters', .true., 200.)
         call cluster2D_stream%set_input('srch_ctrls', 6, 'lpthresh', 'num', 'Resolution rejection threshold',&

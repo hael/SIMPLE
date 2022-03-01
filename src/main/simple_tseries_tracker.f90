@@ -85,7 +85,7 @@ contains
             call neigh_imgs(i)%new([params_glob%box,params_glob%box,1], params_glob%smpd,wthreads=.false.)
             call backgr_imgs(i)%new([params_glob%box,params_glob%box,1], params_glob%smpd,wthreads=.false.)
             call tmp_imgs(i)%new([params_glob%box,params_glob%box,1], params_glob%smpd,wthreads=.false.)
-            fname = trim(dir)//'/'//trim(fbody)//'_background_nn'//int2str(i)//'.mrcs'
+            fname = trim(dir)//'/'//trim(fbody)//'_background_nn'//int2str(i)//trim(STK_EXT)
             neighstknames(i) = trim(fname)
         end do
         allocate(ptcls(params_glob%nframesgrp),ptcls_saved(params_glob%nframesgrp))
