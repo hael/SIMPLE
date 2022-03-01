@@ -397,14 +397,12 @@ contains
                 if( nptcls_eff == 0 ) cycle
                 ! Interpolation loop
                 !$omp parallel default(shared) proc_bind(close)&
-                !$omp private(i,iprec,iptcl,win_corner,add_phshift,mat,ithr,h,k,l,m,ll,mm,dist,loc,sh,phys,kw,tval,fcompl,fcompll,radfirstpeak)
+                !$omp private(i,iprec,win_corner,add_phshift,mat,ithr,h,k,l,m,ll,mm,dist,loc,sh,phys,kw,tval,fcompl,fcompll)
                 !$omp do schedule(static)
                 do i = 1,nptcls_in_batch
                     iprec = batch_iprecs(i)
                     if( iprec == 0 ) cycle
                     if( precs(iprec)%pind == 0 ) cycle
-                    iptcl        = precs(iprec)%pind
-                    ithr         = omp_get_thread_num() + 1
                     cmats(:,:,i) = zero
                     rhos(:,:,i)  = 0.
                     ! normalize & pad & FFT
@@ -490,14 +488,16 @@ contains
                     enddo
                 enddo
                 !$omp end do nowait
+                !$omp end parallel
                 if( l_stream .and. ctfflag /= CTFFLAG_NO)then
                     ! now we update prior to first peak
+                    !$omp parallel default(shared) proc_bind(close)&
+                    !$omp private(i,iprec,win_corner,add_phshift,mat,ithr,h,k,l,m,ll,mm,dist,loc,sh,phys,kw,tval,fcompl,fcompll,radfirstpeak)
                     !$omp do schedule(static)
                     do i = 1,nptcls_in_batch
                         iprec = batch_iprecs(i)
                         if( iprec == 0 ) cycle
                         if( precs(iprec)%pind == 0 ) cycle
-                        iptcl        = precs(iprec)%pind
                         ! apply CTF to image, stores CTF values, within firstpeak
                         add_phshift = 0.
                         if( phaseplate ) add_phshift = precs(iprec)%phshift
@@ -505,7 +505,7 @@ contains
                         &precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, maxSpaFreqsq(i))
                         ! radius of the bounding sphere around the astigmatic first peak ellipse 
                         radfirstpeak = ceiling( sqrt(maxSpaFreqsq(i)) * real(ldim_pd(1)) )
-                        radfirstpeak = min( max(radfirstpeak,0), ldim_pd(1)/2-1)
+                        radfirstpeak = min( max(radfirstpeak,0), interp_shlim)
                         ! Rotation matrix
                         call rotmat2d(-precs(iprec)%e3, mat)
                         ! Interpolation within bounding sphere
@@ -575,8 +575,8 @@ contains
                         enddo
                     enddo
                     !$omp end do nowait
+                    !$omp end parallel
                 endif
-                !$omp end parallel
             enddo ! end read batches loop
             ! close stack
             call stkio_r%close
@@ -672,17 +672,16 @@ contains
 
     !>  \brief  calculates Fourier ring correlations
     subroutine cavger_calc_and_write_frcs_and_eoavg( fname )
-        use simple_estimate_ssnr, only: fsc2optlp_sub
         character(len=*), intent(in) :: fname
         type(image), allocatable     :: even_imgs(:), odd_imgs(:)
-        real,        allocatable     :: frc(:), optlp(:)
+        real,        allocatable     :: frc(:)
         integer :: icls, find, find_plate, ithr
-        allocate(even_imgs(nthr_glob), odd_imgs(nthr_glob), frc(filtsz), optlp(filtsz))
+        allocate(even_imgs(nthr_glob), odd_imgs(nthr_glob), frc(filtsz))
         do ithr=1,nthr_glob
             call even_imgs(ithr)%new(ldim,smpd,wthreads=.false.)
             call odd_imgs(ithr)%new(ldim,smpd,wthreads=.false.)
         end do
-        !$omp parallel do default(shared) private(icls,ithr,frc,find,find_plate,optlp) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(icls,ithr,frc,find,find_plate) schedule(static) proc_bind(close)
         do icls=1,ncls
             ithr = omp_get_thread_num() + 1
             call even_imgs(ithr)%set(cavgs_even(icls))
@@ -712,9 +711,6 @@ contains
                 call cavgs_odd_wfilt(icls)%fft()
                 call cavgs_even_wfilt(icls)%insert_lowres_serial(cavgs_merged_wfilt(icls), find)
                 call cavgs_odd_wfilt(icls)%insert_lowres_serial(cavgs_merged_wfilt(icls), find)
-                ! optimal filtration
-                call fsc2optlp_sub(filtsz,frc,optlp)
-                call cavgs_merged_wfilt(icls)%apply_filter_serial(optlp)
                 call cavgs_merged_wfilt(icls)%ifft
             endif
         end do
@@ -747,14 +743,14 @@ contains
                     call cavgs_odd(icls)%write(fname, icls)
                 end do
             case('merged')
-                do icls=1,ncls
-                    call cavgs_merged(icls)%write(fname, icls)
-                end do
                 if( l_stream )then
                     do icls=1,ncls
                         call cavgs_merged_wfilt(icls)%write(fname_wfilt, icls)
                     end do                
                 endif
+                do icls=1,ncls
+                    call cavgs_merged(icls)%write(fname, icls)
+                end do
             case DEFAULT
                 THROW_HARD('unsupported which flag')
         end select
