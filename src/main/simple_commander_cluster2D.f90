@@ -221,6 +221,7 @@ contains
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
         if( .not. cline%defined('refine')    ) call cline%set('refine',  'greedy')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('wiener')    ) call cline%set('wiener', 'partial')
         call cline%set('ptclw','no')
         call cline%set('stream', 'no')
         ! set shared-memory flag
@@ -428,6 +429,7 @@ contains
         if( do_scaling ) call simple_rmdir(STKPARTSDIR)
         ! end gracefully
         call simple_end('**** SIMPLE_CLEANUP2D NORMAL STOP ****')
+
         contains
 
             subroutine rescale_cavgs(cavgs)
@@ -497,6 +499,7 @@ contains
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',      30. )
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
         if( .not.cline%defined('refine')     ) call cline%set('refine',    'snhc')
+        if( .not. cline%defined('wiener')    ) call cline%set('wiener', 'partial')
         call cline%set('ptclw','no')
         call cline%delete('clip')
         ! set shared-memory flag
@@ -757,12 +760,13 @@ contains
         mskdiam = cline%get_rarg('mskdiam')
         call mskdiam2lplimits(cline%get_rarg('mskdiam'), lpstart, lpstop, lpcen)
         call cline%set('prg','cluster2D')
-        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart', lpstart)
-        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',   lpstop)
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',     lpcen)
-        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30. )
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        if( .not. cline%defined('oritype')   ) call cline%set('oritype','ptcl2D')
+        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',  lpstart)
+        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',    lpstop)
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      lpcen)
+        if( .not. cline%defined('maxits')    ) call cline%set('maxits',      30. )
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
+        if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('wiener')    ) call cline%set('wiener', 'partial')
         l_stream = .false.
         if( cline%defined('stream') )then
             l_stream = trim(cline%get_carg('stream'))=='yes'
