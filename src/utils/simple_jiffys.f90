@@ -76,7 +76,7 @@ contains
             write(logfhandle,'(A)') "         (_                  (\   (_         _)      (_"
             write(logfhandle,'(A)') ""
         endif
-        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') str
+        write(logfhandle,'(A)') str
     end subroutine simple_end
 
     !> \brief  for pretty haloween ending
