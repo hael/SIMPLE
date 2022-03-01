@@ -6,7 +6,7 @@ include 'simple_lib.f08'
 implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
-public :: acc_dose2filter, dose_weight, nonuniform_phase_ran, nonuniform_fsc_lp, local_res_lp
+public :: nonuniform_phase_ran, nonuniform_fsc_lp, local_res_lp
 public :: plot_fsc, lowpass_from_klim, mskdiam2lplimits
 private
 #include "simple_local_flags.inc"
@@ -127,48 +127,44 @@ contains
         lpcen   = max(mskdiam/6.,  30.)
     end subroutine mskdiam2lplimits
 
-    !> DOSE FILTERING (Grant, Grigorieff eLife 2015)
-    !! input is template image, accumulative dose (in e/A2) and acceleration voltage
-    !!         output is filter coefficients
-    !! \f$  \mathrm{dose}_\mathrm{acc} = \int^{N}_{1} \mathrm{dose\_weight}(a,F,V),\ n_\mathrm{e}/\si{\angstrom\squared}  \f$
-    !! \param acc_dose accumulative dose (in \f$n_\mathrm{e}^- per \si{\angstrom\squared}\f$)
-    function acc_dose2filter( img, acc_dose, kV, filtsz ) result( filter )
-        use simple_image,   only: image
-        type(image), intent(in) :: img           !< input image
-        real,        intent(in) :: acc_dose, kV  !< acceleration voltage
-        integer,     intent(in) :: filtsz
-        real, allocatable       :: filter(:)
-        integer :: find
-        allocate(filter(filtsz))
-        do find=1,filtsz
-            filter(find) = dose_weight(acc_dose, img%get_spat_freq(find), kV)
+    ! Following Grant & Grigorieff; eLife 2015;4:e06980
+    subroutine calc_dose_weights( nframes, xdim, ydim, smpd, kV, exp_time, dose_rate, weights )
+        use simple_image, only: image
+        integer, intent(in)    :: nframes, xdim, ydim
+        real,    intent(in)    :: smpd, kV, exp_time, dose_rate
+        real,    intent(inout) :: weights(nframes)
+        real, parameter        :: A=0.245, B=-1.665, C=2.81
+        type(image) :: img
+        real        :: frame_dose(nframes), acc_doses(nframes), spaFreq, current_time
+        real        :: twoNe, limksq, time_per_frame
+        integer     :: filtsz, ldim(3), iframe, k
+        time_per_frame = exp_time/real(nframes)               ! unit: s
+        do iframe=1,nframes
+            current_time      = real(iframe) * time_per_frame ! unit: s
+            acc_doses(iframe) = dose_rate * current_time      ! unit: e/A2/s * s = e/A2
         end do
-    end function acc_dose2filter
-
-    !>  \brief Calculate dose weight. Input is accumulative dose (in e/A2) and
-    !>  spatial frequency (in 1/A)
-    !!         output is resolution dependent weight applied to individual frames
-    !!         before correlation search and averaging
-    !!
-    !! \f$  \mathrm{dose\_weight}(a,F,V) = \exp\left(- \frac{A_\mathrm{dose}}{k\times (2.0\times A\times f^B + C)} \right), \f$
-    !! where \f$k\f$ is 0.75 for \f$V<200\f$ kV, 1.0 for \f$200 \leqslant  V \leqslant  300\f$
-    real function dose_weight( acc_dose, spat_freq, kV )
-        real, intent(in) :: acc_dose                !< accumulative dose (in e/A2)
-        real, intent(in) :: spat_freq               !< spatial frequency (in 1/A)
-        real, intent(in) :: kV                      !< accelleration voltage
-        real, parameter  :: A=0.245, B=-1.665, C=2.81, kV_factor=0.75
-        real             :: critical_exp !< critical exposure (only depends on spatial frequency)
-        critical_exp = A*(spat_freq**B)+C
-        if( abs(kV-300.) < 0.001 )then
-            ! critical exposure does not need modification
-        else if( abs(kV-200.) < 0.001 )then
-            ! critical exposure at 200 kV expected to be ~25% lower
-            critical_exp = critical_exp * kV_factor
-        else
-            THROW_HARD('unsupported kV (acceleration voltage); dose_weight')
-        endif
-        dose_weight = exp(-acc_dose/(2.0*critical_exp))
-    end function dose_weight
+        ldim = [xdim,ydim,1]
+        call img%new(ldim, smpd)
+        filtsz = img%get_filtsz()
+        ! doses
+        limksq = (real(ldim(2))*smpd)**2.
+        do iframe = 1,nframes
+            frame_dose(iframe) = acc_doses(iframe)
+            if( is_equal(kV,200.) )then
+                frame_dose(iframe) = frame_dose(iframe) / 0.8
+            else if( is_equal(kV,100.) )then
+                frame_dose(iframe) = frame_dose(iframe) / 0.64
+            endif
+        enddo
+        ! dose normalization
+        do k = 1,filtsz
+            spaFreq = sqrt(real(k*k)/limksq)
+            twoNe   = 2.*(A * spaFreq**B + C)
+            weights = exp(-frame_dose / twoNe)
+            weights = weights / sqrt(sum(weights * weights))
+        enddo
+        call img%kill
+    end subroutine calc_dose_weights
 
     subroutine nonuniform_phase_ran( even, odd, mskimg )
         use simple_image, only: image
