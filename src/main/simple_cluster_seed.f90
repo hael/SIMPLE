@@ -118,7 +118,7 @@ contains
         integer        :: tmp(nlabels), order(nptcls), config(nptcls), pops(nlabels)
         real           :: corrs(nptcls)
         integer        :: iptcl, s, ind
-        write(logfhandle,'(A)') '>>> GENERATING ranked'
+        write(logfhandle,'(A)') '>>> GENERATING RANKED'
         ! even partitions
         pops = floor(real(nincl_ptcls)/real(nlabels))
         do s=1,nlabels

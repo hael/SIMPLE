@@ -7,7 +7,7 @@ implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
 public :: acc_dose2filter, dose_weight, nonuniform_phase_ran, nonuniform_fsc_lp, local_res_lp
-public :: plot_fsc
+public :: plot_fsc, lowpass_from_klim
 private
 #include "simple_local_flags.inc"
 
@@ -97,6 +97,27 @@ contains
             w(k) = ssnr(k) / (ssnr(k) + 1.)
         end do
     end function ssnr2optlp
+
+    subroutine lowpass_from_klim( klim, nyq, filter, width )
+        integer,        intent(in)    :: klim, nyq
+        real,           intent(inout) :: filter(nyq)
+        real, optional, intent(in)    :: width
+        real    :: freq, lplim_freq, wwidth
+        integer :: k
+        wwidth = 10.
+        if( present(width) ) wwidth = width
+        lplim_freq = real(klim)
+        do k = 1,nyq
+            freq = real(k)
+            if( k > klim )then
+                filter(k) = 0.
+            else if(k .ge. klim - wwidth)then
+                filter(k) = (cos(((freq-(lplim_freq-wwidth))/wwidth)*pi)+1.)/2.
+            else
+                filter(k) = 1.
+            endif
+        end do
+    end subroutine lowpass_from_klim
 
     !> DOSE FILTERING (Grant, Grigorieff eLife 2015)
     !! input is template image, accumulative dose (in e/A2) and acceleration voltage

@@ -120,7 +120,7 @@ contains
         endif
         if( l_shmem .and. .not. cline%defined('refs') ) THROW_HARD('need input refs (filename) for shared-memory execution')
         call build%init_params_and_build_strategy2D_tbox(cline, params, wthreads=.true.)
-        write(logfhandle,'(a)') '>>> GENERATING CLUSTER CENTERS'
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(a)') '>>> GENERATING CLUSTER CENTERS'
         ! deal with the orientations
         ncls_here = build%spproj_field%get_n('class')
         if( .not. cline%defined('ncls') ) params%ncls = build%spproj_field%get_n('class')
@@ -480,16 +480,24 @@ contains
         type(sp_project)              :: spproj, spproj_sc
         character(len=:), allocatable :: projfile_sc, orig_projfile
         character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
-        real     :: scale_stage1, scale_stage2, trs_stage2
+        real     :: scale_stage1, scale_stage2, trs_stage2, mskdiam, lpstart, lpstop, lpcen
         integer  :: last_iter_stage1, last_iter_stage2
         logical  :: scaling, l_shmem
+        mskdiam = cline%get_rarg('mskdiam')
+        lpstart = max(mskdiam/9., 20.)
+        lpstop  = max(mskdiam/22., 5.)
+        lpcen   = max(mskdiam/6., 30.)
+        write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lpstart
+        write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', lpstop
+        write(logfhandle,'(A,F5.1)') '>>> DID SET CENTERING LOW-PASS LIMIT (IN A) TO: ', lpcen
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
-        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',     15. )
-        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',       8. )
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       30. )
+        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',  lpstart)
+        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',    lpstop)
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      lpcen)
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',      30. )
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
+        if( .not.cline%defined('refine')     ) call cline%set('refine',    'snhc')
         call cline%set('ptclw','no')
         call cline%delete('clip')
         ! set shared-memory flag
@@ -517,14 +525,11 @@ contains
             THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cluster2D_autoscale')
         endif
         ! delete any previous solution
-
         if( .not. spproj%is_virgin_field(params%oritype) .and. trim(params%refine).ne.'inpl' )then
             ! removes previous cluster2D solution (states are preserved)
             call spproj%os_ptcl2D%delete_2Dclustering
             call spproj%write_segment_inside(params%oritype)
         endif
-        ! refinement flag
-        if( .not.cline%defined('refine') ) call cline%set('refine', 'snhc')
         ! splitting
         if( .not. l_shmem ) call spproj%split_stk(params%nparts, dir=PATH_PARENT)
         ! general options planning
@@ -536,6 +541,7 @@ contains
             cline_cluster2D_stage1 = cline
             call cline_cluster2D_stage1%set('objfun',     'cc')
             call cline_cluster2D_stage1%set('match_filt', 'no')
+            call cline_cluster2D_stage1%set('lpstop',  lpstart)
             if( params%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))

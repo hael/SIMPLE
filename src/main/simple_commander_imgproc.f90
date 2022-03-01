@@ -777,7 +777,7 @@ contains
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! random selection
         if( cline%defined('nran') )then
-            write(logfhandle,'(a)') '>>> RANDOMLY SELECTING IMAGES'
+            if( L_VERBOSE_GLOB ) write(logfhandle,'(a)') '>>> RANDOMLY SELECTING IMAGES'
             allocate( pinds(params%nran) )
             rt = ran_tabu(params%nptcls)
             call rt%ne_ran_iarr(pinds)

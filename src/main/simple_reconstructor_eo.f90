@@ -498,7 +498,7 @@ contains
     subroutine sampl_dens_correct_sum( self, reference )
         class(reconstructor_eo), intent(inout) :: self      !< instance
         class(image),            intent(inout) :: reference !< reference volume
-        write(logfhandle,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
         call reference%set_ft(.false.)
         call self%eosum%sampl_dens_correct(do_gridcorr=L_DO_GRIDCORR_GLOB)
         call self%eosum%ifft()
@@ -535,7 +535,7 @@ contains
         ! zero the Fourier volumes and rhos
         call self%reset_all
         call self%reset_eoexp
-        write(logfhandle,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
         statecnt = 0
         cnt      = 0
         do i=1,params_glob%nptcls

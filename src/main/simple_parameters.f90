@@ -1199,8 +1199,8 @@ contains
         self%lplims2D(1)       = max(self%fny, self%lpstart)
         self%lplims2D(2)       = max(self%fny, self%lplims2D(1) - (self%lpstart - self%lpstop)/2.)
         self%lplims2D(3)       = max(self%fny, self%lpstop)
-        self%smpd_targets2D(1) = self%lplims2D(2)*LP2SMPDFAC2D
-        self%smpd_targets2D(2) = self%lplims2D(3)*LP2SMPDFAC2D
+        self%smpd_targets2D(1) = min(MAX_SMPD, self%lplims2D(2)*LP2SMPDFAC2D)
+        self%smpd_targets2D(2) = min(MAX_SMPD, self%lplims2D(3)*LP2SMPDFAC2D)
         ! check scale factor sanity
         if( self%scale < 0.00001 ) THROW_HARD('scale out if range, should be > 0; new')
         ! set default msk value
@@ -1396,8 +1396,6 @@ contains
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
                 if( self%l_needs_sigma ) self%l_match_filt = .false.
         end select
-        ! global FSC/FRC filter flag overrrides
-        if( .not. L_FSCFILT ) self%l_match_filt = .false.
         ! atoms
         if( cline%defined('element') )then
             if( .not. atoms_obj%element_exists(self%element) )then
@@ -1438,7 +1436,7 @@ contains
         ! set global pointer to instance
         ! first touch policy here
         if( .not. associated(params_glob) ) params_glob => self
-        if( .not. ssilent ) write(logfhandle,'(A)') '>>> DONE PROCESSING PARAMETERS'
+        if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE PROCESSING PARAMETERS'
 
     contains
 
