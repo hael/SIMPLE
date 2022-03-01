@@ -9,6 +9,7 @@ use simple_sp_project,     only: sp_project
 use simple_qsys_env,       only: qsys_env
 use simple_image,          only: image
 use simple_stack_io,       only: stack_io
+use simple_estimate_ssnr,  only: mskdiam2lplimits, fsc2optlp_sub
 use simple_qsys_funs
 use simple_procimgstk
 implicit none
@@ -207,7 +208,7 @@ contains
         logical                             :: do_scaling, l_shmem
         ! parameters
         character(len=STDLEN) :: orig_projfile_bak = 'orig_bak.simple'
-        integer, parameter    :: MINBOX      = 92
+        integer, parameter    :: MINBOX      = 96
         real,    parameter    :: TARGET_LP   = 15.
         real,    parameter    :: MINITS      =  5., MINITS_FAST =  9.
         real,    parameter    :: MAXITS      = 15., MAXITS_FAST = 18.
@@ -453,7 +454,6 @@ contains
     end subroutine exec_cleanup2D
 
     subroutine exec_cluster2D_autoscale( self, cline )
-        use simple_estimate_ssnr,     only: mskdiam2lplimits
         use simple_commander_project, only: scale_project_commander_distr
         use simple_commander_imgproc, only: scale_commander, pspec_int_rank_commander
         class(cluster2D_autoscale_commander_hlev), intent(inout) :: self
@@ -752,12 +752,14 @@ contains
         character(len=LONGSTRLEN) :: refs, refs_even, refs_odd, str, str_iter, finalcavgs
         integer                   :: iter, cnt, iptcl, ptclind, fnr
         type(chash)               :: job_descr
-        real                      :: frac_srch_space
+        real                      :: frac_srch_space, mskdiam, lpstart, lpstop, lpcen
         logical :: l_stream
+        mskdiam = cline%get_rarg('mskdiam')
+        call mskdiam2lplimits(cline%get_rarg('mskdiam'), lpstart, lpstop, lpcen)
         call cline%set('prg','cluster2D')
-        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15. )
-        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',      8. )
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30. )
+        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart', lpstart)
+        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',   lpstop)
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',     lpcen)
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30. )
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype','ptcl2D')
@@ -1168,7 +1170,6 @@ contains
     subroutine exec_cluster_cavgs( self, cline )
         use simple_polarizer,        only: polarizer
         use simple_class_frcs,       only: class_frcs
-        use simple_estimate_ssnr,    only: fsc2optlp_sub
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_aff_prop,         only: aff_prop
         class(cluster_cavgs_commander), intent(inout) :: self

@@ -122,9 +122,9 @@ contains
     subroutine mskdiam2lplimits( mskdiam, lpstart,lpstop, lpcen )
         real, intent(in)  :: mskdiam
         real, intent(out) :: lpstart,lpstop, lpcen
-        lpstart = max(mskdiam/9., 20.)
-        lpstop  = max(mskdiam/22., 5.)
-        lpcen   = max(mskdiam/6., 30.)
+        lpstart = max(mskdiam/11., 15.)
+        lpstop  = max(mskdiam/22.,  5.)
+        lpcen   = max(mskdiam/6.,  30.)
     end subroutine mskdiam2lplimits
 
     !> DOSE FILTERING (Grant, Grigorieff eLife 2015)
