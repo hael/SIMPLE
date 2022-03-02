@@ -121,7 +121,6 @@ contains
     ! box
     ! smpd
     subroutine exec_print_dose_weights( self, cline )
-        use simple_estimate_ssnr, only: acc_dose2filter
         class(print_dose_weights_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(parameters)  :: params
