@@ -1009,16 +1009,21 @@ class SimpleView {
 		})  
   }
   
-  getCluster2DIteration(element, projfile){
+  getCluster2DIteration(caller, projfile){
 	  fetcher.killWorker()
 	  this.resetSideBar()
 	  var thumbnails = document.getElementById('thumbnails')
 	  thumbnails.innerHTML = ""
+	  var element = document.getElementById('iterationselector')
 	  var selected = element.options[element.selectedIndex]
 	  var header = JSON.parse(selected.dataset.header)
 	  var stats = selected.dataset.stats ? JSON.parse(selected.dataset.stats) : false
 	  var xdim = (header.nx < 100) ? header.nx : 100;
 	  var ydim = (header.ny < 100) ? header.ny : 100;
+	  var wfilt = false
+	  if(document.getElementById('wfilt').checked){
+		  var wfilt = true
+	  }
 	  for(var thumbcount = 0; thumbcount < header['nz']; thumbcount++){
 		  var thumbnail = document.createElement('div')
 		  thumbnail.className = "thumbnail"
@@ -1031,8 +1036,12 @@ class SimpleView {
 		  container.appendChild(containerloader)
 		  var containerimg = document.createElement('img')
 		  containerimg.className = "thumbnailcontainerimg cls2D"
-		  containerimg.dataset.path = window.location.href + "/image?stackfile=" + selected.dataset.file + "&frame=" + thumbcount
-		  container.appendChild(containerimg)
+		  if(wfilt){
+			containerimg.dataset.path = window.location.href + "/image?stackfile=" + selected.dataset.file.replace(".mrc", "_wfilt.mrc") + "&frame=" + thumbcount
+		  }else{
+		  	containerimg.dataset.path = window.location.href + "/image?stackfile=" + selected.dataset.file + "&frame=" + thumbcount
+		  }
+	          container.appendChild(containerimg)
 		  
 		  if(stats){
 			  for(var key of Object.keys(stats[thumbcount])){
