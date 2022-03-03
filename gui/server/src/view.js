@@ -3,8 +3,7 @@ const path = require('path');
 const sharp = require(global.base + '/node_modules/sharp');
 const fs = require(global.base + '/node_modules/fs-extra');
 const {getHeader, toPixels} = require(global.base + '/node_modules/mrchandler')
-//const spawn = require(global.base + '/node_modules/child-process-promise').spawn
-const { spawn } = require('child_process')
+const spawn = require(global.base + '/node_modules/child-process-promise').spawn
 
 const pack = require(global.simplepath + '/gui_data/server/src/DensityServer/pack/main.js')
 const sqlite = require('./sqlite')
@@ -177,16 +176,7 @@ class View{
 			})
 		} else if (! fs.existsSync(trackfilebase + ".jpg") && fs.existsSync(trackfilebase + ".eps")){
 			var commandargs = ["-q", "-sDEVICE=jpeg", "-dNOPAUSE", "-dBATCH", "-dSAFER", "-dDEVICEWIDTHPOINTS=760", "-dDEVICEHEIGHTPOINTS=760", "-sOutputFile=" + trackfilebase + ".jpg", trackfilebase + ".eps"]
-			return new Promise((resolve, reject) => {
-
-				var execprocess = spawn("gs", commandargs)
-				execprocess.on('close', function(_) {
-                   			return resolve();
-                		});
-                		execprocess.on('error', function(error) {
-                    			return reject(error);
-                		});
-			})
+			return spawn("gs", commandargs)
 			.then(() => {
 				return sharp(trackfilebase + ".jpg")
 				.jpeg()
@@ -197,16 +187,7 @@ class View{
 			})
 		} else if (! fs.existsSync(trackfilebase + ".jpg") && fs.existsSync(trackfilebase + ".pdf")){
 			var commandargs = ["-q", "-sDEVICE=jpeg", "-dNOPAUSE", "-dBATCH", "-dSAFER", "-dDEVICEWIDTHPOINTS=760", "-dDEVICEHEIGHTPOINTS=760", "-sOutputFile=" + trackfilebase + ".jpg", trackfilebase + ".pdf"]
-			return new Promise((resolve, reject) => {
-
-                                var execprocess = spawn("gs", commandargs)
-                                execprocess.on('close', function(_) {
-                                        return resolve();
-                                });
-                                execprocess.on('error', function(error) {
-                                        return reject(error);
-                                });
-                        })
+			return spawn("gs", commandargs)
 			.then(() => {
 				return sharp(trackfilebase + ".jpg")
 				.jpeg()
@@ -238,9 +219,9 @@ class View{
   getViewSimple(arg){
 	return simpleexec.getProjectInfo(arg['projfile'])
 	.then(projinfo => {
-		var micrographs = (projinfo.includes('mic')) ? true : false
-		var particles = (projinfo.includes('stk')) ? true : false
-		var cls2d = (projinfo.includes('cls2D')) ? true : false
+		var micrographs = (projinfo.stdout.includes('mic')) ? true : false
+		var particles = (projinfo.stdout.includes('stk')) ? true : false
+		var cls2d = (projinfo.stdout.includes('cls2D')) ? true : false
 	//	var ini3d = (projinfo.stdout.includes('cls3D')) ? true : false
 	//	var refine3d = (projinfo.stdout.includes('cls3D')) ? true : false
 		var ini3d = false
@@ -280,7 +261,7 @@ class View{
 	 return simpleexec.getProjectInfo(arg['projfile'])
 	 .then(projinfo => {
 		//rawtext =  rawtext.normalize().replace(/[^A-Za-z 0-9 \.,\?""!@#\$%\^&\*\(\)-_=\+;:<>\/\\\|\}\{\[\]`~]*/g, '').replace(/[[].[m]/gm, '')
-		var rawtext =  projinfo.normalize().replace(/[^A-Za-z 0-9 \.,\?""!@#\$%\^&\*\(\)-_=\+;:<>\/\\\|\}\{\[\]`~]*/g, '').replace(/[[].[m]/gm, '\n')
+		var rawtext =  projinfo.stdout.normalize().replace(/[^A-Za-z 0-9 \.,\?""!@#\$%\^&\*\(\)-_=\+;:<>\/\\\|\}\{\[\]`~]*/g, '').replace(/[[].[m]/gm, '\n')
 		 return ({html : this.simpleviewraw({projinfo : rawtext})})
 	 })
   }
@@ -302,7 +283,7 @@ class View{
 	var jobdir = path.dirname(arg['projfile'])
 	return simpleexec.getProjectField(arg['projfile'], "mic")
 	 .then(projmicinfo => {
-		 return simpleexec.valsToArray(projmicinfo)
+		 return simpleexec.valsToArray(projmicinfo.stdout)
 	 })
 	 .then(projmicinfovals => {
 		 var micrographs = []
@@ -323,7 +304,7 @@ class View{
 	var jobdir = path.dirname(arg['projfile'])
 	return simpleexec.getProjectField(arg['projfile'], "mic")
 	 .then(projmicinfo => {
-		 return simpleexec.valsToArray(projmicinfo)
+		 return simpleexec.valsToArray(projmicinfo.stdout)
 	 })
 	 .then(projmicinfovals => {
 		 var json = {boxes:{}}
@@ -381,7 +362,7 @@ class View{
 	var jobdir = path.dirname(arg['projfile'])
 	return simpleexec.getProjectField(arg['projfile'], "mic")
 	 .then(projmicinfo => {
-		 return simpleexec.valsToArray(projmicinfo)
+		 return simpleexec.valsToArray(projmicinfo.stdout)
 	 })
 	 .then(projmicinfovals => {
 		 for(var mic in projmicinfovals){
@@ -406,12 +387,16 @@ class View{
   getViewSimpleCluster2D(arg){
 	var jobdir = path.dirname(arg['projfile'])
 	var iterations
+	var wfilt = false
 	return filesystem.getFolderContents(jobdir)
 	.then(foldercontents => {
 		var promises = []
 		for(var file of foldercontents['files']){
-			if(file.includes("cavgs_iter") && !file.includes("odd") && !file.includes("even") && !file.includes("ranked")){
+			if(file.includes("cavgs_iter") && !file.includes("odd") && !file.includes("even") && !file.includes("ranked") && !file.includes("wfilt")){
 				promises.push(this.readMRCHeader(jobdir + "/" + file))
+			}
+			if(file.includes("wfilt")){
+				wfilt = true
 			}
 		}
 		return Promise.all(promises)
@@ -424,7 +409,7 @@ class View{
 		return simpleexec.getProjectField(arg['projfile'], "out")
 	})
 	 .then(projoutinfo => {
-		 return simpleexec.valsToArray(projoutinfo)
+		 return simpleexec.valsToArray(projoutinfo.stdout)
 	 })
 	 .then(projoutinfovals => {
 		var jobfolder = path.basename(jobdir)
@@ -456,13 +441,13 @@ class View{
 				return simpleexec.getProjectField(arg['projfile'], "cls2D")
 			})
 			.then(projcls2dinfo => {
-				return simpleexec.valsToArray(projcls2dinfo)
+				return simpleexec.valsToArray(projcls2dinfo.stdout)
 			})
 			.then(projcls2dinfovals => {
 				finalfilearray['stats'] = projcls2dinfovals
 				finalfilearray['name'] = "Final"
 				iterations.push(finalfilearray)
-				return ({html : this.simpleviewcluster2D({iterations:iterations})})
+				return ({html : this.simpleviewcluster2D({iterations:iterations, wfilt:wfilt})})
 			})
 		}else if(selection){
 			var finalfilearray
@@ -472,16 +457,16 @@ class View{
 				return simpleexec.getProjectField(arg['projfile'], "cls2D")
 			})
 			.then(projcls2dinfo => {
-				return simpleexec.valsToArray(projcls2dinfo)
+				return simpleexec.valsToArray(projcls2dinfo.stdout)
 			})
 			.then(projcls2dinfovals => {
 				finalfilearray['stats'] = projcls2dinfovals
 				finalfilearray['name'] = "Selection"
 				iterations.push(finalfilearray)
-				return ({html : this.simpleviewcluster2D({iterations:iterations})})
+				return ({html : this.simpleviewcluster2D({iterations:iterations, wfilt:wfilt})})
 			})
 		}else{
-			return ({html : this.simpleviewcluster2D({iterations:iterations})})
+			return ({html : this.simpleviewcluster2D({iterations:iterations, wfilt:wfilt})})
 		}
 	 })
   }
@@ -492,7 +477,7 @@ class View{
 	
 	return simpleexec.getProjectField(arg['projfile'], "stk")
 	 .then(projstkinfo => {
-		 return simpleexec.valsToArray(projstkinfo)
+		 return simpleexec.valsToArray(projstkinfo.stdout)
 	 })
 	 .then(projstkinfovals => {
 		for(var element of projstkinfovals){
@@ -506,7 +491,7 @@ class View{
 		return simpleexec.getProjectField(arg['projfile'], "ptcl2D")
 	 })
 	 .then(projptclinfo => {
-		 return simpleexec.valsToArray(projptclinfo)
+		 return simpleexec.valsToArray(projptclinfo.stdout)
 	 })
 	 .then(projptclinfovals => {
 		var stats = []
@@ -562,7 +547,7 @@ class View{
 		return simpleexec.getProjectField(arg['projfile'], "out")
 	})
 	 .then(projoutinfo => {
-		 return simpleexec.valsToArray(projoutinfo)
+		 return simpleexec.valsToArray(projoutinfo.stdout)
 	 })
 	 .then(projoutinfovals => {
 		var jobfolder = path.basename(jobdir)
@@ -588,7 +573,7 @@ class View{
 			recfinalpproc['projections'] = jobdir + "/cavgs_reprojs.mrc"
 			return simpleexec.getProjectField(arg['projfile'], "cls3D")
 			.then(projcls3dinfo => {
-				return simpleexec.valsToArray(projcls3dinfo)
+				return simpleexec.valsToArray(projcls3dinfo.stdout)
 			})
 			.then(projcls3dinfovals => {
 				recfinal['stats'] = projcls3dinfovals
@@ -646,7 +631,7 @@ class View{
   saveSimpleSelection(arg){
 	return simpleexec.getProjectField(arg['projfile'], arg['keys']['keyoritype'])
 	.then(projinfo => {
-		 return simpleexec.valsToArray(projinfo)
+		 return simpleexec.valsToArray(projinfo.stdout)
 	 })
 	.then(projinfovals => {
 		var selectiontxt = ""

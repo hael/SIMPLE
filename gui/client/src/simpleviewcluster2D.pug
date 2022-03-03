@@ -9,5 +9,8 @@ div.viewmaster
 				data-header=iteration.header
 				data-stats=iteration.stats
 			)=iteration.name
+	if wfilt
+		<input type="checkbox" id="wfilt" name="wfilt" onchange="simpleview.getCluster2DIteration(this)">
+		<label for="wfilt">Wiener Filtered</label>
 	h#particlecount.count
 div#thumbnails
