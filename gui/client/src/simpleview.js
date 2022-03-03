@@ -1021,7 +1021,7 @@ class SimpleView {
 	  var xdim = (header.nx < 100) ? header.nx : 100;
 	  var ydim = (header.ny < 100) ? header.ny : 100;
 	  var wfilt = false
-	  if(document.getElementById('wfilt').checked){
+	  if(document.getElementById('wfilt') && document.getElementById('wfilt').checked){
 		  var wfilt = true
 	  }
 	  for(var thumbcount = 0; thumbcount < header['nz']; thumbcount++){
