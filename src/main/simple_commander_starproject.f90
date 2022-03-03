@@ -7,6 +7,8 @@ use simple_starproject,    only: star_project
 use simple_oris,           only: oris
 use simple_binoris_io,     only: binread_nlines, binread_oritab
 use simple_parameters,     only: parameters, params_glob
+use simple_syslib,         only: simple_getcwd
+
 implicit none
 
 public :: import_starproject_commander
@@ -17,13 +19,19 @@ private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: import_starproject_commander
+
   contains
+  
     procedure :: execute      => exec_import_starproject
+    
 end type import_starproject_commander
 
 type, extends(commander_base) :: export_starproject_commander
+
   contains
+  
     procedure :: execute      => exec_export_starproject
+    
 end type export_starproject_commander
 
 contains
@@ -38,18 +46,38 @@ contains
     integer                                                 :: it
     logical                                                 :: iteration
     character(len=3)                                        :: itchar    
+    character(len=LONGSTRLEN)                               :: cwd
     
     call cline%set('mkdir', 'yes')
-    call cline%set('projname', 'project')
-    
+
     call params%new(cline)
+    
+    call spproj%read(params%projfile)
+    
+    if(.not. index(cline%get_carg("import_dir"), "/") == 1) then
+    
+        call simple_getcwd(cwd)
+        call cline%set('import_dir',  trim(adjustl(cwd)) // "/../" // trim(adjustl(cline%get_carg("import_dir"))))
+        
+    end if
+    
+    if(dir_exists(trim(adjustl(cline%get_carg("import_dir"))))) then
+    
+        write(logfhandle,*) ''
+        write(logfhandle,*) char(9), 'importing from ', trim(adjustl(cline%get_carg("import_dir")))
+        write(logfhandle,*) ''
+        
+    else
+    
+        THROW_HARD('folder does not exist ' // trim(adjustl(cline%get_carg("import_dir"))))
+        
+    end if
     
     iteration = .false.
     
     do it=999, 1, -1
         
         write(itchar, "(I0.3)") it
-        
         
         if(file_exists(cline%get_carg("import_dir") // "/" // "run_it" // itchar // "_data.star")) then
     
@@ -71,6 +99,12 @@ contains
     else if(iteration .and. file_exists(cline%get_carg("import_dir") // "/" // "run_it" // itchar // "_classes.mrcs") .and. file_exists(cline%get_carg("import_dir") // "/" // "run_it" // itchar // "_data.star")) then
         
         call starproject%import_ptcls2D(cline, spproj, cline%get_carg("import_dir") // "/" // "run_it" // itchar // "_data.star" )
+        
+        if(file_exists(cline%get_carg("import_dir") // "/" // "run_it" // itchar // "_model.star")) then
+        
+            call starproject%import_cls2D(cline, spproj, cline%get_carg("import_dir") // "/" // "run_it" // itchar // "_model.star" )
+        
+        end if
     
     else if(file_exists(cline%get_carg("import_dir") // "/" // "particles.star")) then
 
@@ -93,11 +127,11 @@ contains
     call spproj%update_projinfo(cline)
     call spproj%update_compenv(cline)
     
-    call spproj%write()
+    call spproj%write(basename(params%projfile))
     
     call spproj%kill
     
-    call simple_end('**** import_relion NORMAL STOP ****')
+    call simple_end('**** import_starproject NORMAL STOP ****')
     
   end subroutine exec_import_starproject
 	
