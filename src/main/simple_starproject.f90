@@ -25,6 +25,7 @@ type star_flag
 
     character(LEN=64) :: rlnflag
     character(LEN=64) :: splflag
+    character(LEN=64) :: splflag2   = ''
     integer           :: ind        = 0
     logical           :: present    = .false.
     logical           :: string     = .false.
@@ -56,6 +57,7 @@ type star_file
     type(star_data)                                 :: micrographs
     type(star_data)                                 :: particles2D
     type(star_data)                                 :: particles3D
+    type(star_data)                                 :: clusters2D
     integer,            dimension(:), allocatable   :: opticsmap
     integer,            dimension(:,:), allocatable :: stkmap ! (stkid : z)
     integer                                         :: stkptclcount
@@ -81,6 +83,7 @@ contains
   procedure :: read_starheaders
   procedure :: import_ptcls2D
   procedure :: import_ptcls3D
+  procedure :: import_cls2D
   procedure :: import_mics
 
   
@@ -126,7 +129,7 @@ contains
     ! assign stk flags
     if (.not. allocated(self%starfile%stacks%flags)) allocate(self%starfile%stacks%flags(0))
     
-    self%starfile%stacks%flags = [self%starfile%stacks%flags, star_flag(rlnflag="rlnImageName", splflag="stk", string=.true., imagesplit=.true., appendroot=.true.)]
+    self%starfile%stacks%flags = [self%starfile%stacks%flags, star_flag(rlnflag="rlnImageName", splflag="stk", string=.true., imagesplit=.true., appendroot=.true., splflag2="stkind")]
     self%starfile%stacks%flags = [self%starfile%stacks%flags, star_flag(rlnflag="rlnOpticsGroup", splflag="ogid", int=.true.)]
     
     ! assign particles 2D flags
@@ -163,6 +166,11 @@ contains
     self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnClassNumber", splflag="class", int=.true.)]
     self%starfile%particles3D%flags = [self%starfile%particles3D%flags, star_flag(rlnflag="rlnGroupNumber", splflag="gid", int=.true.)]
     
+    ! assign clusters2D flags
+    if (.not. allocated(self%starfile%clusters2D%flags)) allocate(self%starfile%clusters2D%flags(0))
+    
+    self%starfile%clusters2D%flags = [self%starfile%clusters2D%flags, star_flag(rlnflag="rlnReferenceImage", splflag="stk", string=.true., imagesplit=.true., appendroot=.true., splflag2="class")]
+    
   end subroutine initialise
 
   
@@ -177,7 +185,7 @@ contains
         if(index(flags(i)%rlnflag, trim(adjustl(rlnflag))) > 0 .AND. len_trim(flags(i)%splflag) > 0) then
             flags(i)%present = .true.
             flags(i)%ind = flagindex
-            print *, char(9), "Mapping ", trim(adjustl(flags(i)%rlnflag)), char(9), char(9), " => ", trim(adjustl(flags(i)%splflag))
+            write(logfhandle,*) char(9), char(9), "mapping ", flags(i)%rlnflag, " => ", trim(adjustl(flags(i)%splflag))
             exit
         end if
          
@@ -197,7 +205,7 @@ contains
         if(index(flags(i)%splflag, trim(adjustl(splflag))) > 0 .AND. len_trim(flags(i)%rlnflag) > 0) then
             flags(i)%present = .true.
             flags(i)%ind = flagindex
-            print *, char(9), "Mapping ", trim(adjustl(flags(i)%splflag)), char(9), char(9), " => ", trim(adjustl(flags(i)%rlnflag))
+            write(logfhandle,*) char(9), char(9), "mapping ", flags(i)%splflag, " => ", trim(adjustl(flags(i)%rlnflag))
             exit
         end if
          
@@ -441,11 +449,13 @@ contains
                     
                     splitimage = trim(adjustl(splitline(stardata%flags(flagsindex)%ind)))
                     
-                    entrystr = splitimage(1:index(splitimage, "@") - 1)
+                    if(.not. stardata%flags(flagsindex)%splflag2 == "") then
                     
-                    read(entrystr,*) ival   
+                        entrystr = splitimage(1:index(splitimage, "@") - 1)
+                        read(entrystr,*) ival   
+                        call sporis%set(projindex, stardata%flags(flagsindex)%splflag2, real(ival))
                     
-                    call sporis%set(projindex, "stkind", real(ival))
+                    end if
                     
                     entrystr = splitimage(index(splitimage, "@") + 1:)
                 
@@ -459,8 +469,7 @@ contains
                 
                     if(stardata%flags(flagsindex)%appendroot) then
                         
-                        call sporis%set(projindex, stardata%flags(flagsindex)%splflag, trim(adjustl(self%starfile%rootdir)) // "/" // rev_basename(rev_basename(trim(adjustl(entrystr)))))
-                        
+                        call sporis%set(projindex, stardata%flags(flagsindex)%splflag, stemname(stemname(trim(adjustl(self%starfile%rootdir)))) // "/" // trim(adjustl(entrystr)))
                     else
                     
                         call sporis%set(projindex, stardata%flags(flagsindex)%splflag, trim(adjustl(entrystr)))
@@ -564,10 +573,6 @@ contains
                 
                 delimindex = index(line, "data_ ") + 6
                 blockname = line(delimindex:)
-                
-                print *, ""
-                print *, "Reading ", trim(adjustl(blockname)), " ... " 
-                print *, ""
 
             else if(flagsopen .AND. index(line, "_rln") > 0) then
             
@@ -598,6 +603,11 @@ contains
                         call self%enable_rlnflag(flagname, self%starfile%stacks%flags, flagindex)
                         self%starfile%stacks%flagscount = self%starfile%stacks%flagscount + 1
                         
+                    case ("model_classes")
+                    
+                        call self%enable_rlnflag(flagname, self%starfile%clusters2D%flags, flagindex)
+                        self%starfile%clusters2D%flagscount = self%starfile%clusters2D%flagscount + 1 
+                    
                 end select
                 
                 
@@ -621,6 +631,10 @@ contains
                         self%starfile%particles2D%datastart = lineindex
                         self%starfile%particles3D%datastart = lineindex
                         self%starfile%stacks%datastart = lineindex 
+                    
+                    case ("model_classes")  
+                        
+                        self%starfile%clusters2D%datastart = lineindex
                         
                 end select
 
@@ -644,7 +658,11 @@ contains
                         self%starfile%particles2D%dataend = lineindex + 1
                         self%starfile%particles3D%dataend = lineindex + 1
                         self%starfile%stacks%dataend = lineindex + 1
-                         
+                       
+                    case ("model_classes")
+                    
+                        self%starfile%clusters2D%dataend = lineindex + 1
+                    
                 end select
                 
             end if
@@ -670,7 +688,9 @@ contains
     character(len=*)                                :: filename
     integer                                         :: i
     
-    print *, "Importing " // filename
+    write(logfhandle,*) ''
+    write(logfhandle,*) char(9), 'importing ' // filename // " to ptcls2D"
+    write(logfhandle,*) 
     
     if(.not. self%starfile%initialised) call self%initialise()
     
@@ -706,7 +726,9 @@ contains
     character(len=*)                                :: filename
     integer                                         :: i
     
-    print *, "Importing " // filename
+    write(logfhandle,*) ''
+    write(logfhandle,*) char(9), 'importing ' // filename // " to ptcls3D"
+    write(logfhandle,*) 
     
     if(.not. self%starfile%initialised) call self%initialise()
     
@@ -734,6 +756,30 @@ contains
   end subroutine import_ptcls3D 
   
   
+  subroutine import_cls2D(self, cline, spproj, filename)
+    
+    class(star_project),    target, intent(inout)   :: self
+    class(cmdline),         intent(inout)           :: cline
+    class(sp_project)                               :: spproj
+    character(len=*)                                :: filename
+    integer                                         :: i
+    
+    write(logfhandle,*) ''
+    write(logfhandle,*) char(9), 'importing ' // filename // " to cls2D"
+    write(logfhandle,*) ''
+    
+    if(.not. self%starfile%initialised) call self%initialise()
+    
+    self%starfile%filename = filename
+    self%starfile%rootdir = cline%get_carg("import_dir")
+    
+    call self%read_starheaders()
+
+    call self%import_stardata(self%starfile%clusters2D, spproj%os_cls2D, .false.)
+    
+  end subroutine import_cls2D
+  
+  
   subroutine import_mics(self, cline, spproj, filename)
     
     class(star_project),    target, intent(inout)   :: self
@@ -742,7 +788,9 @@ contains
     character(len=*)                                :: filename
     integer                                         :: i
     
-    print *, "Importing " // filename
+    write(logfhandle,*) ''
+    write(logfhandle,*) char(9), 'importing ' // filename // " to mics"
+    write(logfhandle,*) ''
     
     if(.not. self%starfile%initialised) call self%initialise()
     

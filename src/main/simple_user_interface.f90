@@ -1836,7 +1836,7 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
-        call import_starproject%set_input('parm_ios', 1, 'import_dir', 'file', 'Import directory', 'Directory to read t.star files', 'e.g. 14_cluster2D/', .true., '')
+        call import_starproject%set_input('parm_ios', 1, 'import_dir', 'file', 'Import directory containing external job output in star format', 'Directory to import star files from', 'e.g. MotionCorr/job001', .true., '')
         ! alternative inputs
         ! <empty>
         ! search controls

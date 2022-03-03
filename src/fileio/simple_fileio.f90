@@ -7,7 +7,7 @@ use simple_syslib,  only: file_exists, is_open, is_file_open, is_io, simple_absp
 implicit none
 
 public :: fileiochk, fopen, fclose, wait_for_closure, nlines, filelength, funit_size, is_funit_open, get_open_funits
-public :: add2fbody, swap_suffix, get_fbody, fname_new_ext, fname2ext, fname2iter, basename, rev_basename, get_fpath
+public :: add2fbody, swap_suffix, get_fbody, fname_new_ext, fname2ext, fname2iter, basename, stemname, get_fpath
 public :: make_dirnames, make_filenames, filepath, del_files, fname2format, read_filetable, write_filetable
 public :: write_singlelineoftext, arr2file, arr2txtfile, file2rarr, simple_copy_file, make_relativepath
 private
@@ -443,18 +443,21 @@ contains
         endif
     end function basename
     
-    pure function rev_basename( fname ) result( new_fname)
+    pure function stemname( fname ) result( new_fname)
         character(len=*), intent(in)  :: fname     !< abs filename
         character(len=:), allocatable :: new_fname
         integer :: length, pos
         length = len_trim(fname)
-        pos = scan(fname(1:length),PATH_SEPARATOR,back=.false.)
+        pos = scan(fname(1:length),PATH_SEPARATOR,back=.true.)
+        if(pos == length)then !< case with trailling slash
+            pos = scan(fname(1:length-1),PATH_SEPARATOR,back=.true.)
+        end if
         if( pos == 0 )then
             allocate(new_fname, source=trim(fname))
         else
-            allocate(new_fname, source=trim(fname(pos+1:length)))
+            allocate(new_fname, source=trim(fname(1:pos - 1)))
         endif
-    end function rev_basename
+    end function stemname
     
     pure function get_fpath( fname ) result( path )
         character(len=*), intent(in)  :: fname !< abs filename
