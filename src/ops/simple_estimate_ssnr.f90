@@ -129,15 +129,13 @@ contains
 
     ! Following Grant & Grigorieff; eLife 2015;4:e06980
     subroutine calc_dose_weights( nframes, box, smpd, kV, exp_time, dose_rate, weights )
-        use simple_image, only: image
         integer,           intent(in)    :: nframes, box
         real,              intent(in)    :: smpd, kV, exp_time, dose_rate
         real, allocatable, intent(inout) :: weights(:,:)
         real, parameter :: A=0.245, B=-1.665, C=2.81
-        type(image)     :: img
         real            :: frame_dose(nframes), acc_doses(nframes), spaFreq, current_time
         real            :: twoNe, limksq, time_per_frame
-        integer         :: filtsz, ldim(3), iframe, k
+        integer         :: filtsz, iframe, k
         time_per_frame = exp_time/real(nframes)               ! unit: s
         do iframe=1,nframes
             current_time      = real(iframe) * time_per_frame ! unit: s
@@ -145,7 +143,7 @@ contains
         end do
         filtsz = fdim(box) - 1
         ! doses
-        limksq = (real(ldim(2))*smpd)**2.
+        limksq = real(box*smpd)**2.
         do iframe = 1,nframes
             frame_dose(iframe) = acc_doses(iframe)
             if( is_equal(kV,200.) )then
@@ -163,7 +161,6 @@ contains
             weights(:,k) = exp(-frame_dose / twoNe)
             weights(:,k) = weights(:,k) / sqrt(sum(weights(:,k) * weights(:,k)))
         enddo
-        call img%kill
     end subroutine calc_dose_weights
 
     subroutine nonuniform_phase_ran( even, odd, mskimg )
