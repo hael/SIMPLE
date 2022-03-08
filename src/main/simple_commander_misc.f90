@@ -116,23 +116,26 @@ contains
         call simple_end('**** SIMPLE_PRINT_MAGIC_BOXES NORMAL STOP ****')
     end subroutine exec_print_magic_boxes
 
-    ! kv
-    ! acc_dose
-    ! box
-    ! smpd
     subroutine exec_print_dose_weights( self, cline )
+        use simple_estimate_ssnr, only: calc_dose_weights
         class(print_dose_weights_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(parameters)  :: params
-        real, allocatable :: filter(:), res(:)
-        integer           :: i, filtsz
+        real, allocatable :: weights(:,:), res(:)
+        integer           :: iframe, k, filtsz
         call params%new(cline)
-
-        ! write(logfhandle,'(A)') 'RESOLUTION, DOSE_WEIGHT'
-        ! do i = 1,filtsz
-        !     write(logfhandle, '(F5.1,1X,A,1X,f5.1)') res(i), ', ', filter(i)
-        ! end do
-
+        call calc_dose_weights(params%nframes, params%box, params%smpd, params%kV, params%exp_time, params%dose_rate, weights)
+        filtsz = size(weights, dim=2)
+        res = get_resarr(params%box, params%smpd)
+        write(logfhandle,'(A)') 'RESOLUTION, DOSE_WEIGHTS'
+        do k = 1,filtsz
+            write(logfhandle, '(F7.1,A)', advance='no') res(k), ', '
+            do iframe = 1,params%nframes - 1
+                write(logfhandle, '(f3.1,A)', advance='no') weights(iframe,k), ', '
+            end do
+            write(logfhandle, '(f3.1,1X)') weights(iframe,k)
+        end do
+        write(logfhandle,*)
         ! end gracefully
         call simple_end('**** SIMPLE_PRINT_DOSE_WEIGHTS_NORMAL STOP ****')
     end subroutine exec_print_dose_weights

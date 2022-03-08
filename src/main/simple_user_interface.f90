@@ -124,6 +124,7 @@ type(simple_program), target :: pick
 type(simple_program), target :: postprocess
 type(simple_program), target :: preprocess
 type(simple_program), target :: preprocess_stream
+type(simple_program), target :: print_dose_weights
 type(simple_program), target :: print_fsc
 type(simple_program), target :: print_magic_boxes
 type(simple_program), target :: print_project_field
@@ -339,6 +340,7 @@ contains
         call new_postprocess
         call new_preprocess
         call new_preprocess_stream
+        call new_print_dose_weights
         call new_print_fsc
         call new_print_magic_boxes
         call new_print_project_info
@@ -435,6 +437,7 @@ contains
         call push2prg_ptr_array(postprocess)
         call push2prg_ptr_array(preprocess)
         call push2prg_ptr_array(preprocess_stream)
+        call push2prg_ptr_array(print_dose_weights)
         call push2prg_ptr_array(print_fsc)
         call push2prg_ptr_array(print_magic_boxes)
         call push2prg_ptr_array(print_project_info)
@@ -593,6 +596,8 @@ contains
                 ptr2prg => preprocess
             case('preprocess_stream')
                 ptr2prg => preprocess_stream
+            case('print_dose_weights')
+                ptr2prg => print_dose_weights
             case('print_fsc')
                 ptr2prg => print_fsc
             case('print_magic_boxes')
@@ -729,6 +734,7 @@ contains
         write(logfhandle,'(A)') postprocess%name
         write(logfhandle,'(A)') preprocess%name
         write(logfhandle,'(A)') preprocess_stream%name
+        write(logfhandle,'(A)') print_dose_weights%name
         write(logfhandle,'(A)') print_fsc%name
         write(logfhandle,'(A)') print_magic_boxes%name
         write(logfhandle,'(A)') print_project_info%name
@@ -926,7 +932,7 @@ contains
         call set_param(automsk,        'automsk',      'multi',  'Perform envelope masking', 'Whether to generate/apply an envelope mask(yes|no|file){no}', '(yes|no|file){no}', .false., 'no')
         call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (only after 1st CTF=0)(full|partial){full}',&
         '(full|partial){full}', .false., 'full')
-        
+
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -2697,6 +2703,36 @@ contains
         call preprocess_stream%set_input('comp_ctrls', 1, nparts)
         call preprocess_stream%set_input('comp_ctrls', 2, nthr)
     end subroutine new_preprocess_stream
+
+    subroutine new_print_dose_weights
+        ! PROGRAM SPECIFICATION
+        call print_dose_weights%new(&
+        &'print_dose_weights', &                                                  ! name
+        &'Print dose weights used in motion correction',&                         ! descr_short
+        &'is a program for printing the dose weights used in motion correction',& ! descr_long
+        &'simple_exec',&                                                          ! executable
+        &0, 6, 0, 0, 0, 0, 0, .false.)                                            ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call print_dose_weights%set_input('parm_ios', 1, smpd)
+        call print_dose_weights%set_input('parm_ios', 2, box)
+        call print_dose_weights%set_input('parm_ios', 3, 'nframes',   'num', 'Number of frames', 'Number of movie frames', '# frames', .true., 0.)
+        call print_dose_weights%set_input('parm_ios', 4, kv)
+        call print_dose_weights%set_input('parm_ios', 5, 'exp_time',  'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .true., 10.)
+        call print_dose_weights%set_input('parm_ios', 6, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .true., 6.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_print_dose_weights
 
     subroutine new_print_fsc
         ! PROGRAM SPECIFICATION
