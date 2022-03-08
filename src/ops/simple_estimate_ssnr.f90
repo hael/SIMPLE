@@ -7,7 +7,7 @@ implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
 public :: nonuniform_phase_ran, nonuniform_fsc_lp, local_res_lp
-public :: plot_fsc, lowpass_from_klim, mskdiam2lplimits
+public :: plot_fsc, lowpass_from_klim, mskdiam2lplimits, calc_dose_weights
 private
 #include "simple_local_flags.inc"
 
@@ -128,24 +128,22 @@ contains
     end subroutine mskdiam2lplimits
 
     ! Following Grant & Grigorieff; eLife 2015;4:e06980
-    subroutine calc_dose_weights( nframes, xdim, ydim, smpd, kV, exp_time, dose_rate, weights )
+    subroutine calc_dose_weights( nframes, box, smpd, kV, exp_time, dose_rate, weights )
         use simple_image, only: image
-        integer, intent(in)    :: nframes, xdim, ydim
-        real,    intent(in)    :: smpd, kV, exp_time, dose_rate
-        real,    intent(inout) :: weights(nframes)
-        real, parameter        :: A=0.245, B=-1.665, C=2.81
-        type(image) :: img
-        real        :: frame_dose(nframes), acc_doses(nframes), spaFreq, current_time
-        real        :: twoNe, limksq, time_per_frame
-        integer     :: filtsz, ldim(3), iframe, k
+        integer,           intent(in)    :: nframes, box
+        real,              intent(in)    :: smpd, kV, exp_time, dose_rate
+        real, allocatable, intent(inout) :: weights(:,:)
+        real, parameter :: A=0.245, B=-1.665, C=2.81
+        type(image)     :: img
+        real            :: frame_dose(nframes), acc_doses(nframes), spaFreq, current_time
+        real            :: twoNe, limksq, time_per_frame
+        integer         :: filtsz, ldim(3), iframe, k
         time_per_frame = exp_time/real(nframes)               ! unit: s
         do iframe=1,nframes
             current_time      = real(iframe) * time_per_frame ! unit: s
             acc_doses(iframe) = dose_rate * current_time      ! unit: e/A2/s * s = e/A2
         end do
-        ldim = [xdim,ydim,1]
-        call img%new(ldim, smpd)
-        filtsz = img%get_filtsz()
+        filtsz = fdim(box) - 1
         ! doses
         limksq = (real(ldim(2))*smpd)**2.
         do iframe = 1,nframes
@@ -156,12 +154,14 @@ contains
                 frame_dose(iframe) = frame_dose(iframe) / 0.64
             endif
         enddo
+        if( allocated(weights) ) deallocate( weights )
+        allocate( weights(nframes,filtsz), source=0.)
         ! dose normalization
         do k = 1,filtsz
-            spaFreq = sqrt(real(k*k)/limksq)
-            twoNe   = 2.*(A * spaFreq**B + C)
-            weights = exp(-frame_dose / twoNe)
-            weights = weights / sqrt(sum(weights * weights))
+            spaFreq      = sqrt(real(k*k)/limksq)
+            twoNe        = 2.*(A * spaFreq**B + C)
+            weights(:,k) = exp(-frame_dose / twoNe)
+            weights(:,k) = weights(:,k) / sqrt(sum(weights(:,k) * weights(:,k)))
         enddo
         call img%kill
     end subroutine calc_dose_weights
