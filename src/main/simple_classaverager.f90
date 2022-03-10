@@ -310,6 +310,7 @@ contains
         complex,          allocatable :: cmats(:,:,:)
         real,             allocatable :: rhos(:,:,:), tvals(:,:,:), maxSpaFreqSq(:)
         integer,          allocatable :: batch_iprecs(:)
+        logical,          allocatable :: has_been_processed(:)
         complex :: fcompl, fcompll
         real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw
         integer :: fdims(3), logi_lims(3,2), phys(2), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
@@ -346,15 +347,13 @@ contains
         enddo
         READBUFFSZ = min(BUFSZ_DEFAULT,maxnptclsperstk)
         ! Objects allocations
-        allocate(read_imgs(READBUFFSZ), cgrid_imgs(READBUFFSZ), batch_iprecs(READBUFFSZ))
-        !$omp parallel default(shared) proc_bind(close) private(i)
-        !$omp do schedule(static)
+        allocate(read_imgs(READBUFFSZ), cgrid_imgs(READBUFFSZ), batch_iprecs(READBUFFSZ),has_been_processed(READBUFFSZ))
+        !$omp parallel do default(shared) proc_bind(close) private(i) schedule(static)
         do i = 1,READBUFFSZ
             call read_imgs(i)%new(ldim, params_glob%smpd, wthreads=.false.)
             call cgrid_imgs(i)%new(ldim_pd, params_glob%smpd, wthreads=.false.)
         enddo
-        !$omp end do nowait
-        !$omp end parallel
+        !$omp end parallel do
         logi_lims       = cgrid_imgs(1)%loop_lims(2)
         cyc_lims        = cgrid_imgs(1)%loop_lims(3)
         nyq             = cgrid_imgs(1)%get_lfny(1)
@@ -397,14 +396,19 @@ contains
                 if( nptcls_eff == 0 ) cycle
                 ! Interpolation loop
                 !$omp parallel default(shared) proc_bind(close)&
-                !$omp private(i,iprec,win_corner,add_phshift,mat,ithr,h,k,l,m,ll,mm,dist,loc,sh,phys,kw,tval,fcompl,fcompll)
+                !$omp private(i,icls,iprec,win_corner,add_phshift,mat,ithr,h,k,l,m,ll,mm,dist,loc,sh,phys,kw,tval,fcompl,fcompll)
+                !$omp workshare
+                cmats        = zero
+                rhos         = 0.0
+                tvals        = 0.0
+                maxSpaFreqSq = 0.0
+                has_been_processed = .false.
+                !$omp end workshare
                 !$omp do schedule(static)
                 do i = 1,nptcls_in_batch
                     iprec = batch_iprecs(i)
                     if( iprec == 0 ) cycle
                     if( precs(iprec)%pind == 0 ) cycle
-                    cmats(:,:,i) = zero
-                    rhos(:,:,i)  = 0.
                     ! normalize & pad & FFT
                     call read_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(i))
                     ! shift
@@ -463,8 +467,9 @@ contains
                             rhos(phys(1),phys(2),i)  = tval*tval
                         end do
                     end do
+                    has_been_processed(i) = .true.
                 enddo
-                !$omp end do nowait
+                !$omp end do
                 ! Sum over classes
                 !$omp do schedule(static)
                 do icls = 1,ncls
@@ -474,6 +479,9 @@ contains
                         if( iprec == 0 ) cycle
                         if( precs(iprec)%pind == 0 ) cycle
                         if( precs(iprec)%class == icls )then
+                            if( .not.has_been_processed(i) )then
+                                THROW_HARD('Indexing error!')
+                            endif
                             select case(precs(iprec)%eo)
                                 case(0,-1)
                                     call cavgs_even(icls)%get_cmat_ptr(pcmat(ithr)%cmat)
@@ -487,12 +495,12 @@ contains
                         endif
                     enddo
                 enddo
-                !$omp end do nowait
+                !$omp end do
                 !$omp end parallel
                 if( l_stream .and. ctfflag /= CTFFLAG_NO)then
                     ! now we update prior to first peak
                     !$omp parallel default(shared) proc_bind(close)&
-                    !$omp private(i,iprec,win_corner,add_phshift,mat,ithr,h,k,l,m,ll,mm,dist,loc,sh,phys,kw,tval,fcompl,fcompll,radfirstpeak)
+                    !$omp private(i,icls,iprec,win_corner,add_phshift,mat,ithr,h,k,l,m,ll,mm,dist,loc,sh,phys,kw,tval,fcompl,fcompll,radfirstpeak)
                     !$omp do schedule(static)
                     do i = 1,nptcls_in_batch
                         iprec = batch_iprecs(i)
@@ -552,7 +560,7 @@ contains
                             end do
                         end do
                     enddo
-                    !$omp end do nowait
+                    !$omp end do
                     !$omp do schedule(static)
                     do icls = 1,ncls
                         ithr = omp_get_thread_num() + 1
@@ -574,7 +582,7 @@ contains
                             endif
                         enddo
                     enddo
-                    !$omp end do nowait
+                    !$omp end do
                     !$omp end parallel
                 endif
             enddo ! end read batches loop
