@@ -104,6 +104,7 @@ contains
             if( ncavgs == 0 ) THROW_HARD('refine=inpl requires class 3D orientations search space generation')
             ! the projection directions for in-plane refinement are defined by those assigned to the class averages
             build_glob%eulspace = build_glob%spproj%os_cls3D
+            call build_glob%eulspace%zero('e3')
             params_glob%nspace  = ncavgs
         endif
 
