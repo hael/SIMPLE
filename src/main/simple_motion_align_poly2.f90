@@ -209,7 +209,7 @@ contains
                 call self%ftexp_tiles_sh(t,ithr)%kill
             enddo
         enddo
-        !$omp end do nowait
+        !$omp end do
         !$omp do schedule(static)
         do ithr = 1,self%nthr
             call self%ftexp_R(ithr)%kill

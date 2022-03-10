@@ -206,7 +206,7 @@ contains
         do ithr = 1,self%nthr
             call tmp_imgs(ithr)%new([self%tilesz,self%tilesz,1], self%smpd, wthreads=.false.)
         enddo
-        !$omp end do nowait
+        !$omp end do
         ! works out dimensions of FFTW-friendly cropped fourier images
         !$omp single
         find            = min(tmp_imgs(1)%get_nyq(), calc_fourier_index(self%lp, self%tilesz, self%smpd))
@@ -235,7 +235,7 @@ contains
                 enddo
             enddo
         enddo
-        !$omp end do nowait
+        !$omp end do
         !$omp single
         self%smpd_tile = self%tiles(1,1,1)%get_smpd()
         !$omp end single
@@ -243,7 +243,7 @@ contains
         do ithr = 1,self%nthr
             call tmp_imgs(ithr)%kill
         enddo
-        !$omp end do nowait
+        !$omp end do
         !$omp single
         self%smpd_tile    = self%tiles(1,1,1)%get_smpd()
         self%scale_factor = self%smpd / self%smpd_tile
@@ -738,7 +738,7 @@ contains
                 call self%ftexp_tiles_sh(t,ithr)%kill
             enddo
         enddo
-        !$omp end do nowait
+        !$omp end do
         !$omp do schedule(static)
         do ithr = 1,self%nthr
             call self%ftexp_R(ithr)%kill

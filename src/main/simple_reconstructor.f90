@@ -303,7 +303,7 @@ contains
                         self%rho_exp(cloc(1), cloc(2), cloc(3))  = self%rho_exp(cloc(1), cloc(2), cloc(3))  + w111 * ctfval
                     end do
                 end do
-                !$omp end do nowait
+                !$omp end do
             end do
             !$omp end parallel
         else
@@ -348,7 +348,7 @@ contains
                             &self%rho_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) + ctfval*w
                     end do
                 end do
-                !$omp end do nowait
+                !$omp end do
             end do
             !$omp end parallel
         endif
