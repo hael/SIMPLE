@@ -7,7 +7,7 @@ use simple_parameters,       only: params_glob
 use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
-public :: extract_peak_ori, sort_corrs
+public :: extract_peak_ori
 private
 #include "simple_local_flags.inc"
 
@@ -17,13 +17,14 @@ contains
         use simple_ori, only: ori
         class(strategy3D_srch), intent(inout) :: s
         type(ori) :: osym, o_prev, o_new
-        integer   :: ref, inpl, state, neff_states, proj
+        integer   :: ref, inpl, state, neff_states, proj, loc(1)
         real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, corr, mi_proj, frac
         logical   :: l_multistates
         ! stash previous ori
         call build_glob%spproj_field%get_ori(s%iptcl, o_prev)
         ! reference (proj)
-        ref = s3D%proj_space_refinds_sorted(s%ithr, s%nrefs)
+        loc = maxloc(s3D%proj_space_corrs(s%ithr,:))
+        ref = loc(1)
         if( ref < 1 .or. ref > s%nrefs ) THROW_HARD('ref index: '//int2str(ref)//' out of bound; extract_peak_ori')
         call build_glob%spproj_field%set(s%iptcl, 'proj', real(s3D%proj_space_proj(ref)))
         ! in-plane (inpl)
@@ -100,31 +101,5 @@ contains
         call o_prev%kill
         call o_new%kill
     end subroutine extract_peak_ori
-
-    subroutine sort_corrs( s )
-        class(strategy3D_srch), intent(inout) :: s
-        real    :: corrs(s%nrefs), corrs_highest(s%nrefs)
-        integer :: proj_space_tmp(s%nrefs)
-        integer :: i, j, idx_array(s%nrefs)
-        real    :: areal
-        do i = 1,s%nrefs
-            s3D%proj_space_refinds_sorted        (s%ithr,i) = i
-            s3D%proj_space_refinds_sorted_highest(s%ithr,i) = i
-            if( .not.s3D%proj_space_corrs_srchd(s%ithr,i) )then
-                corrs(i)          = -HUGE(areal)
-                corrs_highest(i)  = -HUGE(areal)
-            else
-                corrs(i)          = s3D%proj_space_corrs(s%ithr,i)
-                corrs_highest(i)  = s3D%proj_space_corrs(s%ithr,i)
-            end if
-        end do
-        idx_array = (/(j, j=1,s%nrefs)/)
-        call hpsort(corrs, idx_array)
-        proj_space_tmp(:) = s3D%proj_space_refinds_sorted(s%ithr,:)
-        do j = 1,s%nrefs
-            s3D%proj_space_refinds_sorted(s%ithr,j) = proj_space_tmp(idx_array(j))
-        end do
-        call hpsort(corrs_highest, s3D%proj_space_refinds_sorted_highest(s%ithr,:))
-    end subroutine sort_corrs
 
 end module simple_strategy3D_utils

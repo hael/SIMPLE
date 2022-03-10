@@ -220,8 +220,6 @@ contains
         integer,               intent(in)    :: istate, iproj
         integer :: iref
         iref = (istate-1)*s%nprojs+iproj
-        s3D%proj_space_refinds_sorted_highest(s%ithr,s%nrefs) = iref ! inpl angle + shift
-        s3D%proj_space_corrs_srchd(s%ithr,iref) = .true.
         call s%inpl_srch
         if( s3D%proj_space_corrs(s%ithr,iref) > corr )then
             corr = s3D%proj_space_corrs(s%ithr,iref)

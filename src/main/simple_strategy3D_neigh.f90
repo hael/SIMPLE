@@ -63,7 +63,6 @@ contains
                 ! exit condition
                 if( self%s%nbetter > 0 .and. self%s%nrefs_eval >= minnrefs ) exit
             end do
-            call sort_corrs(self%s) ! sort in correlation projection direction space
             call self%s%inpl_srch   ! search shifts
             ! prepare weights and orientations
             call self%oris_assign
@@ -79,7 +78,7 @@ contains
                 ! identify the top scoring in-plane angle
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                 loc = maxloc(inpl_corrs)
-                call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)), .true.)
+                call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
                 ! update nbetter to keep track of how many improving solutions we have identified
                 if( inpl_corrs(loc(1)) > self%s%prev_corr ) self%s%nbetter = self%s%nbetter + 1
                 ! keep track of how many references we are evaluating

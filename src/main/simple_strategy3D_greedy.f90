@@ -51,7 +51,6 @@ contains
             end do
             ! in greedy mode, we evaluate all refs
             self%s%nrefs_eval = self%s%nrefs
-            call sort_corrs(self%s)  ! sort in correlation projection direction space
             ! take care of the in-planes
             call self%s%inpl_srch
             ! prepare orientation
@@ -68,7 +67,7 @@ contains
                     ! identify the top scoring in-plane angle
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
                     loc = maxloc(inpl_corrs)
-                    call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)), .true.)
+                    call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
                 endif
             end subroutine per_ref_srch
 

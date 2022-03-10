@@ -51,11 +51,13 @@ type strategy3D_srch
     logical                  :: doshift       = .true.    !< 2 indicate whether 2 serch shifts
     logical                  :: exists        = .false.   !< 2 indicate existence
   contains
-    procedure :: new
-    procedure :: prep4srch
-    procedure :: inpl_srch
-    procedure :: store_solution
-    procedure :: kill
+    procedure          :: new
+    procedure          :: prep4srch
+    procedure, private :: inpl_srch_1
+    procedure, private :: inpl_srch_2
+    generic            :: inpl_srch => inpl_srch_1, inpl_srch_2
+    procedure          :: store_solution
+    procedure          :: kill
 end type strategy3D_srch
 
 contains
@@ -154,9 +156,13 @@ contains
         self%class      = o_prev%get_class()                                ! 2D class index
         self%prev_roind = pftcc_glob%get_roind(360.-o_prev%e3get())         ! in-plane angle index
         self%prev_shvec = o_prev%get_2Dshift()                              ! shift vector
-        self%prev_proj  = build_glob%eulspace%find_closest_proj(o_prev)     ! previous projection direction
+        if( params_glob%l_refine_inpl )then
+            self%prev_proj = self%class
+        else
+            self%prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
+        endif
         call build_glob%spproj_field%set(self%iptcl, 'proj', real(self%prev_proj))
-        self%prev_ref   = (self%prev_state-1)*self%nprojs + self%prev_proj  ! previous reference
+        self%prev_ref = (self%prev_state-1)*self%nprojs + self%prev_proj  ! previous reference
         ! init threaded search arrays
         call prep_strategy3D_thread(self%ithr)
         ! search order
@@ -180,36 +186,55 @@ contains
         call o_prev%kill
     end subroutine prep4srch
 
-    subroutine inpl_srch( self )
+    subroutine inpl_srch_1( self )
         class(strategy3D_srch), intent(inout) :: self
         type(ori) :: o
         real      :: cxy(3)
-        integer   :: ref, irot!, cnt, j
-        logical   :: found_better
+        integer   :: ref, irot, loc(1)
         if( self%doshift )then
             ! BFGS over shifts with in-plane rot exhaustive callback
-            ref = s3D%proj_space_refinds_sorted_highest(self%ithr, self%nrefs)
+            loc = maxloc(s3D%proj_space_corrs(self%ithr,:))
+            ref = loc(1)
             call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
             cxy = self%grad_shsrch_obj%minimize(irot=irot)
             if( irot > 0 )then
                 ! irot > 0 guarantees improvement found, update solution
-                s3D%proj_space_euls( self%ithr,ref,3) = 360. - pftcc_glob%get_rot(irot)
-                s3D%proj_space_corrs(self%ithr,ref)   = cxy(1)
-                s3D%proj_space_shift(self%ithr,ref,:) = cxy(2:3)
+                s3D%proj_space_euls( self%ithr,ref,3)    = 360. - pftcc_glob%get_rot(irot)
+                s3D%proj_space_corrs(self%ithr,ref)      = cxy(1)
+                s3D%proj_space_shift(self%ithr,ref,:)    = cxy(2:3)
             endif
         endif
-    end subroutine inpl_srch
+    end subroutine inpl_srch_1
 
-    subroutine store_solution( self, ref, inpl_ind, corr, searched )
+    subroutine inpl_srch_2( self, iptcl )
+        class(strategy3D_srch), intent(inout) :: self
+        integer,                intent(inout) :: iptcl
+        type(ori) :: o
+        real      :: cxy(3)
+        integer   :: ref, irot
+        ! class constrained refinement
+        call build_glob%spproj_field%get_ori(iptcl, o)
+        ref  = build_glob%spproj_field%get(iptcl, 'class')
+        ! BFGS over shifts with in-plane rot exhaustive callback
+        call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+        cxy = self%grad_shsrch_obj%minimize(irot=irot)
+        if( irot > 0 )then
+            ! irot > 0 guarantees improvement found, update solution
+            s3D%proj_space_euls( self%ithr,ref,3)    = 360. - pftcc_glob%get_rot(irot)
+            s3D%proj_space_corrs(self%ithr,ref)      = cxy(1)
+            s3D%proj_space_shift(self%ithr,ref,:)    = cxy(2:3)
+        else
+            iptcl = 0
+        endif
+    end subroutine inpl_srch_2
+
+    subroutine store_solution( self, ref, inpl_ind, corr )
         class(strategy3D_srch), intent(inout) :: self
         integer,                intent(in)    :: ref, inpl_ind
         real,                   intent(in)    :: corr
-        logical,                intent(in)    :: searched
-        s3D%proj_space_inplinds(self%ithr,ref)    = inpl_ind
-        s3D%proj_space_euls(self%ithr,ref,3)      = 360. - pftcc_glob%get_rot(inpl_ind)
-        s3D%proj_space_corrs(self%ithr,ref)       = corr
-        s3D%proj_space_corrs_calcd(self%ithr,ref) = .true.
-        if( searched ) s3D%proj_space_corrs_srchd(self%ithr,ref) = .true.
+        s3D%proj_space_inplinds(self%ithr,ref) = inpl_ind
+        s3D%proj_space_euls(self%ithr,ref,3)   = 360. - pftcc_glob%get_rot(inpl_ind)
+        s3D%proj_space_corrs(self%ithr,ref)    = corr
     end subroutine store_solution
 
     subroutine kill( self )
