@@ -211,7 +211,7 @@ type :: parameters
     character(len=STDLEN) :: ptclw='yes'          !< use particle weights(yes|no){yes}
     character(len=STDLEN) :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
     character(len=STDLEN) :: real_filter=''
-    character(len=STDLEN) :: refine='shc'         !< refinement mode(snhc|shc|neigh|cluster|clustersym){shc}
+    character(len=STDLEN) :: refine='shc'         !< refinement mode(snhc|shc|neigh|inpl|cluster|clustersym){shc}
     character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stats='no'           !< provide statistics(yes|no|print){no}
@@ -443,6 +443,7 @@ type :: parameters
     logical :: l_needs_sigma    = .false.
     logical :: l_nonuniform     = .true.
     logical :: l_phaseplate     = .false.
+    logical :: l_refine_inpl    = .false.
     logical :: l_remap_cls      = .false.
     logical :: l_wglob          = .true.
     logical :: sp_required      = .false.
@@ -1420,6 +1421,8 @@ contains
             if( .not. cline%defined('nspace')    ) self%nspace = 5000
             if( .not. cline%defined('athres')    ) self%athres = 15.
         endif
+        self%l_refine_inpl = .false.
+        if( trim(self%refine) .eq. 'inpl' ) self%l_refine_inpl = .true.
         ! motion correction
         if( self%tomo .eq. 'yes' ) self%mcpatch = 'no'
         if( self%mcpatch.eq.'yes' .and. self%nxpatch*self%nypatch<=1 ) self%mcpatch = 'no'

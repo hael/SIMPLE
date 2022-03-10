@@ -24,6 +24,7 @@ use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedy_neigh, only: strategy3D_greedy_neigh
 use simple_strategy3D_neigh,        only: strategy3D_neigh
 use simple_strategy3D_cont,         only: strategy3D_cont
+use simple_strategy3D_inpl,         only: strategy3D_inpl
 use simple_strategy3D,              only: strategy3D
 use simple_strategy3D_srch,         only: strategy3D_spec, set_ptcl_stats, eval_ptcl
 use simple_convergence,             only: convergence
@@ -65,14 +66,15 @@ contains
         !<---- hybrid or combined search strategies can then be implemented as extensions of the
         !      relevant strategy3D base class
         type(strategy3D_spec),     allocatable :: strategy3Dspecs(:)
-        type(convergence)     :: conv
-        type(ori)             :: orientation
-        real,    allocatable  :: resarr(:)
-        integer, allocatable  :: batches(:,:)
+        real,                      allocatable :: resarr(:)
+        integer,                   allocatable :: batches(:,:)
+        character(len=:),          allocatable :: maps_dir, iter_dir
+        type(convergence) :: conv
+        type(ori)         :: orientation
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj, anneal_ratio
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz, imatch
         integer :: iptcl, fnr, ithr, state, n_nozero, iptcl_batch, iptcl_map
-        integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
+        integer :: ibatch, iextr_lim, lpind_anneal, lpind_start, ncavgs
         logical :: doprint, do_extr, l_ctf
         if( L_BENCH_GLOB )then
             t_init = tic()
@@ -94,6 +96,16 @@ contains
 
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
+
+        ! INPL REFINEMENT REQUIRES MODIFICATION OF THE SEARCH SPACE (build_glob%eulspace)
+        if( trim(params_glob%refine) .eq. 'inpl' )then
+            ! check that we have class orientations
+            ncavgs = build_glob%spproj%os_cls3D%get_noris()
+            if( ncavgs == 0 ) THROW_HARD('refine=inpl requires class 3D orientations search space generation')
+            ! the projection directions for in-plane refinement are defined by those assigned to the class averages
+            build_glob%eulspace = build_glob%spproj%os_cls3D
+            params_glob%nspace  = ncavgs
+        endif
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
@@ -215,6 +227,8 @@ contains
                 select case(trim(params_glob%refine))
                     case('snhc')
                         allocate(strategy3D_snhc                 :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('inpl')
+                        allocate(strategy3D_inpl                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc')
                         if( .not. has_been_searched )then
                             allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)

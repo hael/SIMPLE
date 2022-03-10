@@ -52,7 +52,6 @@ contains
                 call per_ref_srch                           ! actual search
             end do
             self%s%nrefs_eval = self%spec%szsn
-            call sort_corrs(self%s)  ! sort in correlation projection direction space
             ! output
             call self%oris_assign
         else
@@ -68,7 +67,7 @@ contains
                 ! identify the top scoring in-plane angle
                 loc = maxloc(inpl_corrs)
                 ! stash
-                call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)), .true.)
+                call self%s%store_solution(iref, loc(1), inpl_corrs(loc(1)))
             end subroutine per_ref_srch
 
     end subroutine srch_snhc
@@ -78,11 +77,12 @@ contains
         class(strategy3D_snhc), intent(inout) :: self
         type(ori)  :: osym, o1, o2
         real       :: dist_inpl, corr, frac, euldist
-        integer    :: ref, roind
+        integer    :: ref, roind, loc(1)
         ! stash prev ori
         call build_glob%spproj_field%get_ori(self%s%iptcl, o1)
         ! orientation parameters
-        ref = s3D%proj_space_refinds_sorted(self%s%ithr, self%s%nrefs)
+        loc = maxloc(s3D%proj_space_corrs(self%s%ithr,:))
+        ref = loc(1)
         if( ref < 1 .or. ref > self%s%nrefs )then
             THROW_HARD('ref index: '//int2str(ref)//' out of bound; oris_assign_snhc')
         endif

@@ -1464,7 +1464,7 @@ contains
         &'Analysis of class averages with affinity propagation',&                  ! descr_short
         &'is a program for analyzing class averages with affinity propagation, &
         &in order to get a better understanding of the view distribution. The balance flag is used &
-        &to apply a balancing restraint (on the class population). Adjust balance until you are &
+        &to apply a balancing constraint (on the class population). Adjust balance until you are &
         &satisfied with the shape of the histogram',&                              ! descr_long
         &'simple_exec',&                                                           ! executable
         &0, 2, 0, 0, 3, 1, 1, .true.)                                              ! # entries in each group, requires sp_project
@@ -3119,7 +3119,7 @@ contains
         call refine3D%set_input('srch_ctrls', 8, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to reconstruct',&
         '# states to reconstruct', .false., 1.0)
         call refine3D%set_input('srch_ctrls', 9, objfun)
-        call refine3D%set_input('srch_ctrls', 10, 'refine', 'multi', 'Refinement mode', 'Refinement mode(shc|neigh|cont|cluster|clustersym){shc}', '(snhc|shc|neigh|cont|cluster|clustersym){shc}', .false., 'shc')
+        call refine3D%set_input('srch_ctrls', 10, 'refine', 'multi', 'Refinement mode', 'Refinement mode(shc|neigh|cont|inpl|cluster|clustersym){shc}', '(snhc|shc|neigh|cont|inpl|cluster|clustersym){shc}', .false., 'shc')
         call refine3D%set_input('srch_ctrls', 11, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
         call refine3D%set_input('srch_ctrls', 12, 'lp_iters', 'num', '# iterations lp refinement', '# iterations lp refinement', '# of iterations for low-pass limited refinement', .false., 20.)
         ! filter controls
