@@ -323,6 +323,7 @@ contains
         call write_project
         call spproj%kill
         ! cleanup
+        call remove_individual_projects
         call qsys_cleanup
         call del_file(micspproj_fname)
         ! end gracefully
@@ -552,7 +553,7 @@ contains
                     nimported  = 0
                     return
                 endif
-                call write_filetable(STREAM_SPPROJFILES, completed_fnames)
+                call write_filetable(STREAM_SPPROJFILES, completedfnames)
             end subroutine update_projects_list
 
             subroutine check_nptcls( fname, nptcls, state )
@@ -592,6 +593,17 @@ contains
                 call cline%set('projname', trim(projname))
                 call cline%set('projfile', trim(projfile))
             end subroutine create_individual_project
+
+            subroutine remove_individual_projects
+                character(len=LONGSTRLEN), allocatable :: spproj_fnames(:)
+                integer :: i, n
+                if( .not.file_exists(STREAM_SPPROJFILES) )return
+                call read_filetable(STREAM_SPPROJFILES, spproj_fnames)
+                n = size(spproj_fnames)
+                do i = 1,n
+                    call del_file(spproj_fnames(i))
+                enddo
+            end subroutine remove_individual_projects
 
             !>  import previous run to the current project based on past single project files
             subroutine import_prev_streams
