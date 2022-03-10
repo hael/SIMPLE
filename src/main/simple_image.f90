@@ -1392,7 +1392,7 @@ contains
         !$omp workshare
         self1%cmat = self2set1%cmat
         self2%cmat = self2set2%cmat
-        !$omp end workshare nowait
+        !$omp end workshare
         !$omp do collapse(2) schedule(static)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
@@ -1418,7 +1418,7 @@ contains
         !$omp workshare
         self1%cmat = self1%cmat + self2set1%cmat
         self2%cmat = self2%cmat + self2set2%cmat
-        !$omp end workshare nowait
+        !$omp end workshare
         !$omp do collapse(2) schedule(static)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)

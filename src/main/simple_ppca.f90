@@ -127,7 +127,7 @@ contains
         !$omp workshare
         evecs = 0.d0
         self%W_1 = self%W
-        !$omp end workshare nowait
+        !$omp end workshare
         !$omp single
         call svdcmp(self%W_1, self%evals, evecs)                        ! SVD; now W_1 holds basis vectors (eg U in A=UWVt)
         !$omp end single
@@ -303,7 +303,7 @@ contains
         do i=1,self%N
             self%E_zn(i,:,1) = real(mnorm_smp(Imat, self%Q, meanv),dp)
         end do
-        !$omp end do nowait
+        !$omp end do
         ! initialize weight matrix with uniform random nrs, normalize over j
         !$omp do schedule(static)
         do i=1,self%D
