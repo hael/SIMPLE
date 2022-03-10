@@ -605,7 +605,7 @@ contains
         real,           intent(in)    :: angast      !< angle of astigmatism
         real,           intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
         real,           intent(in)   :: maxspaFreqSq
-        integer :: ldim(3),phys(2),h,k,radfirstpeak
+        integer :: peaklims(2,2),ldim(3),phys(2),h,k,radfirstpeak
         real    :: ang,tval,spaFreqSq,hinv,hinvsq,kinv
         real    :: rh,rk,totalphshift
         if( imode == CTFFLAG_NO )then
@@ -616,12 +616,13 @@ contains
         call self%init(dfx, dfy, angast)
         ldim         = img%get_ldim()
         radfirstpeak = ceiling( sqrt(maxSpaFreqsq) * real(ldim(1)) ) ! assumed square image
-        radfirstpeak = min( max(radfirstpeak,0), ldim(1)/2-1)
-        do h=logi_lims(1,1),radfirstpeak
+        peaklims(1,:) = [logi_lims(1,1),                           min(max(radfirstpeak,0),logi_lims(1,2))]
+        peaklims(2,:) = [max(min(-radfirstpeak,0),logi_lims(2,1)), min(max(radfirstpeak,0),logi_lims(2,2))]
+        do h= peaklims(1,1),peaklims(1,2)
             rh     = real(h)
             hinv   = rh / real(ldim(1))
             hinvsq = hinv*hinv
-            do k = -radfirstpeak,radfirstpeak
+            do k = peaklims(2,1),peaklims(2,2)
                 ! calculate CTF
                 rk           = real(k)
                 kinv         = rk / real(ldim(2))
