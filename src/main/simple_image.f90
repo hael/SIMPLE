@@ -1402,7 +1402,7 @@ contains
                 self4%cmat(phys(1),phys(2),phys(3)) = cmplx(expcmat4(h,k),0.)
             enddo
         enddo
-        !$omp end do nowait
+        !$omp end do
         !$omp end parallel
     end subroutine set_cmats_from_cmats
 
