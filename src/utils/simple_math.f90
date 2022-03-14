@@ -45,12 +45,6 @@ interface check4nans
     module procedure check4nans_2
 end interface
 
-interface is_nan
-    module procedure is_a_number_1
-    module procedure is_a_number_2
-    module procedure is_a_number_3
-end interface
-
 interface is_even
     module procedure is_even_1
     module procedure is_even_2

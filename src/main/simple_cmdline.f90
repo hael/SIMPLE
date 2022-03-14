@@ -33,17 +33,15 @@ contains
     procedure          :: parse
     procedure          :: parse_private
     procedure          :: parse_oldschool
-    procedure          :: parse_command_line_value
+    procedure, private :: parse_command_line_value
     procedure, private :: copy
     procedure, private :: assign
     generic            :: assignment(=) => assign
     procedure          :: set_1
     procedure          :: set_2
-    procedure          :: set_3
-    procedure          :: set_4
+    generic            :: set => set_1, set_2
     procedure, private :: lookup
     procedure          :: get_keys
-    generic            :: set => set_1, set_2,set_3, set_4
     procedure          :: delete
     procedure          :: checkvar
     procedure          :: check
@@ -89,7 +87,7 @@ contains
         self%argcnt = command_argument_count()
         call get_command(self%entire_line)
         cmdline_glob = trim(self%entire_line)
-        if( .not. str_has_substr(self%entire_line,'prg=') ) THROW_HARD('prg= flag must be set on command line')
+        if( .not. str_has_substr(self%entire_line,'prg=') ) THROW_HARD('prg=flag must be set on command line')
         call get_command_argument(0,exec_cmd)
         if( DEBUG_HERE ) print *, 'exec_cmd from get_command_argument in cmdline class: ', trim(exec_cmd)
         ! parse program name
@@ -305,7 +303,7 @@ contains
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: arg
         class(args),      intent(in)    :: allowed_args
-        character(len=:), allocatable :: form
+        character(len=:), allocatable   :: form
         real    :: rval
         integer :: pos1, io_stat, ival
         pos1 = index(arg, '=') ! position of '='
@@ -324,7 +322,7 @@ contains
                 case('real')
                     self%cmds(i)%rarg = rval
                 case('int')
-                    call str2int(adjustl(arg(pos1+1:)), io_stat, ival )
+                    call str2int(adjustl(arg(pos1+1:)), io_stat, ival)
                     if( io_stat == 0 )then
                         self%cmds(i)%rarg = real(ival)
                     else
@@ -335,7 +333,6 @@ contains
         endif
     end subroutine parse_command_line_value
 
-    !>  \brief  private copier
     subroutine copy( self, self2copy )
         class(cmdline), intent(inout) :: self
         class(cmdline), intent(in) :: self2copy
@@ -412,66 +409,6 @@ contains
             self%cmds(which)%carg = trim(carg)
         endif
     end subroutine set_2
-
-    !> \brief  for setting a command line argument with cmdarg object
-    subroutine set_3( self, cmarg )
-        class(cmdline), intent(inout) :: self
-        type(cmdarg),   intent(in)    :: cmarg
-        integer :: which
-        which = self%lookup(cmarg%key)
-        if( which == 0 )then
-            self%argcnt = self%argcnt + 1
-            if( self%argcnt > MAX_CMDARGS )then
-                write(logfhandle,*) 'self%argcnt: ', self%argcnt
-                write(logfhandle,*) 'MAX_CMDARGS: ', MAX_CMDARGS
-                THROW_HARD('stack overflow; set_3')
-            endif
-            self%cmds(self%argcnt)%key = trim(cmarg%key)
-            if(allocated(cmarg%carg))then
-                self%cmds(self%argcnt)%carg = trim(cmarg%carg)
-            else
-                self%cmds(self%argcnt)%rarg = cmarg%rarg
-            endif
-            self%cmds(self%argcnt)%defined = .true.
-        else
-            if(allocated(cmarg%carg))then
-                self%cmds(which)%carg = trim(cmarg%carg)
-            else
-                self%cmds(self%argcnt)%rarg = cmarg%rarg
-            endif
-        endif
-    end subroutine set_3
-
-    !> \brief  for setting a command line argument with a list of cmdarg objects
-    subroutine set_4( self, cmarg )
-        class(cmdline), intent(inout) :: self
-        type(cmdarg),   intent(in)    :: cmarg(:)
-        integer :: which, n
-        do n=1,size(cmarg)
-            which = self%lookup(cmarg(n)%key)
-            if( which == 0 )then
-                self%argcnt = self%argcnt + 1
-                if( self%argcnt > MAX_CMDARGS )then
-                    write(logfhandle,*) 'self%argcnt: ', self%argcnt
-                    write(logfhandle,*) 'MAX_CMDARGS: ', MAX_CMDARGS
-                    THROW_HARD('stack overflow; set_4')
-                endif
-                self%cmds(self%argcnt)%key = trim(cmarg(n)%key)
-                if(allocated(cmarg(n)%carg))then
-                    self%cmds(self%argcnt)%carg = trim(cmarg(n)%carg)
-                else
-                    self%cmds(self%argcnt)%rarg = cmarg(n)%rarg
-                endif
-                self%cmds(self%argcnt)%defined = .true.
-            else
-                if(allocated(cmarg(n)%carg))then
-                    self%cmds(which)%carg = trim(cmarg(n)%carg)
-                else
-                    self%cmds(self%argcnt)%rarg = cmarg(n)%rarg
-                endif
-            endif
-        end do
-    end subroutine set_4
 
     !> \brief for removing a command line argument
     subroutine delete( self, key )
