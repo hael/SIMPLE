@@ -25,7 +25,6 @@ integer,          parameter :: N_DISCRET           = 1000
 integer,          parameter :: CNMIN               = 3
 integer,          parameter :: CNMAX               = 12
 integer,          parameter :: NSTRAIN_COMPS       = 7
-character(len=3), parameter :: CSV_DELIM           = ', '
 character(len=*), parameter :: ATOMS_STATS_FILE    = 'atoms_stats.csv'
 character(len=*), parameter :: NP_STATS_FILE       = 'nanoparticle_stats.csv'
 character(len=*), parameter :: CN_STATS_FILE       = 'cn_dependent_stats.csv'

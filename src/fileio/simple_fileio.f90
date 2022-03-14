@@ -442,7 +442,7 @@ contains
             allocate(new_fname, source=trim(fname(pos+1:length)))
         endif
     end function basename
-    
+
     pure function stemname( fname ) result( new_fname)
         character(len=*), intent(in)  :: fname     !< abs filename
         character(len=:), allocatable :: new_fname
@@ -458,7 +458,7 @@ contains
             allocate(new_fname, source=trim(fname(1:pos - 1)))
         endif
     end function stemname
-    
+
     pure function get_fpath( fname ) result( path )
         character(len=*), intent(in)  :: fname !< abs filename
         character(len=:), allocatable :: path
@@ -733,7 +733,6 @@ contains
         integer :: recsz, i, funit,io_stat
         inquire(iolength=recsz)rval
         rval = size(arr)
-        funit=-1
         call fopen(funit,fnam,'replace','unknown', iostat=io_stat,access='direct',form='unformatted',recl=recsz)
         call fileiochk("arr2file_1 fopen failed "//trim(fnam),io_stat)
         write(funit, rec=1, iostat=io_stat) rval
@@ -747,7 +746,6 @@ contains
         real,             intent(in) :: arr(:)
         character(len=*), intent(in) :: fnam
         integer :: i,funit,io_stat
-        funit=-1
         call fopen(funit,fnam,'replace', 'unknown', iostat=io_stat, form='formatted')
         call fileiochk("arr2txtfile fopen failed "//trim(fnam),io_stat)
         do i=1,size(arr)
@@ -760,7 +758,6 @@ contains
         integer,          intent(in) :: arr(:)
         character(len=*), intent(in) :: fnam
         integer :: i,funit,io_stat
-        funit=-1
         call fopen(funit,fnam,'replace', 'unknown', iostat=io_stat, form='formatted')
         call fileiochk("arr2txtfile fopen failed "//trim(fnam),io_stat)
         do i=1,size(arr)
