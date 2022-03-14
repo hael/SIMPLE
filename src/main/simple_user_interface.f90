@@ -64,6 +64,7 @@ type :: simple_program
 end type simple_program
 
 ! declare simple_exec and single_exec program specifications here
+! instances of this class - special
 type(simple_program), target :: automask
 type(simple_program), target :: autorefine3D_nano
 type(simple_program), target :: binarize
@@ -834,9 +835,9 @@ contains
     end subroutine set_param_2
 
     subroutine set_common_params
-        call set_param(projfile,      'projfile',      'file',   'Project file', 'SIMPLE projectfile', 'e.g. myproject.simple', .true., 'myproject.simple')
-        call set_param(projfile_target,'projfile_target','file', 'Another project file', 'SIMPLE projectfile', 'e.g. myproject2.simple', .true., 'myproject2.simple')
-        call set_param(stk,           'stk',           'file',   'Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false., 'stk.mrc')
+        call set_param(projfile,      'projfile',      'file',   'Project file', 'SIMPLE projectfile', 'e.g. myproject.simple', .true., '')
+        call set_param(projfile_target,'projfile_target','file', 'Another project file', 'SIMPLE projectfile', 'e.g. myproject2.simple', .true., '')
+        call set_param(stk,           'stk',           'file',   'Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false., '')
         call set_param(stk2,          'stk2',          'file',   'Second Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false., 'stk2.mrc')
         call set_param(stktab,        'stktab',        'file',   'List of per-micrograph particle stacks', 'List of per-micrograph particle stacks', 'stktab.txt file containing file names', .false., 'stktab.txt')
         call set_param(ctf,           'ctf',           'multi',  'CTF status', 'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){no}',&
@@ -1020,7 +1021,7 @@ contains
         &'auto 3D refinement of metallic nanoparticles',&                                 ! descr_short
         &'is a distributed workflow for automated 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                  ! executable
-        &1, 2, 0, 8, 4, 2, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &1, 2, 0, 7, 4, 1, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call autorefine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -1039,7 +1040,6 @@ contains
         call autorefine3D_nano%set_input('srch_ctrls', 5, update_frac)
         call autorefine3D_nano%set_input('srch_ctrls', 6, frac)
         call autorefine3D_nano%set_input('srch_ctrls', 7, pgrp)
-        call autorefine3D_nano%set_input('srch_ctrls', 8, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! filter controls
         call autorefine3D_nano%set_input('filt_ctrls', 1, hp)
         call autorefine3D_nano%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -1050,7 +1050,6 @@ contains
         call autorefine3D_nano%set_input('filt_ctrls', 4, ptclw)
         ! mask controls
         call autorefine3D_nano%set_input('mask_ctrls', 1, mskdiam)
-        call autorefine3D_nano%set_input('mask_ctrls', 2, mskfile)
         ! computer controls
         call autorefine3D_nano%set_input('comp_ctrls', 1, nparts)
         call autorefine3D_nano%set_input('comp_ctrls', 2, nthr)
