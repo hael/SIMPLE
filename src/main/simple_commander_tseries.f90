@@ -13,6 +13,7 @@ use simple_qsys_env,         only: qsys_env
 use simple_commander_volops, only: reproject_commander
 use simple_stack_io,         only: stack_io
 use simple_commander_oris,   only: vizoris_commander
+use simple_commander_rec,    only: reconstruct3D_commander
 use simple_nanoparticle
 use simple_qsys_funs
 use simple_binoris_io
@@ -1167,18 +1168,19 @@ contains
         character(len=STDLEN),     allocatable :: state_assemble_finished(:), vol_fnames(:)
         real,                      allocatable :: ccs(:,:,:), fsc(:), rstates(:)
         integer,                   allocatable :: parts(:,:)
-        character(len=LONGSTRLEN) :: fname
-        character(len=STDLEN)     :: volassemble_output, str_state, fsc_file, optlp_file
-        type(parameters)   :: params
-        type(builder)      :: build
-        type(qsys_env)     :: qenv
-        type(cmdline)      :: cline_volassemble
-        type(chash)        :: job_descr
-        type(image)        :: vol1, vol2
-        real               :: w, sumw
-        integer            :: state, ipart, sz_list, istate, iptcl, cnt, nptcls, nptcls_per_state
-        integer            :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind
-        logical            :: fall_over
+        character(len=LONGSTRLEN)     :: fname
+        character(len=STDLEN)         :: volassemble_output, str_state, fsc_file, optlp_file
+        type(reconstruct3D_commander) :: xrec3D_shmem
+        type(parameters)              :: params
+        type(builder)                 :: build
+        type(qsys_env)                :: qenv
+        type(cmdline)                 :: cline_volassemble
+        type(chash)                   :: job_descr
+        type(image)                   :: vol1, vol2
+        real                          :: w, sumw
+        integer :: state, ipart, sz_list, istate, iptcl, cnt, nptcls, nptcls_per_state
+        integer :: funit, nparts, i, ind, nlps, ilp, iostat, hp_ind
+        logical :: fall_over
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
         if( .not. cline%defined('trs')     ) call cline%set('trs',           5.) ! to assure that shifts are being used
@@ -1197,6 +1199,15 @@ contains
             THROW_HARD('unsupported ORITYPE')
         end select
         if( fall_over ) THROW_HARD('No images found!')
+        if( cline%defined('fromp') .or. cline%defined('top') )then
+            if( cline%defined('fromp') .and. cline%defined('top') )then
+                call cline%delete('nparts') ! shared-memory implementation
+                call xrec3D_shmem%execute(cline)
+                return
+            else
+                THROW_HARD('Both fromp and top need to be defined on command-line for reconstruction of a specific range of the time-series')
+            endif
+        endif
         ! save a states array for putting pack later
         rstates = build%spproj_field%get_all('state')
         ! states/stepz
