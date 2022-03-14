@@ -63,15 +63,6 @@ type :: simple_program
     procedure, private :: kill
 end type simple_program
 
-type simple_prg_ptr
-    type(simple_program), pointer :: ptr2prg => null()
-end type simple_prg_ptr
-
-! array of pointers to all programs
-integer, parameter   :: NMAX_PTRS  = 200
-integer              :: n_prg_ptrs = 0
-type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
-
 ! declare simple_exec and single_exec program specifications here
 type(simple_program), target :: automask
 type(simple_program), target :: autorefine3D_nano
@@ -276,6 +267,14 @@ type(simple_input_param) :: user_project
 type(simple_input_param) :: wcrit
 type(simple_input_param) :: width
 type(simple_input_param) :: wiener
+
+! this is for making an array of pointers to all programs
+type simple_prg_ptr
+    type(simple_program), pointer :: ptr2prg => null()
+end type simple_prg_ptr
+integer, parameter   :: NMAX_PTRS  = 200
+integer              :: n_prg_ptrs = 0
+type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
 interface set_param
     module procedure set_param_1
@@ -806,6 +805,34 @@ contains
 
     ! private class methods
 
+    subroutine set_param_1( self, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value )
+        type(simple_input_param), intent(inout) :: self
+        character(len=*),         intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
+        logical,                  intent(in)    :: required
+        real,                     intent(in)    :: default_value
+        allocate(self%key,               source=trim(key))
+        allocate(self%keytype,           source=trim(keytype))
+        allocate(self%descr_short,       source=trim(descr_short))
+        allocate(self%descr_long,        source=trim(descr_long))
+        allocate(self%descr_placeholder, source=trim(descr_placeholder))
+        self%required = required
+        if( .not. self%required ) self%rval_default = default_value
+    end subroutine set_param_1
+
+    subroutine set_param_2( self, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value )
+        type(simple_input_param), intent(inout) :: self
+        character(len=*),         intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
+        logical,                  intent(in)    :: required
+        character(len=*),         intent(in)    :: default_value
+        allocate(self%key,               source=trim(key))
+        allocate(self%keytype,           source=trim(keytype))
+        allocate(self%descr_short,       source=trim(descr_short))
+        allocate(self%descr_long,        source=trim(descr_long))
+        allocate(self%descr_placeholder, source=trim(descr_placeholder))
+        self%required = required
+        if( .not. self%required ) allocate(self%cval_default, source=trim(default_value))
+    end subroutine set_param_2
+
     subroutine set_common_params
         call set_param(projfile,      'projfile',      'file',   'Project file', 'SIMPLE projectfile', 'e.g. myproject.simple', .true., 'myproject.simple')
         call set_param(projfile_target,'projfile_target','file', 'Another project file', 'SIMPLE projectfile', 'e.g. myproject2.simple', .true., 'myproject2.simple')
@@ -936,35 +963,7 @@ contains
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
-    subroutine set_param_1( self, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value )
-        type(simple_input_param), intent(inout) :: self
-        character(len=*),         intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
-        logical,                  intent(in)    :: required
-        real,                     intent(in)    :: default_value
-        allocate(self%key,               source=trim(key))
-        allocate(self%keytype,           source=trim(keytype))
-        allocate(self%descr_short,       source=trim(descr_short))
-        allocate(self%descr_long,        source=trim(descr_long))
-        allocate(self%descr_placeholder, source=trim(descr_placeholder))
-        self%required = required
-        if( .not. self%required ) self%rval_default = default_value
-    end subroutine set_param_1
-
-    subroutine set_param_2( self, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value )
-        type(simple_input_param), intent(inout) :: self
-        character(len=*),         intent(in)    :: key, keytype, descr_short, descr_long, descr_placeholder
-        logical,                  intent(in)    :: required
-        character(len=*),         intent(in)    :: default_value
-        allocate(self%key,               source=trim(key))
-        allocate(self%keytype,           source=trim(keytype))
-        allocate(self%descr_short,       source=trim(descr_short))
-        allocate(self%descr_long,        source=trim(descr_long))
-        allocate(self%descr_placeholder, source=trim(descr_placeholder))
-        self%required = required
-        if( .not. self%required ) allocate(self%cval_default, source=trim(default_value))
-    end subroutine set_param_2
-
-    ! TEMPLATE
+    ! CONSTRUCTOR TEMPLATE
     ! INPUT PARAMETER SPECIFICATIONS
     ! image input/output
     ! <empty>
@@ -3856,48 +3855,6 @@ contains
         ! <empty>
     end subroutine new_tseries_import_particles
 
-    ! subroutine new_tseries_ctf_estimate
-    !     ! PROGRAM SPECIFICATION
-    !     call tseries_ctf_estimate%new(&
-    !     &'tseries_ctf_estimate', &                             ! name
-    !     &'Time-series CTF parameter fitting',&                 ! descr_short
-    !     &'is a SIMPLE application for CTF parameter fitting',& ! descr_long
-    !     &'single_exec',&                                       ! executable
-    !     &1, 0, 0, 3, 2, 0, 1, .true.)                          ! # entries in each group, requires sp_project
-    !     ! INPUT PARAMETER SPECIFICATIONS
-    !     ! image input/output
-    !     call tseries_ctf_estimate%set_input('img_ios', 1, stk)
-    !     tseries_ctf_estimate%img_ios(1)%required = .true.
-    !     ! <empty>
-    !     ! parameter input/output
-    !     ! <empty>
-    !     ! alternative inputs
-    !     ! <empty>
-    !     ! search controls
-    !     call tseries_ctf_estimate%set_input('srch_ctrls', 1, dfmin)
-    !     tseries_ctf_estimate%srch_ctrls(1)%rval_default = -0.05
-    !     tseries_ctf_estimate%srch_ctrls(1)%descr_placeholder = 'Expected minimum defocus; in microns{-0.05}'
-    !     call tseries_ctf_estimate%set_input('srch_ctrls', 2, dfmax)
-    !     tseries_ctf_estimate%srch_ctrls(2)%rval_default = 0.05
-    !     tseries_ctf_estimate%srch_ctrls(2)%descr_placeholder = 'Expected maximum defocus; in microns{0.05}'
-    !     call tseries_ctf_estimate%set_input('srch_ctrls', 3, astigtol)
-    !     tseries_ctf_estimate%srch_ctrls(3)%rval_default = 0.001
-    !     tseries_ctf_estimate%srch_ctrls(3)%descr_placeholder = 'Expected astigmatism; in microns{0.005}'
-    !     ! filter controls
-    !     call tseries_ctf_estimate%set_input('filt_ctrls', 1, lp)
-    !     tseries_ctf_estimate%filt_ctrls(1)%required     = .false.
-    !     tseries_ctf_estimate%filt_ctrls(1)%rval_default = 2.3
-    !     tseries_ctf_estimate%filt_ctrls(1)%descr_placeholder = 'Low-pass limit in Angstroms{1.}'
-    !     call tseries_ctf_estimate%set_input('filt_ctrls', 2, hp)
-    !     tseries_ctf_estimate%filt_ctrls(2)%required     = .false.
-    !     tseries_ctf_estimate%filt_ctrls(2)%rval_default = 5.
-    !     tseries_ctf_estimate%filt_ctrls(2)%descr_placeholder = 'High-pass limit in Angstroms{5.}'
-    !     ! mask controls
-    !     ! <empty>
-    !     ! computer controls
-    !     call tseries_ctf_estimate%set_input('comp_ctrls', 1, nthr)
-    ! end subroutine new_tseries_ctf_estimate
-
     subroutine new_tseries_motion_correct
         ! PROGRAM SPECIFICATION
         call tseries_motion_correct%new(&
@@ -4055,12 +4012,14 @@ contains
         &'Time windowed 3D reconstruction from oriented particles',&     ! descr_long
         &'Time windowed 3D reconstruction from oriented particles',&
         &'single_exec',&                                                 ! executable
-        &0, 1, 0, 1, 0, 2, 2, .true.)                                    ! # entries in each group, requires sp_project
+        &0, 3, 0, 1, 0, 2, 2, .true.)                                    ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call tseries_reconstruct3D%set_input('parm_ios', 1, 'stepsz',  'num', 'Time window size (# frames){500}', 'Time window size (# frames) for windowed 3D rec{500}', 'give # frames',  .false., 500.)
+        call tseries_reconstruct3D%set_input('parm_ios', 2, 'fromp', 'num', 'From particle index', 'Start index for 3D reconstruction', 'start index', .false., 1.0)
+        call tseries_reconstruct3D%set_input('parm_ios', 3, 'top',   'num', 'To particle index', 'Stop index for 3D reconstruction', 'stop index', .false., 1.0)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -4072,6 +4031,7 @@ contains
         call tseries_reconstruct3D%set_input('mask_ctrls', 2, mskfile)
         ! computer controls
         call tseries_reconstruct3D%set_input('comp_ctrls', 1, nparts)
+        tseries_reconstruct3D%comp_ctrls(1)%required = .false.
         call tseries_reconstruct3D%set_input('comp_ctrls', 2, nthr)
     end subroutine new_tseries_reconstruct3D
 
