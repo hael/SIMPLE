@@ -804,7 +804,6 @@ contains
         type(cmdline)                 :: cline_refine3D_nano, cline_detect_atms, cline_reproject
         type(cmdline)                 :: cline_refine3D_cavgs, cline_vizoris
         type(image), allocatable      :: imgs(:)
-        type(stack_io)                :: stkio_w
         type(sp_project)              :: spproj
         character(len=*), parameter   :: RECVOL     = 'recvol_state01.mrc'
         character(len=*), parameter   :: SIMVOL     = 'recvol_state01_SIM.mrc'
@@ -812,10 +811,11 @@ contains
         character(len=*), parameter   :: BINARY     = 'recvol_state01_BIN.mrc'
         character(len=*), parameter   :: CCS        = 'recvol_state01_CC.mrc'
         character(len=*), parameter   :: SPLITTED   = 'split_ccs.mrc'
-        character(len=*), parameter   :: FINAL_MAPS = './final_thresholded_results'
+        character(len=*), parameter   :: FINAL_MAPS = './final_thresholded_results/'
         character(len=*), parameter   :: TAG        = 'xxx' ! for checking command lines
         character(len=:), allocatable :: iter_dir, cavgs_stk, fname
         real,             allocatable :: rstates(:), corrs(:)
+        logical,          allocatable :: state_mask(:)
         character(len=STDLEN) :: fbody, fbody_split
         integer :: i, j, iter, cnt, ncavgs, funit, io_stat
         real    :: smpd
@@ -862,6 +862,8 @@ contains
             call cline_refine3D_nano%set('prg', 'refine3D_nano') ! because the command line is modified refine3D_nano -> refine3D internally
             iter_dir = 'iteration_'//int2str_pad(i,2)//'/'
             call simple_mkdir(iter_dir)
+            ! extract particle 3D orientations and write them
+            ! 2do
             ! model building
             call xdetect_atms%execute(cline_detect_atms)
             ! copy critical output
@@ -908,6 +910,7 @@ contains
             call cline_refine3D_cavgs%set('projfile', params%projfile)
             call cline_refine3D_cavgs%set('oritype',          'cls3D')
             call cline_refine3D_cavgs%set('lp',                   1.5)
+            call cline_refine3D_cavgs%set('silence_fsc',        'yes')
             ! convention for executing shared-memory workflows from within another workflow with a parameters object declared
             params_ptr  => params_glob
             params_glob => null()
@@ -919,6 +922,9 @@ contains
             call spproj%read_segment('cls3D', params%projfile) ! now the newly generated cls3D field will be read...
             ! ...so write out its content
             call spproj%os_cls3D%write('cavgs_oris.txt')
+            ! ...and get the state flags
+            if( allocated(rstates) ) deallocate(rstates)
+            rstates = spproj%os_cls3D%get_all('state')
             ! prepare for re-projection
             call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
             call cline_reproject%set('outstk', 'reprojs_recvol.mrc')
@@ -932,29 +938,36 @@ contains
             ! re-project
             call xreproject%execute(cline_reproject)
             ! write cavgs & reprojections in triplets
-            allocate(imgs(3*ncavgs))
+            allocate(imgs(3*ncavgs), state_mask(3*ncavgs))
             cnt = 0
             do i = 1,3*(int(ncavgs)),3
                 cnt = cnt + 1
-                call imgs(i    )%new([params%box,params%box,1], smpd)
-                call imgs(i + 1)%new([params%box,params%box,1], smpd)
-                call imgs(i + 2)%new([params%box,params%box,1], smpd)
-                call imgs(i    )%read(cavgs_stk,                 cnt)
-                call imgs(i + 1)%read('reprojs_recvol.mrc',      cnt)
-                call imgs(i + 2)%read('reprojs_thres_SIM.mrc',   cnt)
-                call imgs(i    )%norm
-                call imgs(i + 1)%norm
-                call imgs(i + 2)%norm
+                if( rstates(i) > 0.5 )then
+                    call imgs(i    )%new([params%box,params%box,1], smpd)
+                    call imgs(i + 1)%new([params%box,params%box,1], smpd)
+                    call imgs(i + 2)%new([params%box,params%box,1], smpd)
+                    call imgs(i    )%read(cavgs_stk,                 cnt)
+                    call imgs(i + 1)%read('reprojs_recvol.mrc',      cnt)
+                    call imgs(i + 2)%read('reprojs_thres_SIM.mrc',   cnt)
+                    call imgs(i    )%norm
+                    call imgs(i + 1)%norm
+                    call imgs(i + 2)%norm
+                    state_mask(i    ) = .true.
+                    state_mask(i + 1) = .true.
+                    state_mask(i + 2) = .true.
+                else
+                    state_mask(i    ) = .false.
+                    state_mask(i + 1) = .false.
+                    state_mask(i + 2) = .false.
+                endif
             end do
-            call stkio_w%open('cavgs_vs_reprojections_rec_and_thres_sim.mrc', smpd, 'write', box=params%box, bufsz=3*ncavgs)
             do i = 1,3*ncavgs
-                call stkio_w%write(i, imgs(i))
+                if( state_mask(i) ) call imgs(i)%write('cavgs_vs_reprojections_rec_and_thres_sim.mrc', i)
                 call imgs(i)%kill
             end do
-            call stkio_w%close
             deallocate(imgs)
         endif ! end of class average-based validation
-        call exec_cmdline('rm -f fsc* fft* recvol* RES*')
+        call exec_cmdline('rm -f fsc* fft* recvol* RES* reprojs_recvol* reprojs_thres* reproject_oris.txt stderrout')
         ! visualization of particle orientations
         ! read the ptcl3D segment first to make sure that we are using the latest information
         call spproj%read_segment('ptcl3D', params%projfile)
