@@ -36,6 +36,7 @@ integer                        :: ncls       = 0           !< # classes
 integer                        :: filtsz     = 0           !< size of filter function or FSC
 integer                        :: ldim(3)    = [0,0,0]     !< logical dimension of image
 integer                        :: ldim_pd(3) = [0,0,0]     !< logical dimension of image, padded
+integer                        :: ctflim_mode= CTFLIMFLAG_FULL !< CTF treatment strategy
 real                           :: smpd       = 0.          !< sampling distance
 type(ptcl_record), allocatable :: precs(:)                 !< particle records
 type(image),       allocatable :: cavgs_even(:)            !< class averages
@@ -94,8 +95,22 @@ contains
         ldim_pd       = [params_glob%boxpd,params_glob%boxpd,1]
         ldim_pd(3)    = 1
         filtsz        = build_glob%img%get_filtsz()
-        l_wiener_part = trim(params_glob%wiener) .eq. 'partial'
-        l_stream      = trim(params_glob%stream) .eq. 'yes'
+        ctflim_mode   = CTFLIMFLAG_FULL
+        l_wiener_part = str_has_substr(params_glob%wiener, 'partial')
+        if( l_wiener_part )then
+            select case(trim(params_glob%wiener))
+            case('partial_pi')
+                ctflim_mode = CTFLIMFLAG_PI
+            case('partial_pio2')
+                ctflim_mode = CTFLIMFLAG_PIO2
+            case('partial_el')
+                ctflim_mode = CTFLIMFLAG_EL
+            case DEFAULT
+                THROW_WARN('Unsupported wiener=partialxxx mode; defaulting to wiener=partial_pio2')
+                ctflim_mode = CTFLIMFLAG_PIO2
+            end select
+        endif
+        l_stream = (trim(params_glob%stream) .eq. 'yes') .and. l_wiener_part
         ! build arrays
         allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
         &cavgs_merged(ncls), ctfsqsums_even(ncls),&
@@ -418,10 +433,10 @@ contains
                     if( phaseplate ) add_phshift = precs(iprec)%phshift
                     if( l_stream )then
                         call precs(iprec)%tfun%eval_and_apply(cgrid_imgs(i), ctfflag, logi_lims, fdims(1:2), tvals(:,:,i),&
-                        &precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, .false., maxSpaFreqSq(i))
+                        &precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, ctflim_mode, maxSpaFreqSq(i))
                     else
                         call precs(iprec)%tfun%eval_and_apply(cgrid_imgs(i), ctfflag, logi_lims, fdims(1:2), tvals(:,:,i),&
-                        &precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, .not.l_wiener_part, maxSpaFreqSq(i))
+                        &precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, ctflim_mode, maxSpaFreqSq(i))
                     endif
                     ! Rotation matrix
                     call rotmat2d(-precs(iprec)%e3, mat)
@@ -510,7 +525,7 @@ contains
                         add_phshift = 0.
                         if( phaseplate ) add_phshift = precs(iprec)%phshift
                         call precs(iprec)%tfun%eval_and_apply_before1stpeak(cgrid_imgs(i), ctfflag, logi_lims, fdims(1:2), tvals(:,:,i),&
-                        &precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, maxSpaFreqsq(i))
+                        &precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, maxSpaFreqsq(i), ctflim_mode)
                         ! radius of the bounding sphere around the astigmatic first peak ellipse 
                         radfirstpeak = ceiling( sqrt(maxSpaFreqsq(i)) * real(ldim_pd(1)) )
                         radfirstpeak = min( max(radfirstpeak,0), interp_shlim)

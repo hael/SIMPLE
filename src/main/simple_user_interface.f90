@@ -1265,7 +1265,8 @@ contains
         call cluster2D%set_input('filt_ctrls', 6, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
         '(yes|no){yes}', .false., 'yes')
-        call cluster2D%set_input('filt_ctrls', 7, wiener)
+        call cluster2D%set_input('filt_ctrls', 7, 'wiener', 'multi',  'Wiener restoration', 'Wiener restoration, full or partial (only after 1st CTF=0)(full|partial|partial_pio2|partial_pi|partial_el){full}',&
+        '(full|partial|partial_pio2|partial_pi|partial_el){full}', .false., 'full')
         call cluster2D%set_input('filt_ctrls', 8, graphene_filt)
         call cluster2D%set_input('filt_ctrls', 9, 'lambda', 'num', 'TV regularization lambda parameter', 'Strength of noise reduction', '(0.5-3.0){1.0}', .false., 1.0)
         ! mask controls
@@ -1321,7 +1322,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 2, 0, 7, 4, 1, 4, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 2, 0, 7, 5, 1, 4, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1358,6 +1359,8 @@ contains
         call cluster2D_stream%set_input('filt_ctrls', 4, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){no}',&
         '(yes|no){no}', .false., 'no')
+        call cluster2D_stream%set_input('filt_ctrls', 5, 'wiener', 'multi',  'Wiener restoration', 'Wiener restoration, full or partial (only after 1st CTF=0)(full|partial|partial_pio2|partial_pi|partial_el){full}',&
+        '(full|partial|partial_pio2|partial_pi|partial_el){full}', .false., 'full')
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls

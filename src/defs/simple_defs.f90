@@ -59,7 +59,13 @@ end type str4arr
 ! CTF flag type
 enum, bind(c)
     enumerator :: ENUM_CTFFLAG = -1
-    enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1,  CTFFLAG_FLIP = 2
+    enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1, CTFFLAG_FLIP = 2
+end enum
+
+! CTF treatment flag type
+enum, bind(c)
+    enumerator :: ENUM_CTFLIMFLAG = -1
+    enumerator :: CTFLIMFLAG_FULL = 0, CTFLIMFLAG_PI = 1, CTFLIMFLAG_PIO2 = 2, CTFLIMFLAG_EL = 3
 end enum
 
 ! Objective function type

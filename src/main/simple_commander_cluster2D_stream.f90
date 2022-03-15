@@ -461,6 +461,7 @@ contains
         if( .not. cline%defined('lpthresh')  ) call cline%set('lpthresh',  30.)
         if( .not. cline%defined('ndev')      ) call cline%set('ndev',      1.5)
         if( .not. cline%defined('oritype')   ) call cline%set('oritype','ptcl2D')
+        if( .not. cline%defined('wiener')    ) call cline%set('wiener',   'full')
         call cline%set('ptclw',      'no')
         call cline%set('stream','yes') ! only for parameters determination
         call seed_rnd
@@ -534,7 +535,6 @@ contains
         call cline_cluster2D_chunk%set('startit',  1.)
         call cline_cluster2D_chunk%set('ncls',   real(params%ncls_start))
         call cline_cluster2D_chunk%set('nparts', real(params%nparts_chunk))
-        call cline_cluster2D_chunk%set('wiener', 'partial')
         ! pool classification: optional stochastic optimisation, optional match filter
         ! automated incremental learning, objective function is standard cross-correlation (cc)
         call cline_cluster2D%set('prg',       'cluster2D_distr')
@@ -555,7 +555,8 @@ contains
             call cline_cluster2D%set('lpstart', lpstart_stoch)
             write(logfhandle,'(A,F5.1)') '>>> POOL  STARTING LOW-PASS LIMIT (IN A) TO: ', lpstart_stoch
         endif
-        call cline_cluster2D%set('stream', 'yes') ! controls dual ctf treatment
+        ! ctf treatment
+        call cline_cluster2D%set('stream', 'yes')
         ! transfer project info
         call orig_proj%read(params%projfile)
         pool_proj%projinfo = orig_proj%projinfo
@@ -698,6 +699,8 @@ contains
                 if( pool_iter > 3 )then
                     call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_even'//trim(params%ext))
                     call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_odd'//trim(params%ext))
+                    call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_even_wfilt'//trim(params%ext))
+                    call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_odd_wfilt'//trim(params%ext))
                 endif
                 call debug_print('end pool available '//int2str(iter))
             endif
@@ -1513,15 +1516,13 @@ contains
                     os_backup3 = pool_proj%os_cls2D
                     os_backup2 = pool_proj%os_stk
                     ! rescale classes
-                    call rescale_cavgs(refs_glob, cavgsfname)
-                    src  = add2fbody(refs_glob, params%ext,'_even')
-                    dest = add2fbody(cavgsfname,params%ext,'_even')
+                    src = get_fbody(refs_glob, params%ext, separator=.false.)//'_wfilt'//trim(params%ext)
+                    call rescale_cavgs(src, cavgsfname)
+                    src  = add2fbody(refs_glob, params%ext,'even_wfilt')
+                    dest = add2fbody(cavgsfname,params%ext,'even')
                     call rescale_cavgs(src, dest)
-                    src  = add2fbody(refs_glob, params%ext,'_odd')
+                    src  = add2fbody(refs_glob, params%ext,'_odd_wfilt')
                     dest = add2fbody(cavgsfname,params%ext,'_odd')
-                    call rescale_cavgs(src, dest)
-                    src  = add2fbody(refs_glob, params%ext,'_wfilt')
-                    dest = add2fbody(cavgsfname,params%ext,'_wfilt')
                     call rescale_cavgs(src, dest)
                     call pool_proj%os_out%kill
                     call pool_proj%add_cavgs2os_out(cavgsfname, orig_smpd, 'cavg')
@@ -1558,14 +1559,15 @@ contains
                 else
                     if( add_suffix )then
                         call simple_copy_file(FRCS_FILE, frcsfname)
-                        call simple_copy_file(refs_glob, cavgsfname)
-                        src  = add2fbody(refs_glob, params%ext,'_even')
-                        dest = add2fbody(cavgsfname,params%ext,'_even')
-                        call simple_copy_file(src, dest)
-                        src  = add2fbody(refs_glob, params%ext,'_odd')
-                        dest = add2fbody(cavgsfname,params%ext,'_odd')
-                        call simple_copy_file(src, dest)
                     endif
+                    src = get_fbody(refs_glob, params%ext, separator=.false.)//'_wfilt'//trim(params%ext)
+                    call simple_copy_file(src, cavgsfname)
+                    src  = add2fbody(refs_glob, params%ext,'_even_wfilt')
+                    dest = add2fbody(cavgsfname,params%ext,'_even')
+                    call simple_copy_file(src, dest)
+                    src  = add2fbody(refs_glob, params%ext,'_odd_wfilt')
+                    dest = add2fbody(cavgsfname,params%ext,'_odd')
+                    call simple_copy_file(src, dest)
                     call pool_proj%os_out%kill
                     call pool_proj%add_cavgs2os_out(cavgsfname, orig_smpd, 'cavg')
                     call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
