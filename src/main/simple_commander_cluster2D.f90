@@ -221,7 +221,7 @@ contains
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
         if( .not. cline%defined('refine')    ) call cline%set('refine',  'greedy')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
-        if( .not. cline%defined('wiener')    ) call cline%set('wiener', 'partial')
+        if( .not. cline%defined('wiener')    ) call cline%set('wiener',    'full')
         call cline%set('ptclw','no')
         call cline%set('stream', 'no')
         ! set shared-memory flag
@@ -499,7 +499,7 @@ contains
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',      30. )
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
         if( .not.cline%defined('refine')     ) call cline%set('refine',    'snhc')
-        if( .not. cline%defined('wiener')    ) call cline%set('wiener', 'partial')
+        if( .not. cline%defined('wiener')    ) call cline%set('wiener',    'full')
         call cline%set('ptclw','no')
         call cline%delete('clip')
         ! set shared-memory flag
@@ -766,7 +766,7 @@ contains
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',      30. )
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
-        if( .not. cline%defined('wiener')    ) call cline%set('wiener', 'partial')
+        if( .not. cline%defined('wiener')    ) call cline%set('wiener',    'full')
         l_stream = .false.
         if( cline%defined('stream') )then
             l_stream = trim(cline%get_carg('stream'))=='yes'
