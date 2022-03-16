@@ -14,12 +14,16 @@ end
 
 %%
 figure;
-subplot(131); imagesc(bin_image); colormap gray; axis image;
+subplot(141); imagesc(bin_image); colormap gray; axis image;
 
 % adding noises
 noisy_image = imnoise(bin_image,'gaussian', 0, 0.01);
-subplot(132); imagesc(noisy_image); colormap gray; axis image;
+subplot(142); imagesc(noisy_image); colormap gray; axis image;
 
 % doing TVD restoration
-res_image = tvd_2D(noisy_image, 0.2, 50);
-subplot(133); imagesc(res_image); colormap gray; axis image;
+res_image = tvd_2D(noisy_image, 0.2, 100);
+subplot(143); imagesc(res_image); colormap gray; axis image;
+
+% doing TVD restoration with dense matrix
+res_image = tvd_2D_dense(noisy_image, 0.2, 100);
+subplot(144); imagesc(res_image); colormap gray; axis image;
