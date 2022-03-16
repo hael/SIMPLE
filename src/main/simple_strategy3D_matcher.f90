@@ -25,6 +25,7 @@ use simple_strategy3D_greedy_neigh, only: strategy3D_greedy_neigh
 use simple_strategy3D_neigh,        only: strategy3D_neigh
 use simple_strategy3D_cont,         only: strategy3D_cont
 use simple_strategy3D_inpl,         only: strategy3D_inpl
+use simple_strategy3D_proj,         only: strategy3D_proj
 use simple_strategy3D,              only: strategy3D
 use simple_strategy3D_srch,         only: strategy3D_spec, set_ptcl_stats, eval_ptcl
 use simple_convergence,             only: convergence
@@ -230,6 +231,8 @@ contains
                         allocate(strategy3D_snhc                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('inpl')
                         allocate(strategy3D_inpl                 :: strategy3Dsrch(iptcl_batch)%ptr)
+                    case('proj')
+                        allocate(strategy3D_proj                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc')
                         if( .not. has_been_searched )then
                             allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)
