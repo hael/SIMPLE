@@ -793,6 +793,7 @@ contains
         write(logfhandle,'(A)') refine3D_nano%name
         write(logfhandle,'(A)') autorefine3D_nano%name
         write(logfhandle,'(A)') tseries_reconstruct3D%name
+        write(logfhandle,'(A)') tseries_swap_stack%name
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('VALIDATION PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') vizoris%name
@@ -3944,11 +3945,11 @@ contains
     subroutine new_tseries_swap_stack
         ! PROGRAM SPECIFICATION
         call tseries_swap_stack%new(&
-        &'tseries_swap_stack',&                                                          ! name
-        &'Substitutes stack into an existing project',&                                  ! descr_short
-        &'is a program for substituting stack into an existing project',&                ! descr_long
-        &'single_exec',&                                                                 ! executable
-        &1, 0, 0, 0, 0, 0, 0, .true.)                                                    ! # entries in each group, requires sp_project
+        &'tseries_swap_stack',&                                           ! name
+        &'Substitutes stack into an existing project',&                   ! descr_short
+        &'is a program for substituting stack into an existing project',& ! descr_long
+        &'single_exec',&                                                  ! executable
+        &1, 0, 0, 0, 0, 0, 0, .true.)                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call tseries_swap_stack%set_input('img_ios', 1, stk)
