@@ -41,7 +41,7 @@ type(simulate_atoms_commander)                :: xsimulate_atoms
 type(refine3D_nano_commander)                 :: xrefine3D_nano
 type(autorefine3D_nano_commander)             :: xautorefine3D_nano
 type(tseries_reconstruct3D_distr)             :: xtseries_reconstruct3D_distr
-
+type(tseries_swap_stack_commander)            :: xtseries_swap_stack
 ! VALIDATION PROGRAMS
 type(vizoris_commander)                       :: xvizoris
 type(validate_nano_commander)                 :: xvalidate_nano
@@ -121,6 +121,8 @@ select case(prg)
         call xautorefine3D_nano%execute(cline)
     case( 'tseries_reconstruct3D')
         call xtseries_reconstruct3D_distr%execute(cline)
+    case( 'tseries_swap_stack')
+        call xtseries_swap_stack%execute(cline)
 
     ! VALIDATION PROGRAMS
     case( 'vizoris' )
