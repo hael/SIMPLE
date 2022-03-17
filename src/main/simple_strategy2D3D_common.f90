@@ -519,9 +519,11 @@ contains
                 call build_glob%vol%expand_cmat(params_glob%alpha,norm4proj=.true.)
                 call build_glob%vol_odd%fft
                 call build_glob%vol_odd%expand_cmat(params_glob%alpha,norm4proj=.true.)
-                ! randomize Fourier phases below noise power in a global manner
-                if( params_glob%clsfrcs.eq.'no' )&
-                &call build_glob%vol%ran_phases_below_noise_power(build_glob%vol_odd)
+                if( params_glob%l_ran_noise_ph )then
+                    ! randomize Fourier phases below noise power in a global manner
+                    if( params_glob%clsfrcs.eq.'no' )&
+                    &call build_glob%vol%ran_phases_below_noise_power(build_glob%vol_odd)
+                endif
             endif
         else
             ! expand for fast interpolation
