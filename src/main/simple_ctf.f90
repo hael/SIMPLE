@@ -12,8 +12,10 @@ module simple_ctf
 include 'simple_lib.f08'
 implicit none
 private
-public :: ctf
+public :: ctf, ctf_set_first_lim
 #include "simple_local_flags.inc"
+
+real        :: CTF_FIRST_LIM   = PIO2  !< Phase shift defining limit for intact CTF: CTFFLAG_PIO2=>peak,pi/2; CTFFLAG_PI=>zero,pi)
 
 type ctf
     private
@@ -43,7 +45,6 @@ type ctf
     procedure          :: wienerlike_restoration
     procedure          :: phaseflip_and_shift_serial
     procedure          :: eval_and_apply
-    procedure          :: eval_and_apply_before1stpeak
     procedure, private :: kV2wl
     procedure          :: apply_convention
 end type ctf
@@ -53,6 +54,21 @@ interface ctf
 end interface
 
 contains
+
+    !>  \brief  updates the phase shift limit for leaving the CTF intact (module variable); unused and for future testing
+    subroutine ctf_set_first_lim( mode )
+        integer, intent(in) :: mode
+        select case(mode)
+        case(CTFLIMFLAG_FULL)
+            THROW_WARN('No need to update CTF_RES_LIM with mode=CTFLIMFLAG_FULL; doing nothing')
+        case(CTFLIMFLAG_PIO2)
+            CTF_FIRST_LIM = PIO2
+        case(CTFLIMFLAG_PI)
+            CTF_FIRST_LIM = PI
+        case DEFAULT
+            THROW_HARD('Unsupported ctf first limit: '//int2str(mode))
+        end select
+    end subroutine
 
     elemental function constructor( smpd, kV, Cs, amp_contr ) result( self )
         real, intent(in) :: smpd      !< sampling distance
@@ -179,7 +195,7 @@ contains
         if( before1stpeak )then
             eval_5 = sin( totalphaseshift )
         else
-            if( totalphaseshift > PIO2 )then
+            if( totalphaseshift > CTF_FIRST_LIM )then
                 eval_5 = sin( totalphaseshift )
             else
                 eval_5 = 1.0
@@ -356,7 +372,7 @@ contains
             spaFreqSq = hinv * hinv
             ang       = atan2(0.,real(h))
             tval      = self%eval(spaFreqSq, ang, pphshift)
-            if( tval <= 0.0 )then
+            if( tval <= 0 )then
                 hlim = h
                 exit
             endif
@@ -366,7 +382,7 @@ contains
             spaFreqSq = kinv * kinv
             ang       = atan2(real(k),0.)
             tval      = self%eval(spaFreqSq, ang, pphshift)
-            if( tval <= 0.0 )then
+            if( tval <= 0 )then
                 klim = k
                 exit
             endif
@@ -382,18 +398,18 @@ contains
                 phys      = img%comp_addr_phys(h,k)
                 if( abs(h) < hlim .and. abs(k) < klim )then
                     ! inside rectangle
-                    if( (real(h)/real(hlim))**2 + (real(k)/real(klim))**2 < 1.0 )then
+                    if( real(h/hlim)**2 + real(k/klim)**2 < 1.0 )then
                         ! inside ellipse
                         if( tval < 0.0 )then
-                            !
-                        else
                             call img%set_cmat_at(phys(1),phys(2),1, cmplx(tval,0.0))
+                        else
+                            call img%set_cmat_at(phys(1),phys(2),1, cmplx(1.0,0.0))
                         endif
                     else
-                        ! outside ellipse
+                        call img%set_cmat_at(phys(1),phys(2),1, cmplx(tval,0.0))
                     endif
                 else
-                    ! outside the rectangle
+                    call img%set_cmat_at(phys(1),phys(2),1, cmplx(tval,0.0))
                 endif
             end do
         end do
@@ -405,36 +421,28 @@ contains
         class(image),   intent(inout) :: img
         real,           intent(in)    :: dfx, dfy, angast
         real, optional, intent(in)    :: phshift
-        integer :: lims(3,2),h,k,phys(2),ldim(3),logi_lims(3,2)
-        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3),pphshift,rh,rk,totalphshift,hinvsq
+        integer :: lims(3,2),h,k,phys(2),ldim(3)
+        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3),pphshift
         pphshift = 0.
         if( present(phshift) ) pphshift = phshift
         ! init object
         call self%init(dfx, dfy, angast)
         ! initialize
-        lims      = img%loop_lims(2)
-        ldim      = img%get_ldim()
-        inv_ldim  = 1./real(ldim)
-        logi_lims = img%loop_lims(2)
+        lims     = img%loop_lims(2)
+        ldim     = img%get_ldim()
+        inv_ldim = 1./real(ldim)
         ! initialize image and flag as FT
         img = cmplx(0.,0.)
         ! generate image
         do h = lims(1,1),lims(1,2)
-            rh     = real(h)
-            hinv   = rh / real(ldim(1))
-            hinvsq = hinv*hinv
+            hinv = real(h) * inv_ldim(1)
             do k=lims(2,1),lims(2,2)
-                ! calculate CTF
-                rk           = real(k)
-                kinv         = rk / real(ldim(2))
-                spaFreqSq    = hinvsq + kinv*kinv
-                ang          = atan2(rk,rh)
-                totalphshift = self%evalPhSh(spaFreqSq, ang, pphshift) + self%amp_contr_const
-                if( totalphshift <= PIO2 )then
-                    tval = sin( totalphshift )
-                    phys = img%comp_addr_phys(h,k)
-                    call img%set_cmat_at(phys(1),phys(2),1, cmplx(tval,0.0))
-                endif
+                kinv      = real(k) * inv_ldim(2)
+                spaFreqSq = hinv * hinv + kinv * kinv
+                ang       = atan2(real(k),real(h))
+                tval      = self%eval(spaFreqSq, ang, pphshift, before1stpeak=.false.)
+                phys      = img%comp_addr_phys(h,k)
+                call img%set_cmat_at(phys(1),phys(2),1, cmplx(tval,0.0))
             end do
         end do
     end subroutine ctf_1stpeak2img
@@ -610,136 +618,7 @@ contains
     end subroutine phaseflip_and_shift_serial
 
     ! apply CTF to image, CTF values are also returned
-    subroutine eval_and_apply( self, img, imode, logi_lims, tvalsdims, tvals, dfx, dfy, angast, add_phshift, mode, maxspaFreqSq)
-        use simple_image, only: image
-        class(ctf),     intent(inout) :: self           !< instance
-        class(image),   intent(inout) :: img            !< modified image (output)
-        integer,        intent(in)    :: imode          !< CTFFLAG_FLIP=abs CTFFLAG_YES=ctf CTFFLAG_NO=no
-        integer,        intent(in)    :: logi_lims(3,2) !< logical limits
-        integer,        intent(in)    :: tvalsdims(2)   !< tvals dimensions
-        real,           intent(out)   :: tvals(1:tvalsdims(1),1:tvalsdims(2))
-        real,           intent(in)    :: dfx            !< defocus x-axis
-        real,           intent(in)    :: dfy            !< defocus y-axis
-        real,           intent(in)    :: angast         !< angle of astigmatism
-        real,           intent(in)    :: add_phshift    !< aditional phase shift (radians), for phase plate
-        integer,        intent(in)    :: mode           !< ctf treatment
-        real,           intent(out)   :: maxspaFreqSq   !< Isotropic spatial frequency squared at which we are beyond first peak
-        integer :: ldim(3),phys(2),h,k,hlim,klim
-        real    :: ang,tval,spaFreqSq,hinv,hinvsq,kinv
-        real    :: rh,rk, totalphshift, phshiftlim
-        maxspaFreqSq = 0.0
-        if( imode == CTFFLAG_NO )then
-            tvals = 1.0
-            return
-        endif
-        ! initialize
-        call self%init(dfx, dfy, angast)
-        ldim     = img%get_ldim()
-        select case(mode)
-        case(CTFLIMFLAG_FULL)
-            ! multiply by CTF over whole resolution range
-            do h=logi_lims(1,1),logi_lims(1,2)
-                rh     = real(h)
-                hinv   = rh / real(ldim(1))
-                hinvsq = hinv*hinv
-                do k=logi_lims(2,1),logi_lims(2,2)
-                    rk = real(k)
-                    ! calculate CTF
-                    kinv         = rk / real(ldim(2))
-                    spaFreqSq    = hinvsq + kinv*kinv
-                    ang          = atan2(rk,rh)
-                    totalphshift = self%evalPhSh(spaFreqSq, ang, add_phshift) + self%amp_contr_const
-                    tval         = sin(totalphshift)
-                    if( imode == CTFFLAG_FLIP ) tval = abs(tval)
-                    ! store tval and multiply image with tval
-                    phys = img%comp_addr_phys(h,k)
-                    tvals(phys(1),phys(2)) = tval
-                    call img%mul_cmat_at(phys(1),phys(2),1, tval)
-                end do
-            end do
-        case(CTFLIMFLAG_PI,CTFLIMFLAG_PIO2)
-            ! multiply by CTF beyond phase shift > PI/PIO2
-            phshiftlim = PIO2
-            if( mode == CTFLIMFLAG_PI ) phshiftlim = PI
-            do h=logi_lims(1,1),logi_lims(1,2)
-                rh     = real(h)
-                hinv   = rh / real(ldim(1))
-                hinvsq = hinv*hinv
-                do k=logi_lims(2,1),logi_lims(2,2)
-                    rk = real(k)
-                    ! calculate CTF
-                    kinv         = rk / real(ldim(2))
-                    spaFreqSq    = hinvsq + kinv*kinv
-                    ang          = atan2(rk,rh)
-                    totalphshift = self%evalPhSh(spaFreqSq, ang, add_phshift) + self%amp_contr_const
-                    if( totalphshift <= phshiftlim )then
-                        tval = 1.0
-                        maxspaFreqSq = max(maxspaFreqSq,spaFreqSq)
-                    else
-                        tval = sin(totalphshift)
-                    endif
-                    if( imode == CTFFLAG_FLIP ) tval = abs(tval)
-                    ! store tval and multiply image with tval
-                    phys = img%comp_addr_phys(h,k)
-                    tvals(phys(1),phys(2)) = tval
-                    call img%mul_cmat_at(phys(1),phys(2),1, tval)
-                end do
-            end do
-        case(CTFLIMFLAG_EL)
-            ! find limits
-            do h = 0,logi_lims(1,2)
-                hinv      = real(h) / real(ldim(1))
-                spaFreqSq = hinv * hinv
-                ang       = atan2(0.,real(h))
-                tval      = self%eval(spaFreqSq, ang, add_phshift)
-                if( tval <= 0.0 )then
-                    hlim = h
-                    exit
-                endif
-            end do
-            do k = 0,logi_lims(2,2)
-                kinv      = real(k) / real(ldim(2))
-                spaFreqSq = kinv * kinv
-                ang       = atan2(real(k),0.)
-                tval      = self%eval(spaFreqSq, ang, add_phshift)
-                if( tval <= 0.0 )then
-                    klim = k
-                    exit
-                endif
-            end do
-            do h = logi_lims(1,1),logi_lims(1,2)
-                hinv = real(h) / real(ldim(1))
-                do k = logi_lims(2,1),logi_lims(2,2)
-                    kinv      = real(k) / real(ldim(2))
-                    spaFreqSq = hinv * hinv + kinv * kinv
-                    ang       = atan2(real(k),real(h))
-                    tval      = self%eval(spaFreqSq, ang, add_phshift)
-                    if( abs(h) < hlim .and. abs(k) < klim )then
-                        ! inside rectangle
-                        if( (real(h)/real(hlim))**2 + (real(k)/real(klim))**2 < 1.0 )then
-                            ! inside ellipse
-                            if( tval < 0.0 )then
-                                !
-                            else
-                                tval = 1.0
-                                maxspaFreqSq = max(maxspaFreqSq,spaFreqSq)
-                            endif
-                        endif
-                    endif
-                    if( imode == CTFFLAG_FLIP ) tval = abs(tval)
-                    phys = img%comp_addr_phys(h,k)
-                    tvals(phys(1),phys(2)) = tval
-                    call img%mul_cmat_at(phys(1),phys(2),1, tval)
-                end do
-            end do
-        case DEFAULT
-            THROW_HARD('UNSUPPORTED CTF MODE: '//int2str(mode))
-        end select
-    end subroutine eval_and_apply
-
-    ! apply CTF to image only before first peak, leaves other values untouched
-    ! also returns the largest spatial frequency before the first peak
-    subroutine eval_and_apply_before1stpeak( self, img, imode, logi_lims, tvalsdims, tvals, dfx, dfy, angast, add_phshift, maxspaFreqSq, ctflim_mode)
+    subroutine eval_and_apply( self, img, imode, logi_lims, tvalsdims, tvals, dfx, dfy, angast, add_phshift, before1stpeak)
         use simple_image, only: image
         class(ctf),     intent(inout) :: self        !< instance
         class(image),   intent(inout) :: img         !< modified image (output)
@@ -751,95 +630,37 @@ contains
         real,           intent(in)    :: dfy         !< defocus y-axis
         real,           intent(in)    :: angast      !< angle of astigmatism
         real,           intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
-        real,           intent(in)    :: maxspaFreqSq
-        integer,        intent(in)    :: ctflim_mode
-        integer :: peaklims(2,2),ldim(3),phys(2),h,k,radfirstpeak,hlim,klim
-        real    :: ang,tval,spaFreqSq,hinv,hinvsq,kinv,phshiftlim
-        real    :: rh,rk,totalphshift
-        if( (imode == CTFFLAG_NO) .or. (ctflim_mode == CTFLIMFLAG_FULL) )then
-            tvals        = 1.0
+        logical,        intent(in)    :: before1stpeak
+        integer :: ldim(3),h,k,phys(2)
+        real    :: ang,tval,spaFreqSq,hinv,hinvsq,kinv,inv_ldim(3)
+        real    :: rh,rk
+        if( imode == CTFFLAG_NO )then
+            tvals = 1.0
             return
         endif
         ! initialize
         call self%init(dfx, dfy, angast)
-        ldim = img%get_ldim()
-        select case(ctflim_mode)
-        case(CTFLIMFLAG_EL)
-            ! find limits
-            do h = 0,logi_lims(1,2)
-                hinv      = real(h) / real(ldim(1))
-                spaFreqSq = hinv * hinv
-                ang       = atan2(0.,real(h))
-                tval      = self%eval(spaFreqSq, ang, add_phshift)
-                if( tval <= 0.0 )then
-                    hlim = h
-                    exit
-                endif
+        ldim     = img%get_ldim()
+        inv_ldim = 1./real(ldim)
+        do h=logi_lims(1,1),logi_lims(1,2)
+            rh     = real(h)
+            hinv   = rh * inv_ldim(1)
+            hinvsq = hinv*hinv
+            do k=logi_lims(2,1),logi_lims(2,2)
+                rk = real(k)
+                ! calculate CTF
+                kinv      = rk * inv_ldim(2)
+                spaFreqSq = hinvsq + kinv*kinv
+                ang       = atan2(rk,rh)
+                tval      = self%eval(spaFreqSq, ang, add_phshift, before1stpeak)
+                if( imode == CTFFLAG_FLIP ) tval = abs(tval)
+                ! store tval and multiply image with tval
+                phys = img%comp_addr_phys(h,k)
+                tvals(phys(1),phys(2)) = tval
+                call img%mul_cmat_at(phys(1),phys(2),1, tval)
             end do
-            do k = 0,logi_lims(2,2)
-                kinv      = real(k) / real(ldim(2))
-                spaFreqSq = kinv * kinv
-                ang       = atan2(real(k),0.)
-                tval      = self%eval(spaFreqSq, ang, add_phshift)
-                if( tval <= 0.0 )then
-                    klim = k
-                    exit
-                endif
-            end do
-            peaklims(1,:) = [logi_lims(1,1),                   min(max(hlim,0),logi_lims(1,2))]
-            peaklims(2,:) = [max(min(-klim,0),logi_lims(2,1)), min(max(klim,0),logi_lims(2,2))]
-            do h = peaklims(1,1),peaklims(1,2)
-                hinv = real(h) / real(ldim(1))
-                do k = peaklims(2,1),peaklims(2,2)
-                    kinv      = real(k) / real(ldim(2))
-                    spaFreqSq = hinv * hinv + kinv * kinv
-                    ang       = atan2(real(k),real(h))
-                    if( abs(h) < hlim .and. abs(k) < klim )then
-                        ! inside rectangle
-                        if( (real(h)/real(hlim))**2 + (real(k)/real(klim))**2 < 1.0 )then
-                            ! inside ellipse
-                            tval = self%eval(spaFreqSq, ang, add_phshift)
-                            if( tval < 0.0 )then
-                                !
-                            else
-                                if( imode == CTFFLAG_FLIP ) tval = abs(tval)
-                                phys = img%comp_addr_phys(h,k)
-                                tvals(phys(1),phys(2)) = tval
-                                call img%mul_cmat_at(phys(1),phys(2),1, tval)
-                            endif
-                        endif
-                    endif
-                end do
-            end do
-        case(CTFLIMFLAG_PI,CTFLIMFLAG_PIO2)
-            phshiftlim = PIO2
-            if( ctflim_mode == CTFLIMFLAG_PI ) phshiftlim = PI
-            radfirstpeak  = ceiling( sqrt(maxSpaFreqsq) * real(ldim(1)) ) ! assumed square image
-            peaklims(1,:) = [logi_lims(1,1),                           min(max(radfirstpeak,0),logi_lims(1,2))]
-            peaklims(2,:) = [max(min(-radfirstpeak,0),logi_lims(2,1)), min(max(radfirstpeak,0),logi_lims(2,2))]
-            do h = peaklims(1,1),peaklims(1,2)
-                rh     = real(h)
-                hinv   = rh / real(ldim(1))
-                hinvsq = hinv*hinv
-                do k = peaklims(2,1),peaklims(2,2)
-                    ! calculate CTF
-                    rk           = real(k)
-                    kinv         = rk / real(ldim(2))
-                    spaFreqSq    = hinvsq + kinv*kinv
-                    if( spaFreqSq > maxspaFreqSq ) cycle
-                    ang          = atan2(rk,rh)
-                    totalphshift = self%evalPhSh(spaFreqSq, ang, add_phshift) + self%amp_contr_const
-                    if( totalphshift <= phshiftlim )then
-                        tval = sin( totalphshift )
-                        if( imode == CTFFLAG_FLIP ) tval = abs(tval)
-                        phys = img%comp_addr_phys(h,k)
-                        tvals(phys(1),phys(2)) = tval
-                        call img%mul_cmat_at(phys(1),phys(2),1, tval)
-                    endif
-                end do
-            end do
-        end select
-    end subroutine eval_and_apply_before1stpeak
+        end do
+    end subroutine eval_and_apply
 
     pure elemental real function kV2wl( self ) result (wavelength)
         class(ctf), intent(in) :: self
