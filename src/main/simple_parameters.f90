@@ -78,6 +78,7 @@ type :: parameters
     character(len=3)      :: projstats='no'
     character(len=3)      :: roavg='no'           !< rotationally average images in stack
     character(len=3)      :: clsfrcs='no'
+    character(len=3)      :: ran_noise_ph='yes'   !< randomize phases below the noise power
     character(len=3)      :: readwrite='no'
     character(len=3)      :: remap_cls='no'
     character(len=3)      :: restart='no'
@@ -427,26 +428,27 @@ type :: parameters
     real    :: ysh=0.              !< y shift(in pixels){0}
     real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in (roughly) ascending alphabetical order
-    logical :: l_autoscale      = .false.
-    logical :: l_corrw          = .false.
-    logical :: l_distr_exec     = .false.
-    logical :: l_dev            = .false.
-    logical :: l_dose_weight    = .false.
-    logical :: l_doshift        = .false.
-    logical :: l_envfsc         = .false.
-    logical :: l_focusmsk       = .false.
-    logical :: l_frac_update    = .false.
-    logical :: l_graphene       = .false.
-    logical :: l_lpset          = .false.
-    logical :: l_locres         = .false.
-    logical :: l_match_filt     = .true.
-    logical :: l_needs_sigma    = .false.
-    logical :: l_nonuniform     = .true.
-    logical :: l_phaseplate     = .false.
-    logical :: l_refine_inpl    = .false.
-    logical :: l_remap_cls      = .false.
-    logical :: l_wglob          = .true.
-    logical :: sp_required      = .false.
+    logical :: l_autoscale    = .false.
+    logical :: l_corrw        = .false.
+    logical :: l_distr_exec   = .false.
+    logical :: l_dev          = .false.
+    logical :: l_dose_weight  = .false.
+    logical :: l_doshift      = .false.
+    logical :: l_envfsc       = .false.
+    logical :: l_focusmsk     = .false.
+    logical :: l_frac_update  = .false.
+    logical :: l_graphene     = .false.
+    logical :: l_lpset        = .false.
+    logical :: l_locres       = .false.
+    logical :: l_match_filt   = .true.
+    logical :: l_needs_sigma  = .false.
+    logical :: l_nonuniform   = .true.
+    logical :: l_phaseplate   = .false.
+    logical :: l_ran_noise_ph = .true.
+    logical :: l_refine_inpl  = .false.
+    logical :: l_remap_cls    = .false.
+    logical :: l_wglob        = .true.
+    logical :: sp_required    = .false.
   contains
     procedure          :: new
     procedure, private :: set_img_format
@@ -586,6 +588,7 @@ contains
         call check_carg('ptclw',          self%ptclw)
         call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('qsys_name',      self%qsys_name)
+        call check_carg('ran_noise_ph',   self%ran_noise_ph)
         call check_carg('readwrite',      self%readwrite)
         call check_carg('real_filter',    self%real_filter)
         call check_carg('refine',         self%refine)
@@ -1397,6 +1400,11 @@ contains
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
                 if( self%l_needs_sigma ) self%l_match_filt = .false.
         end select
+        ! phase randomization below noise power
+        self%l_ran_noise_ph = .true.
+        if( cline%defined('ran_noise_ph') )then
+            self%l_ran_noise_ph = (self%ran_noise_ph .eq. 'yes')
+        endif
         ! atoms
         if( cline%defined('element') )then
             if( .not. atoms_obj%element_exists(self%element) )then
