@@ -65,6 +65,8 @@ end type simple_program
 
 ! declare simple_exec and single_exec program specifications here
 ! instances of this class - special
+
+type(simple_program), target :: assign_optics_groups
 type(simple_program), target :: automask
 type(simple_program), target :: autorefine3D_nano
 type(simple_program), target :: binarize
@@ -289,6 +291,7 @@ contains
     subroutine make_user_interface
         call set_common_params
         call set_prg_ptr_array
+        call new_assign_optics_groups
         call new_automask
         call new_autorefine3D_nano
         call new_binarize
@@ -388,6 +391,7 @@ contains
 
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0
+        call push2prg_ptr_array(assign_optics_groups)
         call push2prg_ptr_array(automask)
         call push2prg_ptr_array(autorefine3D_nano)
         call push2prg_ptr_array(binarize)
@@ -494,6 +498,8 @@ contains
         character(len=*), intent(in)  :: which_program
         type(simple_program), pointer :: ptr2prg
         select case(trim(which_program))
+            case('assign_optics_groups')
+                ptr2prg => assign_optics_groups
             case('automask')
                 ptr2prg => automask
             case('autorefine3D_nano')
@@ -688,6 +694,7 @@ contains
     end subroutine get_prg_ptr
 
     subroutine list_simple_prgs_in_ui
+        write(logfhandle,'(A)') assign_optics_groups%name
         write(logfhandle,'(A)') automask%name
         write(logfhandle,'(A)') binarize%name
         write(logfhandle,'(A)') calc_pspec%name
@@ -981,7 +988,38 @@ contains
     ! <empty>
     ! computer controls
     ! <empty>
-
+    
+    subroutine new_assign_optics_groups
+        ! PROGRAM SPECIFICATION
+        call assign_optics_groups%new(&
+        &'assign_optics_groups', &                                              ! name
+        &'Assign optics groups',&                     							! descr_short
+        &'is a program to assign optics groups',& 								! descr long
+        &'simple_exec',&                                                  		! executable
+        &0, 5, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! parameter input/output
+        call assign_optics_groups%set_input('parm_ios', 1, projfile)
+        call assign_optics_groups%set_input('parm_ios', 2, 'xmldir', 'dir', 'Directory containing per movie EPU XML files',&
+        & 'Directory containing per movie EPY XML files', 'e.g. /data/datasetid/xml', .false., '')
+        call assign_optics_groups%set_input('parm_ios', 3, 'maxpop', 'num', 'Maximum number of movies/micrographs/stacks in each optics group',&
+        & 'Maximum number of movies/micrographs/stacks in each optics group', 'e.g. 100', .false., '')
+        call assign_optics_groups%set_input('parm_ios', 4, 'optics_offset', 'num', 'Numbering offset to apply to optics groups',&
+        & 'Numbering offset to apply to optics groups. Aids with combining datasets', 'e.g. 10', .false., '')
+        call assign_optics_groups%set_input('parm_ios', 5, 'tilt_thres', 'num', 'Threshold for hierarchical clustering of beamtilts',&
+        & 'Threshold for hierarchical clustering of beamtilts', 'e.g 0.05', .false., 0.05)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+    end subroutine new_assign_optics_groups
+    
     subroutine new_automask
         ! PROGRAM SPECIFICATION
         call automask%new(&

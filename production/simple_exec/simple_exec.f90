@@ -44,6 +44,7 @@ type(selection_commander)                   :: xselection
 type(export_relion_commander)               :: xexport_relion
 type(import_starproject_commander)          :: ximport_starproject
 type(export_starproject_commander)          :: xexport_starproject
+type(assign_optics_groups_commander)        :: xassign_optics_groups
 
 ! PRE-PROCESSING WORKFLOWS
 type(preprocess_commander_distr)            :: xpreprocess
@@ -208,7 +209,8 @@ select case(trim(prg))
         call ximport_starproject%execute(cline)
     case( 'export_starproject' )
         call xexport_starproject%execute(cline)
-
+    case( 'assign_optics_groups' )
+        call xassign_optics_groups%execute(cline)
     ! PRE-PROCESSING WORKFLOWS
     case( 'preprocess' )
         call xpreprocess%execute(cline)

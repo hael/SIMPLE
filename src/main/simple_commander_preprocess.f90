@@ -1623,7 +1623,7 @@ contains
         type(oris)                              :: os_stk
         character(len=LONGSTRLEN),  allocatable :: boxfiles(:), stktab(:), parts_fname(:)
         character(len=:),           allocatable :: mic_name, imgkind, boxfile_name
-        real    :: dfx,dfy
+        real    :: dfx,dfy,ogid,gid
         integer :: boxcoords(2), lfoo(3)
         integer :: nframes,imic,i,nmics_tot,numlen,nmics,cnt,state,istk,nstks,ipart
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',       'yes')
@@ -1774,6 +1774,18 @@ contains
                         call spproj%os_ptcl2D%set(cnt,'dfy',dfy)
                         call spproj%os_ptcl3D%set(cnt,'dfx',dfx)
                         call spproj%os_ptcl3D%set(cnt,'dfy',dfy)
+                    endif
+                    !optics group id
+                    if( spproj_part%os_ptcl2D%isthere(i,'ogid') )then 
+                        ogid = spproj_part%os_ptcl2D%get(i, 'ogid')
+                        call spproj%os_ptcl2D%set(cnt,'ogid',ogid)
+                        call spproj%os_ptcl3D%set(cnt,'ogid',ogid)
+                    endif
+                    !group id
+                    if( spproj_part%os_ptcl2D%isthere(i,'gid') )then 
+                        gid = spproj_part%os_ptcl2D%get(i, 'gid')
+                        call spproj%os_ptcl2D%set(cnt,'gid',gid)
+                        call spproj%os_ptcl3D%set(cnt,'gid',gid)
                     endif
                 enddo
                 call spproj_part%kill
@@ -2069,6 +2081,16 @@ contains
                         call build%spproj%os_ptcl3D%set(iptcl_glob,'dfx',dfx)
                         call build%spproj%os_ptcl2D%set(iptcl_glob,'dfy',dfy)
                         call build%spproj%os_ptcl3D%set(iptcl_glob,'dfy',dfy)
+                    endif
+                    !update particle optics group id
+                    if( o_mic%isthere('ogid') )then
+                        call build%spproj%os_ptcl2D%set(iptcl_glob,'ogid',o_mic%get('ogid'))
+                        call build%spproj%os_ptcl3D%set(iptcl_glob,'ogid',o_mic%get('ogid'))
+                    endif
+                    !update particle group id
+                    if( o_mic%isthere('gid') )then
+                        call build%spproj%os_ptcl2D%set(iptcl_glob,'gid',o_mic%get('gid'))
+                        call build%spproj%os_ptcl3D%set(iptcl_glob,'gid',o_mic%get('gid'))
                     endif
                 end do
                 ! clean
