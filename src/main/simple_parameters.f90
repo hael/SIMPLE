@@ -167,6 +167,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: vols_odd(MAXS)=''
     character(len=LONGSTRLEN) :: voltab=''            !< table (text file) of volume files(.txt)
     character(len=LONGSTRLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt)
+    character(len=LONGSTRLEN) :: xmldir=''
     character(len=LONGSTRLEN) :: xmlloc=''
     ! other character variables in ascending alphabetical order
     character(len=STDLEN) :: algorithm=''         !< algorithm to be used
@@ -267,6 +268,7 @@ type :: parameters
     integer :: maxits=100          !< maximum # iterations
     integer :: maxits_between=30   !< maximum # iterations in between model building steps
     integer :: maxp=0
+    integer :: maxpop=0
     integer :: minp=10             !< minimum cluster population
     integer :: mrcmode=2
     integer :: navgs=1

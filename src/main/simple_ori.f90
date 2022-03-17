@@ -80,6 +80,7 @@ type :: ori
     procedure          :: chash2ori
     procedure          :: get_ctfvars
     procedure          :: set_ctfvars
+    procedure          :: get_keys
     ! PRINTING & I/O
     procedure          :: print_mat
     procedure          :: print_ori
@@ -972,6 +973,35 @@ contains
         call self%set('angast', ctfvars%angast)
     end subroutine set_ctfvars
 
+    function get_keys( self ) result (keys)
+        class(ori),                 intent(in)      :: self
+        type(str4arr),              allocatable     :: hkeys(:)
+        character(len=XLONGSTRLEN), allocatable     :: keys(:)
+        integer                                     :: sz_chash, sz_hash, i
+        
+        sz_chash = self%chtab%size_of()
+        sz_hash  = self%htab%size_of()
+        
+        allocate(keys(sz_chash + sz_hash))
+        
+        hkeys = self%htab%get_keys()
+        
+        do i=1, sz_chash
+
+            keys(i) = trim(adjustl(self%chtab%get_key(i)))
+            
+        end do
+        
+        do i=1, sz_hash
+            
+            keys(i + sz_chash) = trim(adjustl(hkeys(i)%str))
+            
+        end do
+        
+        if(allocated(hkeys)) deallocate(hkeys)
+        
+    end function get_keys
+    
     !<  \brief  to print the rotation matrix
     subroutine print_mat( self )
         class(ori), intent(inout) :: self
