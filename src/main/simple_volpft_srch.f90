@@ -80,12 +80,15 @@ contains
     function volpft_srch_minimize() result( orientation_best )
         real,    allocatable :: inpl_angs(:), rmats(:,:,:,:), corrs(:,:)
         integer, allocatable :: order(:)
-        class(*), pointer    :: fun_self => null()
+        class(*),    pointer :: fun_self => null()
+        type(ori),    target :: dummyobject ! a dummy object for minimizer, could be any type
         type(oris) :: espace, cand_oris
         type(ori)  :: orientation, orientation_best
         integer    :: iproj, iproj_best, inpl_best
         integer    :: iloc, inpl, ithr, n_inpls
         real       :: eul(3), corr_best, cost, prev_cost
+        ! dummy association
+        fun_self => dummyobject
         ! create
         call orientation%new(is_ptcl=.false.)
         call cand_oris%new(NPROJ, is_ptcl=.false.)

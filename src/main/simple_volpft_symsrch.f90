@@ -90,12 +90,15 @@ contains
         class(ori), intent(inout) :: symaxis_best
         real,    allocatable :: rmats(:,:,:), corrs(:)
         integer, allocatable :: order(:)
-        class(*), pointer    :: fun_self => null()
+        class(*),    pointer :: fun_self => null()
+        type(ori),    target :: dummyobject ! a dummy object for minimizer, could be any type
         type(ori)  :: symaxis
         type(oris) :: espace, cand_axes
         integer    :: fromto(2), ntot, iproj, iproj_best
         integer    :: istop, ithr, iloc
         real       :: eul(3), corr_best, cost
+        ! dummy association
+        fun_self => dummyobject
         ! set range
         fromto(1) = 1
         fromto(2) = NPROJ

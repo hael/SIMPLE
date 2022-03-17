@@ -56,7 +56,9 @@ contains
     function vol_shsrch_minimize( ) result( cxyz )
         real :: cost_init, cost, cxyz(4), cost_best
         real :: shvec(3), shvec_best(3), xsh, ysh, zsh
-        class(*), pointer :: fun_self => null()
+        class(*),   pointer :: fun_self => null()
+        type(image), target :: dummyobject  ! a dummy object for minimizer, could be any type
+        fun_self => dummyobject  ! dummy association
         shvec_best = 0.
         if( INI_W_DISCR_SRCH )then
             ! discrete search to start-off with (half-pixel resolution)
