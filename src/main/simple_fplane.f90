@@ -62,7 +62,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        self%l_wiener_part = trim(params_glob%wiener) .eq. 'partial'
+        self%l_wiener_part = str_has_substr(trim(params_glob%wiener), 'partial')
         self%exists = .true.
     end subroutine new
 

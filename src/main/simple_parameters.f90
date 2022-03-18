@@ -221,7 +221,7 @@ type :: parameters
     character(len=STDLEN) :: tag=''               !< just a tag
     character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
     character(len=STDLEN) :: wfun='kb'
-    character(len=STDLEN) :: wiener='full'        !< Wiener restoration (full|partial){full}
+    character(len=STDLEN) :: wiener='full'        !< Wiener restoration (full|partial|partial_aln){full}
     character(len=:), allocatable :: last_prev_dir !< last previous execution directory
     ! special integer kinds
     integer(kind(ENUM_ORISEG))     :: spproj_iseg  = PTCL3D_SEG    !< sp-project segments that b%a points to

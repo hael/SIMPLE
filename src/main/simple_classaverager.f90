@@ -47,7 +47,7 @@ type(image),       allocatable :: ctfsqsums_merged(:)      !< -"-
 integer,           allocatable :: prev_eo_pops(:,:)
 logical,           allocatable :: pptcl_mask(:)
 logical                        :: phaseplate    = .false.  !< Volta phaseplate images or not
-logical                        :: l_wiener_part = .false.  !< partial Wiener restoration (after 1st CTF zero)
+logical                        :: l_wiener_part = .false.  !< partial Wiener restoration (after 1st CTF peak/zero)
 logical                        :: exists        = .false.  !< to flag instance existence
 
 integer(timer_int_kind) :: t_class_loop,t_batch_loop, t_gridding, t_init, t_tot

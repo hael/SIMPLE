@@ -918,18 +918,18 @@ contains
         if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
         allocate(self%ctfmats(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls), source=0.)
         inv_ldim = 1./real(self%ldim)
+        !$omp parallel do default(shared) private(irot,k,hinv,kinv) schedule(static) proc_bind(close)
+        do irot=1,self%pftsz
+            do k=params_glob%kfromto(1),params_glob%kfromto(2)
+                hinv = self%polar(irot,k) * inv_ldim(1)
+                kinv = self%polar(irot+self%nrots,k) * inv_ldim(2)
+                spaFreqSq_mat(irot,k) = hinv*hinv+kinv*kinv
+                ang_mat(irot,k)       = atan2(self%polar(irot+self%nrots,k),self%polar(irot,k))
+            end do
+        end do
+        !$omp end parallel do
         if( trim(params_glob%wiener).eq.'partial_aln' )then
             ! taking into account CTF is intact before limit
-            !$omp parallel do default(shared) private(irot,k,hinv,kinv) schedule(static) proc_bind(close)
-            do irot=1,self%pftsz
-                do k=params_glob%kfromto(1),params_glob%kfromto(2)
-                    hinv = self%polar(irot,k) * inv_ldim(1)
-                    kinv = self%polar(irot+self%nrots,k) * inv_ldim(2)
-                    spaFreqSq_mat(irot,k) = hinv*hinv+kinv*kinv
-                    ang_mat(irot,k)       = atan2(self%polar(irot+self%nrots,k),self%polar(irot,k))
-                end do
-            end do
-            !$omp end parallel do
             !$omp parallel do default(shared) private(i,iptcl,ctfmatind,ithr) schedule(static) proc_bind(close)
             do i=ppfromto(1),ppfromto(2)
                 if( .not. present_pfromto )then
@@ -945,24 +945,14 @@ contains
                     tfuns(ithr)    = ctf(ctfparms(ithr)%smpd, ctfparms(ithr)%kv, ctfparms(ithr)%cs, ctfparms(ithr)%fraca)
                     call tfuns(ithr)%init(ctfparms(ithr)%dfx, ctfparms(ithr)%dfy, ctfparms(ithr)%angast)
                     if( ctfparms(ithr)%l_phaseplate )then
-                        self%ctfmats(:,:,self%pinds(ctfmatind)) = abs(tfuns(ithr)%eval(spaFreqSq_mat(:,:), ang_mat(:,:), ctfparms(ithr)%phshift,.false. ))
+                        self%ctfmats(:,:,self%pinds(ctfmatind)) = abs(tfuns(ithr)%eval(spaFreqSq_mat(:,:), ang_mat(:,:), ctfparms(ithr)%phshift, .false. ))
                     else
-                        self%ctfmats(:,:,self%pinds(ctfmatind)) = abs(tfuns(ithr)%eval(spaFreqSq_mat(:,:), ang_mat(:,:), 0.0,                   .false.))
+                        self%ctfmats(:,:,self%pinds(ctfmatind)) = abs(tfuns(ithr)%eval(spaFreqSq_mat(:,:), ang_mat(:,:), 0.0,                    .false.))
                     endif
                 endif
             end do
             !$omp end parallel do
         else
-            !$omp parallel do default(shared) private(irot,k,hinv,kinv) schedule(static) proc_bind(close)
-            do irot=1,self%pftsz
-                do k=params_glob%kfromto(1),params_glob%kfromto(2)
-                    hinv = self%polar(irot,k) * inv_ldim(1)
-                    kinv = self%polar(irot+self%nrots,k) * inv_ldim(2)
-                    spaFreqSq_mat(irot,k) = hinv*hinv+kinv*kinv
-                    ang_mat(irot,k)       = atan2(self%polar(irot+self%nrots,k),self%polar(irot,k))
-                end do
-            end do
-            !$omp end parallel do
             !$omp parallel do default(shared) private(i,iptcl,ctfmatind,ithr) schedule(static) proc_bind(close)
             do i=ppfromto(1),ppfromto(2)
                 if( .not. present_pfromto )then
