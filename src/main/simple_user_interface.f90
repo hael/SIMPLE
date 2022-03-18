@@ -966,7 +966,7 @@ contains
         call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(patch|wpatch|poly|poly2){patch}','(patch|wpatch|poly|poly2){patch}', .false.,'patch')
         call set_param(width,          'width',        'num',    'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
         call set_param(automsk,        'automsk',      'multi',  'Perform envelope masking', 'Whether to generate/apply an envelope mask(yes|no|file){no}', '(yes|no|file){no}', .false., 'no')
-        call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (only after 1st CTF=0)(full|partial){full}',&
+        call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (only after 1st CTF=0)(full|partial|partial_aln){full}',&
         '(full|partial){full}', .false., 'full')
 
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
@@ -988,7 +988,7 @@ contains
     ! <empty>
     ! computer controls
     ! <empty>
-    
+
     subroutine new_assign_optics_groups
         ! PROGRAM SPECIFICATION
         call assign_optics_groups%new(&
@@ -1019,7 +1019,7 @@ contains
         ! <empty>
         ! computer controls
     end subroutine new_assign_optics_groups
-    
+
     subroutine new_automask
         ! PROGRAM SPECIFICATION
         call automask%new(&

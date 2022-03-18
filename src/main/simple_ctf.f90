@@ -15,7 +15,7 @@ private
 public :: ctf, ctf_set_first_lim
 #include "simple_local_flags.inc"
 
-real        :: CTF_FIRST_LIM   = PIO2  !< Phase shift defining limit for intact CTF: CTFFLAG_PIO2=>peak,pi/2; CTFFLAG_PI=>zero,pi)
+real :: CTF_FIRST_LIM = PIO2 !< Phase shift defining limit for intact CTF: CTF_FIRST_LIM==pi/2=>peak; CTF_FIRST_LIM==pi=>zero)
 
 type ctf
     private
@@ -59,16 +59,16 @@ contains
     subroutine ctf_set_first_lim( mode )
         integer, intent(in) :: mode
         select case(mode)
-        case(CTFLIMFLAG_FULL)
-            THROW_WARN('No need to update CTF_RES_LIM with mode=CTFLIMFLAG_FULL; doing nothing')
-        case(CTFLIMFLAG_PIO2)
-            CTF_FIRST_LIM = PIO2
-        case(CTFLIMFLAG_PI)
-            CTF_FIRST_LIM = PI
-        case DEFAULT
-            THROW_HARD('Unsupported ctf first limit: '//int2str(mode))
+            case(CTFLIMFLAG_FULL)
+                THROW_WARN('No need to update CTF_RES_LIM with mode=CTFLIMFLAG_FULL; doing nothing')
+            case(CTFLIMFLAG_PIO2)
+                CTF_FIRST_LIM = PIO2
+            case(CTFLIMFLAG_PI)
+                CTF_FIRST_LIM = PI
+            case DEFAULT
+                THROW_HARD('Unsupported ctf first limit: '//int2str(mode))
         end select
-    end subroutine
+    end subroutine ctf_set_first_lim
 
     elemental function constructor( smpd, kV, Cs, amp_contr ) result( self )
         real, intent(in) :: smpd      !< sampling distance
@@ -618,7 +618,7 @@ contains
     end subroutine phaseflip_and_shift_serial
 
     ! apply CTF to image, CTF values are also returned
-    subroutine eval_and_apply( self, img, imode, logi_lims, tvalsdims, tvals, dfx, dfy, angast, add_phshift, before1stpeak)
+    subroutine eval_and_apply( self, img, imode, logi_lims, tvalsdims, tvals, dfx, dfy, angast, add_phshift, before1stpeak )
         use simple_image, only: image
         class(ctf),     intent(inout) :: self        !< instance
         class(image),   intent(inout) :: img         !< modified image (output)
