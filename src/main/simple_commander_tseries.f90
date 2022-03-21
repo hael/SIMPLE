@@ -817,7 +817,7 @@ contains
         real,             allocatable :: rstates(:), corrs(:)
         logical,          allocatable :: state_mask(:)
         character(len=STDLEN) :: fbody, fbody_split
-        integer :: i, j, iter, cnt, ncavgs, funit, io_stat
+        integer :: i, j, iter, cnt, cnt2, ncavgs, funit, io_stat
         real    :: smpd
         logical :: fall_over
         fbody       = get_fbody(RECVOL,   'mrc')
@@ -939,11 +939,11 @@ contains
             ! re-project
             call xreproject%execute(cline_reproject)
             ! write cavgs & reprojections in triplets
-            allocate(imgs(3*ncavgs), state_mask(3*ncavgs))
+            allocate(imgs(3*ncavgs), state_mask(ncavgs))
             cnt = 0
-            do i = 1,3*(int(ncavgs)),3
+            do i = 1,3*ncavgs,3
                 cnt = cnt + 1
-                if( rstates(i) > 0.5 )then
+                if( rstates(cnt) > 0.5 )then
                     call imgs(i    )%new([params%box,params%box,1], smpd)
                     call imgs(i + 1)%new([params%box,params%box,1], smpd)
                     call imgs(i + 2)%new([params%box,params%box,1], smpd)
@@ -953,18 +953,24 @@ contains
                     call imgs(i    )%norm
                     call imgs(i + 1)%norm
                     call imgs(i + 2)%norm
-                    state_mask(i    ) = .true.
-                    state_mask(i + 1) = .true.
-                    state_mask(i + 2) = .true.
+                    state_mask(cnt) = .true.
                 else
-                    state_mask(i    ) = .false.
-                    state_mask(i + 1) = .false.
-                    state_mask(i + 2) = .false.
+                    state_mask(cnt) = .false.
                 endif
             end do
-            do i = 1,3*ncavgs
-                if( state_mask(i) ) call imgs(i)%write('cavgs_vs_reprojections_rec_and_thres_sim.mrc', i)
-                call imgs(i)%kill
+            cnt  = 0
+            cnt2 = 1 ! needed because we have omissions
+            do i = 1,3*ncavgs,3
+                cnt = cnt + 1
+                if( state_mask(cnt) )then
+                    call imgs(i    )%write('cavgs_vs_reprojections_rec_and_thres_sim.mrc', cnt2    )
+                    call imgs(i + 1)%write('cavgs_vs_reprojections_rec_and_thres_sim.mrc', cnt2 + 1)
+                    call imgs(i + 2)%write('cavgs_vs_reprojections_rec_and_thres_sim.mrc', cnt2 + 2)
+                    call imgs(i    )%kill
+                    call imgs(i + 1)%kill
+                    call imgs(i + 2)%kill
+                    cnt2 = cnt2 + 3
+                endif
             end do
             deallocate(imgs)
         endif ! end of class average-based validation
@@ -1227,7 +1233,8 @@ contains
         if( fall_over ) THROW_HARD('No images found!')
         if( cline%defined('fromp') .or. cline%defined('top') )then
             if( cline%defined('fromp') .and. cline%defined('top') )then
-                call cline%delete('nparts') ! shared-memory implementation
+                call cline%delete('nparts')   ! shared-memory implementation
+                call cline%set('mkdir', 'no') ! to avoid nested directory structure
                 call xrec3D_shmem%execute(cline)
                 return
             else
