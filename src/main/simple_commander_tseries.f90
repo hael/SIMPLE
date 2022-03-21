@@ -1233,7 +1233,8 @@ contains
         if( fall_over ) THROW_HARD('No images found!')
         if( cline%defined('fromp') .or. cline%defined('top') )then
             if( cline%defined('fromp') .and. cline%defined('top') )then
-                call cline%delete('nparts') ! shared-memory implementation
+                call cline%delete('nparts')   ! shared-memory implementation
+                call cline%set('mkdir', 'no') ! to avoid nested directory structure
                 call xrec3D_shmem%execute(cline)
                 return
             else
