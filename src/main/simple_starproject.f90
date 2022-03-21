@@ -1567,12 +1567,25 @@ contains
     if(spproj%os_ptcl2D%get_noris() > 0) then
     
         write(logfhandle,*) ''
-        write(logfhandle,*) char(9), "updating particles in project file with updated optics groups ... "
+        write(logfhandle,*) char(9), "updating particles 2d in project file with updated optics groups ... "
         
         do i = 1, spproj%os_ptcl2D%get_noris()
             
             ptclstkid = int(spproj%os_ptcl2D%get(i, 'stkind'))
             call spproj%os_ptcl2D%set(i, 'ogid', spproj%os_stk%get(ptclstkid, 'ogid'))
+            
+        end do
+        
+    end if
+    
+    if(spproj%os_ptcl3D%get_noris() > 0) then
+    
+        write(logfhandle,*) ''
+        write(logfhandle,*) char(9), "updating particles 3d in project file with updated optics groups ... "
+        
+        do i = 1, spproj%os_ptcl3D%get_noris()
+            
+            ptclstkid = int(spproj%os_ptcl2D%get(i, 'stkind'))
             call spproj%os_ptcl3D%set(i, 'ogid', spproj%os_stk%get(ptclstkid, 'ogid'))
             
         end do
