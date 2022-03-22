@@ -899,7 +899,7 @@ contains
     end subroutine calc_ref_pspec
 
     subroutine create_polar_absctfmats( self, spproj, oritype, pfromto )
-        use simple_ctf,        only: ctf
+        use simple_ctf,        only: ctf, ctf_set_first_lim
         use simple_sp_project, only: sp_project
         class(polarft_corrcalc),   intent(inout) :: self
         class(sp_project), target, intent(inout) :: spproj
@@ -911,7 +911,7 @@ contains
         real(sp)        :: ang_mat(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         real(sp)        :: inv_ldim(3),hinv,kinv
         integer         :: i,irot,k,iptcl,ithr,ppfromto(2),ctfmatind
-        logical         :: present_pfromto
+        logical         :: present_pfromto, l_wiener_part_aln
         present_pfromto = present(pfromto)
         ppfromto = self%pfromto
         if( present_pfromto ) ppfromto = pfromto
@@ -928,7 +928,16 @@ contains
             end do
         end do
         !$omp end parallel do
-        if( trim(params_glob%wiener).eq.'partial_aln' )then
+        l_wiener_part_aln = .false.
+        select case(trim(params_glob%wiener))
+        case('partial_aln_pio2')
+            call ctf_set_first_lim( CTFLIMFLAG_PIO2 )
+            l_wiener_part_aln = .true.
+        case('partial_aln_pi')
+            call ctf_set_first_lim( CTFLIMFLAG_PI )
+            l_wiener_part_aln = .true.
+        end select
+        if( l_wiener_part_aln )then
             ! taking into account CTF is intact before limit
             !$omp parallel do default(shared) private(i,iptcl,ctfmatind,ithr) schedule(static) proc_bind(close)
             do i=ppfromto(1),ppfromto(2)

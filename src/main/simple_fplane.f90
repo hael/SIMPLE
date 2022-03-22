@@ -5,7 +5,7 @@ include 'simple_lib.f08'
 use simple_image,         only: image
 use simple_parameters,    only: params_glob
 use simple_euclid_sigma2, only: euclid_sigma2, eucl_sigma2_glob
-use simple_ctf, only: ctf
+use simple_ctf,           only: ctf, ctf_set_first_lim
 implicit none
 
 public :: fplane
@@ -62,7 +62,18 @@ contains
             enddo
         enddo
         !$omp end parallel do
+        ! CTF limit
         self%l_wiener_part = str_has_substr(trim(params_glob%wiener), 'partial')
+        if( self%l_wiener_part )then
+            select case(trim(params_glob%wiener))
+            case('partial_pio2','partial_aln_pio2')
+                call ctf_set_first_lim( CTFLIMFLAG_PIO2 )
+            case('partial_pi','partial_aln_pi')
+                call ctf_set_first_lim( CTFLIMFLAG_PI )
+            case DEFAULT
+                THROW_HARD('Unsupported CTF limit: '//trim(params_glob%wiener))
+            end select
+        endif
         self%exists = .true.
     end subroutine new
 
