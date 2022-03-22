@@ -509,8 +509,7 @@ contains
             call xpostprocess%execute(cline_postprocess)
             call os%kill
         else
-            iter     = cline_refine3D_refine%get_rarg('endit')
-            vol_iter = trim(VOL_FBODY)//trim(str_state)//params%ext
+            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(nint(iter),3)//params%ext
             call vol%new([orig_box,orig_box,orig_box],orig_smpd)
             call vol%read(vol_iter)
             call vol%mirror('x')

@@ -966,9 +966,8 @@ contains
         call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(patch|wpatch|poly|poly2){patch}','(patch|wpatch|poly|poly2){patch}', .false.,'patch')
         call set_param(width,          'width',        'num',    'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
         call set_param(automsk,        'automsk',      'multi',  'Perform envelope masking', 'Whether to generate/apply an envelope mask(yes|no|file){no}', '(yes|no|file){no}', .false., 'no')
-        call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (only after 1st CTF=0)(full|partial|partial_aln){full}',&
-        '(full|partial){full}', .false., 'full')
-
+        call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (full|partial_pio2|partial_aln_pio2|partial_pi|partial_aln_pi){full}',&
+        '(full|partial_pio2|partial_aln_pio2|partial_pi|partial_aln_pi){full}', .false., 'full')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1211,8 +1210,7 @@ contains
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
         call cleanup2D%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
-        call cleanup2D%set_input('filt_ctrls', 4, 'wiener', 'multi',  'Wiener restoration', 'Wiener restoration, full or partial (only after 1st CTF peak)(full|partial_pio2|partial_pi|partial_aln_pio2|partial_aln_pi){full}',&
-        '(full|partial_pio2|partial_pi|partial_aln_pio2|partial_aln_pi){full}', .false., 'full')
+        call cleanup2D%set_input('filt_ctrls', 4, wiener)
         ! mask controls
         call cleanup2D%set_input('mask_ctrls', 1, mskdiam)
         cleanup2D%mask_ctrls(1)%required = .false.
@@ -1305,8 +1303,7 @@ contains
         call cluster2D%set_input('filt_ctrls', 6, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
         '(yes|no){yes}', .false., 'yes')
-        call cluster2D%set_input('filt_ctrls', 7, 'wiener', 'multi',  'Wiener restoration', 'Wiener restoration, full or partial (only after 1st CTF peak)(full|partial_pio2|partial_pi|partial_aln_pio2|partial_aln_pi){full}',&
-        '(full|partial_pio2|partial_pi|partial_aln_pio2|partial_aln_pi){full}', .false., 'full')
+        call cluster2D%set_input('filt_ctrls', 7, wiener)
         call cluster2D%set_input('filt_ctrls', 8, graphene_filt)
         call cluster2D%set_input('filt_ctrls', 9, 'lambda', 'num', 'TV regularization lambda parameter', 'Strength of noise reduction', '(0.5-3.0){1.0}', .false., 1.0)
         ! mask controls
@@ -1399,8 +1396,7 @@ contains
         call cluster2D_stream%set_input('filt_ctrls', 4, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){no}',&
         '(yes|no){no}', .false., 'no')
-        call cluster2D_stream%set_input('filt_ctrls', 5, 'wiener', 'multi',  'Wiener restoration', 'Wiener restoration, full or partial (only after 1st CTF=peak)(full|partial|partial_aln){full}',&
-        '(full|partial|partial_aln){full}', .false., 'full')
+        call cluster2D_stream%set_input('filt_ctrls', 5, wiener)
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
