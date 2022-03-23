@@ -822,6 +822,7 @@ contains
         logical :: fall_over
         fbody       = get_fbody(RECVOL,   'mrc')
         fbody_split = get_fbody(SPLITTED, 'mrc')
+        if(       cline%defined('nparts')         ) call cline%delete('nparts') ! shared-memory workflow
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',          5.)
         if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between', 30.)
         if( .not. cline%defined('overlap')        ) call cline%set('overlap',        0.8)
@@ -856,7 +857,11 @@ contains
         iter = 0
         do i = 1, params%maxits
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user
+            params_ptr  => params_glob
+            params_glob => null()
             call xrefine3D_nano%execute(cline_refine3D_nano)
+            params_glob => params_ptr
+            params_ptr  => null()
             call cline_refine3D_nano%set('vol1', SIMVOL)         ! the reference volume is ALWAYS SIMVOL
             call cline_refine3D_nano%delete('lp')                ! uses the default 1.0 A low-pass limit
             call cline_refine3D_nano%delete('endit')             ! used internally but not technically allowed
@@ -866,7 +871,11 @@ contains
             ! extract particle 3D orientations and write them
             ! 2do
             ! model building
+            params_ptr  => params_glob
+            params_glob => null()
             call xdetect_atms%execute(cline_detect_atms)
+            params_glob => params_ptr
+            params_ptr  => null()
             ! copy critical output
             call simple_copy_file(RECVOL,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'.mrc')
             call simple_copy_file(SIMVOL,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_SIM.mrc')
@@ -933,11 +942,19 @@ contains
             call cline_reproject%set('oritab',     'cavgs_oris.txt')
             call cline_reproject%set('pgrp',            params%pgrp)
             call cline_reproject%set('nthr',      real(params%nthr))
+            params_ptr  => params_glob
+            params_glob => null()
             call xreproject%execute(cline_reproject)
+            params_glob => params_ptr
+            params_ptr  => null()
             call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_thres_SIM.mrc')
             call cline_reproject%set('outstk', 'reprojs_thres_SIM.mrc')
             ! re-project
+            params_ptr  => params_glob
+            params_glob => null()
             call xreproject%execute(cline_reproject)
+            params_glob => params_ptr
+            params_ptr  => null()
             ! write cavgs & reprojections in triplets
             allocate(imgs(3*ncavgs), state_mask(ncavgs))
             cnt = 0
@@ -984,7 +1001,11 @@ contains
         call cline_vizoris%set('pgrp',        params%pgrp)
         call cline_vizoris%set('nspace',           10000.)
         call cline_vizoris%set('tseries',           'yes')
+        params_ptr  => params_glob
+        params_glob => null()
         call xvizoris%execute(cline_vizoris)
+        params_glob => params_ptr
+        params_ptr  => null()
         ! lastly, print CSV file of correlation vs particle number
         corrs = spproj%os_ptcl3D%get_all('corr')
         fname = 'ptcls_vs_reprojs_corrs.csv'

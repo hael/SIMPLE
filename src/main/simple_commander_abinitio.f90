@@ -32,7 +32,6 @@ contains
         use simple_oris,               only: oris
         use simple_ori,                only: ori
         use simple_image,              only: image
-        use simple_parameters,         only: params_glob
         use simple_sym,                only: sym
         use simple_builder,            only: builder
         class(initial_3Dmodel_commander), intent(inout) :: self
