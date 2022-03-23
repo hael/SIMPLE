@@ -3,9 +3,7 @@ program simple_exec
 include 'simple_lib.f08'
 use simple_user_interface, only: make_user_interface,list_simple_prgs_in_ui
 use simple_cmdline,        only: cmdline, cmdline_err
-use simple_qsys_env,       only: qsys_env
-use simple_parameters,     only: parameters
-use simple_spproj_hlev
+use simple_exec_helpers
 use simple_commander_project
 use simple_commander_starproject
 use simple_commander_checks
@@ -25,7 +23,6 @@ use simple_commander_relion
 use simple_commander_sim
 use simple_commander_volops
 use simple_commander_resolest
-use simple_spproj_hlev
 implicit none
 #include "simple_local_flags.inc"
 
@@ -134,13 +131,9 @@ type(mkdir_commander)                       :: xmkdir
 type(split_commander)                       :: xsplit
 
 ! OTHER DECLARATIONS
-type(qsys_env)                              :: qenv
-type(parameters)                            :: params
 character(len=STDLEN)                       :: xarg, prg, entire_line
-character(len=:), allocatable               :: projfile
 type(cmdline)                               :: cline
 integer                                     :: cmdstat, cmdlen, pos
-logical                                     :: has_projfile
 
 ! parse command-line
 call get_command_argument(1, xarg, cmdlen, cmdstat)
@@ -157,26 +150,7 @@ endif
 ! parse command line into cline object
 call cline%parse
 ! generate script for queue submission?
-if( cline%defined('script') )then
-    if( cline%get_carg('script').eq.'yes' )then
-        has_projfile = cline%defined('projfile')
-        if( has_projfile ) projfile = cline%get_carg('projfile')
-        call cline%delete('script')
-        call cline%set('prg', trim(prg))
-        call cline%set('mkdir', 'no')
-        call params%new(cline)
-        call cline%delete('mkdir')
-        call cline%delete('projfile')
-        if( has_projfile ) call cline%set('projfile', projfile)
-        call qenv%new(1, exec_bin='simple_exec')
-        if( cline%defined('tag') )then
-            call qenv%gen_script(cline, trim(prg)//'_script'//'_'//trim(params%tag), uppercase(trim(prg))//'_OUTPUT'//'_'//trim(params%tag))
-        else
-            call qenv%gen_script(cline, trim(prg)//'_script', uppercase(trim(prg))//'_OUTPUT')
-        endif
-        call exit
-    endif
-endif
+call script_exec(cline, trim(prg), 'simple_exec')
 
 select case(trim(prg))
 

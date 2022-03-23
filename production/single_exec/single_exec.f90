@@ -7,12 +7,12 @@ use simple_commander_sim,        only: simulate_atoms_commander
 use simple_commander_preprocess, only: map_cavgs_selection_commander
 use simple_commander_imgproc,    only: estimate_diam_commander, pspec_int_rank_commander
 use simple_commander_rec,        only: random_rec_commander_distr
+use simple_exec_helpers
 use simple_commander_project
 use simple_commander_cluster2D
 use simple_commander_tseries
 use simple_commander_oris
 use simple_commander_quant
-use simple_spproj_hlev
 implicit none
 #include "simple_local_flags.inc"
 
@@ -55,6 +55,7 @@ type(tseries_atoms_analysis_commander)        :: xtseries_atoms_analysis
 character(len=STDLEN) :: args, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
+
 ! parse command line
 call get_command_argument(1, args, cmdlen, cmdstat)
 call get_command(entire_line)
@@ -69,8 +70,11 @@ if( str_has_substr(entire_line, 'prg=list') )then
 endif
 ! parse command line into cline object
 call cline%parse
+! generate script for queue submission?
+call script_exec(cline, trim(prg), 'single_exec')
 ! set global defaults
 if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+
 select case(prg)
 
     ! PROJECT MANAGEMENT PROGRAMS
