@@ -124,7 +124,7 @@ contains
         if( s2D%do_inplsrch(self%iptcl_map) )then
             ! BFGS
             call self%grad_shsrch_obj%set_indices(self%best_class, self%iptcl)
-            if( trim(params_glob%refine) == 'inpl' )then
+            if( params_glob%l_refine_inpl )then
                 irot = self%best_rot
                 cxy  = self%grad_shsrch_obj%minimize_exhaustive(irot=irot, halfrot=HALFROT)
             else

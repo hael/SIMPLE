@@ -112,7 +112,7 @@ contains
                 else
                     converged = ( self%mi_class > overlap_lim .and. self%frac_srch%avg > fracsrch_lim )
                 endif
-                if( params_glob%refine.eq.'inpl' )then
+                if( params_glob%l_refine_inpl )then
                     converged = self%dist_inpl%avg < 0.02
                 endif
                 if( converged )then
@@ -207,7 +207,7 @@ contains
         if( cline%defined('overlap')  ) overlap_lim  = cline%get_rarg('overlap')
         if( cline%defined('fracsrch') ) fracsrch_lim = cline%get_rarg('fracsrch')
         ! determine convergence
-        if( trim(params_glob%refine) .eq. 'inpl' )then
+        if( params_glob%l_refine_inpl )then
             if( self%shincarg%avg < 0.001 .and. self%dist_inpl%avg < 0.5 )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.

@@ -2497,7 +2497,7 @@ contains
         if( noris_ptcl3D /= noris_ptcl2D )then
             ! preserve defocus parameters, stack indices
             self%os_ptcl3D = self%os_ptcl2D
-            call self%os_ptcl3D%delete_2Dclustering(keepshifts=.true.)
+            call self%os_ptcl3D%delete_2Dclustering(keepshifts=.true., keepcls=.true.)
         else
             ! transfer shifts
             shifts = self%os_ptcl2D%get_all('x')
@@ -2529,7 +2529,7 @@ contains
         if( noris_ptcl3D /= noris_ptcl2D )then
             ! preserve defocus parameters, stack indices
             self%os_ptcl3D = self%os_ptcl2D
-            call self%os_ptcl3D%delete_2Dclustering
+            call self%os_ptcl3D%delete_2Dclustering(keepcls=.true.)
         endif
         ! do the mapping
         ncls = self%os_cls3D%get_noris()
@@ -2590,7 +2590,7 @@ contains
         if( noris_ptcl3D /= noris_ptcl2D )then
             ! preserve defocus parameters, stack indices
             self%os_ptcl3D = self%os_ptcl2D
-            call self%os_ptcl3D%delete_2Dclustering
+            call self%os_ptcl3D%delete_2Dclustering(keepcls=.true.)
         endif
         ! undo previous selection & excludes non classified particles
         do iptcl=1,noris_ptcl2D

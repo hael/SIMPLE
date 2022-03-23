@@ -99,7 +99,7 @@ contains
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
 
         ! INPL REFINEMENT REQUIRES MODIFICATION OF THE SEARCH SPACE (build_glob%eulspace)
-        if( trim(params_glob%refine) .eq. 'inpl' )then
+        if( params_glob%l_refine_inpl )then
             ! check that we have class orientations
             ncavgs = build_glob%spproj%os_cls3D%get_noris()
             if( ncavgs == 0 ) THROW_HARD('refine=inpl requires class 3D orientations search space generation')
