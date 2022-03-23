@@ -1059,7 +1059,7 @@ contains
         &'auto 3D refinement of metallic nanoparticles',&                                 ! descr_short
         &'is a distributed workflow for automated 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                  ! executable
-        &1, 2, 0, 7, 4, 1, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &1, 2, 0, 7, 4, 1, 1, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call autorefine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -1089,8 +1089,7 @@ contains
         ! mask controls
         call autorefine3D_nano%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
-        call autorefine3D_nano%set_input('comp_ctrls', 1, nparts)
-        call autorefine3D_nano%set_input('comp_ctrls', 2, nthr)
+        call autorefine3D_nano%set_input('comp_ctrls', 1, nthr)
     end subroutine new_autorefine3D_nano
 
     subroutine new_binarize
