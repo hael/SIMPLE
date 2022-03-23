@@ -1,16 +1,48 @@
-! high-level routines for sp-project updates
-module simple_spproj_hlev
+module simple_exec_helpers
 include 'simple_lib.f08'
-use simple_sp_project, only: sp_project
-use simple_parameters, only: params_glob
+use simple_qsys_env,   only: qsys_env
+use simple_parameters, only: parameters, params_glob
 use simple_cmdline,    only: cmdline
+use simple_sp_project, only: sp_project
 use simple_chash,      only: chash
 implicit none
 
-public :: update_job_descriptions_in_project, copy_project_file_to_root_dir
+public :: script_exec, update_job_descriptions_in_project, copy_project_file_to_root_dir
 private
+#include "simple_local_flags.inc"
 
 contains
+
+    subroutine script_exec( cline, prg, executable )
+        class(cmdline),   intent(inout) :: cline
+        character(len=*), intent(in)    :: prg
+        character(len=*), intent(in)    :: executable
+        character(len=:), allocatable   :: projfile
+        type(qsys_env)   :: qenv
+        type(parameters) :: params
+        logical          :: has_projfile
+        ! generate script for queue submission?
+        if( cline%defined('script') )then
+            if( cline%get_carg('script').eq.'yes' )then
+                has_projfile = cline%defined('projfile')
+                if( has_projfile ) projfile = cline%get_carg('projfile')
+                call cline%delete('script')
+                call cline%set('prg', trim(prg))
+                call cline%set('mkdir', 'no')
+                call params%new(cline)
+                call cline%delete('mkdir')
+                call cline%delete('projfile')
+                if( has_projfile ) call cline%set('projfile', projfile)
+                call qenv%new(1, exec_bin=trim(executable))
+                if( cline%defined('tag') )then
+                    call qenv%gen_script(cline, trim(prg)//'_script'//'_'//trim(params%tag), uppercase(trim(prg))//'_OUTPUT'//'_'//trim(params%tag))
+                else
+                    call qenv%gen_script(cline, trim(prg)//'_script', uppercase(trim(prg))//'_OUTPUT')
+                endif
+                call exit
+            endif
+        endif
+    end subroutine script_exec
 
     subroutine update_job_descriptions_in_project( cline )
         class(cmdline), intent(in) :: cline
@@ -48,4 +80,4 @@ contains
         if( all(tests) ) call simple_copy_file(trim(params_glob%projfile), '../'//trim(params_glob%projfile))
     end subroutine copy_project_file_to_root_dir
 
-end module simple_spproj_hlev
+end module simple_exec_helpers
