@@ -1295,12 +1295,12 @@ contains
         call self%o(ind)%delete_entry(key)
     end subroutine delete_entry_2
 
-    subroutine delete_2Dclustering( self, keepshifts )
+    subroutine delete_2Dclustering( self, keepshifts, keepcls )
         class(oris),       intent(inout) :: self
-        logical, optional, intent(in)    :: keepshifts
+        logical, optional, intent(in)    :: keepshifts, keepcls
         integer :: i
         do i=1,self%n
-            call self%o(i)%delete_2Dclustering(keepshifts)
+            call self%o(i)%delete_2Dclustering(keepshifts, keepcls)
         end do
     end subroutine delete_2Dclustering
 

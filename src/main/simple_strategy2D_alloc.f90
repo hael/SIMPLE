@@ -73,7 +73,7 @@ contains
         endif
         if( l_alloc ) allocate(s2D%do_inplsrch(1:nptcls), s2D%srch_order(1:nptcls, params_glob%ncls))
         ! in plane search
-        if( trim(params_glob%refine).eq.'inpl' )then
+        if( params_glob%l_refine_inpl )then
             s2D%do_inplsrch = params_glob%l_doshift
         else
             s2D%do_inplsrch = params_glob%l_doshift .and. which_iter>2

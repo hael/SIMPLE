@@ -207,27 +207,17 @@ contains
         class(ori), intent(inout)  :: self_out
         type(str4arr), allocatable :: keys(:)
         integer :: sz, i
-        
         if(.not. self_out%is_ptcl .and. .not. self_in%is_ptcl) then
             sz   = self_in%htab%size_of()
             keys = self_in%htab%get_keys()
-            
             do i=1,sz
-            
                 call self_out%set(trim(keys(i)%str), self_in%get(trim(keys(i)%str)))
-
             end do
-            
             sz   = self_in%chtab%size_of()
-            
             do i=1,sz
-            
                 call self_out%set(trim(self_in%chtab%get_key(i)), trim(self_in%chtab%get(i)))
-
             end do
-        
         end if
-            
     end subroutine append_ori
 
     subroutine delete_entry( self, key )
@@ -243,14 +233,16 @@ contains
         if( ind /= 0 ) self%pparms(ind) = 0. ! default value on init
     end subroutine delete_entry
 
-    subroutine delete_2Dclustering( self, keepshifts )
+    subroutine delete_2Dclustering( self, keepshifts, keepcls )
         class(ori),        intent(inout) :: self
-        logical, optional, intent(in)    :: keepshifts
-        logical :: kkeepshifts
+        logical, optional, intent(in)    :: keepshifts, keepcls
+        logical :: kkeepshifts, kkeepcls
         kkeepshifts = .true.
         if( present(keepshifts) ) kkeepshifts = keepshifts
+        kkeepcls = .false.
+        if( present(keepcls) ) kkeepcls = keepcls
         if( self%is_ptcl )then
-            self%pparms(I_CLASS) = 0.
+            if( .not. kkeepcls ) self%pparms(I_CLASS) = 0.
             self%pparms(I_E3)    = 0.
             if( .not. kkeepshifts )then
                 self%pparms(I_X) = 0.
@@ -259,7 +251,7 @@ contains
             self%pparms(I_CORR) = 0.
             self%pparms(I_FRAC) = 0.
         else
-            call self%htab%delete('class')
+            if( .not. kkeepcls ) call self%htab%delete('class')
             call self%htab%delete('e3')
             if( .not. kkeepshifts )then
                 call self%htab%delete('x')

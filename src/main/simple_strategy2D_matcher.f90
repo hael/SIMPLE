@@ -232,7 +232,7 @@ contains
                         if( trim(params_glob%tseries).eq.'yes' )then
                             if( l_np_cls_defined )then
                                 allocate(strategy2D_tseries :: strategy2Dsrch(iptcl_batch)%ptr)
-                            else if( trim(params_glob%refine).eq.'inpl' )then
+                            else if( params_glob%l_refine_inpl )then
                                 allocate(strategy2D_inpl    :: strategy2Dsrch(iptcl_batch)%ptr)
                             else
                                 allocate(strategy2D_greedy  :: strategy2Dsrch(iptcl_batch)%ptr)
@@ -241,7 +241,7 @@ contains
                             allocate(strategy2D_greedy      :: strategy2Dsrch(iptcl_batch)%ptr)
                         endif
                     else
-                        if( trim(params_glob%tseries).eq.'yes' .and. trim(params_glob%refine).eq.'inpl' )then
+                        if( trim(params_glob%tseries).eq.'yes' .and. params_glob%l_refine_inpl )then
                             allocate(strategy2D_inpl        :: strategy2Dsrch(iptcl_batch)%ptr)
                         else
                             allocate(strategy2D_snhc        :: strategy2Dsrch(iptcl_batch)%ptr)
