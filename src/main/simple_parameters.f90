@@ -449,6 +449,7 @@ type :: parameters
     logical :: l_ran_noise_ph = .true.
     logical :: l_refine_inpl  = .false.
     logical :: l_remap_cls    = .false.
+    logical :: l_wiener_part  = .false.
     logical :: l_wglob        = .true.
     logical :: sp_required    = .false.
   contains
@@ -1236,6 +1237,8 @@ contains
         self%l_nonuniform = self%nonuniform .ne. 'no'
         ! set correlation weighting scheme
         self%l_corrw = self%wcrit .ne. 'no'
+        ! set wiener mode
+        self%l_wiener_part = str_has_substr(trim(self%wiener), 'partial')
         if( self%l_corrw )then
             select case(trim(self%wcrit))
                 case('softmax')

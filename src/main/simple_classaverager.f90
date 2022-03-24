@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 !$ use omp_lib
 use simple_builder,    only: build_glob
 use simple_parameters, only: params_glob
-use simple_ctf,        only: ctf, ctf_set_first_lim
+use simple_ctf,        only: ctf
 use simple_image,      only: image, image_ptr
 use simple_stack_io,   only: stack_io
 implicit none
@@ -47,7 +47,6 @@ type(image),       allocatable :: ctfsqsums_merged(:)      !< -"-
 integer,           allocatable :: prev_eo_pops(:,:)
 logical,           allocatable :: pptcl_mask(:)
 logical                        :: phaseplate    = .false.  !< Volta phaseplate images or not
-logical                        :: l_wiener_part = .false.  !< partial Wiener restoration (after 1st CTF peak/zero)
 logical                        :: exists        = .false.  !< to flag instance existence
 
 integer(timer_int_kind) :: t_class_loop,t_batch_loop, t_gridding, t_init, t_tot
@@ -87,8 +86,6 @@ contains
         ldim_pd       = [params_glob%boxpd,params_glob%boxpd,1]
         ldim_pd(3)    = 1
         filtsz        = build_glob%img%get_filtsz()
-        l_wiener_part = .false.
-        if( str_has_substr(params_glob%wiener,'partial') ) l_wiener_part = .true.
         ! build arrays
         allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
         &cavgs_merged(ncls), ctfsqsums_even(ncls),&
@@ -148,18 +145,6 @@ contains
             call spproj%map_ptcl_ind2stk_ind(params_glob%oritype, iptcl, stkind, precs(cnt)%ind_in_stk)
         end do
         !$omp end parallel do
-        ! CTF limit
-        if( l_wiener_part )then
-            select case(trim(params_glob%wiener))
-            case('partial_pio2','partial_aln_pio2')
-                call ctf_set_first_lim( CTFLIMFLAG_PIO2 )
-            case('partial_pi','partial_aln_pi')
-                call ctf_set_first_lim( CTFLIMFLAG_PI )
-            case DEFAULT
-                THROW_HARD('Unsupported CTF limit: '//trim(params_glob%wiener))
-            end select
-        endif
-        ! Streaming
         prev_eo_pops = 0
         if( trim(params_glob%stream).eq.'yes' .and. spproj%os_cls2D%get_noris() == ncls )then
             do i = 1,ncls
@@ -400,7 +385,7 @@ contains
                     add_phshift = 0.
                     if( phaseplate ) add_phshift = precs(iprec)%phshift
                     call precs(iprec)%tfun%eval_and_apply(cgrid_imgs(ithr), ctfflag, logi_lims, fdims(1:2), tvals(:,:,ithr), &
-                    & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, .not.l_wiener_part)
+                    & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, .not.params_glob%l_wiener_part)
                     ! Rotation matrix
                     call rotmat2d(-precs(iprec)%e3, mat)
                     ! Interpolation
