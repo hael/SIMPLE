@@ -26,8 +26,4 @@ call tfun%ctf_1stzero2img(img, DFX, DFY, ANGAST, PHSH)
 call img%ft2img('real', img_spec)
 call img_spec%write('ctfimg_1stzero.mrc')
 
-call tfun%ctf_1stpeak2img(img, DFX, DFY, ANGAST, PHSH)
-call img%ft2img('real', img_spec)
-call img_spec%write('ctfimg_1stpeak.mrc')
-
 end program simple_test_ctf
