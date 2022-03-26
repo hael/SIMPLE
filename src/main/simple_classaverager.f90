@@ -269,6 +269,210 @@ contains
 
     !>  \brief  is for assembling the sums in distributed/non-distributed mode
     !!          using gridding interpolation in Fourier space
+    ! subroutine cavger_assemble_sums( do_frac_update )
+    !     use simple_kbinterpol, only: kbinterpol
+    !     logical, intent(in)           :: do_frac_update
+    !     integer, parameter            :: READBUFFSZ = 1024
+    !     complex, parameter            :: zero = cmplx(0.,0.)
+    !     type(kbinterpol)              :: kbwin
+    !     type(stack_io)                :: stkio_r
+    !     type(image_ptr)               :: pcmat(nthr_glob), prhomat(nthr_glob)
+    !     type(image),      allocatable :: cgrid_imgs(:), read_imgs(:)
+    !     character(len=:), allocatable :: stk_fname
+    !     complex,          allocatable :: cmats(:,:,:)
+    !     real,             allocatable :: rhos(:,:,:), tvals(:,:,:)
+    !     complex :: fcompl, fcompll
+    !     real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw
+    !     integer :: batch_iprecs(READBUFFSZ)
+    !     integer :: fdims(3), logi_lims(3,2), phys(2), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
+    !     integer :: iprec, i, sh, iwinsz, nyq, ind_in_stk, iprec_glob, nptcls_eff
+    !     integer :: wdim, h, k, l, m, ll, mm, icls, iptcl, interp_shlim, batchind
+    !     integer :: first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind
+    !     integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
+    !     if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
+    !     ! init cavgs
+    !     call init_cavgs_sums
+    !     if( do_frac_update )then
+    !         call cavger_readwrite_partial_sums( 'read' )
+    !         call cavger_apply_weights( 1. - params_glob%update_frac )
+    !     endif
+    !     kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
+    !     wdim   = kbwin%get_wdim()
+    !     iwinsz = ceiling(kbwin%get_winsz() - 0.5)
+    !     ! Number stacks
+    !     first_pind = params_glob%fromp
+    !     call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, first_pind, first_stkind, ind_in_stk)
+    !     last_pind = 0
+    !     do i = partsz,1,-1
+    !         if( precs(i)%pind > 0 )then
+    !             last_pind = precs(i)%pind
+    !             exit
+    !         endif
+    !     enddo
+    !     call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, last_pind, last_stkind,  ind_in_stk)
+    !     nstks = last_stkind - first_stkind + 1
+    !     ! Objects allocations
+    !     allocate(read_imgs(READBUFFSZ), cgrid_imgs(nthr_glob))
+    !     !$omp parallel default(shared) proc_bind(close) private(i)
+    !     !$omp do schedule(static)
+    !     do i = 1,READBUFFSZ
+    !         call read_imgs(i)%new(ldim, params_glob%smpd, wthreads=.false.)
+    !     enddo
+    !     !$omp end do nowait
+    !     !$omp do schedule(static)
+    !     do i = 1,nthr_glob
+    !         call cgrid_imgs(i)%new(ldim_pd, params_glob%smpd, wthreads=.false.)
+    !     enddo
+    !     !$omp end do
+    !     !$omp end parallel
+    !     logi_lims       = cgrid_imgs(1)%loop_lims(2)
+    !     cyc_lims        = cgrid_imgs(1)%loop_lims(3)
+    !     nyq             = cgrid_imgs(1)%get_lfny(1)
+    !     fdims           = cgrid_imgs(1)%get_array_shape()
+    !     interp_shlim    = nyq + 1
+    !     cyc_limsR(:,1)  = cyc_lims(1,:)  ! limits in fortran layered format
+    !     cyc_limsR(:,2)  = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
+    !     allocate(cmats(fdims(1),fdims(2),READBUFFSZ), rhos(fdims(1),fdims(2),READBUFFSZ),tvals(fdims(1),fdims(2),nthr_glob))
+    !     ! Main loop
+    !     iprec_glob = 0 ! global record index
+    !     do istk = first_stkind,last_stkind
+    !         ! Particles range in stack
+    !         fromp  = nint(build_glob%spproj%os_stk%get(istk,'fromp'))
+    !         top    = nint(build_glob%spproj%os_stk%get(istk,'top'))
+    !         nptcls_in_stk = top - fromp + 1 ! # of particles in stack
+    !         call build_glob%spproj%get_stkname_and_ind(params_glob%oritype, max(params_glob%fromp,fromp), stk_fname, ind_in_stk)
+    !         ! open buffer
+    !         call stkio_r%open(stk_fname, smpd, 'read', bufsz=min(nptcls_in_stk,READBUFFSZ))
+    !         ! batch loop
+    !         nbatches = ceiling(real(nptcls_in_stk)/real(READBUFFSZ)) ! will be 1 most of the tme
+    !         do ibatch = 1,nbatches
+    !             batch_iprecs = 0                                     ! records in batch, if zero skip
+    !             istart = (ibatch - 1)              * READBUFFSZ + 1  ! first index in current batch, will be 1      most of the time
+    !             iend   = min(nptcls_in_stk, istart + READBUFFSZ - 1) ! last  index in current batch, will be nptcls_in_stk most of the time
+    !             nptcls_in_batch = iend-istart+1
+    !             batchind   = 0
+    !             nptcls_eff = 0                                       ! # particles to process in batch
+    !             do i = istart,iend
+    !                 iptcl    = fromp + i - 1                         ! global particle index
+    !                 batchind = batchind + 1                          ! index in batch
+    !                 if( iptcl < params_glob%fromp ) cycle            ! taking care of limits
+    !                 if( iptcl > params_glob%top )   cycle
+    !                 iprec_glob = iprec_glob + 1                      ! global particle record
+    !                 batch_iprecs(batchind) = iprec_glob              ! particle record in batch
+    !                 if( precs(iprec_glob)%pind == 0 ) cycle
+    !                 nptcls_eff = nptcls_eff + 1
+    !                 if( iptcl /= precs(iprec_glob)%pind ) THROW_HARD('Critical indexing error!')      ! debug, to remove
+    !                 call stkio_r%read(precs(iprec_glob)%ind_in_stk, read_imgs(batchind)) ! read
+    !             enddo
+    !             if( nptcls_eff == 0 ) cycle
+    !             ! Interpolation loop
+    !             !$omp parallel default(shared) proc_bind(close)&
+    !             !$omp private(i,icls,iprec,win_corner,add_phshift,mat,ithr,h,k,l,m,ll,mm,dist,loc,sh,phys,kw,tval,fcompl,fcompll)
+    !             !$omp do schedule(static)
+    !             do i = 1,nptcls_in_batch
+    !                 iprec = batch_iprecs(i)
+    !                 if( iprec == 0 ) cycle
+    !                 if( precs(iprec)%pind == 0 ) cycle
+    !                 ithr            = omp_get_thread_num()+1
+    !                 cmats(:,:,i)    = zero
+    !                 rhos(:,:,i)     = 0.0
+    !                 tvals(:,:,ithr) = 0.0
+    !                 ! normalize & pad & FFT
+    !                 call read_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(ithr))
+    !                 ! shift
+    !                 call cgrid_imgs(ithr)%shift2Dserial(-precs(iprec)%shift)
+    !                 ! apply CTF to image, stores CTF values
+    !                 add_phshift = 0.
+    !                 if( phaseplate ) add_phshift = precs(iprec)%phshift
+    !                 call precs(iprec)%tfun%eval_and_apply(cgrid_imgs(ithr), ctfflag, logi_lims, fdims(1:2), tvals(:,:,ithr), &
+    !                 & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, .not.params_glob%l_wiener_part)
+    !                 ! Rotation matrix
+    !                 call rotmat2d(-precs(iprec)%e3, mat)
+    !                 ! Interpolation
+    !                 do h=logi_lims(1,1),logi_lims(1,2)
+    !                     do k=logi_lims(2,1),logi_lims(2,2)
+    !                         sh = nint(hyp(real(h),real(k)))
+    !                         if( sh > interp_shlim )cycle
+    !                         ! Rotation
+    !                         loc = matmul(real([h,k]),mat)
+    !                         win_corner = floor(loc) ! bottom left corner
+    !                         dist  = loc - real(win_corner)
+    !                         ! Bi-linear interpolation
+    !                         l     = cyci_1d(cyc_limsR(:,1), win_corner(1))
+    !                         ll    = cyci_1d(cyc_limsR(:,1), win_corner(1)+1)
+    !                         m     = cyci_1d(cyc_limsR(:,2), win_corner(2))
+    !                         mm    = cyci_1d(cyc_limsR(:,2), win_corner(2)+1)
+    !                         ! l, bottom left corner
+    !                         phys   = cgrid_imgs(ithr)%comp_addr_phys(l,m)
+    !                         kw     = (1.-dist(1))*(1.-dist(2))   ! interpolation kernel weight
+    !                         fcompl = kw * cgrid_imgs(ithr)%get_cmat_at(phys(1), phys(2),1)
+    !                         tval   = kw * tvals(phys(1),phys(2),ithr)
+    !                         ! l, bottom right corner
+    !                         phys   = cgrid_imgs(ithr)%comp_addr_phys(l,mm)
+    !                         kw     = (1.-dist(1))*dist(2)
+    !                         fcompl = fcompl + kw * cgrid_imgs(ithr)%get_cmat_at(phys(1), phys(2),1)
+    !                         tval   = tval   + kw * tvals(phys(1),phys(2),ithr)
+    !                         if( l < 0 ) fcompl = conjg(fcompl) ! conjugaison when required!
+    !                         ! ll, upper left corner
+    !                         phys    = cgrid_imgs(ithr)%comp_addr_phys(ll,m)
+    !                         kw      = dist(1)*(1.-dist(2))
+    !                         fcompll =         kw * cgrid_imgs(ithr)%get_cmat_at(phys(1), phys(2),1)
+    !                         tval    = tval  + kw * tvals(phys(1),phys(2),ithr)
+    !                         ! ll, upper right corner
+    !                         phys    = cgrid_imgs(ithr)%comp_addr_phys(ll,mm)
+    !                         kw      = dist(1)*dist(2)
+    !                         fcompll = fcompll + kw * cgrid_imgs(ithr)%get_cmat_at(phys(1), phys(2),1)
+    !                         tval    = tval    + kw * tvals(phys(1),phys(2),ithr)
+    !                         if( ll < 0 ) fcompll = conjg(fcompll) ! conjugaison when required!
+    !                         ! update with interpolated values
+    !                         phys = cgrid_imgs(ithr)%comp_addr_phys(h,k)
+    !                         cmats(phys(1),phys(2),i) = fcompl + fcompll
+    !                         rhos(phys(1),phys(2),i)  = tval*tval
+    !                     end do
+    !                 end do
+    !             enddo
+    !             !$omp end do
+    !             ! Sum over classes
+    !             !$omp do schedule(static)
+    !             do icls = 1,ncls
+    !                 ithr = omp_get_thread_num() + 1
+    !                 do i = 1,nptcls_in_batch
+    !                     iprec = batch_iprecs(i)
+    !                     if( iprec == 0 ) cycle
+    !                     if( precs(iprec)%pind == 0 ) cycle
+    !                     if( precs(iprec)%class == icls )then
+    !                         select case(precs(iprec)%eo)
+    !                             case(0,-1)
+    !                                 call cavgs_even(icls)%get_cmat_ptr(pcmat(ithr)%cmat)
+    !                                 call ctfsqsums_even(icls)%get_cmat_ptr(prhomat(ithr)%cmat)
+    !                             case(1)
+    !                                 call cavgs_odd(icls)%get_cmat_ptr(pcmat(ithr)%cmat)
+    !                                 call ctfsqsums_odd(icls)%get_cmat_ptr(prhomat(ithr)%cmat)
+    !                         end select
+    !                         pcmat(ithr)%cmat(:,:,1)   = pcmat(ithr)%cmat(:,:,1)   + precs(iprec)%pw * cmats(:,:,i)
+    !                         prhomat(ithr)%cmat(:,:,1) = prhomat(ithr)%cmat(:,:,1) + precs(iprec)%pw * cmplx(rhos(:,:,i),0.0)
+    !                     endif
+    !                 enddo
+    !             enddo
+    !             !$omp end do
+    !             !$omp end parallel
+    !         enddo ! end read batches loop
+    !         ! close stack
+    !         call stkio_r%close
+    !     enddo
+    !     ! Cleanup
+    !     do i = 1,READBUFFSZ
+    !         call read_imgs(i)%kill
+    !     enddo
+    !     do i = 1,nthr_glob
+    !         call cgrid_imgs(i)%kill
+    !     enddo
+    !     deallocate(read_imgs,cgrid_imgs)
+    !     if( .not. params_glob%l_distr_exec ) call cavger_merge_eos_and_norm
+    ! end subroutine cavger_assemble_sums
+
+    !>  \brief  is for assembling the sums in distributed/non-distributed mode
+    !!          using gridding interpolation in Fourier space
     subroutine cavger_assemble_sums( do_frac_update )
         use simple_kbinterpol, only: kbinterpol
         logical, intent(in)           :: do_frac_update
@@ -281,8 +485,9 @@ contains
         character(len=:), allocatable :: stk_fname
         complex,          allocatable :: cmats(:,:,:)
         real,             allocatable :: rhos(:,:,:), tvals(:,:,:)
+        logical,          allocatable :: l_mat_before(:,:,:)
         complex :: fcompl, fcompll
-        real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw
+        real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw, kwsum
         integer :: batch_iprecs(READBUFFSZ)
         integer :: fdims(3), logi_lims(3,2), phys(2), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
         integer :: iprec, i, sh, iwinsz, nyq, ind_in_stk, iprec_glob, nptcls_eff
@@ -332,7 +537,7 @@ contains
         interp_shlim    = nyq + 1
         cyc_limsR(:,1)  = cyc_lims(1,:)  ! limits in fortran layered format
         cyc_limsR(:,2)  = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
-        allocate(cmats(fdims(1),fdims(2),READBUFFSZ), rhos(fdims(1),fdims(2),READBUFFSZ),tvals(fdims(1),fdims(2),nthr_glob))
+        allocate(cmats(fdims(1),fdims(2),READBUFFSZ), rhos(fdims(1),fdims(2),READBUFFSZ),tvals(fdims(1),fdims(2),nthr_glob),l_mat_before(fdims(1),fdims(2),nthr_glob))
         ! Main loop
         iprec_glob = 0 ! global record index
         do istk = first_stkind,last_stkind
@@ -367,16 +572,17 @@ contains
                 if( nptcls_eff == 0 ) cycle
                 ! Interpolation loop
                 !$omp parallel default(shared) proc_bind(close)&
-                !$omp private(i,icls,iprec,win_corner,add_phshift,mat,ithr,h,k,l,m,ll,mm,dist,loc,sh,phys,kw,tval,fcompl,fcompll)
+                !$omp private(i,icls,iprec,win_corner,add_phshift,mat,ithr,h,k,l,m,ll,mm,dist,loc,sh,phys,kw,kwsum,tval,fcompl,fcompll)
                 !$omp do schedule(static)
                 do i = 1,nptcls_in_batch
                     iprec = batch_iprecs(i)
                     if( iprec == 0 ) cycle
                     if( precs(iprec)%pind == 0 ) cycle
-                    ithr            = omp_get_thread_num()+1
-                    cmats(:,:,i)    = zero
-                    rhos(:,:,i)     = 0.0
-                    tvals(:,:,ithr) = 0.0
+                    ithr                = omp_get_thread_num()+1
+                    cmats(:,:,i)        = zero
+                    rhos(:,:,i)         = 0.0
+                    tvals(:,:,ithr)     = 0.0
+                    l_mat_before(:,:,:) = .false.
                     ! normalize & pad & FFT
                     call read_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(ithr))
                     ! shift
@@ -384,7 +590,7 @@ contains
                     ! apply CTF to image, stores CTF values
                     add_phshift = 0.
                     if( phaseplate ) add_phshift = precs(iprec)%phshift
-                    call precs(iprec)%tfun%eval_and_apply(cgrid_imgs(ithr), ctfflag, logi_lims, fdims(1:2), tvals(:,:,ithr), &
+                    call precs(iprec)%tfun%eval_and_apply(cgrid_imgs(ithr), ctfflag, logi_lims, fdims(1:2), tvals(:,:,ithr), l_mat_before(:,:,ithr),&
                     & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, .not.params_glob%l_wiener_part)
                     ! Rotation matrix
                     call rotmat2d(-precs(iprec)%e3, mat)
@@ -407,27 +613,35 @@ contains
                             kw     = (1.-dist(1))*(1.-dist(2))   ! interpolation kernel weight
                             fcompl = kw * cgrid_imgs(ithr)%get_cmat_at(phys(1), phys(2),1)
                             tval   = kw * tvals(phys(1),phys(2),ithr)
+                            kwsum  = kw
                             ! l, bottom right corner
                             phys   = cgrid_imgs(ithr)%comp_addr_phys(l,mm)
                             kw     = (1.-dist(1))*dist(2)
                             fcompl = fcompl + kw * cgrid_imgs(ithr)%get_cmat_at(phys(1), phys(2),1)
                             tval   = tval   + kw * tvals(phys(1),phys(2),ithr)
-                            if( l < 0 ) fcompl = conjg(fcompl) ! conjugaison when required!
+                            kwsum  = kwsum  + kw
+                            if( l < 0 ) fcompl = conjg(fcompl) ! conjugation when required
                             ! ll, upper left corner
                             phys    = cgrid_imgs(ithr)%comp_addr_phys(ll,m)
                             kw      = dist(1)*(1.-dist(2))
                             fcompll =         kw * cgrid_imgs(ithr)%get_cmat_at(phys(1), phys(2),1)
                             tval    = tval  + kw * tvals(phys(1),phys(2),ithr)
+                            kwsum  = kwsum  + kw
                             ! ll, upper right corner
                             phys    = cgrid_imgs(ithr)%comp_addr_phys(ll,mm)
                             kw      = dist(1)*dist(2)
                             fcompll = fcompll + kw * cgrid_imgs(ithr)%get_cmat_at(phys(1), phys(2),1)
                             tval    = tval    + kw * tvals(phys(1),phys(2),ithr)
-                            if( ll < 0 ) fcompll = conjg(fcompll) ! conjugaison when required!
+                            kwsum  = kwsum    + kw
+                            if( ll < 0 ) fcompll = conjg(fcompll) ! conjugation when required
                             ! update with interpolated values
                             phys = cgrid_imgs(ithr)%comp_addr_phys(h,k)
                             cmats(phys(1),phys(2),i) = fcompl + fcompll
-                            rhos(phys(1),phys(2),i)  = tval*tval
+                            if( l_mat_before(phys(1),phys(2),ithr) )then
+                                rhos(phys(1),phys(2),i) = kwsum
+                            else
+                                rhos(phys(1),phys(2),i) = tval * tval
+                            endif
                         end do
                     end do
                 enddo
