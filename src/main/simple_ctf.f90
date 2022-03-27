@@ -33,7 +33,6 @@ type ctf
     procedure, private :: evalPhSh
     procedure, private :: eval_1, eval_2, eval_3, eval_4, eval_5
     generic            :: eval => eval_1, eval_2, eval_3, eval_4, eval_5
-    procedure          :: eval_tval
     procedure, private :: eval_sign
     procedure, private :: eval_df
     procedure          :: nextrema
@@ -187,29 +186,6 @@ contains
             endif
         endif
     end function eval_5
-
-    ! the intent here is to multiply with the CTF out to the first zero byt not dilutie the low-res info
-    ! by dividing withe the sum of CTF**2
-    subroutine eval_tval( self, spaFreqSq, ang, add_phshift, before1stzero, tval, is_before )
-        class(ctf), intent(in)  :: self        !< instance
-        real,       intent(in)  :: spaFreqSq   !< squared reciprocal pixels
-        real,       intent(in)  :: ang         !< Angle at which to compute the CTF (radians)
-        real,       intent(in)  :: add_phshift !< aditional phase shift (radians), for phase plate
-        logical,    intent(in)  :: before1stzero !< whether of not the CTF value is calculated before the first zero
-        real,       intent(out) :: tval
-        logical,    intent(out) :: is_before
-        real :: totalphaseshift
-        totalphaseshift = self%evalPhSh(spaFreqSq, ang, add_phshift) + self%amp_contr_const
-        tval = sin( totalphaseshift )
-        is_before = .false.
-        if( before1stzero )then
-        else
-            if( totalphaseshift > CTF_FIRST_LIM )then
-            else
-                is_before = .true.
-            endif
-        endif
-    end subroutine eval_tval
 
     !>  \brief Returns the sign of the CTF with pre-initialize parameters
     pure elemental integer function eval_sign( self, spaFreqSq, ang, add_phshift )
@@ -559,51 +535,7 @@ contains
     end subroutine phaseflip_and_shift_serial
 
     ! apply CTF to image, CTF values are also returned
-    ! subroutine eval_and_apply( self, img, imode, logi_lims, tvalsdims, tvals, dfx, dfy, angast, add_phshift, before1stzero )
-    !     use simple_image, only: image
-    !     class(ctf),     intent(inout) :: self        !< instance
-    !     class(image),   intent(inout) :: img         !< modified image (output)
-    !     integer,        intent(in)    :: imode       !< CTFFLAG_FLIP=abs CTFFLAG_YES=ctf CTFFLAG_NO=no
-    !     integer,        intent(in)    :: logi_lims(3,2) !< logical limits
-    !     integer,        intent(in)    :: tvalsdims(2)   !< tvals dimensions
-    !     real,           intent(out)   :: tvals(1:tvalsdims(1),1:tvalsdims(2))
-    !     real,           intent(in)    :: dfx         !< defocus x-axis
-    !     real,           intent(in)    :: dfy         !< defocus y-axis
-    !     real,           intent(in)    :: angast      !< angle of astigmatism
-    !     real,           intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
-    !     logical,        intent(in)    :: before1stzero
-    !     integer :: ldim(3),h,k,phys(2)
-    !     real    :: ang,tval,spaFreqSq,hinv,hinvsq,kinv,inv_ldim(3)
-    !     real    :: rh,rk
-    !     if( imode == CTFFLAG_NO )then
-    !         tvals = 1.0
-    !         return
-    !     endif
-    !     ! initialize
-    !     call self%init(dfx, dfy, angast)
-    !     ldim     = img%get_ldim()
-    !     inv_ldim = 1./real(ldim)
-    !     do h=logi_lims(1,1),logi_lims(1,2)
-    !         rh     = real(h)
-    !         hinv   = rh * inv_ldim(1)
-    !         hinvsq = hinv*hinv
-    !         do k=logi_lims(2,1),logi_lims(2,2)
-    !             rk = real(k)
-    !             ! calculate CTF
-    !             kinv      = rk * inv_ldim(2)
-    !             spaFreqSq = hinvsq + kinv*kinv
-    !             ang       = atan2(rk,rh)
-    !             tval      = self%eval(spaFreqSq, ang, add_phshift, before1stzero)
-    !             if( imode == CTFFLAG_FLIP ) tval = abs(tval)
-    !             ! store tval and multiply image with tval
-    !             phys = img%comp_addr_phys(h,k)
-    !             tvals(phys(1),phys(2)) = tval
-    !             call img%mul_cmat_at(phys(1),phys(2),1, tval)
-    !         end do
-    !     end do
-    ! end subroutine eval_and_apply
-
-    subroutine eval_and_apply( self, img, imode, logi_lims, tvalsdims, tvals, l_mat_before, dfx, dfy, angast, add_phshift, before1stzero)
+    subroutine eval_and_apply( self, img, imode, logi_lims, tvalsdims, tvals, dfx, dfy, angast, add_phshift, before1stzero )
         use simple_image, only: image
         class(ctf),     intent(inout) :: self        !< instance
         class(image),   intent(inout) :: img         !< modified image (output)
@@ -611,15 +543,14 @@ contains
         integer,        intent(in)    :: logi_lims(3,2) !< logical limits
         integer,        intent(in)    :: tvalsdims(2)   !< tvals dimensions
         real,           intent(out)   :: tvals(1:tvalsdims(1),1:tvalsdims(2))
-        logical,        intent(out)   :: l_mat_before(1:tvalsdims(1),1:tvalsdims(2))
         real,           intent(in)    :: dfx         !< defocus x-axis
         real,           intent(in)    :: dfy         !< defocus y-axis
         real,           intent(in)    :: angast      !< angle of astigmatism
         real,           intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
         logical,        intent(in)    :: before1stzero
         integer :: ldim(3),h,k,phys(2)
-        real    :: ang,tval,spaFreqSq,hinv,hinvsq,kinv,inv_ldim(3),rh,rk
-        logical :: is_before
+        real    :: ang,tval,spaFreqSq,hinv,hinvsq,kinv,inv_ldim(3)
+        real    :: rh,rk
         if( imode == CTFFLAG_NO )then
             tvals = 1.0
             return
@@ -638,12 +569,11 @@ contains
                 kinv      = rk * inv_ldim(2)
                 spaFreqSq = hinvsq + kinv*kinv
                 ang       = atan2(rk,rh)
-                call self%eval_tval(spaFreqSq, ang, add_phshift, before1stzero, tval, is_before)
+                tval      = self%eval(spaFreqSq, ang, add_phshift, before1stzero)
                 if( imode == CTFFLAG_FLIP ) tval = abs(tval)
                 ! store tval and multiply image with tval
                 phys = img%comp_addr_phys(h,k)
                 tvals(phys(1),phys(2)) = tval
-                l_mat_before(phys(1),phys(2)) = is_before
                 call img%mul_cmat_at(phys(1),phys(2),1, tval)
             end do
         end do
