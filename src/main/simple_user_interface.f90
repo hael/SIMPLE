@@ -157,7 +157,6 @@ type(simple_program), target :: tseries_track_particles
 type(simple_program), target :: tseries_reconstruct3D
 type(simple_program), target :: graphene_subtr
 type(simple_program), target :: update_project
-type(simple_program), target :: validate_nano
 type(simple_program), target :: vizoris
 type(simple_program), target :: volops
 type(simple_program), target :: write_classes
@@ -383,7 +382,6 @@ contains
         call new_tseries_reconstruct3D
         call new_graphene_subtr
         call new_update_project
-        call new_validate_nano
         call new_vizoris
         call new_volops
         call new_write_classes
@@ -480,7 +478,6 @@ contains
         call push2prg_ptr_array(tseries_reconstruct3D)
         call push2prg_ptr_array(graphene_subtr)
         call push2prg_ptr_array(update_project)
-        call push2prg_ptr_array(validate_nano)
         call push2prg_ptr_array(vizoris)
         call push2prg_ptr_array(volops)
         call push2prg_ptr_array(write_classes)
@@ -681,8 +678,6 @@ contains
                 ptr2prg => graphene_subtr
             case('update_project')
                 ptr2prg => update_project
-            case('validate_nano')
-                ptr2prg => validate_nano
             case('vizoris')
                 ptr2prg => vizoris
             case('volops')
@@ -805,7 +800,6 @@ contains
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('VALIDATION PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') vizoris%name
-        write(logfhandle,'(A)') validate_nano%name
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('MODEL BULDING/ANALYSIS PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') detect_atoms%name
@@ -4168,40 +4162,6 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_vizoris
-
-    subroutine new_validate_nano
-        ! PROGRAM SPECIFICATION
-        call validate_nano%new(&
-        &'validate_nano',&                                                                                         ! name
-        &'Validation of nanoparticle 3D reconstruction',&                                                             ! descr_short
-        &'is a program for validation of nanoparticle 3D reconstruction',& ! descr_long
-        &'single_exec',&                                                                                           ! executable
-        &2, 4, 0, 1, 0, 1, 2, .false.)                                                                             ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call validate_nano%set_input('img_ios', 1, 'stk', 'file', 'Stack of selected time-restrianed class averages',&
-        &'Stack of selected time-restrianed class averages to import', 'e.g. selected.spi', .true., '')
-        call validate_nano%set_input('img_ios', 2, 'vol1', 'file', 'volume to validate', 'volume to validate', 'input volume e.g. vol.mrc', .true., '')
-        ! parameter input/output
-        call validate_nano%set_input('parm_ios', 1, smpd)
-        call validate_nano%set_input('parm_ios', 2, kv)
-        validate_nano%parm_ios(2)%required = .true.
-        call validate_nano%set_input('parm_ios', 3, cs)
-        validate_nano%parm_ios(3)%required = .true.
-        call validate_nano%set_input('parm_ios', 4, fraca)
-        validate_nano%parm_ios(4)%required = .true.
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call validate_nano%set_input('srch_ctrls', 1, pgrp)
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        call validate_nano%set_input('mask_ctrls', 1, mskdiam)
-        ! computer controls
-        call validate_nano%set_input('comp_ctrls', 1, nparts)
-        call validate_nano%set_input('comp_ctrls', 2, nthr)
-    end subroutine new_validate_nano
 
     subroutine new_volops
         ! PROGRAM SPECIFICATION
