@@ -396,6 +396,7 @@ type :: parameters
     real    :: lpstart=0.          !< start low-pass limit(in A){15}
     real    :: lpstop=8.0          !< stop low-pass limit(in A){8}
     real    :: lpthresh=30.
+    real    :: max_dose=0.         !< maximum dose threshold (e/A2)
     real    :: max_rad=0.          !< particle longest  dim (in pixels)
     real    :: min_rad=100.        !< particle shortest dim (in pixels)
     real    :: moldiam=140.        !< molecular diameter(in A)
@@ -819,6 +820,7 @@ contains
         call check_rarg('lpstart',        self%lpstart)
         call check_rarg('lpstop',         self%lpstop)
         call check_rarg('lpthresh',       self%lpthresh)
+        call check_rarg('max_dose',        self%max_dose)
         call check_rarg('max_rad',        self%max_rad)
         call check_rarg('min_rad',        self%min_rad)
         call check_rarg('moldiam',        self%moldiam)

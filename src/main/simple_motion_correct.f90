@@ -46,7 +46,8 @@ real,        allocatable :: acc_doses(:)                  !< accumulated doses
 complex,     allocatable :: cmat_sum(:,:,:)               !< complex matrice
 
 ! module global variables
-integer :: nframes        = 0                             !< number of frames
+integer :: nframes        = 0                             !< number of frames used for alignement
+integer :: total_nframes  = 0                             !< total number of frames in movie
 integer :: fixed_frame    = 0                             !< fixed frame of reference for isotropic alignment (0,0)
 integer :: ldim(3)        = [0,0,0]                       !< logical dimension of frame
 integer :: ldim_orig(3)   = [0,0,0]                       !< logical dimension of frame (original, for use in motion_correct_iter)
@@ -88,7 +89,7 @@ contains
         character(len=*), optional, intent(in)    :: gainref           !< gain reference filename
         type(image), allocatable :: movie_frames(:)
         complex,     pointer     :: pcmat(:,:,:)
-        real     :: dimo4, time_per_frame, current_time
+        real     :: dimo4, time_per_frame, current_time, total_dose
         integer  :: shp(3), iframe, nrawframes
         smpd = ctfvars%smpd ! un-scaled pixel size
         ! get number of frames & dim from stack
@@ -111,7 +112,8 @@ contains
             call find_ldim_nptcls(movie_stack_fname, ldim, nframes)
             l_eer = .false.
         end select
-        ldim_orig = ldim
+        total_nframes = nframes
+        ldim_orig     = ldim
         err = .false.
         if( nframes < 2 )then
             err = .true.
@@ -119,7 +121,35 @@ contains
             THROW_WARN('nframes of movie < 2, aborting motion_correct')
             return
         endif
-        ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
+        ldim(3) = 1
+        ! dose weighting prep
+        if( params_glob%l_dose_weight )then
+            kV = ctfvars%kv
+            time_per_frame = params_glob%exp_time/real(nframes)  ! s
+            dose_rate      = params_glob%dose_rate
+            if( params_glob%max_dose > 0.001 )then
+                ! adjusting number of frames for maximum dose
+                total_dose = 0.0
+                do iframe = 1,nframes
+                    total_dose  = total_dose + dose_rate * time_per_frame ! e/A2
+                    if( total_dose > params_glob%max_dose ) exit
+                enddo
+                nframes = min(iframe,nframes)
+            endif
+            if( nframes < 2 )then
+                err = .true.
+                write(logfhandle,*) 'movie: ', trim(movie_stack_fname)
+                THROW_WARN('nframes of movie < 2, aborting motion_correct')
+                return
+            endif
+            if( allocated(acc_doses) ) deallocate(acc_doses)
+            allocate(acc_doses(nframes), source=0.0)
+            do iframe=1,nframes
+                current_time      = real(iframe)*time_per_frame
+                acc_doses(iframe) = dose_rate*current_time      ! e/A2/s * s = e/A2
+            end do
+        endif
+        ! scaling
         if( params_glob%scale < 0.99 )then
             ldim_scaled(1) = round2even(real(ldim(1))*params_glob%scale)
             ldim_scaled(2) = round2even(real(ldim(2))*params_glob%scale)
@@ -217,18 +247,6 @@ contains
         call movie_sum%set_cmat(cmat_sum)
         call movie_sum%ifft
         if( l_BENCH ) rt_fft_clip = toc(t_fft_clip)
-        ! check if we are doing dose weighting
-        if( params_glob%l_dose_weight )then
-            if( allocated(acc_doses) ) deallocate(acc_doses)
-            allocate( acc_doses(nframes) )
-            kV = ctfvars%kv
-            time_per_frame = params_glob%exp_time/real(nframes)  ! unit: s
-            dose_rate      = params_glob%dose_rate
-            do iframe=1,nframes
-                current_time      = real(iframe)*time_per_frame ! unit: s
-                acc_doses(iframe) = dose_rate*current_time      ! unit: e/A2/s * s = e/A2
-            end do
-        endif
         deallocate(movie_frames)
         if( L_BENCH )then
             print *,'t_fft_clip: ',rt_fft_clip
@@ -418,7 +436,7 @@ contains
         call starfile_table__setname(mc_starfile, "general")
         call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_X, ldim_orig(1))
         call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_Y, ldim_orig(2))
-        call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_Z, nframes)
+        call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_Z, total_nframes)
         call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_MOVIE_NAME, simple_abspath(moviename))
         if (present(gainref_fname)) then
             call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_GAIN_NAME, trim(gainref_fname))
@@ -432,7 +450,7 @@ contains
         doserateperframe = 0.
         if( params_glob%l_dose_weight )then
             doserateperframe = params_glob%exp_time*params_glob%dose_rate   ! total dose
-            doserateperframe = doserateperframe / real(nframes)             ! per frame
+            doserateperframe = doserateperframe / real(total_nframes)             ! per frame
         endif
         call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_DOSE_RATE, real(doserateperframe, dp))
         call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_PRE_EXPOSURE, 0.0_dp)
@@ -448,13 +466,18 @@ contains
         call starfile_table__clear(mc_starfile)
         call starfile_table__setIsList(mc_starfile, .false.)
         call starfile_table__setName(mc_starfile, "global_shift")
-        do iframe = 1, nframes
-            shift = shifts_toplot(iframe,:) - shifts_toplot(1,:)
+        do iframe = 1, total_nframes
             call starfile_table__addObject(mc_starfile)
             call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
-            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, real(shift(1),dp)/dpscale)
-            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, real(shift(2),dp)/dpscale)
-        end do
+            if( iframe <= nframes )then
+                shift = shifts_toplot(iframe,:) - shifts_toplot(1,:)
+                call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, real(shift(1),dp)/dpscale)
+                call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, real(shift(2),dp)/dpscale)
+            else
+                call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, -9999.0d0)
+                call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, -9999.0d0)
+            endif
+        enddo
         call starfile_table__write_ofile(mc_starfile)
         if( writepoly )then
             ! anisotropic shifts

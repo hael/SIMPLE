@@ -349,6 +349,7 @@ contains
         call cmd_dict%push('masscen',       'center using binarisation and mass centering(yes|no){no}')
         call cmd_dict%push('match_filt',    'matched filter on (yes|no){yes}')
         call cmd_dict%push('maxits',        'maximum # iterations')
+        call cmd_dict%push('max_dose',      'maximum dose threshold (in e-/A2)')
         call cmd_dict%push('max_rad',       'particle longest  dim (in pixels)')
         call cmd_dict%push('mcpatch',       'Whether to perform Patch-based motion correction(yes|no){no}')
         call cmd_dict%push('min_rad',       'particle shortest dim (in pixels)')
