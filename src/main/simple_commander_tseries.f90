@@ -32,7 +32,6 @@ public :: tseries_ctf_estimate_commander
 public :: autorefine3D_nano_commander
 public :: refine3D_nano_commander
 public :: graphene_subtr_commander
-public :: validate_nano_commander
 public :: tseries_swap_stack_commander
 public :: tseries_reconstruct3D_distr
 private
@@ -94,10 +93,6 @@ type, extends(commander_base) :: graphene_subtr_commander
   contains
     procedure :: execute      => exec_graphene_subtr
 end type graphene_subtr_commander
-type, extends(commander_base) :: validate_nano_commander
-  contains
-    procedure :: execute      => exec_validate_nano
-end type validate_nano_commander
 type, extends(commander_base) :: tseries_swap_stack_commander
   contains
     procedure :: execute      => exec_tseries_swap_stack
@@ -1133,46 +1128,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_GRAPHENE_SUBTR NORMAL STOP ****')
     end subroutine exec_graphene_subtr
-
-    subroutine exec_validate_nano( self, cline )
-        use simple_commander_project
-        class(validate_nano_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        type(new_project_commander)         :: xnew_project
-        type(import_particles_commander)    :: ximport_ptcls
-        type(refine3D_nano_commander) :: xrefine3D
-        type(reproject_commander)           :: xreproject
-        type(sp_project)                    :: spproj
-        character(len=:), allocatable       :: vol_fname
-        real    :: smpd
-        integer :: box
-        call cline%set('mkdir', 'no')
-        ! make new project called validation
-        call cline%set('projname', 'validation')
-        call xnew_project%execute(cline)
-        ! import particles
-        call cline%set('ctf', 'no')
-        call cline%set('projfile', 'validation.simple')
-        call ximport_ptcls%execute(cline)
-        ! refine3D_nano
-        params_glob => null()
-        call cline%set('maxits', 5.)
-        call xrefine3D%execute(cline)
-        ! print_project_field
-        call exec_cmdline('simple_exec prg=print_project_field oritype=ptcl3D > oris.txt')
-        ! reproject
-        params_glob => null()
-        call spproj%read('validation.simple')
-        call spproj%get_vol( 'vol', 1, vol_fname, smpd, box)
-        call cline%delete('msk')
-        call cline%set('vol1', vol_fname)
-        call cline%set('outstk', 'reprojections.mrc')
-        call cline%set('oritab', 'oris.txt')
-        call xreproject%execute(cline)
-        call exec_cmdline('rm -f frcs.bin fsc_state01.bin&
-        & nohup.out oris.txt recvol_state01_even.spi recvol_state01_odd.spi&
-        & *pproc* *part* RESOLUTION* *filelist* reproject_oris.txt')
-    end subroutine exec_validate_nano
 
     subroutine exec_tseries_swap_stack( self, cline )
         use simple_commander_project
