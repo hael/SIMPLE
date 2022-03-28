@@ -169,7 +169,6 @@ type :: nanoparticle
     ! atomic position determination
     procedure          :: identify_lattice_params
     procedure          :: identify_atomic_pos
-    procedure, private :: phasecorr_one_atom
     procedure, private :: binarize_and_find_centers
     procedure, private :: find_centers
     procedure, private :: discard_atoms_with_low_contact_score
@@ -414,7 +413,7 @@ contains
         type(atoms)       :: atoms_obj
         ! MODEL BUILDING
         ! Phase correlation approach
-        call self%phasecorr_one_atom(self%img)
+        call phasecorr_one_atom(self%img, self%img, self%element)
         ! Nanoparticle binarization
         call self%binarize_and_find_centers()
         ! atom splitting by correlation map validation
@@ -444,7 +443,7 @@ contains
         type(atoms) :: atoms_obj
         ! MODEL BUILDING
         ! Phase correlation approach
-        call self%phasecorr_one_atom(self%img)
+        call phasecorr_one_atom(self%img, self%img, self%element)
         ! Nanoparticle binarization
         call self%binarize_and_find_centers()
         ! atom splitting by correlation map validation
@@ -478,36 +477,6 @@ contains
         call simatms%kill
         call atoms_obj%kill
     end subroutine identify_atomic_pos
-
-    ! FORMULA: phasecorr = ifft2(fft2(field).*conj(fft2(reference)));
-    subroutine phasecorr_one_atom( self, out_img )
-        use simple_segmentation
-        class(nanoparticle), intent(inout) :: self
-        type(image),         intent(inout) :: out_img  ! where to save the correlation values
-        type(image) :: one_atom, img_copy, phasecorr
-        type(atoms) :: atom
-        real :: cutoff
-        call img_copy%new(self%ldim, self%smpd)
-        call img_copy%copy(self%img)
-        call phasecorr%new(self%ldim, self%smpd)
-        call phasecorr%set_ft(.true.)
-        call one_atom%new(self%ldim,self%smpd)
-        cutoff = 8.*self%smpd
-        call atom%new(1)
-        call atom%set_element(1,self%element)
-        call atom%set_coord(1,self%smpd*(real(self%ldim)/2.)) ! DO NOT NEED THE +1
-        call atom%convolve(one_atom, cutoff)
-        call one_atom%fft()
-        call img_copy%fft()
-        call img_copy%phase_corr(one_atom,phasecorr,1.)
-        ! Save Output
-        call out_img%kill() ! if it exists already
-        call out_img%new(self%ldim, self%smpd)
-        call out_img%fft()
-        call out_img%copy(phasecorr)
-        call one_atom%kill()
-        call phasecorr%kill()
-    end subroutine phasecorr_one_atom
 
     ! This subrotuine takes in input a nanoparticle and
     ! binarizes it by thresholding. The gray level histogram is split
@@ -1118,7 +1087,7 @@ contains
         ! CALCULATE PER-ATOM PARAMETERS
         ! extract atominfo
         allocate(mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = .false.)
-        call self%phasecorr_one_atom(phasecorr)
+        call phasecorr_one_atom(self%img, phasecorr, self%element)
         call phasecorr%get_rmat_ptr(rmat_corr)
         call self%img%get_rmat_ptr(rmat)
         call self%img_cc%get_imat(imat_cc)
