@@ -107,6 +107,7 @@ contains
         if( cline%defined('projname') .and. cline%defined('dir') )then
             THROW_HARD('both projname and dir defined on command line, use either or; exec_new_project')
         else if( cline%defined('projname') )then
+            if( index(params%projname, '.') > 0 ) THROW_HARD('No punctuation allowed in projname')
             if( file_exists(PATH_HERE//trim(params%projname)) )then
                 write(logfhandle,*) 'project directory: ', trim(params%projname), ' already exists in cwd: ', trim(params%cwd)
                 write(logfhandle,*) 'If you intent to overwrite the existing file, please remove it and re-run new_project'
