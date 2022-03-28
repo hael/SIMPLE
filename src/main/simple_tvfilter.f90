@@ -79,6 +79,47 @@ contains
         if (.not. img_ft_prev) call img%ifft()
     end subroutine apply_filter
 
+    subroutine apply_filter_fsc( self, img, fsc, n_voxel )
+        class(tvfilter),   intent(inout) :: self
+        class(image),      intent(inout) :: img
+        real,              intent(in)    :: fsc(:)
+        real,              intent(in)    :: n_voxel(:)
+        integer :: img_ldim(3)
+        integer :: dims1, h, k, sh
+        real    :: SNR, nr
+        logical :: img_ft_prev
+        complex(kind=c_float_complex), pointer :: cmat_img(:,:,:)
+
+        img_ldim = img%get_ldim()
+        if ( img_ldim(3) /= 1 )then
+            write(logfhandle,*) 'ldim in tvfilter apply_filter: ', img_ldim(1), img_ldim(2), img_ldim(3)
+            THROW_HARD('only for 2D images; tvfilter::apply_filter')
+        endif
+        
+        img_ft_prev = img%is_ft()
+        if (.not. img_ft_prev) call img%fft()
+        
+        call img%get_cmat_ptr(cmat_img)
+        dims1 = int(img_ldim(1)/2)+1
+
+        do h=1, dims1
+            do k=1, img_ldim(2)
+                sh = nint(hyp(real(h),real(k)))
+                if (sh < 1 .or. sh > dims1) cycle
+
+                nr = real(n_voxel(sh))
+                if (fsc(sh) > 1 .or. fsc(sh) < 1/sqrt(nr)) then
+                    cmat_img(h,k,1) = 0
+                else
+                    SNR             = sqrt(1/nr - (1/nr - fsc(sh))/(1-fsc(sh))) - 1/nr
+                    cmat_img(h,k,1) = cmat_img(h,k,1) * SNR/(SNR + 1)
+                endif
+            enddo
+        enddo
+
+        if (.not. img_ft_prev) call img%ifft()
+    end subroutine apply_filter_fsc
+
     subroutine apply_filter_3d( self, img, lambda )
         class(tvfilter),   intent(inout) :: self
         class(image),      intent(inout) :: img

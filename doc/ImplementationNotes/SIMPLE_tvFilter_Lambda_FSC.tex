@@ -1,0 +1,48 @@
+\documentclass{article}
+\usepackage{amsmath}
+\begin{document}
+\title{SIMPLE's TV filter lambda depending on FSC}
+\maketitle
+\noindent Assuming
+\begin{equation}\label{eq1}
+\tilde{f} = f + \text{noise}
+\end{equation}
+Line 77-78 of 'simple\_tvfilter.f90' is:
+\begin{equation}\label{eq2}
+f = \tilde{f}\frac{\tilde{b}}{\tilde{b} + \lambda r}, \quad \tilde{b} = \text{real}(b)^2 + \text{img}(b)^2
+\end{equation}
+then
+\begin{equation}\label{eq3}
+\frac{\tilde{f}}{f} = 1 + \lambda \frac{r}{\tilde{b}}
+\end{equation}
+substitute \eqref{eq1} into \eqref{eq3}:
+\begin{equation}\label{eq4}
+1 + \frac{\text{noise}}{f} = 1 + \lambda \frac{r}{\tilde{b}}
+\end{equation}
+Since $\text{SNR} = \frac{f}{\text{noise}}$, equation \eqref{eq4} becomes:
+\begin{equation}\label{eq5}
+\lambda = \frac{\tilde{b}}{r\times\text{SNR}}
+\end{equation}
+Substituting \eqref{eq5} into \eqref{eq2} to get
+\begin{equation}\label{eq6}
+f = \tilde{f}\frac{\text{SNR}}{\text{SNR} + 1}
+\end{equation}
+Equation (11) of \cite{Heel2005} relates FSC and SNR:
+\begin{equation}\label{eq7}
+\text{FSC}(r) = \frac{\text{SNR}(r) + \frac{2\sqrt{\text{SNR(r)}}}{\sqrt{n(r)}} + \frac{1}{\sqrt{n(r)}}}{\text{SNR}(r) + \frac{2\sqrt{\text{SNR(r)}}}{\sqrt{n(r)}} + 1} 
+\end{equation}
+From \eqref{eq7}, one can compute SNR and then use \eqref{eq6} to compute f using the computed SNR.
+
+\noindent Solving \eqref{eq7} gives
+\begin{equation}\label{eq8}
+\text{SNR}(r) = \sqrt{\frac{1}{n(r)} - \frac{\frac{1}{\sqrt{n(r)}}-\text{FSC}(r)}{1 - \text{FSC}(r)}} - \frac{1}{\sqrt{n(r)}}
+\end{equation}
+SNR(r) is positive, so equation \eqref{eq8} only makes sense when
+\begin{equation}\label{eq9}
+\frac{1}{\sqrt{n(r)}} \leq \text{FSC}(r) \leq 1.
+\end{equation}
+
+\begin{thebibliography}{9}
+\bibitem[Heel2005]{Heel2005} M. van Heel, M. Schatz, Fourier shell correlation threshold criteria, J Struct Biol, 151 (3) (2005), pp. 250-262
+\end{thebibliography}
+\end{document}
