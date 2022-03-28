@@ -199,6 +199,7 @@ type(simple_input_param) :: kv
 type(simple_input_param) :: lp
 type(simple_input_param) :: lp_backgr
 type(simple_input_param) :: lplim_crit
+type(simple_input_param) :: max_dose
 type(simple_input_param) :: max_rad
 type(simple_input_param) :: maxits
 type(simple_input_param) :: mcpatch
@@ -966,8 +967,8 @@ contains
         call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(patch|wpatch|poly|poly2){patch}','(patch|wpatch|poly|poly2){patch}', .false.,'patch')
         call set_param(width,          'width',        'num',    'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
         call set_param(automsk,        'automsk',      'multi',  'Perform envelope masking', 'Whether to generate/apply an envelope mask(yes|no|file){no}', '(yes|no|file){no}', .false., 'no')
-        call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (full|partial){full}',&
-        '(full|partial){full}', .false., 'full')
+        call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (full|partial){full}','(full|partial){full}', .false., 'full')
+        call set_param(max_dose,       'max_dose',     'num',    'Maximum dose threshold(e/A2)', 'Threshold for maximum dose and number of frames used during movie alignment(e/A2), if <=0 all frames are used{0.0}','{0.0}',.false., 0.0)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -2377,13 +2378,13 @@ contains
         ! parameter input/output
         call motion_correct%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.)
         call motion_correct%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
-        call motion_correct%set_input('parm_ios', 3, scale_movies)
-        call motion_correct%set_input('parm_ios', 4, 'fbody', 'string', 'Template output micrograph name',&
+        call motion_correct%set_input('parm_ios', 3, max_dose)
+        call motion_correct%set_input('parm_ios', 4, scale_movies)
+        call motion_correct%set_input('parm_ios', 5, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., '')
-        call motion_correct%set_input('parm_ios', 5, pspecsz)
-        call motion_correct%set_input('parm_ios', 6, eer_fraction)
-        call motion_correct%set_input('parm_ios', 7, eer_upsampling)
-        call motion_correct%set_input('parm_ios', 8, algorithm)
+        call motion_correct%set_input('parm_ios', 6, pspecsz)
+        call motion_correct%set_input('parm_ios', 7, eer_fraction)
+        call motion_correct%set_input('parm_ios', 8, eer_upsampling)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2613,10 +2614,10 @@ contains
         ! parameter input/output
         call preprocess%set_input('parm_ios', 1,  'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
         call preprocess%set_input('parm_ios', 2,  'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
-        call preprocess%set_input('parm_ios', 3,  scale_movies)
-        call preprocess%set_input('parm_ios', 4,  eer_fraction)
-        call preprocess%set_input('parm_ios', 5,  eer_upsampling)
-        call preprocess%set_input('parm_ios', 6,  algorithm)
+        call preprocess%set_input('parm_ios', 3,  max_dose)
+        call preprocess%set_input('parm_ios', 4,  scale_movies)
+        call preprocess%set_input('parm_ios', 5,  eer_fraction)
+        call preprocess%set_input('parm_ios', 6,  eer_upsampling)
         call preprocess%set_input('parm_ios', 7,  pcontrast)
         call preprocess%set_input('parm_ios', 8,  'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
@@ -2670,7 +2671,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                              ! executable
-        &5, 15, 0, 16, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 16, 0, 16, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
@@ -2682,24 +2683,25 @@ contains
         ! parameter input/output
         call preprocess_stream%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
         call preprocess_stream%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
-        call preprocess_stream%set_input('parm_ios', 3, scale_movies)
-        call preprocess_stream%set_input('parm_ios', 4, eer_fraction)
-        call preprocess_stream%set_input('parm_ios', 5, eer_upsampling)
-        call preprocess_stream%set_input('parm_ios', 6, pcontrast)
-        call preprocess_stream%set_input('parm_ios', 7, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
-        call preprocess_stream%set_input('parm_ios', 8, 'fbody', 'string', 'Template output micrograph name',&
+        call preprocess_stream%set_input('parm_ios', 3, max_dose)
+        call preprocess_stream%set_input('parm_ios', 4, scale_movies)
+        call preprocess_stream%set_input('parm_ios', 5, eer_fraction)
+        call preprocess_stream%set_input('parm_ios', 6, eer_upsampling)
+        call preprocess_stream%set_input('parm_ios', 7, pcontrast)
+        call preprocess_stream%set_input('parm_ios', 8, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
+        call preprocess_stream%set_input('parm_ios', 9, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
-        call preprocess_stream%set_input('parm_ios', 9, pspecsz)
-        call preprocess_stream%set_input('parm_ios',10, kv)
+        call preprocess_stream%set_input('parm_ios',10, pspecsz)
+        call preprocess_stream%set_input('parm_ios',11, kv)
         preprocess_stream%parm_ios(11)%required = .true.
-        call preprocess_stream%set_input('parm_ios',11, cs)
+        call preprocess_stream%set_input('parm_ios',12, cs)
         preprocess_stream%parm_ios(12)%required = .true.
-        call preprocess_stream%set_input('parm_ios',12, fraca)
+        call preprocess_stream%set_input('parm_ios',13, fraca)
         preprocess_stream%parm_ios(13)%required = .true.
-        call preprocess_stream%set_input('parm_ios',13, smpd)
+        call preprocess_stream%set_input('parm_ios',14, smpd)
         preprocess_stream%parm_ios(14)%required = .true.
-        call preprocess_stream%set_input('parm_ios',14, ctfpatch)
-        call preprocess_stream%set_input('parm_ios',15, picker)
+        call preprocess_stream%set_input('parm_ios',15, ctfpatch)
+        call preprocess_stream%set_input('parm_ios',16, picker)
         ! alternative inputs
         ! <empty>
         ! search controls
