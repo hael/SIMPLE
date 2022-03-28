@@ -48,12 +48,12 @@ contains
         type(kbinterpol)  :: kbwin                 !< window function object
         real, allocatable :: w(:,:)
         real              :: loc(2), d1, d2
-        integer           :: win(2,2), lims(3,2), i, k, l, cnt, f1, f2
+        integer           :: win(2,2), lims(2,3), i, k, l, cnt, f1, f2
         logical           :: normalize_weights
         if( .not. pftcc%exists() ) THROW_HARD('polarft_corrcalc object needs to be created; init_polarizer')
         call self%kill_polarizer
-        self%pdim  = pftcc%get_pdim()
-        lims       = self%loop_lims(3)
+        self%pdim = pftcc%get_pdim()
+        lims      = transpose(self%loop_lims(3)) ! fortran layered memory
         select case(trim(params_glob%interpfun))
         case('kb')
             kbwin      = kbinterpol(KBWINSZ, alpha)
@@ -93,8 +93,8 @@ contains
                         w(l,:) = w(l,:) * kbwin%apod( real(win(1,1)+l-1)-loc(1) )
                         w(:,l) = w(:,l) * kbwin%apod( real(win(2,1)+l-1)-loc(2) )
                         ! cyclic addresses
-                        self%polcyc1_mat(i, k, cnt) = cyci_1d(lims(1,:), win(1,1)+l-1)
-                        self%polcyc2_mat(i, k, cnt) = cyci_1d(lims(2,:), win(2,1)+l-1)
+                        self%polcyc1_mat(i, k, cnt) = cyci_1d(lims(:,1), win(1,1)+l-1)
+                        self%polcyc2_mat(i, k, cnt) = cyci_1d(lims(:,2), win(2,1)+l-1)
                     end do
                     self%polweights_mat(i,k,:) = reshape(w,(/self%wlen/))
                     if( normalize_weights ) self%polweights_mat(i,k,:) = self%polweights_mat(i,k,:) / sum(w)
@@ -111,10 +111,10 @@ contains
                     d1  = loc(1) - f1
                     f2  = int(floor(loc(2)))
                     d2  = loc(2) - f2
-                    self%polcyc1_mat(i, k,  1)  = cyci_1d(lims(1,:), f1)
-                    self%polcyc1_mat(i, k,  2)  = cyci_1d(lims(1,:), f1+1)
-                    self%polcyc2_mat(i, k,  1)  = cyci_1d(lims(2,:), f2)
-                    self%polcyc2_mat(i, k,  2)  = cyci_1d(lims(2,:), f2+1)
+                    self%polcyc1_mat(i, k,  1)  = cyci_1d(lims(:,1), f1)
+                    self%polcyc1_mat(i, k,  2)  = cyci_1d(lims(:,1), f1+1)
+                    self%polcyc2_mat(i, k,  1)  = cyci_1d(lims(:,2), f2)
+                    self%polcyc2_mat(i, k,  2)  = cyci_1d(lims(:,2), f2+1)
                     w      = 1.
                     w(1,:) = w(1,:) * (1.0-d1)
                     w(:,1) = w(:,1) * (1.0-d2)
