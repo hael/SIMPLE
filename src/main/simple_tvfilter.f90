@@ -15,7 +15,8 @@ type :: tvfilter
     logical       :: existence
 contains
     procedure          :: new => new_tvfilter
-    procedure          :: apply_filter ! 2D by default
+    procedure          :: apply_filter     ! 2D by default
+    procedure          :: apply_filter_fsc ! 2D by default
     procedure          :: apply_filter_3d
     procedure          :: prepare_interpolation
     procedure          :: interp_val
@@ -85,7 +86,7 @@ contains
         real,              intent(in)    :: fsc(:)
         real,              intent(in)    :: n_voxel(:)
         integer :: img_ldim(3)
-        integer :: dims1, h, k, sh
+        integer :: dims1, h, k, sh, filtsz
         real    :: SNR, nr
         logical :: img_ft_prev
         complex(kind=c_float_complex), pointer :: cmat_img(:,:,:)
@@ -100,12 +101,12 @@ contains
         if (.not. img_ft_prev) call img%fft()
         
         call img%get_cmat_ptr(cmat_img)
-        dims1 = int(img_ldim(1)/2)+1
-
+        dims1  = int(img_ldim(1)/2)+1
+        filtsz = img%get_filtsz()
         do h=1, dims1
             do k=1, img_ldim(2)
                 sh = nint(hyp(real(h),real(k)))
-                if (sh < 1 .or. sh > dims1) cycle
+                if (sh < 1 .or. sh > filtsz) cycle
 
                 nr = real(n_voxel(sh))
                 if (fsc(sh) > 1 .or. fsc(sh) < 1/sqrt(nr)) then
