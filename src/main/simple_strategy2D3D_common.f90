@@ -522,7 +522,7 @@ contains
                 if( params_glob%l_ran_noise_ph )then
                     ! randomize Fourier phases below noise power in a global manner
                     if( params_glob%clsfrcs.eq.'no' )&
-                    &call build_glob%vol%ran_phases_below_noise_power(build_glob%vol_odd)
+                    &call build_glob%vol%ran_phases_below_noise_power(build_glob%vol_odd, params_glob%lplim_crit)
                 endif
             endif
         else

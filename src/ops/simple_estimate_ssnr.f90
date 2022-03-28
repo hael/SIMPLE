@@ -198,7 +198,7 @@ contains
                 do i = lb(1), ub(1)
                     if( .not.l_mask(i,j,k) ) cycle
                     ithr = omp_get_thread_num() + 1
-                    call set_subvols_msk_fft_filter_ifft([i,j,k], ithr)
+                    call set_subvols_msk_fft_phran_ifft([i,j,k], ithr)
                     call even%set_rmat_at(i,j,k, subvols_even(ithr)%get_rmat_at(CPIX,CPIX,CPIX))
                     call odd%set_rmat_at(i,j,k, subvols_odd(ithr)%get_rmat_at(CPIX,CPIX,CPIX))
                 end do
@@ -214,7 +214,7 @@ contains
 
         contains
 
-            subroutine set_subvols_msk_fft_filter_ifft( loc, ithr )
+            subroutine set_subvols_msk_fft_phran_ifft( loc, ithr )
                 integer, intent(in) :: loc(3), ithr
                 integer  :: lb(3), ub(3), i, j, k, ii, jj, kk, isub, jsub, ksub
                 call subvols_even(ithr)%zero_and_unflag_ft
@@ -254,7 +254,7 @@ contains
                 ! back to real space
                 call subvols_even(ithr)%ifft
                 call subvols_odd(ithr)%ifft
-            end subroutine set_subvols_msk_fft_filter_ifft
+            end subroutine set_subvols_msk_fft_phran_ifft
 
     end subroutine nonuniform_phase_ran
 
