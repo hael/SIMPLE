@@ -777,15 +777,15 @@ contains
     end subroutine shft
 
     !> one-dimensional symmetric hard window
-    pure subroutine sqwin_1d_1( x, winsz, win )
-        real,    intent(in)  :: x      !< input point
-        real,    intent(in)  :: winsz  !< window size
-        integer, intent(out) :: win(2) !< window
+    pure subroutine sqwin_1d_1( x, winsz, lowerlim, upperlim )
+        real,    intent(in)  :: x                   !< input point
+        real,    intent(in)  :: winsz               !< window size
+        integer, intent(out) :: lowerlim, upperlim  !< window bounds
         integer :: iwinsz
-        win(:) = nint(x)
-        iwinsz = ceiling(winsz - 0.5)
-        win(1) = win(1)-iwinsz
-        win(2) = win(2)+iwinsz
+        iwinsz   = ceiling(winsz - 0.5)
+        lowerlim = nint(x)
+        upperlim = lowerlim + iwinsz
+        lowerlim = lowerlim - iwinsz
     end subroutine sqwin_1d_1
 
     !> one-dimensional symmetric hard window with limits
@@ -806,8 +806,8 @@ contains
         real,    intent(in)  :: x,y      !< input point
         real,    intent(in)  :: winsz    !< window size
         integer, intent(out) :: win(2,2) !< window
-        call sqwin_1d_1(x, winsz, win(1,:))
-        call sqwin_1d_1(y, winsz, win(2,:))
+        call sqwin_1d_1(x, winsz, win(1,1), win(1,2))
+        call sqwin_1d_1(y, winsz, win(2,1), win(2,2))
     end subroutine sqwin_2d_1
 
     !> two-dimensional symmetric hard window with limits
@@ -825,9 +825,9 @@ contains
         real,    intent(in)  :: x,y,z    !< input point
         real,    intent(in)  :: winsz    !< window size
         integer, intent(out) :: win(3,2) !< window
-        call sqwin_1d_1(x, winsz, win(1,:))
-        call sqwin_1d_1(y, winsz, win(2,:))
-        call sqwin_1d_1(z, winsz, win(3,:))
+        call sqwin_1d_1(x, winsz, win(1,1), win(1,2))
+        call sqwin_1d_1(y, winsz, win(2,1), win(2,2))
+        call sqwin_1d_1(z, winsz, win(3,1), win(3,2))
     end subroutine sqwin_3d_1
 
     !> three-dimensional symmetric hard window with limits

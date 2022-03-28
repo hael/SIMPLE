@@ -122,7 +122,7 @@ contains
         use simple_math, only: sqwin_1d
         class(kbinterpol), intent(in) :: self
         integer :: win(2)
-        call sqwin_1d(0., self%Whalf, win)
+        call sqwin_1d(0., self%Whalf, win(1), win(2))
         get_wdim = win(2) - win(1) + 1
     end function get_wdim
 
