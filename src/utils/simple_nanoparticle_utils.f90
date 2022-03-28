@@ -8,7 +8,7 @@ use simple_qr_solve
 use simple_atoms, only: atoms
 implicit none
 
-public :: fit_lattice, calc_contact_scores, run_cn_analysis, strain_analysis
+public :: phasecorr_one_atom, fit_lattice, calc_contact_scores, run_cn_analysis, strain_analysis
 public :: atoms_mask, read_pdb2matrix, write_matrix2pdb, find_couples
 public :: remove_atoms, find_atoms_subset, dock_nanosPDB
 private
@@ -18,6 +18,34 @@ logical, parameter :: DEBUG = .false.
 integer, parameter :: NSTRAIN_COMPS = 7
 
 contains
+
+    ! FORMULA: phasecorr = ifft(fft(field).*conj(fft(reference)));
+    subroutine phasecorr_one_atom( img_in, img_out, element )
+        use simple_image, only: image
+        class(image),     intent(inout) :: img_in, img_out
+        character(len=2), intent(in)    :: element
+        type(image) :: one_atom, img_copy
+        type(atoms) :: atom
+        real        :: cutoff, smpd
+        integer     :: ldim(3)
+        if( .not. img_in%exists() ) THROW_HARD('input image (3D reference) must be constructed')
+        smpd = img_in%get_smpd()
+        ldim = img_in%get_ldim()
+        call img_copy%copy(img_in)
+        call img_out%new(ldim, smpd)
+        call img_out%set_ft(.true.)
+        call one_atom%new(ldim,smpd)
+        cutoff = 8.*smpd
+        call atom%new(1)
+        call atom%set_element(1,element)
+        call atom%set_coord(1,smpd*(real(ldim)/2.)) ! DO NOT NEED THE +1
+        call atom%convolve(one_atom, cutoff)
+        call one_atom%fft()
+        call img_copy%fft()
+        call img_copy%phase_corr(one_atom,img_out,1.)
+        call img_copy%kill
+        call one_atom%kill()
+    end subroutine phasecorr_one_atom
 
     ! Identify the bound for defining the neighbourhood in
     ! fit_lattice and strain_analysis routines below

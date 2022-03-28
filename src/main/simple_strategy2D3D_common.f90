@@ -484,7 +484,8 @@ contains
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
     subroutine readrefvols_filter_nonuniformly( cline, fname_even, fname_odd )
-        use simple_estimate_ssnr, only: nonuniform_phase_ran
+        use simple_estimate_ssnr,      only: nonuniform_phase_ran
+        use simple_nanoparticle_utils, only: phasecorr_one_atom
         class(cmdline),             intent(in) :: cline
         character(len=*),           intent(in) :: fname_even
         character(len=*), optional, intent(in) :: fname_odd
@@ -492,6 +493,7 @@ contains
         ! ensure correct build_glob%vol dim
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         call build_glob%vol%read(fname_even)
+        if( cline%defined('element') ) call phasecorr_one_atom(build_glob%vol, build_glob%vol, params_glob%element)
         if( present(fname_odd) )then
             call build_glob%vol_odd%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
             call build_glob%vol_odd%read(fname_odd)
