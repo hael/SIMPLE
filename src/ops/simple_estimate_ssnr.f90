@@ -27,6 +27,20 @@ contains
         end do
     end function fsc2ssnr
 
+    !> \brief  converts the FSC to TV-Filter SSNR/(SSNR + 1)
+    function fsc2TVssnr( corrs ) result(TVssnr)
+        real, intent(in)  :: corrs(:)   !< instrument FSC
+        real, allocatable :: TVssnr(:)  !< instrument TV-Filter SSNR/(SSNR + 1)
+        real, allocatable :: ssnr(:)
+        integer :: nyq, k
+        real    :: fsc
+        nyq  = size(corrs)
+        allocate( ssnr(nyq) )
+        ssnr = fsc2ssnr(corrs)
+        allocate( TVssnr(nyq) )
+        TVssnr = ssnr/(ssnr + 1)
+    end function fsc2TVssnr
+
     !> \brief  converts the FSC to the optimal low-pass filter
     function fsc2optlp( corrs ) result( filt )
         real, intent(in)  :: corrs(:) !< fsc plot (correlations)
