@@ -32,14 +32,15 @@ contains
 
     !> calculates Fourier shell correlation from Even/Odd Volume pairs
     subroutine exec_fsc( self, cline )
+        use simple_estimate_ssnr, only: fsc2optlp_sub, fsc2TVfilt
         class(fsc_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
         type(parameters)  :: params
-        type(image)       :: even, odd
+        type(image)       :: even, odd, e_copy
         type(masker)      :: mskvol
-        integer           :: j, find_plate, k_hp, k_lp
+        integer           :: j, find_plate, k_hp, k_lp, nyq, flims(3,2)
         real              :: res_fsc05, res_fsc0143
-        real, allocatable :: res(:), corrs(:)
+        real, allocatable :: res(:), corrs(:), filt_optlp(:), filt_tv(:)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         ! read even/odd pair
@@ -68,10 +69,11 @@ contains
         call odd%fft()
         ! calculate FSC
         res = even%get_res()
-        allocate(corrs(even%get_filtsz()))
+        nyq = even%get_filtsz()
+        allocate(corrs(nyq), filt_optlp(nyq), filt_tv(nyq))
         call even%fsc(odd, corrs)
         if( params%l_phaseplate ) call phaseplate_correct_fsc(corrs, find_plate)
-        do j=1,size(res)
+        do j=1,nyq
            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
         end do
         call get_resolution(corrs, res, res_fsc05, res_fsc0143)
@@ -80,6 +82,19 @@ contains
         write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
         write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
         write(logfhandle,'(A,1X,F8.4)') '>>> MEDIAN FSC (SPECSCORE):', median_nocopy(corrs(k_hp:k_lp))
+        flims = even%loop_lims(2)
+        call fsc2optlp_sub(nyq, corrs, filt_optlp)
+        call fsc2TVfilt(corrs, flims, filt_tv)
+        call e_copy%copy(even)
+        call even%apply_filter(filt_optlp)
+        call e_copy%apply_filter(filt_tv)
+        call even%ifft
+        call e_copy%ifft
+        call even%write('filtered_optlp.mrc')
+        call e_copy%write('filtered_tv.mrc')
+        do j=1,nyq
+            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> OPTLP:', filt_optlp(j), '>>> TV:', filt_tv(j)
+        end do
         call even%kill
         call odd%kill
         ! end gracefully

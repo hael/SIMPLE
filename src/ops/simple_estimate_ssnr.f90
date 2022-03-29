@@ -5,7 +5,7 @@ module simple_estimate_ssnr
 include 'simple_lib.f08'
 implicit none
 
-public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
+public :: fsc2ssnr, fsc2TVfilt, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
 public :: nonuniform_phase_ran, nonuniform_fsc_lp, local_res_lp
 public :: plot_fsc, lowpass_from_klim, mskdiam2lplimits, calc_dose_weights
 private
@@ -15,8 +15,8 @@ contains
 
     !> \brief  converts the FSC to SSNR (the 2.* is because of the division of the data)
     function fsc2ssnr( corrs ) result( ssnr )
-        real, intent(in)  :: corrs(:) !< instrument FSC
-        real, allocatable :: ssnr(:)  !< instrument SSNR
+        real, intent(in)  :: corrs(:) !< FSC
+        real, allocatable :: ssnr(:)  !< SSNR
         integer :: nyq, k
         real    :: fsc
         nyq = size(corrs)
@@ -28,18 +28,35 @@ contains
     end function fsc2ssnr
 
     !> \brief  converts the FSC to TV-Filter SSNR/(SSNR + 1)
-    function fsc2TVssnr( corrs ) result(TVssnr)
-        real, intent(in)  :: corrs(:)   !< instrument FSC
-        real, allocatable :: TVssnr(:)  !< instrument TV-Filter SSNR/(SSNR + 1)
-        real, allocatable :: ssnr(:)
-        integer :: nyq, k
-        real    :: fsc
-        nyq  = size(corrs)
-        allocate( ssnr(nyq) )
-        ssnr = fsc2ssnr(corrs)
-        allocate( TVssnr(nyq) )
-        TVssnr = ssnr/(ssnr + 1)
-    end function fsc2TVssnr
+    subroutine fsc2TVfilt( fsc, flims, TVfilt)
+        real,    intent(in)    :: fsc(:)            !< FSC correlations (depnds on k <=> resolution)
+        integer, intent(in)    :: flims(3,2)
+        real,    intent(inout) :: TVfilt(size(fsc)) !< TV-Filter derived from FSC
+        integer :: nfcomps(size(fsc)), nyq, h, k, l, sh
+        real :: nr, snr
+        nyq     = size(fsc)
+        nfcomps = 0
+        do h = flims(1,1),flims(1,2)
+            do k = flims(2,1),flims(2,2)
+                do l = flims(3,1),flims(3,2)
+                    sh = nint(hyp(real(h),real(k),real(l)))
+                    if (sh < 1 .or. sh > nyq) cycle
+                    nfcomps(sh) = nfcomps(sh) + 1
+                end do
+            end do
+        end do
+        do k = 1,nyq
+            nr = real(nfcomps(k))
+            if( fsc(k) > 1. )then ! round-off error
+                TVfilt(k) = 1.
+            else if( fsc(k) < 1./sqrt(nr) )then
+                TVfilt(k) = 0.
+            else
+                snr = sqrt(1./nr - (1./sqrt(nr) - fsc(k))/(1. - fsc(k))) - 1./sqrt(nr)
+                TVfilt(k) = snr / (snr + 1.)
+            endif
+        enddo
+    end subroutine fsc2TVfilt
 
     !> \brief  converts the FSC to the optimal low-pass filter
     function fsc2optlp( corrs ) result( filt )

@@ -1142,6 +1142,7 @@ contains
         integer, allocatable :: inds_here(:)
         integer :: i, cnt, n_nozero, ifirst, ilast, sz, mincnt
         real    :: val
+        logical :: first_round
         ! gather info (states & counts & indices)
         allocate(states(fromto(1):fromto(2)), counts(fromto(1):fromto(2)), inds_here(fromto(1):fromto(2)))
         do i = fromto(1), fromto(2)
@@ -1154,8 +1155,8 @@ contains
             inds_here(i)  = i
         end do
         n_nozero  = count(states > 0)
-        nsamples  = nint(update_frac * real(n_nozero))
-        if( n_nozero == nsamples .or. all(counts == 0) )then ! update_frac is 1.0 .or. all(counts == 0)
+        nsamples  = min(n_nozero, nint(update_frac * real(n_nozero)))
+        if( n_nozero == nsamples )then ! update_frac is 1.0
             mask = .false.
             cnt  = 0
             do i = fromto(1), fromto(2)
@@ -1168,7 +1169,12 @@ contains
             end do
         else
             ! find the minimum updatecnt
-            mincnt = minval(counts, mask=states > 0)
+            first_round = all(counts == 0)
+            if( first_round )then
+                mincnt = 0
+            else
+                mincnt = minval(counts, mask=states > 0)
+            endif
             ! identify the first & last occurence of mincnt
             ifirst = 0
             do i = fromto(1), fromto(2)
@@ -1178,9 +1184,7 @@ contains
                     ilast = i
                     if( ilast - ifirst + 1 == nsamples ) exit
                 endif
-            end do
-            ! update nsamples in case fewer were found
-            nsamples = ilast - ifirst + 1
+            end do      
             ! update mask & counters
             mask = .false.
             do i = ifirst, ilast
@@ -1189,9 +1193,12 @@ contains
                 val     = self%o(i)%get('updatecnt')
                 call self%o(i)%set('updatecnt', val + 1.0)
             end do
+            ! update nsamples in case fewer were found
+            nsamples = count(mask)
         endif
         if( allocated(inds) ) deallocate(inds)
         inds = pack(inds_here, mask=mask)
+        if( any(inds == 0) ) THROW_HARD('particle indices cannot be zero')
         deallocate(states, counts, inds_here)
     end subroutine sample4update_and_incrcnt
 
