@@ -78,7 +78,7 @@ contains
         type(oris)       :: spiral
         type(ctf)        :: tfun
         type(projector)  :: vol_pad
-        real             :: snr_pink, snr_detector, bfac, bfacerr
+        real             :: bfac, bfacerr
         integer          :: i, cnt, ntot
         logical          :: apply_ctf
         if( .not. cline%defined('mkdir')    ) call cline%set('mkdir', 'yes')
@@ -118,9 +118,6 @@ contains
             if( apply_ctf ) call build%spproj_field%rnd_ctf(params%kv, params%cs, params%fraca, params%defocus, params%dferr, params%astigerr)
         endif
         call build%spproj_field%write(params%outfile, [1,params%nptcls])
-        ! calculate snr:s
-        snr_pink = params%snr/0.2
-        snr_detector = params%snr/0.8
         ! prepare for image generation
         call build%vol%read(params%vols(1))
         call build%vol%mask(params%msk, 'soft')
@@ -152,9 +149,9 @@ contains
                 else
                     bfac = params%bfac+bfacerr
                 endif
-                call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, snr_pink, snr_detector, apply_ctf=apply_ctf)
+                call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, apply_ctf=apply_ctf)
             else
-                call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, snr_pink, snr_detector, bfac=bfac, apply_ctf=apply_ctf)
+                call simimg(build%img_pad, orientation, tfun, params%ctf, params%snr, bfac=bfac, apply_ctf=apply_ctf)
             endif
             ! clip
             call build%img_pad%clip(build%img)

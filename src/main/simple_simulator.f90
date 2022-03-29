@@ -4,7 +4,7 @@ implicit none
 
 contains
 
-    subroutine simimg( img, orientation, tfun, ctfflag, snr, snr_pink, snr_detector, bfac, apply_ctf )
+    subroutine simimg( img, orientation, tfun, ctfflag, snr, bfac, apply_ctf )
         use simple_image, only: image
         use simple_ori,   only: ori
         use simple_ctf,   only: ctf
@@ -12,7 +12,7 @@ contains
         class(ori),        intent(inout) :: orientation
         class(ctf),        intent(inout) :: tfun
         character(len=*),  intent(in)    :: ctfflag
-        real,              intent(in)    :: snr, snr_pink, snr_detector
+        real,              intent(in)    :: snr
         real,    optional, intent(in)    :: bfac
         logical, optional, intent(in)    :: apply_ctf
         logical :: aapply_ctf
@@ -21,8 +21,6 @@ contains
         if( present(apply_ctf) ) aapply_ctf = apply_ctf
         ! back FT (to make sure)
         call img%ifft()
-        ! add pink noise
-        if( snr < 3. ) call img%add_gauran(snr_pink)
         call img%fft()
         ! apply ctf/bfactor
         if( orientation%isthere('dfx') .and. orientation%isthere('dfy') .and. aapply_ctf )then
@@ -40,7 +38,7 @@ contains
         endif
         ! add detector noise
         call img%ifft()
-        if( snr < 3. ) call img%add_gauran(snr_detector)
+        call img%add_gauran(snr)
         if( .not. aapply_ctf ) return
         if( ctfflag .eq. 'flip' )then
             ! simulate phase-flipped images
