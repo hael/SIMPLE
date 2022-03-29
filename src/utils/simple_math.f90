@@ -4013,4 +4013,26 @@ contains
         enddo
     end subroutine eigsrt_dp
 
+    ! Compute the value of the Butterworth transfer function of order n(th)
+    ! at a given frequency s, with the cut-off frequency fc
+    ! SOURCE :
+    ! https://en.wikipedia.org/wiki/Butterworth_filter
+    function butterworth(s, n, fc) result(val)
+        real   , intent(in)  :: s
+        integer, intent(in)  :: n
+        real   , intent(in)  :: fc
+        real    :: val
+        complex :: Bn          ! Normalized Butterworth polynomial
+        complex :: j = (0, 1)  ! Complex identity: j = sqrt(-1)
+        complex :: js          ! frequency is multiplied by the complex identity j
+        integer :: k
+        val = 1.
+        Bn  = (1, 0)
+        js  = j*s/fc
+        do k = 0, int(n/2 - 1)
+            Bn = Bn*(js**2 - 2*js*cos(2*pi*(2*k+n+1)/(4*n)) + 1)
+        end do
+        val = 1/sqrt(real(Bn)**2 + aimag(Bn)**2)
+    end function butterworth
+
 end module simple_math
