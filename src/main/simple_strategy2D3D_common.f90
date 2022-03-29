@@ -321,7 +321,7 @@ contains
     !>  \brief  prepares one cluster centre image for alignment
     subroutine prep2Dref( pftcc, img_in, img_out, icls, center, xyz_in, xyz_out )
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_estimate_ssnr,    only: fsc2optlp_sub
+        use simple_estimate_ssnr,    only: fsc2optlp_sub, fsc2TVfilt
         use simple_polarizer,        only: polarizer
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(image),            intent(inout) :: img_in
@@ -330,6 +330,7 @@ contains
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
+        integer        :: flims(3,2)
         real           :: frc(build_glob%img%get_filtsz()), filter(build_glob%img%get_filtsz())
         real           :: xyz(3), sharg
         logical        :: do_center
@@ -358,8 +359,10 @@ contains
         endif
         ! filter
         call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+        flims = img_in%loop_lims(2)
         if( any(frc > 0.143) )then
-            call fsc2optlp_sub(build_glob%clsfrcs%get_filtsz(), frc, filter)
+            ! call fsc2optlp_sub(build_glob%clsfrcs%get_filtsz(), frc, filter)
+            call fsc2TVfilt(frc, flims, filter)
             if( params_glob%l_match_filt )then
                 call pftcc%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kstop))
             else
