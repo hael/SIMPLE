@@ -136,9 +136,9 @@ contains
     subroutine mskdiam2lplimits( mskdiam, lpstart,lpstop, lpcen )
         real, intent(in)  :: mskdiam
         real, intent(out) :: lpstart,lpstop, lpcen
-        lpstart = max(mskdiam/11., 15.)
-        lpstop  = max(mskdiam/22.,  5.)
-        lpcen   = max(mskdiam/6.,  30.)
+        lpstart = max(min(mskdiam/12., 15.),  8.)
+        lpstop  = min(max(mskdiam/22.,  5.),  8.)
+        lpcen   = min(max(mskdiam/6.,  20.), 30.)
     end subroutine mskdiam2lplimits
 
     ! Following Grant & Grigorieff; eLife 2015;4:e06980
