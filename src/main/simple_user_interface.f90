@@ -1622,7 +1622,7 @@ contains
         &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-comp map',& ! descr long
         &'single_exec',&                                        ! executable
-        &2, 3, 0, 0, 1, 1, 1, .false.)                         ! # entries in each group, requires sp_project
+        &2, 4, 0, 0, 1, 1, 1, .false.)                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
@@ -1635,6 +1635,7 @@ contains
         & 'Corr threshold for discarding atoms(0.3-0.5){0.5}', .false., 0.5)
         call detect_atoms%set_input('parm_ios', 3, 'use_thres', 'binary', 'Use contact-based thresholding', 'Use contact-based thresholding(yes|no){yes}', &
         & '(yes|no){yes}', .false., 'yes')
+        call detect_atoms%set_input('parm_ios', 4, 'cs_thres', 'num', 'Contact score thresholding', 'Use contact score threshold during autorefine3D_nano(2-3){2}', '(2-3){2}', .false., 2.)
         ! alternative inputs
         ! <empty>
         ! search controls

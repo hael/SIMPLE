@@ -432,13 +432,14 @@ contains
         call atoms_obj%kill
     end subroutine identify_lattice_params
 
-    subroutine identify_atomic_pos( self, a, l_fit_lattice, use_cs_thres, use_auto_corr_thres )
+    subroutine identify_atomic_pos( self, a, l_fit_lattice, use_cs_thres, use_auto_corr_thres, cs_thres )
         class(nanoparticle), intent(inout) :: self
         real,                intent(inout) :: a(3)                ! lattice parameters
         logical,             intent(in)    :: l_fit_lattice       ! fit lattice or use inputted
-        logical,             intent(in)    :: use_cs_thres        ! use or not contact score thres
+        logical,             intent(inout) :: use_cs_thres        ! use or not contact score thres
         logical,             intent(in)    :: use_auto_corr_thres ! true -> use automatic corr thres
-        logical     :: use_cn_thresh
+        integer, optional,   intent(in)    :: cs_thres
+        logical     :: use_cn_thresh, fixed_cs_thres
         type(image) :: simatms, img_cos
         type(atoms) :: atoms_obj
         ! MODEL BUILDING
@@ -455,7 +456,10 @@ contains
         ! discard atoms with low valid_corr
         call self%discard_low_valid_corr_atoms(use_auto_corr_thres)
         ! discard lowly coordinated atoms
-        if( use_cs_thres )then
+        fixed_cs_thres = present(cs_thres)
+        if( fixed_cs_thres )then
+            call self%discard_atoms_with_low_contact_score(use_cn_thresh, cs_thres)
+        else if( use_cs_thres )then
             call self%discard_atoms_with_low_contact_score(use_cn_thresh)
             if( use_cn_thresh ) call self%discard_lowly_coordinated(CN_THRESH_XTAL, a, l_fit_lattice)
         endif
@@ -907,9 +911,10 @@ contains
         write(logfhandle, '(A)') '>>> DISCARDING ATOMS WITH LOW VALID_CORR, COMPLETED'
     end subroutine discard_low_valid_corr_atoms
 
-    subroutine discard_atoms_with_low_contact_score( self, use_cn_thresh )
+    subroutine discard_atoms_with_low_contact_score( self, use_cn_thresh, cs_thres )
         class(nanoparticle), intent(inout) :: self
         logical,             intent(inout) :: use_cn_thresh
+        integer, optional,   intent(in)    :: cs_thres
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
         real, allocatable    :: centers_A(:,:) ! coordinates of the atoms in ANGSTROMS
         integer :: cscores(self%n_cc), cc, n_discard, cthresh, new_cthresh
@@ -923,12 +928,16 @@ contains
         write(logfhandle,'(A,F8.4)') 'Sigma  : ', cscore_stats%sdev
         write(logfhandle,'(A,F8.4)') 'Max    : ', cscore_stats%maxv
         write(logfhandle,'(A,F8.4)') 'Min    : ', cscore_stats%minv
-        cthresh = min(5,max(3,nint(cscore_stats%avg - cscore_stats%sdev)))
-        write(logfhandle,'(A,I3)') 'CONTACT SCORE THRESHOLD: ', cthresh
-        use_cn_thresh = .false.
-        if( cthresh == 5 )then ! highly crystalline
-            use_cn_thresh = .true.
-            return
+        if( .not. present(cs_thres) )then
+            cthresh = min(5,max(3,nint(cscore_stats%avg - cscore_stats%sdev)))
+            write(logfhandle,'(A,I3)') 'CONTACT SCORE THRESHOLD: ', cthresh
+            use_cn_thresh = .false.
+            if( cthresh == 5 )then ! highly crystalline
+                use_cn_thresh = .true.
+                return
+            endif
+        else
+            cthresh = cs_thres
         endif
         write(logfhandle, '(A)') '>>> DISCARDING OUTLIERS BASED ON CONTACT SCORE'
         call self%img_cc%get_imat(imat_cc)

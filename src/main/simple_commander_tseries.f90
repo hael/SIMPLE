@@ -886,6 +886,7 @@ contains
             call del_file(SPLITTED)
             iter = iter + 1
         end do
+        call cline_detect_atms%delete('cs_thres') ! 4 testing mild CS-based thresholding in loop
         call cline_detect_atms%set('use_thres', 'yes') ! use contact score threshold for final model building
         call xdetect_atms%execute(cline_detect_atms)
         call simple_mkdir(FINAL_MAPS)

@@ -245,6 +245,7 @@ type :: parameters
     integer :: cn_min=4            !< min std coord number for atoms in nanos
     integer :: cn_stop=10          !< rotational symmetry order stop index{10}
     integer :: corner=0            !< corner size(in pixels){0}
+    integer :: cs_thres=2          !< contact score threshold for discarding atoms during autorefine3D_nano
     integer :: cube=0              !< side size(in pixels){0}
     integer :: edge=6              !< edge size for softening molecular envelope(in pixels)
     integer :: eer_fraction=20     !< # of eer raw frames to fraction together
@@ -346,7 +347,6 @@ type :: parameters
     real    :: bw_ratio=0.3        !< ratio between foreground-background pixel desired in edge detection
     real    :: cenlp=20.           !< low-pass limit for binarisation in centering(in A){30 A}
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
-    real    :: cn_thres=5.         !< threshold (outliers removal based on coordination number)
     real    :: corr_thres=0.5      !< per-atom validation correlation threshold for discarding atoms
     real    :: ctfreslim=8.
     real    :: dcrit_rel=0.5       !< critical distance relative to box(0-1){0.5}
@@ -695,6 +695,7 @@ contains
         call check_iarg('cn_min',         self%cn_min)
         call check_iarg('cn_stop',        self%cn_stop)
         call check_iarg('corner',         self%corner)
+        call check_iarg('cs_thres',       self%cs_thres)
         call check_iarg('cube',           self%cube)
         call check_iarg('edge',           self%edge)
         call check_iarg('eer_fraction',   self%eer_fraction)
@@ -778,7 +779,6 @@ contains
         call check_rarg('bw_ratio',       self%bw_ratio)
         call check_rarg('cenlp',          self%cenlp)
         call check_rarg('cs',             self%cs)
-        call check_rarg('cn_thres',       self%cn_thres)
         call check_rarg('corr_thres',     self%corr_thres)
         call check_rarg('ctfreslim',      self%ctfreslim)
         call check_rarg('dcrit_rel',      self%dcrit_rel)
