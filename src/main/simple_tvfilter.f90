@@ -16,7 +16,6 @@ type :: tvfilter
 contains
     procedure          :: new => new_tvfilter
     procedure          :: apply_filter     ! 2D by default
-    procedure          :: apply_filter_fsc ! 2D by default
     procedure          :: apply_filter_3d
     procedure          :: prepare_interpolation
     procedure          :: interp_val

@@ -24,9 +24,9 @@ program simple_test_tv
     call img%fsc(img_in, fsc_val)
     print *, 'fsc (noisy vs filtered) = ', fsc_val
 
-    n_voxel = 2.
-    call tvfilter_obj%apply_filter_fsc(img_in, fsc_val, n_voxel)
-    call img_in%write(test_out_fsc, 1)
+    ! n_voxel = 2.
+    ! call tvfilter_obj%apply_filter_fsc(img_in, fsc_val, n_voxel)
+    ! call img_in%write(test_out_fsc, 1)
 
     
 end program simple_test_tv
