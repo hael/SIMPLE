@@ -126,7 +126,7 @@ do i=1,params%nptcls
     ! add
     call particle%add(graphene)
     ! simulate
-    call simimg(particle, orientation, tfun, params%ctf, params%snr, snr_pink, snr_detector, params%bfac)
+    call simimg(particle, orientation, tfun, params%ctf, params%snr, params%bfac)
     call particle%ifft
     ! clip & write
     call particle%clip(img)
