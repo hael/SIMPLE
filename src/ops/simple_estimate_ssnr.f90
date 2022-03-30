@@ -5,7 +5,7 @@ module simple_estimate_ssnr
 include 'simple_lib.f08'
 implicit none
 
-public :: fsc2ssnr, fsc2TVfilt, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
+public :: fsc2ssnr, fsc2TVfilt, fsc2TVfilt_fast, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
 public :: nonuniform_phase_ran, nonuniform_fscTVfilt, local_res_lp
 public :: plot_fsc, lowpass_from_klim, mskdiam2lplimits, calc_dose_weights
 private
@@ -302,7 +302,7 @@ contains
                 ! fft
                 call subvols_even(ithr)%fft
                 call subvols_odd(ithr)%fft
-                ! filter
+                ! randomize phases below noise power
                 call subvols_even(ithr)%ran_phases_below_noise_power(subvols_odd(ithr))
                 ! back to real space
                 call subvols_even(ithr)%ifft
@@ -311,26 +311,32 @@ contains
 
     end subroutine nonuniform_phase_ran
 
-    subroutine nonuniform_fscTVfilt( even, odd, mskimg, map2filt )
+    subroutine nonuniform_fscTVfilt( even, odd, mskimg, l_match_filt, map2filt )
         use simple_image, only: image
-        class(image), intent(inout) :: even, odd, mskimg, map2filt
+        class(image),            intent(inout) :: even, odd, mskimg
+        logical,                 intent(in)    :: l_match_filt
+        class (image), optional, intent(inout) :: map2filt
         integer,      parameter   :: SUBBOX=32, LSHIFT=15, RSHIFT=16, CPIX=LSHIFT + 1, CHUNKSZ=20
         real,         parameter   :: SUBMSK=real(SUBBOX)/2. - COSMSKHALFWIDTH - 1.
         type(image),  allocatable :: subvols_even(:)  ! one per thread
         type(image),  allocatable :: subvols_odd(:)   ! one per thread
         type(image),  allocatable :: subvols_2filt(:) ! one per thread
-        type(image)               :: tmpvol
+        type(image)               :: tmpvol, tmpvol_odd
         logical,      allocatable :: l_mask(:,:,:)
         real,         allocatable :: subvol_res(:)
         integer,      allocatable :: nfcomps(:)
         integer :: filtsz, ldim(3), i, j, h, k, l, funit, io_stat, npix, flims(3,2), sh
         integer :: find_hres, find_lres, ithr, lb(3), ub(3), min_find
         real    :: smpd
+        logical :: map2filt_present
         ! check input
-        if( even%is_ft()     ) THROW_HARD('even     vol FTed; nonuniform_fscTVfilt')
-        if( odd%is_ft()      ) THROW_HARD('odd      vol FTed; nonuniform_fscTVfilt')
-        if( mskimg%is_ft()   ) THROW_HARD('msk      vol FTed; nonuniform_fscTVfilt')
-        if( map2filt%is_ft() ) THROW_HARD('map2filt vol FTed; nonuniform_fscTVfilt')
+        if( even%is_ft()   ) THROW_HARD('even vol FTed; nonuniform_fscTVfilt')
+        if( odd%is_ft()    ) THROW_HARD('odd  vol FTed; nonuniform_fscTVfilt')
+        if( mskimg%is_ft() ) THROW_HARD('msk  vol FTed; nonuniform_fscTVfilt')
+        map2filt_present = present(map2filt)
+        if( map2filt_present )then
+            if( map2filt%is_ft() ) THROW_HARD('map2filt vol FTed; nonuniform_fscTVfilt')
+        endif
         ! set parameters
         ldim    = even%get_ldim()
         if( ldim(3) == 1 ) THROW_HARD('not intended for 2D images; nonuniform_fscTVfilt')
@@ -343,7 +349,7 @@ contains
         do ithr = 1, nthr_glob
             call subvols_even(ithr)%new(  [SUBBOX,SUBBOX,SUBBOX], smpd, wthreads=.false.)
             call subvols_odd(ithr)%new(   [SUBBOX,SUBBOX,SUBBOX], smpd, wthreads=.false.)
-            call subvols_2filt(ithr)%new( [SUBBOX,SUBBOX,SUBBOX], smpd, wthreads=.false.)
+            if( map2filt_present ) call subvols_2filt(ithr)%new( [SUBBOX,SUBBOX,SUBBOX], smpd, wthreads=.false.)
         end do
         subvol_res = subvols_even(1)%get_res()
         ! set # fcomps per shell
@@ -358,7 +364,12 @@ contains
                 end do
             end do
         end do
-        call tmpvol%new(ldim, smpd)
+        if( map2filt_present )then
+            call tmpvol%new(ldim, smpd)
+        else
+            call tmpvol%new(ldim, smpd)
+            call tmpvol_odd%new(ldim, smpd)
+        endif
         ! determine loop bounds for better load balancing in the following parallel loop
         call bounds_from_mask3D( l_mask, lb, ub )
         ! loop over pixels
@@ -369,19 +380,34 @@ contains
                     if( .not.l_mask(i,j,k) ) cycle
                     ithr = omp_get_thread_num() + 1
                     call set_subvols_msk_fft_fscTVfilt_ifft([i,j,k], ithr)
-                    call tmpvol%set_rmat_at(i,j,k, subvols_2filt(ithr)%get_rmat_at(CPIX,CPIX,CPIX))
+                    if( map2filt_present )then
+                        call tmpvol%set_rmat_at(i,j,k, subvols_2filt(ithr)%get_rmat_at(CPIX,CPIX,CPIX))
+                    else
+                        call tmpvol%set_rmat_at(i,j,k, subvols_even(ithr)%get_rmat_at(CPIX,CPIX,CPIX))
+                        call tmpvol_odd%set_rmat_at(i,j,k, subvols_odd(ithr)%get_rmat_at(CPIX,CPIX,CPIX))
+                    endif
                 end do
             end do
         end do
         !$omp end parallel do
-        call map2filt%copy(tmpvol)
+        if( map2filt_present )then
+            call map2filt%copy(tmpvol)
+        else
+            call even%copy(tmpvol)
+            call odd%copy(tmpvol_odd)
+        endif
         ! destruct
         do ithr = 1, nthr_glob
             call subvols_even(ithr)%kill
             call subvols_odd(ithr)%kill
-            call subvols_2filt(ithr)%kill
+            if( map2filt_present ) call subvols_2filt(ithr)%kill
         end do
-        call tmpvol%kill
+        if( map2filt_present )then
+            call tmpvol%kill
+        else
+            call tmpvol%kill
+            call tmpvol_odd%kill
+        endif
         deallocate(l_mask)
 
     contains
@@ -392,7 +418,7 @@ contains
             real    :: corrs(filtsz), filt(filtsz)
             call subvols_even(ithr)%zero_and_unflag_ft
             call subvols_odd(ithr)%zero_and_unflag_ft
-            call subvols_2filt(ithr)%zero_and_unflag_ft
+            if( map2filt_present ) call subvols_2filt(ithr)%zero_and_unflag_ft
             ! set bounds
             lb = loc - LSHIFT
             ub = loc + RSHIFT
@@ -411,7 +437,7 @@ contains
                         ksub = kk + LSHIFT + 1
                         call subvols_even(ithr)%set_rmat_at(  isub,jsub,ksub, even%get_rmat_at(i,j,k))
                         call subvols_odd(ithr)%set_rmat_at(   isub,jsub,ksub, odd%get_rmat_at(i,j,k))
-                        call subvols_2filt(ithr)%set_rmat_at( isub,jsub,ksub, map2filt%get_rmat_at(i,j,k))
+                        if( map2filt_present ) call subvols_2filt(ithr)%set_rmat_at( isub,jsub,ksub, map2filt%get_rmat_at(i,j,k))
                         ii = ii + 1
                     enddo
                     jj = jj + 1
@@ -421,21 +447,39 @@ contains
             ! mask
             call subvols_even(ithr)%mask(  SUBMSK, 'soft')
             call subvols_odd(ithr)%mask(   SUBMSK, 'soft')
-            call subvols_2filt(ithr)%mask( SUBMSK, 'soft')
+            if( map2filt_present ) call subvols_2filt(ithr)%mask( SUBMSK, 'soft')
             ! fft
             call subvols_even(ithr)%fft
             call subvols_odd(ithr)%fft
-            call subvols_2filt(ithr)%fft
+            if( map2filt_present ) call subvols_2filt(ithr)%fft
             ! fsc
             call subvols_even(ithr)%fsc(subvols_odd(ithr), corrs)
-            ! TV filter
+            ! calculate TV filter
             call fsc2TVfilt_fast(corrs, nfcomps, filt)
+            ! randomize phases below noise power
+            call subvols_even(ithr)%ran_phases_below_noise_power(subvols_odd(ithr))
             ! apply TV filter
-            call subvols_2filt(ithr)%apply_filter(filt)
-            ! back to real space
-            call subvols_even(ithr)%zero_and_unflag_ft
-            call subvols_odd(ithr)%zero_and_unflag_ft
-            call subvols_2filt(ithr)%ifft
+            if( map2filt_present )then
+                if( l_match_filt )then
+                    call subvols_2filt(ithr)%shellnorm_and_apply_filter(filt)
+                else
+                    call subvols_2filt(ithr)%apply_filter(filt)
+                endif
+                ! back to real space
+                call subvols_even(ithr)%zero_and_unflag_ft
+                call subvols_odd(ithr)%zero_and_unflag_ft
+                call subvols_2filt(ithr)%ifft
+            else
+                if( l_match_filt )then
+                    call subvols_even(ithr)%shellnorm_and_apply_filter(filt)
+                    call subvols_odd(ithr)%shellnorm_and_apply_filter(filt)
+                else
+                    call subvols_even(ithr)%apply_filter(filt)
+                    call subvols_odd(ithr)%apply_filter(filt)
+                endif
+                call subvols_even(ithr)%ifft
+                call subvols_odd(ithr)%ifft
+            endif
         end subroutine set_subvols_msk_fft_fscTVfilt_ifft
 
     end subroutine nonuniform_fscTVfilt
