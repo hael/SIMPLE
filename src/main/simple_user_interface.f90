@@ -2461,11 +2461,12 @@ contains
         &'Nonuniform low-pass filtering',&                      ! descr_short
         &'is a program for nonuniform low-pass filtering by zeroing F-comps below noise in e/o maps',& ! descr_long
         &'simple_exec',&                                        ! executable
-        &2, 1, 0, 0, 0, 2, 1, .false.)                          ! # entries in each group, requires sp_project
+        &3, 1, 0, 0, 0, 2, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call nonuniform_filter%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
-        call nonuniform_filter%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
+        call nonuniform_filter%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',       'Odd volume',       'vol1.mrc file', .true., '')
+        call nonuniform_filter%set_input('img_ios', 2, 'vol2', 'file', 'Even volume',      'Even volume',      'vol2.mrc file', .true., '')
+        call nonuniform_filter%set_input('img_ios', 3, 'vol3', 'file', 'Volume to filter', 'Volume to filter', 'vol3.mrc file', .true., '')
         ! parameter input/output
         call nonuniform_filter%set_input('parm_ios', 1, smpd)
         ! alternative inputs
