@@ -845,10 +845,13 @@ contains
         call cline_refine3D_nano%set('keepvol',  'yes')
         call cline_refine3D_nano%set('maxits',   real(params%maxits_between)) ! turn maxits_between into maxits (max # iterations between model building)
         call cline_refine3D_nano%delete('maxits_between')
+        call cline_refine3D_nano%set('silence_fsc', 'yes')       ! to avoid excessive printing
         ! then update cline_detect_atoms accordingly
         call cline_detect_atms%set('prg', 'detect_atoms')
         call cline_detect_atms%set('vol1', RECVOL)               ! this is ALWYAS going to be the input volume to detect_atoms
-        call cline_detect_atms%set('use_thres', 'no')            ! no thresholding during refinement
+        if( .not. cline%defined('cs_thres') )then                ! mild cs tresholding (2-3)
+            call cline_detect_atms%set('use_thres', 'no')        ! no thresholding during refinement
+        endif
         iter = 0
         do i = 1, params%maxits
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user
