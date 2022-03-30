@@ -164,11 +164,11 @@ contains
     ! end subroutine exec_local_res
 
     subroutine exec_nonuniform_filter( self, cline )
-        use simple_estimate_ssnr, only: nonuniform_phase_ran
+        use simple_estimate_ssnr, only: nonuniform_fscTVfilt
         class(nonuniform_filter_commander), intent(inout) :: self
-        class(cmdline),                        intent(inout) :: cline
+        class(cmdline),                     intent(inout) :: cline
         type(parameters) :: params
-        type(image)      :: even, odd
+        type(image)      :: even, odd, map2filt
         type(masker)     :: mskvol
         logical          :: have_mask_file
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -176,8 +176,10 @@ contains
         ! read even/odd pair
         call even%new([params%box,params%box,params%box], params%smpd)
         call odd%new([params%box,params%box,params%box],  params%smpd)
+        call map2filt%new([params%box,params%box,params%box],  params%smpd)
         call odd%read(params%vols(1))
         call even%read(params%vols(2))
+        call map2filt%read(params%vols(3))
         have_mask_file = .false.
         if( cline%defined('mskfile') )then
             if( file_exists(params%mskfile) )then
@@ -197,18 +199,21 @@ contains
         else
             call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
         endif
-        call nonuniform_phase_ran(even, odd, mskvol)
+        call nonuniform_fscTVfilt(even, odd, mskvol, map2filt)
         if( have_mask_file )then
             call mskvol%read(params%mskfile)
-            call even%mul(mskvol)
-            call odd%mul(mskvol)
+            ! call even%mul(mskvol)
+            ! call odd%mul(mskvol)
+            call map2filt%mul(mskvol)
             call mskvol%kill
         endif
-        call even%write('nonuniform_filter_even.mrc')
-        call odd%write('nonuniform_filter_odd.mrc')
+        ! call even%write('nonuniform_filter_even.mrc')
+        ! call odd%write('nonuniform_filter_odd.mrc')
+        call map2filt%write('nonuniformly_filtered.mrc')
         ! destruct
         call even%kill
         call odd%kill
+        call map2filt%kill
         ! end gracefully
         call simple_end('**** SIMPLE_NONUNIFORM_FILTER NORMAL STOP ****')
     end subroutine exec_nonuniform_filter

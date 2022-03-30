@@ -6,7 +6,7 @@ include 'simple_lib.f08'
 implicit none
 
 public :: fsc2ssnr, fsc2TVfilt, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
-public :: nonuniform_phase_ran, nonuniform_fsc_lp, local_res_lp
+public :: nonuniform_phase_ran, nonuniform_fscTVfilt, local_res_lp
 public :: plot_fsc, lowpass_from_klim, mskdiam2lplimits, calc_dose_weights
 private
 #include "simple_local_flags.inc"
@@ -28,12 +28,12 @@ contains
     end function fsc2ssnr
 
     !> \brief  converts the FSC to TV-Filter SSNR/(SSNR + 1)
-    subroutine fsc2TVfilt( fsc, flims, TVfilt)
+    subroutine fsc2TVfilt( fsc, flims, TVfilt )
         real,    intent(in)    :: fsc(:)            !< FSC correlations (depnds on k <=> resolution)
         integer, intent(in)    :: flims(3,2)
         real,    intent(inout) :: TVfilt(size(fsc)) !< TV-Filter derived from FSC
         integer :: nfcomps(size(fsc)), nyq, h, k, l, sh
-        real :: nr, snr
+        real :: nr, snr,  one_o_sqrt_nr
         nyq     = size(fsc)
         nfcomps = 0
         do h = flims(1,1),flims(1,2)
@@ -47,16 +47,38 @@ contains
         end do
         do k = 1,nyq
             nr = real(nfcomps(k))
+            one_o_sqrt_nr = 1./sqrt(nr)
             if( fsc(k) > 1. )then ! round-off error
                 TVfilt(k) = 1.
-            else if( fsc(k) < 1./sqrt(nr) )then
+            else if( fsc(k) < one_o_sqrt_nr )then
                 TVfilt(k) = 0.
             else
-                snr = sqrt(1./nr - (1./sqrt(nr) - fsc(k))/(1. - fsc(k))) - 1./sqrt(nr)
+                snr = sqrt(1./nr - (one_o_sqrt_nr - fsc(k))/(1. - fsc(k))) - one_o_sqrt_nr
                 TVfilt(k) = snr / (snr + 1.)
             endif
         enddo
     end subroutine fsc2TVfilt
+
+    subroutine fsc2TVfilt_fast( fsc, nfcomps, TVfilt )
+        real,    intent(in)    :: fsc(:)            !< FSC correlations (depnds on k <=> resolution)
+        integer, intent(in)    :: nfcomps(size(fsc))
+        real,    intent(inout) :: TVfilt(size(fsc)) !< TV-Filter derived from FSC
+        integer :: nyq, h, k, l, sh
+        real :: nr, snr, one_o_sqrt_nr
+        nyq = size(fsc)
+        do k = 1,nyq
+            nr = real(nfcomps(k))
+            one_o_sqrt_nr = 1./sqrt(nr)
+            if( fsc(k) > 1. )then ! round-off error
+                TVfilt(k) = 1.
+            else if( fsc(k) < one_o_sqrt_nr )then
+                TVfilt(k) = 0.
+            else
+                snr = sqrt(1./nr - (one_o_sqrt_nr - fsc(k))/(1. - fsc(k))) - one_o_sqrt_nr
+                TVfilt(k) = snr / (snr + 1.)
+            endif
+        enddo
+    end subroutine fsc2TVfilt_fast
 
     !> \brief  converts the FSC to the optimal low-pass filter
     function fsc2optlp( corrs ) result( filt )
@@ -289,11 +311,9 @@ contains
 
     end subroutine nonuniform_phase_ran
 
-    subroutine nonuniform_fsc_lp( even, odd, mskimg, map2filt, fsc_crit, locres_finds )
+    subroutine nonuniform_fscTVfilt( even, odd, mskimg, map2filt )
         use simple_image, only: image
-        class(image),         intent(inout) :: even, odd, mskimg, map2filt
-        real,                 intent(in)    :: fsc_crit
-        integer, allocatable, intent(inout) :: locres_finds(:,:,:)
+        class(image), intent(inout) :: even, odd, mskimg, map2filt
         integer,      parameter   :: SUBBOX=32, LSHIFT=15, RSHIFT=16, CPIX=LSHIFT + 1, CHUNKSZ=20
         real,         parameter   :: SUBMSK=real(SUBBOX)/2. - COSMSKHALFWIDTH - 1.
         type(image),  allocatable :: subvols_even(:)  ! one per thread
@@ -302,31 +322,42 @@ contains
         type(image)               :: tmpvol
         logical,      allocatable :: l_mask(:,:,:)
         real,         allocatable :: subvol_res(:)
-        integer :: filtsz, ldim(3), i, j, k, funit, io_stat, npix
+        integer,      allocatable :: nfcomps(:)
+        integer :: filtsz, ldim(3), i, j, h, k, l, funit, io_stat, npix, flims(3,2), sh
         integer :: find_hres, find_lres, ithr, lb(3), ub(3), min_find
         real    :: smpd
         ! check input
-        if( even%is_ft()     ) THROW_HARD('even     vol FTed; local_res')
-        if( odd%is_ft()      ) THROW_HARD('odd      vol FTed; local_res')
-        if( mskimg%is_ft()   ) THROW_HARD('msk      vol FTed; local_res')
-        if( map2filt%is_ft() ) THROW_HARD('map2filt vol FTed; local_res')
+        if( even%is_ft()     ) THROW_HARD('even     vol FTed; nonuniform_fscTVfilt')
+        if( odd%is_ft()      ) THROW_HARD('odd      vol FTed; nonuniform_fscTVfilt')
+        if( mskimg%is_ft()   ) THROW_HARD('msk      vol FTed; nonuniform_fscTVfilt')
+        if( map2filt%is_ft() ) THROW_HARD('map2filt vol FTed; nonuniform_fscTVfilt')
         ! set parameters
         ldim    = even%get_ldim()
-        if( ldim(3) == 1 ) THROW_HARD('not intended for 2D images; local_res')
+        if( ldim(3) == 1 ) THROW_HARD('not intended for 2D images; nonuniform_fscTVfilt')
         smpd    = even%get_smpd()
         l_mask  = mskimg%bin2logical()
         npix    = count(l_mask)
         filtsz  = fdim(SUBBOX) - 1
         ! construct
-        allocate(subvols_even(nthr_glob), subvols_odd(nthr_glob), subvols_2filt(nthr_glob))
+        allocate(subvols_even(nthr_glob), subvols_odd(nthr_glob), subvols_2filt(nthr_glob), nfcomps(filtsz))
         do ithr = 1, nthr_glob
             call subvols_even(ithr)%new(  [SUBBOX,SUBBOX,SUBBOX], smpd, wthreads=.false.)
             call subvols_odd(ithr)%new(   [SUBBOX,SUBBOX,SUBBOX], smpd, wthreads=.false.)
             call subvols_2filt(ithr)%new( [SUBBOX,SUBBOX,SUBBOX], smpd, wthreads=.false.)
         end do
         subvol_res = subvols_even(1)%get_res()
-        if( allocated(locres_finds) ) deallocate(locres_finds)
-        allocate(locres_finds(ldim(1),ldim(2),ldim(3)), source=0)
+        ! set # fcomps per shell
+        flims   = subvols_even(1)%loop_lims(2)
+        nfcomps = 0
+        do h = flims(1,1),flims(1,2)
+            do k = flims(2,1),flims(2,2)
+                do l = flims(3,1),flims(3,2)
+                    sh = nint(hyp(real(h),real(k),real(l)))
+                    if( sh < 1 .or. sh > filtsz ) cycle
+                    nfcomps(sh) = nfcomps(sh) + 1
+                end do
+            end do
+        end do
         call tmpvol%new(ldim, smpd)
         ! determine loop bounds for better load balancing in the following parallel loop
         call bounds_from_mask3D( l_mask, lb, ub )
@@ -337,18 +368,13 @@ contains
                 do i = lb(1), ub(1)
                     if( .not.l_mask(i,j,k) ) cycle
                     ithr = omp_get_thread_num() + 1
-                    call set_subvols_msk_fft_fsc_filt_ifft([i,j,k], ithr)
+                    call set_subvols_msk_fft_fscTVfilt_ifft([i,j,k], ithr)
                     call tmpvol%set_rmat_at(i,j,k, subvols_2filt(ithr)%get_rmat_at(CPIX,CPIX,CPIX))
                 end do
             end do
         end do
         !$omp end parallel do
         call map2filt%copy(tmpvol)
-        ! make sure no 0 elements within the mask
-        where( l_mask .and. locres_finds == 0 ) locres_finds = even%get_filtsz()
-        ! make sure background at lowest estimated local resolution
-        min_find = minval(locres_finds, mask=l_mask)
-        where( locres_finds == 0 ) locres_finds = min_find
         ! destruct
         do ithr = 1, nthr_glob
             call subvols_even(ithr)%kill
@@ -357,16 +383,10 @@ contains
         end do
         call tmpvol%kill
         deallocate(l_mask)
-        ! write output
-        call fopen(funit, LOCRESMAP3D_FILE, access='STREAM', action='WRITE',&
-            &status='REPLACE', form='UNFORMATTED', iostat=io_stat)
-        call fileiochk('local_res, file: '//LOCRESMAP3D_FILE, io_stat)
-        write(unit=funit,pos=1) locres_finds
-        call fclose(funit)
 
     contains
 
-        subroutine set_subvols_msk_fft_fsc_filt_ifft( loc, ithr )
+        subroutine set_subvols_msk_fft_fscTVfilt_ifft( loc, ithr )
             integer, intent(in) :: loc(3), ithr
             integer :: lb(3), ub(3), i, j, k, ii, jj, kk, isub, jsub, ksub
             real    :: corrs(filtsz), filt(filtsz)
@@ -408,18 +428,17 @@ contains
             call subvols_2filt(ithr)%fft
             ! fsc
             call subvols_even(ithr)%fsc(subvols_odd(ithr), corrs)
-            ! call fsc2optlp_sub(filtsz, corrs, filt)
-            ! Fourier index at fsc_crit
-            call get_find_at_crit(filtsz, corrs, fsc_crit, locres_finds(loc(1),loc(2),loc(3)))
-            ! apply filter
-            call subvols_2filt(ithr)%bp(0., subvol_res(locres_finds(loc(1),loc(2),loc(3))))
+            ! TV filter
+            call fsc2TVfilt_fast(corrs, nfcomps, filt)
+            ! apply TV filter
+            call subvols_2filt(ithr)%apply_filter(filt)
             ! back to real space
             call subvols_even(ithr)%zero_and_unflag_ft
             call subvols_odd(ithr)%zero_and_unflag_ft
             call subvols_2filt(ithr)%ifft
-        end subroutine set_subvols_msk_fft_fsc_filt_ifft
+        end subroutine set_subvols_msk_fft_fscTVfilt_ifft
 
-    end subroutine nonuniform_fsc_lp
+    end subroutine nonuniform_fscTVfilt
 
     ! filtering of the map according to local resolution estimates
     subroutine local_res_lp( locres_finds, img2filter )
