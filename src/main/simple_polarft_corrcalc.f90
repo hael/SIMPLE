@@ -97,9 +97,10 @@ type :: polarft_corrcalc
     type(c_ptr)                      :: plan_fwd_1                  !< FFTW plans for gencorrs
     type(c_ptr)                      :: plan_fwd_2                  !< -"-
     type(c_ptr)                      :: plan_bwd                    !< -"-
-    logical                          :: l_clsfrcs = .false.         !< CLS2D/3DRefs flag
-    logical                          :: with_ctf  = .false.         !< CTF flag
-    logical                          :: existence = .false.         !< to indicate existence
+    logical                          :: l_clsfrcs    = .false.      !< CLS2D/3DRefs flag
+    logical                          :: l_match_filt = .false.      !< matched filter flag
+    logical                          :: with_ctf     = .false.      !< CTF flag
+    logical                          :: existence    = .false.      !< to indicate existence
     type(heap_vars),     allocatable :: heap_vars(:)                !< allocated fields to save stack allocation in subroutines and functions
   contains
     ! CONSTRUCTOR
@@ -211,10 +212,11 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new( self, nrefs, pfromto, ptcl_mask, eoarr )
+    subroutine new( self, nrefs, pfromto,  l_match_filt, ptcl_mask, eoarr )
         class(polarft_corrcalc), target, intent(inout) :: self
         integer,                         intent(in)    :: nrefs
         integer,                         intent(in)    :: pfromto(2)
+        logical,                         intent(in)    :: l_match_filt
         logical, optional,               intent(in)    :: ptcl_mask(pfromto(1):pfromto(2))
         integer, optional,               intent(in)    :: eoarr(pfromto(1):pfromto(2))
         character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
@@ -247,10 +249,11 @@ contains
             THROW_HARD ('only even logical dims supported; new')
         endif
         ! set constants
+        self%l_match_filt = l_match_filt                !< do shellnorm and filtering here (needs to be local because in 3D we do it on the reference volumes)
         if( present(ptcl_mask) )then
-            self%nptcls  = count(ptcl_mask)                            !< the total number of particles in partition
+            self%nptcls  = count(ptcl_mask)                      !< the total number of particles in partition
         else
-            self%nptcls  = self%pfromto(2) - self%pfromto(1) + 1       !< the total number of particles in partition
+            self%nptcls  = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
         endif
         self%nrefs = nrefs                              !< the number of references (logically indexded [1,nrefs])
         self%pftsz = magic_pftsz(nint(params_glob%msk)) !< size of reference (number of vectors used for matching,determined by radius of molecule)
@@ -771,7 +774,7 @@ contains
         complex(sp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         real    :: pw, w, ssnr
         integer :: k
-        if( params_glob%l_match_filt ) then
+        if( self%l_match_filt ) then
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = real(sum(csq_fast(dcmplx(pft(:,k)))) / real(self%pftsz,dp))
                 if( pw > 1.e-12 )then
@@ -789,7 +792,7 @@ contains
         complex(dp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         real(dp) :: pw, w, ssnr
         integer  :: k
-        if( params_glob%l_match_filt ) then
+        if( self%l_match_filt ) then
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
                 if( pw > 1.d-12 )then
@@ -808,7 +811,7 @@ contains
         complex(dp),             intent(inout) :: dpft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),3)
         real(dp) :: w, pw, ssnr
         integer  :: k
-        if( params_glob%l_match_filt ) then
+        if( self%l_match_filt ) then
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
                 if( pw > 1.d-12 )then
@@ -1623,7 +1626,7 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        if( .not.params_glob%l_match_filt )then
+        if( .not.self%l_match_filt )then
             sqsum_ref  = 0.
             sqsum_ptcl = 0.
             corr       = 0.
@@ -1668,7 +1671,7 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        if( .not.params_glob%l_match_filt )then
+        if( .not.self%l_match_filt )then
             sqsum_ref  = 0._dp
             sqsum_ptcl = 0._dp
             corr       = 0._dp
@@ -1880,7 +1883,7 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        if( params_glob%l_match_filt )then
+        if( self%l_match_filt )then
             denom       = sqrt(sum(csq_fast(pft_ref(:,params_glob%kfromto(1):params_glob%kstop))) * self%sqsums_ptcls(self%pinds(iptcl)))
             corr        = self%calc_corr_for_rot_8(pft_ref, self%pinds(iptcl), irot)
             f           = corr  / denom
@@ -1959,7 +1962,7 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        if( params_glob%l_match_filt )then
+        if( self%l_match_filt )then
             denom       = sqrt(sum(csq_fast(pft_ref(:,params_glob%kfromto(1):params_glob%kstop))) * self%sqsums_ptcls(self%pinds(iptcl)))
             pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
             corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)

@@ -170,16 +170,19 @@ contains
         type(parameters) :: params
         type(image)      :: even, odd, map2filt
         type(masker)     :: mskvol
-        logical          :: have_mask_file
+        logical          :: have_mask_file, map2filt_present
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         ! read even/odd pair
         call even%new([params%box,params%box,params%box], params%smpd)
         call odd%new([params%box,params%box,params%box],  params%smpd)
-        call map2filt%new([params%box,params%box,params%box],  params%smpd)
         call odd%read(params%vols(1))
         call even%read(params%vols(2))
-        call map2filt%read(params%vols(3))
+        map2filt_present = cline%defined('vol3')
+        if( map2filt_present )then
+            call map2filt%new([params%box,params%box,params%box],  params%smpd)
+            call map2filt%read(params%vols(3))
+        endif
         have_mask_file = .false.
         if( cline%defined('mskfile') )then
             if( file_exists(params%mskfile) )then
@@ -195,25 +198,32 @@ contains
             call odd%mask(params%msk, 'soft')
         endif
         if( have_mask_file )then
-            call mskvol%one_at_edge ! to expand before masking of reference internally (preprefvol)
+            call mskvol%one_at_edge ! to expand before masking of reference internally
         else
             call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
         endif
-        call nonuniform_fscTVfilt(even, odd, mskvol, map2filt)
+        if( map2filt_present )then
+            call nonuniform_fscTVfilt(even, odd, mskvol, .false., map2filt)
+        else
+            call nonuniform_fscTVfilt(even, odd, mskvol, .false.)
+        endif
         if( have_mask_file )then
             call mskvol%read(params%mskfile)
-            ! call even%mul(mskvol)
-            ! call odd%mul(mskvol)
-            call map2filt%mul(mskvol)
+            call even%mul(mskvol)
+            call odd%mul(mskvol)
+            if( map2filt_present ) call map2filt%mul(mskvol)
             call mskvol%kill
         endif
-        ! call even%write('nonuniform_filter_even.mrc')
-        ! call odd%write('nonuniform_filter_odd.mrc')
-        call map2filt%write('nonuniformly_filtered.mrc')
+        if( map2filt_present )then
+            call map2filt%write('nonuniformly_filtered.mrc')
+        else
+            call even%write('nonuniformly_filtered_even.mrc')
+            call odd%write('nonuniformly_filtered_odd.mrc')
+        endif
         ! destruct
         call even%kill
         call odd%kill
-        call map2filt%kill
+        if( map2filt_present ) call map2filt%kill
         ! end gracefully
         call simple_end('**** SIMPLE_NONUNIFORM_FILTER NORMAL STOP ****')
     end subroutine exec_nonuniform_filter
