@@ -84,9 +84,9 @@ contains
             call nano%new(params%vols(1), params%smpd, params%element, params%msk)
             ! execute
             if( cline%defined('cs_thres') )then
-                call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=use_cs_thres, use_auto_corr_thres=use_auto_corr_thres)
-            else
                 call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=use_cs_thres, use_auto_corr_thres=use_auto_corr_thres, cs_thres=params%cs_thres)
+            else
+                call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=use_cs_thres, use_auto_corr_thres=use_auto_corr_thres)
             endif
             ! kill
             call nano%kill

@@ -442,6 +442,9 @@ contains
         logical     :: use_cn_thresh, fixed_cs_thres
         type(image) :: simatms, img_cos
         type(atoms) :: atoms_obj
+
+        print *, 'use_cs_thres ', use_cs_thres
+
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%img, self%element)
@@ -888,7 +891,7 @@ contains
         call self%img_cc%get_imat(imat_cc)
         call self%img_bin%get_imat(imat_bin)
         if( use_auto_corr_thres )then
-            corr_thres = max(robust_sigma_thres(self%atominfo(:)%valid_corr, CORR_THRES_SIGMA), 0.3)
+            corr_thres = min(max(robust_sigma_thres(self%atominfo(:)%valid_corr, CORR_THRES_SIGMA), 0.3), 0.7)
             write(logfhandle, *) 'Valid_corr threshold calculated: ', corr_thres
         else
             corr_thres = params_glob%corr_thres
