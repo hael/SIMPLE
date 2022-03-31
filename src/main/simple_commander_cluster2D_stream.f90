@@ -21,7 +21,7 @@ private
 
 integer,               parameter   :: MINBOXSZ            = 96    ! minimum boxsize for scaling
 integer,               parameter   :: WAIT_WATCHER        = 5     ! seconds prior to new stack detection
-! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 1800  ! dev settings
+! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600  ! dev settings
 integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
 integer,               parameter   :: FREQ_POOL_REJECTION = 5     !
 character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
@@ -444,7 +444,7 @@ contains
         real    :: orig_smpd, scale_factor, smpd, lp_greedy, lpstart_stoch, lpstart, lpstop, lpcen
         integer :: nptcls_per_chunk, ncls_glob, last_injection, max_ncls,ichunk, time_iter, ipart, iotest
         integer :: iter, orig_box, box, boxpd, n_spprojs, pool_iter, origproj_time, time_start_iter
-        logical :: do_autoscale, l_greedy, l_once, l_restart
+        logical :: do_autoscale, l_greedy, l_once, l_restart, l_wfilt
         if( cline%defined('refine') )then
             if( trim(cline%get_carg('refine')).ne.'greedy' )then
                 if( .not.cline%defined('mskdiam') ) THROW_HARD('MSKDIAM must be defined!')
@@ -460,12 +460,13 @@ contains
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('lpthresh')  ) call cline%set('lpthresh',  30.)
         if( .not. cline%defined('ndev')      ) call cline%set('ndev',      1.5)
-        if( .not. cline%defined('oritype')   ) call cline%set('oritype','ptcl2D')
-        if( .not. cline%defined('wiener')    ) call cline%set('wiener',   'full')
+        if( .not. cline%defined('oritype')   ) call cline%set('oritype',  'ptcl2D')
+        if( .not. cline%defined('wiener')    ) call cline%set('wiener',   'partial')
         call cline%set('ptclw',      'no')
         call cline%set('stream','yes') ! only for parameters determination
         call seed_rnd
         call params%new(cline)
+        l_wfilt = trim(params%wiener) .eq. 'partial'
         ! sanity
         if( .not.file_exists(params%projfile) )then
             THROW_HARD('project file: '//trim(params%projfile)//' does not exist!')
@@ -700,9 +701,10 @@ contains
                 if( pool_iter > 3 )then
                     call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_even'//trim(params%ext))
                     call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_odd'//trim(params%ext))
-                    ! deactivated for now
-                    ! call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_even_wfilt'//trim(params%ext))
-                    ! call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//'_odd_wfilt'//trim(params%ext))
+                    if( l_wfilt )then
+                        call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//trim(WFILT_SUFFIX)//'_even'//trim(params%ext))
+                        call del_file(trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))//trim(WFILT_SUFFIX)//'_odd'//trim(params%ext))
+                    endif
                 endif
                 call debug_print('end pool available '//int2str(iter))
             endif
@@ -1398,9 +1400,10 @@ contains
                 call img%new([box,box,1],smpd)
                 call img%read( refs_in, indin)
                 call img%write(refs_out,indout)
-                ! deactivated for now
-                ! stkout = add2fbody(refs_out,params%ext,'_wfilt')
-                ! call img%write(stkout,indout)
+                if( l_wfilt )then
+                    stkout = add2fbody(refs_out,params%ext,trim(WFILT_SUFFIX))
+                    call img%write(stkout,indout)
+                endif
                 stkin  = add2fbody(refs_in, params%ext,'_even')
                 stkout = add2fbody(refs_out,params%ext,'_even')
                 call img%read( stkin, indin)
@@ -1426,19 +1429,20 @@ contains
                         stkin = 'ctfsqsums_odd_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
                         call img%read(stkin, indin)
                         call img%write(stkin,indout)
-                        ! deactivated for now
-                        ! stkin = 'cavgs_even_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
-                        ! call img%read(stkin, indin)
-                        ! call img%write(stkin,indout)
-                        ! stkin = 'cavgs_odd_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
-                        ! call img%read(stkin, indin)
-                        ! call img%write(stkin,indout)
-                        ! stkin = 'ctfsqsums_even_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
-                        ! call img%read(stkin, indin)
-                        ! call img%write(stkin,indout)
-                        ! stkin = 'ctfsqsums_odd_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
-                        ! call img%read(stkin, indin)
-                        ! call img%write(stkin,indout)
+                        if( l_wfilt )then
+                            stkin = 'cavgs_even_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                            call img%read(stkin, indin)
+                            call img%write(stkin,indout)
+                            stkin = 'cavgs_odd_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                            call img%read(stkin, indin)
+                            call img%write(stkin,indout)
+                            stkin = 'ctfsqsums_even_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                            call img%read(stkin, indin)
+                            call img%write(stkin,indout)
+                            stkin = 'ctfsqsums_odd_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                            call img%read(stkin, indin)
+                            call img%write(stkin,indout)
+                        endif
                     enddo
                 else
                     stkin  = trim(dir)//'/cavgs_even_part'//trim(params%ext)
@@ -1446,36 +1450,40 @@ contains
                     do iipart = 1,params%nparts
                         stkout = 'cavgs_even_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
                         call img%write(stkout,indout)
-                        ! deactivated_for now
-                        ! stkout = 'cavgs_even_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
-                        ! call img%write(stkout,indout)
+                        if( l_wfilt )then
+                            stkout = 'cavgs_even_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                            call img%write(stkout,indout)
+                        endif
                     enddo
                     stkin  = trim(dir)//'/cavgs_odd_part'//trim(params%ext)
                     call img%read(stkin, indin)
                     do iipart = 1,params%nparts
                         stkout = 'cavgs_odd_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
                         call img%write(stkout,indout)
-                        ! deactivated for now
-                        ! stkout = 'cavgs_odd_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
-                        ! call img%write(stkout,indout)
+                        if( l_wfilt )then
+                            stkout = 'cavgs_odd_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                            call img%write(stkout,indout)
+                        endif
                     enddo
                     stkin  = trim(dir)//'/ctfsqsums_even_part'//trim(params%ext)
                     call img%read(stkin, indin)
                     do iipart = 1,params%nparts
                         stkout = 'ctfsqsums_even_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
                         call img%write(stkout,indout)
-                        ! deactivated for now
-                        ! stkout = 'ctfsqsums_even_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
-                        ! call img%write(stkout,indout)
+                        if( l_wfilt )then
+                            stkout = 'ctfsqsums_even_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                            call img%write(stkout,indout)
+                        endif
                     enddo
                     stkin  = trim(dir)//'/ctfsqsums_odd_part'//trim(params%ext)
                     call img%read(stkin, indin)
                     do iipart = 1,params%nparts
                         stkout = 'ctfsqsums_odd_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
                         call img%write(stkout,indout)
-                        ! deactivated for now
-                        ! stkout = 'ctfsqsums_odd_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
-                        ! call img%write(stkout,indout)
+                        if( l_wfilt )then
+                            stkout = 'ctfsqsums_odd_wfilt_part'//int2str_pad(iipart,params%numlen)//trim(params%ext)
+                            call img%write(stkout,indout)
+                        endif
                     enddo
                 endif
                 ! cleanup
@@ -1524,6 +1532,17 @@ contains
                     os_backup3 = pool_proj%os_cls2D
                     os_backup2 = pool_proj%os_stk
                     ! rescale classes
+                    if( l_wfilt )then
+                        src  = add2fbody(refs_glob,  params%ext,trim(WFILT_SUFFIX))
+                        dest = add2fbody(cavgsfname,params%ext,trim(WFILT_SUFFIX))
+                        call rescale_cavgs(src, dest)
+                        src  = add2fbody(refs_glob, params%ext,trim(WFILT_SUFFIX)//'_even')
+                        dest = add2fbody(cavgsfname,params%ext,trim(WFILT_SUFFIX)//'_even')
+                        call rescale_cavgs(src, dest)
+                        src  = add2fbody(refs_glob, params%ext,trim(WFILT_SUFFIX)//'_odd')
+                        dest = add2fbody(cavgsfname,params%ext,trim(WFILT_SUFFIX)//'_odd')
+                        call rescale_cavgs(src, dest)
+                    endif
                     call rescale_cavgs(refs_glob, cavgsfname)
                     src  = add2fbody(refs_glob, params%ext,'_even')
                     dest = add2fbody(cavgsfname,params%ext,'_even')
@@ -1533,6 +1552,10 @@ contains
                     call rescale_cavgs(src, dest)
                     call pool_proj%os_out%kill
                     call pool_proj%add_cavgs2os_out(cavgsfname, orig_smpd, 'cavg')
+                    if( l_wfilt )then
+                        src = add2fbody(cavgsfname,params%ext,trim(WFILT_SUFFIX))
+                        call pool_proj%add_cavgs2os_out(src, orig_smpd, 'cavg'//trim(WFILT_SUFFIX))
+                    endif
                     pool_proj%os_cls2D = os_backup3
                     call os_backup3%kill
                     call debug_print('in write_snapshot 2')
@@ -1566,9 +1589,32 @@ contains
                 else
                     if( add_suffix )then
                         call simple_copy_file(FRCS_FILE, frcsfname)
+                        if( l_wfilt )then
+                            src  = add2fbody(refs_glob,  params%ext,trim(WFILT_SUFFIX))
+                            dest = add2fbody(cavgsfname,params%ext, trim(WFILT_SUFFIX))
+                            call simple_copy_file(src, dest)
+                            src  = add2fbody(refs_glob, params%ext,trim(WFILT_SUFFIX)//'_even')
+                            dest = add2fbody(cavgsfname,params%ext,trim(WFILT_SUFFIX)//'_even')
+                            call simple_copy_file(src, dest)
+                            src  = add2fbody(refs_glob, params%ext,trim(WFILT_SUFFIX)//'_odd')
+                            dest = add2fbody(cavgsfname,params%ext,trim(WFILT_SUFFIX)//'_odd')
+                            call simple_copy_file(src, dest)
+                        else
+                            call simple_copy_file(refs_glob, cavgsfname)
+                            src  = add2fbody(refs_glob, params%ext,'_even')
+                            dest = add2fbody(cavgsfname,params%ext,'_odd')
+                            call simple_copy_file(src, dest)
+                            src  = add2fbody(refs_glob, params%ext,'_odd')
+                            dest = add2fbody(cavgsfname,params%ext,'_odd')
+                            call simple_copy_file(src, dest)
+                        endif
                     endif
                     call pool_proj%os_out%kill
                     call pool_proj%add_cavgs2os_out(cavgsfname, orig_smpd, 'cavg')
+                    if( l_wfilt )then
+                        src = add2fbody(cavgsfname,params%ext,trim(WFILT_SUFFIX))
+                        call pool_proj%add_cavgs2os_out(src, orig_smpd, 'cavg'//trim(WFILT_SUFFIX))
+                    endif
                     call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
                     ! write
                     pool_proj%os_ptcl3D = pool_proj%os_ptcl2D

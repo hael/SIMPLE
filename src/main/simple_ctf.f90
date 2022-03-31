@@ -43,7 +43,7 @@ type ctf
     procedure          :: apply_serial
     procedure          :: wienerlike_restoration
     procedure          :: phaseflip_and_shift_serial
-    procedure          :: eval_and_apply
+    procedure          :: eval_and_apply, eval_and_apply_before_first_zero
     procedure, private :: kV2wl
     procedure          :: apply_convention
 end type ctf
@@ -578,6 +578,53 @@ contains
             end do
         end do
     end subroutine eval_and_apply
+
+    ! apply CTF to image, CTF values are also returned only before 1st zero
+    subroutine eval_and_apply_before_first_zero( self, img, imode, logi_lims, tvalsdims, tvals, dfx, dfy, angast, add_phshift, maxspafreqsq )
+        use simple_image, only: image
+        class(ctf),     intent(inout) :: self        !< instance
+        class(image),   intent(inout) :: img         !< modified image (output)
+        integer,        intent(in)    :: imode       !< CTFFLAG_FLIP=abs CTFFLAG_YES=ctf CTFFLAG_NO=no
+        integer,        intent(in)    :: logi_lims(3,2) !< logical limits
+        integer,        intent(in)    :: tvalsdims(2)   !< tvals dimensions
+        real,           intent(out)   :: tvals(1:tvalsdims(1),1:tvalsdims(2))
+        real,           intent(in)    :: dfx         !< defocus x-axis
+        real,           intent(in)    :: dfy         !< defocus y-axis
+        real,           intent(in)    :: angast      !< angle of astigmatism
+        real,           intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
+        real,           intent(out)   :: maxspafreqsq
+        integer :: ldim(3),h,k,phys(2)
+        real    :: ang,tval,spaFreqSq,hinv,hinvsq,kinv,rh,rk,total_phshift
+        if( imode == CTFFLAG_NO )then
+            tvals = 1.0
+            return
+        endif
+        ! initialize
+        maxspafreqsq = 0.0
+        call self%init(dfx, dfy, angast)
+        ldim = img%get_ldim()
+        do h = logi_lims(1,1),logi_lims(1,2)
+            rh     = real(h)
+            hinv   = rh / real(ldim(1))
+            hinvsq = hinv*hinv
+            do k = logi_lims(2,1),logi_lims(2,2)
+                rk = real(k)
+                ! calculate CTF, reverse logic from eval_5
+                kinv      = rk / real(ldim(2))
+                spaFreqSq = hinvsq + kinv*kinv
+                ang       = atan2(rk,rh)
+                total_phshift = self%evalPhSh(spaFreqSq, ang, add_phshift) + self%amp_contr_const
+                if( total_phshift <= CTF_FIRST_LIM )then
+                    maxspafreqsq = max(maxspafreqsq, spaFreqSq)
+                    phys = img%comp_addr_phys(h,k)
+                    tval = sin(total_phshift)
+                    if( imode == CTFFLAG_FLIP ) tval = abs(tval)
+                    call img%mul_cmat_at(phys(1),phys(2),1, tval)
+                    tvals(phys(1),phys(2)) = tval
+                endif
+            end do
+        end do
+    end subroutine eval_and_apply_before_first_zero
 
     pure elemental real function kV2wl( self ) result (wavelength)
         class(ctf), intent(in) :: self

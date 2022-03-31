@@ -1390,7 +1390,7 @@ contains
         call cluster2D_stream%set_input('filt_ctrls', 4, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){no}',&
         '(yes|no){no}', .false., 'no')
-        call cluster2D_stream%set_input('filt_ctrls', 5, wiener)
+        call cluster2D_stream%set_input('filt_ctrls', 5, 'wiener', 'multi', 'Wiener restoration', 'Wiener restoration, full or partial (full|partial){partial}','(full|partial){partial}', .false., 'partial')
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
