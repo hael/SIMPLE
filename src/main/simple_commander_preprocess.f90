@@ -323,7 +323,6 @@ contains
         call write_project
         call spproj%kill
         ! cleanup
-        call remove_individual_projects
         call qsys_cleanup
         call del_file(micspproj_fname)
         ! end gracefully
