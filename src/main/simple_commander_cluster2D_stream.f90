@@ -19,7 +19,7 @@ public :: cluster2D_commander_stream
 private
 #include "simple_local_flags.inc"
 
-integer,               parameter   :: MINBOXSZ            = 96    ! minimum boxsize for scaling
+integer,               parameter   :: MINBOXSZ            = 128    ! minimum boxsize for scaling
 integer,               parameter   :: WAIT_WATCHER        = 5     ! seconds prior to new stack detection
 ! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600  ! dev settings
 integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
