@@ -208,7 +208,7 @@ contains
         logical                             :: do_scaling, l_shmem
         ! parameters
         character(len=STDLEN) :: orig_projfile_bak = 'orig_bak.simple'
-        integer, parameter    :: MINBOX      = 96
+        integer, parameter    :: MINBOX      = 128
         real,    parameter    :: TARGET_LP   = 15.
         real,    parameter    :: MINITS      =  5., MINITS_FAST =  9.
         real,    parameter    :: MAXITS      = 15., MAXITS_FAST = 18.
