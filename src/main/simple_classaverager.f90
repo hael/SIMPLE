@@ -40,12 +40,19 @@ real                           :: smpd       = 0.          !< sampling distance
 type(ptcl_record), allocatable :: precs(:)                 !< particle records
 type(image),       allocatable :: cavgs_even(:)            !< class averages
 type(image),       allocatable :: cavgs_odd(:)             !< -"-
+type(image),       allocatable :: cavgs_even_wfilt(:)      !< class averages wiener filtered
+type(image),       allocatable :: cavgs_odd_wfilt(:)       !< -"-
 type(image),       allocatable :: cavgs_merged(:)          !< -"-
+type(image),       allocatable :: cavgs_merged_wfilt(:)    !< -"-
 type(image),       allocatable :: ctfsqsums_even(:)        !< CTF**2 sums for Wiener normalisation
 type(image),       allocatable :: ctfsqsums_odd(:)         !< -"-
+type(image),       allocatable :: ctfsqsums_even_wfilt(:)  !< CTF**2 sums for Wiener normalisation
+type(image),       allocatable :: ctfsqsums_odd_wfilt(:)   !< -"-
 type(image),       allocatable :: ctfsqsums_merged(:)      !< -"-
+type(image),       allocatable :: ctfsqsums_merged_wfilt(:)!< -"-
 integer,           allocatable :: prev_eo_pops(:,:)
 logical,           allocatable :: pptcl_mask(:)
+logical                        :: l_stream      = .false.  !< flag for cluster2D_stream
 logical                        :: phaseplate    = .false.  !< Volta phaseplate images or not
 logical                        :: exists        = .false.  !< to flag instance existence
 
@@ -77,8 +84,9 @@ contains
         partsz        = size(pptcl_mask)
         ! CTF logics
         ctfflag       = build_glob%spproj%get_ctfflag_type('ptcl2D',iptcl=params_glob%fromp)
-        ! set phaseplate flag
+        ! set CTF-related flag
         phaseplate    = build_glob%spproj%has_phaseplate('ptcl2D')
+        l_stream      = (trim(params_glob%stream) .eq. 'yes') .and. params_glob%l_wiener_part
         ! smpd
         smpd          = params_glob%smpd
         ! set ldims
@@ -91,6 +99,10 @@ contains
         &cavgs_merged(ncls), ctfsqsums_even(ncls),&
         &ctfsqsums_odd(ncls), ctfsqsums_merged(ncls), prev_eo_pops(ncls,2))
         prev_eo_pops = 0
+        if( l_stream )then
+            allocate(cavgs_even_wfilt(ncls), cavgs_odd_wfilt(ncls), ctfsqsums_merged_wfilt(ncls),&
+            &ctfsqsums_even_wfilt(ncls), ctfsqsums_odd_wfilt(ncls), cavgs_merged_wfilt(ncls))
+        endif
         !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
         do icls=1,ncls
             call cavgs_even(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
@@ -99,6 +111,14 @@ contains
             call ctfsqsums_even(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
             call ctfsqsums_odd(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
             call ctfsqsums_merged(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
+            if( l_stream )then
+                call cavgs_merged_wfilt(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
+                call cavgs_even_wfilt(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
+                call cavgs_odd_wfilt(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
+                call ctfsqsums_even_wfilt(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
+                call ctfsqsums_odd_wfilt(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
+                call ctfsqsums_merged_wfilt(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
+            endif
         end do
         !$omp end parallel do
         ! flag existence
@@ -146,7 +166,7 @@ contains
         end do
         !$omp end parallel do
         prev_eo_pops = 0
-        if( trim(params_glob%stream).eq.'yes' .and. spproj%os_cls2D%get_noris() == ncls )then
+        if( l_stream .and. spproj%os_cls2D%get_noris() == ncls )then
             do i = 1,ncls
                 icls = nint(spproj%os_cls2D%get(i,'class'))
                 if( .not.spproj%os_cls2D%isthere(i,'prev_pop_even') ) cycle
@@ -183,8 +203,7 @@ contains
             specscores(icls) = specscores(icls)+ spproj%os_ptcl2D%get(iptcl,'specscore')
         enddo
         !$omp end parallel do
-        if( trim(params_glob%stream).eq.'yes'  .and.&
-            &spproj%os_cls2D%get_noris()==ncls .and. params_glob%update_frac<.99 )then
+        if( l_stream  .and. spproj%os_cls2D%get_noris()==ncls .and. params_glob%update_frac<.99 )then
             do i = 1,ncls
                 icls = nint(spproj%os_cls2D%get(i,'class'))
                 if( .not.spproj%os_cls2D%isthere(i,'prev_pop_even') ) cycle
@@ -239,6 +258,14 @@ contains
             call ctfsqsums_even(icls)%zero_and_flag_ft
             call ctfsqsums_odd(icls)%zero_and_flag_ft
             call ctfsqsums_merged(icls)%zero_and_flag_ft
+            if( l_stream )then
+                call cavgs_merged_wfilt(icls)%new(ldim_pd,smpd,wthreads=.false.)
+                call cavgs_even_wfilt(icls)%zero_and_flag_ft
+                call cavgs_odd_wfilt(icls)%zero_and_flag_ft
+                call ctfsqsums_even_wfilt(icls)%zero_and_flag_ft
+                call ctfsqsums_odd_wfilt(icls)%zero_and_flag_ft
+                call ctfsqsums_merged_wfilt(icls)%zero_and_flag_ft
+            endif
         end do
         !$omp end parallel do
     end subroutine init_cavgs_sums
@@ -282,10 +309,10 @@ contains
         complex,          allocatable :: cmats(:,:,:)
         real,             allocatable :: rhos(:,:,:), tvals(:,:,:)
         complex :: fcompl, fcompll
-        real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw
+        real    :: loc(2), mat(2,2), dist(2), add_phshift, tval, kw, maxspafreqsq
         integer :: batch_iprecs(READBUFFSZ)
         integer :: fdims(3), logi_lims(3,2), phys(2), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
-        integer :: iprec, i, sh, iwinsz, nyq, ind_in_stk, iprec_glob, nptcls_eff
+        integer :: iprec, i, sh, iwinsz, nyq, ind_in_stk, iprec_glob, nptcls_eff, radfirstpeak
         integer :: wdim, h, k, l, m, ll, mm, icls, iptcl, interp_shlim, batchind
         integer :: first_stkind, fromp, top, istk, nptcls_in_stk, nstks, last_stkind
         integer :: ibatch, nbatches, istart, iend, ithr, nptcls_in_batch, first_pind, last_pind
@@ -312,15 +339,11 @@ contains
         call build_glob%spproj%map_ptcl_ind2stk_ind(params_glob%oritype, last_pind, last_stkind,  ind_in_stk)
         nstks = last_stkind - first_stkind + 1
         ! Objects allocations
-        allocate(read_imgs(READBUFFSZ), cgrid_imgs(nthr_glob))
+        allocate(read_imgs(READBUFFSZ), cgrid_imgs(READBUFFSZ))
         !$omp parallel default(shared) proc_bind(close) private(i)
         !$omp do schedule(static)
         do i = 1,READBUFFSZ
             call read_imgs(i)%new(ldim, params_glob%smpd, wthreads=.false.)
-        enddo
-        !$omp end do nowait
-        !$omp do schedule(static)
-        do i = 1,nthr_glob
             call cgrid_imgs(i)%new(ldim_pd, params_glob%smpd, wthreads=.false.)
         enddo
         !$omp end do
@@ -332,7 +355,7 @@ contains
         interp_shlim    = nyq + 1
         cyc_limsR(:,1)  = cyc_lims(1,:)  ! limits in fortran layered format
         cyc_limsR(:,2)  = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
-        allocate(cmats(fdims(1),fdims(2),READBUFFSZ), rhos(fdims(1),fdims(2),READBUFFSZ),tvals(fdims(1),fdims(2),nthr_glob))
+        allocate(cmats(fdims(1),fdims(2),READBUFFSZ), rhos(fdims(1),fdims(2),READBUFFSZ),tvals(fdims(1),fdims(2),READBUFFSZ))
         ! Main loop
         iprec_glob = 0 ! global record index
         do istk = first_stkind,last_stkind
@@ -361,31 +384,34 @@ contains
                     batch_iprecs(batchind) = iprec_glob              ! particle record in batch
                     if( precs(iprec_glob)%pind == 0 ) cycle
                     nptcls_eff = nptcls_eff + 1
-                    if( iptcl /= precs(iprec_glob)%pind ) THROW_HARD('Critical indexing error!')      ! debug, to remove
                     call stkio_r%read(precs(iprec_glob)%ind_in_stk, read_imgs(batchind)) ! read
                 enddo
                 if( nptcls_eff == 0 ) cycle
                 ! Interpolation loop
                 !$omp parallel default(shared) proc_bind(close)&
-                !$omp private(i,icls,iprec,win_corner,add_phshift,mat,ithr,h,k,l,m,ll,mm,dist,loc,sh,phys,kw,tval,fcompl,fcompll)
+                !$omp private(i,ithr,icls,iprec,win_corner,add_phshift,mat,h,k,l,m,ll,mm,dist,loc,sh,phys,kw,tval,fcompl,fcompll)
                 !$omp do schedule(static)
                 do i = 1,nptcls_in_batch
                     iprec = batch_iprecs(i)
                     if( iprec == 0 ) cycle
                     if( precs(iprec)%pind == 0 ) cycle
-                    ithr            = omp_get_thread_num()+1
-                    cmats(:,:,i)    = zero
-                    rhos(:,:,i)     = 0.0
-                    tvals(:,:,ithr) = 0.0
+                    cmats(:,:,i) = zero
+                    rhos(:,:,i)  = 0.0
+                    tvals(:,:,i) = 0.0
                     ! normalize & pad & FFT
-                    call read_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(ithr))
+                    call read_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(i))
                     ! shift
-                    call cgrid_imgs(ithr)%shift2Dserial(-precs(iprec)%shift)
+                    call cgrid_imgs(i)%shift2Dserial(-precs(iprec)%shift)
                     ! apply CTF to image, stores CTF values
                     add_phshift = 0.
                     if( phaseplate ) add_phshift = precs(iprec)%phshift
-                    call precs(iprec)%tfun%eval_and_apply(cgrid_imgs(ithr), ctfflag, logi_lims, fdims(1:2), tvals(:,:,ithr), &
-                    & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, .not.params_glob%l_wiener_part)
+                    if( l_stream )then
+                        call precs(iprec)%tfun%eval_and_apply(cgrid_imgs(i), ctfflag, logi_lims, fdims(1:2), tvals(:,:,i), &
+                        & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, .false.)
+                    else
+                        call precs(iprec)%tfun%eval_and_apply(cgrid_imgs(i), ctfflag, logi_lims, fdims(1:2), tvals(:,:,i), &
+                        & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, .not.params_glob%l_wiener_part)
+                    endif
                     ! Rotation matrix
                     call rotmat2d(-precs(iprec)%e3, mat)
                     ! Interpolation
@@ -394,38 +420,38 @@ contains
                             sh = nint(hyp(real(h),real(k)))
                             if( sh > interp_shlim )cycle
                             ! Rotation
-                            loc = matmul(real([h,k]),mat)
+                            loc        = matmul(real([h,k]),mat)
                             win_corner = floor(loc) ! bottom left corner
-                            dist  = loc - real(win_corner)
+                            dist       = loc - real(win_corner)
                             ! Bi-linear interpolation
                             l     = cyci_1d(cyc_limsR(:,1), win_corner(1))
                             ll    = cyci_1d(cyc_limsR(:,1), win_corner(1)+1)
                             m     = cyci_1d(cyc_limsR(:,2), win_corner(2))
                             mm    = cyci_1d(cyc_limsR(:,2), win_corner(2)+1)
                             ! l, bottom left corner
-                            phys   = cgrid_imgs(ithr)%comp_addr_phys(l,m)
+                            phys   = cgrid_imgs(i)%comp_addr_phys(l,m)
                             kw     = (1.-dist(1))*(1.-dist(2))   ! interpolation kernel weight
-                            fcompl = kw * cgrid_imgs(ithr)%get_cmat_at(phys(1), phys(2),1)
-                            tval   = kw * tvals(phys(1),phys(2),ithr)
+                            fcompl = kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
+                            tval   = kw * tvals(phys(1),phys(2),i)
                             ! l, bottom right corner
-                            phys   = cgrid_imgs(ithr)%comp_addr_phys(l,mm)
+                            phys   = cgrid_imgs(i)%comp_addr_phys(l,mm)
                             kw     = (1.-dist(1))*dist(2)
-                            fcompl = fcompl + kw * cgrid_imgs(ithr)%get_cmat_at(phys(1), phys(2),1)
-                            tval   = tval   + kw * tvals(phys(1),phys(2),ithr)
+                            fcompl = fcompl + kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
+                            tval   = tval   + kw * tvals(phys(1),phys(2),i)
                             if( l < 0 ) fcompl = conjg(fcompl) ! conjugaison when required!
                             ! ll, upper left corner
-                            phys    = cgrid_imgs(ithr)%comp_addr_phys(ll,m)
+                            phys    = cgrid_imgs(i)%comp_addr_phys(ll,m)
                             kw      = dist(1)*(1.-dist(2))
-                            fcompll =         kw * cgrid_imgs(ithr)%get_cmat_at(phys(1), phys(2),1)
-                            tval    = tval  + kw * tvals(phys(1),phys(2),ithr)
+                            fcompll =         kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
+                            tval    = tval  + kw * tvals(phys(1),phys(2),i)
                             ! ll, upper right corner
-                            phys    = cgrid_imgs(ithr)%comp_addr_phys(ll,mm)
+                            phys    = cgrid_imgs(i)%comp_addr_phys(ll,mm)
                             kw      = dist(1)*dist(2)
-                            fcompll = fcompll + kw * cgrid_imgs(ithr)%get_cmat_at(phys(1), phys(2),1)
-                            tval    = tval    + kw * tvals(phys(1),phys(2),ithr)
+                            fcompll = fcompll + kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
+                            tval    = tval    + kw * tvals(phys(1),phys(2),i)
                             if( ll < 0 ) fcompll = conjg(fcompll) ! conjugaison when required!
                             ! update with interpolated values
-                            phys = cgrid_imgs(ithr)%comp_addr_phys(h,k)
+                            phys = cgrid_imgs(i)%comp_addr_phys(h,k)
                             cmats(phys(1),phys(2),i) = fcompl + fcompll
                             rhos(phys(1),phys(2),i)  = tval*tval
                         end do
@@ -456,6 +482,93 @@ contains
                 enddo
                 !$omp end do
                 !$omp end parallel
+                if( l_stream .and. ctfflag /= CTFFLAG_NO )then
+                    !$omp parallel default(shared) proc_bind(close)&
+                    !$omp private(i,icls,iprec,win_corner,add_phshift,mat,ithr,h,k,l,m,ll,mm,dist,loc,sh,phys,kw,tval,fcompl,fcompll,maxspafreqsq,radfirstpeak)
+                    !$omp do schedule(static)
+                        do i = 1,nptcls_in_batch
+                        iprec = batch_iprecs(i)
+                        if( iprec == 0 ) cycle
+                        if( precs(iprec)%pind == 0 ) cycle
+                        ! apply CTF to image, stores CTF values
+                        add_phshift = 0.
+                        if( phaseplate ) add_phshift = precs(iprec)%phshift
+                        call precs(iprec)%tfun%eval_and_apply_before_first_zero(cgrid_imgs(i), ctfflag, logi_lims, fdims(1:2), tvals(:,:,i), &
+                        & precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift, maxspafreqsq)
+                        radfirstpeak = ceiling( sqrt(maxspafreqsq) * real(ldim_pd(1)) )
+                        radfirstpeak = min( max(radfirstpeak,0), interp_shlim)
+                        ! Rotation matrix
+                        call rotmat2d(-precs(iprec)%e3, mat)
+                        ! Interpolation
+                        do h = logi_lims(1,1),radfirstpeak
+                            do k = -radfirstpeak,radfirstpeak
+                                sh = nint(hyp(real(h),real(k)))
+                                if( sh > radfirstpeak )cycle
+                                if( sh > interp_shlim )cycle
+                                ! Rotation
+                                loc        = matmul(real([h,k]),mat)
+                                win_corner = floor(loc) ! bottom left corner
+                                dist       = loc - real(win_corner)
+                                ! Bi-linear interpolation
+                                l     = cyci_1d(cyc_limsR(:,1), win_corner(1))
+                                ll    = cyci_1d(cyc_limsR(:,1), win_corner(1)+1)
+                                m     = cyci_1d(cyc_limsR(:,2), win_corner(2))
+                                mm    = cyci_1d(cyc_limsR(:,2), win_corner(2)+1)
+                                ! l, bottom left corner
+                                phys   = cgrid_imgs(i)%comp_addr_phys(l,m)
+                                kw     = (1.-dist(1))*(1.-dist(2))   ! interpolation kernel weight
+                                fcompl = kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
+                                tval   = kw * tvals(phys(1),phys(2),i)
+                                ! l, bottom right corner
+                                phys   = cgrid_imgs(i)%comp_addr_phys(l,mm)
+                                kw     = (1.-dist(1))*dist(2)
+                                fcompl = fcompl + kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
+                                tval   = tval   + kw * tvals(phys(1),phys(2),i)
+                                if( l < 0 ) fcompl = conjg(fcompl) ! conjugaison when required!
+                                ! ll, upper left corner
+                                phys    = cgrid_imgs(i)%comp_addr_phys(ll,m)
+                                kw      = dist(1)*(1.-dist(2))
+                                fcompll =         kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
+                                tval    = tval  + kw * tvals(phys(1),phys(2),i)
+                                ! ll, upper right corner
+                                phys    = cgrid_imgs(i)%comp_addr_phys(ll,mm)
+                                kw      = dist(1)*dist(2)
+                                fcompll = fcompll + kw * cgrid_imgs(i)%get_cmat_at(phys(1), phys(2),1)
+                                tval    = tval    + kw * tvals(phys(1),phys(2),i)
+                                if( ll < 0 ) fcompll = conjg(fcompll) ! conjugaison when required!
+                                ! update with interpolated values
+                                phys = cgrid_imgs(i)%comp_addr_phys(h,k)
+                                cmats(phys(1),phys(2),i) = fcompl + fcompll
+                                rhos(phys(1),phys(2),i)  = tval*tval
+                            end do
+                        end do
+                    enddo
+                    !$omp end do
+                    ! Sum over classes
+                    !$omp do schedule(static)
+                    do icls = 1,ncls
+                        ithr = omp_get_thread_num() + 1
+                        do i = 1,nptcls_in_batch
+                            iprec = batch_iprecs(i)
+                            if( iprec == 0 ) cycle
+                            if( precs(iprec)%pind == 0 ) cycle
+                            if( precs(iprec)%class == icls )then
+                                select case(precs(iprec)%eo)
+                                    case(0,-1)
+                                        call cavgs_even_wfilt(icls)%get_cmat_ptr(pcmat(ithr)%cmat)
+                                        call ctfsqsums_even_wfilt(icls)%get_cmat_ptr(prhomat(ithr)%cmat)
+                                    case(1)
+                                        call cavgs_odd_wfilt(icls)%get_cmat_ptr(pcmat(ithr)%cmat)
+                                        call ctfsqsums_odd_wfilt(icls)%get_cmat_ptr(prhomat(ithr)%cmat)
+                                end select
+                                pcmat(ithr)%cmat(:,:,1)   = pcmat(ithr)%cmat(:,:,1)   + precs(iprec)%pw * cmats(:,:,i)
+                                prhomat(ithr)%cmat(:,:,1) = prhomat(ithr)%cmat(:,:,1) + precs(iprec)%pw * cmplx(rhos(:,:,i),0.0)
+                            endif
+                        enddo
+                    enddo
+                    !$omp end do
+                    !$omp end parallel
+                endif
             enddo ! end read batches loop
             ! close stack
             call stkio_r%close
@@ -463,8 +576,6 @@ contains
         ! Cleanup
         do i = 1,READBUFFSZ
             call read_imgs(i)%kill
-        enddo
-        do i = 1,nthr_glob
             call cgrid_imgs(i)%kill
         enddo
         deallocate(read_imgs,cgrid_imgs)
@@ -485,6 +596,12 @@ contains
                 call cavgs_even(icls)%zero_and_unflag_ft
                 call cavgs_odd(icls)%zero_and_unflag_ft
                 call ctfsqsums_merged(icls)%zero_and_flag_ft
+                if( l_stream )then
+                    call cavgs_merged_wfilt(icls)%zero_and_unflag_ft
+                    call cavgs_even_wfilt(icls)%zero_and_unflag_ft
+                    call cavgs_odd_wfilt(icls)%zero_and_unflag_ft
+                    call ctfsqsums_merged_wfilt(icls)%zero_and_flag_ft
+                endif
             else
                 call cavgs_merged(icls)%zero_and_flag_ft
                 call cavgs_merged(icls)%add(cavgs_even(icls))
@@ -492,21 +609,53 @@ contains
                 call ctfsqsums_merged(icls)%zero_and_flag_ft
                 call ctfsqsums_merged(icls)%add(ctfsqsums_even(icls))
                 call ctfsqsums_merged(icls)%add(ctfsqsums_odd(icls))
+                if( l_stream )then
+                    call cavgs_merged_wfilt(icls)%zero_and_flag_ft
+                    call cavgs_merged_wfilt(icls)%add(cavgs_even_wfilt(icls))
+                    call cavgs_merged_wfilt(icls)%add(cavgs_odd_wfilt(icls))
+                    call ctfsqsums_merged_wfilt(icls)%zero_and_flag_ft
+                    call ctfsqsums_merged_wfilt(icls)%add(ctfsqsums_even_wfilt(icls))
+                    call ctfsqsums_merged_wfilt(icls)%add(ctfsqsums_odd_wfilt(icls))
+                endif
                 ! (w*CTF)**2 density correction
-                if(eo_pop(1) > 1) call cavgs_even(icls)%ctf_dens_correct(ctfsqsums_even(icls))
-                if(eo_pop(2) > 1) call cavgs_odd(icls)%ctf_dens_correct(ctfsqsums_odd(icls))
-                if(pop > 1)       call cavgs_merged(icls)%ctf_dens_correct(ctfsqsums_merged(icls))
+                if(eo_pop(1) > 1)then
+                    call cavgs_even(icls)%ctf_dens_correct(ctfsqsums_even(icls))
+                    if( l_stream ) call cavgs_even_wfilt(icls)%ctf_dens_correct(ctfsqsums_even_wfilt(icls))
+                endif
+                if(eo_pop(2) > 1)then
+                    call cavgs_odd(icls)%ctf_dens_correct(ctfsqsums_odd(icls))
+                    if( l_stream ) call cavgs_odd_wfilt(icls)%ctf_dens_correct(ctfsqsums_odd_wfilt(icls))
+                endif
+                if(pop > 1)then
+                    call cavgs_merged(icls)%ctf_dens_correct(ctfsqsums_merged(icls))
+                    if( l_stream ) call cavgs_merged_wfilt(icls)%ctf_dens_correct(ctfsqsums_merged_wfilt(icls))
+                endif
                 call cavgs_even(icls)%ifft()
                 call cavgs_odd(icls)%ifft()
                 call cavgs_merged(icls)%ifft()
+                if( l_stream )then
+                    call cavgs_even_wfilt(icls)%ifft()
+                    call cavgs_odd_wfilt(icls)%ifft()
+                    call cavgs_merged_wfilt(icls)%ifft()
+                endif
             endif
             call cavgs_even(icls)%clip_inplace(ldim)
             call cavgs_odd(icls)%clip_inplace(ldim)
             call cavgs_merged(icls)%clip_inplace(ldim)
+            if( l_stream )then
+                call cavgs_even_wfilt(icls)%clip_inplace(ldim)
+                call cavgs_odd_wfilt(icls)%clip_inplace(ldim)
+                call cavgs_merged_wfilt(icls)%clip_inplace(ldim)
+            endif
             ! gridding correction
             call cavgs_even(icls)%div(gridcorrection_img)
             call cavgs_odd(icls)%div(gridcorrection_img)
             call cavgs_merged(icls)%div(gridcorrection_img)
+            if( l_stream )then
+                call cavgs_even_wfilt(icls)%div(gridcorrection_img)
+                call cavgs_odd_wfilt(icls)%div(gridcorrection_img)
+                call cavgs_merged_wfilt(icls)%div(gridcorrection_img)
+            endif
         end do
         !$omp end parallel do
         call gridcorrection_img%kill
@@ -544,6 +693,16 @@ contains
             call cavgs_merged(icls)%ifft()
             call cavgs_even(icls)%ifft()
             call cavgs_odd(icls)%ifft()
+            if( l_stream )then
+                call cavgs_merged_wfilt(icls)%fft()
+                call cavgs_even_wfilt(icls)%fft()
+                call cavgs_odd_wfilt(icls)%fft()
+                call cavgs_even_wfilt(icls)%insert_lowres_serial(cavgs_merged_wfilt(icls), find)
+                call cavgs_odd_wfilt(icls)%insert_lowres_serial(cavgs_merged_wfilt(icls), find)
+                call cavgs_merged_wfilt(icls)%ifft
+                call cavgs_even_wfilt(icls)%ifft()
+                call cavgs_odd_wfilt(icls)%ifft()
+            endif
         end do
         !$omp end parallel do
         ! write FRCs
@@ -561,19 +720,27 @@ contains
     !>  \brief  writes class averages to disk
     subroutine cavger_write( fname, which )
         character(len=*),  intent(in) :: fname, which
+        character(len=:), allocatable :: fname_wfilt
         integer :: icls
+        fname_wfilt = add2fbody(fname, params_glob%ext, trim(WFILT_SUFFIX))
         select case(which)
             case('even')
+                if( l_stream ) fname_wfilt = add2fbody(fname, '_even'//trim(params_glob%ext), trim(WFILT_SUFFIX))
                 do icls=1,ncls
                     call cavgs_even(icls)%write(fname, icls)
+                    if( l_stream ) call cavgs_even_wfilt(icls)%write(fname_wfilt, icls)
                 end do
             case('odd')
+                if( l_stream ) fname_wfilt = add2fbody(fname, '_odd'//trim(params_glob%ext), trim(WFILT_SUFFIX))
                 do icls=1,ncls
                     call cavgs_odd(icls)%write(fname, icls)
+                    if( l_stream ) call cavgs_odd_wfilt(icls)%write(fname_wfilt, icls)
                 end do
             case('merged')
+                if( l_stream ) fname_wfilt = add2fbody(fname, params_glob%ext, trim(WFILT_SUFFIX))
                 do icls=1,ncls
                     call cavgs_merged(icls)%write(fname, icls)
+                    if( l_stream ) call cavgs_merged_wfilt(icls)%write(fname_wfilt, icls)
                 end do
             case DEFAULT
                 THROW_HARD('unsupported which flag')
@@ -660,13 +827,17 @@ contains
     subroutine cavger_readwrite_partial_sums( which )
         character(len=*), intent(in)  :: which
         integer                       :: icls, ldim_here(3)
-        character(len=:), allocatable :: cae, cao, cte, cto
+        character(len=:), allocatable :: cae, cao, cte, cto, caewf, caowf, ctewf, ctowf
         type(stack_io)                :: stkio(4)
         logical                       :: is_ft
         allocate(cae, source='cavgs_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
         allocate(cao, source='cavgs_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
         allocate(cte, source='ctfsqsums_even_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
         allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
+        allocate(caewf, source='cavgs_even_wfilt_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
+        allocate(caowf, source='cavgs_odd_wfilt_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
+        allocate(ctewf, source='ctfsqsums_even_wfilt_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
+        allocate(ctowf, source='ctfsqsums_odd_wfilt_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext)
         select case(trim(which))
             case('read')
                 call stkio(1)%open(cae, smpd, 'read', bufsz=ncls, is_ft=.true.)
@@ -679,6 +850,28 @@ contains
                     call stkio(3)%read(icls, ctfsqsums_even(icls))
                     call stkio(4)%read(icls, ctfsqsums_odd(icls))
                 end do
+                if( l_stream )then
+                    if( .not.file_exists(caewf) )then
+                        ! fallback, we use the partial CTF classes instead
+                        do icls=1,ncls
+                            call cavgs_even_wfilt(icls)%set(cavgs_even(icls))
+                            call cavgs_odd_wfilt(icls)%set(cavgs_odd(icls))
+                            call ctfsqsums_even_wfilt(icls)%set(ctfsqsums_odd(icls))
+                            call ctfsqsums_odd_wfilt(icls)%set(ctfsqsums_odd(icls))
+                        end do
+                    else
+                        call stkio(1)%open(caewf, smpd, 'read', bufsz=ncls, is_ft=.true.)
+                        call stkio(2)%open(caowf, smpd, 'read', bufsz=ncls, is_ft=.true.)
+                        call stkio(3)%open(ctewf, smpd, 'read', bufsz=ncls, is_ft=.true.)
+                        call stkio(4)%open(ctowf, smpd, 'read', bufsz=ncls, is_ft=.true.)
+                        do icls=1,ncls
+                            call stkio(1)%read(icls, cavgs_even_wfilt(icls))
+                            call stkio(2)%read(icls, cavgs_odd_wfilt(icls))
+                            call stkio(3)%read(icls, ctfsqsums_even_wfilt(icls))
+                            call stkio(4)%read(icls, ctfsqsums_odd_wfilt(icls))
+                        end do
+                    endif
+                endif
                 call stkio(1)%close
                 call stkio(2)%close
                 call stkio(3)%close
@@ -696,6 +889,18 @@ contains
                     call stkio(3)%write(icls, ctfsqsums_even(icls))
                     call stkio(4)%write(icls, ctfsqsums_odd(icls))
                 end do
+                if( l_stream )then
+                    call stkio(1)%open(caewf, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
+                    call stkio(2)%open(caowf, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
+                    call stkio(3)%open(ctewf, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
+                    call stkio(4)%open(ctowf, smpd, 'write', bufsz=ncls, is_ft=is_ft, box=ldim_here(1))
+                    do icls=1,ncls
+                        call stkio(1)%write(icls, cavgs_even_wfilt(icls))
+                        call stkio(2)%write(icls, cavgs_odd_wfilt(icls))
+                        call stkio(3)%write(icls, ctfsqsums_even_wfilt(icls))
+                        call stkio(4)%write(icls, ctfsqsums_odd_wfilt(icls))
+                    end do
+                endif
                 call stkio(1)%close
                 call stkio(2)%close
                 call stkio(3)%close
@@ -715,6 +920,12 @@ contains
             call ctfsqsums_even(icls)%mul(w)
             call cavgs_odd(icls)%mul(w)
             call ctfsqsums_odd(icls)%mul(w)
+            if( l_stream )then
+                call cavgs_even_wfilt(icls)%mul(w)
+                call ctfsqsums_even_wfilt(icls)%mul(w)
+                call cavgs_odd_wfilt(icls)%mul(w)
+                call ctfsqsums_odd_wfilt(icls)%mul(w)
+            endif
         end do
         !$omp end parallel do
     end subroutine cavger_apply_weights
@@ -798,6 +1009,48 @@ contains
             call ctfsqsums_odd(icls) %set_cmat(csums(4,:,:,icls))
         end do
         !$omp end parallel do
+        if( l_stream )then
+            ! reset sum
+            !$omp parallel workshare proc_bind(close)
+            csums = cmplx(0.0,0.0)
+            !$omp end parallel workshare
+            do ipart=1,params_glob%nparts
+                if( L_BENCH_GLOB ) t_io = tic()
+                ! look for files
+                allocate(cae, source='cavgs_even_wfilt_part'    //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
+                allocate(cao, source='cavgs_odd_wfilt_part'     //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
+                allocate(cte, source='ctfsqsums_even_wfilt_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
+                allocate(cto, source='ctfsqsums_odd_wfilt_part' //int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
+                ! serial read
+                call imgs4read(1)%read(cae)
+                call imgs4read(2)%read(cao)
+                call imgs4read(3)%read(cte)
+                call imgs4read(4)%read(cto)
+                deallocate(cae, cao, cte, cto)
+                if( L_BENCH_GLOB )then
+                    rt_io = rt_io + toc(t_io)
+                    t_workshare_sum = tic()
+                endif
+                ! parallel summation
+                !$omp parallel workshare proc_bind(close)
+                csums(1,:,:,:) = csums(1,:,:,:) + cmat_ptr1(:,:,:)
+                csums(2,:,:,:) = csums(2,:,:,:) + cmat_ptr2(:,:,:)
+                csums(3,:,:,:) = csums(3,:,:,:) + cmat_ptr3(:,:,:)
+                csums(4,:,:,:) = csums(4,:,:,:) + cmat_ptr4(:,:,:)
+                !$omp end parallel workshare
+                if( L_BENCH_GLOB ) rt_workshare_sum = rt_workshare_sum + toc(t_workshare_sum)
+            end do
+            if( L_BENCH_GLOB ) t_set_sums = tic()
+            ! update image objects in parallel
+            !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
+            do icls=1,ncls
+                call cavgs_even_wfilt(icls)    %set_cmat(csums(1,:,:,icls))
+                call cavgs_odd_wfilt(icls)     %set_cmat(csums(2,:,:,icls))
+                call ctfsqsums_even_wfilt(icls)%set_cmat(csums(3,:,:,icls))
+                call ctfsqsums_odd_wfilt(icls) %set_cmat(csums(4,:,:,icls))
+            end do
+            !$omp end parallel do
+        endif
         if( L_BENCH_GLOB ) rt_set_sums = rt_set_sums + toc(t_set_sums)
         ! destruct
         call imgs4read(1)%kill
@@ -869,6 +1122,14 @@ contains
                 call ctfsqsums_even(icls)%kill
                 call ctfsqsums_odd(icls)%kill
                 call ctfsqsums_merged(icls)%kill
+                if( l_stream )then
+                    call cavgs_even_wfilt(icls)%kill
+                    call cavgs_odd_wfilt(icls)%kill
+                    call cavgs_merged_wfilt(icls)%kill
+                    call ctfsqsums_even_wfilt(icls)%kill
+                    call ctfsqsums_odd_wfilt(icls)%kill
+                    call ctfsqsums_merged_wfilt(icls)%kill
+                endif
             end do
             deallocate( cavgs_even, cavgs_odd, cavgs_merged, ctfsqsums_even,&
             &ctfsqsums_odd, ctfsqsums_merged, pptcl_mask, prev_eo_pops)

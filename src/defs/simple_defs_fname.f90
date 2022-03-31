@@ -32,6 +32,7 @@ character(len=*), parameter :: DEFAULT_FILE_FORMAT  = 'M'
 character(len=*), parameter :: CLUSTER2D_ITER_FBODY = 'cluster2Ddoc_'
 character(len=*), parameter :: CAVGS_ITER_FBODY     = 'cavgs_iter'
 character(len=*), parameter :: CLUSTER2D_FINISHED   = 'CLUSTER2D_FINISHED'
+character(len=*), parameter :: WFILT_SUFFIX         = '_wfilt'
 ! AUTOMASK2D
 character(len=*), parameter :: BIN_OTSU             = 'binarized_otsu.mrc'
 character(len=*), parameter :: BIN_OTSU_GROW        = 'binarized_otsu_grown.mrc'
