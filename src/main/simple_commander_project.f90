@@ -1179,7 +1179,7 @@ contains
             call spproj%os_stk%get_ori(istk, o_stk)
             call o_stk%getter('stk',stkname)
             ext        = fname2ext(stkname)
-            newstkname = trim(stkdir)//trim(get_fbody(basename(stkname),ext))//'.mrc'
+            newstkname = trim(stkdir)//trim(get_fbody(basename(stkname),ext))//trim(STK_EXT)
             fromp      = nint(o_stk%get('fromp'))
             top        = nint(o_stk%get('top'))
             fromp_glob = top_glob+1
