@@ -990,18 +990,17 @@ contains
         &'Assign optics groups',&                     							! descr_short
         &'is a program to assign optics groups',& 								! descr long
         &'simple_exec',&                                                  		! executable
-        &0, 5, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 4, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
-        call assign_optics_groups%set_input('parm_ios', 1, projfile)
-        call assign_optics_groups%set_input('parm_ios', 2, 'xmldir', 'dir', 'Directory containing per movie EPU XML files',&
+        call assign_optics_groups%set_input('parm_ios', 1, 'xmldir', 'dir', 'Directory containing per movie EPU XML files',&
         & 'Directory containing per movie EPY XML files', 'e.g. /data/datasetid/xml', .false., '')
-        call assign_optics_groups%set_input('parm_ios', 3, 'maxpop', 'num', 'Maximum number of movies/micrographs/stacks in each optics group',&
+        call assign_optics_groups%set_input('parm_ios', 2, 'maxpop', 'num', 'Maximum number of movies/micrographs/stacks in each optics group',&
         & 'Maximum number of movies/micrographs/stacks in each optics group', 'e.g. 100', .false., '')
-        call assign_optics_groups%set_input('parm_ios', 4, 'optics_offset', 'num', 'Numbering offset to apply to optics groups',&
+        call assign_optics_groups%set_input('parm_ios', 3, 'optics_offset', 'num', 'Numbering offset to apply to optics groups',&
         & 'Numbering offset to apply to optics groups. Aids with combining datasets', 'e.g. 10', .false., '')
-        call assign_optics_groups%set_input('parm_ios', 5, 'tilt_thres', 'num', 'Threshold for hierarchical clustering of beamtilts',&
+        call assign_optics_groups%set_input('parm_ios', 4, 'tilt_thres', 'num', 'Threshold for hierarchical clustering of beamtilts',&
         & 'Threshold for hierarchical clustering of beamtilts', 'e.g 0.05', .false., 0.05)
         ! alternative inputs
         ! <empty>
@@ -1747,10 +1746,10 @@ contains
         &'Export projectfile in star format',&                     				! descr_short
         &'is a program to export a SIMPLE projectfile in star format',& 		! descr long
         &'simple_exec',&                                                  		! executable
-        &0, 1, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 0, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call export_starproject%set_input('parm_ios', 1, projfile)
+       ! call export_starproject%set_input('parm_ios', 1, projfile)
         ! parameter input/output
         ! alternative inputs
         ! <empty>
@@ -1870,11 +1869,11 @@ contains
         &'Import project in in star format',&                     				! descr_short
         &'is a program to import a SIMPLE projectfile from star format',& 		! descr long
         &'simple_exec',&                                                  		! executable
-        &0, 1, 0, 0, 0, 0, 0, .false.)                                           ! # entries in each group, requires sp_project
+        &0, 0, 0, 0, 0, 0, 0, .false.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
-        call import_starproject%set_input('parm_ios', 1, 'import_dir', 'file', 'Import directory containing external job output in star format', 'Directory to import star files from', 'e.g. MotionCorr/job001', .true., '')
+    !    call import_starproject%set_input('parm_ios', 1, 'import_dir', 'file', 'Import directory containing external job output in star format', 'Directory to import star files from', 'e.g. MotionCorr/job001', .true., '')
         ! alternative inputs
         ! <empty>
         ! search controls

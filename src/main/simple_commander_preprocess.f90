@@ -1838,6 +1838,7 @@ contains
         real,                       allocatable :: boxdata(:,:)
         logical,                    allocatable :: oris_mask(:), mics_mask(:)
         character(len=LONGSTRLEN) :: stack, boxfile_name, box_fname, ctfdoc
+        character(len=STDLEN)     :: ext
         integer                   :: nframes, imic, iptcl, ldim(3), nptcls,nmics,nmics_here,box, box_first, fromto(2)
         integer                   :: cnt, nmics_tot, lfoo(3), ifoo, noutside, state, iptcl_glob, cnt_stats
         real                      :: ptcl_pos(2), meanv,sddevv,minv,maxv,stk_stats(4),dfx,dfy,sdev_noise
@@ -2005,7 +2006,8 @@ contains
                     endif
                 endif
                 ! output stack
-                stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(basename(mic_name))
+                ext = fname2ext(trim(basename(mic_name)))
+                stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(get_fbody(trim(basename(mic_name)), trim(ext)))//trim(STK_EXT)
                 ! extract windows from integrated movie
                 call micrograph%read(mic_name, 1)
                 ! phase-flip micrograph

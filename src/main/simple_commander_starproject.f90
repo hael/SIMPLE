@@ -67,15 +67,31 @@ contains
         end do
         if(file_exists(cline%get_carg("import_dir") // "/" // "run_data.star") .and. file_exists(cline%get_carg("import_dir") // "/" // "run_class001.mrc")) then
             call starproj%import_ptcls3D(cline, spproj, cline%get_carg("import_dir") // "/" // "run_it" // itchar // "run_data.star" )
+            call spproj%os_ptcl2D%copy(spproj%os_ptcl3D, is_ptcl=.true.)
+            call spproj%os_ptcl2D%set_all2single("e1", 0.0)
+            call spproj%os_ptcl2D%set_all2single("e2", 0.0)
+            call spproj%os_ptcl2D%set_all2single("e3", 0.0)
         else if(iteration .and. file_exists(cline%get_carg("import_dir") // "/" // "run_it" // itchar // "_class001.mrc") .and. file_exists(cline%get_carg("import_dir") // "/" // "run_it" // itchar // "_data.star")) then
             call starproj%import_ptcls3D(cline, spproj, cline%get_carg("import_dir") // "/" // "run_it" // itchar // "_data.star" )
+            call spproj%os_ptcl2D%copy(spproj%os_ptcl3D, is_ptcl=.true.)
+            call spproj%os_ptcl2D%set_all2single("e1", 0.0)
+            call spproj%os_ptcl2D%set_all2single("e2", 0.0)
+            call spproj%os_ptcl2D%set_all2single("e3", 0.0)
         else if(iteration .and. file_exists(cline%get_carg("import_dir") // "/" // "run_it" // itchar // "_classes.mrcs") .and. file_exists(cline%get_carg("import_dir") // "/" // "run_it" // itchar // "_data.star")) then
             call starproj%import_ptcls2D(cline, spproj, cline%get_carg("import_dir") // "/" // "run_it" // itchar // "_data.star" )
+            call spproj%os_ptcl3D%copy(spproj%os_ptcl2D, is_ptcl=.true.)
+            call spproj%os_ptcl3D%set_all2single("e1", 0.0)
+            call spproj%os_ptcl3D%set_all2single("e2", 0.0)
+            call spproj%os_ptcl3D%set_all2single("e3", 0.0)
             if(file_exists(cline%get_carg("import_dir") // "/" // "run_it" // itchar // "_model.star")) then
                 call starproj%import_cls2D(cline, spproj, cline%get_carg("import_dir") // "/" // "run_it" // itchar // "_model.star" )
             end if
         else if(file_exists(cline%get_carg("import_dir") // "/" // "particles.star")) then
             call starproj%import_ptcls2D(cline, spproj, cline%get_carg("import_dir") // "/" // "particles.star")
+            call spproj%os_ptcl3D%copy(spproj%os_ptcl2D, is_ptcl=.true.)
+            call spproj%os_ptcl3D%set_all2single("e1", 0.0)
+            call spproj%os_ptcl3D%set_all2single("e2", 0.0)
+            call spproj%os_ptcl3D%set_all2single("e3", 0.0)
         else if(file_exists(cline%get_carg("import_dir") // "/" // "micrographs_ctf.star")) then
             call starproj%import_mics(cline, spproj, cline%get_carg("import_dir") // "/" // "micrographs_ctf.star")
         else if(file_exists(cline%get_carg("import_dir") // "/" // "corrected_micrographs.star")) then
@@ -101,15 +117,15 @@ contains
         call spproj%read(params%projfile)
         if (spproj%os_optics%get_noris() == 0) then
             write(logfhandle,*) ''
-            write(logfhandle,*) char(9), "no optics groups are set in the project file. please run assign_optics_groups first"
+            write(logfhandle,*) char(9), "no optics groups are set in the project file. Auto assigning optics groups. You may wish to run assign_optics_groups prior to export_starproject"
             write(logfhandle,*) ''
-        else 
-            if (spproj%os_mic%get_noris() > 0) then
-                call starproj%export_mics(cline, spproj)
-            end if
-            if (spproj%os_ptcl2D%get_noris() > 0) then
-                call starproj%export_ptcls2D(cline, spproj)
-            end if
+            call starproj%assign_optics(cline, spproj)
+        end if
+        if (spproj%os_mic%get_noris() > 0) then
+            call starproj%export_mics(cline, spproj)
+        end if
+        if (spproj%os_ptcl2D%get_noris() > 0) then
+            call starproj%export_ptcls2D(cline, spproj)
         end if
         call spproj%kill
         call simple_end('**** EXPORT_STARPROJECT NORMAL STOP ****')
