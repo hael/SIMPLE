@@ -62,7 +62,7 @@ contains
         self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnOpticsGroupName", splflag="ogname", string=.true.)]
         self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnAmplitudeContrast", splflag="fraca")]
         self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnSphericalAberration", splflag="cs")]
-        self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnMicrographPixelSize", splflag="smpd")]
+      !  self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnMicrographPixelSize", splflag="smpd")]
         self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnImagePixelSize", splflag="smpd")]
         self%starfile%optics%flags = [self%starfile%optics%flags, star_flag(rlnflag="rlnImageSize", splflag="box", int=.true.)]
     
@@ -517,7 +517,7 @@ contains
         character(len=XLONGSTRLEN)    :: cwd
         character(len=LONGSTRLEN)     :: strtmp
         integer                       :: iflag, iori, ok, stkindex, fhandle
-        real                          :: rval
+        real                          :: rval, stkind
         logical                       :: ex
         call simple_getcwd(cwd)
         inquire(file=trim(adjustl(self%starfile%filename)), exist=ex)
@@ -527,7 +527,7 @@ contains
             call fopen(fhandle,file=trim(adjustl(self%starfile%filename)), status='new', iostat=ok)
         endif
         write(fhandle, *) ""
-        write(fhandle, *) "# version 3000fhandle"
+        write(fhandle, *) "# version 3000"
         write(fhandle, *) ""
         write(fhandle, *) "data_" // trim(adjustl(blockname))
         write(fhandle, *) ""
@@ -540,6 +540,7 @@ contains
         if( present(mapstks) )then
             if( mapstks )then
                 write(fhandle, *) "_rlnImageName"
+                write(fhandle, *) "_rlnMicrographName"
             endif
         end if
         do iori=1, sporis%get_noris()
@@ -574,6 +575,15 @@ contains
                         write(fhandle, "(I7,A,A,A)", advance="no") int(stkindex), '@', trim(adjustl(stkname(4:))), ' '
                     else
                         write(fhandle, "(I7,A,A,A)", advance="no") int(stkindex), '@', trim(adjustl(stkname)), ' '
+                    end if
+                    stkind = spproj%os_ptcl2D%get(iori, "stkind")
+                    if(stkind <= spproj%os_mic%get_noris()) then
+                        strtmp = trim(adjustl(spproj%os_mic%get_static(int(stkind), "intg")))
+                        if(index(strtmp, '../') == 1) then ! Relative path. Adjust to base directory
+                            write(fhandle, "(A)", advance="no")  trim(adjustl(strtmp(4:))) // " "
+                        else
+                            write(fhandle, "(A)", advance="no") trim(adjustl(strtmp)) // " "
+                        end if
                     end if
                 end if
                 write(fhandle,*) ""
@@ -756,7 +766,7 @@ contains
         end if
         write(logfhandle,*) ''
         write(logfhandle,*) char(9), "updating optics groups in project file ... "
-        call spproj%os_optics%new(maxval(self%tiltinfo%finaltiltgroupid) - minval(self%tiltinfo%finaltiltgroupid) + 1, .false.)
+        call spproj%os_optics%new(maxval(self%tiltinfo%finaltiltgroupid) - minval(self%tiltinfo%finaltiltgroupid) + 1, is_ptcl=.false.)
         do i = minval(self%tiltinfo%finaltiltgroupid), maxval(self%tiltinfo%finaltiltgroupid)
             element = findloc(self%tiltinfo%finaltiltgroupid, i, 1)
             if(element > 0) then
