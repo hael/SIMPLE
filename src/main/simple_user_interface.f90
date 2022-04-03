@@ -1352,7 +1352,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 2, 0, 7, 5, 1, 4, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 2, 0, 7, 6, 1, 4, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1381,15 +1381,15 @@ contains
         call cluster2D_stream%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
         ! filter controls
         call cluster2D_stream%set_input('filt_ctrls', 1, hp)
-        call cluster2D_stream%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        call cluster2D_stream%set_input('filt_ctrls', 2, 'cenlp',      'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
-        call cluster2D_stream%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit to apply to diagnose possible &
-        &issues with the dynamic update scheme used by default', 'low-pass limit in Angstroms', .false., 15.)
-        call cluster2D_stream%set_input('filt_ctrls', 4, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
+        call cluster2D_stream%set_input('filt_ctrls', 3, 'lp',         'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
+        call cluster2D_stream%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit in Angstroms', .false., 2.0*MAX_SMPD)
+        call cluster2D_stream%set_input('filt_ctrls', 5, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){no}',&
         '(yes|no){no}', .false., 'no')
-        call cluster2D_stream%set_input('filt_ctrls', 5, 'wiener', 'multi', 'Wiener restoration', 'Wiener restoration, full or partial (full|partial){partial}','(full|partial){partial}', .false., 'partial')
+        call cluster2D_stream%set_input('filt_ctrls', 6, 'wiener',     'multi', 'Wiener restoration', 'Wiener restoration, full or partial (full|partial){partial}','(full|partial){partial}', .false., 'partial')
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
