@@ -525,11 +525,11 @@ contains
                 call build_glob%vol%expand_cmat(params_glob%alpha,norm4proj=.true.)
                 call build_glob%vol_odd%fft
                 call build_glob%vol_odd%expand_cmat(params_glob%alpha,norm4proj=.true.)
-                ! if( params_glob%l_ran_noise_ph )then
-                !     ! randomize Fourier phases below noise power in a global manner
-                !     if( params_glob%clsfrcs.eq.'no' )&
-                !     &call build_glob%vol%ran_phases_below_noise_power(build_glob%vol_odd, params_glob%lplim_crit)
-                ! endif
+                if( params_glob%l_ran_noise_ph )then
+                    ! randomize Fourier phases below noise power in a global manner
+                    if( params_glob%clsfrcs.eq.'no' )&
+                    &call build_glob%vol%ran_phases_below_noise_power(build_glob%vol_odd, 0.5)
+                endif
                 ! set # fcomps per shell
                 filtsz  = build_glob%img%get_filtsz()
                 flims   = build_glob%vol%loop_lims(2)

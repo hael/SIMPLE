@@ -407,11 +407,11 @@ contains
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! randomize Fourier phases below noise power in a global manner
-                        ! call cavgs_even(icls)%fft
-                        ! call cavgs_odd(icls)%fft
-                        ! call cavgs_even(icls)%ran_phases_below_noise_power(cavgs_odd(icls), params_glob%lplim_crit)
-                        ! call cavgs_even(icls)%ifft
-                        ! call cavgs_odd(icls)%ifft
+                        call cavgs_even(icls)%fft
+                        call cavgs_odd(icls)%fft
+                        call cavgs_even(icls)%ran_phases_below_noise_power(cavgs_odd(icls), 0.5)
+                        call cavgs_even(icls)%ifft
+                        call cavgs_odd(icls)%ifft
                         ! here we are passing in the shifts and do NOT map them back to classes
                         call prep2Dref(pftcc, cavgs_even(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
                         call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
