@@ -311,11 +311,12 @@ contains
 
     end subroutine nonuniform_phase_ran
 
-    subroutine nonuniform_fscTVfilt( even, odd, mskimg, l_match_filt, map2filt )
+    subroutine nonuniform_fscTVfilt( even, odd, mskimg, l_match_filt, map2filt, phran )
         use simple_image, only: image
-        class(image),            intent(inout) :: even, odd, mskimg
-        logical,                 intent(in)    :: l_match_filt
-        class (image), optional, intent(inout) :: map2filt
+        class(image),           intent(inout) :: even, odd, mskimg
+        logical,                intent(in)    :: l_match_filt
+        class(image), optional, intent(inout) :: map2filt
+        logical,      optional, intent(in)    :: phran
         integer,      parameter   :: SUBBOX=32, LSHIFT=15, RSHIFT=16, CPIX=LSHIFT + 1, CHUNKSZ=20
         real,         parameter   :: SUBMSK=real(SUBBOX)/2. - COSMSKHALFWIDTH - 1.
         type(image),  allocatable :: subvols_even(:)  ! one per thread
@@ -328,7 +329,7 @@ contains
         integer :: filtsz, ldim(3), i, j, h, k, l, funit, io_stat, npix, flims(3,2), sh
         integer :: find_hres, find_lres, ithr, lb(3), ub(3), min_find
         real    :: smpd
-        logical :: map2filt_present
+        logical :: map2filt_present, pphran
         ! check input
         if( even%is_ft()   ) THROW_HARD('even vol FTed; nonuniform_fscTVfilt')
         if( odd%is_ft()    ) THROW_HARD('odd  vol FTed; nonuniform_fscTVfilt')
@@ -337,6 +338,8 @@ contains
         if( map2filt_present )then
             if( map2filt%is_ft() ) THROW_HARD('map2filt vol FTed; nonuniform_fscTVfilt')
         endif
+        pphran = .true.
+        if( present(phran) ) pphran = phran
         ! set parameters
         ldim    = even%get_ldim()
         if( ldim(3) == 1 ) THROW_HARD('not intended for 2D images; nonuniform_fscTVfilt')
@@ -457,7 +460,7 @@ contains
             ! calculate TV filter
             call fsc2TVfilt_fast(corrs, nfcomps, filt)
             ! randomize phases below noise power
-            call subvols_even(ithr)%ran_phases_below_noise_power(subvols_odd(ithr), 0.5)
+            if( pphran ) call subvols_even(ithr)%ran_phases_below_noise_power(subvols_odd(ithr), 0.5)
             ! apply TV filter
             if( map2filt_present )then
                 if( l_match_filt )then

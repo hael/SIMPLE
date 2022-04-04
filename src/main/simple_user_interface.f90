@@ -871,7 +871,7 @@ contains
         &system. On a single-socket machine there may be speed benfits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', 'divide job into # parts', .true., 1.0)
         call set_param(nthr,          'nthr',          'num',    'Number of threads per part, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
         &logical threads in a socket.', '# shared-memory CPU threads', .true., 0.)
-        call set_param(nonuniform,    'nonuniform',    'binary', 'Nonuniform filter', 'Apply nonuniform filter (phase randomization below noise power)(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(nonuniform,    'nonuniform',    'binary', 'Nonuniform filter', 'Apply nonuniform filter based on TV regularization(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(update_frac,   'update_frac',   'num',    'Fractional update per iteration', 'Fraction of particles to update per iteration in incremental learning scheme for accelerated convergence &
         &rate(0.1-0.5){1.}', 'update this fraction per iter(0.1-0.5){1.0}', .false., 1.0)
         call set_param(frac,          'frac',          'num',    'Fraction of particles to include', 'Fraction of particles to include based on spectral score (median of FRC between reference and particle)',&
@@ -2560,7 +2560,7 @@ contains
         &'Post-processing of volume',&                                        ! descr_short
         &'is a program for map post-processing. Use program volops to estimate the B-factor with the Guinier plot',& ! descr_long
         &'simple_exec',&                                                      ! executable
-        &0, 1, 0, 0, 5, 7, 1, .true.)                                         ! # entries in each group, requires sp_project
+        &0, 1, 0, 0, 6, 7, 1, .true.)                                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2577,6 +2577,8 @@ contains
         call postprocess%set_input('filt_ctrls', 3, bfac)
         call postprocess%set_input('filt_ctrls', 4, mirr)
         call postprocess%set_input('filt_ctrls', 5, lp_backgr)
+        call postprocess%set_input('filt_ctrls', 6, 'nonuniform', 'binary', 'Nonuniform filter',&
+        &'Apply nonuniform filter based on TV regularization(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! mask controls
         call postprocess%set_input('mask_ctrls', 1, mskdiam)
         call postprocess%set_input('mask_ctrls', 2, mskfile)

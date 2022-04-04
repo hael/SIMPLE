@@ -101,24 +101,27 @@ contains
 
     subroutine exec_postprocess( self, cline )
         use simple_sp_project,    only: sp_project
-        use simple_estimate_ssnr, only: fsc2optlp
+        ! use simple_estimate_ssnr, only: fsc2optlp
+        use simple_estimate_ssnr, only: fsc2TVfilt, nonuniform_fscTVfilt
         class(postprocess_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         character(len=:), allocatable :: fname_vol, fname_fsc, fname_msk, fname_mirr
         character(len=:), allocatable :: fname_even, fname_odd, fname_pproc, fname_lp
         real,             allocatable :: fsc(:), optlp(:), res(:)
         type(parameters) :: params
-        type(image)      :: vol, vol_copy
+        type(image)      :: vol, vol_copy, vol_even, vol_odd
         type(masker)     :: mskvol
         type(sp_project) :: spproj
         real    :: fsc0143, fsc05, smpd, mskfile_smpd, lplim
-        integer :: state, box, fsc_box, mskfile_box, ldim(3)
-        logical :: has_fsc, has_mskfile
+        integer :: state, box, fsc_box, mskfile_box, ldim(3), flims(3,2)
+        logical :: has_fsc, has_mskfile, l_nonuniform
         ! set defaults
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('mkdir') )      call cline%set('mkdir',     'yes')
+        if( .not. cline%defined('nonuniform') ) call cline%set('nonuniform', 'no')
         call cline%set('oritype', 'out')
         ! parse commad-line
         call params%new(cline)
+        l_nonuniform = trim(params%nonuniform).eq.'yes'
         ! read project segment
         call spproj%read_segment(params%oritype, params%projfile)
         ! state
@@ -137,15 +140,21 @@ contains
             THROW_HARD('volume: '//trim(fname_vol)//' does not exist; exec_postprocess')
         endif
         ! generate file names
-        fname_even  = basename(add2fbody(trim(fname_vol),   params%ext, '_even'))
-        fname_odd   = basename(add2fbody(trim(fname_vol),   params%ext, '_odd' ))
+        fname_even  = add2fbody(trim(fname_vol), params%ext, '_even')
+        fname_odd   = add2fbody(trim(fname_vol), params%ext, '_odd' )
         fname_pproc = basename(add2fbody(trim(fname_vol),   params%ext, PPROC_SUFFIX))
         fname_mirr  = basename(add2fbody(trim(fname_pproc), params%ext, MIRR_SUFFIX))
         fname_lp    = basename(add2fbody(trim(fname_vol),   params%ext, LP_SUFFIX))
-        ! read volume
+        ! read volume(s)
         ldim = [box,box,box]
         call vol%new(ldim, smpd)
         call vol%read(fname_vol)
+        if( l_nonuniform )then
+            call vol_even%new(ldim, smpd)
+            call vol_even%read(fname_even)
+            call vol_odd%new(ldim, smpd)
+            call vol_odd%read(fname_odd)
+        endif
         ! check fsc filter & determine resolution
         has_fsc = .false.
         if( cline%defined('lp') )then
@@ -163,7 +172,13 @@ contains
             ! resolution & optimal low-pass filter from FSC
             res   = vol%get_res()
             fsc   = file2rarr(params%fsc)
-            optlp = fsc2optlp(fsc)
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            ! optlp = fsc2optlp(fsc)
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            allocate(optlp(size(fsc)), source=0.)
+            flims = vol%loop_lims(2)
+            call fsc2TVfilt(fsc, flims, optlp)
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             call get_resolution( fsc, res, fsc05, fsc0143 )
             where( res < TINY ) optlp = 0.
             lplim = fsc0143
@@ -187,6 +202,11 @@ contains
             params%mskfile = trim(fname_msk)
             if( file_exists(params%mskfile) ) has_mskfile = .true.
         endif
+        if( l_nonuniform .and. .not. has_mskfile ) THROW_HARD('nonuniform filter requires mask file input')
+        if( has_mskfile )then
+            call mskvol%new(ldim, smpd)
+            call mskvol%read(params%mskfile)
+        endif
         ! B-factor
         call vol%fft()
         call vol_copy%copy(vol)
@@ -196,6 +216,18 @@ contains
             ! low-pass overrides all input
             call vol%bp(0., params%lp)
             call vol_copy%bp(0., params%lp)
+        else if( l_nonuniform )then
+            call vol_even%ifft
+            call vol_odd%ifft
+            call vol%ifft
+            call vol_copy%ifft
+            ! nonuniform low-pass filter based on windowed FSCs and TV regularization
+            call nonuniform_fscTVfilt(vol_even, vol_odd, mskvol,&
+            &l_match_filt=.false., map2filt=vol, phran=.false. )
+            call nonuniform_fscTVfilt(vol_even, vol_odd, mskvol,&
+            &l_match_filt=.false., map2filt=vol_copy, phran=.false. )
+            call vol%fft
+            call vol_copy%fft
         else if( has_fsc )then
             ! optimal low-pass filter from FSC
             call vol%apply_filter(optlp)
@@ -238,8 +270,6 @@ contains
             call mskvol%kill
         else if( trim(params%automsk) .eq. 'file' .and. has_mskfile )then
             call vol%zero_background
-            call mskvol%new(ldim, smpd)
-            call mskvol%read(params%mskfile)
             if( cline%defined('lp_backgr') )then
                 call vol%lp_background(mskvol,params%lp_backgr)
             else
