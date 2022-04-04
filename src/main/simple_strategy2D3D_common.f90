@@ -528,7 +528,7 @@ contains
                 if( params_glob%l_ran_noise_ph )then
                     ! randomize Fourier phases below noise power in a global manner
                     if( params_glob%clsfrcs.eq.'no' )&
-                    &call build_glob%vol%ran_phases_below_noise_power(build_glob%vol_odd, 0.5)
+                    &call build_glob%vol%ran_phases_below_noise_power(build_glob%vol_odd)
                 endif
                 ! set # fcomps per shell
                 filtsz  = build_glob%img%get_filtsz()

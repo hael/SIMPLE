@@ -390,7 +390,7 @@ type :: parameters
     real    :: lp_backgr=20.       !< low-pass for solvent blurring (in A)
     real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
-    real    :: lplim_crit=0.143    !< corr criterion low-pass limit assignment(0.143-0.5){0.5}
+    real    :: lplim_crit=0.5      !< corr criterion low-pass limit assignment(0.143-0.5){0.5}
     real    :: lplims2D(3)
     real    :: lpmed=20.
     real    :: lpstart=0.          !< start low-pass limit(in A){15}
