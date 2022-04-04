@@ -90,9 +90,11 @@ contains
         integer :: i
         do i = 1, size(flags)
             if((index(flags(i)%splflag, trim(adjustl(splflag))) > 0 .OR. index(flags(i)%splflag2, trim(adjustl(splflag))) > 0) .AND. len_trim(flags(i)%rlnflag) > 0) then
-                flags(i)%present = .true.
-                write(logfhandle,*) char(9), char(9), "mapping ", flags(i)%splflag, " => ", trim(adjustl(flags(i)%rlnflag))
-                exit
+				if(flags(i)%present .eqv. .false.) then
+					flags(i)%present = .true.
+					write(logfhandle,*) char(9), char(9), "mapping ", flags(i)%splflag, " => ", trim(adjustl(flags(i)%rlnflag))
+				end if
+				exit
             end if
         end do
     end subroutine enable_splflag
@@ -102,8 +104,9 @@ contains
         type(star_flag),          intent(inout) :: flags(:)
         type(ori)                               :: testori
         character(len=XLONGSTRLEN), allocatable :: keys(:)
-        integer                                 :: iori, ikey
+        integer                                 :: iori, ikey, testcount
         ! find 1st non state 0 ori
+        testcount = 0
         do iori = 1,sporis%get_noris()
             if(sporis%get_state(iori) > 0) then
                 call sporis%get_ori(iori, testori)
@@ -111,7 +114,10 @@ contains
                 do ikey=1, size(keys)
                     call enable_splflag(trim(adjustl(keys(ikey))), flags)
                 end do
-                exit
+                testcount = testcount + 1
+                if(testcount == 10) then ! Do 10 tests to counter xpos or ypos being 0
+					exit
+				end if
             end if
         end do
     end subroutine enable_splflags
