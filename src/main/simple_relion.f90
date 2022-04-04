@@ -408,12 +408,12 @@ contains
 
                         if(stk) then
                             call spproj%os_stk%getter(stkindex, 'stk', getstring)
-                            call starfile_table__setValue_string(startable, EMDL_IMAGE_NAME,trim(int2str(int(ptclcount(stkindex), 4))) // '@particles/' // trim(adjustl(basename(getstring))) // 's')
-                            inquire(file='particles/' // trim(adjustl(basename(getstring))) // 's', exist=exists)
+                            call starfile_table__setValue_string(startable, EMDL_IMAGE_NAME,trim(int2str(int(ptclcount(stkindex), 4))) // '@particles/' // trim(adjustl(basename(fname_new_ext(trim(adjustl(getstring)), "mrcs")))))
+                            inquire(file='particles/' // trim(adjustl(basename(fname_new_ext(trim(adjustl(getstring)), "mrcs")))), exist=exists)
                             if(.NOT. exists) then
-                                call syslib_symlink('../' // trim(adjustl(getstring)), 'particles/' // trim(adjustl(basename(getstring))) // 's', 'Failed to generate symlink')
+                                call syslib_symlink('../' // trim(adjustl(getstring)), 'particles/' // trim(adjustl(basename(fname_new_ext(trim(adjustl(getstring)), "mrcs")))), 'Failed to generate symlink')
                             endif
-                            getstring = trim(adjustl(basename(getstring)))
+                            getstring = trim(adjustl(basename(fname_new_ext(trim(adjustl(getstring)), "mrc"))))
                             call starfile_table__setValue_string(startable, EMDL_MICROGRAPH_NAME, 'micrographs/' // getstring(12 : len(getstring)))
                         endif
 
