@@ -14,7 +14,6 @@ implicit none
 public :: make_oris_commander
 public :: orisops_commander
 public :: oristats_commander
-public :: tseries_rotrate_commander
 public :: rotmats2oris_commander
 public :: vizoris_commander
 private
@@ -24,22 +23,22 @@ type, extends(commander_base) :: make_oris_commander
   contains
     procedure :: execute      => exec_make_oris
 end type make_oris_commander
+
 type, extends(commander_base) :: orisops_commander
   contains
     procedure :: execute      => exec_orisops
 end type orisops_commander
+
 type, extends(commander_base) :: oristats_commander
   contains
     procedure :: execute      => exec_oristats
 end type oristats_commander
-type, extends(commander_base) :: tseries_rotrate_commander
-  contains
-    procedure :: execute      => exec_tseries_rotrate
-end type tseries_rotrate_commander
+
 type, extends(commander_base) :: rotmats2oris_commander
   contains
     procedure :: execute      => exec_rotmats2oris
 end type rotmats2oris_commander
+
 type, extends(commander_base) :: vizoris_commander
   contains
     procedure :: execute      => exec_vizoris
@@ -321,37 +320,6 @@ contains
         call o_single%kill
         call simple_end('**** SIMPLE_ORISTATS NORMAL STOP ****')
     end subroutine exec_oristats
-
-    subroutine exec_tseries_rotrate( self, cline )
-        class(tseries_rotrate_commander), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        type(oris)       :: os
-        type(ori)        :: o_peak1, o_peak2
-        integer :: iptcl, n_nozero, ipart, ptcl1, ptcl2
-        real    :: mindist
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
-        call os%new(params%nptcls, is_ptcl=.true.)
-        call os%read(params%oritab)
-        call o_peak1%new(is_ptcl=.true.)
-        call o_peak2%new(is_ptcl=.true.)
-        write(*,'(A)') '#PARTICLE INDEX #PARTICLE_INDEX #MIN_ANG_DIST'
-        do iptcl = 1, params%nptcls - 1
-            ptcl1   = iptcl
-            ptcl2   = iptcl + 1
-            call os%get_ori(ptcl1, o_peak1)
-            call os%get_ori(ptcl2, o_peak2)
-            if( o_peak1%isstatezero() .or. o_peak2%isstatezero() )then
-                write(*,'(I7,1X,I7,1X,A)') ptcl1, ptcl2, 'NaN'
-            else
-                write(*,'(I7,1X,I7,1X,F6.1)') ptcl1, ptcl2, mindist
-            endif
-        end do
-        call os%kill
-        call o_peak1%kill
-        call o_peak2%kill
-    end subroutine exec_tseries_rotrate
 
     !> convert rotation matrix to orientation oris class
     subroutine exec_rotmats2oris( self, cline )
