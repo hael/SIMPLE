@@ -36,9 +36,10 @@ enum, bind(c)
     enumerator :: I_YPOS      = 32
     enumerator :: I_GID       = 33
     enumerator :: I_OGID      = 34
+    enumerator :: I_PIND      = 35
 end enum
 
-integer, parameter :: N_PTCL_ORIPARAMS = 34
+integer, parameter :: N_PTCL_ORIPARAMS = 35
 
 contains
 
@@ -113,7 +114,9 @@ contains
             case('gid')
                 get_oriparam_ind = I_GID  
             case('ogid')
-                get_oriparam_ind = I_OGID     
+                get_oriparam_ind = I_OGID
+            case('pind')
+                get_oriparam_ind = I_PIND    
         end select
     end function get_oriparam_ind
 
@@ -188,7 +191,9 @@ contains
             case(I_GID)
                 flag ='gid'
             case(I_OGID)
-                flag ='ogid'   
+                flag ='ogid'
+            case(I_PIND)
+                flag ='pind'   
         end select
     end function get_oriparam_flag
 
@@ -246,7 +251,9 @@ contains
             case(I_GID)
                 is_zero = abs(val) < TINY
             case(I_OGID)
-                is_zero = abs(val) < TINY   
+                is_zero = abs(val) < TINY
+            case(I_PIND)
+                is_zero = abs(val) < TINY 
         end select
         oriparam_isthere = .not. is_zero
     end function oriparam_isthere

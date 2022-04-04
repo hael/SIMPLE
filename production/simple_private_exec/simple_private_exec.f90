@@ -72,7 +72,6 @@ type(kstest_commander)                :: xkstst
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
 type(rotmats2oris_commander)          :: xrotmats2oris
 type(print_project_vals_commander)    :: xprint_project_vals
-type(tseries_rotrate_commander)       :: xtseries_rotrate
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
 type(prune_project_commander)         :: xprune_project
@@ -199,8 +198,6 @@ select case(prg)
         call xrotmats2oris%execute(cline)
     case( 'print_project_vals' )
         call xprint_project_vals%execute(cline)
-    case( 'tseries_rotrate')
-        call xtseries_rotrate%execute(cline)
 
     ! DATA MANAGEMENT PROGRAMS
     case( 'prune_project' )

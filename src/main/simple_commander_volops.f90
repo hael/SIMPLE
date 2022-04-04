@@ -186,8 +186,12 @@ contains
         if( cline%defined('bfac') )then
             ! already in params%bfac
         else
-            params%bfac = vol%guinier_bfac(HPLIM_GUINIER, lplim)
-            write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', params%bfac
+            if( lplim < 5. )then
+                params%bfac = vol%guinier_bfac(HPLIM_GUINIER, lplim)
+                write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', params%bfac
+            else
+                params%bfac = 0.
+            endif
         endif
         ! check volume mask
         has_mskfile = .false.

@@ -752,23 +752,15 @@ contains
         ! optional keys
         call private_prgs(24)%push_opt_key('lp_backgr')
 
-        ! TSERIES_ROTRATE, for estimating the rotation rate of nanocrystal time-series data
-        call private_prgs(25)%set_name('tseries_rotrate')
-        ! required keys
-        call private_prgs(25)%push_req_key('dir_refine')
-        call private_prgs(25)%push_req_key('nparts')
-        call private_prgs(25)%push_req_key('nptcls')
-        call private_prgs(25)%push_req_key('projfile')
-
         ! CALC_GROUP_SIGMAS, for asssembling sigmas for refine3D
-        call private_prgs(26)%set_name('calc_group_sigmas')
+        call private_prgs(25)%set_name('calc_group_sigmas')
         ! required keys
-        call private_prgs(26)%push_req_key('nparts')
-        call private_prgs(26)%push_req_key('projfile')
-        call private_prgs(26)%push_req_key('nthr')
-        call private_prgs(26)%push_req_key('which_iter')
+        call private_prgs(25)%push_req_key('nparts')
+        call private_prgs(25)%push_req_key('projfile')
+        call private_prgs(25)%push_req_key('nthr')
+        call private_prgs(25)%push_req_key('which_iter')
 
-        n_private_prgs = 26
+        n_private_prgs = 25
     end subroutine new_private_prgs
 
 end module simple_private_prgs
