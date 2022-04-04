@@ -1,10 +1,12 @@
 program simple_test_math
     include 'simple_lib.f08'
-    use simple_math,                 only: butterworth
-    use simple_testfuns_butterworth, only: testfun_butterworth, ButterworthCost
-    use simple_optimizer,   only: optimizer
-    use simple_opt_factory, only: opt_factory
-    use simple_opt_spec,    only: opt_spec
+    use simple_math,                 only: butterworth, butterworth_kernel
+    use simple_testfuns_butterworth, only: testfun_butterworth, butterworth_cost
+    use simple_optimizer,            only: optimizer
+    use simple_opt_factory,          only: opt_factory
+    use simple_opt_spec,             only: opt_spec
+    use simple_image,                only: image
+    use simple_testfuns_constants,   only: target_img, obj_img, ker_img
     implicit none
     
     integer :: n = 8
@@ -12,13 +14,27 @@ program simple_test_math
     real    :: val
 
     integer, parameter :: ndim = 1, NRESTARTS = 1
-    real    :: lims(ndim,2), lowest_cost
-    procedure(testfun_butterworth), pointer :: costfun_ptr      !< pointer 2 test function
-    type(opt_factory)         :: ofac                 ! the optimization factory object
-    type(opt_spec)            :: spec                 ! the optimizer specification object
-    class(optimizer), pointer :: opt_ptr=>null()      ! the generic optimizer object
-    character(len=8)          :: str_opts             ! string descriptors for the NOPTS optimizers
-    class(*), pointer         :: fun_self => null()
+    
+    procedure(testfun_butterworth), pointer   :: costfun_ptr      !< pointer 2 test function
+    class(optimizer),               pointer   :: opt_ptr=>null()  ! the generic optimizer object
+    class(*),                       pointer   :: fun_self => null()
+    character(len=*),               parameter :: target_img_name  = 'TargetImg.mrc'
+    character(len=*),               parameter :: obj_img_name     = 'NoisyObj.mrc'
+    integer,                        parameter :: box    = 202
+    real,                           parameter :: smpd   = 1.275
+    type(opt_factory)   :: ofac                           ! the optimization factory object
+    type(opt_spec)      :: spec                           ! the optimizer specification object
+    character(len=8)    :: str_opts                       ! string descriptors for the NOPTS optimizers
+    real                :: lims(ndim,2), lowest_cost
+    real                :: ker(box, box, 1)
+   
+    call target_img%new([box,box,1], smpd)
+    call target_img%read(target_img_name, 1)
+
+    call obj_img%new([box,box,1], smpd)
+    call obj_img%read(obj_img_name, 1)
+
+    call ker_img%new([box,box,1], smpd)
     
     ! first Butterworth function test
     val = butterworth(s, n, fc)
@@ -39,7 +55,7 @@ program simple_test_math
     end if
 
     ! Test the optimizer
-    costfun_ptr => ButterworthCost
+    costfun_ptr => butterworth_cost
     str_opts  = 'de'
     lims(1,1) = -5.
     lims(1,2) =  10.
@@ -48,9 +64,13 @@ program simple_test_math
     call ofac%new(spec, opt_ptr)                                        ! generate optimizer object with the factory
     call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
 
-    write(*, *) lowest_cost
+    write(*, *) lowest_cost, spec%x
 
     call opt_ptr%kill
     deallocate(opt_ptr)
+
+    call butterworth_kernel(ker, box, n, 20.)
+    call ker_img%set_rmat(ker, .false.)
+    write(*, *) ker(101, 120, 1), ker(101,101,1), ker(101,150,1)
 end program simple_test_math
     
