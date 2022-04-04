@@ -16,7 +16,7 @@ module simple_testfuns_butterworth
     contains
         function butterworth_cost( fun_self, x, d ) result( r )
             use simple_testfuns_constants, only: target_img, obj_img, ker_img
-            use simple_math,               only: butterworth, butterworth_kernel
+            use simple_math,               only: butterworth_kernel
             use simple_image,              only: image
             class(*), intent(inout) :: fun_self
             integer,  intent(in)    :: d
@@ -27,15 +27,19 @@ module simple_testfuns_butterworth
 
             call ker_img%get_rmat_ptr(rmat_ker)
             call butterworth_kernel(rmat_ker, 202, 8, x(1))  ! WARNING: fix the constants here
-            call ker_img%set_rmat(rmat_ker, .false.)
+            
             call target_img%get_rmat_ptr(rmat_target)
+            write(*, *) 'MAX 1 = ', maxval(rmat_target)
+            call obj_img%fft()
             call obj_img%get_cmat_ptr(cmat_obj)
             call ker_img%fft()
             call ker_img%get_cmat_ptr(cmat_conv)
             cmat_conv = cmat_conv*cmat_obj
             call ker_img%ifft()
-            call ker_img%get_rmat_ptr(rmat_ker)
-            r = sum(abs(rmat_ker - rmat_target))
+            call obj_img%ifft()
+
+            r = sum(abs(rmat_ker - rmat_target)**2)
+            write(*, *) x(1), r
         end function
 end module
     
