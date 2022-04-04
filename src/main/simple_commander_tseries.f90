@@ -813,11 +813,13 @@ contains
         character(len=:), allocatable :: iter_dir, cavgs_stk, fname
         real,             allocatable :: rstates(:), corrs(:)
         logical,          allocatable :: state_mask(:)
-        character(len=STDLEN) :: fbody, fbody_split
+        character(len=STDLEN) :: fbody, fbody_even, fbody_odd, fbody_split
         integer :: i, j, iter, cnt, cnt2, ncavgs, funit, io_stat
         real    :: smpd
         logical :: fall_over
         fbody       = get_fbody(RECVOL,   'mrc')
+        fbody_even  = get_fbody(EVEN,     'mrc')
+        fbody_odd   = get_fbody(ODD,      'mrc')
         fbody_split = get_fbody(SPLITTED, 'mrc')
         if(       cline%defined('nparts')         ) call cline%delete('nparts') ! shared-memory workflow
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',          5.)
@@ -878,8 +880,8 @@ contains
             params_ptr  => null()
             ! copy critical output
             call simple_copy_file(RECVOL,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'.mrc')
-            call simple_copy_file(EVEN,     iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_even.mrc')
-            call simple_copy_file(ODD,      iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_odd.mrc')
+            call simple_copy_file(EVEN,     iter_dir//trim(fbody_even) //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(ODD,      iter_dir//trim(fbody_odd)  //'_iter'//int2str_pad(i,3)//'.mrc')
             call simple_copy_file(SIMVOL,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_SIM.mrc')
             call simple_copy_file(ATOMS,    iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_ATMS.pdb')
             call simple_copy_file(BINARY,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
@@ -898,8 +900,8 @@ contains
         call xdetect_atms%execute(cline_detect_atms)
         call simple_mkdir(FINAL_MAPS)
         call simple_copy_file(RECVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'.mrc')
-        call simple_copy_file(EVEN,     iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_even.mrc')
-        call simple_copy_file(ODD,      iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_odd.mrc')
+        call simple_copy_file(EVEN,     FINAL_MAPS//trim(fbody_even) //'_iter'//int2str_pad(iter,3)//'.mrc')
+        call simple_copy_file(ODD,      FINAL_MAPS//trim(fbody_odd)  //'_iter'//int2str_pad(iter,3)//'.mrc')
         call simple_copy_file(SIMVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_SIM.mrc')
         call simple_copy_file(ATOMS,    FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_ATMS.pdb')
         call simple_copy_file(BINARY,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_BIN.mrc')
