@@ -4044,11 +4044,8 @@ contains
         integer, intent(in)    :: w
         integer, intent(in)    :: n
         real   , intent(in)    :: fc
-        complex :: j = (0, 1)  ! Complex identity: j = sqrt(-1)
-        complex :: js          ! frequency is multiplied by the complex identity j
         integer :: k, l, half_w
         real    :: freq_val    ! current frequency value
-        real    :: but_tf_val  ! Butterworth transfer function value
 
         freq_val = 0
         half_w   = int(w/2)

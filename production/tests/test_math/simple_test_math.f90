@@ -19,7 +19,7 @@ program simple_test_math
     class(optimizer),               pointer   :: opt_ptr=>null()  ! the generic optimizer object
     class(*),                       pointer   :: fun_self => null()
     character(len=*),               parameter :: target_img_name  = 'TargetImg.mrc'
-    character(len=*),               parameter :: obj_img_name     = 'NoisyObj.mrc'
+    character(len=*),               parameter :: obj_img_name     = 'CleanObj.mrc'
     integer,                        parameter :: box    = 202
     real,                           parameter :: smpd   = 1.275
     type(opt_factory)   :: ofac                           ! the optimization factory object
@@ -57,15 +57,16 @@ program simple_test_math
     ! Test the optimizer
     call butterworth_kernel(ker, box, n, 20.)
     call ker_img%set_rmat(ker, .false.)
-    write(*, *) ker(101, 120, 1), ker(101,101,1), ker(101,150,1)
+    write(*, *) ker(101,101,1), ker(101, 120, 1), ker(101,150,1)
 
     costfun_ptr => butterworth_cost
-    str_opts  = 'de'
+    str_opts  = 'simplex'
     lims(1,1) =  5.
-    lims(1,2) =  100.
+    lims(1,2) =  50.
     call spec%specify(str_opts, ndim, limits=lims, nrestarts=NRESTARTS) ! make optimizer spec
     call spec%set_costfun(costfun_ptr)                                  ! set pointer to costfun
     call ofac%new(spec, opt_ptr)                                        ! generate optimizer object with the factory
+    spec%x    = 7.
     call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
 
     write(*, *) lowest_cost, spec%x
