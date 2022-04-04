@@ -460,7 +460,7 @@ contains
             ! calculate TV filter
             call fsc2TVfilt_fast(corrs, nfcomps, filt)
             ! randomize phases below noise power
-            if( pphran ) call subvols_even(ithr)%ran_phases_below_noise_power(subvols_odd(ithr), 0.5)
+            if( pphran ) call subvols_even(ithr)%ran_phases_below_noise_power(subvols_odd(ithr))
             ! apply TV filter
             if( map2filt_present )then
                 if( l_match_filt )then

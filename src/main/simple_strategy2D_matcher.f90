@@ -409,7 +409,7 @@ contains
                         ! randomize Fourier phases below noise power in a global manner
                         call cavgs_even(icls)%fft
                         call cavgs_odd(icls)%fft
-                        call cavgs_even(icls)%ran_phases_below_noise_power(cavgs_odd(icls), 0.5)
+                        call cavgs_even(icls)%ran_phases_below_noise_power(cavgs_odd(icls))
                         call cavgs_even(icls)%ifft
                         call cavgs_odd(icls)%ifft
                         ! here we are passing in the shifts and do NOT map them back to classes
