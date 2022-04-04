@@ -801,6 +801,8 @@ contains
         type(image), allocatable      :: imgs(:)
         type(sp_project)              :: spproj
         character(len=*), parameter   :: RECVOL     = 'recvol_state01.mrc'
+        character(len=*), parameter   :: EVEN       = 'recvol_state01_even.mrc'
+        character(len=*), parameter   :: ODD        = 'recvol_state01_odd.mrc'
         character(len=*), parameter   :: SIMVOL     = 'recvol_state01_SIM.mrc'
         character(len=*), parameter   :: ATOMS      = 'recvol_state01_ATMS.pdb'
         character(len=*), parameter   :: BINARY     = 'recvol_state01_BIN.mrc'
@@ -876,6 +878,8 @@ contains
             params_ptr  => null()
             ! copy critical output
             call simple_copy_file(RECVOL,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(EVEN,     iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_even.mrc')
+            call simple_copy_file(ODD,      iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_odd.mrc')
             call simple_copy_file(SIMVOL,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_SIM.mrc')
             call simple_copy_file(ATOMS,    iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_ATMS.pdb')
             call simple_copy_file(BINARY,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
@@ -894,6 +898,8 @@ contains
         call xdetect_atms%execute(cline_detect_atms)
         call simple_mkdir(FINAL_MAPS)
         call simple_copy_file(RECVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'.mrc')
+        call simple_copy_file(EVEN,     iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_even.mrc')
+        call simple_copy_file(ODD,      iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_odd.mrc')
         call simple_copy_file(SIMVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_SIM.mrc')
         call simple_copy_file(ATOMS,    FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_ATMS.pdb')
         call simple_copy_file(BINARY,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_BIN.mrc')
