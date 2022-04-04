@@ -55,10 +55,14 @@ program simple_test_math
     end if
 
     ! Test the optimizer
+    call butterworth_kernel(ker, box, n, 20.)
+    call ker_img%set_rmat(ker, .false.)
+    write(*, *) ker(101, 120, 1), ker(101,101,1), ker(101,150,1)
+
     costfun_ptr => butterworth_cost
     str_opts  = 'de'
-    lims(1,1) = -5.
-    lims(1,2) =  10.
+    lims(1,1) =  5.
+    lims(1,2) =  100.
     call spec%specify(str_opts, ndim, limits=lims, nrestarts=NRESTARTS) ! make optimizer spec
     call spec%set_costfun(costfun_ptr)                                  ! set pointer to costfun
     call ofac%new(spec, opt_ptr)                                        ! generate optimizer object with the factory
@@ -68,9 +72,5 @@ program simple_test_math
 
     call opt_ptr%kill
     deallocate(opt_ptr)
-
-    call butterworth_kernel(ker, box, n, 20.)
-    call ker_img%set_rmat(ker, .false.)
-    write(*, *) ker(101, 120, 1), ker(101,101,1), ker(101,150,1)
 end program simple_test_math
     
