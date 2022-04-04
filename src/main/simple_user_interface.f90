@@ -2456,11 +2456,11 @@ contains
     subroutine new_nonuniform_filter
         ! PROGRAM SPECIFICATION
         call nonuniform_filter%new(&
-        &'nonuniform_filter',&                               ! name
+        &'nonuniform_filter',&                                  ! name
         &'Nonuniform low-pass filtering',&                      ! descr_short
         &'is a program for nonuniform low-pass filtering by zeroing F-comps below noise in e/o maps',& ! descr_long
         &'simple_exec',&                                        ! executable
-        &3, 1, 0, 0, 0, 2, 1, .false.)                          ! # entries in each group, requires sp_project
+        &3, 1, 0, 0, 1, 2, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call nonuniform_filter%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',       'Odd volume',       'vol1.mrc file', .true., '')
@@ -2473,7 +2473,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        ! <empty>
+        call nonuniform_filter%set_input('filt_ctrls', 1, 'phrand', 'binary', 'Phase randomization', 'Phase randomization of F-comps with power below noise(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! mask controls
         call nonuniform_filter%set_input('mask_ctrls', 1, mskdiam)
         call nonuniform_filter%set_input('mask_ctrls', 2, mskfile)

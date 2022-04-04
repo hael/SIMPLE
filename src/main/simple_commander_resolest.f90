@@ -203,9 +203,9 @@ contains
             call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
         endif
         if( map2filt_present )then
-            call nonuniform_fscTVfilt(even, odd, mskvol, .false., map2filt)
+            call nonuniform_fscTVfilt(even, odd, mskvol, .false., map2filt, phran=trim(params%phrand).eq.'yes')
         else
-            call nonuniform_fscTVfilt(even, odd, mskvol, .false.)
+            call nonuniform_fscTVfilt(even, odd, mskvol, .false., phran=trim(params%phrand).eq.'yes')
         endif
         if( have_mask_file )then
             call mskvol%read(params%mskfile)
