@@ -4032,7 +4032,34 @@ contains
         do k = 0, int(n/2 - 1)
             Bn = Bn*(js**2 - 2*js*cos(2*pi*(2*k+n+1)/(4*n)) + 1)
         end do
-        val = 1/sqrt(real(Bn)**2 + aimag(Bn)**2)
+        Bn  = 1/Bn
+        val = sqrt(real(Bn)**2 + aimag(Bn)**2)
     end function butterworth
+
+    ! Compute the Butterworth kernel of the order n-th of width w
+    ! with the cut-off frequency fc
+    ! https://en.wikipedia.org/wiki/Butterworth_filter
+    subroutine butterworth_kernel(ker, w, n, fc)
+        real,    intent(inout) :: ker(:, :, :)    ! assuming 2D kernel for now!!!
+        integer, intent(in)    :: w
+        integer, intent(in)    :: n
+        real   , intent(in)    :: fc
+        complex :: j = (0, 1)  ! Complex identity: j = sqrt(-1)
+        complex :: js          ! frequency is multiplied by the complex identity j
+        integer :: k, l, half_w
+        real    :: freq_val    ! current frequency value
+        real    :: but_tf_val  ! Butterworth transfer function value
+
+        freq_val = 0
+        half_w   = int(w/2)
+        do k = 1, w
+            do l = 1, w
+                freq_val = hyp(real(k-half_w), real(l-half_w))
+
+                ! compute the value of Butterworth transfer function at current frequency value
+                ker(k,l, 1) = butterworth(freq_val, n, fc)
+            end do
+        end do
+    end subroutine butterworth_kernel
 
 end module simple_math
