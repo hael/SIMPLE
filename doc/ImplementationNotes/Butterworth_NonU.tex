@@ -1,0 +1,49 @@
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{hyperref}
+\begin{document}
+\title{SIMPLE's implementation of Butterworth function/kernel used in non-uniform refinement}
+\maketitle
+\noindent Let $x$ be a frequency value and $\theta$ the cut-off frequency, then the Butterworth polynomial of order $n$-th is estimated \cite{ButterworthWiki} as
+\begin{equation}\label{eq1}
+B_n(x,\theta) = \sum_{k = 0}^n a_n s^k, \quad s := \frac{ix}{\theta}, \quad i = \sqrt{-1}.
+\end{equation}
+The derivative of $B_n$ w.r.t $\theta$ is:
+\begin{align}
+\frac{dB_n}{d\theta}(x,\theta) &= \frac{dB_n}{ds}\frac{ds}{d\theta} \\
+&= \left( \sum_{k = 1}^n ka_ns^{k-1} \right) \left(-\frac{ix}{\theta^2}\right) \\
+&= -\frac{1}{\theta}\sum_{k=1}^n ka_ns^k
+\end{align}
+The Butterworth transfer function $H_n(x,\theta)$ is
+\begin{equation}\label{eq5}
+H_n(x, \theta) = \left| K_n(x,\theta) \right|, \quad K_n(x, \theta) = \frac{1}{B_n(x, \theta)}
+\end{equation}
+The derivative of $H_n$ w.r.t. $\theta$ is
+\begin{align}\label{eq6}
+\frac{dH_n}{d\theta} = \frac{d}{d\theta}\left| K_n(x,\theta) \right| = \frac{\text{Re}\left(K_n(x,\theta)\overline{\frac{dK_n}{d\theta}}\right)}{\left| K_n(x,\theta) \right|}
+\end{align}
+where
+\begin{equation}\label{eq7}
+\frac{dK_n}{d\theta} = -\frac{1}{B_n^2}\frac{dB_n}{d\theta}
+\end{equation}
+The convolution of $H_n$ with a model function $m(x)$ is
+\begin{equation}\label{eq8}
+f(x,\theta) = H_n(x,\theta) \star m(x) = \int H_n(\zeta, \theta)m(x-\zeta)d\zeta
+\end{equation} 
+The derivative of $f(x,\theta)$ w.r.t $\theta$ is
+\begin{equation}\label{eq9}
+\frac{df}{d\theta} = \int\frac{dH_n}{d\theta}(\zeta,\theta)m(x-\zeta)d\zeta = \frac{dH_n}{d\theta}(x,\theta) \star m(x)
+\end{equation}
+The cost function is defined as:
+\begin{equation}\label{eq10}
+F(\theta) = ||f(x,\theta) - f_0||^2 = \int (f(x,\theta) - f_0(x))^2dx
+\end{equation}
+with the derivative
+\begin{equation}\label{eq11}
+\frac{dF}{d\theta} = \int \frac{df}{d\theta}(x,\theta) \cdot (f(x,\theta) - f_0(x))dx
+\end{equation}
+In SIMPLE's refinement process, $f_0$ is the odd and $m(x)$ is the even.
+\begin{thebibliography}{9}
+\bibitem[1]{ButterworthWiki} \url{https://en.wikipedia.org/wiki/Butterworth_filter}
+\end{thebibliography}
+\end{document}
