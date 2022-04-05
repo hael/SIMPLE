@@ -23,6 +23,7 @@ public :: stk_corr_commander
 public :: kstest_commander
 public :: mkdir_commander
 public :: remoc_commander
+public :: comparemc_commander
 private
 #include "simple_local_flags.inc"
 
@@ -58,6 +59,10 @@ type, extends(commander_base) :: remoc_commander
   contains
     procedure :: execute       => exec_remoc
 end type remoc_commander
+type, extends(commander_base) :: comparemc_commander
+  contains
+    procedure :: execute       => exec_comparemc
+end type comparemc_commander
 
 contains
 
@@ -639,5 +644,254 @@ contains
             end subroutine parse_model
 
     end subroutine exec_remoc
+
+    subroutine exec_comparemc( self, cline )
+        use simple_starfile_wrappers
+        use CPlot2D_wrapper_module
+        integer, PARAMETER :: POLYDIM = 18
+        integer, PARAMETER :: NGRID   = 19 ! has to be odd
+        class(comparemc_commander), intent(inout) :: self
+        class(cmdline),             intent(inout) :: cline
+        real,                         allocatable :: rmsds(:,:), gofs(:,:), npatch(:)
+        real(dp),                     allocatable :: poly1(:,:), poly2(:,:), x(:), y(:), t(:), offsets1(:,:), offsets2(:,:)
+        character(len=:),             allocatable :: movie, moviedoc
+        character(len=LONGSTRLEN),    allocatable :: projects_fnames(:), moviedocs(:)
+        integer,                      allocatable :: indextab(:,:)
+        type(CPlot2D_type)    :: plot2D
+        type(CDataSet_type)   :: dataSet
+        type(CDataPoint_type) :: point
+        type(parameters)      :: params
+        type(sp_project)      :: first_spproj, spproj, spproj2
+        real(dp) :: rmsd, maxrmsd, minrmsd
+        real     :: smpd, binning
+        integer  :: i, j, k, npoints, ldim1(3), ldim2(3), nmics, nprojects, nx, ny, nframes
+        logical  :: found
+        if(.not.cline%defined('mkdir')) call cline%set('mkdir', 'yes')
+        call cline%set('oritype', 'mic')
+        call params%new(cline)
+        call read_filetable( params%infile, projects_fnames )
+        if(.not.allocated(projects_fnames))then
+            THROW_HARD('FILETAB invalid format')
+        endif
+        nprojects = size(projects_fnames,1)
+        write(logfhandle,'(A,I6)')'>>> # of project files:', nprojects
+        call first_spproj%read_segment(params%oritype, projects_fnames(1))
+        nmics = first_spproj%get_nintgs()
+        write(logfhandle,'(A,I6)')'>>> # of micrographs  :', nmics
+        allocate(indextab(nprojects,nmics),source=0)
+        allocate(moviedocs(nmics),gofs(nprojects,nmics),npatch(nprojects))
+        npatch(1) = first_spproj%os_mic%get(1,'nxpatch')*first_spproj%os_mic%get(1,'nypatch')
+        gofs = 0.0
+        do i = 1,nmics
+            indextab(1,i) = i
+            moviedocs(i)  = first_spproj%os_mic%get_static(i,'mc_starfile')
+            gofs(1,i)     = sqrt(first_spproj%os_mic%get(i,'gofx')**2.0+first_spproj%os_mic%get(i,'gofy')**2.0)
+        enddo
+        do i = 2,nprojects
+            call spproj%read_segment(params%oritype, projects_fnames(i))
+            do j = 1,nmics
+                found = .false.
+                do k = 1,nmics
+                    moviedoc = basename(spproj%os_mic%get_static(k,'mc_starfile'))
+                    if( trim(moviedoc).eq.trim(basename(moviedocs(j))) )then
+                        indextab(i,j) = k
+                        gofs(i,j) = sqrt(spproj%os_mic%get(k,'gofx')**2.0+spproj%os_mic%get(k,'gofy')**2.0)
+                        found = .true.
+                    endif
+                    if( found ) exit
+                enddo
+                if( .not.found )then
+                    indextab(:,j) = 0
+                    THROW_WARN('Could not find corresponding docs: '//trim(moviedocs(k))//' and '//trim(moviedoc))
+                endif
+            enddo
+            npatch(i) = spproj%os_mic%get(indextab(i,1),'nxpatch')*spproj%os_mic%get(indextab(i,1),'nypatch')
+        enddo
+        ! gofs
+        call CPlot2D__new(plot2D, 'gof_'//int2str_pad(k,3)//C_NULL_CHAR)
+        call CPlot2D__SetXAxisSize(plot2D, real(20*nprojects,dp))
+        call CPlot2D__SetYAxisSize(plot2D, real(20*nprojects,dp))
+        call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
+        do i = 1,nmics
+            call CDataSet__new(dataSet)
+            call CDataSet__SetDrawMarker(dataSet,C_FALSE)
+            call CDataSet__SetDatasetColor(dataSet, 0.3_c_double, 0.3_c_double, 0.3_c_double)
+            do j = 1,nprojects
+                call CDataPoint__new2(real(npatch(j),dp), real(gofs(j,i), dp), point)
+                call CDataSet__AddDataPoint(dataSet, point)
+                call CDataPoint__delete(point)
+            end do
+            call CPlot2D__AddDataSet(plot2D, dataset)
+            call CDataSet__delete(dataset)
+        enddo
+        call CPlot2D__OutputPostScriptPlot(plot2D, 'gofs_'//int2str_pad(k,3)//'.eps'//C_NULL_CHAR)
+        call CPlot2D__delete(plot2D)
+        ! generate dense 2.5D grid        
+        call parse_movie_star(moviedocs(1), poly1, ldim1, binning, smpd)
+        nframes = ldim1(3)
+        nx      = NGRID
+        ny      = nint(real(NGRID) * real(ldim1(2)) / real(ldim1(1)))
+        if( is_even(nx) ) ny = ny + 1
+        npoints = nx*ny*nframes
+        allocate(x(nx),y(ny),t(nframes),offsets1(npoints,2),offsets2(npoints,2),source=0.d0)
+        write(logfhandle,'(A,3I6)')'>>> GRID DIMENSIONS   :', nx, ny, nframes
+        do i = 1,nx
+            x(i) = -0.5d0 + real(i,dp)/real(nx+1,dp)
+        enddo
+        do i = 1,ny
+            y(i) = -0.5d0 + real(i,dp)/real(ny+1,dp)
+        enddo
+        do i = 1,nframes
+            t(i) = real(i-1,dp)
+        enddo
+        ! parsing and calculating
+        allocate(rmsds(nprojects,nprojects),source=0.0)
+        do k = 1,nmics
+            do i = 1,nprojects
+                call spproj%read_segment(params%oritype, projects_fnames(i))
+                moviedoc = trim(spproj%os_mic%get_static(indextab(i,k),'mc_starfile'))
+                call parse_movie_star(moviedoc, poly1, ldim1, binning, smpd)
+                call polynomial2shifts(poly1, x,y,t, offsets1)
+                do j = i+1,nprojects
+                    call spproj2%read_segment(params%oritype, projects_fnames(j))
+                    moviedoc = trim(spproj2%os_mic%get_static(indextab(j,k),'mc_starfile'))
+                    call parse_movie_star(moviedoc, poly2, ldim2, binning, smpd)
+                    call polynomial2shifts(poly2, x,y,t, offsets2)
+                    rmsds(i,j) = sum((offsets2-offsets1)**2.0) / real(npoints,dp)
+                    rmsds(j,i) = rmsds(i,j)
+                enddo
+            enddo
+            maxrmsd = maxval(rmsds)
+            minrmsd = minval(rmsds)
+            call CPlot2D__new(plot2D, 'test_'//int2str_pad(k,3)//C_NULL_CHAR)
+            call CPlot2D__SetXAxisSize(plot2D, real(20*nprojects,dp))
+            call CPlot2D__SetYAxisSize(plot2D, real(20*nprojects,dp))
+            call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
+            do i = 1,nprojects
+                do j = 1,nprojects
+                    rmsd = (rmsds(i,j)-minrmsd) / (maxrmsd-minrmsd)
+                    call CDataSet__new(dataSet)
+                    call CDataSet__SetDrawMarker(dataSet,C_TRUE)
+                    call CDataSet__SetMarkerSize(dataSet,10.0_c_double)
+                    call CDataSet__SetDatasetColor(dataSet, 0.0_c_double, 0.0_c_double, real(rmsd,dp))
+                    call CDataPoint__new2(real(20*i,dp), real(20*j, dp), point)
+                    call CDataSet__AddDataPoint(dataSet, point)
+                    call CDataPoint__delete(point)
+                    call CPlot2D__AddDataSet(plot2D, dataset)
+                    call CDataSet__delete(dataset)
+                end do
+            enddo
+            call CPlot2D__OutputPostScriptPlot(plot2D, 'test_'//int2str_pad(k,3)//'.eps'//C_NULL_CHAR)
+            call CPlot2D__delete(plot2D)
+        enddo
+        call simple_end('**** SIMPLE_COMPAREMC NORMAL STOP ****')
+        contains
+
+            subroutine polynomial2shifts(cs, xs, ys, times, offsets)
+                real(dp), intent(in)  :: cs(POLYDIM,2), xs(nx), ys(ny), times(nframes)
+                real(dp), intent(out) :: offsets(npoints,2)
+                integer :: i,j,k,l
+                l = 0
+                do i = 1,nx
+                    do j = 1,ny
+                        do k = 1,nframes
+                            l = l + 1
+                            offsets(l,1) = sample_poly(cs(:,1), xs(i), ys(j), times(k))
+                            offsets(l,2) = sample_poly(cs(:,2), xs(i), ys(j), times(k))
+                        enddo
+                    enddo
+                enddo
+            end subroutine polynomial2shifts
+
+            real(dp) function sample_poly(c, x, y, t)
+                real(dp), intent(in) :: c(POLYDIM), x, y, t
+                real(dp) :: x2, y2, xy, t2, t3
+                x2 = x * x
+                y2 = y * y
+                xy = x * y
+                t2 = t * t
+                t3 = t2 * t
+                sample_poly =               c( 1) * t      + c( 2) * t2      + c( 3) * t3
+                sample_poly = sample_poly + c( 4) * t * x  + c( 5) * t2 * x  + c( 6) * t3 * x
+                sample_poly = sample_poly + c( 7) * t * x2 + c( 8) * t2 * x2 + c( 9) * t3 * x2
+                sample_poly = sample_poly + c(10) * t * y  + c(11) * t2 * y  + c(12) * t3 * y
+                sample_poly = sample_poly + c(13) * t * y2 + c(14) * t2 * y2 + c(15) * t3 * y2
+                sample_poly = sample_poly + c(16) * t * xy + c(17) * t2 * xy + c(18) * t3 * xy
+            end function sample_poly
+
+            integer function parse_int( table, emdl_id )
+                class(starfile_table_type) :: table
+                integer, intent(in)        :: emdl_id
+                logical :: l_ok
+                l_ok = starfile_table__getValue_int(table, emdl_id, parse_int)
+                if(.not.l_ok) THROW_HARD('Missing value in table!')
+            end function parse_int
+
+            real(dp) function parse_double( table, emdl_id )
+                class(starfile_table_type) :: table
+                integer, intent(in)        :: emdl_id
+                logical  :: l_ok
+                l_ok = starfile_table__getValue_double(table, emdl_id, parse_double)
+                if(.not.l_ok) THROW_HARD('Missing value in table!')
+            end function parse_double
+
+            subroutine parse_string( table, emdl_id, string )
+                class(starfile_table_type)                 :: table
+                integer,                       intent(in)  :: emdl_id
+                character(len=:), allocatable, intent(out) :: string
+                logical :: l_ok
+                l_ok = starfile_table__getValue_string(table, emdl_id, string)
+                if(.not.l_ok) THROW_HARD('Missing value in table!')
+            end subroutine parse_string
+
+            subroutine parse_movie_star( fname, polynomial, ldim, binning, smpd )
+                character(len=*),      intent(in)  :: fname
+                real(dp), allocatable, intent(out) :: polynomial(:,:)
+                integer,               intent(out) :: ldim(3)
+                real,                  intent(out) :: binning, smpd
+                type(str4arr),    allocatable :: names(:)
+                type(starfile_table_type)     :: table
+                integer          :: i,n,ind,start_frame,motion_model
+                integer(C_long)  :: num_objs, object_id
+                call starfile_table__new(table)
+                call starfile_table__getnames(table, trim(fname)//C_NULL_CHAR, names)
+                n = size(names)
+                do i =1,n
+                    call starfile_table__read(table, trim(fname)//C_NULL_CHAR, names(i)%str )
+                    select case(trim(names(i)%str))
+                    case('general')
+                        ldim(1) = parse_int(table, EMDL_IMAGE_SIZE_X)
+                        ldim(2) = parse_int(table, EMDL_IMAGE_SIZE_Y)
+                        ldim(3) = parse_int(table, EMDL_IMAGE_SIZE_Z)
+                        call parse_string(table, EMDL_MICROGRAPH_MOVIE_NAME, movie)
+                        binning      = real(parse_double(table, EMDL_MICROGRAPH_BINNING))
+                        smpd         = real(parse_double(table, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE))
+                        start_frame  = parse_int(table, EMDL_MICROGRAPH_START_FRAME)
+                        motion_model = parse_int(table, EMDL_MICROGRAPH_MOTION_MODEL_VERSION)
+                        if( motion_model /= 1 )then
+                            THROW_HARD('No polynomial found in: '//trim(fname))
+                        else
+                            allocate(polynomial(POLYDIM,2),source=0.d0)
+                        endif
+                    case('local_motion_model')
+                        object_id = starfile_table__firstobject(table) ! base 0
+                        num_objs  = starfile_table__numberofobjects(table)
+                        do while( (object_id < num_objs) .and. (object_id >= 0) )
+                            ind = parse_int(table, EMDL_MICROGRAPH_MOTION_COEFFS_IDX) + 1
+                            if( ind > POLYDIM )then
+                                polynomial(ind-POLYDIM,2) = parse_double(table, EMDL_MICROGRAPH_MOTION_COEFF)
+                            else
+                                polynomial(ind,        1) = parse_double(table, EMDL_MICROGRAPH_MOTION_COEFF)
+                            endif
+                            object_id = starfile_table__nextobject(table)
+                        end do
+                    case DEFAULT
+                        cycle
+                    end select
+                enddo
+                call starfile_table__delete(table)
+            end subroutine parse_movie_star
+
+    end subroutine exec_comparemc
 
 end module simple_commander_misc
