@@ -93,6 +93,11 @@ contains
             if( .not.cline%defined('nypatch') )then
                 params_glob%nypatch = min(MC_NPATCH, max(1,floor(ldim4patch(2)/MC_PATCHSZ)) )
             endif
+            call orientation%set('nxpatch', real(params_glob%nxpatch))
+            call orientation%set('nypatch', real(params_glob%nypatch))
+        else
+            call orientation%set('nxpatch', 1.0)
+            call orientation%set('nypatch', 1.0)
         endif
         motion_correct_with_patched = (params_glob%mcpatch.eq.'yes') .and. (params_glob%nxpatch*params_glob%nypatch > 1)
         ! ALIGNEMENT

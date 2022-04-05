@@ -80,6 +80,7 @@ type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster3D
 type(simple_program), target :: cluster3D_refine
 type(simple_program), target :: cluster_cavgs
+type(simple_program), target :: comparemc
 type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
@@ -305,6 +306,7 @@ contains
         call new_cluster3D
         call new_cluster3D_refine
         call new_cluster_cavgs
+        call new_comparemc
         call new_convert
         call new_ctf_estimate
         call new_ctfops
@@ -404,6 +406,7 @@ contains
         call push2prg_ptr_array(cluster3D)
         call push2prg_ptr_array(cluster3D_refine)
         call push2prg_ptr_array(cluster_cavgs)
+        call push2prg_ptr_array(comparemc)
         call push2prg_ptr_array(convert)
         call push2prg_ptr_array(ctf_estimate)
         call push2prg_ptr_array(ctfops)
@@ -524,6 +527,8 @@ contains
                 ptr2prg => cluster3D_refine
             case('cluster_cavgs')
                 ptr2prg => cluster_cavgs
+            case('comparemc')
+                ptr2prg => comparemc
             case('convert')
                 ptr2prg => convert
             case('ctf_estimate')
@@ -701,6 +706,7 @@ contains
         write(logfhandle,'(A)') cluster2D_stream%name
         write(logfhandle,'(A)') cluster3D%name
         write(logfhandle,'(A)') cluster3D_refine%name
+        write(logfhandle,'(A)') comparemc%name
         write(logfhandle,'(A)') convert%name
         write(logfhandle,'(A)') ctf_estimate%name
         write(logfhandle,'(A)') ctfops%name
@@ -1549,6 +1555,31 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_convert
+
+    subroutine new_comparemc
+        ! PROGRAM SPECIFICATION
+        call comparemc%new(&
+        &'comparemc',&                                                    ! name
+        &'utility',&                     ! descr_short
+        &'is a utility program',& ! descr_long
+        &'simple_exec',&                                                ! executable
+        &0, 1, 0, 0, 0, 0, 0, .false.)                                  ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call comparemc%set_input('parm_ios', 1, 'infile', 'file', 'List of project files', 'List of project files', 'e.g. projects.txt', .true., '')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_comparemc
 
     subroutine new_ctf_estimate
         ! PROGRAM SPECIFICATION

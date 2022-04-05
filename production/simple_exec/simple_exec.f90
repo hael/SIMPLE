@@ -84,6 +84,7 @@ type(dock_volpair_commander)                :: xdock_volpair
 type(postprocess_commander)                 :: xpostprocess
 type(automask_commander)                    :: xautomask
 type(remoc_commander)                       :: xremoc
+type(comparemc_commander)                   :: xcomparemc
 
 ! IMAGE PROCESSING PROGRAMS
 type(binarize_commander)                    :: xbinarize
@@ -256,6 +257,8 @@ select case(trim(prg))
         call xautomask%execute(cline)
     case( 'remoc' )
         call xremoc%execute(cline)
+    case( 'comparemc' )
+        call xcomparemc%execute(cline)
 
     ! IMAGE PROCESSING PROGRAMS
     case('binarize')

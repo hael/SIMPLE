@@ -305,8 +305,8 @@ type :: parameters
     integer :: nvalid=0
     integer :: nvars=30
     integer :: nvox=0              !< # voxels{0}
-    integer :: nxpatch=MC_NPATCH   !< # of patches along x for motion correctionn{5}
-    integer :: nypatch=MC_NPATCH   !< # of patches along y for motion correctionn{5}
+    integer :: nxpatch=MC_NPATCH   !< # of patches along x for motion correction{5}
+    integer :: nypatch=MC_NPATCH   !< # of patches along y for motion correction{5}
     integer :: offset=10           !< pixels offset{10}
     integer :: optics_offset=0
     integer :: part=1
