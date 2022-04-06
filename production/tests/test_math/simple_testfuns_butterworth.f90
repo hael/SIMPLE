@@ -22,24 +22,27 @@ module simple_testfuns_butterworth
             integer,  intent(in)    :: d
             real,     intent(in)    :: x(d)
             real                    :: r
-            real,                          pointer :: rmat_target(:,:,:), rmat_ker(:,:,:), rmat_ker_der(:,:,:)
-            complex(kind=c_float_complex), pointer :: cmat_conv(:,:,:)  , cmat_obj(:,:,:)
+            real                          :: rmat_target(202,202,1), rmat_ker(202,202,1), rmat_ker_der(202,202,1)
+            complex(kind=c_float_complex) :: cmat_conv(202,202,1)  , cmat_obj(202,202,1)
 
-            call ker_img%get_rmat_ptr(rmat_ker)
-            call ker_der_img%get_rmat_ptr(rmat_ker_der)
             call butterworth_kernel(rmat_ker, rmat_ker_der, 202, 8, x(1))  ! WARNING: fix the constants here
+            call ker_img%set_rmat(rmat_ker, .false.)
+            call ker_der_img%set_rmat(rmat_ker_der, .false.)
             
-            call target_img%get_rmat_ptr(rmat_target)
+            call target_img%get_rmat_sub(rmat_target)
             call obj_img%fft()
-            call obj_img%get_cmat_ptr(cmat_obj)
+            call obj_img%get_cmat_sub(cmat_obj)
             call ker_img%fft()
-            call ker_img%get_cmat_ptr(cmat_conv)
+            call ker_img%get_cmat_sub(cmat_conv)
             cmat_conv = cmat_conv*cmat_obj
+            call ker_img%set_cmat(cmat_conv)
             call ker_img%ifft()
+            call ker_img%get_rmat_sub(rmat_ker)
             call obj_img%ifft()
+            rmat_ker = rmat_ker*202*202;
 
             r = sum(abs(rmat_ker - rmat_target)**2)
-            write(*, *) 'cost: ', x(1), r
+            !write(*, *) 'cost: ', x(1), r
         end function
 
         subroutine butterworth_gcost( fun_self, x, grad, d )
@@ -53,25 +56,40 @@ module simple_testfuns_butterworth
             real,                          pointer :: rmat_target(:,:,:), rmat_ker(:,:,:), rmat_ker_der(:,:,:)
             complex(kind=c_float_complex), pointer :: cmat_conv(:,:,:)  , cmat_obj(:,:,:), cmat_der_conv(:,:,:)
 
-            call ker_img%get_rmat_ptr(rmat_ker)
-            call ker_der_img%get_rmat_ptr(rmat_ker_der)
-            call butterworth_kernel(rmat_ker, rmat_ker_der, 202, 8, x(1))  ! WARNING: fix the constants here
+            allocate(rmat_target(  202, 202, 1))
+            allocate(rmat_ker(     202, 202, 1))
+            allocate(rmat_ker_der( 202, 202, 1))
+            allocate(cmat_conv(    202, 202, 1))
+            allocate(cmat_obj(     202, 202, 1))
+            allocate(cmat_der_conv(202, 202, 1))
             
-            call target_img%get_rmat_ptr(rmat_target)
+            call butterworth_kernel(rmat_ker, rmat_ker_der, 202, 8, x(1))  ! WARNING: fix the constants here
+            call ker_img%set_rmat(rmat_ker, .false.)
+            call ker_der_img%set_rmat(rmat_ker_der, .false.)
+            
+            call target_img%get_rmat_sub(rmat_target)
             call obj_img%fft()
-            call obj_img%get_cmat_ptr(cmat_obj)
+            call obj_img%get_cmat_sub(cmat_obj)
             call ker_img%fft()
-            call ker_img%get_cmat_ptr(cmat_conv)
+            call ker_img%get_cmat_sub(cmat_conv)
+            
+
             call ker_der_img%fft()
-            call ker_der_img%get_cmat_ptr(cmat_der_conv)
+            call ker_der_img%get_cmat_sub(cmat_der_conv)
             cmat_conv     = cmat_conv    *cmat_obj
             cmat_der_conv = cmat_der_conv*cmat_obj
+            call ker_img%set_cmat(cmat_conv)
+            call ker_der_img%set_cmat(cmat_der_conv)
             call ker_der_img%ifft()
-            call ker_img%ifft()
+            call ker_img%ifft()       
             call obj_img%ifft()
+            call ker_img%get_rmat_sub(rmat_ker)
+            call ker_der_img%get_rmat_sub(rmat_ker_der)
+            rmat_ker     = rmat_ker*202*202;
+            rmat_ker_der = rmat_ker_der*202*202;
 
             grad(1) = 2*sum((rmat_ker - rmat_target)*rmat_ker_der)
-            write(*, *) 'grad: ', x(1), grad(1)
+            !write(*, *) 'grad: ', x(1), grad(1)
         end subroutine
 end module
     

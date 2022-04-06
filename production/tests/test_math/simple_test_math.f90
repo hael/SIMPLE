@@ -37,6 +37,7 @@ program simple_test_math
     call ker_img%new([box,box,1], smpd)
     call ker_der_img%new([box,box,1], smpd)
     
+    write(*, *) 'Butterworth unit tests:'
     ! first Butterworth function test
     val = butterworth(s, n, fc)
     if (abs(val(1) - 1./sqrt(2.)) <= 100*epsilon(val(1))) then
@@ -54,21 +55,17 @@ program simple_test_math
     else
         write(*, *) epsilon(val(1)), abs(val(1) - 1./sqrt(2.)), 'value of Butterworth poly at freq = 2 (cut-off frequency = 2) should be 1/sqrt(2)!'
     end if
-
+    
     ! Test the optimizer
-    call butterworth_kernel(ker, ker_der, box, n, 7.)
-    call ker_img%set_rmat(ker, .false.)
-    call ker_der_img%set_rmat(ker_der, .false.)
-    write(*, *) ker(101,101,1), ker(101, 120, 1), ker(101,150,1)
-    write(*, *) ker_der(101,101,1), ker_der(101, 120, 1), ker_der(101,150,1)
-
+    write(*, *)
+    write(*, *) 'Simple cut-off frequency optimization test:'
     costfun_ptr  => butterworth_cost
     str_opts  = 'lbfgsb'
     lims(1,1) =  1.
     lims(1,2) =  50.
     call spec%specify(str_opts, ndim, limits=lims, nrestarts=NRESTARTS) ! make optimizer spec
     call spec%set_costfun(costfun_ptr)                                  ! set pointer to costfun
-    call spec%set_gcostfun(butterworth_gcost)                                ! set pointer to gradient of costfun
+    call spec%set_gcostfun(butterworth_gcost)                           ! set pointer to gradient of costfun
     call ofac%new(spec, opt_ptr)                                        ! generate optimizer object with the factory
     spec%x    = 7.
     call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
