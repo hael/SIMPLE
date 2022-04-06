@@ -788,6 +788,7 @@ contains
 
     subroutine exec_autorefine3D_nano( self, cline )
         use simple_commander_quant, only: detect_atoms_commander
+        use simple_ori, only: ori
         class(autorefine3D_nano_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         class(parameters), pointer    :: params_ptr => null()
@@ -798,8 +799,10 @@ contains
         type(vizoris_commander)       :: xvizoris
         type(cmdline)                 :: cline_refine3D_nano, cline_detect_atms, cline_reproject
         type(cmdline)                 :: cline_refine3D_cavgs, cline_vizoris
+        type(ori)                     :: o1, o2
         type(image), allocatable      :: imgs(:)
         type(sp_project)              :: spproj
+        type(stats_struct)            :: euldist_stats
         character(len=*), parameter   :: RECVOL     = 'recvol_state01.mrc'
         character(len=*), parameter   :: EVEN       = 'recvol_state01_even.mrc'
         character(len=*), parameter   :: ODD        = 'recvol_state01_odd.mrc'
@@ -811,15 +814,15 @@ contains
         character(len=*), parameter   :: FINAL_MAPS = './final_thresholded_results/'
         character(len=*), parameter   :: TAG        = 'xxx' ! for checking command lines
         character(len=:), allocatable :: iter_dir, cavgs_stk, fname
-        real,             allocatable :: rstates(:), corrs(:)
-        logical,          allocatable :: state_mask(:)
-        character(len=STDLEN) :: fbody, fbody_even, fbody_odd, fbody_split
-        integer :: i, j, iter, cnt, cnt2, ncavgs, funit, io_stat
+        integer,          allocatable :: pinds(:)
+        real,             allocatable :: rstates(:), corrs(:), euldists(:), tmp(:)
+        logical,          allocatable :: state_mask(:), pind_mask(:)
+        character(len=:), allocatable :: iter_tag
+        character(len=STDLEN) :: fbody, fbody_split
+        integer :: i, j, iter, cnt, cnt2, ncavgs, funit, io_stat, endit, maxpind
         real    :: smpd
         logical :: fall_over
         fbody       = get_fbody(RECVOL,   'mrc')
-        fbody_even  = get_fbody(EVEN,     'mrc')
-        fbody_odd   = get_fbody(ODD,      'mrc')
         fbody_split = get_fbody(SPLITTED, 'mrc')
         if(       cline%defined('nparts')         ) call cline%delete('nparts') ! shared-memory workflow
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',          5.)
@@ -866,12 +869,14 @@ contains
             params_ptr  => null()
             call cline_refine3D_nano%set('vol1', SIMVOL)         ! the reference volume is ALWAYS SIMVOL
             call cline_refine3D_nano%delete('lp')                ! uses the default 1.0 A low-pass limit
+            endit = nint(cline_refine3D_nano%get_rarg('endit'))  ! last iteration executed by refine3D_nano
             call cline_refine3D_nano%delete('endit')             ! used internally but not technically allowed
             call cline_refine3D_nano%set('prg', 'refine3D_nano') ! because the command line is modified refine3D_nano -> refine3D internally
-            iter_dir = 'iteration_'//int2str_pad(i,2)//'/'
-            call simple_mkdir(iter_dir)
-            ! extract particle 3D orientations and write them
-            ! 2do
+            ! rename relevant outputs (because the shared-mem workflow adds the iter tag)
+            iter_tag = '_iter'//int2str_pad(endit,3)
+            call simple_rename(trim(fbody)//iter_tag//'.mrc',    RECVOL)
+            call simple_rename(trim(fbody)//iter_tag//'_even.mrc', EVEN)
+            call simple_rename(trim(fbody)//iter_tag//'_odd.mrc',   ODD)
             ! model building
             params_ptr  => params_glob
             params_glob => null()
@@ -879,9 +884,11 @@ contains
             params_glob => params_ptr
             params_ptr  => null()
             ! copy critical output
+            iter_dir = 'iteration_'//int2str_pad(i,2)//'/'
+            call simple_mkdir(iter_dir)
             call simple_copy_file(RECVOL,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'.mrc')
-            call simple_copy_file(EVEN,     iter_dir//trim(fbody_even) //'_iter'//int2str_pad(i,3)//'.mrc')
-            call simple_copy_file(ODD,      iter_dir//trim(fbody_odd)  //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(EVEN,     iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_even.mrc')
+            call simple_copy_file(ODD,      iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_odd.mrc')
             call simple_copy_file(SIMVOL,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_SIM.mrc')
             call simple_copy_file(ATOMS,    iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_ATMS.pdb')
             call simple_copy_file(BINARY,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
@@ -897,11 +904,15 @@ contains
         end do
         call cline_detect_atms%delete('cs_thres') ! 4 testing mild CS-based thresholding in loop
         call cline_detect_atms%set('use_thres', 'yes') ! use contact score threshold for final model building
+        params_ptr  => params_glob
+        params_glob => null()
         call xdetect_atms%execute(cline_detect_atms)
+        params_glob => params_ptr
+        params_ptr  => null()
         call simple_mkdir(FINAL_MAPS)
         call simple_copy_file(RECVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'.mrc')
-        call simple_copy_file(EVEN,     FINAL_MAPS//trim(fbody_even) //'_iter'//int2str_pad(iter,3)//'.mrc')
-        call simple_copy_file(ODD,      FINAL_MAPS//trim(fbody_odd)  //'_iter'//int2str_pad(iter,3)//'.mrc')
+        call simple_copy_file(EVEN,     FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_even.mrc')
+        call simple_copy_file(ODD,      FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_odd.mrc')
         call simple_copy_file(SIMVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_SIM.mrc')
         call simple_copy_file(ATOMS,    FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_ATMS.pdb')
         call simple_copy_file(BINARY,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_BIN.mrc')
@@ -1013,16 +1024,54 @@ contains
         call xvizoris%execute(cline_vizoris)
         params_glob => params_ptr
         params_ptr  => null()
-        ! lastly, print CSV file of correlation vs particle number
+        ! print CSV file of correlation vs particle number
         corrs = spproj%os_ptcl3D%get_all('corr')
         fname = 'ptcls_vs_reprojs_corrs.csv'
-        call fopen(funit, 'ptcls_vs_reprojs_corrs.csv', 'replace', 'unknown', iostat=io_stat, form='formatted')
+        call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
         call fileiochk('autorefine3D_nano fopen failed'//trim(fname), io_stat)
         write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'CORR'
         do i = 1,size(corrs)
             write(funit,*) int2str(i)//CSV_DELIM//real2str(corrs(i))
         end do
         call fclose(funit)
+        ! print CSV file of particle indices vs. difference in projection direction to right-hand neighbour
+        if( spproj%os_ptcl3D%isthere('pind') )then
+            pinds = nint(spproj%os_ptcl3D%get_all('pind'))
+        else
+            pinds = (/(i,i=1,spproj%os_ptcl3D%get_noris())/)
+        endif
+        maxpind = maxval(pinds)
+        allocate(pind_mask(maxpind),    source = .false.)
+        allocate(euldists(maxpind - 1), source = 0.)
+        do i = 1,size(pinds)
+            pind_mask(pinds(i)) = .true.
+        end do
+        fname = 'pinds_vs_rh_neigh_angdiffs.csv'
+        call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
+        call fileiochk('autorefine3D_nano fopen failed'//trim(fname), io_stat)
+        write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'ANGULAR_DIFFERENCE'
+        cnt = 0
+        do i = 1,maxpind - 1
+            if( pind_mask(i) .and. pind_mask(i + 1) )then
+                ! it is meaningful to look at the angular difference
+                call spproj%os_ptcl3D%get_ori(i,     o1)
+                call spproj%os_ptcl3D%get_ori(i + 1, o2)
+                cnt = cnt + 1
+                euldists(cnt) = rad2deg(o1.euldist.o2)
+                ! this prints the angular difference between projection directions in degrees
+                write(funit,*) int2str(i)//CSV_DELIM//real2str(euldists(cnt))
+            else
+                write(funit,*) int2str(i)//CSV_DELIM//'NaN'
+            endif
+        end do
+        call fclose(funit)
+        call calc_stats(euldists(:cnt), euldist_stats)
+        write(logfhandle,'(A)') '>>> ANGULAR DISTANCE TO RIGHT-HAND NEIGHBOR STATS'
+        write(logfhandle,'(A,F8.4)') 'Average: ', euldist_stats%avg
+        write(logfhandle,'(A,F8.4)') 'Median : ', euldist_stats%med
+        write(logfhandle,'(A,F8.4)') 'Sigma  : ', euldist_stats%sdev
+        write(logfhandle,'(A,F8.4)') 'Max    : ', euldist_stats%maxv
+        write(logfhandle,'(A,F8.4)') 'Min    : ', euldist_stats%minv
         ! deallocate
         if( allocated(iter_dir)  ) deallocate(iter_dir)
         if( allocated(cavgs_stk) ) deallocate(cavgs_stk)

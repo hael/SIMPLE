@@ -486,12 +486,11 @@ contains
         if( present(tag) )then
             do i=1,self%argcnt
                 if( self%cmds(i)%defined .and. allocated(self%cmds(i)%carg) )then
-                    write(logfhandle,*) trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg), trim(tag)
+                    write(logfhandle,*) trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg), ' ', trim(tag)
                 else if( self%cmds(i)%defined )then
-                    write(logfhandle,*) trim(self%cmds(i)%key), ' ', self%cmds(i)%rarg, trim(tag)
+                    write(logfhandle,*) trim(self%cmds(i)%key), ' ', self%cmds(i)%rarg, ' ',trim(tag)
                 endif
             end do
-
         else
             do i=1,self%argcnt
                 if( self%cmds(i)%defined .and. allocated(self%cmds(i)%carg) )then

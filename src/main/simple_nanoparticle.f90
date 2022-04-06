@@ -1317,7 +1317,7 @@ contains
                call centers_pdb%set_name(cc,self%atom_name)
                call centers_pdb%set_element(cc,self%element)
                call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
-               call centers_pdb%set_beta(cc,self%atominfo(cc)%cn_gen) ! use generalised coordination number
+               call centers_pdb%set_beta(cc,self%atominfo(cc)%valid_corr) ! use gper atom valid corr
                call centers_pdb%set_resnum(cc,cc)
            enddo
        endif
