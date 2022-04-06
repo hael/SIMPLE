@@ -796,9 +796,7 @@ contains
         integer(dp) :: sz, nchunks, leftover, bufsz, bytepos, in, out, ichunk
         integer     :: ioerr
         if( present(status) )status = 0
-        ! make sure the file is ready to read
-        call wait_for_closure(fname1)
-        ! process input file
+        if( .not. file_exists(fname1) ) THROW_HARD('file '//trim(fname1)//' does not exist')
         ! we need to inquire size before opening file as stream access
         ! does not allow inquire of size from file unit
         inquire(file=trim(fname1),size=sz)
