@@ -17,7 +17,6 @@ program simple_test_math
     
     procedure(testfun_butterworth), pointer   :: costfun_ptr      !< pointer 2 cost function
     class(optimizer),               pointer   :: opt_ptr=>null()  ! the generic optimizer object
-    class(*),                       pointer   :: fun_self => null()
     character(len=*),               parameter :: target_img_name  = 'TargetImg.mrc'
     character(len=*),               parameter :: obj_img_name     = 'CleanObj.mrc'
     integer,                        parameter :: box    = 202
@@ -26,7 +25,6 @@ program simple_test_math
     type(opt_spec)      :: spec                           ! the optimizer specification object
     character(len=8)    :: str_opts                       ! string descriptors for the NOPTS optimizers
     real                :: lims(ndim,2), lowest_cost
-    real                :: ker(box, box, 1), ker_der(box, box, 1)
    
     call target_img%new([box,box,1], smpd)
     call target_img%read(target_img_name, 1)
@@ -61,16 +59,16 @@ program simple_test_math
     write(*, *) 'Simple cut-off frequency optimization test:'
     costfun_ptr  => butterworth_cost
     str_opts  = 'lbfgsb'
-    lims(1,1) =  1.
-    lims(1,2) =  50.
+    lims(1,1) = 1.
+    lims(1,2) = 50.
     call spec%specify(str_opts, ndim, limits=lims, nrestarts=NRESTARTS) ! make optimizer spec
     call spec%set_costfun(costfun_ptr)                                  ! set pointer to costfun
-    call spec%set_gcostfun(butterworth_gcost)                           ! set pointer to gradient of costfun
+    call spec%set_gcostfun(butterworth_gcost)                           ! set pointer to gradient of costfun         
     call ofac%new(spec, opt_ptr)                                        ! generate optimizer object with the factory
-    spec%x    = 7.
+    spec%x    = 10.                                                     ! set initial guess
     call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
 
-    write(*, *) lowest_cost, spec%x
+    write(*, *) 'cost = ', lowest_cost, '; x = ', spec%x
 
     call opt_ptr%kill
     deallocate(opt_ptr)
