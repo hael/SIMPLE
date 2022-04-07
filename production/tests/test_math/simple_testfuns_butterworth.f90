@@ -1,7 +1,9 @@
 
 module simple_testfuns_butterworth
     use simple_defs
+    use simple_image, only: image
     implicit none
+    type(image) :: target_img, obj_img, ker_img, ker_der_img
     
     !>  \brief  defines the test function interface
     abstract interface
@@ -15,7 +17,7 @@ module simple_testfuns_butterworth
     
     contains
         function butterworth_cost( fun_self, x, d ) result( r )
-            use simple_testfuns_constants, only: target_img, obj_img, ker_img, ker_der_img
+            !use simple_testfuns_constants, only: target_img, obj_img, ker_img, ker_der_img
             use simple_math,               only: butterworth_kernel
             class(*), intent(inout) :: fun_self
             integer,  intent(in)    :: d
@@ -56,7 +58,7 @@ module simple_testfuns_butterworth
         end function
 
         subroutine butterworth_gcost( fun_self, x, grad, d )
-            use simple_testfuns_constants, only: target_img, obj_img, ker_img, ker_der_img
+            !use simple_testfuns_constants, only: target_img, obj_img, ker_img, ker_der_img
             use simple_math,               only: butterworth_kernel
             class(*), intent(inout) :: fun_self
             integer,  intent(in)    :: d
