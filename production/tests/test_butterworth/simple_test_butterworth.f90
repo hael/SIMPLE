@@ -1,9 +1,9 @@
-program simple_test_math
+program simple_test_butterworth
     include 'simple_lib.f08'
-    use simple_testfuns_butterworth
-    use simple_optimizer,            only: optimizer
-    use simple_opt_factory,          only: opt_factory
-    use simple_opt_spec,             only: opt_spec
+    use simple_butterworth
+    use simple_optimizer,   only: optimizer
+    use simple_opt_factory, only: opt_factory
+    use simple_opt_spec,    only: opt_spec
     implicit none
     
     integer :: n = 8
@@ -69,5 +69,4 @@ program simple_test_math
 
     call opt_ptr%kill
     deallocate(opt_ptr)
-end program simple_test_math
-    
+end program simple_test_butterworth

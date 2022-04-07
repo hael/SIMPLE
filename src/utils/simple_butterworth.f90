@@ -1,5 +1,5 @@
 
-module simple_testfuns_butterworth
+module simple_butterworth
     use simple_defs
     use simple_image, only: image
     use simple_math,  only: hyp
