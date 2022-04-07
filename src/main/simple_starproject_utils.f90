@@ -1,12 +1,13 @@
 module simple_starproject_utils
 include 'simple_lib.f08'
 !$ use omp_lib
+use simple_sp_project, only: sp_project
 use simple_oris, only: oris
 use simple_ori,  only: ori
 implicit none
 
 public :: LEN_LINE, LEN_FLAG, stk_map, star_flag, star_data, star_file, tilt_info
-public :: enable_rlnflag, enable_splflag, enable_splflags, get_rlnflagindex
+public :: enable_rlnflag, enable_splflag, enable_splflags, get_rlnflagindex, center_boxes
 public :: split_dataline, h_clust
 private
 #include "simple_local_flags.inc"
@@ -90,11 +91,11 @@ contains
         integer :: i
         do i = 1, size(flags)
             if((index(flags(i)%splflag, trim(adjustl(splflag))) > 0 .OR. index(flags(i)%splflag2, trim(adjustl(splflag))) > 0) .AND. len_trim(flags(i)%rlnflag) > 0) then
-				if(flags(i)%present .eqv. .false.) then
-					flags(i)%present = .true.
-					write(logfhandle,*) char(9), char(9), "mapping ", flags(i)%splflag, " => ", trim(adjustl(flags(i)%rlnflag))
-				end if
-				exit
+                if(flags(i)%present .eqv. .false.) then
+                    flags(i)%present = .true.
+                    write(logfhandle,*) char(9), char(9), "mapping ", flags(i)%splflag, " => ", trim(adjustl(flags(i)%rlnflag))
+                end if
+                exit
             end if
         end do
     end subroutine enable_splflag
@@ -116,8 +117,8 @@ contains
                 end do
                 testcount = testcount + 1
                 if(testcount == 10) then ! Do 10 tests to counter xpos or ypos being 0
-					exit
-				end if
+                    exit
+                end if
             end if
         end do
     end subroutine enable_splflags
@@ -153,7 +154,24 @@ contains
             flagid = flagid + 1
         end do
     end subroutine split_dataline
-
+    
+    subroutine center_boxes(spproj, sporis)
+        class(sp_project),        intent(inout) :: spproj
+        class(oris),              intent(inout) :: sporis
+        integer                                 :: iori
+        real                                    :: stkind, stkbox, xpos, ypos
+        do iori=1, sporis%get_noris()
+            if(sporis%get_state(iori) > 0) then
+                stkind = sporis%get(iori, "stkind")
+                stkbox = spproj%os_stk%get(int(stkind), "box")
+                xpos = sporis%get(iori, "xpos") + (stkbox / 2)
+                ypos = sporis%get(iori, "ypos") + (stkbox / 2)
+                call sporis%set(iori, "xpos", xpos)
+                call sporis%set(iori, "ypos", ypos)
+            end if
+        end do
+    end subroutine center_boxes
+    
     ! distance threshold based yerarchical clustering
     ! Source https://www.mathworks.com/help/stats/hierarchical-clustering.html#bq_679x-10
     subroutine h_clust(data_in, thresh,labels, centroids, populations)

@@ -486,6 +486,7 @@ contains
         if(.not. self%starfile%initialised) call self%initialise()
         call enable_splflags(spproj%os_optics, self%starfile%optics%flags)
         call enable_splflags(spproj%os_ptcl2D, self%starfile%particles2D%flags)
+        call center_boxes(spproj, spproj%os_ptcl2D)
         call self%export_stardata(spproj, self%starfile%optics%flags, spproj%os_optics, "optics")
         call self%export_stardata(spproj, self%starfile%particles2D%flags, spproj%os_ptcl2D, "particles", .true.)
     end subroutine export_ptcls2D
@@ -526,8 +527,6 @@ contains
         else
             call fopen(fhandle,file=trim(adjustl(self%starfile%filename)), status='new', iostat=ok)
         endif
-        write(fhandle, *) ""
-        write(fhandle, *) "# version 3000"
         write(fhandle, *) ""
         write(fhandle, *) "data_" // trim(adjustl(blockname))
         write(fhandle, *) ""
