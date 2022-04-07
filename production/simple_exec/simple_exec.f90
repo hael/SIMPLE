@@ -91,6 +91,7 @@ type(binarize_commander)                    :: xbinarize
 type(mask_commander)                        :: xmask
 type(fsc_commander)                         :: xfsc
 type(nonuniform_filter_commander)           :: xnonuniform_filter
+type(nonuniform_butterworth_commander)      :: xnonuniform_butterworth
 type(centervol_commander)                   :: xcenter
 type(reproject_commander)                   :: xreproject
 type(volops_commander)                      :: xvolops
@@ -269,6 +270,8 @@ select case(trim(prg))
         call xfsc%execute(cline)
     case( 'nonuniform_filter' )
         call xnonuniform_filter%execute(cline)
+    case( 'nonuniform_butterworth' )
+        call xnonuniform_butterworth%execute(cline)
     case( 'center' )
         call xcenter%execute(cline)
     case( 'reproject' )
