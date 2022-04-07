@@ -2,6 +2,7 @@
 module simple_testfuns_butterworth
     use simple_defs
     use simple_image, only: image
+    use simple_math,  only: hyp
     implicit none
     type(image) :: target_img, obj_img, ker_img, ker_der_img
     
@@ -16,9 +17,63 @@ module simple_testfuns_butterworth
     end interface
     
     contains
+        ! Compute the value of the Butterworth transfer function of order n(th)
+        ! at a given frequency s, with the cut-off frequency fc
+        ! SOURCE :
+        ! https://en.wikipedia.org/wiki/Butterworth_filter
+        function butterworth(s, n, fc) result(val)
+            real   , intent(in)  :: s
+            integer, intent(in)  :: n
+            real   , intent(in)  :: fc
+            real                 :: val(2)
+
+            real, parameter :: an(9) = (/ 1., 5.1258, 13.1371, 21.8462, 25.6884, 21.8462, 13.1371, 5.1258, 1./)
+            complex :: Bn, dBn, Kn, dKn  ! Normalized Butterworth polynomial, its derivative and its reciprocal
+            complex :: j = (0, 1)        ! Complex identity: j = sqrt(-1)
+            complex :: js                ! frequency is multiplied by the complex identity j
+            integer :: k
+            val = [0., 0.]
+            Bn  = (0., 0.)
+            dBn = (0., 0.)
+            js  = j*s/fc
+            do k = 0, n
+                Bn  = Bn  +   an(k+1)*js**k
+                dBn = dBn + k*an(k+1)*js**k
+            end do
+            dBn = -dBn/fc
+            Kn  = 1/Bn
+            dKn = -dBn/Bn**2
+            val(1) = sqrt(real(Kn)**2 + aimag(Kn)**2)
+            val(2) = real( Kn*conjg(dKn) )/val(1)
+        end function butterworth
+
+        ! Compute the Butterworth kernel of the order n-th of width w
+        ! with the cut-off frequency fc
+        ! https://en.wikipedia.org/wiki/Butterworth_filter
+        subroutine butterworth_kernel(ker, ker_der, w, n, fc)
+            real,    intent(inout) :: ker    (:, :, :)    ! assuming 2D kernel for now!!!
+            real,    intent(inout) :: ker_der(:, :, :)    ! assuming 2D kernel for now!!!
+            integer, intent(in)    :: w
+            integer, intent(in)    :: n
+            real   , intent(in)    :: fc
+            integer :: k, l, half_w
+            real    :: freq_val, val(2)    ! current frequency value
+
+            freq_val = 0
+            half_w   = int(w/2)
+            do k = 1, w
+                do l = 1, w
+                    freq_val = hyp(real(k-half_w), real(l-half_w))
+
+                    ! compute the value of Butterworth transfer function at current frequency value
+                    val = butterworth(freq_val, n, fc)
+                    ker(k,l,1)     = val(1)
+                    ker_der(k,l,1) = val(2)
+                end do
+            end do
+        end subroutine butterworth_kernel
+
         function butterworth_cost( fun_self, x, d ) result( r )
-            !use simple_testfuns_constants, only: target_img, obj_img, ker_img, ker_der_img
-            use simple_math,               only: butterworth_kernel
             class(*), intent(inout) :: fun_self
             integer,  intent(in)    :: d
             real,     intent(in)    :: x(d)
@@ -58,8 +113,6 @@ module simple_testfuns_butterworth
         end function
 
         subroutine butterworth_gcost( fun_self, x, grad, d )
-            !use simple_testfuns_constants, only: target_img, obj_img, ker_img, ker_der_img
-            use simple_math,               only: butterworth_kernel
             class(*), intent(inout) :: fun_self
             integer,  intent(in)    :: d
             real,     intent(inout) :: x(d)
