@@ -1,12 +1,11 @@
 program simple_test_math
     include 'simple_lib.f08'
     use simple_math,                 only: butterworth, butterworth_kernel
-    use simple_testfuns_butterworth, only: testfun_butterworth, butterworth_cost, butterworth_gcost
+    use simple_testfuns_butterworth, only: testfun_butterworth, butterworth_cost, butterworth_gcost, target_img, obj_img, ker_img, ker_der_img
     use simple_optimizer,            only: optimizer
     use simple_opt_factory,          only: opt_factory
     use simple_opt_spec,             only: opt_spec
     use simple_image,                only: image
-    use simple_testfuns_constants,   only: target_img, obj_img, ker_img, ker_der_img
     implicit none
     
     integer :: n = 8
