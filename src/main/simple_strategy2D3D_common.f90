@@ -328,7 +328,6 @@ contains
         call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
         flims = img_in%loop_lims(2)
         if( any(frc > 0.143) )then
-            ! call fsc2optlp_sub(filtsz, frc, filter)
             call fsc2TVfilt(frc, flims, filter)
             if( params_glob%l_match_filt )then
                 call pftcc%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kstop))
@@ -462,7 +461,7 @@ contains
         character(len=*), optional, intent(in)    :: fname_odd
         type(image) :: mskvol
         real        :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
-        integer     :: iref, iproj, filtsz, flims(3,2), h, k, l, sh
+        integer     :: iref, iproj, filtsz, flims(3,2), h, k, l, sh, nfcomps(build_glob%img%get_filtsz())
         ! ensure correct build_glob%vol dim
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         call build_glob%vol%read(fname_even)
@@ -498,6 +497,18 @@ contains
                     if( params_glob%clsfrcs.eq.'no' )&
                     &call build_glob%vol%ran_phases_below_noise_power(build_glob%vol_odd)
                 endif
+              ! set # fcomps per shell
+               flims   = build_glob%vol%loop_lims(2)
+               nfcomps = 0
+               do h = flims(1,1),flims(1,2)
+                   do k = flims(2,1),flims(2,2)
+                       do l = flims(3,1),flims(3,2)
+                           sh = nint(hyp(real(h),real(k),real(l)))
+                           if( sh < 1 .or. sh > filtsz ) cycle
+                           nfcomps(sh) = nfcomps(sh) + 1
+                       end do
+                   end do
+               end do
                 ! filtering
                 if( params_glob%l_match_filt )then
                     ! stores filters in pftcc
@@ -508,13 +519,13 @@ contains
                                 iproj = iproj+1
                                 if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
                                 call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-                                call fsc2optlp_sub(filtsz, frc, filter)
+                                call fsc2TVfilt_fast(frc, nfcomps, filter)
                                 call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kstop))
                             enddo
                         endif
                     else
                         if( any(build_glob%fsc(s,:) > 0.143) )then
-                            call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
+                            call fsc2TVfilt_fast(build_glob%fsc(s,:), nfcomps, filter)
                         else
                             filter = 1.
                         endif
@@ -526,7 +537,7 @@ contains
                         ! no filtering
                     else
                         if( any(build_glob%fsc(s,:) > 0.143) )then
-                            call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
+                            call fsc2TVfilt_fast(build_glob%fsc(s,:), nfcomps, filter)
                             call build_glob%vol%apply_filter(filter)
                             call build_glob%vol_odd%apply_filter(filter)
                         endif

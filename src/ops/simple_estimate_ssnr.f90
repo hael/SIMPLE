@@ -457,8 +457,8 @@ contains
             if( map2filt_present ) call subvols_2filt(ithr)%fft
             ! fsc
             call subvols_even(ithr)%fsc(subvols_odd(ithr), corrs)
-            ! calculate filter
-            call fsc2optlp_sub(filtsz, corrs, filt)
+            ! calculate TV filter
+            call fsc2TVfilt_fast(corrs, nfcomps, filt)
             ! randomize phases below noise power
             if( pphran ) call subvols_even(ithr)%ran_phases_below_noise_power(subvols_odd(ithr))
             ! apply TV filter
