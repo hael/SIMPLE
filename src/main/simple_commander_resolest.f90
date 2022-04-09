@@ -170,7 +170,7 @@ contains
     ! end subroutine exec_local_res
 
     subroutine exec_nonuniform_filter( self, cline )
-        use simple_estimate_ssnr, only: nonuniform_fscTVfilt
+        use simple_estimate_ssnr, only: nonuniform_fsc_filt
         class(nonuniform_filter_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         type(parameters) :: params
@@ -209,9 +209,9 @@ contains
             call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
         endif
         if( map2filt_present )then
-            call nonuniform_fscTVfilt(even, odd, mskvol, .false., map2filt, phran=trim(params%phrand).eq.'yes')
+            call nonuniform_fsc_filt(even, odd, mskvol, .false., map2filt, phran=trim(params%phrand).eq.'yes')
         else
-            call nonuniform_fscTVfilt(even, odd, mskvol, .false., phran=trim(params%phrand).eq.'yes')
+            call nonuniform_fsc_filt(even, odd, mskvol, .false., phran=trim(params%phrand).eq.'yes')
         endif
         if( have_mask_file )then
             call mskvol%read(params%mskfile)

@@ -6,6 +6,7 @@ use simple_cmdline,    only: cmdline
 use simple_builder,    only: build_glob
 use simple_parameters, only: params_glob
 use simple_stack_io,   only: stack_io
+use simple_estimate_ssnr
 implicit none
 
 public :: read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
@@ -269,7 +270,6 @@ contains
     !!          serial routine
     subroutine prepimg4align( iptcl, img_in, img_out )
         use simple_polarizer,     only: polarizer
-        use simple_estimate_ssnr, only: fsc2optlp_sub
         use simple_ctf,           only: ctf
         integer,          intent(in)    :: iptcl
         class(image),     intent(inout) :: img_in
@@ -321,7 +321,6 @@ contains
     !>  \brief  prepares one cluster centre image for alignment
     subroutine prep2Dref( pftcc, img_in, img_out, icls, center, xyz_in, xyz_out )
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_estimate_ssnr,    only: fsc2optlp_sub, fsc2TVfilt
         use simple_polarizer,        only: polarizer
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(image),            intent(inout) :: img_in
@@ -330,10 +329,11 @@ contains
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
-        integer        :: flims(3,2)
+        integer        :: flims(3,2), filtsz
         real           :: frc(build_glob%img%get_filtsz()), filter(build_glob%img%get_filtsz())
         real           :: xyz(3), sharg
         logical        :: do_center
+        filtsz = build_glob%img%get_filtsz()
         do_center = (params_glob%center .eq. 'yes')
         ! centering only performed if params_glob%center.eq.'yes'
         if( present(center) ) do_center = do_center .and. center
@@ -361,7 +361,7 @@ contains
         call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
         flims = img_in%loop_lims(2)
         if( any(frc > 0.143) )then
-            call fsc2TVfilt(frc, flims, filter)
+            call fsc2optlp_sub(filtsz, frc, filter)
             if( params_glob%l_match_filt )then
                 call pftcc%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kstop))
             else
@@ -487,7 +487,6 @@ contains
 
     subroutine read_and_filter_refvols( pftcc, cline, s, fname_even, fname_odd )
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_estimate_ssnr,    only: nonuniform_fscTVfilt, fsc2TVfilt_fast
         class(polarft_corrcalc),    intent(inout) :: pftcc
         class(cmdline),             intent(in)    :: cline
         integer,                    intent(in)    :: s
@@ -495,10 +494,11 @@ contains
         character(len=*), optional, intent(in)    :: fname_odd
         type(image) :: mskvol
         real        :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
-        integer     :: iref, iproj, filtsz, flims(3,2), h, k, l, sh, nfcomps(build_glob%img%get_filtsz())
+        integer     :: iref, iproj, filtsz, flims(3,2), h, k, l, sh
         ! ensure correct build_glob%vol dim
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         call build_glob%vol%read(fname_even)
+        filtsz = build_glob%img%get_filtsz()
         if( present(fname_odd) )then
             call build_glob%vol_odd%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
             call build_glob%vol_odd%read(fname_odd)
@@ -506,7 +506,7 @@ contains
                 call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
                 call mskvol%read(params_glob%mskfile)
                 call mskvol%one_at_edge ! to expand before masking of reference
-                call nonuniform_fscTVfilt(build_glob%vol, build_glob%vol_odd, mskvol, params_glob%l_match_filt)
+                call nonuniform_fsc_filt(build_glob%vol, build_glob%vol_odd, mskvol, params_glob%l_match_filt)
                 ! envelope masking
                 call mskvol%read(params_glob%mskfile) ! to bring back the edge
                 call build_glob%vol%zero_env_background(mskvol)
@@ -530,19 +530,6 @@ contains
                     if( params_glob%clsfrcs.eq.'no' )&
                     &call build_glob%vol%ran_phases_below_noise_power(build_glob%vol_odd)
                 endif
-                ! set # fcomps per shell
-                filtsz  = build_glob%img%get_filtsz()
-                flims   = build_glob%vol%loop_lims(2)
-                nfcomps = 0
-                do h = flims(1,1),flims(1,2)
-                    do k = flims(2,1),flims(2,2)
-                        do l = flims(3,1),flims(3,2)
-                            sh = nint(hyp(real(h),real(k),real(l)))
-                            if( sh < 1 .or. sh > filtsz ) cycle
-                            nfcomps(sh) = nfcomps(sh) + 1
-                        end do
-                    end do
-                end do
                 ! filtering
                 if( params_glob%l_match_filt )then
                     ! stores filters in pftcc
@@ -553,13 +540,13 @@ contains
                                 iproj = iproj+1
                                 if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
                                 call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-                                call fsc2TVfilt_fast(frc, nfcomps, filter)
+                                call fsc2optlp_sub(filtsz, frc, filter)
                                 call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kstop))
                             enddo
                         endif
                     else
                         if( any(build_glob%fsc(s,:) > 0.143) )then
-                            call fsc2TVfilt_fast(build_glob%fsc(s,:), nfcomps, filter)
+                            call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
                         else
                             filter = 1.
                         endif
@@ -571,7 +558,7 @@ contains
                         ! no filtering
                     else
                         if( any(build_glob%fsc(s,:) > 0.143) )then
-                            call fsc2TVfilt_fast(build_glob%fsc(s,:), nfcomps, filter)
+                            call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
                             call build_glob%vol%apply_filter(filter)
                             call build_glob%vol_odd%apply_filter(filter)
                         endif
@@ -626,8 +613,7 @@ contains
     end subroutine shift_and_mask_refvol
 
     subroutine norm_struct_facts( cline, which_iter )
-        use simple_masker,        only: masker
-        use simple_estimate_ssnr, only: fsc2optlp
+        use simple_masker, only: masker
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         character(len=:), allocatable :: mskfile
