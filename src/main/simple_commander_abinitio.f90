@@ -8,6 +8,7 @@ use simple_sp_project,     only: sp_project
 use simple_stack_io,       only: stack_io
 use simple_qsys_env,       only: qsys_env
 use simple_qsys_funs
+use simple_estimate_ssnr
 implicit none
 
 public :: initial_3Dmodel_commander
@@ -38,7 +39,7 @@ contains
         class(cmdline),                   intent(inout) :: cline
         ! constants
         real,                  parameter :: SCALEFAC2_TARGET = 0.5, AMSKLP_DEFAULT = 15.
-        real,                  parameter :: CENLP=30. !< consistency with refine3D
+        real,                  parameter :: CENLP_DEFAULT = 30.
         integer,               parameter :: MAXITS_SNHC=20, MAXITS_INIT=15, MAXITS_REFINE=40
         integer,               parameter :: NSPACE_SNHC=1000, NSPACE_INIT=1000, NSPACE_REFINE=2500
         character(len=STDLEN), parameter :: ORIG_WORK_PROJFILE   = 'initial_3Dmodel_tmpproj.simple'
@@ -79,8 +80,8 @@ contains
         type(image)           :: img, vol
         type(stack_io)        :: stkio_r, stkio_r2, stkio_w
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine, vol_iter_pproc, vol_iter_pproc_mirr
-        real                  :: iter, smpd_target, lplims(2), orig_smpd
-        real                  :: scale_factor1, scale_factor2
+        real                  :: iter, smpd_target, lplims(2), orig_smpd, cenlp
+        real                  :: scale_factor1, scale_factor2, lp3(3)
         integer               :: icls, ncavgs, orig_box, box, istk, cnt
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset, l_shmem, l_automsk
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
@@ -181,8 +182,8 @@ contains
             endif
         endif
         ! set lplims
-        lplims(1) = 20.
-        lplims(2) = 8.
+        call mskdiam2lplimits(params%mskdiam, lplims(1), lplims(2), cenlp)
+        if( .not. cline%defined('cenlp') ) params_glob%cenlp = cenlp
         if( l_lpset )then
             lplims(1) = params%lpstart
             lplims(2) = params%lpstop
@@ -193,10 +194,14 @@ contains
                 tmp_rarr  = spproj%os_cls2D%get_all('res')
                 tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
                 res       = pack(tmp_rarr, mask=(tmp_iarr>0))
-                lplims(1) = max(median_nocopy(res), lplims(2))
+                call hpsort(res)
+                lplims(1) = max(median_nocopy(res(:3)), lplims(2)) ! low-pass limit is median of three best (as in 2D)
                 deallocate(res, tmp_iarr, tmp_rarr)
             endif
         endif
+        write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lplims(1)
+        write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', lplims(2)
+        write(logfhandle,'(A,F5.1)') '>>> DID SET CENTERING LOW-PASS LIMIT (IN A) TO: ', params_glob%cenlp
         ! prepare a temporary project file for the class average processing
         allocate(WORK_PROJFILE, source=trim(ORIG_WORK_PROJFILE))
         call del_file(WORK_PROJFILE)
