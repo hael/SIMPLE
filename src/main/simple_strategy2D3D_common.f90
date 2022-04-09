@@ -11,7 +11,7 @@ implicit none
 
 public :: read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
 &norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, read_and_filter_refvols,&
-&shift_and_mask_refvol, prep2Dref, preprecvols, killrecvols, prepimgbatch, build_pftcc_particles
+&shift_and_mask_refvol, prep2Dref, preprecvols, killrecvols, prepimgbatch
 private
 #include "simple_local_flags.inc"
 
@@ -233,39 +233,6 @@ contains
         if( pw > TINY ) call build_glob%eorecvols(s)%grid_plane(se, o, fpl, eo, pwght=pw)
     end subroutine grid_ptcl
 
-    !>  \brief  prepares all particle images for alignment
-    subroutine build_pftcc_particles( pftcc, batchsz_max, match_imgs, ptcl_mask )
-        use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_polarizer,        only: polarizer
-        class(polarft_corrcalc), intent(inout) :: pftcc
-        integer,                 intent(in)    :: batchsz_max
-        class(polarizer),        intent(inout) :: match_imgs(batchsz_max)
-        logical, optional,       intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
-        logical :: mask_here(params_glob%fromp:params_glob%top)
-        integer :: iptcl_batch, batchlims(2), imatch, iptcl
-        if( present(ptcl_mask) )then
-            mask_here = ptcl_mask
-        else
-            mask_here = .true.
-        endif
-        if( .not. params_glob%l_distr_exec ) write(logfhandle,'(A)') '>>> BUILDING PARTICLES'
-        call prepimgbatch( batchsz_max )
-        do iptcl_batch=params_glob%fromp,params_glob%top,batchsz_max
-            batchlims = [iptcl_batch,min(params_glob%top,iptcl_batch + batchsz_max - 1)]
-            call read_imgbatch( batchlims, mask_here )
-            !$omp parallel do default(shared) private(iptcl,imatch)&
-            !$omp schedule(static) proc_bind(close)
-            do iptcl=batchlims(1),batchlims(2)
-                if( .not. mask_here(iptcl) ) cycle
-                imatch = iptcl - batchlims(1) + 1
-                call prepimg4align( iptcl, build_glob%imgbatch(imatch), match_imgs(imatch))
-                ! transfer to polar coordinates
-                call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true., mask=build_glob%l_resmsk)
-            end do
-            !$omp end parallel do
-        end do
-    end subroutine build_pftcc_particles
-
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
     subroutine prepimg4align( iptcl, img_in, img_out )
@@ -361,7 +328,8 @@ contains
         call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
         flims = img_in%loop_lims(2)
         if( any(frc > 0.143) )then
-            call fsc2optlp_sub(filtsz, frc, filter)
+            ! call fsc2optlp_sub(filtsz, frc, filter)
+            call fsc2TVfilt(frc, flims, filter)
             if( params_glob%l_match_filt )then
                 call pftcc%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kstop))
             else

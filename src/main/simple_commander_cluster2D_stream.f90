@@ -420,8 +420,7 @@ contains
     ! Main routine
 
     subroutine exec_cluster2D_stream( self, cline )
-        use simple_class_frcs,    only: class_frcs
-        use simple_estimate_ssnr, only: mskdiam2lplimits
+        use simple_class_frcs, only: class_frcs
         class(cluster2D_commander_stream), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters)                   :: params

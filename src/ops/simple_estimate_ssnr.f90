@@ -173,8 +173,8 @@ contains
     end subroutine lowpass_from_klim
 
     subroutine mskdiam2lplimits( mskdiam, lpstart,lpstop, lpcen )
-        real, intent(in)  :: mskdiam
-        real, intent(out) :: lpstart,lpstop, lpcen
+        real, intent(in)    :: mskdiam
+        real, intent(inout) :: lpstart,lpstop, lpcen
         lpstart = max(min(mskdiam/12., 15.),  8.)
         lpstop  = min(max(mskdiam/22.,  5.),  8.)
         lpcen   = min(max(mskdiam/6.,  20.), 30.)
