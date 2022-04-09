@@ -6,7 +6,7 @@ include 'simple_lib.f08'
 implicit none
 
 public :: fsc2ssnr, fsc2TVfilt, fsc2TVfilt_fast, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
-public :: nonuniform_phase_ran, nonuniform_fscTVfilt, local_res_lp
+public :: nonuniform_phase_ran, nonuniform_fsc_filt, local_res_lp
 public :: plot_fsc, lowpass_from_klim, mskdiam2lplimits, calc_dose_weights
 private
 #include "simple_local_flags.inc"
@@ -311,7 +311,7 @@ contains
 
     end subroutine nonuniform_phase_ran
 
-    subroutine nonuniform_fscTVfilt( even, odd, mskimg, l_match_filt, map2filt, phran )
+    subroutine nonuniform_fsc_filt( even, odd, mskimg, l_match_filt, map2filt, phran )
         use simple_image, only: image
         class(image),           intent(inout) :: even, odd, mskimg
         logical,                intent(in)    :: l_match_filt
@@ -331,18 +331,18 @@ contains
         real    :: smpd
         logical :: map2filt_present, pphran
         ! check input
-        if( even%is_ft()   ) THROW_HARD('even vol FTed; nonuniform_fscTVfilt')
-        if( odd%is_ft()    ) THROW_HARD('odd  vol FTed; nonuniform_fscTVfilt')
-        if( mskimg%is_ft() ) THROW_HARD('msk  vol FTed; nonuniform_fscTVfilt')
+        if( even%is_ft()   ) THROW_HARD('even vol FTed; nonuniform_fsc_filt')
+        if( odd%is_ft()    ) THROW_HARD('odd  vol FTed; nonuniform_fsc_filt')
+        if( mskimg%is_ft() ) THROW_HARD('msk  vol FTed; nonuniform_fsc_filt')
         map2filt_present = present(map2filt)
         if( map2filt_present )then
-            if( map2filt%is_ft() ) THROW_HARD('map2filt vol FTed; nonuniform_fscTVfilt')
+            if( map2filt%is_ft() ) THROW_HARD('map2filt vol FTed; nonuniform_fsc_filt')
         endif
         pphran = .true.
         if( present(phran) ) pphran = phran
         ! set parameters
         ldim    = even%get_ldim()
-        if( ldim(3) == 1 ) THROW_HARD('not intended for 2D images; nonuniform_fscTVfilt')
+        if( ldim(3) == 1 ) THROW_HARD('not intended for 2D images; nonuniform_fsc_filt')
         smpd    = even%get_smpd()
         l_mask  = mskimg%bin2logical()
         npix    = count(l_mask)
@@ -457,8 +457,8 @@ contains
             if( map2filt_present ) call subvols_2filt(ithr)%fft
             ! fsc
             call subvols_even(ithr)%fsc(subvols_odd(ithr), corrs)
-            ! calculate TV filter
-            call fsc2TVfilt_fast(corrs, nfcomps, filt)
+            ! calculate filter
+            call fsc2optlp_sub(filtsz, corrs, filt)
             ! randomize phases below noise power
             if( pphran ) call subvols_even(ithr)%ran_phases_below_noise_power(subvols_odd(ithr))
             ! apply TV filter
@@ -485,7 +485,7 @@ contains
             endif
         end subroutine set_subvols_msk_fft_fscTVfilt_ifft
 
-    end subroutine nonuniform_fscTVfilt
+    end subroutine nonuniform_fsc_filt
 
     ! filtering of the map according to local resolution estimates
     subroutine local_res_lp( locres_finds, img2filter )

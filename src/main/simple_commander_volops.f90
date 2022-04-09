@@ -13,6 +13,7 @@ use simple_masker,         only: masker
 use simple_projector,      only: projector
 use simple_volprep,        only: read_and_prep_vol
 use simple_volpft_srch
+use simple_estimate_ssnr
 implicit none
 
 public :: centervol_commander
@@ -100,9 +101,7 @@ contains
     end subroutine exec_centervol
 
     subroutine exec_postprocess( self, cline )
-        use simple_sp_project,    only: sp_project
-        ! use simple_estimate_ssnr, only: fsc2optlp
-        use simple_estimate_ssnr, only: fsc2TVfilt, nonuniform_fscTVfilt
+        use simple_sp_project, only: sp_project
         class(postprocess_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         character(len=:), allocatable :: fname_vol, fname_fsc, fname_msk, fname_mirr
@@ -172,13 +171,7 @@ contains
             ! resolution & optimal low-pass filter from FSC
             res   = vol%get_res()
             fsc   = file2rarr(params%fsc)
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            ! optlp = fsc2optlp(fsc)
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            allocate(optlp(size(fsc)), source=0.)
-            flims = vol%loop_lims(2)
-            call fsc2TVfilt(fsc, flims, optlp)
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            optlp = fsc2optlp(fsc)
             call get_resolution( fsc, res, fsc05, fsc0143 )
             where( res < TINY ) optlp = 0.
             lplim = fsc0143
@@ -226,9 +219,9 @@ contains
             call vol%ifft
             call vol_copy%ifft
             ! nonuniform low-pass filter based on windowed FSCs and TV regularization
-            call nonuniform_fscTVfilt(vol_even, vol_odd, mskvol,&
+            call nonuniform_fsc_filt(vol_even, vol_odd, mskvol,&
             &l_match_filt=.false., map2filt=vol, phran=.false. )
-            call nonuniform_fscTVfilt(vol_even, vol_odd, mskvol,&
+            call nonuniform_fsc_filt(vol_even, vol_odd, mskvol,&
             &l_match_filt=.false., map2filt=vol_copy, phran=.false. )
             call vol%fft
             call vol_copy%fft
