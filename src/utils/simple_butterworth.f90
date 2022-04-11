@@ -44,31 +44,33 @@ module simple_butterworth
             Kn  = 1/Bn
             dKn = -dBn/Bn**2
             val(1) = sqrt(real(Kn)**2 + aimag(Kn)**2)
-            val(2) = real( Kn*conjg(dKn) )/val(1)
+            val(2) = real( Kn*conjg(dKn) )/Kn
         end function butterworth
 
         ! Compute the Butterworth kernel of the order n-th of width w
         ! with the cut-off frequency fc
         ! https://en.wikipedia.org/wiki/Butterworth_filter
         subroutine butterworth_kernel(ker, ker_der, w, n, fc)
-            real,    intent(inout) :: ker    (:, :, :)    ! assuming 2D kernel for now!!!
-            real,    intent(inout) :: ker_der(:, :, :)    ! assuming 2D kernel for now!!!
+            real,    intent(inout) :: ker    (:, :, :)
+            real,    intent(inout) :: ker_der(:, :, :)
             integer, intent(in)    :: w
             integer, intent(in)    :: n
             real   , intent(in)    :: fc
-            integer :: k, l, half_w
+            integer :: k, l, j, half_w
             real    :: freq_val, val(2)    ! current frequency value
 
             freq_val = 0
             half_w   = int(w/2)
             do k = 1, w
                 do l = 1, w
-                    freq_val = hyp(real(k-half_w), real(l-half_w))
+                    do j = 1, w
+                        freq_val = hyp(real(k-half_w), real(l-half_w), real(j-half_w))
 
-                    ! compute the value of Butterworth transfer function at current frequency value
-                    val = butterworth(freq_val, n, fc)
-                    ker(k,l,1)     = val(1)
-                    ker_der(k,l,1) = val(2)
+                        ! compute the value of Butterworth transfer function at current frequency value
+                        val = butterworth(freq_val, n, fc)
+                        ker(k,l,j)     = val(1)
+                        ker_der(k,l,j) = val(2)
+                    end do
                 end do
             end do
         end subroutine butterworth_kernel
@@ -106,12 +108,13 @@ module simple_butterworth
             call even_img%get_cmat_ptr(cmat_even)
 
             ! compute cost of ||ker*odd - even||
-            call ker_odd_img%set_rmat(orig_ker, .false.)
             call ker_odd_img%get_rmat_ptr(rmat_ker)
+            call ker_odd_img%set_rmat(orig_ker, .false.)
             call ker_odd_img%fft()
             call ker_odd_img%get_cmat_sub(cmat_conv)        ! no use of pointer since cmat_conv is used again below
-            call ker_der_odd_img%set_rmat(orig_ker_der, .false.)
+
             call ker_der_odd_img%get_rmat_ptr(rmat_ker_der)
+            call ker_der_odd_img%set_rmat(orig_ker_der, .false.)
             call ker_der_odd_img%fft()
             call ker_der_odd_img%get_cmat_sub(cmat_der_conv)
             cmat_conv     = cmat_conv    *cmat_odd
@@ -120,30 +123,33 @@ module simple_butterworth
             call ker_der_odd_img%set_cmat(cmat_der_conv)
             call ker_odd_img%ifft()
             call ker_der_odd_img%ifft()
-            rmat_ker     = rmat_ker    *ldim(1)*ldim(2)   ! TODO: check why scaling here
-            rmat_ker_der = rmat_ker_der*ldim(1)*ldim(2)   ! TODO: check why scaling here
+            call odd_img%ifft()
+            call even_img%ifft()
+            rmat_ker     = rmat_ker    *ldim(1)*ldim(2)*ldim(3)   ! TODO: check why scaling here
+            rmat_ker_der = rmat_ker_der*ldim(1)*ldim(2)*ldim(3)   ! TODO: check why scaling here
 
             r = sum(abs(rmat_ker - rmat_even)**2)
 
             ! compute cost of ||ker*even - odd||
-            call ker_even_img%set_rmat(orig_ker, .false.)
-            call ker_even_img%get_rmat_ptr(rmat_ker)
-            call ker_even_img%fft()
-            call ker_even_img%get_cmat_ptr(cmat_conv)        ! it's safe to get the pointer here since cmat_conv is not used after
-            call ker_der_even_img%set_rmat(orig_ker_der, .false.)
-            call ker_der_even_img%get_rmat_ptr(rmat_ker_der)
-            call ker_der_even_img%fft()
-            call ker_der_even_img%get_cmat_ptr(cmat_der_conv)
-            cmat_conv     = cmat_conv    *cmat_even
-            cmat_der_conv = cmat_der_conv*cmat_even
-            call ker_even_img%set_cmat(cmat_conv)
-            call ker_der_even_img%set_cmat(cmat_der_conv)
-            call ker_even_img%ifft()
-            call ker_der_even_img%ifft()
-            rmat_ker     = rmat_ker    *ldim(1)*ldim(2)   ! TODO: check why scaling here
-            rmat_ker_der = rmat_ker_der*ldim(1)*ldim(2)   ! TODO: check why scaling here
+            !call ker_even_img%get_rmat_ptr(rmat_ker)
+            !call ker_even_img%set_rmat(orig_ker, .false.)
+            !call ker_even_img%fft()
+            !call ker_even_img%get_cmat_ptr(cmat_conv)        ! it's safe to get the pointer here since cmat_conv is not used after
 
-            r = r + sum(abs(rmat_ker - rmat_odd)**2)
+            !call ker_der_even_img%get_rmat_ptr(rmat_ker_der)
+            !call ker_der_even_img%set_rmat(orig_ker_der, .false.)
+            !call ker_der_even_img%fft()
+            !call ker_der_even_img%get_cmat_ptr(cmat_der_conv)
+            !cmat_conv     = cmat_conv    *cmat_even
+            !cmat_der_conv = cmat_der_conv*cmat_even
+            !call ker_even_img%set_cmat(cmat_conv)
+            !call ker_der_even_img%set_cmat(cmat_der_conv)
+            !call ker_even_img%ifft()
+            !call ker_der_even_img%ifft()
+            !rmat_ker     = rmat_ker    *ldim(1)*ldim(2)*ldim(3)   ! TODO: check why scaling here
+            !rmat_ker_der = rmat_ker_der*ldim(1)*ldim(2)*ldim(3)   ! TODO: check why scaling here
+
+            !r = r + sum(abs(rmat_ker - rmat_odd)**2)
             write(*, *) 'x = ', x(1), 'cost = ', r
         end function
 
@@ -174,7 +180,9 @@ module simple_butterworth
             call ker_der_even_img%get_rmat_ptr(rmat_ker_der_even)
             
         
-            grad(1) = 2*sum((rmat_ker_odd - rmat_even)*rmat_ker_der_odd) + 2*sum((rmat_ker_even - rmat_odd)*rmat_ker_der_even)
+            !grad(1) = 2*sum((rmat_ker_odd - rmat_even)*rmat_ker_der_odd) + 2*sum((rmat_ker_even - rmat_odd)*rmat_ker_der_even)
+            grad(1) = 2*sum((rmat_ker_odd - rmat_even)*rmat_ker_der_odd)
+            write(*, *) 'x = ', x(1), 'dcost = ', grad(1)
         end subroutine
 end module
     

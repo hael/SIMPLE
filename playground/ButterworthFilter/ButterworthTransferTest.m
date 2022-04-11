@@ -1,13 +1,15 @@
 %%
 X = 202;
-bin_image = zeros(X,X);
+bin_image = zeros(X,X,X);
 max_r = 70;
 min_r = 35;
 for x = 1:X
     for y = 1:X
-        dist = sqrt((x - X/2)^2 + (y - X/2)^2);
-        if (dist < max_r && dist > min_r)
-            bin_image(x,y) = 1;
+        for z = 1:X
+            dist = sqrt((x - X/2)^2 + (y - X/2)^2 + (z - X/2)^2);
+            if (dist < max_r && dist > min_r)
+                bin_image(x,y,z) = 1;
+            end
         end
     end
 end
@@ -18,8 +20,8 @@ noisy_image2 = imnoise(bin_image,'gaussian', 0, 0.01);
 
 %%
 figure;
-subplot(141); imagesc(bin_image);   colormap gray; axis image;
-subplot(142); imagesc(noisy_image1); colormap gray; axis image;
+subplot(141); imagesc(bin_image(:,:,101));   colormap gray; axis image;
+subplot(142); imagesc(noisy_image1(:,:,101)); colormap gray; axis image;
 
 %%
 x  = 1:300;
@@ -32,13 +34,13 @@ hold on; plot(abs(HnShort));
 
 %%
 ButterKer = ButterworthKernel(202, 8, fc);
-figure; plot(abs(ButterKer(101,:)));
+figure; plot(abs(ButterKer(101,:,101)));
 
 ImgConv = abs(IFT(FT(ButterKer).*FT(bin_image)));
 %ImgConv = ImgConv/max(ImgConv(:));
 figure;
-subplot(121); imagesc(noisy_image1); colormap gray; axis image;
-subplot(122); imagesc(ImgConv);     colormap gray; axis image;
+subplot(121); imagesc(noisy_image1(:,:,101)); colormap gray; axis image;
+subplot(122); imagesc(ImgConv(:,:,101));     colormap gray; axis image;
 
 
 %%
@@ -53,9 +55,9 @@ subplot(122); imagesc(ImgConv);     colormap gray; axis image;
 % ub = [];
 % [x,fval] = fmincon(@(x) L2NormCost(x, bin_image, ImgConv),x0,A,b,Aeq,beq,lb,ub,[],options);
 
-l = -50;
+l = 1;
 u = 50;
-opts    = struct( 'x0', 7);
+opts    = struct( 'x0', 1);
 opts.printEvery     = 1;
 opts.m  = 5;
 
@@ -72,15 +74,8 @@ ButterKer = ButterworthKernel(202, 8, x);
 ImgConv = abs(IFT(FT(ButterKer).*FT(noisy_image1)));
 %ImgConv = ImgConv/max(ImgConv(:));
 figure;
-subplot(121); imagesc(noisy_image1); colormap gray; axis image;
-subplot(122); imagesc(ImgConv);     colormap gray; axis image;
- 
- noisy_image1_3D = zeros(202, 202, 202);
- noisy_image2_3D = zeros(202, 202, 202);
- for k = 1:202
-     noisy_image1_3D(:,:,k) = noisy_image1;
-     noisy_image2_3D(:,:,k) = noisy_image2;
- end
+subplot(121); imagesc(noisy_image1(:,:,101)); colormap gray; axis image;
+subplot(122); imagesc(ImgConv(:,:,101));     colormap gray; axis image;
 
     function [y, dy] = L2NormCost(x, image1, image2, ImgConv)
         [ButterKer, d_ButterKer] = ButterworthKernel(202, 8, x);
@@ -88,10 +83,13 @@ subplot(122); imagesc(ImgConv);     colormap gray; axis image;
         df1       = abs(IFT(FT(d_ButterKer).*FT(image1)));
         img2      = abs(IFT(FT(ButterKer)  .*FT(image2)));
         df2       = abs(IFT(FT(d_ButterKer).*FT(image2)));
-        temp      = abs(img1 - image2).^2 + abs(img2 - image1).^2;
+        %temp      = abs(img1 - image2).^2 + abs(img2 - image1).^2;
+        temp      = abs(img1 - ImgConv).^2;
         y         = sum(temp(:));
-        diff      = (img1 - image2).*df1 + (img2 - image1).*df2;
+        %diff      = (img1 - image2).*df1 + (img2 - image1).*df2;
+        diff      = (img1 - ImgConv).*df1;
         dy        = 2*sum(diff(:));
+        disp(max(d_ButterKer(:)))
         disp('x = ')
         disp(x)
         disp('cost = ')
