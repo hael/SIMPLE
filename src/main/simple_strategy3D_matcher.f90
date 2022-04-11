@@ -383,7 +383,7 @@ contains
     !> Prepare alignment search using polar projection Fourier cross correlation
     subroutine preppftcc4align( cline, batchsz_max )
         use simple_cmdline,             only: cmdline
-        use simple_strategy2D3D_common, only: calcrefvolshift_and_mapshifts2ptcls, shift_and_mask_refvol
+        use simple_strategy2D3D_common, only: calcrefvolshift_and_mapshifts2ptcls, preprefvol
         class(cmdline), intent(inout) :: cline !< command line
         integer,        intent(in)    :: batchsz_max
         type(ori) :: o_tmp
@@ -393,11 +393,7 @@ contains
         character(len=:), allocatable :: fname
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
-        if( params_glob%clsfrcs.eq.'yes' )then
-            call pftcc%new(nrefs, [1,batchsz_max], l_match_filt=.true.)
-        else
-            call pftcc%new(nrefs, [1,batchsz_max], l_match_filt=.false.) ! unless FRCs come form classes, shellnorm and filtering is done on the 3D volumes
-        endif
+        call pftcc%new(nrefs, [1,batchsz_max], params_glob%l_match_filt)
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname)
@@ -425,9 +421,9 @@ contains
                 endif
             endif
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
-            call read_and_filter_refvols( pftcc, cline, s, params_glob%vols_even(s),  params_glob%vols_odd(s) )
+            call read_and_filter_refvols( cline, params_glob%vols_even(s), params_glob%vols_odd(s) )
             ! PREPARE ODD REFERENCES
-            call shift_and_mask_refvol(cline, do_center, xyz, .false.)
+            call preprefvol(pftcc, cline, s, do_center, xyz, .false.)
             !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
             do iref=1,params_glob%nspace
                 call build_glob%eulspace%get_ori(iref, o_tmp)
@@ -437,7 +433,7 @@ contains
             end do
             !$omp end parallel do
             ! PREPARE EVEN REFERENCES
-            call shift_and_mask_refvol(cline, do_center, xyz, .true.)
+            call preprefvol(pftcc,  cline, s, do_center, xyz, .true.)
             !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
             do iref=1,params_glob%nspace
                 call build_glob%eulspace%get_ori(iref, o_tmp)
