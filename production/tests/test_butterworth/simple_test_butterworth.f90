@@ -14,8 +14,8 @@ program simple_test_butterworth
     
     procedure(fun_butterworth),     pointer   :: costfun_ptr      !< pointer 2 cost function
     class(optimizer),               pointer   :: opt_ptr=>null()  ! the generic optimizer object
-    character(len=*),               parameter :: target_img_name  = 'NoisyObj1.mrc'
-    character(len=*),               parameter :: obj_img_name     = 'NoisyObj2.mrc'
+    character(len=*),               parameter :: target_img_name  = 'TargetImg.mrc'
+    character(len=*),               parameter :: obj_img_name     = 'NoisyObj1.mrc'
     integer,                        parameter :: box    = 202
     real,                           parameter :: smpd   = 1.275
     type(opt_factory)   :: ofac                           ! the optimization factory object
@@ -23,16 +23,16 @@ program simple_test_butterworth
     character(len=8)    :: str_opts                       ! string descriptors for the NOPTS optimizers
     real                :: lims(ndim,2), lowest_cost
    
-    call even_img%new([box,box,1], smpd)
-    call even_img%read(target_img_name, 1)
+    call even_img%new([box,box,box], smpd)
+    call even_img%read(target_img_name)
 
-    call odd_img%new([box,box,1], smpd)
-    call odd_img%read(obj_img_name, 1)
+    call odd_img%new([box,box,box], smpd)
+    call odd_img%read(obj_img_name)
 
-    call ker_odd_img%new([box,box,1], smpd)
-    call ker_even_img%new([box,box,1], smpd)
-    call ker_der_odd_img%new([box,box,1], smpd)
-    call ker_der_even_img%new([box,box,1], smpd)
+    call ker_odd_img%new([box,box,box], smpd)
+    call ker_even_img%new([box,box,box], smpd)
+    call ker_der_odd_img%new([box,box,box], smpd)
+    call ker_der_even_img%new([box,box,box], smpd)
     
     write(*, *) 'Butterworth unit tests:'
     ! first Butterworth function test
@@ -58,13 +58,13 @@ program simple_test_butterworth
     write(*, *) 'Simple cut-off frequency optimization test:'
     costfun_ptr  => butterworth_cost
     str_opts  = 'lbfgsb'
-    lims(1,1) = -50.
+    lims(1,1) =  1.
     lims(1,2) =  50.
     call spec%specify(str_opts, ndim, limits=lims, nrestarts=NRESTARTS) ! make optimizer spec
     call spec%set_costfun(costfun_ptr)                                  ! set pointer to costfun
     call spec%set_gcostfun(butterworth_gcost)                           ! set pointer to gradient of costfun         
     call ofac%new(spec, opt_ptr)                                        ! generate optimizer object with the factory
-    spec%x    = 7.                                                      ! set initial guess
+    spec%x    = 1.                                                      ! set initial guess
     call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
 
     write(*, *) 'cost = ', lowest_cost, '; x = ', spec%x
