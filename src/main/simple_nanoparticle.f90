@@ -442,9 +442,6 @@ contains
         logical     :: use_cn_thresh, fixed_cs_thres
         type(image) :: simatms, img_cos
         type(atoms) :: atoms_obj
-
-        print *, 'use_cs_thres ', use_cs_thres
-
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%img, self%element)
@@ -1317,7 +1314,7 @@ contains
                call centers_pdb%set_name(cc,self%atom_name)
                call centers_pdb%set_element(cc,self%element)
                call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
-               call centers_pdb%set_beta(cc,self%atominfo(cc)%valid_corr) ! use gper atom valid corr
+               call centers_pdb%set_beta(cc,self%atominfo(cc)%valid_corr) ! use per atom valid corr
                call centers_pdb%set_resnum(cc,cc)
            enddo
        endif

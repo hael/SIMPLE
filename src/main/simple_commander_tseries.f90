@@ -614,11 +614,11 @@ contains
     end subroutine exec_center2D_nano
 
     subroutine exec_cluster2D_nano( self, cline )
-        use simple_commander_cluster2D, only: cluster2D_autoscale_commander_hlev
+        use simple_commander_cluster2D, only: cluster2D_autoscale_commander
         class(cluster2D_nano_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commander
-        type(cluster2D_autoscale_commander_hlev) :: xcluster2D_distr
+        type(cluster2D_autoscale_commander) :: xcluster2D_distr
         ! static parameters
         call cline%set('prg',           'cluster2D')
         call cline%set('dir_exec', 'cluster2D_nano')
@@ -628,9 +628,7 @@ contains
         call cline%set('autoscale',            'no')
         call cline%set('tseries',             'yes')
         ! dynamic parameters
-        if( .not. cline%defined('refine') )then
-            call cline%set('refine','greedy')
-        endif
+        if( .not. cline%defined('refine') ) call cline%set('refine','greedy')
         select case(trim(cline%get_carg('refine')))
             case('no','greedy')
                 call cline%set('refine','greedy')
@@ -819,7 +817,7 @@ contains
         logical,          allocatable :: state_mask(:), pind_mask(:)
         character(len=:), allocatable :: iter_tag
         character(len=STDLEN) :: fbody, fbody_split
-        integer :: i, j, iter, cnt, cnt2, ncavgs, funit, io_stat, endit, maxpind
+        integer :: i, j, iter, cnt, cnt2, ncavgs, funit, io_stat, endit, maxpind, noris, pind_plus_one
         real    :: smpd
         logical :: fall_over
         fbody       = get_fbody(RECVOL,   'mrc')
@@ -859,6 +857,9 @@ contains
         if( .not. cline%defined('cs_thres') )then                ! mild cs tresholding (2-3)
             call cline_detect_atms%set('use_thres', 'no')        ! no thresholding during refinement
         endif
+
+        goto 999
+
         iter = 0
         do i = 1, params%maxits
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user
@@ -1009,7 +1010,7 @@ contains
             end do
             deallocate(imgs)
         endif ! end of class average-based validation
-        call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs_thres* reproject_oris.txt stderrout')
+999     call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs_thres* reproject_oris.txt stderrout')
         ! visualization of particle orientations
         ! read the ptcl3D segment first to make sure that we are using the latest information
         call spproj%read_segment('ptcl3D', params%projfile)
@@ -1035,33 +1036,29 @@ contains
         end do
         call fclose(funit)
         ! print CSV file of particle indices vs. difference in projection direction to right-hand neighbour
+        noris = spproj%os_ptcl3D%get_noris()
         if( spproj%os_ptcl3D%isthere('pind') )then
             pinds = nint(spproj%os_ptcl3D%get_all('pind'))
         else
-            pinds = (/(i,i=1,spproj%os_ptcl3D%get_noris())/)
+            pinds = (/(i,i=1,noris)/)
         endif
-        maxpind = maxval(pinds)
-        allocate(pind_mask(maxpind),    source = .false.)
-        allocate(euldists(maxpind - 1), source = 0.)
-        do i = 1,size(pinds)
-            pind_mask(pinds(i)) = .true.
-        end do
+        allocate(euldists(size(pinds)),    source = 0.)
+        allocate(pind_mask(maxval(pinds)), source = .false.)
         fname = 'pinds_vs_rh_neigh_angdiffs.csv'
         call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
         call fileiochk('autorefine3D_nano fopen failed'//trim(fname), io_stat)
         write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'ANGULAR_DIFFERENCE'
         cnt = 0
-        do i = 1,maxpind - 1
-            if( pind_mask(i) .and. pind_mask(i + 1) )then
+        do i = 1,size(pinds) - 1
+            pind_plus_one = pinds(i) + 1
+            if( pinds(i + 1) == pind_plus_one )then
+                if( pind_plus_one > noris ) cycle
                 ! it is meaningful to look at the angular difference
-                call spproj%os_ptcl3D%get_ori(i,     o1)
-                call spproj%os_ptcl3D%get_ori(i + 1, o2)
+                call spproj%os_ptcl3D%get_ori(pinds(i),     o1)
+                call spproj%os_ptcl3D%get_ori(pinds(i) + 1, o2)
                 cnt = cnt + 1
                 euldists(cnt) = rad2deg(o1.euldist.o2)
-                ! this prints the angular difference between projection directions in degrees
-                write(funit,*) int2str(i)//CSV_DELIM//real2str(euldists(cnt))
-            else
-                write(funit,*) int2str(i)//CSV_DELIM//'NaN'
+                write(funit,*) int2str(pinds(i))//CSV_DELIM//real2str(euldists(cnt))
             endif
         end do
         call fclose(funit)
