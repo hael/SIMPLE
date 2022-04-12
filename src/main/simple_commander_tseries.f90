@@ -857,9 +857,6 @@ contains
         if( .not. cline%defined('cs_thres') )then                ! mild cs tresholding (2-3)
             call cline_detect_atms%set('use_thres', 'no')        ! no thresholding during refinement
         endif
-
-        goto 999
-
         iter = 0
         do i = 1, params%maxits
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user
@@ -1010,7 +1007,7 @@ contains
             end do
             deallocate(imgs)
         endif ! end of class average-based validation
-999     call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs_thres* reproject_oris.txt stderrout')
+        call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs_thres* reproject_oris.txt stderrout')
         ! visualization of particle orientations
         ! read the ptcl3D segment first to make sure that we are using the latest information
         call spproj%read_segment('ptcl3D', params%projfile)
