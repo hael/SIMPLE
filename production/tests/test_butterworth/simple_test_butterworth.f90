@@ -64,7 +64,23 @@ program simple_test_butterworth
     call spec%set_costfun(costfun_ptr)                                  ! set pointer to costfun
     call spec%set_gcostfun(butterworth_gcost)                           ! set pointer to gradient of costfun         
     call ofac%new(spec, opt_ptr)                                        ! generate optimizer object with the factory
-    spec%x    = 1.                                                      ! set initial guess
+    spec%x    = 7.                                                      ! set initial guess
+    call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
+
+    write(*, *) 'cost = ', lowest_cost, '; x = ', spec%x
+
+    ! Test the odd/even optimizers
+    write(*, *)
+    write(*, *) 'Odd/Even frequency optimization test:'
+    costfun_ptr  => butterworth_evenodd_cost
+    str_opts  = 'lbfgsb'
+    lims(1,1) =  1.
+    lims(1,2) =  50.
+    call spec%specify(str_opts, ndim, limits=lims, nrestarts=NRESTARTS) ! make optimizer spec
+    call spec%set_costfun(costfun_ptr)                                  ! set pointer to costfun
+    call spec%set_gcostfun(butterworth_evenodd_gcost)                   ! set pointer to gradient of costfun         
+    call ofac%new(spec, opt_ptr)                                        ! generate optimizer object with the factory
+    spec%x    = 7.                                                      ! set initial guess
     call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
 
     write(*, *) 'cost = ', lowest_cost, '; x = ', spec%x

@@ -57,7 +57,7 @@ subplot(122); imagesc(ImgConv(:,:,101));     colormap gray; axis image;
 
 l = 1;
 u = 50;
-opts    = struct( 'x0', 1);
+opts    = struct( 'x0', 7);
 opts.printEvery     = 1;
 opts.m  = 5;
 
