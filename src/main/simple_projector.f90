@@ -79,7 +79,7 @@ contains
         logical, optional, intent(in)    :: norm4proj
         integer, allocatable :: cyck(:), cycm(:), cych(:)
         real    :: factor
-        integer :: h, k, m, phys(3), logi(3), lims(3,2), ldim(3)
+        integer :: h, k, m, phys(3), logi(3), lims(2,3), ldim(3)
         logical :: l_norm4proj
         call self%kill_expanded
         ldim = self%get_ldim()
@@ -89,7 +89,7 @@ contains
         self%iwinsz        = ceiling(self%kbwin%get_winsz() - 0.5)
         self%wdim          = self%kbwin%get_wdim()
         self%wdim_cubd     = self%wdim**3
-        lims               = self%loop_lims(3)
+        lims               = transpose(self%loop_lims(3))
         self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(self%kbwin%get_winsz())
         self%ldim_exp(:,1) = -self%ldim_exp(:,2)
         ! normalize when working with 2D projections
@@ -107,15 +107,15 @@ contains
         ! pre-compute addresses in 2nd and 3rd dimension
         do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
             cych(h) = h
-            if( h < lims(1,1) .or. h > lims(1,2) ) cych(h) = cyci_1d( lims(1,:),h )
+            if( h < lims(1,1) .or. h > lims(2,1) ) cych(h) = cyci_1d( lims(:,1),h )
         enddo
         do k = self%ldim_exp(2,1),self%ldim_exp(2,2)
             cyck(k) = k
-            if( k < lims(2,1) .or. k > lims(2,2) ) cyck(k) = cyci_1d( lims(2,:),k )
+            if( k < lims(1,2) .or. k > lims(2,2) ) cyck(k) = cyci_1d( lims(:,2),k )
         enddo
         do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
             cycm(m) = m
-            if( m < lims(3,1) .or. m > lims(3,2) ) cycm(m) = cyci_1d( lims(3,:),m )
+            if( m < lims(1,3) .or. m > lims(2,3) ) cycm(m) = cyci_1d( lims(:,3),m )
         enddo
         ! build expanded fourier components matrix
         self%cmat_exp = CMPLX_ZERO

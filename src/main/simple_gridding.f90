@@ -69,7 +69,7 @@ contains
                         else
                             arg = PI*sqrt(real(iarg)) / dim
                             arg = sin(arg)/arg
-                            arg = arg*arg ! sinc^2
+                            arg = arg*arg ! normalised sinc^2
                         endif
                         call instrfun_img%set([i,j,1], arg)
                     enddo

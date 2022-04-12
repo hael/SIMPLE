@@ -147,7 +147,6 @@ contains
 
     subroutine prep4srch( self )
         class(strategy3D_srch), intent(inout) :: self
-        integer   :: i, istate
         type(ori) :: o_prev
         real      :: corrs(self%nrots), corr
         ! previous parameters
@@ -188,7 +187,6 @@ contains
 
     subroutine inpl_srch_1( self )
         class(strategy3D_srch), intent(inout) :: self
-        type(ori) :: o
         real      :: cxy(3)
         integer   :: ref, irot, loc(1)
         if( self%doshift )then
@@ -199,9 +197,9 @@ contains
             cxy = self%grad_shsrch_obj%minimize(irot=irot)
             if( irot > 0 )then
                 ! irot > 0 guarantees improvement found, update solution
-                s3D%proj_space_euls( self%ithr,ref,3)    = 360. - pftcc_glob%get_rot(irot)
-                s3D%proj_space_corrs(self%ithr,ref)      = cxy(1)
-                s3D%proj_space_shift(self%ithr,ref,:)    = cxy(2:3)
+                s3D%proj_space_euls(3,ref,self%ithr)  = 360. - pftcc_glob%get_rot(irot)
+                s3D%proj_space_corrs(self%ithr,ref)   = cxy(1)
+                s3D%proj_space_shift(self%ithr,ref,:) = cxy(2:3)
             endif
         endif
     end subroutine inpl_srch_1
@@ -214,15 +212,15 @@ contains
         integer   :: ref, irot
         ! class constrained refinement
         call build_glob%spproj_field%get_ori(iptcl, o)
-        ref  = build_glob%spproj_field%get(iptcl, 'class')
+        ref  = nint(build_glob%spproj_field%get(iptcl, 'class'))
         ! BFGS over shifts with in-plane rot exhaustive callback
         call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
         cxy = self%grad_shsrch_obj%minimize(irot=irot)
         if( irot > 0 )then
             ! irot > 0 guarantees improvement found, update solution
-            s3D%proj_space_euls( self%ithr,ref,3)    = 360. - pftcc_glob%get_rot(irot)
-            s3D%proj_space_corrs(self%ithr,ref)      = cxy(1)
-            s3D%proj_space_shift(self%ithr,ref,:)    = cxy(2:3)
+            s3D%proj_space_euls(3,ref,self%ithr)  = 360. - pftcc_glob%get_rot(irot)
+            s3D%proj_space_corrs(self%ithr,ref)   = cxy(1)
+            s3D%proj_space_shift(self%ithr,ref,:) = cxy(2:3)
         else
             iptcl = 0
         endif
@@ -233,7 +231,7 @@ contains
         integer,                intent(in)    :: ref, inpl_ind
         real,                   intent(in)    :: corr
         s3D%proj_space_inplinds(self%ithr,ref) = inpl_ind
-        s3D%proj_space_euls(self%ithr,ref,3)   = 360. - pftcc_glob%get_rot(inpl_ind)
+        s3D%proj_space_euls(3,ref,self%ithr)   = 360. - pftcc_glob%get_rot(inpl_ind)
         s3D%proj_space_corrs(self%ithr,ref)    = corr
     end subroutine store_solution
 
