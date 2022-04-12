@@ -886,6 +886,7 @@ contains
                 t_scheduled = tic()
             endif
             call qenv%gen_scripts_and_schedule_jobs(job_descr, algnfbody=trim(ALGN_FBODY), array=L_USE_SLURM_ARR)
+            call terminate_stream('SIMPLE_DISTR_CLUSTER2D HARD STOP 1')
             ! assemble alignment docs
             if( L_BENCH_GLOB )then
                 rt_scheduled = toc(t_scheduled)
@@ -901,6 +902,7 @@ contains
             refs_even = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_even' // params%ext
             refs_odd  = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // params%ext
             call cline_cavgassemble%set('refs', trim(refs))
+            call terminate_stream('SIMPLE_DISTR_CLUSTER2D HARD STOP 2')
             call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE_FINISHED')
             if( L_BENCH_GLOB ) rt_cavgassemble = toc(t_cavgassemble)
             ! check convergence
@@ -960,7 +962,6 @@ contains
         class(cmdline),             intent(inout) :: cline
         type(make_cavgs_commander) :: xmake_cavgs
         type(cmdline)              :: cline_make_cavgs
-        real, allocatable          :: states(:)
         type(parameters)           :: params
         type(builder), target      :: build
         character(len=LONGSTRLEN)  :: finalcavgs
@@ -1100,10 +1101,12 @@ contains
             params%refs_even = 'start2Drefs_even'//params%ext
             params%refs_odd  = 'start2Drefs_odd'//params%ext
         endif
+        call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 1')
         call cavger_calc_and_write_frcs_and_eoavg(params%frcs)
         ! classdoc gen needs to be after calc of FRCs
         call cavger_gen2Dclassdoc(build%spproj)
         ! write references
+        call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 2')
         call cavger_write(trim(params%refs),      'merged')
         call cavger_write(trim(params%refs_even), 'even'  )
         call cavger_write(trim(params%refs_odd),  'odd'   )
@@ -1666,5 +1669,15 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK_2DCONV NORMAL STOP ****', print_simple=.false.)
     end subroutine check_2Dconv
+
+    subroutine terminate_stream( msg )
+        character(len=*), intent(in) :: msg
+        if(trim(params_glob%async).eq.'yes')then
+            if( file_exists(TERM_STREAM) )then
+                call simple_end('**** '//trim(msg)//' ****', print_simple=.false.)
+            endif
+
+        endif
+    end
 
 end module simple_commander_cluster2D
