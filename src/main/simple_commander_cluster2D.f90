@@ -15,7 +15,7 @@ use simple_procimgstk
 implicit none
 
 public :: cleanup2D_commander_hlev
-public :: cluster2D_autoscale_commander_hlev
+public :: cluster2D_autoscale_commander
 public :: cluster2D_commander_distr
 public :: cluster2D_commander
 public :: make_cavgs_commander_distr
@@ -32,10 +32,10 @@ type, extends(commander_base) :: cleanup2D_commander_hlev
   contains
     procedure :: execute      => exec_cleanup2D
 end type cleanup2D_commander_hlev
-type, extends(commander_base) :: cluster2D_autoscale_commander_hlev
+type, extends(commander_base) :: cluster2D_autoscale_commander
   contains
     procedure :: execute      => exec_cluster2D_autoscale
-end type cluster2D_autoscale_commander_hlev
+end type cluster2D_autoscale_commander
 type, extends(commander_base) :: cluster2D_commander_distr
   contains
     procedure :: execute      => exec_cluster2D_distr
@@ -458,7 +458,7 @@ contains
     subroutine exec_cluster2D_autoscale( self, cline )
         use simple_commander_project, only: scale_project_commander_distr
         use simple_commander_imgproc, only: scale_commander, pspec_int_rank_commander
-        class(cluster2D_autoscale_commander_hlev), intent(inout) :: self
+        class(cluster2D_autoscale_commander), intent(inout) :: self
         class(cmdline),                            intent(inout) :: cline
         ! constants
         integer,               parameter :: MAXITS_STAGE1      = 10
@@ -488,9 +488,6 @@ contains
         logical  :: scaling, l_shmem
         mskdiam = cline%get_rarg('mskdiam')
         call mskdiam2lplimits(cline%get_rarg('mskdiam'), lpstart, lpstop, lpcen)
-        write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lpstart
-        write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', lpstop
-        write(logfhandle,'(A,F5.1)') '>>> DID SET CENTERING LOW-PASS LIMIT (IN A) TO: ', lpcen
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',  lpstart)
@@ -515,6 +512,10 @@ contains
         endif
         ! master parameters
         call params%new(cline)
+        ! report limits used
+        write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', params%lpstart
+        write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', params%lpstop
+        write(logfhandle,'(A,F5.1)') '>>> DID SET CENTERING LOW-PASS LIMIT (IN A) TO: ', params%cenlp
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! read project file

@@ -56,7 +56,7 @@ type(pick_commander_distr)                  :: xpick_distr
 
 ! CLUSTER2D WORKFLOWS
 type(make_cavgs_commander_distr)            :: xmake_cavgs_distr
-type(cluster2D_autoscale_commander_hlev)    :: xcluster2D_hlev
+type(cluster2D_autoscale_commander)    :: xcluster2D_hlev
 type(cluster2D_commander_stream)            :: xcluster2D_stream
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 

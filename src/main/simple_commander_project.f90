@@ -935,7 +935,7 @@ contains
         character(len=:), allocatable :: fname
         logical,          allocatable :: part_mask(:)
         integer :: imic,nmics,cnt,istk,nstks,ipart,nptcls,nparts,iptcl
-        integer :: nstks_orig,nptcls_orig,nmics_orig,i,np2D,np3D
+        integer :: nstks_orig,nptcls_orig,nmics_orig,i
         ! init
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
@@ -946,19 +946,6 @@ contains
         if( nstks == 0 ) THROW_HARD('No stack to process!')
         nptcls = spproj%get_n_insegment('ptcl2D')
         if( nstks == 0 ) THROW_HARD('No particles to process!')
-        ! update ptcl2D/3D fields with particle indices (flag pind) so that we have access to them after pruning
-        np2D = spproj%os_ptcl2D%get_noris()
-        if( np2D > 0 )then
-            do iptcl = 1,np2D
-                call spproj%os_ptcl2D%set(iptcl, 'pind', real(iptcl))
-            enddo
-        endif
-        np3D = spproj%os_ptcl3D%get_noris()
-        if( np3D > 0 )then
-            do iptcl = 1,np3D
-                call spproj%os_ptcl3D%set(iptcl, 'pind', real(iptcl))
-            enddo
-        endif
         ! identify the particle indices with state .ne. 0 unless state is given on command line
         states = spproj%os_ptcl2D%get_all('state')
         allocate(pinds(nptcls), source=(/(i,i=1,nptcls)/))
@@ -1146,6 +1133,11 @@ contains
         call spproj%read_segment('ptcl3D', params%projfile)
         call spproj_out%os_ptcl2D%new(nptcls_part, is_ptcl=.true.)
         call spproj_out%os_ptcl3D%new(nptcls_part, is_ptcl=.true.)
+        ! particle indices
+        do iptcl = 1,nptcls_tot
+            call spproj%os_ptcl2D%set(iptcl, 'pind', real(iptcl))
+            call spproj%os_ptcl3D%set(iptcl, 'pind', real(iptcl))
+        enddo
         ! stacks
         call spproj%read_segment('stk', params%projfile)
         nstks_tot = spproj%get_nstks()
