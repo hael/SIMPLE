@@ -2,6 +2,7 @@ program simple_test_openmp
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
+use simple_image
 implicit none
 #include "simple_local_flags.inc"
 
@@ -14,11 +15,11 @@ do i=1,100
     vals(i) = nint(real(i)/real(10)) + 1
 enddo
 do j=1,10
-	do i = 1,100
-		if(vals(i)==j)then
-			counts(j) = counts(j)+1
-		endif
-	enddo
+    do i = 1,100
+        if(vals(i)==j)then
+            counts(j) = counts(j)+1
+        endif
+    enddo
 enddo
 correct_counts = counts
 
@@ -33,19 +34,19 @@ enddo
 !$omp end do
 !$omp do schedule(static)
 do j=1,10
-	do i = 1,100
-		if(vals(i)==j)then
-			counts(j) = counts(j)+1
-		endif
-	enddo
+    do i = 1,100
+        if(vals(i)==j)then
+            counts(j) = counts(j)+1
+        endif
+    enddo
 enddo
 !$omp end do
 !$omp end parallel
 
 if(all(counts==correct_counts))then
-	print *,'passed scenario one'
+    print *,'passed scenario one'
 else
-	print *,'failed scenario one'
+    print *,'failed scenario one'
 endif
 
 ! unsafe, nowait
@@ -59,18 +60,18 @@ enddo
 !$omp end do nowait
 !$omp do schedule(static)
 do j=1,10
-	do i = 1,100
-		if(vals(i)==j)then
-			counts(j) = counts(j)+1
-		endif
-	enddo
+    do i = 1,100
+        if(vals(i)==j)then
+            counts(j) = counts(j)+1
+        endif
+    enddo
 enddo
 !$omp end do
 !$omp end parallel
 
 if(all(counts==correct_counts))then
-	print *,'passed scenario two'
+    print *,'passed scenario two'
 else
-	print *,'failed scenario two'
+    print *,'failed scenario two'
 endif
 end program simple_test_openmp

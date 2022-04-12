@@ -86,13 +86,13 @@ contains
         if( ref < 1 .or. ref > self%s%nrefs )then
             THROW_HARD('ref index: '//int2str(ref)//' out of bound; oris_assign_snhc')
         endif
-        roind = pftcc_glob%get_roind(360. - s3D%proj_space_euls(self%s%ithr,ref,3))
+        roind = pftcc_glob%get_roind(360. - s3D%proj_space_euls(3,ref,self%s%ithr))
         ! transfer to spproj_field
         corr = max(0., s3D%proj_space_corrs(self%s%ithr,ref))
         call build_glob%spproj_field%set(self%s%iptcl, 'state', 1.)
         call build_glob%spproj_field%set(self%s%iptcl, 'proj',  real(s3D%proj_space_proj(ref)))
         call build_glob%spproj_field%set(self%s%iptcl, 'corr',  corr)
-        call build_glob%spproj_field%set_euler(self%s%iptcl, s3D%proj_space_euls(self%s%ithr,ref,1:3))
+        call build_glob%spproj_field%set_euler(self%s%iptcl, s3D%proj_space_euls(:,ref,self%s%ithr))
         call build_glob%spproj_field%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc
         ! angular distances
         call build_glob%spproj_field%get_ori(self%s%iptcl, o2)

@@ -121,8 +121,8 @@ contains
             ! if( s%neigh )then
             !     iproj = neigh_projs(state)
             !     iref  = (state-1)*s%nprojs + iproj
-            !     call build_glob%spproj_field%e1set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1))
-            !     call build_glob%spproj_field%e2set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,2))
+            !     call build_glob%spproj_field%e1set(s%iptcl,s3D%proj_space_euls(1,iref,s%ithr))
+            !     call build_glob%spproj_field%e2set(s%iptcl,s3D%proj_space_euls(2,iref,s%ithr))
             ! else
                 iproj = s%prev_proj
             ! endif
@@ -200,8 +200,8 @@ contains
             s%nrefs_eval = count(corrs <= s%prev_corr)
             iproj        = projs(state)
             iref         = (state-1)*s%nprojs+iproj
-            call build_glob%spproj_field%e1set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1))
-            call build_glob%spproj_field%e2set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,2))
+            call build_glob%spproj_field%e1set(s%iptcl,s3D%proj_space_euls(1,iref,s%ithr))
+            call build_glob%spproj_field%e2set(s%iptcl,s3D%proj_space_euls(2,iref,s%ithr))
             corr = corrs(state)
             if(state == s%prev_state) call greedy_inplsrch(s, corr, state, iproj)
         endif
@@ -224,7 +224,7 @@ contains
         if( s3D%proj_space_corrs(s%ithr,iref) > corr )then
             corr = s3D%proj_space_corrs(s%ithr,iref)
             call build_glob%spproj_field%set_shift(s%iptcl,s%prev_shvec+s3D%proj_space_shift(s%ithr,iref,:))
-            call build_glob%spproj_field%e3set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,3))
+            call build_glob%spproj_field%e3set(s%iptcl,s3D%proj_space_euls(3,iref,s%ithr))
         endif
     end subroutine greedy_inplsrch
 

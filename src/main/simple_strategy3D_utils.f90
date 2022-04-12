@@ -17,7 +17,7 @@ contains
         use simple_ori, only: ori
         class(strategy3D_srch), intent(inout) :: s
         type(ori) :: osym, o_prev, o_new
-        integer   :: ref, inpl, state, neff_states, proj, loc(1)
+        integer   :: ref, inpl, state, neff_states, loc(1)
         real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, corr, mi_proj, frac
         logical   :: l_multistates
         ! stash previous ori
@@ -31,7 +31,7 @@ contains
         inpl = s3D%proj_space_inplinds(s%ithr, ref)
         call build_glob%spproj_field%set(s%iptcl, 'inpl', real(inpl))
         ! Euler angle
-        call build_glob%spproj_field%set_euler(s%iptcl, s3D%proj_space_euls(s%ithr,ref,1:3))
+        call build_glob%spproj_field%set_euler(s%iptcl, s3D%proj_space_euls(:,ref,s%ithr))
         ! shift
         shvec      = s%prev_shvec
         shvec_incr = 0.

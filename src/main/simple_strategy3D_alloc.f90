@@ -32,15 +32,14 @@ contains
     subroutine prep_strategy3D( ptcl_mask )
         logical, target, intent(in) :: ptcl_mask(params_glob%fromp:params_glob%top)
         real    :: eul(3)
-        integer :: i, istate, iproj, iptcl, inpl, ithr
-        integer :: nnnrefs, cnt, nrefs
+        integer :: istate, iproj, ithr, cnt, nrefs
         real    :: areal
         ! clean all class arrays & types
         call clean_strategy3D()
         ! parameters
         nrefs  = params_glob%nspace * params_glob%nstates
         ! shared-memory arrays
-        allocate(master_proj_space_euls(nrefs,3), s3D%proj_space_euls(nthr_glob,nrefs,3),&
+        allocate(master_proj_space_euls(3,nrefs), s3D%proj_space_euls(3,nrefs,nthr_glob),&
             &s3D%proj_space_shift(nthr_glob,nrefs,2), s3D%proj_space_state(nrefs),&
             &s3D%proj_space_corrs(nthr_glob,nrefs),&
             &s3D%proj_space_inplinds(nthr_glob,nrefs),&
@@ -63,7 +62,7 @@ contains
                 s3D%proj_space_state(cnt) = istate
                 s3D%proj_space_proj(cnt)  = iproj
                 eul = build_glob%eulspace%get_euler(iproj)
-                master_proj_space_euls(cnt,:) = eul
+                master_proj_space_euls(:,cnt) = eul
             enddo
         enddo
         s3D%proj_space_shift = 0.
@@ -87,7 +86,7 @@ contains
     subroutine prep_strategy3D_thread( ithr )
         integer, intent(in)    :: ithr
         real(sp)               :: areal
-        s3D%proj_space_euls(ithr,:,:)                   = master_proj_space_euls
+        s3D%proj_space_euls(:,:,ithr)                   = master_proj_space_euls
         s3D%proj_space_corrs(ithr,:)                    = -HUGE(areal)
         s3D%proj_space_shift(ithr,:,:)                  = 0.
         s3D%proj_space_inplinds(ithr,:)                 = 0
