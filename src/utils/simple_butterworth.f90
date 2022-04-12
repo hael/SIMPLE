@@ -35,16 +35,21 @@ module simple_butterworth
             val = [0., 0.]
             Bn  = (0., 0.)
             dBn = (0., 0.)
-            js  = j*s/fc
-            do k = 0, n
-                Bn  = Bn  +   an(k+1)*js**k
-                dBn = dBn + k*an(k+1)*js**k
-            end do
-            dBn = -dBn/fc
-            Kn  = 1/Bn
-            dKn = -dBn/Bn**2
-            val(1) = sqrt(real(Kn)**2 + aimag(Kn)**2)
-            val(2) = real( Kn*conjg(dKn) )/Kn
+            if (s/fc < 100) then
+                js  = j*s/fc
+                do k = 0, n
+                    Bn  = Bn  +   an(k+1)*js**k
+                    dBn = dBn + k*an(k+1)*js**k
+                end do
+                dBn = -dBn/fc
+                Kn  = 1/Bn
+                dKn = -dBn/Bn/Bn
+                val(1) = sqrt(real(Kn)**2 + aimag(Kn)**2)
+                val(2) = real( Kn*conjg(dKn) )/val(1)
+            else
+                val(1) = epsilon(val(1))
+                val(2) = epsilon(val(2))
+            endif
         end function butterworth
 
         ! Compute the Butterworth kernel of the order n-th of width w
@@ -129,7 +134,7 @@ module simple_butterworth
             rmat_ker     = rmat_ker    *ldim(1)*ldim(2)*ldim(3)   ! TODO: check why scaling here
             rmat_ker_der = rmat_ker_der*ldim(1)*ldim(2)*ldim(3)   ! TODO: check why scaling here
 
-            r = sum(abs(rmat_ker - rmat_even)**2)
+            r = sum((rmat_ker - rmat_even)**2)
             write(*, *) 'x = ', x(1), 'cost = ', r
         end function
 
