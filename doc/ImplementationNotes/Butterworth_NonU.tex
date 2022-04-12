@@ -42,7 +42,16 @@ with the derivative
 \begin{equation}\label{eq11}
 \frac{dF}{d\theta} = \int \frac{df}{d\theta}(x,\theta) \cdot (f(x,\theta) - f_0(x))dx
 \end{equation}
-In SIMPLE's refinement process, $f_0$ is the odd and $m(x)$ is the even.
+In SIMPLE's refinement process, $f_0$ is the odd and $m(x)$ is the even.\\
+
+\noindent If one requires voxel-wise cut-off frequency $\theta_x$, then the cost function can be defined as
+\begin{equation}\label{eq12}
+F(\theta_x) = \sum_x (f(x,\theta_x) - f_0(x))^2dx
+\end{equation}
+with the derivative
+\begin{equation}\label{eq13}
+\frac{dF}{d\theta} = \int \frac{df}{d\theta}(x,\theta) \cdot (f(x,\theta) - f_0(x))dx
+\end{equation}
 \begin{thebibliography}{9}
 \bibitem[1]{ButterworthWiki} \url{https://en.wikipedia.org/wiki/Butterworth_filter}
 \end{thebibliography}
