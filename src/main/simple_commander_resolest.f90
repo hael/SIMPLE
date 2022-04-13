@@ -33,7 +33,7 @@ end type nonuniform_filter_commander
 
 type, extends(commander_base) :: nonuniform_butterworth_commander
   contains
-    procedure :: execute      => exec_nonuniform_butterworth
+    procedure :: execute      => exec_nonuniform_butterworth_discrete
 end type nonuniform_butterworth_commander
 
 contains
@@ -223,7 +223,7 @@ contains
         call simple_end('**** SIMPLE_NONUNIFORM_FILTER NORMAL STOP ****')
     end subroutine exec_nonuniform_filter
 
-    subroutine exec_nonuniform_butterworth( self, cline )
+    subroutine exec_nonuniform_butterworth_continuous( self, cline )
         use simple_butterworth
         use simple_optimizer,   only: optimizer
         use simple_opt_factory, only: opt_factory
@@ -265,7 +265,7 @@ contains
                 call mskvol%read(params%mskfile)
                 have_mask_file = .true.
             else
-                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_nonuniform_butterworth')
+                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_nonuniform_butterworth_continuous')
             endif
         else
             ! spherical masking [TODO] does it make sense to mask when doing butterworth optimization?
@@ -345,15 +345,141 @@ contains
         if( map2opt_present )then
             call map2opt%write('nonuniformly_butterworth.mrc')
         else
-            call even_img%write('nonuniformly_butterworth_even.mrc')
-            call odd_img %write('nonuniformly_butterworth_odd.mrc')
+            call even_img%write('nonuniformly_butterworth_continuous_even.mrc')
+            call odd_img %write('nonuniformly_butterworth_continuous_odd.mrc')
         endif
         ! destruct
         call even_img%kill
         call odd_img %kill
         if( map2opt_present ) call map2opt%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_NONUNIFORM_BUTTERWORTH NORMAL STOP ****')
-    end subroutine exec_nonuniform_butterworth
+        call simple_end('**** SIMPLE_NONUNIFORM_BUTTERWORTH_CONTINUOUS NORMAL STOP ****')
+    end subroutine exec_nonuniform_butterworth_continuous
+
+    subroutine exec_nonuniform_butterworth_discrete( self, cline )
+        use simple_butterworth, only: butterworth_kernel
+        
+        class(nonuniform_butterworth_commander), intent(inout) :: self
+        class(cmdline),                          intent(inout) :: cline
+        type(parameters) :: params
+        type(image)      :: even, odd, odd_img, ker_odd_img, map2opt
+        type(masker)     :: mskvol
+        logical          :: have_mask_file, map2opt_present
+        integer          :: k,l,m,n
+
+        ! Fitting constants (constructed in MATLAB) in theta(FT_support) = a*exp(b*x) + c*exp(d*x)
+        real   , parameter :: a = 47.27, b = -0.1781, c = 7.69, d = -0.02228, min_sup = 2., max_sup = 100.
+        integer, parameter :: N_sup = 50
+
+        ! optimization variables
+        real                         , allocatable :: cur_mat(:,:,:), sup, theta
+        real                         , pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_ker(:,:,:), orig_ker_der(:,:,:),  prev_diff(:,:,:),  cur_diff(:,:,:)
+        complex(kind=c_float_complex), pointer     :: cmat_odd(:,:,:), cmat_conv(:,:,:)
+
+
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        ! read even/odd pair
+        call even%new([params%box,params%box,params%box], params%smpd)
+        call odd %new([params%box,params%box,params%box], params%smpd)
+        call odd %read(params%vols(1))
+        call even%read(params%vols(2))
+        map2opt_present = cline%defined('vol3')
+        if( map2opt_present )then
+            call map2opt%new([params%box,params%box,params%box],  params%smpd)
+            call map2opt%read(params%vols(3))
+        endif
+        have_mask_file = .false.
+        if( cline%defined('mskfile') )then
+            if( file_exists(params%mskfile) )then
+                call mskvol%new([params%box,params%box,params%box], params%smpd)
+                call mskvol%read(params%mskfile)
+                have_mask_file = .true.
+            else
+                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_nonuniform_butterworth_discrete')
+            endif
+        else
+            ! spherical masking [TODO] comment this for now
+            !call even%mask(params%msk, 'soft')
+            !call odd %mask(params%msk, 'soft')
+        endif
+        if( have_mask_file )then
+            call mskvol%one_at_edge ! to expand before masking of reference internally
+        else
+            call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
+        endif
+        if( map2opt_present )then
+            write(*, *) 'TODO'
+        else
+            call odd_img    %new([params%box,params%box,params%box], params%smpd)
+            call ker_odd_img%new([params%box,params%box,params%box], params%smpd)
+
+            allocate(rmat_odd(     params%box,params%box,params%box))
+            allocate(rmat_even(    params%box,params%box,params%box))
+            allocate(rmat_ker(     params%box,params%box,params%box))
+            allocate(orig_ker_der( params%box,params%box,params%box))
+            allocate(cmat_odd(     params%box,params%box,params%box))
+            allocate(prev_diff(    params%box,params%box,params%box))
+            allocate(cur_diff(     params%box,params%box,params%box))
+            allocate(cur_mat(      params%box,params%box,params%box))
+        
+            call odd %get_rmat_sub(rmat_odd)
+            call even%get_rmat_sub(rmat_even)
+            call odd_img%set_rmat(rmat_odd, .false.)
+            call odd_img%fft()
+            call odd_img%get_cmat_ptr(cmat_odd)
+
+            cur_mat = 0.
+            do n = 1, N_sup
+                sup   = min_sup + (n-1.)*(max_sup-min_sup)/(N_sup-1.)
+                theta = a*exp(b*sup) + c*exp(d*sup)
+                write(*, *) sup, theta
+                call butterworth_kernel(rmat_ker, orig_ker_der, params%box, 8, theta)  ! WARNING: fix the constants here
+                call ker_odd_img%set_rmat(rmat_ker, .false.)
+                call ker_odd_img%fft()
+                call ker_odd_img%get_cmat_ptr(cmat_conv)
+                cmat_conv = cmat_conv * cmat_odd
+                call ker_odd_img%ifft()
+                if (sup > min_sup) then
+                    cur_diff  = abs(rmat_ker - rmat_even)
+                    do k = 1,params%box
+                        do l = 1,params%box
+                            do m = 1,params%box
+                                if (cur_diff(k,l,m) < prev_diff(k,l,m)) then
+                                    cur_mat(k,l,m) = rmat_ker(k,l,m)
+                                endif
+                            enddo
+                        enddo
+                    enddo
+                    prev_diff = cur_diff
+                else
+                    cur_mat   = rmat_ker
+                    prev_diff = abs(rmat_ker - rmat_even)
+                endif
+            enddo
+            call odd_img%kill
+            call ker_odd_img%kill
+            call odd%set_rmat(cur_mat, .false.)
+        endif
+        if( have_mask_file )then
+            call mskvol%read(params%mskfile)
+            call even%mul(mskvol)
+            call odd %mul(mskvol)
+            if( map2opt_present ) call map2opt%mul(mskvol)
+            call mskvol%kill
+        endif
+        if( map2opt_present )then
+            call map2opt%write('nonuniformly_butterworth_discrete.mrc')
+        else
+            call even%write('nonuniformly_butterworth_discrete_even.mrc')
+            call odd %write('nonuniformly_butterworth_discrete_odd.mrc')
+        endif
+        ! destruct
+        call even%kill
+        call odd %kill
+        if( map2opt_present ) call map2opt%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_NONUNIFORM_BUTTERWORTH_DISCRETE NORMAL STOP ****')
+    end subroutine exec_nonuniform_butterworth_discrete
 
 end module simple_commander_resolest
