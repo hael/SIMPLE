@@ -294,6 +294,7 @@ contains
             allocate(orig_ker_der( params%box,params%box,params%box))
             allocate(cmat_odd(     params%box,params%box,params%box))
             allocate(cmat_even(    params%box,params%box,params%box))
+            allocate(cmat_conv(    params%box,params%box,params%box))
 
             ! do the optimization here to get the optimized cut-off frequency
             write(*, *) 'Cut-off frequency optimization in progress:'
@@ -368,12 +369,12 @@ contains
         integer          :: k,l,m,n
 
         ! Fitting constants (constructed in MATLAB) in theta(FT_support) = a*exp(b*x) + c*exp(d*x)
-        real   , parameter :: a = 47.27, b = -0.1781, c = 7.69, d = -0.02228, min_sup = 2., max_sup = 100.
-        integer, parameter :: N_sup = 50
+        real   , parameter :: a = 47.27, b = -0.1781, c = 7.69, d = -0.02228, min_sup = 2, max_sup = 80.
+        integer, parameter :: N_sup = 5
 
         ! optimization variables
         real                         , allocatable :: cur_mat(:,:,:), sup, theta
-        real                         , pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_ker(:,:,:), orig_ker_der(:,:,:),  prev_diff(:,:,:),  cur_diff(:,:,:)
+        real                         , pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_ker(:,:,:), orig_ker(:,:,:), orig_ker_der(:,:,:),  prev_diff(:,:,:),  cur_diff(:,:,:)
         complex(kind=c_float_complex), pointer     :: cmat_odd(:,:,:), cmat_conv(:,:,:)
 
 
@@ -417,11 +418,13 @@ contains
             allocate(rmat_odd(     params%box,params%box,params%box))
             allocate(rmat_even(    params%box,params%box,params%box))
             allocate(rmat_ker(     params%box,params%box,params%box))
+            allocate(orig_ker(     params%box,params%box,params%box))
             allocate(orig_ker_der( params%box,params%box,params%box))
-            allocate(cmat_odd(     params%box,params%box,params%box))
+            allocate(cmat_odd(     int(params%box/2)+1,params%box,params%box))
             allocate(prev_diff(    params%box,params%box,params%box))
             allocate(cur_diff(     params%box,params%box,params%box))
             allocate(cur_mat(      params%box,params%box,params%box))
+            allocate(cmat_conv(    int(params%box/2)+1,params%box,params%box))
         
             call odd %get_rmat_sub(rmat_odd)
             call even%get_rmat_sub(rmat_even)
@@ -429,33 +432,39 @@ contains
             call odd_img%fft()
             call odd_img%get_cmat_ptr(cmat_odd)
 
+            rmat_odd  = rmat_odd /sum(rmat_odd)
+            rmat_even = rmat_even/sum(rmat_even)
             cur_mat = 0.
             do n = 1, N_sup
                 sup   = min_sup + (n-1.)*(max_sup-min_sup)/(N_sup-1.)
                 theta = a*exp(b*sup) + c*exp(d*sup)
                 write(*, *) sup, theta
-                call butterworth_kernel(rmat_ker, orig_ker_der, params%box, 8, theta)  ! WARNING: fix the constants here
-                call ker_odd_img%set_rmat(rmat_ker, .false.)
+                call butterworth_kernel(orig_ker, orig_ker_der, params%box, 8, theta)  ! WARNING: fix the constants here
+                call ker_odd_img%set_rmat(orig_ker, .false.)
                 call ker_odd_img%fft()
                 call ker_odd_img%get_cmat_ptr(cmat_conv)
                 cmat_conv = cmat_conv * cmat_odd
                 call ker_odd_img%ifft()
-                if (sup > min_sup) then
+                call ker_odd_img%get_rmat_sub(rmat_ker)
+                rmat_ker = rmat_ker/sum(rmat_ker)
+                if (n > 1) then
                     cur_diff  = abs(rmat_ker - rmat_even)
                     do k = 1,params%box
                         do l = 1,params%box
                             do m = 1,params%box
                                 if (cur_diff(k,l,m) < prev_diff(k,l,m)) then
-                                    cur_mat(k,l,m) = rmat_ker(k,l,m)
+                                    cur_mat(k,l,m)   = rmat_ker(k,l,m)
+                                    prev_diff(k,l,m) = cur_diff(k,l,m)
                                 endif
                             enddo
                         enddo
                     enddo
-                    prev_diff = cur_diff
                 else
-                    cur_mat   = rmat_ker
+                    !cur_mat   = rmat_ker
                     prev_diff = abs(rmat_ker - rmat_even)
                 endif
+                call odd%set_rmat(cur_mat, .false.)
+                call odd %write('nonuniformly_butterworth_discrete_odd_iter' // int2str(n) // '.mrc')
             enddo
             call odd_img%kill
             call ker_odd_img%kill
