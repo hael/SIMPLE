@@ -366,7 +366,7 @@ contains
         type(image)      :: even, odd, odd_img, ker_odd_img, map2opt
         type(masker)     :: mskvol
         logical          :: have_mask_file, map2opt_present
-        integer          :: k,l,m,n
+        integer          :: k,l,m,n,k1,l1,m1,spatial_sup
 
         ! Fitting constants (constructed in MATLAB) in theta(FT_support) = a*exp(b*x) + c*exp(d*x)
         real   , parameter :: a = 47.27, b = -0.1781, c = 7.69, d = -0.02228, min_sup = 2, max_sup = 80.
@@ -374,7 +374,7 @@ contains
 
         ! optimization variables
         real                         , allocatable :: cur_mat(:,:,:), sup, theta
-        real                         , pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_ker(:,:,:), orig_ker(:,:,:), orig_ker_der(:,:,:),  prev_diff(:,:,:),  cur_diff(:,:,:)
+        real                         , pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_ker(:,:,:), orig_ker(:,:,:), orig_ker_der(:,:,:),  prev_diff(:,:,:), cur_diff(:,:,:), ref_diff(:,:,:)
         complex(kind=c_float_complex), pointer     :: cmat_odd(:,:,:), cmat_conv(:,:,:)
 
 
@@ -420,12 +420,13 @@ contains
             allocate(rmat_ker(     params%box,params%box,params%box))
             allocate(orig_ker(     params%box,params%box,params%box))
             allocate(orig_ker_der( params%box,params%box,params%box))
-            allocate(cmat_odd(     int(params%box/2)+1,params%box,params%box))
             allocate(prev_diff(    params%box,params%box,params%box))
             allocate(cur_diff(     params%box,params%box,params%box))
+            allocate(ref_diff(     params%box,params%box,params%box))
             allocate(cur_mat(      params%box,params%box,params%box))
             allocate(cmat_conv(    int(params%box/2)+1,params%box,params%box))
-        
+            allocate(cmat_odd(     int(params%box/2)+1,params%box,params%box))
+
             call odd %get_rmat_sub(rmat_odd)
             call even%get_rmat_sub(rmat_even)
             call odd_img%set_rmat(rmat_odd, .false.)
@@ -434,7 +435,8 @@ contains
 
             rmat_odd  = rmat_odd /sum(rmat_odd)
             rmat_even = rmat_even/sum(rmat_even)
-            cur_mat = 0.
+            cur_mat   = 0.
+            prev_diff = 1000000. ! supposed to be infinity
             do n = 1, N_sup
                 sup   = min_sup + (n-1.)*(max_sup-min_sup)/(N_sup-1.)
                 theta = a*exp(b*sup) + c*exp(d*sup)
@@ -447,22 +449,32 @@ contains
                 call ker_odd_img%ifft()
                 call ker_odd_img%get_rmat_sub(rmat_ker)
                 rmat_ker = rmat_ker/sum(rmat_ker)
-                if (n > 1) then
-                    cur_diff  = abs(rmat_ker - rmat_even)
-                    do k = 1,params%box
-                        do l = 1,params%box
-                            do m = 1,params%box
-                                if (cur_diff(k,l,m) < prev_diff(k,l,m)) then
-                                    cur_mat(k,l,m)   = rmat_ker(k,l,m)
-                                    prev_diff(k,l,m) = cur_diff(k,l,m)
-                                endif
+
+                cur_diff = abs(rmat_ker - rmat_even)
+                ref_diff = 0.
+                do k = 1,params%box
+                    do l = 1,params%box
+                        do m = 1,params%box
+                            ! applying an average window to each diff (eq 7 in the nonuniform paper)
+                            spatial_sup = 1
+                            do k1 = k-spatial_sup, k+spatial_sup
+                                do l1 = l-spatial_sup, l+spatial_sup
+                                    do m1 = m-spatial_sup, m+spatial_sup
+                                        if ((k1 >= 1 .and. k1 <= params%box) .and. (l1 >= 1 .and. l1 <= params%box) .and. (m1 >= 1 .and. m1 <= params%box)) then
+                                            ref_diff(k,l,m) = ref_diff(k,l,m) + cur_diff(k1,l1,m1)
+                                        endif
+                                    enddo
+                                enddo
                             enddo
+
+                            if (ref_diff(k,l,m) < prev_diff(k,l,m)) then
+                                cur_mat(k,l,m)   = rmat_ker(k,l,m)
+                                prev_diff(k,l,m) = ref_diff(k,l,m)
+                            endif
                         enddo
                     enddo
-                else
-                    !cur_mat   = rmat_ker
-                    prev_diff = abs(rmat_ker - rmat_even)
-                endif
+                enddo
+                
                 call odd%set_rmat(cur_mat, .false.)
                 call odd %write('nonuniformly_butterworth_discrete_odd_iter' // int2str(n) // '.mrc')
             enddo
