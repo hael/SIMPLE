@@ -366,11 +366,13 @@ contains
         type(image)      :: even, odd, odd_img, ker_odd_img, map2opt
         type(masker)     :: mskvol
         logical          :: have_mask_file, map2opt_present
-        integer          :: k,l,m,n,k1,l1,m1,spatial_sup
+        integer          :: k,l,m,n,k1,l1,m1,k_ind,l_ind,m_ind
+        real             :: rad
 
         ! Fitting constants (constructed in MATLAB) in theta(FT_support) = a*exp(b*x) + c*exp(d*x)
-        real   , parameter :: a = 47.27, b = -0.1781, c = 7.69, d = -0.02228, min_sup = 2, max_sup = 80.
-        integer, parameter :: N_sup = 5
+        real   , parameter   :: a = 47.27, b = -0.1781, c = 7.69, d = -0.02228, min_sup = 2, max_sup = 80.
+        integer, parameter   :: N_sup = 5, spatial_sup = 2, mid = 1+spatial_sup
+        real   , allocatable :: weights(:,:,:)    ! weights of the neighboring differences
 
         ! optimization variables
         real                         , allocatable :: cur_mat(:,:,:), sup, theta
@@ -437,6 +439,22 @@ contains
             rmat_even = rmat_even/sum(rmat_even)
             cur_mat   = 0.
             prev_diff = 1000000. ! supposed to be infinity
+            
+            ! assign the weights of the neighboring voxels
+            allocate(weights(spatial_sup*2+1, spatial_sup*2+1, spatial_sup*2+1))
+            do k = 1, 2*spatial_sup+1
+                do l = 1, 2*spatial_sup+1
+                    do m = 1, 2*spatial_sup+1
+                        rad = hyp(real(k-mid), real(l-mid), real(m-mid))
+                        weights(k,l,m) = -rad/2/spatial_sup + 1.  ! linear function: 1 at rad = 0 and 0 at rad = 2*spatial_sup
+                        if (weights(k,l,m) < 0.) then
+                            weights(k,l,m) = 0.
+                        endif
+                    enddo
+                enddo
+            enddo
+            weights = weights/sum(weights) ! weights has energy of 1
+
             do n = 1, N_sup
                 sup   = min_sup + (n-1.)*(max_sup-min_sup)/(N_sup-1.)
                 theta = a*exp(b*sup) + c*exp(d*sup)
@@ -456,12 +474,14 @@ contains
                     do l = 1,params%box
                         do m = 1,params%box
                             ! applying an average window to each diff (eq 7 in the nonuniform paper)
-                            spatial_sup = 1
-                            do k1 = k-spatial_sup, k+spatial_sup
-                                do l1 = l-spatial_sup, l+spatial_sup
-                                    do m1 = m-spatial_sup, m+spatial_sup
+                            do k_ind = 1, 2*spatial_sup+1
+                                k1 = k - spatial_sup + k_ind - 1
+                                do l_ind = 1, 2*spatial_sup+1
+                                    l1 = l - spatial_sup + l_ind - 1
+                                    do m_ind = 1, 2*spatial_sup+1
+                                        m1 = m - spatial_sup + m_ind - 1
                                         if ((k1 >= 1 .and. k1 <= params%box) .and. (l1 >= 1 .and. l1 <= params%box) .and. (m1 >= 1 .and. m1 <= params%box)) then
-                                            ref_diff(k,l,m) = ref_diff(k,l,m) + cur_diff(k1,l1,m1)
+                                            ref_diff(k,l,m) = ref_diff(k,l,m) + cur_diff(k1,l1,m1)**2*weights(k_ind,l_ind,m_ind)
                                         endif
                                     enddo
                                 enddo
