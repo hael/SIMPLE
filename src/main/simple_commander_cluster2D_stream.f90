@@ -33,6 +33,7 @@ character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
 character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
 character(len=STDLEN), parameter   :: DISTR_EXEC_FNAME    = './distr_cluster2D_pool'
 logical,               parameter   :: DEBUG_HERE          = .false.
+integer(timer_int_kind)            :: t
 
 type, extends(commander_base) :: cluster2D_commander_stream
   contains
@@ -380,6 +381,9 @@ contains
             ! call qsys_cleanup
             call simple_rmdir(SCALE_DIR)
             call del_file(PROJFILE_POOL)
+            call del_file('start2Drefs'//params%ext)
+            call del_file('start2Drefs_even'//params%ext)
+            call del_file('start2Drefs_odd'//params%ext)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER2D_STREAM NORMAL STOP ****')
@@ -927,29 +931,42 @@ contains
             end subroutine exec_classify_pool
 
             subroutine rescale_cavgs( src, dest )
+                use simple_stack_io,   only: stack_io
                 character(len=*), intent(in) :: src, dest
                 type(image)          :: img, img_pad
+                type(stack_io)       :: stkio_r, stkio_w
+                character(len=:), allocatable :: dest_here
                 integer, allocatable :: cls_pop(:)
                 integer              :: ldim(3),icls, ncls_here
                 call debug_print('in rescale_cavgs '//trim(src))
                 call debug_print('in rescale_cavgs '//trim(dest))
+                if(trim(src) == trim(dest))then
+                    dest_here = 'tmp_cavgs.mrc'
+                else
+                    dest_here = trim(dest)
+                endif
                 call img%new([box,box,1],smpd)
                 call img_pad%new([orig_box,orig_box,1],params%smpd)
                 cls_pop = nint(pool_proj%os_cls2D%get_all('pop'))
                 call find_ldim_nptcls(src,ldim,ncls_here)
+                call stkio_r%open(trim(src), smpd, 'read', bufsz=ncls_here)
+                call stkio_r%read_whole
+                call stkio_w%open(dest_here, params%smpd, 'write', box=orig_box, bufsz=ncls_here)
                 do icls = 1,ncls_here
                     if( cls_pop(icls) > 0 )then
                         call img%zero_and_unflag_ft
-                        call img%read(src,icls)
+                        call stkio_r%get_image(icls, img)
                         call img%fft
                         call img%pad(img_pad, backgr=0.)
                         call img_pad%ifft
                     else
                         img_pad = 0.
                     endif
-                    call img_pad%write('tmp_cavgs.mrc',icls)
+                    call stkio_w%write(icls, img_pad)
                 enddo
-                call simple_rename('tmp_cavgs.mrc',dest)
+                call stkio_r%close
+                call stkio_w%close
+                if (trim(src) == trim(dest) ) call simple_rename('tmp_cavgs.mrc',dest)
                 call img%kill
                 call img_pad%kill
                 call debug_print('end rescale_cavgs')

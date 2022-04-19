@@ -732,7 +732,6 @@ contains
         call del_file('start2Drefs'//params%ext)
         call del_file('start2Drefs_even'//params%ext)
         call del_file('start2Drefs_odd'//params%ext)
-        call del_file('__simple_filelist__')
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
     end subroutine exec_cluster2D_autoscale

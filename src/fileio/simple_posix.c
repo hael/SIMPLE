@@ -615,13 +615,9 @@ int remove_directory_recursive(char *path, int *len, int*count)
                     if(S_ISDIR(statbuf.st_mode)) {
                         int len2 = (int)strlen(buf);
                         r2 = remove_directory_recursive(buf, &len2 , count);
-
                     } else {
                         r2 = unlink(buf);
                         *count = *count + 1;
-                        FILE* f = fopen("__simple_filelist__", "a");
-                        fprintf(f, "%s\n", buf);
-                        fclose(f);
                     }
                 }
                 free(buf);
@@ -633,17 +629,12 @@ int remove_directory_recursive(char *path, int *len, int*count)
     if(!r) {
         r = rmdir(path);
         *count = *count + 1;
-        FILE* f = fopen("__simple_filelist__", "a");
-        fprintf(f, "%s\n", path);
-        fclose(f);
     }
     return r;
 }
 
 int remove_directory(char *path, int *len, int*count)
 {
-    FILE* f = fopen("__simple_filelist__", "w");
-    fclose(f);
     *count = 0;
     return remove_directory_recursive(path, len, count);
 }
