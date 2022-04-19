@@ -630,7 +630,7 @@ contains
             if( o%isthere('dfy') )then ! astigmatic CTF
                 call tfun%apply(img, o%get_dfx(i), mode, dfy=o%get_dfy(i), angast=o%get(i,'angast'), bfac=bfac)
             else ! non-astigmatic CTF
-                call tfun%apply(img, o%get_dfy(i), mode, bfac=bfac)
+                call tfun%apply(img, o%get_dfx(i), mode, bfac=bfac)
             endif
             call stkio_w%write(i, img)
         end do
