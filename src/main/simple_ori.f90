@@ -37,6 +37,7 @@ type :: ori
     procedure          :: e3set
     procedure          :: swape1e3
     procedure          :: set_shift
+    procedure          :: set_dfx, set_dfy
     procedure, private :: set_1
     procedure, private :: set_2
     generic            :: set => set_1, set_2
@@ -66,6 +67,7 @@ type :: ori
     procedure          :: get_3Dshift
     procedure          :: get_state
     procedure          :: get_class
+    procedure          :: get_dfx, get_dfy
     procedure          :: isthere
     procedure          :: ischar
     procedure          :: isstatezero
@@ -129,9 +131,14 @@ contains
         class(ori), intent(inout) :: self
         logical,    intent(in)    :: is_ptcl
         call self%kill
-        self%htab      = hash()
-        self%chtab     = chash()
         self%is_ptcl   = is_ptcl
+        if( self%is_ptcl )then
+            self%htab      = hash(0)
+            self%chtab     = chash(0)
+        else
+            self%htab      = hash()
+            self%chtab     = chash()
+        endif
         self%existence = .true.
     end subroutine new_ori
 
@@ -416,6 +423,26 @@ contains
         endif
     end subroutine set_shift
 
+    subroutine set_dfx( self, dfx)
+        class(ori), intent(inout) :: self
+        real,       intent(in)    :: dfx
+        if( self%is_ptcl )then
+            self%pparms(I_DFX) = dfx
+        else
+            call self%htab%set('dfx', dfx)
+        endif
+    end subroutine set_dfx
+
+    subroutine set_dfy( self, dfy)
+        class(ori), intent(inout) :: self
+        real,       intent(in)    :: dfy
+        if( self%is_ptcl )then
+            self%pparms(I_DFY) = dfy
+        else
+            call self%htab%set('dfy', dfy)
+        endif
+    end subroutine set_dfy
+
     subroutine set_1( self, key, val )
         class(ori),       intent(inout) :: self
         character(len=*), intent(in)    :: key
@@ -687,7 +714,7 @@ contains
         endif
     end subroutine getter_2
 
-    function get_2Dshift( self ) result( vec )
+    pure function get_2Dshift( self ) result( vec )
         class(ori), intent(in) :: self
         real :: vec(2)
         if( self%is_ptcl )then
@@ -699,7 +726,7 @@ contains
         endif
     end function get_2Dshift
 
-    function get_3Dshift( self ) result( vec )
+    pure function get_3Dshift( self ) result( vec )
         class(ori), intent(in) :: self
         real :: vec(3)
         if( self%is_ptcl )then
@@ -730,6 +757,24 @@ contains
             get_class = nint(self%htab%get('class'))
         endif
     end function get_class
+
+    pure real function get_dfx( self )
+        class(ori), intent(in) :: self
+        if( self%is_ptcl )then
+            get_dfx = self%pparms(I_DFX)
+        else
+            get_dfx = self%htab%get('dfx')
+        endif
+    end function get_dfx
+
+    pure real function get_dfy( self )
+        class(ori), intent(in) :: self
+        if( self%is_ptcl )then
+            get_dfy = self%pparms(I_DFY)
+        else
+            get_dfy = self%htab%get('dfy')
+        endif
+    end function get_dfy
 
     pure function isthere( self, key ) result( found )
         class(ori),        intent(in) :: self
@@ -933,8 +978,8 @@ contains
         ctfvars%cs      = self%get('cs')
         ctfvars%kv      = self%get('kv')
         ctfvars%fraca   = self%get('fraca')
-        ctfvars%dfx     = self%get('dfx')
-        ctfvars%dfy     = self%get('dfy')
+        ctfvars%dfx     = self%get_dfx()
+        ctfvars%dfy     = self%get_dfy()
         ctfvars%angast  = self%get('angast')
         ctfvars%phshift = self%get('phshift')
     end function get_ctfvars
@@ -960,8 +1005,8 @@ contains
         else
             call self%set('phaseplate', 'no')
         endif
-        call self%set('dfx',    ctfvars%dfx)
-        call self%set('dfy',    ctfvars%dfy)
+        call self%set_dfx(ctfvars%dfx)
+        call self%set_dfy(ctfvars%dfy)
         call self%set('angast', ctfvars%angast)
     end subroutine set_ctfvars
 

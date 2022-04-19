@@ -511,9 +511,9 @@ contains
                     case DEFAULT
                         THROW_HARD('unsupported phshiftunit; exec_import_particles')
                 end select
-                call os%set(i, 'dfx', line(1))
+                call os%set_dfx(i, line(1))
                 if( nrecs > 1 )then
-                    call os%set(i, 'dfy', line(2))
+                    call os%set_dfy(i,       line(2))
                     call os%set(i, 'angast', line(3))
                 endif
                 if( nrecs > 3 )then

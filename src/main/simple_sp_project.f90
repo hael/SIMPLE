@@ -349,13 +349,13 @@ contains
                         call self%set_boxcoords(cnt, boxcoords)
                     endif
                     if( ctfvar%ctfflag /= CTFFLAG_NO )then
-                        dfx    = proj%os_ptcl2D%get(iptcl, 'dfx')
-                        dfy    = proj%os_ptcl2D%get(iptcl, 'dfy')
+                        dfx    = proj%os_ptcl2D%get_dfx(iptcl)
+                        dfy    = proj%os_ptcl2D%get_dfy(iptcl)
                         angast = proj%os_ptcl2D%get(iptcl, 'angast')
-                        call self%os_ptcl2D%set(cnt,'dfx',dfx)
-                        call self%os_ptcl2D%set(cnt,'dfy',dfy)
-                        call self%os_ptcl3D%set(cnt,'dfx',dfx)
-                        call self%os_ptcl3D%set(cnt,'dfy',dfy)
+                        call self%os_ptcl2D%set_dfx(cnt,dfx)
+                        call self%os_ptcl2D%set_dfy(cnt,dfy)
+                        call self%os_ptcl3D%set_dfx(cnt,dfx)
+                        call self%os_ptcl3D%set_dfy(cnt,dfy)
                         call self%os_ptcl2D%set(cnt,'angast',angast)
                         call self%os_ptcl3D%set(cnt,'angast',angast)
                         if( proj%os_ptcl2D%isthere(iptcl,'phshift') )then
@@ -772,8 +772,8 @@ contains
                     call self%os_mic%set(imic, 'ctf', 'no')
                 case(CTFFLAG_YES)
                     call self%os_mic%set(imic, 'ctf',    'yes')
-                    call self%os_mic%set(imic, 'dfx',    ctfparms%dfx)
-                    call self%os_mic%set(imic, 'dfy',    ctfparms%dfy)
+                    call self%os_mic%set_dfx(imic,       ctfparms%dfx)
+                    call self%os_mic%set_dfy(imic,       ctfparms%dfy)
                     call self%os_mic%set(imic, 'angast', ctfparms%angast)
                     call self%os_mic%set(imic, 'phshift',ctfparms%phshift)
                 case(CTFFLAG_FLIP)
@@ -898,8 +898,8 @@ contains
         ! update particle oris objects
         do i = 1, nptcls
             call o%new(is_ptcl=.true.)
-            call o%set('dfx',    ctfvars%dfx)
-            call o%set('dfy',    ctfvars%dfy)
+            call o%set_dfx(      ctfvars%dfx)
+            call o%set_dfy(      ctfvars%dfy)
             call o%set('angast', ctfvars%angast)
             if( ctfvars%l_phaseplate ) call o%set('phshift', ctfvars%phshift)
             call o%set('stkind', real(n_os_stk))
@@ -1088,8 +1088,8 @@ contains
             call self%os_stk%set(stk_ind, 'state', real(istate))
             ! updates particles segment
             call o_ptcl%new(is_ptcl=.true.)
-            call o_ptcl%set('dfx',    o_stk%get('dfx'))
-            call o_ptcl%set('dfy',    o_stk%get('dfy'))
+            call o_ptcl%set_dfx(      o_stk%get_dfx())
+            call o_ptcl%set_dfy(      o_stk%get_dfy())
             call o_ptcl%set('angast', o_stk%get('angast'))
             if( o_stk%isthere('phshift') ) call o_ptcl%set('phshift', o_stk%get('phshift'))
             call o_ptcl%set('stkind', real(stk_ind))
@@ -2131,7 +2131,7 @@ contains
         endif
         ! defocus in x
         if( ptcl_field%isthere(iptcl, 'dfx') )then
-            ctfvars%dfx = ptcl_field%get(iptcl, 'dfx')
+            ctfvars%dfx = ptcl_field%get_dfx(iptcl)
         else
             call ptcl_field%print_(iptcl)
             THROW_HARD('dfx (defocus in x) lacking in ptcl_field; get_ctfparams')
