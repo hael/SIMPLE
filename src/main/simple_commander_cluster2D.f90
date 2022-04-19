@@ -1128,40 +1128,43 @@ contains
         class(rank_cavgs_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters)     :: params
-        type(builder)        :: build
+        type(sp_project)     :: spproj
+        type(oris)           :: clsdoc_ranked
+        type(stack_io)       :: stkio_r, stkio_w
+        type(image)          :: img
         integer, allocatable :: order(:)
         real,    allocatable :: res(:)
-        integer        :: ldim(3), ncls, iclass
-        type(oris)     :: clsdoc_ranked
-        type(stack_io) :: stkio_r, stkio_w
+        integer              :: ldim(3), ncls, icls
         call cline%set('oritype', 'cls2D')
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+        call params%new(cline)
+        call spproj%read_segment(params%oritype, params%projfile)
         call find_ldim_nptcls(params%stk, ldim, ncls)
         params%ncls = ncls
-        if( build%spproj_field%get_noris() == params%ncls )then
+        if( spproj%os_cls2D%get_noris() == params%ncls )then
             ! all we need to do is fetch from classdoc in projfile &
             ! order according to resolution
+            call img%new([params%box,params%box,1], params%smpd)
             call clsdoc_ranked%new(params%ncls, is_ptcl=.false.)
-            res = build%spproj%os_cls2D%get_all('res')
+            res = spproj%os_cls2D%get_all('res')
             allocate(order(params%ncls))
-            order = (/(iclass,iclass=1,params%ncls)/)
+            order = (/(icls,icls=1,params%ncls)/)
             call hpsort(res, order)
             call stkio_r%open(params%stk, params%smpd, 'read', bufsz=params%ncls)
             call stkio_r%read_whole ! because need asynchronous access
             call stkio_w%open(params%outstk, params%smpd, 'write', box=ldim(1), bufsz=params%ncls)
-            do iclass=1,params%ncls
-                call clsdoc_ranked%set(iclass, 'class',     real(order(iclass)))
-                call clsdoc_ranked%set(iclass, 'rank',      real(iclass))
-                call clsdoc_ranked%set(iclass, 'pop',       build%spproj_field%get(order(iclass),  'pop'))
-                call clsdoc_ranked%set(iclass, 'res',       build%spproj_field%get(order(iclass),  'res'))
-                call clsdoc_ranked%set(iclass, 'corr',      build%spproj_field%get(order(iclass), 'corr'))
-                call clsdoc_ranked%set(iclass, 'w',         build%spproj_field%get(order(iclass),    'w'))
-                call clsdoc_ranked%set(iclass, 'specscore', build%spproj_field%get(order(iclass), 'specscore'))
-                write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', order(iclass),&
-                    &'RANK:', iclass ,'POP:', nint(build%spproj_field%get(order(iclass), 'pop')),&
-                    &'RES:', build%spproj_field%get(order(iclass), 'res')
-                call stkio_r%get_image(order(iclass), build%img)
-                call stkio_w%write(iclass, build%img)
+            do icls=1,params%ncls
+                call clsdoc_ranked%set(icls, 'class',     real(order(icls)))
+                call clsdoc_ranked%set(icls, 'rank',      real(icls))
+                call clsdoc_ranked%set(icls, 'pop',       spproj%os_cls2D%get(order(icls),  'pop'))
+                call clsdoc_ranked%set(icls, 'res',       spproj%os_cls2D%get(order(icls),  'res'))
+                call clsdoc_ranked%set(icls, 'corr',      spproj%os_cls2D%get(order(icls), 'corr'))
+                call clsdoc_ranked%set(icls, 'w',         spproj%os_cls2D%get(order(icls),    'w'))
+                call clsdoc_ranked%set(icls, 'specscore', spproj%os_cls2D%get(order(icls), 'specscore'))
+                write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', order(icls),&
+                    &'RANK:', icls ,'POP:', nint(spproj%os_cls2D%get(order(icls), 'pop')),&
+                    &'RES:', spproj%os_cls2D%get(order(icls), 'res')
+                call stkio_r%get_image(order(icls), img)
+                call stkio_w%write(icls, img)
             end do
             call stkio_r%close
             call stkio_w%close
@@ -1170,7 +1173,9 @@ contains
             ! nothing to do
         endif
         ! end gracefully
-        call build%kill_general_tbox
+        call clsdoc_ranked%kill
+        call img%kill
+        call spproj%kill
         call simple_end('**** SIMPLE_RANK_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_rank_cavgs
 
