@@ -293,8 +293,8 @@ contains
         self%parms%cs      = os%get(1,'cs')
         self%parms%kv      = os%get(1,'kv')
         self%parms%fraca   = os%get(1,'fraca')
-        self%parms%dfx     = os%get(1,'dfx')
-        self%parms%dfy     = os%get(1,'dfy')
+        self%parms%dfx     = os%get_dfx(1)
+        self%parms%dfy     = os%get_dfy(1)
         self%parms%angast  = os%get(1,'angast')
         self%parms%phshift = os%get(1,'phshift')
         phaseplate         = os%get_static(1,'phaseplate')
@@ -1476,8 +1476,8 @@ contains
         call os%set(1,'cs',      self%parms%cs)
         call os%set(1,'kv',      self%parms%kv)
         call os%set(1,'fraca',   self%parms%fraca)
-        call os%set(1,'dfx',     self%parms%dfx)
-        call os%set(1,'dfy',     self%parms%dfy)
+        call os%set_dfx(1,       self%parms%dfx)
+        call os%set_dfy(1,       self%parms%dfy)
         call os%set(1,'angast',  self%parms%angast)
         call os%set(1,'phshift', self%parms%phshift)
         call os%set(1,'forctf',  moviename)
@@ -1509,8 +1509,8 @@ contains
                     call self%pix2poly(real(self%centers(pi,pj,1),dp), real(self%centers(pi,pj,2),dp), x,y)
                     call os%set(cnt,'x',real(x))
                     call os%set(cnt,'y',real(y))
-                    call os%set(cnt,'dfx',self%parms_patch(pi,pj)%dfx)
-                    call os%set(cnt,'dfy',self%parms_patch(pi,pj)%dfy)
+                    call os%set_dfx(cnt,self%parms_patch(pi,pj)%dfx)
+                    call os%set_dfy(cnt,self%parms_patch(pi,pj)%dfy)
                 enddo
             enddo
         endif

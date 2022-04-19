@@ -37,6 +37,7 @@ type :: oris
     procedure          :: get_mat
     procedure          :: get_normal
     procedure          :: get_2Dshift
+    procedure          :: get_dfx, get_dfy
     procedure          :: get_state
     procedure          :: get_class
     procedure          :: get_tseries_neighs
@@ -91,6 +92,7 @@ type :: oris
     procedure, private :: set_1
     procedure, private :: set_2
     generic            :: set => set_1, set_2
+    procedure          :: set_dfx, set_dfy
     procedure          :: set_ori
     procedure          :: transfer_ori
     procedure, private :: set_all_1
@@ -221,7 +223,7 @@ contains
         self%n = n
         allocate( self%o(self%n) )
         do i=1,n
-            call self%o(i)%new(is_ptcl)
+            call self%o(i)%new_ori(is_ptcl)
         end do
     end subroutine new
 
@@ -380,12 +382,24 @@ contains
         normal = self%o(i)%get_normal()
     end function get_normal
 
-    function get_2Dshift( self, i )  result(shvec)
-        class(oris), intent(inout) :: self
+    pure function get_2Dshift( self, i )  result(shvec)
+        class(oris), intent(in) :: self
         integer,     intent(in)    :: i
         real :: shvec(2)
         shvec = self%o(i)%get_2Dshift()
     end function get_2Dshift
+
+    pure real function get_dfx( self, i )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
+        get_dfx = self%o(i)%get_dfx()
+    end function get_dfx
+
+    pure real function get_dfy( self, i )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
+        get_dfy = self%o(i)%get_dfy()
+    end function get_dfy
 
     pure integer function get_state( self, i )
         class(oris), intent(in) :: self
@@ -1371,6 +1385,20 @@ contains
         call self%o(i)%set(key, val)
     end subroutine set_2
 
+    subroutine set_dfx( self, i, dfx )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i
+        real,        intent(in)    :: dfx
+        call self%o(i)%set_dfx(dfx)
+    end subroutine set_dfx
+
+    subroutine set_dfy( self, i, dfy )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i
+        real,        intent(in)    :: dfy
+        call self%o(i)%set_dfy(dfy)
+    end subroutine set_dfy
+
     subroutine set_ori( self, i, o )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
@@ -1513,8 +1541,7 @@ contains
         real,        intent(in)    :: mul
         integer :: i
         do i=1,self%n
-            call self%o(i)%set('x', mul*self%o(i)%get('x'))
-            call self%o(i)%set('y', mul*self%o(i)%get('y'))
+            call self%o(i)%set_shift(mul*self%o(i)%get_2Dshift())
         end do
     end subroutine mul_shifts
 
@@ -1680,7 +1707,7 @@ contains
                 endif
                 if( dfx > 0. ) exit
             end do
-            call self%o(i)%set('dfx', dfx)
+            call self%o(i)%set_dfx(dfx)
             if( present(astigerr) )then
                 do
                     err = ran3()*astigerr
@@ -1692,7 +1719,7 @@ contains
                     if( dfy > 0. ) exit
                 end do
                 angast = ran3()*359.99
-                call self%o(i)%set('dfy', dfy)
+                call self%o(i)%set_dfy(dfy)
                 call self%o(i)%set('angast', angast)
             endif
         end do
@@ -1872,8 +1899,8 @@ contains
         if( o_tmp%isthere('cs')      ) call self%o(i)%set('cs',      o_tmp%get('cs'))
         if( o_tmp%isthere('fraca')   ) call self%o(i)%set('fraca',   o_tmp%get('fraca'))
         if( o_tmp%isthere('phshift') ) call self%o(i)%set('phshift', o_tmp%get('phshift'))
-        if( o_tmp%isthere('dfx')     ) call self%o(i)%set('dfx',     o_tmp%get('dfx'))
-        if( o_tmp%isthere('dfy')     ) call self%o(i)%set('dfy',     o_tmp%get('dfy'))
+        if( o_tmp%isthere('dfx')     ) call self%o(i)%set_dfx(       o_tmp%get_dfx())
+        if( o_tmp%isthere('dfy')     ) call self%o(i)%set_dfy(       o_tmp%get_dfy())
         if( o_tmp%isthere('angast')  ) call self%o(i)%set('angast',  o_tmp%get('angast'))
         if( o_tmp%isthere('state')   )then
             call self%o(i)%set('state', o_tmp%get('state'))
@@ -1979,8 +2006,8 @@ contains
             if( params_are_there(3) )  call self%set(i, 'cs',      os_tmp%get(i, 'cs')     )
             if( params_are_there(4) )  call self%set(i, 'fraca',   os_tmp%get(i, 'fraca')  )
             if( params_are_there(5) )  call self%set(i, 'phshift', os_tmp%get(i, 'phshift'))
-            if( params_are_there(6) )  call self%set(i, 'dfx',     os_tmp%get(i, 'dfx')    )
-            if( params_are_there(7) )  call self%set(i, 'dfy',     os_tmp%get(i, 'dfy')    )
+            if( params_are_there(6) )  call self%set_dfx(i,        os_tmp%get_dfx(i)       )
+            if( params_are_there(7) )  call self%set_dfy(i,        os_tmp%get_dfy(i)       )
             if( params_are_there(8) )  call self%set(i, 'angast',  os_tmp%get(i, 'angast') )
             if( params_are_there(9) )  call self%set(i, 'state',   os_tmp%get(i, 'state')  )
             if( params_are_there(10) ) call self%set(i, 'eo',      os_tmp%get(i, 'eo')     )
@@ -2107,17 +2134,17 @@ contains
         do i=1,self%n
             if( self%o(i)%isthere('dfx') )then
                 do
-                    dfx = self%o(i)%get('dfx')+ran3()*dferr-dferr/2.
+                    dfx = self%o(i)%get_dfx()+ran3()*dferr-dferr/2.
                     if( dfx > 0. ) exit
                 end do
-                call self%o(i)%set('dfx', dfx)
+                call self%o(i)%set_dfx(dfx)
             endif
             if( self%o(i)%isthere('dfy') )then
                 do
-                    dfy = self%o(i)%get('dfy')+ran3()*dferr-dferr/2.
+                    dfy = self%o(i)%get_dfy()+ran3()*dferr-dferr/2.
                     if( dfy > 0. ) exit
                 end do
-                call self%o(i)%set('dfy', dfy)
+                call self%o(i)%set_dfy(dfy)
             endif
         end do
     end subroutine introd_ctf_err

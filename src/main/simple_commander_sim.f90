@@ -282,8 +282,8 @@ contains
             if( params%vis .eq. 'yes' ) call shifted_base_image%vis()
             call shifted_base_image%write('simulate_movie'//params%ext, i)
             ! set orientation parameters in object
-            call build%spproj_field%set(1, 'dfx',    dfx)
-            call build%spproj_field%set(1, 'dfy',    dfy)
+            call build%spproj_field%set_dfx(1,       dfx)
+            call build%spproj_field%set_dfy(1,       dfy)
             call build%spproj_field%set(1, 'angast', angast)
         end do
         ! generate the optimal average

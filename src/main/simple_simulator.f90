@@ -24,15 +24,15 @@ contains
         call img%fft()
         ! apply ctf/bfactor
         if( orientation%isthere('dfx') .and. orientation%isthere('dfy') .and. aapply_ctf )then
-            dfx = orientation%get('dfx')
-            dfy = orientation%get('dfy')
+            dfx = orientation%get_dfx()
+            dfy = orientation%get_dfy()
             angast = orientation%get('angast')
             call tfun%apply(img, dfx, 'ctf', dfy, angast, bfac=bfac)
         else if( orientation%isthere('dfx') .and. aapply_ctf )then
-            dfx = orientation%get('dfx')
+            dfx = orientation%get_dfx()
             dfy = dfx
             angast = 0.
-            call tfun%apply(img, orientation%get('dfx'), 'ctf', bfac=bfac)
+            call tfun%apply(img, orientation%get_dfx(), 'ctf', bfac=bfac)
         else
             if( present(bfac) ) call img%apply_bfac(bfac)
         endif

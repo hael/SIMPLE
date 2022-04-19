@@ -251,9 +251,9 @@ contains
                 endif
 
                 if(dfx .AND. dfy) then
-                    call starfile_table__setValue_double(startable, EMDL_CTF_ASTIGMATISM, real(abs((spproj%os_mic%get(i, 'dfx') * 10000) - (spproj%os_mic%get(i, 'dfy') * 10000)), dp))
-                    call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSU, real(spproj%os_mic%get(i, 'dfx') * 10000, dp))
-                    call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSV, real(spproj%os_mic%get(i, 'dfy') * 10000, dp))
+                    call starfile_table__setValue_double(startable, EMDL_CTF_ASTIGMATISM, real(abs((spproj%os_mic%get_dfx(i) * 10000) - (spproj%os_mic%get_dfy(i) * 10000)), dp))
+                    call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSU, real(spproj%os_mic%get_dfx(i) * 10000, dp))
+                    call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSV, real(spproj%os_mic%get_dfy(i) * 10000, dp))
                 endif
 
                 if(angast) call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_mic%get(i, 'angast'), dp))
@@ -423,17 +423,17 @@ contains
                         endif
 
                         if(ptcldfx .AND. ptcldfy .AND. ptclangast) then
-                            call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSU, real(spproj%os_ptcl2D%get(i,'dfx') * 10000, dp))
-                            call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSV, real(spproj%os_ptcl2D%get(i,'dfy') * 10000, dp))
+                            call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSU, real(spproj%os_ptcl2D%get_dfx(i) * 10000, dp))
+                            call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSV, real(spproj%os_ptcl2D%get_dfy(i) * 10000, dp))
                             call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_ptcl2D%get(i,'angast'), dp))
                         else if(dfx .AND. dfy .AND. angast) then
-                            call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSU, real(spproj%os_stk%get(stkindex,'dfx') * 10000, dp))
-                            call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSV, real(spproj%os_stk%get(stkindex,'dfy') * 10000, dp))
+                            call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSU, real(spproj%os_stk%get_dfx(stkindex) * 10000, dp))
+                            call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUSV, real(spproj%os_stk%get_dfy(stkindex) * 10000, dp))
                             call starfile_table__setValue_double(startable, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_stk%get(stkindex,'angast'), dp))
                         endif
 
                         if(cline%get_rarg('reliongroups') > 0 .AND. dfx) then
-                            group = ceiling((real(spproj%os_stk%get(stkindex,'dfx')) - dfxmin) / dfxstep)
+                            group = ceiling((real(spproj%os_stk%get_dfx(stkindex)) - dfxmin) / dfxstep)
                             write(groupname, *) group
                             call starfile_table__setValue_string(startable, EMDL_MLMODEL_GROUP_NAME, trim(adjustl(groupname)))
                         endif

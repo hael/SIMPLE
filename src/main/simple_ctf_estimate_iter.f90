@@ -77,8 +77,8 @@ contains
         call ctffit%write_diagnostic(fname_diag)
         call make_relativepath(CWD_GLOB,fname_diag, rel_fname)
         ! reporting
-        call orientation%set('dfx',            ctfvars%dfx)
-        call orientation%set('dfy',            ctfvars%dfy)
+        call orientation%set_dfx(              ctfvars%dfx)
+        call orientation%set_dfy(              ctfvars%dfy)
         call orientation%set('angast',         ctfvars%angast)
         call orientation%set('phshift',        ctfvars%phshift)
         call orientation%set('ctf_estimatecc', ctffit%get_ccfit())

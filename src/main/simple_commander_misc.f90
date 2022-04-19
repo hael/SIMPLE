@@ -542,8 +542,8 @@ contains
                             ! transfer to oris object
                             call os%set_euler(ind,   euls)
                             call os%set_shift(ind,   shift)
-                            call os%set(ind,'dfx',   ctfparms%dfx)
-                            call os%set(ind,'dfy',   ctfparms%dfy)
+                            call os%set_dfx(ind,     ctfparms%dfx)
+                            call os%set_dfy(ind,     ctfparms%dfy)
                             call os%set(ind,'angast',ctfparms%angast)
                             call os%set(ind,'xpos',  pos(1))
                             call os%set(ind,'ypos',  pos(2))
@@ -682,6 +682,7 @@ contains
         allocate(moviedocs(nmics),gofs(nprojects,nmics),npatch(nprojects))
         npatch(1) = first_spproj%os_mic%get(1,'nxpatch')*first_spproj%os_mic%get(1,'nypatch')
         gofs = 0.0
+        ! working out order of movies in each project file
         do i = 1,nmics
             indextab(1,i) = i
             moviedocs(i)  = first_spproj%os_mic%get_static(i,'mc_starfile')
@@ -726,7 +727,7 @@ contains
         enddo
         call CPlot2D__OutputPostScriptPlot(plot2D, 'gofs_'//int2str_pad(k,3)//'.eps'//C_NULL_CHAR)
         call CPlot2D__delete(plot2D)
-        ! generate dense 2.5D grid        
+        ! generate dense 2.5D grid
         call parse_movie_star(moviedocs(1), poly1, ldim1, binning, smpd)
         nframes = ldim1(3)
         nx      = NGRID

@@ -1767,12 +1767,12 @@ contains
                     call spproj%set_boxcoords(cnt, boxcoords)
                     ! defocus from patch-based ctf estimation
                     if( spproj_part%os_ptcl2D%isthere(i,'dfx') )then
-                        dfx = spproj_part%os_ptcl2D%get(i, 'dfx')
-                        dfy = spproj_part%os_ptcl2D%get(i, 'dfy')
-                        call spproj%os_ptcl2D%set(cnt,'dfx',dfx)
-                        call spproj%os_ptcl2D%set(cnt,'dfy',dfy)
-                        call spproj%os_ptcl3D%set(cnt,'dfx',dfx)
-                        call spproj%os_ptcl3D%set(cnt,'dfy',dfy)
+                        dfx = spproj_part%os_ptcl2D%get_dfx(i)
+                        dfy = spproj_part%os_ptcl2D%get_dfy(i)
+                        call spproj%os_ptcl2D%set_dfx(cnt,dfx)
+                        call spproj%os_ptcl2D%set_dfy(cnt,dfy)
+                        call spproj%os_ptcl3D%set_dfx(cnt,dfx)
+                        call spproj%os_ptcl3D%set_dfy(cnt,dfy)
                     endif
                     !optics group id
                     if( spproj_part%os_ptcl2D%isthere(i,'ogid') )then 
@@ -2078,10 +2078,10 @@ contains
                     if( l_ctfpatch )then
                         ptcl_pos = ptcl_pos+1.+real(params%box/2) !  center
                         call ctffit%pix2polyvals(ptcl_pos(1),ptcl_pos(2), dfx,dfy)
-                        call build%spproj%os_ptcl2D%set(iptcl_glob,'dfx',dfx)
-                        call build%spproj%os_ptcl3D%set(iptcl_glob,'dfx',dfx)
-                        call build%spproj%os_ptcl2D%set(iptcl_glob,'dfy',dfy)
-                        call build%spproj%os_ptcl3D%set(iptcl_glob,'dfy',dfy)
+                        call build%spproj%os_ptcl2D%set_dfx(iptcl_glob,dfx)
+                        call build%spproj%os_ptcl3D%set_dfx(iptcl_glob,dfx)
+                        call build%spproj%os_ptcl2D%set_dfy(iptcl_glob,dfy)
+                        call build%spproj%os_ptcl3D%set_dfy(iptcl_glob,dfy)
                     endif
                     !update particle optics group id
                     if( o_mic%isthere('ogid') )then
