@@ -1,9 +1,12 @@
 \documentclass{article}
 \usepackage{amsmath}
 \usepackage{hyperref}
+\usepackage{graphicx}
 \begin{document}
 \title{SIMPLE's implementation of Butterworth function/kernel used in non-uniform refinement}
 \maketitle
+
+\section{Continuous Butterworth-based optimization}
 \noindent Let $x$ be a frequency value and $\theta$ the cut-off frequency, then the Butterworth polynomial of order $n$-th is estimated \cite{ButterworthWiki} as
 \begin{equation}\label{eq1}
 B_n(x,\theta) = \sum_{k = 0}^n a_n s^k, \quad s := \frac{ix}{\theta}, \quad i = \sqrt{-1}.
@@ -52,6 +55,32 @@ with the derivative
 \begin{equation}\label{eq13}
 \frac{dF}{d\theta} = \int \frac{df}{d\theta}(x,\theta) \cdot (f(x,\theta) - f_0(x))dx
 \end{equation}
+
+\newpage
+\section{Discrete Butterworth-based search}
+For each voxel $x$, we would like to search for the cut-off frequency $\theta(x)$ to minimize the following cost function
+\begin{equation}\label{eq14}
+\theta_{\min}(x) = \min_{\theta}\sum_\xi W_\rho(\xi-x) \, |(B_{\theta(x)} \star \text{odd})(\xi) - \text{even}(\xi) |
+\end{equation}
+where
+\begin{itemize}
+\item $B_{\theta(x)}$: Butterworth function, depending on the current voxel $x$, with cut-off frequency $\theta$
+\item $W_\rho$: a window function, which is positive and integrates to 1, with spatial extent $\rho$.\\
+Currently in the codes, this window function is a linear function with is 1 at $x$ and linearly decreases to zero at $x \pm \rho$. It is normalized to have an energy of 1.
+\end{itemize}
+For a Butterworth function with cut-off frequency $\theta$, its FT has some support $\text{sup}_\theta$. In the figure below, the cut-off frequency is $\theta = 10$ and the $\text{sup}_\theta = 13$.
+\includegraphics[width=\textwidth]{pics/Butterworth_CutoffFreq_FTSup}
+The correspondence between $\text{sup}_\theta$ and its cut-off frequency can be estimated by the following line in the codes: theta = a*exp(b*sup) + c*exp(d*sup).\\
+
+\noindent Implementation of equation \eqref{eq14} has the following steps:
+\begin{itemize}
+\item[1.] Divide the interval $[\text{sup}_{\min}, \text{sup}_{\max}]$ into $N_\text{sup}$ equi-distant intervals. For example, in the figure below, $\text{sup}_{\min} = 4$, $\text{sup}_{\max} = 36$ and $N_\text{sup} = 4$.
+\includegraphics[width=\textwidth]{pics/EquiSup}
+For each $\text{sup}$, compute the corresponding cut-off frequency and compute the corresponding Butterworth kernel.
+\item[2.] At each pixel, search over all the theta's in step 1 to see which one minimize equation \eqref{eq14}.
+\item[3.] After finding all the optimized theta's at each pixel, denoising the odd/even with the optimized Butterworth kernel.
+\end{itemize}
+
 \begin{thebibliography}{9}
 \bibitem[1]{ButterworthWiki} \url{https://en.wikipedia.org/wiki/Butterworth_filter}
 \end{thebibliography}
