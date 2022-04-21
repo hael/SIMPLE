@@ -230,13 +230,14 @@ contains
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
         type(image)      :: even, odd, odd_img, ker_odd_img
-        integer          :: k,l,m,n,k1,l1,m1,k_ind,l_ind,m_ind, dim3
+        integer          :: k,l,m,n,k1,l1,m1,k_ind,l_ind,m_ind, dim3, max_sup
         real             :: rad, cur_min_sum
 
-        ! Fitting constants (constructed in MATLAB) in theta(FT_support) = a*exp(b*x) + c*exp(d*x)
-        real   , parameter   :: A = 47.27, B = -0.1781, C = 7.69, D = -0.02228, MIN_SUP = 0.2, MAX_SUP = 20.
-        integer, parameter   :: N_SUP = 5, SPA_SUP = 2, MID = 1+SPA_SUP
-        real   , allocatable :: weights(:,:,:)    ! weights of the neighboring differences
+        real   , parameter   :: A = 47.27, B = -0.1781, C = 7.69, D = -0.02228  ! Fitting constants (constructed in MATLAB) of theta(FT_support) = a*exp(b*x) + c*exp(d*x)
+        real   , parameter   :: MIN_SUP = 0.5, RES_LB = 30                      ! lower bound of resolution is 30 Angstrom, upper bound is nyquist, hence .5
+        integer, parameter   :: N_SUP = 20                                      ! number of intervals between MIN_SUP and MAX_SUP
+        integer, parameter   :: SPA_SUP = 2, MID = 1+SPA_SUP                    ! support of the window function
+        real   , allocatable :: weights(:,:,:)                                  ! weights of the neighboring differences
 
         ! optimization variables
         real                         , allocatable :: cur_mat(:,:,:), sup, theta
@@ -279,10 +280,11 @@ contains
         call odd_img%fft()
         call odd_img%get_cmat_ptr(cmat_odd)
 
-        rmat_odd  = rmat_odd /sum(rmat_odd)
-        rmat_even = rmat_even/sum(rmat_even)
-        cur_mat   = 0.
-        prev_diff    = 3.4028235E+38 - 1 ! supposed to be infinity
+        rmat_odd     = rmat_odd /sum(rmat_odd)
+        rmat_even    = rmat_even/sum(rmat_even)
+        cur_mat      = 0.
+        max_sup      = int(RES_LB/params%smpd)*2    ! multiplication factor depending on the definition of support, set to 2 for now
+        prev_diff    = 3.4028235E+38 - 1            ! supposed to be infinity
         cur_min_sum  = 3.4028235E+38 - 1
         
         ! assign the weights of the neighboring voxels
@@ -301,7 +303,7 @@ contains
         weights = weights/sum(weights) ! weights has energy of 1
 
         do n = 1, N_SUP
-            sup   = MIN_SUP + (n-1.)*(MAX_SUP-MIN_SUP)/(N_SUP-1.)
+            sup   = MIN_SUP + (n-1.)*(max_sup-MIN_SUP)/(N_SUP-1.)
             theta = A*exp(B*sup) + C*exp(D*sup)
             write(*, *) 'support = ', sup, '; theta = ', theta
             call butterworth_kernel(orig_ker, orig_ker_der, params%box, 8, theta)  ! WARNING: fix the constants here
@@ -313,7 +315,7 @@ contains
             call ker_odd_img%get_rmat_sub(rmat_ker)
             rmat_ker = rmat_ker/sum(rmat_ker)
 
-            cur_diff = abs(rmat_ker - rmat_even)
+            cur_diff = (rmat_ker - rmat_even)**2
 
             ! do the non-uniform, i.e. optimizing at each voxel
             if (params%is_uniform == 'no') then
@@ -336,7 +338,7 @@ contains
                                         do m_ind = 1, 2*SPA_SUP+1
                                             m1 = m - SPA_SUP + m_ind - 1
                                             if ((k1 >= 1 .and. k1 <= params%box) .and. (l1 >= 1 .and. l1 <= params%box) .and. (m1 >= 1 .and. m1 <= dim3)) then
-                                                ref_diff(k,l,m) = ref_diff(k,l,m) + cur_diff(k1,l1,m1)**2*weights(k_ind,l_ind,m_ind)
+                                                ref_diff(k,l,m) = ref_diff(k,l,m) + cur_diff(k1,l1,m1)*weights(k_ind,l_ind,m_ind)
                                             endif
                                         enddo
                                     endif
@@ -351,7 +353,7 @@ contains
                     enddo
                 enddo
             else
-                !write(*,*) 'current cost = ', sum(cur_diff)
+                write(*,*) 'current cost = ', sum(cur_diff)
                 if (sum(cur_diff) < cur_min_sum) then
                     cur_mat     = rmat_ker
                     cur_min_sum = sum(cur_diff)
@@ -359,10 +361,10 @@ contains
             endif
             
             call odd%set_rmat(cur_mat, .false.)
-            call odd %write('nonuniformly_butterworth_discrete_odd_iter' // int2str(n) // '.mrc')
+            call odd %write(params%is_uniform // '_uniform_butterworth_filter_iter' // int2str(n) // '.mrc')
         enddo
         
-        !write(*, *) 'min_cost = ', cur_min_sum
+        write(*, *) 'min_cost = ', cur_min_sum
         ! end gracefully
         call simple_end('**** SIMPLE_BUTTERWORTH_FILTER NORMAL STOP ****')
     end subroutine exec_butterworth
