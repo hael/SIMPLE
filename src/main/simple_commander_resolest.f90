@@ -12,7 +12,7 @@ implicit none
 public :: fsc_commander
 ! public :: local_res_commander
 public :: nonuniform_filter_commander
-public :: nonuniform_butterworth_commander
+public :: butterworth_commander
 private
 #include "simple_local_flags.inc"
 
@@ -31,10 +31,10 @@ type, extends(commander_base) :: nonuniform_filter_commander
     procedure :: execute      => exec_nonuniform_filter
 end type nonuniform_filter_commander
 
-type, extends(commander_base) :: nonuniform_butterworth_commander
+type, extends(commander_base) :: butterworth_commander
   contains
-    procedure :: execute      => exec_nonuniform_butterworth_discrete
-end type nonuniform_butterworth_commander
+    procedure :: execute      => exec_butterworth
+end type butterworth_commander
 
 contains
 
@@ -223,155 +223,19 @@ contains
         call simple_end('**** SIMPLE_NONUNIFORM_FILTER NORMAL STOP ****')
     end subroutine exec_nonuniform_filter
 
-    subroutine exec_nonuniform_butterworth_continuous( self, cline )
-        use simple_butterworth
-        use simple_optimizer,   only: optimizer
-        use simple_opt_factory, only: opt_factory
-        use simple_opt_spec,    only: opt_spec
-        class(nonuniform_butterworth_commander), intent(inout) :: self
-        class(cmdline),                          intent(inout) :: cline
-        type(parameters) :: params
-        type(image)      :: map2opt
-        type(masker)     :: mskvol
-        logical          :: have_mask_file, map2opt_present
-
-        procedure(fun_butterworth),     pointer   :: costfun_ptr      !< pointer 2 cost function
-        class(optimizer),               pointer   :: opt_ptr=>null()  ! the generic optimizer object
-        integer,                        parameter :: ndim   = 1, NRESTARTS = 1
-        type(opt_factory)   :: ofac                           ! the optimization factory object
-        type(opt_spec)      :: spec                           ! the optimizer specification object
-        character(len=8)    :: str_opts                       ! string descriptors for the NOPTS optimizers
-        real                :: lims(ndim,2), lowest_cost
-
-        real                         , pointer :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_ker(:,:,:),  orig_ker(:,:,:), orig_ker_der(:,:,:)
-        complex(kind=c_float_complex), pointer :: cmat_odd(:,:,:), cmat_even(:,:,:), cmat_conv(:,:,:)
-
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call params%new(cline)
-        ! read even/odd pair
-        call even_img%new([params%box,params%box,params%box], params%smpd)
-        call odd_img %new([params%box,params%box,params%box], params%smpd)
-        call odd_img %read(params%vols(1))
-        call even_img%read(params%vols(2))
-        map2opt_present = cline%defined('vol3')
-        if( map2opt_present )then
-            call map2opt%new([params%box,params%box,params%box],  params%smpd)
-            call map2opt%read(params%vols(3))
-        endif
-        have_mask_file = .false.
-        if( cline%defined('mskfile') )then
-            if( file_exists(params%mskfile) )then
-                call mskvol%new([params%box,params%box,params%box], params%smpd)
-                call mskvol%read(params%mskfile)
-                have_mask_file = .true.
-            else
-                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_nonuniform_butterworth_continuous')
-            endif
-        else
-            ! spherical masking [TODO] does it make sense to mask when doing butterworth optimization?
-            !call even_img%mask(params%msk, 'soft')
-            !call odd_img %mask(params%msk, 'soft')
-        endif
-        if( have_mask_file )then
-            call mskvol%one_at_edge ! to expand before masking of reference internally
-        else
-            call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
-        endif
-        if( map2opt_present )then
-            write(*, *) 'TODO'
-        else
-            ! initialize the butterworth kernel and its derivative
-            call ker_odd_img     %new([params%box,params%box,params%box], params%smpd)
-            call ker_even_img    %new([params%box,params%box,params%box], params%smpd)
-            call ker_der_odd_img %new([params%box,params%box,params%box], params%smpd)
-            call ker_der_even_img%new([params%box,params%box,params%box], params%smpd)
-
-            ! initialize the temporary arrays
-            allocate(rmat_odd(     params%box,params%box,params%box))
-            allocate(rmat_even(    params%box,params%box,params%box))
-            allocate(rmat_ker(     params%box,params%box,params%box))
-            allocate(orig_ker(     params%box,params%box,params%box))
-            allocate(orig_ker_der( params%box,params%box,params%box))
-            allocate(cmat_odd(     params%box,params%box,params%box))
-            allocate(cmat_even(    params%box,params%box,params%box))
-            allocate(cmat_conv(    params%box,params%box,params%box))
-
-            ! do the optimization here to get the optimized cut-off frequency
-            write(*, *) 'Cut-off frequency optimization in progress:'
-            costfun_ptr  => butterworth_cost
-            str_opts  = 'lbfgsb'
-            lims(1,1) =  0.00001
-            lims(1,2) =  3.
-            call spec%specify(str_opts, ndim, limits=lims, nrestarts=NRESTARTS) ! make optimizer spec
-            call spec%set_costfun(costfun_ptr)                                  ! set pointer to costfun
-            call spec%set_gcostfun(butterworth_gcost)                           ! set pointer to gradient of costfun
-            call ofac%new(spec, opt_ptr)                                        ! generate optimizer object with the factory
-            spec%x = (lims(1,1) + lims(1,2))/2.                                 ! set initial guess
-            call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
-
-            write(*, *) 'cost = ', lowest_cost, '; x = ', spec%x(1)
-
-            ! apply the optimized cut-off frequency to the odd and even image
-            call butterworth_kernel(orig_ker, orig_ker_der, params%box, 8, spec%x(1))  ! WARNING: fix the constants here
-            
-            ! do the convolution B*even
-            call even_img%get_rmat_ptr(rmat_even)
-            call even_img%fft()
-            call even_img%get_cmat_ptr(cmat_even)
-
-            call ker_odd_img%get_rmat_ptr(rmat_ker)
-            call ker_odd_img%set_rmat(orig_ker, .false.)
-            call ker_odd_img%fft()
-            call ker_odd_img%get_cmat_ptr(cmat_conv)
-            cmat_even = cmat_even*cmat_conv
-            call even_img%ifft()
-
-            ! do the convolution B*odd
-            call odd_img%get_rmat_ptr(rmat_odd)
-            call odd_img%fft()
-            call odd_img%get_cmat_ptr(cmat_odd)
-            cmat_odd = cmat_odd*cmat_conv
-            call odd_img%ifft()
-
-            call opt_ptr%kill
-            deallocate(opt_ptr)
-        endif
-        if( have_mask_file )then
-            call mskvol%read(params%mskfile)
-            call even_img%mul(mskvol)
-            call odd_img %mul(mskvol)
-            if( map2opt_present ) call map2opt%mul(mskvol)
-            call mskvol%kill
-        endif
-        if( map2opt_present )then
-            call map2opt%write('nonuniformly_butterworth.mrc')
-        else
-            call even_img%write('nonuniformly_butterworth_continuous_even.mrc')
-            call odd_img %write('nonuniformly_butterworth_continuous_odd.mrc')
-        endif
-        ! destruct
-        call even_img%kill
-        call odd_img %kill
-        if( map2opt_present ) call map2opt%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_NONUNIFORM_BUTTERWORTH_CONTINUOUS NORMAL STOP ****')
-    end subroutine exec_nonuniform_butterworth_continuous
-
-    subroutine exec_nonuniform_butterworth_discrete( self, cline )
+    subroutine exec_butterworth( self, cline )
         use simple_butterworth, only: butterworth_kernel
         
-        class(nonuniform_butterworth_commander), intent(inout) :: self
-        class(cmdline),                          intent(inout) :: cline
+        class(butterworth_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
-        type(image)      :: even, odd, odd_img, ker_odd_img, map2opt
-        type(masker)     :: mskvol
-        logical          :: have_mask_file, map2opt_present
-        integer          :: k,l,m,n,k1,l1,m1,k_ind,l_ind,m_ind
-        real             :: rad
+        type(image)      :: even, odd, odd_img, ker_odd_img
+        integer          :: k,l,m,n,k1,l1,m1,k_ind,l_ind,m_ind, dim3
+        real             :: rad, cur_min_sum
 
         ! Fitting constants (constructed in MATLAB) in theta(FT_support) = a*exp(b*x) + c*exp(d*x)
-        real   , parameter   :: a = 47.27, b = -0.1781, c = 7.69, d = -0.02228, min_sup = 2, max_sup = 80.
-        integer, parameter   :: N_sup = 5, spatial_sup = 2, mid = 1+spatial_sup
+        real   , parameter   :: A = 47.27, B = -0.1781, C = 7.69, D = -0.02228, MIN_SUP = 0.2, MAX_SUP = 20.
+        integer, parameter   :: N_SUP = 5, SPA_SUP = 2, MID = 1+SPA_SUP
         real   , allocatable :: weights(:,:,:)    ! weights of the neighboring differences
 
         ! optimization variables
@@ -382,108 +246,100 @@ contains
 
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
-        ! read even/odd pair
-        call even%new([params%box,params%box,params%box], params%smpd)
-        call odd %new([params%box,params%box,params%box], params%smpd)
+        
+        dim3 = params%box
+        if (params%is_2D == 'yes') then
+            dim3 = 1
+        endif
+
+        call odd %new([params%box,params%box,dim3], params%smpd)
+        call even%new([params%box,params%box,dim3], params%smpd)
         call odd %read(params%vols(1))
         call even%read(params%vols(2))
-        map2opt_present = cline%defined('vol3')
-        if( map2opt_present )then
-            call map2opt%new([params%box,params%box,params%box],  params%smpd)
-            call map2opt%read(params%vols(3))
-        endif
-        have_mask_file = .false.
-        if( cline%defined('mskfile') )then
-            if( file_exists(params%mskfile) )then
-                call mskvol%new([params%box,params%box,params%box], params%smpd)
-                call mskvol%read(params%mskfile)
-                have_mask_file = .true.
-            else
-                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_nonuniform_butterworth_discrete')
-            endif
-        else
-            ! spherical masking [TODO] comment this for now
-            !call even%mask(params%msk, 'soft')
-            !call odd %mask(params%msk, 'soft')
-        endif
-        if( have_mask_file )then
-            call mskvol%one_at_edge ! to expand before masking of reference internally
-        else
-            call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
-        endif
-        if( map2opt_present )then
-            write(*, *) 'TODO'
-        else
-            call odd_img    %new([params%box,params%box,params%box], params%smpd)
-            call ker_odd_img%new([params%box,params%box,params%box], params%smpd)
 
-            allocate(rmat_odd(     params%box,params%box,params%box))
-            allocate(rmat_even(    params%box,params%box,params%box))
-            allocate(rmat_ker(     params%box,params%box,params%box))
-            allocate(orig_ker(     params%box,params%box,params%box))
-            allocate(orig_ker_der( params%box,params%box,params%box))
-            allocate(prev_diff(    params%box,params%box,params%box))
-            allocate(cur_diff(     params%box,params%box,params%box))
-            allocate(ref_diff(     params%box,params%box,params%box))
-            allocate(cur_mat(      params%box,params%box,params%box))
-            allocate(cmat_conv(    int(params%box/2)+1,params%box,params%box))
-            allocate(cmat_odd(     int(params%box/2)+1,params%box,params%box))
+        call odd_img    %new([params%box,params%box,dim3], params%smpd)
+        call ker_odd_img%new([params%box,params%box,dim3], params%smpd)
 
-            call odd %get_rmat_sub(rmat_odd)
-            call even%get_rmat_sub(rmat_even)
-            call odd_img%set_rmat(rmat_odd, .false.)
-            call odd_img%fft()
-            call odd_img%get_cmat_ptr(cmat_odd)
+        allocate(rmat_odd(     params%box,params%box,dim3))
+        allocate(rmat_even(    params%box,params%box,dim3))
+        allocate(rmat_ker(     params%box,params%box,dim3))
+        allocate(orig_ker(     params%box,params%box,dim3))
+        allocate(orig_ker_der( params%box,params%box,dim3))
+        allocate(prev_diff(    params%box,params%box,dim3))
+        allocate(cur_diff(     params%box,params%box,dim3))
+        allocate(ref_diff(     params%box,params%box,dim3))
+        allocate(cur_mat(      params%box,params%box,dim3))
 
-            rmat_odd  = rmat_odd /sum(rmat_odd)
-            rmat_even = rmat_even/sum(rmat_even)
-            cur_mat   = 0.
-            prev_diff = 1000000. ! supposed to be infinity
-            
-            ! assign the weights of the neighboring voxels
-            allocate(weights(spatial_sup*2+1, spatial_sup*2+1, spatial_sup*2+1))
-            do k = 1, 2*spatial_sup+1
-                do l = 1, 2*spatial_sup+1
-                    do m = 1, 2*spatial_sup+1
-                        rad = hyp(real(k-mid), real(l-mid), real(m-mid))
-                        weights(k,l,m) = -rad/2/spatial_sup + 1.  ! linear function: 1 at rad = 0 and 0 at rad = 2*spatial_sup
-                        if (weights(k,l,m) < 0.) then
-                            weights(k,l,m) = 0.
-                        endif
-                    enddo
+        allocate(cmat_conv(    int(params%box/2)+1,params%box,dim3))
+        allocate(cmat_odd(     int(params%box/2)+1,params%box,dim3))
+
+        call odd %get_rmat_sub(rmat_odd)
+        call even%get_rmat_sub(rmat_even)
+        call odd_img%set_rmat(rmat_odd, .false.)
+        call odd_img%fft()
+        call odd_img%get_cmat_ptr(cmat_odd)
+
+        rmat_odd  = rmat_odd /sum(rmat_odd)
+        rmat_even = rmat_even/sum(rmat_even)
+        cur_mat   = 0.
+        prev_diff    = 3.4028235E+38 - 1 ! supposed to be infinity
+        cur_min_sum  = 3.4028235E+38 - 1
+        
+        ! assign the weights of the neighboring voxels
+        allocate(weights(SPA_SUP*2+1, SPA_SUP*2+1, SPA_SUP*2+1))
+        do k = 1, 2*SPA_SUP+1
+            do l = 1, 2*SPA_SUP+1
+                do m = 1, 2*SPA_SUP+1
+                    rad = hyp(real(k-MID), real(l-MID), real(m-MID))
+                    weights(k,l,m) = -rad/2/SPA_SUP + 1.  ! linear function: 1 at rad = 0 and 0 at rad = 2*SPA_SUP
+                    if (weights(k,l,m) < 0.) then
+                        weights(k,l,m) = 0.
+                    endif
                 enddo
             enddo
-            weights = weights/sum(weights) ! weights has energy of 1
+        enddo
+        weights = weights/sum(weights) ! weights has energy of 1
 
-            do n = 1, N_sup
-                sup   = min_sup + (n-1.)*(max_sup-min_sup)/(N_sup-1.)
-                theta = a*exp(b*sup) + c*exp(d*sup)
-                write(*, *) sup, theta
-                call butterworth_kernel(orig_ker, orig_ker_der, params%box, 8, theta)  ! WARNING: fix the constants here
-                call ker_odd_img%set_rmat(orig_ker, .false.)
-                call ker_odd_img%fft()
-                call ker_odd_img%get_cmat_ptr(cmat_conv)
-                cmat_conv = cmat_conv * cmat_odd
-                call ker_odd_img%ifft()
-                call ker_odd_img%get_rmat_sub(rmat_ker)
-                rmat_ker = rmat_ker/sum(rmat_ker)
+        do n = 1, N_SUP
+            sup   = MIN_SUP + (n-1.)*(MAX_SUP-MIN_SUP)/(N_SUP-1.)
+            theta = A*exp(B*sup) + C*exp(D*sup)
+            write(*, *) 'support = ', sup, '; theta = ', theta
+            call butterworth_kernel(orig_ker, orig_ker_der, params%box, 8, theta)  ! WARNING: fix the constants here
+            call ker_odd_img%set_rmat(orig_ker, .false.)
+            call ker_odd_img%fft()
+            call ker_odd_img%get_cmat_ptr(cmat_conv)
+            cmat_conv = cmat_conv * cmat_odd
+            call ker_odd_img%ifft()
+            call ker_odd_img%get_rmat_sub(rmat_ker)
+            rmat_ker = rmat_ker/sum(rmat_ker)
 
-                cur_diff = abs(rmat_ker - rmat_even)
+            cur_diff = abs(rmat_ker - rmat_even)
+
+            ! do the non-uniform, i.e. optimizing at each voxel
+            if (params%is_uniform == 'no') then
                 ref_diff = 0.
                 do k = 1,params%box
                     do l = 1,params%box
-                        do m = 1,params%box
+                        do m = 1,dim3
                             ! applying an average window to each diff (eq 7 in the nonuniform paper)
-                            do k_ind = 1, 2*spatial_sup+1
-                                k1 = k - spatial_sup + k_ind - 1
-                                do l_ind = 1, 2*spatial_sup+1
-                                    l1 = l - spatial_sup + l_ind - 1
-                                    do m_ind = 1, 2*spatial_sup+1
-                                        m1 = m - spatial_sup + m_ind - 1
-                                        if ((k1 >= 1 .and. k1 <= params%box) .and. (l1 >= 1 .and. l1 <= params%box) .and. (m1 >= 1 .and. m1 <= params%box)) then
-                                            ref_diff(k,l,m) = ref_diff(k,l,m) + cur_diff(k1,l1,m1)**2*weights(k_ind,l_ind,m_ind)
+                            do k_ind = 1, 2*SPA_SUP+1
+                                k1 = k - SPA_SUP + k_ind - 1
+                                do l_ind = 1, 2*SPA_SUP+1
+                                    l1 = l - SPA_SUP + l_ind - 1
+
+                                    ! 2D vs 3D cases
+                                    if (dim3 == 1) then
+                                        if ((k1 >= 1 .and. k1 <= params%box) .and. (l1 >= 1 .and. l1 <= params%box)) then
+                                            ref_diff(k,l,m) = ref_diff(k,l,m) + cur_diff(k1,l1,m)
                                         endif
-                                    enddo
+                                    else
+                                        do m_ind = 1, 2*SPA_SUP+1
+                                            m1 = m - SPA_SUP + m_ind - 1
+                                            if ((k1 >= 1 .and. k1 <= params%box) .and. (l1 >= 1 .and. l1 <= params%box) .and. (m1 >= 1 .and. m1 <= dim3)) then
+                                                ref_diff(k,l,m) = ref_diff(k,l,m) + cur_diff(k1,l1,m1)**2*weights(k_ind,l_ind,m_ind)
+                                            endif
+                                        enddo
+                                    endif
                                 enddo
                             enddo
 
@@ -494,33 +350,21 @@ contains
                         enddo
                     enddo
                 enddo
-                
-                call odd%set_rmat(cur_mat, .false.)
-                call odd %write('nonuniformly_butterworth_discrete_odd_iter' // int2str(n) // '.mrc')
-            enddo
-            call odd_img%kill
-            call ker_odd_img%kill
+            else
+                !write(*,*) 'current cost = ', sum(cur_diff)
+                if (sum(cur_diff) < cur_min_sum) then
+                    cur_mat     = rmat_ker
+                    cur_min_sum = sum(cur_diff)
+                endif
+            endif
+            
             call odd%set_rmat(cur_mat, .false.)
-        endif
-        if( have_mask_file )then
-            call mskvol%read(params%mskfile)
-            call even%mul(mskvol)
-            call odd %mul(mskvol)
-            if( map2opt_present ) call map2opt%mul(mskvol)
-            call mskvol%kill
-        endif
-        if( map2opt_present )then
-            call map2opt%write('nonuniformly_butterworth_discrete.mrc')
-        else
-            call even%write('nonuniformly_butterworth_discrete_even.mrc')
-            call odd %write('nonuniformly_butterworth_discrete_odd.mrc')
-        endif
-        ! destruct
-        call even%kill
-        call odd %kill
-        if( map2opt_present ) call map2opt%kill
+            call odd %write('nonuniformly_butterworth_discrete_odd_iter' // int2str(n) // '.mrc')
+        enddo
+        
+        !write(*, *) 'min_cost = ', cur_min_sum
         ! end gracefully
-        call simple_end('**** SIMPLE_NONUNIFORM_BUTTERWORTH_DISCRETE NORMAL STOP ****')
-    end subroutine exec_nonuniform_butterworth_discrete
+        call simple_end('**** SIMPLE_BUTTERWORTH_FILTER NORMAL STOP ****')
+    end subroutine exec_butterworth
 
 end module simple_commander_resolest

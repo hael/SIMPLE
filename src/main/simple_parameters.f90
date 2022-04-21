@@ -50,6 +50,8 @@ type :: parameters
     character(len=3)      :: graphene_filt='no'   !< filter out graphene bands in correcation search
     character(len=3)      :: gridding='no'        !< to test gridding correction
     character(len=3)      :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
+    character(len=3)      :: is_2D='no'           !< dev flag for butterworth filter
+    character(len=3)      :: is_uniform='no'      !< dev flag for butterworth filter
     character(len=3)      :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
@@ -542,6 +544,8 @@ contains
         call check_carg('filter',         self%filter)
         call check_carg('for3D',          self%for3D)
         call check_carg('groupframes',    self%groupframes)
+        call check_carg('is_2D',          self%is_2D)
+        call check_carg('is_uniform',     self%is_uniform)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
