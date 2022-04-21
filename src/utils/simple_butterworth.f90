@@ -68,8 +68,12 @@ module simple_butterworth
             half_w   = int(w/2)
             do k = 1, w
                 do l = 1, w
-                    do j = 1, w
-                        freq_val = hyp(real(k-half_w), real(l-half_w), real(j-half_w))
+                    do j = 1, size(ker, 3)
+                        if (size(ker, 3) == 1) then
+                            freq_val = hyp(real(k-half_w), real(l-half_w))
+                        else
+                            freq_val = hyp(real(k-half_w), real(l-half_w), real(j-half_w))
+                        endif
 
                         ! compute the value of Butterworth transfer function at current frequency value
                         val = butterworth(freq_val, n, fc)

@@ -17,8 +17,7 @@ contains
         do k = 1, size(pop, 1)
             index = 1
             do l = 1, size(indexes)
-                val = indexes(size(indexes) - l + 1) + 1
-                write(*, *) 'temp = ', pop(k, val) 
+                val = indexes(size(indexes) - l + 1) + 1 
                 if (pop(k, val) == 1) then
                     index = index + 2**(l-1)
                 endif

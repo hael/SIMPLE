@@ -112,7 +112,7 @@ type(simple_program), target :: motion_correct
 type(simple_program), target :: motion_correct_tomo
 type(simple_program), target :: new_project
 type(simple_program), target :: nonuniform_filter
-type(simple_program), target :: nonuniform_butterworth
+type(simple_program), target :: butterworth_filter
 type(simple_program), target :: normalize_
 type(simple_program), target :: orisops
 type(simple_program), target :: oristats
@@ -339,7 +339,7 @@ contains
         call new_motion_correct_tomo
         call new_new_project
         call new_nonuniform_filter
-        call new_nonuniform_butterworth
+        call new_butterworth_filter
         call new_normalize
         call new_orisops
         call new_oristats
@@ -438,7 +438,7 @@ contains
         call push2prg_ptr_array(motion_correct_tomo)
         call push2prg_ptr_array(new_project)
         call push2prg_ptr_array(nonuniform_filter)
-        call push2prg_ptr_array(nonuniform_butterworth)
+        call push2prg_ptr_array(butterworth_filter)
         call push2prg_ptr_array(normalize_)
         call push2prg_ptr_array(orisops)
         call push2prg_ptr_array(oristats)
@@ -594,8 +594,8 @@ contains
                 ptr2prg => new_project
             case('nonuniform_filter')
                 ptr2prg => nonuniform_filter
-            case('nonuniform_butterworth')
-                ptr2prg => nonuniform_butterworth
+            case('butterworth_filter')
+                ptr2prg => butterworth_filter
             case('normalize')
                 ptr2prg => normalize_
             case('orisops')
@@ -741,7 +741,7 @@ contains
         write(logfhandle,'(A)') motion_correct_tomo%name
         write(logfhandle,'(A)') new_project%name
         write(logfhandle,'(A)') nonuniform_filter%name
-        write(logfhandle,'(A)') nonuniform_butterworth%name
+        write(logfhandle,'(A)') butterworth_filter%name
         write(logfhandle,'(A)') normalize_%name
         write(logfhandle,'(A)') orisops%name
         write(logfhandle,'(A)') oristats%name
@@ -2518,33 +2518,35 @@ contains
         call nonuniform_filter%set_input('comp_ctrls', 1, nthr)
     end subroutine new_nonuniform_filter
 
-    subroutine new_nonuniform_butterworth
+    subroutine new_butterworth_filter
         ! PROGRAM SPECIFICATION
-        call nonuniform_butterworth%new(&
-        &'nonuniform_butterworth',&                             ! name
-        &'Nonuniform butterworth optimization',&                ! descr_short
-        &'is a program for nonuniform butterworth optimization by minimizing the CV cost function w.r.t theta and convolve the odd/even with the theta-Butterworth kernel',& ! descr_long
+        call butterworth_filter%new(&
+        &'butterworth_filter',&                                 ! name
+        &'Butterworth filter (2D/3D, uniform/nonuniform)',&     ! descr_short
+        &'is a program for uniform/nonuniform butterworth filter by minimizing the CV cost function w.r.t theta and convolve the odd/even with the theta-Butterworth kernel',& ! descr_long
         &'simple_exec',&                                        ! executable
-        &3, 1, 0, 0, 1, 2, 1, .false.)                          ! # entries in each group, requires sp_project
+        &3, 1, 0, 0, 3, 2, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call nonuniform_butterworth%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',       'Odd volume',       'vol1.mrc file', .true., '')
-        call nonuniform_butterworth%set_input('img_ios', 2, 'vol2', 'file', 'Even volume',      'Even volume',      'vol2.mrc file', .true., '')
-        call nonuniform_butterworth%set_input('img_ios', 3, 'vol3', 'file', 'Volume to filter', 'Volume to filter', 'vol3.mrc file', .false., '')
+        call butterworth_filter%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',       'Odd volume',       'vol1.mrc file', .true., '')
+        call butterworth_filter%set_input('img_ios', 2, 'vol2', 'file', 'Even volume',      'Even volume',      'vol2.mrc file', .true., '')
+        call butterworth_filter%set_input('img_ios', 3, 'vol3', 'file', 'Volume to filter', 'Volume to filter', 'vol3.mrc file', .false., '')
         ! parameter input/output
-        call nonuniform_butterworth%set_input('parm_ios', 1, smpd)
+        call butterworth_filter%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call nonuniform_butterworth%set_input('filt_ctrls', 1, 'phrand', 'binary', 'Phase randomization', 'Phase randomization of F-comps with power below noise(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call butterworth_filter%set_input('filt_ctrls', 1, 'phrand'     , 'binary', 'Phase randomization', 'Phase randomization of F-comps with power below noise(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call butterworth_filter%set_input('filt_ctrls', 2, 'is_2D'      , 'binary', 'is 2D image?'       , 'Whether two volumes are 2D images(yes|no){no}'                    , '(yes|no){no}', .false., 'no')
+        call butterworth_filter%set_input('filt_ctrls', 3, 'is_uniform' , 'binary', 'uniform filter?'    , 'Whether uniform or nonuniform filter(yes|no){no}'                 , '(yes|no){no}', .false., 'no')
         ! mask controls
-        call nonuniform_butterworth%set_input('mask_ctrls', 1, mskdiam)
-        call nonuniform_butterworth%set_input('mask_ctrls', 2, mskfile)
+        call butterworth_filter%set_input('mask_ctrls', 1, mskdiam)
+        call butterworth_filter%set_input('mask_ctrls', 2, mskfile)
         ! computer controls
-        call nonuniform_butterworth%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_nonuniform_butterworth
+        call butterworth_filter%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_butterworth_filter
 
     subroutine new_new_project
         ! PROGRAM SPECIFICATION
