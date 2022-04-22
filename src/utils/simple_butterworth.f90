@@ -72,9 +72,9 @@ module simple_butterworth
 
             ! loop over pixels
             !$omp parallel do collapse(3) default(shared) private(l,j,k,ithr,freq_val,val) schedule(dynamic,CHUNKSZ) proc_bind(close)
-            do k = 1, size(ker,3)
-                do j = 1, size(ker,3)
-                    do l = 1, size(ker,3)
+            do k = 1, w
+                do l = 1, w
+                    do j = 1, size(ker, 3)
                         ithr = omp_get_thread_num() + 1
                         if (size(ker, 3) == 1) then
                             freq_val = hyp(real(k-half_w), real(l-half_w))
