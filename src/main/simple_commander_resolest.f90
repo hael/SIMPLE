@@ -1,5 +1,7 @@
 ! concrete commander: resolest for resolution estimation
 module simple_commander_resolest
+!$ use omp_lib
+!$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_parameters,     only: parameters, params_glob
 use simple_builder,        only: builder
@@ -236,20 +238,21 @@ contains
         class(commander_base), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
         integer,               intent(in)    :: dim3
+        integer,               parameter     :: CHUNKSZ=20
         type(parameters) :: params
         type(image)      :: even, odd, odd_img, ker_odd_img
         integer          :: k,l,m,n,k1,l1,m1,k_ind,l_ind,m_ind, max_sup
-        real             :: rad, cur_min_sum
+        real             :: rad, cur_min_sum, ref_diff
 
         real   , parameter   :: A = 47.27, B = -0.1781, C = 7.69, D = -0.02228  ! Fitting constants (constructed in MATLAB) of theta(FT_support) = a*exp(b*x) + c*exp(d*x)
         real   , parameter   :: MIN_SUP = 0.5, RES_LB = 30                      ! lower bound of resolution is 30 Angstrom, upper bound is nyquist, hence .5
-        integer, parameter   :: N_SUP = 2                                       ! number of intervals between MIN_SUP and MAX_SUP
+        integer, parameter   :: N_SUP = 20                                      ! number of intervals between MIN_SUP and MAX_SUP
         integer, parameter   :: SPA_SUP = 2, MID = 1+SPA_SUP                    ! support of the window function
         real   , allocatable :: weights(:,:,:)                                  ! weights of the neighboring differences
 
         ! optimization variables
         real                         , allocatable :: cur_mat(:,:,:), sup, theta
-        real                         , pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_ker(:,:,:), orig_ker(:,:,:), orig_ker_der(:,:,:),  prev_diff(:,:,:), cur_diff(:,:,:), ref_diff(:,:,:)
+        real                         , pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_ker(:,:,:), orig_ker(:,:,:), orig_ker_der(:,:,:),  prev_diff(:,:,:), cur_diff(:,:,:)
         complex(kind=c_float_complex), pointer     :: cmat_odd(:,:,:), cmat_conv(:,:,:)
 
 
@@ -271,7 +274,6 @@ contains
         allocate(orig_ker_der( params%box,params%box,dim3))
         allocate(prev_diff(    params%box,params%box,dim3))
         allocate(cur_diff(     params%box,params%box,dim3))
-        allocate(ref_diff(     params%box,params%box,dim3))
         allocate(cur_mat(      params%box,params%box,dim3))
 
         allocate(cmat_conv(    int(params%box/2)+1,params%box,dim3))
@@ -322,10 +324,11 @@ contains
 
             ! do the non-uniform, i.e. optimizing at each voxel
             if (params%is_uniform == 'no') then
-                ref_diff = 0.
+                !$omp parallel do collapse(3) default(shared) private(k,l,m,k1,l1,m1,k_ind,l_ind,m_ind,ref_diff) schedule(dynamic,CHUNKSZ) proc_bind(close)
                 do k = 1,params%box
                     do l = 1,params%box
                         do m = 1,dim3
+                            ref_diff = 0.
                             ! applying an average window to each diff (eq 7 in the nonuniform paper)
                             do k_ind = 1, 2*SPA_SUP+1
                                 k1 = k - SPA_SUP + k_ind - 1
@@ -335,28 +338,29 @@ contains
                                     ! 2D vs 3D cases
                                     if (dim3 == 1) then
                                         if ((k1 >= 1 .and. k1 <= params%box) .and. (l1 >= 1 .and. l1 <= params%box)) then
-                                            ref_diff(k,l,m) = ref_diff(k,l,m) + cur_diff(k1,l1,m)
+                                            ref_diff = ref_diff + cur_diff(k1,l1,m)
                                         endif
                                     else
                                         do m_ind = 1, 2*SPA_SUP+1
                                             m1 = m - SPA_SUP + m_ind - 1
                                             if ((k1 >= 1 .and. k1 <= params%box) .and. (l1 >= 1 .and. l1 <= params%box) .and. (m1 >= 1 .and. m1 <= dim3)) then
-                                                ref_diff(k,l,m) = ref_diff(k,l,m) + cur_diff(k1,l1,m1)*weights(k_ind,l_ind,m_ind)
+                                                ref_diff = ref_diff + cur_diff(k1,l1,m1)*weights(k_ind,l_ind,m_ind)
                                             endif
                                         enddo
                                     endif
                                 enddo
                             enddo
 
-                            if (ref_diff(k,l,m) < prev_diff(k,l,m)) then
+                            if (ref_diff < prev_diff(k,l,m)) then
                                 cur_mat(k,l,m)   = rmat_ker(k,l,m)
-                                prev_diff(k,l,m) = ref_diff(k,l,m)
+                                prev_diff(k,l,m) = ref_diff
                             endif
                         enddo
                     enddo
                 enddo
+                !$omp end parallel do
             else
-                write(*,*) 'current cost = ', sum(cur_diff)
+                !write(*,*) 'current cost = ', sum(cur_diff)
                 if (sum(cur_diff) < cur_min_sum) then
                     cur_mat     = rmat_ker
                     cur_min_sum = sum(cur_diff)
@@ -367,7 +371,7 @@ contains
             call odd %write(params%is_uniform // '_uniform_butterworth_filter_iter' // int2str(n) // '.mrc')
         enddo
         
-        write(*, *) 'min_cost = ', cur_min_sum
+        !write(*, *) 'min_cost = ', cur_min_sum
         ! end gracefully
         call simple_end('**** SIMPLE_BUTTERWORTH_FILTER NORMAL STOP ****')
     end subroutine exec_butterworth
