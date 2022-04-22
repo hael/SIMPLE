@@ -12,7 +12,8 @@ implicit none
 public :: fsc_commander
 ! public :: local_res_commander
 public :: nonuniform_filter_commander
-public :: butterworth_commander
+public :: butterworth_3D_commander
+public :: butterworth_2D_commander
 private
 #include "simple_local_flags.inc"
 
@@ -31,10 +32,16 @@ type, extends(commander_base) :: nonuniform_filter_commander
     procedure :: execute      => exec_nonuniform_filter
 end type nonuniform_filter_commander
 
-type, extends(commander_base) :: butterworth_commander
+type, extends(commander_base) :: butterworth_2D_commander
   contains
-    procedure :: execute      => exec_butterworth
-end type butterworth_commander
+    procedure :: execute      => exec_butterworth_2D
+end type butterworth_2D_commander
+
+type, extends(commander_base) :: butterworth_3D_commander
+  contains
+    procedure :: execute      => exec_butterworth_3D
+end type butterworth_3D_commander
+
 
 contains
 
@@ -223,19 +230,20 @@ contains
         call simple_end('**** SIMPLE_NONUNIFORM_FILTER NORMAL STOP ****')
     end subroutine exec_nonuniform_filter
 
-    subroutine exec_butterworth( self, cline )
+    subroutine exec_butterworth(self, cline, dim3)
         use simple_butterworth, only: butterworth_kernel
         
-        class(butterworth_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
+        class(commander_base), intent(inout) :: self
+        class(cmdline),        intent(inout) :: cline
+        integer,               intent(in)    :: dim3
         type(parameters) :: params
         type(image)      :: even, odd, odd_img, ker_odd_img
-        integer          :: k,l,m,n,k1,l1,m1,k_ind,l_ind,m_ind, dim3, max_sup
+        integer          :: k,l,m,n,k1,l1,m1,k_ind,l_ind,m_ind, max_sup
         real             :: rad, cur_min_sum
 
         real   , parameter   :: A = 47.27, B = -0.1781, C = 7.69, D = -0.02228  ! Fitting constants (constructed in MATLAB) of theta(FT_support) = a*exp(b*x) + c*exp(d*x)
         real   , parameter   :: MIN_SUP = 0.5, RES_LB = 30                      ! lower bound of resolution is 30 Angstrom, upper bound is nyquist, hence .5
-        integer, parameter   :: N_SUP = 20                                      ! number of intervals between MIN_SUP and MAX_SUP
+        integer, parameter   :: N_SUP = 2                                       ! number of intervals between MIN_SUP and MAX_SUP
         integer, parameter   :: SPA_SUP = 2, MID = 1+SPA_SUP                    ! support of the window function
         real   , allocatable :: weights(:,:,:)                                  ! weights of the neighboring differences
 
@@ -248,11 +256,6 @@ contains
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         
-        dim3 = params%box
-        if (params%is_2D == 'yes') then
-            dim3 = 1
-        endif
-
         call odd %new([params%box,params%box,dim3], params%smpd)
         call even%new([params%box,params%box,dim3], params%smpd)
         call odd %read(params%vols(1))
@@ -368,5 +371,20 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_BUTTERWORTH_FILTER NORMAL STOP ****')
     end subroutine exec_butterworth
+
+
+    subroutine exec_butterworth_2D( self, cline )
+        class(butterworth_2D_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        call exec_butterworth(self, cline, 1)
+    end subroutine exec_butterworth_2D
+
+    subroutine exec_butterworth_3D( self, cline )
+        class(butterworth_3D_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        type(parameters) :: params
+        call params%new(cline)
+        call exec_butterworth(self, cline, params%box)
+    end subroutine exec_butterworth_3D
 
 end module simple_commander_resolest
