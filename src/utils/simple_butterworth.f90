@@ -71,7 +71,7 @@ module simple_butterworth
             half_w   = int(w/2)
 
             ! loop over pixels
-            !$omp parallel do collapse(3) default(shared) private(l,j,k,ithr) schedule(dynamic,CHUNKSZ) proc_bind(close)
+            !$omp parallel do collapse(3) default(shared) private(l,j,k,ithr,freq_val,val) schedule(dynamic,CHUNKSZ) proc_bind(close)
             do k = 1, size(ker,3)
                 do j = 1, size(ker,3)
                     do l = 1, size(ker,3)
