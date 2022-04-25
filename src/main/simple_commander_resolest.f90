@@ -236,13 +236,9 @@ contains
         use simple_butterworth, only: find_butterworth_opt
         class(butterworth_3D_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        ! these are pointers to avoid excessive memory allocation
-        real,                          pointer :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null()
-        complex(kind=c_float_complex), pointer :: cmat_odd(:,:,:)=>null()
         type(parameters)  :: params
         type(image)       :: even, odd, mskvol
         real, allocatable :: cur_mat(:,:,:)
-        integer :: ldim(3)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline) 
         call odd %new([params%box,params%box,params%box], params%smpd)
@@ -266,18 +262,9 @@ contains
             call even%mask(params%msk, 'soft')
             call odd%mask(params%msk, 'soft')
         endif
-        ldim = odd%get_ldim()
-        call odd%get_rmat_ptr(rmat_odd)
-        call even%get_rmat_ptr(rmat_even)
-        ! real-space normalisation needed for correct cost function evaluation
-        rmat_odd     = rmat_odd /sum(rmat_odd)
-        rmat_even    = rmat_even/sum(rmat_even)
-        call odd%fft
-        call odd%get_cmat_ptr(cmat_odd)
-        allocate(cur_mat(ldim(1),ldim(2),ldim(3)), source=0.)
-        call find_butterworth_opt(cmat_odd, rmat_even, cur_mat, ldim, params%smpd, params%is_uniform)
-        call odd%set_rmat(cur_mat, .false.)
-        call odd %write(trim(params%is_uniform)//'_uniform_butterworth_filter_odd.mrc')
+        call find_butterworth_opt(odd, even, params%smpd, params%is_uniform)
+        call odd%write(trim(params%is_uniform)//'_uniform_butterworth_filter_odd.mrc')
+        call even%write(trim(params%is_uniform)//'_uniform_butterworth_filter_even.mrc')
         ! end gracefully
         call simple_end('**** SIMPLE_BUTTERWORTH_FILTER NORMAL STOP ****')
     end subroutine exec_butterworth_3D
@@ -286,33 +273,21 @@ contains
         use simple_butterworth, only: find_butterworth_opt
         class(butterworth_2D_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        ! these are pointers to avoid excessive memory allocation
-        real,                          pointer :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null()
-        complex(kind=c_float_complex), pointer :: cmat_odd(:,:,:)=>null()
         type(parameters)  :: params
         type(image)       :: even, odd
-        real, allocatable :: cur_mat(:,:,:)
         integer           :: iptcl
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline) 
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
         params%ldim(3) = 1 ! because we operate on stacks
-        allocate(cur_mat(params%ldim(1),params%ldim(2),params%ldim(3)))
         do iptcl = 1, params%nptcls
             call odd%new(params%ldim, params%smpd)
             call even%new(params%ldim, params%smpd)
             call odd%read(params%stk2, iptcl)
             call even%read(params%stk,  iptcl)
-            call odd%get_rmat_ptr(rmat_odd)
-            call even%get_rmat_ptr(rmat_even)
-            call odd%get_rmat_ptr(rmat_odd)
-            call even%get_rmat_ptr(rmat_even)
-            call odd%fft
-            call odd%get_cmat_ptr(cmat_odd)
-            cur_mat = 0.
-            call find_butterworth_opt(cmat_odd, rmat_even, cur_mat, params%ldim, params%smpd, params%is_uniform)
-            call odd%set_rmat(cur_mat, .false.)
+            call find_butterworth_opt(odd, even, params%smpd, params%is_uniform)
             call odd%write(trim(params%is_uniform)//'_uniform_butterworth_filter_odd.mrc', iptcl)
+            call even%write(trim(params%is_uniform)//'_uniform_butterworth_filter_even.mrc', iptcl)
             call odd%zero_and_unflag_ft
             call even%zero_and_unflag_ft
         end do
