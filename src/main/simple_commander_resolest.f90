@@ -240,57 +240,48 @@ contains
         integer,               intent(in)    :: dim3            ! dim3 is 1 for 2D case
         integer,               parameter     :: CHUNKSZ=20
         type(parameters) :: params
-        type(image)      :: even, odd, odd_img, ker_odd_img
+        type(image)      :: even, odd, ker_odd_img
         integer          :: k,l,m,n,k1,l1,m1,k_ind,l_ind,m_ind, max_sup
-        real             :: rad, cur_min_sum, ref_diff
-
+        real             :: rad, cur_min_sum, ref_diff, sup, theta
         real   , parameter   :: A = 47.27, B = -0.1781, C = 7.69, D = -0.02228  ! Fitting constants (constructed in MATLAB) of theta(FT_support) = a*exp(b*x) + c*exp(d*x)
-        real   , parameter   :: MIN_SUP = 0.5, RES_LB = 30                      ! lower bound of resolution is 30 Angstrom, upper bound is nyquist, hence .5
+        real   , parameter   :: MIN_SUP = 0.5, RES_LB = 30.                     ! lower bound of resolution is 30 Angstrom, upper bound is nyquist, hence .5
         integer, parameter   :: N_SUP = 20                                      ! number of intervals between MIN_SUP and MAX_SUP
         integer, parameter   :: SPA_SUP = 2, MID = 1+SPA_SUP                    ! support of the window function
         real   , allocatable :: weights(:,:,:)                                  ! weights of the neighboring differences
-
         ! optimization variables
-        real                         , allocatable :: cur_mat(:,:,:), sup, theta
-        real                         , pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_ker(:,:,:), orig_ker(:,:,:), orig_ker_der(:,:,:),  prev_diff(:,:,:), cur_diff(:,:,:)
-        complex(kind=c_float_complex), pointer     :: cmat_odd(:,:,:), cmat_conv(:,:,:)
-
-
+        ! these are pointers to avoi excessive memory allocation
+        real,                          pointer :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null()
+        complex(kind=c_float_complex), pointer :: cmat_odd(:,:,:)=>null(), cmat_conv(:,:,:)=>null()
+        ! these should be allocatables for improved performance
+        real, allocatable :: rmat_ker(:,:,:), orig_ker(:,:,:), orig_ker_der(:,:,:), prev_diff(:,:,:), cur_diff(:,:,:), cur_mat(:,:,:)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call params%new(cline)
-        
+        call params%new(cline) 
         call odd %new([params%box,params%box,dim3], params%smpd)
         call even%new([params%box,params%box,dim3], params%smpd)
         call odd %read(params%vols(1))
         call even%read(params%vols(2))
-
-        call odd_img    %new([params%box,params%box,dim3], params%smpd)
         call ker_odd_img%new([params%box,params%box,dim3], params%smpd)
 
-        allocate(rmat_odd(     params%box,params%box,dim3))
-        allocate(rmat_even(    params%box,params%box,dim3))
-        allocate(rmat_ker(     params%box,params%box,dim3))
-        allocate(orig_ker(     params%box,params%box,dim3))
-        allocate(orig_ker_der( params%box,params%box,dim3))
-        allocate(prev_diff(    params%box,params%box,dim3))
-        allocate(cur_diff(     params%box,params%box,dim3))
-        allocate(cur_mat(      params%box,params%box,dim3))
 
-        allocate(cmat_conv(    int(params%box/2)+1,params%box,dim3))
-        allocate(cmat_odd(     int(params%box/2)+1,params%box,dim3))
 
-        call odd %get_rmat_sub(rmat_odd)
-        call even%get_rmat_sub(rmat_even)
-        call odd_img%set_rmat(rmat_odd, .false.)
-        call odd_img%fft()
-        call odd_img%get_cmat_ptr(cmat_odd)
+        allocate(rmat_ker(params%box,params%box,dim3), orig_ker(params%box,params%box,dim3), orig_ker_der( params%box,params%box,dim3),&
+        &prev_diff(params%box,params%box,dim3), cur_diff(params%box,params%box,dim3), cur_mat(params%box,params%box,dim3), source=0.)
 
+
+
+        call odd%get_rmat_ptr(rmat_odd)
+        call even%get_rmat_ptr(rmat_even)
+        ! real-space normalisation needed for correct cost function evaluation
         rmat_odd     = rmat_odd /sum(rmat_odd)      ! Normalize to energy of 1, so B*odd is comparible with even in the cost function
         rmat_even    = rmat_even/sum(rmat_even)
-        cur_mat      = 0.
+
+        call odd%fft
+        call odd%get_cmat_ptr(cmat_odd)
+
+        
         max_sup      = int(RES_LB/params%smpd)*2    ! multiplication factor depending on the definition of support, set to 2 for now
-        prev_diff    = 3.4028235E+38 - 1            ! supposed to be infinity
-        cur_min_sum  = 3.4028235E+38 - 1
+        prev_diff    = huge(rad)
+        cur_min_sum  = huge(rad)
         
         ! assign the weights of the neighboring voxels
         allocate(weights(SPA_SUP*2+1, SPA_SUP*2+1, SPA_SUP*2+1))
