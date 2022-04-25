@@ -109,7 +109,7 @@ contains
         allocate(rmat_ker(box,box,dim3), orig_ker(box,box,dim3), orig_ker_der( box,box,dim3),&
         &prev_diff(box,box,dim3), cur_diff(box,box,dim3), source=0.)
         call ker_odd_img%new([box,box,dim3], smpd)
-        max_sup      = int(RES_LB/smpd)*2 ! multiplication factor depending on the definition of support, set to 2 for now
+        max_sup      = int(RES_LB/smpd)*3 ! multiplication factor depending on the definition of support, set to 2 for now
         prev_diff    = huge(rad)
         cur_min_sum  = huge(rad)     
         ! assign the weights of the neighboring voxels
@@ -194,7 +194,7 @@ contains
                                         l1 = l - SPA_SUP + l_ind - 1
                                         do m_ind = 1, 2*SPA_SUP+1
                                             m1 = m - SPA_SUP + m_ind - 1
-                                            if ((k1 >= 1 .and. k1 <= box) .and. (l1 >= 1 .and. l1 <= box) .and. (m1 >= 1 .and. m1 <= dim3)) then
+                                            if ((k1 >= 1 .and. k1 <= box) .and. (l1 >= 1 .and. l1 <= box) .and. (m1 >= 1 .and. m1 <= box)) then
                                                 ref_diff = ref_diff + cur_diff(k1,l1,m1)*weights_3D(k_ind,l_ind,m_ind)
                                             endif
                                         enddo
