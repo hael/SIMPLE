@@ -237,7 +237,7 @@ contains
         
         class(commander_base), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
-        integer,               intent(in)    :: dim3
+        integer,               intent(in)    :: dim3            ! dim3 is 1 for 2D case
         integer,               parameter     :: CHUNKSZ=20
         type(parameters) :: params
         type(image)      :: even, odd, odd_img, ker_odd_img
@@ -285,7 +285,7 @@ contains
         call odd_img%fft()
         call odd_img%get_cmat_ptr(cmat_odd)
 
-        rmat_odd     = rmat_odd /sum(rmat_odd)
+        rmat_odd     = rmat_odd /sum(rmat_odd)      ! Normalize to energy of 1, so B*odd is comparible with even in the cost function
         rmat_even    = rmat_even/sum(rmat_even)
         cur_mat      = 0.
         max_sup      = int(RES_LB/params%smpd)*2    ! multiplication factor depending on the definition of support, set to 2 for now
@@ -298,7 +298,7 @@ contains
             do l = 1, 2*SPA_SUP+1
                 do m = 1, 2*SPA_SUP+1
                     rad = hyp(real(k-MID), real(l-MID), real(m-MID))
-                    weights(k,l,m) = -rad/2/SPA_SUP + 1.  ! linear function: 1 at rad = 0 and 0 at rad = 2*SPA_SUP
+                    weights(k,l,m) = -rad/(SPA_SUP + 1) + 1.  ! linear function: 1 at rad = 0 and 0 at rad = SPA_SUP + 1
                     if (weights(k,l,m) < 0.) then
                         weights(k,l,m) = 0.
                     endif
@@ -312,12 +312,16 @@ contains
             theta = A*exp(B*sup) + C*exp(D*sup)
             write(*, *) 'support = ', sup, '; theta = ', theta
             call butterworth_kernel(orig_ker, orig_ker_der, params%box, 8, theta)  ! WARNING: fix the constants here
+
+            ! computing B_kernel 'convolve' odd
             call ker_odd_img%set_rmat(orig_ker, .false.)
             call ker_odd_img%fft()
             call ker_odd_img%get_cmat_ptr(cmat_conv)
             cmat_conv = cmat_conv * cmat_odd
             call ker_odd_img%ifft()
             call ker_odd_img%get_rmat_sub(rmat_ker)
+
+            ! Normalize to energy of 1, so B*odd is comparible with even in the cost function
             rmat_ker = rmat_ker/sum(rmat_ker)
 
             cur_diff = (rmat_ker - rmat_even)**2
@@ -351,6 +355,8 @@ contains
                                 enddo
                             enddo
 
+                            ! prev_diff keeps the lowest cost value at each voxel of the search
+                            ! cur_mat   keeps the best voxel of the form B*odd
                             if (ref_diff < prev_diff(k,l,m)) then
                                 cur_mat(k,l,m)   = rmat_ker(k,l,m)
                                 prev_diff(k,l,m) = ref_diff
@@ -360,7 +366,7 @@ contains
                 enddo
                 !$omp end parallel do
             else
-                !write(*,*) 'current cost = ', sum(cur_diff)
+                ! keep the theta which gives the lowest cost (over all voxels)
                 if (sum(cur_diff) < cur_min_sum) then
                     cur_mat     = rmat_ker
                     cur_min_sum = sum(cur_diff)
@@ -371,7 +377,6 @@ contains
             call odd %write(params%is_uniform // '_uniform_butterworth_filter_iter' // int2str(n) // '.mrc')
         enddo
         
-        !write(*, *) 'min_cost = ', cur_min_sum
         ! end gracefully
         call simple_end('**** SIMPLE_BUTTERWORTH_FILTER NORMAL STOP ****')
     end subroutine exec_butterworth
