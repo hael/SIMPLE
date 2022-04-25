@@ -2,6 +2,7 @@
 module simple_butterworth
 !$ use omp_lib
 !$ use omp_lib_kinds
+include 'simple_lib.f08'
 use simple_defs
 use simple_image, only: image
 use simple_math,  only: hyp
@@ -87,34 +88,41 @@ contains
         endif
     end subroutine butterworth_kernel
 
-    subroutine find_butterworth_opt(cmat_odd, rmat_even, cur_mat, ldim, smpd, is_uniform)
-        real,                          intent(in)    :: rmat_even(:,:,:)
-        complex(kind=c_float_complex), intent(in)    :: cmat_odd(:,:,:)
-        real,                          intent(inout) :: cur_mat(:,:,:)
-        integer,                       intent(in)    :: ldim(3)
-        real,                          intent(in)    :: smpd
-        character(len=*),              intent(in)    :: is_uniform
-        integer              :: k,l,m,n,k1,l1,m1,k_ind,l_ind,m_ind, max_sup, box, dim3
+    subroutine find_butterworth_opt(odd, even, smpd, is_uniform)
+        type(image),      intent(inout) :: odd
+        type(image),      intent(inout) :: even
+        real,             intent(in)    :: smpd
+        character(len=*), intent(in)    :: is_uniform
+        integer              :: k,l,m,n,k1,l1,m1,k_ind,l_ind,m_ind, max_sup, box, dim3, ldim(3)
         real                 :: rad, cur_min_sum, ref_diff, sup, theta
         real   , parameter   :: A = 47.27, B = -0.1781, C = 7.69, D = -0.02228  ! Fitting constants (constructed in MATLAB) of theta(FT_support) = a*exp(b*x) + c*exp(d*x)
         real   , parameter   :: MIN_SUP = 0.5, RES_LB = 30.                     ! lower bound of resolution is 30 Angstrom, upper bound is nyquist, hence .5
         integer, parameter   :: N_SUP = 20                                      ! number of intervals between MIN_SUP and MAX_SUP
         integer, parameter   :: SPA_SUP = 2, MID = 1+SPA_SUP                    ! support of the window function
         integer, parameter   :: CHUNKSZ=20, BW_ORDER=8
-        real,    allocatable :: rmat_ker(:,:,:), orig_ker(:,:,:), orig_ker_der(:,:,:), prev_diff(:,:,:), cur_diff(:,:,:), weights_3D(:,:,:), weights_2D(:,:)
-        type(image)          :: ker_odd_img
-        complex(kind=c_float_complex), pointer :: cmat_conv(:,:,:)=>null()
+        real,    allocatable :: rmat_ker_odd(:,:,:), rmat_ker_even(:,:,:), orig_ker(:,:,:), orig_ker_der(:,:,:), prev_diff(:,:,:), cur_diff(:,:,:), cur_mat_odd(:,:,:), cur_mat_even(:,:,:)
+        real,    allocatable :: weights_3D(:,:,:), weights_2D(:,:)
+        type(image)          :: ker_odd_img, ker_even_img
+        complex(kind=c_float_complex), pointer :: cmat_conv_odd(:,:,:)=>null(), cmat_conv_even(:,:,:)=>null(), cmat_odd(:,:,:)=>null(), cmat_even(:,:,:)=>null()
+        real,                          pointer :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null()
+        ldim = odd%get_ldim()
         box  = ldim(1)
         dim3 = ldim(3)
-        allocate(rmat_ker(box,box,dim3), orig_ker(box,box,dim3), orig_ker_der( box,box,dim3),&
-        &prev_diff(box,box,dim3), cur_diff(box,box,dim3), source=0.)
+        call odd%get_rmat_ptr(rmat_odd)
+        call even%get_rmat_ptr(rmat_even)
+        ! real-space normalisation needed for correct cost function evaluation
+        rmat_even = rmat_even/sum(rmat_even)
+        call odd%fft
+        call odd%get_cmat_ptr(cmat_odd)
+        allocate(rmat_ker_odd(box,box,dim3), rmat_ker_even(box,box,dim3), orig_ker(box,box,dim3), orig_ker_der( box,box,dim3),&
+        &prev_diff(box,box,dim3), cur_diff(box,box,dim3), cur_mat_odd(box,box,dim3), cur_mat_even(box,box,dim3), source=0.)
         call ker_odd_img%new([box,box,dim3], smpd)
+        call ker_even_img%new([box,box,dim3], smpd)
         max_sup      = int(RES_LB/smpd)*3 ! multiplication factor depending on the definition of support, set to 2 for now
         prev_diff    = huge(rad)
         cur_min_sum  = huge(rad)     
         ! assign the weights of the neighboring voxels
-        allocate(weights_2D(SPA_SUP*2+1, SPA_SUP*2+1))
-        allocate(weights_3D(SPA_SUP*2+1, SPA_SUP*2+1, SPA_SUP*2+1))
+        allocate(weights_2D(SPA_SUP*2+1, SPA_SUP*2+1), weights_3D(SPA_SUP*2+1, SPA_SUP*2+1, SPA_SUP*2+1))
         ! 2D weights
         do k = 1, 2*SPA_SUP+1
             do l = 1, 2*SPA_SUP+1
@@ -147,13 +155,23 @@ contains
             ! computing B_kernel 'convolve' odd
             call ker_odd_img%set_rmat(orig_ker, .false.)
             call ker_odd_img%fft()
-            call ker_odd_img%get_cmat_ptr(cmat_conv)
-            cmat_conv = cmat_conv * cmat_odd
+            call ker_odd_img%get_cmat_ptr(cmat_conv_odd)
+            cmat_conv_odd = cmat_conv_odd * cmat_odd
             call ker_odd_img%ifft()
-            call ker_odd_img%get_rmat_sub(rmat_ker)
-            ! Normalize to energy of 1, so B*odd is comparable with even in the cost function
-            rmat_ker = rmat_ker/sum(rmat_ker)
-            cur_diff = (rmat_ker - rmat_even)**2
+            call ker_odd_img%get_rmat_sub(rmat_ker_odd)
+            rmat_ker_odd = rmat_ker_odd/sum(rmat_ker_odd) ! Normalize to energy of 1, so B*odd is comparable with even in the cost function
+            call even%ifft
+            cur_diff = (rmat_ker_odd - rmat_even)**2
+            ! computing B_kernel 'convolve' even
+            call ker_even_img%set_rmat(orig_ker, .false.)
+            call ker_even_img%fft()
+            call ker_even_img%get_cmat_ptr(cmat_conv_even)
+            call even%fft
+            call even%get_cmat_ptr(cmat_even)
+            cmat_conv_even = cmat_conv_even * cmat_even
+            call ker_even_img%ifft()
+            call ker_even_img%get_rmat_sub(rmat_ker_even)
+            rmat_ker_even = rmat_ker_even/sum(rmat_ker_even) ! Normalize to energy of 1, so B*odd is comparable with even in the cost function
             ! do the non-uniform, i.e. optimizing at each voxel
             if (is_uniform == 'no') then
                 ! 2D vs 3D cases
@@ -173,10 +191,11 @@ contains
                                 enddo
                             enddo
                             ! prev_diff keeps the lowest cost value at each voxel of the search
-                            ! cur_mat   keeps the best voxel of the form B*odd
+                            ! cur_mat_odd   keeps the best voxel of the form B*odd
                             if (ref_diff < prev_diff(k,l,1)) then
-                                cur_mat(k,l,1)   = rmat_ker(k,l,1)
-                                prev_diff(k,l,1) = ref_diff
+                                cur_mat_odd(k,l,1)  = rmat_ker_odd(k,l,1)
+                                cur_mat_even(k,l,1) = rmat_ker_even(k,l,1)
+                                prev_diff(k,l,1)    = ref_diff
                             endif
                         enddo
                     enddo
@@ -200,11 +219,12 @@ contains
                                         enddo
                                     enddo
                                 enddo
-                                ! prev_diff keeps the lowest cost value at each voxel of the search
-                                ! cur_mat   keeps the best voxel of the form B*odd
+                                ! prev_diff   keeps the lowest cost value at each voxel of the search
+                                ! cur_mat_odd, cur_mat_even keeps the best voxel of the form B*odd, B*even
                                 if (ref_diff < prev_diff(k,l,m)) then
-                                    cur_mat(k,l,m)   = rmat_ker(k,l,m)
-                                    prev_diff(k,l,m) = ref_diff
+                                    cur_mat_odd(k,l,m)  = rmat_ker_odd(k,l,m)
+                                    cur_mat_even(k,l,m) = rmat_ker_even(k,l,m)
+                                    prev_diff(k,l,m)    = ref_diff
                                 endif
                             enddo
                         enddo
@@ -214,11 +234,14 @@ contains
             else
                 ! keep the theta which gives the lowest cost (over all voxels)
                 if (sum(cur_diff) < cur_min_sum) then
-                    cur_mat     = rmat_ker
-                    cur_min_sum = sum(cur_diff)
+                    cur_mat_odd  = rmat_ker_odd
+                    cur_mat_even = rmat_ker_even
+                    cur_min_sum  = sum(cur_diff)
                 endif
             endif
         enddo
+        call odd%set_rmat(cur_mat_odd,  .false.)
+        call even%set_rmat(cur_mat_even, .false.)
     end subroutine find_butterworth_opt
 end module simple_butterworth
     
