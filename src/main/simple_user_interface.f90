@@ -2534,9 +2534,9 @@ contains
         &3, 1, 0, 0, 2, 2, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call butterworth_2D_filter%set_input('img_ios', 1, 'vol1', 'file', 'First stack',       'First stack',       'stack1.mrc file', .true., '')
-        call butterworth_2D_filter%set_input('img_ios', 2, 'vol2', 'file', 'Second stack',      'Second Stack',      'stack2.mrc file', .true., '')
-        call butterworth_2D_filter%set_input('img_ios', 3, 'vol3', 'file', 'Stack to filter',   'Stack to filter',   'stack3.mrc file', .false., '')
+        call butterworth_2D_filter%set_input('img_ios', 1, 'stk', 'file', 'First stack',       'First stack',       'stack1.mrc file', .true., '')
+        call butterworth_2D_filter%set_input('img_ios', 2, 'stk2', 'file', 'Second stack',      'Second Stack',      'stack2.mrc file', .true., '')
+        call butterworth_2D_filter%set_input('img_ios', 3, 'stk3', 'file', 'Stack to filter',   'Stack to filter',   'stack3.mrc file', .false., '')
         ! parameter input/output
         call butterworth_2D_filter%set_input('parm_ios', 1, smpd)
         ! alternative inputs
