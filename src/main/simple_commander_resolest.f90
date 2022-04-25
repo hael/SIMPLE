@@ -240,7 +240,7 @@ contains
         real,                          pointer :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null()
         complex(kind=c_float_complex), pointer :: cmat_odd(:,:,:)=>null()
         type(parameters)  :: params
-        type(image)       :: even, odd
+        type(image)       :: even, odd, mskvol
         real, allocatable :: cur_mat(:,:,:)
         integer :: ldim(3)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -249,6 +249,23 @@ contains
         call even%new([params%box,params%box,params%box], params%smpd)
         call odd %read(params%vols(1))
         call even%read(params%vols(2))
+        if( cline%defined('mskfile') )then
+            if( file_exists(params%mskfile) )then
+                call mskvol%new([params%box,params%box,params%box], params%smpd)
+                call mskvol%read(params%mskfile)
+                call even%zero_background
+                call odd%zero_background
+                call even%mul(mskvol)
+                call odd%mul(mskvol)
+                call mskvol%kill
+            else
+                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_butterworth_3D')
+            endif
+        else
+            ! spherical masking
+            call even%mask(params%msk, 'soft')
+            call odd%mask(params%msk, 'soft')
+        endif
         ldim = odd%get_ldim()
         call odd%get_rmat_ptr(rmat_odd)
         call even%get_rmat_ptr(rmat_even)
