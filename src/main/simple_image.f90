@@ -258,6 +258,7 @@ contains
     procedure, private :: comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     procedure          :: corr
+    procedure          :: calc_sumsq
     procedure          :: corr_shifted
     procedure, private :: real_corr_1
     procedure, private :: real_corr_2
@@ -4509,6 +4510,13 @@ contains
             THROW_HARD('images to be correlated need to have same dimensions; corr')
         endif
     end function corr
+
+    pure function calc_sumsq( self, resmsk ) result( sumsq )
+        class(image), intent(in) :: self
+        logical,      intent(in) :: resmsk(self%array_shape(1),self%array_shape(3),self%array_shape(3))
+        real :: sumsq
+        sumsq = sum(csq_fast(self%cmat), resmsk)
+    end function calc_sumsq
 
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
         class(image),   intent(inout) :: self_ref, self_ptcl

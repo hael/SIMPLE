@@ -72,7 +72,6 @@ type :: polarft_corrcalc
     integer                          :: nrots      = 0              !< number of in-plane rotations for one pft (determined by radius of molecule)
     integer                          :: pftsz      = 0              !< size of reference and particle pft (nrots/2)
     integer                          :: pfromto(2) = 0              !< particle index range
-    integer                          :: winsz      = 0              !< size of moving window in correlation calculations
     integer                          :: ldim(3)    = 0              !< logical dimensions of original cartesian image
     integer,             allocatable :: pinds(:)                    !< index array (to reduce memory when frac_update < 1)
     real,                allocatable :: pxls_p_shell(:)             !< number of (cartesian) pixels per shell
@@ -206,13 +205,13 @@ end type polarft_corrcalc
 ! CLASS PARAMETERS/VARIABLES
 complex(sp), parameter           :: zero            = cmplx(0.,0.) !< just a complex zero
 integer,     parameter           :: FFTW_USE_WISDOM = 16
-class(polarft_corrcalc), pointer :: pftcc_glob
+class(polarft_corrcalc), pointer :: pftcc_glob => null()
 
 contains
 
     ! CONSTRUCTORS
 
-    subroutine new( self, nrefs, pfromto,  l_match_filt, ptcl_mask, eoarr )
+    subroutine new( self, nrefs, pfromto, l_match_filt, ptcl_mask, eoarr )
         class(polarft_corrcalc), target, intent(inout) :: self
         integer,                         intent(in)    :: nrefs
         integer,                         intent(in)    :: pfromto(2)
@@ -260,7 +259,7 @@ contains
         self%nrots = 2 * self%pftsz                     !< number of in-plane rotations for one pft  (pftsz*2)
         ! allocate optimal low-pass filter
         allocate(self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,self%nrefs),source=1.)
-        ! generate polar coordinates & eo assignment
+        ! generate polar coordinates
         allocate( self%polar(2*self%nrots,params_glob%kfromto(1):params_glob%kfromto(2)),&
                  &self%angtab(self%nrots), self%iseven(1:self%nptcls), polar_here(2*self%nrots))
         ang = twopi/real(self%nrots)
