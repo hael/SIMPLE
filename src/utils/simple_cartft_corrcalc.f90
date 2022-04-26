@@ -34,8 +34,9 @@ type :: cartft_corrcalc
   contains
     ! CONSTRUCTOR
     procedure          :: new
-
     ! SETTERS
+    procedure          :: reallocate_ptcls
+    procedure          :: set_ref
 
     ! GETTERS
 
@@ -44,9 +45,9 @@ type :: cartft_corrcalc
     ! MEMOIZERS
     procedure, private :: memoize_resmsk
     procedure, private :: setup_pxls_p_shell
-    procedure, private :: memoize_ptcl_sqsum
-    
-    
+    procedure, private :: memoize_sqsum_ptcl
+
+
 
     ! CALCULATORS
 
@@ -154,6 +155,64 @@ contains
         cartftcc_glob => self
     end subroutine new
 
+    ! SETTERS
+
+    subroutine reallocate_ptcls( self, nptcls, pinds )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: nptcls
+        integer,                intent(in)    :: pinds(nptcls)
+        integer :: i,iptcl,ik
+        self%pfromto(1) = minval(pinds)
+        self%pfromto(2) = maxval(pinds)
+        if( allocated(self%pinds) ) deallocate(self%pinds)
+        if( self%nptcls == nptcls )then
+            ! just need to update particles indexing
+        else
+            ! re-index & reallocate
+            self%nptcls = nptcls
+            if( allocated(self%sqsums_ptcls) ) deallocate(self%sqsums_ptcls)
+            if( allocated(self%iseven) )       deallocate(self%iseven)
+            if( allocated(self%particles) )then
+                do i = 1, size(self%particles)
+                    call self%particles(i)%kill
+                end do
+                deallocate(self%particles)
+            endif
+            allocate( self%particles(self%nptcls), self%sqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls) )
+            do i = 1,self%nptcls
+                call self%particles(i)%new(self%ldim, params_glob%smpd)
+            end do
+         endif
+         self%sqsums_ptcls = 1.
+         self%iseven       = .true.
+         allocate(self%pinds(self%pfromto(1):self%pfromto(2)), source=0)
+         do i = 1,self%nptcls
+             iptcl = pinds(i)
+             self%pinds( iptcl ) = i
+         enddo
+    end subroutine reallocate_ptcls
+
+    subroutine set_ref( self, iref, img, iseven )
+        class(cartft_corrcalc), intent(inout) :: self   !< this object
+        integer,                intent(in)   :: iref    !< reference index
+        class(image),           intent(in)   :: img     !< reference image
+        logical,                intent(in)   :: iseven  !< logical eo-flag
+        if( iseven )then
+            call self%refs_eo(iref,2)%copy(img)
+        else
+            call self%refs_eo(iref,1)%copy(img)
+        endif
+    end subroutine set_ref
+
+    subroutine set_ptcl( self, iptcl, img )
+        class(cartft_corrcalc), intent(inout) :: self   !< this object
+        integer,                intent(in)    :: iptcl  !< particle index
+        class(image),           intent(in)    :: img    !< particle image
+        call self%particles(self%pinds(iptcl))%copy(img)
+        ! calculate the square sum required for correlation calculation
+        call self%memoize_sqsum_ptcl(self%pinds(iptcl))
+    end subroutine set_ptcl
+
     ! MEMOIZERS
 
     subroutine memoize_resmsk( self )
@@ -194,11 +253,11 @@ contains
         end do
     end subroutine setup_pxls_p_shell
 
-    subroutine memoize_ptcl_sqsum( self, i )
+    subroutine memoize_sqsum_ptcl( self, i )
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: i
         self%sqsums_ptcls(i) = self%particles(i)%calc_sumsq(self%resmsk)
-    end subroutine memoize_ptcl_sqsum
+    end subroutine memoize_sqsum_ptcl
 
     ! DESTRUCTOR
 
