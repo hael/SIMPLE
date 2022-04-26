@@ -227,6 +227,7 @@ contains
     procedure          :: fcomps_below_noise_power_stats
     procedure          :: apply_bfac
     procedure          :: bp
+    procedure          :: lp
     procedure          :: tophat
     procedure, private :: apply_filter_1
     procedure, private :: apply_filter_2
@@ -3336,6 +3337,37 @@ contains
         endif
         if( didft ) call self%ifft()
     end subroutine bp
+
+     !> \brief bp  is for band-pass filtering an image
+    subroutine lp( self, find, width )
+        class(image),   intent(inout) :: self
+        integer,        intent(in)    :: find 
+        real, optional, intent(in)    :: width
+        integer :: h, k, l, lims(3,2), phys(3)
+        logical :: didft, dohp, dolp
+        real    :: freq, hplim_freq, wwidth, w
+        wwidth =10.
+        if( present(width) ) wwidth = width
+        lims = self%fit%loop_lims(2)
+        !$omp parallel do private(h,k,l,freq,phys,w) default(shared)&
+        !$omp collapse(3) proc_bind(close)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    freq = hyp(real(h),real(k),real(l))
+                    phys = self%comp_addr_phys([h,k,l])
+                    if(freq .gt. find)then
+                        self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                    else if(freq .ge. find - wwidth)then
+                        w = (cos(((freq-(find-wwidth))/wwidth)*pi)+1.)/2.
+                        self%cmat(phys(1),phys(2),phys(3)) = &
+                            &self%cmat(phys(1),phys(2),phys(3)) * w
+                    endif
+                end do
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine lp
 
     !> \brief bp  is for tophat band-pass filtering an image
     subroutine tophat( self, shell, halfwidth )
