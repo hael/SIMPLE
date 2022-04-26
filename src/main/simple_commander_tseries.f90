@@ -1069,6 +1069,8 @@ contains
         ! deallocate
         if( allocated(iter_dir)  ) deallocate(iter_dir)
         if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
+        ! end gracefully
+        call simple_end('**** AUTOREFINE3D_NANO NORMAL STOP ****')
     end subroutine exec_autorefine3D_nano
 
     subroutine exec_refine3D_nano( self, cline )

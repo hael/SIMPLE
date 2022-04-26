@@ -1071,7 +1071,7 @@ contains
         &'auto 3D refinement of metallic nanoparticles',&                                 ! descr_short
         &'is a distributed workflow for automated 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                  ! executable
-        &1, 2, 0, 7, 4, 1, 1, .true.)                                                     ! # entries in each group, requires sp_project
+        &1, 2, 0, 7, 3, 1, 1, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call autorefine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
@@ -1096,8 +1096,6 @@ contains
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{5}', .false., 5.)
         call autorefine3D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms{1.5}', .true., 1.5)
-
-        call autorefine3D_nano%set_input('filt_ctrls', 4, ptclw)
         ! mask controls
         call autorefine3D_nano%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
