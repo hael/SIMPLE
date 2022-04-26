@@ -88,6 +88,33 @@ contains
         endif
     end subroutine butterworth_kernel
 
+    subroutine squared_diff(odd, even, diff)
+        real, intent(in)    :: odd(:,:,:)
+        real, intent(in)    :: even(:,:,:)
+        real, intent(inout) :: diff(:,:,:)
+        diff = (odd - even)**2
+    end subroutine squared_diff
+
+    ! normalized to 1 then take the squared diff
+    subroutine same_energy_squared_diff(odd, even, diff)
+        real, intent(in)    :: odd(:,:,:)
+        real, intent(in)    :: even(:,:,:)
+        real, intent(inout) :: diff(:,:,:)
+        call squared_diff(odd/sum(odd), even/sum(even), diff)
+    end subroutine same_energy_squared_diff
+
+    ! from https://stats.stackexchange.com/questions/136232/definition-of-normalized-euclidean-distance#:~:text=The%20normalized%20squared%20euclidean%20distance,not%20related%20to%20Mahalanobis%20distance
+    subroutine normalized_squared_diff(odd, even, diff)
+        real, intent(in)    :: odd(:,:,:)
+        real, intent(in)    :: even(:,:,:)
+        real, intent(inout) :: diff(:,:,:)
+        real                :: mean_odd, mean_even
+        mean_odd  =  sum(odd)/product(shape(odd))
+        mean_even = sum(even)/product(shape(even))
+        call squared_diff(odd-mean_odd, even-mean_even, diff)
+        diff = diff/(sum(odd-mean_odd)**2 + sum(even-mean_even)**2)
+    end subroutine normalized_squared_diff
+
     ! discrete 'convolve'
     subroutine discrete_convolve(kernel, img, res, ldim)
         real,        intent(in)    :: kernel(:,:,:)
@@ -105,7 +132,7 @@ contains
         real,             intent(in)    :: smpd
         character(len=*), intent(in)    :: is_uniform
         type(image)          :: odd_copy
-        integer              :: k,l,m,n,max_lplim, box, dim3, ldim(3), find_start, find_stop
+        integer              :: k,l,m,max_lplim, box, dim3, ldim(3), find_start, find_stop, best_ind, cur_ind
         real                 :: cur_min_sum
         integer, parameter   :: CHUNKSZ=20, BW_ORDER=8, FIND_STEPSZ=2
         real,    parameter   :: LP_START = 30. ! 30 A resolution
@@ -114,28 +141,24 @@ contains
         ldim = odd%get_ldim()
         box  = ldim(1)
         dim3 = ldim(3)
-
         find_stop  = calc_fourier_index(2. * smpd, box, smpd)
         find_start = calc_fourier_index(LP_START, box, smpd)
-
-
         call even%get_rmat_ptr(rmat_even)
         call odd_copy%copy(odd)
         allocate(cur_mat_odd(box,box,dim3), cur_diff(box,box,dim3), prev_diff(box,box,dim3), source=0.)
         ! real-space normalisation needed for correct cost function evaluation
-        rmat_even    = rmat_even/sum(rmat_even)
         prev_diff    = huge(cur_min_sum)
         cur_min_sum  = huge(cur_min_sum)   
-        do n = find_start, find_stop, FIND_STEPSZ
-            write(*, *) 'current Fourier index = ', n
+        best_ind     = find_start
+        do cur_ind = find_start, find_stop, FIND_STEPSZ
+            write(*, *) 'current Fourier index = ', cur_ind
             ! lp of odd
             call odd%copy(odd_copy)
             call odd%fft
-            call odd%lp(n)
+            call odd%lp(cur_ind)
             call odd%ifft
             call odd%get_rmat_ptr(rmat_odd)
-            rmat_odd = rmat_odd/sum(rmat_odd)
-            cur_diff = (rmat_odd - rmat_even)**2
+            call normalized_squared_diff(rmat_odd, rmat_even, cur_diff)
             ! do the non-uniform, i.e. optimizing at each voxel
             if (is_uniform == 'no') then
                 ! 2D vs 3D cases
@@ -174,10 +197,14 @@ contains
                 if (sum(cur_diff) < cur_min_sum) then
                     cur_mat_odd  = rmat_odd
                     cur_min_sum  = sum(cur_diff)
+                    best_ind     = cur_ind
                 endif
             endif
             write(*, *) 'min cost val = ', cur_min_sum, '; current cost = ', sum(cur_diff)
         enddo
+        if (is_uniform == 'yes') then
+            write(*, *) 'minimized cost at index = ', best_ind
+        endif
         call odd%set_rmat(cur_mat_odd,  .false.)
     end subroutine find_lp
 
