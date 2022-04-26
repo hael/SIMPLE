@@ -257,7 +257,9 @@ contains
     procedure          :: calc_gradient
     procedure, private :: comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
-    procedure          :: corr
+    procedure, private :: corr_1
+    procedure, private :: corr_2
+    generic            :: corr => corr_1, corr_2
     procedure          :: calc_sumsq
     procedure          :: corr_shifted
     procedure, private :: real_corr_1
@@ -4449,7 +4451,7 @@ contains
     end function comp_addr_phys3
 
     !>  \brief corr is for correlating two images
-    function corr( self1, self2, lp_dyn, hp_dyn ) result( r )
+    function corr_1( self1, self2, lp_dyn, hp_dyn ) result( r )
         class(image),   intent(inout) :: self1, self2
         real, optional, intent(in)    :: lp_dyn, hp_dyn
         real    :: r, sumasq, sumbsq
@@ -4509,7 +4511,7 @@ contains
             write(logfhandle,*) 'self2%ldim:', self2%ldim
             THROW_HARD('images to be correlated need to have same dimensions; corr')
         endif
-    end function corr
+    end function corr_1
 
     pure function calc_sumsq( self, resmsk ) result( sumsq )
         class(image), intent(in) :: self
@@ -4517,6 +4519,28 @@ contains
         real :: sumsq
         sumsq = sum(csq_fast(self%cmat), resmsk)
     end function calc_sumsq
+
+    function corr_2( self_ref, self_r4cc, self_ptcl, sumsq_ptcl, resmsk, shvec ) result( cc )
+        class(image), target, intent(inout) :: self_ref, self_r4cc
+        class(image),         intent(in)    :: self_ptcl
+        real,                 intent(in)    :: sumsq_ptcl
+        logical,              intent(in)    :: resmsk(self_ref%array_shape(1),self_ref%array_shape(3),self_ref%array_shape(3))
+        real,                 intent(in)    :: shvec(2)
+        real :: ccmat(self_ref%array_shape(1),self_ref%array_shape(3),self_ref%array_shape(3))
+        class(image), pointer :: ref_ptr => null()
+        real :: sumsq_ref, cc
+        if( arg(shvec) > 1e-5 )then
+            call self_ref%shift2Dserial(shvec, self_r4cc)
+            ref_ptr => self_r4cc
+        else
+            ref_ptr => self_ref
+        endif
+        sumsq_ref = ref_ptr%calc_sumsq(resmsk)
+        where( resmsk )
+            ccmat = real(ref_ptr%cmat * conjg(self_ptcl%cmat))
+        end where
+        cc = sum(ccmat, mask=resmsk) / sqrt(sumsq_ref * sumsq_ptcl)
+    end function corr_2
 
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
         class(image),   intent(inout) :: self_ref, self_ptcl
