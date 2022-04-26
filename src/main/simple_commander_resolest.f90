@@ -233,7 +233,7 @@ contains
     end subroutine exec_nonuniform_filter
 
     subroutine exec_butterworth_3D(self, cline)
-        use simple_butterworth, only: find_butterworth_opt
+        use simple_butterworth, only: find_butterworth_opt, find_lp
         class(butterworth_3D_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)  :: params
@@ -262,7 +262,7 @@ contains
             call even%mask(params%msk, 'soft')
             call odd%mask(params%msk, 'soft')
         endif
-        call find_butterworth_opt(odd, even, params%smpd, params%is_uniform)
+        call find_lp(odd, even, params%smpd, params%is_uniform)
         call odd%write(trim(params%is_uniform)//'_uniform_butterworth_filter_odd.mrc')
         call even%write(trim(params%is_uniform)//'_uniform_butterworth_filter_even.mrc')
         ! end gracefully
@@ -270,7 +270,7 @@ contains
     end subroutine exec_butterworth_3D
 
     subroutine exec_butterworth_2D( self, cline )
-        use simple_butterworth, only: find_butterworth_opt
+        use simple_butterworth, only: find_butterworth_opt, find_lp
         class(butterworth_2D_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)  :: params
@@ -285,7 +285,9 @@ contains
             call even%new(params%ldim, params%smpd)
             call odd%read(params%stk2, iptcl)
             call even%read(params%stk,  iptcl)
-            call find_butterworth_opt(odd, even, params%smpd, params%is_uniform)
+            call even%mask(params%msk, 'soft')
+            call odd%mask(params%msk, 'soft')
+            call find_lp(odd, even, params%smpd, params%is_uniform)
             call odd%write(trim(params%is_uniform)//'_uniform_butterworth_filter_odd.mrc', iptcl)
             call even%write(trim(params%is_uniform)//'_uniform_butterworth_filter_even.mrc', iptcl)
             call odd%zero_and_unflag_ft
