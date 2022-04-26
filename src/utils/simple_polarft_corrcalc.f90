@@ -421,6 +421,53 @@ contains
 
     ! SETTERS
 
+    subroutine reallocate_ptcls( self, nptcls, pinds )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: nptcls
+        integer,                 intent(in)    :: pinds(nptcls)
+        integer :: i,iptcl,ik
+        self%pfromto(1) = minval(pinds)
+        self%pfromto(2) = maxval(pinds)
+        if( allocated(self%pinds) ) deallocate(self%pinds)
+        if( self%nptcls == nptcls )then
+            ! just need to update particles indexing
+        else
+            ! re-index & reallocate
+            self%nptcls = nptcls
+            if( allocated(self%sqsums_ptcls) ) deallocate(self%sqsums_ptcls)
+            if( allocated(self%iseven) )       deallocate(self%iseven)
+            if( allocated(self%pfts_ptcls) )   deallocate(self%pfts_ptcls)
+            if( allocated(self%fftdat_ptcls) )then
+                do i = 1, size(self%fftdat_ptcls,dim=1)
+                    do ik = params_glob%kfromto(1),params_glob%kfromto(2)
+                        call fftwf_free(self%fftdat_ptcls(i,ik)%p_re)
+                        call fftwf_free(self%fftdat_ptcls(i,ik)%p_im)
+                    end do
+                end do
+                deallocate(self%fftdat_ptcls)
+            endif
+            allocate( self%pfts_ptcls(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls),&
+                      &self%sqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls),&
+                      &self%fftdat_ptcls(1:self%nptcls,params_glob%kfromto(1):params_glob%kfromto(2)) )
+            do i = 1,self%nptcls
+                do ik = params_glob%kfromto(1),params_glob%kfromto(2)
+                    self%fftdat_ptcls(i,ik)%p_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+                    self%fftdat_ptcls(i,ik)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
+                    call c_f_pointer(self%fftdat_ptcls(i,ik)%p_re, self%fftdat_ptcls(i,ik)%re, [self%pftsz])
+                    call c_f_pointer(self%fftdat_ptcls(i,ik)%p_im, self%fftdat_ptcls(i,ik)%im, [self%pftsz])
+                end do
+            end do
+         endif
+         self%pfts_ptcls   = zero
+         self%sqsums_ptcls = 0.
+         self%iseven       = .true.
+         allocate(self%pinds(self%pfromto(1):self%pfromto(2)), source=0)
+         do i = 1,self%nptcls
+             iptcl = pinds(i)
+             self%pinds( iptcl ) = i
+         enddo
+    end subroutine reallocate_ptcls
+
     subroutine set_ref_pft( self, iref, pft, iseven )
         class(polarft_corrcalc), intent(inout) :: self     !< this object
         integer,                 intent(in)    :: iref     !< reference index
@@ -509,53 +556,6 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         self%iseven = .not.self%iseven
     end subroutine swap_ptclsevenodd
-
-    subroutine reallocate_ptcls( self, nptcls, pinds )
-        class(polarft_corrcalc), intent(inout) :: self
-        integer,                 intent(in)    :: nptcls
-        integer,                 intent(in)    :: pinds(nptcls)
-        integer :: i,iptcl,ik
-        self%pfromto(1) = minval(pinds)
-        self%pfromto(2) = maxval(pinds)
-        if( allocated(self%pinds) ) deallocate(self%pinds)
-        if( self%nptcls == nptcls )then
-            ! just need to update particles indexing
-        else
-            ! re-index & reallocate
-            self%nptcls = nptcls
-            if( allocated(self%sqsums_ptcls) ) deallocate(self%sqsums_ptcls)
-            if( allocated(self%iseven) )       deallocate(self%iseven)
-            if( allocated(self%pfts_ptcls) )   deallocate(self%pfts_ptcls)
-            if( allocated(self%fftdat_ptcls) )then
-                do i = 1, size(self%fftdat_ptcls,dim=1)
-                    do ik = params_glob%kfromto(1),params_glob%kfromto(2)
-                        call fftwf_free(self%fftdat_ptcls(i,ik)%p_re)
-                        call fftwf_free(self%fftdat_ptcls(i,ik)%p_im)
-                    end do
-                end do
-                deallocate(self%fftdat_ptcls)
-            endif
-            allocate( self%pfts_ptcls(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls),&
-                      &self%sqsums_ptcls(1:self%nptcls),self%iseven(1:self%nptcls),&
-                      &self%fftdat_ptcls(1:self%nptcls,params_glob%kfromto(1):params_glob%kfromto(2)) )
-            do i = 1,self%nptcls
-                do ik = params_glob%kfromto(1),params_glob%kfromto(2)
-                    self%fftdat_ptcls(i,ik)%p_re = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-                    self%fftdat_ptcls(i,ik)%p_im = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-                    call c_f_pointer(self%fftdat_ptcls(i,ik)%p_re, self%fftdat_ptcls(i,ik)%re, [self%pftsz])
-                    call c_f_pointer(self%fftdat_ptcls(i,ik)%p_im, self%fftdat_ptcls(i,ik)%im, [self%pftsz])
-                end do
-            end do
-         endif
-         self%pfts_ptcls   = zero
-         self%sqsums_ptcls = 0.
-         self%iseven       = .true.
-         allocate(self%pinds(self%pfromto(1):self%pfromto(2)), source=0)
-         do i = 1,self%nptcls
-             iptcl = pinds(i)
-             self%pinds( iptcl ) = i
-         enddo
-    end subroutine reallocate_ptcls
 
     subroutine set_eo( self, iptcl, is_even )
         class(polarft_corrcalc), intent(inout) :: self
