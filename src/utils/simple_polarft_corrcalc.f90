@@ -150,8 +150,6 @@ type :: polarft_corrcalc
     procedure          :: memoize_ffts
     procedure, private :: setup_pxls_p_shell
     ! CALCULATORS
-    procedure          :: calc_ptcl_pspec
-    procedure          :: calc_ref_pspec
     procedure          :: create_polar_absctfmats
     procedure, private :: prep_ref4corr
     procedure, private :: gen_shmat
@@ -877,28 +875,6 @@ contains
     end subroutine setup_pxls_p_shell
 
     ! CALCULATORS
-
-    subroutine calc_ptcl_pspec( self, iptcl, pspec )
-        class(polarft_corrcalc),   intent(inout) :: self
-        integer,                   intent(in)    :: iptcl
-        real,                      intent(inout) :: pspec(params_glob%kfromto(1):params_glob%kfromto(2))
-        integer :: i
-        i = self%pinds(iptcl)
-        pspec(:) = sum(csq_fast(self%pfts_ptcls(:,:,i)),dim=1) / real(self%pftsz)
-    end subroutine calc_ptcl_pspec
-
-    subroutine calc_ref_pspec( self, iref, even, pspec )
-        class(polarft_corrcalc),   intent(inout) :: self
-        integer,                   intent(in)    :: iref
-        logical,                   intent(in)    :: even
-        real,                      intent(inout) :: pspec(params_glob%kfromto(1):params_glob%kfromto(2))
-        integer :: i
-        if( even )then
-            pspec(:) = sum(csq_fast(self%pfts_refs_even(:,:,iref)),dim=1) / real(self%pftsz)
-        else
-            pspec(:) = sum(csq_fast(self%pfts_refs_odd(:,:,iref)),dim=1) / real(self%pftsz)
-        endif
-    end subroutine calc_ref_pspec
 
     subroutine create_polar_absctfmats( self, spproj, oritype, pfromto )
         use simple_ctf,        only: ctf
