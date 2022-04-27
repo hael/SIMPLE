@@ -3341,7 +3341,7 @@ contains
         if( didft ) call self%ifft()
     end subroutine bp
 
-     !> \brief bp  is for band-pass filtering an image
+     !> \brief lp  is for low-pass filtering an image
     subroutine lp( self, find, width )
         class(image),   intent(inout) :: self
         integer,        intent(in)    :: find 
