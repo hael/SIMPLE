@@ -14,7 +14,7 @@ type :: cartft_corrcalc
     private
     integer                  :: nptcls        = 1       !< the total number of particles in partition (logically indexded [fromp,top])
     integer                  :: nrefs         = 1       !< the number of references (logically indexded [1,nrefs])
-    integer                  :: lnyq          = 0       !< Nyqvist limit
+    integer                  :: filtsz        = 0       !< Nyqvist limit
     integer                  :: pfromto(2)    = 0       !< particle index range
     integer                  :: ldim(3)       = 0       !< logical dimensions of original cartesian image
     integer                  :: lims(3,2)     = 0       !< resolution mask limits
@@ -37,11 +37,18 @@ type :: cartft_corrcalc
     ! SETTERS
     procedure          :: reallocate_ptcls
     procedure          :: set_ref
-
+    procedure          :: set_ref_optlp
+    procedure          :: set_eo
     ! GETTERS
-
+    procedure          :: get_box
+    procedure          :: get_ref_img
+    procedure          :: get_nrefs
+    procedure          :: exists
+    procedure          :: ptcl_iseven
+    procedure          :: get_nptcls
+    procedure          :: assign_pinds
     ! MODIFIERS
-
+    procedure          :: shellnorm_and_filter_ref
     ! MEMOIZERS
     procedure, private :: memoize_resmsk
     procedure, private :: setup_pxls_p_shell
@@ -94,6 +101,7 @@ contains
             THROW_HARD ('only even logical dims supported; new')
         endif
         ! set constants
+        self%filtsz = fdim(params_glob%box) - 1
         self%l_match_filt = l_match_filt !< do shellnorm and filtering here (needs to be local because in 3D we do it on the reference volumes)
         if( present(ptcl_mask) )then
             self%nptcls  = count(ptcl_mask)                      !< the total number of particles in partition
@@ -102,7 +110,7 @@ contains
         endif
         self%nrefs = nrefs               !< the number of references (logically indexded [1,nrefs])
         ! allocate optimal low-pass filter & memoized sqsums
-        allocate(self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,self%nrefs), self%sqsums_ptcls(1:self%nptcls), source=1.)
+        allocate(self%ref_optlp(1:self%filtsz,self%nrefs), self%sqsums_ptcls(1:self%nptcls), source=1.)
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
         if( present(ptcl_mask) )then
@@ -212,6 +220,78 @@ contains
         ! calculate the square sum required for correlation calculation
         call self%memoize_sqsum_ptcl(self%pinds(iptcl))
     end subroutine set_ptcl
+
+    subroutine set_ref_optlp( self, iref, optlp )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iref
+        real,                   intent(in)    :: optlp(params_glob%kfromto(1):params_glob%kstop)
+        self%ref_optlp(1:params_glob%kfromto(1) - 1,iref) = maxval(optlp)
+        self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,iref) = optlp(params_glob%kfromto(1):params_glob%kstop)
+        self%ref_optlp(params_glob%kstop + 1:,iref) = 0.
+    end subroutine set_ref_optlp
+
+    subroutine set_eo( self, iptcl, is_even )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iptcl
+        logical,                intent(in)    :: is_even
+        self%iseven(self%pinds(iptcl)) = is_even
+    end subroutine set_eo
+
+    ! GETTERS
+
+    pure function get_box( self ) result( box )
+        class(cartft_corrcalc), intent(in) :: self
+        integer :: box
+        box = self%ldim(1)
+    end function get_box
+
+    function get_ref_img( self, iref, iseven ) result( ref )
+        class(cartft_corrcalc), intent(in) :: self
+        integer,                intent(in) :: iref
+        logical,                intent(in) :: iseven
+        type(image) :: ref
+        if( iseven )then
+            call ref%copy(self%refs_eo(iref,2))
+        else
+            call ref%copy(self%refs_eo(iref,1))
+        endif
+    end function get_ref_img
+
+    integer function get_nrefs( self )
+        class(cartft_corrcalc), intent(in) :: self
+        get_nrefs = self%nrefs
+    end function get_nrefs
+
+    logical function exists( self )
+        class(cartft_corrcalc), intent(in) :: self
+        exists = self%existence
+    end function exists
+
+    logical function ptcl_iseven( self, iptcl )
+        class(cartft_corrcalc), intent(in) :: self
+        integer,                 intent(in) :: iptcl
+        ptcl_iseven = self%iseven(self%pinds(iptcl))
+    end function ptcl_iseven
+
+    integer function get_nptcls( self )
+        class(cartft_corrcalc), intent(in) :: self
+        get_nptcls = self%nptcls
+    end function get_nptcls
+
+    subroutine assign_pinds( self, pinds )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer, allocatable,    intent(out)   :: pinds(:)
+        pinds = self%pinds
+    end subroutine assign_pinds
+
+    ! MODIFIERS
+
+    subroutine shellnorm_and_filter_ref( self, iref, ref_img )
+        class(cartft_corrcalc), intent(in)    :: self
+        integer,                intent(in)    :: iref
+        class(image),           intent(inout) :: ref_img
+        if( self%l_match_filt ) call ref_img%shellnorm_and_apply_filter_serial(self%ref_optlp(:,iref))
+    end subroutine shellnorm_and_filter_ref
 
     ! MEMOIZERS
 

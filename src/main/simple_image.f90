@@ -3050,10 +3050,10 @@ contains
         real, allocatable  :: expec_pow(:)
         integer            :: sh, h, k, l, phys(3), lfny, lims(3,2), filtsz
         real               :: icomp, wzero, fwght
-        filtsz    = size(filter)
-        wzero     = maxval(filter)
-        lfny      = self%get_lfny(1)
-        lims      = self%fit%loop_lims(2)
+        filtsz = size(filter)
+        wzero  = maxval(filter)
+        lfny   = self%get_lfny(1)
+        lims   = self%fit%loop_lims(2)
         ! calculate the expectation value of the signal power in each shell
         call self%spectrum('power',expec_pow )
         ! normalise
@@ -3344,7 +3344,7 @@ contains
      !> \brief lp  is for low-pass filtering an image
     subroutine lp( self, find, width )
         class(image),   intent(inout) :: self
-        integer,        intent(in)    :: find 
+        integer,        intent(in)    :: find
         real, optional, intent(in)    :: width
         integer :: h, k, l, lims(3,2), phys(3)
         logical :: didft, dohp, dolp
