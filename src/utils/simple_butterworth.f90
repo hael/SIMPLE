@@ -25,7 +25,7 @@ contains
         integer :: k
         Bn  = (0., 0.)
         if (s/fc < 100) then
-            js  = j*s/fc
+            js  = J*s/fc
             do k = 0, n
                 Bn  = Bn + AN(k+1)*js**k
             end do
@@ -83,12 +83,13 @@ contains
         real,             intent(in)    :: smpd
         character(len=*), intent(in)    :: is_uniform
         type(image)          :: odd_copy, even_copy
-        integer              :: k,l,m,max_lplim, box, dim3, ldim(3), find_start, find_stop, best_ind, cur_ind
-        real                 :: cur_min_sum
+        integer              :: k,l,m,max_lplim, box, dim3, ldim(3), find_start, find_stop, best_ind, cur_ind, k1,l1,m1,k_ind,l_ind,m_ind
+        real                 :: cur_min_sum, ref_diff, rad
         integer, parameter   :: CHUNKSZ=20, BW_ORDER=8, FIND_STEPSZ=2
-        real,    parameter   :: LP_START = 30. ! 30 A resolution
+        real,    parameter   :: LP_START = 30.                ! 30 A resolution
+        integer, parameter   :: SPA_SUP = 0, MID = 1+SPA_SUP  ! support of the window function
         real,    pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null()
-        real,    allocatable :: opt_mat_odd(:,:,:), opt_mat_even(:,:,:), cur_diff(:,:,:), opt_diff(:,:,:), but_fil(:)
+        real,    allocatable :: opt_mat_odd(:,:,:), opt_mat_even(:,:,:), cur_diff(:,:,:), opt_diff(:,:,:), but_fil(:), weights_3D(:,:,:), weights_2D(:,:)
         ldim = odd%get_ldim()
         box  = ldim(1)
         dim3 = ldim(3)
@@ -97,7 +98,34 @@ contains
         call odd_copy%copy(odd)
         call even_copy%copy(even)
         allocate(opt_mat_odd(box,box,dim3), opt_mat_even(box,box,dim3), cur_diff(box,box,dim3), opt_diff(box,box,dim3), but_fil(box), source=0.)
-        opt_diff    = huge(cur_min_sum)
+        ! assign the weights of the neighboring voxels
+        allocate(weights_2D(SPA_SUP*2+1, SPA_SUP*2+1), weights_3D(SPA_SUP*2+1, SPA_SUP*2+1, SPA_SUP*2+1), source=0.)
+        ! 2D weights
+        do k = 1, 2*SPA_SUP+1
+            do l = 1, 2*SPA_SUP+1
+                rad = hyp(real(k-MID), real(l-MID))
+                weights_2D(k,l) = -rad/(SPA_SUP + 1) + 1.  ! linear function: 1 at rad = 0 and 0 at rad = SPA_SUP + 1
+                if (weights_2D(k,l) < 0.) then
+                    weights_2D(k,l) = 0.
+                endif
+            enddo
+        enddo
+        ! 3D weights
+        do k = 1, 2*SPA_SUP+1
+            do l = 1, 2*SPA_SUP+1
+                do m = 1, 2*SPA_SUP+1
+                    rad = hyp(real(k-MID), real(l-MID), real(m-MID))
+                    weights_3D(k,l,m) = -rad/(SPA_SUP + 1) + 1.  ! linear function: 1 at rad = 0 and 0 at rad = SPA_SUP + 1
+                    if (weights_3D(k,l,m) < 0.) then
+                        weights_3D(k,l,m) = 0.
+                    endif
+                enddo
+            enddo
+        enddo
+        weights_3D = weights_3D/sum(weights_3D) ! weights has energy of 1
+        weights_2D = weights_2D/sum(weights_2D) ! weights has energy of 1
+        ! starting the searching for the best fourier index from here
+        opt_diff     = huge(cur_min_sum)
         cur_min_sum  = huge(cur_min_sum)   
         best_ind     = find_start
         do cur_ind = find_start, find_stop, FIND_STEPSZ
@@ -125,13 +153,24 @@ contains
                     !$omp parallel do collapse(2) default(shared) private(k,l) schedule(dynamic,CHUNKSZ) proc_bind(close)
                     do k = 1,box
                         do l = 1,box
+                            ref_diff = 0.
+                            ! applying an average window to each diff (eq 7 in the nonuniform paper)
+                            do k_ind = 1, 2*SPA_SUP+1
+                                k1 = k - SPA_SUP + k_ind - 1
+                                do l_ind = 1, 2*SPA_SUP+1
+                                    l1 = l - SPA_SUP + l_ind - 1
+                                    if ((k1 >= 1 .and. k1 <= box) .and. (l1 >= 1 .and. l1 <= box)) then
+                                        ref_diff = ref_diff + cur_diff(k1,l1,1)*weights_2D(k_ind,l_ind)
+                                    endif
+                                enddo
+                            enddo
                             ! opt_diff     keeps the minimized cost value at each voxel of the search
                             ! opt_mat_odd  keeps the best voxel of the form B*odd
                             ! opt_mat_even keeps the best voxel of the form B*even
-                            if (cur_diff(k,l,1) < opt_diff(k,l,1)) then
+                            if (ref_diff < opt_diff(k,l,1)) then
                                 opt_mat_odd(k,l,1)  = rmat_odd(k,l,1)
                                 opt_mat_even(k,l,1) = rmat_even(k,l,1)
-                                opt_diff(k,l,1)     = cur_diff(k,l,1)
+                                opt_diff(k,l,1)     = ref_diff
                             endif
                         enddo
                     enddo
@@ -141,13 +180,27 @@ contains
                     do k = 1,box
                         do l = 1,box
                             do m = 1,box
+                                ref_diff = 0.
+                                ! applying an average window to each diff (eq 7 in the nonuniform paper)
+                                do k_ind = 1, 2*SPA_SUP+1
+                                    k1 = k - SPA_SUP + k_ind - 1
+                                    do l_ind = 1, 2*SPA_SUP+1
+                                        l1 = l - SPA_SUP + l_ind - 1
+                                        do m_ind = 1, 2*SPA_SUP+1
+                                            m1 = m - SPA_SUP + m_ind - 1
+                                            if ((k1 >= 1 .and. k1 <= box) .and. (l1 >= 1 .and. l1 <= box) .and. (m1 >= 1 .and. m1 <= dim3)) then
+                                                ref_diff = ref_diff + cur_diff(k1,l1,m1)*weights_3D(k_ind,l_ind,m_ind)
+                                            endif
+                                        enddo
+                                    enddo
+                                enddo
                                 ! opt_diff     keeps the minimized cost value at each voxel of the search
                                 ! opt_mat_odd  keeps the best voxel of the form B*odd
                                 ! opt_mat_even keeps the best voxel of the form B*even
-                                if (cur_diff(k,l,m) < opt_diff(k,l,m)) then
+                                if (ref_diff < opt_diff(k,l,m)) then
                                     opt_mat_odd(k,l,m)  = rmat_odd(k,l,m)
                                     opt_mat_even(k,l,m) = rmat_even(k,l,m)
-                                    opt_diff(k,l,m)     = cur_diff(k,l,m)
+                                    opt_diff(k,l,m)     = ref_diff
                                 endif
                             enddo
                         enddo
