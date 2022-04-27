@@ -649,14 +649,15 @@ contains
         use simple_starfile_wrappers
         use CPlot2D_wrapper_module
         integer, PARAMETER :: POLYDIM = 18
-        integer, PARAMETER :: NGRID   = 19 ! has to be odd
+        integer, PARAMETER :: NGRID   = 25 ! has to be odd
         class(comparemc_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
-        real,                         allocatable :: rmsds(:,:), gofs(:,:), npatch(:)
+        real,                         allocatable :: rmsds(:), gofs(:,:), avg(:), std(:), npatch(:), rmsds2(:), avg2(:), std2(:)
         real(dp),                     allocatable :: poly1(:,:), poly2(:,:), x(:), y(:), t(:), offsets1(:,:), offsets2(:,:)
         character(len=:),             allocatable :: movie, moviedoc
         character(len=LONGSTRLEN),    allocatable :: projects_fnames(:), moviedocs(:)
-        integer,                      allocatable :: indextab(:,:)
+        integer,                      allocatable :: indextab(:,:), order(:), nxpatch(:), nypatch(:)
+        logical,                      allocatable :: mask(:)
         type(CPlot2D_type)    :: plot2D
         type(CDataSet_type)   :: dataSet
         type(CDataPoint_type) :: point
@@ -664,7 +665,7 @@ contains
         type(sp_project)      :: first_spproj, spproj, spproj2
         real(dp) :: rmsd, maxrmsd, minrmsd
         real     :: smpd, binning
-        integer  :: i, j, k, npoints, ldim1(3), ldim2(3), nmics, nprojects, nx, ny, nframes
+        integer  :: i, j, k, npoints, ldim1(3), ldim2(3), nmics, nprojects, nx, ny, nframes, funit, io_stat, cnt
         logical  :: found
         if(.not.cline%defined('mkdir')) call cline%set('mkdir', 'yes')
         call cline%set('oritype', 'mic')
@@ -675,12 +676,22 @@ contains
         endif
         nprojects = size(projects_fnames,1)
         write(logfhandle,'(A,I6)')'>>> # of project files:', nprojects
+        do i = 1,nprojects
+            if( projects_fnames(i)(1:1).ne.'/' )then
+                if( trim(params%mkdir).eq.'yes')then
+                    projects_fnames(i) = '../'//trim(projects_fnames(i))
+                endif
+                projects_fnames(i) = simple_abspath(projects_fnames(i), errmsg='simple_fileio::make_relativepath: '//trim(projects_fnames(i)))
+            endif
+            if( .not.file_exists(projects_fnames(i))) THROW_HARD('Could not find: '//trim(projects_fnames(i)))
+        enddo
         call first_spproj%read_segment(params%oritype, projects_fnames(1))
         nmics = first_spproj%get_nintgs()
         write(logfhandle,'(A,I6)')'>>> # of micrographs  :', nmics
         allocate(indextab(nprojects,nmics),source=0)
-        allocate(moviedocs(nmics),gofs(nprojects,nmics),npatch(nprojects))
-        npatch(1) = first_spproj%os_mic%get(1,'nxpatch')*first_spproj%os_mic%get(1,'nypatch')
+        allocate(moviedocs(nmics),gofs(nprojects,nmics),npatch(nprojects),nxpatch(nprojects),nypatch(nprojects))
+        nxpatch(1) = nint(first_spproj%os_mic%get(1,'nxpatch'))
+        nypatch(1) = nint(first_spproj%os_mic%get(1,'nypatch'))
         gofs = 0.0
         ! working out order of movies in each project file
         do i = 1,nmics
@@ -703,29 +714,71 @@ contains
                 enddo
                 if( .not.found )then
                     indextab(:,j) = 0
-                    THROW_WARN('Could not find corresponding docs: '//trim(moviedocs(k))//' and '//trim(moviedoc))
+                    THROW_WARN('Could not find corresponding doc: '//trim(moviedoc))
                 endif
             enddo
-            npatch(i) = spproj%os_mic%get(indextab(i,1),'nxpatch')*spproj%os_mic%get(indextab(i,1),'nypatch')
+            nxpatch(i) = nint(spproj%os_mic%get(indextab(i,1),'nxpatch'))
+            nypatch(i) = nint(spproj%os_mic%get(indextab(i,1),'nypatch'))
         enddo
-        ! gofs
-        call CPlot2D__new(plot2D, 'gof_'//int2str_pad(k,3)//C_NULL_CHAR)
-        call CPlot2D__SetXAxisSize(plot2D, real(20*nprojects,dp))
-        call CPlot2D__SetYAxisSize(plot2D, real(20*nprojects,dp))
+        npatch = sqrt(real(nxpatch*nypatch))
+        ! order
+        allocate(order(nprojects),avg(nprojects),std(nprojects))
+        order = (/(i,i=1,nprojects)/)
+        call hpsort(npatch, order)
+        ! goodness of fit
+        do i = 1,nprojects
+            j = order(i)
+            mask   = indextab(j,:) > 0
+            avg(i) = sum(gofs(j,:), mask=mask) / real(count(mask))
+            std(i) = sqrt(sum((gofs(j,:)-avg(i))**2.0)/real(count(mask)))
+        enddo
+        ! csv output
+        call fopen(funit, 'goodnessoffit.txt', action='READWRITE', status='UNKNOWN', iostat=io_stat)
+        call fileiochk('could not write goodnessoffit.txt', io_stat)
+        write(funit,'(A)')'sp_project,nx,ny,npatches,gof_avg,gof_std'
+        do i = 1,nprojects
+            write(funit,'(A,A1,I3,A1,I3,A1,F6.1,A1,F8.3,A1,F8.3)')trim(projects_fnames(order(i))),&
+                &',',nxpatch(order(i)),',',nypatch(order(i)),',',npatch(i),',',avg(i),',',std(i)
+        enddo
+        call fclose(funit)
+        ! eps output
+        call CPlot2D__new(plot2D, 'Goodness of  fit'//C_NULL_CHAR)
+        call CPlot2D__SetXAxisSize(plot2D, real(50*nprojects,dp))
+        call CPlot2D__SetYAxisSize(plot2D, real(50*maxval(avg+2.0*std),dp))
+        call CPlot2D__SetXAxisTitle(plot2D, 'n = sqrt(nx * ny)'//c_null_char)
+        call CPlot2D__SetYAxisTitle(plot2D, 'shifts RMS patch vs poly (pixels) '//c_null_char)
         call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
-        do i = 1,nmics
-            call CDataSet__new(dataSet)
-            call CDataSet__SetDrawMarker(dataSet,C_FALSE)
-            call CDataSet__SetDatasetColor(dataSet, 0.3_c_double, 0.3_c_double, 0.3_c_double)
-            do j = 1,nprojects
-                call CDataPoint__new2(real(npatch(j),dp), real(gofs(j,i), dp), point)
-                call CDataSet__AddDataPoint(dataSet, point)
-                call CDataPoint__delete(point)
-            end do
-            call CPlot2D__AddDataSet(plot2D, dataset)
-            call CDataSet__delete(dataset)
+        call CDataSet__new(dataSet)
+        call CDataSet__SetDrawMarker(dataSet,C_TRUE)
+        call CDataSet__SetDatasetColor(dataSet, 0.0_c_double, 0.0_c_double, 0.0_c_double)
+        do i = 1,nprojects
+            call CDataPoint__new2(real(npatch(i),dp), real(avg(i), dp), point)
+            call CDataSet__AddDataPoint(dataSet, point)
+            call CDataPoint__delete(point)
         enddo
-        call CPlot2D__OutputPostScriptPlot(plot2D, 'gofs_'//int2str_pad(k,3)//'.eps'//C_NULL_CHAR)
+        call CPlot2D__AddDataSet(plot2D, dataset)
+        call CDataSet__delete(dataset)
+        call CDataSet__new(dataSet)
+        call CDataSet__SetDrawMarker(dataSet,C_FALSE)
+        call CDataSet__SetDatasetColor(dataSet, 0.4_c_double, 0.4_c_double, 0.4_c_double)
+        do i = 1,nprojects
+            call CDataPoint__new2(real(npatch(i),dp), real(avg(i)+std(i), dp), point)
+            call CDataSet__AddDataPoint(dataSet, point)
+            call CDataPoint__delete(point)
+        enddo
+        call CPlot2D__AddDataSet(plot2D, dataset)
+        call CDataSet__delete(dataset)
+        call CDataSet__new(dataSet)
+        call CDataSet__SetDrawMarker(dataSet,C_FALSE)
+        call CDataSet__SetDatasetColor(dataSet, 0.4_c_double, 0.4_c_double, 0.4_c_double)
+        do i = 1,nprojects
+            call CDataPoint__new2(real(npatch(i),dp), real(avg(i)-std(i), dp), point)
+            call CDataSet__AddDataPoint(dataSet, point)
+            call CDataPoint__delete(point)
+        enddo
+        call CPlot2D__AddDataSet(plot2D, dataset)
+        call CDataSet__delete(dataset)
+        call CPlot2D__OutputPostScriptPlot(plot2D, 'goodnessoffit.eps'//C_NULL_CHAR)
         call CPlot2D__delete(plot2D)
         ! generate dense 2.5D grid
         call parse_movie_star(moviedocs(1), poly1, ldim1, binning, smpd)
@@ -746,47 +799,131 @@ contains
             t(i) = real(i-1,dp)
         enddo
         ! parsing and calculating
-        allocate(rmsds(nprojects,nprojects),source=0.0)
-        do k = 1,nmics
-            do i = 1,nprojects
-                call spproj%read_segment(params%oritype, projects_fnames(i))
-                moviedoc = trim(spproj%os_mic%get_static(indextab(i,k),'mc_starfile'))
+        if(allocated(mask))deallocate(mask)
+        if(allocated(avg))deallocate(avg)
+        if(allocated(std))deallocate(std)
+        allocate(mask(nmics),rmsds(nmics),avg(nprojects),std(nprojects),rmsds2(nmics),avg2(nprojects),std2(nprojects))
+        avg  = 0.0
+        std  = 0.0
+        avg2 = 0.0
+        std2 = 0.0
+        do i = 1,nprojects-1
+            call spproj%read_segment(params%oritype, projects_fnames(order(i)))
+            call spproj2%read_segment(params%oritype, projects_fnames(order(i+1)))
+            mask   = .false.
+            rmsds  = 0.0
+            rmsds2 = 0.0
+            do k = 1,nmics
+                if( indextab(order(i),k) == 0 .or. indextab(order(i+1),k) == 0) cycle
+                mask(k) = .true.
+                moviedoc = trim(spproj%os_mic%get_static(indextab(order(i),k),'mc_starfile'))
                 call parse_movie_star(moviedoc, poly1, ldim1, binning, smpd)
+                moviedoc = trim(spproj2%os_mic%get_static(indextab(order(i+1),k),'mc_starfile'))
+                call parse_movie_star(moviedoc, poly2, ldim2, binning, smpd)
                 call polynomial2shifts(poly1, x,y,t, offsets1)
-                do j = i+1,nprojects
-                    call spproj2%read_segment(params%oritype, projects_fnames(j))
-                    moviedoc = trim(spproj2%os_mic%get_static(indextab(j,k),'mc_starfile'))
-                    call parse_movie_star(moviedoc, poly2, ldim2, binning, smpd)
-                    call polynomial2shifts(poly2, x,y,t, offsets2)
-                    rmsds(i,j) = sum((offsets2-offsets1)**2.0) / real(npoints,dp)
-                    rmsds(j,i) = rmsds(i,j)
-                enddo
+                call polynomial2shifts(poly2, x,y,t, offsets2)
+                rmsds(k)  = sqrt(sum((offsets2-offsets1)**2.0) / real(npoints,dp))
+                rmsds2(k) = sqrt(sum(offsets1**2.0) / real(npoints,dp))
             enddo
-            maxrmsd = maxval(rmsds)
-            minrmsd = minval(rmsds)
-            call CPlot2D__new(plot2D, 'test_'//int2str_pad(k,3)//C_NULL_CHAR)
-            call CPlot2D__SetXAxisSize(plot2D, real(20*nprojects,dp))
-            call CPlot2D__SetYAxisSize(plot2D, real(20*nprojects,dp))
-            call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
-            do i = 1,nprojects
-                do j = 1,nprojects
-                    rmsd = (rmsds(i,j)-minrmsd) / (maxrmsd-minrmsd)
-                    call CDataSet__new(dataSet)
-                    call CDataSet__SetDrawMarker(dataSet,C_TRUE)
-                    call CDataSet__SetMarkerSize(dataSet,10.0_c_double)
-                    call CDataSet__SetDatasetColor(dataSet, 0.0_c_double, 0.0_c_double, real(rmsd,dp))
-                    call CDataPoint__new2(real(20*i,dp), real(20*j, dp), point)
+            cnt = count(mask)
+            if( cnt > 0 )then
+                avg(i)  = sum(rmsds,mask=mask) / real(cnt)
+                std(i)  = sqrt(sum((rmsds-avg(i))**2,mask=mask)/real(cnt))
+                avg2(i) = sum(rmsds2,mask=mask) / real(cnt)
+                std2(i) = sqrt(sum((rmsds2-avg2(i))**2,mask=mask)/real(cnt))
+            endif
+        enddo
+        i = nprojects
+        call spproj%read_segment(params%oritype, projects_fnames(order(i)))
+        mask   = .false.
+        rmsds2 = 0.0
+        do k = 1,nmics
+            if( indextab(order(i),k) == 0) cycle
+            mask(k) = .true.
+            moviedoc = trim(spproj%os_mic%get_static(indextab(order(i),k),'mc_starfile'))
+            call parse_movie_star(moviedoc, poly1, ldim1, binning, smpd)
+            call polynomial2shifts(poly1, x,y,t, offsets1)
+            rmsds2(k) = sqrt(sum(offsets1**2.0) / real(npoints,dp))
+        enddo
+        cnt = count(mask)
+        if( cnt > 0 )then
+            avg2(i)  = sum(rmsds2,mask=mask) / real(cnt)
+            std2(i)  = sqrt(sum((rmsds2-avg2(i))**2,mask=mask)/real(cnt))
+        endif
+        ! absolute rmsds
+        call fopen(funit, 'absolute_rmsd.txt', action='READWRITE', status='UNKNOWN', iostat=io_stat)
+        call fileiochk('could not write incr_rmsd.txt', io_stat)
+        write(funit,'(A)')'sp_project,nx,ny,npatches,avg,std'
+        do i = 1,nprojects
+            write(funit,'(A,A1,I3,A1,I3,A1,F6.1,A1,F8.3,A1,F8.3)')trim(projects_fnames(order(i))),&
+                &',',nxpatch(order(i)),',',nypatch(order(i)),',',npatch(i),',',avg2(i),',',std2(i)
+        enddo
+        call fclose(funit)
+        call write_plot('Absolute rmsd', 'n = sqrt(nx * ny)', 'shifts rmsd', nprojects, npatch, avg2, std2, 'absolute_rmsd.eps')
+        ! incrementals rmsds
+        call fopen(funit, 'incremental_rmsd.txt', action='READWRITE', status='UNKNOWN', iostat=io_stat)
+        call fileiochk('could not write incr_rmsd.txt', io_stat)
+        write(funit,'(A)')'index,descr,avg,std'
+        do i = 1,nprojects-1
+            write(funit,'(I3,A1,A,A1,F8.3,A1,F8.3)')i,',',&
+                &int2str(nxpatch(order(i)))//'x'//int2str(nypatch(order(i)))//'_vs_'//int2str(nxpatch(order(i+1)))//'x'//int2str(nypatch(order(i+1))),&
+                &',',avg(i),',',std(i)
+        enddo
+        call fclose(funit)
+        order = (/(i,i=1,nprojects)/)
+        i = nprojects-1
+        call write_plot('Incremental rmsd', 'Order', 'incremtal shifts rmsd', i, real(order(:i)), avg(:i), std(:i), 'incremental_rmsd.eps')
+        call simple_end('**** SIMPLE_COMPAREMC NORMAL STOP ****')
+
+        contains
+
+            subroutine write_plot(title, abscissa, ordinate, n, x, y, ystd, fname)
+                character(len=*), intent(in) :: title,abscissa,ordinate,fname
+                integer,          intent(in) :: n
+                real,             intent(in) :: x(n), y(n), ystd(n)
+                integer :: i
+                call CPlot2D__new(plot2D, trim(title)//C_NULL_CHAR)
+                call CPlot2D__SetXAxisSize(plot2D, real(50*n,dp))
+                call CPlot2D__SetYAxisSize(plot2D, real(250*maxval(y+2.0*ystd),dp))
+                call CPlot2D__SetXAxisTitle(plot2D, abscissa//c_null_char)
+                call CPlot2D__SetYAxisTitle(plot2D, ordinate//c_null_char)
+                call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
+                call CDataSet__new(dataSet)
+                call CDataSet__SetDrawMarker(dataSet,C_TRUE)
+                call CDataSet__SetDatasetColor(dataSet, 0.0_c_double, 0.0_c_double, 0.0_c_double)
+                call CDataPoint__new2(real(0.0,dp), real(0.0, dp), point)
+                call CDataSet__AddDataPoint(dataSet, point)
+                call CDataPoint__delete(point)
+                do i = 1,n
+                    call CDataPoint__new2(real(x(i),dp), real(y(i), dp), point)
                     call CDataSet__AddDataPoint(dataSet, point)
                     call CDataPoint__delete(point)
-                    call CPlot2D__AddDataSet(plot2D, dataset)
-                    call CDataSet__delete(dataset)
-                end do
-            enddo
-            call CPlot2D__OutputPostScriptPlot(plot2D, 'test_'//int2str_pad(k,3)//'.eps'//C_NULL_CHAR)
-            call CPlot2D__delete(plot2D)
-        enddo
-        call simple_end('**** SIMPLE_COMPAREMC NORMAL STOP ****')
-        contains
+                enddo
+                call CPlot2D__AddDataSet(plot2D, dataset)
+                call CDataSet__delete(dataset)
+                call CDataSet__new(dataSet)
+                call CDataSet__SetDrawMarker(dataSet,C_FALSE)
+                call CDataSet__SetDatasetColor(dataSet, 0.4_c_double, 0.4_c_double, 0.4_c_double)
+                do i = 1,n
+                    call CDataPoint__new2(real(x(i),dp), real(y(i)+ystd(i), dp), point)
+                    call CDataSet__AddDataPoint(dataSet, point)
+                    call CDataPoint__delete(point)
+                enddo
+                call CPlot2D__AddDataSet(plot2D, dataset)
+                call CDataSet__delete(dataset)
+                call CDataSet__new(dataSet)
+                call CDataSet__SetDrawMarker(dataSet,C_FALSE)
+                call CDataSet__SetDatasetColor(dataSet, 0.4_c_double, 0.4_c_double, 0.4_c_double)
+                do i = 1,n
+                    call CDataPoint__new2(real(x(i),dp), real(y(i)-ystd(i), dp), point)
+                    call CDataSet__AddDataPoint(dataSet, point)
+                    call CDataPoint__delete(point)
+                enddo
+                call CPlot2D__AddDataSet(plot2D, dataset)
+                call CDataSet__delete(dataset)
+                call CPlot2D__OutputPostScriptPlot(plot2D, trim(fname)//C_NULL_CHAR)
+                call CPlot2D__delete(plot2D)
+            end subroutine write_plot
 
             subroutine polynomial2shifts(cs, xs, ys, times, offsets)
                 real(dp), intent(in)  :: cs(POLYDIM,2), xs(nx), ys(ny), times(nframes)
