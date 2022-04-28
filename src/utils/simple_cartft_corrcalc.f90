@@ -65,7 +65,7 @@ type :: cartft_corrcalc
     procedure          :: create_absctfmats
     procedure          :: prep_ref4corr
     procedure          :: calc_corr
-
+    procedure          :: specscore
     ! DESTRUCTOR
     procedure          :: kill
 end type cartft_corrcalc
@@ -440,9 +440,42 @@ contains
         ithr        =  omp_get_thread_num() + 1
         img_ref     => self%heap_vars(ithr)%img_ref
         img_ref_tmp => self%heap_vars(ithr)%img_ref_tmp
+        ! copy
+        if( self%iseven(i) )then
+            call img_ref%copy_fast(self%refs_eo(iref,2))
+        else
+            call img_ref%copy_fast(self%refs_eo(iref,1))
+        endif
+        ! prep ref
         call self%prep_ref4corr(iref, iptcl, img_ref)
+        ! calc corr
         cc = img_ref%corr(img_ref_tmp, self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec)
     end function calc_corr
+
+    function specscore( self, iref, iptcl, shvec ) result( spec )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iref, iptcl
+        real,                   intent(in)    :: shvec(2)
+        class(image), pointer :: img_ref => null()
+        real,         pointer :: frc(:)  => null()
+        real    :: spec
+        integer :: i, ithr
+        i       =  self%pinds(iptcl)
+        ithr    =  omp_get_thread_num() + 1
+        img_ref => self%heap_vars(ithr)%img_ref
+        frc     => self%heap_vars(ithr)%frc
+        if( self%iseven(i) )then
+            call img_ref%copy_fast(self%refs_eo(iref,2))
+        else
+            call img_ref%copy_fast(self%refs_eo(iref,1))
+        endif
+        ! prep ref
+        call self%prep_ref4corr(iref, iptcl, img_ref)
+        ! calc FRC
+        call img_ref%fsc(self%particles(i), frc)
+        ! calc specscore
+        spec = max(0.,median_nocopy(frc))
+    end function specscore
 
     ! DESTRUCTOR
 
