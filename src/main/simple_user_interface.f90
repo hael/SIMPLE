@@ -2544,7 +2544,7 @@ contains
         ! filter controls
         call opt_2D_filter%set_input('filt_ctrls', 1, 'phrand'     , 'binary', 'Phase randomization', 'Phase randomization of F-comps with power below noise(yes|no){no}', '(yes|no){no}', .false., 'no')
         call opt_2D_filter%set_input('filt_ctrls', 2, 'is_uniform' , 'binary', 'uniform filter?'    , 'Whether uniform or nonuniform filter(yes|no){no}'                 , '(yes|no){no}', .false., 'no')
-        call opt_3D_filter%set_input('filt_ctrls', 3, 'filter'     , 'multi' , 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', '(butterworth8|lp|tv|tanh){butterworth8}', .false., 'butterworth8')
+        call opt_2D_filter%set_input('filt_ctrls', 3, 'filter'     , 'multi' , 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', '(butterworth8|lp|tv|tanh){butterworth8}', .false., 'butterworth8')
         ! mask controls
         call opt_2D_filter%set_input('mask_ctrls', 1, mskdiam)
         call opt_2D_filter%set_input('mask_ctrls', 2, mskfile)
