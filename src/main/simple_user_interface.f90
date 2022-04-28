@@ -248,6 +248,7 @@ type(simple_input_param) :: qsys_qos
 type(simple_input_param) :: qsys_reservation
 type(simple_input_param) :: remap_cls
 type(simple_input_param) :: scale_movies
+type(simple_input_param) :: script
 type(simple_input_param) :: sherr
 type(simple_input_param) :: sigma
 type(simple_input_param) :: smpd
@@ -981,6 +982,7 @@ contains
         call set_param(automsk,        'automsk',      'multi',  'Perform envelope masking', 'Whether to generate/apply an envelope mask(yes|no|file){no}', '(yes|no|file){no}', .false., 'no')
         call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (full|partial){full}','(full|partial){full}', .false., 'full')
         call set_param(max_dose,       'max_dose',     'num',    'Maximum dose threshold(e/A2)', 'Threshold for maximum dose and number of frames used during movie alignment(e/A2), if <=0 all frames are used{0.0}','{0.0}',.false., 0.0)
+        call set_param(script,         'script',       'binary', 'Generate script for shared-mem exec on cluster', 'Generate script for shared-mem exec on cluster(yes|no){no}', '(yes|no){no}', .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1100,6 +1102,7 @@ contains
         call autorefine3D_nano%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call autorefine3D_nano%set_input('comp_ctrls', 1, nthr)
+        call autorefine3D_nano%set_input('comp_ctrls', 2, script)
     end subroutine new_autorefine3D_nano
 
     subroutine new_binarize
