@@ -105,7 +105,7 @@ contains
         character(len=*),       intent(in)    :: filter_type
         type(image),  optional, intent(inout) :: mskimg
         class(image), optional, intent(inout) :: map2filt
-        type(image)          :: odd_copy, even_copy, map2filt_copy
+        type(image)          :: odd_copy, even_copy, map2filt_copy, freq_img
         integer              :: k,l,m,max_lplim, box, dim3, ldim(3), find_start, find_stop
         integer              :: best_ind, cur_ind, k1,l1,m1,k_ind,l_ind,m_ind, lb(3), ub(3)
         real                 :: cur_min_sum, ref_diff, rad
@@ -114,7 +114,7 @@ contains
         real,    parameter   :: LP_START = 30.                 ! 30 A resolution
         integer, parameter   :: SPA_SUP = 0, MID = 1 + SPA_SUP ! support of the window function
         real,    pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null(), rmat_map2filt(:,:,:)=>null()
-        real,    allocatable :: opt_odd(:,:,:), opt_even(:,:,:), cur_diff(:,:,:), opt_diff(:,:,:)
+        real,    allocatable :: opt_odd(:,:,:), opt_even(:,:,:), cur_diff(:,:,:), opt_diff(:,:,:), opt_freq(:,:,:)
         real,    allocatable :: cur_fil(:), weights_3D(:,:,:), weights_2D(:,:), opt_map2filt(:,:,:)
         logical, allocatable :: l_mask(:,:,:)
         map2filt_present = present(map2filt)
@@ -127,14 +127,15 @@ contains
         dim3       = ldim(3)
         find_stop  = calc_fourier_index(2. * smpd, box, smpd)
         find_start = calc_fourier_index(LP_START, box, smpd)
+        call freq_img%new([box,box,dim3], smpd)
         call odd_copy%copy(odd)
         call even_copy%copy(even)
         if( map2filt_present )then
             allocate(opt_map2filt(box,box,dim3), source=0.)
             call map2filt_copy%copy(map2filt)
         endif
-        allocate(opt_odd(box,box,dim3), opt_even(box,box,dim3), cur_diff(box,box,dim3), opt_diff(box,box,dim3), cur_fil(box),&
-        &weights_2D(SPA_SUP*2+1, SPA_SUP*2+1), weights_3D(SPA_SUP*2+1, SPA_SUP*2+1, SPA_SUP*2+1), source=0.)
+        allocate(opt_odd(box,box,dim3), opt_even(box,box,dim3), cur_diff(box,box,dim3), opt_diff(box,box,dim3),opt_freq(box,box,dim3),&
+        &cur_fil(box),weights_2D(SPA_SUP*2+1, SPA_SUP*2+1), weights_3D(SPA_SUP*2+1, SPA_SUP*2+1, SPA_SUP*2+1), source=0.)
         ! assign the weights of the neighboring voxels
         ! 2D weights
         do k = 1, 2*SPA_SUP+1
@@ -169,7 +170,9 @@ contains
         endif
         ! searching for the best fourier index from here
         opt_diff     = 0.
+        opt_freq     = 0.   ! record the optimized cutoff frequency
         opt_diff(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(cur_min_sum)
+        opt_freq(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(cur_min_sum)
         cur_min_sum  = huge(cur_min_sum)   
         best_ind     = find_start
         do cur_ind = find_start, find_stop, FIND_STEPSZ
@@ -214,6 +217,7 @@ contains
                                 opt_odd(k,l,1)  = rmat_odd(k,l,1)
                                 opt_even(k,l,1) = rmat_even(k,l,1)
                                 opt_diff(k,l,1) = ref_diff
+                                opt_freq(k,l,1) = cur_ind
                                 if( map2filt_present ) opt_map2filt(k,l,1) = rmat_map2filt(k,l,1)
                             endif
                         enddo
@@ -245,6 +249,7 @@ contains
                                     opt_odd(k,l,m)  = rmat_odd(k,l,m)
                                     opt_even(k,l,m) = rmat_even(k,l,m)
                                     opt_diff(k,l,m) = ref_diff
+                                    opt_freq(k,l,m) = cur_ind
                                     if(map2filt_present ) opt_map2filt(k,l,m) = rmat_map2filt(k,l,m)
                                 endif
                             enddo
@@ -268,6 +273,12 @@ contains
         if(is_uniform == 'yes' ) write(*, *) 'minimized cost at index = ', best_ind
         call odd%set_rmat(opt_odd,   .false.)
         call even%set_rmat(opt_even, .false.)
+        ! output the optimized frequency map to see the nonuniform parts
+        if (dim3 > 1 .and. is_uniform == 'no') then
+            call freq_img%set_rmat(opt_freq, .false.)
+            call freq_img%write('opt_freq_map.mrc')
+            call freq_img%kill
+        endif
         if( map2filt_present ) call map2filt%set_rmat(opt_map2filt, .false.)
         deallocate(l_mask, opt_odd, opt_even, cur_diff, opt_diff, cur_fil, weights_3D, weights_2D)
     end subroutine opt_filter
