@@ -239,7 +239,7 @@ contains
         type(parameters)  :: params
         type(image)       :: even, odd, map2filt, mskvol
         real, allocatable :: cur_mat(:,:,:)
-        logical           :: map2filt_present
+        logical           :: map2filt_present, have_mask_file
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline) 
         map2filt_present = cline%defined('vol3')
@@ -251,6 +251,7 @@ contains
         call even%new([params%box,params%box,params%box], params%smpd)
         call odd %read(params%vols(1))
         call even%read(params%vols(2))
+        have_mask_file = .false.
         if( cline%defined('mskfile') )then
             if( file_exists(params%mskfile) )then
                 call mskvol%new([params%box,params%box,params%box], params%smpd)
@@ -259,6 +260,8 @@ contains
                 call odd%zero_background
                 call even%mul(mskvol)
                 call odd%mul(mskvol)
+                call mskvol%one_at_edge ! to expand before masking of reference internally
+                have_mask_file = .true.
             else
                 THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_opt_3D_filter')
             endif
@@ -266,13 +269,32 @@ contains
             ! spherical masking
             call even%mask(params%msk, 'soft')
             call odd%mask(params%msk, 'soft')
-            call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
+            call mskvol%disc([params%box,params%box,params%box], params%smpd,&
+            &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         endif
         if( map2filt_present )then
             call opt_filter(odd, even, params%smpd, params%is_uniform, params%filter, mskvol, map2filt)
+            if( have_mask_file )then
+                call mskvol%read(params%mskfile) ! restore the soft edge
+                call map2filt%mul(mskvol)
+                call even%mul(mskvol)
+                call odd%mul(mskvol)
+            else
+                call map2filt%mask(params%msk, 'soft')
+                call even%mask(params%msk, 'soft')
+                call odd%mask(params%msk, 'soft')
+            endif
             call map2filt%write(trim(params%is_uniform)//'_uniform_opt_3D_filtered.mrc')
         else
             call opt_filter(odd, even, params%smpd, params%is_uniform, params%filter, mskvol)
+            if( have_mask_file )then
+                call mskvol%read(params%mskfile) ! restore the soft edge
+                call even%mul(mskvol)
+                call odd%mul(mskvol)
+            else
+                call even%mask(params%msk, 'soft')
+                call odd%mask(params%msk, 'soft')
+            endif
         endif
         call odd%write(trim(params%is_uniform)//'_uniform_opt_3D_filter_odd.mrc')
         call even%write(trim(params%is_uniform)//'_uniform_opt_3D_filter_even.mrc')
