@@ -10,27 +10,35 @@ public :: cartft_corrcalc, cartftcc_glob
 private
 #include "simple_local_flags.inc"
 
+type heap_vars
+    type(image), pointer :: img_ref     => null()
+    type(image), pointer :: img_ref_tmp => null()
+    real,        pointer :: frc(:)      => null()
+end type heap_vars
+
 type :: cartft_corrcalc
     private
-    integer                  :: nptcls        = 1       !< the total number of particles in partition (logically indexded [fromp,top])
-    integer                  :: nrefs         = 1       !< the number of references (logically indexded [1,nrefs])
-    integer                  :: filtsz        = 0       !< Nyqvist limit
-    integer                  :: pfromto(2)    = 0       !< particle index range
-    integer                  :: ldim(3)       = 0       !< logical dimensions of original cartesian image
-    integer                  :: lims(3,2)     = 0       !< resolution mask limits
-    integer                  :: cmat_shape(3) = 0       !< shape of complex matrix (dictated by the FFTW library)
-    integer,     allocatable :: pinds(:)                !< index array (to reduce memory when frac_update < 1)
-    real,        allocatable :: pxls_p_shell(:)         !< number of (cartesian) pixels per shell
-    real(sp),    allocatable :: sqsums_ptcls(:)         !< memoized square sums for the correlation calculations (taken from kfromto(1):kstop)
-    real(sp),    allocatable :: ctfmats(:,:,:)          !< expand set of CTF matrices (for efficient parallel exec)
-    real(sp),    allocatable :: ref_optlp(:,:)          !< references optimal filter
-    type(image), allocatable :: refs_eo(:,:)            !< reference images even/odd, dim1=1:nrefs, dim2=1:2 (1 is even 2 is odd)
-    type(image), allocatable :: particles(:)            !< particle images
-    logical,     allocatable :: iseven(:)               !< e/o assignment for gold-standard FSC
-    logical,     allocatable :: resmsk(:,:,:)           !< resolution mask for corr calc
-    logical                  :: l_match_filt = .false.  !< matched filter flag
-    logical                  :: with_ctf     = .false.  !< CTF flag
-    logical                  :: existence    = .false.  !< to indicate existence
+    integer                      :: nptcls        = 1       !< the total number of particles in partition (logically indexded [fromp,top])
+    integer                      :: nrefs         = 1       !< the number of references (logically indexded [1,nrefs])
+    integer                      :: filtsz        = 0       !< Nyqvist limit
+    integer                      :: pfromto(2)    = 0       !< particle index range
+    integer                      :: ldim(3)       = 0       !< logical dimensions of original cartesian image
+    integer                      :: lims(3,2)     = 0       !< resolution mask limits
+    integer                      :: cmat_shape(3) = 0       !< shape of complex matrix (dictated by the FFTW library)
+    integer,         allocatable :: pinds(:)                !< index array (to reduce memory when frac_update < 1)
+    real,            allocatable :: pxls_p_shell(:)         !< number of (cartesian) pixels per shell
+    real(sp),        allocatable :: sqsums_ptcls(:)         !< memoized square sums for the correlation calculations (taken from kfromto(1):kstop)
+    real(sp),        allocatable :: ctfmats(:,:,:,:)        !< expand set of CTF matrices (for efficient parallel exec)
+    real(sp),        allocatable :: ref_optlp(:,:)          !< references optimal filter
+    type(image),     allocatable :: refs_eo(:,:)            !< reference images even/odd, dim1=1:nrefs, dim2=1:2 (1 is even 2 is odd)
+    type(image),     allocatable :: particles(:)            !< particle images
+    logical,         allocatable :: iseven(:)               !< e/o assignment for gold-standard FSC
+    logical,         allocatable :: resmsk(:,:,:)           !< resolution mask for corr calc
+    logical                      :: l_clsfrcs    = .false.  !< CLS2D/3DRefs flag
+    logical                      :: l_match_filt = .false.  !< matched filter flag
+    logical                      :: with_ctf     = .false.  !< CTF flag
+    logical                      :: existence    = .false.  !< to indicate existence
+    type(heap_vars), allocatable :: heap_vars(:)            !< allocated fields to save stack allocation in subroutines and functions
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -53,10 +61,10 @@ type :: cartft_corrcalc
     procedure, private :: memoize_resmsk
     procedure, private :: setup_pxls_p_shell
     procedure, private :: memoize_sqsum_ptcl
-
-
-
     ! CALCULATORS
+    procedure          :: create_absctfmats
+    procedure          :: prep_ref4corr
+    procedure          :: calc_corr
 
     ! DESTRUCTOR
     procedure          :: kill
@@ -77,7 +85,7 @@ contains
         logical, optional,              intent(in)    :: ptcl_mask(pfromto(1):pfromto(2))
         integer, optional,              intent(in)    :: eoarr(pfromto(1):pfromto(2))
         logical :: even_dims, test(2)
-        integer :: i, cnt
+        integer :: i, cnt, ithr
         ! kill possibly pre-existing object
         call self%kill
         ! set particle index range
@@ -141,8 +149,8 @@ contains
                 end do
             endif
         endif
-        ! allocate the rest (we worry about heap variables similar to the polarft_corrcalc class when we get there)
-        allocate( self%refs_eo(self%nrefs,2), self%particles(self%nptcls) )
+        ! allocate the rest
+        allocate( self%refs_eo(self%nrefs,2), self%particles(self%nptcls), self%heap_vars(params_glob%nthr) )
         do i = 1,self%nrefs
             call self%refs_eo(i,1)%new(self%ldim, params_glob%smpd)
             call self%refs_eo(i,2)%new(self%ldim, params_glob%smpd)
@@ -150,9 +158,16 @@ contains
         do i = 1,self%nptcls
             call self%particles(i)%new(self%ldim, params_glob%smpd)
         end do
+        do ithr = 1,params_glob%nthr
+            call self%heap_vars(ithr)%img_ref%new(self%ldim, params_glob%smpd)
+            call self%heap_vars(ithr)%img_ref_tmp%new(self%ldim, params_glob%smpd)
+            allocate(self%heap_vars(ithr)%frc(self%filtsz), source = 0.)
+        end do
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
+        ! 2Dclass/3Drefs mapping on/off
+        self%l_clsfrcs = params_glob%clsfrcs.eq.'yes'
         ! setup pxls_p_shell
         call self%setup_pxls_p_shell
         ! memoize resolution mask
@@ -297,11 +312,11 @@ contains
 
     subroutine memoize_resmsk( self )
         class(cartft_corrcalc), intent(inout) :: self
-        integer :: h, k, l, sh, phys(3), cmat_shape(3)
+        integer :: h, k, l, sh, phys(3)
         self%lims = self%particles(1)%loop_lims(2)
         if( allocated(self%resmsk) ) deallocate(self%resmsk)
-        cmat_shape = self%particles(1)%get_array_shape()
-        allocate(self%resmsk(cmat_shape(1),cmat_shape(2),cmat_shape(3)), source=.false.)
+        self%cmat_shape = self%particles(1)%get_array_shape()
+        allocate(self%resmsk(self%cmat_shape(1),self%cmat_shape(2),self%cmat_shape(3)), source=.false.)
         do k=self%lims(2,1),self%lims(2,2)
             do h=self%lims(1,1),self%lims(1,2)
                 do l=self%lims(3,1),self%lims(3,2)
@@ -339,11 +354,101 @@ contains
         self%sqsums_ptcls(i) = self%particles(i)%calc_sumsq(self%resmsk)
     end subroutine memoize_sqsum_ptcl
 
+    ! CALCULATORS
+
+    subroutine create_absctfmats( self, spproj, oritype, pfromto )
+        use simple_ctf,        only: ctf
+        use simple_sp_project, only: sp_project
+        class(cartft_corrcalc),    intent(inout) :: self
+        class(sp_project), target, intent(inout) :: spproj
+        character(len=*),          intent(in)    :: oritype
+        integer, optional,         intent(in)    :: pfromto(2)
+        type(ctfparams) :: ctfparms(nthr_glob)
+        type(ctf)       :: tfuns(nthr_glob)
+        real(sp)        :: inv_ldim(3),inv(2)
+        integer         :: i,h,k,iptcl,ithr,ppfromto(2),ctfmatind,phys(3)
+        logical         :: present_pfromto
+        present_pfromto = present(pfromto)
+        ppfromto = self%pfromto
+        if( present_pfromto ) ppfromto = pfromto
+        if( allocated(self%ctfmats) ) deallocate(self%ctfmats)
+        allocate(self%ctfmats(self%cmat_shape(1),self%cmat_shape(2),self%cmat_shape(3),1:self%nptcls), source=0.)
+        inv_ldim = 1./real(self%ldim)
+        !$omp parallel do default(shared) private(i,iptcl,ctfmatind,ithr,h,k,phys,inv) schedule(static) proc_bind(close)
+        do i=ppfromto(1),ppfromto(2)
+            if( .not. present_pfromto )then
+                iptcl     = i
+                ctfmatind = i
+            else
+                iptcl     = i
+                ctfmatind = i - ppfromto(1) + 1
+            endif
+            if( self%pinds(iptcl) > 0 )then
+                ithr           = omp_get_thread_num() + 1
+                ctfparms(ithr) = spproj%get_ctfparams(trim(oritype), iptcl)
+                tfuns(ithr)    = ctf(ctfparms(ithr)%smpd, ctfparms(ithr)%kv, ctfparms(ithr)%cs, ctfparms(ithr)%fraca)
+                call tfuns(ithr)%init(ctfparms(ithr)%dfx, ctfparms(ithr)%dfy, ctfparms(ithr)%angast)
+                do h = self%lims(1,1),self%lims(1,2)
+                    do k = self%lims(2,1),self%lims(2,2)
+                        ! compute physical address
+                        phys = self%particles(1)%comp_addr_phys(h,k,1)        
+                        inv  = real([h,k]) * inv_ldim(1:2)
+                        if( ctfparms(ithr)%l_phaseplate )then
+                            self%ctfmats(phys(1),phys(2),phys(3),self%pinds(ctfmatind))= abs(tfuns(ithr)%eval(dot_product(inv,inv), atan2(real(k),real(h)),&
+                            &ctfparms(ithr)%phshift, .not.params_glob%l_wiener_part))
+                        else
+                            self%ctfmats(phys(1),phys(2),phys(3),self%pinds(ctfmatind))= abs(tfuns(ithr)%eval(dot_product(inv,inv), atan2(real(k),real(h)),&
+                            &0., .not.params_glob%l_wiener_part))
+                        endif
+                    end do
+                end do
+            endif
+        end do
+        !$omp end parallel do
+    end subroutine create_absctfmats
+
+    subroutine prep_ref4corr( self, iref, iptcl, img_ref )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iref, iptcl
+        class(image),           intent(inout) :: img_ref
+        integer :: i
+        i = self%pinds(iptcl)
+        ! copy
+        if( self%iseven(i) )then
+            call img_ref%copy_fast(self%refs_eo(iref,2))
+        else
+            call img_ref%copy_fast(self%refs_eo(iref,1))
+        endif
+        ! shell normalization and filtering
+        if( self%l_clsfrcs )then
+            call self%shellnorm_and_filter_ref(iptcl, img_ref)
+        else
+            call self%shellnorm_and_filter_ref(iref,  img_ref)
+        endif
+        ! multiply with CTF
+        if( self%with_ctf ) call img_ref%mul_cmat(self%ctfmats(:,:,:,i), self%resmsk)
+    end subroutine prep_ref4corr
+
+    function calc_corr( self, iref, iptcl, shvec ) result( cc )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iref, iptcl
+        real,                   intent(in)    :: shvec(2)
+        class(image), pointer :: img_ref => null(), img_ref_tmp => null()
+        real    :: cc, sqsum_ref
+        integer :: i, ithr
+        i           =  self%pinds(iptcl)
+        ithr        =  omp_get_thread_num() + 1
+        img_ref     => self%heap_vars(ithr)%img_ref
+        img_ref_tmp => self%heap_vars(ithr)%img_ref_tmp
+        call self%prep_ref4corr(iref, iptcl, img_ref)
+        cc = img_ref%corr(img_ref_tmp, self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec)
+    end function calc_corr
+
     ! DESTRUCTOR
 
     subroutine kill( self )
         class(cartft_corrcalc), intent(inout) :: self
-        integer :: i
+        integer :: i, ithr
         if( self%existence )then
             if( allocated(self%pinds)        ) deallocate(self%pinds)
             if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
@@ -358,7 +463,15 @@ contains
             do i = 1,self%nptcls
                 call self%particles(i)%kill
             end do
-            deallocate(self%refs_eo, self%particles)
+            do ithr = 1,params_glob%nthr
+                call self%heap_vars(ithr)%img_ref%kill
+                call self%heap_vars(ithr)%img_ref_tmp%kill
+                deallocate(self%heap_vars(ithr)%frc)
+                self%heap_vars(ithr)%img_ref     => null()
+                self%heap_vars(ithr)%img_ref_tmp => null()
+                self%heap_vars(ithr)%frc         => null()
+            end do
+            deallocate(self%refs_eo, self%particles, self%heap_vars)
             self%existence = .false.
         endif
     end subroutine kill

@@ -44,6 +44,7 @@ contains
     generic            :: disc => disc_1, disc_2
     procedure          :: ring
     procedure          :: copy
+    procedure          :: copy_fast
     procedure          :: img2spec
     procedure          :: mic2spec
     procedure          :: pspec_graphene_mask
@@ -187,6 +188,7 @@ contains
     procedure, private :: mul_cmat_at_3
     procedure, private :: mul_cmat_at_4
     generic            :: mul_cmat_at => mul_cmat_at_1, mul_cmat_at_2, mul_cmat_at_3, mul_cmat_at_4
+    procedure          :: mul_cmat
     procedure, private :: div_cmat_at_1
     procedure, private :: div_cmat_at_2
     procedure, private :: div_cmat_at_3
@@ -541,15 +543,20 @@ contains
         if( present(npix) )npix = count(self%rmat>0.5)
     end subroutine ring
 
-    !>  \brief copy is a constructor that copies the input object
     subroutine copy( self, self_in )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self_in
         call self%new(self_in%ldim, self_in%smpd, self%wthreads)
-        self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) =&
-            &self_in%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
-        self%ft = self_in%ft
+        self%rmat = self_in%rmat
+        self%ft   = self_in%ft
     end subroutine copy
+
+    subroutine copy_fast( self, self_in )
+        class(image), intent(inout) :: self
+        class(image), intent(in)    :: self_in
+        self%rmat = self_in%rmat
+        self%ft   = self_in%ft
+    end subroutine copy_fast
 
     !> img2spec calculates the powerspectrum of the input image
     !!          the resulting spectrum has dampened central cross and subtracted background
@@ -1249,7 +1256,7 @@ contains
         val = self%rmat(logi(1),logi(2),logi(3))
     end function get
 
-    function get_rmat( self ) result( rmat )
+    pure function get_rmat( self ) result( rmat )
         class(image), intent(in) :: self
         real, allocatable :: rmat(:,:,:)
         integer :: ldim(3)
@@ -1269,14 +1276,14 @@ contains
         rmat = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))
     end subroutine get_rmat_sub
 
-    function get_rmat_at_1( self, logi ) result( val )
+    pure function get_rmat_at_1( self, logi ) result( val )
         class(image), intent(in)  :: self
         integer,      intent(in)  :: logi(3)
         real :: val
         val = self%rmat(logi(1),logi(2),logi(3))
     end function get_rmat_at_1
 
-    elemental pure function get_rmat_at_2( self, i,j,k ) result( val )
+    pure function get_rmat_at_2( self, i,j,k ) result( val )
         class(image), intent(in)  :: self
         integer,      intent(in)  :: i,j,k
         real :: val
@@ -1317,7 +1324,7 @@ contains
         comp = self%cmat(phys(1),phys(2),phys(3))
     end function get_cmat_at_1
 
-    elemental pure function get_cmat_at_2( self, h,k,l ) result( comp )
+    pure function get_cmat_at_2( self, h,k,l ) result( comp )
         class(image), intent(in) :: self
         integer,      intent(in) :: h,k,l
         complex :: comp
@@ -1353,15 +1360,15 @@ contains
     end subroutine set_cmat_4
 
     ! set comp to cmat at index phys
-    subroutine set_cmat_at_1( self , phys , comp)
+    pure subroutine set_cmat_at_1( self, phys ,comp)
         class(image), intent(inout) :: self
-        integer,      intent(in) :: phys(3)
-        complex,      intent(in) :: comp
+        integer,      intent(in)    :: phys(3)
+        complex,      intent(in)    :: comp
         self%cmat(phys(1),phys(2),phys(3)) = comp
     end subroutine set_cmat_at_1
 
     !> add comp to cmat at index phys
-    elemental subroutine set_cmat_at_2( self, h, k, l, comp)
+    pure subroutine set_cmat_at_2( self, h, k, l, comp)
         class(image), intent(inout) :: self
         integer, intent(in) :: h,k,l
         complex, intent(in) :: comp
@@ -1369,15 +1376,15 @@ contains
     end subroutine set_cmat_at_2
 
     !> add comp to cmat at index phys
-    subroutine add_cmat_at_1( self , phys , comp)
+    pure subroutine add_cmat_at_1( self , phys , comp)
         class(image), intent(inout) :: self
-        integer,      intent(in) :: phys(3)
-        complex,      intent(in) :: comp
+        integer,      intent(in)    :: phys(3)
+        complex,      intent(in)    :: comp
         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) + comp
     end subroutine add_cmat_at_1
 
     !> add comp to cmat at index (h,k,l)
-    elemental subroutine add_cmat_at_2( self, h, k, l, comp)
+    pure subroutine add_cmat_at_2( self, h, k, l, comp)
         class(image), intent(inout) :: self
         integer,      intent(in) :: h,k,l
         complex,      intent(in) :: comp
@@ -1436,7 +1443,7 @@ contains
         !$omp end parallel
     end subroutine add_cmats_to_cmats
 
-    subroutine div_cmat_at_1( self, phys, rval )
+    pure subroutine div_cmat_at_1( self, phys, rval )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
         real,              intent(in)    :: rval
@@ -1447,7 +1454,7 @@ contains
         endif
     end subroutine div_cmat_at_1
 
-    elemental subroutine div_cmat_at_2( self,h,k,l, rval)
+    pure subroutine div_cmat_at_2( self,h,k,l, rval)
         class(image), intent(inout) :: self
         integer,      intent(in) :: h,k,l
         real,         intent(in) :: rval
@@ -1458,7 +1465,7 @@ contains
         end if
     end subroutine div_cmat_at_2
 
-    subroutine div_cmat_at_3( self, phys, cval )
+    pure subroutine div_cmat_at_3( self, phys, cval )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: phys(3)
         complex,           intent(in)    :: cval
@@ -1469,14 +1476,14 @@ contains
         endif
     end subroutine div_cmat_at_3
 
-    elemental subroutine div_cmat_at_4( self,h,k,l, cval)
+    pure subroutine div_cmat_at_4( self,h,k,l, cval)
         class(image), intent(inout) :: self
-        integer,      intent(in) :: h,k,l
-        complex,      intent(in) :: cval
+        integer,      intent(in)    :: h,k,l
+        complex,      intent(in)    :: cval
         if( abs(cval) > 1.e-6 )then
             self%cmat(h,k,l) = self%cmat(h,k,l) / cval
         else
-            self%cmat(h,k,l) =cmplx(0.,0.)
+            self%cmat(h,k,l) = cmplx(0.,0.)
         end if
     end subroutine div_cmat_at_4
 
@@ -1494,19 +1501,28 @@ contains
         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * cval
     end subroutine mul_cmat_at_2
 
-    elemental subroutine mul_cmat_at_3( self, h,k,l,rval )
+    pure subroutine mul_cmat_at_3( self, h,k,l,rval )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: h,k,l
         real,         intent(in)    :: rval
         self%cmat(h,k,l) = self%cmat(h,k,l) * rval
     end subroutine mul_cmat_at_3
 
-    elemental subroutine mul_cmat_at_4( self, h,k,l, cval )
+    pure subroutine mul_cmat_at_4( self, h,k,l, cval )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: h,k,l
         complex,      intent(in)    :: cval
         self%cmat(h,k,l) = self%cmat(h,k,l) * cval
     end subroutine mul_cmat_at_4
+
+    subroutine mul_cmat( self, rmat, resmsk )
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: rmat(self%array_shape(1),self%array_shape(3),self%array_shape(3))
+        logical,      intent(in)    :: resmsk(self%array_shape(1),self%array_shape(3),self%array_shape(3))
+        where( resmsk )
+            self%cmat = self%cmat * rmat
+        end where
+    end subroutine mul_cmat
 
     subroutine print_cmat( self )
         class(image), intent(in) :: self
