@@ -1,4 +1,5 @@
-module simple_butterworth
+! optimization(search)-based filter (uniform/nonuniform)
+module simple_opt_filter
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
@@ -76,23 +77,43 @@ contains
         diff = diff/(sum(odd-mean_odd)**2 + sum(even-mean_even)**2)
     end subroutine normalized_squared_diff
 
-    ! optimized voxelwise uniform/nonuniform filter, using the (low-pass/butterworth)
-    subroutine opt_voxel_fil(odd, even, smpd, is_uniform, mskimg, map2filt)
+    subroutine apply_opt_filter(img, filter_type, cur_ind, cur_fil, use_cache)
+        type(image),      intent(inout) :: img
+        character(len=*), intent(in)    :: filter_type
+        integer ,         intent(in)    :: cur_ind
+        real,             intent(inout) :: cur_fil(:)
+        logical,          intent(in)    :: use_cache
+        integer,          parameter     :: BW_ORDER=8
+        call img%fft()
+        if (filter_type == 'lp') then
+            call img%lp(cur_ind)
+        else    ! default to butterworth8, even if wrong filter type is entered
+            if (.not. use_cache) then
+                call butterworth_filter(cur_fil, BW_ORDER, real(cur_ind))
+            endif
+            call img%apply_filter(cur_fil)
+        endif
+        call img%ifft()
+    end subroutine apply_opt_filter
+
+    ! optimization(search)-based uniform/nonuniform filter, using the (low-pass/butterworth)
+    subroutine opt_filter(odd, even, smpd, is_uniform, filter_type, mskimg, map2filt)
         type(image),            intent(inout) :: odd
         type(image),            intent(inout) :: even
         real,                   intent(in)    :: smpd
         character(len=*),       intent(in)    :: is_uniform
+        character(len=*),       intent(in)    :: filter_type
         type(image),  optional, intent(inout) :: mskimg
         class(image), optional, intent(inout) :: map2filt
         type(image)          :: odd_copy, even_copy, map2filt_copy
         integer              :: k,l,m,max_lplim, box, dim3, ldim(3), find_start, find_stop, best_ind, cur_ind, k1,l1,m1,k_ind,l_ind,m_ind, lb(3), ub(3)
         real                 :: cur_min_sum, ref_diff, rad
         logical              :: map2filt_present, mskimg_present
-        integer, parameter   :: CHUNKSZ=20, BW_ORDER=8, FIND_STEPSZ=2
+        integer, parameter   :: CHUNKSZ=20, FIND_STEPSZ=2
         real,    parameter   :: LP_START = 30.                ! 30 A resolution
         integer, parameter   :: SPA_SUP = 0, MID = 1+SPA_SUP  ! support of the window function
         real,    pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null(), rmat_map2filt(:,:,:)=>null()
-        real,    allocatable :: opt_odd(:,:,:), opt_even(:,:,:), cur_diff(:,:,:), opt_diff(:,:,:), but_fil(:), weights_3D(:,:,:), weights_2D(:,:), opt_map2filt(:,:,:)
+        real,    allocatable :: opt_odd(:,:,:), opt_even(:,:,:), cur_diff(:,:,:), opt_diff(:,:,:), cur_fil(:), weights_3D(:,:,:), weights_2D(:,:), opt_map2filt(:,:,:)
         logical, allocatable :: l_mask(:,:,:)
         map2filt_present = present(map2filt)
         mskimg_present   = present(mskimg)
@@ -110,7 +131,7 @@ contains
             allocate(opt_map2filt(box,box,dim3), source=0.)
             call map2filt_copy%copy(map2filt)
         endif
-        allocate(opt_odd(box,box,dim3), opt_even(box,box,dim3), cur_diff(box,box,dim3), opt_diff(box,box,dim3), but_fil(box), source=0.)
+        allocate(opt_odd(box,box,dim3), opt_even(box,box,dim3), cur_diff(box,box,dim3), opt_diff(box,box,dim3), cur_fil(box), source=0.)
         ! assign the weights of the neighboring voxels
         allocate(weights_2D(SPA_SUP*2+1, SPA_SUP*2+1), weights_3D(SPA_SUP*2+1, SPA_SUP*2+1, SPA_SUP*2+1), source=0.)
         ! 2D weights
@@ -153,25 +174,17 @@ contains
             write(*, *) 'current Fourier index = ', cur_ind
             ! filtering odd
             call odd%copy(odd_copy)
-            call odd%fft
-            !call odd%lp(cur_ind)
-            call butterworth_filter(but_fil, BW_ORDER, real(cur_ind))
-            call odd%apply_filter(but_fil)
-            call odd%ifft
+            call apply_opt_filter(odd, filter_type, cur_ind, cur_fil, .false.)
             call odd%get_rmat_ptr(rmat_odd)
             call even%copy(even_copy)
             call even%get_rmat_ptr(rmat_even)
             call normalized_squared_diff(rmat_odd, rmat_even, cur_diff)
             ! filtering even using the same filter
-            call even%fft
-            call even%apply_filter(but_fil)
-            call even%ifft
+            call apply_opt_filter(even, filter_type, cur_ind, cur_fil, .true.)
             call even%get_rmat_ptr(rmat_even)
             if (map2filt_present) then
                 call map2filt%copy(map2filt_copy)
-                call map2filt%fft
-                call map2filt%apply_filter(but_fil)
-                call map2filt%ifft
+                call apply_opt_filter(map2filt, filter_type, cur_ind, cur_fil, .true.)
                 call map2filt%get_rmat_ptr(rmat_map2filt)
             endif
             ! do the non-uniform, i.e. optimizing at each voxel
@@ -264,7 +277,7 @@ contains
         if (map2filt_present) then
             call map2filt%set_rmat(opt_map2filt, .false.)
         endif
-        deallocate(l_mask, opt_odd, opt_even, cur_diff, opt_diff, but_fil, weights_3D, weights_2D)
-    end subroutine opt_voxel_fil
-end module simple_butterworth
+        deallocate(l_mask, opt_odd, opt_even, cur_diff, opt_diff, cur_fil, weights_3D, weights_2D)
+    end subroutine opt_filter
+end module simple_opt_filter
     

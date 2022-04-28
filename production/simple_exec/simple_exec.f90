@@ -91,8 +91,8 @@ type(binarize_commander)                    :: xbinarize
 type(mask_commander)                        :: xmask
 type(fsc_commander)                         :: xfsc
 type(nonuniform_filter_commander)           :: xnonuniform_filter
-type(butterworth_2D_commander)              :: xbutterworth_2D_filter
-type(butterworth_3D_commander)              :: xbutterworth_3D_filter
+type(opt_2D_filter_commander)               :: xopt_2D_filter
+type(opt_3D_filter_commander)               :: xopt_3D_filter
 type(centervol_commander)                   :: xcenter
 type(reproject_commander)                   :: xreproject
 type(volops_commander)                      :: xvolops
@@ -271,10 +271,10 @@ select case(trim(prg))
         call xfsc%execute(cline)
     case( 'nonuniform_filter' )
         call xnonuniform_filter%execute(cline)
-    case( 'butterworth_2D_filter' )
-        call xbutterworth_2D_filter%execute(cline)
-    case( 'butterworth_3D_filter' )
-        call xbutterworth_3D_filter%execute(cline)
+    case( 'opt_2D_filter' )
+        call xopt_2D_filter%execute(cline)
+    case( 'opt_3D_filter' )
+        call xopt_3D_filter%execute(cline)
     case( 'center' )
         call xcenter%execute(cline)
     case( 'reproject' )

@@ -14,8 +14,8 @@ implicit none
 public :: fsc_commander
 ! public :: local_res_commander
 public :: nonuniform_filter_commander
-public :: butterworth_3D_commander
-public :: butterworth_2D_commander
+public :: opt_3D_filter_commander
+public :: opt_2D_filter_commander
 private
 #include "simple_local_flags.inc"
 
@@ -34,15 +34,15 @@ type, extends(commander_base) :: nonuniform_filter_commander
     procedure :: execute      => exec_nonuniform_filter
 end type nonuniform_filter_commander
 
-type, extends(commander_base) :: butterworth_2D_commander
+type, extends(commander_base) :: opt_2D_filter_commander
   contains
-    procedure :: execute      => exec_butterworth_2D
-end type butterworth_2D_commander
+    procedure :: execute      => exec_opt_2D_filter
+end type opt_2D_filter_commander
 
-type, extends(commander_base) :: butterworth_3D_commander
+type, extends(commander_base) :: opt_3D_filter_commander
   contains
-    procedure :: execute      => exec_butterworth_3D
-end type butterworth_3D_commander
+    procedure :: execute      => exec_opt_3D_filter
+end type opt_3D_filter_commander
 
 
 contains
@@ -232,10 +232,10 @@ contains
         call simple_end('**** SIMPLE_NONUNIFORM_FILTER NORMAL STOP ****')
     end subroutine exec_nonuniform_filter
 
-    subroutine exec_butterworth_3D(self, cline)
-        use simple_butterworth, only: opt_voxel_fil
-        class(butterworth_3D_commander), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
+    subroutine exec_opt_3D_filter(self, cline)
+        use simple_opt_filter, only: opt_filter
+        class(opt_3D_filter_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
         type(parameters)  :: params
         type(image)       :: even, odd, map2filt, mskvol
         real, allocatable :: cur_mat(:,:,:)
@@ -260,7 +260,7 @@ contains
                 call even%mul(mskvol)
                 call odd%mul(mskvol)
             else
-                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_butterworth_3D')
+                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_opt_3D_filter')
             endif
         else
             ! spherical masking
@@ -269,21 +269,21 @@ contains
             call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
         endif
         if( map2filt_present )then
-            call opt_voxel_fil(odd, even, params%smpd, params%is_uniform, mskvol, map2filt)
-            call map2filt%write(trim(params%is_uniform)//'_uniformly_filtered.mrc')
+            call opt_filter(odd, even, params%smpd, params%is_uniform, params%filter, mskvol, map2filt)
+            call map2filt%write(trim(params%is_uniform)//'_uniform_opt_3D_filtered.mrc')
         else
-            call opt_voxel_fil(odd, even, params%smpd, params%is_uniform, mskvol)
+            call opt_filter(odd, even, params%smpd, params%is_uniform, params%filter, mskvol)
         endif
-        call odd%write(trim(params%is_uniform)//'_uniform_butterworth_filter_odd.mrc')
-        call even%write(trim(params%is_uniform)//'_uniform_butterworth_filter_even.mrc')
+        call odd%write(trim(params%is_uniform)//'_uniform_opt_3D_filter_odd.mrc')
+        call even%write(trim(params%is_uniform)//'_uniform_opt_3D_filter_even.mrc')
         ! end gracefully
-        call simple_end('**** SIMPLE_BUTTERWORTH_FILTER NORMAL STOP ****')
-    end subroutine exec_butterworth_3D
+        call simple_end('**** SIMPLE_OPT_3D_FILTER NORMAL STOP ****')
+    end subroutine exec_opt_3D_filter
 
-    subroutine exec_butterworth_2D( self, cline )
-        use simple_butterworth, only: opt_voxel_fil
-        class(butterworth_2D_commander), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
+    subroutine exec_opt_2D_filter( self, cline )
+        use simple_opt_filter, only: opt_filter
+        class(opt_2D_filter_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
         type(parameters)  :: params
         type(image)       :: even, odd
         integer           :: iptcl
@@ -298,14 +298,14 @@ contains
             call even%read(params%stk,  iptcl)
             call even%mask(params%msk, 'soft')
             call odd%mask(params%msk, 'soft')
-            call opt_voxel_fil(odd, even, params%smpd, params%is_uniform)
-            call odd%write(trim(params%is_uniform)//'_uniform_butterworth_filter_odd.mrc', iptcl)
-            call even%write(trim(params%is_uniform)//'_uniform_butterworth_filter_even.mrc', iptcl)
+            call opt_filter(odd, even, params%smpd, params%is_uniform, params%filter)
+            call odd%write(trim(params%is_uniform)//'_uniform_opt_2D_filter_odd.mrc', iptcl)
+            call even%write(trim(params%is_uniform)//'_uniform_opt_2D_filter_even.mrc', iptcl)
             call odd%zero_and_unflag_ft
             call even%zero_and_unflag_ft
         end do
         ! end gracefully
-        call simple_end('**** SIMPLE_BUTTERWORTH_FILTER NORMAL STOP ****')
-    end subroutine exec_butterworth_2D
+        call simple_end('**** SIMPLE_OPT_2D_FILTER NORMAL STOP ****')
+    end subroutine exec_opt_2D_filter
 
 end module simple_commander_resolest
