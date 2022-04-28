@@ -237,10 +237,16 @@ contains
         class(butterworth_3D_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters)  :: params
-        type(image)       :: even, odd, mskvol
+        type(image)       :: even, odd, map2filt, mskvol
         real, allocatable :: cur_mat(:,:,:)
+        logical           :: map2filt_present
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline) 
+        map2filt_present = cline%defined('vol3')
+        if( map2filt_present )then
+            call map2filt%new([params%box,params%box,params%box],  params%smpd)
+            call map2filt%read(params%vols(3))
+        endif
         call odd %new([params%box,params%box,params%box], params%smpd)
         call even%new([params%box,params%box,params%box], params%smpd)
         call odd %read(params%vols(1))
@@ -253,7 +259,6 @@ contains
                 call odd%zero_background
                 call even%mul(mskvol)
                 call odd%mul(mskvol)
-                call mskvol%kill
             else
                 THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_butterworth_3D')
             endif
@@ -261,8 +266,14 @@ contains
             ! spherical masking
             call even%mask(params%msk, 'soft')
             call odd%mask(params%msk, 'soft')
+            call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
         endif
-        call opt_voxel_fil(odd, even, params%smpd, params%is_uniform)
+        if( map2filt_present )then
+            call opt_voxel_fil(odd, even, params%smpd, params%is_uniform, mskvol, map2filt)
+            call map2filt%write(trim(params%is_uniform)//'_uniformly_filtered.mrc')
+        else
+            call opt_voxel_fil(odd, even, params%smpd, params%is_uniform, mskvol)
+        endif
         call odd%write(trim(params%is_uniform)//'_uniform_butterworth_filter_odd.mrc')
         call even%write(trim(params%is_uniform)//'_uniform_butterworth_filter_even.mrc')
         ! end gracefully
