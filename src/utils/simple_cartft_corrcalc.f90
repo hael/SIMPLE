@@ -57,14 +57,14 @@ type :: cartft_corrcalc
     procedure          :: get_nptcls
     procedure          :: assign_pinds
     ! MODIFIERS
-    procedure          :: shellnorm_and_filter_ref
+    procedure, private :: shellnorm_and_filter_ref
     ! MEMOIZERS
     procedure, private :: memoize_resmsk
     procedure, private :: setup_pxls_p_shell
     procedure, private :: memoize_sqsum_ptcl
     ! CALCULATORS
     procedure          :: create_absctfmats
-    procedure          :: prep_ref4corr
+    procedure, private :: prep_ref4corr
     procedure          :: calc_corr
     procedure          :: specscore
     ! DESTRUCTOR
@@ -221,10 +221,13 @@ contains
         integer,                intent(in)   :: iref    !< reference index
         class(image),           intent(in)   :: img     !< reference image
         logical,                intent(in)   :: iseven  !< logical eo-flag
+        if( .not. img%is_ft() ) THROW_HARD('input image expected to be FTed')
         if( iseven )then
-            call self%refs_eo(iref,2)%copy(img)
+            if( .not. (img.eqdims.self%refs_eo(iref,2)) ) THROW_HARD('inconsistent image dimensions, input vs class internal') 
+            call self%refs_eo(iref,2)%copy_fast(img)
         else
-            call self%refs_eo(iref,1)%copy(img)
+            if( .not. (img.eqdims.self%refs_eo(iref,1)) ) THROW_HARD('inconsistent image dimensions, input vs class internal') 
+            call self%refs_eo(iref,1)%copy_fast(img)
         endif
     end subroutine set_ref
 
@@ -232,7 +235,9 @@ contains
         class(cartft_corrcalc), intent(inout) :: self   !< this object
         integer,                intent(in)    :: iptcl  !< particle index
         class(image),           intent(in)    :: img    !< particle image
-        call self%particles(self%pinds(iptcl))%copy(img)
+        if( .not. img%is_ft() ) THROW_HARD('input image expected to be FTed')
+        if( .not. (img.eqdims.self%particles(self%pinds(iptcl))) ) THROW_HARD('inconsistent image dimensions, input vs class internal') 
+        call self%particles(self%pinds(iptcl))%copy_fast(img)
         ! calculate the square sum required for correlation calculation
         call self%memoize_sqsum_ptcl(self%pinds(iptcl))
     end subroutine set_ptcl
@@ -306,7 +311,13 @@ contains
         class(cartft_corrcalc), intent(in)    :: self
         integer,                intent(in)    :: iref
         class(image),           intent(inout) :: ref_img
-        if( self%l_match_filt ) call ref_img%shellnorm_and_apply_filter_serial(self%ref_optlp(:,iref))
+        if( self%l_match_filt )then
+            call ref_img%shellnorm_and_apply_filter_serial(self%ref_optlp(:,iref))
+        else if( params_glob%l_lpset )then
+            ! do nothing
+        else
+            call ref_img%apply_filter_serial(self%ref_optlp(:,iref))
+        endif
     end subroutine shellnorm_and_filter_ref
 
     ! MEMOIZERS
