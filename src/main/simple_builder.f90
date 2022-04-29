@@ -235,9 +235,11 @@ contains
         params%nsym    = self%pgrpsyms%get_nsym()
         params%eullims = self%pgrpsyms%get_eullims()
         ! states exception
-        if( self%spproj_field%get_n('state') > 1 )then
-            if( .not. cline%defined('nstates') )then
-                THROW_WARN('your input doc has multiple states but NSTATES is not given')
+        if( associated(self%spproj_field) )then
+            if( self%spproj_field%get_n('state') > 1 )then
+                if( .not. cline%defined('nstates') )then
+                    THROW_WARN('your input doc has multiple states but NSTATES is not given')
+                endif
             endif
         endif
         ! generate discrete projection direction spaces

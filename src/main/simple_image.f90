@@ -4531,7 +4531,7 @@ contains
 
     pure function calc_sumsq( self, resmsk ) result( sumsq )
         class(image), intent(in) :: self
-        logical,      intent(in) :: resmsk(self%array_shape(1),self%array_shape(3),self%array_shape(3))
+        logical,      intent(in) :: resmsk(self%array_shape(1),self%array_shape(2),self%array_shape(3))
         real :: sumsq
         sumsq = sum(csq_fast(self%cmat), resmsk)
     end function calc_sumsq
@@ -4540,9 +4540,8 @@ contains
         class(image), target, intent(inout) :: self_ref, self_r4cc
         class(image),         intent(in)    :: self_ptcl
         real,                 intent(in)    :: sumsq_ptcl
-        logical,              intent(in)    :: resmsk(self_ref%array_shape(1),self_ref%array_shape(3),self_ref%array_shape(3))
+        logical,              intent(in)    :: resmsk(self_ref%array_shape(1),self_ref%array_shape(2),self_ref%array_shape(3))
         real,                 intent(in)    :: shvec(2)
-        real :: ccmat(self_ref%array_shape(1),self_ref%array_shape(3),self_ref%array_shape(3))
         class(image), pointer :: ref_ptr => null()
         real :: sumsq_ref, cc
         if( arg(shvec) > 1e-5 )then
@@ -4552,10 +4551,7 @@ contains
             ref_ptr => self_ref
         endif
         sumsq_ref = ref_ptr%calc_sumsq(resmsk)
-        where( resmsk )
-            ccmat = real(ref_ptr%cmat * conjg(self_ptcl%cmat))
-        end where
-        cc = sum(ccmat, mask=resmsk) / sqrt(sumsq_ref * sumsq_ptcl)
+        cc = real(sum(ref_ptr%cmat * conjg(self_ptcl%cmat), mask=resmsk)) / sqrt(sumsq_ref * sumsq_ptcl)
     end function corr_2
 
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
