@@ -572,35 +572,47 @@ contains
 
     ! STREAMING
 
-    subroutine schedule_streaming( self, q_descr )
-        class(qsys_ctrl),  intent(inout) :: self
-        class(chash),      intent(in)    :: q_descr
-        type(cmdline)         :: cline
-        type(chash)           :: job_descr
-        character(len=STDLEN) :: outfile, script_name
-        integer               :: ipart
-        call self%update_queue
-        if( self%cline_stacksz .eq. 0 )return
-        if( self%ncomputing_units_avail > 0 )then
-            do ipart = 1, self%ncomputing_units
-                if( self%cline_stacksz .eq. 0 )exit
-                if( self%jobs_done(ipart) )then
-                    cline = self%stream_cline_stack(1)
-                    call updatestack
-                    call cline%set('part', real(ipart))        ! computing unit allocation
-                    self%stream_cline_submitted(ipart) = cline ! stash
-                    call cline%gen_job_descr(job_descr)
-                    script_name = self%script_names(ipart)
-                    outfile     = 'OUT' // int2str_pad(ipart, self%numlen)
-                    self%jobs_submitted(ipart) = .true.
-                    self%jobs_done(ipart)      = .false.
-                    call del_file(self%jobs_done_fnames(ipart))
-                    call self%generate_script_2(job_descr, q_descr, self%exec_binary, script_name)
-                    call self%submit_script( script_name )
-                endif
-            enddo
+    subroutine schedule_streaming( self, q_descr, path )
+        class(qsys_ctrl),            intent(inout) :: self
+        class(chash),                intent(in)    :: q_descr
+        character(len=*),  optional, intent(in)    :: path
+        type(cmdline)              :: cline
+        type(chash)                :: job_descr
+        character(len=XLONGSTRLEN) :: cwd, cwd_old
+        character(len=STDLEN)      :: outfile, script_name
+        integer                    :: ipart
+        if( present(path) )then
+            cwd_old = trim(cwd_glob)
+            call chdir(path)
+            call simple_getcwd(cwd)
+            cwd_glob = trim(cwd)
         endif
-
+        call self%update_queue
+        if( self%cline_stacksz /= 0 )then
+            if( self%ncomputing_units_avail > 0 )then
+                do ipart = 1, self%ncomputing_units
+                    if( self%cline_stacksz .eq. 0 )exit
+                    if( self%jobs_done(ipart) )then
+                        cline = self%stream_cline_stack(1)
+                        call updatestack
+                        call cline%set('part', real(ipart))        ! computing unit allocation
+                        self%stream_cline_submitted(ipart) = cline ! stash
+                        call cline%gen_job_descr(job_descr)
+                        script_name = self%script_names(ipart)
+                        outfile     = 'OUT' // int2str_pad(ipart, self%numlen)
+                        self%jobs_submitted(ipart) = .true.
+                        self%jobs_done(ipart)      = .false.
+                        call del_file(self%jobs_done_fnames(ipart))
+                        call self%generate_script_2(job_descr, q_descr, self%exec_binary, script_name)
+                        call self%submit_script( script_name )
+                    endif
+                enddo
+            endif
+        endif
+        if( present(path) )then
+            call chdir(cwd_old)
+            cwd_glob = trim(cwd_old)
+        endif
         contains
 
             ! move everything up so '1' is index for next job to be run
