@@ -61,7 +61,7 @@ contains
                 self%CR   = X_MULTIMODAL
         end select
         ! allocate
-        allocate(self%pop(spec%npop,spec%ndim), self%costs(spec%npop))
+        allocate(self%pop(spec%ndim,spec%npop), self%costs(spec%npop))
         self%exists = .true. ! indicates existence
         if( spec%DEBUG ) write(logfhandle,*) 'created new differential evolution population'
     end subroutine new_de
@@ -84,17 +84,17 @@ contains
         do i=1,spec%npop
             do j=1,spec%ndim
                 L = spec%limits(j,2) - spec%limits(j,1)
-                self%pop(i,j) = spec%limits(j,1) + ran3() * L
+                self%pop(j,i) = spec%limits(j,1) + ran3() * L
             end do
             if( i == 1 )then
                 if( .not. all(spec%x == 0.) )then ! set one point in the swarm to best point in spec
-                    self%pop(1,:)= spec%x
+                    self%pop(:,1)= spec%x
                 endif
             endif
         end do
         ! calculate initial costs
         do i=1,spec%npop
-            self%costs(i) = spec%costfun(fun_self, self%pop(i,:), spec%ndim)
+            self%costs(i) = spec%costfun(fun_self, self%pop(:,i), spec%ndim)
             spec%nevals = spec%nevals + 1
         end do
         loc = minloc(self%costs)
@@ -116,9 +116,9 @@ contains
             ! create a trial solution
             do i=1,spec%ndim
                 if( i == X .or. ran3() < self%CR )then
-                    trial(i) = self%pop(self%best,i) + self%F * (self%pop(a,i) - self%pop(b,i))
+                    trial(i) = self%pop(i,self%best) + self%F * (self%pop(i,a) - self%pop(i,b))
                 else
-                    trial(i) = self%pop(X,i)
+                    trial(i) = self%pop(i,X)
                 endif
                 ! enforce limits
                 trial(i) = min(spec%limits(i,2),trial(i))
@@ -130,7 +130,7 @@ contains
             ! update pop if better solution is found
             if( cost_trial < self%costs(X) )then
                 nworse = 0
-                self%pop(X,:) = trial
+                self%pop(:,X) = trial
                 self%costs(X) = cost_trial
                 ! update global best if needed
                 if( cost_trial < self%costs(self%best) ) self%best = X
@@ -144,7 +144,7 @@ contains
             if( nworse > spec%npop .or. rtol <= spec%ftol ) exit
         end do
         lowest_cost = self%costs(self%best)
-        spec%x = self%pop(self%best,:)
+        spec%x = self%pop(:,self%best)
     end subroutine de_minimize
 
     ! GETTERS

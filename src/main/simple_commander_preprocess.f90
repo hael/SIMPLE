@@ -859,11 +859,19 @@ contains
         if( params%stream.eq.'yes' )then
             output_dir_ctf_estimate   = trim(DIR_CTF_ESTIMATE)
             output_dir_motion_correct = trim(DIR_MOTION_CORRECT)
+            if( cline%defined('dir') )then
+                output_dir_ctf_estimate   = filepath(params%dir,output_dir_ctf_estimate)//'/'
+                output_dir_motion_correct = filepath(params%dir,output_dir_motion_correct)//'/'
+            endif
             call simple_mkdir(output_dir_ctf_estimate,errmsg="commander_preprocess :: preprocess; ")
             call simple_mkdir(output_dir_motion_correct, errmsg="commander_preprocess :: preprocess;")
             if( l_pick )then
                 output_dir_picker  = trim(DIR_PICKER)
                 output_dir_extract = trim(DIR_EXTRACT)
+                if( cline%defined('dir') )then
+                    output_dir_picker  = filepath(params%dir,output_dir_picker)//'/'
+                    output_dir_extract = filepath(params%dir,output_dir_extract)//'/'
+                endif
                 call simple_mkdir(output_dir_picker, errmsg="commander_preprocess :: preprocess; ")
                 call simple_mkdir(output_dir_extract, errmsg="commander_preprocess :: preprocess;")
             endif
