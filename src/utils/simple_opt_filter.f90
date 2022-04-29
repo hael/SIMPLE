@@ -97,22 +97,22 @@ contains
     end subroutine apply_opt_filter
 
     ! optimization(search)-based uniform/nonuniform filter, using the (low-pass/butterworth)
-    subroutine opt_filter(odd, even, smpd, is_uniform, filter_type, mskimg, map2filt)
+    subroutine opt_filter(odd, even, smpd, is_uniform, smooth_ext, filter_type, mskimg, map2filt)
         type(image),            intent(inout) :: odd
         type(image),            intent(inout) :: even
         real,                   intent(in)    :: smpd
         character(len=*),       intent(in)    :: is_uniform
+        integer,                intent(in)    :: smooth_ext
         character(len=*),       intent(in)    :: filter_type
         type(image),  optional, intent(inout) :: mskimg
         class(image), optional, intent(inout) :: map2filt
         type(image)          :: odd_copy, even_copy, map2filt_copy, freq_img
         integer              :: k,l,m,max_lplim, box, dim3, ldim(3), find_start, find_stop
-        integer              :: best_ind, cur_ind, k1,l1,m1,k_ind,l_ind,m_ind, lb(3), ub(3)
+        integer              :: best_ind, cur_ind, k1,l1,m1,k_ind,l_ind,m_ind, lb(3), ub(3), mid_ext
         real                 :: cur_min_sum, ref_diff, rad
         logical              :: map2filt_present, mskimg_present
         integer, parameter   :: CHUNKSZ = 20, FIND_STEPSZ = 2
         real,    parameter   :: LP_START = 30.                 ! 30 A resolution
-        integer, parameter   :: SPA_SUP = 0, MID = 1 + SPA_SUP ! support of the window function
         real,    pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null(), rmat_map2filt(:,:,:)=>null()
         real,    allocatable :: opt_odd(:,:,:), opt_even(:,:,:), cur_diff(:,:,:), opt_diff(:,:,:), opt_freq(:,:,:)
         real,    allocatable :: cur_fil(:), weights_3D(:,:,:), weights_2D(:,:), opt_map2filt(:,:,:)
@@ -125,6 +125,7 @@ contains
         ldim       = odd%get_ldim()
         box        = ldim(1)
         dim3       = ldim(3)
+        mid_ext    = 1 + smooth_ext
         find_stop  = calc_fourier_index(2. * smpd, box, smpd)
         find_start = calc_fourier_index(LP_START, box, smpd)
         call freq_img%new([box,box,dim3], smpd)
@@ -135,24 +136,24 @@ contains
             call map2filt_copy%copy(map2filt)
         endif
         allocate(opt_odd(box,box,dim3), opt_even(box,box,dim3), cur_diff(box,box,dim3), opt_diff(box,box,dim3),opt_freq(box,box,dim3),&
-        &cur_fil(box),weights_2D(SPA_SUP*2+1, SPA_SUP*2+1), weights_3D(SPA_SUP*2+1, SPA_SUP*2+1, SPA_SUP*2+1), source=0.)
+        &cur_fil(box),weights_2D(smooth_ext*2+1, smooth_ext*2+1), weights_3D(smooth_ext*2+1, smooth_ext*2+1, smooth_ext*2+1), source=0.)
         ! assign the weights of the neighboring voxels
         ! 2D weights
-        do k = 1, 2*SPA_SUP+1
-            do l = 1, 2*SPA_SUP+1
-                rad = hyp(real(k-MID), real(l-MID))
-                weights_2D(k,l) = -rad/(SPA_SUP + 1) + 1.  ! linear function: 1 at rad = 0 and 0 at rad = SPA_SUP + 1
+        do k = 1, 2*smooth_ext+1
+            do l = 1, 2*smooth_ext+1
+                rad = hyp(real(k-mid_ext), real(l-mid_ext))
+                weights_2D(k,l) = -rad/(smooth_ext + 1) + 1.  ! linear function: 1 at rad = 0 and 0 at rad = smooth_ext + 1
                 if (weights_2D(k,l) < 0.) then
                     weights_2D(k,l) = 0.
                 endif
             enddo
         enddo
         ! 3D weights
-        do k = 1, 2*SPA_SUP+1
-            do l = 1, 2*SPA_SUP+1
-                do m = 1, 2*SPA_SUP+1
-                    rad = hyp(real(k-MID), real(l-MID), real(m-MID))
-                    weights_3D(k,l,m) = -rad/(SPA_SUP + 1) + 1.  ! linear function: 1 at rad = 0 and 0 at rad = SPA_SUP + 1
+        do k = 1, 2*smooth_ext+1
+            do l = 1, 2*smooth_ext+1
+                do m = 1, 2*smooth_ext+1
+                    rad = hyp(real(k-mid_ext), real(l-mid_ext), real(m-mid_ext))
+                    weights_3D(k,l,m) = -rad/(smooth_ext + 1) + 1.  ! linear function: 1 at rad = 0 and 0 at rad = smooth_ext + 1
                     if (weights_3D(k,l,m) < 0.) then
                         weights_3D(k,l,m) = 0.
                     endif
@@ -183,7 +184,7 @@ contains
             call odd%get_rmat_ptr(rmat_odd)
             call even%copy(even_copy)
             call even%get_rmat_ptr(rmat_even)
-            call normalized_squared_diff(rmat_odd, rmat_even, cur_diff)
+            call squared_diff(rmat_odd, rmat_even, cur_diff)
             ! filtering even using the same filter
             call apply_opt_filter(even, filter_type, cur_ind, cur_fil, .true.)
             call even%get_rmat_ptr(rmat_even)
@@ -201,10 +202,10 @@ contains
                         do l = lb(2),ub(2)
                             ref_diff = 0.
                             ! applying an average window to each diff (eq 7 in the nonuniform paper)
-                            do k_ind = 1, 2*SPA_SUP+1
-                                k1 = k - SPA_SUP + k_ind - 1
-                                do l_ind = 1, 2*SPA_SUP+1
-                                    l1 = l - SPA_SUP + l_ind - 1
+                            do k_ind = 1, 2*smooth_ext+1
+                                k1 = k - smooth_ext + k_ind - 1
+                                do l_ind = 1, 2*smooth_ext+1
+                                    l1 = l - smooth_ext + l_ind - 1
                                     if ((k1 >= 1 .and. k1 <= box) .and. (l1 >= 1 .and. l1 <= box)) then
                                         ref_diff = ref_diff + cur_diff(k1,l1,1)*weights_2D(k_ind,l_ind)
                                     endif
@@ -230,12 +231,12 @@ contains
                             do m = lb(3),ub(3)
                                 ref_diff = 0.
                                 ! applying an average window to each diff (eq 7 in the nonuniform paper)
-                                do k_ind = 1, 2*SPA_SUP+1
-                                    k1 = k - SPA_SUP + k_ind - 1
-                                    do l_ind = 1, 2*SPA_SUP+1
-                                        l1 = l - SPA_SUP + l_ind - 1
-                                        do m_ind = 1, 2*SPA_SUP+1
-                                            m1 = m - SPA_SUP + m_ind - 1
+                                do k_ind = 1, 2*smooth_ext+1
+                                    k1 = k - smooth_ext + k_ind - 1
+                                    do l_ind = 1, 2*smooth_ext+1
+                                        l1 = l - smooth_ext + l_ind - 1
+                                        do m_ind = 1, 2*smooth_ext+1
+                                            m1 = m - smooth_ext + m_ind - 1
                                             if ((k1 >= 1 .and. k1 <= box) .and. (l1 >= 1 .and. l1 <= box) .and. (m1 >= 1 .and. m1 <= dim3)) then
                                                 ref_diff = ref_diff + cur_diff(k1,l1,m1)*weights_3D(k_ind,l_ind,m_ind)
                                             endif

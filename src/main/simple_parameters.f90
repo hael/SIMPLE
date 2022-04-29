@@ -329,6 +329,7 @@ type :: parameters
     integer :: tos=1
     integer :: update=1000
     integer :: which_iter=0        !< iteration nr
+    integer :: smooth_ext=0        !< smoothing window extension{0} 
     integer :: xcoord=0            !< x coordinate{0}
     integer :: ycoord=0            !< y coordinate{0}
     integer :: xdim=0              !< x dimension(in pixles)
@@ -763,6 +764,7 @@ contains
         call check_iarg('tos',            self%tos)
         call check_iarg('update',         self%update)
         call check_iarg('which_iter',     self%which_iter)
+        call check_iarg('smooth_ext',     self%smooth_ext)
         call check_iarg('xdim',           self%xdim)
         call check_iarg('xcoord',         self%xcoord)
         call check_iarg('ycoord',         self%ycoord)

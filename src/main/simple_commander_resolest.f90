@@ -273,7 +273,7 @@ contains
             &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         endif
         if( map2filt_present )then
-            call opt_filter(odd, even, params%smpd, params%is_uniform, params%filter, mskvol, map2filt)
+            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, params%filter, mskvol, map2filt)
             if( have_mask_file )then
                 call mskvol%read(params%mskfile) ! restore the soft edge
                 call map2filt%mul(mskvol)
@@ -286,7 +286,7 @@ contains
             endif
             call map2filt%write(trim(params%is_uniform)//'_uniform_opt_3D_filtered.mrc')
         else
-            call opt_filter(odd, even, params%smpd, params%is_uniform, params%filter, mskvol)
+            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, params%filter, mskvol)
             if( have_mask_file )then
                 call mskvol%read(params%mskfile) ! restore the soft edge
                 call even%mul(mskvol)
@@ -320,7 +320,7 @@ contains
             call even%read(params%stk,  iptcl)
             call even%mask(params%msk, 'soft')
             call odd%mask(params%msk, 'soft')
-            call opt_filter(odd, even, params%smpd, params%is_uniform, params%filter)
+            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, params%filter)
             call odd%write(trim(params%is_uniform)//'_uniform_opt_2D_filter_odd.mrc', iptcl)
             call even%write(trim(params%is_uniform)//'_uniform_opt_2D_filter_even.mrc', iptcl)
             call odd%zero_and_unflag_ft
