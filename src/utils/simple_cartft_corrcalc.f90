@@ -11,9 +11,9 @@ private
 #include "simple_local_flags.inc"
 
 type heap_vars
-    type(image), pointer :: img_ref     => null()
-    type(image), pointer :: img_ref_tmp => null()
-    real,        pointer :: frc(:)      => null()
+    type(image)   :: img_ref
+    type(image)   :: img_ref_tmp
+    real, pointer :: frc(:) => null()
 end type heap_vars
 
 type :: cartft_corrcalc
@@ -44,6 +44,7 @@ type :: cartft_corrcalc
     procedure          :: new
     ! SETTERS
     procedure          :: reallocate_ptcls
+    procedure          :: set_ptcl
     procedure          :: set_ref
     procedure          :: set_ref_optlp
     procedure          :: set_eo
@@ -433,46 +434,42 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iref, iptcl
         real,                   intent(in)    :: shvec(2)
-        class(image), pointer :: img_ref => null(), img_ref_tmp => null()
-        real    :: cc, sqsum_ref
+        real    :: cc
         integer :: i, ithr
-        i           =  self%pinds(iptcl)
-        ithr        =  omp_get_thread_num() + 1
-        img_ref     => self%heap_vars(ithr)%img_ref
-        img_ref_tmp => self%heap_vars(ithr)%img_ref_tmp
+        i    =  self%pinds(iptcl)
+        ithr =  omp_get_thread_num() + 1
         ! copy
         if( self%iseven(i) )then
-            call img_ref%copy_fast(self%refs_eo(iref,2))
+            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(iref,2))
         else
-            call img_ref%copy_fast(self%refs_eo(iref,1))
+            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(iref,1))
         endif
         ! prep ref
-        call self%prep_ref4corr(iref, iptcl, img_ref)
+        call self%prep_ref4corr(iref, iptcl, self%heap_vars(ithr)%img_ref)
         ! calc corr
-        cc = img_ref%corr(img_ref_tmp, self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec)
+        cc = self%heap_vars(ithr)%img_ref%corr(self%heap_vars(ithr)%img_ref_tmp,&
+            &self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec)
     end function calc_corr
 
     function specscore( self, iref, iptcl, shvec ) result( spec )
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iref, iptcl
         real,                   intent(in)    :: shvec(2)
-        class(image), pointer :: img_ref => null()
         real,         pointer :: frc(:)  => null()
         real    :: spec
         integer :: i, ithr
-        i       =  self%pinds(iptcl)
-        ithr    =  omp_get_thread_num() + 1
-        img_ref => self%heap_vars(ithr)%img_ref
-        frc     => self%heap_vars(ithr)%frc
+        i    =  self%pinds(iptcl)
+        ithr =  omp_get_thread_num() + 1
+        frc  => self%heap_vars(ithr)%frc
         if( self%iseven(i) )then
-            call img_ref%copy_fast(self%refs_eo(iref,2))
+            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(iref,2))
         else
-            call img_ref%copy_fast(self%refs_eo(iref,1))
+            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(iref,1))
         endif
         ! prep ref
-        call self%prep_ref4corr(iref, iptcl, img_ref)
+        call self%prep_ref4corr(iref, iptcl, self%heap_vars(ithr)%img_ref)
         ! calc FRC
-        call img_ref%fsc(self%particles(i), frc)
+        call self%heap_vars(ithr)%img_ref%fsc(self%particles(i), frc)
         ! calc specscore
         spec = max(0.,median_nocopy(frc))
     end function specscore
@@ -500,9 +497,7 @@ contains
                 call self%heap_vars(ithr)%img_ref%kill
                 call self%heap_vars(ithr)%img_ref_tmp%kill
                 deallocate(self%heap_vars(ithr)%frc)
-                self%heap_vars(ithr)%img_ref     => null()
-                self%heap_vars(ithr)%img_ref_tmp => null()
-                self%heap_vars(ithr)%frc         => null()
+                self%heap_vars(ithr)%frc => null()
             end do
             deallocate(self%refs_eo, self%particles, self%heap_vars)
             self%existence = .false.
