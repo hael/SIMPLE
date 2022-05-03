@@ -240,6 +240,7 @@ contains
         type(image)       :: even, odd, map2filt, mskvol
         real, allocatable :: cur_mat(:,:,:)
         logical           :: map2filt_present, have_mask_file
+        character(len=90) :: file_tag
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline) 
         map2filt_present = cline%defined('vol3')
@@ -252,6 +253,7 @@ contains
         call odd %read(params%vols(1))
         call even%read(params%vols(2))
         have_mask_file = .false.
+        file_tag       = trim(params%is_uniform)//'_uniform_opt_3D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
         if( cline%defined('mskfile') )then
             if( file_exists(params%mskfile) )then
                 call mskvol%new([params%box,params%box,params%box], params%smpd)
@@ -273,7 +275,7 @@ contains
             &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         endif
         if( map2filt_present )then
-            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, params%filter, mskvol, map2filt)
+            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, trim(params%filter), mskvol, map2filt)
             if( have_mask_file )then
                 call mskvol%read(params%mskfile) ! restore the soft edge
                 call map2filt%mul(mskvol)
@@ -284,9 +286,9 @@ contains
                 call even%mask(params%msk, 'soft')
                 call odd%mask(params%msk, 'soft')
             endif
-            call map2filt%write(trim(params%is_uniform)//'_uniform_opt_3D_filtered.mrc')
+            call map2filt%write(trim(file_tag)//'_filtered.mrc')
         else
-            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, params%filter, mskvol)
+            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, trim(params%filter), mskvol)
             if( have_mask_file )then
                 call mskvol%read(params%mskfile) ! restore the soft edge
                 call even%mul(mskvol)
@@ -296,8 +298,8 @@ contains
                 call odd%mask(params%msk, 'soft')
             endif
         endif
-        call odd%write(trim(params%is_uniform)//'_uniform_opt_3D_filter_odd.mrc')
-        call even%write(trim(params%is_uniform)//'_uniform_opt_3D_filter_even.mrc')
+        call odd%write(trim(file_tag)//'_odd.mrc')
+        call even%write(trim(file_tag)//'_even.mrc')
         ! end gracefully
         call simple_end('**** SIMPLE_OPT_3D_FILTER NORMAL STOP ****')
     end subroutine exec_opt_3D_filter
@@ -309,10 +311,13 @@ contains
         type(parameters)  :: params
         type(image)       :: even, odd
         integer           :: iptcl
+        character(len=90) :: file_tag
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline) 
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
         params%ldim(3) = 1 ! because we operate on stacks
+        params%filter  = trim(params%filter)
+        file_tag       = trim(params%is_uniform)//'_uniform_opt_2D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
         do iptcl = 1, params%nptcls
             call odd%new(params%ldim, params%smpd)
             call even%new(params%ldim, params%smpd)
@@ -320,9 +325,9 @@ contains
             call even%read(params%stk,  iptcl)
             call even%mask(params%msk, 'soft')
             call odd%mask(params%msk, 'soft')
-            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, params%filter)
-            call odd%write(trim(params%is_uniform)//'_uniform_opt_2D_filter_odd.mrc', iptcl)
-            call even%write(trim(params%is_uniform)//'_uniform_opt_2D_filter_even.mrc', iptcl)
+            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, trim(params%filter))
+            call odd%write(trim(file_tag)//'_odd.mrc', iptcl)
+            call even%write(trim(file_tag)//'_even.mrc', iptcl)
             call odd%zero_and_unflag_ft
             call even%zero_and_unflag_ft
         end do
