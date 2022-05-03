@@ -19,7 +19,17 @@ contains
         integer, intent(in)  :: n
         real   , intent(in)  :: fc
         real                 :: val
-        real,    parameter :: AN(9) = (/ 1., 5.1258, 13.1371, 21.8462, 25.6884, 21.8462, 13.1371, 5.1258, 1./)
+        real,    parameter :: AN(11,10) = reshape((/ 1., 1.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    , 0.    , 0.,&
+                                                    &1., 1.4142,  1.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    , 0.    , 0.,&
+                                                    &1., 2.    ,  2.    ,  1.    ,  0.    ,  0.    ,  0.    ,  0.    ,  0.    , 0.    , 0.,&
+                                                    &1., 2.6131,  3.4142,  2.6131,  1.    ,  0.    ,  0.    ,  0.    ,  0.    , 0.    , 0.,&
+                                                    &1., 3.2361,  5.2361,  5.2361,  3.2361,  1.    ,  0.    ,  0.    ,  0.    , 0.    , 0.,&
+                                                    &1., 3.8637,  7.4641,  9.1416,  7.4641,  3.8637,  1.    ,  0.    ,  0.    , 0.    , 0.,&
+                                                    &1., 4.4940, 10.0978, 14.5918, 14.5918, 10.0978,  4.4940,  1.    ,  0.    , 0.    , 0.,&
+                                                    &1., 5.1258, 13.1371, 21.8462, 25.6884, 21.8462, 13.1371,  5.1258,  1.    , 0.    , 0.,&
+                                                    &1., 5.7588, 16.5817, 31.1634, 41.9864, 41.9864, 31.1634, 16.5817,  5.7588, 1.    , 0.,&
+                                                    &1., 6.3925, 20.4317, 42.8021, 64.8824, 74.2334, 64.8824, 42.8021, 20.4317, 6.3925, 1. /),&
+                                                    &(/11,10/))
         complex, parameter :: J = (0, 1) ! Complex identity: j = sqrt(-1)
         complex :: Bn, Kn                ! Normalized Butterworth polynomial, its derivative and its reciprocal
         complex :: js                    ! frequency is multiplied by the complex identity j
@@ -28,7 +38,7 @@ contains
         if (s/fc < 100) then
             js  = J*s/fc
             do k = 0, n
-                Bn  = Bn + AN(k+1)*js**k
+                Bn  = Bn + AN(k+1,n)*js**k
             end do
             Kn  = 1/Bn
             val = sqrt(real(Kn)**2 + aimag(Kn)**2)
@@ -78,18 +88,35 @@ contains
     end subroutine normalized_squared_diff
 
     subroutine apply_opt_filter(img, filter_type, cur_ind, cur_fil, use_cache)
+        use simple_tvfilter, only: tvfilter
         type(image),      intent(inout) :: img
         character(len=*), intent(in)    :: filter_type
         integer ,         intent(in)    :: cur_ind
         real,             intent(inout) :: cur_fil(:)
         logical,          intent(in)    :: use_cache
-        integer,          parameter     :: BW_ORDER=8
+        integer                         :: bw_order, io_stat
+        type(tvfilter)                  :: tvfilt
+        real                            :: lambda
         call img%fft()
         if (filter_type == 'lp') then
             call img%lp(cur_ind)
+        elseif (filter_type == 'tv') then
+            ! convert cur_ind into lambda here
+            lambda = real(cur_ind)
+            call tvfilt%new
+            call tvfilt%apply_filter_3d(img, lambda)
+            call tvfilt%kill
         else    ! default to butterworth8, even if wrong filter type is entered
+            ! extract butterworth order number
+            bw_order = 8
+            if (filter_type(1:11) == 'butterworth') then
+                call str2int(filter_type(12:len_trim(filter_type)), io_stat, bw_order)
+                if (bw_order < 1 .or. bw_order > 10) then
+                    bw_order = 8
+                endif
+            endif
             if( .not. use_cache )then
-                call butterworth_filter(cur_fil, BW_ORDER, real(cur_ind))
+                call butterworth_filter(cur_fil, bw_order, real(cur_ind))
             endif
             call img%apply_filter(cur_fil)
         endif
@@ -182,14 +209,14 @@ contains
             call odd%copy_fast(odd_copy)
             call apply_opt_filter(odd, filter_type, cur_ind, cur_fil, .false.)
             call odd%get_rmat_ptr(rmat_odd)
-            call even%copy(even_copy)
+            call even%copy_fast(even_copy)
             call even%get_rmat_ptr(rmat_even)
             call squared_diff(rmat_odd, rmat_even, cur_diff)
             ! filtering even using the same filter
             call apply_opt_filter(even, filter_type, cur_ind, cur_fil, .true.)
             call even%get_rmat_ptr(rmat_even)
             if( map2filt_present )then
-                call map2filt%copy(map2filt_copy)
+                call map2filt%copy_fast(map2filt_copy)
                 call apply_opt_filter(map2filt, filter_type, cur_ind, cur_fil, .true.)
                 call map2filt%get_rmat_ptr(rmat_map2filt)
             endif
