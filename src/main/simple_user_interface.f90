@@ -2909,10 +2909,10 @@ contains
         call preprocess_stream_dev%set_input('srch_ctrls',13, algorithm)
         call preprocess_stream_dev%set_input('srch_ctrls',14, 'ncls_start', 'num', 'Starting number of clusters',&
         &'Minimum number of class averagages to initiate 2D clustering', 'initial # clusters', .true., 50.)
-        preprocess_stream_dev%srch_ctrls(15)%required = .true.
+        preprocess_stream_dev%srch_ctrls(14)%required = .true.
         call preprocess_stream_dev%set_input('srch_ctrls',15, 'nptcls_per_cls', 'num', 'Particles per cluster',&
         &'Number of incoming particles for which one new class average is generated', '# particles per cluster', .true., 200.)
-        preprocess_stream_dev%srch_ctrls(16)%required = .true.
+        preprocess_stream_dev%srch_ctrls(15)%required = .true.
         call preprocess_stream_dev%set_input('srch_ctrls',16, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated convergence rate. Initial/Final low-pass limits control the degree of down-scaling(yes|no){yes}',&
         &'(yes|no){yes}', .false., 'yes')
