@@ -1860,6 +1860,7 @@ contains
         nmics_here = fromto(2)-fromto(1)+1
         if( params%stream.eq.'yes' )then
             output_dir = DIR_EXTRACT
+            if( cline%defined('dir') ) output_dir = trim(params%dir)//'/'
             fromto(:)  = [1,1]
             nmics_here = 1
             ! read in integrated movies, output project = input project

@@ -13,6 +13,7 @@ use simple_commander_mask
 use simple_commander_misc
 use simple_commander_oris
 use simple_commander_preprocess
+use simple_commander_preprocess_stream
 use simple_commander_cluster2D
 use simple_commander_cluster2D_stream
 use simple_commander_abinitio
@@ -46,6 +47,7 @@ type(assign_optics_groups_commander)        :: xassign_optics_groups
 ! PRE-PROCESSING WORKFLOWS
 type(preprocess_commander_distr)            :: xpreprocess
 type(preprocess_commander_stream)           :: xpreprocess_stream
+type(preprocess_commander_stream_dev)       :: xpreprocess_stream_dev
 type(extract_commander_distr)               :: xextract_distr
 type(reextract_commander_distr)             :: xreextract_distr
 type(motion_correct_commander_distr)        :: xmotion_correct_distr
@@ -188,11 +190,14 @@ select case(trim(prg))
         call xexport_starproject%execute(cline)
     case( 'assign_optics_groups' )
         call xassign_optics_groups%execute(cline)
+
     ! PRE-PROCESSING WORKFLOWS
     case( 'preprocess' )
         call xpreprocess%execute(cline)
     case( 'preprocess_stream' )
         call xpreprocess_stream%execute(cline)
+    case( 'preprocess_stream_dev' )
+        call xpreprocess_stream_dev%execute(cline)
     case( 'extract' )
         call xextract_distr%execute(cline)
     case( 'reextract' )

@@ -389,6 +389,7 @@ type :: parameters
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
     real    :: lambda=1.0
     real    :: lp=20.              !< low-pass limit(in A)
+    real    :: lp2D=20.            !< low-pass limit(in A)
     real    :: lp_backgr=20.       !< low-pass for solvent blurring (in A)
     real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
@@ -397,6 +398,7 @@ type :: parameters
     real    :: lpmed=20.
     real    :: lpstart=0.          !< start low-pass limit(in A){15}
     real    :: lpstop=8.0          !< stop low-pass limit(in A){8}
+    real    :: lpstop2D=8.0        !< stop low-pass limit(in A){8}
     real    :: lpthresh=30.
     real    :: max_dose=0.         !< maximum dose threshold (e/A2)
     real    :: max_rad=0.          !< particle longest  dim (in pixels)
@@ -817,12 +819,14 @@ contains
         call check_rarg('kv',             self%kv)
         call check_rarg('lambda',         self%lambda)
         call check_rarg('lp',             self%lp)
+        call check_rarg('lp2D',           self%lp2D)
         call check_rarg('lp_backgr',      self%lp_backgr)
         call check_rarg('lp_ctf_estimate',self%lp_ctf_estimate)
         call check_rarg('lp_pick',        self%lp_pick)
         call check_rarg('lplim_crit',     self%lplim_crit)
         call check_rarg('lpstart',        self%lpstart)
         call check_rarg('lpstop',         self%lpstop)
+        call check_rarg('lpstop2D',       self%lpstop2D)
         call check_rarg('lpthresh',       self%lpthresh)
         call check_rarg('max_dose',       self%max_dose)
         call check_rarg('max_rad',        self%max_rad)
