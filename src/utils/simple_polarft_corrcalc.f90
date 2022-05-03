@@ -32,8 +32,6 @@ type fftw_arrs
     type(c_ptr)                            :: p_ref_im                   !< -"-
     type(c_ptr)                            :: p_ref_fft_re               !< -"-
     type(c_ptr)                            :: p_ref_fft_im               !< -"-
-    type(c_ptr)                            :: p_ref_fft_re_2             !< -"-
-    type(c_ptr)                            :: p_ref_fft_im_2             !< -"-
     type(c_ptr)                            :: p_product_fft              !< -"-
     type(c_ptr)                            :: p_backtransf               !< -"-
     real(kind=c_float),            pointer :: ref_re(:)       => null()  !< corresponding Fortran pointers
@@ -356,16 +354,12 @@ contains
             self%fftdat(ithr)%p_ref_im       = fftwf_alloc_complex(int(self%pftsz, c_size_t))
             self%fftdat(ithr)%p_ref_fft_re   = fftwf_alloc_complex(int(self%pftsz, c_size_t))
             self%fftdat(ithr)%p_ref_fft_im   = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-            self%fftdat(ithr)%p_ref_fft_re_2 = fftwf_alloc_complex(int(self%pftsz, c_size_t))
-            self%fftdat(ithr)%p_ref_fft_im_2 = fftwf_alloc_complex(int(self%pftsz, c_size_t))
             self%fftdat(ithr)%p_product_fft  = fftwf_alloc_complex(int(self%nrots, c_size_t))
             self%fftdat(ithr)%p_backtransf   = fftwf_alloc_real   (int(self%nrots, c_size_t))
             call c_f_pointer(self%fftdat(ithr)%p_ref_re,        self%fftdat(ithr)%ref_re,        [self%pftsz])
             call c_f_pointer(self%fftdat(ithr)%p_ref_im,        self%fftdat(ithr)%ref_im,        [self%pftsz])
             call c_f_pointer(self%fftdat(ithr)%p_ref_fft_re,    self%fftdat(ithr)%ref_fft_re,    [self%pftsz])
             call c_f_pointer(self%fftdat(ithr)%p_ref_fft_im,    self%fftdat(ithr)%ref_fft_im,    [self%pftsz])
-            call c_f_pointer(self%fftdat(ithr)%p_ref_fft_re_2,  self%fftdat(ithr)%ref_fft_re_2,  [self%pftsz])
-            call c_f_pointer(self%fftdat(ithr)%p_ref_fft_im_2,  self%fftdat(ithr)%ref_fft_im_2,  [self%pftsz])
             call c_f_pointer(self%fftdat(ithr)%p_product_fft,   self%fftdat(ithr)%product_fft,   [self%nrots])
             call c_f_pointer(self%fftdat(ithr)%p_backtransf,    self%fftdat(ithr)%backtransf,    [self%nrots])
             ! thread-safe c-style allocatables for on-the-fly particle memoization
@@ -2208,8 +2202,6 @@ contains
                 call fftwf_free(self%fftdat(ithr)%p_ref_im)
                 call fftwf_free(self%fftdat(ithr)%p_ref_fft_re)
                 call fftwf_free(self%fftdat(ithr)%p_ref_fft_im)
-                call fftwf_free(self%fftdat(ithr)%p_ref_fft_re_2)
-                call fftwf_free(self%fftdat(ithr)%p_ref_fft_im_2)
                 call fftwf_free(self%fftdat(ithr)%p_product_fft)
                 call fftwf_free(self%fftdat(ithr)%p_backtransf)
                 call fftwf_free(self%fft_carray(ithr)%p_re)

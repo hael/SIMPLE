@@ -167,7 +167,7 @@ contains
             endif
             ! Get an IO unit number
             call fopen(self%funit,access='STREAM',file=self%fname,action=rw_str,status=stat_str,iostat=ios)
-            call fileiochk("imgfile::open_local fopen error",ios)
+            call fileiochk("imgfile::open_local fopen error: "//trim(self%fname),ios)
         endif
         self%was_written_to = .false.
     end subroutine open_local
