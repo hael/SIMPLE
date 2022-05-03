@@ -38,8 +38,6 @@ type fftw_arrs
     complex(kind=c_float_complex), pointer :: ref_im(:)       => null()  !< -"-
     complex(kind=c_float_complex), pointer :: ref_fft_re(:)   => null()  !< -"-
     complex(kind=c_float_complex), pointer :: ref_fft_im(:)   => null()  !< -"-
-    complex(kind=c_float_complex), pointer :: ref_fft_re_2(:) => null()  !< -"-
-    complex(kind=c_float_complex), pointer :: ref_fft_im_2(:) => null()  !< -"-
     complex(kind=c_float_complex), pointer :: product_fft(:)  => null()  !< -"-
     real(kind=c_float),            pointer :: backtransf(:)   => null()  !< -"-
 end type fftw_arrs
@@ -763,7 +761,7 @@ contains
         class(polarft_corrcalc), intent(in)    :: self
         integer,                 intent(in)    :: iptcl, iref
         complex(sp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
-        real    :: pw, w, ssnr
+        real    :: pw
         integer :: k
         if( self%l_match_filt ) then
             do k=params_glob%kfromto(1),params_glob%kstop
@@ -781,7 +779,7 @@ contains
         class(polarft_corrcalc), intent(in)    :: self
         integer,                 intent(in)    :: iptcl, iref
         complex(dp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
-        real(dp) :: pw, w, ssnr
+        real(dp) :: pw
         integer  :: k
         if( self%l_match_filt ) then
             do k=params_glob%kfromto(1),params_glob%kstop
@@ -800,7 +798,7 @@ contains
         integer,                 intent(in)    :: iptcl, iref
         complex(dp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         complex(dp),             intent(inout) :: dpft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),3)
-        real(dp) :: w, pw, ssnr
+        real(dp) :: w, pw
         integer  :: k
         if( self%l_match_filt ) then
             do k=params_glob%kfromto(1),params_glob%kstop
@@ -1428,8 +1426,8 @@ contains
             sqsum_i = sum(csq_fast(pft_ref_i(i,params_glob%kfromto(1):params_glob%kstop)))
             do j = 1, self%pftsz
                 sqsum_j = sum(csq_fast(pft_ref_j(j,params_glob%kfromto(1):params_glob%kstop)))
-                cc      = sum( pft_ref_i(i,params_glob%kfromto(1):params_glob%kstop) *&
-                               pft_ref_j(j,params_glob%kfromto(1):params_glob%kstop) ) / sqrt(sqsum_i * sqsum_j)
+                cc      = sum( real(pft_ref_i(i,params_glob%kfromto(1):params_glob%kstop) *&
+                               pft_ref_j(j,params_glob%kfromto(1):params_glob%kstop)) ) / sqrt(sqsum_i * sqsum_j)
                 if( cc > cc_max ) cc_max = cc
             end do
         end do
@@ -1451,7 +1449,7 @@ contains
         do i = 1, self%pftsz
             do j = 1, self%pftsz
                 do k = params_glob%kfromto(1), params_glob%kstop
-                    corrs(k) = ( pft_ref_i(i,k) * pft_ref_j(j,k) ) / sqrt( csq_fast(pft_ref_i(i,k)) * csq_fast(pft_ref_j(j,k)) )
+                    corrs(k) = real( pft_ref_i(i,k) * pft_ref_j(j,k) ) / sqrt( csq_fast(pft_ref_i(i,k)) * csq_fast(pft_ref_j(j,k)) )
                 end do
                 specscore = max(0.,median_nocopy(corrs))
                 if( specscore > specscore_max ) specscore_max = specscore
