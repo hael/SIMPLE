@@ -121,6 +121,7 @@ type(simple_program), target :: pick
 type(simple_program), target :: postprocess
 type(simple_program), target :: preprocess
 type(simple_program), target :: preprocess_stream
+type(simple_program), target :: preprocess_stream_dev
 type(simple_program), target :: print_dose_weights
 type(simple_program), target :: print_fsc
 type(simple_program), target :: print_magic_boxes
@@ -350,6 +351,7 @@ contains
         call new_postprocess
         call new_preprocess
         call new_preprocess_stream
+        call new_preprocess_stream_dev
         call new_print_dose_weights
         call new_print_fsc
         call new_print_magic_boxes
@@ -450,6 +452,7 @@ contains
         call push2prg_ptr_array(postprocess)
         call push2prg_ptr_array(preprocess)
         call push2prg_ptr_array(preprocess_stream)
+        call push2prg_ptr_array(preprocess_stream_dev)
         call push2prg_ptr_array(print_dose_weights)
         call push2prg_ptr_array(print_fsc)
         call push2prg_ptr_array(print_magic_boxes)
@@ -616,6 +619,8 @@ contains
                 ptr2prg => preprocess
             case('preprocess_stream')
                 ptr2prg => preprocess_stream
+            case('preprocess_stream_dev')
+                ptr2prg => preprocess_stream_dev
             case('print_dose_weights')
                 ptr2prg => print_dose_weights
             case('print_fsc')
@@ -2844,6 +2849,108 @@ contains
         call preprocess_stream%set_input('comp_ctrls', 1, nparts)
         call preprocess_stream%set_input('comp_ctrls', 2, nthr)
     end subroutine new_preprocess_stream
+
+    subroutine new_preprocess_stream_dev
+        ! PROGRAM SPECIFICATION
+        call preprocess_stream_dev%new(&
+        &'preprocess_stream_dev', &                                                         ! name
+        &'Preprocessing in streaming mode',&                                                ! descr_short
+        &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
+        &' in streaming mode as the microscope collects the data',&
+        &'simple_exec',&                                                                    ! executable
+        &5, 16, 0, 20, 8, 1, 4, .true.)                                                     ! # entries in each group, requires sp_project
+        ! image input/output
+        call preprocess_stream_dev%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
+        call preprocess_stream_dev%set_input('img_ios', 2, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
+        call preprocess_stream_dev%set_input('img_ios', 3, 'refs', 'file', 'References images for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
+        call preprocess_stream_dev%set_input('img_ios', 4, 'vol1', 'file', 'Reference volume for picking', 'Reference volume for picking', 'e.g. vol.mrc', .false., '')
+        call preprocess_stream_dev%set_input('img_ios', 5, 'dir_prev', 'file', 'Previous run directory',&
+            &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preprocess_stream', .false., '')
+        ! parameter input/output
+        call preprocess_stream_dev%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
+        call preprocess_stream_dev%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
+        call preprocess_stream_dev%set_input('parm_ios', 3, scale_movies)
+        call preprocess_stream_dev%set_input('parm_ios', 4, eer_fraction)
+        call preprocess_stream_dev%set_input('parm_ios', 5, eer_upsampling)
+        call preprocess_stream_dev%set_input('parm_ios', 6, pcontrast)
+        call preprocess_stream_dev%set_input('parm_ios', 7, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
+        call preprocess_stream_dev%set_input('parm_ios', 8, 'fbody', 'string', 'Template output micrograph name',&
+        &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
+        call preprocess_stream_dev%set_input('parm_ios', 9, pspecsz)
+        call preprocess_stream_dev%set_input('parm_ios',10, kv)
+        preprocess_stream_dev%parm_ios(11)%required = .true.
+        call preprocess_stream_dev%set_input('parm_ios',11, cs)
+        preprocess_stream_dev%parm_ios(12)%required = .true.
+        call preprocess_stream_dev%set_input('parm_ios',12, fraca)
+        preprocess_stream_dev%parm_ios(13)%required = .true.
+        call preprocess_stream_dev%set_input('parm_ios',13, smpd)
+        preprocess_stream_dev%parm_ios(14)%required = .true.
+        call preprocess_stream_dev%set_input('parm_ios',14, ctfpatch)
+        call preprocess_stream_dev%set_input('parm_ios',15, picker)
+        call preprocess_stream_dev%set_input('parm_ios',16, time_inactive)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call preprocess_stream_dev%set_input('srch_ctrls', 1, trs)
+        preprocess_stream_dev%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
+        preprocess_stream_dev%srch_ctrls(1)%rval_default      = 20.
+        call preprocess_stream_dev%set_input('srch_ctrls', 2, dfmin)
+        call preprocess_stream_dev%set_input('srch_ctrls', 3, dfmax)
+        call preprocess_stream_dev%set_input('srch_ctrls', 4, astigtol)
+        call preprocess_stream_dev%set_input('srch_ctrls', 5, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
+        call preprocess_stream_dev%set_input('srch_ctrls', 6, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        call preprocess_stream_dev%set_input('srch_ctrls', 7, pgrp)
+        preprocess_stream_dev%srch_ctrls(8)%required = .false.
+        call preprocess_stream_dev%set_input('srch_ctrls', 8, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
+        call preprocess_stream_dev%set_input('srch_ctrls', 9, mcpatch)
+        call preprocess_stream_dev%set_input('srch_ctrls',10, nxpatch)
+        call preprocess_stream_dev%set_input('srch_ctrls',11, nypatch)
+        call preprocess_stream_dev%set_input('srch_ctrls',12, mcconvention)
+        call preprocess_stream_dev%set_input('srch_ctrls',13, algorithm)
+        call preprocess_stream_dev%set_input('srch_ctrls',14, 'ncls_start', 'num', 'Starting number of clusters',&
+        &'Minimum number of class averagages to initiate 2D clustering', 'initial # clusters', .true., 50.)
+        preprocess_stream_dev%srch_ctrls(15)%required = .true.
+        call preprocess_stream_dev%set_input('srch_ctrls',15, 'nptcls_per_cls', 'num', 'Particles per cluster',&
+        &'Number of incoming particles for which one new class average is generated', '# particles per cluster', .true., 200.)
+        preprocess_stream_dev%srch_ctrls(16)%required = .true.
+        call preprocess_stream_dev%set_input('srch_ctrls',16, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        &for accelerated convergence rate. Initial/Final low-pass limits control the degree of down-scaling(yes|no){yes}',&
+        &'(yes|no){yes}', .false., 'yes')
+        call preprocess_stream_dev%set_input('srch_ctrls',17, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
+        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call preprocess_stream_dev%set_input('srch_ctrls',18, 'ncls', 'num', 'Maximum number of 2D clusters',&
+        &'Maximum number of groups to sort the particles into prior to averaging to create 2D class averages with improved SNR', 'Maximum # 2D clusters', .true., 200.)
+        call preprocess_stream_dev%set_input('srch_ctrls',19, 'lpthresh', 'num', 'Resolution rejection threshold',&
+        &'Classes with lower resolution are iteratively rejected{30}', 'Resolution rejection threshold in angstroms{30}', .false., 30.)
+        call preprocess_stream_dev%set_input('srch_ctrls',20, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
+        ! filter controls
+        call preprocess_stream_dev%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
+        &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
+        call preprocess_stream_dev%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit for movie alignment', 'Low-pass limit to be applied in the last &
+        &iterations of movie alignment(in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
+        call preprocess_stream_dev%set_input('filt_ctrls', 3, 'lp_ctf_estimate', 'num', 'Low-pass limit for CTF parameter estimation',&
+        & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false., 5.)
+        call preprocess_stream_dev%set_input('filt_ctrls', 4, 'hp_ctf_estimate', 'num', 'High-pass limit for CTF parameter estimation',&
+        & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30.)
+        call preprocess_stream_dev%set_input('filt_ctrls', 5, 'lp_pick', 'num', 'Low-pass limit for picking',&
+        & 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
+        call preprocess_stream_dev%set_input('filt_ctrls', 6, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30.)
+        call preprocess_stream_dev%set_input('filt_ctrls', 7, 'lp2D', 'num', 'Static low-pass limit for 2D classification', 'Static low-pass limit for 2D classification',&
+        &'low-pass limit in Angstroms', .false., 15.)
+        call preprocess_stream_dev%set_input('filt_ctrls', 8, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
+        &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){no}',&
+        '(yes|no){no}', .false., 'no')
+        ! mask controls
+        call preprocess_stream_dev%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call preprocess_stream_dev%set_input('comp_ctrls', 1, 'nchunks', 'num', 'Number of chunks', 'Number of chunks', '# chunks', .true., 1.0)
+        call preprocess_stream_dev%set_input('comp_ctrls', 2, 'nparts_chunk', 'num', 'Number of partitions per chunk',&
+        &'Number of partitions for distributed execution of each chunk', 'divide chunk job into # parts', .true., 1.0)
+        call preprocess_stream_dev%set_input('comp_ctrls', 3, nparts)
+        call preprocess_stream_dev%set_input('comp_ctrls', 4, nthr)
+    end subroutine new_preprocess_stream_dev
 
     subroutine new_print_dose_weights
         ! PROGRAM SPECIFICATION
