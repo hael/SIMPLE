@@ -54,7 +54,7 @@ contains
         real,    intent(inout) :: ker(:)
         integer, intent(in)    :: n
         real   , intent(in)    :: fc
-        integer :: k, l, j, half_w, ldim3, freq_val
+        integer :: freq_val
         do freq_val = 1, size(ker)
             ker(freq_val) = butterworth(real(freq_val-1), n, fc)
         enddo        
@@ -87,24 +87,21 @@ contains
         diff = diff/(sum(odd-mean_odd)**2 + sum(even-mean_even)**2)
     end subroutine normalized_squared_diff
 
-    subroutine apply_opt_filter(img, filter_type, cur_ind, cur_fil, use_cache)
+    subroutine apply_opt_filter(img, filter_type, param, cur_fil, use_cache)
         use simple_tvfilter, only: tvfilter
         type(image),      intent(inout) :: img
         character(len=*), intent(in)    :: filter_type
-        integer ,         intent(in)    :: cur_ind
+        real,             intent(in)    :: param
         real,             intent(inout) :: cur_fil(:)
         logical,          intent(in)    :: use_cache
         integer                         :: bw_order, io_stat
         type(tvfilter)                  :: tvfilt
-        real                            :: lambda
         call img%fft()
         if (filter_type == 'lp') then
-            call img%lp(cur_ind)
+            call img%lp(int(param))
         elseif (filter_type == 'tv') then
-            ! convert cur_ind into lambda here
-            lambda = real(cur_ind)
             call tvfilt%new
-            call tvfilt%apply_filter_3d(img, lambda)
+            call tvfilt%apply_filter_3d(img, param)
             call tvfilt%kill
         else    ! default to butterworth8, even if wrong filter type is entered
             ! extract butterworth order number
@@ -116,7 +113,7 @@ contains
                 endif
             endif
             if( .not. use_cache )then
-                call butterworth_filter(cur_fil, bw_order, real(cur_ind))
+                call butterworth_filter(cur_fil, bw_order, param)
             endif
             call img%apply_filter(cur_fil)
         endif
@@ -134,12 +131,12 @@ contains
         type(image),  optional, intent(inout) :: mskimg
         class(image), optional, intent(inout) :: map2filt
         type(image)          :: odd_copy, even_copy, map2filt_copy, freq_img
-        integer              :: k,l,m,max_lplim, box, dim3, ldim(3), find_start, find_stop
+        integer              :: k,l,m, box, dim3, ldim(3), find_start, find_stop, find_stepsz, iter_no
         integer              :: best_ind, cur_ind, k1,l1,m1,k_ind,l_ind,m_ind, lb(3), ub(3), mid_ext
-        real                 :: cur_min_sum, ref_diff, rad
+        real                 :: cur_min_sum, ref_diff, rad, param
         logical              :: map2filt_present, mskimg_present
-        integer, parameter   :: CHUNKSZ = 20, FIND_STEPSZ = 2
-        real,    parameter   :: LP_START = 30.                 ! 30 A resolution
+        integer, parameter   :: CHUNKSZ = 20, FIND_NINT = 40
+        real,    parameter   :: LAMBDA_MIN = .1, LAMBDA_MAX = 2., LP_START = 30.    ! 30 A resolution
         real,    pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null(), rmat_map2filt(:,:,:)=>null()
         real,    allocatable :: opt_odd(:,:,:), opt_even(:,:,:), cur_diff(:,:,:), opt_diff(:,:,:), opt_freq(:,:,:)
         real,    allocatable :: cur_fil(:), weights_3D(:,:,:), weights_2D(:,:), opt_map2filt(:,:,:)
@@ -147,14 +144,15 @@ contains
         map2filt_present = present(map2filt)
         mskimg_present   = present(mskimg)
         if( mskimg_present )then
-            l_mask  = mskimg%bin2logical()
+            l_mask = mskimg%bin2logical()
         endif
-        ldim       = odd%get_ldim()
-        box        = ldim(1)
-        dim3       = ldim(3)
-        mid_ext    = 1 + smooth_ext
-        find_stop  = calc_fourier_index(2. * smpd, box, smpd)
-        find_start = calc_fourier_index(LP_START, box, smpd)
+        ldim        = odd%get_ldim()
+        box         = ldim(1)
+        dim3        = ldim(3)
+        mid_ext     = 1 + smooth_ext
+        find_stop   = calc_fourier_index(2. * smpd, box, smpd)
+        find_start  = calc_fourier_index(LP_START, box, smpd)
+        find_stepsz = int((find_stop - find_start)/FIND_NINT)
         call freq_img%new([box,box,dim3], smpd)
         call odd_copy%copy(odd)
         call even_copy%copy(even)
@@ -199,25 +197,33 @@ contains
         ! searching for the best fourier index from here
         opt_diff     = 0.
         opt_freq     = 0.   ! record the optimized cutoff frequency
-        opt_diff(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(cur_min_sum)
-        opt_freq(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(cur_min_sum)
         cur_min_sum  = huge(cur_min_sum)   
         best_ind     = find_start
-        do cur_ind = find_start, find_stop, FIND_STEPSZ
-            write(*, *) 'current Fourier index = ', cur_ind
+        iter_no      = 0
+        opt_diff(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(cur_min_sum)
+        opt_freq(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(cur_min_sum)
+        do cur_ind = find_start, find_stop, find_stepsz
+            iter_no = iter_no + 1
+            if( filter_type == 'tv' )then
+                param = LAMBDA_MIN + (cur_ind - find_start)*(LAMBDA_MAX - LAMBDA_MIN)/(find_stop - find_start)
+                write(*, *) '('//int2str(iter_no)//'/'//int2str(FIND_NINT+1)//') current lambda = ', param
+            else
+                param = real(cur_ind)
+                write(*, *) '('//int2str(iter_no)//'/'//int2str(FIND_NINT+1)//') current Fourier index = ', param
+            endif
             ! filtering odd
             call odd%copy_fast(odd_copy)
-            call apply_opt_filter(odd, filter_type, cur_ind, cur_fil, .false.)
+            call apply_opt_filter(odd, filter_type, param, cur_fil, .false.)
             call odd%get_rmat_ptr(rmat_odd)
             call even%copy_fast(even_copy)
             call even%get_rmat_ptr(rmat_even)
             call squared_diff(rmat_odd, rmat_even, cur_diff)
             ! filtering even using the same filter
-            call apply_opt_filter(even, filter_type, cur_ind, cur_fil, .true.)
+            call apply_opt_filter(even, filter_type, param, cur_fil, .true.)
             call even%get_rmat_ptr(rmat_even)
             if( map2filt_present )then
                 call map2filt%copy_fast(map2filt_copy)
-                call apply_opt_filter(map2filt, filter_type, cur_ind, cur_fil, .true.)
+                call apply_opt_filter(map2filt, filter_type, param, cur_fil, .true.)
                 call map2filt%get_rmat_ptr(rmat_map2filt)
             endif
             ! do the non-uniform, i.e. optimizing at each voxel
@@ -308,7 +314,7 @@ contains
             call freq_img%kill
         endif
         if( map2filt_present ) call map2filt%set_rmat(opt_map2filt, .false.)
-        deallocate(l_mask, opt_odd, opt_even, cur_diff, opt_diff, cur_fil, weights_3D, weights_2D)
+        deallocate(opt_odd, opt_even, cur_diff, opt_diff, cur_fil, weights_3D, weights_2D)
     end subroutine opt_filter
 end module simple_opt_filter
     
