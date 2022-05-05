@@ -4543,7 +4543,7 @@ contains
         logical,              intent(in)    :: resmsk(self_ref%array_shape(1),self_ref%array_shape(2),self_ref%array_shape(3))
         real,                 intent(in)    :: shvec(2)
         class(image), pointer :: ref_ptr => null()
-        real(dp) :: sumsq_ref, cc
+        real(dp) :: sumsq_ref, cc, deps
         if( arg(shvec) > 1e-5 )then
             call self_ref%shift2Dserial(shvec, self_r4cc)
             ref_ptr => self_r4cc
@@ -4551,6 +4551,11 @@ contains
             ref_ptr => self_ref
         endif
         sumsq_ref = ref_ptr%calc_sumsq(resmsk)
+        deps      = epsilon(sumsq_ref)
+        if( sumsq_ptcl < deps .or. sumsq_ptcl < deps )then
+            cc = 0.d0
+            return
+        endif
         cc = real(sum(dcmplx(ref_ptr%cmat) * conjg(dcmplx(self_ptcl%cmat)), mask=resmsk), kind=dp) / dsqrt(sumsq_ref * sumsq_ptcl)
     end function corr_2
 
