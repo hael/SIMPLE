@@ -99,6 +99,7 @@ contains
         allocate(spproj_mask(n_in),source=.false.)
         nptcls_tot = 0
         do iproj = 1,n_in
+            ! n_in projects should be in memory to avoid rereading later
             call spproj%read_segment('mic', fnames(iproj))
             inptcls = nint(spproj%os_mic%get(1,'nptcls'))
             spproj_mask(iproj) = inptcls > 0
@@ -112,7 +113,6 @@ contains
         call self%spproj%os_stk%new(self%nmics, is_ptcl=.false.)
         call self%spproj%os_ptcl2D%new(self%nptcls, is_ptcl=.true.)
         allocate(self%orig_stks(self%nmics))
-        call debug_print('in chunk%generate '//int2str(self%nmics)//' '//int2str(self%nptcls))
         cnt    = 0
         fromp  = 1
         iiproj = 0
@@ -135,7 +135,6 @@ contains
             call self%spproj%os_stk%set(iiproj, 'fromp', real(fromp))
             call self%spproj%os_stk%set(iiproj, 'top',   real(fromp+inptcls-1))
             fromp = fromp + inptcls
-            call debug_print('in chunk%generate '//int2str(iproj)//' '//int2str(iiproj)//' '//int2str(inptcls)//' '//int2str(fromp))
         enddo
         call spproj%kill
         self%spproj%os_ptcl3D = self%spproj%os_ptcl2D
@@ -302,14 +301,8 @@ contains
 
     logical function has_converged( self )
         class(stream_chunk), intent(inout) :: self
-        call debug_print('in chunk%has_converged '//int2str(self%id))
         self%converged = file_exists(trim(self%path)//trim(CLUSTER2D_FINISHED))
         has_converged  = self%converged
-        if( has_converged )then
-            call debug_print('end chunk%has_converged T '//int2str(self%id))
-        else
-            call debug_print('end chunk%has_converged F '//int2str(self%id))
-        endif
     end function has_converged
 
     subroutine reject( self, res_thresh, ndev, box )

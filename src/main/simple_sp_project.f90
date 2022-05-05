@@ -113,6 +113,7 @@ contains
     procedure          :: read_segment
     procedure, private :: segreader
     procedure          :: read_segments_info
+    procedure          :: read_data_info
     ! writers
     procedure          :: write
     procedure          :: write_segment_inside
@@ -3202,7 +3203,7 @@ contains
         character(len=:), allocatable :: projfile
         integer :: i
         if( fname2format(fname) .ne. 'O' )then
-            THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: print_info')
+            THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: read_segments_info')
         endif
         projfile = trim(fname)
         if( file_exists(projfile) )then
@@ -3213,6 +3214,37 @@ contains
             THROW_HARD('projfile: '//trim(projfile)//' nonexistent; print_info')
         endif
     end subroutine read_segments_info
+
+    !>  Convenience funtion for checking # of movies/mics, stacks and particles
+    subroutine read_data_info( self, fname, nmics, nstks, nptcls )
+        class(sp_project),   intent(inout) :: self
+        character(len=*),    intent(in)    :: fname
+        integer,             intent(out)   :: nmics, nstks, nptcls
+        type(binoris_seginfo), allocatable :: seginfos(:)
+        integer,               allocatable :: seginds(:)
+        integer :: i,n2D, n3D
+        call self%read_segments_info(fname, seginds, seginfos)
+        nmics  = 0
+        nstks  = 0
+        n2D    = 0
+        n3D    = 0
+        do i = 1,size(seginds)
+            select case(seginds(i))
+            case(MIC_SEG)
+                nmics = int(seginfos(i)%n_records)
+            case(STK_SEG)
+                nstks = int(seginfos(i)%n_records)
+            case(PTCL2D_SEG)
+                n2D = int(seginfos(i)%n_records)
+            case(PTCL3D_SEG)
+                n3D = int(seginfos(i)%n_records)
+            end select
+        enddo
+        if( n2D /= n3D )then
+            THROW_WARN('Inconsistent # of particles in the 2D/3D segments; read_data_info: '//trim(fname))
+        endif
+        nptcls = n2D
+    end subroutine read_data_info
 
     ! writers
 
