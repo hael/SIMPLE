@@ -11,7 +11,7 @@ use simple_oris,                           only: oris
 use simple_sp_project,                     only: sp_project
 use simple_qsys_env,                       only: qsys_env
 use simple_stack_io,                       only: stack_io
-use simple_commander_cluster2D_stream_dev, only: init_cluster2D_stream
+use simple_commander_cluster2D_stream_dev
 use simple_qsys_funs
 use simple_commander_preprocess
 implicit none
@@ -47,7 +47,8 @@ contains
         type(cmdline)                          :: cline_make_pickrefs
         type(moviewatcher)                     :: movie_buff
         type(sp_project)                       :: spproj, stream_spproj
-        character(len=LONGSTRLEN), allocatable :: movies(:), completed_fnames(:)
+        character(len=LONGSTRLEN), allocatable :: movies(:)
+        character(len=LONGSTRLEN), allocatable, target :: completed_fnames(:)
         character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract
         character(len=LONGSTRLEN)              :: movie
@@ -141,7 +142,7 @@ contains
         ! prep for 2D classification
         l_cluster2D = .false.
         if( l_pick )then
-            call init_cluster2D_stream(cline, spproj, trim(PICKREFS)//trim(params%ext),l_cluster2D)
+            call init_cluster2D_stream(cline, spproj, trim(PICKREFS)//trim(params%ext), l_cluster2D)
         endif
         call cline%delete('ncls')
         ! movie watcher init
@@ -228,6 +229,12 @@ contains
                         call sleep(WAITTIME)
                     endif
                 endif
+            endif
+            ! update chunks
+            if( l_cluster2D )then
+                call update_chunk_mask(completed_fnames)
+                call update_chunks
+                call start_new_chunks(completed_fnames)
             endif
         end do
         ! termination
@@ -336,7 +343,7 @@ contains
                 character(len=:),          allocatable :: fname, abs_fname
                 character(len=LONGSTRLEN), allocatable :: old_fnames(:)
                 logical, allocatable :: spproj_mask(:)
-                integer :: i, n_spprojs, n_old, nptcls_here, state, j, n2import, nprev_imports, n_completed
+                integer :: i, n_spprojs, n_old, nptcls_here, state, j, n2import, nprev_imports, n_completed, nptcls
                 n_completed = 0
                 nimported   = 0
                 ! projects to import
@@ -351,7 +358,6 @@ contains
                         ! flags zero-picked mics that will not be imported
                         fname = trim(output_dir)//trim(completed_jobs_clines(i)%get_carg('projfile'))
                         call check_nptcls(fname,nptcls_here,state)
-                        print *,'update_projects_list ',trim(fname), state, nptcls_here
                         spproj_mask(i) = (nptcls_here > 0) .and. (state > 0)
                     enddo
                 endif
@@ -387,10 +393,18 @@ contains
                         abs_fname = simple_abspath(fname, errmsg='preprocess_stream :: update_projects_list 1')
                         completedfnames(n_old+j) = trim(abs_fname)
                         call streamspproj%read_segment('mic', abs_fname)
-                        if( l_pick ) nptcls_here = nptcls_here + nint(streamspproj%os_mic%get(1,'nptcls'))
+                        if( l_pick )then
+                            nptcls = nint(streamspproj%os_mic%get(1,'nptcls'))
+                            if( nptcls > 0 )then
+                                nptcls_here = nptcls_here + nptcls
+                                call streamspproj%read_segment('stk', abs_fname)
+                                call update_ori_path(streamspproj%os_stk, 1, 'stk')
+                                call streamspproj%write_segment_inside('stk', abs_fname)
+                            endif
+                        endif
                         call spproj%os_mic%transfer_ori(n_old+j, streamspproj%os_mic, 1)
                         call streamspproj%kill
-                        ! update path to outputs
+                        ! update paths such that relative paths are with respect to root folder
                         call update_ori_path(spproj%os_mic, n_old+j, 'starfile')
                         call update_ori_path(spproj%os_mic, n_old+j, 'intg')
                         call update_ori_path(spproj%os_mic, n_old+j, 'forctf')
@@ -469,6 +483,7 @@ contains
             end subroutine create_individual_project
 
             !>  import previous run to the current project based on past single project files
+            ! TO DOUBLE-CHECK
             subroutine import_prev_streams
                 use simple_ori, only: ori
                 type(sp_project) :: streamspproj
