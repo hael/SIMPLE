@@ -15,6 +15,7 @@ use simple_timer
 implicit none
 
 public :: init_cluster2D_stream
+public :: update_chunk_mask, update_chunks, start_new_chunks
 
 private
 #include "simple_local_flags.inc"
@@ -42,10 +43,13 @@ type(cmdline)                   :: cline_cluster2D_chunk, cline_cluster2D_pool
 character(len=:),   allocatable :: orig_projfile
 character(len=LONGSTRLEN)       :: prev_snapshot_frcs, prev_snapshot_cavgs
 real                            :: orig_smpd, smpd, scale_factor, mskdiam
+real                            :: lp_greedy, lpstart_stoch
 integer                         :: orig_box, box, boxpd
 integer                         :: glob_chunk_id, max_ncls, nptcls_per_chunk, ncls_glob
-real                            :: lp_greedy, lpstart_stoch
+integer                         :: n_spprojs_glob = 0
 logical                         :: l_wfilt, do_autoscale, l_greedy
+logical                         :: initiated = .false.
+logical, allocatable :: spprojs_mask_glob(:)
 
 contains
 
@@ -81,7 +85,7 @@ contains
         ncls_glob         = 0
         l_greedy          = trim(params_glob%refine).eq.'greedy'
         lp_greedy         = GREEDY_TARGET_LP
-        ! if( cline%defined('lp2D') ) lp_greedy = params_glob%lp2D
+        if( cline%defined('lp2D') ) lp_greedy = params_glob%lp2D
         lpstart_stoch     = lp_greedy
         prev_snapshot_cavgs = ''
         orig_projfile = trim(params_glob%projfile)
@@ -98,6 +102,11 @@ contains
         ! call write_user_params
         call simple_mkdir(SCALE_DIR)
         call simple_mkdir(POOL_DIR)
+        call pool_proj%kill
+        pool_proj%projinfo = spproj%projinfo
+        pool_proj%compenv  = spproj%compenv
+        call pool_proj%projinfo%delete_entry('projname')
+        call pool_proj%projinfo%delete_entry('projfile')
         ! initialize chunks parameters and objects
         call cline_cluster2D_chunk%set('prg',       'cluster2D_distr')
         call cline_cluster2D_chunk%set('oritype',   'ptcl2D')
@@ -194,7 +203,135 @@ contains
             write(logfhandle,'(A,F5.1)') '>>> POOL STARTING LOW-PASS LIMIT (IN A) TO: ', lpstart_stoch
         endif
         write(logfhandle,'(A,F5.1)')     '>>> POOL   HARD RESOLUTION LIMIT (IN A) TO: ', params_glob%lpstop2D
+        ! module varaiables
+        n_spprojs_glob = 0
+        if( allocated(spprojs_mask_glob) ) deallocate(spprojs_mask_glob)
+        initiated      = .true.
     end subroutine init_cluster2D_stream
+
+    ! updates mask  of project to process, check on chunks
+    subroutine update_chunk_mask( spproj_fnames )
+        character(len=LONGSTRLEN), allocatable, intent(in) :: spproj_fnames(:)
+        logical, allocatable :: tmp_mask(:)
+        integer :: n_spprojs_in
+        if( .not.allocated(spproj_fnames) ) return
+        if( .not.initiated ) return
+        n_spprojs_in = size(spproj_fnames)
+        if( n_spprojs_in == 0 ) return
+        ! updates global mask of projects imported
+        if( n_spprojs_glob == 0 )then
+            ! first time
+            n_spprojs_glob = n_spprojs_in
+            allocate(spprojs_mask_glob(n_spprojs_glob),source=.false.)
+        endif
+        if( n_spprojs_in > n_spprojs_glob )then
+            ! addition of new projects
+            allocate(tmp_mask(n_spprojs_in),source=.false.)
+            tmp_mask(1:n_spprojs_glob) = spprojs_mask_glob
+            call move_alloc(tmp_mask, spprojs_mask_glob)
+            n_spprojs_glob = n_spprojs_in
+        else if( n_spprojs_in == n_spprojs_glob )then
+            ! nothing to do
+        else
+            THROW_HARD('Error update_chunks 1')
+        endif
+        call debug_print('update_chunk_mask n_spprojs_glob: '//int2str(n_spprojs_glob))
+    end subroutine update_chunk_mask
+
+    subroutine update_chunks
+        integer :: ichunk
+        ! deal with chunk completion, rejection, reset, import into pool
+        do ichunk = 1,params_glob%nchunks
+            if( chunks(ichunk)%available ) cycle
+            if( chunks(ichunk)%has_converged() )then
+                call chunks(ichunk)%display_iter
+                ! rejection
+                call chunks(ichunk)%reject(params_glob%lpthresh, params_glob%ndev, box)
+                ! import into pool and folder removal happens here
+                ! TODO
+                ! free chunk
+                glob_chunk_id = glob_chunk_id + 1
+                call chunks(ichunk)%init(glob_chunk_id, pool_proj)
+            endif
+        enddo
+    end subroutine update_chunks
+
+    subroutine start_new_chunks( spproj_fnames )
+        character(len=LONGSTRLEN), allocatable, intent(in) :: spproj_fnames(:)
+        type(sp_project)                       :: stream_proj
+        character(len=LONGSTRLEN), allocatable :: spprojs_for_chunk(:)
+        integer,                   allocatable :: spproj_nptcls(:)
+        integer :: ichunk, n_avail_chunks, n_spprojs_in, iproj, nptcls, n2fill
+        integer :: first2import, last2import, n2import, cnt
+        integer :: inmics, instks, inptcls
+        n_avail_chunks = count(chunks(:)%available)
+        call debug_print('start_new_chunks n_avail_chunks: '//int2str(n_avail_chunks))
+        ! cannot import yet
+        if( n_avail_chunks == 0 ) return
+        if( .not.allocated(spprojs_mask_glob) )return
+        n_spprojs_in = size(spprojs_mask_glob)
+        if( n_spprojs_in == 0 ) return
+        ! how many n2fill chunks to load
+        allocate(spproj_nptcls(n_spprojs_in),source=0)
+        n2fill       = 0
+        nptcls       = 0
+        first2import = 0
+        do iproj = 1,n_spprojs_in
+            if( spprojs_mask_glob(iproj) )cycle
+            call stream_proj%read_data_info(spproj_fnames(iproj), inmics, instks, inptcls)
+            spproj_nptcls(iproj) = inptcls
+
+            ! call stream_proj%read_segment('mic',spproj_fnames(iproj))
+            ! spproj_nptcls(iproj) = nint(stream_proj%os_mic%get(1,'nptcls'))
+
+            if( spproj_nptcls(iproj) > 0 )then
+                if( first2import == 0 ) first2import = iproj
+                nptcls = nptcls + spproj_nptcls(iproj)
+                if( nptcls > nptcls_per_chunk )then
+                    n2fill = n2fill+1
+                    if( n2fill >= n_avail_chunks )exit
+                    nptcls = 0
+                endif
+            else
+                spprojs_mask_glob(iproj) = .true. ! mask out empty projects
+            endif
+        enddo
+        call stream_proj%kill
+        if( n2fill == 0 ) return ! not enough particles
+        do ichunk = 1,params_glob%nchunks
+            if(.not.chunks(ichunk)%available) cycle
+            if( n2fill == 0 ) exit
+            n2fill   = n2fill - 1
+            nptcls   = 0
+            n2import = 0
+            do iproj = first2import,n_spprojs_in
+                if( spproj_nptcls(iproj) == 0 )cycle
+                nptcls   = nptcls + spproj_nptcls(iproj)
+                n2import = n2import + 1
+                if( nptcls > nptcls_per_chunk )then
+                    last2import = iproj
+                    exit
+                endif
+            enddo
+            if( nptcls > nptcls_per_chunk )then
+                ! actual import
+                allocate(spprojs_for_chunk(n2import))
+                cnt = 0
+                do iproj = first2import,last2import
+                    if( spproj_nptcls(iproj) == 0 )cycle
+                    cnt = cnt + 1
+                    spprojs_for_chunk(cnt)   = trim( spproj_fnames(iproj) )
+                    spprojs_mask_glob(iproj) = .true. ! mask out from future imports
+                enddo
+                call chunks(ichunk)%generate(spprojs_for_chunk, nptcls, 1)
+                deallocate(spprojs_for_chunk)
+                ! execution
+                call chunks(ichunk)%exec_classify(cline_cluster2D_chunk, orig_smpd, orig_box, box)
+                ! to avoid cycling through all projects
+                first2import = last2import + 1
+            endif            
+        enddo
+    end subroutine
 
     ! Utilities
 
