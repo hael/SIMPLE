@@ -121,22 +121,25 @@ contains
     end subroutine apply_opt_filter
 
     ! optimization(search)-based uniform/nonuniform filter, using the (low-pass/butterworth)
-    subroutine opt_filter(odd, even, smpd, is_uniform, smooth_ext, filter_type, mskimg, map2filt)
+    subroutine opt_filter(odd, even, smpd, is_uniform, smooth_ext, filter_type, max_res, nsearch, mskimg, map2filt)
         type(image),            intent(inout) :: odd
         type(image),            intent(inout) :: even
         real,                   intent(in)    :: smpd
         character(len=*),       intent(in)    :: is_uniform
         integer,                intent(in)    :: smooth_ext
         character(len=*),       intent(in)    :: filter_type
+        real,                   intent(in)    :: max_res
+        integer,                intent(in)    :: nsearch
         type(image),  optional, intent(inout) :: mskimg
         class(image), optional, intent(inout) :: map2filt
         type(image)          :: odd_copy, even_copy, map2filt_copy, freq_img
-        integer              :: k,l,m, box, dim3, ldim(3), find_start, find_stop, find_stepsz, iter_no
+        integer              :: k,l,m, box, dim3, ldim(3), find_start, find_stop, iter_no
         integer              :: best_ind, cur_ind, k1,l1,m1,k_ind,l_ind,m_ind, lb(3), ub(3), mid_ext
-        real                 :: cur_min_sum, ref_diff, rad, param
+        real                 :: cur_min_sum, ref_diff, rad, param, find_stepsz
         logical              :: map2filt_present, mskimg_present
-        integer, parameter   :: CHUNKSZ = 20, FIND_NINT = 40
-        real,    parameter   :: LAMBDA_MIN = .1, LAMBDA_MAX = 2., LP_START = 30.    ! 30 A resolution
+        character(len=90)    :: file_tag
+        integer, parameter   :: CHUNKSZ = 20
+        real,    parameter   :: LAMBDA_MIN = .1, LAMBDA_MAX = 2.
         real,    pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null(), rmat_map2filt(:,:,:)=>null()
         real,    allocatable :: opt_odd(:,:,:), opt_even(:,:,:), cur_diff(:,:,:), opt_diff(:,:,:), opt_freq(:,:,:)
         real,    allocatable :: cur_fil(:), weights_3D(:,:,:), weights_2D(:,:), opt_map2filt(:,:,:)
@@ -151,8 +154,8 @@ contains
         dim3        = ldim(3)
         mid_ext     = 1 + smooth_ext
         find_stop   = calc_fourier_index(2. * smpd, box, smpd)
-        find_start  = calc_fourier_index(LP_START, box, smpd)
-        find_stepsz = int((find_stop - find_start)/FIND_NINT)
+        find_start  = calc_fourier_index(max_res, box, smpd)
+        find_stepsz = real(find_stop - find_start)/(nsearch-1)
         call freq_img%new([box,box,dim3], smpd)
         call odd_copy%copy(odd)
         call even_copy%copy(even)
@@ -202,14 +205,14 @@ contains
         iter_no      = 0
         opt_diff(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(cur_min_sum)
         opt_freq(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(cur_min_sum)
-        do cur_ind = find_start, find_stop, find_stepsz
-            iter_no = iter_no + 1
+        do iter_no = 1, nsearch
+            cur_ind = find_start + (iter_no - 1)*find_stepsz
             if( filter_type == 'tv' )then
                 param = LAMBDA_MIN + (cur_ind - find_start)*(LAMBDA_MAX - LAMBDA_MIN)/(find_stop - find_start)
-                write(*, *) '('//int2str(iter_no)//'/'//int2str(FIND_NINT+1)//') current lambda = ', param
+                write(*, *) '('//int2str(iter_no)//'/'//int2str(nsearch)//') current lambda = ', param
             else
                 param = real(cur_ind)
-                write(*, *) '('//int2str(iter_no)//'/'//int2str(FIND_NINT+1)//') current Fourier index = ', param
+                write(*, *) '('//int2str(iter_no)//'/'//int2str(nsearch)//') current Fourier index = ', param
             endif
             ! filtering odd
             call odd%copy_fast(odd_copy)
@@ -299,18 +302,22 @@ contains
                     opt_even     = rmat_even
                     cur_min_sum  = sum(cur_diff)
                     best_ind     = cur_ind
+                    opt_freq     = cur_ind
                     if( map2filt_present ) opt_map2filt = rmat_map2filt
                 endif
             endif
             write(*, *) 'min cost val = ', cur_min_sum, '; current cost = ', sum(cur_diff)
         enddo
-        if(is_uniform == 'yes' ) write(*, *) 'minimized cost at index = ', best_ind
+        if(is_uniform == 'yes' ) write(*, *) 'minimized cost at resolution = ', box*smpd/best_ind
         call odd%set_rmat(opt_odd,   .false.)
         call even%set_rmat(opt_even, .false.)
         ! output the optimized frequency map to see the nonuniform parts
-        if (dim3 > 1 .and. is_uniform == 'no') then
+        if (dim3 > 1) then
+            file_tag = trim(is_uniform)//'_uniform_filter_'//trim(filter_type)//'_ext_'//int2str(smooth_ext)
             call freq_img%set_rmat(opt_freq, .false.)
-            call freq_img%write('opt_freq_map.mrc')
+            call freq_img%write('opt_freq_map_'//trim(file_tag)//'.mrc')
+            call freq_img%set_rmat(box*smpd/opt_freq, .false.) ! resolution map
+            call freq_img%write('opt_resolution_map_'//trim(file_tag)//'.mrc')
             call freq_img%kill
         endif
         if( map2filt_present ) call map2filt%set_rmat(opt_map2filt, .false.)

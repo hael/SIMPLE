@@ -296,6 +296,7 @@ type :: parameters
     integer :: nran=0              !< # random images to select
     integer :: nrefs=100           !< # references used for picking{100}
     integer :: nrestarts=1
+    integer :: nsearch=20          !< # search grid points{20}
     integer :: nspace=2500         !< # projection directions
     integer :: nstates=1           !< # states to reconstruct
     integer :: nsym=1
@@ -414,6 +415,7 @@ type :: parameters
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
+    real    :: max_res=30.         !< optimization(search)-based max resolution
     real    :: scale=1.            !< image scale factor{1}
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
@@ -731,6 +733,7 @@ contains
         call check_iarg('newbox',         self%newbox)
         call check_iarg('nframes',        self%nframes)
         call check_iarg('ngrow',          self%ngrow)
+        call check_iarg('nsearch',        self%nsearch)
         call check_iarg('nmovies_trial',  self%nmovies_trial)
         call check_iarg('noris',          self%noris)
         call check_iarg('nran',           self%nran)
@@ -841,6 +844,7 @@ contains
         call check_rarg('overlap',        self%overlap)
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('power',          self%power)
+        call check_rarg('max_res',        self%max_res)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)

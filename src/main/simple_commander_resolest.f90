@@ -275,7 +275,7 @@ contains
             &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         endif
         if( map2filt_present )then
-            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, trim(params%filter), mskvol, map2filt)
+            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, trim(params%filter), params%max_res, params%nsearch, mskvol, map2filt)
             if( have_mask_file )then
                 call mskvol%read(params%mskfile) ! restore the soft edge
                 call map2filt%mul(mskvol)
@@ -288,14 +288,14 @@ contains
             endif
             call map2filt%write(trim(file_tag)//'_filtered.mrc')
         else
-            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, trim(params%filter), mskvol)
+            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, trim(params%filter), params%max_res, params%nsearch, mskvol)
             if( have_mask_file )then
                 call mskvol%read(params%mskfile) ! restore the soft edge
                 call even%mul(mskvol)
                 call odd%mul(mskvol)
             else
-                call even%mask(params%msk, 'soft')
-                call odd%mask(params%msk, 'soft')
+                !call even%mask(params%msk, 'soft')
+                !call odd%mask(params%msk, 'soft')
             endif
         endif
         call odd%write(trim(file_tag)//'_odd.mrc')
@@ -325,7 +325,7 @@ contains
             call even%read(params%stk,  iptcl)
             call even%mask(params%msk, 'soft')
             call odd%mask(params%msk, 'soft')
-            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, trim(params%filter))
+            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, trim(params%filter), params%max_res, params%nsearch)
             call odd%write(trim(file_tag)//'_odd.mrc', iptcl)
             call even%write(trim(file_tag)//'_even.mrc', iptcl)
             call odd%zero_and_unflag_ft
