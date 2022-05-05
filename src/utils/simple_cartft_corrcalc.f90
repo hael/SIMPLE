@@ -27,7 +27,7 @@ type :: cartft_corrcalc
     integer                      :: cmat_shape(3) = 0       !< shape of complex matrix (dictated by the FFTW library)
     integer,         allocatable :: pinds(:)                !< index array (to reduce memory when frac_update < 1)
     real,            allocatable :: pxls_p_shell(:)         !< number of (cartesian) pixels per shell
-    real(dp),        allocatable :: sqsums_ptcls(:)         !< memoized square sums for the correlation calculations (taken from kfromto(1):kstop)
+    real(sp),        allocatable :: sqsums_ptcls(:)         !< memoized square sums for the correlation calculations (taken from kfromto(1):kstop)
     real(sp),        allocatable :: ctfmats(:,:,:,:)        !< expand set of CTF matrices (for efficient parallel exec)
     real(sp),        allocatable :: ref_optlp(:,:)          !< references optimal filter
     type(image),     allocatable :: refs_eo(:,:)            !< reference images even/odd, dim1=1:nrefs, dim2=1:2 (1 is even 2 is odd)
@@ -119,8 +119,7 @@ contains
         endif
         self%nrefs = nrefs               !< the number of references (logically indexded [1,nrefs])
         ! allocate optimal low-pass filter & memoized sqsums
-        allocate(self%ref_optlp(1:self%filtsz,self%nrefs), source=1.)
-        allocate(self%sqsums_ptcls(1:self%nptcls),         source=1.d0)
+        allocate(self%ref_optlp(1:self%filtsz,self%nrefs), self%sqsums_ptcls(1:self%nptcls), source=1.)
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
         if( present(ptcl_mask) )then
@@ -208,7 +207,7 @@ contains
                 call self%particles(i)%new(self%ldim, params_glob%smpd)
             end do
          endif
-         self%sqsums_ptcls = 1.d0
+         self%sqsums_ptcls = 1.
          self%iseven       = .true.
          allocate(self%pinds(self%pfromto(1):self%pfromto(2)), source=0)
          do i = 1,self%nptcls
