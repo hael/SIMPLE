@@ -18,7 +18,6 @@ integer,          parameter   :: NSTAT      = 3
 integer,          parameter   :: MAXKMIT    = 20
 real,             parameter   :: BOXFRAC    = 0.5
 logical,          parameter   :: DEBUG_HERE = .false.
-logical,          parameter   :: DOWRITE    = .true.
 integer,          parameter   :: PICKER_OFFSET_HERE = 3, OFFSET_HWIN = 1
 ! VARS
 type(image)                   :: micrograph, mic_shrunken, mic_saved
@@ -126,7 +125,7 @@ contains
     end subroutine exec_phasecorr_picker
 
     subroutine extract_peaks
-        type(image)              :: mask_img, sdevimg, circ_mask, tmp_mic
+        type(image)              :: mask_img, circ_mask, tmp_mic
         type(image), allocatable :: ptcls(:)
         real,    pointer         :: rmat_phasecorr(:,:,:)
         integer, allocatable     :: labels(:), target_positions(:,:),ref_inds(:,:)
@@ -141,7 +140,6 @@ contains
         call gen_phase_correlation(mic_shrunken,mask_img)
         call mic_shrunken%stats( ave=ave, sdev=sdev, maxv=maxv, minv=minv,mskimg=mask_img)
         call mic_shrunken%get_rmat_ptr(rmat_phasecorr)
-        if( DOWRITE ) call mic_shrunken%write('phasecorr.mrc')
         allocate(corrmat(1:ldim_shrink(1),1:ldim_shrink(2)))
         corrmat(1:ldim_shrink(1),1:ldim_shrink(2)) = rmat_phasecorr(1:ldim_shrink(1),1:ldim_shrink(2),1)
         !$omp parallel do default(shared) private(xind,yind,l,r,u,d) proc_bind(close) schedule(static)
