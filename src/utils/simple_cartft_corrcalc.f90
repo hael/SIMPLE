@@ -27,7 +27,7 @@ type :: cartft_corrcalc
     integer                      :: cmat_shape(3) = 0       !< shape of complex matrix (dictated by the FFTW library)
     integer,         allocatable :: pinds(:)                !< index array (to reduce memory when frac_update < 1)
     real,            allocatable :: pxls_p_shell(:)         !< number of (cartesian) pixels per shell
-    real(sp),        allocatable :: sqsums_ptcls(:)         !< memoized square sums for the correlation calculations (taken from kfromto(1):kstop)
+    real(dp),        allocatable :: sqsums_ptcls(:)         !< memoized square sums for the correlation calculations (taken from kfromto(1):kstop)
     real(sp),        allocatable :: ctfmats(:,:,:,:)        !< expand set of CTF matrices (for efficient parallel exec)
     real(sp),        allocatable :: ref_optlp(:,:)          !< references optimal filter
     type(image),     allocatable :: refs_eo(:,:)            !< reference images even/odd, dim1=1:nrefs, dim2=1:2 (1 is even 2 is odd)
@@ -119,7 +119,8 @@ contains
         endif
         self%nrefs = nrefs               !< the number of references (logically indexded [1,nrefs])
         ! allocate optimal low-pass filter & memoized sqsums
-        allocate(self%ref_optlp(1:self%filtsz,self%nrefs), self%sqsums_ptcls(1:self%nptcls), source=1.)
+        allocate(self%ref_optlp(1:self%filtsz,self%nrefs), source=1.)
+        allocate(self%sqsums_ptcls(1:self%nptcls),         source=1.d0)
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
         if( present(ptcl_mask) )then
@@ -207,7 +208,7 @@ contains
                 call self%particles(i)%new(self%ldim, params_glob%smpd)
             end do
          endif
-         self%sqsums_ptcls = 1.
+         self%sqsums_ptcls = 1.d0
          self%iseven       = .true.
          allocate(self%pinds(self%pfromto(1):self%pfromto(2)), source=0)
          do i = 1,self%nptcls
@@ -445,8 +446,8 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iref, iptcl
         real,                   intent(in)    :: shvec(2)
-        real    :: cc
-        integer :: i, ithr
+        real(sp) :: cc
+        integer  :: i, ithr
         i    =  self%pinds(iptcl)
         ithr =  omp_get_thread_num() + 1
         ! copy
@@ -458,8 +459,8 @@ contains
         ! prep ref
         call self%prep_ref4corr(iref, iptcl, self%heap_vars(ithr)%img_ref)
         ! calc corr
-        cc = self%heap_vars(ithr)%img_ref%corr(self%heap_vars(ithr)%img_ref_tmp,&
-            &self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec)
+        cc = real(self%heap_vars(ithr)%img_ref%corr(self%heap_vars(ithr)%img_ref_tmp,&
+            &self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec), kind=sp)
     end function calc_corr
 
     function specscore( self, iref, iptcl, shvec ) result( spec )
