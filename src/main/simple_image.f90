@@ -4532,18 +4532,18 @@ contains
     pure function calc_sumsq( self, resmsk ) result( sumsq )
         class(image), intent(in) :: self
         logical,      intent(in) :: resmsk(self%array_shape(1),self%array_shape(2),self%array_shape(3))
-        real(dp) :: sumsq
-        sumsq = sum(csq_fast(dcmplx(self%cmat)), resmsk)
+        real :: sumsq
+        sumsq = sum(csq_fast(self%cmat), resmsk)
     end function calc_sumsq
 
     function corr_2( self_ref, self_r4cc, self_ptcl, sumsq_ptcl, resmsk, shvec ) result( cc )
         class(image), target, intent(inout) :: self_ref, self_r4cc
         class(image),         intent(in)    :: self_ptcl
-        real(dp),             intent(in)    :: sumsq_ptcl
+        real,                 intent(in)    :: sumsq_ptcl
         logical,              intent(in)    :: resmsk(self_ref%array_shape(1),self_ref%array_shape(2),self_ref%array_shape(3))
         real,                 intent(in)    :: shvec(2)
         class(image), pointer :: ref_ptr => null()
-        real(dp) :: sumsq_ref, cc, deps
+        real :: sumsq_ref, cc, eps
         if( arg(shvec) > 1e-5 )then
             call self_ref%shift2Dserial(shvec, self_r4cc)
             ref_ptr => self_r4cc
@@ -4551,12 +4551,12 @@ contains
             ref_ptr => self_ref
         endif
         sumsq_ref = ref_ptr%calc_sumsq(resmsk)
-        deps      = epsilon(sumsq_ref)
-        if( sumsq_ptcl < deps .or. sumsq_ptcl < deps )then
-            cc = 0.d0
+        eps       = epsilon(sumsq_ref)
+        if( sumsq_ptcl < eps .or. sumsq_ptcl < eps )then
+            cc = 0.
             return
         endif
-        cc = real(sum(dcmplx(ref_ptr%cmat) * conjg(dcmplx(self_ptcl%cmat)), mask=resmsk), kind=dp) / dsqrt(sumsq_ref * sumsq_ptcl)
+        cc = real(sum(ref_ptr%cmat * conjg(self_ptcl%cmat), mask=resmsk)) / sqrt(sumsq_ref * sumsq_ptcl)
     end function corr_2
 
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
