@@ -294,8 +294,8 @@ contains
                 call even%mul(mskvol)
                 call odd%mul(mskvol)
             else
-                !call even%mask(params%msk, 'soft')
-                !call odd%mask(params%msk, 'soft')
+                call even%mask(params%msk, 'soft')
+                call odd%mask(params%msk, 'soft')
             endif
         endif
         call odd%write(trim(file_tag)//'_odd.mrc')
