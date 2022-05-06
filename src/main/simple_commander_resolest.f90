@@ -13,7 +13,7 @@ implicit none
 
 public :: fsc_commander
 ! public :: local_res_commander
-public :: nonuniform_filter_commander
+! public :: nonuniform_filter_commander
 public :: opt_3D_filter_commander
 public :: opt_2D_filter_commander
 private
@@ -29,10 +29,10 @@ end type fsc_commander
 !     procedure :: execute      => exec_local_res
 ! end type local_res_commander
 
-type, extends(commander_base) :: nonuniform_filter_commander
-  contains
-    procedure :: execute      => exec_nonuniform_filter
-end type nonuniform_filter_commander
+! type, extends(commander_base) :: nonuniform_filter_commander
+!   contains
+!     procedure :: execute      => exec_nonuniform_filter
+! end type nonuniform_filter_commander
 
 type, extends(commander_base) :: opt_2D_filter_commander
   contains
@@ -167,70 +167,70 @@ contains
     !     call simple_end('**** SIMPLE_LOCAL_RES NORMAL STOP ****')
     ! end subroutine exec_local_res
 
-    subroutine exec_nonuniform_filter( self, cline )
-        use simple_estimate_ssnr, only: nonuniform_fsc_filt
-        class(nonuniform_filter_commander), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline
-        type(parameters) :: params
-        type(image)      :: even, odd, map2filt
-        type(masker)     :: mskvol
-        logical          :: have_mask_file, map2filt_present
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call params%new(cline)
-        ! read even/odd pair
-        call even%new([params%box,params%box,params%box], params%smpd)
-        call odd%new([params%box,params%box,params%box],  params%smpd)
-        call odd%read(params%vols(1))
-        call even%read(params%vols(2))
-        map2filt_present = cline%defined('vol3')
-        if( map2filt_present )then
-            call map2filt%new([params%box,params%box,params%box],  params%smpd)
-            call map2filt%read(params%vols(3))
-        endif
-        have_mask_file = .false.
-        if( cline%defined('mskfile') )then
-            if( file_exists(params%mskfile) )then
-                call mskvol%new([params%box,params%box,params%box], params%smpd)
-                call mskvol%read(params%mskfile)
-                have_mask_file = .true.
-            else
-                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_nonuniform_filter')
-            endif
-        else
-            ! spherical masking
-            call even%mask(params%msk, 'soft')
-            call odd%mask(params%msk, 'soft')
-        endif
-        if( have_mask_file )then
-            call mskvol%one_at_edge ! to expand before masking of reference internally
-        else
-            call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
-        endif
-        if( map2filt_present )then
-            call nonuniform_fsc_filt(even, odd, mskvol, .false., map2filt, phran=trim(params%phrand).eq.'yes')
-        else
-            call nonuniform_fsc_filt(even, odd, mskvol, .false., phran=trim(params%phrand).eq.'yes')
-        endif
-        if( have_mask_file )then
-            call mskvol%read(params%mskfile)
-            call even%mul(mskvol)
-            call odd%mul(mskvol)
-            if( map2filt_present ) call map2filt%mul(mskvol)
-            call mskvol%kill
-        endif
-        if( map2filt_present )then
-            call map2filt%write('nonuniformly_filtered.mrc')
-        else
-            call even%write('nonuniformly_filtered_even.mrc')
-            call odd%write('nonuniformly_filtered_odd.mrc')
-        endif
-        ! destruct
-        call even%kill
-        call odd%kill
-        if( map2filt_present ) call map2filt%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_NONUNIFORM_FILTER NORMAL STOP ****')
-    end subroutine exec_nonuniform_filter
+    ! subroutine exec_nonuniform_filter( self, cline )
+    !     use simple_estimate_ssnr, only: nonuniform_fsc_filt
+    !     class(nonuniform_filter_commander), intent(inout) :: self
+    !     class(cmdline),                     intent(inout) :: cline
+    !     type(parameters) :: params
+    !     type(image)      :: even, odd, map2filt
+    !     type(masker)     :: mskvol
+    !     logical          :: have_mask_file, map2filt_present
+    !     if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+    !     call params%new(cline)
+    !     ! read even/odd pair
+    !     call even%new([params%box,params%box,params%box], params%smpd)
+    !     call odd%new([params%box,params%box,params%box],  params%smpd)
+    !     call odd%read(params%vols(1))
+    !     call even%read(params%vols(2))
+    !     map2filt_present = cline%defined('vol3')
+    !     if( map2filt_present )then
+    !         call map2filt%new([params%box,params%box,params%box],  params%smpd)
+    !         call map2filt%read(params%vols(3))
+    !     endif
+    !     have_mask_file = .false.
+    !     if( cline%defined('mskfile') )then
+    !         if( file_exists(params%mskfile) )then
+    !             call mskvol%new([params%box,params%box,params%box], params%smpd)
+    !             call mskvol%read(params%mskfile)
+    !             have_mask_file = .true.
+    !         else
+    !             THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_nonuniform_filter')
+    !         endif
+    !     else
+    !         ! spherical masking
+    !         call even%mask(params%msk, 'soft')
+    !         call odd%mask(params%msk, 'soft')
+    !     endif
+    !     if( have_mask_file )then
+    !         call mskvol%one_at_edge ! to expand before masking of reference internally
+    !     else
+    !         call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
+    !     endif
+    !     if( map2filt_present )then
+    !         call nonuniform_fsc_filt(even, odd, mskvol, .false., map2filt, phran=trim(params%phrand).eq.'yes')
+    !     else
+    !         call nonuniform_fsc_filt(even, odd, mskvol, .false., phran=trim(params%phrand).eq.'yes')
+    !     endif
+    !     if( have_mask_file )then
+    !         call mskvol%read(params%mskfile)
+    !         call even%mul(mskvol)
+    !         call odd%mul(mskvol)
+    !         if( map2filt_present ) call map2filt%mul(mskvol)
+    !         call mskvol%kill
+    !     endif
+    !     if( map2filt_present )then
+    !         call map2filt%write('nonuniformly_filtered.mrc')
+    !     else
+    !         call even%write('nonuniformly_filtered_even.mrc')
+    !         call odd%write('nonuniformly_filtered_odd.mrc')
+    !     endif
+    !     ! destruct
+    !     call even%kill
+    !     call odd%kill
+    !     if( map2filt_present ) call map2filt%kill
+    !     ! end gracefully
+    !     call simple_end('**** SIMPLE_NONUNIFORM_FILTER NORMAL STOP ****')
+    ! end subroutine exec_nonuniform_filter
 
     subroutine exec_opt_3D_filter(self, cline)
         use simple_opt_filter, only: opt_filter
@@ -253,7 +253,11 @@ contains
         call odd %read(params%vols(1))
         call even%read(params%vols(2))
         have_mask_file = .false.
-        file_tag       = trim(params%is_uniform)//'_uniform_opt_3D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
+        if( params%l_nonuniform )then
+            file_tag = 'nonuniform_opt_3D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
+        else
+            file_tag = 'uniform_opt_3D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
+        endif
         if( cline%defined('mskfile') )then
             if( file_exists(params%mskfile) )then
                 call mskvol%new([params%box,params%box,params%box], params%smpd)
@@ -275,7 +279,7 @@ contains
             &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         endif
         if( map2filt_present )then
-            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, trim(params%filter), params%max_res, params%nsearch, mskvol, map2filt)
+            call opt_filter(odd, even, params%smpd, params%l_nonuniform, params%smooth_ext, trim(params%filter), params%lp_lb, params%nsearch, mskvol, map2filt)
             if( have_mask_file )then
                 call mskvol%read(params%mskfile) ! restore the soft edge
                 call map2filt%mul(mskvol)
@@ -288,7 +292,7 @@ contains
             endif
             call map2filt%write(trim(file_tag)//'_filtered.mrc')
         else
-            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, trim(params%filter), params%max_res, params%nsearch, mskvol)
+            call opt_filter(odd, even, params%smpd, params%l_nonuniform, params%smooth_ext, trim(params%filter), params%lp_lb, params%nsearch, mskvol)
             if( have_mask_file )then
                 call mskvol%read(params%mskfile) ! restore the soft edge
                 call even%mul(mskvol)
@@ -317,7 +321,11 @@ contains
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
         params%ldim(3) = 1 ! because we operate on stacks
         params%filter  = trim(params%filter)
-        file_tag       = trim(params%is_uniform)//'_uniform_opt_2D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
+        if( params%l_nonuniform )then
+            file_tag = 'nonuniform_opt_2D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
+        else
+            file_tag = 'uniform_opt_2D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
+        endif
         do iptcl = 1, params%nptcls
             call odd%new(params%ldim, params%smpd)
             call even%new(params%ldim, params%smpd)
@@ -325,7 +333,7 @@ contains
             call even%read(params%stk,  iptcl)
             call even%mask(params%msk, 'soft')
             call odd%mask(params%msk, 'soft')
-            call opt_filter(odd, even, params%smpd, params%is_uniform, params%smooth_ext, trim(params%filter), params%max_res, params%nsearch)
+            call opt_filter(odd, even, params%smpd, params%l_nonuniform, params%smooth_ext, trim(params%filter), params%lp_lb, params%nsearch)
             call odd%write(trim(file_tag)//'_odd.mrc', iptcl)
             call even%write(trim(file_tag)//'_even.mrc', iptcl)
             call odd%zero_and_unflag_ft

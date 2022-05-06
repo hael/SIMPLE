@@ -5,7 +5,6 @@ module simple_opt_filter
 include 'simple_lib.f08'
 use simple_defs
 use simple_image, only: image
-use simple_math,  only: hyp
 implicit none
 
 contains
@@ -97,46 +96,44 @@ contains
         integer                         :: bw_order, io_stat
         type(tvfilter)                  :: tvfilt
         call img%fft()
-        if (filter_type == 'lp') then
-            call img%lp(int(param))
-        elseif (filter_type == 'tv') then
-            call tvfilt%new
-            call tvfilt%apply_filter_3d(img, param)
-            call tvfilt%kill
-        else    ! default to butterworth8, even if wrong filter type is entered
-            ! extract butterworth order number
-            bw_order = 8
-            if (filter_type(1:11) == 'butterworth') then
-                call str2int(filter_type(12:len_trim(filter_type)), io_stat, bw_order)
-                if (bw_order < 1 .or. bw_order > 10) then
-                    bw_order = 8
+        select case(trim(filter_type))
+            case('lp')
+                call img%lp(int(param))
+            case('tv')
+                call tvfilt%new
+                call tvfilt%apply_filter_3d(img, param)
+                call tvfilt%kill
+            case DEFAULT ! default to butterworth8, even if wrong filter type is entered
+                bw_order = 8
+                ! extract butterworth order number
+                if( str_has_substr(filter_type, 'butterworth') )then
+                    call str2int(filter_type(12:len_trim(filter_type)), io_stat, bw_order)
+                    if (bw_order < 1 .or. bw_order > 10) bw_order = 8
                 endif
-            endif
-            if( .not. use_cache )then
-                call butterworth_filter(cur_fil, bw_order, param)
-            endif
-            call img%apply_filter(cur_fil)
-        endif
+                if( .not. use_cache ) call butterworth_filter(cur_fil, bw_order, param)
+                call img%apply_filter(cur_fil)
+        end select
         call img%ifft()
     end subroutine apply_opt_filter
 
     ! optimization(search)-based uniform/nonuniform filter, using the (low-pass/butterworth)
-    subroutine opt_filter(odd, even, smpd, is_uniform, smooth_ext, filter_type, max_res, nsearch, mskimg, map2filt)
-        type(image),            intent(inout) :: odd
-        type(image),            intent(inout) :: even
-        real,                   intent(in)    :: smpd
-        character(len=*),       intent(in)    :: is_uniform
-        integer,                intent(in)    :: smooth_ext
-        character(len=*),       intent(in)    :: filter_type
-        real,                   intent(in)    :: max_res
-        integer,                intent(in)    :: nsearch
-        type(image),  optional, intent(inout) :: mskimg
-        class(image), optional, intent(inout) :: map2filt
+    subroutine opt_filter(odd, even, smpd, nonuniform, smooth_ext, filter_type, lp_lb, nsearch, mskimg, map2filt, norm)
+        type(image),                intent(inout) :: odd
+        type(image),                intent(inout) :: even
+        real,                       intent(in)    :: smpd
+        logical,                    intent(in)    :: nonuniform
+        integer,                    intent(in)    :: smooth_ext
+        character(len=*),           intent(in)    :: filter_type
+        real,                       intent(in)    :: lp_lb
+        integer,                    intent(in)    :: nsearch
+        type(image),      optional, intent(inout) :: mskimg
+        class(image),     optional, intent(inout) :: map2filt
+        character(len=*), optional, intent(in)    :: norm 
         type(image)          :: odd_copy, even_copy, map2filt_copy, freq_img
         integer              :: k,l,m, box, dim3, ldim(3), find_start, find_stop, iter_no
         integer              :: best_ind, cur_ind, k1,l1,m1,k_ind,l_ind,m_ind, lb(3), ub(3), mid_ext
         real                 :: cur_min_sum, ref_diff, rad, param, find_stepsz
-        logical              :: map2filt_present, mskimg_present
+        logical              :: map2filt_present, mskimg_present, l2_norm
         character(len=90)    :: file_tag
         integer, parameter   :: CHUNKSZ = 20
         real,    parameter   :: LAMBDA_MIN = .1, LAMBDA_MAX = 2.
@@ -146,15 +143,13 @@ contains
         logical, allocatable :: l_mask(:,:,:)
         map2filt_present = present(map2filt)
         mskimg_present   = present(mskimg)
-        if( mskimg_present )then
-            l_mask = mskimg%bin2logical()
-        endif
+        if( mskimg_present ) l_mask = mskimg%bin2logical()
         ldim        = odd%get_ldim()
         box         = ldim(1)
         dim3        = ldim(3)
         mid_ext     = 1 + smooth_ext
         find_stop   = calc_fourier_index(2. * smpd, box, smpd)
-        find_start  = calc_fourier_index(max_res, box, smpd)
+        find_start  = calc_fourier_index(lp_lb, box, smpd)
         find_stepsz = real(find_stop - find_start)/(nsearch-1)
         call freq_img%new([box,box,dim3], smpd)
         call odd_copy%copy(odd)
@@ -162,6 +157,15 @@ contains
         if( map2filt_present )then
             allocate(opt_map2filt(box,box,dim3), source=0.)
             call map2filt_copy%copy(map2filt)
+        endif
+        l2_norm = .false.
+        if( present(norm) )then
+            select case(trim(norm))
+                case('euclid_norm')
+                    l2_norm = .true.
+                case DEFAULT
+                    l2_norm = .false.
+            end select
         endif
         allocate(opt_odd(box,box,dim3), opt_even(box,box,dim3), cur_diff(box,box,dim3), opt_diff(box,box,dim3),opt_freq(box,box,dim3),&
         &cur_fil(box),weights_2D(smooth_ext*2+1, smooth_ext*2+1), weights_3D(smooth_ext*2+1, smooth_ext*2+1, smooth_ext*2+1), source=0.)
@@ -219,9 +223,13 @@ contains
             call odd%copy_fast(odd_copy)
             call apply_opt_filter(odd, filter_type, param, cur_fil, .false.)
             call odd%get_rmat_ptr(rmat_odd)
-            call squared_diff(rmat_odd, rmat_even, cur_diff)
+            if( l2_norm )then
+                call normalized_squared_diff(rmat_odd, rmat_even, cur_diff)
+            else
+                call squared_diff(rmat_odd, rmat_even, cur_diff)
+            endif
             ! do the non-uniform, i.e. optimizing at each voxel
-            if( is_uniform == 'no')then
+            if( nonuniform )then
                 ! 2D vs 3D cases
                 if( dim3 == 1 )then
                     !$omp parallel do collapse(2) default(shared) private(k,l,k1,l1,k_ind,l_ind,ref_diff) schedule(dynamic,CHUNKSZ) proc_bind(close)
@@ -289,9 +297,9 @@ contains
             endif
             write(*, *) 'min cost val = ', cur_min_sum, '; current cost = ', sum(cur_diff)
         enddo
-        if(is_uniform == 'yes' ) write(*, *) 'minimized cost at resolution = ', box*smpd/best_ind
+        if( .not. nonuniform ) write(*, *) 'minimized cost at resolution = ', box*smpd/best_ind
         ! applying the filter after getting the optimized resolution map, for the non-uniform case
-        if( is_uniform == 'no' ) then
+        if( nonuniform ) then
             find_start = minval(opt_freq(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)))
             find_stop  = maxval(opt_freq(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)))
             do cur_ind = find_start, find_stop, int(find_stepsz)
@@ -314,8 +322,12 @@ contains
         call odd%set_rmat(opt_odd,   .false.)
         call even%set_rmat(opt_even, .false.)
         ! output the optimized frequency map to see the nonuniform parts
-        if (dim3 > 1) then
-            file_tag = trim(is_uniform)//'_uniform_filter_'//trim(filter_type)//'_ext_'//int2str(smooth_ext)
+        if( dim3 > 1 )then
+            if( nonuniform )then
+                file_tag = 'nonuniform_filter_'//trim(filter_type)//'_ext_'//int2str(smooth_ext)
+            else
+                file_tag = 'uniform_filter_'//trim(filter_type)//'_ext_'//int2str(smooth_ext)
+            endif
             call freq_img%set_rmat(opt_freq, .false.)
             call freq_img%write('opt_freq_map_'//trim(file_tag)//'.mrc')
             call freq_img%set_rmat(box*smpd/opt_freq, .false.) ! resolution map
@@ -325,5 +337,6 @@ contains
         if( map2filt_present ) call map2filt%set_rmat(opt_map2filt, .false.)
         deallocate(opt_odd, opt_even, cur_diff, opt_diff, cur_fil, weights_3D, weights_2D)
     end subroutine opt_filter
+
 end module simple_opt_filter
     

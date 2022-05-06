@@ -111,7 +111,6 @@ type(simple_program), target :: merge_stream_projects
 type(simple_program), target :: motion_correct
 type(simple_program), target :: motion_correct_tomo
 type(simple_program), target :: new_project
-type(simple_program), target :: nonuniform_filter
 type(simple_program), target :: opt_2D_filter
 type(simple_program), target :: opt_3D_filter
 type(simple_program), target :: normalize_
@@ -201,6 +200,7 @@ type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
 type(simple_input_param) :: lp
 type(simple_input_param) :: lp_backgr
+type(simple_input_param) :: lp_lb
 type(simple_input_param) :: lplim_crit
 type(simple_input_param) :: max_dose
 type(simple_input_param) :: max_rad
@@ -220,6 +220,7 @@ type(simple_input_param) :: neg
 type(simple_input_param) :: nparts
 type(simple_input_param) :: nptcls
 type(simple_input_param) :: nrestarts
+type(simple_input_param) :: nsearch
 type(simple_input_param) :: nsig
 type(simple_input_param) :: nspace
 type(simple_input_param) :: nthr
@@ -341,7 +342,6 @@ contains
         call new_motion_correct
         call new_motion_correct_tomo
         call new_new_project
-        call new_nonuniform_filter
         call new_opt_2D_filter
         call new_opt_3D_filter
         call new_normalize
@@ -442,7 +442,6 @@ contains
         call push2prg_ptr_array(motion_correct)
         call push2prg_ptr_array(motion_correct_tomo)
         call push2prg_ptr_array(new_project)
-        call push2prg_ptr_array(nonuniform_filter)
         call push2prg_ptr_array(opt_2D_filter)
         call push2prg_ptr_array(opt_3D_filter)
         call push2prg_ptr_array(normalize_)
@@ -599,8 +598,6 @@ contains
                 ptr2prg => motion_correct_tomo
             case('new_project')
                 ptr2prg => new_project
-            case('nonuniform_filter')
-                ptr2prg => nonuniform_filter
             case('opt_2D_filter')
                 ptr2prg => opt_2D_filter
             case('opt_3D_filter')
@@ -751,7 +748,6 @@ contains
         write(logfhandle,'(A)') motion_correct%name
         write(logfhandle,'(A)') motion_correct_tomo%name
         write(logfhandle,'(A)') new_project%name
-        write(logfhandle,'(A)') nonuniform_filter%name
         write(logfhandle,'(A)') opt_2D_filter%name
         write(logfhandle,'(A)') opt_3D_filter%name
         write(logfhandle,'(A)') normalize_%name
@@ -895,7 +891,7 @@ contains
         &system. On a single-socket machine there may be speed benfits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', 'divide job into # parts', .true., 1.0)
         call set_param(nthr,          'nthr',          'num',    'Number of threads per part, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
         &logical threads in a socket.', '# shared-memory CPU threads', .true., 0.)
-        call set_param(nonuniform,    'nonuniform',    'binary', 'Nonuniform filter', 'Apply nonuniform filter based on TV regularization(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(nonuniform,    'nonuniform',    'binary', 'Nonuniform filter', 'Apply nonuniform filter(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(update_frac,   'update_frac',   'num',    'Fractional update per iteration', 'Fraction of particles to update per iteration in incremental learning scheme for accelerated convergence &
         &rate(0.1-0.5){1.}', 'update this fraction per iter(0.1-0.5){1.0}', .false., 1.0)
         call set_param(frac,          'frac',          'num',    'Fraction of particles to include', 'Fraction of particles to include based on spectral score (median of FRC between reference and particle)',&
@@ -988,6 +984,8 @@ contains
         call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (full|partial){full}','(full|partial){full}', .false., 'full')
         call set_param(max_dose,       'max_dose',     'num',    'Maximum dose threshold(e/A2)', 'Threshold for maximum dose and number of frames used during movie alignment(e/A2), if <=0 all frames are used{0.0}','{0.0}',.false., 0.0)
         call set_param(script,         'script',       'binary', 'Generate script for shared-mem exec on cluster', 'Generate script for shared-mem exec on cluster(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(lp_lb,          'lp_lb',        'num',    'Low-pass limit lower bound', 'Low-pass limit lower bound for search{30 A}', 'Low-pass limit lower bound{30 A}', .false., 30.)
+        call set_param(nsearch,        'nsearch',      'num',    'Number of points to search(lp_lb to nyq)', 'Number of points to search(lp_lb to nyq){40}', 'Number of points to search(lp_lb to nyq){40}', .false., 40.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -2500,34 +2498,6 @@ contains
         call motion_correct_tomo%set_input('comp_ctrls', 1, nthr)
     end subroutine new_motion_correct_tomo
 
-    subroutine new_nonuniform_filter
-        ! PROGRAM SPECIFICATION
-        call nonuniform_filter%new(&
-        &'nonuniform_filter',&                                  ! name
-        &'Nonuniform low-pass filtering',&                      ! descr_short
-        &'is a program for nonuniform low-pass filtering by zeroing F-comps below noise in e/o maps',& ! descr_long
-        &'simple_exec',&                                        ! executable
-        &3, 1, 0, 0, 1, 2, 1, .false.)                          ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call nonuniform_filter%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',       'Odd volume',       'vol1.mrc file', .true., '')
-        call nonuniform_filter%set_input('img_ios', 2, 'vol2', 'file', 'Even volume',      'Even volume',      'vol2.mrc file', .true., '')
-        call nonuniform_filter%set_input('img_ios', 3, 'vol3', 'file', 'Volume to filter', 'Volume to filter', 'vol3.mrc file', .false., '')
-        ! parameter input/output
-        call nonuniform_filter%set_input('parm_ios', 1, smpd)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call nonuniform_filter%set_input('filt_ctrls', 1, 'phrand', 'binary', 'Phase randomization', 'Phase randomization of F-comps with power below noise(yes|no){no}', '(yes|no){no}', .false., 'no')
-        ! mask controls
-        call nonuniform_filter%set_input('mask_ctrls', 1, mskdiam)
-        call nonuniform_filter%set_input('mask_ctrls', 2, mskfile)
-        ! computer controls
-        call nonuniform_filter%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_nonuniform_filter
-
     subroutine new_opt_2D_filter
         ! PROGRAM SPECIFICATION
         call opt_2D_filter%new(&
@@ -2548,12 +2518,11 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call opt_2D_filter%set_input('filt_ctrls', 1, 'phrand'     , 'binary', 'Phase randomization', 'Phase randomization of F-comps with power below noise(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call opt_2D_filter%set_input('filt_ctrls', 2, 'is_uniform' , 'binary', 'uniform filter?'    , 'Whether uniform or nonuniform filter(yes|no){no}'                 , '(yes|no){no}', .false., 'no')
-        call opt_2D_filter%set_input('filt_ctrls', 3, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', .false., 0.)
-        call opt_2D_filter%set_input('filt_ctrls', 4, 'filter'     , 'multi' , 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', '(butterworth8|lp|tv|tanh){butterworth8}', .false., 'butterworth8')
-        call opt_2D_filter%set_input('filt_ctrls', 5, 'max_res'    , 'num'   , 'Maximum resolution to search', 'Maximum resolution to search (default to 30 A)', 'Maximum resolution to search{30}', .false., 30.)
-        call opt_2D_filter%set_input('filt_ctrls', 6, 'nsearch'    , 'num'   , 'Number of search points (nyq to max_res)', 'Number of search points (nyq to max_res) (default to 20)', 'Number of search points (nyq to max_res){20}', .false., 20.)
+        call opt_2D_filter%set_input('filt_ctrls', 1, nonuniform)
+        call opt_2D_filter%set_input('filt_ctrls', 2, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', .false., 0.)
+        call opt_2D_filter%set_input('filt_ctrls', 3, 'filter'     , 'multi' , 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', '(butterworth8|lp|tv|tanh){butterworth8}', .false., 'butterworth8')
+        call opt_2D_filter%set_input('filt_ctrls', 4, lp_lb)
+        call opt_2D_filter%set_input('filt_ctrls', 5, nsearch)
         ! mask controls
         call opt_2D_filter%set_input('mask_ctrls', 1, mskdiam)
         call opt_2D_filter%set_input('mask_ctrls', 2, mskfile)
@@ -2581,12 +2550,11 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call opt_3D_filter%set_input('filt_ctrls', 1, 'phrand'     , 'binary', 'Phase randomization', 'Phase randomization of F-comps with power below noise(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call opt_3D_filter%set_input('filt_ctrls', 2, 'is_uniform' , 'binary', 'uniform filter?'    , 'Whether uniform or nonuniform filter(yes|no){no}'                 , '(yes|no){no}', .false., 'no')
-        call opt_3D_filter%set_input('filt_ctrls', 3, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', .false., 0.)
-        call opt_3D_filter%set_input('filt_ctrls', 4, 'filter'     , 'multi' , 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', '(butterworth8|lp|tv|tanh){butterworth8}', .false., 'butterworth8')
-        call opt_3D_filter%set_input('filt_ctrls', 5, 'max_res'    , 'num'   , 'Maximum resolution to search', 'Maximum resolution to search (default to 30 A)', 'Maximum resolution to search{30}', .false., 30.)
-        call opt_3D_filter%set_input('filt_ctrls', 6, 'nsearch'    , 'num'   , 'Number of search points (nyq to max_res)', 'Number of search points (nyq to max_res) (default to 20)', 'Number of search points (nyq to max_res){20}', .false., 20.)
+        call opt_3D_filter%set_input('filt_ctrls', 1, nonuniform)
+        call opt_3D_filter%set_input('filt_ctrls', 2, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', .false., 0.)
+        call opt_3D_filter%set_input('filt_ctrls', 3, 'filter'     , 'multi' , 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', '(butterworth8|lp|tv|tanh){butterworth8}', .false., 'butterworth8')
+        call opt_3D_filter%set_input('filt_ctrls', 4, lp_lb)
+        call opt_3D_filter%set_input('filt_ctrls', 5, nsearch)
         ! mask controls
         call opt_3D_filter%set_input('mask_ctrls', 1, mskdiam)
         call opt_3D_filter%set_input('mask_ctrls', 2, mskfile)
@@ -2690,8 +2658,7 @@ contains
         call postprocess%set_input('filt_ctrls', 3, bfac)
         call postprocess%set_input('filt_ctrls', 4, mirr)
         call postprocess%set_input('filt_ctrls', 5, lp_backgr)
-        call postprocess%set_input('filt_ctrls', 6, 'nonuniform', 'binary', 'Nonuniform filter',&
-        &'Apply nonuniform filter based on TV regularization(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call postprocess%set_input('filt_ctrls', 6, nonuniform)
         ! mask controls
         call postprocess%set_input('mask_ctrls', 1, mskdiam)
         call postprocess%set_input('mask_ctrls', 2, mskfile)
