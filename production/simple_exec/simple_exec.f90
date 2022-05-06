@@ -92,7 +92,6 @@ type(comparemc_commander)                   :: xcomparemc
 type(binarize_commander)                    :: xbinarize
 type(mask_commander)                        :: xmask
 type(fsc_commander)                         :: xfsc
-type(nonuniform_filter_commander)           :: xnonuniform_filter
 type(opt_2D_filter_commander)               :: xopt_2D_filter
 type(opt_3D_filter_commander)               :: xopt_3D_filter
 type(centervol_commander)                   :: xcenter
@@ -274,8 +273,6 @@ select case(trim(prg))
         call xmask%execute(cline)
     case( 'fsc' )
         call xfsc%execute(cline)
-    case( 'nonuniform_filter' )
-        call xnonuniform_filter%execute(cline)
     case( 'opt_2D_filter' )
         call xopt_2D_filter%execute(cline)
     case( 'opt_3D_filter' )

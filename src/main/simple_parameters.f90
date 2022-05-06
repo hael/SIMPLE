@@ -50,7 +50,6 @@ type :: parameters
     character(len=3)      :: graphene_filt='no'   !< filter out graphene bands in correcation search
     character(len=3)      :: gridding='no'        !< to test gridding correction
     character(len=3)      :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
-    character(len=3)      :: is_uniform='no'      !< dev flag for butterworth filter
     character(len=3)      :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
@@ -296,7 +295,7 @@ type :: parameters
     integer :: nran=0              !< # random images to select
     integer :: nrefs=100           !< # references used for picking{100}
     integer :: nrestarts=1
-    integer :: nsearch=20          !< # search grid points{20}
+    integer :: nsearch=40          !< # search grid points{40}
     integer :: nspace=2500         !< # projection directions
     integer :: nstates=1           !< # states to reconstruct
     integer :: nsym=1
@@ -393,6 +392,7 @@ type :: parameters
     real    :: lp2D=20.            !< low-pass limit(in A)
     real    :: lp_backgr=20.       !< low-pass for solvent blurring (in A)
     real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
+    real    :: lp_lb = 30.         !< optimization(search)-based low-pass limit lower bound
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
     real    :: lplim_crit=0.5      !< corr criterion low-pass limit assignment(0.143-0.5){0.5}
     real    :: lplims2D(3)
@@ -415,7 +415,6 @@ type :: parameters
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
-    real    :: max_res=30.         !< optimization(search)-based max resolution
     real    :: scale=1.            !< image scale factor{1}
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma=1.0           !< for gaussian function generation {1.}
@@ -548,7 +547,6 @@ contains
         call check_carg('filter',         self%filter)
         call check_carg('for3D',          self%for3D)
         call check_carg('groupframes',    self%groupframes)
-        call check_carg('is_uniform',     self%is_uniform)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
@@ -825,6 +823,7 @@ contains
         call check_rarg('lp2D',           self%lp2D)
         call check_rarg('lp_backgr',      self%lp_backgr)
         call check_rarg('lp_ctf_estimate',self%lp_ctf_estimate)
+        call check_rarg('lp_lb',          self%lp_lb)
         call check_rarg('lp_pick',        self%lp_pick)
         call check_rarg('lplim_crit',     self%lplim_crit)
         call check_rarg('lpstart',        self%lpstart)
@@ -844,7 +843,6 @@ contains
         call check_rarg('overlap',        self%overlap)
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('power',          self%power)
-        call check_rarg('max_res',        self%max_res)
         call check_rarg('scale',          self%scale)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
