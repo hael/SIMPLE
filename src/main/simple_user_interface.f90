@@ -2505,7 +2505,7 @@ contains
         &'Optimization (search) based 2D filter (uniform/nonuniform)',&     ! descr_short
         &'is a program for 2D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                                    ! executable
-        &3, 1, 0, 0, 6, 2, 1, .false.)                                      ! # entries in each group, requires sp_project
+        &3, 1, 0, 0, 5, 2, 1, .false.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call opt_2D_filter%set_input('img_ios', 1, 'stk',  'file', 'First stack',       'First stack',       'stack1.mrc file', .true., '')
@@ -2537,7 +2537,7 @@ contains
         &'Butterworth 3D filter (uniform/nonuniform)',&         ! descr_short
         &'is a program for 3D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                        ! executable
-        &3, 1, 0, 0, 6, 2, 1, .false.)                          ! # entries in each group, requires sp_project
+        &3, 1, 0, 0, 5, 2, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call opt_3D_filter%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',       'Odd volume',       'vol1.mrc file', .true., '')
