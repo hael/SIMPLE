@@ -57,7 +57,7 @@ contains
         type(masker)      :: mskvol
         integer           :: j, find_plate, k_hp, k_lp, nyq
         real              :: res_fsc05, res_fsc0143
-        real, allocatable :: res(:), corrs(:), filt_optlp(:), filt_tv(:)
+        real, allocatable :: res(:), corrs(:)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         ! read even/odd pair
@@ -87,7 +87,7 @@ contains
         ! calculate FSC
         res = even%get_res()
         nyq = even%get_filtsz()
-        allocate(corrs(nyq), filt_optlp(nyq), filt_tv(nyq))
+        allocate(corrs(nyq))
         call even%fsc(odd, corrs)
         if( params%l_phaseplate ) call phaseplate_correct_fsc(corrs, find_plate)
         do j=1,nyq
