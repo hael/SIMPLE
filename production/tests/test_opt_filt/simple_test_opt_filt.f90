@@ -75,6 +75,8 @@ write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', re
 ! calculate optimal filter
 call even%write('vol_even.mrc')
 call odd%write('vol_odd.mrc')
+call even%kill
+call odd%kill
 cline_opt_filt = cline
 call cline_opt_filt%set('vol1',   'vol_odd.mrc')
 call cline_opt_filt%set('vol2',   'vol_even.mrc')
