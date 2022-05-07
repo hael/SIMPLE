@@ -83,4 +83,27 @@ call cline_opt_filt%set('vol2',   'vol_even.mrc')
 call cline_opt_filt%set('filter', 'lp')
 call cline_opt_filt%set('mkdir',  'no')
 call xopt_3D_filter%execute(cline_opt_filt)
+! comparing the nonuniform result with the original data
+call even%new(p%ldim, p%smpd)
+call odd%new( p%ldim, p%smpd)
+call even%copy(even_copy)
+call odd%read('nonuniform_opt_3D_filter_lp_ext_0_odd.mrc')
+! spherical masking
+call even%mask(p%msk, 'soft')
+call odd%mask( p%msk, 'soft')
+! forward FT
+call even%fft()
+call odd%fft()
+! calculate FSC
+res = even%get_res()
+nyq = even%get_filtsz()
+call even%fsc(odd, corrs)
+call even%ifft
+call odd%ifft
+do j=1,nyq
+    write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
+end do
+call get_resolution(corrs, res, res_fsc05, res_fsc0143)
+write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
+write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
 end program simple_test_opt_filt
