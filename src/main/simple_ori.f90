@@ -131,13 +131,13 @@ contains
         class(ori), intent(inout) :: self
         logical,    intent(in)    :: is_ptcl
         call self%kill
-        self%is_ptcl   = is_ptcl
+        self%is_ptcl = is_ptcl
         if( self%is_ptcl )then
-            self%htab      = hash(0)
-            self%chtab     = chash(0)
+            self%htab  = hash(0)
+            self%chtab = chash(0)
         else
-            self%htab      = hash()
-            self%chtab     = chash()
+            self%htab  = hash()
+            self%chtab = chash()
         endif
         self%existence = .true.
     end subroutine new_ori

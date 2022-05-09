@@ -39,9 +39,13 @@ type, extends(image) :: projector
     procedure          :: expand_cmat
     ! SETTERS
     procedure          :: reset_expanded
+    ! GETTERS
+    procedure          :: is_expanded
     ! FOURIER PROJECTORS
     procedure          :: fproject
-    procedure          :: fproject_serial
+    procedure, private :: fproject_serial_1
+    procedure, private :: fproject_serial_2
+    generic            :: fproject_serial => fproject_serial_1, fproject_serial_2
     procedure          :: fproject_polar
     procedure          :: fdf_project_polar
     procedure          :: interp_fcomp_norm
@@ -134,16 +138,16 @@ contains
         deallocate( cych,cyck,cycm )
         ! gridding correction & interpolation
         select case(trim(params_glob%interpfun))
-        case('linear')
-            self%interp_fcomp => interp_fcomp_trilinear
-        case DEFAULT
-            ! defaults to Kaiser-Bessel
-            self%interp_fcomp     => interp_fcomp_norm
-            self%fdf_interp_fcomp => fdf_interp_fcomp_norm
-            if( params_glob%gridding.eq.'yes')then
-                self%interp_fcomp     => interp_fcomp_grid
-                self%fdf_interp_fcomp => fdf_interp_fcomp_grid
-            endif
+            case('linear')
+                self%interp_fcomp => interp_fcomp_trilinear
+            case DEFAULT
+                ! defaults to Kaiser-Bessel
+                self%interp_fcomp     => interp_fcomp_norm
+                self%fdf_interp_fcomp => fdf_interp_fcomp_norm
+                if( params_glob%gridding.eq.'yes')then
+                    self%interp_fcomp     => interp_fcomp_grid
+                    self%fdf_interp_fcomp => fdf_interp_fcomp_grid
+                endif
         end select
         self%expanded_exists = .true.
     end subroutine expand_cmat
@@ -157,6 +161,13 @@ contains
             &THROW_HARD('expanded Fourier matrix does not exist; reset_expanded')
         self%cmat_exp = CMPLX_ZERO
     end subroutine reset_expanded
+
+    ! GETTERS
+
+    logical function is_expanded( self )
+        class(projector), intent(in) :: self
+        is_expanded = self%expanded_exists
+    end function is_expanded
 
     ! FOURIER PROJECTORS
 
@@ -198,16 +209,16 @@ contains
     end subroutine fproject
 
     !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
-    subroutine fproject_serial( self, e, fplane )
-        class(projector), intent(inout) :: self
-        class(ori),       intent(in)    :: e
-        class(image),     intent(inout) :: fplane
+    subroutine fproject_serial_1( self, e, fplane )
+        class(projector),  intent(inout) :: self
+        class(ori),        intent(in)    :: e
+        class(image),      intent(inout) :: fplane
         real        :: loc(3), e_rotmat(3,3)
         integer     :: h, k, sqarg, sqlp, lims(3,2), phys(3), ldim(3)
         complex(sp) :: comp
-        lims   = self%loop_lims(2)
-        sqlp   = (maxval(lims(:,2)))**2
-        ldim   = fplane%get_ldim()
+        lims = self%loop_lims(2)
+        sqlp = (maxval(lims(:,2)))**2
+        ldim = fplane%get_ldim()
         call fplane%zero_and_flag_ft()
         e_rotmat = e%get_mat()
         do h=lims(1,1),lims(1,2)
@@ -229,7 +240,43 @@ contains
                 endif
             end do
         end do
-    end subroutine fproject_serial
+    end subroutine fproject_serial_1
+
+    !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
+    subroutine fproject_serial_2( self, ospace, iref, fplane, find_lp )
+        class(projector),  intent(inout) :: self
+        class(oris),       intent(in)    :: ospace
+        integer,           intent(in)    :: iref
+        class(image),      intent(inout) :: fplane
+        integer, optional, intent(in)    :: find_lp
+        real        :: loc(3), e_rotmat(3,3)
+        integer     :: h, k, sqarg, sqlp, lims(3,2), phys(3), ldim(3)
+        complex(sp) :: comp
+        lims = self%loop_lims(2)
+        sqlp = find_lp * find_lp
+        ldim = fplane%get_ldim()
+        call fplane%zero_and_flag_ft()
+        e_rotmat = ospace%get_mat(iref)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                sqarg = dot_product([h,k],[h,k])
+                if( sqarg > sqlp ) cycle
+                loc  = matmul(real([h,k,0]), e_rotmat)
+                comp = self%interp_fcomp(loc)
+                if (h > 0) then
+                    phys(1) = h + 1
+                    phys(2) = k + 1 + MERGE(ldim(2),0,k < 0)
+                    phys(3) = 1
+                    call fplane%set_cmat_at(phys, comp)
+                else
+                    phys(1) = -h + 1
+                    phys(2) = -k + 1 + MERGE(ldim(2),0,-k < 0)
+                    phys(3) = 1
+                    call fplane%set_cmat_at(phys, conjg(comp))
+                endif
+            end do
+        end do
+    end subroutine fproject_serial_2
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
     subroutine fproject_polar( self, iref, e, pftcc, iseven, mask )
