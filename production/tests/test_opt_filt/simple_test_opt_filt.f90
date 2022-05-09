@@ -55,7 +55,7 @@ write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', re
 write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
 call even%stats('foreground', ave, sdev, maxv, minv)
 ! add noise in a small center region of the even
-call noise%gauran(0., 25. * sdev)
+call noise%gauran(0., 15. * sdev)
 call noise%mask(0.4 * p%msk, 'soft')
 call noise%write('noisevol.mrc')
 call even%add(noise)
@@ -78,8 +78,8 @@ call odd%write('vol_odd.mrc')
 call even%kill
 call odd%kill
 cline_opt_filt = cline
-call cline_opt_filt%set('vol1',   'vol_odd.mrc')
-call cline_opt_filt%set('vol2',   'vol_even.mrc')
+call cline_opt_filt%set('vol1',   'vol_even.mrc')
+call cline_opt_filt%set('vol2',   'vol_odd.mrc')
 call cline_opt_filt%set('filter', 'lp')
 call cline_opt_filt%set('mkdir',  'no')
 call xopt_3D_filter%execute(cline_opt_filt)

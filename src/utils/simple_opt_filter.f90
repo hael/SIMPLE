@@ -117,7 +117,7 @@ contains
     end subroutine apply_opt_filter
 
     ! optimization(search)-based uniform/nonuniform filter, using the (low-pass/butterworth)
-    subroutine opt_filter(odd, even, smpd, nonuniform, smooth_ext, filter_type, lp_lb, nsearch, mskimg, map2filt, norm)
+    subroutine opt_filter(odd, even, smpd, nonuniform, smooth_ext, filter_type, lp_lb, nsearch, mskimg, map2filt)
         type(image),                intent(inout) :: odd
         type(image),                intent(inout) :: even
         real,                       intent(in)    :: smpd
@@ -128,12 +128,11 @@ contains
         integer,                    intent(in)    :: nsearch
         type(image),      optional, intent(inout) :: mskimg
         class(image),     optional, intent(inout) :: map2filt
-        character(len=*), optional, intent(in)    :: norm 
         type(image)          :: odd_copy, even_copy, map2filt_copy, freq_img
         integer              :: k,l,m, box, dim3, ldim(3), find_start, find_stop, iter_no
         integer              :: best_ind, cur_ind, k1,l1,m1,k_ind,l_ind,m_ind, lb(3), ub(3), mid_ext
         real                 :: cur_min_sum, ref_diff, rad, param, find_stepsz
-        logical              :: map2filt_present, mskimg_present, l2_norm
+        logical              :: map2filt_present, mskimg_present
         character(len=90)    :: file_tag
         integer, parameter   :: CHUNKSZ = 20
         real,    parameter   :: LAMBDA_MIN = .1, LAMBDA_MAX = 2.
@@ -157,15 +156,6 @@ contains
         if( map2filt_present )then
             allocate(opt_map2filt(box,box,dim3), source=0.)
             call map2filt_copy%copy(map2filt)
-        endif
-        l2_norm = .false.
-        if( present(norm) )then
-            select case(trim(norm))
-                case('euclid_norm')
-                    l2_norm = .true.
-                case DEFAULT
-                    l2_norm = .false.
-            end select
         endif
         allocate(opt_odd(box,box,dim3), opt_even(box,box,dim3), cur_diff(box,box,dim3), opt_diff(box,box,dim3),opt_freq(box,box,dim3),&
         &cur_fil(box),weights_2D(smooth_ext*2+1, smooth_ext*2+1), weights_3D(smooth_ext*2+1, smooth_ext*2+1, smooth_ext*2+1), source=0.)
@@ -209,7 +199,6 @@ contains
         iter_no      = 0
         opt_diff(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(cur_min_sum)
         opt_freq(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(cur_min_sum)
-        call even%get_rmat_ptr(rmat_even)
         do iter_no = 1, nsearch
             cur_ind = find_start + (iter_no - 1)*find_stepsz
             if( filter_type == 'tv' )then
@@ -223,10 +212,16 @@ contains
             call odd%copy_fast(odd_copy)
             call apply_opt_filter(odd, filter_type, param, cur_fil, .false.)
             call odd%get_rmat_ptr(rmat_odd)
-            if( l2_norm )then
-                call normalized_squared_diff(rmat_odd, rmat_even, cur_diff)
-            else
-                call squared_diff(rmat_odd, rmat_even, cur_diff)
+            call even%copy_fast(even_copy)
+            call even%get_rmat_ptr(rmat_even)
+            call squared_diff(rmat_odd, rmat_even, cur_diff)
+            ! filtering even using the same filter
+            call apply_opt_filter(even, filter_type, param, cur_fil, .true.)
+            call even%get_rmat_ptr(rmat_even)
+            if( map2filt_present )then
+                call map2filt%copy_fast(map2filt_copy)
+                call apply_opt_filter(map2filt, filter_type, param, cur_fil, .true.)
+                call map2filt%get_rmat_ptr(rmat_map2filt)
             endif
             ! do the non-uniform, i.e. optimizing at each voxel
             if( nonuniform )then
@@ -247,9 +242,14 @@ contains
                                 enddo
                             enddo
                             ! opt_diff keeps the minimized cost value at each voxel of the search
+                            ! opt_odd  keeps the best voxel of the form B*odd
+                            ! opt_even keeps the best voxel of the form B*even
                             if (ref_diff < opt_diff(k,l,1)) then
+                                opt_odd(k,l,1)  = rmat_odd(k,l,1)
+                                opt_even(k,l,1) = rmat_even(k,l,1)
                                 opt_diff(k,l,1) = ref_diff
                                 opt_freq(k,l,1) = cur_ind
+                                if( map2filt_present ) opt_map2filt(k,l,1) = rmat_map2filt(k,l,1)
                             endif
                         enddo
                     enddo
@@ -274,9 +274,14 @@ contains
                                     enddo
                                 enddo
                                 ! opt_diff keeps the minimized cost value at each voxel of the search
+                                ! opt_odd  keeps the best voxel of the form B*odd
+                                ! opt_even keeps the best voxel of the form B*even
                                 if (ref_diff < opt_diff(k,l,m)) then
+                                    opt_odd(k,l,m)  = rmat_odd(k,l,m)
+                                    opt_even(k,l,m) = rmat_even(k,l,m)
                                     opt_diff(k,l,m) = ref_diff
                                     opt_freq(k,l,m) = cur_ind
+                                    if(map2filt_present ) opt_map2filt(k,l,m) = rmat_map2filt(k,l,m)
                                 endif
                             enddo
                         enddo
@@ -298,27 +303,6 @@ contains
             write(*, *) 'min cost val = ', cur_min_sum, '; current cost = ', sum(cur_diff)
         enddo
         if( .not. nonuniform ) write(*, *) 'minimized cost at resolution = ', box*smpd/best_ind
-        ! applying the filter after getting the optimized resolution map, for the non-uniform case
-        if( nonuniform ) then
-            find_start = minval(opt_freq(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)))
-            find_stop  = maxval(opt_freq(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)))
-            do cur_ind = find_start, find_stop, int(find_stepsz)
-                call even%copy_fast(even_copy)
-                call apply_opt_filter(even, filter_type, real(cur_ind), cur_fil, .false.)
-                call even%get_rmat_ptr(rmat_even)
-                !$omp parallel do collapse(3) default(shared) private(k,l,m) schedule(dynamic,CHUNKSZ) proc_bind(close)
-                do k = lb(1),ub(1)
-                    do l = lb(2),ub(2)
-                        do m = lb(3),ub(3)
-                            if (int(opt_freq(k,l,m)) == cur_ind) then
-                                opt_odd(k,l,m) = rmat_even(k,l,m)
-                            endif
-                        enddo
-                    enddo
-                enddo
-                !$omp end parallel do
-            enddo
-        endif
         call odd%set_rmat(opt_odd,   .false.)
         call even%set_rmat(opt_even, .false.)
         ! output the optimized frequency map to see the nonuniform parts
