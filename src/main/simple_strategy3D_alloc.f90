@@ -21,6 +21,7 @@ type strategy3D_alloc
     real,           allocatable :: proj_space_corrs(:,:)    !< reference vs. particle correlations
     integer,        allocatable :: proj_space_inplinds(:,:) !< in-plane indices
     integer,        allocatable :: srch_order(:,:)          !< stochastic search index
+    logical,        allocatable :: proj_space_mask(:,:)     !< reference vs. particle correlations mask
 end type strategy3D_alloc
 
 type(strategy3D_alloc) :: s3D                         ! singleton
@@ -40,8 +41,8 @@ contains
         nrefs  = params_glob%nspace * params_glob%nstates
         ! shared-memory arrays
         allocate(master_proj_space_euls(3,nrefs), s3D%proj_space_euls(3,nrefs,nthr_glob),&
-            &s3D%proj_space_shift(nthr_glob,nrefs,2), s3D%proj_space_state(nrefs),&
-            &s3D%proj_space_corrs(nthr_glob,nrefs),&
+            &s3D%proj_space_shift(2,nrefs,nthr_glob), s3D%proj_space_state(nrefs),&
+            &s3D%proj_space_corrs(nthr_glob,nrefs),s3D%proj_space_mask(nrefs,nthr_glob),&
             &s3D%proj_space_inplinds(nthr_glob,nrefs),&
             &s3D%proj_space_proj(nrefs))
         ! states existence
@@ -67,6 +68,7 @@ contains
         enddo
         s3D%proj_space_shift = 0.
         s3D%proj_space_corrs = -HUGE(areal)
+        s3D%proj_space_mask  = .false.
         s3D%proj_space_euls  = 0.
         ! search orders allocation
         select case( trim(params_glob%refine) )
@@ -88,7 +90,8 @@ contains
         real(sp)               :: areal
         s3D%proj_space_euls(:,:,ithr)                   = master_proj_space_euls
         s3D%proj_space_corrs(ithr,:)                    = -HUGE(areal)
-        s3D%proj_space_shift(ithr,:,:)                  = 0.
+        s3D%proj_space_mask(:,ithr)                     = .false.
+        s3D%proj_space_shift(:,:,ithr)                  = 0.
         s3D%proj_space_inplinds(ithr,:)                 = 0
         if(srch_order_allocated) s3D%srch_order(ithr,:) = 0
     end subroutine prep_strategy3D_thread
@@ -103,6 +106,7 @@ contains
         if( allocated(s3D%proj_space_euls)        ) deallocate(s3D%proj_space_euls)
         if( allocated(s3D%proj_space_shift)       ) deallocate(s3D%proj_space_shift)
         if( allocated(s3D%proj_space_corrs)       ) deallocate(s3D%proj_space_corrs)
+        if( allocated(s3D%proj_space_mask)        ) deallocate(s3D%proj_space_mask)
         if( allocated(s3D%proj_space_inplinds)    ) deallocate(s3D%proj_space_inplinds)
         if( allocated(s3D%rts) )then
             do ithr=1,nthr_glob

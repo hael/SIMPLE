@@ -72,6 +72,11 @@ contains
                     class_glob    = iref
                     inpl_glob     = inpl_ind
                 endif
+                ! keep track of visited classes
+                if( self%s%l_ptclw )then
+                    s2D%cls_mask(iref,self%s%ithr)  = .true.
+                    s2D%cls_corrs(iref,self%s%ithr) = inpl_corr
+                endif
                 ! first improvement heuristic
                 if( found_better ) exit
             end do

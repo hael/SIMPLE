@@ -15,6 +15,9 @@ type strategy2D_alloc
     ! per particle
     integer, allocatable :: srch_order(:,:)
     logical, allocatable :: do_inplsrch(:)
+    ! per thread
+    real,    allocatable :: cls_corrs(:,:)
+    logical, allocatable :: cls_mask(:,:)
 end type strategy2D_alloc
 
 type(strategy2D_alloc) :: s2D
@@ -27,6 +30,9 @@ contains
         ! per particle
         if( allocated(s2D%srch_order) ) deallocate(s2D%srch_order)
         if( allocated(s2D%do_inplsrch)) deallocate(s2D%do_inplsrch)
+        ! per thread
+        if( allocated(s2D%cls_corrs)) deallocate(s2D%cls_corrs)
+        if( allocated(s2D%cls_mask) ) deallocate(s2D%cls_mask)
     end subroutine clean_strategy2D
 
     !>  prep class & global parameters
@@ -48,12 +54,15 @@ contains
                     return
                 endif
             endif
-            s2D%cls_pops = build_glob%spproj%os_cls2D%get_all('pop')
+            s2D%cls_pops = nint(build_glob%spproj%os_cls2D%get_all('pop'))
         else
             ! first iteration, no class assignment: all classes are up for grab
             allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1)
         endif
         if( all(s2D%cls_pops == 0) ) THROW_HARD('All class pops cannot be zero!')
+        ! per-thread allocations
+        allocate(s2D%cls_corrs(params_glob%ncls,nthr_glob),source=0.0)
+        allocate(s2D%cls_mask(params_glob%ncls,nthr_glob),source=.false.)
     end subroutine prep_strategy2D_glob
 
     !>  prep batch related parameters (particles level)

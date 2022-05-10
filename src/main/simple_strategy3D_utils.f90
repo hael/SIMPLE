@@ -36,7 +36,7 @@ contains
         shvec      = s%prev_shvec
         shvec_incr = 0.
         if( s%doshift ) then
-            shvec_incr = s3D%proj_space_shift(s%ithr,ref,1:2)
+            shvec_incr = s3D%proj_space_shift(:,ref,s%ithr)
             shvec      = shvec + shvec_incr
         end if
         where( abs(shvec) < 1e-6 ) shvec = 0.

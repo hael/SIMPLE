@@ -199,7 +199,8 @@ contains
                 ! irot > 0 guarantees improvement found, update solution
                 s3D%proj_space_euls(3,ref,self%ithr)  = 360. - pftcc_glob%get_rot(irot)
                 s3D%proj_space_corrs(self%ithr,ref)   = cxy(1)
-                s3D%proj_space_shift(self%ithr,ref,:) = cxy(2:3)
+                s3D%proj_space_shift(:,ref,self%ithr) = cxy(2:3)
+                s3D%proj_space_mask(ref,self%ithr)    = .true.
             endif
         endif
     end subroutine inpl_srch_1
@@ -220,7 +221,8 @@ contains
             ! irot > 0 guarantees improvement found, update solution
             s3D%proj_space_euls(3,ref,self%ithr)  = 360. - pftcc_glob%get_rot(irot)
             s3D%proj_space_corrs(self%ithr,ref)   = cxy(1)
-            s3D%proj_space_shift(self%ithr,ref,:) = cxy(2:3)
+            s3D%proj_space_shift(:,ref,self%ithr) = cxy(2:3)
+            s3D%proj_space_mask(ref,self%ithr)    = .true.
         else
             iptcl = 0
         endif
@@ -233,6 +235,7 @@ contains
         s3D%proj_space_inplinds(self%ithr,ref) = inpl_ind
         s3D%proj_space_euls(3,ref,self%ithr)   = 360. - pftcc_glob%get_rot(inpl_ind)
         s3D%proj_space_corrs(self%ithr,ref)    = corr
+        s3D%proj_space_mask(ref,self%ithr)     = .true.
     end subroutine store_solution
 
     subroutine kill( self )

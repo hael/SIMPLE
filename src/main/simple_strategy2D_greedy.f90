@@ -39,14 +39,21 @@ contains
             corr = -huge(corr)
             do iref=1,self%s%nrefs
                 if( s2D%cls_pops(iref) == 0 )cycle
+                ! class best
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs)
                 inpl_ind  = maxloc(corrs, dim=1)
                 inpl_corr = corrs(inpl_ind)
+                ! updates global best
                 if( inpl_corr >= corr )then
                     corr              = inpl_corr
                     self%s%best_class = iref
                     self%s%best_corr  = inpl_corr
                     self%s%best_rot   = inpl_ind
+                endif
+                ! keep track of visited classes
+                if( self%s%l_ptclw )then
+                    s2D%cls_mask(iref,self%s%ithr)  = .true.
+                    s2D%cls_corrs(iref,self%s%ithr) = inpl_corr
                 endif
             end do
             self%s%nrefs_eval = self%s%nrefs
