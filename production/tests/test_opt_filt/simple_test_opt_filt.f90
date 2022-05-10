@@ -10,9 +10,10 @@ type(parameters)              :: p
 type(cmdline)                 :: cline, cline_opt_filt
 type(image)                   :: even, odd, even_copy, odd_copy, noise
 type(opt_3D_filter_commander) :: xopt_3D_filter
-integer                       :: j, nyq, ifoo
+integer                       :: j, nyq, ifoo, smooth_ext
 real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv
 real, allocatable             :: res(:), corrs(:)
+character(len=20)             :: filter
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'simple_test_opt_filt smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
     stop
@@ -59,10 +60,50 @@ call noise%gauran(0., 15. * sdev)
 call noise%mask(0.4 * p%msk, 'soft')
 call noise%write('noisevol.mrc')
 call even%add(noise)
-call even%write('contaminated.mrc')
+call even%write('vol_noisy.mrc')
+call odd%write('vol_clean.mrc')
 ! calculate FSC
 call even%fft
 call odd%fft
+call even%fsc(odd, corrs)
+call even%ifft
+call odd%ifft
+call even%kill
+call odd%kill
+call noise%kill
+do j=1,nyq
+    write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
+end do
+call get_resolution(corrs, res, res_fsc05, res_fsc0143)
+write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
+write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
+write(*, *) 'Press ENTER to start nonuniform filtering (odd is noisy one, even is clean one)...'
+read(*, *)
+! calculate optimal filter
+cline_opt_filt = cline
+filter         = 'lp'
+smooth_ext     = 0
+if( cline%defined('smooth_ext') ) smooth_ext = p%smooth_ext
+if( cline%defined('filter') )     filter     = p%filter
+call cline_opt_filt%set('vol1',   'vol_noisy.mrc')
+call cline_opt_filt%set('vol2',   'vol_clean.mrc')
+call cline_opt_filt%set('filter', trim(filter))
+call cline_opt_filt%set('mkdir',  'no')
+call xopt_3D_filter%execute(cline_opt_filt)
+! comparing the nonuniform result with the original data
+call even%new(p%ldim, p%smpd)
+call odd%new( p%ldim, p%smpd)
+call even%copy(even_copy)
+call odd%read('nonuniform_opt_3D_filter_'//trim(filter)//'_ext_'//int2str(smooth_ext)//'_odd.mrc')
+! spherical masking
+call even%mask(p%msk, 'soft')
+call odd%mask( p%msk, 'soft')
+! forward FT
+call even%fft()
+call odd%fft()
+! calculate FSC
+res = even%get_res()
+nyq = even%get_filtsz()
 call even%fsc(odd, corrs)
 call even%ifft
 call odd%ifft
@@ -72,22 +113,19 @@ end do
 call get_resolution(corrs, res, res_fsc05, res_fsc0143)
 write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
 write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
-! calculate optimal filter
-call even%write('vol_even.mrc')
-call odd%write('vol_odd.mrc')
-call even%kill
-call odd%kill
+write(*, *) 'Press ENTER to start nonuniform filtering (even is noisy one, odd is clean one)...'
+read(*, *)
 cline_opt_filt = cline
-call cline_opt_filt%set('vol1',   'vol_even.mrc')
-call cline_opt_filt%set('vol2',   'vol_odd.mrc')
-call cline_opt_filt%set('filter', 'lp')
+call cline_opt_filt%set('vol1',   'vol_clean.mrc')
+call cline_opt_filt%set('vol2',   'vol_noisy.mrc')
+call cline_opt_filt%set('filter', trim(filter))
 call cline_opt_filt%set('mkdir',  'no')
 call xopt_3D_filter%execute(cline_opt_filt)
 ! comparing the nonuniform result with the original data
 call even%new(p%ldim, p%smpd)
 call odd%new( p%ldim, p%smpd)
 call even%copy(even_copy)
-call odd%read('nonuniform_opt_3D_filter_lp_ext_0_odd.mrc')
+call odd%read('nonuniform_opt_3D_filter_'//trim(filter)//'_ext_'//int2str(smooth_ext)//'_even.mrc')
 ! spherical masking
 call even%mask(p%msk, 'soft')
 call odd%mask( p%msk, 'soft')
