@@ -52,6 +52,7 @@ contains
         call os%stats('dist_inpl', self%dist_inpl, mask=mask)
         call os%stats('frac',      self%frac_srch, mask=mask)
         call os%stats('shincarg',  self%shincarg,  mask=mask)
+        call os%stats('w',         self%pw,        mask=mask)
         self%mi_class  = os%get_avg('mi_class',    mask=mask)
         write(logfhandle,601) '>>> CLASS OVERLAP:                          ', self%mi_class
         write(logfhandle,601) '>>> # PARTICLE UPDATES     AVG:             ', avg_updatecnt
@@ -63,6 +64,8 @@ contains
         &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
         write(logfhandle,604) '>>> SPECSCORE              AVG/SDEV/MIN/MAX:',&
         &self%specscore%avg, self%specscore%sdev, self%specscore%minv, self%specscore%maxv
+        write(logfhandle,604) '>>> WEIGHTS                AVG/SDEV/MIN/MAX:',&
+        &self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
         write(logfhandle,604) '>>> SHIFT INCR ARG         AVG/SDEV/MIN/MAX:',&
         &self%shincarg%avg, self%shincarg%sdev, self%shincarg%minv, self%shincarg%maxv
         ! dynamic shift search range update

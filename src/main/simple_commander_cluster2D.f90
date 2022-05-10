@@ -80,7 +80,7 @@ contains
         type(chash)      :: job_descr
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
-        call cline%set('ptclw','no')
+        if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -222,7 +222,7 @@ contains
         if( .not. cline%defined('refine')    ) call cline%set('refine',  'greedy')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('wiener')    ) call cline%set('wiener',    'full')
-        call cline%set('ptclw','no')
+        if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',       'no')
         call cline%set('stream', 'no')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
@@ -277,7 +277,6 @@ contains
         ! down-scaling for fast execution, greedy optimisation, no match filter
         ! objective function default is standard cross-correlation (cc)
         call cline_cluster2D2%set('prg', 'cluster2D')
-        call cline_cluster2D2%set('ptclw',      'no')
         call cline_cluster2D2%set('match_filt', 'no')
         call cline_cluster2D2%set('autoscale',  'no')
         call cline_cluster2D2%set('trs',    MINSHIFT)
@@ -497,7 +496,7 @@ contains
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
         if( .not.cline%defined('refine')     ) call cline%set('refine',    'snhc')
         if( .not. cline%defined('wiener')    ) call cline%set('wiener',    'full')
-        call cline%set('ptclw','no')
+        if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',     'no')
         call cline%delete('clip')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
@@ -545,6 +544,7 @@ contains
             call cline_cluster2D_stage1%set('objfun',     'cc')
             call cline_cluster2D_stage1%set('match_filt', 'no')
             call cline_cluster2D_stage1%set('lpstop',  lpstart)
+            call cline_cluster2D_stage1%set('ptclw','no')
             if( params%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
@@ -767,12 +767,13 @@ contains
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('wiener')    ) call cline%set('wiener',    'full')
+        if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',    'no')
         l_stream = .false.
         if( cline%defined('stream') )then
             l_stream = trim(cline%get_carg('stream'))=='yes'
         endif
         call cline%set('stream','no') ! for parameters determination
-        call cline%set('ptclw','no')
+        ! call cline%set('ptclw','no')
         ! builder & params
         call build%init_params_and_build_spproj(cline, params)
         if( l_stream ) call cline%set('stream','yes')
