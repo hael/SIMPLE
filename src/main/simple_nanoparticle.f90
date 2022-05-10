@@ -19,7 +19,7 @@ integer,          parameter :: NBIN_THRESH         = 15      ! number of thresho
 integer,          parameter :: CN_THRESH_XTAL      = 5       ! cn-threshold highly crystalline NPs
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
 logical,          parameter :: DEBUG               = .false. ! for debugging purposes
-logical,          parameter :: GENERATE_FIGS       = .false. ! for figures generation
+logical,          parameter :: WRITE_OUPUT         = .false. ! for figures generation
 integer,          parameter :: SOFT_EDGE           = 6
 integer,          parameter :: N_DISCRET           = 1000
 integer,          parameter :: CNMIN               = 3
@@ -343,26 +343,59 @@ contains
 
     ! utils
 
-    function atominfo2centers( self ) result( centers )
+    function atominfo2centers( self, mask ) result( centers )
         class(nanoparticle), intent(in) :: self
+        logical, optional,   intent(in) :: mask(size(self%atominfo))
         real, allocatable :: centers(:,:)
-        integer :: sz, i
+        logical :: mask_present
+        integer :: sz, i, cnt
         sz = size(self%atominfo)
-        allocate(centers(3,sz), source=0.)
-        do i = 1, sz
-            centers(:,i) = self%atominfo(i)%center(:)
-        end do
+        mask_present = .false.
+        if( present(mask) ) mask_present = .true.
+        if( mask_present )then
+            cnt = count(mask)
+            allocate(centers(3,cnt), source=0.)
+            cnt = 0
+            do i = 1, sz
+                if( mask(i) )then
+                    cnt = cnt + 1
+                    centers(:,cnt) = self%atominfo(i)%center(:)
+                endif
+            end do
+        else
+            allocate(centers(3,sz), source=0.)
+            do i = 1, sz
+                centers(:,i) = self%atominfo(i)%center(:)
+            end do
+        endif
+
     end function atominfo2centers
 
-    function atominfo2centers_A( self ) result( centers_A )
+    function atominfo2centers_A( self, mask ) result( centers_A )
         class(nanoparticle), intent(in) :: self
+        logical, optional,   intent(in) :: mask(size(self%atominfo))
         real, allocatable :: centers_A(:,:)
-        integer :: sz, i
+        logical :: mask_present
+        integer :: sz, i, cnt
         sz = size(self%atominfo)
-        allocate(centers_A(3,sz), source=0.)
-        do i = 1, sz
-            centers_A(:,i) = (self%atominfo(i)%center(:) - 1.) * self%smpd
-        end do
+        mask_present = .false.
+        if( present(mask) ) mask_present = .true.
+        if( mask_present )then
+            cnt = count(mask)
+            allocate(centers_A(3,cnt), source=0.)
+            cnt = 0
+            do i = 1, sz
+                if( mask(i) )then
+                    cnt = cnt + 1
+                    centers_A(:,cnt) = (self%atominfo(i)%center(:) - 1.) * self%smpd
+                endif
+            end do
+        else
+            allocate(centers_A(3,sz), source=0.)
+            do i = 1, sz
+                centers_A(:,i) = (self%atominfo(i)%center(:) - 1.) * self%smpd
+            end do
+        endif
     end function atominfo2centers_A
 
     ! Translate the identified atomic positions so that the center of mass
@@ -445,6 +478,7 @@ contains
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%img, self%element)
+        if( WRITE_OUPUT ) call self%img%write('denoised.mrc')
         ! Nanoparticle binarization
         call self%binarize_and_find_centers()
         ! atom splitting by correlation map validation
@@ -463,6 +497,9 @@ contains
             call self%discard_atoms_with_low_contact_score(use_cn_thresh)
             if( use_cn_thresh ) call self%discard_lowly_coordinated(CN_THRESH_XTAL, a, l_fit_lattice)
         endif
+        ! re-calculate valid_corr:s (since they are otherwise lost from the B-factor field due to reallocations of atominfo)
+        call self%simulate_atoms(atoms_obj, simatms)
+        call self%validate_atoms( simatms )
         ! WRITE OUTPUT
         call self%img_bin%write_bimg(trim(self%fbody)//'_BIN.mrc')
         write(logfhandle,'(A)') 'output, binarized map:            '//trim(self%fbody)//'_BIN.mrc'
@@ -473,7 +510,6 @@ contains
         call self%img_cc%write_bimg(trim(self%fbody)//'_CC.mrc')
         write(logfhandle,'(A)') 'output, connected components map: '//trim(self%fbody)//'_CC.mrc'
         call self%write_centers
-        call self%simulate_atoms(atoms_obj, simatms)
         call simatms%write(trim(self%fbody)//'_SIM.mrc')
         write(logfhandle,'(A)') 'output, simulated atomic density: '//trim(self%fbody)//'_SIM.mrc'
         ! destruct
@@ -1206,12 +1242,17 @@ contains
             subroutine write_cn_atoms( cn_std )
                 integer, intent(in)  :: cn_std
                 type(binimage)       :: img_atom
+                type(image)          :: simatms
+                type(atoms)          :: atoms_obj
                 integer, allocatable :: imat(:,:,:), imat_atom(:,:,:)
                 logical :: cn_mask(self%n_cc)
                 integer :: i
                 ! make cn mask
                 cn_mask = self%atominfo(:)%cn_std == cn_std
-                ! make binary matrix of atoms with given cn_std
+                call self%simulate_atoms(atoms_obj, simatms, mask=cn_mask)
+                call atoms_obj%writepdb('atoms_cn'//int2str_pad(cn_std,2))
+                call simatms%write('simvol_cn'//int2str_pad(cn_std,2))
+                ! make binary image of atoms with given cn_std
                 call img_atom%copy_bimg(self%img_cc)
                 allocate(imat_atom(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
                 call img_atom%get_imat(imat)
@@ -1221,9 +1262,11 @@ contains
                     endif
                 enddo
                 call img_atom%set_imat(imat_atom)
-                call img_atom%write_bimg('Atoms_with_cn_std'//trim(int2str(cn_std))//'.mrc')
+                call img_atom%write_bimg('binvol_cn'//int2str_pad(cn_std,2)//'.mrc')
                 deallocate(imat,imat_atom)
                 call img_atom%kill_bimg
+                call simatms%kill
+                call atoms_obj%kill
             end subroutine write_cn_atoms
 
     end subroutine fillin_atominfo
@@ -1267,32 +1310,57 @@ contains
 
     ! visualization and output
 
-    subroutine simulate_atoms( self, atoms_obj, simatms, betas )
+    subroutine simulate_atoms( self, atoms_obj, simatms, betas, mask )
         class(nanoparticle), intent(inout) :: self
         class(atoms),        intent(inout) :: atoms_obj
         class(image),        intent(inout) :: simatms
-        real, optional,      intent(in)    :: betas(self%n_cc) ! in pdb file b-factor
-        logical :: betas_present
-        integer :: i
+        real,    optional,   intent(in)    :: betas(self%n_cc) ! in pdb file b-factor
+        logical, optional,   intent(in)    :: mask(self%n_cc)
+        logical :: betas_present, mask_present
+        integer :: i, cnt
         betas_present = present(betas)
+        mask_present  = present(mask)
         ! generate atoms object
-        call atoms_obj%new(self%n_cc)
-        do i = 1, self%n_cc
-            call atoms_obj%set_name(     i, self%atom_name)
-            call atoms_obj%set_element(  i, self%element)
-            call atoms_obj%set_coord(    i, (self%atominfo(i)%center(:)-1.)*self%smpd)
-            call atoms_obj%set_num(      i, i)
-            call atoms_obj%set_resnum(   i, i)
-            call atoms_obj%set_chain(    i, 'A')
-            call atoms_obj%set_occupancy(i, 1.)
-            if( betas_present )then
-                call atoms_obj%set_beta( i, betas(i))
-            else
-                call atoms_obj%set_beta( i ,self%atominfo(i)%cn_gen) ! use generalised coordination number
-            endif
-        enddo
+        if( mask_present )then
+            cnt = count(mask)
+            call atoms_obj%new(cnt)
+        else
+            call atoms_obj%new(self%n_cc)
+        endif
+        if( mask_present )then
+            cnt = 0
+            do i = 1, self%n_cc
+                if( mask(i) )then
+                    cnt = cnt + 1
+                    call set_atoms_obj(cnt, i)
+                endif
+            end do
+        else
+            do i = 1, self%n_cc
+                call set_atoms_obj(i, i)
+            enddo
+        endif
         call simatms%new(self%ldim,self%smpd)
-        call atoms_obj%convolve(simatms, cutoff = 8.*self%smpd) ! con
+        call atoms_obj%convolve(simatms, cutoff = 8.*self%smpd)
+
+        contains
+
+            subroutine set_atoms_obj( atms_obj_ind, ainfo_ind )
+                integer, intent(in) :: atms_obj_ind, ainfo_ind
+                call atoms_obj%set_name(     atms_obj_ind, self%atom_name)
+                call atoms_obj%set_element(  atms_obj_ind, self%element)
+                call atoms_obj%set_coord(    atms_obj_ind, (self%atominfo(i)%center(:)-1.)*self%smpd)
+                call atoms_obj%set_num(      atms_obj_ind, atms_obj_ind)
+                call atoms_obj%set_resnum(   atms_obj_ind, atms_obj_ind)
+                call atoms_obj%set_chain(    atms_obj_ind, 'A')
+                call atoms_obj%set_occupancy(atms_obj_ind, 1.)
+                if( betas_present )then
+                    call atoms_obj%set_beta(atms_obj_ind, betas(ainfo_ind))
+                else
+                    call atoms_obj%set_beta(atms_obj_ind, self%atominfo(ainfo_ind)%cn_gen) ! use generalised coordination number
+                endif
+            end subroutine set_atoms_obj
+
     end subroutine simulate_atoms
 
     subroutine write_centers_1( self, fname, coords )
@@ -1304,18 +1372,12 @@ contains
        if( present(coords) )then
            call centers_pdb%new(size(coords, dim = 2), dummy=.true.)
            do cc=1,size(coords, dim = 2)
-               call centers_pdb%set_name(cc,self%atom_name)
-               call centers_pdb%set_element(cc,self%element)
-               call centers_pdb%set_coord(cc,(coords(:,cc)-1.)*self%smpd)
+               call set_atm_info
            enddo
        else
            call centers_pdb%new(self%n_cc, dummy=.true.)
            do cc=1,self%n_cc
-               call centers_pdb%set_name(cc,self%atom_name)
-               call centers_pdb%set_element(cc,self%element)
-               call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
-               call centers_pdb%set_beta(cc,self%atominfo(cc)%valid_corr) ! use per atom valid corr
-               call centers_pdb%set_resnum(cc,cc)
+               call set_atm_info
            enddo
        endif
        if( present(fname) ) then
@@ -1324,6 +1386,17 @@ contains
            call centers_pdb%writepdb(trim(self%fbody)//'_ATMS')
            write(logfhandle,*) 'output, atomic coordinates:       ', trim(self%fbody)//'_ATMS'
        endif
+
+       contains
+
+           subroutine set_atm_info
+               call centers_pdb%set_name(cc,self%atom_name)
+               call centers_pdb%set_element(cc,self%element)
+               call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
+               call centers_pdb%set_beta(cc,self%atominfo(cc)%valid_corr) ! use per atom valid corr
+               call centers_pdb%set_resnum(cc,cc)
+           end subroutine set_atm_info
+
    end subroutine write_centers_1
 
    subroutine write_centers_2( self, fname, which )
@@ -1338,12 +1411,12 @@ contains
           call centers_pdb%set_element(cc,self%element)
           call centers_pdb%set_coord(cc,(self%atominfo(cc)%center(:)-1.)*self%smpd)
           select case(which)
-              case('valid_corr')
-                  call centers_pdb%set_beta(cc,self%atominfo(cc)%valid_corr)  ! use per-atom validation correlation
+              case('cn_gen')
+                  call centers_pdb%set_beta(cc,self%atominfo(cc)%cn_gen)      ! use generalised coordination number
               case('max_int')
                   call centers_pdb%set_beta(cc,self%atominfo(cc)%max_int)     ! use z-score of maximum intensity
               case DEFAULT
-                  call centers_pdb%set_beta(cc,self%atominfo(cc)%cn_gen)      ! use generalised coordination number
+                  call centers_pdb%set_beta(cc,self%atominfo(cc)%valid_corr)  ! use per-atom validation correlation
           end select
           call centers_pdb%set_resnum(cc,cc)
       enddo
@@ -1962,23 +2035,6 @@ contains
           write(filnum,*) self%atominfo(i)%bondl
         enddo
         call fclose(filnum)
-        ! Generate one figure for each class
-        if(GENERATE_FIGS) then
-          call img_1clss%new_bimg(self%ldim, self%smpd)
-          call self%img_cc%get_imat(imat_cc)
-          allocate(imat_1clss(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
-          do i = 1, ncls
-              imat_1clss = 0
-              do j = 1, dim
-                  if(labels(j) == i) then
-                      where(imat_cc == j) imat_1clss = i
-                  endif
-              enddo
-              call img_1clss%set_imat(imat_1clss)
-              call img_1clss%write_bimg('DistClass'//int2str(i)//'.mrc')
-          enddo
-          call img_1clss%kill_bimg
-        endif
         if(allocated(stdev_within)) deallocate(stdev_within)
         deallocate(centroids, labels, populations)
     end subroutine cluster_bondl
