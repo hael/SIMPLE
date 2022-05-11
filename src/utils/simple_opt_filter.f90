@@ -97,31 +97,29 @@ contains
     end subroutine apply_opt_filter
 
     ! optimization(search)-based uniform/nonuniform filter, using the (low-pass/butterworth)
-    subroutine opt_filter(odd, even, smpd, nonuniform, smooth_ext, filter_type, lp_lb, nsearch, mskimg, map2filt)
-        type(image),                intent(inout) :: odd
-        type(image),                intent(inout) :: even
-        real,                       intent(in)    :: smpd
-        logical,                    intent(in)    :: nonuniform
-        integer,                    intent(in)    :: smooth_ext
-        character(len=*),           intent(in)    :: filter_type
-        real,                       intent(in)    :: lp_lb
-        integer,                    intent(in)    :: nsearch
-        type(image),      optional, intent(inout) :: mskimg
-        class(image),     optional, intent(inout) :: map2filt
-        type(image)          :: odd_copy, even_copy, map2filt_copy, freq_img
+    subroutine opt_filter(odd, even, smpd, nonuniform, smooth_ext, filter_type, lp_lb, nsearch, mskimg)
+        type(image),           intent(inout) :: odd
+        type(image),           intent(inout) :: even
+        real,                  intent(in)    :: smpd
+        logical,               intent(in)    :: nonuniform
+        integer,               intent(in)    :: smooth_ext
+        character(len=*),      intent(in)    :: filter_type
+        real,                  intent(in)    :: lp_lb
+        integer,               intent(in)    :: nsearch
+        type(image), optional, intent(inout) :: mskimg
+        type(image)          :: odd_copy, even_copy, freq_img
         integer              :: k,l,m, box, dim3, ldim(3), find_start, find_stop, iter_no
         integer              :: best_ind, cur_ind, k1,l1,m1,k_ind,l_ind,m_ind, lb(3), ub(3), mid_ext
         real                 :: min_sum_odd, min_sum_even, ref_diff_odd, ref_diff_even, rad, param, find_stepsz
-        logical              :: map2filt_present, mskimg_present
+        logical              :: mskimg_present
         character(len=90)    :: file_tag
         integer, parameter   :: CHUNKSZ = 20
-        real,    parameter   :: LAMBDA_MIN = .1, LAMBDA_MAX = 2.
-        real,    pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null(), rmat_map2filt(:,:,:)=>null()
+        real,    parameter   :: LAMBDA_MIN = .5, LAMBDA_MAX = 5.
+        real,    pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null()
         real,    allocatable :: opt_odd( :,:,:), cur_diff_odd( :,:,:), opt_diff_odd( :,:,:), opt_freq_odd(:,:,:)
         real,    allocatable :: opt_even(:,:,:), cur_diff_even(:,:,:), opt_diff_even(:,:,:), opt_freq_even(:,:,:)
-        real,    allocatable :: cur_fil(:), weights_3D(:,:,:), weights_2D(:,:), opt_map2filt(:,:,:)
+        real,    allocatable :: cur_fil(:), weights_3D(:,:,:), weights_2D(:,:)
         logical, allocatable :: l_mask(:,:,:)
-        map2filt_present = present(map2filt)
         mskimg_present   = present(mskimg)
         if( mskimg_present ) l_mask = mskimg%bin2logical()
         ldim        = odd%get_ldim()
@@ -130,14 +128,10 @@ contains
         mid_ext     = 1 + smooth_ext
         find_stop   = calc_fourier_index(2. * smpd, box, smpd)
         find_start  = calc_fourier_index(lp_lb, box, smpd)
-        find_stepsz = real(find_stop - find_start)/(nsearch-1)
+        find_stepsz = real(find_stop - find_start)/(nsearch - 1)
         call freq_img%new([box,box,dim3], smpd)
         call odd_copy%copy(odd)
         call even_copy%copy(even)
-        if( map2filt_present )then
-            allocate(opt_map2filt(box,box,dim3), source=0.)
-            call map2filt_copy%copy(map2filt)
-        endif
         allocate(opt_odd( box,box,dim3), cur_diff_odd( box,box,dim3), opt_diff_odd( box,box,dim3), opt_freq_odd( box,box,dim3),&
                 &opt_even(box,box,dim3), cur_diff_even(box,box,dim3), opt_diff_even(box,box,dim3), opt_freq_even(box,box,dim3),&
                 &cur_fil(box),weights_2D(smooth_ext*2+1, smooth_ext*2+1), weights_3D(smooth_ext*2+1, smooth_ext*2+1, smooth_ext*2+1), source=0.)
@@ -200,17 +194,12 @@ contains
             call odd%get_rmat_ptr(rmat_odd)
             call even_copy%get_rmat_ptr(rmat_even)
             call squared_diff(rmat_odd, rmat_even, cur_diff_odd)
-            ! filtering even using the same filter
+            ! filtering even
             call even%copy_fast(even_copy)
             call apply_opt_filter(even, filter_type, param, cur_fil, .true.)
             call even%get_rmat_ptr(rmat_even)
             call odd_copy%get_rmat_ptr(rmat_odd)
             call squared_diff(rmat_odd, rmat_even, cur_diff_even)
-            if( map2filt_present )then
-                call map2filt%copy_fast(map2filt_copy)
-                call apply_opt_filter(map2filt, filter_type, param, cur_fil, .true.)
-                call map2filt%get_rmat_ptr(rmat_map2filt)
-            endif
             call odd%get_rmat_ptr(rmat_odd) ! point rmat_odd to the filtered odd, rmat_even should be filtered even
             ! do the non-uniform, i.e. optimizing at each voxel
             if( nonuniform )then
@@ -239,7 +228,6 @@ contains
                                 opt_odd(k,l,1)      = rmat_odd(k,l,1)
                                 opt_diff_odd(k,l,1) = ref_diff_odd
                                 opt_freq_odd(k,l,1) = cur_ind
-                                if( map2filt_present ) opt_map2filt(k,l,1) = rmat_map2filt(k,l,1) ! TODO
                             endif
                             if (ref_diff_even < opt_diff_even(k,l,1)) then
                                 opt_even(k,l,1)      = rmat_even(k,l,1)
@@ -250,7 +238,7 @@ contains
                     enddo
                     !$omp end parallel do
                 else
-                    !$omp parallel do collapse(3) default(shared) private(k,l,m,k1,l1,m1,k_ind,l_ind,m_ind,ref_diff_odd, ref_diff_even) schedule(dynamic,CHUNKSZ) proc_bind(close)
+                    !$omp parallel do collapse(3) default(shared) private(k,l,m,k1,l1,m1,k_ind,l_ind,m_ind,ref_diff_odd,ref_diff_even) schedule(dynamic,CHUNKSZ) proc_bind(close)
                     do k = lb(1),ub(1)
                         do l = lb(2),ub(2)
                             do m = lb(3),ub(3)
@@ -277,7 +265,6 @@ contains
                                     opt_odd(k,l,m)      = rmat_odd(k,l,m)
                                     opt_diff_odd(k,l,m) = ref_diff_odd
                                     opt_freq_odd(k,l,m) = cur_ind
-                                    if(map2filt_present ) opt_map2filt(k,l,m) = rmat_map2filt(k,l,m) ! TODO
                                 endif
                                 if (ref_diff_even < opt_diff_even(k,l,m)) then
                                     opt_even(k,l,m)      = rmat_even(k,l,m)
@@ -298,7 +285,6 @@ contains
                     min_sum_odd  = sum(cur_diff_odd)
                     best_ind     = cur_ind
                     opt_freq_odd = cur_ind
-                    if( map2filt_present ) opt_map2filt = rmat_map2filt ! TODO
                 endif
                 if (sum(cur_diff_even) < min_sum_even) then
                     opt_even      = rmat_even
@@ -324,7 +310,6 @@ contains
             call freq_img%write('opt_resolution_odd_map_'//trim(file_tag)//'.mrc')
             call freq_img%kill
         endif
-        if( map2filt_present ) call map2filt%set_rmat(opt_map2filt, .false.)
         deallocate(opt_odd, opt_even, cur_diff_odd, opt_diff_odd, cur_diff_even, opt_diff_even, cur_fil, weights_3D, weights_2D)
     end subroutine opt_filter
 

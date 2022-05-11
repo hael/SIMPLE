@@ -82,7 +82,7 @@ read(*, *)
 ! calculate optimal filter
 cline_opt_filt = cline
 filter         = 'lp'
-smooth_ext     = 0
+smooth_ext     = 1
 if( cline%defined('smooth_ext') ) smooth_ext = p%smooth_ext
 if( cline%defined('filter') )     filter     = p%filter
 call cline_opt_filt%set('vol1',   'vol_noisy.mrc')

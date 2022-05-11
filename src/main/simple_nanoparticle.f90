@@ -568,6 +568,7 @@ contains
                 max_corr  = corr
                 thresh_opt = thresh
             endif
+            if( corr < max_corr ) exit ! convex goal function
         enddo
         ! refinement
         lbt    = thresh_opt - step + step_refine
@@ -1383,7 +1384,7 @@ contains
            call centers_pdb%writepdb(fname)
        else
            call centers_pdb%writepdb(trim(self%fbody)//'_ATMS')
-           write(logfhandle,*) 'output, atomic coordinates:       ', trim(self%fbody)//'_ATMS'
+           write(logfhandle,'(A)') 'output, atomic coordinates:       '//trim(self%fbody)//'_ATMS'
        endif
 
        contains

@@ -2505,12 +2505,11 @@ contains
         &'Optimization (search) based 2D filter (uniform/nonuniform)',&     ! descr_short
         &'is a program for 2D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                                    ! executable
-        &3, 1, 0, 0, 5, 2, 1, .false.)                                      ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 5, 2, 1, .false.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call opt_2D_filter%set_input('img_ios', 1, 'stk',  'file', 'First stack',       'First stack',       'stack1.mrc file', .true., '')
         call opt_2D_filter%set_input('img_ios', 2, 'stk2', 'file', 'Second stack',      'Second Stack',      'stack2.mrc file', .true., '')
-        call opt_2D_filter%set_input('img_ios', 3, 'stk3', 'file', 'Stack to filter',   'Stack to filter',   'stack3.mrc file', .false., '')
         ! parameter input/output
         call opt_2D_filter%set_input('parm_ios', 1, smpd)
         ! alternative inputs
@@ -2519,7 +2518,7 @@ contains
         ! <empty>
         ! filter controls
         call opt_2D_filter%set_input('filt_ctrls', 1, nonuniform)
-        call opt_2D_filter%set_input('filt_ctrls', 2, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', .false., 0.)
+        call opt_2D_filter%set_input('filt_ctrls', 2, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension in number of pixels{1}', 'give # pixels', .false., 1.)
         call opt_2D_filter%set_input('filt_ctrls', 3, 'filter'     , 'multi' , 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', '(butterworth8|lp|tv|tanh){butterworth8}', .false., 'butterworth8')
         call opt_2D_filter%set_input('filt_ctrls', 4, lp_lb)
         call opt_2D_filter%set_input('filt_ctrls', 5, nsearch)
@@ -2537,12 +2536,11 @@ contains
         &'Butterworth 3D filter (uniform/nonuniform)',&         ! descr_short
         &'is a program for 3D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                        ! executable
-        &3, 1, 0, 0, 5, 2, 1, .false.)                          ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 5, 2, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call opt_3D_filter%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',       'Odd volume',       'vol1.mrc file', .true., '')
         call opt_3D_filter%set_input('img_ios', 2, 'vol2', 'file', 'Even volume',      'Even volume',      'vol2.mrc file', .true., '')
-        call opt_3D_filter%set_input('img_ios', 3, 'vol3', 'file', 'Volume to filter', 'Volume to filter', 'vol3.mrc file', .false., '')
         ! parameter input/output
         call opt_3D_filter%set_input('parm_ios', 1, smpd)
         ! alternative inputs
@@ -2551,7 +2549,7 @@ contains
         ! <empty>
         ! filter controls
         call opt_3D_filter%set_input('filt_ctrls', 1, nonuniform)
-        call opt_3D_filter%set_input('filt_ctrls', 2, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', .false., 0.)
+        call opt_3D_filter%set_input('filt_ctrls', 2, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', 'give # pixels', .false., 1.)
         call opt_3D_filter%set_input('filt_ctrls', 3, 'filter'     , 'multi' , 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', '(butterworth8|lp|tv|tanh){butterworth8}', .false., 'butterworth8')
         call opt_3D_filter%set_input('filt_ctrls', 4, lp_lb)
         call opt_3D_filter%set_input('filt_ctrls', 5, nsearch)
