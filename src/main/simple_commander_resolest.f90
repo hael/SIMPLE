@@ -237,27 +237,21 @@ contains
         class(opt_3D_filter_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)  :: params
-        type(image)       :: even, odd, map2filt, mskvol
-        real, allocatable :: cur_mat(:,:,:)
-        logical           :: map2filt_present, have_mask_file
+        type(image)       :: even, odd, mskvol
+        logical           :: have_mask_file
         character(len=90) :: file_tag
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call params%new(cline) 
-        map2filt_present = cline%defined('vol3')
-        if( map2filt_present )then
-            call map2filt%new([params%box,params%box,params%box],  params%smpd)
-            call map2filt%read(params%vols(3))
-        endif
+        call params%new(cline)
         call odd %new([params%box,params%box,params%box], params%smpd)
         call even%new([params%box,params%box,params%box], params%smpd)
         call odd %read(params%vols(1))
         call even%read(params%vols(2))
-        have_mask_file = .false.
         if( params%l_nonuniform )then
             file_tag = 'nonuniform_opt_3D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
         else
             file_tag = 'uniform_opt_3D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
         endif
+        have_mask_file = .false.
         if( cline%defined('mskfile') )then
             if( file_exists(params%mskfile) )then
                 call mskvol%new([params%box,params%box,params%box], params%smpd)
@@ -277,33 +271,25 @@ contains
             call odd%mask(params%msk, 'soft')
             call mskvol%disc([params%box,params%box,params%box], params%smpd,&
             &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
-        endif
-        if( map2filt_present )then
-            call opt_filter(odd, even, params%smpd, params%l_nonuniform, params%smooth_ext, trim(params%filter), params%lp_lb, params%nsearch, mskvol, map2filt)
-            if( have_mask_file )then
-                call mskvol%read(params%mskfile) ! restore the soft edge
-                call map2filt%mul(mskvol)
-                call even%mul(mskvol)
-                call odd%mul(mskvol)
-            else
-                call map2filt%mask(params%msk, 'soft')
-                call even%mask(params%msk, 'soft')
-                call odd%mask(params%msk, 'soft')
-            endif
-            call map2filt%write(trim(file_tag)//'_filtered.mrc')
+        endif        
+        call opt_filter(odd, even, params%smpd, params%l_nonuniform, params%smooth_ext, trim(params%filter), params%lp_lb, params%nsearch, mskvol)
+        if( have_mask_file )then
+            call mskvol%read(params%mskfile) ! restore the soft edge
+            call even%mul(mskvol)
+            call odd%mul(mskvol)
         else
-            call opt_filter(odd, even, params%smpd, params%l_nonuniform, params%smooth_ext, trim(params%filter), params%lp_lb, params%nsearch, mskvol)
-            if( have_mask_file )then
-                call mskvol%read(params%mskfile) ! restore the soft edge
-                call even%mul(mskvol)
-                call odd%mul(mskvol)
-            else
-                call even%mask(params%msk, 'soft')
-                call odd%mask(params%msk, 'soft')
-            endif
+            call even%mask(params%msk, 'soft')
+            call odd%mask(params%msk, 'soft')
         endif
         call odd%write(trim(file_tag)//'_odd.mrc')
         call even%write(trim(file_tag)//'_even.mrc')
+        call odd%add(even)
+        call odd%mul(0.5)
+        call odd%write(trim(file_tag)//'_avg.mrc')
+        ! destruct
+        call odd%kill
+        call even%kill
+        call mskvol%kill
         ! end gracefully
         call simple_end('**** SIMPLE_OPT_3D_FILTER NORMAL STOP ****')
     end subroutine exec_opt_3D_filter
@@ -326,9 +312,9 @@ contains
         else
             file_tag = 'uniform_opt_2D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
         endif
+        call odd%new(params%ldim, params%smpd)
+        call even%new(params%ldim, params%smpd)
         do iptcl = 1, params%nptcls
-            call odd%new(params%ldim, params%smpd)
-            call even%new(params%ldim, params%smpd)
             call odd%read(params%stk2, iptcl)
             call even%read(params%stk,  iptcl)
             call even%mask(params%msk, 'soft')

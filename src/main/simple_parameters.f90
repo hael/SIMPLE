@@ -329,7 +329,7 @@ type :: parameters
     integer :: tos=1
     integer :: update=1000
     integer :: which_iter=0        !< iteration nr
-    integer :: smooth_ext=0        !< smoothing window extension{0} 
+    integer :: smooth_ext=1        !< smoothing window extension{1} 
     integer :: xcoord=0            !< x coordinate{0}
     integer :: ycoord=0            !< y coordinate{0}
     integer :: xdim=0              !< x dimension(in pixles)
