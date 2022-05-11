@@ -368,7 +368,6 @@ contains
                 centers(:,i) = self%atominfo(i)%center(:)
             end do
         endif
-
     end function atominfo2centers
 
     function atominfo2centers_A( self, mask ) result( centers_A )
@@ -1251,7 +1250,7 @@ contains
                 cn_mask = self%atominfo(:)%cn_std == cn_std
                 call self%simulate_atoms(atoms_obj, simatms, mask=cn_mask)
                 call atoms_obj%writepdb('atoms_cn'//int2str_pad(cn_std,2))
-                call simatms%write('simvol_cn'//int2str_pad(cn_std,2))
+                call simatms%write('simvol_cn'//int2str_pad(cn_std,2)//'.mrc')
                 ! make binary image of atoms with given cn_std
                 call img_atom%copy_bimg(self%img_cc)
                 allocate(imat_atom(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
