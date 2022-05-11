@@ -108,7 +108,7 @@ contains
         integer,               intent(in)    :: nsearch
         type(image), optional, intent(inout) :: mskimg
         type(image)          :: odd_copy, even_copy, freq_img
-        integer              :: k,l,m, box, dim3, ldim(3), find_start, find_stop, iter_no
+        integer              :: k,l,m, box, dim3, ldim(3), find_start, find_stop, iter_no, fnr
         integer              :: best_ind, cur_ind, k1,l1,m1,k_ind,l_ind,m_ind, lb(3), ub(3), mid_ext
         real                 :: min_sum_odd, min_sum_even, ref_diff_odd, ref_diff_even, rad, param, find_stepsz
         logical              :: mskimg_present
@@ -120,6 +120,9 @@ contains
         real,    allocatable :: opt_even(:,:,:), cur_diff_even(:,:,:), opt_diff_even(:,:,:), opt_freq_even(:,:,:)
         real,    allocatable :: cur_fil(:), weights_3D(:,:,:), weights_2D(:,:)
         logical, allocatable :: l_mask(:,:,:)
+        character(len=LONGSTRLEN)     :: benchfname
+        integer(timer_int_kind)       ::  t_tot,  t_filter_odd,  t_filter_even,  t_search_opt
+        real(timer_int_kind)          :: rt_tot, rt_filter_odd, rt_filter_even, rt_search_opt
         mskimg_present   = present(mskimg)
         if( mskimg_present ) l_mask = mskimg%bin2logical()
         ldim        = odd%get_ldim()
@@ -179,6 +182,12 @@ contains
         opt_diff_even(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(min_sum_odd)
         opt_freq_odd( lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(min_sum_odd)
         opt_freq_even(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(min_sum_odd)
+        if( L_BENCH_GLOB )then
+            t_tot          = tic()
+            rt_filter_odd  = 0.
+            rt_filter_even = 0.
+            rt_search_opt  = 0.
+        endif
         do iter_no = 1, nsearch
             cur_ind = find_start + (iter_no - 1)*find_stepsz
             if( filter_type == 'tv' )then
@@ -188,12 +197,19 @@ contains
                 param = real(cur_ind)
                 write(*, *) '('//int2str(iter_no)//'/'//int2str(nsearch)//') current Fourier index = ', param
             endif
+            if( L_BENCH_GLOB )then
+                t_filter_odd = tic()
+            endif
             ! filtering odd
             call odd%copy_fast(odd_copy)
             call apply_opt_filter(odd, filter_type, param, cur_fil, .false.)
             call odd%get_rmat_ptr(rmat_odd)
             call even_copy%get_rmat_ptr(rmat_even)
             call squared_diff(rmat_odd, rmat_even, cur_diff_odd)
+            if( L_BENCH_GLOB )then
+                rt_filter_odd = rt_filter_odd + toc(t_filter_odd)
+                t_filter_even = tic()
+            endif
             ! filtering even
             call even%copy_fast(even_copy)
             call apply_opt_filter(even, filter_type, param, cur_fil, .true.)
@@ -201,6 +217,10 @@ contains
             call odd_copy%get_rmat_ptr(rmat_odd)
             call squared_diff(rmat_odd, rmat_even, cur_diff_even)
             call odd%get_rmat_ptr(rmat_odd) ! point rmat_odd to the filtered odd, rmat_even should be filtered even
+            if( L_BENCH_GLOB )then
+                rt_filter_even = rt_filter_even + toc(t_filter_even)
+                t_search_opt   = tic()
+            endif
             ! do the non-uniform, i.e. optimizing at each voxel
             if( nonuniform )then
                 ! 2D vs 3D cases
@@ -293,7 +313,28 @@ contains
                 endif
             endif
             write(*, *) 'min cost val (odd) = ', min_sum_odd, '; current cost (odd) = ', sum(cur_diff_odd)
+            if( L_BENCH_GLOB )then
+                rt_search_opt = rt_search_opt + toc(t_search_opt)
+            endif
         enddo
+        if( L_BENCH_GLOB )then
+            rt_tot     = toc(t_tot)
+            benchfname = 'OPT_FILTER_BENCH.txt'
+            call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
+            write(fnr,'(a)') '*** TIMINGS (s) ***'
+            write(fnr,'(a,1x,f9.2)') 'odd filtering        : ', rt_filter_odd
+            write(fnr,'(a,1x,f9.2)') 'even filtering       : ', rt_filter_even
+            write(fnr,'(a,1x,f9.2)') 'searching/optimizing : ', rt_search_opt
+            write(fnr,'(a,1x,f9.2)') 'total time           : ', rt_tot
+            write(fnr,'(a)') ''
+            write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
+            write(fnr,'(a,1x,f9.2)') 'odd filtering        : ', (rt_filter_odd /rt_tot) * 100. 
+            write(fnr,'(a,1x,f9.2)') 'even filtering       : ', (rt_filter_even/rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') 'searching/optimizing : ', (rt_search_opt /rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') '% accounted for          : ',&
+            &((rt_filter_odd+rt_filter_even+rt_search_opt)/rt_tot) * 100.
+            call fclose(fnr)
+        endif
         if( .not. nonuniform ) write(*, *) 'minimized cost at resolution = ', box*smpd/best_ind
         call odd%set_rmat(opt_odd,   .false.)
         call even%set_rmat(opt_even, .false.)
