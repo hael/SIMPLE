@@ -8,14 +8,15 @@ use simple_image,          only: image
 use simple_binimage,       only: binimage
 use simple_nanoparticle,   only: nanoparticle
 use simple_dock_coords,    only: dock_coords_init, dock_coords_minimize
+use simple_nanoparticle_utils
 implicit none
 
 public :: detect_atoms_commander
+public :: detect_atoms_eo_commander
 public :: atoms_stats_commander
 public :: tseries_atoms_analysis_commander
 public :: dock_coords_commander
 public :: atoms_mask_commander
-
 private
 #include "simple_local_flags.inc"
 
@@ -23,18 +24,27 @@ type, extends(commander_base) :: detect_atoms_commander
   contains
     procedure :: execute      => exec_detect_atoms
 end type detect_atoms_commander
+
+type, extends(commander_base) :: detect_atoms_eo_commander
+  contains
+    procedure :: execute      => exec_detect_atoms_eo
+end type detect_atoms_eo_commander
+
 type, extends(commander_base) :: atoms_stats_commander
   contains
     procedure :: execute      => exec_atoms_stats
 end type atoms_stats_commander
+
 type, extends(commander_base) :: tseries_atoms_analysis_commander
   contains
     procedure :: execute      => exec_tseries_atoms_analysis
 end type tseries_atoms_analysis_commander
+
 type, extends(commander_base) :: dock_coords_commander
   contains
     procedure :: execute      => exec_dock_coords
 end type dock_coords_commander
+
 type, extends(commander_base) :: atoms_mask_commander
   contains
     procedure :: execute      => exec_atoms_mask
@@ -44,49 +54,53 @@ integer, parameter :: CNMIN             = 5
 integer, parameter :: CNMAX             = 12
 integer, parameter :: CN_THRESH_DEFAULT = 5
 
+type :: common_atoms
+    integer           :: ind1, ind2, ncommon
+    real, allocatable :: coords1(:,:), coords2(:,:)
+    real, allocatable :: common1(:,:), common2(:,:)
+    real, allocatable :: different1(:,:), different2(:,:)
+    real, allocatable :: displacements(:,:), dists(:)
+end type common_atoms
+
 contains
 
-    ! Performs preprocessing on the nanoparticle map, identifies atomic positions,
-    ! validates them and write them to disk
     subroutine exec_detect_atoms( self, cline )
         class(detect_atoms_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline !< command line input
+        class(cmdline),                intent(inout) :: cline
         type(parameters)   :: params
         type(nanoparticle) :: nano
         real               :: a(3) ! lattice parameters
         logical            :: prefit_lattice, use_cs_thres, use_auto_corr_thres
-        if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
-        endif
-        if( .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
-        endif
         prefit_lattice = cline%defined('vol2')
         call params%new(cline)
         use_cs_thres        = trim(params%use_thres) .eq. 'yes'
         use_auto_corr_thres = .not.cline%defined('corr_thres')
         if( prefit_lattice )then
-            call nano%new(params%vols(2), params%smpd, params%element, params%msk)
+            call nano%new(params%vols(2), params%msk)
             ! execute
             call nano%identify_lattice_params(a, use_auto_corr_thres=use_auto_corr_thres)
             ! kill
             call nano%kill
-            call nano%new(params%vols(1), params%smpd, params%element, params%msk)
+            call nano%new(params%vols(1), params%msk)
             ! execute
             if( cline%defined('cs_thres') )then
-                call nano%identify_atomic_pos(a, l_fit_lattice=.false., use_cs_thres=use_cs_thres, use_auto_corr_thres=use_auto_corr_thres, cs_thres=params%cs_thres)
+                call nano%identify_atomic_pos(a, l_fit_lattice=.false., use_cs_thres=use_cs_thres,&
+                &use_auto_corr_thres=use_auto_corr_thres, cs_thres=params%cs_thres)
             else
-                call nano%identify_atomic_pos(a, l_fit_lattice=.false., use_cs_thres=use_cs_thres, use_auto_corr_thres=use_auto_corr_thres)
+                call nano%identify_atomic_pos(a, l_fit_lattice=.false., use_cs_thres=use_cs_thres,&
+                &use_auto_corr_thres=use_auto_corr_thres)
             endif
             ! kill
             call nano%kill
         else
-            call nano%new(params%vols(1), params%smpd, params%element, params%msk)
+            call nano%new(params%vols(1), params%msk)
             ! execute
             if( cline%defined('cs_thres') )then
-                call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=use_cs_thres, use_auto_corr_thres=use_auto_corr_thres, cs_thres=params%cs_thres)
+                call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=use_cs_thres,&
+                &use_auto_corr_thres=use_auto_corr_thres, cs_thres=params%cs_thres)
             else
-                call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=use_cs_thres, use_auto_corr_thres=use_auto_corr_thres)
+                call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=use_cs_thres,&
+                &use_auto_corr_thres=use_auto_corr_thres)
             endif
             ! kill
             call nano%kill
@@ -94,6 +108,93 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
+
+    subroutine exec_detect_atoms_eo( self, cline )
+        use simple_opt_filter, only: opt_filter
+        class(detect_atoms_eo_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(parameters)   :: params
+        type(nanoparticle) :: nano
+        type(image)        :: even, odd, mskvol
+        type(common_atoms) :: atms_common
+        real, allocatable  :: pdbmat(:,:)
+        character(len=2)   :: el
+        integer            :: k
+        type(stats_struct) :: dist_stats
+        character(len=:), allocatable :: add2fn, ename_filt, oname_filt, eatms, oatms, tmp, eatms_common, oatms_common
+        call cline%set('use_thres', 'no')
+        call cline%set('corr_thres', 0.)
+        call params%new(cline)
+        ! read e/o:s
+        call odd %new([params%box,params%box,params%box], params%smpd)
+        call even%new([params%box,params%box,params%box], params%smpd)
+        call odd %read(params%vols(1))
+        call even%read(params%vols(2))
+        ! spherical masking
+        call even%mask(params%msk, 'soft')
+        call odd%mask(params%msk, 'soft')
+        call mskvol%disc([params%box,params%box,params%box], params%smpd,&
+        &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
+        ! nonuniform filter
+        ! ... nonuniform=.true., smooth_ext=1, filter_type='butterworth', lp_lb=3. ...
+        call opt_filter(odd, even, params%smpd, .true., 1, 'butterworth', 3., params%nsearch, mskvol)
+        call even%mask(params%msk, 'soft')
+        call odd%mask(params%msk, 'soft')
+        add2fn     = '_nonuni_bw8_sext1'
+        oname_filt = add2fbody(params%vols(1), trim(params%ext), add2fn)
+        ename_filt = add2fbody(params%vols(2), trim(params%ext), add2fn)
+        call odd%write(oname_filt)
+        call even%write(ename_filt)
+        ! detect atoms in odd
+        call nano%new(oname_filt)
+        call nano%identify_atomic_pos_slim
+        ! detect atoms in even
+        call nano%new(ename_filt)
+        call nano%identify_atomic_pos_slim
+        ! compare independent atomic models
+        el               = trim(adjustl(params%element))
+        tmp              = add2fbody(oname_filt,    trim(params%ext), '_ATMS')
+        oatms            = swap_suffix(tmp, '.pdb', trim(params%ext) )
+        tmp              = add2fbody(ename_filt,    trim(params%ext), '_ATMS')
+        eatms            = swap_suffix(tmp, '.pdb', trim(params%ext) )
+        tmp              = add2fbody(oname_filt,    trim(params%ext), '_ATMS_COMMON')
+        oatms_common     = swap_suffix(tmp, '.pdb', trim(params%ext) )
+        tmp              = add2fbody(ename_filt,    trim(params%ext), '_ATMS_COMMON')
+        eatms_common     = swap_suffix(tmp, '.pdb', trim(params%ext) )
+        atms_common%ind1 = 1
+        atms_common%ind2 = 2
+        call read_pdb2matrix(oatms, pdbmat)
+        allocate(atms_common%coords1(3,size(pdbmat,dim=2)), source=pdbmat)
+        deallocate(pdbmat)
+        call read_pdb2matrix(eatms, pdbmat)
+        allocate(atms_common%coords2(3,size(pdbmat,dim=2)), source=pdbmat)
+        deallocate(pdbmat)
+        ! identify couples
+        call find_couples( atms_common%coords1, atms_common%coords2, el,&
+        &atms_common%common1, atms_common%common2)
+        atms_common%ncommon = size(atms_common%common1, dim=2)
+        ! calculate displacements and distances
+        allocate( atms_common%displacements(3,atms_common%ncommon), atms_common%dists(atms_common%ncommon) )
+        do k = 1, atms_common%ncommon
+            atms_common%displacements(:,k) = atms_common%common2(:,k) - atms_common%common1(:,k)
+            atms_common%dists(k) = sqrt(sum((atms_common%displacements(:,k))**2.))
+        end do
+        ! write pdb files
+        call write_matrix2pdb(el, atms_common%common1, oatms_common)
+        call write_matrix2pdb(el, atms_common%common2, eatms_common)
+        ! RMSD reporting
+        call calc_stats(atms_common%dists(:), dist_stats)
+        write(logfhandle,'(A)') '>>> DISTANCE STATS (IN A) FOR COMMON ATOMS BELOW'
+        write(logfhandle,'(A,F8.4)') 'Average: ', dist_stats%avg
+        write(logfhandle,'(A,F8.4)') 'Median : ', dist_stats%med
+        write(logfhandle,'(A,F8.4)') 'Sigma  : ', dist_stats%sdev
+        write(logfhandle,'(A,F8.4)') 'Max    : ', dist_stats%maxv
+        write(logfhandle,'(A,F8.4)') 'Min    : ', dist_stats%minv
+        ! kill
+        call nano%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_DETECT_ATOMS_EO NORMAL STOP ****')
+    end subroutine exec_detect_atoms_eo
 
     subroutine exec_atoms_stats( self, cline )
         class(atoms_stats_commander), intent(inout) :: self
@@ -121,11 +222,11 @@ contains
         call params%new(cline)
         if( prefit_lattice )then
             ! fit lattice using vol3
-            call nano%new(params%vols(3), params%smpd, params%element, params%msk)
+            call nano%new(params%vols(3), params%msk)
             call nano%identify_lattice_params(a, use_auto_corr_thres=use_auto_corr_thres)
             call nano%kill
             ! calc stats
-            call nano%new(params%vols(1), params%smpd, params%element, params%msk)
+            call nano%new(params%vols(1), params%msk)
             call nano%set_atomic_coords(params%pdbfile)
             if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
             call nano%set_img(params%vols(2), 'img_cc')
@@ -135,7 +236,7 @@ contains
             call nano%kill
         else
             ! calc stats
-            call nano%new(params%vols(1), params%smpd, params%element, params%msk)
+            call nano%new(params%vols(1), params%msk)
             call nano%set_atomic_coords(params%pdbfile)
             if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
             call nano%set_img(params%vols(2), 'img_cc')
@@ -149,14 +250,6 @@ contains
     end subroutine exec_atoms_stats
 
     subroutine exec_tseries_atoms_analysis( self, cline )
-        use simple_nanoparticle_utils
-        type :: common_atoms
-            integer           :: ind1, ind2, ncommon
-            real, allocatable :: coords1(:,:), coords2(:,:)
-            real, allocatable :: common1(:,:), common2(:,:)
-            real, allocatable :: different1(:,:), different2(:,:)
-            real, allocatable :: displacements(:,:), dists(:)
-        end type common_atoms
         class(tseries_atoms_analysis_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline !< command line input
         character(len=LONGSTRLEN), allocatable :: pdbfnames(:)
@@ -282,7 +375,6 @@ contains
     end subroutine exec_dock_coords
 
     subroutine exec_atoms_mask( self, cline )
-        use simple_nanoparticle_utils, only: atoms_mask
         class(atoms_mask_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline !< command line input
         type(parameters) :: params
