@@ -75,7 +75,7 @@ contains
         logical,          intent(in)    :: use_cache
         integer                         :: bw_order, io_stat
         type(tvfilter)                  :: tvfilt
-        call img%fft()
+        !call img%fft()
         select case(trim(filter_type))
             case('lp')
                 call img%lp(int(param))
@@ -107,7 +107,7 @@ contains
         real,                  intent(in)    :: lp_lb
         integer,               intent(in)    :: nsearch
         type(image), optional, intent(inout) :: mskimg
-        type(image)          :: odd_copy, even_copy, freq_img
+        type(image)          :: odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat, freq_img
         integer              :: k,l,m, box, dim3, ldim(3), find_start, find_stop, iter_no, fnr
         integer              :: best_ind, cur_ind, k1,l1,m1,k_ind,l_ind,m_ind, lb(3), ub(3), mid_ext
         real                 :: min_sum_odd, min_sum_even, ref_diff_odd, ref_diff_even, rad, param, find_stepsz
@@ -133,8 +133,12 @@ contains
         find_start  = calc_fourier_index(lp_lb, box, smpd)
         find_stepsz = real(find_stop - find_start)/(nsearch - 1)
         call freq_img%new([box,box,dim3], smpd)
-        call odd_copy%copy(odd)
-        call even_copy%copy(even)
+        call odd_copy_rmat%copy(odd)
+        call odd_copy_cmat%copy(odd)
+        call odd_copy_cmat%fft
+        call even_copy_rmat%copy(even)
+        call even_copy_cmat%copy(even)
+        call even_copy_cmat%fft
         allocate(opt_odd( box,box,dim3), cur_diff_odd( box,box,dim3), opt_diff_odd( box,box,dim3), opt_freq_odd( box,box,dim3),&
                 &opt_even(box,box,dim3), cur_diff_even(box,box,dim3), opt_diff_even(box,box,dim3), opt_freq_even(box,box,dim3),&
                 &cur_fil(box),weights_2D(smooth_ext*2+1, smooth_ext*2+1), weights_3D(smooth_ext*2+1, smooth_ext*2+1, smooth_ext*2+1), source=0.)
@@ -201,20 +205,20 @@ contains
                 t_filter_odd = tic()
             endif
             ! filtering odd
-            call odd%copy_fast(odd_copy)
+            call odd%copy_fast(odd_copy_cmat)
             call apply_opt_filter(odd, filter_type, param, cur_fil, .false.)
             call odd%get_rmat_ptr(rmat_odd)
-            call even_copy%get_rmat_ptr(rmat_even)
+            call even_copy_rmat%get_rmat_ptr(rmat_even)
             call squared_diff(rmat_odd, rmat_even, cur_diff_odd)
             if( L_BENCH_GLOB )then
                 rt_filter_odd = rt_filter_odd + toc(t_filter_odd)
                 t_filter_even = tic()
             endif
             ! filtering even
-            call even%copy_fast(even_copy)
+            call even%copy_fast(even_copy_cmat)
             call apply_opt_filter(even, filter_type, param, cur_fil, .true.)
             call even%get_rmat_ptr(rmat_even)
-            call odd_copy%get_rmat_ptr(rmat_odd)
+            call odd_copy_rmat%get_rmat_ptr(rmat_odd)
             call squared_diff(rmat_odd, rmat_even, cur_diff_even)
             call odd%get_rmat_ptr(rmat_odd) ! point rmat_odd to the filtered odd, rmat_even should be filtered even
             if( L_BENCH_GLOB )then
@@ -352,6 +356,10 @@ contains
             call freq_img%kill
         endif
         deallocate(opt_odd, opt_even, cur_diff_odd, opt_diff_odd, cur_diff_even, opt_diff_even, cur_fil, weights_3D, weights_2D)
+        call odd_copy_rmat%kill
+        call odd_copy_cmat%kill
+        call even_copy_rmat%kill
+        call even_copy_cmat%kill
     end subroutine opt_filter
 
 end module simple_opt_filter
