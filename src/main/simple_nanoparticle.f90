@@ -104,7 +104,8 @@ end type atom_stats
 type :: nanoparticle
     private
     type(image)           :: img, img_raw
-    type(binimage)        :: img_bin, img_cc
+    type(image)           :: img_pc_atm              ! Phase Correlation with one atom (used for atom validation & splitting)
+    type(binimage)        :: img_bin, img_cc         ! binary and connected component images
     integer               :: ldim(3)            = 0  ! logical dimension of image
     integer               :: n_cc               = 0  ! number of atoms (connected components)                NATOMS
     integer               :: n4stats            = 0  ! number of atoms in subset used for stats calc
@@ -147,10 +148,10 @@ type :: nanoparticle
     type(stats_struct)    :: valid_corr_cls_stats(2)
     type(stats_struct)    :: radial_strain_cls_stats(2)
     ! OTHER
-    character(len=2)      :: element     = ' '
-    character(len=4)      :: atom_name   = '    '
+    character(len=2)      :: element   = ' '
+    character(len=4)      :: atom_name = '    '
     character(len=STDLEN) :: npname    = '' ! fname
-    character(len=STDLEN) :: fbody       = '' ! fbody
+    character(len=STDLEN) :: fbody     = '' ! fbody
   contains
     ! constructor
     procedure          :: new => new_nanoparticle
@@ -169,6 +170,7 @@ type :: nanoparticle
     ! atomic position determination
     procedure          :: identify_lattice_params
     procedure          :: identify_atomic_pos
+    procedure          :: identify_atomic_pos_slim
     procedure, private :: binarize_and_find_centers
     procedure, private :: find_centers
     procedure, private :: discard_atoms_with_low_contact_score
@@ -203,11 +205,9 @@ end type nanoparticle
 
 contains
 
-    subroutine new_nanoparticle( self, fname, cline_smpd, element, msk )
+    subroutine new_nanoparticle( self, fname, msk )
         class(nanoparticle), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
-        real,                intent(in)    :: cline_smpd
-        character(len=2),    intent(inout) :: element
         real, optional,      intent(in)    :: msk
         character(len=2) :: el_ucase
         integer :: nptcls
@@ -216,10 +216,10 @@ contains
         call self%kill
         self%npname    = fname
         self%fbody     = get_fbody(trim(basename(fname)), trim(fname2ext(fname)))
-        self%smpd      = cline_smpd
-        self%atom_name = ' '//element
-        self%element   = element
-        el_ucase       = upperCase(trim(adjustl(element)))
+        self%smpd      = params_glob%smpd
+        self%atom_name = ' '//params_glob%element
+        self%element   = params_glob%element
+        el_ucase       = upperCase(trim(adjustl(params_glob%element)))
         call get_element_Z_and_radius(el_ucase, Z, self%theoretical_radius)
         if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
         call find_ldim_nptcls(self%npname, self%ldim, nptcls, smpd)
@@ -477,6 +477,7 @@ contains
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%img, self%element)
+        call self%img_pc_atm%copy(self%img)
         if( WRITE_OUPUT ) call self%img%write('denoised.mrc')
         ! Nanoparticle binarization
         call self%binarize_and_find_centers()
@@ -516,6 +517,35 @@ contains
         call simatms%kill
         call atoms_obj%kill
     end subroutine identify_atomic_pos
+
+    ! this slimmed-down version is intended for detect_atoms_eo
+    ! it assumes that the input map is denoised beforehand
+    subroutine identify_atomic_pos_slim( self )
+        class(nanoparticle), intent(inout) :: self
+        type(image) :: simatms
+        type(atoms) :: atoms_obj
+        ! MODEL BUILDING
+        ! Phase correlation approach
+        call phasecorr_one_atom(self%img, self%img_pc_atm, self%element)
+        ! Nanoparticle binarization
+        call self%binarize_and_find_centers()
+        ! atom splitting by correlation map validation
+        call self%split_atoms()
+        ! validation through per-atom correlation with the simulated density
+        call self%simulate_atoms(atoms_obj, simatms)
+        call self%validate_atoms( simatms )
+        ! WRITE OUTPUT
+        call self%img_bin%write_bimg(trim(self%fbody)//'_BIN.mrc')
+        write(logfhandle,'(A)') 'output, binarized map:            '//trim(self%fbody)//'_BIN.mrc'
+        call self%img_cc%write_bimg(trim(self%fbody)//'_CC.mrc')
+        write(logfhandle,'(A)') 'output, connected components map: '//trim(self%fbody)//'_CC.mrc'
+        call self%write_centers
+        call simatms%write(trim(self%fbody)//'_SIM.mrc')
+        write(logfhandle,'(A)') 'output, simulated atomic density: '//trim(self%fbody)//'_SIM.mrc'
+        ! destruct
+        call simatms%kill
+        call atoms_obj%kill
+    end subroutine identify_atomic_pos_slim
 
     ! This subrotuine takes in input a nanoparticle and
     ! binarizes it by thresholding. The gray level histogram is split
@@ -738,8 +768,8 @@ contains
         real    :: new_centers(3,2*self%n_cc) ! will pack it afterwards if it has too many elements
         real    :: pc, radius
         write(logfhandle, '(A)') '>>> SPLITTING CONNECTED ATOMS'
-        call self%img%get_rmat_ptr(rmat_pc) ! now img contains the phase correlation
-        call self%img_cc%get_imat(imat_cc)  ! to pass to the subroutine split_atoms
+        call self%img_pc_atm%get_rmat_ptr(rmat_pc) ! rmat_pc contains the phase correlation
+        call self%img_cc%get_imat(imat_cc)         ! to pass to the subroutine split_atoms
         allocate(imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),           source = imat_cc)
         allocate(imat_split_ccs(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = 0)
         call img_split_ccs%new_bimg(self%ldim, self%smpd)
@@ -2043,6 +2073,7 @@ contains
         class(nanoparticle), intent(inout) :: self
         call self%img%kill()
         call self%img_raw%kill
+        call self%img_pc_atm%kill
         call self%img_bin%kill_bimg()
         call self%img_cc%kill_bimg()
         if( allocated(self%atominfo) ) deallocate(self%atominfo)

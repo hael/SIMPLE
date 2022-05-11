@@ -48,6 +48,7 @@ type(vizoris_commander)                       :: xvizoris
 
 ! MODEL BUILDING/ANALYSIS PROGRAMS
 type(detect_atoms_commander)                  :: xdetect_atoms
+type(detect_atoms_eo_commander)               :: xdetect_atoms_eo
 type(atoms_stats_commander)                   :: xatoms_stats
 type(tseries_atoms_analysis_commander)        :: xtseries_atoms_analysis
 
@@ -136,6 +137,9 @@ select case(prg)
     case( 'detect_atoms' )
         call cline%set('mkdir', 'no')
         call xdetect_atoms%execute(cline)
+    case( 'detect_atoms_eo' )
+        call cline%set('mkdir', 'no')
+        call xdetect_atoms_eo%execute(cline)
     case( 'atoms_stats' )
         call cline%set('mkdir', 'yes')
         call xatoms_stats%execute(cline)
