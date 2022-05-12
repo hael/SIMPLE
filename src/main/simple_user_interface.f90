@@ -2899,7 +2899,7 @@ contains
         call preprocess_stream_dev%set_input('srch_ctrls', 5, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
         call preprocess_stream_dev%set_input('srch_ctrls', 6, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
         call preprocess_stream_dev%set_input('srch_ctrls', 7, pgrp)
-        preprocess_stream_dev%srch_ctrls(8)%required = .false.
+        preprocess_stream_dev%srch_ctrls(7)%required = .false.
         call preprocess_stream_dev%set_input('srch_ctrls', 8, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
         call preprocess_stream_dev%set_input('srch_ctrls', 9, mcpatch)
         call preprocess_stream_dev%set_input('srch_ctrls',10, nxpatch)

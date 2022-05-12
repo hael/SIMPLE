@@ -9,12 +9,14 @@ use simple_qsys_env,       only: qsys_env
 use simple_image,          only: image
 use simple_oris,           only: oris
 use simple_stream_chunk,   only: stream_chunk
+use simple_class_frcs,     only: class_frcs
 use simple_qsys_funs
 use simple_commander_cluster2D
 use simple_timer
 implicit none
 
 public :: init_cluster2D_stream
+public :: update_pool_status, update_pool, reject_from_pool, classify_pool, tidy_2Dstream_iter
 public :: update_chunk_mask, update_chunks, start_new_chunks
 
 private
@@ -36,27 +38,41 @@ character(len=STDLEN), parameter   :: DISTR_EXEC_FNAME    = './distr_cluster2D_p
 logical,               parameter   :: DEBUG_HERE          = .true.
 integer(timer_int_kind)            :: t
 
-type(stream_chunk), allocatable :: chunks(:)
-type(sp_project)                :: pool_proj
-type(qsys_env)                  :: qenv_pool
-type(cmdline)                   :: cline_cluster2D_chunk, cline_cluster2D_pool
-character(len=:),   allocatable :: orig_projfile
-character(len=LONGSTRLEN)       :: prev_snapshot_frcs, prev_snapshot_cavgs
-real                            :: orig_smpd, smpd, scale_factor, mskdiam
-real                            :: lp_greedy, lpstart_stoch
-integer                         :: orig_box, box, boxpd
-integer                         :: glob_chunk_id, max_ncls, nptcls_per_chunk, ncls_glob
-integer                         :: n_spprojs_glob = 0
-logical                         :: l_wfilt, do_autoscale, l_greedy
-logical                         :: initiated = .false.
-logical, allocatable :: spprojs_mask_glob(:)
+! Pool related
+type(sp_project)                  :: pool_proj
+type(qsys_env)                    :: qenv_pool
+type(cmdline)                     :: cline_cluster2D_pool
+logical,              allocatable :: pool_stacks_mask(:)
+integer                           :: pool_iter
+logical                           :: pool_available, pool_converged
+! Chunk related
+type(stream_chunk),   allocatable :: chunks(:)
+type(cmdline)                     :: cline_cluster2D_chunk
+integer                           :: glob_chunk_id
+! Book-keeping
+logical,               allocatable :: spprojs_mask_glob(:)
+character(LONGSTRLEN), allocatable :: imported_spprojs(:), imported_stks(:)
+character(len=:),      allocatable :: orig_projfile
+integer                            :: n_spprojs_glob = 0
+logical                            :: initiated = .false.
+! GUI
+character(len=:),      allocatable :: projfile4gui
+! other
+character(len=LONGSTRLEN) :: prev_snapshot_frcs, prev_snapshot_cavgs
+character(len=STDLEN)     :: refs_glob, refs_glob_ranked
+real                      :: orig_smpd, smpd, scale_factor, mskdiam     ! dimensions
+integer                   :: orig_box, box, boxpd
+real                      :: lp_greedy, lpstart_stoch                   ! resolution limits
+integer                   :: max_ncls, nptcls_per_chunk, ncls_glob, numlen 
+logical                   :: l_wfilt, do_autoscale, l_greedy            
 
 contains
 
-    subroutine init_cluster2D_stream( cline, spproj, refs, do2D )
+    subroutine init_cluster2D_stream( cline, spproj, refs, projfilegui, do2D )
         class(cmdline),    intent(inout) :: cline
         class(sp_project), intent(inout) :: spproj
         character(len=*),  intent(in)    :: refs
+        character(len=*),  intent(in)    :: projfilegui
         logical,           intent(inout) :: do2D
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
         integer :: ldim(3), ichunk, maybe2D, ifoo
@@ -89,6 +105,7 @@ contains
         lpstart_stoch     = lp_greedy
         prev_snapshot_cavgs = ''
         orig_projfile = trim(params_glob%projfile)
+        projfile4gui  = trim(projfilegui)
         if( cline%defined('box_extract') )then
             orig_box = nint(cline%get_rarg('box_extract'))
         else
@@ -99,14 +116,21 @@ contains
         call debug_print('cluster2D_stream orig_box: '//int2str(orig_box))
         call debug_print('cluster2D_stream orig_smpd: '//real2str(orig_smpd))
         call debug_print('cluster2D_stream mskdiam: '//real2str(mskdiam))
+        numlen         = len(int2str(params_glob%nparts))
+        refs_glob      = 'start_cavgs'//params_glob%ext
+        pool_available = .true.
+        pool_converged = .false.
+        pool_iter      = 0
         ! call write_user_params
         call simple_mkdir(SCALE_DIR)
         call simple_mkdir(POOL_DIR)
+        call simple_touch(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
         call pool_proj%kill
         pool_proj%projinfo = spproj%projinfo
         pool_proj%compenv  = spproj%compenv
         call pool_proj%projinfo%delete_entry('projname')
         call pool_proj%projinfo%delete_entry('projfile')
+        call pool_proj%write(trim(POOL_DIR)//PROJFILE_POOL)
         ! initialize chunks parameters and objects
         call cline_cluster2D_chunk%set('prg',       'cluster2D_distr')
         call cline_cluster2D_chunk%set('oritype',   'ptcl2D')
@@ -235,11 +259,13 @@ contains
         else
             THROW_HARD('Error update_chunks 1')
         endif
-        call debug_print('update_chunk_mask n_spprojs_glob: '//int2str(n_spprojs_glob))
+        ! call debug_print('update_chunk_mask n_spprojs_glob: '//int2str(n_spprojs_glob))
     end subroutine update_chunk_mask
 
     subroutine update_chunks
+        logical :: converged_chunks(params_glob%nchunks)
         integer :: ichunk
+        converged_chunks = .false.
         ! deal with chunk completion, rejection, reset, import into pool
         do ichunk = 1,params_glob%nchunks
             if( chunks(ichunk)%available ) cycle
@@ -247,13 +273,23 @@ contains
                 call chunks(ichunk)%display_iter
                 ! rejection
                 call chunks(ichunk)%reject(params_glob%lpthresh, params_glob%ndev, box)
-                ! import into pool and folder removal happens here
-                ! TODO
-                ! free chunk
-                glob_chunk_id = glob_chunk_id + 1
-                call chunks(ichunk)%init(glob_chunk_id, pool_proj)
+                converged_chunks(ichunk) = .true.
             endif
         enddo
+        if( any(converged_chunks) )then
+            ! transfer parameters to pool & update display
+            call import_chunks_into_pool(converged_chunks)
+            call update_pool_for_gui
+            ! cleanup and reinit available chunks
+            do ichunk = 1,params_glob%nchunks
+                if( converged_chunks(ichunk) ) then
+                    call chunks(ichunk)%remove_folder
+                    call chunks(ichunk)%kill
+                    glob_chunk_id = glob_chunk_id + 1
+                    call chunks(ichunk)%init(glob_chunk_id, pool_proj)
+                endif
+            enddo
+        endif
     end subroutine update_chunks
 
     subroutine start_new_chunks( spproj_fnames )
@@ -265,7 +301,7 @@ contains
         integer :: first2import, last2import, n2import, cnt
         integer :: inmics, instks, inptcls
         n_avail_chunks = count(chunks(:)%available)
-        call debug_print('start_new_chunks n_avail_chunks: '//int2str(n_avail_chunks))
+        ! call debug_print('start_new_chunks n_avail_chunks: '//int2str(n_avail_chunks))
         ! cannot import yet
         if( n_avail_chunks == 0 ) return
         if( .not.allocated(spprojs_mask_glob) )return
@@ -280,10 +316,6 @@ contains
             if( spprojs_mask_glob(iproj) )cycle
             call stream_proj%read_data_info(spproj_fnames(iproj), inmics, instks, inptcls)
             spproj_nptcls(iproj) = inptcls
-
-            ! call stream_proj%read_segment('mic',spproj_fnames(iproj))
-            ! spproj_nptcls(iproj) = nint(stream_proj%os_mic%get(1,'nptcls'))
-
             if( spproj_nptcls(iproj) > 0 )then
                 if( first2import == 0 ) first2import = iproj
                 nptcls = nptcls + spproj_nptcls(iproj)
@@ -333,7 +365,625 @@ contains
         enddo
     end subroutine
 
+    subroutine import_chunks_into_pool( chunks2import )
+        logical,                intent(in) :: chunks2import(params_glob%nchunks)
+        type(class_frcs)                   :: frcs_glob, frcs_chunk, frcs_prev
+        character(LONGSTRLEN), allocatable :: tmp(:)
+        character(len=:),      allocatable :: cavgs_chunk, dir_chunk
+        integer,               allocatable :: cls_pop(:), cls_chunk_pop(:), pinds(:), states(:)
+        character(len=LONGSTRLEN) :: stk_relpath
+        real    :: smpd_here
+        integer :: ichunk, nchunks2import, nptcls2import, nmics2import, nptcls, imic, iproj
+        integer :: ncls_tmp, fromp_prev, fromp, ii, jptcl, i, poolind, n_remap, pop
+        integer :: nmics_imported, nptcls_imported, iptcl, ind, ncls_here, icls
+        logical :: l_maxed
+        call debug_print('in import_chunks_into_pool 0')
+        nchunks2import = count(chunks2import)
+        if( nchunks2import == 0 ) return
+        nptcls2import   = 0
+        nmics2import    = 0
+        do ichunk = 1,params_glob%nchunks
+            if( chunks2import(ichunk) )then 
+                nptcls2import = nptcls2import + chunks(ichunk)%nptcls
+                nmics2import  = nmics2import  + chunks(ichunk)%nmics
+            endif
+        enddo
+        if( nptcls2import == 0 ) return
+        call debug_print('in import_chunks_into_pool 1 '//int2str(nptcls2import))
+        ! reallocations
+        nmics_imported  = pool_proj%os_mic%get_noris()
+        nptcls_imported = pool_proj%os_ptcl2D%get_noris()
+        if( nmics_imported == 0 )then
+            call pool_proj%os_mic%new(nmics2import, is_ptcl=.false.)
+            call pool_proj%os_stk%new(nmics2import, is_ptcl=.false.)
+            call pool_proj%os_ptcl2D%new(nptcls2import, is_ptcl=.true.)
+            allocate(imported_stks(nmics2import))
+            fromp = 1
+        else
+            call pool_proj%os_mic%reallocate(nmics_imported+nmics2import)
+            call pool_proj%os_stk%reallocate(nmics_imported+nmics2import)
+            call pool_proj%os_ptcl2D%reallocate(nptcls_imported+nptcls2import)
+            fromp = nint(pool_proj%os_stk%get(nmics_imported,'top'))+1
+            call move_alloc(imported_stks, tmp)
+            allocate(imported_stks(nmics_imported+nmics2import))
+            imported_stks(1:nmics_imported) = tmp(:)
+            deallocate(tmp)
+        endif
+        imic  = nmics_imported
+        iptcl = nptcls_imported
+        call debug_print('in import_chunks_into_pool 2 '//int2str(imic)//' '//int2str(iptcl))
+        do ichunk = 1,params_glob%nchunks
+            if( .not.chunks2import(ichunk) )cycle
+            fromp_prev = fromp
+            call chunks(ichunk)%read(boxpd)
+            ! transfer micrographs, stacks & particles parameters
+            jptcl = 0
+            do iproj=1,chunks(ichunk)%nmics
+                imic  = imic+1
+                ! micrographs
+                call pool_proj%os_mic%transfer_ori(imic, chunks(ichunk)%spproj%os_mic, iproj)
+                ! stacks
+                call pool_proj%os_stk%transfer_ori(imic, chunks(ichunk)%spproj%os_stk, iproj)
+                nptcls = nint(chunks(ichunk)%spproj%os_stk%get(iproj,'nptcls'))
+                call pool_proj%os_stk%set(imic, 'fromp', real(fromp))
+                call pool_proj%os_stk%set(imic, 'top',   real(fromp+nptcls-1))
+                call make_relativepath(cwd_glob, chunks(ichunk)%orig_stks(iproj), stk_relpath)
+
+                call debug_print('in import_chunks_into_pool 2 '//trim(stk_relpath))
+
+                imported_stks(imic) = trim(stk_relpath)
+                ! particles
+                do i = 1,nptcls
+                    iptcl = iptcl + 1
+                    jptcl = jptcl + 1
+                    call pool_proj%os_ptcl2D%transfer_ori(iptcl, chunks(ichunk)%spproj%os_ptcl2D, jptcl)
+                    call pool_proj%os_ptcl2D%set(iptcl, 'stkind',    real(imic))
+                    call pool_proj%os_ptcl2D%set(iptcl, 'updatecnt', 0.) ! new particle
+                    call pool_proj%os_ptcl2D%set(iptcl, 'frac',      0.) ! new particle
+                enddo
+                fromp = fromp + nptcls
+            enddo
+            write(logfhandle,'(A,I6,A,I6,A)')'>>> TRANSFERRED ',fromp-fromp_prev,' PARTICLES FROM CHUNK ',&
+            &chunks(ichunk)%id,' TO POOL'
+            call flush(logfhandle)
+            ! transfer classes
+            l_maxed   = ncls_glob >= max_ncls ! max # of classes reached ?
+            ncls_here = ncls_glob
+            if( .not.l_maxed ) ncls_here = ncls_glob + params_glob%ncls_start
+            states = nint(chunks(ichunk)%spproj%os_ptcl2D%get_all('state'))
+            call chunks(ichunk)%spproj%get_cavgs_stk(cavgs_chunk, ncls_tmp, smpd_here)
+            dir_chunk   = trim(chunks(ichunk)%path)
+            cavgs_chunk = trim(dir_chunk)//basename(cavgs_chunk)
+            call frcs_chunk%new(params_glob%ncls_start, box, smpd, nstates=1)
+            call frcs_chunk%read(trim(dir_chunk)//trim(FRCS_FILE))
+            if( l_maxed )then
+                call debug_print('in import_chunks_into_pool 3 '//int2str(ichunk))
+                ! transfer all others
+                cls_pop = nint(pool_proj%os_cls2D%get_all('pop'))
+                n_remap = 0
+                if( any(cls_pop==0) )then
+                    if( all(cls_pop==0) ) THROW_HARD('Empty os_cls2D!')
+                    ! remapping
+                    cls_chunk_pop = nint(chunks(ichunk)%spproj%os_cls2D%get_all('pop'))
+                    call frcs_glob%new(ncls_glob, box, smpd, nstates=1)
+                    call frcs_glob%read(trim(POOL_DIR)//trim(FRCS_FILE))
+                    do icls=1,ncls_glob
+                        if( cls_pop(icls)>0 ) cycle          ! class already filled
+                        if( all(cls_chunk_pop == 0 ) ) exit  ! no more chunk class available
+                        ind = irnd_uni(params_glob%ncls_start)    ! selects chunk class stochastically
+                        do while( cls_chunk_pop(ind) == 0 )
+                            ind = irnd_uni(params_glob%ncls_start)
+                        enddo
+                        cls_chunk_pop(ind) = 0             ! excludes from being picked again
+                        n_remap = n_remap+1
+                        ! class average
+                        call transfer_cavg(cavgs_chunk, dir_chunk, ind, refs_glob, icls)
+                        ! frcs
+                        call frcs_glob%set_frc(icls,frcs_chunk%get_frc(ind, box, 1), 1)
+                        ! class parameters transfer
+                        call pool_proj%os_cls2D%transfer_ori(icls, chunks(ichunk)%spproj%os_cls2D, ind)
+                        call pool_proj%os_cls2D%set(icls, 'class', real(icls))
+                        ! particles
+                        call chunks(ichunk)%spproj%os_ptcl2D%get_pinds(ind,'class',pinds,consider_w=.false.)
+                        pop = size(pinds)
+                        do i=1,pop
+                            ii      = pinds(i)               ! in chunk
+                            poolind = fromp_prev + ii - 1 ! in pool
+                            call pool_proj%os_ptcl2D%set(poolind,'class',real(icls))
+                        enddo
+                        cls_pop(icls) = cls_pop(icls) + pop ! updates class populations
+                    enddo
+                    ! now transfer particles that were not remapped
+                    do icls = 1,params_glob%ncls_start
+                        if( cls_chunk_pop(icls) == 0 ) cycle
+                        call chunks(ichunk)%spproj%os_ptcl2D%get_pinds(icls,'class',pinds,consider_w=.false.)
+                        pop = size(pinds)
+                        do i = 1,pop
+                            ii      = pinds(i)            ! in chunk
+                            poolind = fromp_prev + ii - 1 ! in pool
+                            ind     = irnd_uni(ncls_glob) ! stochastic labelling followed by greedy search
+                            do while( cls_pop(ind) == 0 )
+                                ind = irnd_uni(ncls_glob)
+                            enddo
+                            call pool_proj%os_ptcl2D%set(poolind,'class',real(ind))
+                            cls_pop(ind) = cls_pop(ind) + 1 ! updates class populations
+                        enddo
+                    enddo
+                    if( n_remap > 0 )then
+                        call transfer_cavg(refs_glob,dir_chunk,ncls_glob,refs_glob,ncls_glob, self_transfer=.true.)
+                        call frcs_glob%write(trim(POOL_DIR)//trim(FRCS_FILE))
+                        write(logfhandle,'(A,I4)')'>>> # OF RE-MAPPED CLASS AVERAGES: ',n_remap
+                    endif
+                else
+                    call debug_print('in import_chunks_into_pool 4 '//int2str(ichunk))
+                    ! no remapping, just transfer particles & updates 2D population
+                    do ii = 1,chunks(ichunk)%nptcls
+                        if( states(ii) /= 0 )then
+                            icls          = irnd_uni(ncls_glob) ! stochastic labelling followed by greedy search
+                            cls_pop(icls) = cls_pop(icls) + 1   ! updates populations
+                            poolind       = fromp_prev + ii - 1
+                            call pool_proj%os_ptcl2D%set(poolind, 'class', real(icls))
+                        endif
+                    enddo
+                endif
+                ! updates class populations
+                call pool_proj%os_cls2D%set_all('pop',real(cls_pop))
+                call debug_print('in import_chunks_into_pool 5 '//int2str(ichunk))
+            else
+                call debug_print('in import_chunks_into_pool 6 '//' '//int2str(ichunk)//' '//int2str(ncls_glob))
+                ! all new classes can be imported, no remapping
+                if( ncls_glob == 0 )then
+                    ! first transfer : copy classes, frcs & class parameters
+                    refs_glob = 'start_cavgs'//params_glob%ext
+                    do icls= 1,params_glob%ncls_start
+                        call transfer_cavg(cavgs_chunk,dir_chunk,icls,refs_glob,icls)
+                    enddo
+                    call simple_copy_file(trim(dir_chunk)//trim(FRCS_FILE),trim(POOL_DIR)//trim(FRCS_FILE))
+                    pool_proj%os_cls2D = chunks(ichunk)%spproj%os_cls2D
+                else
+                    ! append new classes
+                    do icls=1,params_glob%ncls_start
+                        call transfer_cavg(cavgs_chunk, dir_chunk, icls, refs_glob, ncls_glob+icls)
+                    enddo
+                    ! FRCs
+                    call frcs_glob%new(ncls_here, box, smpd, nstates=1)
+                    call frcs_prev%new(ncls_glob, box, smpd, nstates=1)
+                    call frcs_prev%read(trim(POOL_DIR)//trim(FRCS_FILE))
+                    do icls=1,ncls_glob
+                        call frcs_glob%set_frc(icls,frcs_prev%get_frc(icls, box, 1), 1)
+                    enddo
+                    do icls=1,params_glob%ncls_start
+                        call frcs_glob%set_frc(ncls_glob+icls,frcs_chunk%get_frc(icls, box, 1), 1)
+                    enddo
+                    call frcs_glob%write(trim(POOL_DIR)//trim(FRCS_FILE))
+                    ! class parameters
+                    call pool_proj%os_cls2D%reallocate(ncls_here)
+                    do icls = 1,params_glob%ncls_start
+                        ind = ncls_glob+icls
+                        call pool_proj%os_cls2D%transfer_ori(ind, chunks(ichunk)%spproj%os_cls2D, icls)
+                        call pool_proj%os_cls2D%set(ind, 'class', real(ind))
+                    enddo
+                endif
+                call debug_print('in import_chunks_into_pool 7'//' '//int2str(ichunk))
+                ! particles 2D
+                do ii = 1,chunks(ichunk)%nptcls
+                    if( states(ii) /= 0 )then
+                        poolind = fromp_prev+ii-1
+                        icls    = ncls_glob+nint(chunks(ichunk)%spproj%os_ptcl2D%get(ii,'class'))
+                        call pool_proj%os_ptcl2D%set(poolind, 'class', real(icls))
+                    endif
+                enddo
+                ! global # of classes
+                ncls_glob = ncls_here
+                call debug_print('in import_chunks_into_pool 8'//' '//int2str(ichunk))
+            endif
+            ! cleanup
+            call frcs_prev%kill
+            call frcs_glob%kill
+            call frcs_chunk%kill
+            call debug_print('end import_chunks_into_pool')
+        enddo
+    end subroutine import_chunks_into_pool
+
+    subroutine update_pool_for_gui
+        type(oris) :: os_backup
+        os_backup = pool_proj%os_cls2D
+        call pool_proj%add_cavgs2os_out(trim(POOL_DIR)//trim(refs_glob), smpd, 'cavg')
+        pool_proj%os_cls2D = os_backup
+        call pool_proj%write_segment_inside('out',   projfile4gui)
+        call pool_proj%write_segment_inside('cls2D', projfile4gui)
+        call os_backup%kill
+    end subroutine update_pool_for_gui
+
+    !>  Convenience function
+    subroutine transfer_cavg( refs_in, dir, indin, refs_out, indout, self_transfer )
+        character(len=*),  intent(in) :: refs_in, dir, refs_out
+        integer,           intent(in) :: indin, indout
+        logical, optional, intent(in) :: self_transfer
+        type(image)                   :: img
+        character(len=:), allocatable :: stkout, stkin, refs_out_here
+        integer :: iipart
+        logical :: l_self
+        call debug_print('in transfer_cavg '//int2str(indin)//' '//int2str(indout))
+        l_self = .false.
+        if( present(self_transfer) ) l_self = self_transfer
+        if( l_self ) call debug_print('in transfer_cavg self_transfer')
+        ! making sure we are writing to the correct folder
+        refs_out_here = trim(POOL_DIR)//'/'//trim(refs_out)
+        ! merged class
+        call img%new([box,box,1],smpd)
+        call img%read( refs_in, indin)
+        call img%write(refs_out_here,indout)
+        if( l_wfilt )then
+            stkout = add2fbody(refs_out_here,params_glob%ext,trim(WFILT_SUFFIX))
+            call img%write(stkout,indout)
+        endif
+        ! e/o
+        stkin  = add2fbody(refs_in, params_glob%ext,'_even')
+        stkout = add2fbody(refs_out_here,params_glob%ext,'_even')
+        call img%read( stkin, indin)
+        call img%write(stkout,indout)
+        stkin  = add2fbody(refs_in,params_glob%ext,'_odd')
+        stkout = add2fbody(refs_out_here,params_glob%ext,'_odd')
+        call img%read( stkin, indin)
+        call img%write(stkout,indout)
+        ! temporary matrices, logics from chunk%read
+        call img%new([boxpd,boxpd,1],smpd)
+        call img%zero_and_flag_ft
+        if( l_self )then
+            do iipart = 1,params_glob%nparts
+                stkin = trim(POOL_DIR)//'/cavgs_even_part'//int2str_pad(iipart,numlen)//trim(params_glob%ext)
+                call img%read(stkin, indin)
+                call img%write(stkin,indout)
+                stkin = trim(POOL_DIR)//'/cavgs_odd_part'//int2str_pad(iipart,numlen)//trim(params_glob%ext)
+                call img%read(stkin, indin)
+                call img%write(stkin,indout)
+                stkin = trim(POOL_DIR)//'/ctfsqsums_even_part'//int2str_pad(iipart,numlen)//trim(params_glob%ext)
+                call img%read(stkin, indin)
+                call img%write(stkin,indout)
+                stkin = trim(POOL_DIR)//'/ctfsqsums_odd_part'//int2str_pad(iipart,numlen)//trim(params_glob%ext)
+                call img%read(stkin, indin)
+                call img%write(stkin,indout)
+                if( l_wfilt )then
+                    stkin = trim(POOL_DIR)//'/cavgs_even_wfilt_part'//int2str_pad(iipart,numlen)//trim(params_glob%ext)
+                    call img%read(stkin, indin)
+                    call img%write(stkin,indout)
+                    stkin = trim(POOL_DIR)//'/cavgs_odd_wfilt_part'//int2str_pad(iipart,numlen)//trim(params_glob%ext)
+                    call img%read(stkin, indin)
+                    call img%write(stkin,indout)
+                    stkin = trim(POOL_DIR)//'/ctfsqsums_even_wfilt_part'//int2str_pad(iipart,numlen)//trim(params_glob%ext)
+                    call img%read(stkin, indin)
+                    call img%write(stkin,indout)
+                    stkin = trim(POOL_DIR)//'/ctfsqsums_odd_wfilt_part'//int2str_pad(iipart,numlen)//trim(params_glob%ext)
+                    call img%read(stkin, indin)
+                    call img%write(stkin,indout)
+                endif
+            enddo
+        else
+            stkin  = trim(dir)//'/cavgs_even_part'//trim(params_glob%ext)
+            call img%read(stkin, indin)
+            do iipart = 1,params_glob%nparts
+                stkout = trim(POOL_DIR)//'cavgs_even_part'//int2str_pad(iipart,numlen)//trim(params_glob%ext)
+                call img%write(stkout,indout)
+                if( l_wfilt )then
+                    stkout = trim(POOL_DIR)//'/cavgs_even_wfilt_part'//int2str_pad(iipart,numlen)//trim(params_glob%ext)
+                    call img%write(stkout,indout)
+                endif
+            enddo
+            stkin  = trim(dir)//'/cavgs_odd_part'//trim(params_glob%ext)
+            call img%read(stkin, indin)
+            do iipart = 1,params_glob%nparts
+                stkout = trim(POOL_DIR)//'/cavgs_odd_part'//int2str_pad(iipart,numlen)//trim(params_glob%ext)
+                call img%write(stkout,indout)
+                if( l_wfilt )then
+                    stkout = trim(POOL_DIR)//'/cavgs_odd_wfilt_part'//int2str_pad(iipart,numlen)//trim(params_glob%ext)
+                    call img%write(stkout,indout)
+                endif
+            enddo
+            stkin  = trim(dir)//'/ctfsqsums_even_part'//trim(params_glob%ext)
+            call img%read(stkin, indin)
+            do iipart = 1,params_glob%nparts
+                stkout = trim(POOL_DIR)//'/ctfsqsums_even_part'//int2str_pad(iipart,numlen)//trim(params_glob%ext)
+                call img%write(stkout,indout)
+                if( l_wfilt )then
+                    stkout = trim(POOL_DIR)//'/ctfsqsums_even_wfilt_part'//int2str_pad(iipart,numlen)//trim(params_glob%ext)
+                    call img%write(stkout,indout)
+                endif
+            enddo
+            stkin  = trim(dir)//'/ctfsqsums_odd_part'//trim(params_glob%ext)
+            call img%read(stkin, indin)
+            do iipart = 1,params_glob%nparts
+                stkout = trim(POOL_DIR)//'/ctfsqsums_odd_part'//int2str_pad(iipart,numlen)//trim(params_glob%ext)
+                call img%write(stkout,indout)
+                if( l_wfilt )then
+                    stkout = trim(POOL_DIR)//'/ctfsqsums_odd_wfilt_part'//int2str_pad(iipart,numlen)//trim(params_glob%ext)
+                    call img%write(stkout,indout)
+                endif
+            enddo
+        endif
+        ! cleanup
+        call img%kill
+        call debug_print('end transfer_cavg')
+    end subroutine transfer_cavg
+
+    subroutine update_pool_status
+        if( .not.pool_available )then
+            pool_converged = file_exists(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
+            if( pool_iter > 1 ) refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params_glob%ext)
+            pool_available = pool_converged
+        endif
+    end subroutine update_pool_status
+
+    subroutine update_pool
+        type(sp_project)      :: spproj
+        type(oris)            :: os
+        type(class_frcs)      :: frcs
+        integer, allocatable  :: pops(:)
+        character(len=STDLEN) :: fname
+        real    :: corr, frac, mi_class
+        integer :: i, it, jptcl, iptcl, istk
+        if( .not.pool_available )return
+        call debug_print('in update_pool pool_iter '//int2str(pool_iter))
+        call del_file(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
+        ! iteration info
+        fname = trim(POOL_DIR)//trim(STATS_FILE)
+        if( file_exists(fname) )then
+            call os%new(1,is_ptcl=.false.)
+            call os%read(fname)
+            it = nint(os%get(1,'ITERATION'))
+            if( it == pool_iter )then
+                mi_class = os%get(1,'CLASS_OVERLAP')
+                frac     = os%get(1,'SEARCH_SPACE_SCANNED')
+                corr     = os%get(1,'CORRELATION')
+                write(logfhandle,'(A,I6,A,F7.3,A,F7.3,A,F7.3)')'>>> POOL         ITERATION ',it,&
+                    &'; CLASS OVERLAP: ',mi_class,'; SEARCH SPACE SCANNED: ',frac,'; CORRELATION: ',corr
+            endif
+            call os%kill
+        endif
+        ! transfer to pool
+        call spproj%read_segment('cls2D', trim(POOL_DIR)//trim(PROJFILE_POOL))
+        if( spproj%os_cls2D%get_noris() == 0 )then
+            ! not executed yet, do nothing
+        else
+            if( .not.allocated(pool_stacks_mask) )then
+                THROW_HARD('Critical ERROR 0') ! first time
+            endif
+            call spproj%read_segment('stk',   trim(POOL_DIR)//trim(PROJFILE_POOL))
+            call spproj%read_segment('ptcl2D',trim(POOL_DIR)//trim(PROJFILE_POOL))
+            i = 0
+            do istk = 1,size(pool_stacks_mask)
+                if( pool_stacks_mask(istk) )then
+                    i = i+1
+                    iptcl = nint(pool_proj%os_stk%get(istk,'fromp'))
+                    do jptcl = nint(spproj%os_stk%get(i,'fromp')),nint(spproj%os_stk%get(i,'top'))
+                        if( spproj%os_ptcl2D%get_state(jptcl) > 0 )then
+                            call pool_proj%os_ptcl2D%transfer_2Dparams(iptcl, spproj%os_ptcl2D, jptcl)
+                        endif
+                        iptcl = iptcl+1
+                    enddo
+                endif
+            enddo
+            call pool_proj%os_ptcl2D%get_pops(pops, 'class', consider_w=.false., maxn=ncls_glob)
+            pool_proj%os_cls2D = spproj%os_cls2D
+            call pool_proj%os_cls2D%set_all('pop', real(pops))
+            if( .not.l_greedy )then
+                call frcs%read(trim(POOL_DIR)//trim(FRCS_FILE))
+                write(logfhandle,'(A,F5.1)')'>>> CURRENT POOOL RESOLUTION: ',frcs%estimate_lp_for_align()
+                call frcs%kill
+            endif
+            ! for gui
+            call update_pool_for_gui
+        endif
+        call spproj%kill
+        call debug_print('end update_pool')
+    end subroutine update_pool
+
+    subroutine reject_from_pool
+        type(image)          :: img
+        logical, allocatable :: cls_mask(:)
+        real                 :: ndev_here
+        integer              :: nptcls_rejected, ncls_rejected, iptcl
+        integer              :: icls, cnt
+        if( .not.pool_available )return
+        ! rejection frequency
+        if( pool_iter <= 2*FREQ_POOL_REJECTION .or. mod(pool_iter,FREQ_POOL_REJECTION)/=0 ) return
+        if( pool_proj%os_cls2D%get_noris() == 0 ) return
+        call debug_print('in reject from_pool')
+        ncls_rejected   = 0
+        nptcls_rejected = 0
+        allocate(cls_mask(ncls_glob), source=.true.)
+        ! correlation & resolution
+        ! ndev_here = 1.5*params%ndev ! less stringent rejection than chunk
+        ndev_here = 8.0 ! TODO, dev only
+        call pool_proj%os_cls2D%find_best_classes(box,smpd,params_glob%lpthresh,cls_mask,ndev_here)
+        if( count(cls_mask) > 1 .and. count(cls_mask) < ncls_glob )then
+            ncls_rejected = 0
+            do iptcl=1,pool_proj%os_ptcl2D%get_noris()
+                if( pool_proj%os_ptcl2D%get_state(iptcl) == 0 )cycle
+                icls = nint(pool_proj%os_ptcl2D%get(iptcl,'class'))
+                if( cls_mask(icls) ) cycle
+                nptcls_rejected = nptcls_rejected+1
+                call pool_proj%os_ptcl2D%set(iptcl,'state',0.)
+            enddo
+            call debug_print('in reject from_pool 1')
+            if( nptcls_rejected > 0 )then
+                do icls=1,ncls_glob
+                    if( .not.cls_mask(icls) )then
+                        if( pool_proj%os_cls2D%get(icls,'pop') > 0.5 ) ncls_rejected = ncls_rejected+1
+                        call pool_proj%os_cls2D%set(icls,'pop',0.)
+                        call pool_proj%os_cls2D%set(icls,'corr',-1.)
+                    endif
+                enddo
+                call debug_print('in reject from_pool 2')
+                cnt = 0
+                call img%new([box,box,1],smpd)
+                do icls=1,ncls_glob
+                    if( cls_mask(icls) ) cycle
+                    cnt = cnt+1
+                    if( debug_here )then
+                        call img%read(refs_glob,icls)
+                        call img%write('rejected_pool_'//int2str(pool_iter)//'.mrc',cnt)
+                    endif
+                    img = 0.
+                    call img%write(refs_glob,icls)
+                enddo
+                call debug_print('in reject from_pool 3')
+                call img%read(refs_glob, ncls_glob)
+                call img%write(refs_glob, ncls_glob)
+                deallocate(cls_mask)
+                write(logfhandle,'(A,I4,A,I6,A)')'>>> REJECTED FROM POOL: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTER(S)'
+            endif
+        else
+            write(logfhandle,'(A,I4,A,I6,A)')'>>> NO PARTICLES FLAGGED FOR REJECTION FROM POOL'
+        endif
+        call img%kill
+        call debug_print('end reject from_pool')
+    end subroutine reject_from_pool
+
+    subroutine classify_pool
+        use simple_ran_tabu
+        type(ran_tabu)          :: random_generator
+        type(sp_project)        :: spproj
+        logical, parameter      :: L_BENCH = .false.
+        integer, allocatable    :: prev_eo_pops(:,:), min_update_cnts_per_stk(:), nptcls_per_stk(:), stk_order(:)
+        real                    :: frac_update
+        integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
+        integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update
+        integer(timer_int_kind) :: t_tot
+        if( .not.pool_available )return
+        if( L_BENCH ) t_tot  = tic()
+        nptcls_tot = pool_proj%os_ptcl2D%get_noris()
+        if( nptcls_tot == 0 ) return
+        call debug_print('in exec_classify_pool '//int2str(nptcls_tot))
+        pool_iter = pool_iter + 1
+        call cline_cluster2D_pool%set('refs',    refs_glob)
+        call cline_cluster2D_pool%set('ncls',    real(ncls_glob))
+        call cline_cluster2D_pool%set('startit', real(pool_iter))
+        call cline_cluster2D_pool%set('maxits',  real(pool_iter))
+        call cline_cluster2D_pool%set('frcs',    trim(FRCS_FILE))
+        spproj%projinfo = pool_proj%projinfo
+        spproj%compenv  = pool_proj%compenv
+        call spproj%projinfo%delete_entry('projname')
+        call spproj%projinfo%delete_entry('projfile')
+        call spproj%update_projinfo( cline_cluster2D_pool )
+        ! counting number of stacks & particles (old and newer)
+        nstks_tot  = pool_proj%os_stk%get_noris()
+        allocate(nptcls_per_stk(nstks_tot), min_update_cnts_per_stk(nstks_tot), source=0)
+        nptcls_old = 0
+        do istk = 1,nstks_tot
+            fromp = nint(pool_proj%os_stk%get(istk,'fromp'))
+            top   = nint(pool_proj%os_stk%get(istk,'top'))
+            min_update_cnts_per_stk(istk) = huge(istk)
+            do iptcl = fromp,top
+                if( pool_proj%os_ptcl2D%get_state(iptcl) > 0 )then
+                    nptcls_per_stk(istk)          = nptcls_per_stk(istk) + 1 ! # ptcls with state=1
+                    min_update_cnts_per_stk(istk) = min(min_update_cnts_per_stk(istk), nint(pool_proj%os_ptcl2D%get(iptcl,'updatecnt')))
+                endif
+            enddo
+            if( min_update_cnts_per_stk(istk) >= STREAM_SRCHLIM )then
+                nptcls_old = nptcls_old + nptcls_per_stk(istk)
+            endif
+        enddo
+        ! flagging stacks to be skipped
+        if( allocated(pool_stacks_mask) ) deallocate(pool_stacks_mask)
+        allocate(pool_stacks_mask(nstks_tot), source=.false.)
+        allocate(prev_eo_pops(ncls_glob,2),source=0)
+        if( nptcls_old > params_glob%ncls_start*params_glob%nptcls_per_cls )then
+            allocate(stk_order(nstks_tot))
+            do istk = 1,nstks_tot
+                stk_order(istk) = istk
+            enddo
+            random_generator = ran_tabu(nstks_tot)
+            call random_generator%shuffle(stk_order)
+            nptcls2update = 0 ! # of ptcls including state=0 within selected stacks
+            nptcls_sel    = 0 ! # of ptcls excluding state=0 within selected stacks
+            do i = 1,nstks_tot
+                istk = stk_order(i)
+                if( (min_update_cnts_per_stk(istk) > STREAM_SRCHLIM) .and. (nptcls_sel > MAX_STREAM_NPTCLS) ) cycle
+                nptcls_sel    = nptcls_sel + nptcls_per_stk(istk)
+                nptcls2update = nptcls2update + nint(pool_proj%os_stk%get(istk,'nptcls'))
+                pool_stacks_mask(istk) = .true.
+            enddo
+            call random_generator%kill
+        else
+            nptcls2update   = nptcls_tot
+            nptcls_sel      = sum(nptcls_per_stk)
+            do istk = 1,nstks_tot
+                pool_stacks_mask(istk) = nptcls_per_stk(istk) > 0
+            enddo
+        endif
+        nstks2update = count(pool_stacks_mask)
+        ! transfer stacks and particles
+        call spproj%os_stk%new(nstks2update, is_ptcl=.false.)
+        call spproj%os_ptcl2D%new(nptcls2update, is_ptcl=.true.)
+        i     = 0
+        jptcl = 0
+        do istk = 1,nstks_tot
+            fromp = nint(pool_proj%os_stk%get(istk,'fromp'))
+            top   = nint(pool_proj%os_stk%get(istk,'top'))
+            if( pool_stacks_mask(istk) )then
+                ! transfer alignement parameters for selected particles
+                i = i + 1 ! stack index in spproj
+                call spproj%os_stk%transfer_ori(i, pool_proj%os_stk, istk)
+                call spproj%os_stk%set(i, 'fromp', real(jptcl+1))
+                do iptcl = fromp,top
+                    jptcl = jptcl+1
+                    call spproj%os_ptcl2D%transfer_ori(jptcl, pool_proj%os_ptcl2D, iptcl)
+                    call spproj%os_ptcl2D%set(jptcl, 'stkind', real(i))
+                enddo
+                call spproj%os_stk%set(i, 'top', real(jptcl))
+            else
+                ! keeps track of skipped particles
+                do iptcl = fromp,top
+                    icls = nint(pool_proj%os_ptcl2D%get(iptcl,'class'))
+                    eo   = nint(pool_proj%os_ptcl2D%get(iptcl,'eo')) + 1
+                    prev_eo_pops(icls,eo) = prev_eo_pops(icls,eo) + 1
+                enddo
+            endif
+        enddo
+        call spproj%os_ptcl3D%new(nptcls2update, is_ptcl=.true.)
+        spproj%os_cls2D = pool_proj%os_cls2D
+        ! execution
+        if( sum(prev_eo_pops) == 0 )then
+            call cline_cluster2D_pool%delete('update_frac')
+        else
+            frac_update = real(nptcls_old-sum(prev_eo_pops)) / real(nptcls_old)
+            call cline_cluster2D_pool%set('update_frac', frac_update)
+            call cline_cluster2D_pool%set('center',      'no')
+            do icls = 1,ncls_glob
+                call spproj%os_cls2D%set(icls,'prev_pop_even',real(prev_eo_pops(icls,1)))
+                call spproj%os_cls2D%set(icls,'prev_pop_odd', real(prev_eo_pops(icls,2)))
+            enddo
+        endif
+        call spproj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
+        call spproj%kill
+        call debug_print('in exec_classify_pool 4')
+        call simple_chdir(POOL_DIR)
+        call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D_pool, DISTR_EXEC_FNAME, 'simple_log_cluster2D_pool')
+        call simple_chdir('..')
+        pool_available = .false.
+        pool_converged = .false.
+        write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_sel,&
+        &' / ', sum(nptcls_per_stk),' PARTICLES'
+        if( L_BENCH ) print *,'timer exec_classify_pool tot : ',toc(t_tot)
+        call tidy_2Dstream_iter
+        call debug_print('end exec_classify_pool')
+    end subroutine classify_pool
+
     ! Utilities
+
+    subroutine tidy_2Dstream_iter
+        character(len=:), allocatable :: prefix
+        if( pool_iter > 3 .and. pool_available )then
+            prefix = trim(POOL_DIR)//trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-3,3))
+            call del_file(prefix//'_even'//trim(params_glob%ext))
+            call del_file(prefix//'_odd'//trim(params_glob%ext))
+            if( l_wfilt )then
+                call del_file(prefix//trim(WFILT_SUFFIX)//'_even'//trim(params_glob%ext))
+                call del_file(prefix//trim(WFILT_SUFFIX)//'_odd'//trim(params_glob%ext))
+            endif
+        endif
+    end subroutine tidy_2Dstream_iter
 
     subroutine debug_print( string )
         character(len=*), intent(in) :: string
