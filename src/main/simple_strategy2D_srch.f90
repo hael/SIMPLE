@@ -16,7 +16,8 @@ private
 
 #include "simple_local_flags.inc"
 
-real, parameter :: HALFROT = 30. ! half rotational range for in-plane refinement
+real, parameter :: HALFROT      = 30. ! half rotational range for in-plane refinement
+real, parameter :: MIN_2DWEIGHT = 0.001
 
 
 type strategy2D_spec
@@ -204,13 +205,17 @@ contains
         if( self%l_ptclw )then
             ! w = 1 - exp( -(cc-ccmean)/ccsdev )
             if( self%nrefs_eval == 1 )then
-                w = 0.001
+                w = MIN_2DWEIGHT
             else
-                call normalize(s2D%cls_corrs(:,self%ithr),err, s2D%cls_mask(:,self%ithr))
-                if( err )then
-                    w = 0.001
+                if( s2D%cls_corrs(self%best_class,self%ithr) < 0.0 )then
+                    w = MIN_2DWEIGHT
                 else
-                    w = 1.0 - exp(-s2D%cls_corrs(self%best_class,self%ithr))
+                    call normalize(s2D%cls_corrs(:,self%ithr), err, s2D%cls_mask(:,self%ithr))
+                    if( err )then
+                        w = MIN_2DWEIGHT
+                    else
+                        w = 1.0 - exp(-s2D%cls_corrs(self%best_class,self%ithr))
+                    endif
                 endif
             endif
         else
