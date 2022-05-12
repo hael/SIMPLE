@@ -142,7 +142,7 @@ contains
         ! prep for 2D classification
         l_cluster2D = .false.
         if( l_pick )then
-            call init_cluster2D_stream(cline, spproj, trim(PICKREFS)//trim(params%ext), l_cluster2D)
+            call init_cluster2D_stream(cline, spproj, trim(PICKREFS)//trim(params%ext), micspproj_fname, l_cluster2D)
         endif
         call cline%delete('ncls')
         ! movie watcher init
@@ -230,11 +230,17 @@ contains
                     endif
                 endif
             endif
-            ! update chunks
+            ! 2D classification section
             if( l_cluster2D )then
+                ! chunks
                 call update_chunk_mask(completed_fnames)
                 call update_chunks
                 call start_new_chunks(completed_fnames)
+                ! pool
+                call update_pool_status
+                call update_pool
+                call reject_from_pool
+                call classify_pool
             endif
         end do
         ! termination
