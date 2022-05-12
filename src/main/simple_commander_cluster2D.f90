@@ -773,7 +773,6 @@ contains
             l_stream = trim(cline%get_carg('stream'))=='yes'
         endif
         call cline%set('stream','no') ! for parameters determination
-        ! call cline%set('ptclw','no')
         ! builder & params
         call build%init_params_and_build_spproj(cline, params)
         if( l_stream ) call cline%set('stream','yes')
