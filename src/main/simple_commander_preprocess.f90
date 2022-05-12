@@ -12,6 +12,7 @@ use simple_oris,           only: oris
 use simple_sp_project,     only: sp_project
 use simple_qsys_env,       only: qsys_env
 use simple_stack_io,       only: stack_io
+use simple_starproject,    only: starproject
 use simple_qsys_funs
 implicit none
 
@@ -138,6 +139,7 @@ contains
         type(cmdline)                          :: cline_make_pickrefs
         type(moviewatcher)                     :: movie_buff
         type(sp_project)                       :: spproj, stream_spproj
+        type(starproject)                      :: starproj
         character(len=LONGSTRLEN), allocatable :: movies(:), completed_fnames(:)
         character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract
@@ -300,6 +302,12 @@ contains
                 ! write project
                 call report_selection
                 call spproj%write(micspproj_fname)
+                ! write starfile snapshot
+                if (spproj%os_mic%get_noris() > 0) then
+                    if( file_exists("micrographs.star") ) call del_file("micrographs.star")
+                    call starproj%assign_optics(cline, spproj)
+                    call starproj%export_mics(cline, spproj)
+                end if
                 last_injection = simple_gettime()
                 l_haschanged   = .true.
                 n_imported     = spproj%os_mic%get_noris()

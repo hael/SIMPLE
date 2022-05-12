@@ -5,6 +5,7 @@ use simple_sp_project, only: sp_project
 use simple_cmdline,    only: cmdline
 use simple_oris,       only: oris
 use simple_ori,        only: ori
+use simple_parameters, only: parameters
 use simple_starproject_utils
 use CPlot2D_wrapper_module
 use simple_rnd
@@ -32,6 +33,7 @@ contains
     procedure, private :: read_starheaders
     ! export
     procedure          :: export_mics
+    procedure          :: export_cls2D
     procedure          :: export_ptcls2D
     procedure          :: export_ptcls3D
     procedure, private :: export_stardata
@@ -381,7 +383,7 @@ contains
         lineindex = 1
         call fopen(fhandle, file=trim(adjustl(self%starfile%filename)), status='old')  
         do
-            read(1, '(A)', iostat=ios) line
+            read(fhandle, '(A)', iostat=ios) line
             if(ios /= 0) exit
             if(len_trim(line) > 0) then
                 line = trim(adjustl(line))
@@ -474,6 +476,37 @@ contains
         call self%export_stardata(spproj, self%starfile%micrographs%flags, spproj%os_mic, "micrographs")
     end subroutine export_mics
 
+    subroutine export_cls2D(self, cline, spproj, iter)
+        class(starproject), intent(inout) :: self
+        class(cmdline),     intent(inout) :: cline
+        class(sp_project),  intent(inout) :: spproj
+        type(parameters)                  :: params
+        character(len=:), allocatable     :: stkname, relpath
+        integer                           :: ncls
+        integer, optional                 :: iter
+        real                              :: smpd
+        integer                           :: i
+        if(present(iter)) then
+            self%starfile%filename ="clusters2D_iter"//int2str_pad(iter,3)//".star"
+        else
+            self%starfile%filename = "clusters2D.star"
+        end if
+        write(logfhandle,*) ''
+        write(logfhandle,*) char(9), 'exporting clusters2D to ' // trim(adjustl(self%starfile%filename))
+        write(logfhandle,*) ''
+        if(.not. self%starfile%initialised) call self%initialise()
+        if(present(iter)) then
+            stkname = basename(CWD_GLOB)//"/"//trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext
+        else
+            call spproj%get_cavgs_stk(stkname, ncls, smpd)
+        end if
+        do i=1, spproj%os_cls2D%get_noris()
+            call spproj%os_cls2D%set(i, "stk", trim(adjustl(stkname)))
+        end do
+        call enable_splflags(spproj%os_cls2D, self%starfile%clusters2D%flags)
+        call self%export_stardata(spproj, self%starfile%clusters2D%flags, spproj%os_cls2D, "clusters", .false.)
+    end subroutine export_cls2D
+
     subroutine export_ptcls2D(self, cline, spproj)
         class(starproject), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
@@ -546,25 +579,39 @@ contains
             if(sporis%get_state(iori) > 0) then
                 do iflag=1, size(flags)
                     if(flags(iflag)%present) then
-                        if(flags(iflag)%string) then
+                        if(flags(iflag)%imagesplit) then
+                            rval = sporis%get(iori, trim(adjustl(flags(iflag)%splflag2)))
+                            if(flags(iflag)%mult > 0) then
+                                rval = rval / flags(iflag)%mult
+                            end if
+                            write(fhandle, "(I6,A)", advance="no") int(rval), "@"
                             strtmp = trim(adjustl(sporis%get_static(iori, trim(adjustl(flags(iflag)%splflag)))))
                             if(index(strtmp, '../') == 1) then ! Relative path. Adjust to base directory
                                 write(fhandle, "(A)", advance="no")  trim(adjustl(strtmp(4:))) // " "
                             else
                                 write(fhandle, "(A)", advance="no") trim(adjustl(sporis%get_static(iori, trim(adjustl(flags(iflag)%splflag))))) // " "
                             end if
-                        elseif(flags(iflag)%int) then
-                            rval = sporis%get(iori, trim(adjustl(flags(iflag)%splflag)))
-                            if(flags(iflag)%mult > 0) then
-                                rval = rval / flags(iflag)%mult
-                            end if
-                            write(fhandle, "(I6,A)", advance="no") int(rval), " "
                         else
-                            rval = sporis%get(iori, trim(adjustl(flags(iflag)%splflag)))
-                            if(flags(iflag)%mult > 0) then
-                                rval = rval / flags(iflag)%mult
+                            if(flags(iflag)%string) then
+                                strtmp = trim(adjustl(sporis%get_static(iori, trim(adjustl(flags(iflag)%splflag)))))
+                                if(index(strtmp, '../') == 1) then ! Relative path. Adjust to base directory
+                                    write(fhandle, "(A)", advance="no")  trim(adjustl(strtmp(4:))) // " "
+                                else
+                                    write(fhandle, "(A)", advance="no") trim(adjustl(sporis%get_static(iori, trim(adjustl(flags(iflag)%splflag))))) // " "
+                                end if
+                            elseif(flags(iflag)%int) then
+                                rval = sporis%get(iori, trim(adjustl(flags(iflag)%splflag)))
+                                if(flags(iflag)%mult > 0) then
+                                    rval = rval / flags(iflag)%mult
+                                end if
+                                write(fhandle, "(I6,A)", advance="no") int(rval), " "
+                            else
+                                rval = sporis%get(iori, trim(adjustl(flags(iflag)%splflag)))
+                                if(flags(iflag)%mult > 0) then
+                                    rval = rval / flags(iflag)%mult
+                                end if
+                                write(fhandle, "(F12.4,A)", advance="no") rval, " "
                             end if
-                            write(fhandle, "(F12.4,A)", advance="no") rval, " "
                         end if
                     end if
                 end do

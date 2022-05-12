@@ -9,6 +9,7 @@ use simple_sp_project,     only: sp_project
 use simple_qsys_env,       only: qsys_env
 use simple_image,          only: image
 use simple_stack_io,       only: stack_io
+use simple_starproject,    only: starproject
 use simple_estimate_ssnr,  only: mskdiam2lplimits, fsc2optlp_sub
 use simple_qsys_funs
 use simple_procimgstk
@@ -964,6 +965,7 @@ contains
         type(cmdline)              :: cline_make_cavgs
         type(parameters)           :: params
         type(builder), target      :: build
+        type(starproject)          :: starproj
         character(len=LONGSTRLEN)  :: finalcavgs
         logical                    :: converged
         integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind
@@ -1052,6 +1054,8 @@ contains
                 params%extr_iter = params%extr_iter + 1
                 ! update project with the new orientations (this needs to be here rather than after convergence for the current implementation to work)
                 call build%spproj%write_segment_inside(params%oritype)
+                ! write cavgs starfile for iteration
+                call starproj%export_cls2D(cline, build%spproj, params%which_iter)
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
                     call cline%delete( 'startit' )
