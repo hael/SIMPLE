@@ -232,15 +232,14 @@ contains
             endif
             ! 2D classification section
             if( l_cluster2D )then
-                ! chunks
-                call update_chunk_mask(completed_fnames)
                 call update_chunks
-                call start_new_chunks(completed_fnames)
-                ! pool
                 call update_pool_status
                 call update_pool
                 call reject_from_pool
+                call import_chunks_into_pool
                 call classify_pool
+                call update_projects_mask(completed_fnames)
+                call classify_new_chunks(completed_fnames)
             endif
         end do
         ! termination
