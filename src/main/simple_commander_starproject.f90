@@ -43,7 +43,9 @@ contains
         logical                   :: iteration
         character(len=3)          :: itchar    
         character(len=LONGSTRLEN) :: cwd
-        call cline%set('mkdir', 'yes')
+        if(.not. cline%defined("mkdir")) then
+            call cline%set('mkdir', 'yes')
+        end if
         call params%new(cline)
         call spproj%read(params%projfile)
         if(.not. index(cline%get_carg("import_dir"), "/") == 1) then
@@ -96,6 +98,8 @@ contains
             call starproj%import_mics(cline, spproj, cline%get_carg("import_dir") // "/" // "micrographs_ctf.star")
         else if(file_exists(cline%get_carg("import_dir") // "/" // "corrected_micrographs.star")) then
             call starproj%import_mics(cline, spproj, cline%get_carg("import_dir") // "/" // "corrected_micrographs.star")
+        else if(file_exists(cline%get_carg("import_dir") // "/" // "manual_pick.star")) then
+            call starproj%import_mics(cline, spproj, cline%get_carg("import_dir") // "/" // "manual_pick.star")
         else if(file_exists(cline%get_carg("import_dir") // "/" // "micrographs.star")) then
             call starproj%import_mics(cline, spproj, cline%get_carg("import_dir") // "/" // "micrographs.star")
         end if
@@ -112,7 +116,9 @@ contains
         type(starproject) :: starproj
         type(parameters)  :: params
         type(sp_project)  :: spproj
-        call cline%set('mkdir', 'yes')
+        if(.not. cline%defined("mkdir")) then
+            call cline%set('mkdir', 'yes')
+        end if
         call params%new(cline)
         call spproj%read(params%projfile)
         if (spproj%os_optics%get_noris() == 0) then
@@ -123,6 +129,9 @@ contains
         end if
         if (spproj%os_mic%get_noris() > 0) then
             call starproj%export_mics(cline, spproj)
+        end if
+	if (spproj%os_cls2D%get_noris() > 0) then
+            call starproj%export_cls2D(cline, spproj)
         end if
         if (spproj%os_ptcl2D%get_noris() > 0) then
             call starproj%export_ptcls2D(cline, spproj)
