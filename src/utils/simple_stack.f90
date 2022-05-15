@@ -3,7 +3,7 @@ module simple_stack
 include 'simple_lib.f08'
 implicit none
 private
-public :: stack
+public :: stack, push, pop, contains, is_empty
 #include "simple_local_flags.inc"
 
 type :: stack
@@ -15,6 +15,7 @@ contains
 procedure :: new
 procedure :: push
 procedure :: pop
+procedure :: is_empty
 procedure :: contains
 ! DESTRUCTOR
 !procedure :: kill
@@ -87,4 +88,11 @@ contains
             endif
         enddo
     end function contains
+
+    function is_empty(self) result(ret)
+        class(stack), intent(inout) :: self
+        logical :: ret
+        ret = .false.
+        if( self%last_ind == 1 ) ret = .true.
+    end function is_empty        
 end module simple_stack

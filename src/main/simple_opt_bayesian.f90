@@ -55,4 +55,40 @@ contains
             endif
         enddo
     end function k2equation
+
+    function path_exist(i, j, graph) result(val)
+        use simple_stack
+        integer, intent(in)  :: i
+        integer, intent(in)  :: j
+        real   , intent(in)  :: graph(:,:)
+        logical              :: val
+        type(stack)          :: stk, visited
+        integer              :: k, l
+        call stk%new
+        call visited%new
+        call stk%push(i)
+        do while (.not. stk%is_empty())
+            if( stk%contains(j) )then
+                val = .true.
+                return
+            endif
+            k = stk%pop()
+            if( visited%contains(k) ) cycle
+            call visited%push(k)
+            do l = 1,size(graph,2)
+                if( graph(k,l) > 0. .and. .not. visited%contains(l) )then
+                    call stk%push(l)
+                endif
+            enddo
+        enddo
+        val = .false.
+    end function path_exist
+
+    function can_add_edge(i, j, graph) result(val)
+        integer, intent(in) :: i
+        integer, intent(in) :: j
+        real,    intent(in) :: graph(:,:)
+        logical :: val
+        val = (.not. ( graph(i,j) > 0. .or. path_exist(j,i,graph)))
+    end function can_add_edge
 end module simple_opt_bayesian
