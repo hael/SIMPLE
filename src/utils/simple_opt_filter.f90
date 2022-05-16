@@ -59,13 +59,6 @@ contains
         enddo        
     end subroutine butterworth_filter
 
-    subroutine squared_diff(odd, even, diff)
-        real, pointer, intent(in) :: odd(:,:,:)
-        real, pointer, intent(in) :: even(:,:,:)
-        real, intent(inout)       :: diff(:,:,:)
-        diff = (odd - even)**2
-    end subroutine squared_diff
-
     subroutine apply_opt_filter(img, filter_type, param, cur_fil, use_cache)
         use simple_tvfilter, only: tvfilter
         type(image),      intent(inout) :: img
@@ -209,7 +202,7 @@ contains
             call apply_opt_filter(odd, filter_type, param, cur_fil, .false.)
             call odd%get_rmat_ptr(rmat_odd)
             call even_copy_rmat%get_rmat_ptr(rmat_even)
-            call squared_diff(rmat_odd, rmat_even, cur_diff_odd)
+            call odd%sqeuclid_matrix(even_copy_rmat, cur_diff_odd)
             if( L_BENCH_GLOB )then
                 rt_filter_odd = rt_filter_odd + toc(t_filter_odd)
                 t_filter_even = tic()
@@ -219,7 +212,7 @@ contains
             call apply_opt_filter(even, filter_type, param, cur_fil, .true.)
             call even%get_rmat_ptr(rmat_even)
             call odd_copy_rmat%get_rmat_ptr(rmat_odd)
-            call squared_diff(rmat_odd, rmat_even, cur_diff_even)
+            call even%sqeuclid_matrix(odd_copy_rmat, cur_diff_even)
             call odd%get_rmat_ptr(rmat_odd) ! point rmat_odd to the filtered odd, rmat_even should be filtered even
             if( L_BENCH_GLOB )then
                 rt_filter_even = rt_filter_even + toc(t_filter_even)

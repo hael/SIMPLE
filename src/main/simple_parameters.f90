@@ -220,6 +220,8 @@ type :: parameters
     character(len=STDLEN) :: stk_part=''
     character(len=STDLEN) :: tag=''               !< just a tag
     character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
+    character(len=STDLEN) :: vol_even=''          !< even reference volume
+    character(len=STDLEN) :: vol_odd=''           !< odd  reference volume
     character(len=STDLEN) :: wfun='kb'
     character(len=STDLEN) :: wiener='full'        !< Wiener restoration (full|partial|partial_aln){full}
     character(len=:), allocatable :: last_prev_dir !< last previous execution directory
@@ -671,6 +673,8 @@ contains
         call check_file('stk2',           self%stk2,         notAllowed='T')
         call check_file('stk3',           self%stk3,         notAllowed='T')
         call check_file('stk_backgr',     self%stk_backgr,   notAllowed='T')
+        call check_file('vol_even',       self%vol_even,     notAllowed='T')
+        call check_file('vol_odd',        self%vol_odd,      notAllowed='T')
         call check_file('vol_filt',       self%vol_filt,     notAllowed='T')
         call check_file('vollist',        self%vollist,      'T')
         call check_file('voltab',         self%voltab,       'T')
@@ -1000,7 +1004,7 @@ contains
         else
             if( any(vol_defined) )then
                 do i=1,size(vol_defined)
-                    if(vol_defined(i))call check_vol( i )
+                    if(vol_defined(i))call check_vol(self%vols(i))
                 end do
             endif
         endif
@@ -1009,7 +1013,11 @@ contains
             if( nlines(self%msklist)< MAXS ) call read_masks
         endif
         ! no stack given, get ldim from volume if present
-        if( self%stk .eq. '' .and. vol_defined(1) )then
+
+        if( self%stk .eq. '' .and. cline%defined('vol_even') )then
+            call find_ldim_nptcls(self%vol_even, self%ldim, ifoo)
+            self%box  = self%ldim(1)
+        else if( self%stk .eq. '' .and. vol_defined(1) )then
             call find_ldim_nptcls(self%vols(1), self%ldim, ifoo)
             self%box  = self%ldim(1)
         endif
@@ -1152,15 +1160,23 @@ contains
             self%refs_odd  = add2fbody(self%refs, self%ext, '_odd')
         endif
         ! set vols_even and vols_odd
-        if( cline%defined('vol1') )then
-            do istate=1,self%nstates
-                self%vols_even(istate) = add2fbody(self%vols(istate), self%ext, '_even')
-                self%vols_odd(istate)  = add2fbody(self%vols(istate), self%ext, '_odd' )
-                if( str_has_substr(self%prg, 'refine') )then
-                    if( .not. file_exists(self%vols_even(istate)) ) call simple_copy_file(self%vols(istate), self%vols_even(istate))
-                    if( .not. file_exists(self%vols_odd(istate))  ) call simple_copy_file(self%vols(istate), self%vols_odd(istate))
-                endif
-            end do
+        if( cline%defined('vol_even') .and. cline%defined('vol_odd') )then
+            if( cline%defined('vol1') ) THROW_HARD('vol1 cannot be part of command line when vol_even and vol_odd are')
+            self%vols_even(1) = trim(self%vol_even)
+            self%vols_odd(1)  = trim(self%vol_odd)
+        else
+            if( cline%defined('vol1') )then
+                do istate=1,self%nstates
+                    self%vols_even(istate) = add2fbody(self%vols(istate), self%ext, '_even')
+                    self%vols_odd(istate)  = add2fbody(self%vols(istate), self%ext, '_odd' )
+                    if( str_has_substr(self%prg, 'refine') )then
+                        if( .not. file_exists(self%vols_even(istate)) ) call simple_copy_file(self%vols(istate), self%vols_even(istate))
+                        if( .not. file_exists(self%vols_odd(istate))  ) call simple_copy_file(self%vols(istate), self%vols_odd(istate))
+                    endif
+                end do
+            else
+                THROW_HARD('both vol_even and vol_odd need to be part of the command line')
+            endif
         endif
         !<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)
 
@@ -1468,19 +1484,28 @@ contains
 
     contains
 
-        subroutine check_vol( i )
-            integer,           intent(in) :: i
-            character(len=STDLEN)         :: key
-            character(len=LONGSTRLEN)     :: vol
-            character(len=:), allocatable :: abs_fname
-            key = 'vol'//int2str(i)
+        subroutine check_vol( volname, is_even )
+            character(len=*),  intent(inout) :: volname
+            logical, optional, intent(in)    :: is_even
+            character(len=STDLEN)            :: key
+            character(len=LONGSTRLEN)        :: vol
+            character(len=:), allocatable    :: abs_volname
+            if( present(is_even) )then
+                if( is_even )then
+                    key = 'vol_even'
+                else    
+                    key = 'vol_odd'
+                endif
+            else
+                key = 'vol'//int2str(i)
+            endif
             if( cline%defined(key) )then
                 vol = trim(cline%get_carg(key))
                 if( vol(1:1).eq.PATH_SEPARATOR )then
                     ! already in absolute path format
-                    call check_file(key, self%vols(i), notAllowed='T')
-                    if( .not. file_exists(self%vols(i)) )then
-                        write(logfhandle,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 1'
+                    call check_file(key, volname, notAllowed='T')
+                    if( .not. file_exists(volname) )then
+                        write(logfhandle,*) 'Input volume:', trim(volname), ' does not exist! 1'
                         stop
                     endif
                 else
@@ -1490,18 +1515,18 @@ contains
                         vol = PATH_PARENT//trim(vol)
                         call cline%set(key, vol)
                     endif
-                    call check_file(key, self%vols(i), notAllowed='T')
-                    if( .not. file_exists(self%vols(i)) )then
-                        write(logfhandle,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 2'
+                    call check_file(key, volname, notAllowed='T')
+                    if( .not. file_exists(volname) )then
+                        write(logfhandle,*) 'Input volume:', trim(volname), ' does not exist! 2'
                         stop
                     else
-                        abs_fname = simple_abspath(self%vols(i),'parameters :: check_vol', check_exists=.false.)
-                        if( len_trim( abs_fname) > LONGSTRLEN )then
-                            THROW_HARD('argument too long: '//trim( abs_fname)//' new :: check_vol')
+                        abs_volname = simple_abspath(volname,'parameters :: check_vol', check_exists=.false.)
+                        if( len_trim( abs_volname) > LONGSTRLEN )then
+                            THROW_HARD('argument too long: '//trim( abs_volname)//' new :: check_vol')
                         endif
-                        self%vols(i) = trim(abs_fname)
-                        call cline%set(key, trim(self%vols(i)))
-                        deallocate(abs_fname)
+                        volname = trim(abs_volname)
+                        call cline%set(key, trim(volname))
+                        deallocate(abs_volname)
                     endif
                 endif
             endif

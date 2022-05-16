@@ -1749,8 +1749,8 @@ contains
         &2, 1, 0, 0, 1, 1, 1, .false.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call detect_atoms_eo%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
-        call detect_atoms_eo%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
+        call detect_atoms_eo%set_input('img_ios', 1, 'vol_odd',  'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
+        call detect_atoms_eo%set_input('img_ios', 2, 'vol_even', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
         ! parameter input/output
         call detect_atoms_eo%set_input('parm_ios', 1, smpd)
         ! alternative inputs
@@ -2591,8 +2591,8 @@ contains
         ! <empty>
         ! filter controls
         call opt_2D_filter%set_input('filt_ctrls', 1, nonuniform)
-        call opt_2D_filter%set_input('filt_ctrls', 2, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension in number of pixels{1}', 'give # pixels', .false., 1.)
-        call opt_2D_filter%set_input('filt_ctrls', 3, 'filter'     , 'multi' , 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', '(butterworth8|lp|tv|tanh){butterworth8}', .false., 'butterworth8')
+        call opt_2D_filter%set_input('filt_ctrls', 2, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', .false., 0.)
+        call opt_2D_filter%set_input('filt_ctrls', 3, 'filter'     , 'multi' , 'Filter type(butterworth8|lp|tv){butterworth8}', 'Filter type(butterworth8|lp|tv){butterworth8}', '(butterworth8|lp|tv){butterworth8}', .false., 'butterworth8')
         call opt_2D_filter%set_input('filt_ctrls', 4, lp_lb)
         call opt_2D_filter%set_input('filt_ctrls', 5, nsearch)
         ! mask controls
@@ -2622,8 +2622,8 @@ contains
         ! <empty>
         ! filter controls
         call opt_3D_filter%set_input('filt_ctrls', 1, nonuniform)
-        call opt_3D_filter%set_input('filt_ctrls', 2, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', 'give # pixels', .false., 1.)
-        call opt_3D_filter%set_input('filt_ctrls', 3, 'filter'     , 'multi' , 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', 'Filter type(butterworth8|lp|tv|tanh){butterworth8}', '(butterworth8|lp|tv|tanh){butterworth8}', .false., 'butterworth8')
+        call opt_3D_filter%set_input('filt_ctrls', 2, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', .false., 0.)
+        call opt_3D_filter%set_input('filt_ctrls', 3, 'filter'     , 'multi' , 'Filter type(butterworth8|lp|tv){butterworth8}', 'Filter type(butterworth8|lp|tv){butterworth8}', '(butterworth8|lp){butterworth8}', .false., 'butterworth8')
         call opt_3D_filter%set_input('filt_ctrls', 4, lp_lb)
         call opt_3D_filter%set_input('filt_ctrls', 5, nsearch)
         ! mask controls

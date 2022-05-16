@@ -7,8 +7,8 @@ use simple_syslib,  only: file_exists, is_open, is_file_open, is_io, simple_absp
 implicit none
 
 public :: fileiochk, fopen, fclose, wait_for_closure, nlines, filelength, funit_size, is_funit_open, get_open_funits
-public :: add2fbody, swap_suffix, get_fbody, fname_new_ext, fname2ext, fname2iter, basename, stemname, get_fpath
-public :: make_dirnames, make_filenames, filepath, del_files, fname2format, read_filetable, write_filetable
+public :: add2fbody, rm_from_fbody, swap_suffix, get_fbody, fname_new_ext, fname2ext, fname2iter, basename, stemname
+public :: get_fpath, make_dirnames, make_filenames, filepath, del_files, fname2format, read_filetable, write_filetable
 public :: write_singlelineoftext, arr2file, arr2txtfile, file2rarr, simple_copy_file, make_relativepath
 private
 #include "simple_local_flags.inc"
@@ -363,6 +363,14 @@ contains
         pos = index(trim(fname), trim(suffix)) ! position of suffix
         allocate(newname, source=fname(:pos-1)//trim(str)//trim(suffix))
     end function add2fbody
+
+    function rm_from_fbody( fname, suffix, str ) result( newname )
+        character(len=*), intent(in)  :: fname, suffix, str
+        character(len=:), allocatable :: newname
+        integer :: pos
+        pos = index(trim(fname), trim(str)) ! position of str
+        allocate(newname, source=fname(:pos-1)//trim(suffix))
+    end function rm_from_fbody
 
     function swap_suffix( fname, suffix, old_suffix ) result( newname )
         character(len=*), intent(in)  :: fname, suffix, old_suffix
