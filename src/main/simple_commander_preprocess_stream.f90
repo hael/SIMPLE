@@ -226,15 +226,19 @@ contains
                 l_haschanged   = .true.
                 n_imported     = spproj%os_mic%get_noris()
             else
-                ! wait
-                if( .not.l_movies_left )then
-                    if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
-                        ! write project when inactive...
-                        call write_project
-                        l_haschanged = .false.
-                    else
-                        ! ...or wait
-                        call sleep(WAITTIME)
+                ! wait & write snapshot
+                if( l_cluster2D )then
+                    ! cf 2D section
+                else
+                    if( .not.l_movies_left )then
+                        if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
+                            ! write project when inactive...
+                            call write_project
+                            l_haschanged = .false.
+                        else
+                            ! ...or wait
+                            call sleep(WAITTIME)
+                        endif
                     endif
                 endif
             endif
@@ -244,6 +248,7 @@ contains
                 call update_pool_status
                 call update_pool
                 call reject_from_pool
+                call write_project_stream2D(.true.,.false.)
                 call import_chunks_into_pool
                 call classify_pool
                 call update_projects_mask(completed_fnames)
@@ -251,7 +256,11 @@ contains
             endif
         end do
         ! termination
-        call write_project
+        if( l_cluster2D )then
+            call terminate_stream2D
+        else
+            call write_project
+        endif
         call spproj%kill
         ! cleanup
         call qsys_cleanup
