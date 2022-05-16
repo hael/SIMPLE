@@ -115,13 +115,14 @@ contains
         class(cmdline),                   intent(inout) :: cline
         type(parameters)   :: params
         type(nanoparticle) :: nano
-        type(image)        :: even, odd, mskvol
+        type(image)        :: even, odd, mskvol, sim_density
         type(common_atoms) :: atms_common
         real, allocatable  :: pdbmat(:,:)
         character(len=2)   :: el
         integer            :: k
         type(stats_struct) :: dist_stats
-        character(len=:), allocatable :: add2fn, ename_filt, oname_filt, eatms, oatms, tmp, eatms_common, oatms_common
+        character(len=:), allocatable :: add2fn, ename_filt, oname_filt, eatms, oatms
+        character(len=:), allocatable :: tmp, eatms_common, oatms_common, oatms_sim, eatms_sim
         call cline%set('use_thres', 'no')
         call cline%set('corr_thres', 0.)
         call params%new(cline)
@@ -158,8 +159,10 @@ contains
         tmp              = add2fbody(ename_filt,    trim(params%ext), '_ATMS')
         eatms            = swap_suffix(tmp, '.pdb', trim(params%ext) )
         tmp              = add2fbody(oname_filt,    trim(params%ext), '_ATMS_COMMON')
+        oatms_sim        = add2fbody(oname_filt,    trim(params%ext), '_ATMS_COMMON_SIM')
         oatms_common     = swap_suffix(tmp, '.pdb', trim(params%ext) )
         tmp              = add2fbody(ename_filt,    trim(params%ext), '_ATMS_COMMON')
+        eatms_sim        = add2fbody(ename_filt,    trim(params%ext), '_ATMS_COMMON_SIM')
         eatms_common     = swap_suffix(tmp, '.pdb', trim(params%ext) )
         atms_common%ind1 = 1
         atms_common%ind2 = 2
@@ -190,8 +193,20 @@ contains
         write(logfhandle,'(A,F8.4)') 'Sigma  : ', dist_stats%sdev
         write(logfhandle,'(A,F8.4)') 'Max    : ', dist_stats%maxv
         write(logfhandle,'(A,F8.4)') 'Min    : ', dist_stats%minv
+        ! generate simulated densities for the e/o pairs
+        call sim_density%new([params%box,params%box,params%box], params%smpd)
+        call nano%set_atomic_coords(oatms_common)
+        call nano%simulate_atoms(sim_density)
+        call sim_density%write(oatms_sim)
+        call nano%set_atomic_coords(eatms_common)
+        call nano%simulate_atoms(sim_density)
+        call sim_density%write(eatms_sim)
         ! kill
         call nano%kill
+        call even%kill
+        call odd%kill
+        call mskvol%kill
+        call sim_density%kill
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS_EO NORMAL STOP ****')
     end subroutine exec_detect_atoms_eo
@@ -204,18 +219,6 @@ contains
         type(nanoparticle)    :: nano
         real                  :: a(3) ! lattice parameters
         logical               :: prefit_lattice, use_subset_coords, use_auto_corr_thres
-        if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_atoms_stats')
-        endif
-        if( .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! vol1 (raw map) needs to be present; exec_atoms_stats')
-        endif
-        if( .not. cline%defined('vol2') )then
-            THROW_HARD('ERROR! vol2 (connected components map *CC.mrc) needs to be present; exec_atoms_stats')
-        endif
-        if( .not. cline%defined('pdbfile') )then
-            THROW_HARD('ERROR! pdbfile needs to be present; exec_atoms_stats')
-        endif
         prefit_lattice      = cline%defined('vol3')
         use_subset_coords   = cline%defined('pdbfile2')
         use_auto_corr_thres = .not.cline%defined('corr_thres')
@@ -347,15 +350,6 @@ contains
         real :: rot_trans(7) ! cost, rotation angles, shift
         real :: rmat(3,3)
         call params%new(cline)
-        if(.not. cline%defined('pdbfile')) then
-            THROW_HARD('ERROR! pdbfile needs to be present; exec_dock_coords')
-        endif
-        if(.not. cline%defined('pdbfile2')) then
-            THROW_HARD('ERROR! pdbfile2 needs to be present; exec_dock_coords')
-        endif
-        if(.not. cline%defined('thres')) then
-            THROW_HARD('ERROR! thres needs to be present; exec_dock_coords')
-        endif
         call a_ref%new(basename(params%pdbfile))
         call a_targ%new(basename(params%pdbfile2))
         call dock_coords_init( a_ref, a_targ, params%thres )
@@ -380,15 +374,6 @@ contains
         type(parameters) :: params
         integer          :: nremoved
         call params%new(cline)
-        if( .not. cline%defined('pdbfile') )then
-            THROW_HARD('ERROR! pdbfile needs to be present; exec_atoms_mask')
-        endif
-        if( .not. cline%defined('pdbfile2') )then
-            THROW_HARD('ERROR! pdbfile2 needs to be present; exec_atoms_mask')
-        endif
-        if( .not. cline%defined('max_rad') )then
-            THROW_HARD('ERROR! max_rad needs to be present; exec_atoms_mask')
-        endif
         ! execute
         call atoms_mask(params%pdbfile,params%max_rad,params%pdbfile2,nremoved)
         write(logfhandle,*) 'REMOVED ', nremoved, 'ATOMS FROM THE PDBFILE'
