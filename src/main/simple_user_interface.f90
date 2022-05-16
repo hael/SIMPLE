@@ -69,6 +69,7 @@ end type simple_program
 type(simple_program), target :: assign_optics_groups
 type(simple_program), target :: automask
 type(simple_program), target :: autorefine3D_nano
+type(simple_program), target :: autorefine3D_nano_eo
 type(simple_program), target :: binarize
 type(simple_program), target :: calc_pspec
 type(simple_program), target :: center
@@ -301,6 +302,7 @@ contains
         call new_assign_optics_groups
         call new_automask
         call new_autorefine3D_nano
+        call new_autorefine3D_nano_eo
         call new_binarize
         call new_calc_pspec
         call new_center
@@ -404,6 +406,7 @@ contains
         call push2prg_ptr_array(assign_optics_groups)
         call push2prg_ptr_array(automask)
         call push2prg_ptr_array(autorefine3D_nano)
+        call push2prg_ptr_array(autorefine3D_nano_eo)
         call push2prg_ptr_array(binarize)
         call push2prg_ptr_array(calc_pspec)
         call push2prg_ptr_array(center)
@@ -820,6 +823,7 @@ contains
         write(logfhandle,'(A)') simulate_atoms%name
         write(logfhandle,'(A)') refine3D_nano%name
         write(logfhandle,'(A)') autorefine3D_nano%name
+        write(logfhandle,'(A)') autorefine3D_nano_eo%name
         write(logfhandle,'(A)') tseries_reconstruct3D%name
         write(logfhandle,'(A)') tseries_swap_stack%name
         write(logfhandle,'(A)') ''
@@ -1111,6 +1115,43 @@ contains
         call autorefine3D_nano%set_input('comp_ctrls', 1, nthr)
         call autorefine3D_nano%set_input('comp_ctrls', 2, script)
     end subroutine new_autorefine3D_nano
+
+    subroutine new_autorefine3D_nano_eo
+        ! PROGRAM SPECIFICATION
+        call autorefine3D_nano%new(&
+        &'autorefine3D_nano_eo',&                                                            ! name
+        &'auto 3D refinement of metallic nanoparticles',&                                 ! descr_short
+        &'is a distributed workflow for automated 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
+        &'single_exec',&                                                                  ! executable
+        &1, 2, 0, 5, 3, 1, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call autorefine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
+        & sections for nanoparticle image matching', 'input volume e.g. vol.mrc', .true., '')
+        ! parameter input/output
+        call autorefine3D_nano%set_input('parm_ios', 1, smpd)
+        call autorefine3D_nano%set_input('parm_ios', 2, element)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call autorefine3D_nano%set_input('srch_ctrls', 1, nspace)
+        call autorefine3D_nano%set_input('srch_ctrls', 2, trs)
+        call autorefine3D_nano%set_input('srch_ctrls', 3, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call autorefine3D_nano%set_input('srch_ctrls', 4, 'maxits', 'num', 'Max iterations', 'Maximum number of iterations', 'Max # iterations{5}', .false., 5.)
+        call autorefine3D_nano%set_input('srch_ctrls', 5, pgrp)
+        ! filter controls
+        call autorefine3D_nano%set_input('filt_ctrls', 1, hp)
+        call autorefine3D_nano%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
+        &Angstroms{5}', .false., 5.)
+        call autorefine3D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms{1.5}', .true., 1.5)
+        ! mask controls
+        call autorefine3D_nano%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call autorefine3D_nano%set_input('comp_ctrls', 1, nthr)
+        call autorefine3D_nano%set_input('comp_ctrls', 2, script)
+    end subroutine new_autorefine3D_nano_eo
 
     subroutine new_binarize
         call binarize%new(&

@@ -40,6 +40,7 @@ type(estimate_diam_commander)                 :: xestimate_diam
 type(simulate_atoms_commander)                :: xsimulate_atoms
 type(refine3D_nano_commander)                 :: xrefine3D_nano
 type(autorefine3D_nano_commander)             :: xautorefine3D_nano
+type(autorefine3D_nano_eo_commander)          :: xautorefine3D_nano_eo
 type(tseries_reconstruct3D_distr)             :: xtseries_reconstruct3D_distr
 type(tseries_swap_stack_commander)            :: xtseries_swap_stack
 
@@ -124,6 +125,8 @@ select case(prg)
         call xrefine3D_nano%execute(cline)
     case( 'autorefine3D_nano')
         call xautorefine3D_nano%execute(cline)
+    case( 'autorefine3D_nano_eo')
+        call xautorefine3D_nano_eo%execute(cline)
     case( 'tseries_reconstruct3D')
         call xtseries_reconstruct3D_distr%execute(cline)
     case( 'tseries_swap_stack')

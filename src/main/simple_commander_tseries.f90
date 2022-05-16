@@ -30,6 +30,7 @@ public :: center2D_nano_commander
 public :: cluster2D_nano_commander
 public :: tseries_ctf_estimate_commander
 public :: autorefine3D_nano_commander
+public :: autorefine3D_nano_eo_commander
 public :: refine3D_nano_commander
 public :: graphene_subtr_commander
 public :: tseries_swap_stack_commander
@@ -41,62 +42,82 @@ type, extends(commander_base) :: tseries_import_commander
   contains
     procedure :: execute      => exec_tseries_import
 end type tseries_import_commander
+
 type, extends(commander_base) :: tseries_import_particles_commander
   contains
     procedure :: execute      => exec_tseries_import_particles
 end type tseries_import_particles_commander
+
 type, extends(commander_base) :: tseries_motion_correct_commander_distr
   contains
     procedure :: execute      => exec_tseries_motion_correct_distr
 end type tseries_motion_correct_commander_distr
+
 type, extends(commander_base) :: tseries_motion_correct_commander
   contains
     procedure :: execute      => exec_tseries_motion_correct
 end type tseries_motion_correct_commander
+
 type, extends(commander_base) :: tseries_make_pickavg_commander
   contains
     procedure :: execute      => exec_tseries_make_pickavg
 end type tseries_make_pickavg_commander
+
 type, extends(commander_base) :: tseries_track_particles_commander_distr
   contains
     procedure :: execute      => exec_tseries_track_particles_distr
 end type tseries_track_particles_commander_distr
+
 type, extends(commander_base) :: tseries_track_particles_commander
   contains
     procedure :: execute      => exec_tseries_track_particles
 end type tseries_track_particles_commander
+
 type, extends(commander_base) :: center2D_nano_commander
   contains
     procedure :: execute      => exec_center2D_nano
 end type center2D_nano_commander
+
 type, extends(commander_base) :: cluster2D_nano_commander
   contains
     procedure :: execute      => exec_cluster2D_nano
 end type cluster2D_nano_commander
+
 type, extends(commander_base) :: tseries_backgr_subtr_commander
   contains
     procedure :: execute      => exec_tseries_backgr_subtr
 end type tseries_backgr_subtr_commander
+
 type, extends(commander_base) :: tseries_ctf_estimate_commander
   contains
     procedure :: execute      => exec_tseries_ctf_estimate
 end type tseries_ctf_estimate_commander
+
 type, extends(commander_base) :: autorefine3D_nano_commander
   contains
     procedure :: execute      => exec_autorefine3D_nano
 end type autorefine3D_nano_commander
+
+type, extends(commander_base) :: autorefine3D_nano_eo_commander
+  contains
+    procedure :: execute      => exec_autorefine3D_nano_eo
+end type autorefine3D_nano_eo_commander
+
 type, extends(commander_base) :: refine3D_nano_commander
   contains
     procedure :: execute      => exec_refine3D_nano
 end type refine3D_nano_commander
+
 type, extends(commander_base) :: graphene_subtr_commander
   contains
     procedure :: execute      => exec_graphene_subtr
 end type graphene_subtr_commander
+
 type, extends(commander_base) :: tseries_swap_stack_commander
   contains
     procedure :: execute      => exec_tseries_swap_stack
 end type tseries_swap_stack_commander
+
 type, extends(commander_base) :: tseries_reconstruct3D_distr
   contains
     procedure :: execute      => exec_tseries_reconstruct3D_distr
@@ -784,6 +805,31 @@ contains
         call simple_end('**** SIMPLE_TSERIES_CTF_ESTIMATE NORMAL STOP ****')
     end subroutine exec_tseries_ctf_estimate
 
+    subroutine exec_refine3D_nano( self, cline )
+        use simple_commander_refine3D, only: refine3D_commander_distr
+        class(refine3D_nano_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        ! commander
+        type(refine3D_commander_distr) :: xrefine3D_distr
+        ! static parameters
+        call cline%set('prg',           'refine3D')
+        call cline%set('dir_exec', 'refine3D_nano')
+        call cline%set('match_filt',          'no')
+        ! dynamic parameters
+        if( .not. cline%defined('cenlp')         ) call cline%set('cenlp',            5.)
+        if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
+        if( .not. cline%defined('keepvol')       ) call cline%set('keepvol',       'yes')
+        if( .not. cline%defined('lp')            ) call cline%set('lp',              1.0)
+        if( .not. cline%defined('maxits')        ) call cline%set('maxits',          30.)
+        if( .not. cline%defined('nspace')        ) call cline%set('nspace',       10000.)
+        if( .not. cline%defined('nonuniform')    ) call cline%set('nonuniform',     'no')
+        if( .not. cline%defined('oritype')       ) call cline%set('oritype',    'ptcl3D')
+        if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',          'no')
+        if( .not. cline%defined('trs')           ) call cline%set('trs',             5.0)
+        if( .not. cline%defined('ran_noise_ph')  ) call cline%set('ran_noise_ph',   'no')
+        call xrefine3D_distr%execute(cline)
+    end subroutine exec_refine3D_nano
+
     subroutine exec_autorefine3D_nano( self, cline )
         use simple_commander_quant, only: detect_atoms_commander
         use simple_ori, only: ori
@@ -1073,30 +1119,294 @@ contains
         call simple_end('**** AUTOREFINE3D_NANO NORMAL STOP ****')
     end subroutine exec_autorefine3D_nano
 
-    subroutine exec_refine3D_nano( self, cline )
-        use simple_commander_refine3D, only: refine3D_commander_distr
-        class(refine3D_nano_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        ! commander
-        type(refine3D_commander_distr) :: xrefine3D_distr
-        ! static parameters
-        call cline%set('prg',           'refine3D')
-        call cline%set('dir_exec', 'refine3D_nano')
-        call cline%set('match_filt',          'no')
-        ! dynamic parameters
-        if( .not. cline%defined('cenlp')         ) call cline%set('cenlp',            5.)
-        if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
-        if( .not. cline%defined('keepvol')       ) call cline%set('keepvol',       'yes')
-        if( .not. cline%defined('lp')            ) call cline%set('lp',              1.0)
-        if( .not. cline%defined('maxits')        ) call cline%set('maxits',          30.)
-        if( .not. cline%defined('nspace')        ) call cline%set('nspace',       10000.)
-        if( .not. cline%defined('nonuniform')    ) call cline%set('nonuniform',     'no')
-        if( .not. cline%defined('oritype')       ) call cline%set('oritype',    'ptcl3D')
-        if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',          'no')
-        if( .not. cline%defined('trs')           ) call cline%set('trs',             5.0)
-        if( .not. cline%defined('ran_noise_ph')  ) call cline%set('ran_noise_ph',   'no')
-        call xrefine3D_distr%execute(cline)
-    end subroutine exec_refine3D_nano
+    subroutine exec_autorefine3D_nano_eo( self, cline )
+        use simple_commander_quant, only: detect_atoms_eo_commander
+        use simple_ori, only: ori
+        class(autorefine3D_nano_eo_commander), intent(inout) :: self
+        class(cmdline),                        intent(inout) :: cline
+        class(parameters), pointer      :: params_ptr => null()
+        type(parameters)                :: params
+        type(refine3D_nano_commander)   :: xrefine3D_nano
+        type(detect_atoms_eo_commander) :: xdetect_atms_eo
+        type(reproject_commander)       :: xreproject
+        type(vizoris_commander)         :: xvizoris
+        type(cmdline)                   :: cline_refine3D_nano, cline_detect_atms_eo, cline_reproject
+        type(cmdline)                   :: cline_refine3D_cavgs, cline_vizoris
+        type(ori)                       :: o1, o2
+        type(image), allocatable        :: imgs(:)
+        type(sp_project)                :: spproj
+        type(stats_struct)              :: euldist_stats
+        character(len=*), parameter     :: RECVOL     = 'recvol_state01.mrc'
+        character(len=*), parameter     :: EVEN       = 'recvol_state01_even.mrc'
+        character(len=*), parameter     :: ODD        = 'recvol_state01_odd.mrc'
+        character(len=*), parameter     :: SIMVOL     = 'recvol_state01_SIM.mrc'
+        character(len=*), parameter     :: ATOMS      = 'recvol_state01_ATMS.pdb'
+        character(len=*), parameter     :: BINARY     = 'recvol_state01_BIN.mrc'
+        character(len=*), parameter     :: CCS        = 'recvol_state01_CC.mrc'
+        character(len=*), parameter     :: SPLITTED   = 'split_ccs.mrc'
+        character(len=*), parameter     :: FINAL_MAPS = './final_thresholded_results/'
+        character(len=*), parameter     :: TAG        = 'xxx' ! for checking command lines
+        character(len=:), allocatable   :: iter_dir, cavgs_stk, fname
+        integer,          allocatable   :: pinds(:)
+        real,             allocatable   :: rstates(:), corrs(:), euldists(:), tmp(:)
+        logical,          allocatable   :: state_mask(:), pind_mask(:)
+        character(len=:), allocatable   :: iter_tag
+        character(len=STDLEN) :: fbody, fbody_split
+        integer :: i, j, iter, cnt, cnt2, ncavgs, funit, io_stat, endit, maxpind, noris, pind_plus_one
+        real    :: smpd
+        logical :: fall_over
+        fbody       = get_fbody(RECVOL,   'mrc')
+        fbody_split = get_fbody(SPLITTED, 'mrc')
+        if(       cline%defined('nparts')         ) call cline%delete('nparts') ! shared-memory workflow
+        if( .not. cline%defined('maxits')         ) call cline%set('maxits',          5.)
+        if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between', 30.)
+        if( .not. cline%defined('overlap')        ) call cline%set('overlap',        0.8)
+        if( .not. cline%defined('fracsrch')       ) call cline%set('fracsrch',       0.9)
+        if( .not. cline%defined('ran_noise_ph')   ) call cline%set('ran_noise_ph',  'no')
+        call cline%set('mkdir', 'yes') ! because we want to create the directory X_autorefine3D_nano & copy the project file
+        call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
+        params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
+        call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
+        ! read the project file and check that there are no state=0s in the ptcl2D & ptcl3D fields
+        call spproj%read(params%projfile)
+        rstates = spproj%os_ptcl2D%get_all('state')
+        fall_over = .false.
+        if( any(rstates < 0.5 ) ) fall_over = .true.
+        deallocate(rstates)
+        rstates = spproj%os_ptcl3D%get_all('state')
+        if( any(rstates < 0.5 ) ) fall_over = .true.
+        if( fall_over ) THROW_HARD('There are state=0s in the ptcl2D/3D fields of the project, which is not allowed. Use simple_exec prg=prune_project before executing autorefine3D_nano')
+        ! copy the input command line as templates for the refine3D_nano/detect_atoms_eo command line
+        cline_refine3D_nano = cline
+        cline_detect_atms_eo   = cline
+        ! then update cline_refine3D_nano accordingly
+        call cline_refine3D_nano%set('prg',     'refine3D_nano')
+        call cline_refine3D_nano%set('projfile', trim(params%projfile)) ! since we are not making directories (non-standard execution) we need to keep track of project file
+        call cline_refine3D_nano%set('keepvol',  'yes')
+        call cline_refine3D_nano%set('maxits',   real(params%maxits_between)) ! turn maxits_between into maxits (max # iterations between model building)
+        call cline_refine3D_nano%delete('maxits_between')
+        call cline_refine3D_nano%set('silence_fsc', 'yes')       ! to avoid excessive printing
+        ! then update cline_detect_atoms_eo accordingly
+        call cline_detect_atms_eo%set('prg', 'detect_atoms_eo')
+        call cline_detect_atms_eo%set('vol1', RECVOL)               ! this is ALWYAS going to be the input volume to detect_atoms_eo
+        if( .not. cline%defined('cs_thres') )then                ! mild cs tresholding (2-3)
+            call cline_detect_atms_eo%set('use_thres', 'no')        ! no thresholding during refinement
+        endif
+        iter = 0
+        do i = 1, params%maxits
+            ! first refinement pass on the initial volume uses the low-pass limit defined by the user
+            params_ptr  => params_glob
+            params_glob => null()
+            call xrefine3D_nano%execute(cline_refine3D_nano)
+            params_glob => params_ptr
+            params_ptr  => null()
+            call cline_refine3D_nano%set('vol1', SIMVOL)         ! the reference volume is ALWAYS SIMVOL
+            call cline_refine3D_nano%delete('lp')                ! uses the default 1.0 A low-pass limit
+            endit = nint(cline_refine3D_nano%get_rarg('endit'))  ! last iteration executed by refine3D_nano
+            call cline_refine3D_nano%delete('endit')             ! used internally but not technically allowed
+            call cline_refine3D_nano%set('prg', 'refine3D_nano') ! because the command line is modified refine3D_nano -> refine3D internally
+            ! rename relevant outputs (because the shared-mem workflow adds the iter tag)
+            iter_tag = '_iter'//int2str_pad(endit,3)
+            call simple_rename(trim(fbody)//iter_tag//'.mrc',    RECVOL)
+            call simple_rename(trim(fbody)//iter_tag//'_even.mrc', EVEN)
+            call simple_rename(trim(fbody)//iter_tag//'_odd.mrc',   ODD)
+            ! model building
+            params_ptr  => params_glob
+            params_glob => null()
+            call xdetect_atms_eo%execute(cline_detect_atms_eo)
+            params_glob => params_ptr
+            params_ptr  => null()
+            ! copy critical output
+            iter_dir = 'iteration_'//int2str_pad(i,2)//'/'
+            call simple_mkdir(iter_dir)
+            call simple_copy_file(RECVOL,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(EVEN,     iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_even.mrc')
+            call simple_copy_file(ODD,      iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_odd.mrc')
+            call simple_copy_file(SIMVOL,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_SIM.mrc')
+            call simple_copy_file(ATOMS,    iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_ATMS.pdb')
+            call simple_copy_file(BINARY,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
+            call simple_copy_file(CCS,      iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_CC.mrc')
+            call simple_copy_file(SPLITTED, iter_dir//trim(fbody_split)//'_iter'//int2str_pad(i,3)//'.mrc')
+            ! clean
+            call exec_cmdline('rm -f recvol_state01_iter* *part*')
+            call del_file(ATOMS)
+            call del_file(BINARY)
+            call del_file(CCS)
+            call del_file(SPLITTED)
+            iter = iter + 1
+        end do
+        call cline_detect_atms_eo%delete('cs_thres') ! 4 testing mild CS-based thresholding in loop
+        call cline_detect_atms_eo%set('use_thres', 'yes') ! use contact score threshold for final model building
+        params_ptr  => params_glob
+        params_glob => null()
+        call xdetect_atms_eo%execute(cline_detect_atms_eo)
+        params_glob => params_ptr
+        params_ptr  => null()
+        call simple_mkdir(FINAL_MAPS)
+        call simple_copy_file(RECVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'.mrc')
+        call simple_copy_file(EVEN,     FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_even.mrc')
+        call simple_copy_file(ODD,      FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_odd.mrc')
+        call simple_copy_file(SIMVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_SIM.mrc')
+        call simple_copy_file(ATOMS,    FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_ATMS.pdb')
+        call simple_copy_file(BINARY,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_BIN.mrc')
+        call simple_copy_file(CCS,      FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_CC.mrc')
+        call simple_copy_file(SPLITTED, FINAL_MAPS//trim(fbody_split)//'_iter'//int2str_pad(iter,3)//'.mrc')
+        ! clean
+        call del_file(SIMVOL)
+        call del_file(ATOMS)
+        call del_file(BINARY)
+        call del_file(CCS)
+        call del_file(SPLITTED)
+        ! retrieve cavgs stack
+        call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
+        if( ncavgs /= 0 )then
+            ! update cline_refine3D_cavgs accordingly
+            call cline_refine3D_cavgs%set('prg',      'refine3D_nano')
+            call cline_refine3D_cavgs%set('vol1', FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
+            call cline_refine3D_cavgs%set('pgrp',         params%pgrp)
+            call cline_refine3D_cavgs%set('mskdiam',   params%mskdiam)
+            call cline_refine3D_cavgs%set('nthr',   real(params%nthr))
+            call cline_refine3D_cavgs%set('mkdir',               'no')
+            call cline_refine3D_cavgs%set('maxits',                1.)
+            call cline_refine3D_cavgs%set('projfile', params%projfile)
+            call cline_refine3D_cavgs%set('oritype',          'cls3D')
+            call cline_refine3D_cavgs%set('lp',                   1.5)
+            call cline_refine3D_cavgs%set('silence_fsc',        'yes')
+            ! convention for executing shared-memory workflows from within another workflow with a parameters object declared
+            params_ptr  => params_glob
+            params_glob => null()
+            call xrefine3D_nano%execute(cline_refine3D_cavgs)
+            params_glob => params_ptr
+            params_ptr  => null()
+            ! cavgs vs RECVOL reprojs vs SIMVOL reprojs if cavgs exist in projfile
+            ! align cavgs to the final RECVOL
+            call spproj%read_segment('cls3D', params%projfile) ! now the newly generated cls3D field will be read...
+            ! ...so write out its content
+            call spproj%os_cls3D%write('cavgs_oris.txt')
+            ! ...and get the state flags
+            if( allocated(rstates) ) deallocate(rstates)
+            rstates = spproj%os_cls3D%get_all('state')
+            ! prepare for re-projection
+            call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
+            call cline_reproject%set('outstk', 'reprojs_recvol.mrc')
+            call cline_reproject%set('smpd',            params%smpd)
+            call cline_reproject%set('oritab',     'cavgs_oris.txt')
+            call cline_reproject%set('pgrp',            params%pgrp)
+            call cline_reproject%set('nthr',      real(params%nthr))
+            params_ptr  => params_glob
+            params_glob => null()
+            call xreproject%execute(cline_reproject)
+            params_glob => params_ptr
+            params_ptr  => null()
+            call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_thres_SIM.mrc')
+            call cline_reproject%set('outstk', 'reprojs_thres_SIM.mrc')
+            ! re-project
+            params_ptr  => params_glob
+            params_glob => null()
+            call xreproject%execute(cline_reproject)
+            params_glob => params_ptr
+            params_ptr  => null()
+            ! write cavgs & reprojections in triplets
+            allocate(imgs(3*ncavgs), state_mask(ncavgs))
+            cnt = 0
+            do i = 1,3*ncavgs,3
+                cnt = cnt + 1
+                if( rstates(cnt) > 0.5 )then
+                    call imgs(i    )%new([params%box,params%box,1], smpd)
+                    call imgs(i + 1)%new([params%box,params%box,1], smpd)
+                    call imgs(i + 2)%new([params%box,params%box,1], smpd)
+                    call imgs(i    )%read(cavgs_stk,                 cnt)
+                    call imgs(i + 1)%read('reprojs_recvol.mrc',      cnt)
+                    call imgs(i + 2)%read('reprojs_thres_SIM.mrc',   cnt)
+                    call imgs(i    )%norm
+                    call imgs(i + 1)%norm
+                    call imgs(i + 2)%norm
+                    state_mask(cnt) = .true.
+                else
+                    state_mask(cnt) = .false.
+                endif
+            end do
+            cnt  = 0
+            cnt2 = 1 ! needed because we have omissions
+            do i = 1,3*ncavgs,3
+                cnt = cnt + 1
+                if( state_mask(cnt) )then
+                    call imgs(i    )%write('cavgs_vs_reprojections_rec_and_thres_sim.mrc', cnt2    )
+                    call imgs(i + 1)%write('cavgs_vs_reprojections_rec_and_thres_sim.mrc', cnt2 + 1)
+                    call imgs(i + 2)%write('cavgs_vs_reprojections_rec_and_thres_sim.mrc', cnt2 + 2)
+                    call imgs(i    )%kill
+                    call imgs(i + 1)%kill
+                    call imgs(i + 2)%kill
+                    cnt2 = cnt2 + 3
+                endif
+            end do
+            deallocate(imgs)
+        endif ! end of class average-based validation
+        call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs_thres* reproject_oris.txt stderrout')
+        ! visualization of particle orientations
+        ! read the ptcl3D segment first to make sure that we are using the latest information
+        call spproj%read_segment('ptcl3D', params%projfile)
+        ! extract ptcls oritab
+        call spproj%os_ptcl3D%write('ptcls_oris.txt')
+        call cline_vizoris%set('oritab', 'ptcls_oris.txt')
+        call cline_vizoris%set('pgrp',        params%pgrp)
+        call cline_vizoris%set('nspace',           10000.)
+        call cline_vizoris%set('tseries',           'yes')
+        params_ptr  => params_glob
+        params_glob => null()
+        call xvizoris%execute(cline_vizoris)
+        params_glob => params_ptr
+        params_ptr  => null()
+        ! print CSV file of correlation vs particle number
+        corrs = spproj%os_ptcl3D%get_all('corr')
+        fname = 'ptcls_vs_reprojs_corrs.csv'
+        call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
+        call fileiochk('autorefine3D_nano fopen failed'//trim(fname), io_stat)
+        write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'CORR'
+        do i = 1,size(corrs)
+            write(funit,*) int2str(i)//CSV_DELIM//real2str(corrs(i))
+        end do
+        call fclose(funit)
+        ! print CSV file of particle indices vs. difference in projection direction to right-hand neighbour
+        noris = spproj%os_ptcl3D%get_noris()
+        if( spproj%os_ptcl3D%isthere('pind') )then
+            pinds = nint(spproj%os_ptcl3D%get_all('pind'))
+        else
+            pinds = (/(i,i=1,noris)/)
+        endif
+        allocate(euldists(size(pinds)),    source = 0.)
+        allocate(pind_mask(maxval(pinds)), source = .false.)
+        fname = 'pinds_vs_rh_neigh_angdiffs.csv'
+        call fopen(funit, trim(fname), 'replace', 'unknown', iostat=io_stat, form='formatted')
+        call fileiochk('autorefine3D_nano fopen failed'//trim(fname), io_stat)
+        write(funit,*) 'PTCL_INDEX'//CSV_DELIM//'ANGULAR_DIFFERENCE'
+        cnt = 0
+        do i = 1,size(pinds) - 1
+            pind_plus_one = pinds(i) + 1
+            if( pinds(i + 1) == pind_plus_one )then
+                if( pind_plus_one > noris ) cycle
+                ! it is meaningful to look at the angular difference
+                call spproj%os_ptcl3D%get_ori(pinds(i),     o1)
+                call spproj%os_ptcl3D%get_ori(pinds(i) + 1, o2)
+                cnt = cnt + 1
+                euldists(cnt) = rad2deg(o1.euldist.o2)
+                write(funit,*) int2str(pinds(i))//CSV_DELIM//real2str(euldists(cnt))
+            endif
+        end do
+        call fclose(funit)
+        call calc_stats(euldists(:cnt), euldist_stats)
+        write(logfhandle,'(A)') '>>> ANGULAR DISTANCE TO RIGHT-HAND NEIGHBOR STATS'
+        write(logfhandle,'(A,F8.4)') 'Average: ', euldist_stats%avg
+        write(logfhandle,'(A,F8.4)') 'Median : ', euldist_stats%med
+        write(logfhandle,'(A,F8.4)') 'Sigma  : ', euldist_stats%sdev
+        write(logfhandle,'(A,F8.4)') 'Max    : ', euldist_stats%maxv
+        write(logfhandle,'(A,F8.4)') 'Min    : ', euldist_stats%minv
+        ! deallocate
+        if( allocated(iter_dir)  ) deallocate(iter_dir)
+        if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
+        ! end gracefully
+        call simple_end('**** AUTOREFINE3D_NANO NORMAL STOP ****')
+    end subroutine exec_autorefine3D_nano_eo
 
     subroutine exec_graphene_subtr( self, cline )
         use simple_tseries_graphene_subtr
