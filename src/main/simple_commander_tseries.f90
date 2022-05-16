@@ -1122,6 +1122,7 @@ contains
     subroutine exec_autorefine3D_nano_eo( self, cline )
         use simple_commander_quant, only: detect_atoms_eo_commander
         use simple_ori, only: ori
+        use simple_defs_autorefine
         class(autorefine3D_nano_eo_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         class(parameters), pointer      :: params_ptr => null()
@@ -1136,27 +1137,22 @@ contains
         type(image), allocatable        :: imgs(:)
         type(sp_project)                :: spproj
         type(stats_struct)              :: euldist_stats
-        character(len=*), parameter     :: RECVOL     = 'recvol_state01.mrc'
-        character(len=*), parameter     :: EVEN       = 'recvol_state01_even.mrc'
-        character(len=*), parameter     :: ODD        = 'recvol_state01_odd.mrc'
-        character(len=*), parameter     :: SIMVOL     = 'recvol_state01_SIM.mrc'
-        character(len=*), parameter     :: ATOMS      = 'recvol_state01_ATMS.pdb'
-        character(len=*), parameter     :: BINARY     = 'recvol_state01_BIN.mrc'
-        character(len=*), parameter     :: CCS        = 'recvol_state01_CC.mrc'
-        character(len=*), parameter     :: SPLITTED   = 'split_ccs.mrc'
-        character(len=*), parameter     :: FINAL_MAPS = './final_thresholded_results/'
-        character(len=*), parameter     :: TAG        = 'xxx' ! for checking command lines
         character(len=:), allocatable   :: iter_dir, cavgs_stk, fname
         integer,          allocatable   :: pinds(:)
         real,             allocatable   :: rstates(:), corrs(:), euldists(:), tmp(:)
         logical,          allocatable   :: state_mask(:), pind_mask(:)
         character(len=:), allocatable   :: iter_tag
-        character(len=STDLEN) :: fbody, fbody_split
+        character(len=STDLEN) :: fbody, fbody_split_e, fbody_split_o, fbody_e, fbody_o, fbody_filt_e, fbody_filt_o
         integer :: i, j, iter, cnt, cnt2, ncavgs, funit, io_stat, endit, maxpind, noris, pind_plus_one
         real    :: smpd
         logical :: fall_over
-        fbody       = get_fbody(RECVOL,   'mrc')
-        fbody_split = get_fbody(SPLITTED, 'mrc')
+        fbody         = get_fbody(RECVOL,     'mrc')
+        fbody_e       = get_fbody(EVEN,       'mrc')
+        fbody_o       = get_fbody(ODD,        'mrc')
+        fbody_filt_e  = get_fbody(EVEN_FILT,  'mrc')
+        fbody_filt_o  = get_fbody(ODD_FILT,   'mrc')
+        fbody_split_e = get_fbody(EVEN_SPLIT, 'mrc')
+        fbody_split_o = get_fbody(ODD_SPLIT,  'mrc')
         if(       cline%defined('nparts')         ) call cline%delete('nparts') ! shared-memory workflow
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',          5.)
         if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between', 30.)
@@ -1169,7 +1165,7 @@ contains
         call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory
         ! read the project file and check that there are no state=0s in the ptcl2D & ptcl3D fields
         call spproj%read(params%projfile)
-        rstates = spproj%os_ptcl2D%get_all('state')
+        rstates   = spproj%os_ptcl2D%get_all('state')
         fall_over = .false.
         if( any(rstates < 0.5 ) ) fall_over = .true.
         deallocate(rstates)
@@ -1177,21 +1173,19 @@ contains
         if( any(rstates < 0.5 ) ) fall_over = .true.
         if( fall_over ) THROW_HARD('There are state=0s in the ptcl2D/3D fields of the project, which is not allowed. Use simple_exec prg=prune_project before executing autorefine3D_nano')
         ! copy the input command line as templates for the refine3D_nano/detect_atoms_eo command line
-        cline_refine3D_nano = cline
-        cline_detect_atms_eo   = cline
+        cline_refine3D_nano  = cline
+        cline_detect_atms_eo = cline
         ! then update cline_refine3D_nano accordingly
         call cline_refine3D_nano%set('prg',     'refine3D_nano')
         call cline_refine3D_nano%set('projfile', trim(params%projfile)) ! since we are not making directories (non-standard execution) we need to keep track of project file
         call cline_refine3D_nano%set('keepvol',  'yes')
         call cline_refine3D_nano%set('maxits',   real(params%maxits_between)) ! turn maxits_between into maxits (max # iterations between model building)
         call cline_refine3D_nano%delete('maxits_between')
-        call cline_refine3D_nano%set('silence_fsc', 'yes')       ! to avoid excessive printing
+        call cline_refine3D_nano%set('silence_fsc', 'yes') ! to avoid excessive printing
         ! then update cline_detect_atoms_eo accordingly
         call cline_detect_atms_eo%set('prg', 'detect_atoms_eo')
-        call cline_detect_atms_eo%set('vol1', RECVOL)               ! this is ALWYAS going to be the input volume to detect_atoms_eo
-        if( .not. cline%defined('cs_thres') )then                ! mild cs tresholding (2-3)
-            call cline_detect_atms_eo%set('use_thres', 'no')        ! no thresholding during refinement
-        endif
+        call cline_detect_atms_eo%set('vol_even', EVEN)  ! this is ALWYAS going to be the input volume to detect_atoms_eo
+        call cline_detect_atms_eo%set('vol_odd',  ODD)   ! this is ALWYAS going to be the input volume to detect_atoms_eo
         iter = 0
         do i = 1, params%maxits
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user
@@ -1200,10 +1194,12 @@ contains
             call xrefine3D_nano%execute(cline_refine3D_nano)
             params_glob => params_ptr
             params_ptr  => null()
-            call cline_refine3D_nano%set('vol1', SIMVOL)         ! the reference volume is ALWAYS SIMVOL
+            call cline_refine3D_nano%delete('vol1')              ! because after the first round we change to even/odd convention for input vols
+            call cline_refine3D_nano%set('vol_even', EVEN_SIM)   ! the reference volume is ALWAYS the simulated volume
+            call cline_refine3D_nano%set('vol_odd',  ODD_SIM)    ! the reference volume is ALWAYS the simulated volume
             call cline_refine3D_nano%delete('lp')                ! uses the default 1.0 A low-pass limit
             endit = nint(cline_refine3D_nano%get_rarg('endit'))  ! last iteration executed by refine3D_nano
-            call cline_refine3D_nano%delete('endit')             ! used internally but not technically allowed
+            call cline_refine3D_nano%delete('endit')             ! used internally but not technically allowed (leftover cleanup)
             call cline_refine3D_nano%set('prg', 'refine3D_nano') ! because the command line is modified refine3D_nano -> refine3D internally
             ! rename relevant outputs (because the shared-mem workflow adds the iter tag)
             iter_tag = '_iter'//int2str_pad(endit,3)
@@ -1219,50 +1215,22 @@ contains
             ! copy critical output
             iter_dir = 'iteration_'//int2str_pad(i,2)//'/'
             call simple_mkdir(iter_dir)
-            call simple_copy_file(RECVOL,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'.mrc')
-            call simple_copy_file(EVEN,     iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_even.mrc')
-            call simple_copy_file(ODD,      iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_odd.mrc')
-            call simple_copy_file(SIMVOL,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_SIM.mrc')
-            call simple_copy_file(ATOMS,    iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_ATMS.pdb')
-            call simple_copy_file(BINARY,   iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
-            call simple_copy_file(CCS,      iter_dir//trim(fbody)      //'_iter'//int2str_pad(i,3)//'_CC.mrc')
-            call simple_copy_file(SPLITTED, iter_dir//trim(fbody_split)//'_iter'//int2str_pad(i,3)//'.mrc')
+            call copy_files(iter_dir, i)
             ! clean
             call exec_cmdline('rm -f recvol_state01_iter* *part*')
-            call del_file(ATOMS)
-            call del_file(BINARY)
-            call del_file(CCS)
-            call del_file(SPLITTED)
             iter = iter + 1
         end do
-        call cline_detect_atms_eo%delete('cs_thres') ! 4 testing mild CS-based thresholding in loop
-        call cline_detect_atms_eo%set('use_thres', 'yes') ! use contact score threshold for final model building
-        params_ptr  => params_glob
-        params_glob => null()
-        call xdetect_atms_eo%execute(cline_detect_atms_eo)
-        params_glob => params_ptr
-        params_ptr  => null()
         call simple_mkdir(FINAL_MAPS)
-        call simple_copy_file(RECVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'.mrc')
-        call simple_copy_file(EVEN,     FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_even.mrc')
-        call simple_copy_file(ODD,      FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_odd.mrc')
-        call simple_copy_file(SIMVOL,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_SIM.mrc')
-        call simple_copy_file(ATOMS,    FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_ATMS.pdb')
-        call simple_copy_file(BINARY,   FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_BIN.mrc')
-        call simple_copy_file(CCS,      FINAL_MAPS//trim(fbody)      //'_iter'//int2str_pad(iter,3)//'_thres_CC.mrc')
-        call simple_copy_file(SPLITTED, FINAL_MAPS//trim(fbody_split)//'_iter'//int2str_pad(iter,3)//'.mrc')
+        call copy_files(FINAL_MAPS, iter)
         ! clean
-        call del_file(SIMVOL)
-        call del_file(ATOMS)
-        call del_file(BINARY)
-        call del_file(CCS)
-        call del_file(SPLITTED)
+        call clean
         ! retrieve cavgs stack
         call spproj%get_cavgs_stk(cavgs_stk, ncavgs, smpd, fail=.false.)
         if( ncavgs /= 0 )then
             ! update cline_refine3D_cavgs accordingly
             call cline_refine3D_cavgs%set('prg',      'refine3D_nano')
-            call cline_refine3D_cavgs%set('vol1', FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
+            call cline_refine3D_cavgs%set('vol_even', FINAL_MAPS//trim(fbody_e)//'_iter'//int2str_pad(iter,3)//'.mrc')
+            call cline_refine3D_cavgs%set('vol_odd',  FINAL_MAPS//trim(fbody_o)//'_iter'//int2str_pad(iter,3)//'.mrc')
             call cline_refine3D_cavgs%set('pgrp',         params%pgrp)
             call cline_refine3D_cavgs%set('mskdiam',   params%mskdiam)
             call cline_refine3D_cavgs%set('nthr',   real(params%nthr))
@@ -1270,7 +1238,7 @@ contains
             call cline_refine3D_cavgs%set('maxits',                1.)
             call cline_refine3D_cavgs%set('projfile', params%projfile)
             call cline_refine3D_cavgs%set('oritype',          'cls3D')
-            call cline_refine3D_cavgs%set('lp',                   1.5)
+            call cline_refine3D_cavgs%set('lp',                    1.)
             call cline_refine3D_cavgs%set('silence_fsc',        'yes')
             ! convention for executing shared-memory workflows from within another workflow with a parameters object declared
             params_ptr  => params_glob
@@ -1298,8 +1266,8 @@ contains
             call xreproject%execute(cline_reproject)
             params_glob => params_ptr
             params_ptr  => null()
-            call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_thres_SIM.mrc')
-            call cline_reproject%set('outstk', 'reprojs_thres_SIM.mrc')
+            call cline_reproject%set('vol1', FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_ATMS_AVG_SIM.mrc')
+            call cline_reproject%set('outstk', 'reprojs_ATMS_AVG_SIM.mrc')
             ! re-project
             params_ptr  => params_glob
             params_glob => null()
@@ -1317,7 +1285,7 @@ contains
                     call imgs(i + 2)%new([params%box,params%box,1], smpd)
                     call imgs(i    )%read(cavgs_stk,                 cnt)
                     call imgs(i + 1)%read('reprojs_recvol.mrc',      cnt)
-                    call imgs(i + 2)%read('reprojs_thres_SIM.mrc',   cnt)
+                    call imgs(i + 2)%read('reprojs_ATMS_AVG_SIM.mrc',   cnt)
                     call imgs(i    )%norm
                     call imgs(i + 1)%norm
                     call imgs(i + 2)%norm
@@ -1342,7 +1310,7 @@ contains
             end do
             deallocate(imgs)
         endif ! end of class average-based validation
-        call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs_thres* reproject_oris.txt stderrout')
+        call exec_cmdline('rm -rf fsc* fft* recvol* RES* reprojs_recvol* reprojs_ATMS_AVG_SIM* reproject_oris.txt stderrout')
         ! visualization of particle orientations
         ! read the ptcl3D segment first to make sure that we are using the latest information
         call spproj%read_segment('ptcl3D', params%projfile)
@@ -1406,6 +1374,46 @@ contains
         if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
         ! end gracefully
         call simple_end('**** AUTOREFINE3D_NANO NORMAL STOP ****')
+
+    contains
+
+        subroutine clean
+            call del_file(EVEN_FILT)
+            call del_file(EVEN_ATOMS)
+            call del_file(EVEN_BIN)
+            call del_file(EVEN_CCS)
+            call del_file(EVEN_SPLIT)
+            call del_file(ODD_FILT)
+            call del_file(ODD_ATOMS)
+            call del_file(ODD_BIN)
+            call del_file(ODD_CCS)
+            call del_file(ODD_SPLIT)
+            call del_file(AVG_ATOMS)
+            call del_file(AVG_ATOMS_SIM)
+        end subroutine clean
+
+        subroutine copy_files( dir, i )
+            character(len=*), intent(in) :: dir
+            integer,          intent(in) :: i
+            call simple_copy_file(RECVOL,        trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(EVEN,          trim(dir)//trim(fbody_e)       //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(EVEN_FILT,     trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(EVEN_ATOMS,    trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON.pdb')
+            call simple_copy_file(EVEN_SIM,      trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON_SIM.mrc')
+            call simple_copy_file(EVEN_BIN,      trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
+            call simple_copy_file(EVEN_CCS,      trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_CC.mrc')
+            call simple_copy_file(EVEN_SPLIT,    trim(dir)//trim(fbody_split_e) //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(ODD,           trim(dir)//trim(fbody_o)       //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(ODD_FILT,      trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(ODD_ATOMS,     trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON.pdb')
+            call simple_copy_file(ODD_SIM,       trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON_SIM.mrc')
+            call simple_copy_file(ODD_BIN,       trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
+            call simple_copy_file(ODD_CCS,       trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_CC.mrc')
+            call simple_copy_file(ODD_SPLIT,     trim(dir)//trim(fbody_split_o) //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(AVG_ATOMS,     trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_ATMS_AVG.pdb')
+            call simple_copy_file(AVG_ATOMS_SIM, trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_ATMS_AVG_SIM.pdb')
+        end subroutine copy_files
+
     end subroutine exec_autorefine3D_nano_eo
 
     subroutine exec_graphene_subtr( self, cline )

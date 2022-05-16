@@ -121,16 +121,16 @@ contains
         character(len=2)   :: el
         integer            :: k
         type(stats_struct) :: dist_stats
-        character(len=:), allocatable :: add2fn, ename_filt, oname_filt, eatms, oatms
-        character(len=:), allocatable :: tmp, eatms_common, oatms_common, oatms_sim, eatms_sim
+        character(len=:), allocatable :: add2fn, ename_filt, oname_filt, eatms, oatms, fname_avg
+        character(len=:), allocatable :: tmp, eatms_common, oatms_common, oatms_sim, eatms_sim, atms_avg, atms_avg_sim
         call cline%set('use_thres', 'no')
         call cline%set('corr_thres', 0.)
         call params%new(cline)
         ! read e/o:s
         call odd %new([params%box,params%box,params%box], params%smpd)
         call even%new([params%box,params%box,params%box], params%smpd)
-        call odd %read(params%vols(1))
-        call even%read(params%vols(2))
+        call odd %read(params%vols_odd(1))
+        call even%read(params%vols_even(1))
         ! spherical masking
         call even%mask(params%msk, 'soft')
         call odd%mask(params%msk, 'soft')
@@ -141,17 +141,21 @@ contains
         call opt_filter(odd, even, params%smpd, .true., 1, 'butterworth', 3., params%nsearch, mskvol)
         call even%mask(params%msk, 'soft')
         call odd%mask(params%msk, 'soft')
-        add2fn     = '_nonuni_bw8_sext1'
-        oname_filt = add2fbody(params%vols(1), trim(params%ext), add2fn)
-        ename_filt = add2fbody(params%vols(2), trim(params%ext), add2fn)
+        add2fn       = '_filt'
+        oname_filt   = add2fbody(params%vols_odd(1),     trim(params%ext), add2fn)
+        ename_filt   = add2fbody(params%vols_even(1),    trim(params%ext), add2fn)
+        tmp          = rm_from_fbody(params%vols_odd(1), trim(params%ext), '_odd')
+        atms_avg_sim = add2fbody(tmp,                    trim(params%ext), '_ATMS_AVG_SIM')
+        fname_avg    = swap_suffix(tmp, '.pdb',          trim(params%ext) )
+        atms_avg     = add2fbody(fname_avg ,             '.pdb', '_ATMS_AVG')
         call odd%write(oname_filt)
         call even%write(ename_filt)
         ! detect atoms in odd
         call nano%new(oname_filt)
-        call nano%identify_atomic_pos_slim
+        call nano%identify_atomic_pos_slim(.false.)
         ! detect atoms in even
         call nano%new(ename_filt)
-        call nano%identify_atomic_pos_slim
+        call nano%identify_atomic_pos_slim(.true.)
         ! compare independent atomic models
         el               = trim(adjustl(params%element))
         tmp              = add2fbody(oname_filt,    trim(params%ext), '_ATMS')
@@ -182,9 +186,12 @@ contains
             atms_common%displacements(:,k) = atms_common%common2(:,k) - atms_common%common1(:,k)
             atms_common%dists(k) = sqrt(sum((atms_common%displacements(:,k))**2.))
         end do
-        ! write pdb files
+        ! write pdb files for the e/o:s
         call write_matrix2pdb(el, atms_common%common1, oatms_common)
         call write_matrix2pdb(el, atms_common%common2, eatms_common)
+        ! write the average atomic positions
+        atms_common%common1 = (atms_common%common1 + atms_common%common2) / 2.
+        call write_matrix2pdb(el, atms_common%common1, atms_avg)
         ! RMSD reporting
         call calc_stats(atms_common%dists(:), dist_stats)
         write(logfhandle,'(A)') '>>> DISTANCE STATS (IN A) FOR COMMON ATOMS BELOW'
@@ -201,6 +208,11 @@ contains
         call nano%set_atomic_coords(eatms_common)
         call nano%simulate_atoms(sim_density)
         call sim_density%write(eatms_sim)
+        call nano%set_atomic_coords(oatms_common)
+        ! simulate density for the average atomic positions
+        call nano%set_atomic_coords(atms_avg)
+        call nano%simulate_atoms(sim_density)
+        call sim_density%write(atms_avg_sim)
         ! kill
         call nano%kill
         call even%kill
@@ -260,12 +272,17 @@ contains
         character(len=:),          allocatable :: fname1, fname2
         real, allocatable  :: pdbmat(:,:), dists_all(:)
         type(parameters)   :: params
-        integer            :: npdbs, i, j, k, ndists, cnt
+        integer            :: npdbs, i, j, k, ndists, cnt, ipdb
         character(len=2)   :: el
         type(stats_struct) :: dist_stats
         call params%new(cline)
         call read_filetable(params%pdbfiles, pdbfnames)
         npdbs = size(pdbfnames)
+        if( params%mkdir.eq.'yes' )then
+            do ipdb = 1,npdbs
+                if(pdbfnames(ipdb)(1:1).ne.'/') pdbfnames(ipdb) = '../'//trim(pdbfnames(ipdb))
+            enddo
+        endif
         allocate( atms_common(npdbs,npdbs) )
         el = trim(adjustl(params%element))
         ! identify common atoms across pairs

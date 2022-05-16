@@ -19,7 +19,7 @@ integer,          parameter :: NBIN_THRESH         = 15      ! number of thresho
 integer,          parameter :: CN_THRESH_XTAL      = 5       ! cn-threshold highly crystalline NPs
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
 logical,          parameter :: DEBUG               = .false. ! for debugging purposes
-logical,          parameter :: WRITE_OUPUT         = .false. ! for figures generation
+logical,          parameter :: WRITE_OUTPUT        = .false. ! for figures generation
 integer,          parameter :: SOFT_EDGE           = 6
 integer,          parameter :: N_DISCRET           = 1000
 integer,          parameter :: CNMIN               = 3
@@ -475,7 +475,7 @@ contains
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%img, self%element)
         call self%img_pc_atm%copy(self%img)
-        if( WRITE_OUPUT ) call self%img%write('denoised.mrc')
+        if( WRITE_OUTPUT ) call self%img%write('denoised.mrc')
         ! Nanoparticle binarization
         call self%binarize_and_find_centers()
         ! atom splitting by correlation map validation
@@ -516,16 +516,23 @@ contains
 
     ! this slimmed-down version is intended for detect_atoms_eo
     ! it assumes that the input map is denoised beforehand
-    subroutine identify_atomic_pos_slim( self )
+    subroutine identify_atomic_pos_slim( self, is_even )
         class(nanoparticle), intent(inout) :: self
+        logical,             intent(in)    :: is_even
+        character(len=:),    allocatable   :: fname_split_ccs
         type(image) :: simatms
+        if( is_even )then
+            fname_split_ccs = 'split_ccs_even.mrc'
+        else
+            fname_split_ccs = 'split_ccs_odd.mrc'
+        endif
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%img_pc_atm, self%element)
         ! Nanoparticle binarization
         call self%binarize_and_find_centers()
         ! atom splitting by correlation map validation
-        call self%split_atoms()
+        call self%split_atoms(fname_split_ccs)
         ! validation through per-atom correlation with the simulated density
         call self%simulate_atoms(simatms)
         call self%validate_atoms(simatms)
@@ -647,53 +654,54 @@ contains
 
     contains
 
-         ! Otsu binarization for nanoparticle maps
-         ! It considers the grey level value only in the positive range.
-         ! It doesn't threshold the map. It just returns the ideal threshold.
-         ! This is based on the implementation of 1D otsu
-         subroutine otsu_nano(img, scaled_thresh)
-             use simple_math, only : otsu
-             type(image),    intent(inout) :: img
-             real,           intent(out)   :: scaled_thresh ! returns the threshold in the correct range
-             real, pointer     :: rmat(:,:,:)
-             real, allocatable :: x(:)
-             call img%get_rmat_ptr(rmat)
-             x = pack(rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-                     &rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 0.)
-             call otsu(x, scaled_thresh)
-         end subroutine otsu_nano
+        ! Otsu binarization for nanoparticle maps
+        ! It considers the grey level value only in the positive range.
+        ! It doesn't threshold the map. It just returns the ideal threshold.
+        ! This is based on the implementation of 1D otsu
+        subroutine otsu_nano(img, scaled_thresh)
+            use simple_math, only : otsu
+            type(image),    intent(inout) :: img
+            real,           intent(out)   :: scaled_thresh ! returns the threshold in the correct range
+            real, pointer     :: rmat(:,:,:)
+            real, allocatable :: x(:)
+            call img%get_rmat_ptr(rmat)
+            x = pack(rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+                    &rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 0.)
+            call otsu(x, scaled_thresh)
+        end subroutine otsu_nano
 
-         real function t2c( thres )
-             real, intent(in) :: thres
-             where(rmat > thres)
-                 imat_t = 1
-             elsewhere
-                 imat_t = 0
-             endwhere
-             ! Generate binary image and cc image
-             call img_bin_t%new_bimg(self%ldim, self%smpd)
-             call img_bin_t%set_imat(imat_t)
-             t_find_ccs = tic()
-             call img_ccs_t%new_bimg(self%ldim, self%smpd)
-             call img_bin_t%find_ccs(img_ccs_t)
-             rt_find_ccs = rt_find_ccs + toc(t_find_ccs)
-             ! Find atom centers in the generated distributions
-             call self%update_ncc(img_ccs_t) ! self%n_cc is needed in find_centers
-             t_find_centers = tic()
-             call self%find_centers(img_bin_t, img_ccs_t, coords)
-             rt_find_centers = rt_find_centers + toc(t_find_centers)
-             ! Generate a simulated distribution based on those center
-             t_gen_sim = tic()
-             call self%write_centers('centers_'//trim(int2str(i))//'_iteration', coords)
-             call atom%new          ('centers_'//trim(int2str(i))//'_iteration.pdb')
-             call atom%convolve(simulated_distrib, cutoff = 8.*self%smpd)
-             call del_file('centers_'//trim(int2str(i))//'_iteration.pdb')
-             call atom%kill
-             rt_gen_sim = rt_gen_sim + toc(t_gen_sim)
-             ! correlate volumes
-             t_real_corr = tic()
-             t2c = self%img%real_corr(simulated_distrib)
-             rt_real_corr = rt_real_corr + toc(t_real_corr)
+        real function t2c( thres )
+            real, intent(in) :: thres
+            where(rmat > thres)
+                imat_t = 1
+            elsewhere
+                imat_t = 0
+            endwhere
+            ! Generate binary image and cc image
+            call img_bin_t%new_bimg(self%ldim, self%smpd)
+            call img_bin_t%set_imat(imat_t)
+            t_find_ccs = tic()
+            call img_ccs_t%new_bimg(self%ldim, self%smpd)
+            call img_bin_t%find_ccs(img_ccs_t)
+            rt_find_ccs = rt_find_ccs + toc(t_find_ccs)
+            ! Find atom centers in the generated distributions
+            call self%update_ncc(img_ccs_t) ! self%n_cc is needed in find_centers
+            t_find_centers = tic()
+            call self%find_centers(img_bin_t, img_ccs_t, coords)
+            rt_find_centers = rt_find_centers + toc(t_find_centers)
+            ! Generate a simulated distribution based on those center
+            t_gen_sim = tic()
+            call self%write_centers('centers_'//trim(int2str(i))//'_iteration', coords)
+            call atom%new          ('centers_'//trim(int2str(i))//'_iteration.pdb')
+            call atom%convolve(simulated_distrib, cutoff = 8.*self%smpd)
+            call del_file('centers_'//trim(int2str(i))//'_iteration.pdb')
+            call atom%kill
+            rt_gen_sim = rt_gen_sim + toc(t_gen_sim)
+            ! correlate volumes
+            t_real_corr = tic()
+            t2c = self%img%real_corr(simulated_distrib)
+            rt_real_corr = rt_real_corr + toc(t_real_corr)
+            if( WRITE_OUTPUT ) call simulated_distrib%write('simvol_thres'//trim(real2str(thres))//'_corr'//trim(real2str(t2c))//'.mrc')
         end function t2c
 
     end subroutine binarize_and_find_centers
@@ -702,56 +710,57 @@ contains
     ! and save it in the global variable centers.
     ! If coords is present, it saves it also in coords.
     subroutine find_centers( self, img_bin, img_cc, coords )
-       class(nanoparticle),         intent(inout) :: self
-       type(binimage), optional,    intent(inout) :: img_bin, img_cc
-       real, optional, allocatable, intent(out)   :: coords(:,:)
-       real,        pointer :: rmat_raw(:,:,:)
-       integer, allocatable :: imat_cc_in(:,:,:)
-       logical, allocatable :: mask(:,:,:)
-       integer :: i, ii, jj, kk
-       real    :: m(3), sum_mass
-       ! sanity check
-       if( present(img_bin) .and. .not. present(img_cc) ) THROW_HARD('img_bin and img_cc have to be both present')
-       ! global variables allocation
-       if( allocated(self%atominfo) ) deallocate(self%atominfo)
-       allocate( self%atominfo(self%n_cc) )
-       if( present(img_cc) )then
-           call img_cc%get_imat(imat_cc_in)
-       else
-           call self%img_cc%get_imat(imat_cc_in)
-       endif
-       call self%img_raw%get_rmat_ptr(rmat_raw)
-       allocate(mask(self%ldim(1),self%ldim(2),self%ldim(3)), source=.true.)
-       !$omp parallel do default(shared) private(i,ii,jj,kk,mask,m,sum_mass) schedule(static) proc_bind(close)
-       do i=1,self%n_cc
-           mask     = .true.
-           where( imat_cc_in /= i ) mask = .false.
-           m        = 0.
-           sum_mass = 0.
-           do ii = 1, self%ldim(1)
-               do jj = 1, self%ldim(2)
-                   do kk = 1, self%ldim(3)
-                       if( mask(ii,jj,kk) )then
-                           m = m + real([ii,jj,kk]) * rmat_raw(ii,jj,kk)
-                           sum_mass = sum_mass + rmat_raw(ii,jj,kk)
-                       endif
-                   enddo
-               enddo
-           enddo
-           self%atominfo(i)%center(:) = m / sum_mass
-       enddo
-       !$omp end parallel do
-       ! saving centers coordinates, optional
-       if( present(coords) )then
-           allocate(coords(3,self%n_cc))
-           do i=1,self%n_cc
-               coords(:,i) = self%atominfo(i)%center(:)
-           end do
-       endif
+        class(nanoparticle),         intent(inout) :: self
+        type(binimage), optional,    intent(inout) :: img_bin, img_cc
+        real, optional, allocatable, intent(out)   :: coords(:,:)
+        real,        pointer :: rmat_raw(:,:,:)
+        integer, allocatable :: imat_cc_in(:,:,:)
+        logical, allocatable :: mask(:,:,:)
+        integer :: i, ii, jj, kk
+        real    :: m(3), sum_mass
+        ! sanity check
+        if( present(img_bin) .and. .not. present(img_cc) ) THROW_HARD('img_bin and img_cc have to be both present')
+        ! global variables allocation
+        if( allocated(self%atominfo) ) deallocate(self%atominfo)
+        allocate( self%atominfo(self%n_cc) )
+        if( present(img_cc) )then
+            call img_cc%get_imat(imat_cc_in)
+        else
+            call self%img_cc%get_imat(imat_cc_in)
+        endif
+        call self%img_raw%get_rmat_ptr(rmat_raw)
+        allocate(mask(self%ldim(1),self%ldim(2),self%ldim(3)), source=.true.)
+        !$omp parallel do default(shared) private(i,ii,jj,kk,mask,m,sum_mass) schedule(static) proc_bind(close)
+        do i=1,self%n_cc
+            mask     = .true.
+            where( imat_cc_in /= i ) mask = .false.
+            m        = 0.
+            sum_mass = 0.
+            do ii = 1, self%ldim(1)
+                do jj = 1, self%ldim(2)
+                    do kk = 1, self%ldim(3)
+                        if( mask(ii,jj,kk) )then
+                            m = m + real([ii,jj,kk]) * rmat_raw(ii,jj,kk)
+                            sum_mass = sum_mass + rmat_raw(ii,jj,kk)
+                        endif
+                    enddo
+                enddo
+            enddo
+            self%atominfo(i)%center(:) = m / sum_mass
+        enddo
+        !$omp end parallel do
+        ! saving centers coordinates, optional
+        if( present(coords) )then
+            allocate(coords(3,self%n_cc))
+            do i=1,self%n_cc
+                coords(:,i) = self%atominfo(i)%center(:)
+            end do
+        endif
     end subroutine find_centers
 
-    subroutine split_atoms( self )
-        class(nanoparticle), intent(inout) :: self
+    subroutine split_atoms( self, fname )
+        class(nanoparticle),        intent(inout) :: self
+        character(len=*), optional, intent(in)    :: fname
         type(binimage)       :: img_split_ccs
         real,    allocatable :: x(:)
         real,    pointer     :: rmat_pc(:,:,:)
@@ -809,7 +818,11 @@ contains
         endwhere
         ! update relevant data fields
         call img_split_ccs%set_imat(imat_split_ccs)
-        call img_split_ccs%write('split_ccs.mrc')
+        if( present(fname) )then
+            call img_split_ccs%write(trim(fname))
+        else
+            call img_split_ccs%write('split_ccs.mrc')
+        endif
         call img_split_ccs%kill
         call self%img_bin%set_imat(imat_bin)
         call self%img_bin%update_img_rmat()

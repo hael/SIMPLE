@@ -1028,16 +1028,16 @@ contains
         call a%kill
     end subroutine write_matrix2pdb
 
-    subroutine find_couples( points_P, points_Q, element, P, Q, theoretical_rad )
+    subroutine find_couples( points_P, points_Q, element, P, Q, theoretical_rad, frac_diam )
         real,              intent(in)    :: points_P(:,:), points_Q(:,:)
         character(len=2),  intent(in)    :: element
         real, allocatable, intent(inout) :: P(:,:), Q(:,:) ! just the couples of points
-        real, optional,    intent(in)    :: theoretical_rad
-        real    :: theoretical_radius ! for threshold selection
-        integer :: n   ! max number of couples
-        integer :: cnt ! actual number of couples
+        real, optional,    intent(in)    :: theoretical_rad, frac_diam
+        real    :: theoretical_radius                      ! for threshold selection
+        integer :: n                                       ! max number of couples
+        integer :: cnt                                     ! actual number of couples
         integer :: i, location(1), cnt_P, cnt_Q, z
-        real    :: d
+        real    :: d, theo_diam, ffrac_diam, d_thres
         character(len=2)     :: el_ucase
         logical, allocatable :: mask(:)
         real,    allocatable :: points_P_out(:,:), points_Q_out(:,:)
@@ -1046,6 +1046,13 @@ contains
         call get_element_Z_and_radius(el_ucase, z, theoretical_radius)
         if( z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
         if( present(theoretical_rad) ) theoretical_radius = theoretical_rad
+        theo_diam = 2. * theoretical_radius
+        if( present(frac_diam) )then
+            ffrac_diam = frac_diam
+        else
+            ffrac_diam = 0.8
+        endif
+        d_thres  = ffrac_diam * theo_diam
         if( size(points_P, dim=2) <= size(points_Q, dim=2) )then
             n = size(points_P, dim=2)
             allocate(mask(n), source=.true.)
@@ -1053,7 +1060,7 @@ contains
             cnt = 0 ! counts the number of identified couples
             do i = 1, size(points_Q, dim=2)
                 d = pixels_dist(points_Q(:,i),points_P(:,:),'min',mask,location,keep_zero=.true.)
-                if( d <= 2.*theoretical_radius )then ! has a couple
+                if( d <= d_thres )then ! has a couple
                     cnt = cnt + 1
                     points_P_out(:,cnt) = points_P(:,location(1))
                     points_Q_out(:,cnt) = points_Q(:,i)
@@ -1082,7 +1089,7 @@ contains
             cnt = 0 ! counts the number of identified couples
             do i = 1, size(points_P, dim=2)
                 d = pixels_dist(points_P(:,i),points_Q(:,:),'min',mask,location,keep_zero=.true.)
-                if( d <= 2.*theoretical_radius )then ! has couple
+                if( d <= d_thres )then ! has couple
                     cnt                 = cnt + 1
                     points_Q_out(:,cnt) = points_Q(:,location(1))
                     points_P_out(:,cnt) = points_P(:,i)
