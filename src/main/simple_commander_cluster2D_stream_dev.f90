@@ -10,12 +10,13 @@ use simple_image,          only: image
 use simple_oris,           only: oris
 use simple_stream_chunk,   only: stream_chunk
 use simple_class_frcs,     only: class_frcs
+use simple_stack_io,       only: stack_io
 use simple_qsys_funs
 use simple_commander_cluster2D
 use simple_timer
 implicit none
 
-public :: init_cluster2D_stream, update_projects_mask
+public :: init_cluster2D_stream, update_projects_mask, write_project_stream2D, terminate_stream2D
 public :: update_pool_status, update_pool, reject_from_pool, classify_pool
 public :: update_chunks, classify_new_chunks, import_chunks_into_pool
 
@@ -50,15 +51,15 @@ type(stream_chunk),   allocatable :: chunks(:), converged_chunks(:)
 type(cmdline)                     :: cline_cluster2D_chunk
 integer                           :: glob_chunk_id
 ! Book-keeping
-logical,               allocatable :: spprojs_mask_glob(:)
-character(LONGSTRLEN), allocatable :: imported_spprojs(:), imported_stks(:)
-character(len=:),      allocatable :: orig_projfile
-integer                            :: n_spprojs_glob = 0
-logical                            :: initiated = .false.
+logical,                   allocatable :: spprojs_mask_glob(:)
+character(len=LONGSTRLEN), allocatable :: imported_spprojs(:), imported_stks(:)
+character(len=LONGSTRLEN)              :: prev_snapshot_frcs, prev_snapshot_cavgs
+character(len=:),          allocatable :: orig_projfile
+integer                                :: origproj_time, n_spprojs_glob = 0
+logical                                :: initiated = .false.
 ! GUI
-character(len=:),      allocatable :: projfile4gui
+character(len=:),          allocatable :: projfile4gui
 ! other
-character(len=LONGSTRLEN) :: prev_snapshot_frcs, prev_snapshot_cavgs
 character(len=STDLEN)     :: refs_glob, refs_glob_ranked
 real                      :: orig_smpd, smpd, scale_factor, mskdiam     ! dimensions
 integer                   :: orig_box, box, boxpd
@@ -229,6 +230,7 @@ contains
         ! module varaiables
         n_spprojs_glob = 0
         if( allocated(spprojs_mask_glob) ) deallocate(spprojs_mask_glob)
+        origproj_time  = simple_gettime()
         initiated      = .true.
     end subroutine init_cluster2D_stream
 
@@ -964,7 +966,222 @@ contains
         call debug_print('end exec_classify_pool')
     end subroutine classify_pool
 
+    !> produces consolidated project at original scale
+    subroutine write_project_stream2D( add_suffix, force_write )
+        logical,           intent(in) :: add_suffix, force_write
+        type(class_frcs)              :: frcs, frcs_sc
+        type(oris)                    :: os_backup2, os_backup3
+        character(len=:), allocatable :: projfile,projfname, cavgsfname, suffix, frcsfname, src, dest
+        character(len=:), allocatable :: pool_refs
+        integer :: istk
+        logical :: do_write
+        do_write = force_write
+        if( .not.do_write )then
+            ! writes snapshot every ORIGPROJ_WRITEFREQ seconds
+            if( (simple_gettime()-origproj_time) > ORIGPROJ_WRITEFREQ .and. pool_iter>1 )then
+                do_write      = .true.
+                origproj_time = simple_gettime()
+            endif
+        endif
+        if( .not.do_write ) return
+        ! file naming
+        projfname  = get_fbody(orig_projfile, METADATA_EXT, separator=.false.)
+        cavgsfname = get_fbody(refs_glob, params_glob%ext, separator=.false.)
+        frcsfname  = get_fbody(FRCS_FILE, BIN_EXT, separator=.false.)
+        if( add_suffix )then
+            suffix     = '_snapshot'
+            cavgsfname = trim(cavgsfname)//trim(suffix)
+            frcsfname  = trim(frcsfname)//trim(suffix)
+            projfname  = trim(projfname)//trim(suffix)
+        endif
+        call pool_proj%projinfo%set(1,'projname', projfname)
+        projfile   = trim(projfname)//trim(METADATA_EXT)
+        cavgsfname = trim(cavgsfname)//trim(params_glob%ext)
+        frcsfname  = trim(frcsfname)//trim(BIN_EXT)
+        call pool_proj%projinfo%set(1,'projfile', projfile)
+        if( add_suffix )then
+            if( trim(prev_snapshot_cavgs) /= '' )then
+                call del_file(prev_snapshot_frcs)
+                call del_file(prev_snapshot_cavgs)
+                src = add2fbody(prev_snapshot_cavgs, params_glob%ext,'_even')
+                call del_file(src)
+                src = add2fbody(prev_snapshot_cavgs, params_glob%ext,'_odd')
+                call del_file(src)
+            endif
+        endif
+        write(logfhandle,'(A,A,A,A)')'>>> GENERATING PROJECT SNAPSHOT ',trim(projfile), ' AT: ',cast_time_char(simple_gettime())
+        pool_refs = trim(POOL_DIR)//trim(refs_glob)
+        if( do_autoscale )then
+            os_backup3 = pool_proj%os_cls2D
+            os_backup2 = pool_proj%os_stk
+            ! rescale classes
+            if( l_wfilt )then
+                src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX))
+                dest = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX))
+                call rescale_cavgs(src, dest)
+                src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX)//'_even')
+                dest = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX)//'_even')
+                call rescale_cavgs(src, dest)
+                src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX)//'_odd')
+                dest = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX)//'_odd')
+                call rescale_cavgs(src, dest)
+            endif
+            call rescale_cavgs(pool_refs, cavgsfname)
+            src  = add2fbody(pool_refs, params_glob%ext,'_even')
+            dest = add2fbody(cavgsfname,params_glob%ext,'_even')
+            call rescale_cavgs(src, dest)
+            src  = add2fbody(pool_refs, params_glob%ext,'_odd')
+            dest = add2fbody(cavgsfname,params_glob%ext,'_odd')
+            call rescale_cavgs(src, dest)
+            call pool_proj%os_out%kill
+            call pool_proj%add_cavgs2os_out(cavgsfname, orig_smpd, 'cavg')
+            if( l_wfilt )then
+                src = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX))
+                call pool_proj%add_cavgs2os_out(src, orig_smpd, 'cavg'//trim(WFILT_SUFFIX))
+            endif
+            pool_proj%os_cls2D = os_backup3
+            call os_backup3%kill
+            ! rescale frcs
+            call frcs_sc%read(trim(POOL_DIR)//trim(FRCS_FILE))
+            call frcs_sc%upsample(orig_smpd, orig_box, frcs)
+            call frcs%write(frcsfname)
+            call frcs%kill
+            call frcs_sc%kill
+            call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
+            ! project updates to original scale
+            call pool_proj%os_stk%set_all2single('box', real(orig_box))
+            call pool_proj%os_stk%set_all2single('smpd',orig_smpd)
+            call pool_proj%os_ptcl2D%mul_shifts( 1./scale_factor )
+            do istk = 1,pool_proj%os_stk%get_noris()
+                call pool_proj%os_stk%set(istk,'stk',imported_stks(istk))
+            enddo
+            ! write
+            pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
+            call pool_proj%os_ptcl3D%delete_2Dclustering
+            call pool_proj%write(projfile)
+            call pool_proj%os_ptcl3D%kill
+            ! preserve down-scaling
+            call pool_proj%os_ptcl2D%mul_shifts( scale_factor )
+            pool_proj%os_stk = os_backup2
+            call os_backup2%kill
+        else
+            if( add_suffix )then
+                call simple_copy_file(trim(POOL_DIR)//trim(FRCS_FILE), frcsfname)
+                if( l_wfilt )then
+                    src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX))
+                    dest = add2fbody(cavgsfname,params_glob%ext, trim(WFILT_SUFFIX))
+                    call simple_copy_file(src, dest)
+                    src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX)//'_even')
+                    dest = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX)//'_even')
+                    call simple_copy_file(src, dest)
+                    src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX)//'_odd')
+                    dest = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX)//'_odd')
+                    call simple_copy_file(src, dest)
+                else
+                    call simple_copy_file(pool_refs, cavgsfname)
+                    src  = add2fbody(pool_refs, params_glob%ext,'_even')
+                    dest = add2fbody(cavgsfname,params_glob%ext,'_odd')
+                    call simple_copy_file(src, dest)
+                    src  = add2fbody(pool_refs, params_glob%ext,'_odd')
+                    dest = add2fbody(cavgsfname,params_glob%ext,'_odd')
+                    call simple_copy_file(src, dest)
+                endif
+            endif
+            call pool_proj%os_out%kill
+            call pool_proj%add_cavgs2os_out(cavgsfname, orig_smpd, 'cavg')
+            if( l_wfilt )then
+                src = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX))
+                call pool_proj%add_cavgs2os_out(src, orig_smpd, 'cavg'//trim(WFILT_SUFFIX))
+            endif
+            call pool_proj%add_frcs2os_out(frcsfname, 'frc2D')
+            ! write
+            pool_proj%os_ptcl3D = pool_proj%os_ptcl2D
+            call pool_proj%os_ptcl3D%delete_2Dclustering
+            call pool_proj%write(projfile)
+            call pool_proj%os_ptcl3D%kill
+        endif
+        ! cleanup previous snapshot
+        prev_snapshot_frcs  = trim(frcsfname)
+        prev_snapshot_cavgs = trim(cavgsfname)
+    end subroutine write_project_stream2D
+
+    subroutine terminate_stream2D
+        type(rank_cavgs_commander) :: xrank_cavgs
+        type(cmdline)              :: cline_rank_cavgs
+        integer :: ichunk, ipart
+        ! call qsys_cleanup
+        do ichunk = 1,params_glob%nchunks
+            call chunks(ichunk)%terminate
+        enddo
+        if( .not.pool_available )then
+            pool_iter = pool_iter-1
+            refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params_glob%ext)
+            ! tricking the asynchronous master process to come to a hard stop
+            do ipart = 1,params_glob%nparts
+                call simple_touch(trim(POOL_DIR)//'JOB_FINISHED_'//int2str_pad(ipart,numlen))
+            enddo
+            call simple_touch(trim(POOL_DIR)//'CAVGASSEMBLE_FINISHED')
+        endif
+        if( pool_iter >= 1 )then
+            ! updates project
+            call write_project_stream2D(.false.,.true.)
+            ! ranking
+            refs_glob_ranked = add2fbody(refs_glob,params_glob%ext,'_ranked')
+            call cline_rank_cavgs%set('projfile', orig_projfile)
+            call cline_rank_cavgs%set('stk',      trim(POOL_DIR)//refs_glob)
+            call cline_rank_cavgs%set('outstk',   trim(refs_glob_ranked))
+            call xrank_cavgs%execute(cline_rank_cavgs)
+        endif
+        ! cleanup
+        if( .not.debug_here )then
+            ! call qsys_cleanup
+            call simple_rmdir(SCALE_DIR)
+            call simple_rmdir(POOL_DIR)
+        endif
+    end subroutine terminate_stream2D
+
     ! Utilities
+
+    subroutine rescale_cavgs( src, dest )
+        character(len=*), intent(in) :: src, dest
+        type(image)          :: img, img_pad
+        type(stack_io)       :: stkio_r, stkio_w
+        character(len=:), allocatable :: dest_here
+        integer, allocatable :: cls_pop(:)
+        integer              :: ldim(3),icls, ncls_here
+        call debug_print('in rescale_cavgs '//trim(src))
+        call debug_print('in rescale_cavgs '//trim(dest))
+        if(trim(src) == trim(dest))then
+            dest_here = 'tmp_cavgs.mrc'
+        else
+            dest_here = trim(dest)
+        endif
+        call img%new([box,box,1],smpd)
+        call img_pad%new([orig_box,orig_box,1],orig_smpd)
+        cls_pop = nint(pool_proj%os_cls2D%get_all('pop'))
+        call find_ldim_nptcls(src,ldim,ncls_here)
+        call stkio_r%open(trim(src), smpd, 'read', bufsz=ncls_here)
+        call stkio_r%read_whole
+        call stkio_w%open(dest_here, orig_smpd, 'write', box=orig_box, bufsz=ncls_here)
+        do icls = 1,ncls_here
+            if( cls_pop(icls) > 0 )then
+                call img%zero_and_unflag_ft
+                call stkio_r%get_image(icls, img)
+                call img%fft
+                call img%pad(img_pad, backgr=0.)
+                call img_pad%ifft
+            else
+                img_pad = 0.
+            endif
+            call stkio_w%write(icls, img_pad)
+        enddo
+        call stkio_r%close
+        call stkio_w%close
+        if (trim(src) == trim(dest) ) call simple_rename('tmp_cavgs.mrc',dest)
+        call img%kill
+        call img_pad%kill
+        call debug_print('end rescale_cavgs')
+    end subroutine rescale_cavgs
 
     subroutine tidy_2Dstream_iter
         character(len=:), allocatable :: prefix
