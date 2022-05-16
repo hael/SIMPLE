@@ -183,7 +183,7 @@ type :: nanoparticle
     procedure, private :: masscen
     procedure, private :: calc_longest_atm_dist
     ! visualization and output
-    procedure, private :: simulate_atoms
+    procedure          :: simulate_atoms
     procedure, private :: write_centers_1
     procedure, private :: write_centers_2
     generic            :: write_centers => write_centers_1, write_centers_2
@@ -442,7 +442,6 @@ contains
         logical,             intent(in)    :: use_auto_corr_thres ! true -> use automatic corr thres
         real, allocatable :: centers_A(:,:)                       ! coordinates of the atoms in ANGSTROMS
         type(image)       :: simatms
-        type(atoms)       :: atoms_obj
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%img, self%element)
@@ -452,8 +451,8 @@ contains
         call self%split_atoms()
         ! OUTLIERS DISCARDING
         ! validation through per-atom correlation with the simulated density
-        call self%simulate_atoms(atoms_obj, simatms)
-        call self%validate_atoms( simatms )
+        call self%simulate_atoms(simatms)
+        call self%validate_atoms(simatms)
         ! discard atoms with low valid_corr
         call self%discard_low_valid_corr_atoms(use_auto_corr_thres)
         ! fit lattice
@@ -461,7 +460,6 @@ contains
         call fit_lattice(self%element, centers_A, a)
         deallocate(centers_A)
         call simatms%kill
-        call atoms_obj%kill
     end subroutine identify_lattice_params
 
     subroutine identify_atomic_pos( self, a, l_fit_lattice, use_cs_thres, use_auto_corr_thres, cs_thres )
@@ -473,7 +471,6 @@ contains
         integer, optional,   intent(in)    :: cs_thres
         logical     :: use_cn_thresh, fixed_cs_thres
         type(image) :: simatms, img_cos
-        type(atoms) :: atoms_obj
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%img, self%element)
@@ -485,8 +482,8 @@ contains
         call self%split_atoms()
         ! OUTLIERS DISCARDING
         ! validation through per-atom correlation with the simulated density
-        call self%simulate_atoms(atoms_obj, simatms)
-        call self%validate_atoms( simatms )
+        call self%simulate_atoms(simatms)
+        call self%validate_atoms(simatms)
         ! discard atoms with low valid_corr
         call self%discard_low_valid_corr_atoms(use_auto_corr_thres)
         ! discard lowly coordinated atoms
@@ -498,8 +495,8 @@ contains
             if( use_cn_thresh ) call self%discard_lowly_coordinated(CN_THRESH_XTAL, a, l_fit_lattice)
         endif
         ! re-calculate valid_corr:s (since they are otherwise lost from the B-factor field due to reallocations of atominfo)
-        call self%simulate_atoms(atoms_obj, simatms)
-        call self%validate_atoms( simatms )
+        call self%simulate_atoms(simatms)
+        call self%validate_atoms(simatms)
         ! WRITE OUTPUT
         call self%img_bin%write_bimg(trim(self%fbody)//'_BIN.mrc')
         write(logfhandle,'(A)') 'output, binarized map:            '//trim(self%fbody)//'_BIN.mrc'
@@ -515,7 +512,6 @@ contains
         ! destruct
         call img_cos%kill
         call simatms%kill
-        call atoms_obj%kill
     end subroutine identify_atomic_pos
 
     ! this slimmed-down version is intended for detect_atoms_eo
@@ -523,7 +519,6 @@ contains
     subroutine identify_atomic_pos_slim( self )
         class(nanoparticle), intent(inout) :: self
         type(image) :: simatms
-        type(atoms) :: atoms_obj
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%img_pc_atm, self%element)
@@ -532,8 +527,8 @@ contains
         ! atom splitting by correlation map validation
         call self%split_atoms()
         ! validation through per-atom correlation with the simulated density
-        call self%simulate_atoms(atoms_obj, simatms)
-        call self%validate_atoms( simatms )
+        call self%simulate_atoms(simatms)
+        call self%validate_atoms(simatms)
         ! WRITE OUTPUT
         call self%img_bin%write_bimg(trim(self%fbody)//'_BIN.mrc')
         write(logfhandle,'(A)') 'output, binarized map:            '//trim(self%fbody)//'_BIN.mrc'
@@ -544,7 +539,6 @@ contains
         write(logfhandle,'(A)') 'output, simulated atomic density: '//trim(self%fbody)//'_SIM.mrc'
         ! destruct
         call simatms%kill
-        call atoms_obj%kill
     end subroutine identify_atomic_pos_slim
 
     ! This subrotuine takes in input a nanoparticle and
@@ -1121,7 +1115,6 @@ contains
         class(nanoparticle), intent(inout) :: self
         real, optional,      intent(in)    :: a0(3) ! lattice parameters
         type(image)          :: phasecorr, simatms
-        type(atoms)          :: atoms_obj
         logical, allocatable :: mask(:,:,:)
         real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:)
         real,    pointer     :: rmat(:,:,:), rmat_corr(:,:,:)
@@ -1145,8 +1138,8 @@ contains
         if( allocated(self%coords4stats) ) call self%pack_instance4stats(strain_array)
         allocate(cc_mask(self%n_cc), source=.true.) ! because self%n_cc might change after pack_instance4stats
         ! validation through per-atom correlation with the simulated density
-        call self%simulate_atoms(atoms_obj, simatms)
-        call self%validate_atoms( simatms )
+        call self%simulate_atoms(simatms)
+        call self%validate_atoms(simatms)
         ! calc NPdiam & NPcen
         tmpcens     = self%atominfo2centers()
         self%NPdiam = 0.
@@ -1236,7 +1229,6 @@ contains
         deallocate(cc_mask, imat_cc, tmpcens, strain_array, centers_A)
         call phasecorr%kill
         call simatms%kill
-        call atoms_obj%kill
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS, COMPLETED'
 
         contains
@@ -1279,7 +1271,7 @@ contains
                 integer :: i
                 ! make cn mask
                 cn_mask = self%atominfo(:)%cn_std == cn_std
-                call self%simulate_atoms(atoms_obj, simatms, mask=cn_mask)
+                call self%simulate_atoms(simatms, mask=cn_mask, atoms_obj=atoms_obj)
                 call atoms_obj%writepdb('atoms_cn'//int2str_pad(cn_std,2))
                 call simatms%write('simvol_cn'//int2str_pad(cn_std,2)//'.mrc')
                 ! make binary image of atoms with given cn_std
@@ -1340,56 +1332,65 @@ contains
 
     ! visualization and output
 
-    subroutine simulate_atoms( self, atoms_obj, simatms, betas, mask )
-        class(nanoparticle), intent(inout) :: self
-        class(atoms),        intent(inout) :: atoms_obj
-        class(image),        intent(inout) :: simatms
-        real,    optional,   intent(in)    :: betas(self%n_cc) ! in pdb file b-factor
-        logical, optional,   intent(in)    :: mask(self%n_cc)
-        logical :: betas_present, mask_present
+    subroutine simulate_atoms( self, simatms, betas, mask, atoms_obj)
+        class(nanoparticle),           intent(inout) :: self
+        class(image),                  intent(inout) :: simatms
+        real,        optional,         intent(in)    :: betas(self%n_cc) ! in pdb file b-factor
+        logical,     optional,         intent(in)    :: mask(self%n_cc)
+        type(atoms), optional, target, intent(inout) :: atoms_obj
+        type(atoms), target  :: atms_here
+        type(atoms), pointer :: atms_ptr => null()
+        logical :: betas_present, mask_present, atoms_obj_present
         integer :: i, cnt
-        betas_present = present(betas)
-        mask_present  = present(mask)
+        betas_present     = present(betas)
+        mask_present      = present(mask)
+        atoms_obj_present = present(atoms_obj)
+        if( atoms_obj_present )then
+            atms_ptr => atoms_obj
+        else
+            atms_ptr => atms_here
+        endif
         ! generate atoms object
         if( mask_present )then
             cnt = count(mask)
-            call atoms_obj%new(cnt)
+            call atms_ptr%new(cnt)
         else
-            call atoms_obj%new(self%n_cc)
+            call atms_ptr%new(self%n_cc)
         endif
         if( mask_present )then
             cnt = 0
             do i = 1, self%n_cc
                 if( mask(i) )then
                     cnt = cnt + 1
-                    call set_atoms_obj(cnt, i)
+                    call set_atoms(cnt, i)
                 endif
             end do
         else
             do i = 1, self%n_cc
-                call set_atoms_obj(i, i)
+                call set_atoms(i, i)
             enddo
         endif
         call simatms%new(self%ldim,self%smpd)
-        call atoms_obj%convolve(simatms, cutoff = 8.*self%smpd)
+        call atms_ptr%convolve(simatms, cutoff = 8.*self%smpd)
+        if( .not. atoms_obj_present ) call atms_ptr%kill
 
         contains
 
-            subroutine set_atoms_obj( atms_obj_ind, ainfo_ind )
+            subroutine set_atoms( atms_obj_ind, ainfo_ind )
                 integer, intent(in) :: atms_obj_ind, ainfo_ind
-                call atoms_obj%set_name(     atms_obj_ind, self%atom_name)
-                call atoms_obj%set_element(  atms_obj_ind, self%element)
-                call atoms_obj%set_coord(    atms_obj_ind, (self%atominfo(i)%center(:)-1.)*self%smpd)
-                call atoms_obj%set_num(      atms_obj_ind, atms_obj_ind)
-                call atoms_obj%set_resnum(   atms_obj_ind, atms_obj_ind)
-                call atoms_obj%set_chain(    atms_obj_ind, 'A')
-                call atoms_obj%set_occupancy(atms_obj_ind, 1.)
+                call atms_ptr%set_name(     atms_obj_ind, self%atom_name)
+                call atms_ptr%set_element(  atms_obj_ind, self%element)
+                call atms_ptr%set_coord(    atms_obj_ind, (self%atominfo(i)%center(:)-1.)*self%smpd)
+                call atms_ptr%set_num(      atms_obj_ind, atms_obj_ind)
+                call atms_ptr%set_resnum(   atms_obj_ind, atms_obj_ind)
+                call atms_ptr%set_chain(    atms_obj_ind, 'A')
+                call atms_ptr%set_occupancy(atms_obj_ind, 1.)
                 if( betas_present )then
-                    call atoms_obj%set_beta(atms_obj_ind, betas(ainfo_ind))
+                    call atms_ptr%set_beta(atms_obj_ind, betas(ainfo_ind))
                 else
-                    call atoms_obj%set_beta(atms_obj_ind, self%atominfo(ainfo_ind)%cn_gen) ! use generalised coordination number
+                    call atms_ptr%set_beta(atms_obj_ind, self%atominfo(ainfo_ind)%cn_gen) ! use generalised coordination number
                 endif
-            end subroutine set_atoms_obj
+            end subroutine set_atoms
 
     end subroutine simulate_atoms
 
