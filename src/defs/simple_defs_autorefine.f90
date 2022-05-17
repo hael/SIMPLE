@@ -17,6 +17,5 @@ character(len=*), parameter :: ODD_SPLIT     = 'split_ccs_odd.mrc'
 character(len=*), parameter :: AVG_MAP       = 'recvol_state01_filt_AVG.mrc'
 character(len=*), parameter :: AVG_ATOMS     = 'recvol_state01_ATMS_AVG.pdb'
 character(len=*), parameter :: AVG_ATOMS_SIM = 'recvol_state01_ATMS_AVG_SIM.mrc'
-character(len=*), parameter :: FINAL_MAPS    = './final_results/'
 character(len=*), parameter :: TAG           = 'xxx' ! for checking command lines
 end module simple_defs_autorefine

@@ -1221,8 +1221,6 @@ contains
             call exec_cmdline('rm -f recvol_state01_iter* *part*')
             iter = iter + 1
         end do
-        call simple_mkdir(FINAL_MAPS)
-        call copy_files(FINAL_MAPS, iter)
         ! clean
         call clean
         ! retrieve cavgs stack
@@ -1230,8 +1228,8 @@ contains
         if( ncavgs /= 0 )then
             ! update cline_refine3D_cavgs accordingly
             call cline_refine3D_cavgs%set('prg',      'refine3D_nano')
-            call cline_refine3D_cavgs%set('vol_even', FINAL_MAPS//trim(fbody_e)//'_iter'//int2str_pad(iter,3)//'.mrc')
-            call cline_refine3D_cavgs%set('vol_odd',  FINAL_MAPS//trim(fbody_o)//'_iter'//int2str_pad(iter,3)//'.mrc')
+            call cline_refine3D_cavgs%set('vol_even', iter_dir//trim(fbody_e)//'_iter'//int2str_pad(iter,3)//'.mrc')
+            call cline_refine3D_cavgs%set('vol_odd',  iter_dir//trim(fbody_o)//'_iter'//int2str_pad(iter,3)//'.mrc')
             call cline_refine3D_cavgs%set('pgrp',         params%pgrp)
             call cline_refine3D_cavgs%set('mskdiam',   params%mskdiam)
             call cline_refine3D_cavgs%set('nthr',   real(params%nthr))
@@ -1256,7 +1254,7 @@ contains
             if( allocated(rstates) ) deallocate(rstates)
             rstates = spproj%os_cls3D%get_all('state')
             ! prepare for re-projection
-            call cline_reproject%set('vol1',   FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
+            call cline_reproject%set('vol1',   iter_dir//trim(fbody)//'_iter'//int2str_pad(iter,3)//'.mrc')
             call cline_reproject%set('outstk', 'reprojs_recvol.mrc')
             call cline_reproject%set('smpd',            params%smpd)
             call cline_reproject%set('oritab',     'cavgs_oris.txt')
@@ -1267,7 +1265,7 @@ contains
             call xreproject%execute(cline_reproject)
             params_glob => params_ptr
             params_ptr  => null()
-            call cline_reproject%set('vol1', FINAL_MAPS//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_ATMS_AVG_SIM.mrc')
+            call cline_reproject%set('vol1', iter_dir//trim(fbody)//'_iter'//int2str_pad(iter,3)//'_ATMS_AVG_SIM.mrc')
             call cline_reproject%set('outstk', 'reprojs_ATMS_AVG_SIM.mrc')
             ! re-project
             params_ptr  => params_glob
@@ -1383,12 +1381,12 @@ contains
             call del_file(EVEN_ATOMS)
             call del_file(EVEN_BIN)
             call del_file(EVEN_CCS)
-            ! call del_file(EVEN_SPLIT)
+            call del_file(EVEN_SPLIT)
             call del_file(ODD_FILT)
             call del_file(ODD_ATOMS)
             call del_file(ODD_BIN)
             call del_file(ODD_CCS)
-            ! call del_file(ODD_SPLIT)
+            call del_file(ODD_SPLIT)
             call del_file(AVG_MAP)
             call del_file(AVG_ATOMS)
             call del_file(AVG_ATOMS_SIM)
@@ -1404,14 +1402,14 @@ contains
             call simple_copy_file(EVEN_SIM,      trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON_SIM.mrc')
             call simple_copy_file(EVEN_BIN,      trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
             call simple_copy_file(EVEN_CCS,      trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_CC.mrc')
-            ! call simple_copy_file(EVEN_SPLIT,    trim(dir)//trim(fbody_split_e) //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(EVEN_SPLIT,    trim(dir)//trim(fbody_split_e) //'_iter'//int2str_pad(i,3)//'.mrc')
             call simple_copy_file(ODD,           trim(dir)//trim(fbody_o)       //'_iter'//int2str_pad(i,3)//'.mrc')
             call simple_copy_file(ODD_FILT,      trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'.mrc')
             call simple_copy_file(ODD_ATOMS,     trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON.pdb')
             call simple_copy_file(ODD_SIM,       trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON_SIM.mrc')
             call simple_copy_file(ODD_BIN,       trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
             call simple_copy_file(ODD_CCS,       trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_CC.mrc')
-            ! call simple_copy_file(ODD_SPLIT,     trim(dir)//trim(fbody_split_o) //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(ODD_SPLIT,     trim(dir)//trim(fbody_split_o) //'_iter'//int2str_pad(i,3)//'.mrc')
             call simple_copy_file(AVG_MAP,       trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_filt_AVG.mrc')
             call simple_copy_file(AVG_ATOMS,     trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_ATMS_AVG.pdb')
             call simple_copy_file(AVG_ATOMS_SIM, trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_ATMS_AVG_SIM.mrc')
