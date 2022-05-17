@@ -42,7 +42,6 @@ contains
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
         logical,                   parameter   :: DEBUG_HERE      = .false.
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
-        character(len=STDLEN),     parameter   :: selection_fname = './STREAM_SELECTION'
         class(cmdline),            allocatable :: completed_jobs_clines(:)
         type(qsys_env)                         :: qenv
         type(cmdline)                          :: cline_make_pickrefs
@@ -67,7 +66,7 @@ contains
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           8.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            5.)
         if( .not. cline%defined('bfac')            ) call cline%set('bfac',             50.)
-        call cline%set('groupframes',     'no') ! TODO
+        call cline%set('groupframes',     'no')
         if( .not. cline%defined('mcconvention')    ) call cline%set('mcconvention','simple')
         if( .not. cline%defined('eer_fraction')    ) call cline%set('eer_fraction',     20.)
         if( .not. cline%defined('eer_upsampling')  ) call cline%set('eer_upsampling',    1.)
@@ -81,6 +80,8 @@ contains
         if( .not. cline%defined('ctfpatch')        ) call cline%set('ctfpatch',       'yes')
         ! picking
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
+        if( .not. cline%defined('ndev')            ) call cline%set('ndev',              2.)
+        if( .not. cline%defined('thres')           ) call cline%set('thres',            24.)
         ! extraction
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
         if( cline%defined('refs') .and. cline%defined('vol1') )then
@@ -89,10 +90,10 @@ contains
         call cline%set('numlen', 5.)
         call cline%set('stream','yes')
         ! 2D classification
-        if( .not. cline%defined('lpthresh')  ) call cline%set('lpthresh', 30.0)
-        ! if( .not. cline%defined('ndev2D')    ) call cline%set('ndev2D',   1.5) ! TODO
+        if( .not. cline%defined('lpthresh')  ) call cline%set('lpthresh',      30.0)
+        if( .not. cline%defined('ndev2D')    ) call cline%set('ndev2D',         1.5)
         if( .not. cline%defined('wiener')    ) call cline%set('wiener',   'partial')
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale',    'yes')
         ! master parameters
         call params%new(cline)
         params_glob%split_mode = 'stream'
@@ -106,6 +107,7 @@ contains
         call spproj%read( params%projfile )
         call spproj%update_projinfo(cline)
         if( spproj%os_mic%get_noris() /= 0 ) THROW_HARD('PREPROCESS_STREAM must start from an empty project (eg from root project folder)')
+        call spproj%write(micspproj_fname)
         ! picking
         l_pick = .false.
         if( cline%defined('refs') .or. cline%defined('vol1') ) l_pick = .true.
@@ -215,7 +217,7 @@ contains
                 write(logfhandle,'(A,I5)')'>>> # MOVIES PROCESSED & IMPORTED:    ',n_imported
                 if( l_pick ) write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',nptcls_glob
                 ! write project
-                call spproj%write(micspproj_fname)
+                call spproj%write_segment_inside('mic',micspproj_fname)
                 ! write starfile snapshot
                 if (spproj%os_mic%get_noris() > 0) then
                     if( file_exists("micrographs.star") ) call del_file("micrographs.star")
@@ -440,7 +442,6 @@ contains
                     nimported  = 0
                     return
                 endif
-                call write_filetable(STREAM_SPPROJFILES, completedfnames) ! to be removed
             end subroutine update_projects_list
 
             subroutine update_ori_path(os, i, key)

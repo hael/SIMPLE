@@ -146,7 +146,11 @@ contains
         ! shift multiplication
         if( params%mul > 1. ) call build%spproj_field%mul_shifts(params%mul)
         ! setup weights
-        call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)
+        if( trim(params%ptclw).eq.'yes' )then
+            ! weights are set at search time, so nothing to do here.
+        else
+            call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)
+        endif
         ! even/odd partitioning
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
         ! write

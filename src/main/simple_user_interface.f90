@@ -2898,7 +2898,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 16, 0, 20, 8, 1, 4, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 16, 0, 20, 9, 1, 4, .true.)                                                     ! # entries in each group, requires sp_project
         ! image input/output
         call preprocess_stream_dev%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
         call preprocess_stream_dev%set_input('img_ios', 2, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2938,7 +2938,7 @@ contains
         call preprocess_stream_dev%set_input('srch_ctrls', 3, dfmax)
         call preprocess_stream_dev%set_input('srch_ctrls', 4, astigtol)
         call preprocess_stream_dev%set_input('srch_ctrls', 5, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
-        call preprocess_stream_dev%set_input('srch_ctrls', 6, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        call preprocess_stream_dev%set_input('srch_ctrls', 6, 'ndev',  'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
         call preprocess_stream_dev%set_input('srch_ctrls', 7, pgrp)
         preprocess_stream_dev%srch_ctrls(7)%required = .false.
         call preprocess_stream_dev%set_input('srch_ctrls', 8, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
@@ -2982,6 +2982,8 @@ contains
         call preprocess_stream_dev%set_input('filt_ctrls', 8, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){no}',&
         '(yes|no){no}', .false., 'no')
+        call preprocess_stream_dev%set_input('filt_ctrls', 9, 'wiener', 'multi', 'Wiener restoration', 'Wiener restoration, full or partial (full|partial){partial}',&
+        &'(full|partial){partial}', .false., 'partial')
         ! mask controls
         call preprocess_stream_dev%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
