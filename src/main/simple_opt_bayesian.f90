@@ -6,17 +6,17 @@ implicit none
 
 contains
     ! simple translation of rb's compute_count_for_edges
-    subroutine compute_count_for_edges(pop, indexes, counts)
-        integer, intent(in)    :: indexes(:)
-        integer, intent(in)    :: pop(:,:)
-        integer, intent(inout) :: counts(:)
+    subroutine compute_count_for_edges(population, indexes, counts)
+        integer    , intent(in)    :: population(:,:)
+        type(stack), intent(in)    :: indexes
+        integer    , intent(inout) :: counts(:)
         integer :: k, l, index, val
         counts = 0
-        do k = 1, size(pop, 1)
+        do k = 1, size(population, 1)
             index = 1
-            do l = 1, size(indexes)
-                val = indexes(size(indexes) - l + 1)
-                if (pop(k, val) == 1) then
+            do l = 1, indexes%size_of()
+                val = indexes%get_at(indexes%size_of() - l + 1)
+                if (population(k, val) == 1) then
                     index = index + 2**(l-1)
                 endif
             enddo
@@ -35,13 +35,14 @@ contains
         integer, intent(in)  :: node
         integer, intent(in)  :: candidates(:)
         integer, intent(in)  :: pop(:,:)
-        integer, allocatable :: indexes(:)
+        type(stack)          :: indexes
         integer, allocatable :: counts(:)
         real    :: total, rs
         integer :: k, a1, a2
-        allocate(indexes(size(candidates)+1), counts(int(2**(size(candidates)+1))), source=0)
-        indexes(1)                    = node
-        indexes(2:size(candidates)+1) = candidates
+        allocate(counts(int(2**(size(candidates)+1))), source=0)
+        call indexes%new()
+        call indexes%push(node)
+        call indexes%push(candidates)
         call compute_count_for_edges(pop, indexes, counts)
         total = -1.
         do k = 0, int(size(counts)/2)-1
@@ -173,4 +174,129 @@ contains
             graph(from, to) = 1.
         enddo
     end subroutine construct_network
+
+    subroutine topological_ordering(graph, ordered)
+        real   , intent(in)    :: graph(:,:)
+        integer, intent(inout) :: ordered(:)
+        integer, allocatable   :: in_count(:)
+        integer     :: prob_size, k, l, cur_item
+        type(stack) :: stk
+        prob_size = size(graph, 1)
+        allocate(in_count(prob_size), source=0)
+        do k = 1, prob_size
+            in_count(k) = 0
+            do l = 1, prob_size
+                if( graph(l, k) > 0. ) in_count(k) = in_count(k) + 1
+            enddo
+        enddo
+        call stk%new()
+        do k = 1, prob_size
+            if( in_count(k) == 0 ) then
+                call stk%push(k)
+            endif
+        enddo
+        do k = 1, prob_size
+            cur_item = stk%pop()
+            do l = 1, prob_size
+                if( graph(cur_item, l) > 0. )then
+                    in_count(l) = in_count(l) - 1
+                    if( in_count(l) <= 0 ) call stk%push(l)
+                endif
+            enddo
+            ordered(k) = cur_item
+        enddo
+    end subroutine topological_ordering
+
+    function marginal_probability(node, population) result(val)
+        integer, intent(in) :: node
+        integer, intent(in) :: population(:,:)
+        real    :: val
+        integer :: k
+        val = 0.
+        do k = 1, size(population, 1)
+            val = val + population(k, node)
+        enddo
+        val = val/size(population, 1)
+    end function marginal_probability
+
+    function count_in(node, graph) result(val)
+        integer, intent(in) :: node
+        real   , intent(in) :: graph(:,:)
+        integer             :: val, k
+        val = 0
+        do k = 1, size(graph, 1)
+            if( graph(k, node) > 0. ) val = val + 1
+        enddo
+    end function count_in
+
+    function calculate_probability(node, bitstring, graph, population) result(val)
+        integer, intent(in)  :: node
+        integer, intent(in)  :: bitstring(:)
+        real   , intent(in)  :: graph(:,:)
+        integer, intent(in)  :: population(:,:)
+        real                 :: val
+        type(stack)          :: indexes
+        integer              :: k, index, i1, i2
+        integer, allocatable :: counts(:)
+        if( count_in(node, graph) == 0 )then
+            val = marginal_probability(node, population)
+            return
+        endif
+        allocate(counts(size(bitstring)), source=0)
+        call indexes%new()
+        call indexes%push(node)
+        ! add the 'in' to node
+        do k = 1, size(graph, 1)
+            if( graph(k, node) > 0. ) call indexes%push(k)
+        enddo
+        call compute_count_for_edges(population, indexes, counts)
+        index = 0
+        do k = 1, size(graph, 1)
+            if( graph(k, node) > 0. )then
+                if( bitstring(k) == 1 ) index = index + 2**(k - 1)
+            endif
+        enddo
+        i1  = index + 1*2**(count_in(node, graph)) + 1
+        i2  = index + 0*2**(count_in(node, graph)) + 1
+        val = 1.*counts(i1)/(counts(i1) + counts(i2))
+    end function calculate_probability
+
+    subroutine probabilistic_logic_sample(graph, ordered, population, bitstring, seed)
+        real   ,           intent(in)    :: graph(:,:)
+        integer,           intent(inout) :: ordered(:)
+        integer,           intent(in)    :: population(:,:)
+        integer,           intent(inout) :: bitstring(:)
+        integer, optional, intent(in)    :: seed
+        integer :: k, ordered_ind
+        bitstring = 0
+        if( present(seed) ) call srand(seed)
+        do k = 1, size(graph, 1)
+            ordered_ind = ordered(k)
+            if( rand() < calculate_probability(ordered_ind, bitstring, graph, population) )then
+                bitstring(ordered_ind) = 1
+            endif
+        enddo
+    end subroutine probabilistic_logic_sample
+
+    subroutine sample_from_network(population, graph, num_samples, samples, seeds)
+        integer,           intent(in)    :: population(:,:)
+        real   ,           intent(in)    :: graph(:,:)
+        integer,           intent(in)    :: num_samples
+        integer,           intent(inout) :: samples(:, :)
+        integer, optional, intent(in)    :: seeds(:)
+        integer, allocatable   :: ordered(:), bitstring(:)
+        integer :: k
+        allocate(ordered(  size(graph, 1)), source=0)
+        allocate(bitstring(size(graph, 1)), source=-1)
+        call topological_ordering(graph, ordered)
+        do k = 1, num_samples
+            if( present(seeds) )then
+                call probabilistic_logic_sample(graph, ordered, population, bitstring, seeds(k))
+            else
+                call probabilistic_logic_sample(graph, ordered, population, bitstring)
+            endif
+            samples(k, :) = bitstring
+            write(*, *) bitstring
+        enddo
+    end subroutine sample_from_network
 end module simple_opt_bayesian
