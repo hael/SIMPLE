@@ -258,7 +258,7 @@ contains
                     enddo
                     !$omp end parallel do
                 else
-                    !omp parallel do collapse(3) default(shared) private(k,l,m,k1,l1,m1,k_ind,l_ind,m_ind,ref_diff_odd,ref_diff_even) schedule(dynamic,CHUNKSZ) proc_bind(close)
+                    !$omp parallel do collapse(3) default(shared) private(k,l,m,k1,l1,m1,k_ind,l_ind,m_ind,ref_diff_odd,ref_diff_even) schedule(dynamic,CHUNKSZ) proc_bind(close)
                     do k = lb(1),ub(1)
                         do l = lb(2),ub(2)
                             do m = lb(3),ub(3)
@@ -294,7 +294,7 @@ contains
                             enddo
                         enddo
                     enddo
-                    !omp end parallel do
+                    !$omp end parallel do
                 endif
                 min_sum_odd  = sum(opt_diff_odd) ! TODO
                 min_sum_even = sum(opt_diff_even) ! TODO
