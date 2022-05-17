@@ -121,8 +121,9 @@ contains
         character(len=2)   :: el
         integer            :: k
         type(stats_struct) :: dist_stats
-        character(len=:), allocatable :: add2fn, ename_filt, oname_filt, eatms, oatms, fname_avg
-        character(len=:), allocatable :: tmp, eatms_common, oatms_common, oatms_sim, eatms_sim, atms_avg, atms_avg_sim
+        character(len=:), allocatable :: add2fn, ename_filt, oname_filt, eatms, oatms
+        character(len=:), allocatable :: fname_avg, map_avg_filt, tmp, eatms_common
+        character(len=:), allocatable :: oatms_common, oatms_sim, eatms_sim, atms_avg, atms_avg_sim
         call cline%set('use_thres', 'no')
         call cline%set('corr_thres', 0.)
         call params%new(cline)
@@ -145,9 +146,10 @@ contains
         oname_filt   = add2fbody(params%vols_odd(1),     trim(params%ext), add2fn)
         ename_filt   = add2fbody(params%vols_even(1),    trim(params%ext), add2fn)
         tmp          = rm_from_fbody(params%vols_odd(1), trim(params%ext), '_odd')
+        map_avg_filt = add2fbody(tmp,                    trim(params%ext), '_filt_AVG')
         atms_avg_sim = add2fbody(tmp,                    trim(params%ext), '_ATMS_AVG_SIM')
         fname_avg    = swap_suffix(tmp, '.pdb',          trim(params%ext) )
-        atms_avg     = add2fbody(fname_avg ,             '.pdb', '_ATMS_AVG')
+        atms_avg     = add2fbody(fname_avg ,             '.pdb',           '_ATMS_AVG')
         call odd%write(oname_filt)
         call even%write(ename_filt)
         ! detect atoms in odd
@@ -213,6 +215,10 @@ contains
         call nano%set_atomic_coords(atms_avg)
         call nano%simulate_atoms(sim_density)
         call sim_density%write(atms_avg_sim)
+        ! write average filtered map
+        call even%add(odd)
+        call even%mul(0.5)
+        call even%write(map_avg_filt)
         ! kill
         call nano%kill
         call even%kill

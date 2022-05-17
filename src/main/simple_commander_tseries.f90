@@ -1184,8 +1184,9 @@ contains
         call cline_refine3D_nano%set('silence_fsc', 'yes') ! to avoid excessive printing
         ! then update cline_detect_atoms_eo accordingly
         call cline_detect_atms_eo%set('prg', 'detect_atoms_eo')
-        call cline_detect_atms_eo%set('vol_even', EVEN)  ! this is ALWYAS going to be the input volume to detect_atoms_eo
-        call cline_detect_atms_eo%set('vol_odd',  ODD)   ! this is ALWYAS going to be the input volume to detect_atoms_eo
+        call cline_detect_atms_eo%delete('vol1')        ! because after the first round we change to even/odd convention for input vols
+        call cline_detect_atms_eo%set('vol_even', EVEN) ! this is ALWYAS going to be the input volume to detect_atoms_eo
+        call cline_detect_atms_eo%set('vol_odd',  ODD)  ! this is ALWYAS going to be the input volume to detect_atoms_eo
         iter = 0
         do i = 1, params%maxits
             ! first refinement pass on the initial volume uses the low-pass limit defined by the user
@@ -1373,7 +1374,7 @@ contains
         if( allocated(iter_dir)  ) deallocate(iter_dir)
         if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
         ! end gracefully
-        call simple_end('**** AUTOREFINE3D_NANO NORMAL STOP ****')
+        call simple_end('**** AUTOREFINE3D_NANO_EO NORMAL STOP ****')
 
     contains
 
@@ -1382,12 +1383,13 @@ contains
             call del_file(EVEN_ATOMS)
             call del_file(EVEN_BIN)
             call del_file(EVEN_CCS)
-            call del_file(EVEN_SPLIT)
+            ! call del_file(EVEN_SPLIT)
             call del_file(ODD_FILT)
             call del_file(ODD_ATOMS)
             call del_file(ODD_BIN)
             call del_file(ODD_CCS)
-            call del_file(ODD_SPLIT)
+            ! call del_file(ODD_SPLIT)
+            call del_file(AVG_MAP)
             call del_file(AVG_ATOMS)
             call del_file(AVG_ATOMS_SIM)
         end subroutine clean
@@ -1402,16 +1404,17 @@ contains
             call simple_copy_file(EVEN_SIM,      trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON_SIM.mrc')
             call simple_copy_file(EVEN_BIN,      trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
             call simple_copy_file(EVEN_CCS,      trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_CC.mrc')
-            call simple_copy_file(EVEN_SPLIT,    trim(dir)//trim(fbody_split_e) //'_iter'//int2str_pad(i,3)//'.mrc')
+            ! call simple_copy_file(EVEN_SPLIT,    trim(dir)//trim(fbody_split_e) //'_iter'//int2str_pad(i,3)//'.mrc')
             call simple_copy_file(ODD,           trim(dir)//trim(fbody_o)       //'_iter'//int2str_pad(i,3)//'.mrc')
             call simple_copy_file(ODD_FILT,      trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'.mrc')
             call simple_copy_file(ODD_ATOMS,     trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON.pdb')
             call simple_copy_file(ODD_SIM,       trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON_SIM.mrc')
             call simple_copy_file(ODD_BIN,       trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
             call simple_copy_file(ODD_CCS,       trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_CC.mrc')
-            call simple_copy_file(ODD_SPLIT,     trim(dir)//trim(fbody_split_o) //'_iter'//int2str_pad(i,3)//'.mrc')
+            ! call simple_copy_file(ODD_SPLIT,     trim(dir)//trim(fbody_split_o) //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(AVG_MAP,       trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_filt_AVG.mrc')
             call simple_copy_file(AVG_ATOMS,     trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_ATMS_AVG.pdb')
-            call simple_copy_file(AVG_ATOMS_SIM, trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_ATMS_AVG_SIM.pdb')
+            call simple_copy_file(AVG_ATOMS_SIM, trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_ATMS_AVG_SIM.mrc')
         end subroutine copy_files
 
     end subroutine exec_autorefine3D_nano_eo

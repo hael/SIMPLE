@@ -489,7 +489,7 @@ contains
         real             :: smpd, mskdiam_default, msk_default
         integer          :: i, ncls, ifoo, lfoo(3), cntfile, istate
         integer          :: idir, nsp_files, box, nptcls, nthr
-        logical          :: nparts_set, ssilent
+        logical          :: nparts_set, ssilent, def_vol1, def_even, def_odd
         ssilent = .false.
         if( present(silent) ) ssilent = silent
         ! seed random number generator
@@ -1162,13 +1162,31 @@ contains
             self%refs_odd  = add2fbody(self%refs, self%ext, '_odd')
         endif
         ! set vols_even and vols_odd
-        if( cline%defined('vol_even') .or. cline%defined('vol_odd') .or. cline%defined('vol1') )then
-            if( cline%defined('vol_even') .and. cline%defined('vol_odd') )then
-                if( cline%defined('vol1') ) THROW_HARD('vol1 cannot be part of command line when vol_even and vol_odd are')
+        def_vol1 = cline%defined('vol1')
+        def_even = cline%defined('vol_even')
+        def_odd  = cline%defined('vol_odd')
+        if( def_vol1 )then
+            if( def_even ) THROW_HARD('vol1 and vol_even cannot be simultaneously part of the command line')
+            if( def_odd )  THROW_HARD('vol1 and vol_odd cannot be simultaneously part of the command line')
+        else
+            if( def_even .and. def_odd )then
+                if( def_vol1 ) THROW_HARD('vol1 cannot be part of command line when vol_even and vol_odd are')
+            else
+                if( (def_even.eqv..false.) .and. (def_odd.eqv..false.) )then
+                    ! all good
+                else
+                    THROW_HARD('vol_even and vol_odd must be simultaneously part of the command line')
+                endif
+            endif
+        endif
+        if( def_even .or. def_odd .or. def_vol1 )then
+            if( def_even .and. def_odd )then
+                if( def_vol1 ) THROW_HARD('vol1 cannot be part of command line when vol_even and vol_odd are')
                 self%vols_even(1) = trim(self%vol_even)
                 self%vols_odd(1)  = trim(self%vol_odd)
+                self%vols(1)      = trim(self%vol_even) ! the even volume will substitute the average one in this mode
             else
-                if( cline%defined('vol1') )then
+                if( def_vol1 )then
                     do istate=1,self%nstates
                         self%vols_even(istate) = add2fbody(self%vols(istate), self%ext, '_even')
                         self%vols_odd(istate)  = add2fbody(self%vols(istate), self%ext, '_odd' )
