@@ -14,32 +14,32 @@ private
 ! the fftw_arrs data structures are needed for thread-safe FFTW exec. Letting OpenMP copy out the per-threads
 ! arrays leads to bugs because of inconsistency between data in memory and the fftw_plan
 type fftw_carr
-    type(c_ptr)                            :: p_re                       !< pointer for C-style allocation
-    type(c_ptr)                            :: p_im                       !< -"-
-    real(kind=c_float),            pointer :: re(:) => null()            !< corresponding Fortran pointers
-    complex(kind=c_float_complex), pointer :: im(:) => null()            !< -"-
+    type(c_ptr)                            :: p_re                      !< pointer for C-style allocation
+    type(c_ptr)                            :: p_im                      !< -"-
+    real(kind=c_float),            pointer :: re(:) => null()           !< corresponding Fortran pointers
+    complex(kind=c_float_complex), pointer :: im(:) => null()           !< -"-
 end type fftw_carr
 
 type fftw_carr_fft
-    type(c_ptr)                            :: p_re                       !< pointer for C-style allocation
-    type(c_ptr)                            :: p_im                       !< -"-
-    complex(kind=c_float_complex), pointer :: re(:) => null()            !< corresponding Fortran pointers
-    complex(kind=c_float_complex), pointer :: im(:) => null()            !< -"-
+    type(c_ptr)                            :: p_re                      !< pointer for C-style allocation
+    type(c_ptr)                            :: p_im                      !< -"-
+    complex(kind=c_float_complex), pointer :: re(:) => null()           !< corresponding Fortran pointers
+    complex(kind=c_float_complex), pointer :: im(:) => null()           !< -"-
 end type fftw_carr_fft
 
 type fftw_arrs
-    type(c_ptr)                            :: p_ref_re                   !< pointer for C-style allocation
-    type(c_ptr)                            :: p_ref_im                   !< -"-
-    type(c_ptr)                            :: p_ref_fft_re               !< -"-
-    type(c_ptr)                            :: p_ref_fft_im               !< -"-
-    type(c_ptr)                            :: p_product_fft              !< -"-
-    type(c_ptr)                            :: p_backtransf               !< -"-
-    real(kind=c_float),            pointer :: ref_re(:)       => null()  !< corresponding Fortran pointers
-    complex(kind=c_float_complex), pointer :: ref_im(:)       => null()  !< -"-
-    complex(kind=c_float_complex), pointer :: ref_fft_re(:)   => null()  !< -"-
-    complex(kind=c_float_complex), pointer :: ref_fft_im(:)   => null()  !< -"-
-    complex(kind=c_float_complex), pointer :: product_fft(:)  => null()  !< -"-
-    real(kind=c_float),            pointer :: backtransf(:)   => null()  !< -"-
+    type(c_ptr)                            :: p_ref_re                  !< pointer for C-style allocation
+    type(c_ptr)                            :: p_ref_im                  !< -"-
+    type(c_ptr)                            :: p_ref_fft_re              !< -"-
+    type(c_ptr)                            :: p_ref_fft_im              !< -"-
+    type(c_ptr)                            :: p_product_fft             !< -"-
+    type(c_ptr)                            :: p_backtransf              !< -"-
+    real(kind=c_float),            pointer :: ref_re(:)      => null()  !< corresponding Fortran pointers
+    complex(kind=c_float_complex), pointer :: ref_im(:)      => null()  !< -"-
+    complex(kind=c_float_complex), pointer :: ref_fft_re(:)  => null()  !< -"-
+    complex(kind=c_float_complex), pointer :: ref_fft_im(:)  => null()  !< -"-
+    complex(kind=c_float_complex), pointer :: product_fft(:) => null()  !< -"-
+    real(kind=c_float),            pointer :: backtransf(:)  => null()  !< -"-
 end type fftw_arrs
 
 type heap_vars
@@ -94,6 +94,7 @@ type :: polarft_corrcalc
     type(c_ptr)                      :: plan_bwd                    !< -"-
     logical                          :: l_clsfrcs    = .false.      !< CLS2D/3DRefs flag
     logical                          :: l_match_filt = .false.      !< matched filter flag
+    logical                          :: l_filt_set   = .false.      !< to indicate whether filter is set
     logical                          :: with_ctf     = .false.      !< CTF flag
     logical                          :: existence    = .false.      !< to indicate existence
     type(heap_vars),     allocatable :: heap_vars(:)                !< allocated fields to save stack allocation in subroutines and functions
@@ -582,6 +583,7 @@ contains
         integer,                 intent(in)    :: iref
         real,                    intent(in)    :: optlp(params_glob%kfromto(1):params_glob%kstop)
         self%ref_optlp(:,iref) = optlp(:)
+        self%l_filt_set        = .true.
     end subroutine set_ref_optlp
 
     ! GETTERS
@@ -763,7 +765,7 @@ contains
         complex(sp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         real    :: pw
         integer :: k
-        if( self%l_match_filt ) then
+        if( self%l_match_filt .and. self%l_filt_set ) then
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = real(sum(csq_fast(dcmplx(pft(:,k)))) / real(self%pftsz,dp))
                 if( pw > 1.e-12 )then
@@ -781,7 +783,7 @@ contains
         complex(dp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         real(dp) :: pw
         integer  :: k
-        if( self%l_match_filt ) then
+        if( self%l_match_filt .and. self%l_filt_set ) then
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
                 if( pw > 1.d-12 )then
@@ -800,7 +802,7 @@ contains
         complex(dp),             intent(inout) :: dpft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),3)
         real(dp) :: w, pw
         integer  :: k
-        if( self%l_match_filt ) then
+        if( self%l_match_filt .and. self%l_filt_set ) then
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
                 if( pw > 1.d-12 )then
@@ -2231,8 +2233,9 @@ contains
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)
-            self%sigma2_noise      => null()
-            self%existence = .false.
+            self%sigma2_noise => null()
+            self%l_filt_set   = .false.
+            self%existence    = .false.
         endif
     end subroutine kill
 

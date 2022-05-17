@@ -24,6 +24,7 @@ real, parameter :: SHTHRESH  = 0.001
 real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg centering in pixels
 
 type(stack_io)  :: stkio_r
+logical         :: did_filter
 
 contains
 
@@ -452,7 +453,7 @@ contains
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
     subroutine read_and_filter_refvols( cline, fname_even, fname_odd )
-        use simple_estimate_ssnr, only: nonuniform_phase_ran
+        use simple_opt_filter, only: opt_filter
         class(cmdline),   intent(in) :: cline
         character(len=*), intent(in) :: fname_even
         character(len=*), intent(in) :: fname_odd
@@ -462,12 +463,13 @@ contains
         call build_glob%vol%read(fname_even)
         call build_glob%vol_odd%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         call build_glob%vol_odd%read(fname_odd)
+        did_filter = .false.
         if( cline%defined('mskfile') .and. params_glob%l_nonuniform )then
-            ! randomize Fourier phases below noise power in a nonuniform manner
             call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
             call mskvol%read(params_glob%mskfile)
             call mskvol%one_at_edge ! to expand before masking of reference
-            call nonuniform_phase_ran(build_glob%vol, build_glob%vol_odd, mskvol)
+            call opt_filter(build_glob%vol_odd, build_glob%vol, mskvol)
+            did_filter = .true.
             ! envelope masking
             call mskvol%read(params_glob%mskfile) ! to bring back the edge
             call build_glob%vol%zero_env_background(mskvol)
@@ -475,17 +477,12 @@ contains
             call build_glob%vol%mul(mskvol)
             call build_glob%vol_odd%mul(mskvol)
             call mskvol%kill
-            ! expand for fast interpolation
             call build_glob%vol%fft
-            call build_glob%vol%expand_cmat(params_glob%alpha,norm4proj=.true.)
             call build_glob%vol_odd%fft
-            call build_glob%vol_odd%expand_cmat(params_glob%alpha,norm4proj=.true.)
         else
             ! expand for fast interpolation
             call build_glob%vol%fft
-            call build_glob%vol%expand_cmat(params_glob%alpha,norm4proj=.true.)
             call build_glob%vol_odd%fft
-            call build_glob%vol_odd%expand_cmat(params_glob%alpha,norm4proj=.true.)
             if( params_glob%l_ran_noise_ph )then
                 ! randomize Fourier phases below noise power in a global manner
                 if( params_glob%clsfrcs.eq.'no' )&
@@ -519,7 +516,7 @@ contains
           endif
           ! Volume filtering
           filtsz = build_glob%img%get_filtsz()
-          if( params_glob%l_match_filt )then
+          if( params_glob%l_match_filt .and. .not. did_filter )then
               ! stores filters in pftcc
               if( params_glob%clsfrcs.eq.'yes')then
                   if( file_exists(params_glob%frcs) )then
@@ -545,7 +542,7 @@ contains
           else
               if( params_glob%cc_objfun == OBJFUN_EUCLID )then
                   ! no filtering
-              else
+              else if( .not. did_filter )then
                   call vol_ptr%fft()
                   if( any(build_glob%fsc(s,:) > 0.143) )then
                       call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
