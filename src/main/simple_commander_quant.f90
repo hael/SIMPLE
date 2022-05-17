@@ -126,6 +126,7 @@ contains
         character(len=:), allocatable :: oatms_common, oatms_sim, eatms_sim, atms_avg, atms_avg_sim
         call cline%set('use_thres', 'no')
         call cline%set('corr_thres', 0.)
+        call cline%set('lp_lb',      3.)
         call params%new(cline)
         ! read e/o:s
         call odd %new([params%box,params%box,params%box], params%smpd)
@@ -139,7 +140,7 @@ contains
         &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         ! nonuniform filter
         ! ... nonuniform=.true., smooth_ext=1, filter_type='butterworth', lp_lb=3. ...
-        call opt_filter(odd, even, params%smpd, .true., 1, 'butterworth', 3., params%nsearch, mskvol)
+        call opt_filter(odd, even, mskvol)
         call even%mask(params%msk, 'soft')
         call odd%mask(params%msk, 'soft')
         add2fn       = '_filt'

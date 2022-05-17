@@ -272,7 +272,7 @@ contains
             call mskvol%disc([params%box,params%box,params%box], params%smpd,&
             &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         endif        
-        call opt_filter(odd, even, params%smpd, params%l_nonuniform, params%smooth_ext, trim(params%filter), params%lp_lb, params%nsearch, mskvol)
+        call opt_filter(odd, even, mskvol)
         if( have_mask_file )then
             call mskvol%read(params%mskfile) ! restore the soft edge
             call even%mul(mskvol)
@@ -319,7 +319,7 @@ contains
             call even%read(params%stk,  iptcl)
             call even%mask(params%msk, 'soft')
             call odd%mask(params%msk, 'soft')
-            call opt_filter(odd, even, params%smpd, params%l_nonuniform, params%smooth_ext, trim(params%filter), params%lp_lb, params%nsearch)
+            call opt_filter(odd, even)
             call odd%write(trim(file_tag)//'_odd.mrc', iptcl)
             call even%write(trim(file_tag)//'_even.mrc', iptcl)
             call odd%zero_and_unflag_ft

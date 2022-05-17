@@ -36,6 +36,7 @@ type :: cartft_corrcalc
     logical,         allocatable :: resmsk(:,:,:)           !< resolution mask for corr calc
     logical                      :: l_clsfrcs    = .false.  !< CLS2D/3DRefs flag
     logical                      :: l_match_filt = .false.  !< matched filter flag
+    logical                      :: l_filt_set   = .false.  !< to indicate whether filter is set
     logical                      :: with_ctf     = .false.  !< CTF flag
     logical                      :: existence    = .false.  !< to indicate existence
     type(heap_vars), allocatable :: heap_vars(:)            !< allocated fields to save stack allocation in subroutines and functions
@@ -249,6 +250,7 @@ contains
         self%ref_optlp(1:params_glob%kfromto(1) - 1,iref) = maxval(optlp)
         self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,iref) = optlp(params_glob%kfromto(1):params_glob%kstop)
         self%ref_optlp(params_glob%kstop + 1:,iref) = 0.
+        self%l_filt_set = .true.
     end subroutine set_ref_optlp
 
     subroutine set_eo( self, iptcl, is_even )
@@ -311,11 +313,9 @@ contains
         class(cartft_corrcalc), intent(in)    :: self
         integer,                intent(in)    :: iref
         class(image),           intent(inout) :: ref_img
-        if( self%l_match_filt )then
+        if( self%l_match_filt .and. self%l_filt_set )then
             call ref_img%shellnorm_and_apply_filter_serial(self%ref_optlp(:,iref))
-        else if( params_glob%l_lpset )then
-            ! do nothing
-        else
+        else if( .not. params_glob%l_lpset .and. self%l_filt_set )then
             call ref_img%apply_filter_serial(self%ref_optlp(:,iref))
         endif
     end subroutine shellnorm_and_filter_ref
@@ -511,7 +511,8 @@ contains
                 self%heap_vars(ithr)%frc => null()
             end do
             deallocate(self%refs_eo, self%particles, self%heap_vars)
-            self%existence = .false.
+            self%l_filt_set = .false.
+            self%existence  = .false.
         endif
     end subroutine kill
 

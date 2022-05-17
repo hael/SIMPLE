@@ -4,7 +4,8 @@ module simple_opt_filter
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_defs
-use simple_image, only: image
+use simple_image,      only: image
+use simple_parameters, only: params_glob
 implicit none
 
 contains
@@ -59,17 +60,15 @@ contains
         enddo        
     end subroutine butterworth_filter
 
-    subroutine apply_opt_filter(img, filter_type, param, cur_fil, use_cache)
+    subroutine apply_opt_filter(img, param, cur_fil, use_cache)
         use simple_tvfilter, only: tvfilter
-        type(image),      intent(inout) :: img
-        character(len=*), intent(in)    :: filter_type
+        class(image),     intent(inout) :: img
         real,             intent(in)    :: param
         real,             intent(inout) :: cur_fil(:)
         logical,          intent(in)    :: use_cache
         integer                         :: bw_order, io_stat
         type(tvfilter)                  :: tvfilt
-        !call img%fft()
-        select case(trim(filter_type))
+        select case(trim(params_glob%filter))
             case('lp')
                 call img%lp(int(param))
             case('tv')
@@ -79,8 +78,8 @@ contains
             case DEFAULT ! default to butterworth8, even if wrong filter type is entered
                 bw_order = 8
                 ! extract butterworth order number
-                if( str_has_substr(filter_type, 'butterworth') )then
-                    call str2int(filter_type(12:len_trim(filter_type)), io_stat, bw_order)
+                if( str_has_substr(params_glob%filter, 'butterworth') )then
+                    call str2int(params_glob%filter(12:len_trim(params_glob%filter)), io_stat, bw_order)
                     if (bw_order < 1 .or. bw_order > 10) bw_order = 8
                 endif
                 if( .not. use_cache ) call butterworth_filter(cur_fil, bw_order, param)
@@ -90,16 +89,10 @@ contains
     end subroutine apply_opt_filter
 
     ! optimization(search)-based uniform/nonuniform filter, using the (low-pass/butterworth)
-    subroutine opt_filter(odd, even, smpd, nonuniform, smooth_ext, filter_type, lp_lb, nsearch, mskimg)
-        type(image),           intent(inout) :: odd
-        type(image),           intent(inout) :: even
-        real,                  intent(in)    :: smpd
-        logical,               intent(in)    :: nonuniform
-        integer,               intent(in)    :: smooth_ext
-        character(len=*),      intent(in)    :: filter_type
-        real,                  intent(in)    :: lp_lb
-        integer,               intent(in)    :: nsearch
-        type(image), optional, intent(inout) :: mskimg
+    subroutine opt_filter(odd, even, mskimg)
+        class(image),           intent(inout) :: odd
+        class(image),           intent(inout) :: even
+        class(image), optional, intent(inout) :: mskimg
         type(image)          :: odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat, freq_img
         integer              :: k,l,m, box, dim3, ldim(3), find_start, find_stop, iter_no, fnr
         integer              :: best_ind, cur_ind, k1,l1,m1,k_ind,l_ind,m_ind, lb(3), ub(3), mid_ext
@@ -121,11 +114,11 @@ contains
         ldim        = odd%get_ldim()
         box         = ldim(1)
         dim3        = ldim(3)
-        mid_ext     = 1 + smooth_ext
-        find_stop   = calc_fourier_index(2. * smpd, box, smpd)
-        find_start  = calc_fourier_index(lp_lb, box, smpd)
-        find_stepsz = real(find_stop - find_start)/(nsearch - 1)
-        call freq_img%new([box,box,dim3], smpd)
+        mid_ext     = 1 + params_glob%smooth_ext
+        find_stop   = calc_fourier_index(2. * params_glob%smpd, box, params_glob%smpd)
+        find_start  = calc_fourier_index(params_glob%lp_lb, box, params_glob%smpd)
+        find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
+        call freq_img%new([box,box,dim3], params_glob%smpd)
         call odd_copy_rmat%copy(odd)
         call odd_copy_cmat%copy(odd)
         call odd_copy_cmat%fft
@@ -134,24 +127,24 @@ contains
         call even_copy_cmat%fft
         allocate(opt_odd( box,box,dim3), cur_diff_odd( box,box,dim3), opt_diff_odd( box,box,dim3), opt_freq_odd( box,box,dim3),&
                 &opt_even(box,box,dim3), cur_diff_even(box,box,dim3), opt_diff_even(box,box,dim3), opt_freq_even(box,box,dim3),&
-                &cur_fil(box),weights_2D(smooth_ext*2+1, smooth_ext*2+1), weights_3D(smooth_ext*2+1, smooth_ext*2+1, smooth_ext*2+1), source=0.)
+                &cur_fil(box),weights_2D(params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1), weights_3D(params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1), source=0.)
         ! assign the weights of the neighboring voxels
         ! 2D weights
-        do k = 1, 2*smooth_ext+1
-            do l = 1, 2*smooth_ext+1
+        do k = 1, 2*params_glob%smooth_ext+1
+            do l = 1, 2*params_glob%smooth_ext+1
                 rad = hyp(real(k-mid_ext), real(l-mid_ext))
-                weights_2D(k,l) = -rad/(smooth_ext + 1) + 1.  ! linear function: 1 at rad = 0 and 0 at rad = smooth_ext + 1
+                weights_2D(k,l) = -rad/(params_glob%smooth_ext + 1) + 1.  ! linear function: 1 at rad = 0 and 0 at rad = smooth_ext + 1
                 if (weights_2D(k,l) < 0.) then
                     weights_2D(k,l) = 0.
                 endif
             enddo
         enddo
         ! 3D weights
-        do k = 1, 2*smooth_ext+1
-            do l = 1, 2*smooth_ext+1
-                do m = 1, 2*smooth_ext+1
+        do k = 1, 2*params_glob%smooth_ext+1
+            do l = 1, 2*params_glob%smooth_ext+1
+                do m = 1, 2*params_glob%smooth_ext+1
                     rad = hyp(real(k-mid_ext), real(l-mid_ext), real(m-mid_ext))
-                    weights_3D(k,l,m) = -rad/(smooth_ext + 1) + 1.  ! linear function: 1 at rad = 0 and 0 at rad = smooth_ext + 1
+                    weights_3D(k,l,m) = -rad/(params_glob%smooth_ext + 1) + 1.  ! linear function: 1 at rad = 0 and 0 at rad = smooth_ext + 1
                     if (weights_3D(k,l,m) < 0.) then
                         weights_3D(k,l,m) = 0.
                     endif
@@ -185,41 +178,51 @@ contains
             rt_filter_even = 0.
             rt_search_opt  = 0.
         endif
-        do iter_no = 1, nsearch
+        do iter_no = 1, params_glob%nsearch
             cur_ind = find_start + (iter_no - 1)*find_stepsz
-            if( filter_type == 'tv' )then
+            if( params_glob%filter == 'tv' )then
                 param = LAMBDA_MIN + (cur_ind - find_start)*(LAMBDA_MAX - LAMBDA_MIN)/(find_stop - find_start)
-                write(*, *) '('//int2str(iter_no)//'/'//int2str(nsearch)//') current lambda = ', param
+                write(*, *) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current lambda = ', param
             else
                 param = real(cur_ind)
-                write(*, *) '('//int2str(iter_no)//'/'//int2str(nsearch)//') current Fourier index = ', param
+                write(*, *) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current Fourier index = ', param
             endif
-            if( L_BENCH_GLOB )then
-                t_filter_odd = tic()
-            endif
+            if( L_BENCH_GLOB ) t_filter_odd = tic()
             ! filtering odd
             call odd%copy_fast(odd_copy_cmat)
-            call apply_opt_filter(odd, filter_type, param, cur_fil, .false.)
+            call apply_opt_filter(odd, param, cur_fil, .false.)
             call odd%get_rmat_ptr(rmat_odd)
             call even_copy_rmat%get_rmat_ptr(rmat_even)
             call odd%sqeuclid_matrix(even_copy_rmat, cur_diff_odd)
+            if( params_glob%l_match_filt )then
+                call odd%set_ft(.true.)
+                call odd%copy_fast(odd_copy_cmat)
+                call odd%shellnorm
+                call apply_opt_filter(odd, param, cur_fil, .false.)
+            endif
             if( L_BENCH_GLOB )then
                 rt_filter_odd = rt_filter_odd + toc(t_filter_odd)
                 t_filter_even = tic()
             endif
             ! filtering even
             call even%copy_fast(even_copy_cmat)
-            call apply_opt_filter(even, filter_type, param, cur_fil, .true.)
+            call apply_opt_filter(even, param, cur_fil, .true.)
             call even%get_rmat_ptr(rmat_even)
             call odd_copy_rmat%get_rmat_ptr(rmat_odd)
             call even%sqeuclid_matrix(odd_copy_rmat, cur_diff_even)
+            if( params_glob%l_match_filt )then
+                call even%set_ft(.true.)
+                call even%copy_fast(even_copy_cmat)
+                call even%shellnorm
+                call apply_opt_filter(even, param, cur_fil, .false.)
+            endif
             call odd%get_rmat_ptr(rmat_odd) ! point rmat_odd to the filtered odd, rmat_even should be filtered even
             if( L_BENCH_GLOB )then
                 rt_filter_even = rt_filter_even + toc(t_filter_even)
                 t_search_opt   = tic()
             endif
             ! do the non-uniform, i.e. optimizing at each voxel
-            if( nonuniform )then
+            if( params_glob%l_nonuniform )then
                 ! 2D vs 3D cases
                 if( dim3 == 1 )then
                     !$omp parallel do collapse(2) default(shared) private(k,l,k1,l1,k_ind,l_ind,ref_diff_odd, ref_diff_even) schedule(dynamic,CHUNKSZ) proc_bind(close)
@@ -228,10 +231,10 @@ contains
                             ref_diff_odd  = 0.
                             ref_diff_even = 0.
                             ! applying an average window to each diff (eq 7 in the nonuniform paper)
-                            do k_ind = 1, 2*smooth_ext+1
-                                k1 = k - smooth_ext + k_ind - 1
-                                do l_ind = 1, 2*smooth_ext+1
-                                    l1 = l - smooth_ext + l_ind - 1
+                            do k_ind = 1, 2*params_glob%smooth_ext+1
+                                k1 = k - params_glob%smooth_ext + k_ind - 1
+                                do l_ind = 1, 2*params_glob%smooth_ext+1
+                                    l1 = l - params_glob%smooth_ext + l_ind - 1
                                     if ((k1 >= 1 .and. k1 <= box) .and. (l1 >= 1 .and. l1 <= box)) then
                                         ref_diff_odd  = ref_diff_odd  + cur_diff_odd( k1,l1,1)*weights_2D(k_ind,l_ind)
                                         ref_diff_even = ref_diff_even + cur_diff_even(k1,l1,1)*weights_2D(k_ind,l_ind)
@@ -255,19 +258,19 @@ contains
                     enddo
                     !$omp end parallel do
                 else
-                    !$omp parallel do collapse(3) default(shared) private(k,l,m,k1,l1,m1,k_ind,l_ind,m_ind,ref_diff_odd,ref_diff_even) schedule(dynamic,CHUNKSZ) proc_bind(close)
+                    !omp parallel do collapse(3) default(shared) private(k,l,m,k1,l1,m1,k_ind,l_ind,m_ind,ref_diff_odd,ref_diff_even) schedule(dynamic,CHUNKSZ) proc_bind(close)
                     do k = lb(1),ub(1)
                         do l = lb(2),ub(2)
                             do m = lb(3),ub(3)
                                 ref_diff_odd  = 0.
                                 ref_diff_even = 0.
                                 ! applying an average window to each diff (eq 7 in the nonuniform paper)
-                                do k_ind = 1, 2*smooth_ext+1
-                                    k1 = k - smooth_ext + k_ind - 1
-                                    do l_ind = 1, 2*smooth_ext+1
-                                        l1 = l - smooth_ext + l_ind - 1
-                                        do m_ind = 1, 2*smooth_ext+1
-                                            m1 = m - smooth_ext + m_ind - 1
+                                do k_ind = 1, 2*params_glob%smooth_ext+1
+                                    k1 = k - params_glob%smooth_ext + k_ind - 1
+                                    do l_ind = 1, 2*params_glob%smooth_ext+1
+                                        l1 = l - params_glob%smooth_ext + l_ind - 1
+                                        do m_ind = 1, 2*params_glob%smooth_ext+1
+                                            m1 = m - params_glob%smooth_ext + m_ind - 1
                                             if ((k1 >= 1 .and. k1 <= box) .and. (l1 >= 1 .and. l1 <= box) .and. (m1 >= 1 .and. m1 <= dim3)) then
                                                 ref_diff_odd  = ref_diff_odd  + cur_diff_odd( k1,l1,m1)*weights_3D(k_ind,l_ind,m_ind)
                                                 ref_diff_even = ref_diff_even + cur_diff_even(k1,l1,m1)*weights_3D(k_ind,l_ind,m_ind)
@@ -291,7 +294,7 @@ contains
                             enddo
                         enddo
                     enddo
-                    !$omp end parallel do
+                    !omp end parallel do
                 endif
                 min_sum_odd  = sum(opt_diff_odd) ! TODO
                 min_sum_even = sum(opt_diff_even) ! TODO
@@ -332,19 +335,19 @@ contains
             &((rt_filter_odd+rt_filter_even+rt_search_opt)/rt_tot) * 100.
             call fclose(fnr)
         endif
-        if( .not. nonuniform ) write(*, *) 'minimized cost at resolution = ', box*smpd/best_ind
+        if( .not. params_glob%l_nonuniform ) write(*, *) 'minimized cost at resolution = ', box*params_glob%smpd/best_ind
         call odd%set_rmat(opt_odd,   .false.)
         call even%set_rmat(opt_even, .false.)
         ! output the optimized frequency map to see the nonuniform parts
         if( dim3 > 1 )then
-            if( nonuniform )then
-                file_tag = 'nonuniform_filter_'//trim(filter_type)//'_ext_'//int2str(smooth_ext)
+            if( params_glob%l_nonuniform )then
+                file_tag = 'nonuniform_filter_'//trim(params_glob%filter)//'_ext_'//int2str(params_glob%smooth_ext)
             else
-                file_tag = 'uniform_filter_'//trim(filter_type)//'_ext_'//int2str(smooth_ext)
+                file_tag = 'uniform_filter_'//trim(params_glob%filter)//'_ext_'//int2str(params_glob%smooth_ext)
             endif
             call freq_img%set_rmat(opt_freq_odd, .false.)
             call freq_img%write('opt_freq_odd_map_'//trim(file_tag)//'.mrc')
-            call freq_img%set_rmat(box*smpd/opt_freq_odd, .false.) ! resolution map
+            call freq_img%set_rmat(box*params_glob%smpd/opt_freq_odd, .false.) ! resolution map
             call freq_img%write('opt_resolution_odd_map_'//trim(file_tag)//'.mrc')
             call freq_img%kill
         endif
