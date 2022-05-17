@@ -520,6 +520,8 @@ contains
                 ptr2prg => automask
             case('autorefine3D_nano')
                 ptr2prg => autorefine3D_nano
+            case('autorefine3D_nano_eo')
+                ptr2prg => autorefine3D_nano_eo
             case('binarize')
                 ptr2prg => binarize
             case('calc_pspec')
@@ -1119,7 +1121,7 @@ contains
     subroutine new_autorefine3D_nano_eo
         ! PROGRAM SPECIFICATION
         call autorefine3D_nano_eo%new(&
-        &'autorefine3D_nano_eo',&                                                            ! name
+        &'autorefine3D_nano_eo',&                                                         ! name
         &'auto 3D refinement of metallic nanoparticles',&                                 ! descr_short
         &'is a distributed workflow for automated 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                  ! executable
@@ -3446,11 +3448,13 @@ contains
         &'3D refinement of metallic nanoparticles',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
         &'single_exec',&                                                                                                      ! executable
-        &1, 0, 0, 8, 4, 2, 2, .true.)                                                                                         ! # entries in each group, requires sp_project
+        &3, 0, 0, 8, 4, 2, 2, .true.)                                                                                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
-        & sections for nanoparticle image matching', 'input volume e.g. vol.mrc', .true., '')
+        & sections for nanoparticle image matching', 'input volume e.g. vol.mrc', .false., '')
+        call refine3D_nano%set_input('img_ios', 2, 'vol_odd',  'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .false., '')
+        call refine3D_nano%set_input('img_ios', 3, 'vol_even', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .false., '')
         ! parameter input/output
         ! <empty>
         ! alternative inputs

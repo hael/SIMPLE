@@ -646,9 +646,9 @@ contains
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
             call refine3D_exec(cline, startit, converged)
         else
-            if( trim(params%objfun) == 'euclid' ) THROW_HARD('shared-memory implementation of refine3D does not support objfun=euclid')
-            if( trim(params%continue) == 'yes'  ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
-            if( .not. cline%defined('vol1')     ) THROW_HARD('shared-memory implementation of refine3D needs a starting volume')
+            if( trim(params%objfun) == 'euclid'   ) THROW_HARD('shared-memory implementation of refine3D does not support objfun=euclid')
+            if( trim(params%continue) == 'yes'    ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
+            if( .not. file_exists(params%vols(1)) ) THROW_HARD('shared-memory implementation of refine3D requires starting volume(s) input')
             ! take care of automask flag
             l_automsk = .false.
             if( cline%defined('automsk') )then
