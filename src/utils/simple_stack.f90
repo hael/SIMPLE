@@ -3,7 +3,7 @@ module simple_stack
 include 'simple_lib.f08'
 implicit none
 private
-public :: stack, push, pop, contains, is_empty
+public :: stack, pop, contains, is_empty
 #include "simple_local_flags.inc"
 
 type :: stack
@@ -13,10 +13,14 @@ type :: stack
     integer           :: last_ind   !< index of the last element of the stack
 contains
 procedure :: new
-procedure :: push
+procedure, private :: push_obj
+procedure, private :: push_arr
+generic   :: push => push_obj, push_arr
 procedure :: pop
+procedure :: get_at
 procedure :: is_empty
 procedure :: contains
+procedure :: size_of
 ! DESTRUCTOR
 !procedure :: kill
 end type stack
@@ -58,12 +62,22 @@ contains
         endif
     end subroutine new
 
-    subroutine push(self, obj)
+    subroutine push_obj(self, obj)
         class(stack), intent(inout) :: self
         integer     , intent(in)    :: obj
         self%val_arr(self%last_ind) = obj
         self%last_ind               = self%last_ind + 1
-    end subroutine push
+    end subroutine push_obj
+
+    subroutine push_arr(self, arr)
+        class(stack), intent(inout) :: self
+        integer     , intent(in)    :: arr(:)
+        integer :: k
+        do k = 1, size(arr)
+            self%val_arr(self%last_ind) = arr(k)
+            self%last_ind               = self%last_ind + 1
+        enddo
+    end subroutine push_arr
 
     function pop(self) result(ret)
         class(stack), intent(inout) :: self
@@ -75,10 +89,21 @@ contains
             ret = -1
         endif
     end function pop
+    
+    function get_at(self, ind) result(ret)
+        class(stack), intent(in) :: self
+        integer     , intent(in) :: ind
+        integer :: ret
+        if( ind < self%last_ind )then
+            ret = self%val_arr(ind)
+        else
+            ret = -1
+        endif
+    end function get_at
 
     function contains(self, obj_val) result(ret)
-        class(stack), intent(inout) :: self
-        integer     , intent(in)    :: obj_val
+        class(stack), intent(in) :: self
+        integer     , intent(in) :: obj_val
         logical :: ret
         integer :: k
         ret = .false.
@@ -90,9 +115,15 @@ contains
     end function contains
 
     function is_empty(self) result(ret)
-        class(stack), intent(inout) :: self
+        class(stack), intent(in) :: self
         logical :: ret
         ret = .false.
         if( self%last_ind == 1 ) ret = .true.
-    end function is_empty        
+    end function is_empty
+    
+    function size_of(self) result(ret)
+        class(stack), intent(in) :: self
+        integer :: ret
+        ret = self%last_ind - 1
+    end function size_of
 end module simple_stack
