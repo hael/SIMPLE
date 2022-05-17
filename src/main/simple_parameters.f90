@@ -413,6 +413,7 @@ type :: parameters
     real    :: mul=1.              !< origin shift multiplication factor{1}
     real    :: mw=0.               !< molecular weight(in kD)
     real    :: ndev=2.0            !< # deviations in one-cluster clustering
+    real    :: ndev2D=1.5          !< # deviations for 2D class selection/rejection
     real    :: nsig=2.5            !< # sigmas
     real    :: overlap=0.9         !< required parameters overlap for convergence
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
@@ -843,6 +844,7 @@ contains
         call check_rarg('mul',            self%mul)
         call check_rarg('mw',             self%mw)
         call check_rarg('ndev',           self%ndev)
+        call check_rarg('ndev2D',         self%ndev2D)
         call check_rarg('nsig',           self%nsig)
         call check_rarg('overlap',        self%overlap)
         call check_rarg('phranlp',        self%phranlp)

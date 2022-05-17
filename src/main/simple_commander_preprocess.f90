@@ -770,6 +770,8 @@ contains
         if( .not. cline%defined('ctfpatch')        ) call cline%set('ctfpatch',       'yes')
         ! picking
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
+        if( .not. cline%defined('ndev')            ) call cline%set('ndev',              2.)
+        if( .not. cline%defined('thres')           ) call cline%set('thres',            24.)
         ! extraction
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
         if( cline%defined('refs') .and. cline%defined('vol1') )then
@@ -1530,6 +1532,8 @@ contains
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype',     'mic')
+        if( .not. cline%defined('ndev')      ) call cline%set('ndev',              2.)
+        if( .not. cline%defined('thres')     ) call cline%set('thres',            24.)
         call params%new(cline)
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
