@@ -1160,22 +1160,24 @@ contains
             self%refs_odd  = add2fbody(self%refs, self%ext, '_odd')
         endif
         ! set vols_even and vols_odd
-        if( cline%defined('vol_even') .and. cline%defined('vol_odd') )then
-            if( cline%defined('vol1') ) THROW_HARD('vol1 cannot be part of command line when vol_even and vol_odd are')
-            self%vols_even(1) = trim(self%vol_even)
-            self%vols_odd(1)  = trim(self%vol_odd)
-        else
-            if( cline%defined('vol1') )then
-                do istate=1,self%nstates
-                    self%vols_even(istate) = add2fbody(self%vols(istate), self%ext, '_even')
-                    self%vols_odd(istate)  = add2fbody(self%vols(istate), self%ext, '_odd' )
-                    if( str_has_substr(self%prg, 'refine') )then
-                        if( .not. file_exists(self%vols_even(istate)) ) call simple_copy_file(self%vols(istate), self%vols_even(istate))
-                        if( .not. file_exists(self%vols_odd(istate))  ) call simple_copy_file(self%vols(istate), self%vols_odd(istate))
-                    endif
-                end do
+        if( cline%defined('vol_even') .or. cline%defined('vol_odd') .or. cline%defined('vol1') )then
+            if( cline%defined('vol_even') .and. cline%defined('vol_odd') )then
+                if( cline%defined('vol1') ) THROW_HARD('vol1 cannot be part of command line when vol_even and vol_odd are')
+                self%vols_even(1) = trim(self%vol_even)
+                self%vols_odd(1)  = trim(self%vol_odd)
             else
-                THROW_HARD('both vol_even and vol_odd need to be part of the command line')
+                if( cline%defined('vol1') )then
+                    do istate=1,self%nstates
+                        self%vols_even(istate) = add2fbody(self%vols(istate), self%ext, '_even')
+                        self%vols_odd(istate)  = add2fbody(self%vols(istate), self%ext, '_odd' )
+                        if( str_has_substr(self%prg, 'refine') )then
+                            if( .not. file_exists(self%vols_even(istate)) ) call simple_copy_file(self%vols(istate), self%vols_even(istate))
+                            if( .not. file_exists(self%vols_odd(istate))  ) call simple_copy_file(self%vols(istate), self%vols_odd(istate))
+                        endif
+                    end do
+                else
+                    THROW_HARD('both vol_even and vol_odd need to be part of the command line')
+                endif
             endif
         endif
         !<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)
