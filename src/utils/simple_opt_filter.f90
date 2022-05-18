@@ -93,7 +93,8 @@ contains
         class(image),           intent(inout) :: odd
         class(image),           intent(inout) :: even
         class(image), optional, intent(inout) :: mskimg
-        type(image)          :: odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat, freq_img
+        type(image)          ::  odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm, freq_img,&
+                               &even_copy_rmat, even_copy_cmat, even_copy_shellnorm
         integer              :: k,l,m, box, dim3, ldim(3), find_start, find_stop, iter_no, fnr
         integer              :: best_ind, cur_ind, k1,l1,m1,k_ind,l_ind,m_ind, lb(3), ub(3), mid_ext
         real                 :: min_sum_odd, min_sum_even, ref_diff_odd, ref_diff_even, rad, param, find_stepsz
@@ -107,8 +108,10 @@ contains
         real,    allocatable :: cur_fil(:), weights_3D(:,:,:), weights_2D(:,:)
         logical, allocatable :: l_mask(:,:,:)
         character(len=LONGSTRLEN)     :: benchfname
-        integer(timer_int_kind)       ::  t_tot,  t_filter_odd,  t_filter_even,  t_search_opt
-        real(timer_int_kind)          :: rt_tot, rt_filter_odd, rt_filter_even, rt_search_opt
+        integer(timer_int_kind)       ::  t_tot,  t_filter_odd,  t_filter_even,  t_search_opt, &
+                                        & t_chop_copy,  t_chop_filter,  t_chop_sqeu
+        real(timer_int_kind)          :: rt_tot, rt_filter_odd, rt_filter_even, rt_search_opt, &
+                                        &rt_chop_copy, rt_chop_filter, rt_chop_sqeu
         mskimg_present   = present(mskimg)
         if( mskimg_present ) l_mask = mskimg%bin2logical()
         ldim        = odd%get_ldim()
@@ -122,9 +125,15 @@ contains
         call odd_copy_rmat%copy(odd)
         call odd_copy_cmat%copy(odd)
         call odd_copy_cmat%fft
+        call odd_copy_shellnorm%copy(odd)
+        call odd_copy_shellnorm%shellnorm
+        call odd_copy_shellnorm%fft
         call even_copy_rmat%copy(even)
         call even_copy_cmat%copy(even)
         call even_copy_cmat%fft
+        call even_copy_shellnorm%copy(even)
+        call even_copy_shellnorm%shellnorm
+        call even_copy_shellnorm%fft
         allocate(opt_odd( box,box,dim3), cur_diff_odd( box,box,dim3), opt_diff_odd( box,box,dim3), opt_freq_odd( box,box,dim3),&
                 &opt_even(box,box,dim3), cur_diff_even(box,box,dim3), opt_diff_even(box,box,dim3), opt_freq_even(box,box,dim3),&
                 &cur_fil(box),weights_2D(params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1), weights_3D(params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1), source=0.)
@@ -187,18 +196,33 @@ contains
                 param = real(cur_ind)
                 write(*, *) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current Fourier index = ', param
             endif
-            if( L_BENCH_GLOB ) t_filter_odd = tic()
+            if( L_BENCH_GLOB )then
+                t_filter_odd = tic()
+                t_chop_copy  = tic()
+            endif
             ! filtering odd
             call odd%copy_fast(odd_copy_cmat)
+            if( L_BENCH_GLOB )then
+                rt_chop_copy  = rt_chop_copy + toc(t_chop_copy)
+                t_chop_filter = tic()
+            endif
             call apply_opt_filter(odd, param, cur_fil, .false.)
             call odd%get_rmat_ptr(rmat_odd)
             call even_copy_rmat%get_rmat_ptr(rmat_even)
+            if( L_BENCH_GLOB )then
+                rt_chop_filter = rt_chop_filter + toc(t_chop_filter)
+                t_chop_sqeu  = tic()
+            endif
             call odd%sqeuclid_matrix(even_copy_rmat, cur_diff_odd)
+            if( L_BENCH_GLOB )then
+                rt_chop_sqeu = rt_chop_sqeu + toc(t_chop_sqeu)
+            endif
             if( params_glob%l_match_filt )then
-                call odd%set_ft(.true.)
-                call odd%copy_fast(odd_copy_cmat)
-                call odd%shellnorm
+                call odd%copy_fast(odd_copy_shellnorm)
+                if( L_BENCH_GLOB ) t_chop_filter = tic()
                 call apply_opt_filter(odd, param, cur_fil, .false.)
+                if( L_BENCH_GLOB ) rt_chop_filter = rt_chop_filter + toc(t_chop_filter)
+                call odd%get_rmat_ptr(rmat_odd)
             endif
             if( L_BENCH_GLOB )then
                 rt_filter_odd = rt_filter_odd + toc(t_filter_odd)
@@ -211,10 +235,9 @@ contains
             call odd_copy_rmat%get_rmat_ptr(rmat_odd)
             call even%sqeuclid_matrix(odd_copy_rmat, cur_diff_even)
             if( params_glob%l_match_filt )then
-                call even%set_ft(.true.)
-                call even%copy_fast(even_copy_cmat)
-                call even%shellnorm
+                call even%copy_fast(even_copy_shellnorm)
                 call apply_opt_filter(even, param, cur_fil, .false.)
+                call even%get_rmat_ptr(rmat_even)
             endif
             call odd%get_rmat_ptr(rmat_odd) ! point rmat_odd to the filtered odd, rmat_even should be filtered even
             if( L_BENCH_GLOB )then
@@ -322,6 +345,9 @@ contains
             benchfname = 'OPT_FILTER_BENCH.txt'
             call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
+            write(fnr,'(a,1x,f9.2)') 'copy_fast            : ', rt_chop_copy
+            write(fnr,'(a,1x,f9.2)') 'lp_filter and ifft   : ', rt_chop_filter
+            write(fnr,'(a,1x,f9.2)') 'sqeuclid_matrix      : ', rt_chop_sqeu
             write(fnr,'(a,1x,f9.2)') 'odd filtering        : ', rt_filter_odd
             write(fnr,'(a,1x,f9.2)') 'even filtering       : ', rt_filter_even
             write(fnr,'(a,1x,f9.2)') 'searching/optimizing : ', rt_search_opt
@@ -331,7 +357,7 @@ contains
             write(fnr,'(a,1x,f9.2)') 'odd filtering        : ', (rt_filter_odd /rt_tot) * 100. 
             write(fnr,'(a,1x,f9.2)') 'even filtering       : ', (rt_filter_even/rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') 'searching/optimizing : ', (rt_search_opt /rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') '% accounted for          : ',&
+            write(fnr,'(a,1x,f9.2)') '% accounted for      : ',&
             &((rt_filter_odd+rt_filter_even+rt_search_opt)/rt_tot) * 100.
             call fclose(fnr)
         endif
