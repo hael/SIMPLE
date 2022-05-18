@@ -99,6 +99,7 @@ call odd%read('nonuniform_opt_3D_filter_'//trim(filter)//'_ext_'//int2str(smooth
 call even%mask(p%msk, 'soft')
 call odd%mask( p%msk, 'soft')
 ! forward FT
+call even%shellnorm()
 call even%fft()
 call odd%fft()
 ! calculate FSC
@@ -130,6 +131,7 @@ call odd%read('nonuniform_opt_3D_filter_'//trim(filter)//'_ext_'//int2str(smooth
 call even%mask(p%msk, 'soft')
 call odd%mask( p%msk, 'soft')
 ! forward FT
+call even%shellnorm()
 call even%fft()
 call odd%fft()
 ! calculate FSC

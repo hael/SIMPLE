@@ -207,8 +207,6 @@ contains
                 t_chop_filter = tic()
             endif
             call apply_opt_filter(odd, param, cur_fil, .false.)
-            call odd%get_rmat_ptr(rmat_odd)
-            call even_copy_rmat%get_rmat_ptr(rmat_even)
             if( L_BENCH_GLOB )then
                 rt_chop_filter = rt_chop_filter + toc(t_chop_filter)
                 t_chop_sqeu  = tic()
@@ -231,15 +229,12 @@ contains
             ! filtering even
             call even%copy_fast(even_copy_cmat)
             call apply_opt_filter(even, param, cur_fil, .true.)
-            call even%get_rmat_ptr(rmat_even)
-            call odd_copy_rmat%get_rmat_ptr(rmat_odd)
             call even%sqeuclid_matrix(odd_copy_rmat, cur_diff_even)
             if( params_glob%l_match_filt )then
                 call even%copy_fast(even_copy_shellnorm)
                 call apply_opt_filter(even, param, cur_fil, .false.)
                 call even%get_rmat_ptr(rmat_even)
             endif
-            call odd%get_rmat_ptr(rmat_odd) ! point rmat_odd to the filtered odd, rmat_even should be filtered even
             if( L_BENCH_GLOB )then
                 rt_filter_even = rt_filter_even + toc(t_filter_even)
                 t_search_opt   = tic()
