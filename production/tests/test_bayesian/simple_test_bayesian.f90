@@ -9,7 +9,7 @@ program simple_test_bayesian
     real        :: gains(4)
     integer     :: ordered(4), node, bitstring(4)
     type(stack) :: indexes
-    integer     :: samples(5,4)
+    integer     :: samples(5,4), k
     ! unit tests for 'compute_count_for_edges'
     write(*, *) 'Testing counting for each edge:'
     call indexes%new()
@@ -231,6 +231,9 @@ program simple_test_bayesian
     graph(2,:)      = (/ 0., 0., 0., 1. /)
     graph(3,:)      = (/ 0., 1., 0., 1. /)
     graph(4,:)      = (/ 0., 0., 0., 0. /)
-    call sample_from_network(population, graph, 5, samples, (/ 1, 2, 3, 4, 5 /))
-    !write(*, *) samples
+    call sample_from_network(population, graph, 5, samples)
+    do k = 1, size(samples,1)
+        write(*, *) samples(k, :)
+    enddo
+    write(*, *) 'BARELY PASSED! These are random!'
 end program simple_test_bayesian

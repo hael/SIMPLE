@@ -278,25 +278,25 @@ contains
         enddo
     end subroutine probabilistic_logic_sample
 
-    subroutine sample_from_network(population, graph, num_samples, samples, seeds)
+    subroutine sample_from_network(population, graph, num_samples, samples, seed)
         integer,           intent(in)    :: population(:,:)
         real   ,           intent(in)    :: graph(:,:)
         integer,           intent(in)    :: num_samples
         integer,           intent(inout) :: samples(:, :)
-        integer, optional, intent(in)    :: seeds(:)
+        integer, optional, intent(in)    :: seed
         integer, allocatable   :: ordered(:), bitstring(:)
         integer :: k
         allocate(ordered(  size(graph, 1)), source=0)
         allocate(bitstring(size(graph, 1)), source=-1)
         call topological_ordering(graph, ordered)
+        if( present(seed) )then
+            call srand(seed)
+        else
+            call srand(time())
+        endif
         do k = 1, num_samples
-            if( present(seeds) )then
-                call probabilistic_logic_sample(graph, ordered, population, bitstring, seeds(k))
-            else
-                call probabilistic_logic_sample(graph, ordered, population, bitstring)
-            endif
+            call probabilistic_logic_sample(graph, ordered, population, bitstring)
             samples(k, :) = bitstring
-            write(*, *) bitstring
         enddo
     end subroutine sample_from_network
 end module simple_opt_bayesian
