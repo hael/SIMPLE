@@ -162,13 +162,8 @@ contains
         enddo
         weights_3D = weights_3D/sum(weights_3D) ! weights has energy of 1
         weights_2D = weights_2D/sum(weights_2D) ! weights has energy of 1
-        ! determine loop bounds for better load balancing in the following parallel loop
-        if( mskimg_present )then
-            call bounds_from_mask3D(l_mask, lb, ub)
-        else
-            lb = (/ 1, 1, 1/)
-            ub = (/ box, box, box /)
-        endif
+        lb         = (/ 1, 1, 1/)
+        ub         = (/ box, box, box /)
         ! searching for the best fourier index from here and generating the optimized filter
         opt_diff_odd  = 0.
         opt_diff_even = 0.
