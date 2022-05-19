@@ -163,9 +163,6 @@ contains
         weights_2D = weights_2D/sum(weights_2D) ! weights has energy of 1
         if( mskimg_present )then
             call bounds_from_mask3D(l_mask, lb, ub)
-            print *, lb(1), ub(1)
-            print *, lb(2), ub(2)
-            print *, lb(3), ub(3)
         else
             lb = (/ 1, 1, 1/)
             ub = (/ box, box, box /)
