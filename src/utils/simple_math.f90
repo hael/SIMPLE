@@ -875,7 +875,7 @@ contains
         end do
         ub(3) = ldim(3)
         do while( ub(3) >= ldim(3) / 2 )
-            if( any(l_mask(:,ub(3),:)) ) exit
+            if( any(l_mask(:,:,ub(3))) ) exit
             ub(3) = ub(3) - 1
         end do
     end subroutine bounds_from_mask3D
