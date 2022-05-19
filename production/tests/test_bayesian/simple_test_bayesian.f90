@@ -9,7 +9,8 @@ program simple_test_bayesian
     real        :: gains(4)
     integer     :: ordered(4), node, bitstring(4)
     type(stack) :: indexes
-    integer     :: samples(5,4), k, best(4)
+    integer     :: samples(5,4), k, best(20)
+    integer     :: num_bits, max_iter, pop_size, select_size, num_child
     ! unit tests for 'compute_count_for_
     write(*, *) 'Testing counting for each edge:'
     call indexes%new()
@@ -240,5 +241,11 @@ program simple_test_bayesian
     call test_qsort_C()
     write(*, *) 'Testing bayesian search:'
     best = 0
-    call bayesian_search(4, 5, 5, 4, 5, best)
+    num_bits    = 20
+    max_iter    = 100
+    pop_size    = 50
+    select_size = 15
+    num_child   = 25
+    call bayesian_search(num_bits, max_iter, pop_size, select_size, num_child, best)
+    write(*, *) best
 end program simple_test_bayesian
