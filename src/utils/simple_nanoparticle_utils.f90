@@ -997,15 +997,18 @@ contains
         call a%kill
     end subroutine read_pdb2matrix
 
-    subroutine write_matrix2pdb( element, matrix, pdbfile )
+    subroutine write_matrix2pdb( element, matrix, pdbfile, betas )
         character(len=2),  intent(in) :: element
         real, allocatable, intent(in) :: matrix(:,:)
         character(len=*),  intent(in) :: pdbfile
+        real, optional,    intent(in) :: betas(size(matrix, dim=2))
         character(len=:), allocatable :: ext
         character(len=4)      :: atom_name
         character(len=STDLEN) :: fbody
         integer     :: n, i
         type(atoms) :: a
+        logical     :: betas_present
+        betas_present = present(betas)
         ! check that the file extension is .pdb
         if(fname2ext(pdbfile) .ne. 'pdb') THROW_HARD('Wrong extension input file! Should be pdb')
         atom_name = trim(adjustl(element))//'  '
@@ -1013,13 +1016,14 @@ contains
         call a%new(n)
         ! fill up a
         do i = 1, n
+            call a%set_name(i,atom_name)
+            call a%set_element(i, element)
+            call a%set_coord(i, matrix(:,i))
             call a%set_num(i,i)
             call a%set_resnum(i,i)
             call a%set_chain(i,'A')
             call a%set_occupancy(i,1.)
-            call a%set_element(i, element)
-            call a%set_coord(i, matrix(:,i))
-            call a%set_name(i,atom_name)
+            if( betas_present ) call a%set_beta(i, betas(i))
         enddo
         ! write PDB
         ext   = fname2ext(trim(pdbfile))
