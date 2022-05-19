@@ -437,6 +437,7 @@ contains
                         call update_ori_path(spproj%os_mic, n_old+j, 'mceps')
                         call update_ori_path(spproj%os_mic, n_old+j, 'ctfeps')
                         call update_ori_path(spproj%os_mic, n_old+j, 'ctfjpg')
+                        if( l_pick ) call update_ori_path(spproj%os_mic, n_old+j, 'boxfile')
                     enddo
                     if( l_pick ) nptcls_glob = nptcls_glob + nptcls_here
                 else
@@ -450,13 +451,14 @@ contains
                 integer,          intent(in)    :: i
                 character(len=*), intent(in)    :: key
                 character(len=:), allocatable :: fname
+                character(len=LONGSTRLEN)     :: newfname
                 if( os%isthere(i,key) )then
                     call os%getter(i,key,fname)
                     if( len_trim(fname) > 3 )then
-                        if( fname(1:3) == '../' )then
-                            call os%set(i, key, fname(4:))
-                        endif
+                        if( fname(1:3) == '../' ) fname = trim(fname(4:))
                     endif
+                    call make_relativepath(CWD_GLOB, fname, newfname)
+                    call os%set(i, key, newfname)
                 endif
             end subroutine update_ori_path
 
