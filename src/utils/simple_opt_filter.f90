@@ -167,6 +167,10 @@ contains
             lb = (/ 1, 1, 1/)
             ub = (/ box, box, box /)
         endif
+        do k = 1, 3
+            if( lb(k) < params_glob%smooth_ext + 1 )   lb(k) = params_glob%smooth_ext+1
+            if( ub(k) > box - params_glob%smooth_ext ) ub(k) = box - params_glob%smooth_ext
+        enddo
         ! searching for the best fourier index from here and generating the optimized filter
         opt_diff_odd  = 0.
         opt_diff_even = 0.
@@ -251,10 +255,8 @@ contains
                                 k1 = k - params_glob%smooth_ext + k_ind - 1
                                 do l_ind = 1, 2*params_glob%smooth_ext+1
                                     l1 = l - params_glob%smooth_ext + l_ind - 1
-                                    if ((k1 >= 1 .and. k1 <= box) .and. (l1 >= 1 .and. l1 <= box)) then
-                                        ref_diff_odd  = ref_diff_odd  + cur_diff_odd( k1,l1,1)*weights_2D(k_ind,l_ind)
-                                        ref_diff_even = ref_diff_even + cur_diff_even(k1,l1,1)*weights_2D(k_ind,l_ind)
-                                    endif
+                                    ref_diff_odd  = ref_diff_odd  + cur_diff_odd( k1,l1,1)*weights_2D(k_ind,l_ind)
+                                    ref_diff_even = ref_diff_even + cur_diff_even(k1,l1,1)*weights_2D(k_ind,l_ind)
                                 enddo
                             enddo
                             ! opt_diff keeps the minimized cost value at each voxel of the search
@@ -287,10 +289,8 @@ contains
                                         l1 = l - params_glob%smooth_ext + l_ind - 1
                                         do m_ind = 1, 2*params_glob%smooth_ext+1
                                             m1 = m - params_glob%smooth_ext + m_ind - 1
-                                            if ((k1 >= 1 .and. k1 <= box) .and. (l1 >= 1 .and. l1 <= box) .and. (m1 >= 1 .and. m1 <= dim3)) then
-                                                ref_diff_odd  = ref_diff_odd  + cur_diff_odd( k1,l1,m1)*weights_3D(k_ind,l_ind,m_ind)
-                                                ref_diff_even = ref_diff_even + cur_diff_even(k1,l1,m1)*weights_3D(k_ind,l_ind,m_ind)
-                                            endif
+                                            ref_diff_odd  = ref_diff_odd  + cur_diff_odd( k1,l1,m1)*weights_3D(k_ind,l_ind,m_ind)
+                                            ref_diff_even = ref_diff_even + cur_diff_even(k1,l1,m1)*weights_3D(k_ind,l_ind,m_ind)
                                         enddo
                                     enddo
                                 enddo
