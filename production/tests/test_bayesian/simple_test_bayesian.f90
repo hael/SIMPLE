@@ -99,7 +99,7 @@ program simple_test_bayesian
     population(2,:) = (/ 0, 0, 1, 0 /)
     population(3,:) = (/ 0, 0, 0, 0 /)
     graph = 0.
-    call construct_network(population, 4, graph, size(population,1))
+    call construct_network(population, 4, graph)
     write(*, *) graph
     if( all(pack(graph, .true.) .eq. (/ 0., 0., 1., 0., 1., 0., 1., 0., 0., 0., 0., 0., 1., 1., 0., 0. /)) )then
         write(*, *) 'PASSED!'
