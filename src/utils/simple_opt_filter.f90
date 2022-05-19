@@ -126,17 +126,16 @@ contains
         call odd_copy_cmat%copy(odd)
         call odd_copy_cmat%fft
         call odd_copy_shellnorm%copy(odd)
-        call odd_copy_shellnorm%shellnorm
-        call odd_copy_shellnorm%fft
+        call odd_copy_shellnorm%shellnorm(return_ft=.true.)
         call even_copy_rmat%copy(even)
         call even_copy_cmat%copy(even)
         call even_copy_cmat%fft
         call even_copy_shellnorm%copy(even)
-        call even_copy_shellnorm%shellnorm
-        call even_copy_shellnorm%fft
+        call even_copy_shellnorm%shellnorm(return_ft=.true.)
         allocate(opt_odd( box,box,dim3), cur_diff_odd( box,box,dim3), opt_diff_odd( box,box,dim3), opt_freq_odd( box,box,dim3),&
                 &opt_even(box,box,dim3), cur_diff_even(box,box,dim3), opt_diff_even(box,box,dim3), opt_freq_even(box,box,dim3),&
-                &cur_fil(box),weights_2D(params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1), weights_3D(params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1), source=0.)
+                &cur_fil(box),weights_2D(params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1), weights_3D(params_glob%smooth_ext*2+1,&
+                &params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1), source=0.)
         ! assign the weights of the neighboring voxels
         ! 2D weights
         do k = 1, 2*params_glob%smooth_ext+1
@@ -162,8 +161,15 @@ contains
         enddo
         weights_3D = weights_3D/sum(weights_3D) ! weights has energy of 1
         weights_2D = weights_2D/sum(weights_2D) ! weights has energy of 1
-        lb         = (/ 1, 1, 1/)
-        ub         = (/ box, box, box /)
+        if( mskimg_present )then
+            call bounds_from_mask3D(l_mask, lb, ub)
+            print *, lb(1), ub(1)
+            print *, lb(2), ub(2)
+            print *, lb(3), ub(3)
+        else
+            lb = (/ 1, 1, 1/)
+            ub = (/ box, box, box /)
+        endif
         ! searching for the best fourier index from here and generating the optimized filter
         opt_diff_odd  = 0.
         opt_diff_even = 0.
@@ -210,7 +216,7 @@ contains
             if( L_BENCH_GLOB )then
                 rt_chop_sqeu = rt_chop_sqeu + toc(t_chop_sqeu)
             endif
-            if(params_glob%l_match_filt )then
+            if( params_glob%l_match_filt )then
                 call odd%copy_fast(odd_copy_shellnorm)
                 if( L_BENCH_GLOB ) t_chop_filter = tic()
                 call apply_opt_filter(odd, param, cur_fil, .false.)
@@ -225,7 +231,7 @@ contains
             call even%copy_fast(even_copy_cmat)
             call apply_opt_filter(even, param, cur_fil, .true.)
             call even%sqeuclid_matrix(odd_copy_rmat, cur_diff_even)
-            if(params_glob%l_match_filt )then
+            if( params_glob%l_match_filt )then
                 call even%copy_fast(even_copy_shellnorm)
                 call apply_opt_filter(even, param, cur_fil, .false.)
             endif
