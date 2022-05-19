@@ -86,17 +86,19 @@ contains
             tpi          = self%qdescr%get('time_per_image')
             rtpi         = str2real(tpi)
             tot_time_sec = rtpi*real(partsz)
+            if( self%qdescr%isthere('walltime') )then
+                tot_time_sec = min(tot_time_sec, str2real(self%qdescr%get('walltime')))
+            else
+                tot_time_sec = min(tot_time_sec, real(WALLTIME_DEFAULT))
+            endif
+            tot_time_sec = min(tot_time_sec, real(params_glob%walltime)) ! command line override
             hrs          = int(tot_time_sec/3600.)
             hrs_str      = int2str(hrs)
             mins         = int((tot_time_sec - 3600.*real(hrs))/60.)
             mins_str     = int2str(mins)
             secs         = int(tot_time_sec - 3600.*real(hrs) - 60.*real(mins))
             secs_str     = int2str(secs)
-            if( hrs > 23 )then
-                call self%qdescr%set('job_time', '1-23:59:0')
-            else
-                call self%qdescr%set('job_time','0-'//hrs_str//':'//mins_str//':'//secs_str)
-            endif
+            call self%qdescr%set('job_time','0-'//hrs_str//':'//mins_str//':'//secs_str)
         endif
         if( present(qsys_name) ) call self%qdescr%set('qsys_name', qsys_name)
         qsnam = self%qdescr%get('qsys_name')

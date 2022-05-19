@@ -204,7 +204,8 @@ integer, parameter :: SZSN_MAX   = 20
 
 ! computer related
 integer, parameter :: JOB_MEMORY_PER_TASK_DEFAULT = 16000
-integer, parameter :: TIME_PER_IMAGE_DEFAULT      = 100
+integer, parameter :: TIME_PER_IMAGE_DEFAULT      = 100     ! seconds
+integer, parameter :: WALLTIME_DEFAULT            = 86340   ! seconds, 23h59mins
 
 ! precision constants
 #ifndef IMAGE_SINGLE_PRECISION
