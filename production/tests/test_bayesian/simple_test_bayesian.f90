@@ -9,8 +9,8 @@ program simple_test_bayesian
     real        :: gains(4)
     integer     :: ordered(4), node, bitstring(4)
     type(stack) :: indexes
-    integer     :: samples(5,4), k
-    ! unit tests for 'compute_count_for_edges'
+    integer     :: samples(5,4), k, best(4)
+    ! unit tests for 'compute_count_for_
     write(*, *) 'Testing counting for each edge:'
     call indexes%new()
     call indexes%push((/ 1, 2 /))
@@ -236,4 +236,9 @@ program simple_test_bayesian
         write(*, *) samples(k, :)
     enddo
     write(*, *) 'BARELY PASSED! These are random!'
+    write(*, *) 'Testing q_sort_C:'
+    call test_qsort_C()
+    write(*, *) 'Testing bayesian search:'
+    best = 0
+    call bayesian_search(4, 5, 5, 4, 5, best)
 end program simple_test_bayesian
