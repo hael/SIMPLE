@@ -61,6 +61,7 @@ contains
         real(timer_int_kind)    :: rt_write
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',          'yes')
+        if( .not. cline%defined('walltime')        ) call cline%set('walltime',  29.0*60.0) ! 29 minutes
         ! motion correction
         if( .not. cline%defined('trs')             ) call cline%set('trs',              20.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           8.)

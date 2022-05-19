@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
-use simple_parameters,     only: parameters, params_glob
+use simple_parameters,     only: params_glob
 use simple_sp_project,     only: sp_project
 use simple_qsys_env,       only: qsys_env
 use simple_image,          only: image
@@ -172,6 +172,9 @@ contains
             call cline_scale%set('nthr',       real(params_glob%nthr))
             call cline_scale%set('mkdir',      'yes') ! required but not done as it is a simple_private_exec
             call cline_scale%set('dir_target', '../'//trim(SCALE_DIR))
+            if( cline_classify%defined('walltime') )then
+                call cline_scale%set('walltime',real(params_glob%walltime))
+            endif
             call self%spproj%update_projinfo(cline_scale)
             call self%spproj%write(projfile_in)
             call cline_classify%delete('projname')

@@ -84,6 +84,7 @@ contains
         if( .not. cline%defined('ndev')      ) call cline%set('ndev',      1.5)
         if( .not. cline%defined('oritype')   ) call cline%set('oritype',  'ptcl2D')
         if( .not. cline%defined('wiener')    ) call cline%set('wiener',   'partial')
+        if( .not. cline%defined('walltime')  ) call cline%set('walltime',  29.0*60.0) ! 29 minutes
         call cline%set('ptclw',      'no')
         call cline%set('stream','yes') ! only for parameters determination
         call seed_rnd

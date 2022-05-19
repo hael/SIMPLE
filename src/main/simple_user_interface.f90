@@ -276,6 +276,7 @@ type(simple_input_param) :: update_frac
 type(simple_input_param) :: user_account
 type(simple_input_param) :: user_email
 type(simple_input_param) :: user_project
+type(simple_input_param) :: walltime
 type(simple_input_param) :: wcrit
 type(simple_input_param) :: width
 type(simple_input_param) :: wiener
@@ -964,6 +965,7 @@ contains
         call set_param(user_email,     'user_email',   'str',    'Your e-mail address', 'Your e-mail address', 'e.g. myname@uni.edu', .false., '')
         call set_param(time_inactive,  'time_inactive','num',    'Time limit for exit (no new data detected)', 'Time limit in minutes after which the application will exit when no new data is detected{120}', 'in mins{120}', .false., 120.)
         call set_param(time_per_image, 'time_per_image','num',   'Time per image', 'Estimated time per image in seconds for forecasting total execution time{100}', 'in seconds{100}', .false., 100.)
+        call set_param(walltime,       'walltime',     'num',    'Walltime', 'Maximum execution time for job scheduling and management(23h59mins){86340}', 'in seconds(23h59mins){86340}', .false., 86340.)
         call set_param(user_account,   'user_account', 'str',    'User account name in SLURM/PBS', 'User account name in SLURM/PBS system', 'e.g. Account084', .false., '')
         call set_param(user_project,   'user_project', 'str',    'User project name in SLURM/PBS', 'User project name in SLURM/PBS system', 'e.g. Project001', .false., '')
         call set_param(frcs,           'frcs',         'str',    'Projection FRCs file', 'Projection FRCs file', 'e.g. frcs.bin', .false., '')
@@ -1421,7 +1423,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 2, 0, 7, 6, 1, 4, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 2, 0, 7, 6, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1465,6 +1467,7 @@ contains
         &'Number of partitions for distributed execution of each chunk', 'divide chunk job into # parts', .true., 1.0)
         call cluster2D_stream%set_input('comp_ctrls', 3, nparts)
         call cluster2D_stream%set_input('comp_ctrls', 4, nthr)
+        call cluster2D_stream%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740.)
     end subroutine new_cluster2D_stream
 
     subroutine new_cluster3D
@@ -2647,7 +2650,7 @@ contains
         &file is mirrored by an abstract data type in the back-end, which manages the parameters and &
         &meta-data I/O required for execution of SIMPLE',& ! descr_longg
         &'all',&                          ! executable
-        &0, 1, 2, 0, 0, 0, 8, .false.)       ! # entries in each group, requires sp_project
+        &0, 1, 2, 0, 0, 0, 9, .false.)       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2673,6 +2676,7 @@ contains
         call new_project%set_input('comp_ctrls', 6, qsys_reservation)
         call new_project%set_input('comp_ctrls', 7, job_memory_per_task)
         call new_project%set_input('comp_ctrls', 8, qsys_name)
+        call new_project%set_input('comp_ctrls', 9, walltime)
     end subroutine new_new_project
 
     subroutine new_pick
@@ -2900,7 +2904,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 16, 0, 20, 9, 1, 4, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 16, 0, 20, 9, 1, 5, .true.)                                                     ! # entries in each group, requires sp_project
         ! image input/output
         call preprocess_stream_dev%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
         call preprocess_stream_dev%set_input('img_ios', 2, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2992,6 +2996,7 @@ contains
         &'Number of partitions for distributed execution of each chunk', 'divide chunk job into # parts', .true., 1.0)
         call preprocess_stream_dev%set_input('comp_ctrls', 3, nparts)
         call preprocess_stream_dev%set_input('comp_ctrls', 4, nthr)
+        call preprocess_stream_dev%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740.)
     end subroutine new_preprocess_stream_dev
 
     subroutine new_print_dose_weights
@@ -4367,7 +4372,7 @@ contains
         &'Update an existing project',&      ! descr_short
         &'is a program for updating an existing project: changing the name/user_email/computer controls',& ! descr_long
         &'all',&                          ! executable
-        &0, 2, 0, 0, 0, 0, 8, .true.)        ! # entries in each group, requires sp_project
+        &0, 2, 0, 0, 0, 0, 9, .true.)        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -4391,6 +4396,7 @@ contains
         call update_project%set_input('comp_ctrls', 6, qsys_reservation)
         call update_project%set_input('comp_ctrls', 7, job_memory_per_task)
         call update_project%set_input('comp_ctrls', 8, qsys_name)
+        call update_project%set_input('comp_ctrls', 9, walltime)
     end subroutine new_update_project
 
     subroutine new_vizoris

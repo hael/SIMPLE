@@ -99,7 +99,6 @@ type :: parameters
     character(len=3)      :: test='no'
     character(len=3)      :: tomo='no'            !< tomography mode(yes|no){no}
     character(len=3)      :: tophat='no'          !< tophat filter(yes|no){no}
-    character(len=3)      :: time='no'
     character(len=3)      :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)      :: tseries='no'         !< images represent a time-series(yes|no){no}
     character(len=3)      :: use_thres='yes'      !< Use contact-based thresholding(yes|no){yes}
@@ -330,6 +329,7 @@ type :: parameters
     integer :: top=1
     integer :: tos=1
     integer :: update=1000
+    integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
     integer :: which_iter=0        !< iteration nr
     integer :: smooth_ext=1        !< smoothing window extension{1} 
     integer :: xcoord=0            !< x coordinate{0}
@@ -429,7 +429,6 @@ type :: parameters
     real    :: thres_low=0.        !< lower threshold for canny edge detection
     real    :: thres_up=1.         !< upper threshold for canny edge detection
     real    :: tiltgroupmax=0
-    real    :: time_per_image=200.
     real    :: time_per_frame=0.
     real    :: trs=0.              !< maximum halfwidth shift(in pixels)
     real    :: update_frac = 1.
@@ -625,7 +624,6 @@ contains
         call check_carg('tag',            self%tag)
         call check_carg('taper_edges',    self%taper_edges)
         call check_carg('test',           self%test)
-        call check_carg('time',           self%time)
         call check_carg('tomo',           self%tomo)
         call check_carg('tomoseries',     self%tomoseries)
         call check_carg('tophat',         self%tophat)
@@ -773,6 +771,7 @@ contains
         call check_iarg('update',         self%update)
         call check_iarg('which_iter',     self%which_iter)
         call check_iarg('smooth_ext',     self%smooth_ext)
+        call check_iarg('walltime',       self%walltime)
         call check_iarg('xdim',           self%xdim)
         call check_iarg('xcoord',         self%xcoord)
         call check_iarg('ycoord',         self%ycoord)
@@ -858,7 +857,6 @@ contains
         call check_rarg('thres',          self%thres)
         call check_rarg('thres_low',      self%thres_low)
         call check_rarg('thres_up',       self%thres_up)
-        call check_rarg('time_per_image', self%time_per_image)
         call check_rarg('trs',            self%trs)
         call check_rarg('motion_correctftol', self%motion_correctftol)
         call check_rarg('motion_correctgtol', self%motion_correctgtol)
@@ -1233,6 +1231,13 @@ contains
             !$ call omp_set_num_threads(self%nthr)
         endif
         nthr_glob = self%nthr
+        ! job scheduling management
+        if( self%walltime <= 0 )then
+            THROW_HARD('Walltime cannot be negative!')
+        else if( self%walltime > WALLTIME_DEFAULT )then
+            THROW_WARN('Walltime is superior to maximum allowed of 23h59mins, resetting it to this value')
+            self%walltime = WALLTIME_DEFAULT
+        endif
         !<<< END, PARALLELISATION-RELATED
 
         !>>> START, IMAGE-PROCESSING-RELATED

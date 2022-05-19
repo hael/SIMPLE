@@ -255,6 +255,13 @@ contains
                 call self%compenv%set(1, 'time_per_image', real(TIME_PER_IMAGE_DEFAULT))
             endif
         endif
+        if( cline%defined('walltime') )then
+            call self%compenv%set(1, 'walltime', cline%get_rarg('walltime'))
+        else
+            if( .not. self%compenv%isthere('walltime') )then
+                call self%compenv%set(1, 'walltime', real(WALLTIME_DEFAULT))
+            endif
+        endif
         if( cline%defined('user_account') )then
             call self%compenv%set(1, 'user_account', cline%get_carg('user_account'))
         endif
