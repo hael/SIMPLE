@@ -258,7 +258,7 @@ contains
             val = marginal_probability(node, population)
             return
         endif
-        allocate(counts(size(bitstring)), source=0)
+        allocate(counts(2**size(bitstring)), source=0)
         call indexes%new()
         call indexes%push(node)
         ! add the 'in' to node
@@ -279,7 +279,7 @@ contains
 
     subroutine probabilistic_logic_sample(graph, ordered, population, bitstring, seed)
         real   ,           intent(in)    :: graph(:,:)
-        integer,           intent(inout) :: ordered(:)
+        integer,           intent(in)    :: ordered(:)
         integer,           intent(in)    :: population(:,:)
         integer,           intent(inout) :: bitstring(:)
         integer, optional, intent(in)    :: seed
@@ -366,7 +366,7 @@ contains
         !enddo
         best      = pop_cost(1)%bitstr
         best_cost = pop_cost(1)%cost
-        write(*, *) best, best_cost
+        write(*, *) best, best_cost, rand()
         do k = 1, max_iter
             do l = 1, select_size
                 selected(l, :) = pop_cost(l)%bitstr
@@ -390,12 +390,12 @@ contains
                 best      = pop_cost(1)%bitstr
                 best_cost = pop_cost(1)%cost
             endif
-            write(*, *) best, best_cost
-            converged = .false.
-            do l = 1, size(pop_cost)
+            !write(*, *) best, best_cost
+            !converged = .false.
+            !do l = 1, size(pop_cost)
 
-            enddo
-            if( converged .or. best_cost == num_bits ) return
+            !enddo
+            !if( converged .or. best_cost == num_bits ) return
         enddo
     end subroutine bayesian_search
 
