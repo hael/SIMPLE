@@ -1749,13 +1749,15 @@ contains
         &'Detect atoms in atomic-resolution nanoparticle map, with 2-fold CV',& ! descr_short
         &'is a program for identifying atoms in atomic-resolution nanoparticle maps using 2-fold cross-validation',& ! descr long
         &'single_exec',&                                                        ! executable
-        &2, 1, 0, 0, 1, 1, 1, .false.)                                          ! # entries in each group, requires sp_project
+        &2, 2, 0, 0, 1, 1, 1, .false.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms_eo%set_input('img_ios', 1, 'vol_odd',  'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
         call detect_atoms_eo%set_input('img_ios', 2, 'vol_even', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
         ! parameter input/output
         call detect_atoms_eo%set_input('parm_ios', 1, smpd)
+        call detect_atoms_eo%set_input('parm_ios', 2, 'corr_thres', 'num', 'Per-atom corr threshold', 'Per-atom validation correlation threshold for discarding atoms(0.3-0.5){0.5}', &
+        & 'Corr threshold for discarding atoms(0.3-0.5){0.5}', .false., 0.5)
         ! alternative inputs
         ! <empty>
         ! search controls

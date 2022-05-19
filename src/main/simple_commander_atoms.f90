@@ -1,4 +1,4 @@
-module simple_commander_quant
+module simple_commander_atoms
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
@@ -117,16 +117,18 @@ contains
         type(nanoparticle) :: nano
         type(image)        :: even, odd, mskvol, sim_density
         type(common_atoms) :: atms_common
-        real, allocatable  :: pdbmat(:,:)
+        real, allocatable  :: pdbmat(:,:), valid_corrs(:)
         character(len=2)   :: el
         integer            :: k
+        logical            :: use_auto_corr_thres
         type(stats_struct) :: dist_stats
         character(len=:), allocatable :: add2fn, ename_filt, oname_filt, eatms, oatms
-        character(len=:), allocatable :: fname_avg, map_avg_filt, tmp, eatms_common
+        character(len=:), allocatable :: fname_avg, map_avg_filt, tmp, eatms_common, atms_avg_valid
         character(len=:), allocatable :: oatms_common, oatms_sim, eatms_sim, atms_avg, atms_avg_sim
-        call cline%set('use_thres', 'no')
-        call cline%set('corr_thres', 0.)
-        call cline%set('lp_lb',      3.)
+        call cline%set('use_thres',  'no')
+        call cline%set('lp_lb',        3.)
+        call cline%set('match_filt', 'no')
+        use_auto_corr_thres = .not.cline%defined('corr_thres')
         call params%new(cline)
         ! read e/o:s
         call odd %new([params%box,params%box,params%box], params%smpd)
@@ -143,22 +145,23 @@ contains
         call opt_filter(odd, even, mskvol)
         call even%mask(params%msk, 'soft')
         call odd%mask(params%msk, 'soft')
-        add2fn       = '_filt'
-        oname_filt   = add2fbody(params%vols_odd(1),     trim(params%ext), add2fn)
-        ename_filt   = add2fbody(params%vols_even(1),    trim(params%ext), add2fn)
-        tmp          = rm_from_fbody(params%vols_odd(1), trim(params%ext), '_odd')
-        map_avg_filt = add2fbody(tmp,                    trim(params%ext), '_filt_AVG')
-        atms_avg_sim = add2fbody(tmp,                    trim(params%ext), '_ATMS_AVG_SIM')
-        fname_avg    = swap_suffix(tmp, '.pdb',          trim(params%ext) )
-        atms_avg     = add2fbody(fname_avg ,             '.pdb',           '_ATMS_AVG')
+        add2fn         = '_filt'
+        oname_filt     = add2fbody(params%vols_odd(1),     trim(params%ext), add2fn)
+        ename_filt     = add2fbody(params%vols_even(1),    trim(params%ext), add2fn)
+        tmp            = rm_from_fbody(params%vols_odd(1), trim(params%ext), '_odd')
+        map_avg_filt   = add2fbody(tmp,                    trim(params%ext), '_filt_AVG')
+        atms_avg_sim   = add2fbody(tmp,                    trim(params%ext), '_ATMS_AVG_SIM')
+        fname_avg      = swap_suffix(tmp, '.pdb',          trim(params%ext) )
+        atms_avg       = add2fbody(fname_avg ,             '.pdb',           '_ATMS_AVG')
+        atms_avg_valid = add2fbody(fname_avg ,             '.pdb',           '_ATMS_AVG_VALID')
         call odd%write(oname_filt)
         call even%write(ename_filt)
         ! detect atoms in odd
         call nano%new(oname_filt)
-        call nano%identify_atomic_pos_slim(.false.)
+        call nano%identify_atomic_pos_slim(.false., use_auto_corr_thres)
         ! detect atoms in even
         call nano%new(ename_filt)
-        call nano%identify_atomic_pos_slim(.true.)
+        call nano%identify_atomic_pos_slim(.true.,  use_auto_corr_thres)
         ! compare independent atomic models
         el               = trim(adjustl(params%element))
         tmp              = add2fbody(oname_filt,    trim(params%ext), '_ATMS')
@@ -192,9 +195,9 @@ contains
         ! write pdb files for the e/o:s
         call write_matrix2pdb(el, atms_common%common1, oatms_common)
         call write_matrix2pdb(el, atms_common%common2, eatms_common)
-        ! write the average atomic positions
+        ! write the average atomic positions (with the per-atom RMSDS in the B-factor field)
         atms_common%common1 = (atms_common%common1 + atms_common%common2) / 2.
-        call write_matrix2pdb(el, atms_common%common1, atms_avg)
+        call write_matrix2pdb(el, atms_common%common1, atms_avg, betas=atms_common%dists)
         ! RMSD reporting
         call calc_stats(atms_common%dists(:), dist_stats)
         write(logfhandle,'(A)') '>>> DISTANCE STATS (IN A) FOR COMMON ATOMS BELOW'
@@ -212,7 +215,7 @@ contains
         call nano%simulate_atoms(sim_density)
         call sim_density%write(eatms_sim)
         call nano%set_atomic_coords(oatms_common)
-        ! simulate density for the average atomic positions
+        ! simulate density for the average atomic positions 
         call nano%set_atomic_coords(atms_avg)
         call nano%simulate_atoms(sim_density)
         call sim_density%write(atms_avg_sim)
@@ -220,7 +223,13 @@ contains
         call even%add(odd)
         call even%mul(0.5)
         call even%write(map_avg_filt)
+        ! write a PDB file for the average atomic positions with the valid_corrs in the B-factor field
+        call nano%set_img(map_avg_filt, 'img_raw')
+        call nano%validate_atoms(sim_density)
+        valid_corrs = nano%get_valid_corrs()
+        call write_matrix2pdb(el, atms_common%common1, atms_avg_valid, betas=valid_corrs)
         ! kill
+        deallocate(valid_corrs)
         call nano%kill
         call even%kill
         call odd%kill
@@ -405,4 +414,4 @@ contains
         call simple_end('**** SIMPLE_ATOMS_MASK NORMAL STOP ****')
     end subroutine exec_atoms_mask
 
-end module simple_commander_quant
+end module simple_commander_atoms

@@ -2994,8 +2994,6 @@ contains
         logical            :: didbwdft, rretrun_ft
         integer            :: sh, h, k, l, phys(3), lfny, lims(3,2)
         real               :: icomp, avg
-        
-        
         ! subtract average in real space
         didbwdft   = .false.
         rretrun_ft = .true.
@@ -4559,7 +4557,7 @@ contains
         endif
         sumsq_ref = ref_ptr%calc_sumsq(resmsk)
         eps       = epsilon(sumsq_ref)
-        if( sumsq_ptcl < eps .or. sumsq_ptcl < eps )then
+        if( sumsq_ref < eps .or. sumsq_ptcl < eps )then
             cc = 0.
             return
         endif

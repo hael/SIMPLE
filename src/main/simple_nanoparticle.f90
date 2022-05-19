@@ -14,7 +14,7 @@ private
 #include "simple_local_flags.inc"
 
 ! module global constants
-real,             parameter :: CORR_THRES_SIGMA    = -3.0    ! sigma for valid_corr thresholding
+real,             parameter :: CORR_THRES_SIGMA    = -2.0    ! sigma for valid_corr thresholding
 integer,          parameter :: NBIN_THRESH         = 15      ! number of thresholds for binarization
 integer,          parameter :: CN_THRESH_XTAL      = 5       ! cn-threshold highly crystalline NPs
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
@@ -158,6 +158,7 @@ type :: nanoparticle
     ! getters/setters
     procedure          :: get_ldim
     procedure          :: get_natoms
+    procedure          :: get_valid_corrs
     procedure          :: set_img
     procedure          :: set_atomic_coords
     procedure          :: set_coords4stats
@@ -177,7 +178,7 @@ type :: nanoparticle
     procedure, private :: discard_lowly_coordinated
     procedure, private :: discard_low_valid_corr_atoms
     procedure, private :: split_atoms
-    procedure, private :: validate_atoms
+    procedure          :: validate_atoms
     ! calc stats
     procedure          :: fillin_atominfo
     procedure, private :: masscen
@@ -247,6 +248,14 @@ contains
        call self%img_cc%get_nccs(n)
     end function get_natoms
 
+    function get_valid_corrs( self ) result( corrs )
+        class(nanoparticle), intent(in) :: self
+        real, allocatable :: corrs(:)
+        if( allocated(self%atominfo) )then
+            allocate(corrs(size(self%atominfo)), source=self%atominfo(:)%valid_corr)
+        endif
+    end function get_valid_corrs
+
     ! set one of the images of the nanoparticle type
     subroutine set_img( self, imgfile, which )
         class(nanoparticle), intent(inout) :: self
@@ -262,6 +271,9 @@ contains
             case('img_cc')
                 call self%img_cc%new_bimg(self%ldim, self%smpd)
                 call self%img_cc%read_bimg(imgfile)
+            case('img_raw')
+                call self%img%new(self%ldim, self%smpd)
+                call self%img%read(imgfile)
             case DEFAULT
                 THROW_HARD('Wrong input parameter img type (which); set_img')
         end select
@@ -442,6 +454,7 @@ contains
         logical,             intent(in)    :: use_auto_corr_thres ! true -> use automatic corr thres
         real, allocatable :: centers_A(:,:)                       ! coordinates of the atoms in ANGSTROMS
         type(image)       :: simatms
+        integer           :: n_discard
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%img, self%element)
@@ -454,7 +467,7 @@ contains
         call self%simulate_atoms(simatms)
         call self%validate_atoms(simatms)
         ! discard atoms with low valid_corr
-        call self%discard_low_valid_corr_atoms(use_auto_corr_thres)
+        call self%discard_low_valid_corr_atoms(use_auto_corr_thres, n_discard)
         ! fit lattice
         centers_A = self%atominfo2centers_A()
         call fit_lattice(self%element, centers_A, a)
@@ -471,6 +484,7 @@ contains
         integer, optional,   intent(in)    :: cs_thres
         logical     :: use_cn_thresh, fixed_cs_thres
         type(image) :: simatms, img_cos
+        integer     :: n_discard
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%img, self%element)
@@ -485,7 +499,7 @@ contains
         call self%simulate_atoms(simatms)
         call self%validate_atoms(simatms)
         ! discard atoms with low valid_corr
-        call self%discard_low_valid_corr_atoms(use_auto_corr_thres)
+        call self%discard_low_valid_corr_atoms(use_auto_corr_thres, n_discard)
         ! discard lowly coordinated atoms
         fixed_cs_thres = present(cs_thres)
         if( fixed_cs_thres )then
@@ -516,11 +530,13 @@ contains
 
     ! this slimmed-down version is intended for detect_atoms_eo
     ! it assumes that the input map is denoised beforehand
-    subroutine identify_atomic_pos_slim( self, is_even )
+    subroutine identify_atomic_pos_slim( self, is_even, use_auto_corr_thres )
         class(nanoparticle), intent(inout) :: self
         logical,             intent(in)    :: is_even
+        logical,             intent(in)    :: use_auto_corr_thres ! true -> use automatic corr thres
         character(len=:),    allocatable   :: fname_split_ccs
         type(image) :: simatms
+        integer     :: n_discard
         if( is_even )then
             fname_split_ccs = 'split_ccs_even.mrc'
         else
@@ -536,6 +552,13 @@ contains
         ! validation through per-atom correlation with the simulated density
         call self%simulate_atoms(simatms)
         call self%validate_atoms(simatms)
+        ! discard atoms with low valid_corr
+        call self%discard_low_valid_corr_atoms(use_auto_corr_thres, n_discard)
+        if( n_discard > 0 )then
+            ! re-calculate valid_corr:s (since they are otherwise lost from the B-factor field due to reallocations of atominfo)
+            call self%simulate_atoms(simatms)
+            call self%validate_atoms(simatms)
+        endif
         ! WRITE OUTPUT
         call self%img_bin%write_bimg(trim(self%fbody)//'_BIN.mrc')
         write(logfhandle,'(A)') 'output, binarized map:            '//trim(self%fbody)//'_BIN.mrc'
@@ -950,12 +973,13 @@ contains
         write(logfhandle,'(A,F8.4)') 'Min    : ', corr_stats%minv
     end subroutine validate_atoms
 
-    subroutine discard_low_valid_corr_atoms( self, use_auto_corr_thres )
+    subroutine discard_low_valid_corr_atoms( self, use_auto_corr_thres, n_discard )
         use simple_stat, only: robust_sigma_thres
         class(nanoparticle), intent(inout) :: self
         logical,             intent(in)    :: use_auto_corr_thres
+        integer,             intent(inout) :: n_discard
         integer, allocatable :: imat_bin(:,:,:), imat_cc(:,:,:)
-        integer :: cc, n_discard
+        integer :: cc
         real    :: corr_thres
         write(logfhandle, '(A)') '>>> DISCARDING ATOMS WITH LOW VALID_CORR'
         call self%img_cc%get_imat(imat_cc)
@@ -1375,12 +1399,12 @@ contains
             do i = 1, self%n_cc
                 if( mask(i) )then
                     cnt = cnt + 1
-                    call set_atoms(cnt, i)
+                    call set_atom(cnt, i)
                 endif
             end do
         else
             do i = 1, self%n_cc
-                call set_atoms(i, i)
+                call set_atom(i, i)
             enddo
         endif
         call simatms%new(self%ldim,self%smpd)
@@ -1389,7 +1413,7 @@ contains
 
         contains
 
-            subroutine set_atoms( atms_obj_ind, ainfo_ind )
+            subroutine set_atom( atms_obj_ind, ainfo_ind )
                 integer, intent(in) :: atms_obj_ind, ainfo_ind
                 call atms_ptr%set_name(     atms_obj_ind, self%atom_name)
                 call atms_ptr%set_element(  atms_obj_ind, self%element)
@@ -1403,7 +1427,7 @@ contains
                 else
                     call atms_ptr%set_beta(atms_obj_ind, self%atominfo(ainfo_ind)%cn_gen) ! use generalised coordination number
                 endif
-            end subroutine set_atoms
+            end subroutine set_atom
 
     end subroutine simulate_atoms
 

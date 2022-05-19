@@ -12,7 +12,7 @@ use simple_commander_project
 use simple_commander_cluster2D
 use simple_commander_tseries
 use simple_commander_oris
-use simple_commander_quant
+use simple_commander_atoms
 implicit none
 #include "simple_local_flags.inc"
 
