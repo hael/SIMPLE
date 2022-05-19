@@ -2987,18 +2987,24 @@ contains
     end subroutine spectrum
 
     !> \brief shellnorm for normalising each shell to uniform (=1) power
-    subroutine shellnorm( self )
-        class(image), intent(inout) :: self
+    subroutine shellnorm( self, return_ft )
+        class(image),      intent(inout) :: self
+        logical, optional, intent(in) :: return_ft
         real, allocatable  :: expec_pow(:)
-        logical            :: didbwdft
+        logical            :: didbwdft, rretrun_ft
         integer            :: sh, h, k, l, phys(3), lfny, lims(3,2)
         real               :: icomp, avg
+        
+        
         ! subtract average in real space
-        didbwdft = .false.
+        didbwdft   = .false.
+        rretrun_ft = .true.
         if( self%ft )then
             call self%ifft()
-            didbwdft = .true.
+            didbwdft   = .true.
+            rretrun_ft = .false.
         endif
+        if( present(return_ft) ) rretrun_ft = return_ft 
         avg = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))/real(product(self%ldim))
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
             self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))-avg
@@ -3051,7 +3057,7 @@ contains
         icomp = aimag(self%cmat(phys(1),phys(2),phys(3)))
         self%cmat(phys(1),phys(2),phys(3)) = cmplx(1.,icomp)
         ! Fourier plan upon return
-        if( didbwdft )then
+        if( didbwdft .or. rretrun_ft )then
             ! return in Fourier space
         else
             ! return in real space
