@@ -5,8 +5,8 @@ include 'simple_lib.f08'
 implicit none
 
 type bit_cost
-    integer :: index
-    integer :: cost
+    integer, allocatable :: bitstr(:)
+    integer              :: cost
 end type bit_cost
 
 interface
@@ -324,37 +324,37 @@ contains
         integer, intent(in)           :: num_child
         integer, intent(inout)        :: best(:)
         integer, optional, intent(in) :: seed
-        integer, allocatable          :: population(:, :), children(:, :)
+        integer, allocatable          :: children(:, :), selected(:, :)
         integer                       :: k, l, m, best_cost, ind
-        integer, allocatable          :: selected(:, :)
         real   , allocatable          :: network(:, :)
         integer, parameter            :: BITS_IN_BYTE = 8
+        logical                       :: converged
         type(bit_cost), allocatable, target :: pop_cost(:)
-        allocate(population(pop_size-select_size+num_child, num_bits),&
-                &selected(select_size, num_bits), children(num_child, num_bits),&
+        allocate(selected(select_size, num_bits), children(num_child, num_bits),&
                 &source=0)
         allocate(network(num_bits, num_bits), source=0.)
         allocate(pop_cost(pop_size-select_size+num_child))
+        do k = 1, pop_size-select_size+num_child
+            allocate(pop_cost(k)%bitstr(num_bits), source=0)
+        enddo
         if( present(seed) )then
             call srand(seed)
         else
             call srand(time())
         endif
         do k = 1, pop_size
-            population(k, :)  = 0
-            pop_cost(k)%index = k
-            pop_cost(k)%cost  = 0
+            pop_cost(k)%bitstr = 0
+            pop_cost(k)%cost   = 0
             do l = 1, num_bits
                 if( rand() < 0.5 )then
-                    population(k,l)  = 1
-                    pop_cost(k)%cost = pop_cost(k)%cost + 1
+                    pop_cost(k)%bitstr(l) = 1
+                    pop_cost(k)%cost      = pop_cost(k)%cost + 1
                 endif
             enddo
         enddo
         do k = pop_size+1,pop_size-select_size+num_child
-            population(k, :)  = 0
-            pop_cost(k)%index = k
-            pop_cost(k)%cost  = 0
+            pop_cost(k)%bitstr = 0
+            pop_cost(k)%cost   = 0
         enddo
         ! In-place sort of the pop_cost
         call qsort_C( c_loc(pop_cost(1)), & 
@@ -364,20 +364,19 @@ contains
         !do k = 1, size(pop_cost)
         !    write(*, *) pop_cost(k)%index, pop_cost(k)%cost
         !enddo
-        best      = population(pop_cost(1)%index, :)
+        best      = pop_cost(1)%bitstr
         best_cost = pop_cost(1)%cost
         write(*, *) best, best_cost
         do k = 1, max_iter
             do l = 1, select_size
-                selected(l, :) = population(pop_cost(l)%index, :)
+                selected(l, :) = pop_cost(l)%bitstr
             enddo
             call construct_network(selected, num_bits, network)
             call sample_from_network(selected, network, num_child, children)
             do l = 1, num_child
                 ind = pop_size-select_size+l
-                population(ind, :)  = children(l, :)
-                pop_cost(ind)%index = ind
-                pop_cost(ind)%cost  = 0
+                pop_cost(ind)%bitstr = children(l, :)
+                pop_cost(ind)%cost   = 0
                 do m = 1, num_bits
                     if( children(l,m) == 1 ) pop_cost(ind)%cost = pop_cost(ind)%cost+1
                 enddo
@@ -387,16 +386,16 @@ contains
                             size(pop_cost, kind=c_size_t), &
                             int(storage_size(pop_cost(1))/BITS_IN_BYTE, kind=c_size_t), &
                             c_funloc(cost_compare) )
-            !print*, 'ORDERED'
-            !do m = 1, size(pop_cost)
-            !    write(*, *) pop_cost(m)%index, pop_cost(m)%cost
-            !enddo
-            !print*, 'END-ORDERED'
             if( pop_cost(1)%cost >= best_cost )then
-                best      = population(pop_cost(1)%index, :)
+                best      = pop_cost(1)%bitstr
                 best_cost = pop_cost(1)%cost
             endif
             write(*, *) best, best_cost
+            converged = .false.
+            do l = 1, size(pop_cost)
+
+            enddo
+            if( converged .or. best_cost == num_bits ) return
         enddo
     end subroutine bayesian_search
 
@@ -419,8 +418,9 @@ contains
         integer :: cost(5) = [4, 3, 5, 1, 2]
         ! To be sorted
         do k = 1, 5
-            array(k)%index = k
-            array(k)%cost  = cost(k)
+            allocate(array(k)%bitstr(4), source=0)
+            array(k)%bitstr = [1, 2, 3, k]
+            array(k)%cost   = cost(k)
         enddo
         ! In-place sort of the array
         call qsort_C( c_loc(array(1)), & 
@@ -428,7 +428,7 @@ contains
                       int(storage_size(array(1))/BITS_IN_BYTE, kind=c_size_t), &
                       c_funloc(cost_compare) )
         do k = 1, 5
-            write(*, *) array(k)%index, array(k)%cost
+            write(*, *) array(k)%cost, array(k)%bitstr
         enddo
     end subroutine
 
