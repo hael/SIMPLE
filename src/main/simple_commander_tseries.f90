@@ -1136,6 +1136,7 @@ contains
         type(ori)                       :: o1, o2
         type(image), allocatable        :: imgs(:)
         type(image)                     :: spher_msk
+        type(binimage)                  :: spher_msk_bin
         type(sp_project)                :: spproj
         type(stats_struct)              :: euldist_stats
         character(len=:), allocatable   :: iter_dir, cavgs_stk, fname
@@ -1143,23 +1144,25 @@ contains
         real,             allocatable   :: rstates(:), corrs(:), euldists(:), tmp(:)
         logical,          allocatable   :: state_mask(:), pind_mask(:)
         character(len=:), allocatable   :: iter_tag
-        character(len=STDLEN) :: fbody, fbody_split_e, fbody_split_o, fbody_e, fbody_o, fbody_filt_e, fbody_filt_o
+        character(len=STDLEN) :: fbody, fbody_split_e, fbody_split_o, fbody_e, fbody_o, fbody_filt_e, fbody_filt_o, fbody_rmsds
         integer :: i, j, iter, cnt, cnt2, ncavgs, funit, io_stat, endit, maxpind, noris, pind_plus_one, npix
         real    :: smpd
         logical :: fall_over
-        fbody         = get_fbody(RECVOL,     'mrc')
-        fbody_e       = get_fbody(EVEN,       'mrc')
-        fbody_o       = get_fbody(ODD,        'mrc')
-        fbody_filt_e  = get_fbody(EVEN_FILT,  'mrc')
-        fbody_filt_o  = get_fbody(ODD_FILT,   'mrc')
-        fbody_split_e = get_fbody(EVEN_SPLIT, 'mrc')
-        fbody_split_o = get_fbody(ODD_SPLIT,  'mrc')
+        fbody         = get_fbody(RECVOL,             'mrc')
+        fbody_e       = get_fbody(EVEN,               'mrc')
+        fbody_o       = get_fbody(ODD,                'mrc')
+        fbody_filt_e  = get_fbody(EVEN_FILT,          'mrc')
+        fbody_filt_o  = get_fbody(ODD_FILT,           'mrc')
+        fbody_split_e = get_fbody(EVEN_SPLIT,         'mrc')
+        fbody_split_o = get_fbody(ODD_SPLIT,          'mrc')
+        fbody_rmsds   = get_fbody(PER_ATOM_RMSDS_BIN, 'bin')
         if(       cline%defined('nparts')         ) call cline%delete('nparts') ! shared-memory workflow
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',          5.)
         if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between', 30.)
         if( .not. cline%defined('overlap')        ) call cline%set('overlap',        0.8)
         if( .not. cline%defined('fracsrch')       ) call cline%set('fracsrch',       0.9)
         if( .not. cline%defined('ran_noise_ph')   ) call cline%set('ran_noise_ph',  'no')
+        if( .not. cline%defined('nonuniform')     ) call cline%set('nonuniform',   'yes')
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_autorefine3D_nano & copy the project file
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
         params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
@@ -1176,8 +1179,12 @@ contains
         &which is not allowed. Use simple_exec prg=prune_project before executing autorefine3D_nano')
         ! make a spherical mask
         call spher_msk%disc([params%box,params%box,params%box], params%smpd, params%msk, npix)
-        ! call spher_msk%cos_edge(params%edge)
-        call spher_msk%write('spherical_mask.mrc')
+        ! transfer to binimg instance
+        call spher_msk_bin%transfer2bimg(spher_msk)
+        ! apply soft cosine edge
+        call spher_msk_bin%cos_edge(nint(COSMSKHALFWIDTH))
+        ! write
+        call spher_msk_bin%write_bimg('spherical_mask.mrc')
         ! copy the input command line as templates for the refine3D_nano/detect_atoms_eo command line
         cline_refine3D_nano  = cline
         cline_detect_atms_eo = cline
@@ -1188,6 +1195,7 @@ contains
         call cline_refine3D_nano%set('maxits',   real(params%maxits_between)) ! turn maxits_between into maxits (max # iterations between model building)
         call cline_refine3D_nano%delete('maxits_between')
         call cline_refine3D_nano%set('silence_fsc', 'yes') ! to avoid excessive printing
+        call cline_refine3D_nano%set('maskfile', 'spherical_mask.mrc')
         ! then update cline_detect_atoms_eo accordingly
         call cline_detect_atms_eo%set('prg', 'detect_atoms_eo')
         call cline_detect_atms_eo%delete('vol1')        ! because after the first round we change to even/odd convention for input vols
@@ -1377,6 +1385,8 @@ contains
         ! deallocate
         if( allocated(iter_dir)  ) deallocate(iter_dir)
         if( allocated(cavgs_stk) ) deallocate(cavgs_stk)
+        ! final cleanup
+        call del_file('spherical_mask.mrc')
         ! end gracefully
         call simple_end('**** AUTOREFINE3D_NANO_EO NORMAL STOP ****')
 
@@ -1397,30 +1407,34 @@ contains
             call del_file(AVG_ATOMS)
             call del_file(AVG_ATOMS_SIM)
             call del_file(AVG_ATOMS_VALID)
+            call del_file(PER_ATOM_RMSDS_BIN)
+            call del_file(PER_ATOM_RMSDS_TXT)
         end subroutine clean
 
         subroutine copy_files( dir, i )
             character(len=*), intent(in) :: dir
             integer,          intent(in) :: i
-            call simple_copy_file(RECVOL,          trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'.mrc')
-            call simple_copy_file(EVEN,            trim(dir)//trim(fbody_e)       //'_iter'//int2str_pad(i,3)//'.mrc')
-            call simple_copy_file(EVEN_FILT,       trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'.mrc')
-            call simple_copy_file(EVEN_ATOMS,      trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON.pdb')
-            call simple_copy_file(EVEN_SIM,        trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON_SIM.mrc')
-            call simple_copy_file(EVEN_BIN,        trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
-            call simple_copy_file(EVEN_CCS,        trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_CC.mrc')
-            call simple_copy_file(EVEN_SPLIT,      trim(dir)//trim(fbody_split_e) //'_iter'//int2str_pad(i,3)//'.mrc')
-            call simple_copy_file(ODD,             trim(dir)//trim(fbody_o)       //'_iter'//int2str_pad(i,3)//'.mrc')
-            call simple_copy_file(ODD_FILT,        trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'.mrc')
-            call simple_copy_file(ODD_ATOMS,       trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON.pdb')
-            call simple_copy_file(ODD_SIM,         trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON_SIM.mrc')
-            call simple_copy_file(ODD_BIN,         trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
-            call simple_copy_file(ODD_CCS,         trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_CC.mrc')
-            call simple_copy_file(ODD_SPLIT,       trim(dir)//trim(fbody_split_o) //'_iter'//int2str_pad(i,3)//'.mrc')
-            call simple_copy_file(AVG_MAP,         trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_filt_AVG.mrc')
-            call simple_copy_file(AVG_ATOMS,       trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_ATMS_AVG.pdb')
-            call simple_copy_file(AVG_ATOMS_SIM,   trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_ATMS_AVG_SIM.mrc')
-            call simple_copy_file(AVG_ATOMS_VALID, trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_ATMS_AVG_VALID.pdb')
+            call simple_copy_file(RECVOL,             trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(EVEN,               trim(dir)//trim(fbody_e)       //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(EVEN_FILT,          trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(EVEN_ATOMS,         trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON.pdb')
+            call simple_copy_file(EVEN_SIM,           trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON_SIM.mrc')
+            call simple_copy_file(EVEN_BIN,           trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
+            call simple_copy_file(EVEN_CCS,           trim(dir)//trim(fbody_filt_e)  //'_iter'//int2str_pad(i,3)//'_CC.mrc')
+            call simple_copy_file(EVEN_SPLIT,         trim(dir)//trim(fbody_split_e) //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(ODD,                trim(dir)//trim(fbody_o)       //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(ODD_FILT,           trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(ODD_ATOMS,          trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON.pdb')
+            call simple_copy_file(ODD_SIM,            trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_ATMS_COMMON_SIM.mrc')
+            call simple_copy_file(ODD_BIN,            trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_BIN.mrc')
+            call simple_copy_file(ODD_CCS,            trim(dir)//trim(fbody_filt_o)  //'_iter'//int2str_pad(i,3)//'_CC.mrc')
+            call simple_copy_file(ODD_SPLIT,          trim(dir)//trim(fbody_split_o) //'_iter'//int2str_pad(i,3)//'.mrc')
+            call simple_copy_file(AVG_MAP,            trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_filt_AVG.mrc')
+            call simple_copy_file(AVG_ATOMS,          trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_ATMS_AVG.pdb')
+            call simple_copy_file(AVG_ATOMS_SIM,      trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_ATMS_AVG_SIM.mrc')
+            call simple_copy_file(AVG_ATOMS_VALID,    trim(dir)//trim(fbody)         //'_iter'//int2str_pad(i,3)//'_ATMS_AVG_VALID.pdb')
+            call simple_copy_file(PER_ATOM_RMSDS_BIN, trim(dir)//trim(fbody_rmsds)   //'_iter'//int2str_pad(i,3)//'.bin')
+            call simple_copy_file(PER_ATOM_RMSDS_TXT, trim(dir)//trim(fbody_rmsds)   //'_iter'//int2str_pad(i,3)//'.txt')
         end subroutine copy_files
 
     end subroutine exec_autorefine3D_nano_eo

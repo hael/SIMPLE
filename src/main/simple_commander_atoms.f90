@@ -192,6 +192,9 @@ contains
             atms_common%displacements(:,k) = atms_common%common2(:,k) - atms_common%common1(:,k)
             atms_common%dists(k) = sqrt(sum((atms_common%displacements(:,k))**2.))
         end do
+        ! write a binary file containing the per-atom RMSDs
+        call arr2txtfile(atms_common%dists, 'per_atom_rmsds.txt')
+        call arr2file(   atms_common%dists, 'per_atom_rmsds.bin')
         ! write pdb files for the e/o:s
         call write_matrix2pdb(el, atms_common%common1, oatms_common)
         call write_matrix2pdb(el, atms_common%common2, eatms_common)
@@ -215,7 +218,7 @@ contains
         call nano%simulate_atoms(sim_density)
         call sim_density%write(eatms_sim)
         call nano%set_atomic_coords(oatms_common)
-        ! simulate density for the average atomic positions 
+        ! simulate density for the average atomic positions
         call nano%set_atomic_coords(atms_avg)
         call nano%simulate_atoms(sim_density)
         call sim_density%write(atms_avg_sim)

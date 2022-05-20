@@ -84,8 +84,8 @@ contains
      end subroutine copy_bimg
 
     subroutine transfer2bimg( self, self_in )
-        class(binimage),      intent(inout) :: self
-        class(image), target, intent(in)    :: self_in
+        class(binimage), intent(inout) :: self
+        class(image),    intent(in)    :: self_in
         call self%kill_bimg
         call self%copy(self_in)
         self%bldim = self_in%get_ldim()
