@@ -171,7 +171,6 @@ type :: nanoparticle
     ! atomic position determination
     procedure          :: identify_lattice_params
     procedure          :: identify_atomic_pos
-    procedure          :: identify_atomic_pos_slim
     procedure, private :: binarize_and_find_centers
     procedure, private :: find_centers
     procedure, private :: discard_atoms_with_low_contact_score
@@ -527,49 +526,6 @@ contains
         call img_cos%kill
         call simatms%kill
     end subroutine identify_atomic_pos
-
-    ! this slimmed-down version is intended for detect_atoms_eo
-    ! it assumes that the input map is denoised beforehand
-    subroutine identify_atomic_pos_slim( self, is_even, use_auto_corr_thres )
-        class(nanoparticle), intent(inout) :: self
-        logical,             intent(in)    :: is_even
-        logical,             intent(in)    :: use_auto_corr_thres ! true -> use automatic corr thres
-        character(len=:),    allocatable   :: fname_split_ccs
-        type(image) :: simatms
-        integer     :: n_discard
-        if( is_even )then
-            fname_split_ccs = 'split_ccs_even.mrc'
-        else
-            fname_split_ccs = 'split_ccs_odd.mrc'
-        endif
-        ! MODEL BUILDING
-        ! Phase correlation approach
-        call phasecorr_one_atom(self%img, self%img_pc_atm, self%element)
-        ! Nanoparticle binarization
-        call self%binarize_and_find_centers()
-        ! atom splitting by correlation map validation
-        call self%split_atoms(fname_split_ccs)
-        ! validation through per-atom correlation with the simulated density
-        call self%simulate_atoms(simatms)
-        call self%validate_atoms(simatms)
-        ! discard atoms with low valid_corr
-        call self%discard_low_valid_corr_atoms(use_auto_corr_thres, n_discard)
-        if( n_discard > 0 )then
-            ! re-calculate valid_corr:s (since they are otherwise lost from the B-factor field due to reallocations of atominfo)
-            call self%simulate_atoms(simatms)
-            call self%validate_atoms(simatms)
-        endif
-        ! WRITE OUTPUT
-        call self%img_bin%write_bimg(trim(self%fbody)//'_BIN.mrc')
-        write(logfhandle,'(A)') 'output, binarized map:            '//trim(self%fbody)//'_BIN.mrc'
-        call self%img_cc%write_bimg(trim(self%fbody)//'_CC.mrc')
-        write(logfhandle,'(A)') 'output, connected components map: '//trim(self%fbody)//'_CC.mrc'
-        call self%write_centers
-        call simatms%write(trim(self%fbody)//'_SIM.mrc')
-        write(logfhandle,'(A)') 'output, simulated atomic density: '//trim(self%fbody)//'_SIM.mrc'
-        ! destruct
-        call simatms%kill
-    end subroutine identify_atomic_pos_slim
 
     ! This subrotuine takes in input a nanoparticle and
     ! binarizes it by thresholding. The gray level histogram is split
