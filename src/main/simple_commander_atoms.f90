@@ -319,7 +319,7 @@ contains
                 deallocate(pdbmat)
                 ! identify couples
                 call find_couples( atms_common(i,j)%coords1, atms_common(i,j)%coords2, el,&
-                                  &atms_common(i,j)%common1, atms_common(i,j)%common2)
+                                  &atms_common(i,j)%common1, atms_common(i,j)%common2, frac_diam=params%frac_diam)
                 atms_common(i,j)%ncommon = size(atms_common(i,j)%common1, dim=2)
                 ! calculate displacements and distances
                 allocate( atms_common(i,j)%displacements(3,atms_common(i,j)%ncommon), atms_common(i,j)%dists(atms_common(i,j)%ncommon) )
