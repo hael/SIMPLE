@@ -165,9 +165,10 @@ contains
             call bounds_from_mask3D(l_mask, lb, ub)
         else
             lb = (/ 1, 1, 1/)
-            ub = (/ box, box, box /)
+            ub = (/ box, box, dim3 /)
         endif
         do k = 1, 3
+            if( dim3 == 1 .and. k == 3 ) cycle
             if( lb(k) < params_glob%smooth_ext + 1 )   lb(k) = params_glob%smooth_ext+1
             if( ub(k) > box - params_glob%smooth_ext ) ub(k) = box - params_glob%smooth_ext
         enddo
