@@ -193,10 +193,10 @@ contains
             cur_ind = find_start + (iter_no - 1)*find_stepsz
             if( params_glob%filter == 'tv' )then
                 param = LAMBDA_MIN + (cur_ind - find_start)*(LAMBDA_MAX - LAMBDA_MIN)/(find_stop - find_start)
-                write(*, *) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current lambda = ', param
+                if( L_VERBOSE_GLOB ) write(*,*) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current lambda = ', param
             else
                 param = real(cur_ind)
-                write(*, *) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current Fourier index = ', param
+                if( L_VERBOSE_GLOB ) write(*,*) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current Fourier index = ', param
             endif
             if( L_BENCH_GLOB )then
                 t_filter_odd = tic()
@@ -328,7 +328,7 @@ contains
                     opt_freq_even = cur_ind
                 endif
             endif
-            write(*, *) 'min cost val (odd) = ', min_sum_odd, '; current cost (odd) = ', sum(cur_diff_odd)
+            if( L_VERBOSE_GLOB ) write(*,*) 'min cost val (odd) = ', min_sum_odd, '; current cost (odd) = ', sum(cur_diff_odd)
             if( L_BENCH_GLOB )then
                 rt_search_opt = rt_search_opt + toc(t_search_opt)
             endif
@@ -354,7 +354,9 @@ contains
             &((rt_filter_odd+rt_filter_even+rt_search_opt)/rt_tot) * 100.
             call fclose(fnr)
         endif
-        if( .not. params_glob%l_nonuniform ) write(*, *) 'minimized cost at resolution = ', box*params_glob%smpd/best_ind
+        if( L_VERBOSE_GLOB )then
+            if( .not. params_glob%l_nonuniform ) write(*,*) 'minimized cost at resolution = ', box*params_glob%smpd/best_ind
+        endif
         call odd%set_rmat(opt_odd,   .false.)
         call even%set_rmat(opt_even, .false.)
         ! output the optimized frequency map to see the nonuniform parts
