@@ -4047,7 +4047,7 @@ contains
         &'atoms_stats',&                                                                              ! name
         &'Statistical test for radial dependent symmetry',&                                           ! descr_short
         &'is a program that generates statistics at different radii and across the whold nano map.',& ! descr long
-        &'single_exec',&                                                                               ! executable
+        &'single_exec',&                                                                              ! executable
         &3, 3, 0, 0, 1, 1, 1, .false.)                                                                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -4076,17 +4076,18 @@ contains
     subroutine new_tseries_atoms_analysis
         ! PROGRAM SPECIFICATION
         call tseries_atoms_analysis%new(&
-        &'tseries_atoms_analysis',&                                                    ! name
+        &'tseries_atoms_analysis',&                                                   ! name
         &'Analysis of results obtianed with tseries_reconstruct3D and detect_atoms',& ! descr_short
         &'is a program that analysis atomic time-series coordinates',&                ! descr long
-        &'single_exec',&                                                               ! executable
-        &0, 2, 0, 0, 1, 0, 0, .false.)                                                ! # entries in each group, requires sp_project
+        &'single_exec',&                                                              ! executable
+        &0, 3, 0, 0, 1, 0, 0, .false.)                                                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call tseries_atoms_analysis%set_input('parm_ios', 1, smpd)
-        call tseries_atoms_analysis%set_input('parm_ios', 2, 'pdbfiles', 'file', 'txt', 'List of PDB format coords files',  'List of input coords files in PDB format', .true., '')
+        call tseries_atoms_analysis%set_input('parm_ios', 2, 'pdbfiles',  'file', 'txt', 'List of PDB format coords files',  'List of input coords files in PDB format', .true., '')
+        call tseries_atoms_analysis%set_input('parm_ios', 3, 'frac_diam', 'num',  'Fraction of atomic diameter', 'Fraction of atomic diameter used for thresholding{0.8}', '{0.8}', .false., 0.8)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -4102,7 +4103,7 @@ contains
     subroutine new_tseries_import
         ! PROGRAM SPECIFICATION
         call tseries_import%new(&
-        &'tseries_import',&                                ! name
+        &'tseries_import',&                               ! name
         &'Imports time-series datasets',&                 ! descr_short
         &'is a workflow for importing time-series data',& ! descr_long
         &'single_exec',&                                  ! executable
@@ -4158,7 +4159,7 @@ contains
     subroutine new_tseries_motion_correct
         ! PROGRAM SPECIFICATION
         call tseries_motion_correct%new(&
-        &'tseries_motion_correct', &                                               ! name
+        &'tseries_motion_correct', &                                       ! name
         &'Anisotropic motion correction of time-series of nanoparticles',& ! descr_short
         &'is a distributed workflow for anisotropic motion correction of time-series (movies) of nanoparticles.&
         & If dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly&
@@ -4202,7 +4203,7 @@ contains
     subroutine new_tseries_make_pickavg
         ! PROGRAM SPECIFICATION
         call tseries_make_pickavg%new(&
-        &'tseries_make_pickavg',&                                                                ! name
+        &'tseries_make_pickavg',&                                                        ! name
         &'Align & average the first few frames of the time-series',&                     ! descr_short
         &'is a program for aligning & averaging the first few frames of the time-series&
         & to accomplish SNR enhancement for particle identification',&                   ! descr_long
