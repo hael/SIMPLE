@@ -245,14 +245,15 @@ contains
         enddo
     end function count_in
 
-    function calculate_probability(node, bitstring, graph, population) result(val)
+    function calculate_probability(node, bitstring, graph, ordered, population) result(val)
         integer, intent(in)  :: node
         integer, intent(in)  :: bitstring(:)
         real   , intent(in)  :: graph(:,:)
+        integer, intent(in)  :: ordered(:)
         integer, intent(in)  :: population(:,:)
         real                 :: val
         type(stack)          :: indexes
-        integer              :: k, index, i1, i2
+        integer              :: k, index, i1, i2, cnt
         integer, allocatable :: counts(:)
         if( count_in(node, graph) == 0 )then
             val = marginal_probability(node, population)
@@ -267,14 +268,22 @@ contains
         enddo
         call compute_count_for_edges(population, indexes, counts)
         index = 0
+        cnt   = 0
         do k = 1, size(graph, 1)
-            if( graph(k, node) > 0. )then
-                if( bitstring(k) == 1 ) index = index + 2**(k - 1)
+            if( graph(ordered(k), node) > 0. )then
+                if( bitstring(ordered(k)) == 1 )then
+                    index = index + 2**cnt
+                endif
+                cnt = cnt + 1
             endif
         enddo
         i1  = index + 1*2**(count_in(node, graph)) + 1
         i2  = index + 0*2**(count_in(node, graph)) + 1
-        val = 1.*counts(i1)/(counts(i1) + counts(i2))
+        if( counts(i1) == 0 .and. counts(i2) == 0 )then
+            val = 0.0
+        else
+            val = 1.0*counts(i1)/(counts(i1) + counts(i2))*1.0
+        endif
     end function calculate_probability
 
     subroutine probabilistic_logic_sample(graph, ordered, population, bitstring, seed)
@@ -284,11 +293,14 @@ contains
         integer,           intent(inout) :: bitstring(:)
         integer, optional, intent(in)    :: seed
         integer :: k, ordered_ind
+        real    :: rand_val, prob_val
         bitstring = 0
         if( present(seed) ) call srand(seed)
         do k = 1, size(graph, 1)
             ordered_ind = ordered(k)
-            if( rand() < calculate_probability(ordered_ind, bitstring, graph, population) )then
+            rand_val    = rand()
+            prob_val    = calculate_probability(ordered_ind, bitstring, graph, ordered, population) 
+            if( rand_val < prob_val )then
                 bitstring(ordered_ind) = 1
             endif
         enddo
@@ -325,7 +337,7 @@ contains
         integer, intent(inout)        :: best(:)
         integer, optional, intent(in) :: seed
         integer, allocatable          :: children(:, :), selected(:, :)
-        integer                       :: k, l, m, best_cost, ind
+        integer                       :: k, l, m, best_cost, ind, cnt
         real   , allocatable          :: network(:, :)
         integer, parameter            :: BITS_IN_BYTE = 8
         logical                       :: converged
@@ -361,12 +373,9 @@ contains
                       size(pop_cost, kind=c_size_t), &
                       int(storage_size(pop_cost(1))/BITS_IN_BYTE, kind=c_size_t), &
                       c_funloc(cost_compare) )
-        !do k = 1, size(pop_cost)
-        !    write(*, *) pop_cost(k)%index, pop_cost(k)%cost
-        !enddo
         best      = pop_cost(1)%bitstr
         best_cost = pop_cost(1)%cost
-        write(*, *) best, best_cost, rand()
+        write(*, *) 'current cost = ', best_cost
         do k = 1, max_iter
             do l = 1, select_size
                 selected(l, :) = pop_cost(l)%bitstr
@@ -390,12 +399,14 @@ contains
                 best      = pop_cost(1)%bitstr
                 best_cost = pop_cost(1)%cost
             endif
-            !write(*, *) best, best_cost
-            !converged = .false.
-            !do l = 1, size(pop_cost)
-
-            !enddo
-            !if( converged .or. best_cost == num_bits ) return
+            write(*, *) 'current cost = ', best_cost
+            converged = .false.
+            cnt = 0
+            do l = 1, size(pop_cost)
+                if( .not. (all(pop_cost(l)%bitstr .eq. pop_cost(1)%bitstr)) ) cnt = cnt + 1
+            enddo
+            if( cnt == 0 ) converged = .true.
+            if( converged .or. best_cost == num_bits ) return
         enddo
     end subroutine bayesian_search
 

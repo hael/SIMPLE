@@ -158,7 +158,8 @@ program simple_test_bayesian
     graph(4,:)      = (/ 0., 1., 0., 0. /)
     node            = 1
     bitstring       = (/ -1, -1, -1, -1 /)
-    res = calculate_probability(node, bitstring, graph, population)
+    ordered         = (/ 1, 2, 3, 4 /)
+    res = calculate_probability(node, bitstring, graph, ordered, population)
     if( abs(res - 2./3.) < epsilon(res) )then
         write(*, *) 'PASSED!'
     else
@@ -173,7 +174,8 @@ program simple_test_bayesian
     graph(4,:)      = (/ 0., 1., 0., 0. /)
     node            = 4
     bitstring       = (/ 0, -1, -1, -1 /)
-    res = calculate_probability(node, bitstring, graph, population)
+    ordered         = (/ 1, 2, 3, 4 /)
+    res = calculate_probability(node, bitstring, graph, ordered, population)
     if( abs(res - 1.) < epsilon(res) )then
         write(*, *) 'PASSED!'
     else
@@ -200,7 +202,8 @@ program simple_test_bayesian
     graph(4,:)      = (/ 1., 1., 0., 0. /)
     node            = 4
     bitstring       = (/ -1, -1, -1, -1 /)
-    res = calculate_probability(node, bitstring, graph, population15)
+    ordered         = (/ 1, 2, 3, 4 /)
+    res = calculate_probability(node, bitstring, graph, ordered, population15)
     if( abs(res - .4) < epsilon(res) )then
         write(*, *) 'PASSED!'
     else
@@ -208,17 +211,17 @@ program simple_test_bayesian
     endif
     ! Testing probabilistic_logic_sample
     write(*, *) 'Testing probabilistic_logic_sample:'
-    population(1,:) = (/ 0, 1, 1, 0 /)
-    population(2,:) = (/ 0, 0, 1, 1 /)
-    population(3,:) = (/ 1, 0, 0, 0 /)
-    graph(1,:)      = (/ 0., 1., 1., 0. /)
-    graph(2,:)      = (/ 0., 0., 1., 1. /)
-    graph(3,:)      = (/ 0., 0., 0., 1. /)
+    population(1,:) = (/ 0, 1, 0, 1 /)
+    population(2,:) = (/ 0, 1, 0, 1 /)
+    population(3,:) = (/ 0, 0, 1, 0 /)
+    graph(1,:)      = (/ 0., 0., 1., 1. /)
+    graph(2,:)      = (/ 1., 0., 1., 1. /)
+    graph(3,:)      = (/ 0., 0., 0., 0. /)
     graph(4,:)      = (/ 0., 0., 0., 0. /)
     bitstring       = (/ -1, -1, -1, -1 /)
-    ordered         = (/ 1, 2, 3, 4 /)
-    call probabilistic_logic_sample(graph, ordered, population, bitstring, 86465)
-    if( all(bitstring .eq. (/ 0, 1, 1, 0 /)) )then
+    ordered         = (/ 2, 1, 3, 4 /)
+    call probabilistic_logic_sample(graph, ordered, population, bitstring)
+    if( all(bitstring .eq. (/ 0, 1, 0, 1 /)) )then
         write(*, *) 'PASSED!'
     else
         write(*, *) 'FAILED! result = ', bitstring
@@ -247,5 +250,9 @@ program simple_test_bayesian
     select_size = 15
     num_child   = 25
     call bayesian_search(num_bits, max_iter, pop_size, select_size, num_child, best)
-    write(*, *) best
+    if( all(best .eq. 1) )then
+        write(*, *) 'PASSED!'
+    else
+        write(*, *) 'FAILED! result = ', best
+    endif
 end program simple_test_bayesian
