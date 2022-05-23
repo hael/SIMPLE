@@ -118,9 +118,11 @@ contains
         type(image)        :: even, odd, mskvol, sim_density
         type(common_atoms) :: atms_common
         real, allocatable  :: pdbmat(:,:), valid_corrs(:)
+        real               :: a(3)
         character(len=2)   :: el
         integer            :: k
-        logical            :: use_auto_corr_thres
+        logical            :: use_auto_corr_thres, use_cs_thres
+        real,    parameter :: FRAC_DIAM=0.6
         type(stats_struct) :: dist_stats
         character(len=:), allocatable :: add2fn, ename_filt, oname_filt, eatms, oatms
         character(len=:), allocatable :: fname_avg, map_avg_filt, tmp, eatms_common, atms_avg_valid
@@ -129,6 +131,7 @@ contains
         call cline%set('lp_lb',        3.)
         call cline%set('match_filt', 'no')
         use_auto_corr_thres = .not.cline%defined('corr_thres')
+        use_cs_thres        = .false.
         call params%new(cline)
         ! read e/o:s
         call odd %new([params%box,params%box,params%box], params%smpd)
@@ -158,10 +161,10 @@ contains
         call even%write(ename_filt)
         ! detect atoms in odd
         call nano%new(oname_filt)
-        call nano%identify_atomic_pos_slim(.false., use_auto_corr_thres)
+        call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=USE_CS_THRES, use_auto_corr_thres=use_auto_corr_thres)
         ! detect atoms in even
         call nano%new(ename_filt)
-        call nano%identify_atomic_pos_slim(.true.,  use_auto_corr_thres)
+        call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=USE_CS_THRES, use_auto_corr_thres=use_auto_corr_thres)
         ! compare independent atomic models
         el               = trim(adjustl(params%element))
         tmp              = add2fbody(oname_filt,    trim(params%ext), '_ATMS')
@@ -183,8 +186,7 @@ contains
         allocate(atms_common%coords2(3,size(pdbmat,dim=2)), source=pdbmat)
         deallocate(pdbmat)
         ! identify couples
-        call find_couples( atms_common%coords1, atms_common%coords2, el,&
-        &atms_common%common1, atms_common%common2)
+        call find_couples( atms_common%coords1, atms_common%coords2, el, atms_common%common1, atms_common%common2, frac_diam=FRAC_DIAM)
         atms_common%ncommon = size(atms_common%common1, dim=2)
         ! calculate displacements and distances
         allocate( atms_common%displacements(3,atms_common%ncommon), atms_common%dists(atms_common%ncommon) )
