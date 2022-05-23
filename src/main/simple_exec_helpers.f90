@@ -24,15 +24,15 @@ contains
         ! generate script for queue submission?
         if( cline%defined('script') )then
             if( cline%get_carg('script').eq.'yes' )then
-                has_projfile = cline%defined('projfile')
-                if( has_projfile ) projfile = cline%get_carg('projfile')
+                if( .not. cline%defined('projfile') ) THROW_HARD('script-based execution route requires a project file')
+                projfile = cline%get_carg('projfile')
                 call cline%delete('script')
                 call cline%set('prg', trim(prg))
                 call cline%set('mkdir', 'no')
                 call params%new(cline)
                 call cline%delete('mkdir')
                 call cline%delete('projfile')
-                if( has_projfile ) call cline%set('projfile', projfile)
+                call cline%set('projfile', projfile)
                 call qenv%new(1, exec_bin=trim(executable))
                 if( cline%defined('tag') )then
                     call qenv%gen_script(cline, trim(prg)//'_script'//'_'//trim(params%tag), uppercase(trim(prg))//'_OUTPUT'//'_'//trim(params%tag))
