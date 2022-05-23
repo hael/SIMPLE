@@ -136,9 +136,11 @@ contains
         class(sp_project),  intent(inout) :: spproj
         character(len=*),   intent(in)    :: filename
         integer :: i
-        write(logfhandle,*) ''
-        write(logfhandle,*) char(9), 'importing3 ' // filename // " to mics"
-        write(logfhandle,*) ''
+        if( L_VERBOSE_GLOB )then
+            write(logfhandle,*) ''
+            write(logfhandle,*) char(9), 'importing3 ' // filename // " to mics"
+            write(logfhandle,*) ''
+        endif
         if(.not. self%starfile%initialised) call self%initialise()
         self%starfile%filename = filename
         self%starfile%rootdir = cline%get_carg("import_dir")
@@ -158,9 +160,11 @@ contains
         class(sp_project),  intent(inout) :: spproj
         character(len=*),   intent(in)    :: filename
         integer :: i
-        write(logfhandle,*) ''
-        write(logfhandle,*) char(9), 'importing ' // filename // " to ptcls2D"
-        write(logfhandle,*) 
+        if( L_VERBOSE_GLOB )then
+            write(logfhandle,*) ''
+            write(logfhandle,*) char(9), 'importing ' // filename // " to ptcls2D"
+            write(logfhandle,*)
+        endif 
         if(.not. self%starfile%initialised) call self%initialise()
         self%starfile%filename = filename
         self%starfile%rootdir = cline%get_carg("import_dir")
@@ -182,9 +186,11 @@ contains
         class(sp_project),  intent(inout) :: spproj
         character(len=*) :: filename
         integer :: i
-        write(logfhandle,*) ''
-        write(logfhandle,*) char(9), 'importing ' // filename // " to cls2D"
-        write(logfhandle,*) ''
+        if( L_VERBOSE_GLOB )then
+            write(logfhandle,*) ''
+            write(logfhandle,*) char(9), 'importing ' // filename // " to cls2D"
+            write(logfhandle,*) ''
+        endif
         if(.not. self%starfile%initialised) call self%initialise()
         self%starfile%filename = filename
         self%starfile%rootdir  = cline%get_carg("import_dir")
@@ -198,9 +204,11 @@ contains
         class(sp_project),  intent(inout) :: spproj
         character(len=*),   intent(in)    :: filename
         integer :: i
-        write(logfhandle,*) ''
-        write(logfhandle,*) char(9), 'importing ' // filename // " to ptcls3D"
-        write(logfhandle,*) 
+        if( L_VERBOSE_GLOB )then
+            write(logfhandle,*) ''
+            write(logfhandle,*) char(9), 'importing ' // filename // " to ptcls3D"
+            write(logfhandle,*)
+        endif 
         if(.not. self%starfile%initialised) call self%initialise()
         self%starfile%filename = filename
         self%starfile%rootdir = cline%get_carg("import_dir")
@@ -466,9 +474,11 @@ contains
         integer                                         :: i
         self%starfile%filename = "micrographs.star"
         self%starfile%rootdir = cline%get_carg("import_dir")
-        write(logfhandle,*) ''
-        write(logfhandle,*) char(9), 'exporting micrographs to ' // trim(adjustl(self%starfile%filename))
-        write(logfhandle,*) ''
+        if( L_VERBOSE_GLOB )then
+            write(logfhandle,*) ''
+            write(logfhandle,*) char(9), 'exporting micrographs to ' // trim(adjustl(self%starfile%filename))
+            write(logfhandle,*) ''
+        endif
         if(.not. self%starfile%initialised) call self%initialise()
         call enable_splflags(spproj%os_optics, self%starfile%optics%flags)
         call enable_splflags(spproj%os_mic,    self%starfile%micrographs%flags)
@@ -491,9 +501,11 @@ contains
         else
             self%starfile%filename = "clusters2D.star"
         end if
-        write(logfhandle,*) ''
-        write(logfhandle,*) char(9), 'exporting clusters2D to ' // trim(adjustl(self%starfile%filename))
-        write(logfhandle,*) ''
+        if( L_VERBOSE_GLOB )then
+            write(logfhandle,*) ''
+            write(logfhandle,*) char(9), 'exporting clusters2D to ' // trim(adjustl(self%starfile%filename))
+            write(logfhandle,*) ''
+        endif
         if(.not. self%starfile%initialised) call self%initialise()
         if(present(iter)) then
             stkname = basename(CWD_GLOB)//"/"//trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext
@@ -530,9 +542,11 @@ contains
         class(sp_project) :: spproj
         integer           :: i
         self%starfile%filename = "particles3D.star"
-        write(logfhandle,*) ''
-        write(logfhandle,*) char(9), 'exporting particles3D to ' // trim(adjustl(self%starfile%filename))
-        write(logfhandle,*) ''
+        if( L_VERBOSE_GLOB )then
+            write(logfhandle,*) ''
+            write(logfhandle,*) char(9), 'exporting particles3D to ' // trim(adjustl(self%starfile%filename))
+            write(logfhandle,*) ''
+        endif
         if(.not. self%starfile%initialised) call self%initialise()
         call enable_splflags(spproj%os_optics, self%starfile%optics%flags)
         call enable_splflags(spproj%os_ptcl3D, self%starfile%particles3D%flags)
