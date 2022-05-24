@@ -225,9 +225,10 @@ type :: parameters
     character(len=STDLEN) :: wiener='full'        !< Wiener restoration (full|partial|partial_aln){full}
     character(len=:), allocatable :: last_prev_dir !< last previous execution directory
     ! special integer kinds
-    integer(kind(ENUM_ORISEG))     :: spproj_iseg  = PTCL3D_SEG    !< sp-project segments that b%a points to
-    integer(kind(ENUM_OBJFUN))     :: cc_objfun    = OBJFUN_CC     !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1)
-    integer(kind=kind(ENUM_WCRIT)) :: wcrit_enum   = CORRW_CRIT    !< criterium for correlation-based weights
+    integer(kind(ENUM_ORISEG))     :: spproj_iseg = PTCL3D_SEG    !< sp-project segments that b%a points to
+    integer(kind(ENUM_OBJFUN))     :: cc_objfun   = OBJFUN_CC     !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1)
+    integer(kind=kind(ENUM_WCRIT)) :: wcrit_enum  = CORRW_CRIT    !< criterium for correlation-based weights
+    integer(kind(ENUM_FILT))       :: filt_enum   = FILT_BW8      !< filter type, see simple_defs.f90 for definitions
     ! integer variables in ascending alphabetical order
     integer :: angstep=5
     integer :: avgsz=0
@@ -1312,6 +1313,21 @@ contains
                     self%wcrit_enum = RANK_INV_CRIT
                 case DEFAULT
                     THROW_HARD('unsupported correlation weighting method')
+            end select
+        endif
+        ! set filter type
+        if( cline%defined('filter') )then
+            select case(trim(self%filter))
+                case('lp')
+                    self%filt_enum = FILT_LP    
+                case('tv') 
+                    self%filt_enum = FILT_TV
+                case('butterworth')
+                    self%filt_enum = FILT_BW8
+                case('nlmean')
+                    self%filt_enum = FILT_NLMEAN
+                case DEFAULT
+                    THROW_HARD('unsupported filter type')
             end select
         endif
         ! set graphene flag

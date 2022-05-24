@@ -7,6 +7,7 @@ use simple_defs
 use simple_image,      only: image
 use simple_parameters, only: params_glob
 implicit none
+#include "simple_local_flags.inc"
 
 contains
 
@@ -62,30 +63,30 @@ contains
 
     subroutine apply_opt_filter(img, param, cur_fil, use_cache)
         use simple_tvfilter, only: tvfilter
-        class(image),     intent(inout) :: img
-        real,             intent(in)    :: param
-        real,             intent(inout) :: cur_fil(:)
-        logical,          intent(in)    :: use_cache
-        integer                         :: bw_order, io_stat
-        type(tvfilter)                  :: tvfilt
-        select case(trim(params_glob%filter))
-            case('lp')
+        class(image), intent(inout) :: img
+        real,         intent(in)    :: param
+        real,         intent(inout) :: cur_fil(:)
+        logical,      intent(in)    :: use_cache
+        integer, parameter :: BW_ORDER = 8
+        type(tvfilter)     :: tvfilt
+        select case(params_glob%filt_enum)
+            case(FILT_LP)
                 call img%lp(int(param))
-            case('tv')
+                call img%ifft()
+            case(FILT_TV)
                 call tvfilt%new
                 call tvfilt%apply_filter_3d(img, param)
                 call tvfilt%kill
-            case DEFAULT ! default to butterworth8, even if wrong filter type is entered
-                bw_order = 8
-                ! extract butterworth order number
-                if( str_has_substr(params_glob%filter, 'butterworth') )then
-                    call str2int(params_glob%filter(12:len_trim(params_glob%filter)), io_stat, bw_order)
-                    if (bw_order < 1 .or. bw_order > 10) bw_order = 8
-                endif
-                if( .not. use_cache ) call butterworth_filter(cur_fil, bw_order, param)
+                call img%ifft()
+            case(FILT_BW8)
+                if( .not. use_cache ) call butterworth_filter(cur_fil, BW_ORDER, param)
                 call img%apply_filter(cur_fil)
+                call img%ifft()
+            case(FILT_NLMEAN)
+                ! to be implemented
+            case DEFAULT
+                THROW_HARD('unsupported filter type')
         end select
-        call img%ifft()
     end subroutine apply_opt_filter
 
     ! optimization(search)-based uniform/nonuniform filter, using the (low-pass/butterworth)
