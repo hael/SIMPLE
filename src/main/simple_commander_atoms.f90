@@ -111,6 +111,7 @@ contains
 
     subroutine exec_detect_atoms_eo( self, cline )
         use simple_opt_filter, only: opt_filter
+        use simple_defs_autorefine, only: EVEN_SPLIT, ODD_SPLIT
         class(detect_atoms_eo_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(parameters)   :: params
@@ -161,10 +162,12 @@ contains
         call even%write(ename_filt)
         ! detect atoms in odd
         call nano%new(oname_filt)
-        call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=USE_CS_THRES, use_auto_corr_thres=use_auto_corr_thres)
+        call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=USE_CS_THRES,&
+        &use_auto_corr_thres=use_auto_corr_thres, split_fname=ODD_SPLIT)
         ! detect atoms in even
         call nano%new(ename_filt)
-        call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=USE_CS_THRES, use_auto_corr_thres=use_auto_corr_thres)
+        call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=USE_CS_THRES,&
+        &use_auto_corr_thres=use_auto_corr_thres, split_fname=EVEN_SPLIT)
         ! compare independent atomic models
         el               = trim(adjustl(params%element))
         tmp              = add2fbody(oname_filt,    trim(params%ext), '_ATMS')
