@@ -579,7 +579,7 @@ contains
         type(cmdline)              :: cline
         type(chash)                :: job_descr
         character(len=XLONGSTRLEN) :: cwd, cwd_old
-        character(len=STDLEN)      :: outfile, script_name
+        character(len=STDLEN)      :: script_name
         integer                    :: ipart
         if( present(path) )then
             cwd_old = trim(cwd_glob)
@@ -599,7 +599,6 @@ contains
                         self%stream_cline_submitted(ipart) = cline ! stash
                         call cline%gen_job_descr(job_descr)
                         script_name = self%script_names(ipart)
-                        outfile     = 'OUT' // int2str_pad(ipart, self%numlen)
                         self%jobs_submitted(ipart) = .true.
                         self%jobs_done(ipart)      = .false.
                         call del_file(self%jobs_done_fnames(ipart))
