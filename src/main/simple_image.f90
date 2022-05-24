@@ -3733,7 +3733,7 @@ contains
     !> \brief phase_rand  is for randomzing the phases of the FT of an image from lp and out
     subroutine phase_rand( self, lp )
         class(image), intent(inout) :: self
-        real, intent(in)            :: lp
+        real,         intent(in)    :: lp
         integer                     :: h,k,l,phys(3),lims(3,2)
         logical                     :: didft
         real                        :: freq,lp_freq, amp,phase
