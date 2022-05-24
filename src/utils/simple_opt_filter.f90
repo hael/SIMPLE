@@ -119,8 +119,8 @@ contains
         box         = ldim(1)
         dim3        = ldim(3)
         mid_ext     = 1 + params_glob%smooth_ext
-        find_stop   = calc_fourier_index(2. * params_glob%smpd, box, params_glob%smpd)
-        find_start  = calc_fourier_index(params_glob%lp_lb, box, params_glob%smpd)
+        find_stop   = calc_fourier_index(2. * params_glob%smpd , box, params_glob%smpd)
+        find_start  = calc_fourier_index(     params_glob%lp_lb, box, params_glob%smpd)
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
         call freq_img%new([box,box,dim3], params_glob%smpd)
         call odd_copy_rmat%copy(odd)
