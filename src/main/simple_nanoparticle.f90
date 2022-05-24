@@ -474,13 +474,14 @@ contains
         call simatms%kill
     end subroutine identify_lattice_params
 
-    subroutine identify_atomic_pos( self, a, l_fit_lattice, use_cs_thres, use_auto_corr_thres, cs_thres )
-        class(nanoparticle), intent(inout) :: self
-        real,                intent(inout) :: a(3)                ! lattice parameters
-        logical,             intent(in)    :: l_fit_lattice       ! fit lattice or use inputted
-        logical,             intent(inout) :: use_cs_thres        ! use or not contact score thres
-        logical,             intent(in)    :: use_auto_corr_thres ! true -> use automatic corr thres
-        integer, optional,   intent(in)    :: cs_thres
+    subroutine identify_atomic_pos( self, a, l_fit_lattice, use_cs_thres, use_auto_corr_thres, cs_thres, split_fname )
+        class(nanoparticle),        intent(inout) :: self
+        real,                       intent(inout) :: a(3)                ! lattice parameters
+        logical,                    intent(in)    :: l_fit_lattice       ! fit lattice or use inputted
+        logical,                    intent(inout) :: use_cs_thres        ! use or not contact score thres
+        logical,                    intent(in)    :: use_auto_corr_thres ! true -> use automatic corr thres
+        integer,          optional, intent(in)    :: cs_thres
+        character(len=*), optional, intent(in)    :: split_fname
         logical     :: use_cn_thresh, fixed_cs_thres
         type(image) :: simatms, img_cos
         integer     :: n_discard
@@ -492,7 +493,7 @@ contains
         ! Nanoparticle binarization
         call self%binarize_and_find_centers()
         ! atom splitting by correlation map validation
-        call self%split_atoms()
+        call self%split_atoms(split_fname)
         ! OUTLIERS DISCARDING
         ! validation through per-atom correlation with the simulated density
         call self%simulate_atoms(simatms)
