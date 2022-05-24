@@ -299,7 +299,7 @@ contains
                         exit
                     endif
                 endif
-                ! write project
+                ! write project for gui, micrographs field only
                 call report_selection
                 call spproj%write(micspproj_fname)
                 ! write starfile snapshot
@@ -476,6 +476,12 @@ contains
                     write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',spproj%os_ptcl2D%get_noris()
                 endif
                 call spproj%write_non_data_segments(params%projfile)
+                ! write starfile snapshot
+                if (spproj%os_mic%get_noris() > 0) then
+                    if( file_exists("micrographs.star") ) call del_file("micrographs.star")
+                    call starproj%assign_optics(cline, spproj)
+                    call starproj%export_mics(cline, spproj)
+                end if
                 ! cleanup, we preserve os_mic
                 call spproj%os_stk%kill
                 call spproj%os_ptcl2D%kill
@@ -2657,7 +2663,7 @@ contains
         class(make_pickrefs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)              :: params
-        type(stack_io)                :: stkio_r, stkio_w
+        type(stack_io)                :: stkio_r
         type(oris)                    :: os
         type(sym)                     :: pgrpsyms
         type(image)                   :: ref3D, ref2D

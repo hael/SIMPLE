@@ -19,6 +19,7 @@ implicit none
 public :: init_cluster2D_stream, update_projects_mask, write_project_stream2D, terminate_stream2D
 public :: update_pool_status, update_pool, reject_from_pool, classify_pool
 public :: update_chunks, classify_new_chunks, import_chunks_into_pool
+public :: update_path
 
 private
 #include "simple_local_flags.inc"
@@ -30,13 +31,11 @@ integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600  ! dev settings
 ! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
 integer,               parameter   :: FREQ_POOL_REJECTION = 5     !
 character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
-character(len=STDLEN), parameter   :: LAST_SNAPSHOT       = 'last_snapshot.txt'
-character(len=STDLEN), parameter   :: SPPROJ_SNAPSHOT     = 'SIMPLE_PROJECT_SNAPSHOT'
 character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
 character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
 character(len=STDLEN), parameter   :: POOL_DIR           = './pool/'
 character(len=STDLEN), parameter   :: DISTR_EXEC_FNAME    = './distr_cluster2D_pool'
-logical,               parameter   :: DEBUG_HERE          = .true.
+logical,               parameter   :: DEBUG_HERE          = .false.
 integer(timer_int_kind)            :: t
 
 ! Pool related
@@ -412,17 +411,23 @@ contains
             jptcl = 0
             do iproj=1,converged_chunks(ichunk)%nmics
                 imic  = imic+1
-                ! micrographs
+                ! micrographs & update paths so they are relative to root folder
                 call pool_proj%os_mic%transfer_ori(imic, converged_chunks(ichunk)%spproj%os_mic, iproj)
-                ! stacks
+                call update_path(pool_proj%os_mic, imic, 'mc_starfile')
+                call update_path(pool_proj%os_mic, imic, 'intg')
+                call update_path(pool_proj%os_mic, imic, 'forctf')
+                call update_path(pool_proj%os_mic, imic, 'thumb')
+                call update_path(pool_proj%os_mic, imic, 'mceps')
+                call update_path(pool_proj%os_mic, imic, 'ctfdoc')
+                call update_path(pool_proj%os_mic, imic, 'ctfeps')
+                call update_path(pool_proj%os_mic, imic, 'ctfjpg')
+                call update_path(pool_proj%os_mic, imic, 'boxfile')
+                ! stacks & update path so they are relative to root folder
                 call pool_proj%os_stk%transfer_ori(imic, converged_chunks(ichunk)%spproj%os_stk, iproj)
                 nptcls = nint(converged_chunks(ichunk)%spproj%os_stk%get(iproj,'nptcls'))
                 call pool_proj%os_stk%set(imic, 'fromp', real(fromp))
                 call pool_proj%os_stk%set(imic, 'top',   real(fromp+nptcls-1))
                 call make_relativepath(cwd_glob, converged_chunks(ichunk)%orig_stks(iproj), stk_relpath)
-
-                call debug_print('in import_chunks_into_pool 2 '//trim(stk_relpath))
-
                 imported_stks(imic) = trim(stk_relpath)
                 ! particles
                 do i = 1,nptcls
@@ -872,11 +877,11 @@ contains
         call pool_proj%projinfo%set(1,'projfile', projfile)
         if( trim(prev_snapshot_cavgs) /= '' )then
             call del_file(prev_snapshot_frcs)
-            call del_file(prev_snapshot_cavgs)
-            src = add2fbody(prev_snapshot_cavgs, params_glob%ext,'_even')
-            call del_file(src)
-            src = add2fbody(prev_snapshot_cavgs, params_glob%ext,'_odd')
-            call del_file(src)
+            ! call del_file(prev_snapshot_cavgs)
+            ! src = add2fbody(prev_snapshot_cavgs, params_glob%ext,'_even')
+            ! call del_file(src)
+            ! src = add2fbody(prev_snapshot_cavgs, params_glob%ext,'_odd')
+            ! call del_file(src)
         endif
         write(logfhandle,'(A,A,A,A)')'>>> GENERATING PROJECT SNAPSHOT ',trim(projfile), ' AT: ',cast_time_char(simple_gettime())
         pool_refs = trim(POOL_DIR)//trim(refs_glob)
@@ -1010,6 +1015,22 @@ contains
     end subroutine terminate_stream2D
 
     ! Utilities
+
+    subroutine update_path(os, i, key)
+        class(oris),      intent(inout) :: os
+        integer,          intent(in)    :: i
+        character(len=*), intent(in)    :: key
+        character(len=:), allocatable :: fname
+        character(len=LONGSTRLEN)     :: newfname
+        if( os%isthere(i,key) )then
+            call os%getter(i,key,fname)
+            if( len_trim(fname) > 3 )then
+                if( fname(1:3) == '../' ) fname = trim(fname(4:))
+            endif
+            call make_relativepath(CWD_GLOB, fname, newfname)
+            call os%set(i, key, newfname)
+        endif
+    end subroutine update_path
 
     !>  Updates the project watched by the gui for display
     subroutine update_pool_for_gui

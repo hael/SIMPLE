@@ -95,6 +95,7 @@ contains
         if( .not. cline%defined('ndev2D')    ) call cline%set('ndev2D',         1.5)
         if( .not. cline%defined('wiener')    ) call cline%set('wiener',   'partial')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale',    'yes')
+        if( .not.cline%defined('match_filt') ) call cline%set('match_filt',    'no')
         ! master parameters
         call params%new(cline)
         params_glob%split_mode = 'stream'
@@ -217,14 +218,9 @@ contains
                 n_imported = spproj%os_mic%get_noris()
                 write(logfhandle,'(A,I5)')'>>> # MOVIES PROCESSED & IMPORTED:    ',n_imported
                 if( l_pick ) write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',nptcls_glob
-                ! write project
+                ! write project micrographs field
                 call spproj%write_segment_inside('mic',micspproj_fname)
-                ! write starfile snapshot
-                if (spproj%os_mic%get_noris() > 0) then
-                    if( file_exists("micrographs.star") ) call del_file("micrographs.star")
-                    call starproj%assign_optics(cline, spproj)
-                    call starproj%export_mics(cline, spproj)
-                end if
+                call write_migrograps_starfile
                 last_injection = simple_gettime()
                 l_haschanged   = .true.
                 n_imported     = spproj%os_mic%get_noris()
@@ -251,7 +247,7 @@ contains
                 call update_pool_status
                 call update_pool
                 call reject_from_pool
-                call write_project_stream2D(.true.,.false.)
+                call write_project_stream2D(.false.,.false.)
                 call import_chunks_into_pool
                 call classify_pool
                 call update_projects_mask(completed_fnames)
@@ -264,13 +260,23 @@ contains
         else
             call write_project
         endif
-        call spproj%kill
+        call write_migrograps_starfile
         ! cleanup
+        call spproj%kill
         call qsys_cleanup
         call del_file(micspproj_fname)
         ! end gracefully
         call simple_end('**** SIMPLE_PREPROCESS_STREAM NORMAL STOP ****')
         contains
+
+            !>  write starfile snapshot
+            subroutine write_migrograps_starfile
+                if (spproj%os_mic%get_noris() > 0) then
+                    if( file_exists("micrographs.star") ) call del_file("micrographs.star")
+                    call starproj%assign_optics(cline, spproj)
+                    call starproj%export_mics(cline, spproj)
+                end if
+            end subroutine write_migrograps_starfile
 
             subroutine write_project()
                 logical, allocatable :: stk_mask(:)
@@ -423,21 +429,22 @@ contains
                             if( nptcls > 0 )then
                                 nptcls_here = nptcls_here + nptcls
                                 call streamspproj%read_segment('stk', abs_fname)
-                                call update_ori_path(streamspproj%os_stk, 1, 'stk')
+                                call update_path(streamspproj%os_stk, 1, 'stk')
                                 call streamspproj%write_segment_inside('stk', abs_fname)
                             endif
                         endif
                         call spproj%os_mic%transfer_ori(n_old+j, streamspproj%os_mic, 1)
                         call streamspproj%kill
                         ! update paths such that relative paths are with respect to root folder
-                        call update_ori_path(spproj%os_mic, n_old+j, 'starfile')
-                        call update_ori_path(spproj%os_mic, n_old+j, 'intg')
-                        call update_ori_path(spproj%os_mic, n_old+j, 'forctf')
-                        call update_ori_path(spproj%os_mic, n_old+j, 'thumb')
-                        call update_ori_path(spproj%os_mic, n_old+j, 'mceps')
-                        call update_ori_path(spproj%os_mic, n_old+j, 'ctfeps')
-                        call update_ori_path(spproj%os_mic, n_old+j, 'ctfjpg')
-                        if( l_pick ) call update_ori_path(spproj%os_mic, n_old+j, 'boxfile')
+                        call update_path(spproj%os_mic, n_old+j, 'mc_starfile')
+                        call update_path(spproj%os_mic, n_old+j, 'intg')
+                        call update_path(spproj%os_mic, n_old+j, 'forctf')
+                        call update_path(spproj%os_mic, n_old+j, 'thumb')
+                        call update_path(spproj%os_mic, n_old+j, 'mceps')
+                        call update_path(spproj%os_mic, n_old+j, 'ctfdoc')
+                        call update_path(spproj%os_mic, n_old+j, 'ctfeps')
+                        call update_path(spproj%os_mic, n_old+j, 'ctfjpg')
+                        if( l_pick ) call update_path(spproj%os_mic, n_old+j, 'boxfile')
                     enddo
                     if( l_pick ) nptcls_glob = nptcls_glob + nptcls_here
                 else
@@ -445,22 +452,6 @@ contains
                     return
                 endif
             end subroutine update_projects_list
-
-            subroutine update_ori_path(os, i, key)
-                class(oris),      intent(inout) :: os
-                integer,          intent(in)    :: i
-                character(len=*), intent(in)    :: key
-                character(len=:), allocatable :: fname
-                character(len=LONGSTRLEN)     :: newfname
-                if( os%isthere(i,key) )then
-                    call os%getter(i,key,fname)
-                    if( len_trim(fname) > 3 )then
-                        if( fname(1:3) == '../' ) fname = trim(fname(4:))
-                    endif
-                    call make_relativepath(CWD_GLOB, fname, newfname)
-                    call os%set(i, key, newfname)
-                endif
-            end subroutine update_ori_path
 
             subroutine check_nptcls( fname, nptcls, state )
                 character(len=*), intent(in)  :: fname

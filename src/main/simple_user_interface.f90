@@ -2955,19 +2955,16 @@ contains
         call preprocess_stream_dev%set_input('srch_ctrls',11, nypatch)
         call preprocess_stream_dev%set_input('srch_ctrls',12, mcconvention)
         call preprocess_stream_dev%set_input('srch_ctrls',13, algorithm)
-        call preprocess_stream_dev%set_input('srch_ctrls',14, 'ncls_start', 'num', 'Starting number of clusters',&
-        &'Minimum number of class averagages to initiate 2D clustering', 'initial # clusters', .true., 50.)
-        preprocess_stream_dev%srch_ctrls(14)%required = .true.
-        call preprocess_stream_dev%set_input('srch_ctrls',15, 'nptcls_per_cls', 'num', 'Particles per cluster',&
-        &'Number of incoming particles for which one new class average is generated', '# particles per cluster', .true., 200.)
-        preprocess_stream_dev%srch_ctrls(15)%required = .true.
-        call preprocess_stream_dev%set_input('srch_ctrls',16, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
-        &for accelerated convergence rate. Initial/Final low-pass limits control the degree of down-scaling(yes|no){yes}',&
-        &'(yes|no){yes}', .false., 'yes')
+        call preprocess_stream_dev%set_input('srch_ctrls',14, 'ncls_start', 'num', 'Starting number of clusters*',&
+        &'Minimum number of class averagages to initiate 2D clustering', 'initial # clusters', .false., 50.)
+        call preprocess_stream_dev%set_input('srch_ctrls',15, 'nptcls_per_cls', 'num', 'Particles per cluster*',&
+        &'Number of incoming particles for which one new class average is generated', '# particles per cluster', .false., 200.)
+        call preprocess_stream_dev%set_input('srch_ctrls',16, 'autoscale', 'binary', 'Automatic down-scaling for 2D classification', 'Automatic down-scaling of images &
+        &for accelerated convergence rate. I(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call preprocess_stream_dev%set_input('srch_ctrls',17, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
         &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call preprocess_stream_dev%set_input('srch_ctrls',18, 'ncls', 'num', 'Maximum number of 2D clusters',&
-        &'Maximum number of groups to sort the particles into prior to averaging to create 2D class averages with improved SNR', 'Maximum # 2D clusters', .true., 200.)
+        call preprocess_stream_dev%set_input('srch_ctrls',18, 'ncls', 'num', 'Maximum number of 2D clusters*',&
+        &'Maximum number of groups to sort the particles into prior to averaging to create 2D class averages with improved SNR', 'Maximum # 2D clusters', .false., 200.)
         call preprocess_stream_dev%set_input('srch_ctrls',19, 'lpthresh', 'num', 'Resolution rejection threshold',&
         &'Classes with lower resolution are iteratively rejected{30}', 'Resolution rejection threshold in angstroms{30}', .false., 30.)
         call preprocess_stream_dev%set_input('srch_ctrls',20, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
@@ -2987,15 +2984,18 @@ contains
         &Angstroms{30}', .false., 30.)
         call preprocess_stream_dev%set_input('filt_ctrls', 7, 'lp2D', 'num', 'Static low-pass limit for 2D classification', 'Static low-pass limit for 2D classification',&
         &'low-pass limit in Angstroms', .false., 15.)
-        call preprocess_stream_dev%set_input('filt_ctrls', 8, match_filt)
+        call preprocess_stream_dev%set_input('filt_ctrls', 8, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise ratio (SNR) in the presence of additive &
+        &stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){no}', '(yes|no){no}', .false., 'no')
         call preprocess_stream_dev%set_input('filt_ctrls', 9, 'wiener', 'multi', 'Wiener restoration', 'Wiener restoration, full or partial (full|partial){partial}',&
         &'(full|partial){partial}', .false., 'partial')
         ! mask controls
         call preprocess_stream_dev%set_input('mask_ctrls', 1, mskdiam)
+        preprocess_stream_dev%mask_ctrls(1)%required = .false.
+        preprocess_stream_dev%mask_ctrls(1)%descr_short = 'Mask Diameter*'
         ! computer controls
-        call preprocess_stream_dev%set_input('comp_ctrls', 1, 'nchunks', 'num', 'Number of chunks', 'Number of chunks', '# chunks', .true., 1.0)
-        call preprocess_stream_dev%set_input('comp_ctrls', 2, 'nparts_chunk', 'num', 'Number of partitions per chunk',&
-        &'Number of partitions for distributed execution of each chunk', 'divide chunk job into # parts', .true., 1.0)
+        call preprocess_stream_dev%set_input('comp_ctrls', 1, 'nchunks', 'num', 'Number of chunks*', 'Number of chunks', '# chunks', .false., 1.0)
+        call preprocess_stream_dev%set_input('comp_ctrls', 2, 'nparts_chunk', 'num', 'Number of partitions per chunk*',&
+        &'Number of partitions for distributed execution of each chunk', 'divide chunk job into # parts', .false., 1.0)
         call preprocess_stream_dev%set_input('comp_ctrls', 3, nparts)
         call preprocess_stream_dev%set_input('comp_ctrls', 4, nthr)
         call preprocess_stream_dev%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740.)
