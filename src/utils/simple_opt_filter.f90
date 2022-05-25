@@ -61,29 +61,41 @@ contains
         enddo        
     end subroutine butterworth_filter
 
-    subroutine apply_opt_filter(img, param, cur_fil, use_cache)
+    subroutine apply_opt_filter(img, cur_ind, find_start, find_stop, cur_fil, use_cache)
         use simple_tvfilter, only: tvfilter
         class(image), intent(inout) :: img
-        real,         intent(in)    :: param
+        integer,      intent(in)    :: cur_ind
+        integer,      intent(in)    :: find_start
+        integer,      intent(in)    :: find_stop
         real,         intent(inout) :: cur_fil(:)
         logical,      intent(in)    :: use_cache
         integer, parameter :: BW_ORDER = 8
+        real,    parameter :: LAMBDA_MIN = .5 , LAMBDA_MAX = 5.    ! for TV filter
+        real,    parameter ::  SIGMA_MIN = .01,  SIGMA_MAX = 1.    ! for NLMean filter
         type(tvfilter)     :: tvfilt
+        real               :: param
         select case(params_glob%filt_enum)
             case(FILT_LP)
-                call img%lp(int(param))
+                call img%lp(cur_ind)
                 call img%ifft()
             case(FILT_TV)
+                param = LAMBDA_MIN + (cur_ind - find_start)*(LAMBDA_MAX - LAMBDA_MIN)/(find_stop - find_start)
                 call tvfilt%new
                 call tvfilt%apply_filter_3d(img, param)
                 call tvfilt%kill
                 call img%ifft()
             case(FILT_BW8)
-                if( .not. use_cache ) call butterworth_filter(cur_fil, BW_ORDER, param)
+                if( .not. use_cache ) call butterworth_filter(cur_fil, BW_ORDER, real(cur_ind))
                 call img%apply_filter(cur_fil)
                 call img%ifft()
             case(FILT_NLMEAN)
-                ! to be implemented
+                param = SIGMA_MIN + (cur_ind - find_start)*(SIGMA_MAX - SIGMA_MIN)/(find_stop - find_start)
+                call img%ifft()
+                if( img%is_2d() )then
+                    call img%nlmean(sdev_noise = param)
+                else
+                    THROW_HARD('nlmean is supported for 2D case only!')
+                endif
             case DEFAULT
                 THROW_HARD('unsupported filter type')
         end select
@@ -98,11 +110,10 @@ contains
                                &even_copy_rmat, even_copy_cmat, even_copy_shellnorm
         integer              :: k,l,m, box, dim3, ldim(3), find_start, find_stop, iter_no, fnr
         integer              :: best_ind, cur_ind, k1,l1,m1,k_ind,l_ind,m_ind, lb(3), ub(3), mid_ext
-        real                 :: min_sum_odd, min_sum_even, ref_diff_odd, ref_diff_even, rad, param, find_stepsz
+        real                 :: min_sum_odd, min_sum_even, ref_diff_odd, ref_diff_even, rad, find_stepsz
         logical              :: mskimg_present
         character(len=90)    :: file_tag
         integer, parameter   :: CHUNKSZ = 20
-        real,    parameter   :: LAMBDA_MIN = .5, LAMBDA_MAX = 5.
         real,    pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null()
         real,    allocatable :: opt_odd( :,:,:), cur_diff_odd( :,:,:), opt_diff_odd( :,:,:), opt_freq_odd(:,:,:)
         real,    allocatable :: opt_even(:,:,:), cur_diff_even(:,:,:), opt_diff_even(:,:,:), opt_freq_even(:,:,:)
@@ -193,13 +204,7 @@ contains
         endif
         do iter_no = 1, params_glob%nsearch
             cur_ind = find_start + (iter_no - 1)*find_stepsz
-            if( params_glob%filter == 'tv' )then
-                param = LAMBDA_MIN + (cur_ind - find_start)*(LAMBDA_MAX - LAMBDA_MIN)/(find_stop - find_start)
-                if( L_VERBOSE_GLOB ) write(*,*) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current lambda = ', param
-            else
-                param = real(cur_ind)
-                if( L_VERBOSE_GLOB ) write(*,*) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current Fourier index = ', param
-            endif
+            if( L_VERBOSE_GLOB ) write(*,*) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current Fourier index = ', cur_ind
             if( L_BENCH_GLOB )then
                 t_filter_odd = tic()
                 t_chop_copy  = tic()
@@ -210,7 +215,7 @@ contains
                 rt_chop_copy  = rt_chop_copy + toc(t_chop_copy)
                 t_chop_filter = tic()
             endif
-            call apply_opt_filter(odd, param, cur_fil, .false.)
+            call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false.)
             if( L_BENCH_GLOB )then
                 rt_chop_filter = rt_chop_filter + toc(t_chop_filter)
                 t_chop_sqeu  = tic()
@@ -222,7 +227,7 @@ contains
             if( params_glob%l_match_filt )then
                 call odd%copy_fast(odd_copy_shellnorm)
                 if( L_BENCH_GLOB ) t_chop_filter = tic()
-                call apply_opt_filter(odd, param, cur_fil, .false.)
+                call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false.)
                 if( L_BENCH_GLOB ) rt_chop_filter = rt_chop_filter + toc(t_chop_filter)
             endif
             call odd%get_rmat_ptr(rmat_odd)
@@ -232,11 +237,11 @@ contains
             endif
             ! filtering even
             call even%copy_fast(even_copy_cmat)
-            call apply_opt_filter(even, param, cur_fil, .true.)
+            call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .true.)
             call even%sqeuclid_matrix(odd_copy_rmat, cur_diff_even)
             if( params_glob%l_match_filt )then
                 call even%copy_fast(even_copy_shellnorm)
-                call apply_opt_filter(even, param, cur_fil, .false.)
+                call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .false.)
             endif
             call even%get_rmat_ptr(rmat_even)
             if( L_BENCH_GLOB )then
