@@ -1329,6 +1329,8 @@ contains
                 case DEFAULT
                     THROW_HARD('unsupported filter type')
             end select
+        else
+            self%filter = 'butterworth'
         endif
         ! set graphene flag
         self%l_graphene = self%graphene_filt .ne. 'no'
