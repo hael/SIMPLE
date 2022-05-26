@@ -4052,7 +4052,7 @@ contains
         &'Statistical test for radial dependent symmetry',&                                           ! descr_short
         &'is a program that generates statistics at different radii and across the whold nano map.',& ! descr long
         &'single_exec',&                                                                              ! executable
-        &3, 3, 0, 0, 1, 1, 1, .false.)                                                                ! # entries in each group, requires sp_project
+        &3, 4, 0, 0, 1, 1, 1, .false.)                                                                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call atoms_stats%set_input('img_ios', 1, 'vol1', 'file', 'Raw volume', 'Raw volume of grey valued pixel intensities', &
@@ -4065,6 +4065,7 @@ contains
         call atoms_stats%set_input('parm_ios', 1, smpd)
         call atoms_stats%set_input('parm_ios', 2, 'pdbfile', 'file', 'PDB', 'Input coords file in PDB format', 'Input coords file in PDB format', .true., '')
         call atoms_stats%set_input('parm_ios', 3, 'pdbfile2', 'file', 'PDB', 'subset coords for stats calc', 'subset coords file in PDB format for stats calc', .false., '')
+        call atoms_stats%set_input('parm_ios', 4, 'rmsd_file','file', 'bin', 'per-atom e/o rmsd:s', 'per-atom e/o rmsd:s from CS model building', .false., '')
         ! alternative inputs
         ! <empty>
         ! search controls

@@ -210,6 +210,7 @@ type :: parameters
     character(len=STDLEN) :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN) :: projname=''          !< SIMPLE  project name
     character(len=STDLEN) :: ptclw='yes'          !< use particle weights(yes|no){yes}
+    character(len=STDLEN) :: rmsd_file=''         !< per-atom e/o rmsd:s
     character(len=STDLEN) :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
     character(len=STDLEN) :: real_filter=''
     character(len=STDLEN) :: refine='shc'         !< refinement mode(snhc|shc|neigh|inpl|proj|cluster|clustersym){shc}
@@ -666,6 +667,7 @@ contains
         call check_file('projfile',       self%projfile,     'O')
         call check_file('projfile_target',self%projfile_target,'O')
         call check_file('refs',           self%refs,         notAllowed='T')
+        call check_file('rmsd_file',      self%rmsd_file,    'B') 
         call check_file('starfile',       self%starfile,     'R')  ! R for relion, S taken by SPIDER
         call check_file('star_mic',       self%star_mic,     'R')  ! R for relion, S taken by SPIDER
         call check_file('star_model',     self%star_model,   'R')  ! R for relion, S taken by SPIDER
