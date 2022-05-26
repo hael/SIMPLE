@@ -79,7 +79,7 @@ contains
             if(index(flags(i)%rlnflag, trim(adjustl(rlnflag))) > 0 .AND. len_trim(flags(i)%splflag) > 0) then
                 flags(i)%present = .true.
                 flags(i)%ind = flagindex
-                write(logfhandle,*) char(9), char(9), "mapping ", flags(i)%rlnflag, " => ", trim(adjustl(flags(i)%splflag))
+                if( L_VERBOSE_GLOB ) write(logfhandle,*) char(9), char(9), "mapping ", flags(i)%rlnflag, " => ", trim(adjustl(flags(i)%splflag))
                 exit
             end if
         end do
@@ -93,7 +93,7 @@ contains
             if((index(flags(i)%splflag, trim(adjustl(splflag))) > 0 .OR. index(flags(i)%splflag2, trim(adjustl(splflag))) > 0) .AND. len_trim(flags(i)%rlnflag) > 0) then
                 if(flags(i)%present .eqv. .false.) then
                     flags(i)%present = .true.
-                    write(logfhandle,*) char(9), char(9), "mapping ", flags(i)%splflag, " => ", trim(adjustl(flags(i)%rlnflag))
+                    if( L_VERBOSE_GLOB ) write(logfhandle,*) char(9), char(9), "mapping ", flags(i)%splflag, " => ", trim(adjustl(flags(i)%rlnflag))
                 end if
                 exit
             end if
