@@ -14,6 +14,7 @@ use simple_commander_volops, only: reproject_commander
 use simple_stack_io,         only: stack_io
 use simple_commander_oris,   only: vizoris_commander
 use simple_commander_rec,    only: reconstruct3D_commander
+use simple_commander_cluster2D
 use simple_nanoparticle
 use simple_qsys_funs
 use simple_binoris_io
@@ -551,21 +552,20 @@ contains
     end subroutine exec_tseries_track_particles
 
     subroutine exec_center2D_nano( self, cline )
-        use simple_commander_cluster2D, only: make_cavgs_commander_distr,cluster2D_commander_distr
-        use simple_commander_imgproc,   only: pspec_int_rank_commander
         class(center2D_nano_commander), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
+        class(cmdline),                 intent(inout) :: cline
         ! commanders
+        type(cluster2D_commander)       :: xcluster2D ! shared-memory
         type(cluster2D_commander_distr) :: xcluster2D_distr
-        type(pspec_int_rank_commander)  :: xpspec_rank
         ! other variables
         type(parameters)              :: params
         type(sp_project)              :: spproj
-        type(cmdline)                 :: cline_pspec_rank
+        class(parameters), pointer    :: params_ptr => null()
         character(len=:), allocatable :: orig_projfile
         character(len=STDLEN)         :: prev_ctfflag
         character(len=LONGSTRLEN)     :: finalcavgs
-        integer  :: nparts, last_iter_stage2, nptcls
+        integer  :: last_iter_stage2, nptcls
+        logical  :: l_shmem
         call cline%set('dir_exec', 'center2D_nano')
         call cline%set('match_filt',          'no')
         call cline%set('ptclw',               'no')
@@ -580,8 +580,18 @@ contains
         if( .not. cline%defined('trs')     )       call cline%set('trs',           5.)
         if( .not. cline%defined('maxits')  )       call cline%set('maxits',       15.)
         if( .not. cline%defined('oritype') )       call cline%set('oritype', 'ptcl2D')
+        ! set shared-memory flag
+        if( cline%defined('nparts') )then
+            if( nint(cline%get_rarg('nparts')) == 1 )then
+                l_shmem = .true.
+                call cline%delete('nparts')
+            else
+                l_shmem = .false.
+            endif
+        else
+            l_shmem = .true.
+        endif
         call params%new(cline)
-        nparts = params%nparts
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! read project file
@@ -605,10 +615,18 @@ contains
         params%nptcls_per_cls = ceiling(real(nptcls)/real(params%ncls))
         call cline%set('nptcls_per_cls', real(params%nptcls_per_cls))
         ! splitting
-        call spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        if( .not. l_shmem ) call spproj%split_stk(params%nparts, dir=PATH_PARENT)
         ! no auto-scaling
         call cline%set('prg', 'cluster2D')
-        call xcluster2D_distr%execute(cline)
+        if( l_shmem )then
+            params_ptr  => params_glob
+            params_glob => null()
+            call xcluster2D%execute(cline)
+            params_glob => params_ptr
+            params_ptr  => null()
+        else
+            call xcluster2D_distr%execute(cline)
+        endif
         last_iter_stage2 = nint(cline%get_rarg('endit'))
         finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
         ! adding cavgs & FRCs to project
@@ -616,14 +634,6 @@ contains
         call spproj%read( params%projfile )
         call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
         call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
-        ! rank based on maximum of power spectrum
-        call cline_pspec_rank%set('mkdir',   'no')
-        call cline_pspec_rank%set('moldiam', params%moldiam)
-        call cline_pspec_rank%set('nthr',    real(params%nthr))
-        call cline_pspec_rank%set('smpd',    params%smpd)
-        call cline_pspec_rank%set('stk',     finalcavgs)
-        if( cline%defined('lp_backgr') ) call cline_pspec_rank%set('lp_backgr', params%lp_backgr)
-        call xpspec_rank%execute(cline_pspec_rank)
         ! transfer 2D shifts to 3D field
         call spproj%map2Dshifts23D
         call spproj%write
@@ -635,11 +645,14 @@ contains
     end subroutine exec_center2D_nano
 
     subroutine exec_cluster2D_nano( self, cline )
-        use simple_commander_cluster2D, only: cluster2D_autoscale_commander
         class(cluster2D_nano_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commander
+        type(cluster2D_commander)           :: xcluster2D ! shared-memory
         type(cluster2D_autoscale_commander) :: xcluster2D_distr
+        type(parameters)           :: params
+        class(parameters), pointer :: params_ptr => null()
+        logical :: l_shmem
         ! static parameters
         call cline%set('prg',           'cluster2D')
         call cline%set('dir_exec', 'cluster2D_nano')
@@ -670,7 +683,29 @@ contains
         if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',           5.)
         if( .not. cline%defined('trs')            ) call cline%set('trs',             5.)
         if( .not. cline%defined('oritype')        ) call cline%set('oritype',   'ptcl2D')
-        call xcluster2D_distr%execute(cline)
+        ! set shared-memory flag
+        if( cline%defined('nparts') )then
+            if( nint(cline%get_rarg('nparts')) == 1 )then
+                l_shmem = .true.
+                call cline%delete('nparts')
+            else
+                l_shmem = .false.
+            endif
+        else
+            l_shmem = .true.
+        endif
+        call params%new(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
+        if( l_shmem )then
+            params_ptr  => params_glob
+            params_glob => null()
+            call xcluster2D%execute(cline)
+            params_glob => params_ptr
+            params_ptr  => null()
+        else
+            call xcluster2D_distr%execute(cline)
+        endif
         call simple_end('**** SIMPLE_CLUSTER2D_NANO NORMAL STOP ****')
     end subroutine exec_cluster2D_nano
 

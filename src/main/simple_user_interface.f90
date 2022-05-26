@@ -1319,6 +1319,7 @@ contains
         call center2D_nano%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call center2D_nano%set_input('comp_ctrls', 1, nparts)
+        center2D_nano%comp_ctrls(1)%required = .false.
         call center2D_nano%set_input('comp_ctrls', 2, nthr)
     end subroutine new_center2D_nano
 
@@ -1413,6 +1414,7 @@ contains
         call cluster2D_nano%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
         call cluster2D_nano%set_input('comp_ctrls', 1, nparts)
+        cluster2D_nano%comp_ctrls(1)%required = .false.
         call cluster2D_nano%set_input('comp_ctrls', 2, nthr)
     end subroutine new_cluster2D_nano
 
