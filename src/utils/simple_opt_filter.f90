@@ -344,7 +344,6 @@ contains
                 rt_search_opt = rt_search_opt + toc(t_search_opt)
             endif
         enddo
-        write(*, *) rt_chop_filter
         if( L_BENCH_GLOB )then
             rt_tot     = toc(t_tot)
             benchfname = 'OPT_FILTER_BENCH.txt'
