@@ -94,7 +94,6 @@ end type atom_stats
 type :: nanoparticle
     private
     type(image)           :: img, img_raw
-    type(image)           :: img_pc_atm              ! Phase Correlation with one atom (used for atom validation & splitting)
     type(binimage)        :: img_bin, img_cc         ! binary and connected component images
     integer               :: ldim(3)            = 0  ! logical dimension of image
     integer               :: n_cc               = 0  ! number of atoms (connected components)                NATOMS
@@ -202,7 +201,6 @@ contains
         if( Z == 0 ) THROW_HARD('Unknown element: '//el_ucase)
         call find_ldim_nptcls(self%npname, self%ldim, nptcls, smpd)
         call self%img%new(self%ldim, self%smpd)
-        call self%img_raw%new(self%ldim, self%smpd)
         call self%img_bin%new_bimg(self%ldim, self%smpd)
         call self%img_bin%new(self%ldim, self%smpd)
         call self%img%read(fname)
@@ -466,7 +464,6 @@ contains
         ! MODEL BUILDING
         ! Phase correlation approach
         call phasecorr_one_atom(self%img, self%img, self%element)
-        call self%img_pc_atm%copy(self%img)
         if( WRITE_OUTPUT ) call self%img%write('denoised.mrc')
         ! Nanoparticle binarization
         call self%binarize_and_find_centers()
@@ -729,8 +726,8 @@ contains
         real    :: new_centers(3,2*self%n_cc) ! will pack it afterwards if it has too many elements
         real    :: pc, radius
         write(logfhandle, '(A)') '>>> SPLITTING CONNECTED ATOMS'
-        call self%img_pc_atm%get_rmat_ptr(rmat_pc) ! rmat_pc contains the phase correlation
-        call self%img_cc%get_imat(imat_cc)         ! to pass to the subroutine split_atoms
+        call self%img%get_rmat_ptr(rmat_pc) ! rmat_pc contains the phase correlation
+        call self%img_cc%get_imat(imat_cc)  ! to pass to the subroutine split_atoms
         allocate(imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)),           source = imat_cc)
         allocate(imat_split_ccs(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = 0)
         call img_split_ccs%new_bimg(self%ldim, self%smpd)
@@ -1087,10 +1084,10 @@ contains
         class(nanoparticle),        intent(inout) :: self
         real,             optional, intent(in)    :: a0(3) ! lattice parameters
         character(len=*), optional, intent(in)    :: rmsd_file
-        type(image)          :: phasecorr, simatms
+        type(image)          :: simatms
         logical, allocatable :: mask(:,:,:)
         real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:), rmsds(:)
-        real,    pointer     :: rmat(:,:,:), rmat_corr(:,:,:)
+        real,    pointer     :: rmat_raw(:,:,:)
         integer, allocatable :: imat_cc(:,:,:)
         character(len=256)   :: io_msg
         logical, allocatable :: cc_mask(:)
@@ -1104,14 +1101,13 @@ contains
         else
             call fit_lattice(self%element, centers_A, a)
         endif
-        call run_cn_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
-
+        ! per-atom e/o RMSDs
         if( present(rmsd_file) )then
             rmsds = file2rarr(rmsd_file)
-
-            !!!!!!!!!!!!!!!!!!! 2DO
-
+            if( size(rmsds) /= self%n_cc ) THROW_HARD('incongruent array dims atominfo vs rmsd:s')
+            self%atominfo(:)%rmsd = rmsds
         endif
+        call run_cn_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
         ! calc strain for all atoms
         allocate(strain_array(self%n_cc,NSTRAIN_COMPS), source=0.)
         call strain_analysis(self%element, centers_A, a, strain_array)
@@ -1135,9 +1131,7 @@ contains
         ! CALCULATE PER-ATOM PARAMETERS
         ! extract atominfo
         allocate(mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), source = .false.)
-        call phasecorr_one_atom(self%img, phasecorr, self%element)
-        call phasecorr%get_rmat_ptr(rmat_corr)
-        call self%img%get_rmat_ptr(rmat)
+        call self%img_raw%get_rmat_ptr(rmat_raw)
         call self%img_cc%get_imat(imat_cc)
         do cc = 1, self%n_cc
             call progress(cc, self%n_cc)
@@ -1152,9 +1146,9 @@ contains
             call self%calc_longest_atm_dist(cc, self%atominfo(cc)%diam)
             self%atominfo(cc)%diam = 2.*self%atominfo(cc)%diam ! radius --> diameter in A
             ! maximum grey level intensity across the connected component
-            self%atominfo(cc)%max_int = maxval(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
+            self%atominfo(cc)%max_int = maxval(rmat_raw(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
             ! average grey level intensity across the connected component
-            self%atominfo(cc)%avg_int = sum(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
+            self%atominfo(cc)%avg_int = sum(rmat_raw(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
             self%atominfo(cc)%avg_int = self%atominfo(cc)%avg_int / real(count(mask))
             ! bond length of nearest neighbour...
             self%atominfo(cc)%bondl = pixels_dist(self%atominfo(cc)%center(:), tmpcens, 'min', mask=cc_mask) ! Use all the atoms
@@ -1194,7 +1188,6 @@ contains
         call self%write_centers('max_int_in_bfac_field',    'max_int')
         ! destruct
         deallocate(cc_mask, imat_cc, tmpcens, strain_array, centers_A)
-        call phasecorr%kill
         call simatms%kill
         write(logfhandle, '(A)') '>>> EXTRACTING ATOM STATISTICS, COMPLETED'
 
@@ -1625,7 +1618,6 @@ contains
         class(nanoparticle), intent(inout) :: self
         call self%img%kill()
         call self%img_raw%kill
-        call self%img_pc_atm%kill
         call self%img_bin%kill_bimg()
         call self%img_cc%kill_bimg()
         if( allocated(self%atominfo) ) deallocate(self%atominfo)
