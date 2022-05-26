@@ -75,16 +75,17 @@ contains
         else
             if( .not.cline%defined('mskdiam') ) THROW_HARD('MSKDIAM must be defined!')
         endif
-        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',     30.0)
-        if( .not. cline%defined('center')    ) call cline%set('center',    'yes')
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        if( .not. cline%defined('lp')        ) call cline%set('lp',        GREEDY_TARGET_LP)
-        if( .not. cline%defined('lpthresh')  ) call cline%set('lpthresh',  30.0)
-        if( .not. cline%defined('ndev')      ) call cline%set('ndev',      1.5)
-        if( .not. cline%defined('oritype')   ) call cline%set('oritype',  'ptcl2D')
-        if( .not. cline%defined('wiener')    ) call cline%set('wiener',   'partial')
-        if( .not. cline%defined('walltime')  ) call cline%set('walltime',  29.0*60.0) ! 29 minutes
+        if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',      'yes')
+        if( .not. cline%defined('cenlp')        ) call cline%set('cenlp',      30.0)
+        if( .not. cline%defined('center')       ) call cline%set('center',     'yes')
+        if( .not. cline%defined('autoscale')    ) call cline%set('autoscale',  'yes')
+        if( .not. cline%defined('lp')           ) call cline%set('lp',          GREEDY_TARGET_LP)
+        if( .not. cline%defined('lpthresh')     ) call cline%set('lpthresh',    30.0)
+        if( .not. cline%defined('ndev')         ) call cline%set('ndev',        1.5)
+        if( .not. cline%defined('oritype')      ) call cline%set('oritype',     'ptcl2D')
+        if( .not. cline%defined('wiener')       ) call cline%set('wiener',      'partial')
+        if( .not. cline%defined('walltime')     ) call cline%set('walltime',     29.0*60.0) ! 29 minutes
+        if( .not. cline%defined('nparts_chunk') ) call cline%set('nparts_chunk', 1.0)
         call cline%set('ptclw',      'no')
         call cline%set('stream','yes') ! only for parameters determination
         call seed_rnd

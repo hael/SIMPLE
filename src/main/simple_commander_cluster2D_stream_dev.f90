@@ -124,6 +124,7 @@ contains
         pool_iter      = 0
         call simple_mkdir(SCALE_DIR)
         call simple_mkdir(POOL_DIR)
+        call simple_mkdir(trim(POOL_DIR)//trim(STDERROUT_DIR))
         call simple_touch(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
         call pool_proj%kill
         pool_proj%projinfo = spproj%projinfo
@@ -144,7 +145,7 @@ contains
         call cline_cluster2D_chunk%set('startit',   1.)
         call cline_cluster2D_chunk%set('mskdiam',   mskdiam)
         call cline_cluster2D_chunk%set('ncls',      real(params_glob%ncls_start))
-        call cline_cluster2D_chunk%set('nparts',    real(params_glob%nparts_chunk))
+        call cline_cluster2D_chunk%set('nparts',    1.0) ! shared memory execution
         call cline_cluster2D_chunk%set('nthr',      real(params_glob%nthr))
         if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
         allocate(chunks(params_glob%nchunks))
@@ -171,8 +172,8 @@ contains
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment
         call cline_cluster2D_pool%set('nthr',     real(params_glob%nthr))
-        call cline_cluster2D_pool%set('nparts',   real(params_glob%nparts))
-        call qenv_pool%new(params_glob%nparts,exec_bin='simple_private_exec',qsys_name='local')
+        call cline_cluster2D_pool%set('nparts',   real(params_glob%nparts_pool))
+        call qenv_pool%new(params_glob%nparts_pool,exec_bin='simple_private_exec',qsys_name='local')
         ! auto-scaling
         if( orig_box == 0 ) THROW_HARD('FATAL ERROR')
         if( do_autoscale )then
@@ -419,7 +420,6 @@ contains
                 call update_path(pool_proj%os_mic, imic, 'thumb')
                 call update_path(pool_proj%os_mic, imic, 'mceps')
                 call update_path(pool_proj%os_mic, imic, 'ctfdoc')
-                call update_path(pool_proj%os_mic, imic, 'ctfeps')
                 call update_path(pool_proj%os_mic, imic, 'ctfjpg')
                 call update_path(pool_proj%os_mic, imic, 'boxfile')
                 ! stacks & update path so they are relative to root folder
@@ -573,7 +573,7 @@ contains
                 ncls_glob = ncls_here
             endif
             ! tidy
-            call converged_chunks(ichunk)%remove_folder
+            ! call converged_chunks(ichunk)%remove_folder
             call converged_chunks(ichunk)%kill
         enddo
         call update_pool_for_gui
@@ -842,11 +842,11 @@ contains
     end subroutine classify_pool
 
     !> produces consolidated project at original scale
-    subroutine write_project_stream2D( add_suffix, force_write )
-        logical,           intent(in) :: add_suffix, force_write
+    subroutine write_project_stream2D( force_write )
+        logical,           intent(in) :: force_write
         type(class_frcs)              :: frcs, frcs_sc
         type(oris)                    :: os_backup2, os_backup3
-        character(len=:), allocatable :: projfile,projfname, cavgsfname, suffix, frcsfname, src, dest
+        character(len=:), allocatable :: projfile,projfname, cavgsfname, frcsfname, src, dest
         character(len=:), allocatable :: pool_refs
         integer :: istk
         logical :: do_write
@@ -864,12 +864,6 @@ contains
         projfname  = get_fbody(orig_projfile, METADATA_EXT, separator=.false.)
         cavgsfname = get_fbody(refs_glob, params_glob%ext, separator=.false.)
         frcsfname  = get_fbody(FRCS_FILE, BIN_EXT, separator=.false.)
-        if( add_suffix )then
-            suffix     = '_snapshot'
-            cavgsfname = trim(cavgsfname)//trim(suffix)
-            frcsfname  = trim(frcsfname)//trim(suffix)
-            projfname  = trim(projfname)//trim(suffix)
-        endif
         call pool_proj%projinfo%set(1,'projname', projfname)
         projfile   = trim(projfname)//trim(METADATA_EXT)
         cavgsfname = trim(cavgsfname)//trim(params_glob%ext)
@@ -939,28 +933,6 @@ contains
             pool_proj%os_stk = os_backup2
             call os_backup2%kill
         else
-            if( add_suffix )then
-                call simple_copy_file(trim(POOL_DIR)//trim(FRCS_FILE), frcsfname)
-                if( l_wfilt )then
-                    src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX))
-                    dest = add2fbody(cavgsfname,params_glob%ext, trim(WFILT_SUFFIX))
-                    call simple_copy_file(src, dest)
-                    src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX)//'_even')
-                    dest = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX)//'_even')
-                    call simple_copy_file(src, dest)
-                    src  = add2fbody(pool_refs, params_glob%ext,trim(WFILT_SUFFIX)//'_odd')
-                    dest = add2fbody(cavgsfname,params_glob%ext,trim(WFILT_SUFFIX)//'_odd')
-                    call simple_copy_file(src, dest)
-                else
-                    call simple_copy_file(pool_refs, cavgsfname)
-                    src  = add2fbody(pool_refs, params_glob%ext,'_even')
-                    dest = add2fbody(cavgsfname,params_glob%ext,'_odd')
-                    call simple_copy_file(src, dest)
-                    src  = add2fbody(pool_refs, params_glob%ext,'_odd')
-                    dest = add2fbody(cavgsfname,params_glob%ext,'_odd')
-                    call simple_copy_file(src, dest)
-                endif
-            endif
             call pool_proj%os_out%kill
             call pool_proj%add_cavgs2os_out(cavgsfname, orig_smpd, 'cavg')
             if( l_wfilt )then
@@ -998,7 +970,7 @@ contains
         endif
         if( pool_iter >= 1 )then
             ! updates project
-            call write_project_stream2D(.false.,.true.)
+            call write_project_stream2D(.true.)
             ! ranking
             refs_glob_ranked = add2fbody(refs_glob,params_glob%ext,'_ranked')
             call cline_rank_cavgs%set('projfile', orig_projfile)

@@ -1464,7 +1464,7 @@ contains
         ! computer controls
         call cluster2D_stream%set_input('comp_ctrls', 1, 'nchunks', 'num', 'Number of chunks', 'Number of chunks', '# chunks', .true., 1.0)
         call cluster2D_stream%set_input('comp_ctrls', 2, 'nparts_chunk', 'num', 'Number of partitions per chunk',&
-        &'Number of partitions for distributed execution of each chunk', 'divide chunk job into # parts', .true., 1.0)
+        &'Number of partitions for distributed execution of each chunk{1}', 'divide chunk job into # parts{1}', .false., 1.0)
         call cluster2D_stream%set_input('comp_ctrls', 3, nparts)
         call cluster2D_stream%set_input('comp_ctrls', 4, nthr)
         call cluster2D_stream%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740.)
@@ -2906,7 +2906,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 16, 0, 20, 9, 1, 5, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 16, 0, 20, 9, 1, 6, .true.)                                                     ! # entries in each group, requires sp_project
         ! image input/output
         call preprocess_stream_dev%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
         call preprocess_stream_dev%set_input('img_ios', 2, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2994,11 +2994,13 @@ contains
         preprocess_stream_dev%mask_ctrls(1)%descr_short = 'Mask Diameter*'
         ! computer controls
         call preprocess_stream_dev%set_input('comp_ctrls', 1, 'nchunks', 'num', 'Number of chunks*', 'Number of chunks', '# chunks', .false., 1.0)
-        call preprocess_stream_dev%set_input('comp_ctrls', 2, 'nparts_chunk', 'num', 'Number of partitions per chunk*',&
-        &'Number of partitions for distributed execution of each chunk', 'divide chunk job into # parts', .false., 1.0)
-        call preprocess_stream_dev%set_input('comp_ctrls', 3, nparts)
-        call preprocess_stream_dev%set_input('comp_ctrls', 4, nthr)
-        call preprocess_stream_dev%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740.)
+        call preprocess_stream_dev%set_input('comp_ctrls', 2, 'nparts_chunk', 'num', 'Number of partitions per 2D chunk*',&
+        &'Number of partitions for distributed execution of each chunk{1}', 'divide chunk job into # parts{1}', .false., 1.0)
+        call preprocess_stream_dev%set_input('comp_ctrls', 3, 'nparts_pool', 'num', 'Number of partitions for the 2D pool*',&
+        &'Number of partitions for distributed execution of the 2D pool{nparts}', 'divide pool job into # parts', .false., 1.0)
+        call preprocess_stream_dev%set_input('comp_ctrls', 4, nparts)
+        call preprocess_stream_dev%set_input('comp_ctrls', 5, nthr)
+        call preprocess_stream_dev%set_input('comp_ctrls', 6, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)', 'in seconds(29mins){1740}', .false., 1740.)
     end subroutine new_preprocess_stream_dev
 
     subroutine new_print_dose_weights

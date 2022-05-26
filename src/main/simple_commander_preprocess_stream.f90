@@ -37,7 +37,7 @@ contains
         class(preprocess_commander_stream_dev), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
         type(parameters)                       :: params
-        integer,                   parameter   :: WAITTIME        = 5   ! folder watched every 5 seconds
+        integer,                   parameter   :: WAITTIME        = 5    ! folder watched every 5 seconds
         integer,                   parameter   :: LONGTIME        = 300  ! time lag after which a movie is processed
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
         logical,                   parameter   :: DEBUG_HERE      = .false.
@@ -61,7 +61,7 @@ contains
         real(timer_int_kind)    :: rt_write
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
         if( .not. cline%defined('mkdir')           ) call cline%set('mkdir',          'yes')
-        if( .not. cline%defined('walltime')        ) call cline%set('walltime',  29.0*60.0) ! 29 minutes
+        if( .not. cline%defined('walltime')        ) call cline%set('walltime',   29.0*60.0) ! 29 minutes
         ! motion correction
         if( .not. cline%defined('trs')             ) call cline%set('trs',              20.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           8.)
@@ -91,11 +91,12 @@ contains
         call cline%set('numlen', 5.)
         call cline%set('stream','yes')
         ! 2D classification
-        if( .not. cline%defined('lpthresh')  ) call cline%set('lpthresh',      30.0)
-        if( .not. cline%defined('ndev2D')    ) call cline%set('ndev2D',         1.5)
-        if( .not. cline%defined('wiener')    ) call cline%set('wiener',   'partial')
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale',    'yes')
-        if( .not.cline%defined('match_filt') ) call cline%set('match_filt',    'no')
+        if( .not. cline%defined('lpthresh')    ) call cline%set('lpthresh',      30.0)
+        if( .not. cline%defined('ndev2D')      ) call cline%set('ndev2D',         1.5)
+        if( .not. cline%defined('wiener')      ) call cline%set('wiener',   'partial')
+        if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',    'yes')
+        if( .not. cline%defined('match_filt')  ) call cline%set('match_filt',    'no')
+        if( .not. cline%defined('nparts_chunk')) call cline%set('nparts_chunk',   1.0)
         ! master parameters
         call params%new(cline)
         params_glob%split_mode = 'stream'
@@ -104,6 +105,10 @@ contains
         call cline%set('prg',   'preprocess')
         if( cline%defined('dir_prev') .and. .not.file_exists(params%dir_prev) )then
             THROW_HARD('Directory '//trim(params%dir_prev)//' does not exist!')
+        endif
+        if( .not.cline%defined('nparts_pool') )then
+            params_glob%nparts_pool = params_glob%nparts
+            call cline%set('nparts_pool', real(params_glob%nparts_pool))
         endif
         ! master project file
         call spproj%read( params%projfile )
@@ -116,6 +121,7 @@ contains
         ! output directories
         output_dir = trim(PATH_HERE)//trim(dir_preprocess)
         call simple_mkdir(output_dir)
+        call simple_mkdir(trim(output_dir)//trim(STDERROUT_DIR))
         output_dir_ctf_estimate   = filepath(trim(PATH_HERE), trim(DIR_CTF_ESTIMATE))
         output_dir_motion_correct = filepath(trim(PATH_HERE), trim(DIR_MOTION_CORRECT))
         call simple_mkdir(output_dir_ctf_estimate,errmsg="commander_stream_wflows :: exec_preprocess_stream;  ")
@@ -220,19 +226,21 @@ contains
                 if( l_pick ) write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',nptcls_glob
                 ! write project micrographs field
                 call spproj%write_segment_inside('mic',micspproj_fname)
-                call write_migrograps_starfile
                 last_injection = simple_gettime()
                 l_haschanged   = .true.
                 n_imported     = spproj%os_mic%get_noris()
             else
                 ! wait & write snapshot
                 if( l_cluster2D )then
-                    ! cf 2D section
+                    if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
+                        call write_migrograps_starfile
+                    endif
                 else
                     if( .not.l_movies_left )then
                         if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
                             ! write project when inactive...
                             call write_project
+                            call write_migrograps_starfile
                             l_haschanged = .false.
                         else
                             ! ...or wait
@@ -247,11 +255,12 @@ contains
                 call update_pool_status
                 call update_pool
                 call reject_from_pool
-                call write_project_stream2D(.false.,.false.)
+                call write_project_stream2D(.false.)
                 call import_chunks_into_pool
                 call classify_pool
                 call update_projects_mask(completed_fnames)
                 call classify_new_chunks(completed_fnames)
+                call sleep(WAITTIME)
             endif
         end do
         ! termination
@@ -442,7 +451,6 @@ contains
                         call update_path(spproj%os_mic, n_old+j, 'thumb')
                         call update_path(spproj%os_mic, n_old+j, 'mceps')
                         call update_path(spproj%os_mic, n_old+j, 'ctfdoc')
-                        call update_path(spproj%os_mic, n_old+j, 'ctfeps')
                         call update_path(spproj%os_mic, n_old+j, 'ctfjpg')
                         if( l_pick ) call update_path(spproj%os_mic, n_old+j, 'boxfile')
                     enddo
@@ -546,7 +554,6 @@ contains
                     call movefile2folder('mceps',       output_dir_motion_correct, o, err)
                     call movefile2folder('ctfjpg',      output_dir_ctf_estimate,   o, err)
                     call movefile2folder('ctfdoc',      output_dir_ctf_estimate,   o, err)
-                    call movefile2folder('ctfeps',      output_dir_ctf_estimate,   o, err)
                     if( l_pick )then
                         ! import mic & updates stk segment
                         call movefile2folder('boxfile', output_dir_picker, o, err)
