@@ -110,7 +110,7 @@ contains
     end subroutine exec_detect_atoms
 
     subroutine exec_detect_atoms_eo( self, cline )
-        use simple_opt_filter, only: opt_filter
+        use simple_opt_filter,      only: opt_filter
         use simple_defs_autorefine, only: EVEN_SPLIT, ODD_SPLIT
         class(detect_atoms_eo_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
