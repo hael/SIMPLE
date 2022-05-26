@@ -9,6 +9,12 @@ use simple_parameters, only: params_glob
 implicit none
 #include "simple_local_flags.inc"
 
+type opt_vol
+    real :: opt_val
+    real :: opt_diff
+    real :: opt_freq
+end type opt_vol
+
 contains
 
     ! Compute the value of the Butterworth transfer function of order n(th)
@@ -116,10 +122,10 @@ contains
         character(len=90)    :: file_tag
         integer, parameter   :: CHUNKSZ = 20
         real,    pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null()
-        real,    allocatable :: opt_odd( :,:,:), cur_diff_odd( :,:,:), opt_diff_odd( :,:,:), opt_freq_odd(:,:,:)
-        real,    allocatable :: opt_even(:,:,:), cur_diff_even(:,:,:), opt_diff_even(:,:,:), opt_freq_even(:,:,:)
+        real,    allocatable :: cur_diff_odd( :,:,:), cur_diff_even(:,:,:)
         real,    allocatable :: cur_fil(:), weights_3D(:,:,:), weights_2D(:,:)
         logical, allocatable :: l_mask(:,:,:)
+        type(opt_vol), allocatable :: opt_odd(:,:,:), opt_even(:,:,:)
         character(len=LONGSTRLEN)     :: benchfname
         integer(timer_int_kind)       ::  t_tot,  t_filter_odd,  t_filter_even,  t_search_opt, &
                                         & t_chop_copy,  t_chop_filter,  t_chop_sqeu
@@ -145,10 +151,10 @@ contains
         call even_copy_cmat%fft
         call even_copy_shellnorm%copy(even)
         call even_copy_shellnorm%shellnorm(return_ft=.true.)
-        allocate(opt_odd( box,box,dim3), cur_diff_odd( box,box,dim3), opt_diff_odd( box,box,dim3), opt_freq_odd( box,box,dim3),&
-                &opt_even(box,box,dim3), cur_diff_even(box,box,dim3), opt_diff_even(box,box,dim3), opt_freq_even(box,box,dim3),&
+        allocate(cur_diff_odd( box,box,dim3), cur_diff_even(box,box,dim3),&
                 &cur_fil(box),weights_2D(params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1), weights_3D(params_glob%smooth_ext*2+1,&
                 &params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1), source=0.)
+        allocate(opt_odd(box,box,dim3), opt_even(box,box,dim3))
         ! assign the weights of the neighboring voxels
         ! 2D weights
         do k = 1, 2*params_glob%smooth_ext+1
@@ -186,17 +192,17 @@ contains
             if( ub(k) > box - params_glob%smooth_ext ) ub(k) = box - params_glob%smooth_ext
         enddo
         ! searching for the best fourier index from here and generating the optimized filter
-        opt_diff_odd  = 0.
-        opt_diff_even = 0.
-        opt_freq_odd  = 0.   ! record the optimized cutoff frequency
-        opt_freq_even = 0.   ! record the optimized cutoff frequency
-        min_sum_odd   = huge(min_sum_odd)
-        min_sum_even  = huge(min_sum_even)
-        best_ind      = find_start
-        opt_diff_odd( lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(min_sum_odd)
-        opt_diff_even(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(min_sum_odd)
-        opt_freq_odd( lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(min_sum_odd)
-        opt_freq_even(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) = huge(min_sum_odd)
+        min_sum_odd       = huge(min_sum_odd)
+        min_sum_even      = huge(min_sum_even)
+        best_ind          = find_start
+        opt_odd%opt_val   = 0.
+        opt_odd%opt_diff  = 0.
+        opt_odd%opt_freq  = 0.
+        opt_even%opt_val  = 0.
+        opt_even%opt_diff = 0.
+        opt_even%opt_freq = 0.
+        opt_odd( lb(1):ub(1),lb(2):ub(2),lb(3):ub(3))%opt_diff = huge(min_sum_odd)
+        opt_even(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3))%opt_diff = huge(min_sum_odd)
         if( L_BENCH_GLOB )then
             t_tot          = tic()
             rt_filter_odd  = 0.
@@ -267,15 +273,15 @@ contains
                             ! opt_diff keeps the minimized cost value at each voxel of the search
                             ! opt_odd  keeps the best voxel of the form B*odd
                             ! opt_even keeps the best voxel of the form B*even
-                            if (ref_diff_odd < opt_diff_odd(k,l,1)) then
-                                opt_odd(     k,l,1) = rmat_odd(k,l,1)
-                                opt_diff_odd(k,l,1) = ref_diff_odd
-                                opt_freq_odd(k,l,1) = cur_ind
+                            if (ref_diff_odd < opt_odd(k,l,1)%opt_diff) then
+                                opt_odd(k,l,1)%opt_val  = rmat_odd(k,l,1)
+                                opt_odd(k,l,1)%opt_diff = ref_diff_odd
+                                opt_odd(k,l,1)%opt_freq = cur_ind
                             endif
-                            if (ref_diff_even < opt_diff_even(k,l,1)) then
-                                opt_even(     k,l,1) = rmat_even(k,l,1)
-                                opt_diff_even(k,l,1) = ref_diff_even
-                                opt_freq_even(k,l,1) = cur_ind
+                            if (ref_diff_even < opt_even(k,l,1)%opt_diff) then
+                                opt_even(k,l,1)%opt_val  = rmat_even(k,l,1)
+                                opt_even(k,l,1)%opt_diff = ref_diff_even
+                                opt_even(k,l,1)%opt_freq = cur_ind
                             endif
                         enddo
                     enddo
@@ -300,38 +306,36 @@ contains
                                 ! opt_diff keeps the minimized cost value at each voxel of the search
                                 ! opt_odd  keeps the best voxel of the form B*odd
                                 ! opt_even keeps the best voxel of the form B*even
-                                if (ref_diff_odd < opt_diff_odd(k,l,m)) then
-                                    opt_odd(     k,l,m) = rmat_odd(k,l,m)
-                                    opt_diff_odd(k,l,m) = ref_diff_odd
-                                    opt_freq_odd(k,l,m) = cur_ind
+                                if (ref_diff_odd < opt_odd(k,l,m)%opt_diff) then
+                                    opt_odd(k,l,m)%opt_val  = rmat_odd(k,l,m)
+                                    opt_odd(k,l,m)%opt_diff = ref_diff_odd
+                                    opt_odd(k,l,m)%opt_freq = cur_ind
                                 endif
-                                if (ref_diff_even < opt_diff_even(k,l,m)) then
-                                    opt_even(     k,l,m) = rmat_even(k,l,m)
-                                    opt_diff_even(k,l,m) = ref_diff_even
-                                    opt_freq_even(k,l,m) = cur_ind
+                                if (ref_diff_even < opt_even(k,l,m)%opt_diff) then
+                                    opt_even(k,l,m)%opt_val  = rmat_even(k,l,m)
+                                    opt_even(k,l,m)%opt_diff = ref_diff_even
+                                    opt_even(k,l,m)%opt_freq = cur_ind
                                 endif
                             enddo
                         enddo
                     enddo
                     !$omp end parallel do
                 endif
-                min_sum_odd  = sum(opt_diff_odd)
-                min_sum_even = sum(opt_diff_even)
             else
                 ! keep the theta which gives the lowest cost (over all voxels)
                 if (sum(cur_diff_odd) < min_sum_odd) then
-                    opt_odd      = rmat_odd
+                    opt_odd(:,:,:)%opt_val  = rmat_odd(1:box, 1:box, 1:dim3)
+                    opt_odd(:,:,:)%opt_freq = cur_ind
                     min_sum_odd  = sum(cur_diff_odd)
                     best_ind     = cur_ind
-                    opt_freq_odd = cur_ind
                 endif
                 if (sum(cur_diff_even) < min_sum_even) then
-                    opt_even      = rmat_even
+                    opt_even(:,:,:)%opt_val  = rmat_even(1:box, 1:box, 1:dim3)
+                    opt_even(:,:,:)%opt_freq = cur_ind
                     min_sum_even  = sum(cur_diff_even)
-                    opt_freq_even = cur_ind
                 endif
             endif
-            if( L_VERBOSE_GLOB ) write(*,*) 'min cost val (odd) = ', min_sum_odd, '; current cost (odd) = ', sum(cur_diff_odd)
+            if( L_VERBOSE_GLOB ) write(*,*) 'current cost (odd) = ', sum(cur_diff_odd)
             if( L_BENCH_GLOB )then
                 rt_search_opt = rt_search_opt + toc(t_search_opt)
             endif
@@ -360,8 +364,8 @@ contains
         if( L_VERBOSE_GLOB )then
             if( .not. params_glob%l_nonuniform ) write(*,*) 'minimized cost at resolution = ', box*params_glob%smpd/best_ind
         endif
-        call odd%set_rmat(opt_odd,   .false.)
-        call even%set_rmat(opt_even, .false.)
+        call odd%set_rmat( opt_odd( :,:,:)%opt_val, .false.)
+        call even%set_rmat(opt_even(:,:,:)%opt_val, .false.)
         ! output the optimized frequency map to see the nonuniform parts
         if( dim3 > 1 )then
             if( params_glob%l_nonuniform )then
@@ -369,13 +373,13 @@ contains
             else
                 file_tag = 'uniform_filter_'//trim(params_glob%filter)//'_ext_'//int2str(params_glob%smooth_ext)
             endif
-            call freq_img%set_rmat(opt_freq_odd, .false.)
+            call freq_img%set_rmat(opt_odd(:,:,:)%opt_freq, .false.)
             call freq_img%write('opt_freq_odd_map_'//trim(file_tag)//'.mrc')
-            call freq_img%set_rmat(box*params_glob%smpd/opt_freq_odd, .false.) ! resolution map
+            call freq_img%set_rmat(box*params_glob%smpd/opt_odd(:,:,:)%opt_freq, .false.) ! resolution map
             call freq_img%write('opt_resolution_odd_map_'//trim(file_tag)//'.mrc')
             call freq_img%kill
         endif
-        deallocate(opt_odd, opt_even, cur_diff_odd, opt_diff_odd, cur_diff_even, opt_diff_even, cur_fil, weights_3D, weights_2D)
+        deallocate(opt_odd, opt_even, cur_diff_odd, cur_diff_even, cur_fil, weights_3D, weights_2D)
         call odd_copy_rmat%kill
         call odd_copy_cmat%kill
         call even_copy_rmat%kill

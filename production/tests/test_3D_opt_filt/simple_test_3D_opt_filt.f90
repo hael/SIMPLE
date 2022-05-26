@@ -120,10 +120,11 @@ smooth_ext     = 1
 if( cline%defined('smooth_ext') ) smooth_ext = p%smooth_ext
 if( cline%defined('filter') )     filter     = p%filter
 if( .not. cline%defined('match_filt') ) call cline_opt_filt%set('match_filt', 'no')
-call cline_opt_filt%set('vol1',   'vol_noisy.mrc')
-call cline_opt_filt%set('vol2',   'vol_clean.mrc')
-call cline_opt_filt%set('filter', trim(filter))
-call cline_opt_filt%set('mkdir',  'no')
+call cline_opt_filt%set('vol1'      , 'vol_noisy.mrc')
+call cline_opt_filt%set('vol2'      , 'vol_clean.mrc')
+call cline_opt_filt%set('filter'    , trim(filter))
+call cline_opt_filt%set('mkdir'     , 'no')
+call cline_opt_filt%set('smooth_ext', real(smooth_ext))
 call p%new(cline_opt_filt)
 call xopt_3D_filter%execute(cline_opt_filt)
 ! comparing the nonuniform result with the original data
@@ -153,14 +154,16 @@ write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', re
 write(*, *) 'Filtering phase-randomized volume in progress...'
 cline_opt_filt = cline
 filter         = 'butterworth'
-smooth_ext     = 1
+smooth_ext     = 0
 if( cline%defined('smooth_ext') ) smooth_ext = p%smooth_ext
 if( cline%defined('filter') )     filter     = p%filter
 if( .not. cline%defined('match_filt') ) call cline_opt_filt%set('match_filt', 'no')
-call cline_opt_filt%set('vol1',   'vol_phase_rand.mrc')
-call cline_opt_filt%set('vol2',   'vol_clean.mrc')
-call cline_opt_filt%set('filter', trim(filter))
-call cline_opt_filt%set('mkdir',  'no')
+call cline_opt_filt%set('vol1'      , 'vol_phase_rand.mrc')
+call cline_opt_filt%set('vol2'      , 'vol_clean.mrc')
+call cline_opt_filt%set('filter'    , trim(filter))
+call cline_opt_filt%set('mkdir'     , 'no')
+call cline_opt_filt%set('smooth_ext', real(smooth_ext))
+call p%new(cline_opt_filt)
 call xopt_3D_filter%execute(cline_opt_filt)
 ! comparing the nonuniform result with the original data
 call even%new(p%ldim, p%smpd)
