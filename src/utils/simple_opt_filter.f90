@@ -208,6 +208,10 @@ contains
             rt_filter_odd  = 0.
             rt_filter_even = 0.
             rt_search_opt  = 0.
+            rt_chop_copy   = 0.
+            rt_tot         = 0.
+            rt_chop_filter = 0.
+            rt_chop_sqeu   = 0.
         endif
         do iter_no = 1, params_glob%nsearch
             cur_ind = find_start + (iter_no - 1)*find_stepsz
@@ -225,7 +229,7 @@ contains
             call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false.)
             if( L_BENCH_GLOB )then
                 rt_chop_filter = rt_chop_filter + toc(t_chop_filter)
-                t_chop_sqeu  = tic()
+                t_chop_sqeu    = tic()
             endif
             call odd%sqeuclid_matrix(even_copy_rmat, cur_diff_odd)
             if( L_BENCH_GLOB )then
@@ -340,6 +344,7 @@ contains
                 rt_search_opt = rt_search_opt + toc(t_search_opt)
             endif
         enddo
+        write(*, *) rt_chop_filter
         if( L_BENCH_GLOB )then
             rt_tot     = toc(t_tot)
             benchfname = 'OPT_FILTER_BENCH.txt'
