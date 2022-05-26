@@ -30,7 +30,7 @@ contains
         logical,                  intent(in)    :: l_gen_thumb
         type(ctf_estimate_fit)        :: ctffit
         character(len=:), allocatable :: fname_diag
-        character(len=LONGSTRLEN)     :: moviename_thumb, rel_moviename_thumb, rel_fname, epsname, docname, tmpl_fname
+        character(len=LONGSTRLEN)     :: moviename_thumb, rel_moviename_thumb, rel_fname, docname, tmpl_fname
         integer                       :: nframes, ldim(3)
         if( .not. file_exists(moviename_forctf) )&
         & write(logfhandle,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
@@ -47,7 +47,6 @@ contains
         endif
         fname_diag      = filepath(trim(dir_out),trim(adjustl(tmpl_fname))//'_ctf_estimate_diag'//trim(JPG_EXT))
         moviename_thumb = filepath(trim(dir_out),trim(adjustl(tmpl_fname))//trim(THUMBNAIL_SUFFIX)//trim(JPG_EXT))
-        epsname         = filepath(trim(dir_out),trim(adjustl(tmpl_fname))//'_ctf.eps'//C_NULL_CHAR)
         docname         = filepath(trim(dir_out),trim(adjustl(tmpl_fname))//'_ctf'//trim(TXT_EXT)) !//C_NULL_CHAR ! for future use of star format?
         ! filter out frequencies lower than the box can express to avoid aliasing
         call self%micrograph%new(ldim, ctfvars%smpd)
@@ -67,12 +66,9 @@ contains
         ! patch based fitting
         if( trim(params_glob%ctfpatch).eq.'yes' )then
             call ctffit%fit_patches
-            call ctffit%plot_parms(epsname)
             call ctffit%write_doc(moviename_forctf, docname)
             call make_relativepath(CWD_GLOB,docname,rel_fname)
             call orientation%set('ctfdoc', rel_fname)
-            call make_relativepath(CWD_GLOB,epsname,rel_fname)
-            call orientation%set('ctfeps', rel_fname)
         endif
         call ctffit%write_diagnostic(fname_diag)
         call make_relativepath(CWD_GLOB,fname_diag, rel_fname)

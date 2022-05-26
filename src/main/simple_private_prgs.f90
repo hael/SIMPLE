@@ -382,6 +382,7 @@ contains
         call cmd_dict%push('norm',          'do statistical normalisation avg')
         call cmd_dict%push('nparts',        '# partitions in distributed exection')
         call cmd_dict%push('nparts_chunk',  '# partitions for chunks distributed exection')
+        call cmd_dict%push('nparts_pool',   '# partitions for pool distributed exection')
         call cmd_dict%push('npix',          '# pixles/voxels in binary representation')
         call cmd_dict%push('nptcls',        '# images in stk/# orientations in oritab')
         call cmd_dict%push('nptcls_per_cls','# images per class for 2D streaming')

@@ -73,10 +73,16 @@ contains
         self%nptcls    = 0
         self%path      = './chunk_'//int2str(id)//'/'
         self%projfile_out = ''
-        ! we need to override the qsys_name for non local distributed execution
-        call self%qenv%new(params_glob%nparts_chunk, exec_bin='simple_private_exec', qsys_name='local')
         self%spproj%projinfo = master_spproj%projinfo
         self%spproj%compenv  = master_spproj%compenv
+        if( params_glob%nparts_chunk == 1 )then
+            ! shared memory
+            call self%qenv%new(params_glob%nparts_chunk, exec_bin='simple_private_exec')
+            call self%spproj%compenv%set(1,'qsys_name','local')
+        else
+            ! we need to override the qsys_name for non local distributed execution
+            call self%qenv%new(params_glob%nparts_chunk, exec_bin='simple_private_exec', qsys_name='local')
+        endif
         call self%spproj%projinfo%delete_entry('projname')
         call self%spproj%projinfo%delete_entry('projfile')
         if( allocated(self%orig_stks) ) deallocate(self%orig_stks)
@@ -159,6 +165,7 @@ contains
         call simple_getcwd(cwd)
         cwd_glob    = trim(cwd)
         projfile_in = trim(PROJNAME_CHUNK)//trim(METADATA_EXT)
+        call simple_mkdir(STDERROUT_DIR)
         ! scaling
         if( box /= orig_box )then
             self%projfile_out = trim(PROJNAME_CHUNK)//SCALE_SUFFIX//trim(METADATA_EXT) ! as per scale_project convention

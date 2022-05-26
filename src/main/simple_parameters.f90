@@ -291,6 +291,7 @@ type :: parameters
     integer :: noris=0
     integer :: nparts=1            !< # partitions in distributed execution
     integer :: nparts_chunk=1      !< # partitions in chunks distributed execution
+    integer :: nparts_pool =1      !< # partitions for pool distributed execution
     integer :: npix=0              !< # pixles/voxels in binary representation
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
     integer :: nptcls_per_cls=400  !< # images in stk/# orientations in oritab
@@ -747,6 +748,7 @@ contains
         call check_iarg('class',          self%class)
         call check_iarg('nparts',         self%nparts)
         call check_iarg('nparts_chunk',   self%nparts_chunk)
+        call check_iarg('nparts_pool',    self%nparts_pool)
         call check_iarg('npix',           self%npix)
         call check_iarg('nptcls',         self%nptcls)
         call check_iarg('nptcls_per_cls', self%nptcls_per_cls)

@@ -302,12 +302,6 @@ contains
                 ! write project for gui, micrographs field only
                 call report_selection
                 call spproj%write(micspproj_fname)
-                ! write starfile snapshot
-                if (spproj%os_mic%get_noris() > 0) then
-                    if( file_exists("micrographs.star") ) call del_file("micrographs.star")
-                    call starproj%assign_optics(cline, spproj)
-                    call starproj%export_mics(cline, spproj)
-                end if
                 last_injection = simple_gettime()
                 l_haschanged   = .true.
                 n_imported     = spproj%os_mic%get_noris()
@@ -318,6 +312,11 @@ contains
                         ! write project when inactive...
                         call report_selection
                         call write_project
+                        if (spproj%os_mic%get_noris() > 0) then
+                            if( file_exists("micrographs.star") ) call del_file("micrographs.star")
+                            call starproj%assign_optics(cline, spproj)
+                            call starproj%export_mics(cline, spproj)
+                        end if
                         l_haschanged = .false.
                     else
                         ! ...or wait
@@ -329,6 +328,11 @@ contains
         ! termination
         call report_selection
         call write_project
+        if (spproj%os_mic%get_noris() > 0) then
+            if( file_exists("micrographs.star") ) call del_file("micrographs.star")
+            call starproj%assign_optics(cline, spproj)
+            call starproj%export_mics(cline, spproj)
+        end if
         call spproj%kill
         ! cleanup
         call qsys_cleanup
@@ -664,7 +668,6 @@ contains
                     call movefile2folder('mceps',       output_dir_motion_correct, o, err)
                     call movefile2folder('ctfjpg',      output_dir_ctf_estimate,   o, err)
                     call movefile2folder('ctfdoc',      output_dir_ctf_estimate,   o, err)
-                    call movefile2folder('ctfeps',      output_dir_ctf_estimate,   o, err)
                     if( l_pick )then
                         ! import mic & updates stk segment
                         call movefile2folder('boxfile', output_dir_picker, o, err)
