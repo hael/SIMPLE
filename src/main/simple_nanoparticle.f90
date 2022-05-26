@@ -29,19 +29,17 @@ character(len=*), parameter :: ATOMS_STATS_FILE    = 'atoms_stats.csv'
 character(len=*), parameter :: NP_STATS_FILE       = 'nanoparticle_stats.csv'
 character(len=*), parameter :: CN_STATS_FILE       = 'cn_dependent_stats.csv'
 character(len=*), parameter :: ATOM_VAR_CORRS_FILE = 'atom_param_corrs.txt'
-character(len=*), parameter :: BIN_CLS_STATS_FILE  = 'binary_class_stats.csv'
 
-character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//'CN_STD'//CSV_DELIM//'NN_BONDL'//&
-&CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
-&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'X'//&
-&CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//&
-&CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'//&
-&CSV_DELIM//'NVOX_CLASS'//CSV_DELIM//'NN_BONDL_CLASS'//&
-&CSV_DELIM//'DIAM_CLASS'//CSV_DELIM//'MAX_INT_CLASS'//CSV_DELIM//'VALID_CORR_CLASS'//CSV_DELIM//'RADIAL_STRAIN_CLASS'
+character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//&
+&'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
+&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'RMSD'//&
+&CSV_DELIM//'X'//CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//&
+&CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//&
+&'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'
 
-character(len=*), parameter :: ATOM_STATS_HEAD_OMIT = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//'CN_STD'//CSV_DELIM//'NN_BONDL'//&
-&CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
-&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'RADIAL_STRAIN'
+character(len=*), parameter :: ATOM_STATS_HEAD_OMIT = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//&
+&'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
+&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'RMSD'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MED_NVOX'//CSV_DELIM//'SDEV_NVOX'//&
@@ -52,6 +50,7 @@ character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_AVG_INT'//CSV_DELIM//'MED_AVG_INT'//CSV_DELIM//'SDEV_AVG_INT'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'MED_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
 &CSV_DELIM//'AVG_VALID_CORR'//CSV_DELIM//'MED_VALID_CORR'//CSV_DELIM//'SDEV_VALID_CORR'//&
+&CSV_DELIM//'AVG_RMSD'//CSV_DELIM//'MED_RMSD'//CSV_DELIM//'SDEV_RMSD'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
 
@@ -63,16 +62,13 @@ character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//&
 &CSV_DELIM//'AVG_AVG_INT'//CSV_DELIM//'MED_AVG_INT'//CSV_DELIM//'SDEV_AVG_INT'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'MED_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
 &CSV_DELIM//'AVG_VALID_CORR'//CSV_DELIM//'MED_VALID_CORR'//CSV_DELIM//'SDEV_VALID_CORR'//&
+&CSV_DELIM//'AVG_RMSD'//CSV_DELIM//'MED_RMSD'//CSV_DELIM//'SDEV_RMSD'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
 
-character(len=*), parameter :: BIN_CLS_STATS_HEAD = 'PARAMETER'//&
-&CSV_DELIM//'AVG_1'//CSV_DELIM//'MED_1'//CSV_DELIM//'SDEV_1'//CSV_DELIM//'MIN_1'//CSV_DELIM//'MAX_1'//CSV_DELIM//'POP_1'//&
-&CSV_DELIM//'AVG_2'//CSV_DELIM//'MED_2'//CSV_DELIM//'SDEV_2'//CSV_DELIM//'MIN_2'//CSV_DELIM//'MAX_2'//CSV_DELIM//'POP_2'
-
 ! container for per-atom statistics
 type :: atom_stats
-    ! various per-atom parameters
+    ! various per-atom parameters                                                                   ! csv file labels
     integer :: cc_ind            = 0  ! index of the connected component                            INDEX
     integer :: size              = 0  ! number of voxels in connected component                     NVOX
     integer :: cn_std            = 0  ! standard coordination number                                CN_STD
@@ -84,6 +80,7 @@ type :: atom_stats
     real    :: cendist           = 0. ! distance from the centre of mass of the nanoparticle        CENDIST
     real    :: valid_corr        = 0. ! per-atom correlation with the simulated map                 VALID_CORR
     real    :: center(3)         = 0. ! atom center                                                 X Y Z
+    real    :: rmsd              = 0. ! rmsd between e/o atoms                                      RMSD
     ! strain
     real    :: exx_strain        = 0. ! tensile strain in %                                         EXX_STRAIN
     real    :: eyy_strain        = 0. ! -"-                                                         EYY_STRAIN
@@ -92,13 +89,6 @@ type :: atom_stats
     real    :: eyz_strain        = 0. ! -"-                                                         EYZ_STRAIN
     real    :: exz_strain        = 0. ! -"-                                                         EXZ_STRAIN
     real    :: radial_strain     = 0. ! -"-                                                         RADIAL_STRAIN
-    ! binary cluster assignments
-    integer :: size_cls          = 0  !                                                             NVOX_CLASS
-    integer :: bondl_cls         = 0  !                                                             NN_BONDL_CLASS
-    integer :: diam_cls          = 0  !                                                             DIAM_CLASS
-    integer :: max_int_cls       = 0  !                                                             MAX_INT_CLASS
-    integer :: valid_corr_cls    = 0  !                                                             VALID_CORR_CLASS
-    integer :: radial_strain_cls = 0  !                                                             RADIAL_STRAIN_CLASS
 end type atom_stats
 
 type :: nanoparticle
@@ -125,6 +115,7 @@ type :: nanoparticle
     type(stats_struct)    :: max_int_stats
     type(stats_struct)    :: valid_corr_stats
     type(stats_struct)    :: radial_strain_stats
+    type(stats_struct)    :: rmsd_stats
     ! CN-DEPENDENT STATS
     ! -- # atoms
     real                  :: natoms_cns(CNMIN:CNMAX) = 0. ! # of atoms per cn_std                            NATOMS
@@ -137,16 +128,10 @@ type :: nanoparticle
     type(stats_struct)    :: max_int_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: valid_corr_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: radial_strain_stats_cns(CNMIN:CNMAX)
+    type(stats_struct)    :: rmsd_stats_cns(CNMIN:CNMAX)
     ! PER-ATOM STATISTICS
     type(atom_stats), allocatable :: atominfo(:)
     real,             allocatable :: coords4stats(:,:)
-    ! BINARY CLASS STATISTICS
-    type(stats_struct)    :: size_cls_stats(2)
-    type(stats_struct)    :: bondl_cls_stats(2)
-    type(stats_struct)    :: diam_cls_stats(2)
-    type(stats_struct)    :: max_int_cls_stats(2)
-    type(stats_struct)    :: valid_corr_cls_stats(2)
-    type(stats_struct)    :: radial_strain_cls_stats(2)
     ! OTHER
     character(len=2)      :: element   = ' '
     character(len=4)      :: atom_name = '    '
@@ -192,13 +177,6 @@ type :: nanoparticle
     procedure, private :: write_atominfo
     procedure, private :: write_np_stats
     procedure, private :: write_cn_stats
-    ! clustering
-    procedure, private :: id_corr_vars
-    procedure, private :: bicluster_otsu
-    procedure, private :: cluster_atom_intensity
-    procedure          :: cluster_atom_maxint
-    procedure          :: cluster_atom_intint
-    procedure          :: cluster_bondl
     ! kill
     procedure          :: kill => kill_nanoparticle
 end type nanoparticle
@@ -1105,12 +1083,13 @@ contains
 
     ! calc stats
 
-    subroutine fillin_atominfo( self, a0 )
-        class(nanoparticle), intent(inout) :: self
-        real, optional,      intent(in)    :: a0(3) ! lattice parameters
+    subroutine fillin_atominfo( self, a0, rmsd_file )
+        class(nanoparticle),        intent(inout) :: self
+        real,             optional, intent(in)    :: a0(3) ! lattice parameters
+        character(len=*), optional, intent(in)    :: rmsd_file
         type(image)          :: phasecorr, simatms
         logical, allocatable :: mask(:,:,:)
-        real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:)
+        real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:), rmsds(:)
         real,    pointer     :: rmat(:,:,:), rmat_corr(:,:,:)
         integer, allocatable :: imat_cc(:,:,:)
         character(len=256)   :: io_msg
@@ -1126,6 +1105,13 @@ contains
             call fit_lattice(self%element, centers_A, a)
         endif
         call run_cn_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
+
+        if( present(rmsd_file) )then
+            rmsds = file2rarr(rmsd_file)
+
+            !!!!!!!!!!!!!!!!!!! 2DO
+
+        endif
         ! calc strain for all atoms
         allocate(strain_array(self%n_cc,NSTRAIN_COMPS), source=0.)
         call strain_analysis(self%element, centers_A, a, strain_array)
@@ -1197,25 +1183,12 @@ contains
         call calc_stats(  self%atominfo(:)%max_int,       self%max_int_stats       )
         call calc_stats(  self%atominfo(:)%valid_corr,    self%valid_corr_stats    )
         call calc_stats(  self%atominfo(:)%radial_strain, self%radial_strain_stats )
+        call calc_stats(  self%atominfo(:)%rmsd,          self%rmsd_stats          )
         ! CALCULATE CN-DEPENDENT STATS & WRITE CN-ATOMS
         do cn = CNMIN, CNMAX
             call calc_cn_stats( cn )
             call write_cn_atoms( cn )
         end do
-        ! BINARY CLUSTERING OF RELEVANT PARAMETERS
-        call fopen(funit, file=BIN_CLS_STATS_FILE, iostat=ios, status='replace', iomsg=io_msg)
-        call fileiochk("simple_nanoparticle :: bicluster_otsu; ERROR when opening file "//BIN_CLS_STATS_FILE//'; '//trim(io_msg),ios)
-        ! write header
-        write(funit,'(a)') BIN_CLS_STATS_HEAD
-        call self%bicluster_otsu('size',          funit)
-        call self%bicluster_otsu('bondl',         funit)
-        call self%bicluster_otsu('diam',          funit)
-        call self%bicluster_otsu('max_int',       funit)
-        call self%bicluster_otsu('valid_corr',    funit)
-        call self%bicluster_otsu('radial_strain', funit)
-        call fclose(funit)
-        ! identify correlated variables with Pearson's product moment correation coefficient
-        call self%id_corr_vars
         ! write pdf files with valid_corr and max_int in the B-factor field (for validation/visualisation)
         call self%write_centers('valid_corr_in_bfac_field', 'valid_corr')
         call self%write_centers('max_int_in_bfac_field',    'max_int')
@@ -1253,6 +1226,7 @@ contains
                 call calc_stats( self%atominfo(:)%max_int,       self%max_int_stats_cns(cn),       mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%valid_corr,    self%valid_corr_stats_cns(cn),    mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%radial_strain, self%radial_strain_stats_cns(cn), mask=cn_mask   )
+                call calc_stats( self%atominfo(:)%rmsd,          self%rmsd_stats_cns(cn),          mask=cn_mask   )
             end subroutine calc_cn_stats
 
             subroutine write_cn_atoms( cn_std )
@@ -1524,6 +1498,7 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%max_int,                CSV_DELIM ! MAX_INT
         write(funit,601,advance='no') self%atominfo(cc)%cendist,                CSV_DELIM ! CENDIST
         write(funit,601,advance='no') self%atominfo(cc)%valid_corr,             CSV_DELIM ! VALID_CORR
+        write(funit,601,advance='no') self%atominfo(cc)%rmsd,                   CSV_DELIM ! RMSD
         if( .not. omit_here )then
         write(funit,601,advance='no') self%atominfo(cc)%center(1),              CSV_DELIM ! X
         write(funit,601,advance='no') self%atominfo(cc)%center(2),              CSV_DELIM ! Y
@@ -1540,15 +1515,6 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%radial_strain,          CSV_DELIM ! RADIAL_STRAIN
         else
         write(funit,602)              self%atominfo(cc)%radial_strain                     ! RADIAL_STRAIN
-        endif
-        if( .not. omit_here )then
-        ! cluster assignments
-        write(funit,601,advance='no') real(self%atominfo(cc)%size_cls),         CSV_DELIM ! NVOX_CLASS
-        write(funit,601,advance='no') real(self%atominfo(cc)%bondl_cls),        CSV_DELIM ! NN_BONDL_CLASS
-        write(funit,601,advance='no') real(self%atominfo(cc)%diam_cls),         CSV_DELIM ! DIAM_CLASS
-        write(funit,601,advance='no') real(self%atominfo(cc)%max_int_cls),      CSV_DELIM ! MAX_INT_CLASS
-        write(funit,601,advance='no') real(self%atominfo(cc)%valid_corr_cls),   CSV_DELIM ! VALID_CORR_CLASS
-        write(funit,602)              real(self%atominfo(cc)%radial_strain_cls)           ! RADIAL_STRAIN_CLASS
         endif
     end subroutine write_atominfo
 
@@ -1593,6 +1559,10 @@ contains
         write(funit,601,advance='no') self%valid_corr_stats%avg,     CSV_DELIM ! AVG_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats%med,     CSV_DELIM ! MED_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats%sdev,    CSV_DELIM ! SDEV_VALID_CORR
+        ! -- e/o atom rmsd
+        write(funit,601,advance='no') self%rmsd_stats%avg,           CSV_DELIM ! AVG_RMSD
+        write(funit,601,advance='no') self%rmsd_stats%med,           CSV_DELIM ! MED_RMSD
+        write(funit,601,advance='no') self%rmsd_stats%sdev,          CSV_DELIM ! SDEV_RMSD
         ! -- radial strain
         write(funit,601,advance='no') self%radial_strain_stats%avg,  CSV_DELIM ! AVG_RADIAL_STRAIN
         write(funit,601,advance='no') self%radial_strain_stats%med,  CSV_DELIM ! MED_RADIAL_STRAIN
@@ -1639,6 +1609,10 @@ contains
         write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%avg,     CSV_DELIM ! AVG_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%med,     CSV_DELIM ! MED_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%sdev,    CSV_DELIM ! SDEV_VALID_CORR
+        ! -- e/o atom rmsd
+        write(funit,601,advance='no') self%rmsd_stats_cns(cn)%avg,           CSV_DELIM ! AVG_RMSD
+        write(funit,601,advance='no') self%rmsd_stats_cns(cn)%med,           CSV_DELIM ! MED_RMSD
+        write(funit,601,advance='no') self%rmsd_stats_cns(cn)%sdev,          CSV_DELIM ! SDEV_RMSD
         ! -- radial strain
         write(funit,601,advance='no') self%radial_strain_stats_cns(cn)%avg,  CSV_DELIM ! AVG_RADIAL_STRAIN
         write(funit,601,advance='no') self%radial_strain_stats_cns(cn)%med,  CSV_DELIM ! MED_RADIAL_STRAIN
@@ -1646,423 +1620,6 @@ contains
         write(funit,601,advance='no') self%radial_strain_stats_cns(cn)%minv, CSV_DELIM ! MIN_RADIAL_STRAIN
         write(funit,602)              self%radial_strain_stats_cns(cn)%maxv            ! MAX_RADIAL_STRAIN
     end subroutine write_cn_stats
-
-    ! identify correlated variables with Pearson's product moment correation coefficient
-    subroutine id_corr_vars( self )
-        class(nanoparticle), target, intent(in) :: self
-        integer, parameter :: NFLAGS = 9
-        integer, parameter :: NPAIRS = (NFLAGS * (NFLAGS - 1)) / 2
-        character(len=13)  :: flags(NFLAGS), flags_i(NPAIRS), flags_j(NPAIRS)
-        character(len=256) :: io_msg
-        real               :: vals1(self%n_cc), vals2(self%n_cc)
-        real    :: corrs(NPAIRS), corrs_copy(NPAIRS), corr
-        integer :: i, j, inds(NPAIRS), cnt, funit, ios
-        ! variables to correlate
-        flags(1)  = 'NVOX'          ! size
-        flags(2)  = 'NN_BONDL'      ! bondl
-        flags(3)  = 'CN_GEN'        ! cn_gen
-        flags(4)  = 'DIAM'          ! diam
-        flags(5)  = 'AVG_INT'       ! avg_int
-        flags(6)  = 'MAX_INT'       ! max_int
-        flags(7)  = 'CENDIST'    ! cendist
-        flags(8)  = 'VALID_CORR'    ! valid_corr
-        flags(9)  = 'RADIAL_STRAIN' ! radial_strain
-        ! calculate correlations
-        cnt = 0
-        do i = 1, NFLAGS - 1
-            call set_vals(flags(i), vals1)
-            do j = i + 1, NFLAGS
-                cnt          = cnt + 1
-                inds(cnt)    = cnt
-                flags_i(cnt) = flags(i)
-                flags_j(cnt) = flags(j)
-                call set_vals(flags(j), vals2)
-                corrs(cnt) = pearsn_serial(vals1,vals2)
-            end do
-        end do
-        ! sort
-        corrs_copy = corrs
-        call hpsort(corrs_copy, inds)
-        ! write output
-        call fopen(funit, file=ATOM_VAR_CORRS_FILE, iostat=ios, status='replace', iomsg=io_msg)
-        call fileiochk("simple_nanoparticle :: id_corr_vars; ERROR when opening file "//ATOM_VAR_CORRS_FILE//'; '//trim(io_msg),ios)
-        do i = 1, NPAIRS
-            write(funit,'(A,F7.4)')'PEARSONS CORRELATION BTW '//flags_i(inds(i))//' & '//flags_j(inds(i))//' IS ', corrs(inds(i))
-        end do
-        call fclose(funit)
-
-        contains
-
-            subroutine set_vals( flag, vals )
-                character(len=*), intent(in)  :: flag
-                real,             intent(out) :: vals(self%n_cc)
-                 select case(trim(flag))
-                    case('NVOX')
-                        vals = real(self%atominfo(:)%size)
-                    case('NN_BONDL')
-                        vals = self%atominfo(:)%bondl
-                    case('CN_GEN')
-                        vals = self%atominfo(:)%cn_gen
-                    case('DIAM')
-                        vals =  self%atominfo(:)%diam
-                    case('AVG_INT')
-                        vals =  self%atominfo(:)%avg_int
-                    case('MAX_INT')
-                        vals =  self%atominfo(:)%max_int
-                    case('CENDIST')
-                        vals =  self%atominfo(:)%cendist
-                    case('VALID_CORR')
-                        vals =  self%atominfo(:)%valid_corr
-                    case('RADIAL_STRAIN')
-                        vals =  self%atominfo(:)%radial_strain
-                end select
-            end subroutine set_vals
-
-    end subroutine id_corr_vars
-
-    subroutine bicluster_otsu( self, which, funit )
-        class(nanoparticle), intent(inout) :: self
-        character(len=*),    intent(in)    :: which
-        integer,             intent(in)    :: funit
-        integer :: n, bicls(self%n_cc)
-        real    :: vals(self%n_cc), thresh
-        logical :: cls_mask(self%n_cc), mask(self%n_cc)
-        select case(which)
-            case('size')
-                vals = real(self%atominfo(:)%size)
-                call bicluster_local(self%atominfo(:)%size >= NVOX_THRESH, which, 'NVOX')
-                self%atominfo(:)%size_cls = bicls
-            case('bondl')
-                vals = self%atominfo(:)%bondl
-                call bicluster_local(self%atominfo(:)%bondl > 0., which, 'NN_BONDL')
-                self%atominfo(:)%bondl_cls = bicls
-            case('diam')
-                vals = self%atominfo(:)%diam
-                call bicluster_local(self%atominfo(:)%diam > 0., which, 'DIAM')
-                self%atominfo(:)%diam_cls = bicls
-            case('max_int')
-                vals = self%atominfo(:)%max_int
-                mask = .true.
-                call bicluster_local(mask, which, 'MAX_INT')
-                self%atominfo(:)%max_int_cls = bicls
-            case('valid_corr')
-                vals = self%atominfo(:)%valid_corr
-                mask = .true.
-                call bicluster_local(mask, which, 'VALID_CORR')
-                self%atominfo(:)%valid_corr_cls = bicls
-            case('radial_strain')
-                vals = self%atominfo(:)%radial_strain
-                mask = .true.
-                call bicluster_local(mask, which, 'RADIAL_STRAIN')
-                self%atominfo(:)%radial_strain_cls = bicls
-        case DEFAULT
-            THROW_HARD('unsupported parameter for bicluster_otsu')
-        end select
-
-        contains
-
-            subroutine bicluster_local( mask, which, param )
-                logical,          intent(in) :: mask(self%n_cc)
-                character(len=*), intent(in) :: which, param
-                real, allocatable  :: vals4otsu(:)
-                type(stats_struct) :: stats(2)
-                character(len=13)  :: param_str
-                integer            :: pop1, pop2
-                601 format(F8.4,A2)
-                602 format(F8.4)
-                param_str = trim(param)
-                vals4otsu = pack(vals, mask=mask)
-                call otsu(vals4otsu, thresh)
-                deallocate(vals4otsu)
-                where( vals > thresh )
-                    bicls = 1 ! 1 is large
-                elsewhere
-                    bicls = 2 ! 2 is small
-                endwhere
-                cls_mask = bicls == 1 .and. mask
-                pop1     = count(cls_mask)
-                call calc_stats(vals, stats(1), mask=cls_mask)
-                call write_cls_atoms(1, which)
-                cls_mask = bicls == 2 .and. mask
-                pop2     = count(cls_mask)
-                call calc_stats(vals, stats(2), mask=cls_mask)
-                call write_cls_atoms(2, which)
-                write(logfhandle,'(A,A21,1X,F8.4,1X,F8.4)') param_str, ' class averages 1 & 2:', stats(1)%avg, stats(2)%avg
-                write(funit,'(A,A3)',advance='no') param_str,  CSV_DELIM ! PARAMETER
-                write(funit,601,  advance='no') stats(1)%avg,  CSV_DELIM ! AVG_1
-                write(funit,601,  advance='no') stats(1)%med,  CSV_DELIM ! MED_1
-                write(funit,601,  advance='no') stats(1)%sdev, CSV_DELIM ! SDEV_1
-                write(funit,601,  advance='no') stats(1)%minv, CSV_DELIM ! MIN_1
-                write(funit,601,  advance='no') stats(1)%maxv, CSV_DELIM ! MAX_1
-                write(funit,601,  advance='no') real(pop1),    CSV_DELIM ! POP_1
-                write(funit,601,  advance='no') stats(2)%avg,  CSV_DELIM ! AVG_2
-                write(funit,601,  advance='no') stats(2)%med,  CSV_DELIM ! MED_2
-                write(funit,601,  advance='no') stats(2)%sdev, CSV_DELIM ! SDEV_2
-                write(funit,601,  advance='no') stats(2)%minv, CSV_DELIM ! MIN_2
-                write(funit,601,  advance='no') stats(2)%maxv, CSV_DELIM ! MAX_2
-                write(funit,602)                real(pop2)               ! POP_2
-            end subroutine bicluster_local
-
-            subroutine write_cls_atoms( cls, which )
-                integer,          intent(in) :: cls
-                character(len=*), intent(in) :: which
-                type(binimage)       :: img_atom
-                integer, allocatable :: imat(:,:,:), imat_atom(:,:,:)
-                integer :: i
-                call img_atom%copy_bimg(self%img_cc)
-                allocate(imat_atom(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
-                call img_atom%get_imat(imat)
-                do i = 1, self%n_cc
-                    if( cls_mask(i) )then
-                        where( imat == i ) imat_atom = 1
-                    endif
-                enddo
-                call img_atom%set_imat(imat_atom)
-                if( cls == 1 )then
-                    call img_atom%write_bimg('Atoms_'//trim(which)//'_large.mrc')
-                else
-                    call img_atom%write_bimg('Atoms_'//trim(which)//'_small.mrc')
-                endif
-                deallocate(imat,imat_atom)
-                call img_atom%kill_bimg
-            end subroutine write_cls_atoms
-
-    end subroutine bicluster_otsu
-
-    ! This subroutine clusters the atoms with respect to the maximum intensity
-    ! or the integrated density (according to the values contained in feature)
-    ! using kmeans algorithm with 2 classes. The initial guess fo the centers
-    ! is intentionally biased. It supposes there are two distinguished classes
-    ! with different avgs (proved with simulated data).
-    subroutine cluster_atom_intensity( self, feature )
-        use gnufor2
-        use simple_nanoML, only: nanoML
-        class(nanoparticle), intent(inout) :: self
-        real,                intent(inout) :: feature(:)
-        integer, parameter   :: MAX_IT = 50 ! maximum number of iterations for
-        integer, allocatable :: imat_cc(:,:,:)
-        real, pointer        :: rmat1(:,:,:), rmat2(:,:,:)
-        type(image)          :: class1, class2
-        type(nanoML)         :: emfit
-        real    :: centers_kmeans(2) ! output of k-means
-        real    :: avgs(2), vars(2), gammas(self%n_cc,2) ! output of ML
-        integer :: i, cnt1, cnt2, filnum, io_stat
-        feature = feature/maxval(feature)*10. ! normalise with maxval*10
-        call hist(feature, 20)
-        write(logfhandle,*) '****clustering wrt maximum intensity, init'
-        ! Report clusters on images in dedicated directory
-        call class1%new(self%ldim, self%smpd)
-        call class2%new(self%ldim, self%smpd)
-        call class1%get_rmat_ptr(rmat1)
-        call class2%get_rmat_ptr(rmat2)
-        call self%img_cc%get_imat(imat_cc)
-        call fopen(filnum, file='ClusterIntensities.txt', iostat=io_stat)
-        ! kmeans
-        call emfit%kmeans_biased2classes(feature, centers_kmeans)
-        write(filnum,*) 'centers_kmeans', centers_kmeans
-        ! ML, fit
-        call emfit%new(self%n_cc,2)
-        call emfit%set_data(feature)
-        call emfit%fit(MAX_IT,centers_kmeans)
-        avgs   = emfit%get_avgs()
-        vars   = emfit%get_vars()
-        gammas = emfit%get_gammas()
-        write(filnum,*) 'AVG/VAR 1:', avgs(1), vars(1)
-        write(filnum,*) 'AVG/VAR 2:', avgs(2), vars(2)
-        cnt2 = 0
-        do i = 1, self%n_cc
-            if( (avgs(1) - feature(i))**2. < (avgs(2) - feature(i))**2. ) then
-                cnt2 = cnt2 + 1
-                write(filnum,*) 'connected component #', i, 'belongs to class 1 with probability', max(gammas(i,1),gammas(i,2))
-              else
-                write(filnum,*) 'connected component #', i, 'belongs to class 2 with probability', max(gammas(i,1),gammas(i,2))
-            endif
-        enddo
-        cnt1 = count((avgs(1) - feature)**2. <  (avgs(2) - feature)**2. )
-        cnt2 = count((avgs(1) - feature)**2. >= (avgs(2) - feature)**2. )
-        do i = 1, self%n_cc
-            if( (avgs(1) - feature(i))**2. < (avgs(2) - feature(i))**2. ) then
-                where( imat_cc == i ) rmat1(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
-            else
-                where( imat_cc == i ) rmat2(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
-            endif
-        enddo
-        call class1%write('Class1.mrc')
-        call class2%write('Class2.mrc')
-        write(filnum,*)  'Class1 contains ', cnt1 ,' atoms'
-        write(filnum,*)  'Class2 contains ', cnt2 ,' atoms'
-        write(filnum,*)  'Total ', cnt1+cnt2, ' atoms'
-        call fclose(filnum)
-        call class1%kill
-        call class2%kill
-        deallocate(imat_cc)
-        ! come back to root directory
-        write(logfhandle,*) '****clustering wrt maximum intensity, completed'
-
-    contains
-
-        subroutine initialise_centers(data,cen1,cen2)
-            real, intent(inout) :: cen1,cen2
-            real, intent(inout) :: data(:)
-            !>   rheapsort from numerical recepies (largest last)
-            call hpsort(data)
-            cen1 = sum(data(1:self%n_cc/2))/real(self%n_cc/2)
-            cen2 = sum(data(self%n_cc/2+1:size(data)))/real(self%n_cc/2)
-        end subroutine initialise_centers
-
-        subroutine update_centers(cen1,cen2,converged,val1,val2)
-            real,    intent(inout) :: cen1,cen2
-            logical, intent(inout) :: converged
-            integer, intent(inout) :: val1, val2
-            integer :: i
-            integer :: cnt1, cnt2
-            real    :: sum1, sum2
-            real :: cen1_new, cen2_new
-            sum1 = 0.
-            cnt1 = 0
-            do i=1,self%n_cc
-                if( (cen1-feature(i))**2. < (cen2-feature(i))**2. )then
-                    cnt1 = cnt1 + 1 ! number of elements in cluster 1
-                    sum1 = sum1 + feature(i)
-                endif
-            end do
-            cnt2 = self%n_cc - cnt1       ! number of elements in cluster 2
-            sum2 = sum(feature)- sum1
-            cen1_new = sum1 / real(cnt1)
-            cen2_new = sum2 / real(cnt2)
-            if(abs(cen1_new - cen1) < TINY .and. abs(cen2_new - cen2) < TINY) then
-                converged = .true.
-            else
-                converged = .false.
-            endif
-            ! update
-            cen1 = cen1_new
-            cen2 = cen2_new
-            ! assign values to the centers
-            if( cen1 > cen2 )then
-                val1           = 1
-                val2           = 0
-            else
-                val1           = 0
-                val2           = 1
-            endif
-        end subroutine update_centers
-
-    end subroutine cluster_atom_intensity
-
-    ! Cluster the atoms wrt the maximum intensity
-    ! k-means 2 classes + ML
-    subroutine cluster_atom_maxint( self )
-        class(nanoparticle), intent(inout) :: self
-        real    :: max_intensity(self%n_cc)
-        integer :: i, io_stat, filnum
-        call fopen(filnum, file='MaxIntensity.csv', action='readwrite', iostat=io_stat)
-        if( io_stat .ne. 0 ) then
-            THROW_HARD('Unable to read file MaxIntensity.csv Did you run atoms_stats?; cluster_atom_maxint')
-        endif
-        read(filnum,*) ! first line is variable name
-        do i = 1, self%n_cc
-            read(filnum,*) max_intensity(i)
-        enddo
-        call fclose(filnum)
-        call self%cluster_atom_intensity(max_intensity)
-    end subroutine cluster_atom_maxint
-
-    ! Cluster the atoms wrt the integrated density
-    ! k-means 2 classes + ML
-    subroutine cluster_atom_intint( self )
-        class(nanoparticle), intent(inout) :: self
-        real    :: int_intensity(self%n_cc)
-        integer :: i, io_stat, filnum
-        call fopen(filnum, file='IntIntensity.csv', action='readwrite', iostat=io_stat)
-        if( io_stat .ne. 0 ) then
-            THROW_HARD('Unable to read file IntIntensity.csv Did you run atoms_stats?; cluster_atom_intint')
-        endif
-        read(filnum,*) ! first line is variable name
-        do i = 1, self%n_cc
-            read(filnum,*) int_intensity(i)
-        enddo
-        call fclose(filnum)
-        call self%cluster_atom_intensity(int_intensity)
-    end subroutine cluster_atom_intint
-
-    ! Cluster the atoms wrt to the interatomic distances
-    subroutine cluster_bondl(self, thresh)
-        class(nanoparticle), intent(inout) :: self
-        real,    intent(in)  :: thresh ! threshold for class definition, user inputted
-        real,    allocatable :: centroids(:)
-        integer, allocatable :: labels(:), populations(:)
-        real,    allocatable :: stdev_within(:), avg_dist_cog(:)
-        integer              :: i, j, ncls, dim, filnum, io_stat
-        real                 :: avg, stdev, cog(3)
-        type(binimage)       :: img_1clss
-        integer, allocatable :: imat_cc(:,:,:), imat_1clss(:,:,:)
-        character(len=4)     :: str_thres
-        ! Preparing for clustering
-        dim = size(self%atominfo)
-        allocate(labels(dim), source = 0)
-        ! classify
-        call hac_1d(self%atominfo(:)%bondl, thresh, labels, centroids, populations)
-        ! Stats calculations
-        ncls = maxval(labels)
-        allocate(stdev_within(ncls), source = 0.)
-        allocate(avg_dist_cog(ncls), source = 0.)
-        cog = self%masscen()
-        ! stdev within the same class
-        ! avg dist to the center of gravity of each class
-        do i = 1, ncls
-            do j = 1, dim
-                if(labels(j) == i) then
-                   stdev_within(i) = stdev_within(i) + (self%atominfo(j)%bondl - centroids(i))**2.
-                   avg_dist_cog(i) = avg_dist_cog(i) + euclid(cog,self%atominfo(j)%center(:))
-                endif
-            enddo
-        enddo
-        avg_dist_cog = (avg_dist_cog*self%smpd)/real(populations) ! in A
-        where (populations>1)
-            stdev_within = sqrt(stdev_within/(real(populations)-1.))
-        elsewhere
-            stdev_within = 0.
-        endwhere
-        ! avg and stdev among different classes
-        avg = 0.
-        do i = 1, ncls
-            avg = avg + centroids(i)
-        enddo
-        avg = avg/real(ncls)
-        stdev = 0.
-        if(ncls>1) then
-          do i = 1, ncls
-              stdev = stdev + (centroids(i) - avg)**2
-          enddo
-          stdev = sqrt(stdev/(real(ncls)-1.))
-        endif
-        ! Output on a file
-        str_thres = trim(real2str(thresh))
-        call fopen(filnum, file='ClusterInterDistThresh'//str_thres//'.txt', iostat=io_stat)
-        write(unit = filnum,fmt ='(a,i2,a,f6.2)') 'NR OF IDENTIFIED CLUSTERS:', ncls, ' SELECTED THRESHOLD: ',  thresh
-        write(unit = filnum,fmt ='(a)') 'CLASSIFICATION '
-        do i = 1, dim
-          write(unit = filnum,fmt ='(a,i3,a,f6.2,a,i3)') 'Atom #: ', i, '; data (A): ', self%atominfo(i)%bondl, '; class: ', labels(i)
-        enddo
-        write(unit = filnum,fmt ='(a)') 'CLASS STATISTICS '
-        do i = 1, ncls
-          write(unit = filnum,fmt ='(a,i3,a,i3,a,f6.2,a,f6.2,a)') 'class: ', i, '; cardinality: ', populations(i), '; centroid: ', centroids(i), ' A; stdev within the class: ', stdev_within(i), ' A'
-        enddo
-        do i = 1, ncls
-          write(unit = filnum,fmt ='(a,i3,a,f6.2,a)') 'class: ', i, '; average distance to the center of gravity: ', avg_dist_cog(i), ' A'
-        enddo
-        write(unit = filnum,fmt ='(a,f6.2,a,f6.2,a)') 'AVG among the classes: ', avg, ' A; STDEV among the classes: ', stdev, ' A'
-        call fclose(filnum)
-        call fopen(filnum, file='Dist.csv', iostat=io_stat)
-        write(filnum,*) 'dist'
-        do i  = 1, self%n_cc
-          write(filnum,*) self%atominfo(i)%bondl
-        enddo
-        call fclose(filnum)
-        if(allocated(stdev_within)) deallocate(stdev_within)
-        deallocate(centroids, labels, populations)
-    end subroutine cluster_bondl
 
     subroutine kill_nanoparticle(self)
         class(nanoparticle), intent(inout) :: self
