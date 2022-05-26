@@ -94,6 +94,7 @@ contains
                 if( img%is_2d() )then
                     call img%nlmean(sdev_noise = param)
                 else
+                    !call img%nlmean3D(sdev_noise = param)
                     THROW_HARD('nlmean is supported for 2D case only!')
                 endif
             case DEFAULT
@@ -109,7 +110,7 @@ contains
         type(image)          ::  odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm, freq_img,&
                                &even_copy_rmat, even_copy_cmat, even_copy_shellnorm
         integer              :: k,l,m, box, dim3, ldim(3), find_start, find_stop, iter_no, fnr
-        integer              :: best_ind, cur_ind, k1,l1,m1,k_ind,l_ind,m_ind, lb(3), ub(3), mid_ext
+        integer              :: best_ind, cur_ind, k1, l1, m1, lb(3), ub(3), mid_ext
         real                 :: min_sum_odd, min_sum_even, ref_diff_odd, ref_diff_even, rad, find_stepsz
         logical              :: mskimg_present
         character(len=90)    :: file_tag
@@ -252,30 +253,27 @@ contains
             if( params_glob%l_nonuniform )then
                 ! 2D vs 3D cases
                 if( dim3 == 1 )then
-                    !$omp parallel do collapse(2) default(shared) private(k,l,k1,l1,k_ind,l_ind,ref_diff_odd, ref_diff_even) schedule(dynamic,CHUNKSZ) proc_bind(close)
-                    do k = lb(1),ub(1)
-                        do l = lb(2),ub(2)
-                            ref_diff_odd  = 0.
-                            ref_diff_even = 0.
-                            ! applying an average window to each diff (eq 7 in the nonuniform paper)
-                            do k_ind = 1, 2*params_glob%smooth_ext+1
-                                k1 = k - params_glob%smooth_ext + k_ind - 1
-                                do l_ind = 1, 2*params_glob%smooth_ext+1
-                                    l1 = l - params_glob%smooth_ext + l_ind - 1
-                                    ref_diff_odd  = ref_diff_odd  + cur_diff_odd( k1,l1,1)*weights_2D(k_ind,l_ind)
-                                    ref_diff_even = ref_diff_even + cur_diff_even(k1,l1,1)*weights_2D(k_ind,l_ind)
-                                enddo
-                            enddo
+                    !$omp parallel do collapse(2) default(shared) private(k,l,k1,l1,ref_diff_odd, ref_diff_even) schedule(dynamic,CHUNKSZ) proc_bind(close)
+                    do l = lb(2),ub(2)
+                        do k = lb(1),ub(1)
+                            k1 = k - params_glob%smooth_ext
+                            l1 = l - params_glob%smooth_ext
+                            ref_diff_odd  = sum(sum(cur_diff_odd( k1:k1+2*params_glob%smooth_ext,&
+                                                                 &l1:l1+2*params_glob%smooth_ext,1)*weights_2D,&
+                                                   &dim=2), dim=1)
+                            ref_diff_even = sum(sum(cur_diff_even(k1:k1+2*params_glob%smooth_ext,&
+                                                                 &l1:l1+2*params_glob%smooth_ext,1)*weights_2D,&
+                                                   &dim=2), dim=1)
                             ! opt_diff keeps the minimized cost value at each voxel of the search
                             ! opt_odd  keeps the best voxel of the form B*odd
                             ! opt_even keeps the best voxel of the form B*even
                             if (ref_diff_odd < opt_diff_odd(k,l,1)) then
-                                opt_odd(k,l,1)      = rmat_odd(k,l,1)
+                                opt_odd(     k,l,1) = rmat_odd(k,l,1)
                                 opt_diff_odd(k,l,1) = ref_diff_odd
                                 opt_freq_odd(k,l,1) = cur_ind
                             endif
                             if (ref_diff_even < opt_diff_even(k,l,1)) then
-                                opt_even(k,l,1)      = rmat_even(k,l,1)
+                                opt_even(     k,l,1) = rmat_even(k,l,1)
                                 opt_diff_even(k,l,1) = ref_diff_even
                                 opt_freq_even(k,l,1) = cur_ind
                             endif
@@ -283,34 +281,32 @@ contains
                     enddo
                     !$omp end parallel do
                 else
-                    !$omp parallel do collapse(3) default(shared) private(k,l,m,k1,l1,m1,k_ind,l_ind,m_ind,ref_diff_odd,ref_diff_even) schedule(dynamic,CHUNKSZ) proc_bind(close)
-                    do k = lb(1),ub(1)
+                    !$omp parallel do collapse(3) default(shared) private(k,l,m,k1,l1,m1,ref_diff_odd,ref_diff_even) schedule(dynamic,CHUNKSZ) proc_bind(close)
+                    do m = lb(3),ub(3)
                         do l = lb(2),ub(2)
-                            do m = lb(3),ub(3)
-                                ref_diff_odd  = 0.
-                                ref_diff_even = 0.
+                            do k = lb(1),ub(1)
                                 ! applying an average window to each diff (eq 7 in the nonuniform paper)
-                                do k_ind = 1, 2*params_glob%smooth_ext+1
-                                    k1 = k - params_glob%smooth_ext + k_ind - 1
-                                    do l_ind = 1, 2*params_glob%smooth_ext+1
-                                        l1 = l - params_glob%smooth_ext + l_ind - 1
-                                        do m_ind = 1, 2*params_glob%smooth_ext+1
-                                            m1 = m - params_glob%smooth_ext + m_ind - 1
-                                            ref_diff_odd  = ref_diff_odd  + cur_diff_odd( k1,l1,m1)*weights_3D(k_ind,l_ind,m_ind)
-                                            ref_diff_even = ref_diff_even + cur_diff_even(k1,l1,m1)*weights_3D(k_ind,l_ind,m_ind)
-                                        enddo
-                                    enddo
-                                enddo
+                                k1 = k - params_glob%smooth_ext
+                                l1 = l - params_glob%smooth_ext
+                                m1 = m - params_glob%smooth_ext
+                                ref_diff_odd  = sum(sum(sum(cur_diff_odd( k1:k1+2*params_glob%smooth_ext,&
+                                                                         &l1:l1+2*params_glob%smooth_ext,&
+                                                                         &m1:m1+2*params_glob%smooth_ext)*weights_3D,&
+                                                           &dim=3), dim=2), dim=1)
+                                ref_diff_even = sum(sum(sum(cur_diff_even(k1:k1+2*params_glob%smooth_ext,&
+                                                                         &l1:l1+2*params_glob%smooth_ext,&
+                                                                         &m1:m1+2*params_glob%smooth_ext)*weights_3D,&
+                                                           &dim=3), dim=2), dim=1)
                                 ! opt_diff keeps the minimized cost value at each voxel of the search
                                 ! opt_odd  keeps the best voxel of the form B*odd
                                 ! opt_even keeps the best voxel of the form B*even
                                 if (ref_diff_odd < opt_diff_odd(k,l,m)) then
-                                    opt_odd(k,l,m)      = rmat_odd(k,l,m)
+                                    opt_odd(     k,l,m) = rmat_odd(k,l,m)
                                     opt_diff_odd(k,l,m) = ref_diff_odd
                                     opt_freq_odd(k,l,m) = cur_ind
                                 endif
                                 if (ref_diff_even < opt_diff_even(k,l,m)) then
-                                    opt_even(k,l,m)      = rmat_even(k,l,m)
+                                    opt_even(     k,l,m) = rmat_even(k,l,m)
                                     opt_diff_even(k,l,m) = ref_diff_even
                                     opt_freq_even(k,l,m) = cur_ind
                                 endif
@@ -319,8 +315,8 @@ contains
                     enddo
                     !$omp end parallel do
                 endif
-                min_sum_odd  = sum(opt_diff_odd) ! TODO
-                min_sum_even = sum(opt_diff_even) ! TODO
+                min_sum_odd  = sum(opt_diff_odd)
+                min_sum_even = sum(opt_diff_even)
             else
                 ! keep the theta which gives the lowest cost (over all voxels)
                 if (sum(cur_diff_odd) < min_sum_odd) then

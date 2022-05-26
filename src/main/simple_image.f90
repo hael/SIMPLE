@@ -2879,9 +2879,9 @@ contains
                 end do
             end do
         case('power')
-            do h=lims(1,1),lims(1,2)
+            do l=lims(3,1),lims(3,2)
                 do k=lims(2,1),lims(2,2)
-                    do l=lims(3,1),lims(3,2)
+                    do h=lims(1,1),lims(1,2)
                         phys = self%fit%comp_addr_phys([h,k,l])
                         sh = nint(hyp(real(h),real(k),real(l)))
                         if( sh == 0 .or. sh > lfny ) cycle
@@ -3015,9 +3015,9 @@ contains
         if( self%wthreads )then
             !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys)&
             !$omp schedule(static) proc_bind(close)
-            do h=lims(1,1),lims(1,2)
+            do l=lims(3,1),lims(3,2)
                 do k=lims(2,1),lims(2,2)
-                    do l=lims(3,1),lims(3,2)
+                    do h=lims(1,1),lims(1,2)
                         sh = nint(hyp(real(h),real(k),real(l)))
                         phys = self%fit%comp_addr_phys([h,k,l])
                         if( sh > lfny )then
@@ -3033,9 +3033,9 @@ contains
             end do
             !$omp end parallel do
         else
-            do h=lims(1,1),lims(1,2)
+            do l=lims(3,1),lims(3,2)
                 do k=lims(2,1),lims(2,2)
-                    do l=lims(3,1),lims(3,2)
+                    do h=lims(1,1),lims(1,2)
                         sh = nint(hyp(real(h),real(k),real(l)))
                         phys = self%fit%comp_addr_phys([h,k,l])
                         if( sh > lfny )then
@@ -3375,9 +3375,9 @@ contains
         lims = self%fit%loop_lims(2)
         !$omp parallel do private(h,k,l,freq,phys,w) default(shared)&
         !$omp collapse(3) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
+        do l=lims(3,1),lims(3,2)
             do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
+                do h=lims(1,1),lims(1,2)
                     freq = hyp(real(h),real(k),real(l))
                     phys = self%comp_addr_phys([h,k,l])
                     if(freq .gt. find)then
@@ -3996,13 +3996,13 @@ contains
         rmat_pad(1:self%ldim(1),1:self%ldim(2)) = self%rmat(1:self%ldim(1),1:self%ldim(2),1)
         !$omp parallel do schedule(static) default(shared) private(m,n,ithr,sw_px,exponentials,i,j,z)&
         !$omp proc_bind(close) firstprivate(rmat_pad) collapse(2)
-        do m = 1,self%ldim(1)
-            do n = 1,self%ldim(2)
+        do n = 1,self%ldim(2)
+            do m = 1,self%ldim(1)
                 ithr  = omp_get_thread_num() + 1
                 sw_px = rmat_pad(m:m+DIM_SW-1,n:n+DIM_SW-1)
                 exponentials = 0.
-                do i = -CFR_BOX,CFR_BOX
-                  do j = -CFR_BOX,CFR_BOX
+                do j = -CFR_BOX,CFR_BOX
+                    do i = -CFR_BOX,CFR_BOX
                       exponentials(i,j) = &
                       & exp( -sum( (sw_px - rmat_pad(m+i:m+i+DIM_SW-1, n+j:n+j+DIM_SW-1))**2. )/h_sq) ! Euclidean norm
                   enddo
@@ -4049,15 +4049,15 @@ contains
         rmat_pad(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
         !$omp parallel do schedule(static) default(shared) private(m,n,o,ithr,sw_px,exponentials,i,j,k,z)&
         !$omp proc_bind(close) firstprivate(rmat_pad) collapse(3)
-        do m = 1, self%ldim(1)
+        do o = 1, self%ldim(3)
             do n = 1, self%ldim(2)
-                do o = 1, self%ldim(3)
+                do m = 1, self%ldim(1)
                     ithr  = omp_get_thread_num() + 1
                     sw_px = rmat_pad(m:m+DIM_SW-1,n:n+DIM_SW-1,o:o+DIM_SW-1)
                     exponentials = 0.
-                    do i = -CFR_BOX,CFR_BOX
+                    do k = -CFR_BOX,CFR_BOX
                         do j = -CFR_BOX,CFR_BOX
-                            do k = -CFR_BOX,CFR_BOX
+                            do i = -CFR_BOX,CFR_BOX
                                 exponentials(i,j,k) = &
                                 & exp(-sum((sw_px - rmat_pad(m+i:m+i+DIM_SW-1,n+j:n+j+DIM_SW-1,o+k:o+k+DIM_SW-1))**2.)/h_sq) ! euclidean norm
                             enddo
