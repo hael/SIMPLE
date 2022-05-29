@@ -37,7 +37,7 @@ contains
         class(preprocess_commander_stream_dev), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
         type(parameters)                       :: params
-        integer,                   parameter   :: WAITTIME        = 5    ! folder watched every 5 seconds
+        integer,                   parameter   :: WAITTIME        = 3    ! folder watched every 5 seconds
         integer,                   parameter   :: LONGTIME        = 300  ! time lag after which a movie is processed
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
         logical,                   parameter   :: DEBUG_HERE      = .false.
