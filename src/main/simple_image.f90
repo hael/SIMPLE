@@ -6739,7 +6739,7 @@ contains
         class(image), intent(inout) :: self
         integer, intent(in)         :: ldim(3)
         type(image)                 :: tmp
-        call tmp%new(ldim, self%smpd)
+        call tmp%new(ldim, self%smpd, wthreads=self%wthreads)
         call self%clip(tmp)
         call self%copy(tmp)
         call tmp%kill()

@@ -182,12 +182,13 @@ contains
         if( noris == 0 ) return
         if( present(fromto) )then
             if( fromto(1) < 1 .or. fromto(2) > noris )then
+                write(logfhandle,*) 'filename',trim(self%fname)
                 write(logfhandle,*) 'noris : ', noris
                 write(logfhandle,*) 'fromto: ', fromto
                 THROW_HARD('fromto out of range')
             endif
         endif
-        if( .not. self%l_open ) THROW_HARD('file needs to be open')
+        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//trim(self%fname))
         ! ranges and raw bytes
         call self%byte_manager4seg_inside_1(isegment, end_part1, start_part3, end_part3, bytearr_part3)
         ! add segment to stack, this sets all the information needed for allocation
@@ -227,6 +228,7 @@ contains
             if( first_data_byte > 0 )then
                 write(unit=self%funit,pos=first_data_byte) bytearr_part3
             else
+                write(logfhandle,*) 'filename',trim(self%fname)
                 write(logfhandle,*) 'first_data_byte: ', first_data_byte
                 THROW_HARD('first_data_byte must be > 0 for non-empty 3d segment')
             endif
@@ -250,7 +252,7 @@ contains
         character(len=1), allocatable :: bytearr_part3(:)
         noris = size(os_strings)
         if( noris == 0 ) return
-        if( .not. self%l_open ) THROW_HARD('file needs to be open')
+        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//trim(self%fname))
         ! ranges and raw bytes
         call self%byte_manager4seg_inside_1(isegment, end_part1, start_part3, end_part3, bytearr_part3)
         ! add segment to stack, this sets all the information needed for allocation
@@ -282,6 +284,7 @@ contains
             if( first_data_byte > 0 )then
                 write(unit=self%funit,pos=first_data_byte) bytearr_part3
             else
+                write(logfhandle,*) 'filename',trim(self%fname)
                 write(logfhandle,*) 'first_data_byte: ', first_data_byte
                 THROW_HARD('first_data_byte must be > 0 for non-empty 3d segment')
             endif
@@ -336,6 +339,7 @@ contains
         call self%update_byte_ranges
         ! validate byte ranges
         if( self%header(isegment)%first_data_byte - 1 /= end_part1 )then
+            write(logfhandle,*) 'filename',trim(self%fname)
             write(logfhandle,*) 'first data byte of segment: ', self%header(isegment)%first_data_byte
             write(logfhandle,*) 'end of part 1 (bytes)     : ', end_part1
             THROW_HARD('end of part 1 of file does not match first data byte of segment')
@@ -351,6 +355,7 @@ contains
             ! compare with original
             n_bytes_part3_orig = end_part3 - start_part3 + 1
             if( n_bytes_part3_orig /= n_bytes_part3 )then
+                write(logfhandle,*) 'filename',trim(self%fname)
                 write(logfhandle,*) '# bytes of part 3 in original: ', n_bytes_part3_orig
                 write(logfhandle,*) '# bytes of part 3 in updated : ', n_bytes_part3
                 THROW_HARD('byte sizes of part3 in original and updated do not match')
@@ -372,12 +377,13 @@ contains
         if( noris == 0 ) return
         if( present(fromto) )then
             if( fromto(1) < 1 .or. fromto(2) > noris )then
+                write(logfhandle,*) 'filename',trim(self%fname)
                 write(logfhandle,*) 'noris : ', noris
                 write(logfhandle,*) 'fromto: ', fromto
                 THROW_HARD('fromto out of range')
             endif
         endif
-        if( .not. self%l_open ) THROW_HARD('file needs to be open')
+        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//trim(self%fname))
         ! add segment to stack, this sets all the information needed for allocation
         call self%add_segment_1(isegment, os, fromto)
         ! update byte ranges in header
@@ -411,7 +417,7 @@ contains
         type(str4arr),              intent(inout) :: sarr(:) ! indexed from 1 to nptcls
         integer :: i, nspaces
         integer(kind=8) :: ibytes
-        if( .not. self%l_open ) THROW_HARD('file needs to be open')
+        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//trim(self%fname))
         ! add segment to stack
         call self%add_segment_2(isegment, fromto, strlen_max)
         ! update byte ranges in header
@@ -438,6 +444,7 @@ contains
         integer :: strlen_max
         ! sanity check isegment
         if( isegment < 1 .or. isegment > MAX_N_SEGMENTS )then
+            write(logfhandle,*) 'filename',trim(self%fname)
             write(logfhandle,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
@@ -469,6 +476,7 @@ contains
         integer,                    intent(in)    :: strlen_max
         ! sanity check isegment
         if( isegment < 1 .or. isegment > MAX_N_SEGMENTS )then
+            write(logfhandle,*) 'filename',trim(self%fname)
             write(logfhandle,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
@@ -501,8 +509,9 @@ contains
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         class(ori),                 intent(inout) :: o
         character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
-        if( .not. self%l_open ) THROW_HARD('file needs to be open')
+        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//trim(self%fname))
         if( isegment < 1 .or. isegment > self%n_segments )then
+            write(logfhandle,*) 'filename',trim(self%fname)
             write(logfhandle,*) 'isegment: ', isegment
             write(logfhandle,*) 'n_segments: ', self%n_segments
             THROW_HARD('isegment out of range')
@@ -530,17 +539,20 @@ contains
         real            :: ptcl_record(N_PTCL_ORIPARAMS)
         integer         :: fromto_here(2), i, irec, n, nl, nbatches, ibatch, nbatch, nthr
         logical         :: present_fromto, oonly_ctfparams_state_eo
-        if( .not. self%l_open ) THROW_HARD('file needs to be open')
+        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//trim(self%fname))
         if( isegment < 1 .or. isegment > self%n_segments )then
+            write(logfhandle,*) 'filename',trim(self%fname)
             write(logfhandle,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
         fromto_here = self%header(isegment)%fromto
         if( present(fromto) ) fromto_here = fromto
         if( fromto_here(1)<self%header(isegment)%fromto(1) .or. fromto_here(1)>self%header(isegment)%fromto(2) )then
+            write(logfhandle,*) 'filename',trim(self%fname)
             THROW_HARD('Invalid fromto(1) index, out of range')
         endif
         if( fromto_here(2)<self%header(isegment)%fromto(1) .or. fromto_here(2)>self%header(isegment)%fromto(2) )then
+            write(logfhandle,*) 'filename',trim(self%fname)
             THROW_HARD('Invalid fromto(2) index, out of range')
         endif
         nthr = 1
@@ -608,8 +620,9 @@ contains
         type(str4arr),              intent(inout) :: sarr(:)
         integer :: i
         integer(kind=8) :: ibytes
-        if( .not. self%l_open ) THROW_HARD('file needs to be open')
+        if( .not. self%l_open ) THROW_HARD('file needs to be open: '//trim(self%fname))
         if( isegment < 1 .or. isegment > self%n_segments )then
+            write(logfhandle,*) 'filename',trim(self%fname)
             write(logfhandle,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif

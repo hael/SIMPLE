@@ -27,8 +27,8 @@ private
 integer,               parameter   :: MINBOXSZ            = 128    ! minimum boxsize for scaling
 real,                  parameter   :: GREEDY_TARGET_LP    = 15.0
 integer,               parameter   :: WAIT_WATCHER        = 5     ! seconds prior to new stack detection
-integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600  ! dev settings
-! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
+! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600  ! dev settings
+integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
 integer,               parameter   :: FREQ_POOL_REJECTION = 5     !
 character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
