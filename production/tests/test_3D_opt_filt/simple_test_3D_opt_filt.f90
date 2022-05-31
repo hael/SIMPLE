@@ -14,9 +14,7 @@ integer                       :: j, nyq, ifoo, smooth_ext, rc
 real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, med, lp_lb
 real, allocatable             :: res(:), corrs(:)
 character(len=20)             :: filter
-real, pointer                 :: res_rmat(:, :, :)=>null()
 character(len=:), allocatable :: cmd
-character(len=*), parameter   :: URL    = ''
 logical                       :: mrc_exists
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'Usage: simple_test_3D_opt_filt smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
