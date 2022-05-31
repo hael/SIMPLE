@@ -11,11 +11,12 @@ type(cmdline)                 :: cline, cline_opt_filt
 type(image)                   :: even, odd, even_copy, odd_copy, noise, res_map
 type(opt_3D_filter_commander) :: xopt_3D_filter
 integer                       :: j, nyq, ifoo, smooth_ext, rc
-real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, med, lp_lb
+real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, med
 real, allocatable             :: res(:), corrs(:)
 character(len=20)             :: filter
 character(len=:), allocatable :: cmd
 logical                       :: mrc_exists
+real, parameter               :: LP_LB_PHASE = 7.
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'Usage: simple_test_3D_opt_filt smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
     write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
@@ -90,8 +91,7 @@ call get_resolution(corrs, res, res_fsc05, res_fsc0143)
 write(*, *) 'Comparing clean volume vs noisy volume...'
 write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
 write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
-lp_lb = 7.
-call even%phase_rand(lp_lb)
+call even%phase_rand(LP_LB_PHASE)
 call even%write('vol_phase_rand.mrc')
 call odd%write('vol_clean.mrc')
 ! calculate FSC
@@ -107,7 +107,7 @@ call noise%kill
 !    write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
 !end do
 call get_resolution(corrs, res, res_fsc05, res_fsc0143)
-write(*, *) 'Comparing clean volume vs phase-randomized (beyond '//trim(int2str(int((lp_lb))))//' A) (noisy) volume...'
+write(*, *) 'Comparing clean volume vs phase-randomized (beyond '//trim(int2str(int((LP_LB_PHASE))))//' A) (noisy) volume...'
 write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
 write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
 ! calculate optimal filter
