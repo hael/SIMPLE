@@ -579,7 +579,6 @@ contains
             call cgrid_imgs(i)%kill
         enddo
         deallocate(read_imgs,cgrid_imgs)
-        if( .not. params_glob%l_distr_exec ) call cavger_merge_eos_and_norm
     end subroutine cavger_assemble_sums
 
     !>  \brief  merges the even/odd pairs and normalises the sums

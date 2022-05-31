@@ -150,6 +150,7 @@ contains
             call cline%set('refs', '../'//trim(PICKREFS)//trim(params%ext))
             call cline%delete('vol1')
             write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+            call qsys_cleanup
         endif
         ! prep for 2D classification
         l_cluster2D = .false.
@@ -176,12 +177,6 @@ contains
                 write(logfhandle,'(A)')'>>> TERMINATING PREPROCESS STREAM'
                 exit
             endif
-            do while( file_exists(trim(PAUSE_STREAM)) )
-                if( file_exists(trim(TERM_STREAM)) ) exit
-                call write_singlelineoftext(PAUSE_STREAM, 'PAUSED')
-                write(logfhandle,'(A,A)')'>>> PREPROCESS STREAM PAUSED ',cast_time_char(simple_gettime())
-                call sleep(WAITTIME)
-            enddo
             iter = iter + 1
             call movie_buff%watch( nmovies, movies )
             ! append movies to processing stack
@@ -233,14 +228,15 @@ contains
                 ! wait & write snapshot
                 if( l_cluster2D )then
                     if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
-                        call write_migrograps_starfile
+                        call write_migrographs_starfile
+                        l_haschanged = .false.
                     endif
                 else
                     if( .not.l_movies_left )then
                         if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
                             ! write project when inactive...
                             call write_project
-                            call write_migrograps_starfile
+                            call write_migrographs_starfile
                             l_haschanged = .false.
                         else
                             ! ...or wait
@@ -269,7 +265,7 @@ contains
         else
             call write_project
         endif
-        call write_migrograps_starfile
+        call write_migrographs_starfile
         ! cleanup
         call spproj%kill
         call qsys_cleanup
@@ -279,13 +275,13 @@ contains
         contains
 
             !>  write starfile snapshot
-            subroutine write_migrograps_starfile
+            subroutine write_migrographs_starfile
                 if (spproj%os_mic%get_noris() > 0) then
                     if( file_exists("micrographs.star") ) call del_file("micrographs.star")
                     call starproj%assign_optics(cline, spproj)
                     call starproj%export_mics(cline, spproj)
                 end if
-            end subroutine write_migrograps_starfile
+            end subroutine write_migrographs_starfile
 
             subroutine write_project()
                 logical, allocatable :: stk_mask(:)
@@ -343,23 +339,8 @@ contains
                         call stream_spproj%kill
                     enddo
                     call spproj%write_segment_inside('ptcl2D', params%projfile)
-                    call spproj%os_ptcl2D%reset
-                    ! particles 3D
-                    istk   = 0
-                    iptcl  = 0
-                    do iproj = 1,nmics
-                        if( .not.stk_mask(iproj) ) cycle
-                        istk = istk+1
-                        call stream_spproj%read_segment('ptcl3D', completed_fnames(iproj))
-                        nptcls = stream_spproj%os_ptcl3D%get_noris()
-                        do i = 1,nptcls
-                            iptcl = iptcl + 1
-                            call spproj%os_ptcl3D%transfer_ori(iptcl,stream_spproj%os_ptcl3D,i)
-                            call spproj%os_ptcl3D%set(iptcl, 'stkind', real(istk))
-                            call spproj%os_ptcl3D%set(iptcl, 'state',  real(states(iproj)))
-                        enddo
-                        call stream_spproj%kill
-                    enddo
+                    spproj%os_ptcl3D = spproj%os_ptcl2D
+                    call spproj%os_ptcl3D%delete_2Dclustering
                     call spproj%write_segment_inside('ptcl3D', params%projfile)
                     write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',spproj%os_ptcl2D%get_noris()
                 endif
@@ -465,10 +446,19 @@ contains
                 character(len=*), intent(in)  :: fname
                 integer,          intent(out) :: nptcls, state
                 type(sp_project) :: spproj_here
-                call spproj_here%read_segment('mic',fname)
-                nptcls = nint(spproj_here%os_mic%get(1,'nptcls'))
-                state  = nint(spproj_here%os_mic%get(1,'state'))
-                call spproj_here%kill
+                integer :: nmics, nstks
+                call spproj_here%read_data_info(fname, nmics, nstks, nptcls)
+                if( nmics /= 1 .or. nptcls < 1 )then
+                    ! something went wrong, skipping this one
+                    THROW_WARN('Something went wrong with: '//trim(fname)//'. Skipping')
+                    nptcls = 0
+                    state  = 0
+                else
+                    call spproj_here%read_segment('mic',fname)
+                    nptcls = nint(spproj_here%os_mic%get(1,'nptcls'))
+                    state  = spproj_here%os_mic%get_state(1)
+                    call spproj_here%kill
+                endif
             end subroutine check_nptcls
 
             subroutine create_individual_project

@@ -166,6 +166,7 @@ contains
         ! standard cavg assembly
         call cavger_assemble_sums( .false. )
         if( l_shmem )then
+            call cavger_merge_eos_and_norm
             call cavger_calc_and_write_frcs_and_eoavg(params%frcs)
             ! classdoc gen needs to be after calc of FRCs
             call cavger_gen2Dclassdoc(build%spproj)
@@ -726,7 +727,7 @@ contains
             if( cline%defined('lp_backgr') ) call cline_pspec_rank%set('lp_backgr', params%lp_backgr)
             call xpspec_rank%execute(cline_pspec_rank)
         else
-            ! rank baseed on gold-standard resolution estimates
+            ! rank based on gold-standard resolution estimates
             finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//params%ext
             call cline_rank_cavgs%set('projfile', trim(params%projfile))
             call cline_rank_cavgs%set('stk',      trim(finalcavgs))
@@ -1075,6 +1076,7 @@ contains
                 params%startit = params%startit + 1
             end do
             ! end gracefully
+            call simple_touch(CLUSTER2D_FINISHED)
             call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
         endif
     end subroutine exec_cluster2D

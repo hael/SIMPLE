@@ -285,6 +285,13 @@ contains
             ! write results to disk
             call cavger_readwrite_partial_sums('write')
         else
+            ! check convergence
+            converged = conv%check_conv2D(cline, build_glob%spproj_field, build_glob%spproj_field%get_n('class'), params_glob%msk)
+            ! finalize classes
+            if( converged .or. which_iter == params_glob%maxits)then
+                call cavger_readwrite_partial_sums('write')
+            endif
+            call cavger_merge_eos_and_norm
             if( cline%defined('which_iter') )then
                 params_glob%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//params_glob%ext
                 params_glob%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params_glob%which_iter,3)//'_even'//params_glob%ext
@@ -308,8 +315,6 @@ contains
             call build_glob%spproj%write_segment_inside('cls2D', params_glob%projfile)
             call build_glob%spproj%write_segment_inside('cls3D', params_glob%projfile)
             deallocate(states)
-            ! check convergence
-            converged = conv%check_conv2D(cline, build_glob%spproj_field, build_glob%spproj_field%get_n('class'), params_glob%msk)
         endif
         call cavger_kill
         call pftcc%kill ! necessary for shared mem implementation, which otherwise bugs out when the bp-range changes

@@ -108,6 +108,7 @@ contains
     procedure          :: print_segment
     ! readers
     procedure          :: read
+    procedure          :: read_mic_stk_ptcl2D_segments
     procedure          :: read_non_data_segments
     procedure          :: read_ctfparams_state_eo
     procedure          :: read_segment
@@ -3106,6 +3107,25 @@ contains
         end do
         call self%bos%close
     end subroutine read_ctfparams_state_eo
+
+    subroutine read_mic_stk_ptcl2D_segments( self, fname, wthreads)
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: fname
+        logical, optional, intent(in)    :: wthreads
+        character(len=:), allocatable :: projfile
+        if( fname2format(fname) .ne. 'O' )then
+            THROW_HARD('format of: '//trim(fname)//' not supported; read')
+        endif
+        projfile = trim(fname)
+        if( .not. file_exists(trim(projfile)) )then
+            THROW_HARD('file: '// trim(projfile)//' does not exist; read')
+        endif
+        call self%bos%open(projfile)
+        call self%segreader(MIC_SEG, wthreads=wthreads)
+        call self%segreader(STK_SEG, wthreads=wthreads)
+        call self%segreader(PTCL2D_SEG, wthreads=wthreads)
+        call self%bos%close
+    end subroutine read_mic_stk_ptcl2D_segments
 
     subroutine read_segment( self, oritype, fname, fromto, wthreads )
         class(sp_project), intent(inout) :: self
