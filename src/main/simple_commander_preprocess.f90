@@ -133,7 +133,6 @@ contains
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
         logical,                   parameter   :: DEBUG_HERE      = .false.
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
-        character(len=STDLEN),     parameter   :: selection_fname = './STREAM_SELECTION'
         class(cmdline),            allocatable :: completed_jobs_clines(:)
         type(qsys_env)                         :: qenv
         type(cmdline)                          :: cline_make_pickrefs
@@ -236,8 +235,6 @@ contains
         l_movies_left = .false.
         l_haschanged  = .false.
         do
-            ! applying selection produced from the gui
-            call report_selection
             ! termination & pausing
             if( file_exists(trim(TERM_STREAM)) )then
                 write(logfhandle,'(A)')'>>> TERMINATING PREPROCESS STREAM'
@@ -300,7 +297,6 @@ contains
                     endif
                 endif
                 ! write project for gui, micrographs field only
-                call report_selection
                 call spproj%write(micspproj_fname)
                 last_injection = simple_gettime()
                 l_haschanged   = .true.
@@ -310,7 +306,6 @@ contains
                 if( .not.l_movies_left )then
                     if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
                         ! write project when inactive...
-                        call report_selection
                         call write_project
                         if (spproj%os_mic%get_noris() > 0) then
                             if( file_exists("micrographs.star") ) call del_file("micrographs.star")
@@ -326,7 +321,6 @@ contains
             endif
         end do
         ! termination
-        call report_selection
         call write_project
         if (spproj%os_mic%get_noris() > 0) then
             if( file_exists("micrographs.star") ) call del_file("micrographs.star")
@@ -340,68 +334,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PREPROCESS_STREAM NORMAL STOP ****')
         contains
-
-            ! reports GUI-generated selection to project & individual projects
-            ! snaphot project will be updated at writing time for safety
-            subroutine report_selection
-                type(sp_project)          :: stream_proj
-                integer, allocatable      :: states(:)
-                character(len=STDLEN)     :: ext
-                character(len=LONGSTRLEN) :: iimovie, projfile
-                integer :: i, nsel, funit, nmics, n, nptcls
-                if( DEBUG_HERE ) print *,'in report_selection'; call flush(6)
-                ! sanity checks
-                nmics = spproj%os_mic%get_noris()
-                if( nmics == 0 )                        return
-                if( .not.file_exists(selection_fname) ) return
-                nsel = nlines(selection_fname)
-                if( nsel > nmics )then
-                    THROW_WARN('Inconsistent selection size, skipping')
-                    return
-                endif
-                write(logfhandle,'(A)')'>>> APPLYING SELECTION...'
-                ! read
-                allocate(states(nsel),source=0)
-                call fopen(funit, FILE=selection_fname, STATUS='OLD', action='READ')
-                do i = 1,nsel
-                    read(funit,*) states(i)
-                end do
-                call fclose(funit)
-                n = count(states==0)
-                if( n+count(states==1) /= nsel )then
-                    THROW_WARN('Inconsistent selection flags, skipping')
-                    return
-                endif
-                ! report selection to global project
-                do i = 1,nsel
-                    call spproj%os_mic%set(i,'state',real(states(i)))
-                end do
-                ! report selection to individual projects
-                do i = 1,nsel
-                    iimovie  = basename(spproj%os_mic%get_static(i,'movie'))
-                    ext      = fname2ext(iimovie)
-                    projfile = trim(PREPROCESS_PREFIX)//trim(get_fbody(iimovie,ext))//trim(METADATA_EXT)
-                    call stream_proj%read_segment('mic', projfile)
-                    if( stream_proj%os_mic%isthere(1,'intg') .and. stream_proj%os_mic%get_state(1) /= states(i) )then
-                        call stream_proj%os_mic%set(1,'state',0.)
-                        nptcls = nint(stream_proj%os_mic%get(1,'nptcls'))
-                        if( l_pick .and. nptcls>0 )then
-                            call stream_proj%read(projfile)
-                            call stream_proj%os_stk%set(1,'state',0.)
-                            call stream_proj%os_ptcl2D%set_all2single('state',0.)
-                            call stream_proj%os_ptcl3D%set_all2single('state',0.)
-                            call stream_proj%write(projfile)
-                        else
-                            call stream_proj%write_segment_inside('mic', projfile)
-                        endif
-                    endif
-                    call stream_proj%kill
-                end do
-                call del_file(selection_fname)
-                call spproj%write(micspproj_fname)
-                write(logfhandle,'(A,I6,A)')'>>> DE-SELECTED ',n,' MICROGRAPHS'
-                if( DEBUG_HERE ) print *,'end report_selection'; call flush(6)
-            end subroutine report_selection
 
             subroutine write_project()
                 logical, allocatable :: stk_mask(:)
@@ -459,23 +391,8 @@ contains
                         call stream_spproj%kill
                     enddo
                     call spproj%write_segment_inside('ptcl2D', params%projfile)
-                    call spproj%os_ptcl2D%reset
-                    ! particles 3D
-                    istk   = 0
-                    iptcl  = 0
-                    do iproj = 1,nmics
-                        if( .not.stk_mask(iproj) ) cycle
-                        istk = istk+1
-                        call stream_spproj%read_segment('ptcl3D', completed_fnames(iproj))
-                        nptcls = stream_spproj%os_ptcl3D%get_noris()
-                        do i = 1,nptcls
-                            iptcl = iptcl + 1
-                            call spproj%os_ptcl3D%transfer_ori(iptcl,stream_spproj%os_ptcl3D,i)
-                            call spproj%os_ptcl3D%set(iptcl, 'stkind', real(istk))
-                            call spproj%os_ptcl3D%set(iptcl, 'state',  real(states(iproj)))
-                        enddo
-                        call stream_spproj%kill
-                    enddo
+                    spproj%os_ptcl3D = spproj%os_ptcl2D
+                    call spproj%os_ptcl3D%delete_2Dclustering
                     call spproj%write_segment_inside('ptcl3D', params%projfile)
                     write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',spproj%os_ptcl2D%get_noris()
                 endif
@@ -577,10 +494,19 @@ contains
                 character(len=*), intent(in)  :: fname
                 integer,          intent(out) :: nptcls, state
                 type(sp_project) :: spproj_here
-                call spproj_here%read_segment('mic',fname)
-                nptcls = nint(spproj_here%os_mic%get(1,'nptcls'))
-                state  = nint(spproj_here%os_mic%get(1,'state'))
-                call spproj_here%kill
+                integer :: nmics, nstks
+                call spproj_here%read_data_info(fname, nmics, nstks, nptcls)
+                if( nmics /= 1 .or. nptcls < 1 )then
+                    ! something went wrong, skipping this one
+                    nptcls = 0
+                    state  = 0
+                    THROW_WARN('Something went wrong with: '//trim(fname)//'. Skipping')
+                else
+                    call spproj_here%read_segment('mic',fname)
+                    nptcls = nint(spproj_here%os_mic%get(1,'nptcls'))
+                    state  = spproj_here%os_mic%get_state(1)
+                    call spproj_here%kill
+                endif
             end subroutine check_nptcls
 
             subroutine create_individual_project
