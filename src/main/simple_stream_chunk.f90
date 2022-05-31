@@ -97,7 +97,7 @@ contains
         integer,                   intent(in)    :: nptcls, ind_glob
         type(sp_project)     :: spproj
         logical, allocatable :: spproj_mask(:)
-        integer :: iproj, iptcl, cnt, inptcls, nptcls_tot, fromp, iiproj, n_in
+        integer :: iproj, iptcl, cnt, inptcls, nptcls_tot, fromp, iiproj, n_in, inmics, instks
         if( .not.self%available ) THROW_HARD('chunk unavailable; chunk%generate')
         n_in = size(fnames)
         if( n_in == 0 ) THROW_HARD('# ptcls == 0; chunk%generate')
@@ -105,9 +105,7 @@ contains
         allocate(spproj_mask(n_in),source=.false.)
         nptcls_tot = 0
         do iproj = 1,n_in
-            ! n_in projects should be in memory to avoid rereading later
-            call spproj%read_segment('mic', fnames(iproj))
-            inptcls = nint(spproj%os_mic%get(1,'nptcls'))
+            call spproj%read_data_info(fnames(iproj), inmics, instks, inptcls)
             spproj_mask(iproj) = inptcls > 0
             if( spproj_mask(iproj) ) nptcls_tot = nptcls_tot + inptcls
         enddo
@@ -125,14 +123,12 @@ contains
         do iproj = 1,n_in
             if( .not.spproj_mask(iproj) ) cycle
             iiproj = iiproj + 1
-            call spproj%read_segment('mic', fnames(iproj))
+            call spproj%read_mic_stk_ptcl2D_segments(fnames(iproj))
             inptcls = nint(spproj%os_mic%get(1,'nptcls'))
             call self%spproj%os_mic%transfer_ori(iiproj, spproj%os_mic, 1)
-            call spproj%read_segment('stk', fnames(iproj))
             call self%spproj%os_stk%transfer_ori(iiproj, spproj%os_stk, 1)
             self%orig_stks(iiproj) = simple_abspath(trim(spproj%get_stkname(1)))
             call self%spproj%os_stk%set(iiproj, 'stk', self%orig_stks(iiproj))
-            call spproj%read_segment('ptcl2D', fnames(iproj))
             do iptcl = 1,inptcls
                 cnt = cnt + 1
                 call self%spproj%os_ptcl2D%transfer_ori(cnt, spproj%os_ptcl2D, iptcl)
@@ -175,7 +171,7 @@ contains
             call cline_scale%set('smpd',       orig_smpd)
             call cline_scale%set('box',        real(orig_box))
             call cline_scale%set('newbox',     real(box))
-            call cline_scale%set('nparts',     real(params_glob%nparts_chunk))
+            if( params_glob%nparts_chunk > 1 ) call cline_scale%set('nparts',real(params_glob%nparts_chunk))
             call cline_scale%set('nthr',       real(params_glob%nthr))
             call cline_scale%set('mkdir',      'yes') ! required but not done as it is a simple_private_exec
             call cline_scale%set('dir_target', '../'//trim(SCALE_DIR))
@@ -218,11 +214,7 @@ contains
         if( .not.self%converged )THROW_HARD('cannot read chunk prior to convergence')
         ! doc & parameters
         projfile = trim(self%path)//trim(self%projfile_out)
-        call self%spproj%read_segment('mic',   projfile)
-        call self%spproj%read_segment('stk',   projfile)
-        call self%spproj%read_segment('ptcl2D',projfile)
-        call self%spproj%read_segment('cls2D', projfile)
-        call self%spproj%read_segment('out',   projfile)
+        call self%spproj%read(projfile)
         ! classes, to account for nparts /= nparts_chunk
         call img%new([box,box,1],1.0)
         call avg%new([box,box,1],1.0)
@@ -239,19 +231,24 @@ contains
             subroutine average_into(tmpl)
                 character(len=*), intent(in) :: tmpl
                 character(len=XLONGSTRLEN) :: fname
-                integer                    :: icls, ipart, numlen_chunk
-                numlen_chunk = len(int2str(params_glob%nparts_chunk)) ! as per parameters
-                call img%zero_and_flag_ft
-                do icls = 1,params_glob%ncls_start
-                    call avg%zero_and_flag_ft
-                    do ipart = 1,params_glob%nparts_chunk
-                        fname = trim(tmpl)//int2str_pad(ipart,numlen_chunk)//trim(params_glob%ext)
-                        call img%read(fname,icls)
-                        call avg%add(img)
+                integer                    :: icls, ipart, numlen_chunk, iostat
+                if( params_glob%nparts_chunk > 1  )then
+                    numlen_chunk = len(int2str(params_glob%nparts_chunk)) ! as per parameters
+                    call img%zero_and_flag_ft
+                    do icls = 1,params_glob%ncls_start
+                        call avg%zero_and_flag_ft
+                        do ipart = 1,params_glob%nparts_chunk
+                            fname = trim(tmpl)//int2str_pad(ipart,numlen_chunk)//trim(params_glob%ext)
+                            call img%read(fname,icls)
+                            call avg%add(img)
+                        enddo
+                        call avg%div(real(params_glob%nparts_chunk))
+                        call avg%write(trim(tmpl)//trim(params_glob%ext),icls)
                     enddo
-                    call avg%div(real(params_glob%nparts_chunk))
-                    call avg%write(trim(tmpl)//trim(params_glob%ext),icls)
-                enddo
+                else
+                    fname = trim(tmpl)//'1'//trim(params_glob%ext)
+                    iostat = rename(fname,trim(tmpl)//trim(params_glob%ext))
+                endif
             end subroutine average_into
 
     end subroutine read

@@ -130,7 +130,13 @@ contains
         cline_cluster2D        = cline
         cline_cluster2D_chunk  = cline
         ! chunk classification
-        call cline_cluster2D_chunk%set('prg',       'cluster2D_distr')
+        if( params_glob%nparts_chunk > 1 )then
+            call cline_cluster2D_chunk%set('prg',    'cluster2D_distr')
+            call cline_cluster2D_chunk%set('nparts', real(params_glob%nparts_chunk))
+        else
+            ! shared memory execution
+            call cline_cluster2D_chunk%set('prg','cluster2D')
+        endif
         call cline_cluster2D_chunk%delete('projfile')
         call cline_cluster2D_chunk%delete('projname')
         call cline_cluster2D_chunk%set('objfun',    'cc')
@@ -144,7 +150,6 @@ contains
         call cline_cluster2D_chunk%delete('dir_target')
         call cline_cluster2D_chunk%set('startit',  1.)
         call cline_cluster2D_chunk%set('ncls',    real(params%ncls_start))
-        call cline_cluster2D_chunk%set('nparts',  real(params%nparts_chunk))
         call cline_cluster2D_chunk%delete('lpstop')
         ! pool classification: optional stochastic optimisation, optional match filter
         ! automated incremental learning, objective function is standard cross-correlation (cc)
@@ -472,6 +477,7 @@ contains
                 integer,                   allocatable :: spproj_nptcls(:)
                 logical,                   allocatable :: spproj_mask(:)
                 integer :: nptcls, iproj, jproj, cnt, nmics_imported, iichunk, first_new, n_new, n_avail, n2fill, iostat
+                integer :: inmics, instks, inptcls
                 logical :: isnew, enough
                 call debug_print('in generate_new_chunks')
                 nmics_imported = 0
@@ -523,8 +529,8 @@ contains
                 n2fill = 0
                 do iproj = first_new,n_spprojs
                     if( spproj_mask(iproj) )then
-                        call stream_proj%read_segment('mic',spproj_list(iproj))
-                        spproj_nptcls(iproj) = nint(stream_proj%os_mic%get(1,'nptcls'))
+                        call stream_proj%read_data_info(spproj_list(iproj), inmics, instks, inptcls)
+                        spproj_nptcls(iproj) = inptcls
                         if( spproj_nptcls(iproj)==0 ) THROW_HARD('zero particles project detected!')
                         nptcls = nptcls + spproj_nptcls(iproj)
                         if( nptcls > nptcls_per_chunk )then

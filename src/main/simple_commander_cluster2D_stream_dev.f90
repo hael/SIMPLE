@@ -26,9 +26,8 @@ private
 
 integer,               parameter   :: MINBOXSZ            = 128    ! minimum boxsize for scaling
 real,                  parameter   :: GREEDY_TARGET_LP    = 15.0
-integer,               parameter   :: WAIT_WATCHER        = 5     ! seconds prior to new stack detection
-! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600  ! dev settings
-integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
+integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600  ! dev settings
+! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
 integer,               parameter   :: FREQ_POOL_REJECTION = 5     !
 character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
@@ -80,12 +79,11 @@ contains
         integer :: ldim(3), ichunk, maybe2D, ifoo
         ! check whether 2D classification will be performed based on 6 strictly required parameters
         maybe2D = merge(1,0,cline%defined('nchunks'))
-        maybe2D = maybe2D + merge(1,0,cline%defined('nparts_chunk'))
         maybe2D = maybe2D + merge(1,0,cline%defined('ncls'))
         maybe2D = maybe2D + merge(1,0,cline%defined('nptcls_per_cls'))
         maybe2D = maybe2D + merge(1,0,cline%defined('ncls_start'))
         maybe2D = maybe2D + merge(1,0,cline%defined('mskdiam'))
-        if( maybe2D == 6 )then
+        if( maybe2D == 5 )then
             do2D = .true.
         else if( maybe2D > 0 )then
             THROW_HARD('Missing arguments for 2D classification')
@@ -118,7 +116,7 @@ contains
         call debug_print('cluster2D_stream orig_box: '//int2str(orig_box))
         call debug_print('cluster2D_stream orig_smpd: '//real2str(orig_smpd))
         call debug_print('cluster2D_stream mskdiam: '//real2str(mskdiam))
-        numlen         = len(int2str(params_glob%nparts))
+        numlen         = len(int2str(params_glob%nparts_pool))
         refs_glob      = 'start_cavgs'//params_glob%ext
         pool_available = .true.
         pool_iter      = 0
@@ -133,7 +131,13 @@ contains
         call pool_proj%projinfo%delete_entry('projfile')
         call pool_proj%write(trim(POOL_DIR)//PROJFILE_POOL)
         ! initialize chunks parameters and objects
-        call cline_cluster2D_chunk%set('prg',       'cluster2D_distr')
+        if( params_glob%nparts_chunk > 1 )then
+            call cline_cluster2D_chunk%set('prg',    'cluster2D_distr')
+            call cline_cluster2D_chunk%set('nparts', real(params_glob%nparts_chunk))
+        else
+            ! shared memory execution
+            call cline_cluster2D_chunk%set('prg',       'cluster2D')
+        endif
         call cline_cluster2D_chunk%set('oritype',   'ptcl2D')
         call cline_cluster2D_chunk%set('objfun',    'cc')
         call cline_cluster2D_chunk%set('center',    'no')
@@ -145,7 +149,6 @@ contains
         call cline_cluster2D_chunk%set('startit',   1.)
         call cline_cluster2D_chunk%set('mskdiam',   mskdiam)
         call cline_cluster2D_chunk%set('ncls',      real(params_glob%ncls_start))
-        call cline_cluster2D_chunk%set('nparts',    1.0) ! shared memory execution
         call cline_cluster2D_chunk%set('nthr',      real(params_glob%nthr))
         if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
         allocate(chunks(params_glob%nchunks))
@@ -573,7 +576,7 @@ contains
                 ncls_glob = ncls_here
             endif
             ! tidy
-            ! call converged_chunks(ichunk)%remove_folder
+            call converged_chunks(ichunk)%remove_folder
             call converged_chunks(ichunk)%kill
         enddo
         call update_pool_for_gui
@@ -963,7 +966,8 @@ contains
             pool_iter = pool_iter-1
             refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params_glob%ext)
             ! tricking the asynchronous master process to come to a hard stop
-            do ipart = 1,params_glob%nparts
+            call simple_touch(trim(POOL_DIR)//trim(TERM_STREAM))
+            do ipart = 1,params_glob%nparts_pool
                 call simple_touch(trim(POOL_DIR)//'JOB_FINISHED_'//int2str_pad(ipart,numlen))
             enddo
             call simple_touch(trim(POOL_DIR)//'CAVGASSEMBLE_FINISHED')
@@ -1061,7 +1065,7 @@ contains
         call img%new([boxpd,boxpd,1],smpd)
         call img%zero_and_flag_ft
         if( l_self )then
-            do ipart = 1,params_glob%nparts
+            do ipart = 1,params_glob%nparts_pool
                 stkin = trim(POOL_DIR)//'cavgs_even_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
                 call img%read(stkin, indin)
                 call img%write(stkin,indout)
@@ -1092,7 +1096,7 @@ contains
         else
             stkin  = trim(dir)//'/cavgs_even_part'//trim(params_glob%ext)
             call img%read(stkin, indin)
-            do ipart = 1,params_glob%nparts
+            do ipart = 1,params_glob%nparts_pool
                 stkout = trim(POOL_DIR)//'cavgs_even_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
                 call img%write(stkout,indout)
                 if( l_wfilt )then
@@ -1102,7 +1106,7 @@ contains
             enddo
             stkin  = trim(dir)//'/cavgs_odd_part'//trim(params_glob%ext)
             call img%read(stkin, indin)
-            do ipart = 1,params_glob%nparts
+            do ipart = 1,params_glob%nparts_pool
                 stkout = trim(POOL_DIR)//'cavgs_odd_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
                 call img%write(stkout,indout)
                 if( l_wfilt )then
@@ -1112,7 +1116,7 @@ contains
             enddo
             stkin  = trim(dir)//'/ctfsqsums_even_part'//trim(params_glob%ext)
             call img%read(stkin, indin)
-            do ipart = 1,params_glob%nparts
+            do ipart = 1,params_glob%nparts_pool
                 stkout = trim(POOL_DIR)//'ctfsqsums_even_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
                 call img%write(stkout,indout)
                 if( l_wfilt )then
@@ -1122,7 +1126,7 @@ contains
             enddo
             stkin  = trim(dir)//'/ctfsqsums_odd_part'//trim(params_glob%ext)
             call img%read(stkin, indin)
-            do ipart = 1,params_glob%nparts
+            do ipart = 1,params_glob%nparts_pool
                 stkout = trim(POOL_DIR)//'ctfsqsums_odd_part'//int2str_pad(ipart,numlen)//trim(params_glob%ext)
                 call img%write(stkout,indout)
                 if( l_wfilt )then
