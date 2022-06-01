@@ -1294,7 +1294,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after time-series tracking',&  ! descr_long
         &'single_exec',&                                                        ! executable
-        &0, 0, 0, 4, 3, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 0, 0, 4, 3, 1, 3, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1321,6 +1321,7 @@ contains
         call center2D_nano%set_input('comp_ctrls', 1, nparts)
         center2D_nano%comp_ctrls(1)%required = .false.
         call center2D_nano%set_input('comp_ctrls', 2, nthr)
+        call center2D_nano%set_input('comp_ctrls', 3, script)
     end subroutine new_center2D_nano
 
     subroutine new_cluster2D
@@ -1385,8 +1386,8 @@ contains
         &'cluster2D_nano',&                                                                 ! name
         &'Simultaneous 2D alignment and clustering of time-series of nanoparticle images',& ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm for time-series of nanoparticle images',& ! descr_long
-        &'single_exec',&                                                             ! executable
-        &0, 1, 0, 5, 5, 1, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &'single_exec',&                                                                    ! executable
+        &0, 1, 0, 5, 5, 1, 3, .true.)                                                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1416,6 +1417,7 @@ contains
         call cluster2D_nano%set_input('comp_ctrls', 1, nparts)
         cluster2D_nano%comp_ctrls(1)%required = .false.
         call cluster2D_nano%set_input('comp_ctrls', 2, nthr)
+        call cluster2D_nano%set_input('comp_ctrls', 3, script)
     end subroutine new_cluster2D_nano
 
     subroutine new_cluster2D_stream
