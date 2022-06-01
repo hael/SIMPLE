@@ -10,7 +10,7 @@ type(parameters)              :: p
 type(cmdline)                 :: cline, cline_opt_filt
 type(image)                   :: even, odd, even_copy, odd_copy, noise, res_map
 type(opt_3D_filter_commander) :: xopt_3D_filter
-integer                       :: j, nyq, ifoo, smooth_ext, rc
+integer                       :: nyq, ifoo, smooth_ext, rc
 real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, med
 real, allocatable             :: res(:), corrs(:)
 character(len=20)             :: filter
@@ -94,6 +94,8 @@ write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', re
 call even%phase_rand(LP_LB_PHASE)
 call even%write('vol_phase_rand.mrc')
 call odd%write('vol_clean.mrc')
+call odd%phase_rand(LP_LB_PHASE)
+call odd%write('vol_clean_phase_rand.mrc')
 ! calculate FSC
 call even%fft
 call odd%fft
@@ -157,7 +159,7 @@ if( cline%defined('smooth_ext') ) smooth_ext = p%smooth_ext
 if( cline%defined('filter') )     filter     = p%filter
 if( .not. cline%defined('match_filt') ) call cline_opt_filt%set('match_filt', 'no')
 call cline_opt_filt%set('vol1'      , 'vol_phase_rand.mrc')
-call cline_opt_filt%set('vol2'      , 'vol_clean.mrc')
+call cline_opt_filt%set('vol2'      , 'vol_clean_phase_rand.mrc')
 call cline_opt_filt%set('filter'    , trim(filter))
 call cline_opt_filt%set('mkdir'     , 'no')
 call cline_opt_filt%set('smooth_ext', real(smooth_ext))
