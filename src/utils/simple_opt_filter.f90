@@ -87,7 +87,11 @@ contains
             case(FILT_TV)
                 param = LAMBDA_MIN + (cur_ind - find_start)*(LAMBDA_MAX - LAMBDA_MIN)/(find_stop - find_start)
                 call tvfilt%new
-                call tvfilt%apply_filter_3d(img, param)
+                if( img%is_2d() )then
+                    call tvfilt%apply_filter(img, param)
+                else
+                    call tvfilt%apply_filter_3d(img, param)
+                endif
                 call tvfilt%kill
                 call img%ifft()
             case(FILT_BW8)
