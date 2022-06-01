@@ -67,7 +67,7 @@ contains
         enddo        
     end subroutine butterworth_filter
 
-    subroutine apply_opt_filter(img, cur_ind, find_start, find_stop, cur_fil, use_cache)
+    subroutine apply_opt_filter(img, cur_ind, find_start, find_stop, cur_fil, use_cache, tvfilt_in)
         use simple_tvfilter, only: tvfilter
         class(image), intent(inout) :: img
         integer,      intent(in)    :: cur_ind
@@ -75,24 +75,33 @@ contains
         integer,      intent(in)    :: find_stop
         real,         intent(inout) :: cur_fil(:)
         logical,      intent(in)    :: use_cache
+        type(tvfilter), optional, intent(inout) :: tvfilt_in
         integer, parameter :: BW_ORDER = 8
         real,    parameter :: LAMBDA_MIN = .5 , LAMBDA_MAX = 5.    ! for TV filter
         real,    parameter ::  SIGMA_MIN = .01,  SIGMA_MAX = 1.    ! for NLMean filter
-        type(tvfilter)     :: tvfilt
         real               :: param
+        type(tvfilter)     :: tvfilt_loc
         select case(params_glob%filt_enum)
             case(FILT_LP)
                 call img%lp(cur_ind)
                 call img%ifft()
             case(FILT_TV)
                 param = LAMBDA_MIN + (cur_ind - find_start)*(LAMBDA_MAX - LAMBDA_MIN)/(find_stop - find_start)
-                call tvfilt%new
-                if( img%is_2d() )then
-                    call tvfilt%apply_filter(img, param)
+                if( .not. present(tvfilt_in) )then
+                    call tvfilt_loc%new
+                    if( img%is_2d() )then
+                        call tvfilt_loc%apply_filter(img, param)
+                    else
+                        call tvfilt_loc%apply_filter_3d(img, param)
+                    endif
+                    call tvfilt_loc%kill
                 else
-                    call tvfilt%apply_filter_3d(img, param)
+                    if( img%is_2d() )then
+                        call tvfilt_in%apply_filter(img, param)
+                    else
+                        call tvfilt_in%apply_filter_3d(img, param)
+                    endif
                 endif
-                call tvfilt%kill
                 call img%ifft()
             case(FILT_BW8)
                 if( .not. use_cache ) call butterworth_filter(cur_fil, BW_ORDER, real(cur_ind))
@@ -104,12 +113,15 @@ contains
     end subroutine apply_opt_filter
 
     ! 2D optimization(search)-based uniform/nonuniform filter, serial (strictly non-paralellized) version
-    subroutine opt_filter_2D(odd, even, mskimg)
-        class(image),           intent(inout) :: odd
-        class(image),           intent(inout) :: even
-        class(image), optional, intent(inout) :: mskimg
-        type(image)          ::  odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm, freq_img,&
-                               &even_copy_rmat, even_copy_cmat, even_copy_shellnorm
+    subroutine opt_filter_2D(odd, even,&
+                            &odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm,&
+                            &even_copy_rmat, even_copy_cmat, even_copy_shellnorm, tvfilt_in)
+        use simple_tvfilter, only: tvfilter
+        class(image),   intent(inout) :: odd
+        class(image),   intent(inout) :: even
+        class(image),   intent(in)    :: odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm,&
+                                        &even_copy_rmat, even_copy_cmat, even_copy_shellnorm
+        type(tvfilter), intent(inout) :: tvfilt_in
         integer              :: k,l,m, box, dim3, ldim(3), find_start, find_stop, iter_no, fnr
         integer              :: best_ind, cur_ind, k1, l1, m1, lb(3), ub(3), mid_ext
         real                 :: min_sum_odd, min_sum_even, ref_diff_odd, ref_diff_even, rad, find_stepsz
@@ -119,11 +131,8 @@ contains
         real,    pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null()
         real,    allocatable :: cur_diff_odd( :,:,:), cur_diff_even(:,:,:)
         real,    allocatable :: cur_fil(:), weights_2D(:,:)
-        logical, allocatable :: l_mask(:,:,:)
         type(opt_vol), allocatable :: opt_odd(:,:,:), opt_even(:,:,:)
-        character(len=LONGSTRLEN)     :: benchfname
-        mskimg_present   = present(mskimg)
-        if( mskimg_present ) l_mask = mskimg%bin2logical()
+        !$omp critical
         ldim        = odd%get_ldim()
         box         = ldim(1)
         dim3        = ldim(3)
@@ -132,17 +141,6 @@ contains
         find_stop   = calc_fourier_index(2. * params_glob%smpd , box, params_glob%smpd)
         find_start  = calc_fourier_index(     params_glob%lp_lb, box, params_glob%smpd)
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
-        call freq_img%new([box,box,dim3], params_glob%smpd)
-        call odd_copy_rmat%copy(odd)
-        call odd_copy_cmat%copy(odd)
-        call odd_copy_cmat%fft
-        call odd_copy_shellnorm%copy(odd)
-        call odd_copy_shellnorm%shellnorm(return_ft=.true.)
-        call even_copy_rmat%copy(even)
-        call even_copy_cmat%copy(even)
-        call even_copy_cmat%fft
-        call even_copy_shellnorm%copy(even)
-        call even_copy_shellnorm%shellnorm(return_ft=.true.)
         allocate(cur_diff_odd( box,box,dim3), cur_diff_even(box,box,dim3),&
                 &cur_fil(box),weights_2D(params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1), source=0.)
         allocate(opt_odd(box,box,dim3), opt_even(box,box,dim3))
@@ -158,12 +156,8 @@ contains
             enddo
         enddo
         weights_2D = weights_2D/sum(weights_2D) ! weights has energy of 1
-        if( mskimg_present )then
-            call bounds_from_mask3D(l_mask, lb, ub)
-        else
-            lb = (/ 1, 1, 1/)
-            ub = (/ box, box, dim3 /)
-        endif
+        lb         = (/ 1, 1, 1/)
+        ub         = (/ box, box, dim3 /)
         do k = 1, 2
             if( lb(k) < params_glob%smooth_ext + 1 )   lb(k) = params_glob%smooth_ext+1
             if( ub(k) > box - params_glob%smooth_ext ) ub(k) = box - params_glob%smooth_ext
@@ -185,20 +179,20 @@ contains
             if( L_VERBOSE_GLOB ) write(*,*) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current Fourier index = ', cur_ind
             ! filtering odd
             call odd%copy_fast(odd_copy_cmat)
-            call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false.)
+            call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
             call odd%sqeuclid_matrix(even_copy_rmat, cur_diff_odd)
             if( params_glob%l_match_filt )then
                 call odd%copy_fast(odd_copy_shellnorm)
-                call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false.)
+                call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
             endif
             call odd%get_rmat_ptr(rmat_odd)
             ! filtering even
             call even%copy_fast(even_copy_cmat)
-            call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .true.)
+            call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .true., tvfilt_in)
             call even%sqeuclid_matrix(odd_copy_rmat, cur_diff_even)
             if( params_glob%l_match_filt )then
                 call even%copy_fast(even_copy_shellnorm)
-                call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .false.)
+                call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
             endif
             call even%get_rmat_ptr(rmat_even)
             ! do the non-uniform, i.e. optimizing at each voxel
@@ -250,10 +244,7 @@ contains
         call odd%set_rmat( opt_odd( :,:,:)%opt_val, .false.)
         call even%set_rmat(opt_even(:,:,:)%opt_val, .false.)
         deallocate(opt_odd, opt_even, cur_diff_odd, cur_diff_even, cur_fil, weights_2D)
-        call odd_copy_rmat%kill
-        call odd_copy_cmat%kill
-        call even_copy_rmat%kill
-        call even_copy_cmat%kill
+        !$omp end critical
     end subroutine opt_filter_2D
 
     ! 3D optimization(search)-based uniform/nonuniform filter, paralellized version
