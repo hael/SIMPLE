@@ -2590,8 +2590,8 @@ contains
         &2, 1, 0, 0, 6, 2, 1, .false.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call opt_2D_filter%set_input('img_ios', 1, 'stk',  'file', 'First stack',       'First stack',       'stack1.mrc file', .true., '')
-        call opt_2D_filter%set_input('img_ios', 2, 'stk2', 'file', 'Second stack',      'Second Stack',      'stack2.mrc file', .true., '')
+        call opt_2D_filter%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
+        call opt_2D_filter%set_input('img_ios', 2, 'stk2', 'file', 'Even stack', 'Even Stack', 'stack_odd.mrc file',  .true., '')
         ! parameter input/output
         call opt_2D_filter%set_input('parm_ios', 1, smpd)
         ! alternative inputs
@@ -2600,8 +2600,8 @@ contains
         ! <empty>
         ! filter controls
         call opt_2D_filter%set_input('filt_ctrls', 1, nonuniform)
-        call opt_2D_filter%set_input('filt_ctrls', 2, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', .false., 0.)
-        call opt_2D_filter%set_input('filt_ctrls', 3, 'filter'     , 'multi' , 'Filter type(butterworth|lp|tv|nlmean){butterworth}', 'Filter type(butterworth|lp|tv|nlmean){butterworth}', '(butterworth|lp|tv|nlmean){butterworth}', .false., 'butterworth')
+        call opt_2D_filter%set_input('filt_ctrls', 2, 'smooth_ext', 'num',   'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', .false., 0.)
+        call opt_2D_filter%set_input('filt_ctrls', 3, 'filter',     'multi', 'Filter type(butterworth|lp|tv|nlmean){butterworth}', 'Filter type(butterworth|lp|tv|nlmean){butterworth}', '(butterworth|lp|tv|nlmean){butterworth}', .false., 'butterworth')
         call opt_2D_filter%set_input('filt_ctrls', 4, lp_lb)
         call opt_2D_filter%set_input('filt_ctrls', 5, nsearch)
         call opt_2D_filter%set_input('filt_ctrls', 6, match_filt)
