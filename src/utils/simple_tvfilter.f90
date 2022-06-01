@@ -14,7 +14,9 @@ type :: tvfilter
     integer       :: img_dims(2), img_dims_3d(3), ldim(2)
     logical       :: existence
 contains
-    procedure          :: new => new_tvfilter
+    procedure, private :: new_tvfilter
+    procedure, private :: new_tvfilter_img
+    generic            :: new => new_tvfilter, new_tvfilter_img
     procedure          :: apply_filter     ! 2D by default
     procedure          :: apply_filter_3d
     procedure          :: prepare_interpolation
@@ -32,6 +34,29 @@ contains
         class(tvfilter), intent(inout) :: self
         self%existence   = .true.
     end subroutine new_tvfilter
+    
+    subroutine new_tvfilter_img( self, img )
+        class(tvfilter), intent(inout) :: self
+        class(image),    intent(inout) :: img
+        integer :: img_ldim(3), rb_ldim(3)
+        real    :: img_smpd
+        self%existence   = .true.
+        img_ldim = img%get_ldim()
+        if ( img_ldim(3) /= 1 )then
+            write(logfhandle,*) 'ldim in tvfilter apply_filter: ', img_ldim(1), img_ldim(2), img_ldim(3)
+            THROW_HARD('only for 2D images; tvfilter::apply_filter')
+        endif
+        self%img_dims(1:2) = img_ldim(1:2)
+        img_smpd = img%get_smpd()
+        rb_ldim(1:2) = img_ldim(1:2)
+        rb_ldim(3)   = 1
+        call self%r_img%new(rb_ldim, img_smpd)
+        call self%b_img%new(rb_ldim, img_smpd)
+        call self%fill_b()
+        call self%fill_r()
+        call self%r_img%fft_noshift()
+        call self%b_img%fft_noshift()
+    end subroutine new_tvfilter_img
 
     subroutine apply_filter( self, img, lambda )
         class(tvfilter),   intent(inout) :: self
