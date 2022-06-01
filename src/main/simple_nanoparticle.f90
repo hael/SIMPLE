@@ -14,7 +14,7 @@ private
 #include "simple_local_flags.inc"
 
 ! module global constants
-real,             parameter :: CORR_THRES_SIGMA    = -2.0    ! sigma for valid_corr thresholding
+real,             parameter :: CORR_THRES_SIGMA    = -3.0    ! sigma for valid_corr thresholding
 integer,          parameter :: NBIN_THRESH         = 15      ! number of thresholds for binarization
 integer,          parameter :: CN_THRESH_XTAL      = 5       ! cn-threshold highly crystalline NPs
 integer,          parameter :: NVOX_THRESH         = 3       ! min # voxels per atom is 3
