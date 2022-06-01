@@ -98,15 +98,6 @@ contains
                 if( .not. use_cache ) call butterworth_filter(cur_fil, BW_ORDER, real(cur_ind))
                 call img%apply_filter(cur_fil)
                 call img%ifft()
-            case(FILT_NLMEAN)
-                param = SIGMA_MIN + (cur_ind - find_start)*(SIGMA_MAX - SIGMA_MIN)/(find_stop - find_start)
-                call img%ifft()
-                if( img%is_2d() )then
-                    call img%nlmean(sdev_noise = param)
-                else
-                    !call img%nlmean3D(sdev_noise = param)
-                    THROW_HARD('nlmean is supported for 2D case only!')
-                endif
             case DEFAULT
                 THROW_HARD('unsupported filter type')
         end select

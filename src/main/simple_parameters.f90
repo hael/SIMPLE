@@ -1328,8 +1328,6 @@ contains
                     self%filt_enum = FILT_TV
                 case('butterworth')
                     self%filt_enum = FILT_BW8
-                case('nlmean')
-                    self%filt_enum = FILT_NLMEAN
                 case DEFAULT
                     THROW_HARD('unsupported filter type')
             end select
