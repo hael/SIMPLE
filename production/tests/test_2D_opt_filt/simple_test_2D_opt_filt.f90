@@ -100,7 +100,8 @@ do iptcl = 1, p%nptcls
     write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
     call even%phase_rand(LP_LB_PHASE)
     call even%write('stk_phase_rand.mrc', iptcl)
-    call odd%write('stk_clean.mrc', iptcl)
+    call odd%phase_rand(LP_LB_PHASE)
+    call odd%write('stk_clean_phase_rand.mrc', iptcl)
     call even%fft
     call odd%fft
     call even%fsc(odd, corrs)
@@ -169,7 +170,7 @@ do k = 1, size(FIL_ARR)
     if( cline%defined('filter') )     filter     = p%filter
     if( .not. cline%defined('match_filt') ) call cline_opt_filt%set('match_filt', 'no')
     call cline_opt_filt%set('stk'       , 'stk_phase_rand.mrc')
-    call cline_opt_filt%set('stk2'      , 'stk_clean.mrc')
+    call cline_opt_filt%set('stk2'      , 'stk_clean_phase_rand.mrc')
     call cline_opt_filt%set('filter'    , trim(filter))
     call cline_opt_filt%set('mkdir'     , 'no')
     call cline_opt_filt%set('smooth_ext', real(smooth_ext))
@@ -180,7 +181,7 @@ do k = 1, size(FIL_ARR)
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         ! comparing the nonuniform result with the original data
-        call even%read(p%stk2,  iptcl)
+        call even%read('stk_clean.mrc',  iptcl)
         call odd%read('nonuniform_opt_2D_filter_'//trim(filter)//'_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
         ! spherical masking
         call even%mask(p%msk, 'soft')
