@@ -77,7 +77,7 @@ end enum
 ! Filter kind in nonuniform regularization
 enum, bind(c)
     enumerator :: ENUM_FILT = -1
-    enumerator :: FILT_LP = 0, FILT_TV = 1, FILT_BW8 = 2, FILT_NLMEAN = 3
+    enumerator :: FILT_LP = 0, FILT_TV = 1, FILT_BW8 = 2
 end enum
 
 ! type for CTF parameters

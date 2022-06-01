@@ -19,7 +19,7 @@ character(len=20)             :: filter
 character(len=:), allocatable :: cmd
 logical                       :: mrc_exists
 real, parameter               :: LP_LB_PHASE = 7.
-character(len=15), parameter, dimension(4) :: FIL_ARR = [character(len=15) :: "tv", "butterworth", "lp", "nlmean"]
+character(len=15), parameter, dimension(3) :: FIL_ARR = [character(len=15) :: "tv", "butterworth", "lp"]
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'Usage: simple_test_2D_opt_filt smpd=xx nthr=yy stk=stk.mrc, mskdiam=zz'
     write(logfhandle,'(a)') 'Example: projections of https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'

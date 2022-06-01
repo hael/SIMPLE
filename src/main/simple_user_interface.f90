@@ -2601,7 +2601,7 @@ contains
         ! filter controls
         call opt_2D_filter%set_input('filt_ctrls', 1, nonuniform)
         call opt_2D_filter%set_input('filt_ctrls', 2, 'smooth_ext', 'num',   'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', .false., 0.)
-        call opt_2D_filter%set_input('filt_ctrls', 3, 'filter',     'multi', 'Filter type(butterworth|lp|tv|nlmean){butterworth}', 'Filter type(butterworth|lp|tv|nlmean){butterworth}', '(butterworth|lp|tv|nlmean){butterworth}', .false., 'butterworth')
+        call opt_2D_filter%set_input('filt_ctrls', 3, 'filter',     'multi', 'Filter type(butterworth|lp|tv){butterworth}', 'Filter type(butterworth|lp|tv){butterworth}', '(butterworth|lp|tv){butterworth}', .false., 'butterworth')
         call opt_2D_filter%set_input('filt_ctrls', 4, lp_lb)
         call opt_2D_filter%set_input('filt_ctrls', 5, nsearch)
         call opt_2D_filter%set_input('filt_ctrls', 6, match_filt)
@@ -2633,7 +2633,7 @@ contains
         ! filter controls
         call opt_3D_filter%set_input('filt_ctrls', 1, nonuniform)
         call opt_3D_filter%set_input('filt_ctrls', 2, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', .false., 0.)
-        call opt_3D_filter%set_input('filt_ctrls', 3, 'filter'     , 'multi' , 'Filter type(butterworth|lp|tv|nlmean){butterworth}', 'Filter type(butterworth|lp|tv|nlmean){butterworth}', '(butterworth|lp|nlmean){butterworth}', .false., 'butterworth')
+        call opt_3D_filter%set_input('filt_ctrls', 3, 'filter'     , 'multi' , 'Filter type(butterworth|lp|tv){butterworth}', 'Filter type(butterworth|lp|tv){butterworth}', '(butterworth|lp){butterworth}', .false., 'butterworth')
         call opt_3D_filter%set_input('filt_ctrls', 4, lp_lb)
         call opt_3D_filter%set_input('filt_ctrls', 5, nsearch)
         call opt_3D_filter%set_input('filt_ctrls', 6, match_filt)
