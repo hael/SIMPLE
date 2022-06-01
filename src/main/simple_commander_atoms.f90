@@ -110,7 +110,6 @@ contains
     end subroutine exec_detect_atoms
 
     subroutine exec_detect_atoms_eo( self, cline )
-        use simple_opt_filter,      only: opt_filter
         use simple_defs_autorefine, only: EVEN_SPLIT, ODD_SPLIT
         class(detect_atoms_eo_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
@@ -123,10 +122,10 @@ contains
         character(len=2)   :: el
         integer            :: k
         logical            :: use_auto_corr_thres, use_cs_thres
-        real,    parameter :: FRAC_DIAM=0.6
+        real,    parameter :: FRAC_DIAM=0.7
         type(stats_struct) :: dist_stats
-        character(len=:), allocatable :: add2fn, ename_filt, oname_filt, eatms, oatms
-        character(len=:), allocatable :: fname_avg, map_avg_filt, tmp, eatms_common, atms_avg_valid
+        character(len=:), allocatable :: ename, oname, eatms, oatms
+        character(len=:), allocatable :: fname_avg, map_avg, tmp, eatms_common, atms_avg_valid
         character(len=:), allocatable :: oatms_common, oatms_sim, eatms_sim, atms_avg, atms_avg_sim
         call cline%set('use_thres',  'no')
         call cline%set('lp_lb',        3.)
@@ -142,43 +141,33 @@ contains
         ! spherical masking
         call even%mask(params%msk, 'soft')
         call odd%mask(params%msk, 'soft')
-        call mskvol%disc([params%box,params%box,params%box], params%smpd,&
-        &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
-        ! nonuniform filter
-        ! ... nonuniform=.true., smooth_ext=1, filter_type='butterworth', lp_lb=3. ...
-        call opt_filter(odd, even, mskvol)
-        call even%mask(params%msk, 'soft')
-        call odd%mask(params%msk, 'soft')
-        add2fn         = '_filt'
-        oname_filt     = add2fbody(params%vols_odd(1),     trim(params%ext), add2fn)
-        ename_filt     = add2fbody(params%vols_even(1),    trim(params%ext), add2fn)
+        oname          = trim(params%vols_odd(1))
+        ename          = trim(params%vols_even(1))
         tmp            = rm_from_fbody(params%vols_odd(1), trim(params%ext), '_odd')
-        map_avg_filt   = add2fbody(tmp,                    trim(params%ext), '_filt_AVG')
+        map_avg        = add2fbody(tmp,                    trim(params%ext), '_AVG')
         atms_avg_sim   = add2fbody(tmp,                    trim(params%ext), '_ATMS_AVG_SIM')
         fname_avg      = swap_suffix(tmp, '.pdb',          trim(params%ext) )
         atms_avg       = add2fbody(fname_avg ,             '.pdb',           '_ATMS_AVG')
         atms_avg_valid = add2fbody(fname_avg ,             '.pdb',           '_ATMS_AVG_VALID')
-        call odd%write(oname_filt)
-        call even%write(ename_filt)
         ! detect atoms in odd
-        call nano%new(oname_filt)
+        call nano%new(oname)
         call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=USE_CS_THRES,&
         &use_auto_corr_thres=use_auto_corr_thres, split_fname=ODD_SPLIT)
         ! detect atoms in even
-        call nano%new(ename_filt)
+        call nano%new(ename)
         call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=USE_CS_THRES,&
         &use_auto_corr_thres=use_auto_corr_thres, split_fname=EVEN_SPLIT)
         ! compare independent atomic models
         el               = trim(adjustl(params%element))
-        tmp              = add2fbody(oname_filt,    trim(params%ext), '_ATMS')
+        tmp              = add2fbody(oname, trim(params%ext), '_ATMS')
         oatms            = swap_suffix(tmp, '.pdb', trim(params%ext) )
-        tmp              = add2fbody(ename_filt,    trim(params%ext), '_ATMS')
+        tmp              = add2fbody(ename, trim(params%ext), '_ATMS')
         eatms            = swap_suffix(tmp, '.pdb', trim(params%ext) )
-        tmp              = add2fbody(oname_filt,    trim(params%ext), '_ATMS_COMMON')
-        oatms_sim        = add2fbody(oname_filt,    trim(params%ext), '_ATMS_COMMON_SIM')
+        tmp              = add2fbody(oname, trim(params%ext), '_ATMS_COMMON')
+        oatms_sim        = add2fbody(oname, trim(params%ext), '_ATMS_COMMON_SIM')
         oatms_common     = swap_suffix(tmp, '.pdb', trim(params%ext) )
-        tmp              = add2fbody(ename_filt,    trim(params%ext), '_ATMS_COMMON')
-        eatms_sim        = add2fbody(ename_filt,    trim(params%ext), '_ATMS_COMMON_SIM')
+        tmp              = add2fbody(ename, trim(params%ext), '_ATMS_COMMON')
+        eatms_sim        = add2fbody(ename, trim(params%ext), '_ATMS_COMMON_SIM')
         eatms_common     = swap_suffix(tmp, '.pdb', trim(params%ext) )
         atms_common%ind1 = 1
         atms_common%ind2 = 2
@@ -227,12 +216,12 @@ contains
         call nano%set_atomic_coords(atms_avg)
         call nano%simulate_atoms(sim_density)
         call sim_density%write(atms_avg_sim)
-        ! write average filtered map
+        ! write average map
         call even%add(odd)
         call even%mul(0.5)
-        call even%write(map_avg_filt)
+        call even%write(map_avg)
         ! write a PDB file for the average atomic positions with the valid_corrs in the B-factor field
-        call nano%set_img(map_avg_filt, 'img_raw')
+        call nano%set_img(map_avg, 'img_raw')
         call nano%validate_atoms(sim_density)
         valid_corrs = nano%get_valid_corrs()
         call write_matrix2pdb(el, atms_common%common1, atms_avg_valid, betas=valid_corrs)
