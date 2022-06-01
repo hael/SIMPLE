@@ -1218,7 +1218,6 @@ contains
         call cline_refine3D_nano%set('maxits',   real(params%maxits_between)) ! turn maxits_between into maxits (max # iterations between model building)
         call cline_refine3D_nano%delete('maxits_between')
         call cline_refine3D_nano%set('silence_fsc', 'yes') ! to avoid excessive printing
-        ! call cline_refine3D_nano%set('maskfile', 'spherical_mask.mrc')
         ! then update cline_detect_atoms_eo accordingly
         call cline_detect_atms_eo%set('prg', 'detect_atoms_eo')
         call cline_detect_atms_eo%delete('vol1')        ! because after the first round we change to even/odd convention for input vols

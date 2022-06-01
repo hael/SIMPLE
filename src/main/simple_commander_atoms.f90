@@ -122,7 +122,7 @@ contains
         character(len=2)   :: el
         integer            :: k
         logical            :: use_auto_corr_thres, use_cs_thres
-        real,    parameter :: FRAC_DIAM=0.7
+        real,    parameter :: FRAC_DIAM=0.6
         type(stats_struct) :: dist_stats
         character(len=:), allocatable :: ename, oname, eatms, oatms
         character(len=:), allocatable :: fname_avg, map_avg, tmp, eatms_common, atms_avg_valid
