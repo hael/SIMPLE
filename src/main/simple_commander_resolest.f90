@@ -233,7 +233,7 @@ contains
     ! end subroutine exec_nonuniform_filter
 
     subroutine exec_opt_3D_filter(self, cline)
-        use simple_opt_filter, only: opt_filter
+        use simple_opt_filter, only: opt_filter_3D
         class(opt_3D_filter_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)  :: params
@@ -272,7 +272,7 @@ contains
             call mskvol%disc([params%box,params%box,params%box], params%smpd,&
             &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         endif        
-        call opt_filter(odd, even, mskvol)
+        call opt_filter_3D(odd, even, mskvol)
         if( have_mask_file )then
             call mskvol%read(params%mskfile) ! restore the soft edge
             call even%mul(mskvol)
@@ -295,7 +295,7 @@ contains
     end subroutine exec_opt_3D_filter
 
     subroutine exec_opt_2D_filter( self, cline )
-        use simple_opt_filter, only: opt_filter
+        use simple_opt_filter, only: opt_filter_2D
         class(opt_2D_filter_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)  :: params
@@ -319,7 +319,7 @@ contains
             call even%read(params%stk,  iptcl)
             call even%mask(params%msk, 'soft')
             call odd%mask(params%msk, 'soft')
-            call opt_filter(odd, even)
+            call opt_filter_2D(odd, even)
             call odd%write(trim(file_tag)//'_odd.mrc', iptcl)
             call even%write(trim(file_tag)//'_even.mrc', iptcl)
             call odd%zero_and_unflag_ft

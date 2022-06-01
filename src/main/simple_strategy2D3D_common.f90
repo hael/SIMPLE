@@ -453,7 +453,7 @@ contains
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
     subroutine read_and_filter_refvols( cline, fname_even, fname_odd )
-        use simple_opt_filter, only: opt_filter
+        use simple_opt_filter, only: opt_filter_3D
         class(cmdline),   intent(in) :: cline
         character(len=*), intent(in) :: fname_even
         character(len=*), intent(in) :: fname_odd
@@ -468,7 +468,7 @@ contains
             call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
             call mskvol%read(params_glob%mskfile)
             call mskvol%one_at_edge ! to expand before masking of reference
-            call opt_filter(build_glob%vol_odd, build_glob%vol, mskvol)
+            call opt_filter_3D(build_glob%vol_odd, build_glob%vol, mskvol)
             did_filter = .true.
             ! envelope masking
             call mskvol%read(params_glob%mskfile) ! to bring back the edge
