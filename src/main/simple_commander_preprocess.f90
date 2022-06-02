@@ -240,12 +240,6 @@ contains
                 write(logfhandle,'(A)')'>>> TERMINATING PREPROCESS STREAM'
                 exit
             endif
-            do while( file_exists(trim(PAUSE_STREAM)) )
-                if( file_exists(trim(TERM_STREAM)) ) exit
-                call write_singlelineoftext(PAUSE_STREAM, 'PAUSED')
-                write(logfhandle,'(A,A)')'>>> PREPROCESS STREAM PAUSED ',cast_time_char(simple_gettime())
-                call sleep(WAITTIME)
-            enddo
             iter = iter + 1
             call movie_buff%watch( nmovies, movies )
             ! append movies to processing stack
@@ -307,11 +301,6 @@ contains
                     if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
                         ! write project when inactive...
                         call write_project
-                        if (spproj%os_mic%get_noris() > 0) then
-                            if( file_exists("micrographs.star") ) call del_file("micrographs.star")
-                            call starproj%assign_optics(cline, spproj)
-                            call starproj%export_mics(cline, spproj)
-                        end if
                         l_haschanged = .false.
                     else
                         ! ...or wait
@@ -322,11 +311,6 @@ contains
         end do
         ! termination
         call write_project
-        if (spproj%os_mic%get_noris() > 0) then
-            if( file_exists("micrographs.star") ) call del_file("micrographs.star")
-            call starproj%assign_optics(cline, spproj)
-            call starproj%export_mics(cline, spproj)
-        end if
         call spproj%kill
         ! cleanup
         call qsys_cleanup
@@ -371,7 +355,6 @@ contains
                         call spproj%os_stk%set(istk, 'top',  real(top))
                     enddo
                     call spproj%write_segment_inside('stk', params%projfile)
-                    call spproj%os_stk%reset
                     call spproj%os_ptcl2D%new(nptcls, is_ptcl=.true.)
                     call spproj%os_ptcl3D%new(nptcls, is_ptcl=.true.)
                     ! particles 2D
@@ -397,16 +380,16 @@ contains
                     write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',spproj%os_ptcl2D%get_noris()
                 endif
                 call spproj%write_non_data_segments(params%projfile)
+                ! cleanup, we preserve os_mic
+                call spproj%os_stk%kill
+                call spproj%os_ptcl2D%kill
+                call spproj%os_ptcl3D%kill
                 ! write starfile snapshot
                 if (spproj%os_mic%get_noris() > 0) then
                     if( file_exists("micrographs.star") ) call del_file("micrographs.star")
                     call starproj%assign_optics(cline, spproj)
                     call starproj%export_mics(cline, spproj)
                 end if
-                ! cleanup, we preserve os_mic
-                call spproj%os_stk%kill
-                call spproj%os_ptcl2D%kill
-                call spproj%os_ptcl3D%kill
                 ! benchmark
                 if( DEBUG_HERE )then
                     rt_write = toc(t0)
