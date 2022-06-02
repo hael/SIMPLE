@@ -4522,9 +4522,9 @@ contains
             !$omp end parallel do
             if( r < TINY )then
                 if( sumasq < TINY .and. sumbsq < TINY )then
-                    r = 0.
-                else
                     r = 1.
+                else
+                    r = 0.
                 endif
             else
                 r = r / sqrt(sumasq * sumbsq)
