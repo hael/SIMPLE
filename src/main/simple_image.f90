@@ -4520,8 +4520,12 @@ contains
                 end do
             end do
             !$omp end parallel do
-            if( sumasq < TINY .or. sumbsq < TINY )then
-                r = 0.
+            if( r < TINY )then
+                if( sumasq < TINY .and. sumbsq < TINY )then
+                    r = 0.
+                else
+                    r = 1.
+                endif
             else
                 r = r / sqrt(sumasq * sumbsq)
             endif
@@ -4557,11 +4561,16 @@ contains
         endif
         sumsq_ref = ref_ptr%calc_sumsq(resmsk)
         eps       = epsilon(sumsq_ref)
-        if( sumsq_ref < eps .or. sumsq_ptcl < eps )then
-            cc = 0.
+        cc        = real(sum(ref_ptr%cmat * conjg(self_ptcl%cmat), mask=resmsk))
+        if( cc < eps )then
+            if( sumsq_ref < eps .and. sumsq_ptcl < eps )then
+                cc = 1.
+            else
+                cc = 0.
+            endif
             return
         endif
-        cc = real(sum(ref_ptr%cmat * conjg(self_ptcl%cmat), mask=resmsk)) / sqrt(sumsq_ref * sumsq_ptcl)
+        cc = cc / sqrt(sumsq_ref * sumsq_ptcl)
     end function corr_2
 
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
