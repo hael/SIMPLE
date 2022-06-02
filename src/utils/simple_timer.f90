@@ -56,7 +56,7 @@ integer, parameter :: timer_int_kind = sp
 contains
 
 integer function simple_gettime ()
-    simple_gettime= time()
+    simple_gettime = time()
 end function simple_gettime
 
 function cast_time_char (arg)

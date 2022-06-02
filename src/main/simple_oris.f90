@@ -130,7 +130,6 @@ type :: oris
     procedure          :: str2ori_ctfparams_state_eo
     procedure          :: set_ctfvars
     procedure          :: set_boxfile
-    procedure          :: reset
     ! I/O
     procedure          :: read
     procedure          :: read_ctfparams_state_eo
@@ -1926,16 +1925,6 @@ contains
         call self%o(i)%set_boxfile(boxfname, nptcls)
     end subroutine set_boxfile
 
-    subroutine reset( self )
-        class(oris), intent(inout) :: self
-        integer :: i
-        do i = 1,self%n
-            call self%o(i)%kill_hash
-            call self%o(i)%kill_chash
-            call self%o(i)%reset_pparms
-        enddo
-    end subroutine reset
-
     ! I/O
 
     !>  \brief  reads orientation info from file
@@ -3194,8 +3183,8 @@ contains
                 call self%o(i)%kill
             end do
             deallocate( self%o )
-            self%n = 0
         endif
+        self%n = 0
     end subroutine kill
 
 end module simple_oris

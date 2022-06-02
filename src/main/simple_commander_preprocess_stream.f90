@@ -319,7 +319,6 @@ contains
                         call spproj%os_stk%set(istk, 'top',  real(top))
                     enddo
                     call spproj%write_segment_inside('stk', params%projfile)
-                    call spproj%os_stk%reset
                     call spproj%os_ptcl2D%new(nptcls, is_ptcl=.true.)
                     call spproj%os_ptcl3D%new(nptcls, is_ptcl=.true.)
                     ! particles 2D
