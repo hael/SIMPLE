@@ -70,12 +70,12 @@ program simple_test_CED
             call ker%set_rmat_at(p%ldim(1)/2 + k, p%ldim(2)/2 + l, 1, exp(-(sh**2/(2*SIGMA**2)))) 
         enddo
         enddo
-        call img%ifft()
-        call ker%ifft()
+        call img%fft()
+        call ker%fft()
         call img%get_cmat_ptr(img_cmat)
         call ker%get_cmat_ptr(ker_cmat)
         img_cmat = img_cmat*ker_cmat
-        call img%fft()
+        call img%ifft()
         call img%write('CED_temp_out.mrc', iptcl)
         call img%calc_gradient(grad, Dc, Dr)
     enddo
