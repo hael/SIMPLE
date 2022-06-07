@@ -273,7 +273,7 @@ contains
             cwd_glob = trim(cwd)
             call qsys_cleanup(keep2D=.false.)
             do ipart = 1,params_glob%nparts_chunk
-                call simple_touch('JOB_FINISHED_'//int2str_pad(ipart,numlen),errmsg="chunk%terminate")
+                call simple_touch(trim(JOB_FINISHED_FBODY)//int2str_pad(ipart,numlen),errmsg="chunk%terminate")
             enddo
             call simple_touch('CAVGASSEMBLE_FINISHED',errmsg="chunk%terminate")
             call chdir('..')

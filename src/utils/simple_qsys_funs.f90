@@ -33,7 +33,7 @@ contains
         call del_files('OUT',                  params_glob%nparts)
         call del_files('algndoc_',             params_glob%nparts, ext=trim(METADATA_EXT))
         call del_files('algndoc_cavgs_',       params_glob%nparts, ext=trim(METADATA_EXT))
-        call del_files('JOB_FINISHED_',        params_glob%nparts)
+        call del_files(JOB_FINISHED_FBODY,     params_glob%nparts)
         call del_files('distr_simple_script_', params_glob%nparts)
         ! optionally deletes 2D classification temporary files
         if( .not.l_keep2D )then
@@ -53,7 +53,7 @@ contains
         ! this file is empty 4 now but may contain run stats etc.
         character(len=*), intent(in) :: source
         if( params_glob%l_distr_exec .or. params_glob%stream.eq.'yes' )then
-            call simple_touch('JOB_FINISHED_'//int2str_pad(params_glob%part,params_glob%numlen), errmsg="qsys_job_finished")
+            call simple_touch(trim(JOB_FINISHED_FBODY)//int2str_pad(params_glob%part,params_glob%numlen), errmsg="qsys_job_finished")
         endif
     end subroutine qsys_job_finished
 

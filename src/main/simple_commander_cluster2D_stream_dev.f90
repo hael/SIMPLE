@@ -11,6 +11,7 @@ use simple_oris,           only: oris
 use simple_stream_chunk,   only: stream_chunk
 use simple_class_frcs,     only: class_frcs
 use simple_stack_io,       only: stack_io
+use simple_starproject,    only: starproject
 use simple_qsys_funs
 use simple_commander_cluster2D
 use simple_timer
@@ -26,8 +27,8 @@ private
 
 integer,               parameter   :: MINBOXSZ            = 128    ! minimum boxsize for scaling
 real,                  parameter   :: GREEDY_TARGET_LP    = 15.0
-integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600  ! dev settings
-! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
+! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600  ! dev settings
+integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
 integer,               parameter   :: FREQ_POOL_REJECTION = 5     !
 character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
@@ -41,6 +42,7 @@ integer(timer_int_kind)            :: t
 type(sp_project)                       :: pool_proj
 type(qsys_env)                         :: qenv_pool
 type(cmdline)                          :: cline_cluster2D_pool
+type(starproject)                      :: starproj
 logical,                   allocatable :: pool_stacks_mask(:)
 integer                                :: pool_iter
 logical                                :: pool_available
@@ -651,6 +653,9 @@ contains
                 write(logfhandle,'(A,F5.1)')'>>> CURRENT POOOL RESOLUTION: ',frcs%estimate_lp_for_align()
                 call frcs%kill
             endif
+            ! classes export
+            if(file_exists('clusters2D.star')) call del_file('clusters2D.star')
+            call starproj%export_cls2D(pool_proj)
             ! for gui
             call update_pool_for_gui
         endif
@@ -680,7 +685,7 @@ contains
                 icls = nint(pool_proj%os_ptcl2D%get(iptcl,'class'))
                 if( cls_mask(icls) ) cycle
                 nptcls_rejected = nptcls_rejected+1
-                call pool_proj%os_ptcl2D%set(iptcl,'state',0.)
+                call pool_proj%os_ptcl2D%set_state(iptcl,0)
             enddo
             if( nptcls_rejected > 0 )then
                 do icls=1,ncls_glob
@@ -968,7 +973,7 @@ contains
             ! tricking the asynchronous master process to come to a hard stop
             call simple_touch(trim(POOL_DIR)//trim(TERM_STREAM))
             do ipart = 1,params_glob%nparts_pool
-                call simple_touch(trim(POOL_DIR)//'JOB_FINISHED_'//int2str_pad(ipart,numlen))
+                call simple_touch(trim(POOL_DIR)//trim(JOB_FINISHED_FBODY)//int2str_pad(ipart,numlen))
             enddo
             call simple_touch(trim(POOL_DIR)//'CAVGASSEMBLE_FINISHED')
         endif

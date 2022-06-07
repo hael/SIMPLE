@@ -66,6 +66,7 @@ type :: ori
     procedure          :: get_2Dshift
     procedure          :: get_3Dshift
     procedure          :: get_state
+    procedure          :: set_state
     procedure          :: get_class
     procedure          :: get_dfx, get_dfy
     procedure          :: isthere
@@ -748,6 +749,16 @@ contains
             get_state = nint(self%htab%get('state'))
         endif
     end function get_state
+
+    subroutine set_state( self, state )
+        class(ori), intent(inout) :: self
+        integer,    intent(in)    :: state
+        if( self%is_ptcl )then
+            self%pparms(I_STATE) = real(state)
+        else
+            call self%set('state', real(state))
+        endif
+    end subroutine set_state
 
     pure integer function get_class( self )
         class(ori), intent(in) :: self

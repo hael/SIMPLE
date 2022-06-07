@@ -17,11 +17,14 @@ type qsys_ctrl
     character(len=STDLEN)          :: exec_binary = ''              !< binary to execute in parallel
     character(len=32), allocatable :: script_names(:)               !< file names of generated scripts
     character(len=32), allocatable :: jobs_done_fnames(:)           !< touch files indicating completion
+    character(len=32), allocatable :: jobs_exit_code_fnames(:)      !< touch files containing exit codes
     class(qsys_base),  pointer     :: myqsys     => null()          !< pointer to polymorphic qsys object
     integer, pointer               :: parts(:,:) => null()          !< defines the fromp/top ranges for all partitions
     class(cmdline),    allocatable :: stream_cline_stack(:)         !< stack of command lines, for streaming only
     class(cmdline),    allocatable :: stream_cline_submitted(:)     !< stack of submitted command lines, for streaming only
     class(cmdline),    allocatable :: stream_cline_done_stack(:)    !< stack of completed command lines, for streaming only
+    class(cmdline),    allocatable :: stream_cline_fail_stack(:)    !< stack of failed command lines, for streaming only
+    integer(kind=8),   allocatable :: stream_submit_time(:)         !< records submission time
     logical,           allocatable :: jobs_done(:)                  !< to indicate completion of distributed scripts
     logical,           allocatable :: jobs_submitted(:)             !< to indicate which jobs have been submitted
     integer                        :: fromto_part(2)         = 0    !< defines the range of partitions controlled by this instance
@@ -33,7 +36,7 @@ type qsys_ctrl
     integer                        :: cline_stacksz          = 0    !< size of stack of command lines, for streaming only
     logical                        :: stream    = .false.           !< stream flag
     logical                        :: existence = .false.           !< indicates existence
-  contains
+    contains
     ! CONSTRUCTORS
     procedure          :: new
     ! GETTERS
@@ -55,17 +58,20 @@ type qsys_ctrl
     procedure          :: submit_scripts
     procedure          :: submit_script
     ! QUERIES
-    procedure          :: update_queue
+    procedure, private :: update_queue
     ! THE MASTER SCHEDULERS
     procedure          :: schedule_jobs
     procedure          :: schedule_array_jobs
     ! STREAMING
     procedure          :: schedule_streaming
     procedure          :: add_to_streaming
-    procedure, private :: add_to_stream_done_stack
+    procedure, private :: add_to_stream_stack
     procedure          :: get_stream_done_stack
+    procedure          :: get_stream_fail_stack
     procedure          :: get_stacksz
     procedure          :: get_done_stacksz
+    procedure          :: get_failed_stacksz
+    procedure          :: get_ncomputing_units_avail
     ! DESTRUCTOR
     procedure          :: kill
 end type qsys_ctrl
@@ -122,9 +128,11 @@ contains
                     self%jobs_submitted(fromto_part(1):fromto_part(2)),&
                     self%script_names(fromto_part(1):fromto_part(2)),&
                     self%jobs_done_fnames(fromto_part(1):fromto_part(2)),&
-                    self%stream_cline_submitted(fromto_part(1):fromto_part(2)))
+                    self%jobs_exit_code_fnames(fromto_part(1):fromto_part(2)))
         if( self%stream )then
             self%jobs_done  = .true.
+            allocate(self%stream_cline_submitted(fromto_part(1):fromto_part(2)))
+            allocate(self%stream_submit_time(fromto_part(1):fromto_part(2)),source=int(0,kind=8))
         else
             self%jobs_done  = .false.
         endif
@@ -135,7 +143,8 @@ contains
         end do
         ! create jobs done flags
         do ipart=self%fromto_part(1),self%fromto_part(2)
-            self%jobs_done_fnames(ipart) = 'JOB_FINISHED_'//int2str_pad(ipart,self%numlen)
+            self%jobs_done_fnames(ipart) = trim(JOB_FINISHED_FBODY)//int2str_pad(ipart,self%numlen)
+            self%jobs_exit_code_fnames(ipart) = 'EXIT_CODE_JOB_'//int2str_pad(ipart,self%numlen)
         end do
         self%existence = .true.
     end subroutine new
@@ -327,7 +336,7 @@ contains
         integer :: ios, funit
         call fopen(funit, file=self%script_names(ipart), iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
         call fileiochk('simple_qsys_ctrl :: gen_qsys_script; Error when opening file for writing: '&
-             //trim(self%script_names(ipart))//' ; '//trim(io_msg),ios )
+                //trim(self%script_names(ipart))//' ; '//trim(io_msg),ios )
         ! need to specify shell
         write(funit,'(a)') '#!/bin/bash'
         ! write (run-time polymorphic) instructions to the qsys
@@ -361,13 +370,14 @@ contains
     end subroutine generate_script_1
 
     !>  \brief  public script generator for single jobs
-    subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile, job_descr2 )
+    subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile, job_descr2, exit_code_fname )
         class(qsys_ctrl),           intent(inout) :: self
         class(chash),               intent(in)    :: job_descr
         class(chash),               intent(in)    :: q_descr
         character(len=*),           intent(in)    :: exec_bin, script_name
         character(len=*), optional, intent(in)    :: outfile
         class(chash),     optional, intent(in)    :: job_descr2
+        character(len=*), optional, intent(in)    :: exit_code_fname
         character(len=512) :: io_msg
         integer :: ios, funit
         call fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
@@ -399,6 +409,11 @@ contains
         else
             ! subprocess, global output
             write(funit,'(a)') ' '//STDERR2STDOUT//' | tee -a '//SIMPLE_SUBPROC_OUT
+        endif
+        ! exit code
+        if( present(exit_code_fname) )then
+            write(funit,'(a)') ''
+            write(funit,'(a)') 'echo $? > '//trim(exit_code_fname)
         endif
         ! exit shell when done
         write(funit,'(a)') ''
@@ -527,22 +542,34 @@ contains
 
     subroutine update_queue( self )
         class(qsys_ctrl),  intent(inout) :: self
-        integer :: ipart, njobs_in_queue
-        do ipart=self%fromto_part(1),self%fromto_part(2)
-            if( .not. self%jobs_done(ipart) ) self%jobs_done(ipart) = file_exists(self%jobs_done_fnames(ipart))
-            if( self%stream )then
-                if( self%jobs_done(ipart) .and. self%n_stream_updates > 0 )then
-                    call self%add_to_stream_done_stack( self%stream_cline_submitted(ipart) )
-                    call self%stream_cline_submitted(ipart)%delete('prg')
-                endif
-            else
-                if( self%jobs_done(ipart) ) self%jobs_submitted(ipart) = .true.
-            endif
-        end do
+        integer :: ipart, njobs_in_queue, exit_code
+        logical :: err
         if( self%stream )then
+            do ipart=self%fromto_part(1),self%fromto_part(2)
+                if( .not.self%jobs_done(ipart) )then
+                    if( file_exists(self%jobs_exit_code_fnames(ipart)) )then
+                        ! job has finished
+                        call read_exit_code(self%jobs_exit_code_fnames(ipart), exit_code, err)
+                        if( (exit_code == 0) .and. (.not.err) .and. file_exists(self%jobs_done_fnames(ipart)))then
+                            ! gracefully
+                            self%jobs_done(ipart) = .true.
+                            call self%add_to_stream_stack( self%stream_cline_submitted(ipart), self%stream_cline_done_stack )
+                            call self%stream_cline_submitted(ipart)%delete('prg')
+                        else
+                            ! some error occured, resource is being freed
+                            self%jobs_done(ipart) = .true.
+                            call self%add_to_stream_stack( self%stream_cline_submitted(ipart), self%stream_cline_fail_stack )
+                        endif
+                    endif
+                endif
+            end do
             self%ncomputing_units_avail = min(count(self%jobs_done), self%ncomputing_units)
             self%n_stream_updates = self%n_stream_updates + 1
         else
+            do ipart=self%fromto_part(1),self%fromto_part(2)
+                if( .not. self%jobs_done(ipart) ) self%jobs_done(ipart) = file_exists(self%jobs_done_fnames(ipart))
+                if( self%jobs_done(ipart) ) self%jobs_submitted(ipart) = .true.
+            end do
             njobs_in_queue = count(self%jobs_submitted .eqv. (.not.self%jobs_done))
             self%ncomputing_units_avail = self%ncomputing_units - njobs_in_queue
         endif
@@ -579,7 +606,6 @@ contains
         type(cmdline)              :: cline
         type(chash)                :: job_descr
         character(len=XLONGSTRLEN) :: cwd, cwd_old
-        character(len=STDLEN)      :: script_name
         integer                    :: ipart
         if( present(path) )then
             cwd_old = trim(cwd_glob)
@@ -598,12 +624,14 @@ contains
                         call cline%set('part', real(ipart))        ! computing unit allocation
                         self%stream_cline_submitted(ipart) = cline ! stash
                         call cline%gen_job_descr(job_descr)
-                        script_name = self%script_names(ipart)
                         self%jobs_submitted(ipart) = .true.
                         self%jobs_done(ipart)      = .false.
                         call del_file(self%jobs_done_fnames(ipart))
-                        call self%generate_script_2(job_descr, q_descr, self%exec_binary, script_name)
-                        call self%submit_script( script_name )
+                        call del_file(self%jobs_exit_code_fnames(ipart))
+                        call self%generate_script_2(job_descr, q_descr, self%exec_binary, self%script_names(ipart),&
+                        &exit_code_fname=self%jobs_exit_code_fnames(ipart) )
+                        call self%submit_script( self%script_names(ipart) )
+                        self%stream_submit_time(ipart) = time8()
                     endif
                 enddo
             endif
@@ -661,31 +689,32 @@ contains
         endif
     end subroutine add_to_streaming
 
-    !>  \brief  is to append to the streaming command-line stack of DONE jobs
-    subroutine add_to_stream_done_stack( self, cline )
-        class(qsys_ctrl),  intent(inout) :: self
-        class(cmdline),    intent(in)    :: cline
+    !>  \brief  is to append to the streaming command-line stack
+    subroutine add_to_stream_stack( self, cline, stack )
+        class(qsys_ctrl),            intent(inout) :: self
+        class(cmdline),              intent(in)    :: cline
+        class(cmdline), allocatable, intent(inout) :: stack(:)
         class(cmdline), allocatable :: tmp_stack(:)
         integer :: i, stacksz
         if( .not.cline%defined('prg') )return
-        if( .not. allocated(self%stream_cline_done_stack) )then
+        if( .not. allocated(stack) )then
             ! empty stack
-            allocate( self%stream_cline_done_stack(1))
-            self%stream_cline_done_stack(1) = cline
+            allocate( stack(1), source=cline)
         else
             ! append
-            stacksz = size(self%stream_cline_done_stack)
-            call move_alloc(self%stream_cline_done_stack, tmp_stack)
+            stacksz = size(stack)
+            call move_alloc(stack, tmp_stack)
             stacksz = stacksz + 1
-            allocate( self%stream_cline_done_stack(stacksz) )
+            allocate( stack(stacksz) )
             do i = 1, stacksz-1
-                self%stream_cline_done_stack(i) = tmp_stack(i)
+                stack(i) = tmp_stack(i)
                 call tmp_stack(i)%kill
             enddo
-            self%stream_cline_done_stack(stacksz) = cline
+            stack(stacksz) = cline
             deallocate(tmp_stack)
         endif
-    end subroutine add_to_stream_done_stack
+    end subroutine add_to_stream_stack
+
 
     !>  \brief  is to get the streaming command-line stack of DONE jobs, which also deallocates it
     subroutine get_stream_done_stack( self, clines )
@@ -694,6 +723,17 @@ contains
         if( .not. allocated(self%stream_cline_done_stack) )return
         call move_alloc(self%stream_cline_done_stack, clines)
     end subroutine get_stream_done_stack
+
+    !>  \brief  is to get the streaming command-line stack of DONE jobs, which also deallocates it
+    subroutine get_stream_fail_stack( self, clines, n )
+        class(qsys_ctrl),            intent(inout) :: self
+        class(cmdline), allocatable, intent(out)   :: clines(:)
+        integer,                     intent(out)   :: n
+        n = 0
+        if( .not. allocated(self%stream_cline_fail_stack) )return
+        call move_alloc(self%stream_cline_fail_stack, clines)
+        n = size(clines)
+    end subroutine get_stream_fail_stack
 
     !>  \brief  returns streaming jobs stack size
     integer function get_stacksz( self )
@@ -711,6 +751,21 @@ contains
         endif
     end function get_done_stacksz
 
+    !>  \brief  returns streaming jobs done stack size
+    integer function get_failed_stacksz( self )
+        class(qsys_ctrl), intent(in) :: self
+        if( .not. allocated(self%stream_cline_fail_stack) )then
+            get_failed_stacksz = 0
+        else
+            get_failed_stacksz = size(self%stream_cline_fail_stack)
+        endif
+    end function get_failed_stacksz
+
+    integer function get_ncomputing_units_avail( self )
+        class(qsys_ctrl), intent(in) :: self
+        get_ncomputing_units_avail = count(self%jobs_submitted)
+    end function get_ncomputing_units_avail
+
     ! DESTRUCTOR
 
     !>  \brief  is a destructor
@@ -725,10 +780,13 @@ contains
             self%ncomputing_units_avail =  0
             self%numlen                 =  0
             self%cline_stacksz          =  0
-            deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames, self%jobs_submitted)
+            deallocate(self%script_names, self%jobs_done, self%jobs_done_fnames,&
+            &self%jobs_exit_code_fnames, self%jobs_submitted)
             if(allocated(self%stream_cline_stack))     deallocate(self%stream_cline_stack)
             if(allocated(self%stream_cline_submitted)) deallocate(self%stream_cline_submitted)
             if(allocated(self%stream_cline_done_stack))deallocate(self%stream_cline_done_stack)
+            if(allocated(self%stream_cline_fail_stack))deallocate(self%stream_cline_fail_stack)
+            if(allocated(self%stream_submit_time))     deallocate(self%stream_submit_time)
             self%existence = .false.
         endif
     end subroutine kill

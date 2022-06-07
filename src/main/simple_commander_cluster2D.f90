@@ -1060,7 +1060,7 @@ contains
                 ! update project with the new orientations (this needs to be here rather than after convergence for the current implementation to work)
                 call build%spproj%write_segment_inside(params%oritype)
                 ! write cavgs starfile for iteration
-                call starproj%export_cls2D(cline, build%spproj, params%which_iter)
+                call starproj%export_cls2D(build%spproj, params%which_iter)
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
                     call cline%delete( 'startit' )

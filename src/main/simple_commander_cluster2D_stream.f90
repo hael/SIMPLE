@@ -10,6 +10,7 @@ use simple_qsys_env,       only: qsys_env
 use simple_image,          only: image
 use simple_oris,           only: oris
 use simple_stream_chunk,   only: stream_chunk
+use simple_starproject,    only: starproject
 use simple_qsys_funs
 use simple_commander_cluster2D
 use simple_timer
@@ -27,8 +28,6 @@ integer,               parameter   :: WAIT_WATCHER        = 5     ! seconds prio
 integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 7200  ! Frequency at which the original project file should be updated
 integer,               parameter   :: FREQ_POOL_REJECTION = 5     !
 character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
-character(len=STDLEN), parameter   :: LAST_SNAPSHOT       = 'last_snapshot.txt'
-character(len=STDLEN), parameter   :: SPPROJ_SNAPSHOT     = 'SIMPLE_PROJECT_SNAPSHOT'
 character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
 character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
 character(len=STDLEN), parameter   :: DISTR_EXEC_FNAME    = './distr_cluster2D_pool'
@@ -61,13 +60,14 @@ contains
         integer                            :: n_new_chunks, glob_chunk_id, n_converged_chunks
         ! others
         type(sp_project)                   :: orig_proj, transfer_spproj
+        type(starproject)                  :: starproj
         character(len=:),      allocatable :: spproj_list_fname, orig_projfile
         character(len=LONGSTRLEN)          :: prev_snapshot_frcs, prev_snapshot_cavgs
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
         real    :: orig_smpd, scale_factor, smpd, lp_greedy, lpstart_stoch
         integer :: nptcls_per_chunk, ncls_glob, last_injection, max_ncls,ichunk, time_iter, ipart, iotest
         integer :: iter, orig_box, box, boxpd, n_spprojs, pool_iter, origproj_time, time_start_iter
-        logical :: do_autoscale, l_greedy, l_once, l_restart, l_wfilt
+        logical :: do_autoscale, l_greedy, l_once, l_wfilt
         if( cline%defined('refine') )then
             if( trim(cline%get_carg('refine')).ne.'greedy' )then
                 if( .not.cline%defined('mskdiam') ) THROW_HARD('MSKDIAM must be defined!')
@@ -120,7 +120,7 @@ contains
         if( cline%defined('lp') ) lp_greedy = params%lp
         lpstart_stoch     = lp_greedy
         prev_snapshot_cavgs = ''
-        call write_user_params
+        ! call write_user_params
         call simple_mkdir(SCALE_DIR)
         ! init command-lines
         call cline%delete('lp')
@@ -267,7 +267,7 @@ contains
             time_start_iter = simple_gettime()
             call debug_print('global iter '//int2str(iter)//' '//trim(cast_time_char(time_start_iter)))
             ! update rejection parameters
-            call update_user_params
+            ! call update_user_params
             if( file_exists(TERM_STREAM) )then
                 write(logfhandle,'(A,A)')'>>> TERMINATING CLUSTER2D STREAM ',trim(cast_time_char(simple_gettime()))
                 exit
@@ -298,7 +298,7 @@ contains
             if( allocated(converged_chunks) ) n_converged_chunks = size(converged_chunks)
             call debug_print('end chunk section global iter '//int2str(iter))
             ! deal with pool completion, rejection, execution
-            call update_user_params
+            ! call update_user_params
             if( .not.pool_available )then
                 call debug_print('pool unavailable '//int2str(iter))
                 pool_converged = file_exists(CLUSTER2D_FINISHED)
@@ -318,10 +318,6 @@ contains
                 if( (simple_gettime()-origproj_time) > ORIGPROJ_WRITEFREQ .and. pool_iter>1)then
                     call write_snapshot(.true.)
                     origproj_time = simple_gettime()
-                endif
-                if( file_exists(SPPROJ_SNAPSHOT) )then
-                    call write_snapshot(.true.)
-                    call del_file(SPPROJ_SNAPSHOT)
                 endif
                 ! append new chunks
                 if( n_converged_chunks > 0) call import_chunks_into_pool
@@ -369,7 +365,7 @@ contains
             refs_glob = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params%ext)
             ! tricking the asynchronous master process to come to a hard stop
             do ipart = 1,params%nparts
-                call simple_touch('JOB_FINISHED_'//int2str_pad(ipart,params%numlen))
+                call simple_touch(trim(JOB_FINISHED_FBODY)//int2str_pad(ipart,params%numlen))
             enddo
             call simple_touch('CAVGASSEMBLE_FINISHED')
         endif
@@ -464,6 +460,9 @@ contains
                         write(logfhandle,'(A,F5.1)')'>>> CURRENT POOOL RESOLUTION: ',frcs%estimate_lp_for_align()
                         call frcs%kill
                     endif
+                    ! classes star export
+                    if(file_exists('clusters2D.star')) call del_file('clusters2D.star')
+                    call starproj%export_cls2D(pool_proj)
                 endif
                 call spproj%kill
                 call debug_print('end update_pool')
@@ -846,7 +845,7 @@ contains
                     top   = nint(pool_proj%os_stk%get(istk,'top'))
                     min_update_cnts_per_stk(istk) = huge(istk)
                     do iptcl = fromp,top
-                        if( pool_proj%os_ptcl2D%get(iptcl,'state') > 0.5 )then
+                        if( pool_proj%os_ptcl2D%get_state(iptcl) > 0 )then
                             nptcls_per_stk(istk)          = nptcls_per_stk(istk) + 1 ! # ptcls with state=1
                             min_update_cnts_per_stk(istk) = min(min_update_cnts_per_stk(istk), nint(pool_proj%os_ptcl2D%get(iptcl,'updatecnt')))
                         endif
@@ -954,12 +953,12 @@ contains
                     dest_here = trim(dest)
                 endif
                 call img%new([box,box,1],smpd)
-                call img_pad%new([orig_box,orig_box,1],params%smpd)
+                call img_pad%new([orig_box,orig_box,1],orig_smpd)
                 cls_pop = nint(pool_proj%os_cls2D%get_all('pop'))
                 call find_ldim_nptcls(src,ldim,ncls_here)
                 call stkio_r%open(trim(src), smpd, 'read', bufsz=ncls_here)
                 call stkio_r%read_whole
-                call stkio_w%open(dest_here, params%smpd, 'write', box=orig_box, bufsz=ncls_here)
+                call stkio_w%open(dest_here, orig_smpd, 'write', box=orig_box, bufsz=ncls_here)
                 do icls = 1,ncls_here
                     if( cls_pop(icls) > 0 )then
                         call img%zero_and_unflag_ft
@@ -1001,7 +1000,7 @@ contains
                         icls = nint(pool_proj%os_ptcl2D%get(iptcl,'class'))
                         if( cls_mask(icls) ) cycle
                         nptcls_rejected = nptcls_rejected+1
-                        call pool_proj%os_ptcl2D%set(iptcl,'state',0.)
+                        call pool_proj%os_ptcl2D%set_state(iptcl,0)
                     enddo
                     call debug_print('in reject from_pool 1')
                     if( nptcls_rejected > 0 )then
@@ -1277,8 +1276,6 @@ contains
                     call pool_proj%write(projfile)
                     call pool_proj%os_ptcl3D%kill
                 endif
-                ! we save the last snapshot name to simplify restarting
-                call write_singlelineoftext(LAST_SNAPSHOT, projfile)
                 ! cleanup previous snapshot
                 prev_snapshot_frcs  = trim(frcsfname)
                 prev_snapshot_cavgs = trim(cavgsfname)
@@ -1322,18 +1319,6 @@ contains
                 call os%kill
                 call debug_print('end update_user_params')
             end subroutine update_user_params
-
-            !> Sniffs for most recent snpashot in previous folder
-            subroutine find_previous_snapshot()
-                character(len=LONGSTRLEN), allocatable :: restart_snapshot(:)
-                l_restart = .false.
-                if( .not. cline%defined('dir_prev') ) return
-                if( .not.file_exists(trim(params%dir_prev)//trim(LAST_SNAPSHOT)) ) then
-                    THROW_HARD('Could not find previous project file for restart!')
-                endif
-                call read_filetable( trim(params%dir_prev)//trim(LAST_SNAPSHOT), restart_snapshot)
-                if( size(restart_snapshot) /= 1 ) THROW_HARD('Invalid format for: '//trim(LAST_SNAPSHOT))
-            end subroutine find_previous_snapshot
 
     end subroutine exec_cluster2D_stream
 
