@@ -17,6 +17,7 @@ type(builder)            :: b
 integer,     parameter   :: NSPACE=100
 real                     :: corrs(NSPACE)
 type(image), allocatable :: imgs(:)
+real,        allocatable :: pshifts(:,:)
 integer                  :: iref, iptcl, loc(1), cnt, x, y
 type(eval_cartftcc)      :: evalcc
 if( command_argument_count() < 3 )then
@@ -65,25 +66,53 @@ do iptcl = 1,p%nptcls
     loc = maxloc(corrs)
     if( loc(1) == iptcl ) cnt = cnt + 1
 end do
-print *, (real(cnt) / real(p%nptcls)) * 100., ' % correctly assigned'
-! test with shifted ori
-do x = -3, 3
-    do y = -3, 3
-        do iref = 1,p%nptcls
-            call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [real(x),real(y)])
-        end do
-        ! first crude test
-        cnt = 0
-        do iptcl = 1,p%nptcls
-            call evalcc%project_and_correlate(iptcl, corrs)
-            loc = maxloc(corrs)
-            if( loc(1) == iptcl ) cnt = cnt + 1
-        end do
-        if( cnt < p%nptcls )then
-            print *, 'Shifted Ori test FAILED! At x = ', x, ', y = ', y
-            stop
-        endif
-    enddo
-enddo
-print *, 'Shifted Ori test PASSED!'
+if( cnt == p%nptcls )then 
+    print *, 'Crude unit test PASSED!'
+else
+    print *, 'Crude unit test FAILED! ', (real(cnt) / real(p%nptcls)) * 100., ' % correctly assigned!' 
+endif
+! randomly shift the origin
+allocate(pshifts(p%nptcls, 2), source=0.)
+do iref = 1,p%nptcls
+    ! mapping ran3 (0 to 1) to [-5, 5]
+    pshifts(iptcl, 1) = floor(ran3()*10.99) - 5
+    pshifts(iptcl, 2) = floor(ran3()*10.99) - 5
+    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), pshifts(iptcl, :))
+end do
+cnt = 0
+do iptcl = 1,p%nptcls
+    call evalcc%project_and_correlate(iptcl, corrs)
+    loc = maxloc(corrs)
+    if( loc(1) == iptcl ) cnt = cnt + 1
+    if( .not. loc(1) == iptcl ) write(*, *) pshifts(iptcl, :)
+end do
+if( cnt == p%nptcls )then 
+    print *, 'Randomly-shifted origin unit test PASSED!'
+else
+    print *, 'Randomly-shifted origin unit test FAILED! ', (real(cnt) / real(p%nptcls)) * 100., ' % correctly assigned!' 
+endif
+! keeping orig at (0,0) and randomly shift the particles
+do iref = 1,p%nptcls
+    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [0.,0.])
+end do
+do iptcl = 1,p%nptcls
+    ! mapping ran3 (0 to 1) to [-5, 5]
+    pshifts(iptcl, 1) = floor(ran3()*10.99) - 5
+    pshifts(iptcl, 2) = floor(ran3()*10.99) - 5
+    call imgs(iptcl)%fft
+    call imgs(iptcl)%shift2Dserial(pshifts(iptcl,:))
+    call cftcc%set_ptcl(iptcl,imgs(iptcl))
+end do
+cnt = 0
+do iptcl = 1,p%nptcls
+    call evalcc%project_and_correlate(iptcl, corrs)
+    loc = maxloc(corrs)
+    if( loc(1) == iptcl ) cnt = cnt + 1
+    if( .not. loc(1) == iptcl ) write(*, *) pshifts(iptcl, :)
+end do
+if( cnt == p%nptcls )then
+    print *, 'Randomly-shifted particles unit test PASSED!'
+else
+    print *, 'Randomly-shifted particles unit test FAILED! ', (real(cnt) / real(p%nptcls)) * 100., ' % correctly assigned!' 
+endif
 end program simple_test_eval_cartftcc
