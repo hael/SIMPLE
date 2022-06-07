@@ -78,7 +78,6 @@ contains
         type(tvfilter), optional, intent(inout) :: tvfilt_in
         integer, parameter :: BW_ORDER = 8
         real,    parameter :: LAMBDA_MIN = .5 , LAMBDA_MAX = 5.    ! for TV filter
-        real,    parameter ::  SIGMA_MIN = .01,  SIGMA_MAX = 1.    ! for NLMean filter
         real               :: param
         type(tvfilter)     :: tvfilt_loc
         select case(params_glob%filt_enum)
