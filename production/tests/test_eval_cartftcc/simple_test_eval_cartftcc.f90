@@ -17,7 +17,7 @@ type(builder)            :: b
 integer,     parameter   :: NSPACE=100
 real                     :: corrs(NSPACE)
 type(image), allocatable :: imgs(:)
-integer                  :: iref, iptcl, loc(1), cnt
+integer                  :: iref, iptcl, loc(1), cnt, x, y
 type(eval_cartftcc)      :: evalcc
 if( command_argument_count() < 3 )then
     write(logfhandle,'(a)') 'simple_test_eval_cartftcc lp=xx smpd=yy nthr=zz vol1=vol1.mrc'
@@ -66,4 +66,24 @@ do iptcl = 1,p%nptcls
     if( loc(1) == iptcl ) cnt = cnt + 1
 end do
 print *, (real(cnt) / real(p%nptcls)) * 100., ' % correctly assigned'
+! test with shifted ori
+do x = -3, 3
+    do y = -3, 3
+        do iref = 1,p%nptcls
+            call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [real(x),real(y)])
+        end do
+        ! first crude test
+        cnt = 0
+        do iptcl = 1,p%nptcls
+            call evalcc%project_and_correlate(iptcl, corrs)
+            loc = maxloc(corrs)
+            if( loc(1) == iptcl ) cnt = cnt + 1
+        end do
+        if( cnt < p%nptcls )then
+            print *, 'Shifted Ori test FAILED! At x = ', x, ', y = ', y
+            stop
+        endif
+    enddo
+enddo
+print *, 'Shifted Ori test PASSED!'
 end program simple_test_eval_cartftcc
