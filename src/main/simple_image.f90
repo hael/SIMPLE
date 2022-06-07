@@ -4475,12 +4475,13 @@ contains
     function corr_1( self1, self2, lp_dyn, hp_dyn ) result( r )
         class(image),   intent(inout) :: self1, self2
         real, optional, intent(in)    :: lp_dyn, hp_dyn
-        real    :: r, sumasq, sumbsq
+        real    :: r, sumasq, sumbsq, eps
         integer :: h, k, l, phys(3), lims(3,2), sqarg, sqlp, sqhp
         logical :: didft1, didft2
         r = 0.
         sumasq = 0.
         sumbsq = 0.
+        eps    = epsilon(sumasq)
         if( self1.eqdims.self2 )then
             didft1 = .false.
             if( .not. self1%ft )then
@@ -4520,12 +4521,10 @@ contains
                 end do
             end do
             !$omp end parallel do
-            if( r < TINY )then
-                if( sumasq < TINY .and. sumbsq < TINY )then
-                    r = 1.
-                else
-                    r = 0.
-                endif
+            if( r < eps .and. sumasq < eps .and. sumbsq < eps )then
+                r = 1.
+            elseif( sqrt(sumasq * sumbsq) < eps )then
+                r = 0.
             else
                 r = r / sqrt(sumasq * sumbsq)
             endif
@@ -4562,15 +4561,13 @@ contains
         sumsq_ref = ref_ptr%calc_sumsq(resmsk)
         eps       = epsilon(sumsq_ref)
         cc        = real(sum(ref_ptr%cmat * conjg(self_ptcl%cmat), mask=resmsk))
-        if( cc < eps )then
-            if( sumsq_ref < eps .and. sumsq_ptcl < eps )then
-                cc = 1.
-            else
-                cc = 0.
-            endif
-            return
+        if( cc < eps .and. sumsq_ref < eps .and. sumsq_ptcl < eps )then
+            cc = 1.
+        elseif( sqrt(sumsq_ref * sumsq_ptcl) < eps )then
+            cc = 0.
+        else
+            cc = cc / sqrt(sumsq_ref * sumsq_ptcl)
         endif
-        cc = cc / sqrt(sumsq_ref * sumsq_ptcl)
     end function corr_2
 
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
