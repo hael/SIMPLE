@@ -17,7 +17,7 @@ type(builder)            :: b
 integer,     parameter   :: NSPACE=100
 real                     :: corrs(NSPACE)
 type(image), allocatable :: imgs(:)
-integer                  :: iref, iptcl
+integer                  :: iref, iptcl, loc(1), cnt
 type(eval_cartftcc)      :: evalcc
 if( command_argument_count() < 3 )then
     write(logfhandle,'(a)') 'simple_test_eval_cartftcc lp=xx smpd=yy nthr=zz vol1=vol1.mrc'
@@ -58,18 +58,12 @@ call evalcc%new(b%vol, b%vol, NSPACE)
 do iref = 1,p%nptcls
     call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [0.,0.])
 end do
-
-
-
+! first crude test
+cnt = 0
 do iptcl = 1,p%nptcls
     call evalcc%project_and_correlate(iptcl, corrs)
-
-    print *, corrs
-
+    loc = maxloc(corrs)
+    if( loc(1) == iptcl ) cnt = cnt + 1
 end do
-
-
-
-
-
+print *, (real(cnt) / real(p%nptcls)) * 100., ' % correctly assigned'
 end program simple_test_eval_cartftcc
