@@ -42,20 +42,20 @@ contains
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
         logical,                   parameter   :: DEBUG_HERE      = .false.
         character(len=STDLEN),     parameter   :: micspproj_fname = './streamdata.simple'
-        class(cmdline),            allocatable :: completed_jobs_clines(:)
+        class(cmdline),            allocatable :: completed_jobs_clines(:), failed_jobs_clines(:)
         type(qsys_env)                         :: qenv
         type(cmdline)                          :: cline_make_pickrefs
         type(moviewatcher)                     :: movie_buff
         type(sp_project)                       :: spproj, stream_spproj
         type(starproject)                      :: starproj
         character(len=LONGSTRLEN), allocatable :: movies(:)
-        character(len=LONGSTRLEN), allocatable, target :: completed_fnames(:)
+        character(len=LONGSTRLEN), allocatable :: completed_fnames(:)
         character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract
         character(len=LONGSTRLEN)              :: movie
         real                                   :: pickref_scale
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection
-        integer                                :: cnt, n_imported, nptcls_glob
+        integer                                :: cnt, n_imported, nptcls_glob, n_failed_jobs, n_fail_iter
         logical                                :: l_pick, l_movies_left, l_haschanged, l_cluster2d
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
@@ -169,6 +169,7 @@ contains
         nmovies       = 0
         iter          = 0
         n_imported    = 0
+        n_failed_jobs = 0
         l_movies_left = .false.
         l_haschanged  = .false.
         do
@@ -185,7 +186,7 @@ contains
                 do imovie = 1, nmovies
                     movie = trim(adjustl(movies(imovie)))
                     if( movie_buff%is_past(movie) )cycle
-                    call create_individual_project
+                    call create_individual_project(movie)
                     call qenv%qscripts%add_to_streaming( cline )
                     call qenv%qscripts%schedule_streaming( qenv%qdescr, path=output_dir )
                     call movie_buff%add2history( movies(imovie) )
@@ -214,12 +215,26 @@ contains
             else
                 n_imported = 0 ! newly imported
             endif
+            ! failed jobs
+            if( qenv%qscripts%get_failed_stacksz() > 0 )then
+                call qenv%qscripts%get_stream_fail_stack( failed_jobs_clines, n_fail_iter )
+                if( n_fail_iter > 0 )then
+                    n_failed_jobs = n_failed_jobs + n_fail_iter
+                    do cnt = 1,n_fail_iter
+                        THROW_WARN('Something went wrong with: '//trim(failed_jobs_clines(cnt)%get_carg('projfile'))//'. Skipping')
+                        call failed_jobs_clines(cnt)%kill
+                    enddo
+                    deallocate(failed_jobs_clines)
+                endif
+            endif
             ! project update
             if( n_imported > 0 )then
                 n_imported = spproj%os_mic%get_noris()
-                write(logfhandle,'(A,I5)')'>>> # MOVIES PROCESSED & IMPORTED:    ',n_imported
-                if( l_pick ) write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',nptcls_glob
-                ! write project micrographs field
+                write(logfhandle,'(A,I5)')             '>>> # MOVIES PROCESSED & IMPORTED:     ',n_imported
+                if( l_pick ) write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:          ',nptcls_glob
+                write(logfhandle,'(A,I3,A1,I3)')       '>>> # OF COMPUTING UNITS IN USE/TOTAL:   ',qenv%get_navail_computing_units(),'/',params%nparts
+                if( n_failed_jobs > 0 ) write(logfhandle,'(A,I5)')             '>>> # FAILED JOBS                :     ',n_failed_jobs
+                ! write project for gui, micrographs field only
                 call spproj%write_segment_inside('mic',micspproj_fname)
                 last_injection = simple_gettime()
                 l_haschanged   = .true.
@@ -309,7 +324,7 @@ contains
                         if( .not.stk_mask(iproj) ) cycle
                         istk = istk+1
                         call stream_spproj%read_segment('stk', completed_fnames(iproj))
-                        call stream_spproj%os_stk%set(1, 'state', real(states(iproj)))
+                        call stream_spproj%os_stk%set_state(1, states(iproj))
                         n      = nint(stream_spproj%os_stk%get(1,'nptcls'))
                         fromp  = nptcls + 1
                         nptcls = nptcls + n
@@ -319,9 +334,9 @@ contains
                         call spproj%os_stk%set(istk, 'top',  real(top))
                     enddo
                     call spproj%write_segment_inside('stk', params%projfile)
+                    call spproj%os_stk%kill
+                    ! particles
                     call spproj%os_ptcl2D%new(nptcls, is_ptcl=.true.)
-                    call spproj%os_ptcl3D%new(nptcls, is_ptcl=.true.)
-                    ! particles 2D
                     istk   = 0
                     iptcl  = 0
                     do iproj = 1,nmics
@@ -333,21 +348,19 @@ contains
                             iptcl = iptcl + 1
                             call spproj%os_ptcl2D%transfer_ori(iptcl,stream_spproj%os_ptcl2D,i)
                             call spproj%os_ptcl2D%set(iptcl, 'stkind', real(istk))
-                            call spproj%os_ptcl2D%set(iptcl, 'state',  real(states(iproj)))
+                            call spproj%os_ptcl2D%set_state(iptcl, states(iproj))
                         enddo
                         call stream_spproj%kill
                     enddo
+                    write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',spproj%os_ptcl2D%get_noris()
                     call spproj%write_segment_inside('ptcl2D', params%projfile)
                     spproj%os_ptcl3D = spproj%os_ptcl2D
+                    call spproj%os_ptcl2D%kill
                     call spproj%os_ptcl3D%delete_2Dclustering
                     call spproj%write_segment_inside('ptcl3D', params%projfile)
-                    write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:         ',spproj%os_ptcl2D%get_noris()
+                    call spproj%os_ptcl3D%kill
                 endif
                 call spproj%write_non_data_segments(params%projfile)
-                ! cleanup, we preserve os_mic
-                call spproj%os_stk%kill
-                call spproj%os_ptcl2D%kill
-                call spproj%os_ptcl3D%kill
                 ! benchmark
                 if( DEBUG_HERE )then
                     rt_write = toc(t0)
@@ -373,19 +386,20 @@ contains
                 ! previously completed projects
                 n_old = 0 ! on first import
                 if( allocated(completedfnames) ) n_old = size(completed_fnames)
-                if( l_pick )then
-                    do i = 1,n_spprojs
-                        ! flags zero-picked mics that will not be imported
-                        fname = trim(output_dir)//trim(completed_jobs_clines(i)%get_carg('projfile'))
-                        call check_nptcls(fname,nptcls_here,state)
+                do i = 1,n_spprojs
+                    ! flags zero-picked mics that will not be imported
+                    fname = trim(output_dir)//trim(completed_jobs_clines(i)%get_carg('projfile'))
+                    call check_nptcls(fname, nptcls_here, state, l_pick)
+                    if( l_pick )then
                         spproj_mask(i) = (nptcls_here > 0) .and. (state > 0)
-                    enddo
-                endif
-                n2import = count(spproj_mask)
-                if( l_pick )then 
-                    if( n2import /= n_spprojs )then
-                        write(logfhandle,'(A,I3,A)')'>>> NO PARTICLES FOUND IN ',n_spprojs-n2import,' MICROGRAPHS'
+                    else
+                        spproj_mask(i) = state > 0
                     endif
+                enddo
+                n2import      = count(spproj_mask)
+                n_failed_jobs = n_failed_jobs + (n_spprojs-n2import)
+                if( l_pick .and. n2import /= n_spprojs )then
+                    write(logfhandle,'(A,I3,A)')'>>> NO PARTICLES FOUND IN ',n_spprojs-n2import,' MICROGRAPHS'
                 endif
                 if( n2import > 0 )then
                     n_completed = n_old + n2import
@@ -439,34 +453,17 @@ contains
                     nimported  = 0
                     return
                 endif
+                ! call write_filetable(STREAM_SPPROJFILES, completedfnames)
             end subroutine update_projects_list
 
-            subroutine check_nptcls( fname, nptcls, state )
-                character(len=*), intent(in)  :: fname
-                integer,          intent(out) :: nptcls, state
-                type(sp_project) :: spproj_here
-                integer :: nmics, nstks
-                call spproj_here%read_data_info(fname, nmics, nstks, nptcls)
-                if( nmics /= 1 .or. nptcls < 1 )then
-                    ! something went wrong, skipping this one
-                    THROW_WARN('Something went wrong with: '//trim(fname)//'. Skipping')
-                    nptcls = 0
-                    state  = 0
-                else
-                    call spproj_here%read_segment('mic',fname)
-                    nptcls = nint(spproj_here%os_mic%get(1,'nptcls'))
-                    state  = spproj_here%os_mic%get_state(1)
-                    call spproj_here%kill
-                endif
-            end subroutine check_nptcls
-
-            subroutine create_individual_project
-                type(sp_project)              :: spproj_here
-                type(cmdline)                 :: cline_here
-                type(ctfparams)               :: ctfvars
-                character(len=STDLEN)         :: ext, movie_here
-                character(len=LONGSTRLEN)     :: projname, projfile
-                character(len=XLONGSTRLEN)    :: cwd, cwd_old
+            subroutine create_individual_project( movie )
+                character(len=*), intent(in) :: movie
+                type(sp_project)             :: spproj_here
+                type(cmdline)                :: cline_here
+                type(ctfparams)              :: ctfvars
+                character(len=STDLEN)        :: ext, movie_here
+                character(len=LONGSTRLEN)    :: projname, projfile
+                character(len=XLONGSTRLEN)   :: cwd, cwd_old
                 cwd_old = trim(cwd_glob)
                 call chdir(output_dir)
                 call simple_getcwd(cwd)
@@ -621,5 +618,38 @@ contains
             end subroutine movefile2folder
 
     end subroutine exec_preprocess_stream_dev
+
+    ! Common utility functions
+
+    subroutine check_nptcls( fname, nptcls, state, ptcl_check )
+        character(len=*), intent(in)  :: fname
+        integer,          intent(out) :: nptcls, state
+        logical,          intent(in)  :: ptcl_check
+        type(sp_project) :: spproj_here
+        integer :: nmics, nstks
+        state  = 0
+        call spproj_here%read_data_info(fname, nmics, nstks, nptcls)
+        if( ptcl_check )then
+            if( nmics /= 1 .or. nptcls < 1 )then
+                ! something went wrong, skipping this one
+                THROW_WARN('Something went wrong with: '//trim(fname)//'. Skipping')
+                nptcls = 0
+            else
+                call spproj_here%read_segment('mic',fname)
+                nptcls = nint(spproj_here%os_mic%get(1,'nptcls'))
+                state  = spproj_here%os_mic%get_state(1)
+                call spproj_here%kill
+            endif
+        else
+            if( nmics /= 1 )then
+                ! something went wrong, skipping this one
+                THROW_WARN('Something went wrong with: '//trim(fname)//'. Skipping')
+            else
+                call spproj_here%read_segment('mic',fname)
+                state  = spproj_here%os_mic%get_state(1)
+                call spproj_here%kill
+            endif
+        endif
+    end subroutine check_nptcls
 
 end module simple_commander_preprocess_stream

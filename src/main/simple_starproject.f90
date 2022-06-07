@@ -5,7 +5,7 @@ use simple_sp_project, only: sp_project
 use simple_cmdline,    only: cmdline
 use simple_oris,       only: oris
 use simple_ori,        only: ori
-use simple_parameters, only: parameters
+use simple_parameters, only: params_glob
 use simple_starproject_utils
 use CPlot2D_wrapper_module
 use simple_rnd
@@ -485,16 +485,13 @@ contains
         call self%export_stardata(spproj, self%starfile%micrographs%flags, spproj%os_mic, "micrographs")
     end subroutine export_mics
 
-    subroutine export_cls2D(self, cline, spproj, iter)
+    subroutine export_cls2D(self, spproj, iter)
         class(starproject), intent(inout) :: self
-        class(cmdline),     intent(inout) :: cline
         class(sp_project),  intent(inout) :: spproj
-        type(parameters)                  :: params
+        integer, optional,  intent(in)    :: iter
         character(len=:), allocatable     :: stkname, relpath
-        integer                           :: ncls
-        integer, optional                 :: iter
+        integer                           :: i, ncls
         real                              :: smpd
-        integer                           :: i
         if(present(iter)) then
             self%starfile%filename ="clusters2D_iter"//int2str_pad(iter,3)//".star"
         else
@@ -507,7 +504,7 @@ contains
         endif
         if(.not. self%starfile%initialised) call self%initialise()
         if(present(iter)) then
-            stkname = basename(CWD_GLOB)//"/"//trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//params%ext
+            stkname = basename(CWD_GLOB)//"/"//trim(CAVGS_ITER_FBODY)//int2str_pad(iter,3)//trim(params_glob%ext)
         else
             call spproj%get_cavgs_stk(stkname, ncls, smpd)
         end if

@@ -9,6 +9,7 @@ integer, parameter :: LONGSTRLEN   = 1024 !< longer string length
 integer, parameter :: XLONGSTRLEN  = 4096 !< extra longer string length
 ! GLOBAL FILE CONSTANTS
 character(len=*), parameter :: SIMPLE_SUBPROC_OUT   = 'SIMPLE_SUBPROC_OUTPUT'
+character(len=*), parameter :: JOB_FINISHED_FBODY   = 'JOB_FINISHED_'
 ! EXTENSIONS
 character(len=*), parameter :: TXT_EXT              = '.txt'
 character(len=*), parameter :: BIN_EXT              = '.bin'
@@ -75,7 +76,6 @@ character(len=*), parameter :: DIR_PREPROC          = './'
 ! STREAMING
 character(len=*), parameter :: PREPROCESS_PREFIX    = 'preprocess_'
 character(len=*), parameter :: STREAM_SPPROJFILES   = './stream_spprojfiles.txt'
-character(len=*), parameter :: STREAM_SELMICS       = './stream_selected_mics.txt'
 character(len=*), parameter :: TERM_STREAM          = './SIMPLE_TERM_STREAM'
 character(len=*), parameter :: PAUSE_STREAM         = './SIMPLE_PAUSE_STREAM'
 ! MISCELLANEOUS

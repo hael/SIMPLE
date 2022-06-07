@@ -25,7 +25,7 @@ type :: qsys_env
     class(qsys_base), pointer, private :: myqsys=>null()
     integer,                   private :: nparts
     logical,                   private :: existence = .false.
-  contains
+    contains
     procedure :: new
     procedure :: exists
     procedure :: gen_script
@@ -33,6 +33,7 @@ type :: qsys_env
     procedure :: exec_simple_prg_in_queue
     procedure :: exec_simple_prg_in_queue_async
     procedure :: get_qsys
+    procedure :: get_navail_computing_units
     procedure :: kill
 end type qsys_env
 
@@ -105,9 +106,9 @@ contains
         call self%qsys_fac%new(qsnam, self%myqsys)
         ! create the user specific qsys and qsys controller (script generator)
         if(present(exec_bin))then
-             self%simple_exec_bin = filepath(trim(self%qdescr%get('simple_path')),'bin',trim(exec_bin), nonalloc=.true.)
+                self%simple_exec_bin = filepath(trim(self%qdescr%get('simple_path')),'bin',trim(exec_bin), nonalloc=.true.)
         else
-             self%simple_exec_bin = filepath(trim(self%qdescr%get('simple_path')),'bin','simple_private_exec', nonalloc=.true.)
+                self%simple_exec_bin = filepath(trim(self%qdescr%get('simple_path')),'bin','simple_private_exec', nonalloc=.true.)
         endif
         if( present(numlen) )then
             call self%qscripts%new(self%simple_exec_bin, self%myqsys, self%parts,&
@@ -197,9 +198,11 @@ contains
         call cline%gen_job_descr(job_descr)
         if(present(cline2) )then
             call cline2%gen_job_descr(job_descr2)
-            call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name, outfile, job_descr2)
+            call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name,&
+            & outfile=outfile, job_descr2=job_descr2)
         else
-            call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name, outfile)
+            call self%qscripts%generate_script(job_descr, self%qdescr, self%simple_exec_bin, script_name,&
+            & outfile=outfile)
         endif
         call wait_for_closure(script_name)
         call self%qscripts%submit_script(script_name)
@@ -221,6 +224,11 @@ contains
                 qsys = 'pbs'
         end select
     end function get_qsys
+
+    integer function get_navail_computing_units( self )
+        class(qsys_env), intent(in) :: self
+        get_navail_computing_units = self%qscripts%get_ncomputing_units_avail()
+    end function get_navail_computing_units
 
     subroutine kill( self )
         class(qsys_env) :: self

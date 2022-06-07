@@ -269,7 +269,6 @@ type(simple_input_param) :: stk2
 type(simple_input_param) :: stktab
 type(simple_input_param) :: stepsz
 type(simple_input_param) :: time_per_image
-type(simple_input_param) :: time_inactive
 type(simple_input_param) :: trs
 type(simple_input_param) :: tseries
 type(simple_input_param) :: update_frac
@@ -901,9 +900,9 @@ contains
         call set_param(mskdiam,       'mskdiam',           'num',    'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to remove background noise', 'mask diameter in A', .true., 0.)
         call set_param(ncls,          'ncls',          'num',    'Number of 2D clusters', 'Number of groups to sort the particles &
         &into prior to averaging to create 2D class averages with improved SNR', '# 2D clusters', .true., 200.)
-        call set_param(nparts,        'nparts',        'num',    'Number of parts', 'Number of partitions for distrbuted memory execution. One part typically corresponds to one CPU socket in the distributed &
+        call set_param(nparts,        'nparts',        'num',    'Number of computing nodes', 'Number of partitions for distrbuted memory execution. One part typically corresponds to one CPU socket in the distributed &
         &system. On a single-socket machine there may be speed benfits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', 'divide job into # parts', .true., 1.0)
-        call set_param(nthr,          'nthr',          'num',    'Number of threads per part, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
+        call set_param(nthr,          'nthr',          'num',    'Number of threads per computing node, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
         &logical threads in a socket.', '# shared-memory CPU threads', .true., 0.)
         call set_param(nonuniform,    'nonuniform',    'binary', 'Nonuniform filter', 'Apply nonuniform filter(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(update_frac,   'update_frac',   'num',    'Fractional update per iteration', 'Fraction of particles to update per iteration in incremental learning scheme for accelerated convergence &
@@ -954,7 +953,7 @@ contains
         call set_param(eer_fraction,   'eer_fraction', 'num',    '# of EER frames to fraction together', 'Number of raw EER frames to fraction together', '# EER frames{20}', .false., 20.)
         call set_param(eer_upsampling, 'eer_upsampling','multi', 'EER up-sampling', 'EER up-sampling(1=4K|2=8K){1}', '(1|2){1}', .false., 1.)
         call set_param(groupframes,    'groupframes',  'binary', 'Patch motion correction frames averaging', 'Whether to perform frames averaging during motion correction - for patchesonly(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(mcpatch,        'mcpatch',      'binary', 'Patch-based motion correction', 'Whether to perform Patch-based motion correction(yes|no){no}', '(yes|no){yes}', .false., 'yes')
+        call set_param(mcpatch,        'mcpatch',      'binary', 'Patch-based motion correction', 'Whether to perform Patch-based motion correction(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(mcconvention,   'mcconvention', 'str',    'Frame of reference during movie alignment', 'Frame of reference during movie alignment; simple/unblur:central; relion/motioncorr:first(simple|unblur|relion|motioncorr){simple}', '(simple|unblur|relion|motioncorr){simple}', .false., 'simple')
         call set_param(nxpatch,        'nxpatch',      'num',    '# of patches along x-axis', 'Motion correction # of patches along x-axis', '# x-patches{5}', .false., 5.)
         call set_param(nypatch,        'nypatch',      'num',    '# of patches along y-axis', 'Motion correction # of patches along y-axis', '# y-patches{5}', .false., 5.)
@@ -963,7 +962,6 @@ contains
         call set_param(projname,       'projname',     'str',    'Project name', 'Name of project to create ./myproject/myproject.simple file for',&
         &'e.g. to create ./myproject/myproject.simple', .true., '')
         call set_param(user_email,     'user_email',   'str',    'Your e-mail address', 'Your e-mail address', 'e.g. myname@uni.edu', .false., '')
-        call set_param(time_inactive,  'time_inactive','num',    'Time limit for exit (no new data detected)', 'Time limit in minutes after which the application will exit when no new data is detected{120}', 'in mins{120}', .false., 120.)
         call set_param(time_per_image, 'time_per_image','num',   'Time per image', 'Estimated time per image in seconds for forecasting total execution time{100}', 'in seconds{100}', .false., 100.)
         call set_param(walltime,       'walltime',     'num',    'Walltime', 'Maximum execution time for job scheduling and management(23h59mins){86340}', 'in seconds(23h59mins){86340}', .false., 86340.)
         call set_param(user_account,   'user_account', 'str',    'User account name in SLURM/PBS', 'User account name in SLURM/PBS system', 'e.g. Account084', .false., '')
@@ -1427,14 +1425,13 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 2, 0, 7, 6, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 1, 0, 7, 6, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call cluster2D_stream%set_input('parm_ios', 1, 'dir_target', 'file', 'Target directory',&
         &'Directory where the preprocess_stream application is running', 'e.g. 1_preprocess_stream', .true., '')
-        call cluster2D_stream%set_input('parm_ios', 2, time_inactive)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2830,8 +2827,8 @@ contains
         &'Preprocessing in streaming mode',&                                                ! descr_short
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
-        &'simple_exec',&                                                              ! executable
-        &5, 16, 0, 16, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &'simple_exec',&                                                                    ! executable
+        &5, 15, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
@@ -2849,41 +2846,36 @@ contains
         call preprocess_stream%set_input('parm_ios', 6, eer_upsampling)
         call preprocess_stream%set_input('parm_ios', 7, pcontrast)
         call preprocess_stream%set_input('parm_ios', 8, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
-        call preprocess_stream%set_input('parm_ios', 9, 'fbody', 'string', 'Template output micrograph name',&
-        &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
-        call preprocess_stream%set_input('parm_ios',10, pspecsz)
-        call preprocess_stream%set_input('parm_ios',11, kv)
+        call preprocess_stream%set_input('parm_ios', 9, pspecsz)
+        call preprocess_stream%set_input('parm_ios',10, kv)
+        preprocess_stream%parm_ios(10)%required = .true.
+        call preprocess_stream%set_input('parm_ios',11, cs)
         preprocess_stream%parm_ios(11)%required = .true.
-        call preprocess_stream%set_input('parm_ios',12, cs)
+        call preprocess_stream%set_input('parm_ios',12, fraca)
         preprocess_stream%parm_ios(12)%required = .true.
-        call preprocess_stream%set_input('parm_ios',13, fraca)
+        call preprocess_stream%set_input('parm_ios',13, smpd)
         preprocess_stream%parm_ios(13)%required = .true.
-        call preprocess_stream%set_input('parm_ios',14, smpd)
-        preprocess_stream%parm_ios(14)%required = .true.
-        call preprocess_stream%set_input('parm_ios',15, ctfpatch)
-        call preprocess_stream%set_input('parm_ios',16, picker)
+        call preprocess_stream%set_input('parm_ios',14, ctfpatch)
+        call preprocess_stream%set_input('parm_ios',15, picker)
         ! alternative inputs
         ! <empty>
         ! search controls
         call preprocess_stream%set_input('srch_ctrls', 1, trs)
         preprocess_stream%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
         preprocess_stream%srch_ctrls(1)%rval_default      = 20.
-        call preprocess_stream%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3){0}', '{0}', .false., 0.)
-        call preprocess_stream%set_input('srch_ctrls', 3, dfmin)
-        call preprocess_stream%set_input('srch_ctrls', 4, dfmax)
-        call preprocess_stream%set_input('srch_ctrls', 5, astigtol)
-        call preprocess_stream%set_input('srch_ctrls', 6, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
-        call preprocess_stream%set_input('srch_ctrls', 7, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
-        call preprocess_stream%set_input('srch_ctrls', 8, pgrp)
-        preprocess_stream%srch_ctrls(8)%required = .false.
-        call preprocess_stream%set_input('srch_ctrls', 9, 'nptcls_trial', 'num', '# of particles after which streaming stops', '# of extracted particles to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
-        call preprocess_stream%set_input('srch_ctrls',10, 'nmovies_trial', 'num', '# of movies after which streaming stops', '# of processed movies to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
-        call preprocess_stream%set_input('srch_ctrls',11, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
-        call preprocess_stream%set_input('srch_ctrls',12, mcpatch)
-        call preprocess_stream%set_input('srch_ctrls',13, nxpatch)
-        call preprocess_stream%set_input('srch_ctrls',14, nypatch)
-        call preprocess_stream%set_input('srch_ctrls',15, mcconvention)
-        call preprocess_stream%set_input('srch_ctrls',16, algorithm)
+        call preprocess_stream%set_input('srch_ctrls', 2, dfmin)
+        call preprocess_stream%set_input('srch_ctrls', 3, dfmax)
+        call preprocess_stream%set_input('srch_ctrls', 4, astigtol)
+        call preprocess_stream%set_input('srch_ctrls', 5, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
+        call preprocess_stream%set_input('srch_ctrls', 6, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        call preprocess_stream%set_input('srch_ctrls', 7, pgrp)
+        preprocess_stream%srch_ctrls(7)%required = .false.
+        call preprocess_stream%set_input('srch_ctrls', 8, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
+        call preprocess_stream%set_input('srch_ctrls', 9, mcpatch)
+        call preprocess_stream%set_input('srch_ctrls',10, nxpatch)
+        call preprocess_stream%set_input('srch_ctrls',11, nypatch)
+        call preprocess_stream%set_input('srch_ctrls',12, mcconvention)
+        call preprocess_stream%set_input('srch_ctrls',13, algorithm)
         ! filter controls
         call preprocess_stream%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -2910,7 +2902,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 16, 0, 20, 9, 1, 6, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 15, 0, 20, 9, 1, 6, .true.)                                                     ! # entries in each group, requires sp_project
         ! image input/output
         call preprocess_stream_dev%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
         call preprocess_stream_dev%set_input('img_ios', 2, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2939,7 +2931,6 @@ contains
         preprocess_stream_dev%parm_ios(14)%required = .true.
         call preprocess_stream_dev%set_input('parm_ios',14, ctfpatch)
         call preprocess_stream_dev%set_input('parm_ios',15, picker)
-        call preprocess_stream_dev%set_input('parm_ios',16, time_inactive)
         ! alternative inputs
         ! <empty>
         ! search controls

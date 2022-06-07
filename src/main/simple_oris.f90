@@ -86,6 +86,7 @@ type :: oris
     procedure          :: transfer_3Dparams
     procedure          :: set_euler
     procedure          :: set_shift
+    procedure          :: set_state
     procedure          :: e1set
     procedure          :: e2set
     procedure          :: e3set
@@ -1346,6 +1347,12 @@ contains
         real,        intent(in)    :: vec(2)
         call self%o(i)%set_shift(vec)
     end subroutine set_shift
+
+    subroutine set_state( self, i, state )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i, state
+        call self%o(i)%set_state(state)
+    end subroutine set_state
 
     subroutine e1set( self, i, e1 )
         class(oris), intent(inout) :: self
