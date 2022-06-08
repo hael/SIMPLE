@@ -7,14 +7,16 @@ program simple_test_CED
     implicit none
     type(parameters)              :: p
     type(cmdline)                 :: cline, cline_projection
-    type(image)                   :: img, ker
+    type(image)                   :: img, ker, J11, J12, J22
     type(reproject_commander)     :: xreproject
     integer                       :: k, l, nptcls, iptcl, rc, gaussian_ext, sh
     character(len=:), allocatable :: cmd
     logical                       :: mrc_exists
-    real,    parameter            :: SIGMA = 0.7
-    real,    allocatable          :: grad(:,:,:), Dc(:,:,:), Dr(:,:,:)
+    real,    parameter            :: SIGMA = 0.7, RHO = 4., C1 = 0.001, C2 = 1.
+    real,    allocatable          :: grad(:,:,:), D1(:,:,:), D2(:,:,:), eig_val(:,:,:,:), eig_vec_1(:,:,:,:),&
+                                    &lambda(:,:,:,:), a(:,:,:), b(:,:,:), c(:,:,:)
     complex, pointer              :: img_cmat(:,:,:)=>null(), ker_cmat(:,:,:)=>null()
+    real,    pointer              :: J11_rmat(:,:,:)=>null(), J12_rmat(:,:,:)=>null(), J22_rmat(:,:,:)=>null()
 
     character(len=15), parameter, dimension(3) :: FIL_ARR = [character(len=15) :: "tv", "butterworth", "lp"]
     if( command_argument_count() < 4 )then
@@ -57,12 +59,14 @@ program simple_test_CED
     p%ldim(3) = 1 ! because we operate on stacks
     call img%new(p%ldim, p%smpd)
     call ker%new(p%ldim, p%smpd)
-    allocate(grad(p%ldim(1),p%ldim(2),1), Dc(p%ldim(1),p%ldim(2),1),&
-            &Dr(p%ldim(1),p%ldim(2),1), source=0.)
+    allocate(grad(p%ldim(1),p%ldim(2),1), D1(p%ldim(1),p%ldim(2),1),&
+              &D2(p%ldim(1),p%ldim(2),1), eig_val(p%ldim(1),p%ldim(2),1,2),&
+              &eig_vec_1(p%ldim(1),p%ldim(2),1,2),lambda(p%ldim(1),p%ldim(2),1,2),&
+              &a(p%ldim(1),p%ldim(2),1), b(p%ldim(1),p%ldim(2),1), c(p%ldim(1),p%ldim(2),1), source=0.)
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         call img%read(p%stk, iptcl)
-        ! build the Gaussian kernel
+        ! build the Gaussian kernel with sigma
         gaussian_ext = ceiling(2*SIGMA)
         do k = -gaussian_ext, gaussian_ext
         do l = -gaussian_ext, gaussian_ext
@@ -70,6 +74,7 @@ program simple_test_CED
             call ker%set_rmat_at(p%ldim(1)/2 + k, p%ldim(2)/2 + l, 1, exp(-(sh**2/(2*SIGMA**2)))) 
         enddo
         enddo
+        ! convolving img with the kernel
         call img%fft()
         call ker%fft()
         call img%get_cmat_ptr(img_cmat)
@@ -77,6 +82,50 @@ program simple_test_CED
         img_cmat = img_cmat*ker_cmat
         call img%ifft()
         call img%write('CED_temp_out.mrc', iptcl)
-        call img%calc_gradient(grad, Dc, Dr)
+        call img%calc_gradient(grad, D1, D2)
+        ! build the Gaussian kernel with rho
+        gaussian_ext = ceiling(3*RHO)
+        call ker%zero_and_unflag_ft()
+        do k = -gaussian_ext, gaussian_ext
+        do l = -gaussian_ext, gaussian_ext
+            sh = nint(hyp(real(k),real(l)))
+            call ker%set_rmat_at(p%ldim(1)/2 + k, p%ldim(2)/2 + l, 1, exp(-(sh**2/(2*RHO**2)))) 
+        enddo
+        enddo
+        ! construct the structure tensor
+        call J11%new(p%ldim, p%smpd)
+        call J12%new(p%ldim, p%smpd)
+        call J22%new(p%ldim, p%smpd)
+        call J11%set_rmat(D1**2, .false.)
+        call J12%set_rmat(D1*D2, .false.)
+        call J22%set_rmat(D2**2, .false.)
+        call J11%fft()
+        call J12%fft()
+        call J22%fft()
+        call ker%fft()
+        call ker%get_cmat_ptr(ker_cmat)
+        call J11%get_cmat_ptr(img_cmat)
+        img_cmat = img_cmat*ker_cmat
+        call J11%ifft()
+        call J11%get_rmat_ptr(J11_rmat)
+        call J12%get_cmat_ptr(img_cmat)
+        img_cmat = img_cmat*ker_cmat
+        call J12%ifft()
+        call J12%get_rmat_ptr(J12_rmat)
+        call J22%get_cmat_ptr(img_cmat)
+        img_cmat = img_cmat*ker_cmat
+        call J22%ifft()
+        call J22%get_rmat_ptr(J22_rmat)
+        ! computing eigenvalues/eigenvectors of the structure tensor
+        eig_val(  :,:,:,1) = (J11_rmat + J22_rmat + sqrt((J11_rmat - J22_rmat)**2 + 4*J12_rmat**2))/2
+        eig_val(  :,:,:,2) = (J11_rmat + J22_rmat - sqrt((J11_rmat - J22_rmat)**2 + 4*J12_rmat**2))/2
+        eig_vec_1(:,:,:,1) = 2*J12_rmat
+        eig_vec_1(:,:,:,2) = J22_rmat - J11_rmat - sqrt((J11_rmat - J22_rmat)**2 + 4*J12_rmat**2)
+        lambda(   :,:,:,1) = C1
+        lambda(   :,:,:,2) = C1 + (1-C1)*exp(-C2/(eig_val(:,:,:,1) - eig_val(:,:,:,2))**2)
+        a = lambda(:,:,:,1)*eig_vec_1(:,:,:,1)**2 + lambda(:,:,:,2)*eig_vec_1(:,:,:,2)**2
+        b = (lambda(:,:,:,1) - lambda(:,:,:,2))*eig_vec_1(:,:,:,1)*eig_vec_1(:,:,:,2)
+        c = lambda(:,:,:,1)*eig_vec_1(:,:,:,2)**2 + lambda(:,:,:,2)*eig_vec_1(:,:,:,1)**2
+        ! solving the diffusion equations
     enddo
 end program simple_test_CED
