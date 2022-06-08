@@ -124,14 +124,11 @@ contains
         integer              :: k,l,m, box, dim3, ldim(3), find_start, find_stop, iter_no, fnr
         integer              :: best_ind, cur_ind, k1, l1, m1, lb(3), ub(3), mid_ext
         real                 :: min_sum_odd, min_sum_even, ref_diff_odd, ref_diff_even, rad, find_stepsz
-        logical              :: mskimg_present
         character(len=90)    :: file_tag
-        integer, parameter   :: CHUNKSZ = 20
         real,    pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null()
         real,    allocatable :: cur_diff_odd( :,:,:), cur_diff_even(:,:,:)
         real,    allocatable :: cur_fil(:), weights_2D(:,:)
         type(opt_vol), allocatable :: opt_odd(:,:,:), opt_even(:,:,:)
-        !$omp critical
         ldim        = odd%get_ldim()
         box         = ldim(1)
         dim3        = ldim(3)
@@ -201,10 +198,10 @@ contains
                         k1 = k - params_glob%smooth_ext
                         l1 = l - params_glob%smooth_ext
                         ref_diff_odd  = sum(sum(cur_diff_odd( k1:k1+2*params_glob%smooth_ext,&
-                                                                &l1:l1+2*params_glob%smooth_ext,1)*weights_2D,&
+                                                             &l1:l1+2*params_glob%smooth_ext,1)*weights_2D,&
                                                 &dim=2), dim=1)
                         ref_diff_even = sum(sum(cur_diff_even(k1:k1+2*params_glob%smooth_ext,&
-                                                                &l1:l1+2*params_glob%smooth_ext,1)*weights_2D,&
+                                                             &l1:l1+2*params_glob%smooth_ext,1)*weights_2D,&
                                                 &dim=2), dim=1)
                         ! opt_diff keeps the minimized cost value at each voxel of the search
                         ! opt_odd  keeps the best voxel of the form B*odd
@@ -243,7 +240,6 @@ contains
         call odd%set_rmat( opt_odd( :,:,:)%opt_val, .false.)
         call even%set_rmat(opt_even(:,:,:)%opt_val, .false.)
         deallocate(opt_odd, opt_even, cur_diff_odd, cur_diff_even, cur_fil, weights_2D)
-        !$omp end critical
     end subroutine opt_filter_2D
 
     ! 3D optimization(search)-based uniform/nonuniform filter, paralellized version

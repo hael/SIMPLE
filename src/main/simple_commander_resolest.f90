@@ -299,13 +299,14 @@ contains
         use simple_tvfilter,   only: tvfilter
         class(opt_2D_filter_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(parameters)  :: params
-        type(image)       :: even, odd,&
-                            &odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm,&
-                            &even_copy_rmat, even_copy_cmat, even_copy_shellnorm
-        integer           :: iptcl
-        character(len=90) :: file_tag
-        type(tvfilter)    :: tvfilt
+        type(parameters)   :: params
+        integer            :: iptcl
+        character(len=90)  :: file_tag
+        type(tvfilter)     :: tvfilt
+        integer, parameter :: CHUNKSZ = 20
+        type(image), allocatable :: even(:), odd(:),&
+                                   & odd_copy_rmat(:),  odd_copy_cmat(:),  odd_copy_shellnorm(:),&
+                                   &even_copy_rmat(:), even_copy_cmat(:), even_copy_shellnorm(:)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline) 
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
@@ -316,38 +317,48 @@ contains
         else
             file_tag = 'uniform_opt_2D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
         endif
-        call odd%new(params%ldim,  params%smpd, .false.)
-        call even%new(params%ldim, params%smpd, .false.)
-        call odd_copy_rmat%new(params%ldim,  params%smpd, .false.)
-        call even_copy_rmat%new(params%ldim, params%smpd, .false.)
-        call odd_copy_cmat%new(params%ldim,  params%smpd, .false.)
-        call even_copy_cmat%new(params%ldim, params%smpd, .false.)
-        call odd_copy_shellnorm%new(params%ldim,  params%smpd, .false.)
-        call even_copy_shellnorm%new(params%ldim, params%smpd, .false.)
-        call tvfilt%new(odd)
+        allocate(odd(params%nptcls), even(params%nptcls),&
+                & odd_copy_rmat(params%nptcls),  odd_copy_cmat(params%nptcls),  odd_copy_shellnorm(params%nptcls),&
+                &even_copy_rmat(params%nptcls), even_copy_cmat(params%nptcls), even_copy_shellnorm(params%nptcls))
         do iptcl = 1, params%nptcls
-            call odd%read(params%stk2, iptcl)
-            call even%read(params%stk, iptcl)
-            call odd_copy_rmat%copy(odd)
-            call odd_copy_cmat%copy(odd)
-            call odd_copy_cmat%fft
-            call odd_copy_shellnorm%copy(odd)
-            call odd_copy_shellnorm%shellnorm(return_ft=.true.)
-            call even_copy_rmat%copy(even)
-            call even_copy_cmat%copy(even)
-            call even_copy_cmat%fft
-            call even_copy_shellnorm%copy(even)
-            call even_copy_shellnorm%shellnorm(return_ft=.true.)
-            call even%mask(params%msk, 'soft')
-            call odd%mask(params%msk,  'soft')
-            call opt_filter_2D(odd, even, odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm,&
-                                         &even_copy_rmat, even_copy_cmat, even_copy_shellnorm, tvfilt)
-            call odd%write(trim(file_tag)//'_odd.mrc',   iptcl)
-            call even%write(trim(file_tag)//'_even.mrc', iptcl)
-            call odd%zero_and_unflag_ft
-            call even%zero_and_unflag_ft
-        end do
-        call tvfilt%kill
+            call odd( iptcl)%new(params%ldim, params%smpd, .false.)
+            call even(iptcl)%new(params%ldim, params%smpd, .false.)
+            call odd_copy_rmat( iptcl)%new(params%ldim, params%smpd, .false.)
+            call even_copy_rmat(iptcl)%new(params%ldim, params%smpd, .false.)
+            call odd_copy_cmat( iptcl)%new(params%ldim, params%smpd, .false.)
+            call even_copy_cmat(iptcl)%new(params%ldim, params%smpd, .false.)
+            call odd_copy_shellnorm( iptcl)%new(params%ldim, params%smpd, .false.)
+            call even_copy_shellnorm(iptcl)%new(params%ldim, params%smpd, .false.)
+            call odd( iptcl)%read(params%stk2, iptcl)
+            call even(iptcl)%read(params%stk,  iptcl)
+            call odd_copy_rmat(iptcl)%copy(odd(iptcl))
+            call odd_copy_cmat(iptcl)%copy(odd(iptcl))
+            call odd_copy_cmat(iptcl)%fft
+            call odd_copy_shellnorm(iptcl)%copy(odd(iptcl))
+            call odd_copy_shellnorm(iptcl)%shellnorm(return_ft=.true.)
+            call even_copy_rmat(iptcl)%copy(even(iptcl))
+            call even_copy_cmat(iptcl)%copy(even(iptcl))
+            call even_copy_cmat(iptcl)%fft
+            call even_copy_shellnorm(iptcl)%copy(even(iptcl))
+            call even_copy_shellnorm(iptcl)%shellnorm(return_ft=.true.)
+            call even(iptcl)%mask(params%msk, 'soft')
+            call odd( iptcl)%mask(params%msk, 'soft')
+        enddo
+        call tvfilt%new(odd(1))
+        !$omp parallel do collapse(1) default(shared) private(iptcl) schedule(dynamic,CHUNKSZ) proc_bind(close)
+        do iptcl = 1, params%nptcls
+            call opt_filter_2D(odd(iptcl), even(iptcl),&
+                               & odd_copy_rmat(iptcl),  odd_copy_cmat(iptcl),  odd_copy_shellnorm(iptcl),&
+                               &even_copy_rmat(iptcl), even_copy_cmat(iptcl), even_copy_shellnorm(iptcl), tvfilt)
+        enddo
+        !$omp end parallel do
+        do iptcl = 1, params%nptcls
+            call odd( iptcl)%write(trim(file_tag)//'_odd.mrc',  iptcl)
+            call even(iptcl)%write(trim(file_tag)//'_even.mrc', iptcl)
+            call odd( iptcl)%kill()
+            call even(iptcl)%kill()
+        enddo
+        call tvfilt%kill()
         ! end gracefully
         call simple_end('**** SIMPLE_OPT_2D_FILTER NORMAL STOP ****')
     end subroutine exec_opt_2D_filter
