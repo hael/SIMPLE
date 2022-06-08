@@ -93,7 +93,7 @@ contains
         do iref = 1,self%nspace
             call vol_ptr%fproject_serial(self%orispace, iref, self%projs(ithr), params_glob%kstop)
             call cartftcc_glob%set_ref(iref, self%projs(ithr), iseven)
-            corrs(iref) = cartftcc_glob%calc_corr(iref, iptcl, self%orispace%get_2Dshift(iref))
+            corrs(iref) = cartftcc_glob%calc_corr(iref, iptcl, self%orispace%get_2Dshift(iptcl))
         end do
     end subroutine project_and_correlate
 

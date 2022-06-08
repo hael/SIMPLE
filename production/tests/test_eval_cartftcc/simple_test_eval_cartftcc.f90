@@ -75,9 +75,9 @@ endif
 allocate(pshifts(p%nptcls, 2), source=0.)
 do iref = 1,p%nptcls
     ! mapping ran3 (0 to 1) to [-5, 5]
-    pshifts(iptcl, 1) = floor(ran3()*10.99) - 5
-    pshifts(iptcl, 2) = floor(ran3()*10.99) - 5
-    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), pshifts(iptcl, :))
+    pshifts(iref, 1) = floor(ran3()*10.99) - 5
+    pshifts(iref, 2) = floor(ran3()*10.99) - 5
+    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), pshifts(iref, :))
 end do
 cnt = 0
 do iptcl = 1,p%nptcls
