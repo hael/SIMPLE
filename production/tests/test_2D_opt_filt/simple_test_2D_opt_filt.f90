@@ -87,6 +87,10 @@ do iptcl = 1, p%nptcls
     call noise%gauran(0., 5. * sdev)
     call noise%mask(0.4 * p%msk, 'soft')
     call even%add(noise)
+    ! add background noise
+    call noise%gauran(0., 0.5 * sdev)
+    call noise%mask(1.2 * p%msk, 'soft')
+    call even%add(noise)
     call even%write('stk_noisy.mrc', iptcl)
     call odd%write('stk_clean.mrc', iptcl)
     call even%fft
