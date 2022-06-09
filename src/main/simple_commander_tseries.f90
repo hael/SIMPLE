@@ -905,7 +905,7 @@ contains
         fbody_split = get_fbody(SPLITTED, 'mrc')
         if(       cline%defined('nparts')         ) call cline%delete('nparts') ! shared-memory workflow
         if( .not. cline%defined('maxits')         ) call cline%set('maxits',          5.)
-        if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between', 30.)
+        if( .not. cline%defined('maxits_between') ) call cline%set('maxits_between', 10.)
         if( .not. cline%defined('overlap')        ) call cline%set('overlap',        0.8)
         if( .not. cline%defined('fracsrch')       ) call cline%set('fracsrch',       0.9)
         if( .not. cline%defined('ran_noise_ph')   ) call cline%set('ran_noise_ph',  'no')
