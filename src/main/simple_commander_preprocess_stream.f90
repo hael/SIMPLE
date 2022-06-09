@@ -55,7 +55,7 @@ contains
         character(len=LONGSTRLEN)              :: movie
         real                                   :: pickref_scale
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection
-        integer                                :: cnt, n_imported, nptcls_glob, n_failed_jobs, n_fail_iter
+        integer                                :: cnt, n_imported, nptcls_glob, n_failed_jobs, n_fail_iter, ncls_in
         logical                                :: l_pick, l_movies_left, l_haschanged, l_cluster2d
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
@@ -88,8 +88,6 @@ contains
         if( cline%defined('refs') .and. cline%defined('vol1') )then
             THROW_HARD('REFS and VOL1 cannot be both provided!')
         endif
-        call cline%set('numlen', 5.)
-        call cline%set('stream','yes')
         ! 2D classification
         if( .not. cline%defined('lpthresh')    ) call cline%set('lpthresh',      30.0)
         if( .not. cline%defined('ndev2D')      ) call cline%set('ndev2D',         1.5)
@@ -97,12 +95,22 @@ contains
         if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',    'yes')
         if( .not. cline%defined('match_filt')  ) call cline%set('match_filt',    'no')
         if( .not. cline%defined('nparts_chunk')) call cline%set('nparts_chunk',   1.0)
+        ncls_in = 0
+        if( cline%defined('ncls') )then
+            ! to circumvent parameters class stringency
+            ! restored after params%new
+            ncls_in = nint(cline%get_rarg('ncls'))
+            call cline%delete('ncls')
+        endif
         ! master parameters
+        call cline%set('numlen', 5.)
+        call cline%set('stream','yes')
         call params%new(cline)
         params_glob%split_mode = 'stream'
         params_glob%ncunits    = params%nparts
         call cline%set('mkdir', 'no')
         call cline%set('prg',   'preprocess')
+        if( ncls_in > 0 ) call cline%set('ncls', real(ncls_in))
         if( cline%defined('dir_prev') .and. .not.file_exists(params%dir_prev) )then
             THROW_HARD('Directory '//trim(params%dir_prev)//' does not exist!')
         endif
