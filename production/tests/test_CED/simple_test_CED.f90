@@ -7,16 +7,18 @@ program simple_test_CED
     implicit none
     type(parameters)              :: p
     type(cmdline)                 :: cline, cline_projection
-    type(image)                   :: img, ker, J11, J12, J22
+    type(image)                   :: img, cur_img, ker, J11, J12, J22
     type(reproject_commander)     :: xreproject
     integer                       :: k, l, nptcls, iptcl, rc, gaussian_ext, sh
     character(len=:), allocatable :: cmd
     logical                       :: mrc_exists
     real,    parameter            :: SIGMA = 0.7, RHO = 4., C1 = 0.001, C2 = 1.
+    integer, allocatable          :: pos_ind_1(:), pos_ind_2(:), neg_ind_1(:), neg_ind_2(:)
     real,    allocatable          :: grad(:,:,:), D1(:,:,:), D2(:,:,:), eig_val(:,:,:,:), eig_vec_1(:,:,:,:),&
-                                    &lambda(:,:,:,:), a(:,:,:), b(:,:,:), c(:,:,:)
+                                    &lambda(:,:,:,:), a(:,:,:), b(:,:,:), c(:,:,:), discrete_table(:,:,:,:,:)
     complex, pointer              :: img_cmat(:,:,:)=>null(), ker_cmat(:,:,:)=>null()
-    real,    pointer              :: J11_rmat(:,:,:)=>null(), J12_rmat(:,:,:)=>null(), J22_rmat(:,:,:)=>null()
+    real,    pointer              :: J11_rmat(:,:,:)=>null(), J12_rmat(:,:,:)=>null(), J22_rmat(:,:,:)=>null(),&
+                                    &cur_img_rmat(:,:,:)=>null()
 
     character(len=15), parameter, dimension(3) :: FIL_ARR = [character(len=15) :: "tv", "butterworth", "lp"]
     if( command_argument_count() < 4 )then
@@ -59,13 +61,21 @@ program simple_test_CED
     p%ldim(3) = 1 ! because we operate on stacks
     call img%new(p%ldim, p%smpd)
     call ker%new(p%ldim, p%smpd)
+    call cur_img%new(p%ldim, p%smpd)
     allocate(grad(p%ldim(1),p%ldim(2),1), D1(p%ldim(1),p%ldim(2),1),&
               &D2(p%ldim(1),p%ldim(2),1), eig_val(p%ldim(1),p%ldim(2),1,2),&
               &eig_vec_1(p%ldim(1),p%ldim(2),1,2),lambda(p%ldim(1),p%ldim(2),1,2),&
-              &a(p%ldim(1),p%ldim(2),1), b(p%ldim(1),p%ldim(2),1), c(p%ldim(1),p%ldim(2),1), source=0.)
+              &a(p%ldim(1),p%ldim(2),1), b(p%ldim(1),p%ldim(2),1), c(p%ldim(1),p%ldim(2),1),&
+              &discrete_table(p%ldim(1),p%ldim(2),1,3,3), source=0.)
+    allocate(neg_ind_1(p%ldim(1)), pos_ind_1(p%ldim(1)), neg_ind_2(p%ldim(2)), pos_ind_2(p%ldim(2)))
+    !neg_ind_1 = [  p%ldim(1), 1:p%ldim(1)-1]
+    !neg_ind_2 = [  p%ldim(2), 1:p%ldim(2)-1]
+    !pos_ind_1 = [2:p%ldim(1), 1]
+    !pos_ind_2 = [2:p%ldim(2), 1]
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         call img%read(p%stk, iptcl)
+        call cur_img%copy(img)
         ! build the Gaussian kernel with sigma
         gaussian_ext = ceiling(2*SIGMA)
         do k = -gaussian_ext, gaussian_ext
@@ -124,8 +134,19 @@ program simple_test_CED
         lambda(   :,:,:,1) = C1
         lambda(   :,:,:,2) = C1 + (1-C1)*exp(-C2/(eig_val(:,:,:,1) - eig_val(:,:,:,2))**2)
         a = lambda(:,:,:,1)*eig_vec_1(:,:,:,1)**2 + lambda(:,:,:,2)*eig_vec_1(:,:,:,2)**2
-        b = (lambda(:,:,:,1) - lambda(:,:,:,2))*eig_vec_1(:,:,:,1)*eig_vec_1(:,:,:,2)
         c = lambda(:,:,:,1)*eig_vec_1(:,:,:,2)**2 + lambda(:,:,:,2)*eig_vec_1(:,:,:,1)**2
+        b = (lambda(:,:,:,1) - lambda(:,:,:,2))*eig_vec_1(:,:,:,1)*eig_vec_1(:,:,:,2)
         ! solving the diffusion equations
+        call cur_img%get_rmat_ptr(cur_img_rmat)
+        discrete_table(:,:,1,1,1) = (cur_img_rmat(neg_ind_1, pos_ind_2, 1) - cur_img_rmat(:,:,1))*&
+                                   &( abs(b(neg_ind_1, pos_ind_2, 1)) - b(neg_ind_1, pos_ind_2, 1)+&
+                                   &  abs(b(:,:,1)) - b(:,:,1) )/4.
+        discrete_table(:,:,1,1,2) = (cur_img_rmat(:, pos_ind_2, 1) - cur_img_rmat(:,:,1))*&
+                                   &( c(:, pos_ind_2, 1) + c(:,:,1) - abs(b(:,pos_ind_2,1)) - b(:,:,1) )/2.
+        discrete_table(:,:,1,1,3) = (cur_img_rmat(pos_ind_1, pos_ind_2, 1) - cur_img_rmat(:,:,1))*&
+                                   &( abs(b(pos_ind_1, pos_ind_2, 1)) + b(pos_ind_1, pos_ind_2, 1)+&
+                                   &  abs(b(:,:,1)) - b(:,:,1) )/4.
+        discrete_table(:,:,1,2,1) = (cur_img_rmat(neg_ind_1, :, 1) - cur_img_rmat(:,:,1))*&
+                                   &( a(neg_ind_1, :, 1) + a(:,:,1) - abs(b(neg_ind_1,:,1)) - b(:,:,1) )/2.
     enddo
 end program simple_test_CED
