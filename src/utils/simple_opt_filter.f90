@@ -114,18 +114,21 @@ contains
     ! 2D optimization(search)-based uniform/nonuniform filter, serial (strictly non-paralellized) version
     subroutine opt_filter_2D(odd, even,&
                             &odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm,&
-                            &even_copy_rmat, even_copy_cmat, even_copy_shellnorm, tvfilt_in)
+                            &even_copy_rmat, even_copy_cmat, even_copy_shellnorm,&
+                            &tvfilt_in, weights_img, ref_diff_odd_img, ref_diff_even_img)
         use simple_tvfilter, only: tvfilter
         class(image),   intent(inout) :: odd
         class(image),   intent(inout) :: even
         class(image),   intent(in)    :: odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm,&
                                         &even_copy_rmat, even_copy_cmat, even_copy_shellnorm
         type(tvfilter), intent(inout) :: tvfilt_in
+        class(image),   intent(inout) :: weights_img, ref_diff_odd_img, ref_diff_even_img
         integer              :: k,l,m,n, box, dim3, ldim(3), find_start, find_stop, iter_no, ext
         integer              :: best_ind, cur_ind, k1, l1, m1, lb(3), ub(3), mid_ext
-        real                 :: min_sum_odd, min_sum_even, ref_diff_odd, ref_diff_even, rad, find_stepsz
+        real                 :: min_sum_odd, min_sum_even, ref_diff_odd, ref_diff_even, rad, find_stepsz, val
         character(len=90)    :: file_tag
-        real,    pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null()
+        real,    pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null(),&
+                               &weights_rmat(:,:,:)=>null(), ref_odd_rmat(:,:,:)=>null(), ref_even_rmat(:,:,:)=>null()
         real,    allocatable :: cur_diff_odd( :,:,:), cur_diff_even(:,:,:)
         real,    allocatable :: cur_fil(:), weights_2D(:,:)
         type(opt_vol), allocatable :: opt_odd(:,:,:), opt_even(:,:,:)
@@ -183,44 +186,82 @@ contains
                 ! searching through the smoothing extension here
                 do ext = params_glob%smooth_ext,params_glob%smooth_ext
                     ! setting up the 2D weights
-                    weights_2D = 0.
-                    mid_ext    = 1 + ext
-                    do m = 1, 2*ext+1
-                        do n = 1, 2*ext+1
-                            rad = hyp(real(m-mid_ext), real(n-mid_ext))
-                            weights_2D(m,n) = -rad/(ext + 1) + 1.  ! linear function: 1 at rad = 0 and 0 at rad = smooth_ext + 1
-                            if (weights_2D(m,n) < 0.) then
-                                weights_2D(m,n) = 0.
-                            endif
+                    if( ext <= 5 )then
+                        weights_2D = 0.
+                        mid_ext    = 1 + ext
+                        do m = 1, 2*ext+1
+                            do n = 1, 2*ext+1
+                                rad = hyp(real(m-mid_ext), real(n-mid_ext))
+                                weights_2D(m,n) = -rad/(ext + 1) + 1.  ! linear function: 1 at rad = 0 and 0 at rad = smooth_ext + 1
+                                if (weights_2D(m,n) < 0.) then
+                                    weights_2D(m,n) = 0.
+                                endif
+                            enddo
                         enddo
-                    enddo
-                    weights_2D = weights_2D/sum(weights_2D) ! weights has energy of 1
-                    do l = lb(2),ub(2)
-                        do k = lb(1),ub(1)
-                            ! applying the smoothing extension to the difference
-                            k1 = k - ext
-                            l1 = l - ext
-                            ref_diff_odd  = sum(sum(cur_diff_odd( k1:k1+2*ext,&
-                                                                 &l1:l1+2*ext,1)*weights_2D(1:2*ext+1, 1:2*ext+1),&
-                                                    &dim=2), dim=1)
-                            ref_diff_even = sum(sum(cur_diff_even(k1:k1+2*ext,&
-                                                                 &l1:l1+2*ext,1)*weights_2D(1:2*ext+1, 1:2*ext+1),&
-                                                    &dim=2), dim=1)
-                            ! opt_diff keeps the minimized cost value at each voxel of the search
-                            ! opt_odd  keeps the best voxel of the form B*odd
-                            ! opt_even keeps the best voxel of the form B*even
-                            if (ref_diff_odd < opt_odd(k,l,1)%opt_diff) then
-                                opt_odd(k,l,1)%opt_val  = rmat_odd(k,l,1)
-                                opt_odd(k,l,1)%opt_diff = ref_diff_odd
-                                opt_odd(k,l,1)%opt_freq = cur_ind
-                            endif
-                            if (ref_diff_even < opt_even(k,l,1)%opt_diff) then
-                                opt_even(k,l,1)%opt_val  = rmat_even(k,l,1)
-                                opt_even(k,l,1)%opt_diff = ref_diff_even
-                                opt_even(k,l,1)%opt_freq = cur_ind
-                            endif
+                        weights_2D = weights_2D/sum(weights_2D) ! weights has energy of 1
+                        do l = lb(2),ub(2)
+                            do k = lb(1),ub(1)
+                                ! applying the smoothing extension to the difference
+                                k1 = k - ext
+                                l1 = l - ext
+                                ref_diff_odd  = sum(sum(cur_diff_odd( k1:k1+2*ext,&
+                                                                    &l1:l1+2*ext,1)*weights_2D(1:2*ext+1, 1:2*ext+1),&
+                                                        &dim=2), dim=1)
+                                ref_diff_even = sum(sum(cur_diff_even(k1:k1+2*ext,&
+                                                                    &l1:l1+2*ext,1)*weights_2D(1:2*ext+1, 1:2*ext+1),&
+                                                        &dim=2), dim=1)
+                                ! opt_diff keeps the minimized cost value at each voxel of the search
+                                ! opt_odd  keeps the best voxel of the form B*odd
+                                ! opt_even keeps the best voxel of the form B*even
+                                if (ref_diff_odd < opt_odd(k,l,1)%opt_diff) then
+                                    opt_odd(k,l,1)%opt_val  = rmat_odd(k,l,1)
+                                    opt_odd(k,l,1)%opt_diff = ref_diff_odd
+                                    opt_odd(k,l,1)%opt_freq = cur_ind
+                                endif
+                                if (ref_diff_even < opt_even(k,l,1)%opt_diff) then
+                                    opt_even(k,l,1)%opt_val  = rmat_even(k,l,1)
+                                    opt_even(k,l,1)%opt_diff = ref_diff_even
+                                    opt_even(k,l,1)%opt_freq = cur_ind
+                                endif
+                            enddo
                         enddo
-                    enddo
+                    else
+                        call weights_img%zero_and_unflag_ft()
+                        do m = -ext, ext
+                            do n = -ext, ext
+                                rad = hyp(real(m), real(n))
+                                val = -rad/(ext + 1) + 1.
+                                if( val > 0 ) call weights_img%set_rmat_at(box/2+m, box/2+n, 1, val)
+                            enddo
+                        enddo
+                        call weights_img%fft()
+                        call ref_diff_odd_img%zero_and_unflag_ft()
+                        call ref_diff_odd_img%set_rmat(cur_diff_odd, .false.)
+                        call ref_diff_odd_img%fft()
+                        ref_diff_odd_img = ref_diff_odd_img * weights_img
+                        call ref_diff_odd_img%ifft()
+                        call ref_diff_odd_img%get_rmat_ptr(ref_odd_rmat)
+                        call ref_diff_even_img%zero_and_unflag_ft()
+                        call ref_diff_even_img%set_rmat(cur_diff_even, .false.)
+                        call ref_diff_even_img%fft()
+                        ref_diff_even_img = ref_diff_even_img * weights_img
+                        call ref_diff_even_img%ifft()
+                        call ref_diff_even_img%get_rmat_ptr(ref_even_rmat)
+                        do l = lb(2),ub(2)
+                            do k = lb(1),ub(1)
+                                if (ref_odd_rmat(k,l,1) < opt_odd(k,l,1)%opt_diff) then
+                                    opt_odd(k,l,1)%opt_val  = rmat_odd(k,l,1)
+                                    opt_odd(k,l,1)%opt_diff = ref_odd_rmat(k,l,1)
+                                    opt_odd(k,l,1)%opt_freq = cur_ind
+                                endif
+                                if (ref_even_rmat(k,l,1) < opt_even(k,l,1)%opt_diff) then
+                                    opt_even(k,l,1)%opt_val  = rmat_even(k,l,1)
+                                    opt_even(k,l,1)%opt_diff = ref_even_rmat(k,l,1)
+                                    opt_even(k,l,1)%opt_freq = cur_ind
+                                endif
+                            enddo
+                        enddo
+                    endif
                 enddo
             else
                 ! keep the theta which gives the lowest cost (over all voxels)
