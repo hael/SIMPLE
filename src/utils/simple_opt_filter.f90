@@ -132,6 +132,7 @@ contains
         real,    allocatable :: cur_diff_odd( :,:,:), cur_diff_even(:,:,:)
         real,    allocatable :: cur_fil(:), weights_2D(:,:)
         type(opt_vol), allocatable :: opt_odd(:,:,:), opt_even(:,:,:)
+        integer,       parameter   :: SMOOTH_EXT_LIM = 5
         ldim        = odd%get_ldim()
         box         = ldim(1)
         dim3        = ldim(3)
@@ -139,15 +140,11 @@ contains
         find_stop   = calc_fourier_index(2. * params_glob%smpd , box, params_glob%smpd)
         find_start  = calc_fourier_index(     params_glob%lp_lb, box, params_glob%smpd)
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
+        lb          = (/ SMOOTH_EXT_LIM+1  , SMOOTH_EXT_LIM+1  , 1/)
+        ub          = (/ box-SMOOTH_EXT_LIM, box-SMOOTH_EXT_LIM, dim3 /)
         allocate(cur_diff_odd( box,box,dim3), cur_diff_even(box,box,dim3),&
                 &cur_fil(box),weights_2D(params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1), source=0.)
         allocate(opt_odd(box,box,dim3), opt_even(box,box,dim3))
-        lb         = (/ 1, 1, 1/)
-        ub         = (/ box, box, dim3 /)
-        do k = 1, 2
-            if( lb(k) < params_glob%smooth_ext + 1 )   lb(k) = params_glob%smooth_ext+1
-            if( ub(k) > box - params_glob%smooth_ext ) ub(k) = box - params_glob%smooth_ext
-        enddo
         ! searching for the best fourier index from here and generating the optimized filter
         min_sum_odd       = huge(min_sum_odd)
         min_sum_even      = huge(min_sum_even)
@@ -186,7 +183,7 @@ contains
                 ! searching through the smoothing extension here
                 do ext = params_glob%smooth_ext,params_glob%smooth_ext
                     ! setting up the 2D weights
-                    if( ext <= 5 )then
+                    if( ext <= SMOOTH_EXT_LIM )then
                         weights_2D = 0.
                         mid_ext    = 1 + ext
                         do m = 1, 2*ext+1
