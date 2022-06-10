@@ -12,7 +12,7 @@ type(cmdline)                 :: cline, cline_opt_filt, cline_projection
 type(image)                   :: even, odd, noise, res_map
 type(opt_2D_filter_commander) :: xopt_2D_filter
 type(reproject_commander)     :: xreproject
-integer                       :: k, nyq, nptcls, smooth_ext, rc, iptcl
+integer                       :: k, nyq, nptcls, smooth_ext, rc, iptcl, ext
 real                          :: res_fsc05, res_fsc0143, ave, sdev, maxv, minv, med
 real, allocatable             :: res(:), corrs(:)
 character(len=20)             :: filter
@@ -121,7 +121,95 @@ do iptcl = 1, p%nptcls
 enddo
 call even%kill()
 call odd%kill()    
-! calculate optimal filter
+! testing smooth_ext vs resolution level
+write(*, *) 'Testing butterworth filter with different smooth_ext'
+do ext = 0, 20, 10
+    write(*, *) 'Filtering noisy stack (with ext = ', ext,') in progress...'
+    filter         = trim(FIL_ARR(2))
+    smooth_ext     = ext
+    cline_opt_filt = cline
+    if( cline%defined('smooth_ext') ) smooth_ext = p%smooth_ext
+    if( cline%defined('filter') )     filter     = p%filter
+    if( .not. cline%defined('match_filt') ) call cline_opt_filt%set('match_filt', 'no')
+    call cline_opt_filt%set('stk'       , 'stk_noisy.mrc')
+    call cline_opt_filt%set('stk2'      , 'stk_clean.mrc')
+    call cline_opt_filt%set('filter'    , trim(filter))
+    call cline_opt_filt%set('mkdir'     , 'no')
+    call cline_opt_filt%set('smooth_ext', real(smooth_ext))
+    call p%new(cline_opt_filt)
+    call xopt_2D_filter%execute(cline_opt_filt)
+    call even%new(p%ldim, p%smpd)
+    call odd%new(p%ldim, p%smpd)
+    do iptcl = 1, p%nptcls
+        write(*, *) 'Particle # ', iptcl
+        ! comparing the nonuniform result with the original data
+        call even%read(p%stk2,  iptcl)
+        call odd%read('nonuniform_opt_2D_filter_'//trim(filter)//'_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
+        ! spherical masking
+        call even%mask(p%msk, 'soft')
+        call odd%mask( p%msk, 'soft')
+        ! forward FT
+        call even%fft()
+        call odd%fft()
+        ! calculate FSC
+        res = even%get_res()
+        nyq = even%get_filtsz()
+        call even%fsc(odd, corrs)
+        call even%ifft
+        call odd%ifft
+        call get_resolution(corrs, res, res_fsc05, res_fsc0143)
+        write(*, *) 'Comparing clean particle vs FILTERED noisy particle...'
+        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
+        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
+        call odd%zero_and_unflag_ft
+        call even%zero_and_unflag_ft
+        call sleep(1)
+    enddo
+    call even%kill()
+    call odd%kill()
+    write(*, *) 'Filtering phase-randomized stack (with ext = ', ext,') in progress...'
+    cline_opt_filt = cline
+    if( cline%defined('smooth_ext') ) smooth_ext = p%smooth_ext
+    if( cline%defined('filter') )     filter     = p%filter
+    if( .not. cline%defined('match_filt') ) call cline_opt_filt%set('match_filt', 'no')
+    call cline_opt_filt%set('stk'       , 'stk_phase_rand.mrc')
+    call cline_opt_filt%set('stk2'      , 'stk_clean_phase_rand.mrc')
+    call cline_opt_filt%set('filter'    , trim(filter))
+    call cline_opt_filt%set('mkdir'     , 'no')
+    call cline_opt_filt%set('smooth_ext', real(smooth_ext))
+    call p%new(cline_opt_filt)
+    call xopt_2D_filter%execute(cline_opt_filt)
+    call even%new(p%ldim, p%smpd)
+    call odd%new(p%ldim, p%smpd)
+    do iptcl = 1, p%nptcls
+        write(*, *) 'Particle # ', iptcl
+        ! comparing the nonuniform result with the original data
+        call even%read('stk_clean.mrc',  iptcl)
+        call odd%read('nonuniform_opt_2D_filter_'//trim(filter)//'_ext_'//int2str(smooth_ext)//'_odd.mrc', iptcl)
+        ! spherical masking
+        call even%mask(p%msk, 'soft')
+        call odd%mask( p%msk, 'soft')
+        ! forward FT
+        call even%fft()
+        call odd%fft()
+        ! calculate FSC
+        res = even%get_res()
+        nyq = even%get_filtsz()
+        call even%fsc(odd, corrs)
+        call even%ifft
+        call odd%ifft
+        call get_resolution(corrs, res, res_fsc05, res_fsc0143)
+        write(*, *) 'Comparing clean particle vs FILTERED phase-randomized particle...'
+        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
+        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
+        call odd%zero_and_unflag_ft
+        call even%zero_and_unflag_ft
+        call sleep(1)
+    enddo
+    call even%kill()
+    call odd%kill()
+enddo
+! testing different filters
 do k = 1, size(FIL_ARR)
     write(*, *) 'Current filter = ', FIL_ARR(k)
     write(*, *) 'Filtering noisy stack in progress...'
