@@ -80,12 +80,11 @@ contains
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
         integer :: ldim(3), ichunk, maybe2D, ifoo
         ! check whether 2D classification will be performed based on 6 strictly required parameters
-        maybe2D = merge(1,0,cline%defined('nchunks'))
-        maybe2D = maybe2D + merge(1,0,cline%defined('ncls'))
+        maybe2D = merge(1,0,cline%defined('ncls'))
         maybe2D = maybe2D + merge(1,0,cline%defined('nptcls_per_cls'))
         maybe2D = maybe2D + merge(1,0,cline%defined('ncls_start'))
         maybe2D = maybe2D + merge(1,0,cline%defined('mskdiam'))
-        if( maybe2D == 5 )then
+        if( maybe2D == 4 )then
             do2D = .true.
         else if( maybe2D > 0 )then
             THROW_HARD('Missing arguments for 2D classification')

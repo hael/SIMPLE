@@ -540,7 +540,7 @@ contains
                 do iproj = 1,nprojs
                     call streamspproj%read_segment('mic', sp_files(iproj) )
                     if( streamspproj%os_mic%get_noris() /= 1 )then
-                        THROW_WARN('Ignoring previous project'//trim(sp_files(iproj)))
+                        THROW_WARN('Ignoring '//trim(sp_files(iproj)))
                         cycle
                     endif
                     if( .not. streamspproj%os_mic%isthere(1,'intg') )cycle
@@ -603,7 +603,6 @@ contains
                         if(spproj_mask(iproj))then
                             icnt = icnt+1
                             call completed_jobs_clines(icnt)%set('projfile',basename(sp_files(iproj)))
-                            call completed_jobs_clines(icnt)%printline
                         endif
                     enddo
                     call update_projects_list(completed_fnames, n_imported)

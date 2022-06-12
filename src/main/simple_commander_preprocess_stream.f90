@@ -95,6 +95,7 @@ contains
         if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',    'yes')
         if( .not. cline%defined('match_filt')  ) call cline%set('match_filt',    'no')
         if( .not. cline%defined('nparts_chunk')) call cline%set('nparts_chunk',   1.0)
+        if( .not. cline%defined('nchunks'))      call cline%set('nchunks',        2.0)
         ncls_in = 0
         if( cline%defined('ncls') )then
             ! to circumvent parameters class stringency

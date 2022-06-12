@@ -46,7 +46,7 @@ contains
         real,             allocatable :: boxdata(:,:)
         character(len=:), allocatable :: fbody_here, ext, star_fname
         character(len=LONGSTRLEN)     :: rel_fname
-        real    :: ldim4patch(2), goodnessoffit(2), scale, bfac_here
+        real    :: ldim4patch(2), goodnessoffit(2), scale, bfac_here, msd
         integer :: ldim(3), ldim_thumb(3), iptcl
         logical :: patch_success, l_tseries
         patch_success = .false.
@@ -100,6 +100,7 @@ contains
             call orientation%set('nypatch', 1.0)
         endif
         motion_correct_with_patched = (params_glob%mcpatch.eq.'yes') .and. (params_glob%nxpatch*params_glob%nypatch > 1)
+        msd = 0.0
         ! ALIGNEMENT
         select case(params_glob%algorithm)
         case('iso','wpatch','poly')
@@ -181,7 +182,10 @@ contains
                 endif
             endif
             ! STAR output
-            if( .not. l_tseries ) call motion_correct_write2star(star_fname, self%moviename, patch_success, gainref_fname)
+            if( .not. l_tseries )then
+                call motion_correct_write2star(star_fname, self%moviename, patch_success, gainref_fname)
+                call motion_correct_calc_msd(patch_success, msd)
+            endif
         end select
         ! generate power-spectra
         call motion_correct_mic2spec(self%moviesum_ctf, GUI_PSPECSZ, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_ctf)
@@ -212,11 +216,12 @@ contains
         ! report to ori object
         if( .not. l_tseries )then
             call make_relativepath(CWD_GLOB,self%moviename,rel_fname)
-            call orientation%set('movie',  trim(rel_fname))
+            call orientation%set('movie',      trim(rel_fname))
             call make_relativepath(CWD_GLOB,self%moviename_forctf,rel_fname)
-            call orientation%set('forctf', trim(rel_fname))
+            call orientation%set('forctf',     trim(rel_fname))
             call make_relativepath(CWD_GLOB,star_fname,rel_fname)
             call orientation%set("mc_starfile",rel_fname)
+            call orientation%set("msd",        msd)
         endif
         call make_relativepath(CWD_GLOB,self%moviename_intg,rel_fname)
         call orientation%set('intg',   trim(rel_fname))
