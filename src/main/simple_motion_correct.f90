@@ -20,7 +20,7 @@ public :: motion_correct_dev, motion_correct_patched, motion_correct_patched_cal
 public :: motion_correct_with_patched
 ! Common & convenience
 public :: motion_correct_kill_common, motion_correct_mic2spec, patched_shift_fname
-public :: motion_correct_write2star, motion_correct_calc_opt_weights
+public :: motion_correct_write2star, motion_correct_calc_opt_weights, motion_correct_calc_msd
 private
 #include "simple_local_flags.inc"
 
@@ -414,6 +414,24 @@ contains
         end do
         call  motion_correct_iso_calc_sums(movie_sum_corrected, movie_sum_ctf)
     end subroutine motion_correct_iso_calc_sums_tomo
+
+    subroutine motion_correct_calc_msd( include_patch, msd )
+        logical, intent(in)  :: include_patch
+        real,    intent(out) :: msd
+        real    :: shifts(nframes,2)
+        integer :: t
+        if( include_patch )then
+            do t = 1, nframes
+                shifts(t,1) = shifts_toplot(t,1) + real(sum(patched_shifts(1,t,:,:))/real(params_glob%nxpatch*params_glob%nypatch,dp))
+                shifts(t,2) = shifts_toplot(t,2) + real(sum(patched_shifts(2,t,:,:))/real(params_glob%nxpatch*params_glob%nypatch,dp))
+            enddo
+        else
+            shifts = shifts_toplot
+        endif
+        msd = sum( (shifts(:,1)-shifts(1,1))**2 )
+        msd = msd + sum( (shifts(:,2)-shifts(1,2))**2 )
+        msd = msd/real(nframes)
+    end subroutine motion_correct_calc_msd
 
     ! Write iso/aniso-tropic shifts
     subroutine motion_correct_write2star( mc_starfile_fname, moviename, writepoly, gainref_fname )
@@ -905,7 +923,7 @@ contains
         noutliers = count(outliers)
         if( noutliers > 0 )then
             write(logfhandle,'(a,1x,i8)') '>>> # DEAD/HOT PIXELS:', noutliers
-            write(logfhandle,'(a,1x,2f8.3)') '>>> AVERAGE (STDEV):  ', ave, sdev
+            write(logfhandle,'(a,1x,2f8.1)') '>>> AVERAGE (STDEV):  ', ave, sdev
             winsz = 2*HWINSZ+1
             nvals = winsz*winsz
             allocate(pos_outliers(2,noutliers))

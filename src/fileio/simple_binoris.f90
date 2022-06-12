@@ -457,7 +457,7 @@ contains
             self%header(isegment)%fromto(2) = os%get_noris()
         endif
         if( is_particle_seg(isegment) )then ! is ptcl2D or ptcl3D segment, see simple_sp_project
-            ! fixed byte lenght per record
+            ! fixed byte length per record
             self%header(isegment)%n_bytes_per_record = PTCL_BYTES_PER_REC
         else
             ! set maximum trimmed string lenght to n_bytes_per_record

@@ -2918,17 +2918,16 @@ contains
         call preprocess_stream_dev%set_input('parm_ios', 5, eer_upsampling)
         call preprocess_stream_dev%set_input('parm_ios', 6, pcontrast)
         call preprocess_stream_dev%set_input('parm_ios', 7, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
-        call preprocess_stream_dev%set_input('parm_ios', 8, 'fbody', 'string', 'Template output micrograph name',&
-        &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
-        call preprocess_stream_dev%set_input('parm_ios', 9, pspecsz)
+        call preprocess_stream_dev%set_input('parm_ios', 8, pspecsz)
+        call preprocess_stream_dev%set_input('parm_ios', 9, max_dose)
         call preprocess_stream_dev%set_input('parm_ios',10, kv)
-        preprocess_stream_dev%parm_ios(11)%required = .true.
+        preprocess_stream_dev%parm_ios(10)%required = .true.
         call preprocess_stream_dev%set_input('parm_ios',11, cs)
-        preprocess_stream_dev%parm_ios(12)%required = .true.
+        preprocess_stream_dev%parm_ios(11)%required = .true.
         call preprocess_stream_dev%set_input('parm_ios',12, fraca)
-        preprocess_stream_dev%parm_ios(13)%required = .true.
+        preprocess_stream_dev%parm_ios(12)%required = .true.
         call preprocess_stream_dev%set_input('parm_ios',13, smpd)
-        preprocess_stream_dev%parm_ios(14)%required = .true.
+        preprocess_stream_dev%parm_ios(13)%required = .true.
         call preprocess_stream_dev%set_input('parm_ios',14, ctfpatch)
         call preprocess_stream_dev%set_input('parm_ios',15, picker)
         ! alternative inputs
@@ -2988,12 +2987,13 @@ contains
         preprocess_stream_dev%mask_ctrls(1)%required = .false.
         preprocess_stream_dev%mask_ctrls(1)%descr_short = 'Mask Diameter*'
         ! computer controls
-        call preprocess_stream_dev%set_input('comp_ctrls', 1, 'nchunks', 'num', 'Number of chunks*', 'Number of chunks', '# chunks', .false., 1.0)
-        call preprocess_stream_dev%set_input('comp_ctrls', 2, 'nparts_chunk', 'num', 'Number of partitions per 2D chunk*',&
+        call preprocess_stream_dev%set_input('comp_ctrls', 1, 'nchunks', 'num', 'Number of chunks', 'Number of chunks{2}', '# chunks{2}', .false., 2.0)
+        call preprocess_stream_dev%set_input('comp_ctrls', 2, 'nparts_chunk', 'num', 'Number of partitions per 2D chunk',&
         &'Number of partitions for distributed execution of each chunk{1}', 'divide chunk job into # parts{1}', .false., 1.0)
-        call preprocess_stream_dev%set_input('comp_ctrls', 3, 'nparts_pool', 'num', 'Number of partitions for the 2D pool*',&
+        call preprocess_stream_dev%set_input('comp_ctrls', 3, 'nparts_pool', 'num', 'Number of partitions for the 2D pool',&
         &'Number of partitions for distributed execution of the 2D pool{nparts}', 'divide pool job into # parts', .false., 1.0)
         call preprocess_stream_dev%set_input('comp_ctrls', 4, nparts)
+        preprocess_stream_dev%comp_ctrls(4)%descr_short = 'Number of computing nodes for preprocessing'
         call preprocess_stream_dev%set_input('comp_ctrls', 5, nthr)
         call preprocess_stream_dev%set_input('comp_ctrls', 6, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)', 'in seconds(29mins){1740}', .false., 1740.)
     end subroutine new_preprocess_stream_dev
