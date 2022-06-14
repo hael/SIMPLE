@@ -33,7 +33,8 @@ integer,               parameter   :: FREQ_POOL_REJECTION = 5     !
 character(len=STDLEN), parameter   :: USER_PARAMS         = 'stream2D_user_params.txt'
 character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'cluster2D.simple'
 character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
-character(len=STDLEN), parameter   :: POOL_DIR           = './pool/'
+character(len=STDLEN), parameter   :: POOL_DIR            = '' ! should be './pool/' for tidyness but difficult with gui
+character(len=STDLEN), parameter   :: SNAPSHOT_DIR        = './snapshot/'
 character(len=STDLEN), parameter   :: DISTR_EXEC_FNAME    = './distr_cluster2D_pool'
 logical,               parameter   :: DEBUG_HERE          = .false.
 integer(timer_int_kind)            :: t
@@ -97,7 +98,7 @@ contains
         mskdiam             = cline%get_rarg('mskdiam')
         l_wfilt             = trim(params_glob%wiener) .eq. 'partial'
         do_autoscale        = trim(params_glob%autoscale) .eq. 'yes'
-        max_ncls            = floor(real(params_glob%ncls)/real(params_glob%ncls_start))*params_glob%ncls_start ! effective maximum # of classes
+        max_ncls            = floor(cline%get_rarg('ncls')/real(params_glob%ncls_start))*params_glob%ncls_start ! effective maximum # of classes
         nptcls_per_chunk    = params_glob%nptcls_per_cls*params_glob%ncls_start         ! # of particles in each chunk
         ncls_glob           = 0
         l_greedy            = trim(params_glob%refine).eq.'greedy'
@@ -124,6 +125,7 @@ contains
         call simple_mkdir(SCALE_DIR)
         call simple_mkdir(POOL_DIR)
         call simple_mkdir(trim(POOL_DIR)//trim(STDERROUT_DIR))
+        call simple_mkdir(trim(SNAPSHOT_DIR))
         call simple_touch(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
         call pool_proj%kill
         pool_proj%projinfo = spproj%projinfo
@@ -652,9 +654,6 @@ contains
                 write(logfhandle,'(A,F5.1)')'>>> CURRENT POOOL RESOLUTION: ',frcs%estimate_lp_for_align()
                 call frcs%kill
             endif
-            ! classes export
-            if(file_exists('clusters2D.star')) call del_file('clusters2D.star')
-            call starproj%export_cls2D(pool_proj)
             ! for gui
             call update_pool_for_gui
         endif
@@ -723,7 +722,7 @@ contains
         type(sp_project)        :: spproj
         logical, parameter      :: L_BENCH = .false.
         integer, allocatable    :: prev_eo_pops(:,:), min_update_cnts_per_stk(:), nptcls_per_stk(:), stk_order(:)
-        character(len=XLONGSTRLEN) :: cwd
+        ! character(len=XLONGSTRLEN) :: cwd
         real                    :: frac_update
         integer                 :: iptcl,i, nptcls_tot, nptcls_old, fromp, top, nstks_tot, jptcl
         integer                 :: eo, icls, nptcls_sel, istk, nptcls2update, nstks2update
@@ -783,8 +782,8 @@ contains
             enddo
             call random_generator%kill
         else
-            nptcls2update   = nptcls_tot
-            nptcls_sel      = sum(nptcls_per_stk)
+            nptcls2update = nptcls_tot
+            nptcls_sel    = sum(nptcls_per_stk)
             do istk = 1,nstks_tot
                 pool_stacks_mask(istk) = nptcls_per_stk(istk) > 0
             enddo
@@ -812,7 +811,7 @@ contains
             else
                 ! keeps track of skipped particles
                 do iptcl = fromp,top
-                    icls = nint(pool_proj%os_ptcl2D%get(iptcl,'class'))
+                    icls = pool_proj%os_ptcl2D%get_class(iptcl)
                     eo   = nint(pool_proj%os_ptcl2D%get(iptcl,'eo')) + 1
                     prev_eo_pops(icls,eo) = prev_eo_pops(icls,eo) + 1
                 enddo
@@ -835,12 +834,12 @@ contains
         call spproj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
         call spproj%kill
         ! execution in correct directory
-        call chdir(POOL_DIR)
-        call simple_getcwd(cwd)
-        cwd_glob = trim(cwd)
+        ! call chdir(POOL_DIR)
+        ! call simple_getcwd(cwd)
+        ! cwd_glob = trim(cwd)
         call qenv_pool%exec_simple_prg_in_queue_async(cline_cluster2D_pool, DISTR_EXEC_FNAME, 'simple_log_cluster2D_pool')
-        call chdir('..')
-        call simple_getcwd(cwd_glob)
+        ! call chdir('..')
+        ! call simple_getcwd(cwd_glob)
         pool_available = .false.
         write(logfhandle,'(A,I6,A,I8,A3,I8,A)')'>>> POOL         INITIATED ITERATION ',pool_iter,' WITH ',nptcls_sel,&
         &' / ', sum(nptcls_per_stk),' PARTICLES'
@@ -849,16 +848,16 @@ contains
     end subroutine classify_pool
 
     !> produces consolidated project at original scale
-    subroutine write_project_stream2D( force_write )
-        logical,           intent(in) :: force_write
+    subroutine write_project_stream2D( snapshot )
+        logical,           intent(in) :: snapshot
         type(class_frcs)              :: frcs, frcs_sc
         type(oris)                    :: os_backup2, os_backup3
         character(len=:), allocatable :: projfile,projfname, cavgsfname, frcsfname, src, dest
         character(len=:), allocatable :: pool_refs
         integer :: istk
         logical :: do_write
-        do_write = force_write
-        if( .not.do_write )then
+        do_write = .not.snapshot
+        if( snapshot )then
             ! writes snapshot every ORIGPROJ_WRITEFREQ seconds
             if( .not.pool_available )return
             if( (simple_gettime()-origproj_time) > ORIGPROJ_WRITEFREQ .and. pool_iter>1 )then
@@ -875,14 +874,27 @@ contains
         projfile   = trim(projfname)//trim(METADATA_EXT)
         cavgsfname = trim(cavgsfname)//trim(params_glob%ext)
         frcsfname  = trim(frcsfname)//trim(BIN_EXT)
+        if( snapshot )then
+            cavgsfname = trim(SNAPSHOT_DIR)//trim(cavgsfname)
+            frcsfname  = trim(SNAPSHOT_DIR)//trim(frcsfname)
+        endif
         call pool_proj%projinfo%set(1,'projfile', projfile)
-        if( trim(prev_snapshot_cavgs) /= '' )then
+        ! removing previous snapshot
+        if( (trim(prev_snapshot_cavgs) /= '') .and. snapshot)then
             call del_file(prev_snapshot_frcs)
-            ! call del_file(prev_snapshot_cavgs)
-            ! src = add2fbody(prev_snapshot_cavgs, params_glob%ext,'_even')
-            ! call del_file(src)
-            ! src = add2fbody(prev_snapshot_cavgs, params_glob%ext,'_odd')
-            ! call del_file(src)
+            call del_file(prev_snapshot_cavgs)
+            src = add2fbody(prev_snapshot_cavgs, params_glob%ext,'_even')
+            call del_file(src)
+            src = add2fbody(prev_snapshot_cavgs, params_glob%ext,'_odd')
+            call del_file(src)
+            if( l_wfilt )then
+                src = add2fbody(prev_snapshot_cavgs, params_glob%ext, trim(WFILT_SUFFIX))
+                call del_file(src)
+                src = add2fbody(prev_snapshot_cavgs, params_glob%ext, trim(WFILT_SUFFIX)//'_even')
+                call del_file(src)
+                src = add2fbody(prev_snapshot_cavgs, params_glob%ext, trim(WFILT_SUFFIX)//'_odd')
+                call del_file(src)
+            endif
         endif
         write(logfhandle,'(A,A,A,A)')'>>> GENERATING PROJECT SNAPSHOT ',trim(projfile), ' AT: ',cast_time_char(simple_gettime())
         pool_refs = trim(POOL_DIR)//trim(refs_glob)
@@ -953,9 +965,14 @@ contains
             call pool_proj%write(projfile)
             call pool_proj%os_ptcl3D%kill
         endif
-        ! cleanup previous snapshot
-        prev_snapshot_frcs  = trim(frcsfname)
-        prev_snapshot_cavgs = trim(cavgsfname)
+        if( snapshot )then
+            prev_snapshot_frcs  = trim(frcsfname)
+            prev_snapshot_cavgs = trim(cavgsfname)
+        endif
+        ! classes export
+        if(file_exists('clusters2D.star')) call del_file('clusters2D.star')
+        call starproj%export_cls2D(pool_proj)
+        call pool_proj%os_cls2D%delete_entry('stk')
     end subroutine write_project_stream2D
 
     subroutine terminate_stream2D
@@ -978,7 +995,7 @@ contains
         endif
         if( pool_iter >= 1 )then
             ! updates project
-            call write_project_stream2D(.true.)
+            call write_project_stream2D(.false.)
             ! ranking
             refs_glob_ranked = add2fbody(refs_glob,params_glob%ext,'_ranked')
             call cline_rank_cavgs%set('projfile', orig_projfile)
@@ -990,7 +1007,7 @@ contains
         call simple_rmdir(SCALE_DIR)
         if( .not.debug_here )then
             ! call qsys_cleanup
-            call simple_rmdir(POOL_DIR)
+            ! call simple_rmdir(POOL_DIR)
         endif
     end subroutine terminate_stream2D
 
@@ -1047,7 +1064,7 @@ contains
             refs_in_here = trim(refs_in)
         endif
         ! making sure we are writing to the correct folder
-        refs_out_here = trim(POOL_DIR)//'/'//trim(refs_out)
+        refs_out_here = trim(POOL_DIR)//trim(refs_out)
         ! merged class
         call img%new([box,box,1],smpd)
         call img%read( refs_in_here, indin)

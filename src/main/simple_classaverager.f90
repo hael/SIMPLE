@@ -159,7 +159,7 @@ contains
             precs(cnt)%angast  = ctfvars(ithr)%angast
             precs(cnt)%phshift = 0.
             if( phaseplate ) precs(cnt)%phshift = ctfvars(ithr)%phshift
-            precs(cnt)%class   = nint(spproj%os_ptcl2D%get(iptcl, 'class'))
+            precs(cnt)%class   = spproj%os_ptcl2D%get_class(iptcl)
             precs(cnt)%e3      = spproj%os_ptcl2D%e3get(iptcl)
             precs(cnt)%shift   = spproj%os_ptcl2D%get_2Dshift(iptcl)
             call spproj%map_ptcl_ind2stk_ind(params_glob%oritype, iptcl, stkind, precs(cnt)%ind_in_stk)
@@ -168,7 +168,7 @@ contains
         prev_eo_pops = 0
         if( l_stream .and. spproj%os_cls2D%get_noris() == ncls )then
             do i = 1,ncls
-                icls = nint(spproj%os_cls2D%get(i,'class'))
+                icls = spproj%os_cls2D%get_class(i)
                 if( .not.spproj%os_cls2D%isthere(i,'prev_pop_even') ) cycle
                 prev_eo_pops(icls,1) = nint(spproj%os_cls2D%get(i,'prev_pop_even'))
                 prev_eo_pops(icls,2) = nint(spproj%os_cls2D%get(i,'prev_pop_odd'))

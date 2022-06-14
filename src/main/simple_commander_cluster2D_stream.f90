@@ -460,9 +460,6 @@ contains
                         write(logfhandle,'(A,F5.1)')'>>> CURRENT POOOL RESOLUTION: ',frcs%estimate_lp_for_align()
                         call frcs%kill
                     endif
-                    ! classes star export
-                    if(file_exists('clusters2D.star')) call del_file('clusters2D.star')
-                    call starproj%export_cls2D(pool_proj)
                 endif
                 call spproj%kill
                 call debug_print('end update_pool')
@@ -1280,6 +1277,10 @@ contains
                 prev_snapshot_frcs  = trim(frcsfname)
                 prev_snapshot_cavgs = trim(cavgsfname)
                 call debug_print('end write_snapshot')
+                ! classes export
+                if(file_exists('clusters2D.star')) call del_file('clusters2D.star')
+                call starproj%export_cls2D(pool_proj)
+                call pool_proj%os_cls2D%delete_entry('stk')
             end subroutine write_snapshot
 
             !> for initial write of set of user adjustable parameters

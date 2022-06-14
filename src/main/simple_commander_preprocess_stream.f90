@@ -211,7 +211,7 @@ contains
             stacksz = qenv%qscripts%get_stacksz()
             if( stacksz .ne. prev_stacksz )then
                 prev_stacksz = stacksz
-                write(logfhandle,'(A,I5)')'>>> MOVIES TO PROCESS:                ', stacksz
+                write(logfhandle,'(A,I6)')'>>> MOVIES TO PROCESS:                ', stacksz
             endif
             ! fetch completed jobs list & updates of cluster2D_stream
             if( qenv%qscripts%get_done_stacksz() > 0 )then
@@ -275,7 +275,7 @@ contains
                 call update_pool_status
                 call update_pool
                 call reject_from_pool
-                call write_project_stream2D(.false.)
+                call write_project_stream2D(.true.)
                 call import_chunks_into_pool
                 call classify_pool
                 call update_projects_mask(completed_fnames)
