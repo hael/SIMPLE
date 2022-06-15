@@ -66,6 +66,7 @@ end type simple_program
 ! declare simple_exec and single_exec program specifications here
 ! instances of this class - special
 
+type(simple_program), target :: analysis2D_nano
 type(simple_program), target :: assign_optics_groups
 type(simple_program), target :: automask
 type(simple_program), target :: autorefine3D_nano
@@ -299,6 +300,7 @@ contains
     subroutine make_user_interface
         call set_common_params
         call set_prg_ptr_array
+        call new_analysis2D_nano
         call new_assign_optics_groups
         call new_automask
         call new_autorefine3D_nano
@@ -402,6 +404,7 @@ contains
 
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0
+        call push2prg_ptr_array(analysis2D_nano)
         call push2prg_ptr_array(assign_optics_groups)
         call push2prg_ptr_array(automask)
         call push2prg_ptr_array(autorefine3D_nano)
@@ -512,6 +515,8 @@ contains
         character(len=*), intent(in)  :: which_program
         type(simple_program), pointer :: ptr2prg
         select case(trim(which_program))
+            case('analysis2D_nano')
+                ptr2prg => analysis2D_nano
             case('assign_optics_groups')
                 ptr2prg => assign_optics_groups
             case('automask')
@@ -814,6 +819,7 @@ contains
         write(logfhandle,'(A)') graphene_subtr%name
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('PARTICLE 3D RECONSTRUCTION PROGRAMS:', C_UNDERLINED)
+        write(logfhandle,'(A)') analysis2D_nano%name
         write(logfhandle,'(A)') center2D_nano%name
         write(logfhandle,'(A)') cluster2D_nano%name
         write(logfhandle,'(A)') map_cavgs_selection%name
@@ -1013,6 +1019,35 @@ contains
     ! <empty>
     ! computer controls
     ! <empty>
+
+    subroutine new_analysis2D_nano
+        ! PROGRAM SPECIFICATION
+        call analysis2D_nano%new(&
+        &'analysis2D_nano', &                                         ! name
+        &'2D analysis (centering, diameter estimation & clustering) for nanycrystal time-series',& ! descr_short
+        &'is a program for 2D analysis for nanycrystal time-series',& ! descr long
+        &'single_exec',&                                              ! executable
+        &0, 1, 0, 1, 0, 1, 3, .true.)                                 ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call analysis2D_nano%set_input('parm_ios', 1, element)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call analysis2D_nano%set_input('srch_ctrls', 1, 'nptcls_per_cls', 'num', 'Particles per cluster',&
+        &'Initial number of paricles per cluster{35}', '# initial particles per cluster{35}', .false., 35.)
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        call analysis2D_nano%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call analysis2D_nano%set_input('comp_ctrls', 1, nparts)
+        analysis2D_nano%comp_ctrls(1)%required = .false.
+        call analysis2D_nano%set_input('comp_ctrls', 2, nthr)
+        call analysis2D_nano%set_input('comp_ctrls', 3, script)
+    end subroutine new_analysis2D_nano
 
     subroutine new_assign_optics_groups
         ! PROGRAM SPECIFICATION

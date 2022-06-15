@@ -1085,6 +1085,7 @@ contains
         type(image)                 :: roavg        ! rotational average
         type(stats_struct)          :: diamstats    ! stats struct
         real,           allocatable :: diams(:)     ! diameters
+        real,           allocatable :: diams_nonzero(:)
         integer :: funit, i, loc(1)
         real    :: med_diam, thresh(3), msk_rad
         if( .not. cline%defined('lp')    ) call cline%set('lp',     7.0)
@@ -1136,7 +1137,8 @@ contains
             write(funit,'(F6.1)') diams(i)
         end do
         call fclose(funit)
-        call calc_stats(diams, diamstats)
+        diams_nonzero = pack(diams, mask=diams > TINY)
+        call calc_stats(diams_nonzero, diamstats)
         ! output
         med_diam = median(diams)
         write(logfhandle,'(A,2F6.1)') '>>> AVG    DIAMETER (IN A & pix): ', diamstats%avg,  diamstats%avg/params%smpd
@@ -1151,6 +1153,8 @@ contains
         write(funit,     '(A,2F6.1)') '>>> MAX    DIAMETER (IN A & pix): ', diamstats%maxv, diamstats%maxv/params%smpd
         write(funit,     '(A,2F6.1)') '>>> MIN    DIAMETER (IN A & pix): ', diamstats%minv, diamstats%minv/params%smpd
         call fclose(funit)
+        ! output the minimum diameter value in the command line object
+        call cline%set('min_diam', diamstats%minv)
         ! destruct
         do i=1,size(imgs)
             call imgs_mask(i)%kill

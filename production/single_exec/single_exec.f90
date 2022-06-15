@@ -28,19 +28,20 @@ type(prune_project_commander_distr)           :: xprune_project
 
 ! TIME-SERIES PRE-PROCESSING PROGRAMS
 type(tseries_make_pickavg_commander)          :: xtseries_make_pickavg
-type(tseries_motion_correct_commander_distr)  :: xmcorr_distr
-type(tseries_track_particles_commander_distr) :: xtrack_distr
+type(tseries_motion_correct_commander_distr)  :: xmcorr
+type(tseries_track_particles_commander_distr) :: xtrack
 type(graphene_subtr_commander)                :: xgraphene_subtr
 
 ! PARTICLE 3D RECONSTRUCTION PROGRAMS
-type(center2D_nano_commander)                 :: xcenter2D_distr
-type(cluster2D_nano_commander)                :: xcluster2D_distr
+type(analysis2D_nano_commander)               :: xanalysis2D_nano
+type(center2D_nano_commander)                 :: xcenter2D
+type(cluster2D_nano_commander)                :: xcluster2D
 type(map_cavgs_selection_commander)           :: xmap_cavgs_selection
 type(estimate_diam_commander)                 :: xestimate_diam
 type(simulate_atoms_commander)                :: xsimulate_atoms
 type(refine3D_nano_commander)                 :: xrefine3D_nano
 type(autorefine3D_nano_commander)             :: xautorefine3D_nano
-type(tseries_reconstruct3D_distr)             :: xtseries_reconstruct3D_distr
+type(tseries_reconstruct3D_distr)             :: xtseries_reconstruct3D
 type(tseries_swap_stack_commander)            :: xtseries_swap_stack
 
 ! VALIDATION PROGRAMS
@@ -100,18 +101,20 @@ select case(prg)
     case( 'tseries_make_pickavg')
         call xtseries_make_pickavg%execute(cline)
     case( 'tseries_motion_correct' )
-        call xmcorr_distr%execute( cline )
+        call xmcorr%execute( cline )
     case( 'tseries_track_particles' )
-        call xtrack_distr%execute( cline )
+        call xtrack%execute( cline )
     case( 'graphene_subtr' )
         call cline%set('mkdir', 'no')
         call xgraphene_subtr%execute( cline )
 
     ! PARTICLE 3D RECONSTRUCTION PROGRAMS
+    case( 'analysis2D_nano' )
+        call xanalysis2D_nano%execute(cline)
     case( 'center2D_nano' )
-        call xcenter2D_distr%execute(cline)
+        call xcenter2D%execute(cline)
     case( 'cluster2D_nano' )
-        call xcluster2D_distr%execute(cline)
+        call xcluster2D%execute(cline)
     case( 'map_cavgs_selection' )
         call xmap_cavgs_selection%execute(cline)
     case( 'estimate_diam')
@@ -125,7 +128,7 @@ select case(prg)
     case( 'autorefine3D_nano')
         call xautorefine3D_nano%execute(cline)
     case( 'tseries_reconstruct3D')
-        call xtseries_reconstruct3D_distr%execute(cline)
+        call xtseries_reconstruct3D%execute(cline)
     case( 'tseries_swap_stack')
         call xtseries_swap_stack%execute(cline)
 
