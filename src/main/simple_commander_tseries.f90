@@ -27,6 +27,7 @@ public :: tseries_motion_correct_commander_distr
 public :: tseries_motion_correct_commander
 public :: tseries_track_particles_commander_distr
 public :: tseries_track_particles_commander
+public :: analysis2D_nano_commander
 public :: center2D_nano_commander
 public :: cluster2D_nano_commander
 public :: tseries_ctf_estimate_commander
@@ -72,6 +73,11 @@ type, extends(commander_base) :: tseries_track_particles_commander
   contains
     procedure :: execute      => exec_tseries_track_particles
 end type tseries_track_particles_commander
+
+type, extends(commander_base) :: analysis2D_nano_commander
+  contains
+    procedure :: execute      => exec_analysis2D_nano
+end type analysis2D_nano_commander
 
 type, extends(commander_base) :: center2D_nano_commander
   contains
@@ -545,6 +551,58 @@ contains
         call simple_end('**** SIMPLE_TSERIES_TRACK_PARTICLES NORMAL STOP ****')
     end subroutine exec_tseries_track_particles
 
+    subroutine exec_analysis2D_nano( self, cline )
+        use simple_commander_imgproc, only: estimate_diam_commander
+        use simple_commander_sim,     only: simulate_atoms_commander
+        class(analysis2D_nano_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        ! commanders
+        type(center2D_nano_commander)  :: xcenter2D
+        type(cluster2D_nano_commander) :: xcluster2D
+        type(estimate_diam_commander)  :: xest_diam
+        type(simulate_atoms_commander) :: xsim_atms
+        ! other variables
+        type(parameters)               :: params
+        type(sp_project)               :: spproj
+        type(cmdline)                  :: cline_est_diam, cline_sim_atms, cline_copy
+        character(len=:), allocatable  :: stkname
+        character(len=*), parameter    :: STARTVOL = 'startvol.mrc'
+        integer :: ncls, nptcls, ldim(3)
+        real    :: smpd, diam
+        call cline%set('dir_exec', 'analysis2D_nano')
+        call params%new(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
+        cline_copy = cline
+        ! centering
+        call xcenter2D%execute(cline)
+        ! prep for diameter estimation
+        call spproj%read(trim(params%projfile))
+        call spproj%get_cavgs_stk(stkname,   ncls,   smpd)
+        call cline_est_diam%set('stk',            stkname)
+        call cline_est_diam%set('smpd',              smpd)
+        call cline_est_diam%set('mskdiam', params%mskdiam)
+        call cline_est_diam%set('nthr', real(params%nthr))
+        ! estimate diameter
+        call xest_diam%execute(cline_est_diam)
+        diam = cline_est_diam%get_rarg('min_diam')
+        ! make a starting volume for initialization of 3D refinement
+        call find_ldim_nptcls(stkname, ldim, nptcls)
+        call cline_sim_atms%set('outvol',  STARTVOL)
+        call cline_sim_atms%set('smpd',    params%smpd)
+        call cline_sim_atms%set('element', params%element)
+        call cline_sim_atms%set('moldiam', diam)
+        call cline_sim_atms%set('box',     real(ldim(1)))
+        call cline_sim_atms%set('nthr',    real(params%nthr))
+        call xsim_atms%execute(cline_sim_atms)
+        ! run final 2D analysis
+        cline = cline_copy
+        call exec_cmdline('rm -rf cavgs* clusters2D*star *_FINISHED start2Drefs* frcs*')
+        call xcluster2D%execute(cline)
+        ! end gracefully
+        call simple_end('**** SIMPLE_ANALYSIS2D_NANO NORMAL STOP ****')
+    end subroutine exec_analysis2D_nano
+
     subroutine exec_center2D_nano( self, cline )
         class(center2D_nano_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
@@ -552,14 +610,14 @@ contains
         type(cluster2D_commander)       :: xcluster2D ! shared-memory
         type(cluster2D_commander_distr) :: xcluster2D_distr
         ! other variables
-        type(parameters)              :: params
-        type(sp_project)              :: spproj
-        class(parameters), pointer    :: params_ptr => null()
-        character(len=:), allocatable :: orig_projfile
-        character(len=STDLEN)         :: prev_ctfflag
-        character(len=LONGSTRLEN)     :: finalcavgs
-        integer  :: last_iter_stage2, nptcls
-        logical  :: l_shmem
+        type(parameters)                :: params
+        type(sp_project)                :: spproj
+        class(parameters), pointer      :: params_ptr => null()
+        character(len=:), allocatable   :: orig_projfile
+        character(len=STDLEN)           :: prev_ctfflag
+        character(len=LONGSTRLEN)       :: finalcavgs
+        integer :: last_iter_stage2, nptcls
+        logical :: l_shmem
         call cline%set('dir_exec', 'center2D_nano')
         call cline%set('match_filt',          'no')
         call cline%set('ptclw',               'no')
@@ -567,13 +625,13 @@ contains
         call cline%set('autoscale',           'no')
         call cline%set('refine',          'greedy')
         call cline%set('tseries',            'yes')
-        if( .not. cline%defined('graphene_filt') ) call cline%set('graphene_filt', 'yes')
-        if( .not. cline%defined('lp')      )       call cline%set('lp',            1.)
-        if( .not. cline%defined('ncls')    )       call cline%set('ncls',         20.)
-        if( .not. cline%defined('cenlp')   )       call cline%set('cenlp',         5.)
-        if( .not. cline%defined('trs')     )       call cline%set('trs',           5.)
-        if( .not. cline%defined('maxits')  )       call cline%set('maxits',       15.)
-        if( .not. cline%defined('oritype') )       call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt', 'yes')
+        if( .not. cline%defined('lp')             ) call cline%set('lp',               1.)
+        if( .not. cline%defined('ncls')           ) call cline%set('ncls',            20.)
+        if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',            5.)
+        if( .not. cline%defined('trs')            ) call cline%set('trs',              5.)
+        if( .not. cline%defined('maxits')         ) call cline%set('maxits',          15.)
+        if( .not. cline%defined('oritype')        ) call cline%set('oritype',    'ptcl2D')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
             if( nint(cline%get_rarg('nparts')) == 1 )then
