@@ -304,7 +304,7 @@ contains
         character(len=90)  :: file_tag
         type(tvfilter)     :: tvfilt
         integer, parameter :: CHUNKSZ = 20
-        type(image), allocatable :: even(:), odd(:), weights_img(:), ref_diff_odd_img(:), ref_diff_even_img(:),&
+        type(image), allocatable :: even(:), odd(:),&
                                    & odd_copy_rmat(:),  odd_copy_cmat(:),  odd_copy_shellnorm(:),&
                                    &even_copy_rmat(:), even_copy_cmat(:), even_copy_shellnorm(:)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -319,8 +319,7 @@ contains
         endif
         allocate(odd(params%nptcls), even(params%nptcls),&
                 & odd_copy_rmat(params%nptcls),  odd_copy_cmat(params%nptcls),  odd_copy_shellnorm(params%nptcls),&
-                &even_copy_rmat(params%nptcls), even_copy_cmat(params%nptcls), even_copy_shellnorm(params%nptcls),&
-                &weights_img(params%nptcls), ref_diff_odd_img(params%nptcls), ref_diff_even_img(params%nptcls))
+                &even_copy_rmat(params%nptcls), even_copy_cmat(params%nptcls), even_copy_shellnorm(params%nptcls))
         do iptcl = 1, params%nptcls
             call odd( iptcl)%new(params%ldim, params%smpd, .false.)
             call even(iptcl)%new(params%ldim, params%smpd, .false.)
@@ -330,9 +329,6 @@ contains
             call even_copy_cmat(iptcl)%new(params%ldim, params%smpd, .false.)
             call odd_copy_shellnorm( iptcl)%new(params%ldim, params%smpd, .false.)
             call even_copy_shellnorm(iptcl)%new(params%ldim, params%smpd, .false.)
-            call weights_img(iptcl)%new(params%ldim, params%smpd, .false.)
-            call ref_diff_odd_img( iptcl)%new(params%ldim, params%smpd, .false.)
-            call ref_diff_even_img(iptcl)%new(params%ldim, params%smpd, .false.)
             call odd( iptcl)%read(params%stk2, iptcl)
             call even(iptcl)%read(params%stk,  iptcl)
             call odd_copy_rmat(iptcl)%copy(odd(iptcl))
@@ -354,7 +350,7 @@ contains
             call opt_filter_2D(odd(iptcl), even(iptcl),&
                                & odd_copy_rmat(iptcl),  odd_copy_cmat(iptcl),  odd_copy_shellnorm(iptcl),&
                                &even_copy_rmat(iptcl), even_copy_cmat(iptcl), even_copy_shellnorm(iptcl),&
-                               &tvfilt, weights_img(iptcl), ref_diff_odd_img(iptcl), ref_diff_even_img(iptcl))
+                               &tvfilt)
         enddo
         !$omp end parallel do
         do iptcl = 1, params%nptcls
