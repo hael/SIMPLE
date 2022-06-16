@@ -1253,7 +1253,7 @@ contains
         character(len=LONGSTRLEN), allocatable :: completed_fnames(:), tmp_fnames(:)
         character(len=:),          allocatable :: one_projfile, one_projname
         ! character(len=LONGSTRLEN)              :: finalcavgs, finalcavgs_ranked, cavgs
-        integer :: ichunk, istk, nstks, nptcls, nptcls_tot, ntot_chunks, cnt, chunk_top
+        integer :: ichunk, istk, nstks, nptcls, nptcls_tot, ntot_chunks, cnt
         logical :: l_start
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('cenlp')        ) call cline%set('cenlp',      30.0)
@@ -1442,7 +1442,6 @@ contains
         nstks = spproj%os_stk%get_noris()
         allocate(completed_fnames(nstks))
         nptcls_tot      = 0
-        chunk_top       = 0
         l_start         = .false.
         ntot_chunks     = 0
         cnt             = 0
@@ -1454,7 +1453,6 @@ contains
             completed_fnames(istk) = trim(dir_preprocess)//trim(one_projfile)
             cnt = cnt + nptcls
             if( cnt > nptcls_per_chunk )then
-                chunk_top   = nptcls_tot
                 ntot_chunks = ntot_chunks + 1
                 cnt = 0
             endif
@@ -1469,6 +1467,7 @@ contains
             endif
             call progress_gfortran(istk, nstks)
         enddo
+        call update_projects_mask(completed_fnames)
         if( allocated(tmp_fnames) ) deallocate(tmp_fnames)
         call spproj%os_ptcl3D%kill
         write(logfhandle,'(A,I6)')'>>> # OF STACKS:           ', nstks
@@ -1522,15 +1521,15 @@ contains
             call spproj_here%os_mic%set(1,'nptcls',0.0)
             call spproj_here%os_mic%set_state(1,0)
         else
-            fromp  = nint(sp_proj%os_stk%get(stkind,'fromp'))
-            top    = nint(sp_proj%os_stk%get(stkind,'top'))
+            fromp = nint(sp_proj%os_stk%get(stkind,'fromp'))
+            top   = nint(sp_proj%os_stk%get(stkind,'top'))
             call spproj_here%os_stk%new(1, is_ptcl=.false.)
             call spproj_here%os_ptcl2D%new(nptcls, is_ptcl=.true.)
-            if( sp_proj%os_mic%get_noris() > proj_ind )then
+            if( sp_proj%os_mic%get_noris() >= proj_ind )then
                 call spproj_here%os_mic%transfer_ori(1, sp_proj%os_mic, stkind)
             else
                 call spproj_here%os_mic%set(1,'nptcls',real(nptcls))
-                call spproj_here%os_mic%set(1,'intg', 'xxx.mrc')
+                call spproj_here%os_mic%set_state(1,1)
             endif
             call spproj_here%os_stk%transfer_ori(1,sp_proj%os_stk,stkind)
             call spproj_here%os_stk%set(1,'fromp',1.0)
