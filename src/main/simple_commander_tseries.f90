@@ -919,7 +919,7 @@ contains
 
     subroutine exec_autorefine3D_nano( self, cline )
         use simple_commander_atoms, only: detect_atoms_commander
-        use simple_ori, only: ori
+        use simple_ori,             only: ori
         class(autorefine3D_nano_commander), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
         class(parameters), pointer    :: params_ptr => null()

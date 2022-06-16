@@ -22,7 +22,6 @@ end interface read_imgbatch
 
 real, parameter :: SHTHRESH  = 0.001
 real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg centering in pixels
-
 type(stack_io)  :: stkio_r
 logical         :: did_filter
 
@@ -279,9 +278,7 @@ contains
             endif
         endif
         ! gridding prep
-        if( params_glob%gridding.eq.'yes' )then
-            call img_out%div_by_instrfun
-        endif
+        if( params_glob%gridding.eq.'yes' ) call img_out%div_by_instrfun
         ! return in Fourier space
         call img_out%fft()
     end subroutine prepimg4align
@@ -293,14 +290,14 @@ contains
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(image),            intent(inout) :: img_in
         class(polarizer),        intent(inout) :: img_out
-        integer,           intent(in)    :: icls
-        logical, optional, intent(in)    :: center
-        real,    optional, intent(in)    :: xyz_in(3)
-        real,    optional, intent(out)   :: xyz_out(3)
-        integer        :: filtsz
-        real           :: frc(build_glob%img%get_filtsz()), filter(build_glob%img%get_filtsz())
-        real           :: xyz(3), sharg
-        logical        :: do_center
+        integer,                 intent(in)    :: icls
+        logical, optional,       intent(in)    :: center
+        real,    optional,       intent(in)    :: xyz_in(3)
+        real,    optional,       intent(out)   :: xyz_out(3)
+        integer :: filtsz
+        real    :: frc(build_glob%img%get_filtsz()), filter(build_glob%img%get_filtsz())
+        real    :: xyz(3), sharg
+        logical :: do_center
         filtsz = build_glob%img%get_filtsz()
         do_center = (params_glob%center .eq. 'yes')
         ! centering only performed if params_glob%center.eq.'yes'
@@ -492,86 +489,86 @@ contains
     end subroutine read_and_filter_refvols
 
     !>  \brief  prepares one volume for references extraction
-      subroutine preprefvol( pftcc, cline, s, do_center, xyz, iseven )
-          use simple_polarft_corrcalc, only: polarft_corrcalc
-          use simple_estimate_ssnr,    only: fsc2optlp_sub
-          use simple_projector,        only: projector
-          class(polarft_corrcalc), intent(inout) :: pftcc
-          class(cmdline),          intent(inout) :: cline
-          integer,                 intent(in)    :: s
-          logical,                 intent(in)    :: do_center
-          real,                    intent(in)    :: xyz(3)
-          logical,                 intent(in)    :: iseven
-          type(projector),  pointer     :: vol_ptr => null()
-          real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
-          integer :: iref, iproj, filtsz
-          if( iseven )then
-              vol_ptr => build_glob%vol
-          else
-              vol_ptr => build_glob%vol_odd
-          endif
-          if( do_center )then
-              call vol_ptr%fft()
-              call vol_ptr%shift([xyz(1),xyz(2),xyz(3)])
-          endif
-          ! Volume filtering
-          filtsz = build_glob%img%get_filtsz()
-          if( params_glob%l_match_filt .and. .not. did_filter )then
-              ! stores filters in pftcc
-              if( params_glob%clsfrcs.eq.'yes')then
-                  if( file_exists(params_glob%frcs) )then
-                      iproj = 0
-                      do iref = 1,2*build_glob%clsfrcs%get_nprojs()
-                          iproj = iproj+1
-                          if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
-                          call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-                          call fsc2optlp_sub(filtsz, frc, filter)
-                          call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kstop))
-                      enddo
-                  endif
-              else
-                  if( any(build_glob%fsc(s,:) > 0.143) )then
-                      call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
-                  else
-                      filter = 1.
-                  endif
-                  do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
-                      call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kstop))
-                  enddo
-              endif
-          else
-              if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-                  ! no filtering
-              else if( .not. did_filter )then
-                  call vol_ptr%fft()
-                  if( any(build_glob%fsc(s,:) > 0.143) )then
-                      call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
-                      call vol_ptr%apply_filter(filter)
-                  endif
-              endif
-          endif
-          ! back to real space
-          call vol_ptr%ifft()
-          ! masking
-          if( cline%defined('mskfile') )then
-              ! masking performed in readrefvols_filter_nonuniformly, above
-          else
-              ! circular masking
-              if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-                  call vol_ptr%mask(params_glob%msk, 'soft', backgr=0.0)
-              else
-                  call vol_ptr%mask(params_glob%msk, 'soft')
-              endif
-          endif
-          ! gridding prep
-          if( params_glob%gridding.eq.'yes' )then
-              call vol_ptr%div_w_instrfun(params_glob%interpfun, alpha=params_glob%alpha)
-          endif
-          ! FT volume
-          call vol_ptr%fft()
-          ! expand for fast interpolation & correct for norm when clipped
-          call vol_ptr%expand_cmat(params_glob%alpha,norm4proj=.true.)
-      end subroutine preprefvol
+    subroutine preprefvol( pftcc, cline, s, do_center, xyz, iseven )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_estimate_ssnr,    only: fsc2optlp_sub
+        use simple_projector,        only: projector
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        class(cmdline),          intent(inout) :: cline
+        integer,                 intent(in)    :: s
+        logical,                 intent(in)    :: do_center
+        real,                    intent(in)    :: xyz(3)
+        logical,                 intent(in)    :: iseven
+        type(projector),  pointer     :: vol_ptr => null()
+        real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
+        integer :: iref, iproj, filtsz
+        if( iseven )then
+            vol_ptr => build_glob%vol
+        else
+            vol_ptr => build_glob%vol_odd
+        endif
+        if( do_center )then
+            call vol_ptr%fft()
+            call vol_ptr%shift([xyz(1),xyz(2),xyz(3)])
+        endif
+        ! Volume filtering
+        filtsz = build_glob%img%get_filtsz()
+        if( params_glob%l_match_filt .and. .not. did_filter )then
+            ! stores filters in pftcc
+            if( params_glob%clsfrcs.eq.'yes')then
+                if( file_exists(params_glob%frcs) )then
+                    iproj = 0
+                    do iref = 1,2*build_glob%clsfrcs%get_nprojs()
+                        iproj = iproj+1
+                        if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
+                        call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+                        call fsc2optlp_sub(filtsz, frc, filter)
+                        call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kstop))
+                    enddo
+                endif
+            else
+                if( any(build_glob%fsc(s,:) > 0.143) )then
+                    call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
+                else
+                    filter = 1.
+                endif
+                do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
+                    call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kstop))
+                enddo
+            endif
+        else
+            if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+                ! no filtering
+            else if( .not. did_filter )then
+                call vol_ptr%fft()
+                if( any(build_glob%fsc(s,:) > 0.143) )then
+                    call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
+                    call vol_ptr%apply_filter(filter)
+                endif
+            endif
+        endif
+        ! back to real space
+        call vol_ptr%ifft()
+        ! masking
+        if( cline%defined('mskfile') )then
+            ! masking performed in readrefvols_filter_nonuniformly, above
+        else
+            ! circular masking
+            if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+                call vol_ptr%mask(params_glob%msk, 'soft', backgr=0.0)
+            else
+                call vol_ptr%mask(params_glob%msk, 'soft')
+            endif
+        endif
+        ! gridding prep
+        if( params_glob%gridding.eq.'yes' )then
+            call vol_ptr%div_w_instrfun(params_glob%interpfun, alpha=params_glob%alpha)
+        endif
+        ! FT volume
+        call vol_ptr%fft()
+        ! expand for fast interpolation & correct for norm when clipped
+        call vol_ptr%expand_cmat(params_glob%alpha,norm4proj=.true.)
+    end subroutine preprefvol
 
     subroutine norm_struct_facts( cline, which_iter )
         use simple_masker, only: masker

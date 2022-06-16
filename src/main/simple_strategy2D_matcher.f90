@@ -20,6 +20,7 @@ use simple_strategy2D_tseries,  only: strategy2D_tseries
 use simple_strategy2D_snhc,     only: strategy2D_snhc
 use simple_strategy2D_inpl,     only: strategy2D_inpl
 use simple_strategy2D_eval,     only: strategy2D_eval
+use simple_commander_resolest,  only: opt_2D_filter_commander
 use simple_classaverager
 implicit none
 
@@ -43,15 +44,18 @@ contains
         logical,                 intent(inout) :: converged
         type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
         type(strategy2D_spec),     allocatable :: strategy2Dspecs(:)
-        integer, allocatable :: pinds(:), batches(:,:)
-        logical, allocatable :: ptcl_mask(:)
-        real,    allocatable :: states(:)
-        type(convergence)    :: conv
-        real                 :: frac_srch_space, snhc_sz, frac
-        integer              :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update, min_nsamples
-        integer              :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
-        logical              :: doprint, l_partial_sums, l_frac_update, l_ctf
-        logical              :: l_snhc, l_greedy, l_stream, l_np_cls_defined
+        character(len=:), allocatable :: odd_stk, even_stk
+        integer,          allocatable :: pinds(:), batches(:,:)
+        logical,          allocatable :: ptcl_mask(:)
+        real,             allocatable :: states(:)
+        type(opt_2D_filter_commander) :: xfilt
+        type(convergence) :: conv
+        type(cmdline)     :: cline_opt_filt
+        real    :: frac_srch_space, snhc_sz, frac
+        integer :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update, min_nsamples
+        integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
+        logical :: doprint, l_partial_sums, l_frac_update, l_ctf
+        logical :: l_snhc, l_greedy, l_stream, l_np_cls_defined
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
@@ -61,11 +65,11 @@ contains
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
 
         ! SWITCHES
-        l_partial_sums = .false.
-        l_snhc         = .false.
-        l_greedy       = .false.
-        l_frac_update  = .false.
-        l_stream       = trim(params_glob%stream).eq.'yes'
+        l_partial_sums     = .false.
+        l_snhc             = .false.
+        l_greedy           = .false.
+        l_frac_update      = .false.
+        l_stream           = trim(params_glob%stream).eq.'yes'
         if( params_glob%extr_iter == 1 )then
             ! greedy start
             l_partial_sums = .false.
@@ -79,8 +83,8 @@ contains
             l_greedy       = .false.
             l_snhc         = .true.
             if( (params_glob%refine.eq.'greedy') )then
-                l_greedy = .true.
-                l_snhc   = .false.
+                l_greedy   = .true.
+                l_snhc     = .false.
             endif
         else
             ! optional fractional update, no snhc opt
@@ -135,6 +139,19 @@ contains
         call build_glob%spproj_field%set_all2single('w', 1.0)
 
         ! PREP REFERENCES
+        if( params_glob%l_nonuniform )then
+            cline_opt_filt = cline
+            call cline_opt_filt%set('stk',     trim(params_glob%refs_odd))
+            call cline_opt_filt%set('stk2',    trim(params_glob%refs_even))
+            call cline_opt_filt%set('smpd',    params_glob%smpd)
+            call cline_opt_filt%set('mskdiam', params_glob%mskdiam)
+            call cline_opt_filt%set('nthr',    real(params_glob%nthr))
+            call xfilt%execute(cline_opt_filt)
+            odd_stk  = cline_opt_filt%get_carg('odd_stk')
+            even_stk = cline_opt_filt%get_carg('even_stk')
+            call simple_copy_file(odd_stk,  trim(params_glob%refs_odd))
+            call simple_copy_file(even_stk, trim(params_glob%refs_even))
+        endif
         call cavger_new(ptcl_mask)
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
             if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; cluster2D_exec')
@@ -425,12 +442,12 @@ contains
                         call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk) ! 2 polar coords
                     else
                         ! put the merged class average in both even and odd positions
-                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk) ! 2 polar coords
+                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords
                         call pftcc%cp_even2odd_ref(icls)
                     endif
                 else
                     call prep2Dref(pftcc, cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
-                    call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk) ! 2 polar coords
+                    call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)     ! 2 polar coords
                     call pftcc%cp_even2odd_ref(icls)
                 endif
                 call match_imgs(icls)%kill_polarizer

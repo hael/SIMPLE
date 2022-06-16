@@ -126,21 +126,21 @@ contains
         real,           intent(inout) :: cur_diff_odd( :,:,:), cur_diff_even(:,:,:)
         real,           intent(inout) :: cur_fil(:), weights_2D(:,:)
         type(opt_vol),  intent(inout) :: opt_odd(:,:,:), opt_even(:,:,:)
-        integer              :: k,l,m,n, box, dim3, ldim(3), find_start, find_stop, iter_no, ext
-        integer              :: best_ind, cur_ind, k1, l1, m1, lb(3), ub(3), mid_ext
-        real                 :: min_sum_odd, min_sum_even, ref_diff_odd, ref_diff_even, rad, find_stepsz, val
-        character(len=90)    :: file_tag
-        real,    pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null()
+        integer           :: k,l,m,n, box, dim3, ldim(3), find_start, find_stop, iter_no, ext
+        integer           :: best_ind, cur_ind, k1, l1, m1, lb(3), ub(3), mid_ext
+        real              :: min_sum_odd, min_sum_even, ref_diff_odd, ref_diff_even, rad, find_stepsz, val
+        character(len=90) :: file_tag
+        real, pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null()
         !$omp critical
-        ldim        = odd%get_ldim()
-        box         = ldim(1)
-        dim3        = ldim(3)
+        ldim              = odd%get_ldim()
+        box               = ldim(1)
+        dim3              = ldim(3)
         if( dim3 > 1 ) THROW_HARD('This opt_filter_2D is strictly for 2D case only!')
-        find_stop   = calc_fourier_index(2. * params_glob%smpd , box, params_glob%smpd)
-        find_start  = calc_fourier_index(     params_glob%lp_lb, box, params_glob%smpd)
-        find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
-        lb          = (/ params_glob%smooth_ext+1  , params_glob%smooth_ext+1  , 1/)
-        ub          = (/ box-params_glob%smooth_ext, box-params_glob%smooth_ext, dim3 /)
+        find_stop         = calc_fourier_index(2. * params_glob%smpd , box, params_glob%smpd)
+        find_start        = calc_fourier_index(     params_glob%lp_lb, box, params_glob%smpd)
+        find_stepsz       = real(find_stop - find_start)/(params_glob%nsearch - 1)
+        lb                = (/ params_glob%smooth_ext+1  , params_glob%smooth_ext+1  , 1/)
+        ub                = (/ box-params_glob%smooth_ext, box-params_glob%smooth_ext, dim3 /)
         ! searching for the best fourier index from here and generating the optimized filter
         min_sum_odd       = huge(min_sum_odd)
         min_sum_even      = huge(min_sum_even)
