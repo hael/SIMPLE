@@ -16,6 +16,7 @@ use simple_commander_preprocess
 use simple_commander_preprocess_stream
 use simple_commander_cluster2D
 use simple_commander_cluster2D_stream
+use simple_commander_cluster2D_stream_dev
 use simple_commander_abinitio
 use simple_commander_refine3D
 use simple_commander_cluster3D
@@ -58,8 +59,9 @@ type(pick_commander_distr)                  :: xpick_distr
 
 ! CLUSTER2D WORKFLOWS
 type(make_cavgs_commander_distr)            :: xmake_cavgs_distr
-type(cluster2D_autoscale_commander)    :: xcluster2D_hlev
+type(cluster2D_autoscale_commander)         :: xcluster2D_hlev
 type(cluster2D_commander_stream)            :: xcluster2D_stream
+type(cluster2D_commander_chunks)            :: xcluster2D_chunks
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
@@ -221,6 +223,8 @@ select case(trim(prg))
         call xcluster2D_hlev%execute(cline)
     case( 'cluster2D_stream' )
         call xcluster2D_stream%execute(cline)
+    case( 'cluster2D_chunks' )
+        call xcluster2D_chunks%execute(cline)
 
     ! AB INITIO 3D RECONSTRUCTION WORKFLOW
     case( 'initial_3Dmodel' )

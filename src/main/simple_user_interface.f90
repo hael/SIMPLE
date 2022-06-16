@@ -78,6 +78,7 @@ type(simple_program), target :: center2D_nano
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_nano
 type(simple_program), target :: cluster2D_stream
+type(simple_program), target :: cluster2D_chunks
 type(simple_program), target :: cluster3D
 type(simple_program), target :: cluster3D_refine
 type(simple_program), target :: cluster_cavgs
@@ -312,6 +313,7 @@ contains
         call new_cluster2D
         call new_cluster2D_nano
         call new_cluster2D_stream
+        call new_cluster2D_chunks
         call new_cluster3D
         call new_cluster3D_refine
         call new_cluster_cavgs
@@ -416,6 +418,7 @@ contains
         call push2prg_ptr_array(cluster2D)
         call push2prg_ptr_array(cluster2D_nano)
         call push2prg_ptr_array(cluster2D_stream)
+        call push2prg_ptr_array(cluster2D_chunks)
         call push2prg_ptr_array(cluster3D)
         call push2prg_ptr_array(cluster3D_refine)
         call push2prg_ptr_array(cluster_cavgs)
@@ -539,6 +542,8 @@ contains
                 ptr2prg => cluster2D_nano
             case('cluster2D_stream')
                 ptr2prg => cluster2D_stream
+            case('cluster2D_chunks')
+                ptr2prg => cluster2D_chunks
             case('cluster3D')
                 ptr2prg => cluster3D
             case('cluster3D_refine')
@@ -728,6 +733,7 @@ contains
         write(logfhandle,'(A)') cluster_cavgs%name
         write(logfhandle,'(A)') cluster2D%name
         write(logfhandle,'(A)') cluster2D_stream%name
+        write(logfhandle,'(A)') cluster2D_chunks%name
         write(logfhandle,'(A)') cluster3D%name
         write(logfhandle,'(A)') cluster3D_refine%name
         write(logfhandle,'(A)') comparemc%name
@@ -1462,6 +1468,58 @@ contains
         call cluster2D_stream%set_input('comp_ctrls', 4, nthr)
         call cluster2D_stream%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740.)
     end subroutine new_cluster2D_stream
+
+    subroutine new_cluster2D_chunks
+        ! PROGRAM SPECIFICATION
+        call cluster2D_chunks%new(&
+        &'cluster2D_chunks',&                                                                     ! name
+        &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
+        &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
+        &'simple_exec',&                                                                          ! executable
+        &0, 0, 0, 7, 6, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call cluster2d_chunks%set_input('srch_ctrls', 1, 'ncls_start', 'num', 'Starting number of clusters',&
+        &'Minimum number of class averagages to initiate 2D clustering', 'initial # clusters', .true., 50.)
+        cluster2d_chunks%srch_ctrls(1)%required = .true.
+        call cluster2d_chunks%set_input('srch_ctrls', 2, 'nptcls_per_cls', 'num', 'Particles per cluster',&
+        &'Number of incoming particles for which one new class average is generated', '# particles per cluster', .true., 200.)
+        cluster2d_chunks%srch_ctrls(2)%required = .true.
+        call cluster2d_chunks%set_input('srch_ctrls', 3, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        &for accelerated convergence rate. Initial/Final low-pass limits control the degree of down-scaling(yes|no){yes}',&
+        &'(yes|no){yes}', .false., 'yes')
+        call cluster2d_chunks%set_input('srch_ctrls', 4, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
+            &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call cluster2d_chunks%set_input('srch_ctrls', 5, 'ncls', 'num', 'Maximum number of 2D clusters',&
+        &'Maximum number of groups to sort the particles into prior to averaging to create 2D class averages with improved SNR', 'Maximum # 2D clusters', .true., 200.)
+        call cluster2d_chunks%set_input('srch_ctrls', 6, 'lpthresh', 'num', 'Resolution rejection threshold',&
+        &'Classes with lower resolution are iteratively rejected{30}', 'Resolution rejection threshold in angstroms{30}', .false., 30.)
+        call cluster2d_chunks%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
+        ! filter controls
+        call cluster2d_chunks%set_input('filt_ctrls', 1, hp)
+        call cluster2d_chunks%set_input('filt_ctrls', 2, 'cenlp',      'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30.)
+        call cluster2d_chunks%set_input('filt_ctrls', 3, 'lp',         'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
+        call cluster2d_chunks%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit in Angstroms', .false., 2.0*MAX_SMPD)
+        call cluster2d_chunks%set_input('filt_ctrls', 5, match_filt)
+        call cluster2d_chunks%set_input('filt_ctrls', 6, 'wiener',     'multi', 'Wiener restoration', 'Wiener restoration, full or partial (full|partial){partial}','(full|partial){partial}', .false., 'partial')
+        ! mask controls
+        call cluster2d_chunks%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call cluster2d_chunks%set_input('comp_ctrls', 1, 'nchunks', 'num', 'Number of chunks', 'Number of chunks{2}', '# chunks{2}', .false., 2.0)
+        call cluster2d_chunks%set_input('comp_ctrls', 2, 'nparts_chunk', 'num', 'Number of partitions per chunk',&
+        &'Number of partitions for distributed execution of each chunk{1}', 'divide chunk job into # parts{1}', .false., 1.0)
+        call cluster2d_chunks%set_input('comp_ctrls', 3, nparts)
+        call cluster2d_chunks%set_input('comp_ctrls', 4, nthr)
+        call cluster2d_chunks%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740.)
+    end subroutine new_cluster2D_chunks
 
     subroutine new_cluster3D
         ! PROGRAM SPECIFICATION

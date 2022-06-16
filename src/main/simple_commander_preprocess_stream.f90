@@ -37,7 +37,7 @@ contains
         class(preprocess_commander_stream_dev), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
         type(parameters)                       :: params
-        integer,                   parameter   :: WAITTIME        = 3    ! folder watched every 5 seconds
+        integer,                   parameter   :: WAITTIME        = 3    ! movie folder watched every WAITTIME seconds
         integer,                   parameter   :: LONGTIME        = 300  ! time lag after which a movie is processed
         integer,                   parameter   :: INACTIVE_TIME   = 900  ! inactive time trigger for writing project file
         logical,                   parameter   :: DEBUG_HERE      = .false.
@@ -276,7 +276,7 @@ contains
                 call update_pool
                 call reject_from_pool
                 call write_project_stream2D(.true.)
-                call import_chunks_into_pool
+                call import_chunks_into_pool(.false.)
                 call classify_pool
                 call update_projects_mask(completed_fnames)
                 call classify_new_chunks(completed_fnames)
@@ -285,7 +285,7 @@ contains
         end do
         ! termination
         if( l_cluster2D )then
-            call terminate_stream2D
+            call terminate_stream2D(.true.)
         else
             call write_project
         endif
