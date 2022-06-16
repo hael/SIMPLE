@@ -130,6 +130,7 @@ contains
         real,    allocatable :: cur_diff_odd( :,:,:), cur_diff_even(:,:,:)
         real,    allocatable :: cur_fil(:), weights_2D(:,:)
         type(opt_vol), allocatable :: opt_odd(:,:,:), opt_even(:,:,:)
+        !$omp critical
         ldim        = odd%get_ldim()
         box         = ldim(1)
         dim3        = ldim(3)
@@ -241,6 +242,7 @@ contains
         call odd%set_rmat( opt_odd( :,:,:)%opt_val, .false.)
         call even%set_rmat(opt_even(:,:,:)%opt_val, .false.)
         deallocate(opt_odd, opt_even, cur_diff_odd, cur_diff_even, cur_fil, weights_2D)
+        !$omp end critical
     end subroutine opt_filter_2D
 
     ! 3D optimization(search)-based uniform/nonuniform filter, paralellized version
