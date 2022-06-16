@@ -1014,7 +1014,6 @@ contains
             if( nlines(self%msklist)< MAXS ) call read_masks
         endif
         ! no stack given, get ldim from volume if present
-
         if( self%stk .eq. '' .and. cline%defined('vol_even') )then
             call find_ldim_nptcls(self%vol_even, self%ldim, ifoo)
             self%box  = self%ldim(1)

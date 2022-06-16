@@ -44,7 +44,6 @@ type, extends(commander_base) :: opt_3D_filter_commander
     procedure :: execute      => exec_opt_3D_filter
 end type opt_3D_filter_commander
 
-
 contains
 
     !> calculates Fourier shell correlation from Even/Odd Volume pairs
@@ -299,12 +298,12 @@ contains
         use simple_tvfilter,   only: tvfilter
         class(opt_2D_filter_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(parameters)   :: params
-        integer            :: iptcl, box
-        character(len=90)  :: file_tag
-        type(tvfilter)     :: tvfilt
-        integer, parameter :: CHUNKSZ = 20
-        type(image), allocatable   :: even(:), odd(:),&
+        type(parameters)           :: params
+        integer                    :: iptcl, box
+        character(len=90)          :: file_tag
+        type(tvfilter)             :: tvfilt
+        integer, parameter         :: CHUNKSZ = 20
+        type(image),   allocatable :: even(:), odd(:),&
                                     & odd_copy_rmat(:),  odd_copy_cmat(:),  odd_copy_shellnorm(:),&
                                     &even_copy_rmat(:), even_copy_cmat(:), even_copy_shellnorm(:)
         real,          allocatable :: cur_diff_odd(:,:,:,:), cur_diff_even(:,:,:,:)
@@ -367,6 +366,8 @@ contains
             call odd( iptcl)%kill()
             call even(iptcl)%kill()
         enddo
+        call cline%set('odd_stk',  trim(file_tag)//'_odd.mrc')
+        call cline%set('even_stk', trim(file_tag)//'_even.mrc')
         call tvfilt%kill()
         ! end gracefully
         call simple_end('**** SIMPLE_OPT_2D_FILTER NORMAL STOP ****')
