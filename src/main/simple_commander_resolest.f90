@@ -295,21 +295,25 @@ contains
     end subroutine exec_opt_3D_filter
 
     subroutine exec_opt_2D_filter( self, cline )
-        use simple_opt_filter, only: opt_filter_2D
+        use simple_opt_filter, only: opt_filter_2D, opt_vol
         use simple_tvfilter,   only: tvfilter
         class(opt_2D_filter_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)   :: params
-        integer            :: iptcl
+        integer            :: iptcl, box
         character(len=90)  :: file_tag
         type(tvfilter)     :: tvfilt
         integer, parameter :: CHUNKSZ = 20
-        type(image), allocatable :: even(:), odd(:),&
-                                   & odd_copy_rmat(:),  odd_copy_cmat(:),  odd_copy_shellnorm(:),&
-                                   &even_copy_rmat(:), even_copy_cmat(:), even_copy_shellnorm(:)
+        type(image), allocatable   :: even(:), odd(:),&
+                                    & odd_copy_rmat(:),  odd_copy_cmat(:),  odd_copy_shellnorm(:),&
+                                    &even_copy_rmat(:), even_copy_cmat(:), even_copy_shellnorm(:)
+        real,          allocatable :: cur_diff_odd(:,:,:,:), cur_diff_even(:,:,:,:)
+        real,          allocatable :: cur_fil(:,:), weights_2D(:,:,:)
+        type(opt_vol), allocatable :: opt_odd(:,:,:,:), opt_even(:,:,:,:)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline) 
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
+        box            = params%ldim(1)
         params%ldim(3) = 1 ! because we operate on stacks
         params%filter  = trim(params%filter)
         if( params%l_nonuniform )then
@@ -320,6 +324,9 @@ contains
         allocate(odd(params%nptcls), even(params%nptcls),&
                 & odd_copy_rmat(params%nptcls),  odd_copy_cmat(params%nptcls),  odd_copy_shellnorm(params%nptcls),&
                 &even_copy_rmat(params%nptcls), even_copy_cmat(params%nptcls), even_copy_shellnorm(params%nptcls))
+        allocate(cur_diff_odd(box,box,1,params%nptcls), cur_diff_even(box,box,1,params%nptcls),&
+                &cur_fil(box,params%nptcls),weights_2D(params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1,params%nptcls), source=0.)
+        allocate(opt_odd(box,box,1,params%nptcls), opt_even(box,box,1,params%nptcls))
         do iptcl = 1, params%nptcls
             call odd( iptcl)%new(params%ldim, params%smpd, .false.)
             call even(iptcl)%new(params%ldim, params%smpd, .false.)
@@ -345,12 +352,13 @@ contains
             call odd( iptcl)%mask(params%msk, 'soft')
         enddo
         call tvfilt%new(odd(1))
-        !$omp parallel do collapse(1) default(shared) private(iptcl) schedule(dynamic,CHUNKSZ) proc_bind(close)
+        !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
         do iptcl = 1, params%nptcls
             call opt_filter_2D(odd(iptcl), even(iptcl),&
                                & odd_copy_rmat(iptcl),  odd_copy_cmat(iptcl),  odd_copy_shellnorm(iptcl),&
                                &even_copy_rmat(iptcl), even_copy_cmat(iptcl), even_copy_shellnorm(iptcl),&
-                               &tvfilt)
+                               &tvfilt, cur_diff_odd(:,:,:,iptcl), cur_diff_even(:,:,:,iptcl),&
+                               &cur_fil(:,iptcl), weights_2D(:,:,iptcl), opt_odd(:,:,:,iptcl), opt_even(:,:,:,iptcl))
         enddo
         !$omp end parallel do
         do iptcl = 1, params%nptcls
