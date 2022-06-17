@@ -964,6 +964,7 @@ contains
 
     subroutine exec_cluster2D( self, cline )
         use simple_strategy2D_matcher, only: cluster2D_exec
+        use simple_classaverager
         class(cluster2D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(make_cavgs_commander) :: xmake_cavgs
@@ -1059,8 +1060,11 @@ contains
                 params%extr_iter = params%extr_iter + 1
                 ! update project with the new orientations (this needs to be here rather than after convergence for the current implementation to work)
                 call build%spproj%write_segment_inside(params%oritype)
-                ! write cavgs starfile for iteration
+
+                ! update class information and write cavgs starfile for iteration
+                call cavger_gen2Dclassdoc(build%spproj)
                 call starproj%export_cls2D(build%spproj, params%which_iter)
+
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
                     call cline%delete( 'startit' )

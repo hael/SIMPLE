@@ -132,7 +132,8 @@ class View{
 			  for(var line of lines){
 				var elements = line.split((/[ , \t]+/))
 				if(elements.length > 2){
-				 svg += "<rect style='fill:none;stroke:green;stroke-width:2' x='" + Number(elements[1]) * scale + "' y='" + ((Number(elements[2]) * scale) + padding) + "' height='" + Number(elements[3]) * scale + "' width='" + Number(elements[3]) * scale + "'/>"
+				// svg += "<rect style='fill:none;stroke:green;stroke-width:2' x='" + Number(elements[1]) * scale + "' y='" + ((Number(elements[2]) * scale) + padding) + "' height='" + Number(elements[3]) * scale + "' width='" + Number(elements[3]) * scale + "'/>"
+				  svg += "<circle style='fill:none;stroke:green;stroke-width:2' cx='" + (Number(elements[1]) + Number(elements[3])/2 ) * scale +  "' cy='" + (((Number(elements[2]) + Number(elements[3])/2 )* scale) + padding) + "' r='2' />"
 				}
 			  }
 			  svg += '</svg>'

@@ -93,6 +93,15 @@ class TaskSetup {
 			}
 			inputpath.disabled = 'true'
 		}
+		
+		for (var input of document.querySelectorAll('#popupwindow input.argument')){
+			var desc = input.parentElement.parentElement.querySelector("td")
+			if(desc.innerHTML.includes("*")){
+				desc.innerHTML = desc.innerHTML.replace("*","")
+				desc.parentElement.style = 'display:table-row'
+				desc.parentElement.className = "other"
+			}
+		}
       })
   }
 

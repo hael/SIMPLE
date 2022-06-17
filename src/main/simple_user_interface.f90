@@ -2955,14 +2955,14 @@ contains
         &5, 15, 0, 20, 9, 1, 6, .true.)                                                     ! # entries in each group, requires sp_project
         ! image input/output
         call preprocess_stream_dev%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
-        call preprocess_stream_dev%set_input('img_ios', 2, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
-        call preprocess_stream_dev%set_input('img_ios', 3, 'refs', 'file', 'References images for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
-        call preprocess_stream_dev%set_input('img_ios', 4, 'vol1', 'file', 'Reference volume for picking', 'Reference volume for picking', 'e.g. vol.mrc', .false., '')
+        call preprocess_stream_dev%set_input('img_ios', 2, 'gainref', 'file', 'Gain reference*', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
+        call preprocess_stream_dev%set_input('img_ios', 3, 'refs', 'file', 'References images for picking*', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
+        call preprocess_stream_dev%set_input('img_ios', 4, 'vol1', 'file', 'Reference volume for picking*', 'Reference volume for picking', 'e.g. vol.mrc', .false., '')
         call preprocess_stream_dev%set_input('img_ios', 5, 'dir_prev', 'file', 'Previous run directory',&
             &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preprocess_stream', .false., '')
         ! parameter input/output
-        call preprocess_stream_dev%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
-        call preprocess_stream_dev%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
+        call preprocess_stream_dev%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate*', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
+        call preprocess_stream_dev%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time*', 'Exposure time in seconds', 'in seconds', .false., 10.)
         call preprocess_stream_dev%set_input('parm_ios', 3, scale_movies)
         call preprocess_stream_dev%set_input('parm_ios', 4, eer_fraction)
         call preprocess_stream_dev%set_input('parm_ios', 5, eer_upsampling)

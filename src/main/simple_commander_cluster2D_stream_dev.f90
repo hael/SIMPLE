@@ -1043,6 +1043,7 @@ contains
     !>  Updates the project watched by the gui for display
     subroutine update_pool_for_gui
         type(oris)                    :: os_backup
+        type(starproject)             :: starproj
         character(len=:), allocatable :: src
         os_backup = pool_proj%os_cls2D
         call pool_proj%add_cavgs2os_out(trim(POOL_DIR)//trim(refs_glob), smpd, 'cavg')
@@ -1053,6 +1054,9 @@ contains
         pool_proj%os_cls2D = os_backup
         call pool_proj%write_segment_inside('out',   projfile4gui)
         call pool_proj%write_segment_inside('cls2D', projfile4gui)
+        ! Write star file for iteration
+        call starproj%export_cls2D(pool_proj, pool_iter)
+        
         call os_backup%kill
     end subroutine update_pool_for_gui
 

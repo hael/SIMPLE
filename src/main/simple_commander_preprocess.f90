@@ -386,12 +386,14 @@ contains
                     call spproj%os_ptcl3D%kill
                 endif
                 call spproj%write_non_data_segments(params%projfile)
+
                 ! write starfile
                 if (spproj%os_mic%get_noris() > 0) then
                     if( file_exists("micrographs.star") ) call del_file("micrographs.star")
                     call starproj%assign_optics(cline, spproj)
                     call starproj%export_mics(cline, spproj)
                 end if
+
                 ! benchmark
                 if( DEBUG_HERE )then
                     rt_write = toc(t0)
