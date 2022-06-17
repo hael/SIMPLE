@@ -248,6 +248,12 @@ contains
                 last_injection = simple_gettime()
                 l_haschanged   = .true.
                 n_imported     = spproj%os_mic%get_noris()
+                ! always write micrographs snapshot if less than 1000 mics, else every INACTIVE_TIME
+                if( n_imported < 1000 .and. l_haschanged )then
+                    call write_migrographs_starfile
+                else if( (simple_gettime()-last_injection > INACTIVE_TIME) .and. l_haschanged )then
+                    call write_migrographs_starfile
+                endif
             else
                 ! wait & write snapshot
                 if( l_cluster2D )then

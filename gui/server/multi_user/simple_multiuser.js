@@ -36,6 +36,10 @@ global.appPath = path.dirname(__dirname)
 if(!process.env.SIMPLE_PATH){
 	console.log("Error: SIMPLE_PATH not set")
 	process.exit(1)
+}else if(process.env.SIMPLE_GUI_DATA){
+	console.log("SIMPLE_GUI_DATA set to " + process.env.SIMPLE_GUI_DATA)
+	global.userdata = process.env.SIMPLE_GUI_DATA
+	global.simplepath = process.env.SIMPLE_PATH
 }else{
 	global.userdata = process.env.SIMPLE_PATH + '/gui_data'
 	global.simplepath = process.env.SIMPLE_PATH

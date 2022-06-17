@@ -17,9 +17,9 @@ private
 #include "simple_local_flags.inc"
 
 type starproject
-    private
     type(star_file)              :: starfile
     type(tilt_info), allocatable :: tiltinfo(:)
+    !logical                      :: VERBOSE_OUTPUT =.false.
 contains
     ! constructor
     procedure, private :: initialise
@@ -48,6 +48,8 @@ contains
     procedure, private :: sort_optics_maxpop
     procedure, private :: apply_optics_offset
     procedure, private :: get_image_basename
+    !other
+    procedure          :: set_verbose
 end type starproject
 
 contains
@@ -84,7 +86,8 @@ contains
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnImageSizeZ", splflag="nframes", int=.true.)]
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnCtfPowerSpectrum", splflag="ctfjpg", string=.true.)]
         self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="rlnMicrographCoordinates", splflag="boxfile", string=.true.)]
-    
+        self%starfile%micrographs%flags = [self%starfile%micrographs%flags, star_flag(rlnflag="splNumberParticles", splflag="nptcls", int=.true.)]
+
         ! assign stk flags
         if (.not. allocated(self%starfile%stacks%flags)) allocate(self%starfile%stacks%flags(0))
         self%starfile%stacks%flags = [self%starfile%stacks%flags, star_flag(rlnflag="rlnImageName", splflag="stk", string=.true., imagesplit=.true., splflag2="stkind")]
@@ -125,6 +128,9 @@ contains
         ! assign clusters2D flags
         if (.not. allocated(self%starfile%clusters2D%flags)) allocate(self%starfile%clusters2D%flags(0))
         self%starfile%clusters2D%flags = [self%starfile%clusters2D%flags, star_flag(rlnflag="rlnReferenceImage", splflag="stk", string=.true., imagesplit=.true., splflag2="class")]
+        self%starfile%clusters2D%flags = [self%starfile%clusters2D%flags, star_flag(rlnflag="rlnEstimatedResolution", splflag="res")]
+        self%starfile%clusters2D%flags = [self%starfile%clusters2D%flags, star_flag(rlnflag="rlnClassDistribution", splflag="pop", int=.true.)]
+        
     end subroutine initialise
 
     ! import
@@ -135,7 +141,7 @@ contains
         class(sp_project),  intent(inout) :: spproj
         character(len=*),   intent(in)    :: filename
         integer :: i
-        if( L_VERBOSE_GLOB )then
+        if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing3 ' // filename // " to mics"
             write(logfhandle,*) ''
@@ -159,7 +165,7 @@ contains
         class(sp_project),  intent(inout) :: spproj
         character(len=*),   intent(in)    :: filename
         integer :: i
-        if( L_VERBOSE_GLOB )then
+        if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing ' // filename // " to ptcls2D"
             write(logfhandle,*)
@@ -185,7 +191,7 @@ contains
         class(sp_project),  intent(inout) :: spproj
         character(len=*) :: filename
         integer :: i
-        if( L_VERBOSE_GLOB )then
+        if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing ' // filename // " to cls2D"
             write(logfhandle,*) ''
@@ -203,7 +209,7 @@ contains
         class(sp_project),  intent(inout) :: spproj
         character(len=*),   intent(in)    :: filename
         integer :: i
-        if( L_VERBOSE_GLOB )then
+        if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing ' // filename // " to ptcls3D"
             write(logfhandle,*)
@@ -470,10 +476,11 @@ contains
         class(starproject), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         class(sp_project),  intent(inout) :: spproj
-        integer                                         :: i
+        integer                           :: i
+        if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         self%starfile%filename = "micrographs.star"
         self%starfile%rootdir = cline%get_carg("import_dir")
-        if( L_VERBOSE_GLOB )then
+        if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'exporting micrographs to ' // trim(adjustl(self%starfile%filename))
             write(logfhandle,*) ''
@@ -492,12 +499,13 @@ contains
         character(len=:), allocatable     :: stkname, relpath
         integer                           :: i, ncls
         real                              :: smpd
+        if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         if(present(iter)) then
             self%starfile%filename ="clusters2D_iter"//int2str_pad(iter,3)//".star"
         else
             self%starfile%filename = "clusters2D.star"
         end if
-        if( L_VERBOSE_GLOB )then
+        if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'exporting clusters2D to ' // trim(adjustl(self%starfile%filename))
             write(logfhandle,*) ''
@@ -520,10 +528,13 @@ contains
         class(cmdline),     intent(inout) :: cline
         class(sp_project),  intent(inout) :: spproj
         integer :: i
+        if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         self%starfile%filename = "particles2D.star"
-        write(logfhandle,*) ''
-        write(logfhandle,*) char(9), 'exporting particles2D to ' // trim(adjustl(self%starfile%filename))
-        write(logfhandle,*) ''
+        if( VERBOSE_OUTPUT )then
+            write(logfhandle,*) ''
+            write(logfhandle,*) char(9), 'exporting particles2D to ' // trim(adjustl(self%starfile%filename))
+            write(logfhandle,*) ''
+        endif
         if(.not. self%starfile%initialised) call self%initialise()
         call enable_splflags(spproj%os_optics, self%starfile%optics%flags)
         call enable_splflags(spproj%os_ptcl2D, self%starfile%particles2D%flags)
@@ -537,8 +548,9 @@ contains
         class(cmdline),     intent(inout) :: cline
         class(sp_project) :: spproj
         integer           :: i
+        if( L_VERBOSE_GLOB ) VERBOSE_OUTPUT = .true.
         self%starfile%filename = "particles3D.star"
-        if( L_VERBOSE_GLOB )then
+        if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'exporting particles3D to ' // trim(adjustl(self%starfile%filename))
             write(logfhandle,*) ''
@@ -655,12 +667,12 @@ contains
         character(len=LONGSTRLEN), allocatable :: epugroups(:)
         character(len=LONGSTRLEN)              :: eputilt
         integer :: i, epugroupid
-        write(logfhandle,*) ''
+        if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
         if(index(self%tiltinfo(1)%basename, 'FoilHole') == 0) then
-            write(logfhandle,*) char(9), 'no EPU filenames detected. assigning single initial beamtilt group'
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), 'no EPU filenames detected. assigning single initial beamtilt group'
             ! already assigned initialtiltgroupid=1 in initialisation
         else
-            write(logfhandle,"(A,A)", advance="no") char(9), 'EPU filenames detected. using these to assign initial beamtilt groups ... '
+            if( VERBOSE_OUTPUT ) write(logfhandle,"(A,A)", advance="no") char(9), 'EPU filenames detected. using these to assign initial beamtilt groups ... '
             allocate(epugroups(0))
             epugroupid = 1
             do i =1,size(self%tiltinfo)
@@ -674,10 +686,10 @@ contains
                     epugroupid = epugroupid + 1
                 end if
             end do
-            write(logfhandle,"(A,I4,A)") "assigned ", size(epugroups), " initial groups"
+            if( VERBOSE_OUTPUT ) write(logfhandle,"(A,I4,A)") "assigned ", size(epugroups), " initial groups"
             deallocate(epugroups)
         end if
-        write(logfhandle,*) ''
+        if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
     end subroutine assign_initial_tiltgroups
 
     subroutine assign_xml_tiltinfo(self, xmldir)
@@ -686,8 +698,8 @@ contains
         character(len=LONGSTRLEN) :: eputilt
         type(Node), pointer :: xmldoc, beamtiltnode, beamtiltnodex, beamtiltnodey
         integer :: i, j
-        write(logfhandle,*) ''
-        write(logfhandle,*) char(9), "reading tilt info from metadata ... "
+        if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
+        if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "reading tilt info from metadata ... "
         do i = 1,size(self%tiltinfo)
             if(file_exists(xmldir // '/' // trim(adjustl(self%tiltinfo(i)%basename)) // '.xml')) then
                 xmldoc => parseFile(xmldir // '/' // trim(adjustl(self%tiltinfo(i)%basename)) // '.xml')
@@ -698,10 +710,10 @@ contains
                 self%tiltinfo(i)%tilty = str2real(getTextContent(beamtiltnodey))
                 call destroy(xmldoc)   
             else
-                write(logfhandle, *) char(9), char(9), xmldir // '/' // trim(adjustl(self%tiltinfo(i)%basename)) // '.xml does not exist. Ignoring'  
+                if( VERBOSE_OUTPUT ) write(logfhandle, *) char(9), char(9), xmldir // '/' // trim(adjustl(self%tiltinfo(i)%basename)) // '.xml does not exist. Ignoring'  
             end if
         end do
-        write(logfhandle,*) ''
+        if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
     end subroutine assign_xml_tiltinfo
   
     subroutine cluster_tiltinfo(self, threshold)
@@ -710,11 +722,11 @@ contains
         integer, allocatable :: populations(:), labels(:), tiltinfopos(:)
         real,    allocatable :: tilts(:,:), centroids(:,:)
         integer :: i, j, k, tiltcount, groupcount, matchcount
-        write(logfhandle,*) ''
-        write(logfhandle,*) char(9), "clustering initial beamtilt groups using tilt info and a threshold of ", threshold, " ... "
+        if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
+        if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "clustering initial beamtilt groups using tilt info and a threshold of ", threshold, " ... "
         groupcount = 0
         do i = 1, maxval(self%tiltinfo%initialtiltgroupid)
-            write(logfhandle,*) char(9), char(9), "clustering initial beamtilt group ", i, " ... "
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), char(9), "clustering initial beamtilt group ", i, " ... "
             matchcount = count(self%tiltinfo%initialtiltgroupid == i)
             allocate(tilts(matchcount, 2))
             allocate(labels(matchcount))
@@ -734,7 +746,7 @@ contains
             end do
             groupcount = groupcount + size(populations)
             deallocate(tilts, labels, tiltinfopos)
-            write(logfhandle,*) ''
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
         end do
     end subroutine cluster_tiltinfo
 
@@ -765,24 +777,24 @@ contains
         end if
         call self%cluster_tiltinfo(cline%get_rarg("tilt_thres"))
         if(cline%get_rarg("maxpop") > 0) then
-            write(logfhandle,*) ''
-            write(logfhandle,*) char(9), "plotting beamtilt groups (prior to splitting on maxpop) ... "
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "plotting beamtilt groups (prior to splitting on maxpop) ... "
             call self%plot_opticsgroups("optics_groups_pre_maxpop.eps")
             call self%sort_optics_maxpop(int(cline%get_rarg("maxpop")))
-            write(logfhandle,*) ''
-            write(logfhandle,*) char(9), "plotting beamtilt groups (after splitting on maxpop) ... "
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "plotting beamtilt groups (after splitting on maxpop) ... "
             call self%plot_opticsgroups("optics_groups_post_maxpop.eps") 
         else
-            write(logfhandle,*) ''
-            write(logfhandle,*) char(9), "plotting beamtilt groups ... "
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "plotting beamtilt groups ... "
             call self%plot_opticsgroups("optics_groups.eps")
         end if
         if(cline%get_rarg("optics_offset") > 0) then
             call self%apply_optics_offset(int(cline%get_rarg("optics_offset")))
         end if
         if(spproj%os_mic%get_noris() > 0) then
-            write(logfhandle,*) ''
-            write(logfhandle,*) char(9), "updating micrographs in project file with updated optics groups ... "
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating micrographs in project file with updated optics groups ... "
             do i = 1,spproj%os_mic%get_noris()
                 element = findloc(self%tiltinfo%basename, trim(adjustl(spproj%os_mic%get_static(i, "bsname"))), 1)
                 if(element > 0) then
@@ -793,8 +805,8 @@ contains
             end do
         end if
         if(spproj%os_stk%get_noris() > 0) then
-            write(logfhandle,*) ''
-            write(logfhandle,*) char(9), "updating stacks in project file with updated optics groups ... "
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating stacks in project file with updated optics groups ... "
             do i = 1, spproj%os_stk%get_noris()
                 element = findloc(self%tiltinfo%basename, trim(adjustl(spproj%os_stk%get_static(i, "bsname"))), 1)
                 if(element > 0) then
@@ -805,23 +817,23 @@ contains
             end do
         end if
         if(spproj%os_ptcl2D%get_noris() > 0) then
-            write(logfhandle,*) ''
-            write(logfhandle,*) char(9), "updating particles 2d in project file with updated optics groups ... "
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating particles 2d in project file with updated optics groups ... "
             do i = 1, spproj%os_ptcl2D%get_noris()
                 ptclstkid = int(spproj%os_ptcl2D%get(i, 'stkind'))
                 call spproj%os_ptcl2D%set(i, 'ogid', spproj%os_stk%get(ptclstkid, 'ogid'))
             end do
         end if
         if(spproj%os_ptcl3D%get_noris() > 0) then
-            write(logfhandle,*) ''
-            write(logfhandle,*) char(9), "updating particles 3d in project file with updated optics groups ... "
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating particles 3d in project file with updated optics groups ... "
             do i = 1, spproj%os_ptcl3D%get_noris()
                 ptclstkid = int(spproj%os_ptcl2D%get(i, 'stkind'))
                 call spproj%os_ptcl3D%set(i, 'ogid', spproj%os_stk%get(ptclstkid, 'ogid'))
             end do
         end if
-        write(logfhandle,*) ''
-        write(logfhandle,*) char(9), "updating optics groups in project file ... "
+        if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
+        if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating optics groups in project file ... "
         call spproj%os_optics%new(maxval(self%tiltinfo%finaltiltgroupid) - minval(self%tiltinfo%finaltiltgroupid) + 1, is_ptcl=.false.)
         do i = minval(self%tiltinfo%finaltiltgroupid), maxval(self%tiltinfo%finaltiltgroupid)
             element = findloc(self%tiltinfo%finaltiltgroupid, i, 1)
@@ -838,7 +850,7 @@ contains
             end if
         end do
         deallocate(self%tiltinfo)
-        write(logfhandle,*) ''
+        if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
     end subroutine assign_optics
 
     subroutine populate_opticsmap(self, opticsoris)
@@ -885,7 +897,7 @@ contains
         end do
         call CPlot2D__OutputPostScriptPlot(plot2D, fname_eps//C_NULL_CHAR)
         call CPlot2D__delete(plot2D)
-        write(logfhandle,*) char(9), char(9), "wrote ", fname_eps
+        if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), char(9), "wrote ", fname_eps
     end subroutine plot_opticsgroups
   
     subroutine sort_optics_maxpop(self, maxpop)
@@ -958,5 +970,10 @@ contains
             end if
         end do
     end subroutine get_image_basename
+    
+    subroutine set_verbose(self)
+		class(starproject), intent(inout) :: self
+		VERBOSE_OUTPUT = .true.
+    end subroutine set_verbose
     
 end module simple_starproject

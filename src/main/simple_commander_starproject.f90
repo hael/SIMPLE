@@ -43,6 +43,8 @@ contains
         logical                   :: iteration
         character(len=3)          :: itchar    
         character(len=LONGSTRLEN) :: cwd
+        !show output. Defaults to false for streaming
+        call starproj%set_verbose
         if(.not. cline%defined("mkdir")) then
             call cline%set('mkdir', 'yes')
         end if
@@ -116,6 +118,8 @@ contains
         type(starproject) :: starproj
         type(parameters)  :: params
         type(sp_project)  :: spproj
+        !show output. Defaults to false for streaming
+        call starproj%set_verbose
         if(.not. cline%defined("mkdir")) then
             call cline%set('mkdir', 'yes')
         end if
@@ -130,7 +134,7 @@ contains
         if (spproj%os_mic%get_noris() > 0) then
             call starproj%export_mics(cline, spproj)
         end if
-	if (spproj%os_cls2D%get_noris() > 0) then
+    if (spproj%os_cls2D%get_noris() > 0) then
             call starproj%export_cls2D(spproj)
         end if
         if (spproj%os_ptcl2D%get_noris() > 0) then
@@ -146,6 +150,8 @@ contains
         type(starproject) :: starproj
         type(parameters)  :: params
         type(sp_project)  :: spproj
+        !show output. Defaults to false for streaming
+        call starproj%set_verbose
         call cline%set('mkdir', 'yes')
         call params%new(cline)
         if(cline%get_rarg("tilt_thres") == 0) then

@@ -9,11 +9,14 @@ implicit none
 public :: LEN_LINE, LEN_FLAG, stk_map, star_flag, star_data, star_file, tilt_info
 public :: enable_rlnflag, enable_splflag, enable_splflags, get_rlnflagindex, center_boxes
 public :: split_dataline, h_clust
+public :: VERBOSE_OUTPUT
 private
 #include "simple_local_flags.inc"
 
 integer, parameter :: LEN_LINE = 2048
 integer, parameter :: LEN_FLAG = 64
+
+logical            :: VERBOSE_OUTPUT =.false.
 
 type stk_map
     character(LEN=2056) :: stkpath
@@ -79,7 +82,7 @@ contains
             if(index(flags(i)%rlnflag, trim(adjustl(rlnflag))) > 0 .AND. len_trim(flags(i)%splflag) > 0) then
                 flags(i)%present = .true.
                 flags(i)%ind = flagindex
-                if( L_VERBOSE_GLOB ) write(logfhandle,*) char(9), char(9), "mapping ", flags(i)%rlnflag, " => ", trim(adjustl(flags(i)%splflag))
+                if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), char(9), "mapping ", flags(i)%rlnflag, " => ", trim(adjustl(flags(i)%splflag))
                 exit
             end if
         end do
@@ -93,7 +96,7 @@ contains
             if((index(flags(i)%splflag, trim(adjustl(splflag))) > 0 .OR. index(flags(i)%splflag2, trim(adjustl(splflag))) > 0) .AND. len_trim(flags(i)%rlnflag) > 0) then
                 if(flags(i)%present .eqv. .false.) then
                     flags(i)%present = .true.
-                    if( L_VERBOSE_GLOB ) write(logfhandle,*) char(9), char(9), "mapping ", flags(i)%splflag, " => ", trim(adjustl(flags(i)%rlnflag))
+                    if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), char(9), "mapping ", flags(i)%splflag, " => ", trim(adjustl(flags(i)%rlnflag))
                 end if
                 exit
             end if
@@ -275,7 +278,7 @@ contains
         enddo
         ! output generation
         do i = 1, ncls
-            write(logfhandle, *) char(9), char(9), char(9), 'Class ', i, 'Population ', populations(i)
+            if( VERBOSE_OUTPUT ) write(logfhandle, *) char(9), char(9), char(9), 'Class ', i, 'Population ', populations(i)
         enddo
     end subroutine h_clust
 
