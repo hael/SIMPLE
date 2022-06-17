@@ -15,10 +15,10 @@ program simple_test_CED
     logical                       :: mrc_exists
     real,    parameter            :: SIGMA = 0.7, RHO = 4., C1 = 0.001, C2 = 1., DT = 0.15, T_MAX = 15.
     integer, allocatable          :: pos_ind_1(:), pos_ind_2(:), neg_ind_1(:), neg_ind_2(:)
-    real,    allocatable          :: grad(:,:,:), D1(:,:,:), D2(:,:,:), eig_val(:,:,:,:), eig_vec_1(:,:,:,:),&
+    real,    allocatable          :: D1(:,:,:), D2(:,:,:), eig_val(:,:,:,:), eig_vec_1(:,:,:,:),&
                                     &lambda(:,:,:,:), a(:,:,:), b(:,:,:), c(:,:,:), discrete_table(:,:,:,:,:)
     real,    pointer              :: J11_rmat(:,:,:)=>null(), J12_rmat(:,:,:)=>null(), J22_rmat(:,:,:)=>null(),&
-                                    &cur_img_rmat(:,:,:)=>null()
+                                    &cur_img_rmat(:,:,:)=>null(), img_rmat(:,:,:)=>null()
     character(len=15), parameter, dimension(3) :: FIL_ARR = [character(len=15) :: "tv", "butterworth", "lp"]
     if( command_argument_count() < 4 )then
         write(logfhandle,'(a)') 'Usage: simple_test_CED smpd=xx nthr=yy stk=stk.mrc, mskdiam=zz'
@@ -64,7 +64,7 @@ program simple_test_CED
     call J12%new(p%ldim, p%smpd)
     call J22%new(p%ldim, p%smpd)
     call cur_img%new(p%ldim, p%smpd)
-    allocate(grad(p%ldim(1),p%ldim(2),1), D1(p%ldim(1),p%ldim(2),1),&
+    allocate(  D1(p%ldim(1),p%ldim(2),1),&
               &D2(p%ldim(1),p%ldim(2),1), eig_val(p%ldim(1),p%ldim(2),1,2),&
               &eig_vec_1(p%ldim(1),p%ldim(2),1,2),lambda(p%ldim(1),p%ldim(2),1,2),&
               &a(p%ldim(1),p%ldim(2),1), b(p%ldim(1),p%ldim(2),1), c(p%ldim(1),p%ldim(2),1),&
@@ -80,7 +80,7 @@ program simple_test_CED
         call cur_img%copy(img)
         call cur_img%get_rmat_ptr(cur_img_rmat)
         t = 0.
-        do while( t < DT*3 )
+        do while( t < (T_MAX-0.001) )
             call img%copy_fast(cur_img)
             call ker%zero_and_unflag_ft()
             t = t + DT
@@ -97,10 +97,20 @@ program simple_test_CED
             call ker%fft()
             img = img*ker
             call img%ifft()
-            call img%calc_gradient(grad, D1, D2)
-            call ker%ifft()
-            call ker%get_rmat_ptr(J11_rmat)
-            write(*, *) sum(sum(sum(D1,3),2),1), sum(sum(sum(D2,3),2),1), sum(sum(sum(J11_rmat,3),2),1)
+            call img%get_rmat_ptr(img_rmat)
+            D1 = 0.
+            D2 = 0.
+            do k = 2, p%ldim(1)-1
+                D1(:,k,1) = 0.5*( img_rmat(:  ,k+1,1) - img_rmat(:  ,k-1,1) )
+            enddo
+            do k = 2, p%ldim(2)-1
+                D2(k,:,1) = 0.5*( img_rmat(k+1,:  ,1) - img_rmat(k-1,:  ,1) )
+            enddo
+            D1(:,1        ,1) = img_rmat(:,2        ,1) - img_rmat(:,1          ,1)
+            D1(:,p%ldim(1),1) = img_rmat(:,p%ldim(1),1) - img_rmat(:,p%ldim(1)-1,1)
+            D2(1        ,:,1) = img_rmat(2        ,:,1) - img_rmat(1          ,:,1)
+            D2(p%ldim(2),:,1) = img_rmat(p%ldim(2),:,1) - img_rmat(p%ldim(2)-1,:,1)
+            write(*, *) sum(D1), sum(D2), sum(img_rmat)
             ! build the Gaussian kernel with rho
             gaussian_ext = ceiling(3*RHO)
             call ker%zero_and_unflag_ft()
@@ -134,8 +144,8 @@ program simple_test_CED
             eig_vec_1(:,:,:,2) = J22_rmat - J11_rmat + sqrt((J11_rmat - J22_rmat)**2 + 4*J12_rmat**2)
             lambda(   :,:,:,1) = C1
             lambda(   :,:,:,2) = C1 + (1-C1)*exp(-C2/(eig_val(:,:,:,1) - eig_val(:,:,:,2))**2)
-            a = lambda(:,:,:,1)*eig_vec_1(:,:,:,1)**2 + lambda(:,:,:,2)*eig_vec_1(:,:,:,2)**2
-            c = lambda(:,:,:,1)*eig_vec_1(:,:,:,2)**2 + lambda(:,:,:,2)*eig_vec_1(:,:,:,1)**2
+            a =  lambda(:,:,:,1)*eig_vec_1(:,:,:,1)**2 + lambda(:,:,:,2)*eig_vec_1(:,:,:,2)**2
+            c =  lambda(:,:,:,1)*eig_vec_1(:,:,:,2)**2 + lambda(:,:,:,2)*eig_vec_1(:,:,:,1)**2
             b = (lambda(:,:,:,1) - lambda(:,:,:,2))*eig_vec_1(:,:,:,1)*eig_vec_1(:,:,:,2)
             ! solving the diffusion equations
             discrete_table(:,:,1,1,1) = (cur_img_rmat(neg_ind_1, pos_ind_2, 1) - cur_img_rmat(:,:,1))*&
