@@ -115,12 +115,12 @@ contains
         integer :: state, box, fsc_box, mskfile_box, ldim(3), flims(3,2)
         logical :: has_fsc, has_mskfile, l_nonuniform
         ! set defaults
-        if( .not. cline%defined('mkdir') )      call cline%set('mkdir',     'yes')
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('nonuniform') ) call cline%set('nonuniform', 'no')
         call cline%set('oritype', 'out')
         ! parse commad-line
         call params%new(cline)
-        l_nonuniform = trim(params%nonuniform).eq.'yes'
+        l_nonuniform = cline%defined('filter')
         ! read project segment
         call spproj%read_segment(params%oritype, params%projfile)
         ! state

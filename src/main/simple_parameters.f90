@@ -64,7 +64,6 @@ type :: parameters
     character(len=3)      :: needs_sigma='no'     !< invert contrast of images(yes|no){no}
     character(len=3)      :: neg='no'             !< invert contrast of images(yes|no){no}
     character(len=3)      :: noise_norm ='no'
-    character(len=3)      :: nonuniform='yes'     !< nonuniform filter(yes|no){yes}
     character(len=3)      :: norm='no'            !< do statistical normalisation avg
     character(len=3)      :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
@@ -453,7 +452,7 @@ type :: parameters
     logical :: l_locres       = .false.
     logical :: l_match_filt   = .true.
     logical :: l_needs_sigma  = .false.
-    logical :: l_nonuniform   = .true.
+    logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_ran_noise_ph = .true.
     logical :: l_refine_inpl  = .false.
@@ -576,7 +575,6 @@ contains
         call check_carg('needs_sigma',    self%needs_sigma)
         call check_carg('neg',            self%neg)
         call check_carg('noise_norm',     self%noise_norm)
-        call check_carg('nonuniform',     self%nonuniform)
         call check_carg('norm',           self%norm)
         call check_carg('objfun',         self%objfun)
         call check_carg('omit_neg',       self%omit_neg)
@@ -1289,7 +1287,7 @@ contains
         ! set envfsc flag
         self%l_envfsc = self%envfsc .ne. 'no'
         ! set nonuniform flag
-        self%l_nonuniform = self%nonuniform .ne. 'no'
+        self%l_nonuniform = cline%defined('filter')
         ! set correlation weighting scheme
         self%l_corrw = self%wcrit .ne. 'no'
         ! set wiener mode
