@@ -15,7 +15,7 @@ program simple_test_CED
     logical                       :: mrc_exists
     real,    parameter            :: SIGMA = 0.7, RHO = 4., C1 = 0.001, C2 = 1., DT = 0.15, T_MAX = 15.
     integer, allocatable          :: pos_ind_1(:), pos_ind_2(:), neg_ind_1(:), neg_ind_2(:)
-    real,    allocatable          :: D1(:,:,:), D2(:,:,:), eig_val(:,:,:,:), eig_vec_1(:,:,:,:),&
+    real,    allocatable          :: D1(:,:,:), D2(:,:,:), eig_val(:,:,:,:), eig_vec(:,:,:,:),&
                                     &lambda(:,:,:,:), a(:,:,:), b(:,:,:), c(:,:,:), discrete_table(:,:,:,:,:)
     real,    pointer              :: J11_rmat(:,:,:)=>null(), J12_rmat(:,:,:)=>null(), J22_rmat(:,:,:)=>null(),&
                                     &cur_img_rmat(:,:,:)=>null(), img_rmat(:,:,:)=>null(), ker_rmat(:,:,:)=>null()
@@ -66,14 +66,14 @@ program simple_test_CED
     call D1_img%new( p%ldim, p%smpd)
     allocate(  D1(p%ldim(1),p%ldim(2),1),&
               &D2(p%ldim(1),p%ldim(2),1), eig_val(p%ldim(1),p%ldim(2),1,2),&
-              &eig_vec_1(p%ldim(1),p%ldim(2),1,2),lambda(p%ldim(1),p%ldim(2),1,2),&
+              &eig_vec(p%ldim(1),p%ldim(2),1,2),lambda(p%ldim(1),p%ldim(2),1,2),&
               &a(p%ldim(1),p%ldim(2),1), b(p%ldim(1),p%ldim(2),1), c(p%ldim(1),p%ldim(2),1),&
               &discrete_table(p%ldim(1),p%ldim(2),1,3,3), source=0.)
     allocate(neg_ind_1(p%ldim(1)), pos_ind_1(p%ldim(1)), neg_ind_2(p%ldim(2)), pos_ind_2(p%ldim(2)))
-    pos_ind_1 = [  p%ldim(1), (k, k = 1,p%ldim(1)-1)]
-    pos_ind_2 = [  p%ldim(2), (k, k = 1,p%ldim(2)-1)]
-    neg_ind_1 = [(k, k = 2,p%ldim(1)), 1]
-    neg_ind_2 = [(k, k = 2,p%ldim(2)), 1]
+    neg_ind_1 = [  p%ldim(1), (k, k = 1,p%ldim(1)-1)]
+    neg_ind_2 = [  p%ldim(2), (k, k = 1,p%ldim(2)-1)]
+    pos_ind_1 = [(k, k = 2,p%ldim(1)), 1]
+    pos_ind_2 = [(k, k = 2,p%ldim(2)), 1]
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         call img%read(p%stk, iptcl)
@@ -147,24 +147,25 @@ program simple_test_CED
             call J22%get_rmat_ptr(J22_rmat)
             J22_rmat = J22_rmat*product(p%ldim)
             ! computing eigenvalues/eigenvectors of the structure tensor
-            eig_val(  :,:,:,1) = (J11_rmat + J22_rmat + sqrt((J11_rmat - J22_rmat)**2 + 4*J12_rmat**2))/2.
-            eig_val(  :,:,:,2) = (J11_rmat + J22_rmat - sqrt((J11_rmat - J22_rmat)**2 + 4*J12_rmat**2))/2.
-            lambda(   :,:,:,1) = C1
-            lambda(   :,:,:,2) = C1 + (1-C1)*exp(-C2/(eig_val(:,:,:,1) - eig_val(:,:,:,2))**2)
-            eig_vec_1(:,:,:,1) = 2*J12_rmat
-            eig_vec_1(:,:,:,2) = J22_rmat - J11_rmat + sqrt((J11_rmat - J22_rmat)**2 + 4*J12_rmat**2)
+            eig_val(:,:,:,1) = (J11_rmat + J22_rmat + sqrt((J11_rmat - J22_rmat)**2 + 4*J12_rmat**2))/2.
+            eig_val(:,:,:,2) = (J11_rmat + J22_rmat - sqrt((J11_rmat - J22_rmat)**2 + 4*J12_rmat**2))/2.
+            lambda( :,:,:,1) = C1
+            lambda( :,:,:,2) = C1 + (1-C1)*exp(-C2/(eig_val(:,:,:,1) - eig_val(:,:,:,2))**2)
+            eig_vec(:,:,:,1) = 2*J12_rmat
+            eig_vec(:,:,:,2) = J22_rmat - J11_rmat + sqrt((J11_rmat - J22_rmat)**2 + 4*J12_rmat**2)
+            ! normalize the eigenvectors (critical, but not mentioned in the CED paper)
             do k = 1,p%ldim(1)
             do l = 1,p%ldim(2)
-                sh = sqrt(eig_vec_1(k,l,1,1)**2 + eig_vec_1(k,l,1,2)**2);
+                sh = sqrt(eig_vec(k,l,1,1)**2 + eig_vec(k,l,1,2)**2)
                 if( sh > epsilon(sh) )then
-                    eig_vec_1(k,l,1,1) = eig_vec_1(k,l,1,1)/sh;
-                    eig_vec_1(k,l,1,2) = eig_vec_1(k,l,1,2)/sh;
+                    eig_vec(k,l,1,1) = eig_vec(k,l,1,1)/sh
+                    eig_vec(k,l,1,2) = eig_vec(k,l,1,2)/sh
                 endif 
             enddo
             enddo
-            a =  lambda(:,:,:,1)*eig_vec_1(:,:,:,1)**2 + lambda(:,:,:,2)*eig_vec_1(:,:,:,2)**2
-            c =  lambda(:,:,:,1)*eig_vec_1(:,:,:,2)**2 + lambda(:,:,:,2)*eig_vec_1(:,:,:,1)**2
-            b = (lambda(:,:,:,1) - lambda(:,:,:,2))*eig_vec_1(:,:,:,1)*eig_vec_1(:,:,:,2)
+            a =  lambda(:,:,:,1)*eig_vec(:,:,:,1)**2 + lambda(:,:,:,2)*eig_vec(:,:,:,2)**2
+            c =  lambda(:,:,:,1)*eig_vec(:,:,:,2)**2 + lambda(:,:,:,2)*eig_vec(:,:,:,1)**2
+            b = (lambda(:,:,:,1) - lambda(:,:,:,2))*eig_vec(:,:,:,1)*eig_vec(:,:,:,2)
             ! solving the diffusion equations
             discrete_table(:,:,1,1,1) = (cur_img_rmat(neg_ind_1, pos_ind_2, 1) - cur_img_rmat(:,:,1))*&
                                     &( abs(b(neg_ind_1, pos_ind_2, 1)) - b(neg_ind_1, pos_ind_2, 1)+&
