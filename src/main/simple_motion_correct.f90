@@ -922,8 +922,8 @@ contains
         ! cure
         noutliers = count(outliers)
         if( noutliers > 0 )then
-            write(logfhandle,'(a,1x,i8)') '>>> # DEAD/HOT PIXELS:', noutliers
-            write(logfhandle,'(a,1x,2f8.1)') '>>> AVERAGE (STDEV):  ', ave, sdev
+            write(logfhandle,'(a,1x,i10)') '>>> # DEAD/HOT PIXELS:', noutliers
+            write(logfhandle,'(a,1x,2f10.1)') '>>> AVERAGE (STDEV):  ', ave, sdev
             winsz = 2*HWINSZ+1
             nvals = winsz*winsz
             allocate(pos_outliers(2,noutliers))
