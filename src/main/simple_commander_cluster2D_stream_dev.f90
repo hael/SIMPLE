@@ -1264,7 +1264,7 @@ contains
         character(len=:),          allocatable :: frcsfname, src
         integer,                   allocatable :: stk_nptcls(:), stk_all_nptcls(:), chunks_map(:,:)
         logical,                   allocatable :: pool_stk_mask(:)
-        integer :: ichunk, istk, nstks, nptcls, nptcls_tot, ntot_chunks, cnt, ic, fromp, top
+        integer :: ichunk, istk, nstks, nptcls, nptcls_tot, ntot_chunks, cnt, ic, fromp, top, nsplit
         integer :: maxits, pool_nstks, iptcl, jptcl, jstk, nchunks_imported, tot_nchunks_imported
         logical :: all_chunks_submitted, all_chunks_imported, l_once
         if( .not. cline%defined('mkdir')        ) call cline%set('mkdir',      'yes')
@@ -1352,23 +1352,37 @@ contains
         if( .not.cline%defined('match_filt') ) call cline_cluster2D_pool%set('match_filt','no')
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
         call cline_cluster2D_pool%delete('lpstop')
-        ! read project
-        call spproj%read(params%projfile)
-        call spproj%os_ptcl3D%kill
+        ! read strictly required fields project
+        ! call spproj%read(params%projfile)
+        ! call spproj%os_ptcl3D%kill
+        call spproj%read_non_data_segments(params%projfile)
+        call spproj%read_segment('mic',   params%projfile)
+        call spproj%read_segment('stk',   params%projfile)
+        call spproj%read_segment('ptcl2D',params%projfile)
         ! sanity checks
-        if( spproj%get_nptcls() == 0 )then
-            THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cleanup2D_autoscale')
+        nptcls = spproj%get_nptcls()
+        if( nptcls == 0 )then
+            THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cluster2D_chunks')
+        endif
+        if ( nptcls < 2*nptcls_per_chunk )then
+            THROW_WARN('Not enough particles to classify more than one chunk')
+            THROW_HARD('Review parameters or use cleanup2D/cluster2D instead')
         endif
         ! splitting
-        ! call spproj%split_stk(params%nparts, dir='./') ! TODO
-        projfile4gui   = './streamdata.simple'
+        if( spproj%os_stk%get_noris() == 1 )then
+            spproj%os_ptcl3D = spproj%os_ptcl2D
+            nsplit = floor(real(spproj%os_ptcl2D%get_noris())/real(nptcls_per_chunk))
+            call spproj%split_stk(nsplit, dir=PATH_PARENT)
+            call spproj%os_ptcl3D%kill
+        endif
+        ! directory structure & temporary project handling
         projfile4gui   = trim(orig_projfile)
         numlen         = len(int2str(params_glob%nparts_pool))
         refs_glob      = 'start_cavgs'//params_glob%ext
         pool_available = .true.
         pool_iter      = 0
         call simple_mkdir(SCALE_DIR)
-        ! call simple_mkdir(POOL_DIR)
+        if( trim(POOL_DIR) /= '' ) call simple_mkdir(POOL_DIR)
         call simple_mkdir(trim(POOL_DIR)//trim(STDERROUT_DIR))
         call simple_mkdir(dir_preprocess)
         call simple_touch(trim(POOL_DIR)//trim(CLUSTER2D_FINISHED))
@@ -1489,9 +1503,10 @@ contains
             endif
         enddo
         chunks_map(ntot_chunks,2) = nstks ! border effect
+        write(logfhandle,'(A)')'>>> CHUNKS MAP: '
         do ichunk = 1,ntot_chunks
             nptcls = sum(stk_nptcls(chunks_map(ichunk,1):chunks_map(ichunk,2)))
-            write(logfhandle,'(A,I6,A,I6,A,I8)')'>>> CHUNK; # OF PARTICLES  : ',  ichunk, ' ; ',nptcls,' / ',sum(stk_all_nptcls)
+            write(logfhandle,'(A,I6,A,I6,A,I8)')'>>> CHUNK ID; # OF PARTICLES  : ',  ichunk, ' ; ',nptcls,' / ',sum(stk_all_nptcls)
         enddo
         ! Infinite loop
         allocate(completed_fnames(nstks))
@@ -1542,7 +1557,7 @@ contains
                         maxits = pool_iter + 5 ! for convergence
                         l_once = .false.
                         write(logfhandle,'(A)')'>>> ALL CHUNKS HAVE CONVERGED'
-                        write(logfhandle,'(A,I6)')'>>> TERMINATING AT ITERATION: ',maxits
+                        write(logfhandle,'(A,I6)')'>>> TERMINATING AT END OF ITERATION: ',maxits
                     endif
                 else
                     call import_chunks_into_pool(.true., nchunks_imported)
@@ -1550,7 +1565,7 @@ contains
                     all_chunks_imported  = tot_nchunks_imported == ntot_chunks
                 endif
                 if( pool_iter /= maxits ) call classify_pool
-                call sleep(WAITTIME)
+                if( .not.all_chunks_submitted ) call sleep(WAITTIME)
             else
                 ! converged
                 if( pool_available ) exit
@@ -1572,11 +1587,8 @@ contains
             if( (spproj%os_stk%get_state(istk)==0) .or. (nint(spproj%os_stk%get(istk,'nptcls'))==0) )cycle
             call spproj%os_stk%getter(istk,'stk',fname)
             orig_stack_fname = basename(fname)
-            if( do_autoscale )then
-                stack_fname = add2fbody(orig_stack_fname,params%ext,SCALE_SUFFIX)
-            else
-                stack_fname = trim(orig_stack_fname)
-            endif
+            stack_fname = trim(orig_stack_fname)
+            if( do_autoscale ) stack_fname = add2fbody(orig_stack_fname,params%ext,SCALE_SUFFIX)
             do jstk = 1,pool_nstks
                 if( pool_stk_mask(jstk) )then
                     if( trim(stack_fname) == pool_stacks(jstk) )then
