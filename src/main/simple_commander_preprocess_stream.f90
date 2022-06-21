@@ -54,7 +54,7 @@ contains
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract
         character(len=LONGSTRLEN)              :: movie
         real                                   :: pickref_scale
-        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection
+        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nchunks_imported
         integer                                :: cnt, n_imported, nptcls_glob, n_failed_jobs, n_fail_iter, ncls_in
         logical                                :: l_pick, l_movies_left, l_haschanged, l_cluster2d
         integer(timer_int_kind) :: t0
@@ -282,7 +282,7 @@ contains
                 call update_pool
                 call reject_from_pool
                 call write_project_stream2D(.true.)
-                call import_chunks_into_pool(.false.)
+                call import_chunks_into_pool(.false., nchunks_imported)
                 call classify_pool
                 call update_projects_mask(completed_fnames)
                 call classify_new_chunks(completed_fnames)
