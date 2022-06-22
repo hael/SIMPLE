@@ -79,7 +79,6 @@ call get_AFM(Cob16, 'AmplitudeTrace', HeightTrace)
 HeightRetrace = Cob16%img_array(findloc(index(Cob16%img_names, 'AmplitudeRetrace'),1, dim = 1))
 call HeightTrace%fft()
 call HeightRetrace%fft()
-
 ! shvec(3) = 1
 ! do iterx = 9.38, 10.09, 0.01
 !     do itery = -1.09, -0.61, 0.01
@@ -92,7 +91,7 @@ call HeightRetrace%fft()
 
 !need to adjust make function sub-pixel accurate. 
 
-call HeightTrace%fcorr_shift(HeightRetrace, 20., h_shift, .false.)
+call HeightTrace%fcorr_shift(HeightRetrace, 20., h_shift, .true.)
 print *, h_shift
 
 ! normalize retrace to max value of normalized retrace
@@ -187,10 +186,11 @@ contains
     end subroutine matrix_log
 
     ! alignment subroutine. 
-    subroutine alignment(Align_AFM)
+    subroutine align_avg(Align_AFM)
         type(AFM_image), intent(inout)     :: Align_AFM
-
-    end subroutine 
+        real, allocatable                  :: shifts(:)
+        allocate(shifts(size(Align_AFM%img_array)))
+    end subroutine align_avg
 
     !change this to function... 
     subroutine get_AFM(AFM_Hash, key, image_at_key)
@@ -200,6 +200,12 @@ contains
         image_at_key = AFM_Hash%img_array(findloc(index(AFM_Hash%img_names, key),1, dim = 1))
     end subroutine get_AFM  
 
+    function fget_AFM(AFM_Hash, key) result(image_at_key)
+        type(AFM_image), intent(in) :: AFM_Hash
+        character(*), intent(in)    :: key 
+        type(image)     :: image_at_key
+        image_at_key = AFM_Hash%img_array(findloc(index(AFM_Hash%img_names, key),1, dim = 1))
+    end function fget_AFM  
 
     ! print *,  img_array(1)%get_smpd()
     ! print *, AFM%img_array(1)%get_ldim()
