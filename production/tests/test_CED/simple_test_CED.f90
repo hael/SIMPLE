@@ -7,18 +7,18 @@ program simple_test_CED
     implicit none
     type(parameters)              :: p
     type(cmdline)                 :: cline, cline_projection
-    type(image)                   :: img, cur_img, ker, J11, J12, J22, D1_img
+    type(image)                   :: img, cur_img, ker, J11, J12, J22
     type(reproject_commander)     :: xreproject
-    integer                       :: k, l, nptcls, iptcl, rc, gaussian_ext, cnt
+    integer                       :: k, l, nptcls, iptcl, rc, gaussian_ext
     real                          :: t, sh
     character(len=:), allocatable :: cmd
     logical                       :: mrc_exists
-    real,    parameter            :: SIGMA = 0.7, RHO = 4., C1 = 0.001, C2 = 1., DT = 0.15, T_MAX = 15.
+    real,    parameter            :: SIGMA = 0.7, RHO = 4., C1 = 0.001, C2 = 1., DT = 0.15, T_MAX = 1.
     integer, allocatable          :: pos_ind_1(:), pos_ind_2(:), neg_ind_1(:), neg_ind_2(:)
     real,    allocatable          :: D1(:,:,:), D2(:,:,:), eig_val(:,:,:,:), eig_vec(:,:,:,:),&
                                     &lambda(:,:,:,:), a(:,:,:), b(:,:,:), c(:,:,:), discrete_table(:,:,:,:,:)
     real,    pointer              :: J11_rmat(:,:,:)=>null(), J12_rmat(:,:,:)=>null(), J22_rmat(:,:,:)=>null(),&
-                                    &cur_img_rmat(:,:,:)=>null(), img_rmat(:,:,:)=>null(), ker_rmat(:,:,:)=>null()
+                                    &cur_img_rmat(:,:,:)=>null(), ker_rmat(:,:,:)=>null()
     if( command_argument_count() < 4 )then
         write(logfhandle,'(a)') 'Usage: simple_test_CED smpd=xx nthr=yy stk=stk.mrc, mskdiam=zz'
         write(logfhandle,'(a)') 'Example: projections of https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
@@ -63,7 +63,6 @@ program simple_test_CED
     call J12%new(p%ldim, p%smpd)
     call J22%new(p%ldim, p%smpd)
     call cur_img%new(p%ldim, p%smpd)
-    call D1_img%new( p%ldim, p%smpd)
     allocate(  D1(p%ldim(1),p%ldim(2),1),&
               &D2(p%ldim(1),p%ldim(2),1), eig_val(p%ldim(1),p%ldim(2),1,2),&
               &eig_vec(p%ldim(1),p%ldim(2),1,2),lambda(p%ldim(1),p%ldim(2),1,2),&
@@ -79,10 +78,8 @@ program simple_test_CED
         call img%read(p%stk, iptcl)
         call cur_img%copy(img)
         call cur_img%get_rmat_ptr(cur_img_rmat)
-        t   = 0.
-        cnt = 0
+        t = 0.
         do while( t < T_MAX )
-            cnt = cnt + 1
             call img%copy_fast(cur_img)
             call ker%zero_and_unflag_ft()
             t = t + DT
@@ -101,20 +98,11 @@ program simple_test_CED
             call ker%fft()
             img = img*ker
             call img%ifft()
-            call img%get_rmat_ptr(img_rmat)
-            img_rmat = img_rmat*product(p%ldim)
-            D1 = 0.
-            D2 = 0.
-            do k = 2, p%ldim(1)-1
-                D1(k,:,1) = 0.5*(img_rmat(k+1,:,1) - img_rmat(k-1,:,1) )
-            enddo
-            do k = 2, p%ldim(2)-1
-                D2(:,k,1) = 0.5*(img_rmat(:,k+1,1) - img_rmat(:,k-1,1) )
-            enddo
-            D1(1        ,:,1) = img_rmat(2        ,:,1) - img_rmat(1          ,:,1)
-            D1(p%ldim(1),:,1) = img_rmat(p%ldim(1),:,1) - img_rmat(p%ldim(1)-1,:,1)
-            D2(:,1        ,1) = img_rmat(:,2        ,1) - img_rmat(:,1          ,1)
-            D2(:,p%ldim(2),1) = img_rmat(:,p%ldim(2),1) - img_rmat(:,p%ldim(2)-1,1)
+            ! computing the gradient using central difference scheme
+            call img%gradient(D1, D2)
+            ! scalling D1, D2 due to fft down-scaling
+            D1 = D1*product(p%ldim)
+            D2 = D2*product(p%ldim)
             ! build the Gaussian kernel with rho
             gaussian_ext = ceiling(3*RHO)
             call ker%zero_and_unflag_ft()
@@ -157,10 +145,7 @@ program simple_test_CED
             do k = 1,p%ldim(1)
             do l = 1,p%ldim(2)
                 sh = sqrt(eig_vec(k,l,1,1)**2 + eig_vec(k,l,1,2)**2)
-                if( sh > epsilon(sh) )then
-                    eig_vec(k,l,1,1) = eig_vec(k,l,1,1)/sh
-                    eig_vec(k,l,1,2) = eig_vec(k,l,1,2)/sh
-                endif 
+                if( sh > epsilon(sh) ) eig_vec(k,l,1,:) = eig_vec(k,l,1,:)/sh
             enddo
             enddo
             a =  lambda(:,:,:,1)*eig_vec(:,:,:,1)**2 + lambda(:,:,:,2)*eig_vec(:,:,:,2)**2

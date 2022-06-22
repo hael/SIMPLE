@@ -257,6 +257,7 @@ contains
     procedure          :: cure
     procedure          :: loop_lims
     procedure          :: calc_gradient
+    procedure          :: gradient
     procedure, private :: comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2, comp_addr_phys3
     procedure, private :: corr_1
@@ -4446,6 +4447,47 @@ contains
         if(present(Dr)) Dr = Ddr
         call img_p%kill
     end subroutine calc_gradient
+
+    ! This function returns a the gradient matrix/volume of the input image/volume.
+    ! It is also possible to have derivates row, column, and z as output (optional).
+    ! It uses standard central difference scheme
+    subroutine gradient(self, Dc, Dr, Dz, grad)
+        class(image),   intent(inout) :: self
+        real, optional, intent(out)   :: Dc(self%ldim(1), self%ldim(2), self%ldim(3)), & ! derivates column matrix
+                                         Dr(self%ldim(1), self%ldim(2), self%ldim(3)), & ! derivates row matrix
+                                         Dz(self%ldim(1), self%ldim(2), self%ldim(3))    ! derivates z matrix
+        real, optional, intent(out)   :: grad(self%ldim(1), self%ldim(2), self%ldim(3))  ! gradient matrix
+        integer :: ldim(3) ! dimension of the image, save just for comfort
+        integer :: i,j,k   ! loop indeces
+        real    :: Ddc(self%ldim(1),self%ldim(2),self%ldim(3))
+        real    :: Ddr(self%ldim(1),self%ldim(2),self%ldim(3))
+        real    :: Ddz(self%ldim(1),self%ldim(2),self%ldim(3))
+        ldim = self%ldim
+        Ddc  = 0. ! initialisation
+        Ddr  = 0.
+        Ddz  = 0.
+        do k = 2, ldim(1)-1
+            Ddc(k,:,:) = 0.5*(self%rmat(k+1,:,:) - self%rmat(k-1,:,:))
+        enddo
+        do k = 2, ldim(2)-1
+            Ddr(:,k,:) = 0.5*(self%rmat(:,k+1,:) - self%rmat(:,k-1,:))
+        enddo
+        Ddc(1      ,:,:) = self%rmat(2      ,:,:) - self%rmat(1        ,:,:)
+        Ddc(ldim(1),:,:) = self%rmat(ldim(1),:,:) - self%rmat(ldim(1)-1,:,:)
+        Ddr(:,1      ,:) = self%rmat(:,2      ,:) - self%rmat(:,1        ,:)
+        Ddr(:,ldim(2),:) = self%rmat(:,ldim(2),:) - self%rmat(:,ldim(2)-1,:)
+        if( ldim(3) > 1 )then
+            do k = 2, ldim(3)-1
+                Ddz(:,:,k) = 0.5*(self%rmat(:,:,k+1) - self%rmat(:,:,k-1))
+            enddo
+            Ddz(:,:,1      ) = self%rmat(:,:,2)       - self%rmat(:,:,1)
+            Ddz(:,:,ldim(3)) = self%rmat(:,:,ldim(3)) - self%rmat(:,:,ldim(3)-1)
+        endif
+        if(present(Dc))   Dc   = Ddc
+        if(present(Dr))   Dr   = Ddr
+        if(present(Dz))   Dz   = Ddz
+        if(present(grad)) grad = sqrt(Ddc**2 + Ddr**2 + Ddz**2)
+    end subroutine gradient
 
     !>  \brief  Convert logical address to physical address. Complex image.
     pure function comp_addr_phys1(self,logi) result(phys)
