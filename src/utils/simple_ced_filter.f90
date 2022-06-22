@@ -48,7 +48,7 @@ contains
                 &lambda(ldim(1),ldim(2),1,2),discrete_table(ldim(1),ldim(2),1,3,3),&
                 &a(ldim(1),ldim(2),1), b(ldim(1),ldim(2),1), c(ldim(1),ldim(2),1),&
                 &source=0.)
-        allocate(neg_ind_1(ldim(1)), pos_ind_1(ldim(1)), neg_ind_2(ldim(2)), pos_ind_2(ldim(2)))
+        allocate(neg_ind_1(ldim(1)), pos_ind_1(ldim(2)), neg_ind_2(ldim(2)), pos_ind_2(ldim(2)))
         neg_ind_1 = [ldim(1), (k, k = 1,ldim(1)-1)]
         neg_ind_2 = [ldim(2), (k, k = 1,ldim(2)-1)]
         pos_ind_1 = [(k, k = 2,ldim(1)), 1]
@@ -109,12 +109,15 @@ contains
             call J22%get_rmat_ptr(J22_rmat)
             J22_rmat = J22_rmat*product(ldim)
             ! computing eigenvalues/eigenvectors of the structure tensor
-            eig_val(:,:,:,1) = (J11_rmat + J22_rmat + sqrt((J11_rmat - J22_rmat)**2 + 4*J12_rmat**2))/2.
-            eig_val(:,:,:,2) = (J11_rmat + J22_rmat - sqrt((J11_rmat - J22_rmat)**2 + 4*J12_rmat**2))/2.
-            lambda( :,:,:,1) = c1
-            lambda( :,:,:,2) = c1 + (1-c1)*exp(-c2/(eig_val(:,:,:,1) - eig_val(:,:,:,2))**2)
-            eig_vec(:,:,:,1) = 2*J12_rmat
-            eig_vec(:,:,:,2) = J22_rmat - J11_rmat + sqrt((J11_rmat - J22_rmat)**2 + 4*J12_rmat**2)
+            eig_val(:,:,1,1) = (J11_rmat(1:ldim(1), 1:ldim(2), 1) + J22_rmat(1:ldim(1), 1:ldim(2), 1) + &
+                              &sqrt((J11_rmat(1:ldim(1), 1:ldim(2), 1) - J22_rmat(1:ldim(1), 1:ldim(2), 1))**2 + 4*J12_rmat(1:ldim(1), 1:ldim(2), 1)**2))/2.
+            eig_val(:,:,1,2) = (J11_rmat(1:ldim(1), 1:ldim(2), 1) + J22_rmat(1:ldim(1), 1:ldim(2), 1) - &
+                              &sqrt((J11_rmat(1:ldim(1), 1:ldim(2), 1) - J22_rmat(1:ldim(1), 1:ldim(2), 1))**2 + 4*J12_rmat(1:ldim(1), 1:ldim(2), 1)**2))/2.
+            lambda( :,:,1,1) = c1
+            lambda( :,:,1,2) = c1 + (1-c1)*exp(-c2/(eig_val(:,:,1,1) - eig_val(:,:,1,2))**2)
+            eig_vec(:,:,1,1) = 2*J12_rmat(1:ldim(1), 1:ldim(2), 1)
+            eig_vec(:,:,1,2) = J22_rmat(1:ldim(1), 1:ldim(2), 1) - J11_rmat(1:ldim(1), 1:ldim(2), 1) + &
+                              &sqrt((J11_rmat(1:ldim(1), 1:ldim(2), 1) - J22_rmat(1:ldim(1), 1:ldim(2), 1))**2 + 4*J12_rmat(1:ldim(1), 1:ldim(2), 1)**2)
             ! normalize the eigenvectors (critical, but not mentioned in the CED paper)
             do k = 1,ldim(1)
             do l = 1,ldim(2)
@@ -126,27 +129,28 @@ contains
             c =  lambda(:,:,:,1)*eig_vec(:,:,:,2)**2 + lambda(:,:,:,2)*eig_vec(:,:,:,1)**2
             b = (lambda(:,:,:,1) - lambda(:,:,:,2))*eig_vec(:,:,:,1)*eig_vec(:,:,:,2)
             ! solving the diffusion equations
-            discrete_table(:,:,1,1,1) = (cur_img_rmat(neg_ind_1, pos_ind_2, 1) - cur_img_rmat(:,:,1))*&
+            discrete_table(:,:,1,1,1) = (cur_img_rmat(neg_ind_1, pos_ind_2, 1) - cur_img_rmat(1:ldim(1), 1:ldim(2),1))*&
                                     &( abs(b(neg_ind_1, pos_ind_2, 1)) - b(neg_ind_1, pos_ind_2, 1)+&
                                     &  abs(b(:,:,1)) - b(:,:,1) )/4.
-            discrete_table(:,:,1,1,2) = (cur_img_rmat(:, pos_ind_2, 1) - cur_img_rmat(:,:,1))*&
+            discrete_table(:,:,1,1,2) = (cur_img_rmat(1:ldim(1), pos_ind_2, 1) - cur_img_rmat(1:ldim(1), 1:ldim(2),1))*&
                                     &( c(:, pos_ind_2, 1) + c(:,:,1) - abs(b(:,pos_ind_2,1)) - abs(b(:,:,1)) )/2.
-            discrete_table(:,:,1,1,3) = (cur_img_rmat(pos_ind_1, pos_ind_2, 1) - cur_img_rmat(:,:,1))*&
+            discrete_table(:,:,1,1,3) = (cur_img_rmat(pos_ind_1, pos_ind_2, 1) - cur_img_rmat(1:ldim(1), 1:ldim(2),1))*&
                                     &( abs(b(pos_ind_1, pos_ind_2, 1)) + b(pos_ind_1, pos_ind_2, 1)+&
                                     &  abs(b(:,:,1)) + b(:,:,1) )/4.
-            discrete_table(:,:,1,2,1) = (cur_img_rmat(neg_ind_1, :, 1) - cur_img_rmat(:,:,1))*&
+            discrete_table(:,:,1,2,1) = (cur_img_rmat(neg_ind_1, 1:ldim(2), 1) - cur_img_rmat(1:ldim(1), 1:ldim(2),1))*&
                                     &( a(neg_ind_1, :, 1) + a(:,:,1) - abs(b(neg_ind_1,:,1)) - abs(b(:,:,1)) )/2.
-            discrete_table(:,:,1,2,3) = (cur_img_rmat(pos_ind_1, :, 1) - cur_img_rmat(:,:,1))*&
+            discrete_table(:,:,1,2,3) = (cur_img_rmat(pos_ind_1, 1:ldim(2), 1) - cur_img_rmat(1:ldim(1), 1:ldim(2),1))*&
                                     &( a(pos_ind_1, :, 1) + a(:,:,1) - abs(b(pos_ind_1,:,1)) - abs(b(:,:,1)) )/2.
-            discrete_table(:,:,1,3,1) = (cur_img_rmat(neg_ind_1, neg_ind_2, 1) - cur_img_rmat(:,:,1))*&
+            discrete_table(:,:,1,3,1) = (cur_img_rmat(neg_ind_1, neg_ind_2, 1) - cur_img_rmat(1:ldim(1), 1:ldim(2),1))*&
                                     &( abs(b(neg_ind_1, neg_ind_2, 1)) + b(neg_ind_1, neg_ind_2, 1)+&
                                     &  abs(b(:,:,1)) + b(:,:,1) )/4.
-            discrete_table(:,:,1,3,2) = (cur_img_rmat(:, neg_ind_2, 1) - cur_img_rmat(:,:,1))*&
+            discrete_table(:,:,1,3,2) = (cur_img_rmat(1:ldim(1), neg_ind_2, 1) - cur_img_rmat(1:ldim(1), 1:ldim(2),1))*&
                                     &( c(:, neg_ind_2, 1) + c(:,:,1) - abs(b(:,neg_ind_2,1)) - abs(b(:,:,1)) )/2.
-            discrete_table(:,:,1,3,3) = (cur_img_rmat(pos_ind_1, neg_ind_2, 1) - cur_img_rmat(:,:,1))*&
+            discrete_table(:,:,1,3,3) = (cur_img_rmat(pos_ind_1, neg_ind_2, 1) - cur_img_rmat(1:ldim(1), 1:ldim(2),1))*&
                                     &( abs(b(pos_ind_1, neg_ind_2, 1)) - b(pos_ind_1, neg_ind_2, 1)+&
                                     &  abs(b(:,:,1)) - b(:,:,1) )/4.
-            cur_img_rmat = cur_img_rmat + step_size*sum(sum(discrete_table,5),4)
+            cur_img_rmat(1:ldim(1), 1:ldim(2), 1:ldim(3)) = cur_img_rmat(1:ldim(1), 1:ldim(2), 1:ldim(3)) + step_size*sum(sum(discrete_table,5),4)
         enddo
+        deallocate(D1, D2, eig_val, eig_vec, a, b, c, discrete_table, lambda, neg_ind_1, pos_ind_1, neg_ind_2, pos_ind_2)
     end subroutine ced_filter_2D
 end module simple_ced_filter
