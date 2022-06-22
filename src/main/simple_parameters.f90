@@ -331,6 +331,7 @@ type :: parameters
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
     integer :: which_iter=0        !< iteration nr
     integer :: smooth_ext=1        !< smoothing window extension{1} 
+    integer :: smooth_ext_lb=3     !< lb of searching smoothing window extension{3} 
     integer :: xcoord=0            !< x coordinate{0}
     integer :: ycoord=0            !< y coordinate{0}
     integer :: xdim=0              !< x dimension(in pixles)
@@ -769,6 +770,7 @@ contains
         call check_iarg('update',         self%update)
         call check_iarg('which_iter',     self%which_iter)
         call check_iarg('smooth_ext',     self%smooth_ext)
+        call check_iarg('smooth_ext_lb',  self%smooth_ext_lb)
         call check_iarg('walltime',       self%walltime)
         call check_iarg('xdim',           self%xdim)
         call check_iarg('xcoord',         self%xcoord)
