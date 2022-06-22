@@ -4448,8 +4448,8 @@ contains
         call img_p%kill
     end subroutine calc_gradient
 
-    ! This function returns a the gradient matrix/volume of the input image/volume.
-    ! It is also possible to have derivates row, column, and z as output (optional).
+    ! This function returns the derivates row, column, and z as outputs,
+    ! together with the optional gradient matrix/volume.
     ! It uses standard central difference scheme
     subroutine gradient(self, Dc, Dr, Dz, grad)
         class(image),   intent(inout) :: self
