@@ -126,7 +126,7 @@ contains
         real,           intent(inout) :: cur_diff_odd( :,:,:), cur_diff_even(:,:,:)
         real,           intent(inout) :: cur_fil(:), weights_2D(:,:)
         type(opt_vol),  intent(inout) :: opt_odd(:,:,:), opt_even(:,:,:)
-        integer           :: k,l,m,n, box, dim3, ldim(3), find_start, find_stop, iter_no, ext
+        integer           :: k,l,m,n, box, dim3, ldim(3), find_start, find_stop, iter_no, ext, ext_lb
         integer           :: best_ind, cur_ind, k1, l1, m1, lb(3), ub(3), mid_ext
         real              :: min_sum_odd, min_sum_even, ref_diff_odd, ref_diff_even, rad, find_stepsz, val
         character(len=90) :: file_tag
@@ -153,6 +153,11 @@ contains
         opt_even%opt_freq = 0.
         opt_odd( lb(1):ub(1),lb(2):ub(2),lb(3):ub(3))%opt_diff = huge(min_sum_odd)
         opt_even(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3))%opt_diff = huge(min_sum_odd)
+        if( params_glob%smooth_ext_lb > params_glob%smooth_ext )then
+            ext_lb = params_glob%smooth_ext
+        else
+            ext_lb = params_glob%smooth_ext_lb
+        endif
         do iter_no = 1, params_glob%nsearch
             cur_ind = find_start + (iter_no - 1)*find_stepsz
             if( L_VERBOSE_GLOB ) write(*,*) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current Fourier index = ', cur_ind
@@ -177,7 +182,7 @@ contains
             ! do the non-uniform, i.e. optimizing at each voxel
             if( params_glob%l_nonuniform )then
                 ! searching through the smoothing extension here
-                do ext = params_glob%smooth_ext,params_glob%smooth_ext
+                do ext = ext_lb,params_glob%smooth_ext
                     ! setting up the 2D weights
                     weights_2D = 0.
                     mid_ext    = 1 + ext
