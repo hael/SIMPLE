@@ -4467,21 +4467,21 @@ contains
         Ddr  = 0.
         Ddz  = 0.
         do k = 2, ldim(1)-1
-            Ddc(k,:,:) = 0.5*(self%rmat(k+1,:,:) - self%rmat(k-1,:,:))
+            Ddc(k,1:ldim(2),1:ldim(3)) = 0.5*(self%rmat(k+1,1:ldim(2),1:ldim(3)) - self%rmat(k-1,1:ldim(2),1:ldim(3)))
         enddo
         do k = 2, ldim(2)-1
-            Ddr(:,k,:) = 0.5*(self%rmat(:,k+1,:) - self%rmat(:,k-1,:))
+            Ddr(1:ldim(1),k,1:ldim(3)) = 0.5*(self%rmat(1:ldim(1),k+1,1:ldim(3)) - self%rmat(1:ldim(1),k-1,1:ldim(3)))
         enddo
-        Ddc(1      ,:,:) = self%rmat(2      ,:,:) - self%rmat(1        ,:,:)
-        Ddc(ldim(1),:,:) = self%rmat(ldim(1),:,:) - self%rmat(ldim(1)-1,:,:)
-        Ddr(:,1      ,:) = self%rmat(:,2      ,:) - self%rmat(:,1        ,:)
-        Ddr(:,ldim(2),:) = self%rmat(:,ldim(2),:) - self%rmat(:,ldim(2)-1,:)
+        Ddc(1,1:ldim(2),1:ldim(3))       = self%rmat(2,1:ldim(2),1:ldim(3)) - self%rmat(1,1:ldim(2),1:ldim(3))
+        Ddc(ldim(1),1:ldim(2),1:ldim(3)) = self%rmat(ldim(1),1:ldim(2),1:ldim(3)) - self%rmat(ldim(1)-1,1:ldim(2),1:ldim(3))
+        Ddr(1:ldim(1),1,1:ldim(3))       = self%rmat(1:ldim(1),2,1:ldim(3)) - self%rmat(1:ldim(1),1,1:ldim(3))
+        Ddr(1:ldim(1),ldim(2),1:ldim(3)) = self%rmat(1:ldim(1),ldim(2),1:ldim(3)) - self%rmat(1:ldim(1),ldim(2)-1,1:ldim(3))
         if( ldim(3) > 1 )then
             do k = 2, ldim(3)-1
-                Ddz(:,:,k) = 0.5*(self%rmat(:,:,k+1) - self%rmat(:,:,k-1))
+                Ddz(1:ldim(1),1:ldim(2),k) = 0.5*(self%rmat(1:ldim(1),1:ldim(2),k+1) - self%rmat(1:ldim(1),1:ldim(2),k-1))
             enddo
-            Ddz(:,:,1      ) = self%rmat(:,:,2)       - self%rmat(:,:,1)
-            Ddz(:,:,ldim(3)) = self%rmat(:,:,ldim(3)) - self%rmat(:,:,ldim(3)-1)
+            Ddz(1:ldim(1),1:ldim(2),1      ) = self%rmat(1:ldim(1),1:ldim(2),2)       - self%rmat(1:ldim(1),1:ldim(2),1)
+            Ddz(1:ldim(1),1:ldim(2),ldim(3)) = self%rmat(1:ldim(1),1:ldim(2),ldim(3)) - self%rmat(1:ldim(1),1:ldim(2),ldim(3)-1)
         endif
         if(present(Dc))   Dc   = Ddc
         if(present(Dr))   Dr   = Ddr
