@@ -346,7 +346,7 @@ contains
         allocate(opt_odd(box,box,1,params%nptcls), opt_even(box,box,1,params%nptcls), lplims_hres(params%nptcls))
         ! calculate high-res low-pass limits
         if( lpstart_fallback )then
-            lplims_hres(iptcl) = calc_fourier_index(params%lpstart, box, params%smpd)
+            lplims_hres = calc_fourier_index(params%lpstart, box, params%smpd)
         else
             do iptcl = 1, params%nptcls
                 call clsfrcs%frc_getter(iptcl, params%hpind_fsc, params%l_phaseplate, frc)
