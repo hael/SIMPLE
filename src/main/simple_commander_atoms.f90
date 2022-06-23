@@ -128,7 +128,7 @@ contains
         character(len=:), allocatable :: fname_avg, map_avg, tmp, eatms_common, atms_avg_valid
         character(len=:), allocatable :: oatms_common, oatms_sim, eatms_sim, atms_avg, atms_avg_sim
         call cline%set('use_thres',  'no')
-        call cline%set('lp_lb',        3.)
+        call cline%set('lp_lowres',    3.)
         call cline%set('match_filt', 'no')
         use_auto_corr_thres = .not.cline%defined('corr_thres')
         use_cs_thres        = .false.

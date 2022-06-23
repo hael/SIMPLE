@@ -18,7 +18,7 @@ real, allocatable             :: res(:), corrs(:)
 character(len=20)             :: filter
 character(len=:), allocatable :: cmd
 logical                       :: mrc_exists
-real, parameter               :: LP_LB_PHASE = 7.
+real, parameter               :: LP_LOWRES_PHASE = 7.
 character(len=15), parameter, dimension(3) :: FIL_ARR = [character(len=15) :: "tv", "butterworth", "lp"]
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'Usage: simple_test_2D_opt_filt smpd=xx nthr=yy stk=stk.mrc, mskdiam=zz'
@@ -102,9 +102,9 @@ do iptcl = 1, p%nptcls
     write(*, *) 'Comparing clean particle vs noisy particle...'
     write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
     write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
-    call even%phase_rand(LP_LB_PHASE)
+    call even%phase_rand(LP_LOWRES_PHASE)
     call even%write('stk_phase_rand.mrc', iptcl)
-    call odd%phase_rand(LP_LB_PHASE)
+    call odd%phase_rand(LP_LOWRES_PHASE)
     call odd%write('stk_clean_phase_rand.mrc', iptcl)
     call even%fft
     call odd%fft
@@ -112,7 +112,7 @@ do iptcl = 1, p%nptcls
     call even%ifft
     call odd%ifft
     call get_resolution(corrs, res, res_fsc05, res_fsc0143)
-    write(*, *) 'Comparing clean particle vs phase-randomized (beyond '//trim(int2str(int((LP_LB_PHASE))))//' A) (noisy) particle...'
+    write(*, *) 'Comparing clean particle vs phase-randomized (beyond '//trim(int2str(int((LP_LOWRES_PHASE))))//' A) (noisy) particle...'
     write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
     write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
     call odd%zero_and_unflag_ft

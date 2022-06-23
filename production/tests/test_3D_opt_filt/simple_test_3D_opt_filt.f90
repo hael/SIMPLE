@@ -16,7 +16,7 @@ real, allocatable             :: res(:), corrs(:)
 character(len=20)             :: filter
 character(len=:), allocatable :: cmd
 logical                       :: mrc_exists
-real, parameter               :: LP_LB_PHASE = 7.
+real, parameter               :: LP_LOWRES_PHASE = 7.
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'Usage: simple_test_3D_opt_filt smpd=xx nthr=yy vol1=volume.mrc mskdiam=zz'
     write(logfhandle,'(a)') 'Example: https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
@@ -91,10 +91,10 @@ call get_resolution(corrs, res, res_fsc05, res_fsc0143)
 write(*, *) 'Comparing clean volume vs noisy volume...'
 write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
 write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
-call even%phase_rand(LP_LB_PHASE)
+call even%phase_rand(LP_LOWRES_PHASE)
 call even%write('vol_phase_rand.mrc')
 call odd%write('vol_clean.mrc')
-call odd%phase_rand(LP_LB_PHASE)
+call odd%phase_rand(LP_LOWRES_PHASE)
 call odd%write('vol_clean_phase_rand.mrc')
 ! calculate FSC
 call even%fft
@@ -109,7 +109,7 @@ call noise%kill
 !    write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
 !end do
 call get_resolution(corrs, res, res_fsc05, res_fsc0143)
-write(*, *) 'Comparing clean volume vs phase-randomized (beyond '//trim(int2str(int((LP_LB_PHASE))))//' A) (noisy) volume...'
+write(*, *) 'Comparing clean volume vs phase-randomized (beyond '//trim(int2str(int((LP_LOWRES_PHASE))))//' A) (noisy) volume...'
 write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
 write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
 ! calculate optimal filter

@@ -291,25 +291,30 @@ contains
         call mskvol%kill
         ! end gracefully
         call simple_end('**** SIMPLE_OPT_3D_FILTER NORMAL STOP ****')
-    end subroutine exec_opt_3D_filter
+    end subroutine exec_opt_3D_filter           
 
     subroutine exec_opt_2D_filter( self, cline )
         use simple_opt_filter, only: opt_filter_2D, opt_vol
         use simple_tvfilter,   only: tvfilter
+        use simple_class_frcs, only: class_frcs
         class(opt_2D_filter_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)           :: params
-        integer                    :: iptcl, box
+        integer                    :: iptcl, box, filtsz
+        logical                    :: lpstart_fallback
         character(len=90)          :: file_tag
         type(tvfilter)             :: tvfilt
-        integer, parameter         :: CHUNKSZ = 20
+        type(class_frcs)           :: clsfrcs 
         type(image),   allocatable :: even(:), odd(:), weights_img(:), ref_diff_odd_img(:), ref_diff_even_img(:),&
                                     & odd_copy_rmat(:),  odd_copy_cmat(:),  odd_copy_shellnorm(:),&
                                     &even_copy_rmat(:), even_copy_cmat(:), even_copy_shellnorm(:)
-        real,          allocatable :: cur_diff_odd(:,:,:,:), cur_diff_even(:,:,:,:)
-        real,          allocatable :: cur_fil(:,:), weights_2D(:,:,:)
+        real,          allocatable :: cur_diff_odd(:,:,:,:), cur_diff_even(:,:,:,:), cur_fil(:,:),&
+                                     &weights_2D(:,:,:), frc(:)
+        integer,       allocatable :: lplims_hres(:)
         type(opt_vol), allocatable :: opt_odd(:,:,:,:), opt_even(:,:,:,:)
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        ! init
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',    'yes')
+        if( .not. cline%defined('smooth_ext') ) call cline%set('smooth_ext', 20.)
         call params%new(cline) 
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
         box            = params%ldim(1)
@@ -320,13 +325,35 @@ contains
         else
             file_tag = 'uniform_opt_2D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
         endif
+        ! retrieve FRCs
+        call clsfrcs%new(params%nptcls, box, params%smpd, 1)
+        lpstart_fallback = .false.
+        if( file_exists(params%frcs) )then
+            call clsfrcs%read(params%frcs)
+        else
+            THROW_WARN('Class average FRCs file '//trim(params%frcs)//' does not exist, falling back on lpstart: '//real2str(params%lpstart))
+            lpstart_fallback = .true.
+        endif
+        filtsz = clsfrcs%get_filtsz()
+        ! allocate
         allocate(odd(params%nptcls), even(params%nptcls),&
                 & odd_copy_rmat(params%nptcls),  odd_copy_cmat(params%nptcls),  odd_copy_shellnorm(params%nptcls),&
                 &even_copy_rmat(params%nptcls), even_copy_cmat(params%nptcls), even_copy_shellnorm(params%nptcls),&
                 &weights_img(params%nptcls), ref_diff_odd_img(params%nptcls), ref_diff_even_img(params%nptcls))
         allocate(cur_diff_odd(box,box,1,params%nptcls), cur_diff_even(box,box,1,params%nptcls),&
-                &cur_fil(box,params%nptcls),weights_2D(params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1,params%nptcls), source=0.)
-        allocate(opt_odd(box,box,1,params%nptcls), opt_even(box,box,1,params%nptcls))
+                &cur_fil(box,params%nptcls),weights_2D(params_glob%smooth_ext*2+1,&
+                &params_glob%smooth_ext*2+1,params%nptcls), frc(filtsz), source=0.)
+        allocate(opt_odd(box,box,1,params%nptcls), opt_even(box,box,1,params%nptcls), lplims_hres(params%nptcls))
+        ! calculate high-res low-pass limits
+        if( lpstart_fallback )then
+            lplims_hres(iptcl) = calc_fourier_index(params%lpstart, box, params%smpd)
+        else
+            do iptcl = 1, params%nptcls
+                call clsfrcs%frc_getter(iptcl, params%hpind_fsc, params%l_phaseplate, frc)
+                lplims_hres(iptcl) = get_lplim_at_corr(frc, LPLIM_CRIT2D)
+            end do
+        endif
+        ! construct
         do iptcl = 1, params%nptcls
             call odd( iptcl)%new(params%ldim, params%smpd, .false.)
             call even(iptcl)%new(params%ldim, params%smpd, .false.)
@@ -355,16 +382,19 @@ contains
             call odd( iptcl)%mask(params%msk, 'soft')
         enddo
         call tvfilt%new(odd(1))
+        ! filter
         !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
         do iptcl = 1, params%nptcls
             call opt_filter_2D(odd(iptcl), even(iptcl),&
                                & odd_copy_rmat(iptcl),  odd_copy_cmat(iptcl),  odd_copy_shellnorm(iptcl),&
                                &even_copy_rmat(iptcl), even_copy_cmat(iptcl), even_copy_shellnorm(iptcl),&
                                &tvfilt, cur_diff_odd(:,:,:,iptcl), cur_diff_even(:,:,:,iptcl),&
-                               &cur_fil(:,iptcl), weights_2D(:,:,iptcl), opt_odd(:,:,:,iptcl), opt_even(:,:,:,iptcl),&
+                               &cur_fil(:,iptcl), weights_2D(:,:,iptcl), lplims_hres(iptcl),&
+                               &opt_odd(:,:,:,iptcl), opt_even(:,:,:,iptcl),&
                                &weights_img(iptcl), ref_diff_odd_img(iptcl), ref_diff_even_img(iptcl))
         enddo
         !$omp end parallel do
+        ! destruct
         do iptcl = 1, params%nptcls
             call odd( iptcl)%write(trim(file_tag)//'_odd.mrc',  iptcl)
             call even(iptcl)%write(trim(file_tag)//'_even.mrc', iptcl)
