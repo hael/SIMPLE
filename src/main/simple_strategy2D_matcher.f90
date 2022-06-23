@@ -54,7 +54,7 @@ contains
         real    :: frac_srch_space, snhc_sz, frac
         integer :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update, min_nsamples
         integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
-        logical :: doprint, l_partial_sums, l_frac_update, l_ctf
+        logical :: doprint, l_partial_sums, l_frac_update, l_ctf, have_frcs
         logical :: l_snhc, l_greedy, l_stream, l_np_cls_defined
         if( L_BENCH_GLOB )then
             t_init = tic()
@@ -138,8 +138,15 @@ contains
         ! SETUP WEIGHTS
         call build_glob%spproj_field%set_all2single('w', 1.0)
 
+        ! READ FOURIER RING CORRELATIONS
+        have_frcs = .false.
+        if( file_exists(params_glob%frcs) )then
+            call build_glob%clsfrcs%read(params_glob%frcs)
+            have_frcs = .true.
+        endif
+
         ! PREP REFERENCES
-        if( params_glob%l_nonuniform )then
+        if( params_glob%l_nonuniform .and. have_frcs )then
             cline_opt_filt = cline
             call cline_opt_filt%set('stk',     trim(params_glob%refs_odd))
             call cline_opt_filt%set('stk2',    trim(params_glob%refs_even))
@@ -171,9 +178,6 @@ contains
         else
             call cavger_read(params_glob%refs, 'odd')
         endif
-
-        ! READ FOURIER RING CORRELATIONS
-        if( file_exists(params_glob%frcs) ) call build_glob%clsfrcs%read(params_glob%frcs)
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D(cline, which_iter, frac_srch_space)
@@ -429,11 +433,11 @@ contains
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! randomize Fourier phases below noise power in a global manner
-                        call cavgs_even(icls)%fft
-                        call cavgs_odd(icls)%fft
-                        call cavgs_even(icls)%ran_phases_below_noise_power(cavgs_odd(icls))
-                        call cavgs_even(icls)%ifft
-                        call cavgs_odd(icls)%ifft
+                        ! call cavgs_even(icls)%fft
+                        ! call cavgs_odd(icls)%fft
+                        ! call cavgs_even(icls)%ran_phases_below_noise_power(cavgs_odd(icls))
+                        ! call cavgs_even(icls)%ifft
+                        ! call cavgs_odd(icls)%ifft
                         ! here we are passing in the shifts and do NOT map them back to classes
                         call prep2Dref(pftcc, cavgs_even(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
                         call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords

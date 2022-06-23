@@ -208,7 +208,7 @@ type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
 type(simple_input_param) :: lp
 type(simple_input_param) :: lp_backgr
-type(simple_input_param) :: lp_lb
+type(simple_input_param) :: lp_lowres
 type(simple_input_param) :: lplim_crit
 type(simple_input_param) :: match_filt 
 type(simple_input_param) :: max_dose
@@ -1023,8 +1023,8 @@ contains
         call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (full|partial){full}','(full|partial){full}', .false., 'full')
         call set_param(max_dose,       'max_dose',     'num',    'Maximum dose threshold(e/A2)', 'Threshold for maximum dose and number of frames used during movie alignment(e/A2), if <=0 all frames are used{0.0}','{0.0}',.false., 0.0)
         call set_param(script,         'script',       'binary', 'Generate script for shared-mem exec on cluster', 'Generate script for shared-mem exec on cluster(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(lp_lb,          'lp_lb',        'num',    'Low-pass limit lower bound', 'Low-pass limit lower bound for search{30 A}', 'Low-pass limit lower bound{30 A}', .false., 30.)
-        call set_param(nsearch,        'nsearch',      'num',    'Number of points to search(lp_lb to nyq)', 'Number of points to search(lp_lb to nyq){40}', 'Number of points to search(lp_lb to nyq){40}', .false., 40.)
+        call set_param(lp_lowres,      'lp_lowres',    'num',    'Low-pass low-res limit', 'Low-pass low-res limit{30 A}', 'Low-pass low-resolution limit{30 A}', .false., 30.)
+        call set_param(nsearch,        'nsearch',      'num',    'Number of points to search', 'Number of points to search{40}', 'Number of points to search{40}', .false., 40.)
         call set_param(match_filt,     'match_filt',   'binary', 'Matched filter', 'Filter to maximize the signal-to-noise ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
@@ -2660,12 +2660,13 @@ contains
         ! <empty>
         ! filter controls
         call opt_2D_filter%set_input('filt_ctrls', 1, nonuniform)
-        call opt_2D_filter%set_input('filt_ctrls', 2, 'smooth_ext',    'num',   'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', .false., 0.)
-        call opt_2D_filter%set_input('filt_ctrls', 3, 'smooth_ext_lb', 'num',   'Lb of smoothing window extension', 'Lb of smoothing window extension', 'Lb of smoothing window extension in number of pixels{3}', .false., 3.)
-        call opt_2D_filter%set_input('filt_ctrls', 4, 'filter',        'multi', 'Filter type(butterworth|lp|tv){butterworth}', 'Filter type(butterworth|lp|tv){butterworth}', '(butterworth|lp|tv){butterworth}', .false., 'butterworth')
-        call opt_2D_filter%set_input('filt_ctrls', 5, lp_lb)
-        call opt_2D_filter%set_input('filt_ctrls', 6, nsearch)
-        call opt_2D_filter%set_input('filt_ctrls', 7, match_filt)
+        call opt_2D_filter%set_input('filt_ctrls', 2, 'smooth_ext', 'num', 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{20}', .false., 0.)
+        call opt_2D_filter%set_input('filt_ctrls', 3, 'filter', 'multi', 'Filter type(butterworth|lp|tv){butterworth}', 'Filter type(butterworth|lp|tv){butterworth}', '(butterworth|lp|tv){butterworth}', .false., 'butterworth')
+        call opt_2D_filter%set_input('filt_ctrls', 4, lp_lowres)
+        call opt_2D_filter%set_input('filt_ctrls', 5, nsearch)
+        call opt_2D_filter%set_input('filt_ctrls', 6, match_filt)
+        frcs%required = .true.
+        call opt_2D_filter%set_input('filt_ctrls', 7, frcs)
         ! mask controls
         call opt_2D_filter%set_input('mask_ctrls', 1, mskdiam)
         call opt_2D_filter%set_input('mask_ctrls', 2, mskfile)
@@ -2695,7 +2696,7 @@ contains
         call opt_3D_filter%set_input('filt_ctrls', 1, nonuniform)
         call opt_3D_filter%set_input('filt_ctrls', 2, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', .false., 0.)
         call opt_3D_filter%set_input('filt_ctrls', 3, 'filter'     , 'multi' , 'Filter type(butterworth|lp|tv){butterworth}', 'Filter type(butterworth|lp|tv){butterworth}', '(butterworth|lp){butterworth}', .false., 'butterworth')
-        call opt_3D_filter%set_input('filt_ctrls', 4, lp_lb)
+        call opt_3D_filter%set_input('filt_ctrls', 4, lp_lowres)
         call opt_3D_filter%set_input('filt_ctrls', 5, nsearch)
         call opt_3D_filter%set_input('filt_ctrls', 6, match_filt)
         ! mask controls
