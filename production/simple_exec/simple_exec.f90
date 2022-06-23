@@ -61,7 +61,7 @@ type(pick_commander_distr)                  :: xpick_distr
 type(make_cavgs_commander_distr)            :: xmake_cavgs_distr
 type(cluster2D_autoscale_commander)         :: xcluster2D_hlev
 type(cluster2D_commander_stream)            :: xcluster2D_stream
-type(cluster2D_commander_chunks)            :: xcluster2D_chunks
+type(cluster2D_commander_subsets)           :: xcluster2D_subsets
 type(cleanup2D_commander_hlev)              :: xcleanup2D_distr
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
@@ -223,8 +223,8 @@ select case(trim(prg))
         call xcluster2D_hlev%execute(cline)
     case( 'cluster2D_stream' )
         call xcluster2D_stream%execute(cline)
-    case( 'cluster2D_chunks' )
-        call xcluster2D_chunks%execute(cline)
+    case( 'cluster2D_subsets' )
+        call xcluster2D_subsets%execute(cline)
 
     ! AB INITIO 3D RECONSTRUCTION WORKFLOW
     case( 'initial_3Dmodel' )

@@ -363,7 +363,7 @@ type :: parameters
     real    :: dfmax=5.0           !< maximum expected defocus(in microns)
     real    :: dfmin=0.3           !< minimum expected defocus(in microns)
     real    :: dfsdev=0.1
-    real    :: dose_rate=30.0      !< dose rate(in e/A2/s)
+    real    :: dose_rate=1.0      !< dose rate(in e/A2/s)
     real    :: dstep=0.
     real    :: dsteppd=0.
     real    :: e1=0.               !< 1st Euler(in degrees){0}
