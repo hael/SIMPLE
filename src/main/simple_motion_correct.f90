@@ -892,7 +892,7 @@ contains
         real,        pointer :: prmat(:,:,:)
         real,    allocatable :: rsum(:,:), new_vals(:,:), vals(:)
         integer, allocatable :: pos_outliers_here(:,:)
-        real    :: ave, sdev, var, lthresh,uthresh, l,u
+        real    :: ave, sdev, var, lthresh,uthresh, l,u,localave
         integer :: iframe, noutliers, i,j,k,ii,jj, nvals, winsz, n
         logical :: outliers(ldim(1),ldim(2)), err
         allocate(rsum(ldim(1),ldim(2)),source=0.)
@@ -970,7 +970,7 @@ contains
             sdev = sdev / real(nframes)
             uthresh = uthresh / real(nframes)
             lthresh = lthresh / real(nframes)
-            !$omp parallel do default(shared) private(iframe,k,i,j,n,ii,jj,vals,prmat,l,u)&
+            !$omp parallel do default(shared) private(iframe,k,i,j,n,ii,jj,vals,prmat,l,u,localave)&
             !$omp proc_bind(close) schedule(static)
             do iframe=1,nframes
                 call frames(iframe)%get_rmat_ptr(prmat)
@@ -991,13 +991,10 @@ contains
                     if( n > 1 )then
                         if( real(n)/real(nvals) < 0.85 )then
                             ! high defect area
-                            l = max(lthresh, minval(vals(:n)))
-                            u = max(uthresh, maxval(vals(:n)))
-                            if( l > u )then
-                                new_vals(k,iframe) = gasdev(ave, sdev, [lthresh,uthresh])
-                            else
-                                new_vals(k,iframe) = gasdev(ave, sdev, [l,u])
-                            endif
+                            l = minval(vals(:n))
+                            u = maxval(vals(:n))
+                            localave = sum(vals(:n)) / real(n)
+                            new_vals(k,iframe) = gasdev(localave, sdev, [l,u])
                         else
                             new_vals(k,iframe) = median_nocopy(vals(:n))
                         endif
