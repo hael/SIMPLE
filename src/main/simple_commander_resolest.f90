@@ -351,6 +351,7 @@ contains
             call odd( iptcl)%mask(params%msk, 'soft')
         enddo
         call tvfilt%new(odd(1))
+        !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
         do iptcl = 1, params%nptcls
             call opt_filter_2D(odd(iptcl), even(iptcl),&
                                & odd_copy_rmat(iptcl),  odd_copy_cmat(iptcl),  odd_copy_shellnorm(iptcl),&
@@ -358,6 +359,7 @@ contains
                                &tvfilt, cur_diff_odd(:,:,:,iptcl), cur_diff_even(:,:,:,iptcl),&
                                &cur_fil(:,iptcl), weights_2D(:,:,iptcl), opt_odd(:,:,:,iptcl), opt_even(:,:,:,iptcl))
         enddo
+        !$omp end parallel do
         do iptcl = 1, params%nptcls
             call odd( iptcl)%write(trim(file_tag)//'_odd.mrc',  iptcl)
             call even(iptcl)%write(trim(file_tag)//'_even.mrc', iptcl)
