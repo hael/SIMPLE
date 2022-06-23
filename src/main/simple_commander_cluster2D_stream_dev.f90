@@ -17,7 +17,7 @@ use simple_commander_cluster2D
 use simple_timer
 implicit none
 
-public :: cluster2D_commander_chunks
+public :: cluster2D_commander_subsets
 public :: init_cluster2D_stream, update_projects_mask, write_project_stream2D, terminate_stream2D
 public :: update_pool_status, update_pool, reject_from_pool, classify_pool
 public :: update_chunks, classify_new_chunks, import_chunks_into_pool
@@ -26,10 +26,10 @@ public :: update_path
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: cluster2D_commander_chunks
+type, extends(commander_base) :: cluster2D_commander_subsets
   contains
-    procedure :: execute      => exec_cluster2D_chunks
-end type cluster2D_commander_chunks
+    procedure :: execute      => exec_cluster2D_subsets
+end type cluster2D_commander_subsets
 
 integer,               parameter   :: MINBOXSZ            = 128    ! minimum boxsize for scaling
 real,                  parameter   :: GREEDY_TARGET_LP    = 15.0
@@ -1003,15 +1003,9 @@ contains
             call write_project_stream2D(.false.)
             ! ranking
             call rank_cavgs
-            ! refs_ranked = add2fbody(refs_glob,params_glob%ext,'_ranked')
-            ! call cline_rank_cavgs%set('projfile', orig_projfile)
-            ! call cline_rank_cavgs%set('stk',      trim(POOL_DIR)//refs_glob)
-            ! call cline_rank_cavgs%set('outstk',   refs_ranked)
-            ! call xrank_cavgs%execute(cline_rank_cavgs)
         endif
         ! cleanup
         call simple_rmdir(SCALE_DIR)
-        ! call cline_rank_cavgs%kill
         if( .not.debug_here )then
             ! call qsys_cleanup
             ! call simple_rmdir(POOL_DIR)
@@ -1247,12 +1241,12 @@ contains
     end subroutine debug_print
 
     !
-    ! CLUSTER2D_CHUNKS (=cluster2d_stream offline)
+    ! cluster2D_subsets (=cluster2d_stream offline)
     !
-    subroutine exec_cluster2D_chunks( self, cline )
+    subroutine exec_cluster2D_subsets( self, cline )
         use simple_class_frcs,        only: class_frcs
-        class(cluster2D_commander_chunks), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
+        class(cluster2D_commander_subsets), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline
         character(len=STDLEN),    parameter :: dir_preprocess = trim(PATH_HERE)//'spprojs/'
         integer,                  parameter :: WAITTIME       = 3
         real                                :: SMPD_TARGET    = MAX_SMPD  ! target sampling distance
@@ -1291,10 +1285,6 @@ contains
         endif
         orig_projfile = trim(params%projfile)
         call cline%set('mkdir','no')
-        if( .not.cline%defined('nparts_pool') )then
-            params%nparts_pool = params%nparts
-            call cline%set('nparts_pool', real(params%nparts_pool))
-        endif
         ! init
         do_autoscale      = params%autoscale .eq. 'yes'
         max_ncls          = floor(real(params%ncls)/real(params%ncls_start))*params%ncls_start ! effective maximum # of classes
@@ -1314,9 +1304,9 @@ contains
         cline_cluster2D_pool   = cline
         cline_cluster2D_chunk  = cline
         ! chunk classification
-        if( params_glob%nparts_chunk > 1 )then
+        if( params%nparts_chunk > 1 )then
             call cline_cluster2D_chunk%set('prg',    'cluster2D_distr')
-            call cline_cluster2D_chunk%set('nparts', real(params_glob%nparts_chunk))
+            call cline_cluster2D_chunk%set('nparts', real(params%nparts_chunk))
         else
             ! shared memory execution
             call cline_cluster2D_chunk%set('prg','cluster2D')
@@ -1349,6 +1339,7 @@ contains
         call cline_cluster2D_pool%set('mkdir',     'no')
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment
+        call cline_cluster2D_pool%set('nparts',    real(params%nparts_pool))
         if( .not.cline%defined('match_filt') ) call cline_cluster2D_pool%set('match_filt','no')
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
         call cline_cluster2D_pool%delete('lpstop')
@@ -1362,7 +1353,7 @@ contains
         ! sanity checks
         nptcls = spproj%get_nptcls()
         if( nptcls == 0 )then
-            THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cluster2D_chunks')
+            THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cluster2d_subsets')
         endif
         if ( nptcls < 2*nptcls_per_chunk )then
             THROW_WARN('Not enough particles to classify more than one chunk')
@@ -1377,8 +1368,8 @@ contains
         endif
         ! directory structure & temporary project handling
         projfile4gui   = trim(orig_projfile)
-        numlen         = len(int2str(params_glob%nparts_pool))
-        refs_glob      = 'start_cavgs'//params_glob%ext
+        numlen         = len(int2str(params%nparts_pool))
+        refs_glob      = 'start_cavgs'//params%ext
         pool_available = .true.
         pool_iter      = 0
         call simple_mkdir(SCALE_DIR)
@@ -1427,9 +1418,9 @@ contains
         lp_greedy     = max(lp_greedy,    2.0*smpd)
         lpstart_stoch = max(lpstart_stoch,2.0*smpd)
         if( cline%defined('lpstop2D') )then
-            params_glob%lpstop2D = max(2.0*smpd,params_glob%lpstop2D)
+            params%lpstop2D = max(2.0*smpd,params%lpstop2D)
         else
-            params_glob%lpstop2D = 2.0*smpd
+            params%lpstop2D = 2.0*smpd
         endif
         call cline_cluster2D_chunk%set('lp', lp_greedy)
         if( l_greedy )then
@@ -1447,10 +1438,10 @@ contains
             write(logfhandle,'(A,F5.1)') '>>> POOL          LOW-PASS LIMIT (IN A) TO: ', lp_greedy
         else
             call cline_cluster2D_pool%set('lpstart', lpstart_stoch)
-            call cline_cluster2D_pool%set('lpstop',  params_glob%lpstop2D)
+            call cline_cluster2D_pool%set('lpstop',  params%lpstop2D)
             write(logfhandle,'(A,F5.1)') '>>> POOL STARTING LOW-PASS LIMIT (IN A) TO: ', lpstart_stoch
         endif
-        write(logfhandle,'(A,F5.1)')     '>>> POOL   HARD RESOLUTION LIMIT (IN A) TO: ', params_glob%lpstop2D
+        write(logfhandle,'(A,F5.1)')     '>>> POOL   HARD RESOLUTION LIMIT (IN A) TO: ', params%lpstop2D
         ! initialize chunks
         allocate(chunks(params%nchunks))
         do ichunk = 1,params%nchunks
@@ -1554,7 +1545,7 @@ contains
                 ! keep going
                 if( all_chunks_imported )then
                     if( l_once )then
-                        maxits = pool_iter + 5 ! for convergence
+                        maxits = pool_iter + 2*STREAM_SRCHLIM ! for convergence
                         l_once = .false.
                         write(logfhandle,'(A)')'>>> ALL CHUNKS HAVE CONVERGED'
                         write(logfhandle,'(A,I6)')'>>> TERMINATING AT END OF ITERATION: ',maxits
@@ -1657,8 +1648,8 @@ contains
         call del_file(trim(POOL_DIR)//trim(PROJFILE_POOL))
         call qsys_cleanup
         ! graceful end
-        call simple_end('**** SIMPLE_CLUSTER2D_CHUNKS NORMAL STOP ****')
-    end subroutine exec_cluster2D_chunks
+        call simple_end('**** SIMPLE_CLUSTER2D_SUBSETS NORMAL STOP ****')
+    end subroutine exec_cluster2D_subsets
 
     subroutine create_individual_project( sp_proj, stkind, proj_ind, output_dir, spprojname, nptcls )
         class(sp_project), intent(in)  :: sp_proj

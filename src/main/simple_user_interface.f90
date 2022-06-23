@@ -78,7 +78,7 @@ type(simple_program), target :: center2D_nano
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_nano
 type(simple_program), target :: cluster2D_stream
-type(simple_program), target :: cluster2D_chunks
+type(simple_program), target :: cluster2D_subsets
 type(simple_program), target :: cluster3D
 type(simple_program), target :: cluster3D_refine
 type(simple_program), target :: cluster_cavgs
@@ -174,6 +174,7 @@ type(simple_input_param) :: astigtol
 type(simple_input_param) :: automsk
 type(simple_input_param) :: bfac
 type(simple_input_param) :: box
+type(simple_input_param) :: box_extract
 type(simple_input_param) :: clip
 type(simple_input_param) :: clustermode
 type(simple_input_param) :: cn
@@ -187,15 +188,19 @@ type(simple_input_param) :: deftab
 type(simple_input_param) :: dferr
 type(simple_input_param) :: dfmax
 type(simple_input_param) :: dfmin
+type(simple_input_param) :: dir_movies
+type(simple_input_param) :: dose_rate
 type(simple_input_param) :: e1, e2, e3
 type(simple_input_param) :: eer_fraction
 type(simple_input_param) :: eer_upsampling
 type(simple_input_param) :: element
 type(simple_input_param) :: eo
+type(simple_input_param) :: exp_time
 type(simple_input_param) :: focusmskdiam
 type(simple_input_param) :: frac
 type(simple_input_param) :: fraca
 type(simple_input_param) :: frcs
+type(simple_input_param) :: gainref
 type(simple_input_param) :: graphene_filt
 type(simple_input_param) :: groupframes
 type(simple_input_param) :: hp
@@ -219,10 +224,15 @@ type(simple_input_param) :: mskfile
 type(simple_input_param) :: envfsc
 type(simple_input_param) :: mul
 type(simple_input_param) :: mw
+type(simple_input_param) :: nchunks
 type(simple_input_param) :: ncls
+type(simple_input_param) :: ncls_start
 type(simple_input_param) :: neg
 type(simple_input_param) :: nparts
+type(simple_input_param) :: nparts_chunk
+type(simple_input_param) :: nparts_pool
 type(simple_input_param) :: nptcls
+type(simple_input_param) :: nptcls_per_cls
 type(simple_input_param) :: nrestarts
 type(simple_input_param) :: nsearch
 type(simple_input_param) :: nsig
@@ -313,7 +323,7 @@ contains
         call new_cluster2D
         call new_cluster2D_nano
         call new_cluster2D_stream
-        call new_cluster2D_chunks
+        call new_cluster2D_subsets
         call new_cluster3D
         call new_cluster3D_refine
         call new_cluster_cavgs
@@ -418,7 +428,7 @@ contains
         call push2prg_ptr_array(cluster2D)
         call push2prg_ptr_array(cluster2D_nano)
         call push2prg_ptr_array(cluster2D_stream)
-        call push2prg_ptr_array(cluster2D_chunks)
+        call push2prg_ptr_array(cluster2D_subsets)
         call push2prg_ptr_array(cluster3D)
         call push2prg_ptr_array(cluster3D_refine)
         call push2prg_ptr_array(cluster_cavgs)
@@ -542,8 +552,8 @@ contains
                 ptr2prg => cluster2D_nano
             case('cluster2D_stream')
                 ptr2prg => cluster2D_stream
-            case('cluster2D_chunks')
-                ptr2prg => cluster2D_chunks
+            case('cluster2D_subsets')
+                ptr2prg => cluster2D_subsets
             case('cluster3D')
                 ptr2prg => cluster3D
             case('cluster3D_refine')
@@ -733,7 +743,7 @@ contains
         write(logfhandle,'(A)') cluster_cavgs%name
         write(logfhandle,'(A)') cluster2D%name
         write(logfhandle,'(A)') cluster2D_stream%name
-        write(logfhandle,'(A)') cluster2D_chunks%name
+        write(logfhandle,'(A)') cluster2D_subsets%name
         write(logfhandle,'(A)') cluster3D%name
         write(logfhandle,'(A)') cluster3D_refine%name
         write(logfhandle,'(A)') comparemc%name
@@ -896,6 +906,7 @@ contains
         &'.simple|.txt parameter file', .false., 'oritab2'//trim(METADATA_EXT))
         call set_param(outfile,       'outfile',       'file',   'Output orientation and CTF parameter file', 'Output Orientation and CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format',&
         &'.simple|.txt parameter file', .false., 'outfile'//trim(METADATA_EXT))
+        call set_param(dir_movies,    'dir_movies',    'dir',    'Input movies directory', 'Where the movies to process are located or will squentially appear', 'e.g. /cryodata/', .true., 'preprocess/')
         call set_param(startit,       'startit',       'num',    'First iteration', 'Index of first iteration when starting from a previous run', 'start iterations from here', .false., 1.0)
         call set_param(trs,           'trs',           'num',    'Maximum translational shift', 'Maximum half-width for bund-constrained search of rotational origin shifts',&
         &'max shift per iteration in pixels{5}', .false., 5.0)
@@ -903,11 +914,14 @@ contains
         call set_param(hp,            'hp',            'num',    'High-pass limit', 'High-pass resolution limit', 'high-pass limit in Angstroms', .false., 100.)
         call set_param(lp,            'lp',            'num',    'Low-pass limit', 'Low-pass resolution limit', 'low-pass limit in Angstroms', .false., 20.)
         call set_param(lp_backgr,     'lp_backgr',     'num',    'Background low-pass resolution', 'Low-pass resolution for solvent blurring', 'low-pass limit in Angstroms', .false., 20.)
-        call set_param(mskdiam,       'mskdiam',           'num',    'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to remove background noise', 'mask diameter in A', .true., 0.)
+        call set_param(mskdiam,       'mskdiam',       'num',    'Mask diameter', 'Mask diameter (in A) for application of a soft-edged circular mask to remove background noise', 'mask diameter in A', .true., 0.)
         call set_param(ncls,          'ncls',          'num',    'Number of 2D clusters', 'Number of groups to sort the particles &
         &into prior to averaging to create 2D class averages with improved SNR', '# 2D clusters', .true., 200.)
-        call set_param(nparts,        'nparts',        'num',    'Number of computing nodes', 'Number of partitions for distrbuted memory execution. One part typically corresponds to one CPU socket in the distributed &
-        &system. On a single-socket machine there may be speed benfits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', 'divide job into # parts', .true., 1.0)
+        call set_param(ncls_start,    'ncls_start',    'num',    'Number of 2D clusters per subset of particles', 'Number of class averages used in the independent 2D classification of each subset of particles', '# 2D clusters / subset', .true., 50.)
+        call set_param(nparts,        'nparts',        'num',    'Number of computing nodes', 'Number of partitions for distributed memory execution. One part typically corresponds to one CPU socket in the distributed &
+        &system. On a single-socket machine there may be speed benefits to dividing the jobs into a few (2-4) partitions, depending on memory capacity', 'divide job into # parts', .true., 1.0)
+        call set_param(nparts_chunk,  'nparts_chunk',  'num',    'Number of computing nodes per subset', 'Number of computing nodes allocated to 2D classification of each particles subset (chunk){1}', '# of nodes per subset{1}', .false., 1.0)
+        call set_param(nparts_pool,   'nparts_pool',   'num',    'Number of computing nodes for the pooled subsets', 'Number of computing nodes allocated to 2D classification of the pooled particles subsets', '# of nodes for the pooled subsets', .false., 2.0)
         call set_param(nthr,          'nthr',          'num',    'Number of threads per computing node, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
         &logical threads in a socket.', '# shared-memory CPU threads', .true., 0.)
         call set_param(nonuniform,    'nonuniform',    'binary', 'Nonuniform filter', 'Apply nonuniform filter(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
@@ -925,6 +939,8 @@ contains
         call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.5}',&
         &'low-pass FSC criterion(0.143-0.5){0.5}', .false., 0.5)
         call set_param(cs,            'cs',            'num',    'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in mm{2.7}', .false., 2.7)
+        call set_param(dose_rate,     'dose_rate',     'num',    'Dose rate (e/Ang^2/s)', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 1.)
+        call set_param(exp_time,      'exp_time',      'num',    'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
         call set_param(fraca,         'fraca',         'num',    'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', 'fraction{0.1}', .false., 0.1)
         call set_param(pspecsz,       'pspecsz',       'num',    'Size of power spectrum', 'Size of power spectrum in pixels', 'in pixels', .false., 512.)
         call set_param(dfmin,         'dfmin',         'num',    'Expected minimum defocus', 'Expected minimum defocus in microns{0.3}', 'in microns{0.3}', .false., 0.3)
@@ -941,8 +957,11 @@ contains
         call set_param(qsys_partition,'qsys_partition','str',    'Name of SLURM/PBS partition', 'Name of target partition of distributed computer system (SLURM/PBS)', 'give part name', .false., '')
         call set_param(qsys_qos,      'qsys_qos',      'str',    'Schedule priority', 'Job scheduling priority (SLURM/PBS)', 'give priority', .false., '')
         call set_param(qsys_reservation, 'qsys_reservation', 'str', 'Name of reserved partition', 'Name of reserved target partition of distributed computer system (SLURM/PBS)', 'give your part', .false., '')
-        call set_param(box,            'box',          'num',    'Particle box size','Particle box size(in pixels)', '# pixels of box', .true., 0.)
+        call set_param(box,            'box',          'num',    'Particle box size', 'Particle box size(in pixels)', '# pixels of box', .true., 0.)
+        call set_param(box_extract,    'box_extract',  'num',    'Extracted particle image size', 'Extracted particle image size(in pixels)', 'Extracted particle image size', .false., 0.)
+        call set_param(nchunks,        'nchunks',      'num',    'Number of subsets to classify simultaneously', 'Maximum number of particles subsets (chunks) to classify simultaneously', '# of substsets', .true., 2.)
         call set_param(nptcls,         'nptcls',       'num',    'Number of particles', 'Number of particle images', '# particles', .true., 0.)
+        call set_param(nptcls_per_cls, 'nptcls_per_cls','num',   'Number of particles per cluster', 'Initial number of particles per cluster{35}', '# initial particles per cluster{35}', .false., 35.)
         call set_param(outstk,         'outstk',       'file',   'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
         call set_param(pcontrast,      'pcontrast',    'multi',  'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
         call set_param(clip,           'clip',         'num',    'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
@@ -958,6 +977,7 @@ contains
         call set_param(e3,             'e3',           'num',    'Rotation along Psi',  'Psi Euler angle',   'in degrees', .false., 0.)
         call set_param(eer_fraction,   'eer_fraction', 'num',    '# of EER frames to fraction together', 'Number of raw EER frames to fraction together', '# EER frames{20}', .false., 20.)
         call set_param(eer_upsampling, 'eer_upsampling','multi', 'EER up-sampling', 'EER up-sampling(1=4K|2=8K){1}', '(1|2){1}', .false., 1.)
+        call set_param(gainref,        'gainref',      'file',   'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
         call set_param(groupframes,    'groupframes',  'binary', 'Patch motion correction frames averaging', 'Whether to perform frames averaging during motion correction - for patchesonly(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(mcpatch,        'mcpatch',      'binary', 'Patch-based motion correction', 'Whether to perform Patch-based motion correction(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(mcconvention,   'mcconvention', 'str',    'Frame of reference during movie alignment', 'Frame of reference during movie alignment; simple/unblur:central; relion/motioncorr:first(simple|unblur|relion|motioncorr){simple}', '(simple|unblur|relion|motioncorr){simple}', .false., 'simple')
@@ -1042,8 +1062,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call analysis2D_nano%set_input('srch_ctrls', 1, 'nptcls_per_cls', 'num', 'Particles per cluster',&
-        &'Initial number of paricles per cluster{35}', '# initial particles per cluster{35}', .false., 35.)
+        call analysis2D_nano%set_input('srch_ctrls', 1, nptcls_per_cls)
         ! filter controls
         ! <empty>
         ! mask controls
@@ -1392,8 +1411,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call cluster2D_nano%set_input('srch_ctrls', 1, 'nptcls_per_cls', 'num', 'Particles per cluster',&
-        &'Initial number of paricles per cluster{35}', '# initial particles per cluster{35}', .false., 35.)
+        call cluster2D_nano%set_input('srch_ctrls', 1, nptcls_per_cls)
         call cluster2D_nano%set_input('srch_ctrls', 2, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
         &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call cluster2D_nano%set_input('srch_ctrls', 3, 'winsz', 'num', 'Half-window size', 'Half-window size(frames)', 'winsz in # frames', .false., 3.0)
@@ -1433,12 +1451,10 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call cluster2D_stream%set_input('srch_ctrls', 1, 'ncls_start', 'num', 'Starting number of clusters',&
-        &'Minimum number of class averagages to initiate 2D clustering', 'initial # clusters', .true., 50.)
-        cluster2D_stream%srch_ctrls(1)%required = .true.
-        call cluster2D_stream%set_input('srch_ctrls', 2, 'nptcls_per_cls', 'num', 'Particles per cluster',&
-        &'Number of incoming particles for which one new class average is generated', '# particles per cluster', .true., 200.)
+        call cluster2D_stream%set_input('srch_ctrls', 1, ncls_start)
+        call cluster2D_stream%set_input('srch_ctrls', 2, nptcls_per_cls)
         cluster2D_stream%srch_ctrls(2)%required = .true.
+        cluster2D_stream%srch_ctrls(2)%rval_default = 300.
         call cluster2D_stream%set_input('srch_ctrls', 3, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated convergence rate. Initial/Final low-pass limits control the degree of down-scaling(yes|no){yes}',&
         &'(yes|no){yes}', .false., 'yes')
@@ -1461,18 +1477,17 @@ contains
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
-        call cluster2D_stream%set_input('comp_ctrls', 1, 'nchunks', 'num', 'Number of chunks', 'Number of chunks', '# chunks', .true., 1.0)
-        call cluster2D_stream%set_input('comp_ctrls', 2, 'nparts_chunk', 'num', 'Number of partitions per chunk',&
-        &'Number of partitions for distributed execution of each chunk{1}', 'divide chunk job into # parts{1}', .false., 1.0)
+        call cluster2D_stream%set_input('comp_ctrls', 1, nchunks)
+        call cluster2D_stream%set_input('comp_ctrls', 2, nparts_chunk)
         call cluster2D_stream%set_input('comp_ctrls', 3, nparts)
         call cluster2D_stream%set_input('comp_ctrls', 4, nthr)
         call cluster2D_stream%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740.)
     end subroutine new_cluster2D_stream
 
-    subroutine new_cluster2D_chunks
+    subroutine new_cluster2D_subsets
         ! PROGRAM SPECIFICATION
-        call cluster2D_chunks%new(&
-        &'cluster2D_chunks',&                                                                     ! name
+        call cluster2D_subsets%new(&
+        &'cluster2D_subsets',&                                                                     ! name
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
@@ -1485,41 +1500,39 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call cluster2d_chunks%set_input('srch_ctrls', 1, 'ncls_start', 'num', 'Starting number of clusters',&
-        &'Minimum number of class averagages to initiate 2D clustering', 'initial # clusters', .true., 50.)
-        cluster2d_chunks%srch_ctrls(1)%required = .true.
-        call cluster2d_chunks%set_input('srch_ctrls', 2, 'nptcls_per_cls', 'num', 'Particles per cluster',&
-        &'Number of incoming particles for which one new class average is generated', '# particles per cluster', .true., 200.)
-        cluster2d_chunks%srch_ctrls(2)%required = .true.
-        call cluster2d_chunks%set_input('srch_ctrls', 3, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        call cluster2D_subsets%set_input('srch_ctrls', 1, ncls_start)
+        call cluster2D_subsets%set_input('srch_ctrls', 2, nptcls_per_cls)
+        cluster2D_subsets%srch_ctrls(2)%required = .true.
+        cluster2D_subsets%srch_ctrls(2)%rval_default = 300.
+        call cluster2D_subsets%set_input('srch_ctrls', 3, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated convergence rate. Initial/Final low-pass limits control the degree of down-scaling(yes|no){yes}',&
         &'(yes|no){yes}', .false., 'yes')
-        call cluster2d_chunks%set_input('srch_ctrls', 4, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
+        call cluster2D_subsets%set_input('srch_ctrls', 4, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call cluster2d_chunks%set_input('srch_ctrls', 5, 'ncls', 'num', 'Maximum number of 2D clusters',&
-        &'Maximum number of groups to sort the particles into prior to averaging to create 2D class averages with improved SNR', 'Maximum # 2D clusters', .true., 200.)
-        call cluster2d_chunks%set_input('srch_ctrls', 6, 'lpthresh', 'num', 'Resolution rejection threshold',&
+        call cluster2D_subsets%set_input('srch_ctrls', 5, 'ncls', 'num', 'Maximum number of 2D clusters',&
+        &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .true., 200.)
+        call cluster2D_subsets%set_input('srch_ctrls', 6, 'lpthresh', 'num', 'Resolution rejection threshold',&
         &'Classes with lower resolution are iteratively rejected{30}', 'Resolution rejection threshold in angstroms{30}', .false., 30.)
-        call cluster2d_chunks%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
+        call cluster2D_subsets%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
         ! filter controls
-        call cluster2d_chunks%set_input('filt_ctrls', 1, hp)
-        call cluster2d_chunks%set_input('filt_ctrls', 2, 'cenlp',      'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        call cluster2D_subsets%set_input('filt_ctrls', 1, hp)
+        call cluster2D_subsets%set_input('filt_ctrls', 2, 'cenlp',      'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
-        call cluster2d_chunks%set_input('filt_ctrls', 3, 'lp',         'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
-        call cluster2d_chunks%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit in Angstroms', .false., 2.0*MAX_SMPD)
-        call cluster2d_chunks%set_input('filt_ctrls', 5, match_filt)
-        call cluster2d_chunks%set_input('filt_ctrls', 6, 'wiener',     'multi', 'Wiener restoration', 'Wiener restoration, full or partial (full|partial){partial}','(full|partial){partial}', .false., 'partial')
+        call cluster2D_subsets%set_input('filt_ctrls', 3, 'lp',         'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
+        call cluster2D_subsets%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit in Angstroms', .false., 2.0*MAX_SMPD)
+        call cluster2D_subsets%set_input('filt_ctrls', 5, match_filt)
+        call cluster2D_subsets%set_input('filt_ctrls', 6, 'wiener',     'multi', 'Wiener restoration', 'Wiener restoration, full or partial (full|partial){partial}','(full|partial){partial}', .false., 'partial')
         ! mask controls
-        call cluster2d_chunks%set_input('mask_ctrls', 1, mskdiam)
+        call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
-        call cluster2d_chunks%set_input('comp_ctrls', 1, 'nchunks', 'num', 'Number of chunks', 'Number of chunks{2}', '# chunks{2}', .false., 2.0)
-        call cluster2d_chunks%set_input('comp_ctrls', 2, 'nparts_chunk', 'num', 'Number of partitions per chunk',&
-        &'Number of partitions for distributed execution of each chunk{1}', 'divide chunk job into # parts{1}', .false., 1.0)
-        call cluster2d_chunks%set_input('comp_ctrls', 3, nparts)
-        call cluster2d_chunks%set_input('comp_ctrls', 4, nthr)
-        call cluster2d_chunks%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740.)
-    end subroutine new_cluster2D_chunks
+        call cluster2D_subsets%set_input('comp_ctrls', 1, nchunks)
+        call cluster2D_subsets%set_input('comp_ctrls', 2, nparts_chunk)
+        call cluster2D_subsets%set_input('comp_ctrls', 3, nparts_pool)
+        cluster2D_subsets%comp_ctrls(3)%required = .true.
+        call cluster2D_subsets%set_input('comp_ctrls', 4, nthr)
+        call cluster2D_subsets%set_input('comp_ctrls', 5, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management(29mins){1740}', 'in seconds(29mins){1740}', .false., 1740.)
+    end subroutine new_cluster2D_subsets
 
     subroutine new_cluster3D
         ! PROGRAM SPECIFICATION
@@ -2542,10 +2555,10 @@ contains
         &1, 8, 0, 8, 3, 0, 2, .true.)                                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call motion_correct%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
+        call motion_correct%set_input('img_ios', 1, gainref)
         ! parameter input/output
-        call motion_correct%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.)
-        call motion_correct%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
+        call motion_correct%set_input('parm_ios', 1, dose_rate)
+        call motion_correct%set_input('parm_ios', 2, exp_time)
         call motion_correct%set_input('parm_ios', 3, max_dose)
         call motion_correct%set_input('parm_ios', 4, scale_movies)
         call motion_correct%set_input('parm_ios', 5, 'fbody', 'string', 'Template output micrograph name',&
@@ -2816,12 +2829,12 @@ contains
         &3, 12, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call preprocess%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
+        call preprocess%set_input('img_ios', 1, gainref)
         call preprocess%set_input('img_ios', 2, 'refs', 'file', 'Reference images for picking', 'Stack of images for picking', 'e.g. cavgs.mrc', .false., '')
         call preprocess%set_input('img_ios', 3, 'vol1', 'file', 'Reference volume for picking', 'Reference volume for picking', 'e.g. vol.mrc', .false., '')
         ! parameter input/output
         call preprocess%set_input('parm_ios', 1,  'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
-        call preprocess%set_input('parm_ios', 2,  'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
+        call preprocess%set_input('parm_ios', 2,  exp_time)
         call preprocess%set_input('parm_ios', 3,  max_dose)
         call preprocess%set_input('parm_ios', 4,  scale_movies)
         call preprocess%set_input('parm_ios', 5,  eer_fraction)
@@ -2882,21 +2895,21 @@ contains
         &5, 15, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
-        call preprocess_stream%set_input('img_ios', 2, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
+        call preprocess_stream%set_input('img_ios', 1, dir_movies)
+        call preprocess_stream%set_input('img_ios', 2, gainref)
         call preprocess_stream%set_input('img_ios', 3, 'refs', 'file', 'References images for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
         call preprocess_stream%set_input('img_ios', 4, 'vol1', 'file', 'Reference volume for picking', 'Reference volume for picking', 'e.g. vol.mrc', .false., '')
         call preprocess_stream%set_input('img_ios', 5, 'dir_prev', 'file', 'Previous run directory',&
             &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preprocess_stream', .false., '')
         ! parameter input/output
-        call preprocess_stream%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
-        call preprocess_stream%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
+        call preprocess_stream%set_input('parm_ios', 1, dose_rate)
+        call preprocess_stream%set_input('parm_ios', 2, exp_time)
         call preprocess_stream%set_input('parm_ios', 3, max_dose)
         call preprocess_stream%set_input('parm_ios', 4, scale_movies)
         call preprocess_stream%set_input('parm_ios', 5, eer_fraction)
         call preprocess_stream%set_input('parm_ios', 6, eer_upsampling)
         call preprocess_stream%set_input('parm_ios', 7, pcontrast)
-        call preprocess_stream%set_input('parm_ios', 8, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
+        call preprocess_stream%set_input('parm_ios', 8, box_extract)
         call preprocess_stream%set_input('parm_ios', 9, pspecsz)
         call preprocess_stream%set_input('parm_ios',10, kv)
         preprocess_stream%parm_ios(10)%required = .true.
@@ -2955,20 +2968,20 @@ contains
         &'simple_exec',&                                                                    ! executable
         &5, 15, 0, 20, 9, 1, 6, .true.)                                                     ! # entries in each group, requires sp_project
         ! image input/output
-        call preprocess_stream_dev%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
-        call preprocess_stream_dev%set_input('img_ios', 2, 'gainref', 'file', 'Gain reference*', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
+        call preprocess_stream_dev%set_input('img_ios', 1, dir_movies)
+        call preprocess_stream_dev%set_input('img_ios', 2, gainref)
         call preprocess_stream_dev%set_input('img_ios', 3, 'refs', 'file', 'References images for picking*', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
         call preprocess_stream_dev%set_input('img_ios', 4, 'vol1', 'file', 'Reference volume for picking*', 'Reference volume for picking', 'e.g. vol.mrc', .false., '')
         call preprocess_stream_dev%set_input('img_ios', 5, 'dir_prev', 'file', 'Previous run directory',&
             &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preprocess_stream', .false., '')
         ! parameter input/output
-        call preprocess_stream_dev%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate*', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
-        call preprocess_stream_dev%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time*', 'Exposure time in seconds', 'in seconds', .false., 10.)
+        call preprocess_stream_dev%set_input('parm_ios', 1, dose_rate)
+        call preprocess_stream_dev%set_input('parm_ios', 2, exp_time)
         call preprocess_stream_dev%set_input('parm_ios', 3, scale_movies)
         call preprocess_stream_dev%set_input('parm_ios', 4, eer_fraction)
         call preprocess_stream_dev%set_input('parm_ios', 5, eer_upsampling)
         call preprocess_stream_dev%set_input('parm_ios', 6, pcontrast)
-        call preprocess_stream_dev%set_input('parm_ios', 7, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
+        call preprocess_stream_dev%set_input('parm_ios', 7, box_extract)
         call preprocess_stream_dev%set_input('parm_ios', 8, pspecsz)
         call preprocess_stream_dev%set_input('parm_ios', 9, max_dose)
         call preprocess_stream_dev%set_input('parm_ios',10, kv)
@@ -3000,16 +3013,17 @@ contains
         call preprocess_stream_dev%set_input('srch_ctrls',11, nypatch)
         call preprocess_stream_dev%set_input('srch_ctrls',12, mcconvention)
         call preprocess_stream_dev%set_input('srch_ctrls',13, algorithm)
-        call preprocess_stream_dev%set_input('srch_ctrls',14, 'ncls_start', 'num', 'Starting number of clusters*',&
-        &'Minimum number of class averagages to initiate 2D clustering', 'initial # clusters', .false., 50.)
-        call preprocess_stream_dev%set_input('srch_ctrls',15, 'nptcls_per_cls', 'num', 'Particles per cluster*',&
-        &'Number of incoming particles for which one new class average is generated', '# particles per cluster', .false., 200.)
+        call preprocess_stream_dev%set_input('srch_ctrls',14, ncls_start)
+        preprocess_stream_dev%srch_ctrls(14)%required = .false.
+        call preprocess_stream_dev%set_input('srch_ctrls',15, nptcls_per_cls)
+        preprocess_stream_dev%srch_ctrls(15)%required = .true.
+        preprocess_stream_dev%srch_ctrls(15)%rval_default = 300.
         call preprocess_stream_dev%set_input('srch_ctrls',16, 'autoscale', 'binary', 'Automatic down-scaling for 2D classification', 'Automatic down-scaling of images &
-        &for accelerated convergence rate. I(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        &for accelerated convergence rate. (yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call preprocess_stream_dev%set_input('srch_ctrls',17, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
         &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call preprocess_stream_dev%set_input('srch_ctrls',18, 'ncls', 'num', 'Maximum number of 2D clusters*',&
-        &'Maximum number of groups to sort the particles into prior to averaging to create 2D class averages with improved SNR', 'Maximum # 2D clusters', .false., 200.)
+        &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .false., 200.)
         call preprocess_stream_dev%set_input('srch_ctrls',19, 'lpthresh', 'num', 'Resolution rejection threshold',&
         &'Classes with lower resolution are iteratively rejected{30}', 'Resolution rejection threshold in angstroms{30}', .false., 30.)
         call preprocess_stream_dev%set_input('srch_ctrls',20, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
@@ -3038,13 +3052,12 @@ contains
         preprocess_stream_dev%mask_ctrls(1)%required = .false.
         preprocess_stream_dev%mask_ctrls(1)%descr_short = 'Mask Diameter*'
         ! computer controls
-        call preprocess_stream_dev%set_input('comp_ctrls', 1, 'nchunks', 'num', 'Number of chunks', 'Number of chunks{2}', '# chunks{2}', .false., 2.0)
-        call preprocess_stream_dev%set_input('comp_ctrls', 2, 'nparts_chunk', 'num', 'Number of partitions per 2D chunk',&
-        &'Number of partitions for distributed execution of each chunk{1}', 'divide chunk job into # parts{1}', .false., 1.0)
-        call preprocess_stream_dev%set_input('comp_ctrls', 3, 'nparts_pool', 'num', 'Number of partitions for the 2D pool',&
-        &'Number of partitions for distributed execution of the 2D pool{nparts}', 'divide pool job into # parts', .false., 1.0)
+        call preprocess_stream_dev%set_input('comp_ctrls', 1, nchunks)
+        preprocess_stream_dev%comp_ctrls(1)%required = .false.
+        call preprocess_stream_dev%set_input('comp_ctrls', 2, nparts_chunk)
+        call preprocess_stream_dev%set_input('comp_ctrls', 3, nparts_pool)
         call preprocess_stream_dev%set_input('comp_ctrls', 4, nparts)
-        preprocess_stream_dev%comp_ctrls(4)%descr_short = 'Number of computing nodes for preprocessing'
+        preprocess_stream_dev%comp_ctrls(4)%descr_short = 'Number of computing nodes allocated to preprocessing'
         call preprocess_stream_dev%set_input('comp_ctrls', 5, nthr)
         call preprocess_stream_dev%set_input('comp_ctrls', 6, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)', 'in seconds(29mins){1740}', .false., 1740.)
     end subroutine new_preprocess_stream_dev
@@ -3065,8 +3078,10 @@ contains
         call print_dose_weights%set_input('parm_ios', 2, box)
         call print_dose_weights%set_input('parm_ios', 3, 'nframes',   'num', 'Number of frames', 'Number of movie frames', '# frames', .true., 0.)
         call print_dose_weights%set_input('parm_ios', 4, kv)
-        call print_dose_weights%set_input('parm_ios', 5, 'exp_time',  'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .true., 10.)
-        call print_dose_weights%set_input('parm_ios', 6, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .true., 6.)
+        call print_dose_weights%set_input('parm_ios', 5, exp_time)
+        print_dose_weights%parm_ios(5)%required = .true.
+        call print_dose_weights%set_input('parm_ios', 6, dose_rate)
+        print_dose_weights%parm_ios(6)%required = .true.
         ! alternative inputs
         ! <empty>
         ! search controls
