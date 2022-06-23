@@ -5651,7 +5651,7 @@ contains
         if(allocated(smooth_avg_curr_edge_stop))  deallocate(smooth_avg_curr_edge_stop)
     end subroutine taper_edges
 
-    !>  subtracts linear background to mitigate Gibbs phenomenon, adapted from Relion
+    !>  subtracts background linear ramp including mean
     subroutine subtr_backgr_ramp( self, lmsk )
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
@@ -5662,12 +5662,12 @@ contains
         if( self%ft )      THROW_HARD('Real space only!, subtr_backr_ramp')
         if( self%is_3d() ) THROW_HARD('2D images only!, subtr_backr_ramp')
         npix = product(self%ldim) - count(lmsk)
-        if( npix == 0 ) return
+        if( npix < 2 ) return
         allocate(xyz(npix,3))
         cen  = self%ldim(1:2)/2 + 1
         npix = 0
-        do i = 1,self%ldim(1)
-            do j = 1,self%ldim(2)
+        do j = 1,self%ldim(2)
+            do i = 1,self%ldim(1)
                 if( lmsk(i,j,1) ) cycle
                 npix = npix + 1
                 xyz(npix,:) = [real(i-cen(1)), real(j-cen(2)), self%rmat(i,j,1)]
@@ -5675,10 +5675,10 @@ contains
         enddo
         call fit_lsq_plane(npix, xyz, A,B,C, err)
         if( err ) return
-        do i = 1,self%ldim(1)
-            D = A*real(i) + C
-            do j = 1,self%ldim(2)
-                self%rmat(i,j,1) = self%rmat(i,j,1) - B*real(j) - D
+        do j = 1,self%ldim(2)
+            D = B*real(j-cen(2)) + C
+            do i = 1,self%ldim(1)
+                self%rmat(i,j,1) = self%rmat(i,j,1) - (D + A*real(i-cen(1)))
             enddo
         enddo
     end subroutine subtr_backgr_ramp
