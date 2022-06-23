@@ -130,7 +130,7 @@ contains
         integer           :: best_ind, cur_ind, k1, l1, m1, lb(3), ub(3), mid_ext
         real              :: min_sum_odd, min_sum_even, ref_diff_odd, ref_diff_even, rad, find_stepsz, val
         character(len=90) :: file_tag
-        real, pointer     :: rmat_odd(:,:,:)=>null(), rmat_even(:,:,:)=>null()
+        real, pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:)
         ldim              = odd%get_ldim()
         box               = ldim(1)
         dim3              = ldim(3)
@@ -195,7 +195,6 @@ contains
                         enddo
                     enddo
                     weights_2D = weights_2D/sum(weights_2D) ! weights has energy of 1
-                    !$omp parallel do collapse(2) default(shared) private(k,l,k1,l1,ref_diff_odd,ref_diff_even) schedule(static) proc_bind(close)
                     do l = lb(2),ub(2)
                         do k = lb(1),ub(1)
                             ! applying the smoothing extension to the difference
@@ -222,7 +221,6 @@ contains
                             endif
                         enddo
                     enddo
-                    !$omp end parallel do
                 enddo
             else
                 ! keep the theta which gives the lowest cost (over all voxels)
