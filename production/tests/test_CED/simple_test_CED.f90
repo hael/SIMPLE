@@ -9,10 +9,11 @@ program simple_test_CED
     type(parameters)              :: p
     type(cmdline)                 :: cline, cline_projection
     type(reproject_commander)     :: xreproject
-    type(image)                   :: img
+    type(image)                   :: img, noise
     integer                       :: nptcls, iptcl, rc
     character(len=:), allocatable :: cmd
     logical                       :: mrc_exists
+    real                          :: ave, sdev, maxv, minv, med
     if( command_argument_count() < 5 )then
         write(logfhandle,'(a)') 'Usage: simple_test_CED smpd=xx nthr=yy stk=stk.mrc mskdiam=zz sigma=tt'
         write(logfhandle,'(a)') 'Example: projections of https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180 sigma=0.7'
@@ -53,10 +54,17 @@ program simple_test_CED
     call p%new(cline)
     call find_ldim_nptcls(p%stk, p%ldim, nptcls)
     p%ldim(3) = 1 ! because we operate on stacks
-    call img%new(p%ldim, p%smpd)
+    call   img%new(p%ldim, p%smpd)
+    call noise%new(p%ldim, p%smpd)
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         call img%read(p%stk, iptcl)
+        call img%stats('foreground', ave, sdev, maxv, minv)
+        ! addding noise
+        call noise%gauran(0., .5 * sdev)
+        call noise%mask(2. * p%msk, 'soft')
+        call img%add(noise)
+        call img%write('stk_noisy.mrc', iptcl)
         call ced_filter_2D(img, p%sigma)
         call img%write('test_CED_output.mrc', iptcl)
     enddo
