@@ -303,7 +303,7 @@ contains
         character(len=90)          :: file_tag
         type(tvfilter)             :: tvfilt
         integer, parameter         :: CHUNKSZ = 20
-        type(image),   allocatable :: even(:), odd(:),&
+        type(image),   allocatable :: even(:), odd(:), weights_img(:), ref_diff_odd_img(:), ref_diff_even_img(:),&
                                     & odd_copy_rmat(:),  odd_copy_cmat(:),  odd_copy_shellnorm(:),&
                                     &even_copy_rmat(:), even_copy_cmat(:), even_copy_shellnorm(:)
         real,          allocatable :: cur_diff_odd(:,:,:,:), cur_diff_even(:,:,:,:)
@@ -322,7 +322,8 @@ contains
         endif
         allocate(odd(params%nptcls), even(params%nptcls),&
                 & odd_copy_rmat(params%nptcls),  odd_copy_cmat(params%nptcls),  odd_copy_shellnorm(params%nptcls),&
-                &even_copy_rmat(params%nptcls), even_copy_cmat(params%nptcls), even_copy_shellnorm(params%nptcls))
+                &even_copy_rmat(params%nptcls), even_copy_cmat(params%nptcls), even_copy_shellnorm(params%nptcls),&
+                &weights_img(params%nptcls), ref_diff_odd_img(params%nptcls), ref_diff_even_img(params%nptcls))
         allocate(cur_diff_odd(box,box,1,params%nptcls), cur_diff_even(box,box,1,params%nptcls),&
                 &cur_fil(box,params%nptcls),weights_2D(params_glob%smooth_ext*2+1, params_glob%smooth_ext*2+1,params%nptcls), source=0.)
         allocate(opt_odd(box,box,1,params%nptcls), opt_even(box,box,1,params%nptcls))
@@ -335,6 +336,9 @@ contains
             call even_copy_cmat(iptcl)%new(params%ldim, params%smpd, .false.)
             call odd_copy_shellnorm( iptcl)%new(params%ldim, params%smpd, .false.)
             call even_copy_shellnorm(iptcl)%new(params%ldim, params%smpd, .false.)
+            call weights_img(iptcl)%new(params%ldim, params%smpd, .false.)
+            call ref_diff_odd_img( iptcl)%new(params%ldim, params%smpd, .false.)
+            call ref_diff_even_img(iptcl)%new(params%ldim, params%smpd, .false.)
             call odd( iptcl)%read(params%stk2, iptcl)
             call even(iptcl)%read(params%stk,  iptcl)
             call odd_copy_rmat(iptcl)%copy(odd(iptcl))
@@ -357,7 +361,8 @@ contains
                                & odd_copy_rmat(iptcl),  odd_copy_cmat(iptcl),  odd_copy_shellnorm(iptcl),&
                                &even_copy_rmat(iptcl), even_copy_cmat(iptcl), even_copy_shellnorm(iptcl),&
                                &tvfilt, cur_diff_odd(:,:,:,iptcl), cur_diff_even(:,:,:,iptcl),&
-                               &cur_fil(:,iptcl), weights_2D(:,:,iptcl), opt_odd(:,:,:,iptcl), opt_even(:,:,:,iptcl))
+                               &cur_fil(:,iptcl), weights_2D(:,:,iptcl), opt_odd(:,:,:,iptcl), opt_even(:,:,:,iptcl),&
+                               &weights_img(iptcl), ref_diff_odd_img(iptcl), ref_diff_even_img(iptcl))
         enddo
         !$omp end parallel do
         do iptcl = 1, params%nptcls
