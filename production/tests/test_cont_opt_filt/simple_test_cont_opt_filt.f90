@@ -9,7 +9,7 @@ program simple_test_cont_opt_filt
     type(parameters)              :: p
     type(cmdline)                 :: cline, cline_projection
     type(reproject_commander)     :: xreproject
-    type(image)                   :: img, noise, ker, img_ker
+    type(image)                   :: img, noise, ker, img_ker, img_pad
     integer                       :: nptcls, iptcl, rc, gaussian_ext, k, l
     character(len=:), allocatable :: cmd
     real,             allocatable :: pat_mat(:, :)
@@ -62,9 +62,9 @@ program simple_test_cont_opt_filt
     call img_ker%new(p%ldim, p%smpd)
     ! build the Gaussian kernel with sigma
     gaussian_ext = ceiling(2*p%sigma)
-    allocate(pat_mat(2*gaussian_ext+1, 2*gaussian_ext+1), source = 0.)
-    do k = -gaussian_ext, gaussian_ext
-    do l = -gaussian_ext, gaussian_ext
+    allocate(pat_mat(2*gaussian_ext, 2*gaussian_ext), source = 0.)
+    do k = -gaussian_ext, gaussian_ext-1
+    do l = -gaussian_ext, gaussian_ext-1
         sh = hyp(real(k),real(l))
         call ker%set_rmat_at(p%ldim(1)/2 + k, p%ldim(2)/2 + l, 1, exp(-(sh**2/(2*p%sigma**2))))
         pat_mat(gaussian_ext + k + 1, gaussian_ext + l + 1) = exp(-(sh**2/(2*p%sigma**2)))
@@ -74,7 +74,6 @@ program simple_test_cont_opt_filt
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         call img%read(p%stk, iptcl)
-        call img%get_rmat_ptr(img_rmat)
         call img_ker%copy_fast(img)
         ! convolving img with the kernel
         call img_ker%fft()
@@ -83,10 +82,13 @@ program simple_test_cont_opt_filt
         call img_ker%write('test_img_ker.mrc', iptcl)
         ! voxel-wise convolution
         call img_ker%zero_and_unflag_ft()
-        do l = 1+gaussian_ext, p%ldim(2)-gaussian_ext
-        do k = 1+gaussian_ext, p%ldim(1)-gaussian_ext
-            call img_ker%set_rmat_at(k, l, 1, sum(pat_mat*img_rmat(k - gaussian_ext:k+gaussian_ext-1,&
-                                                                  &l - gaussian_ext:l+gaussian_ext-1,1)))
+        call img_pad%new([p%ldim(1)+2*gaussian_ext,p%ldim(2)+2*gaussian_ext,1],1.)
+        call img%pad(img_pad)
+        call img_pad%get_rmat_ptr(img_rmat)
+        do l = 1, p%ldim(2)
+        do k = 1, p%ldim(1)
+            call img_ker%set_rmat_at(k, l, 1, sum(pat_mat*img_rmat(k:k+2*gaussian_ext,&
+                                                                  &l:l+2*gaussian_ext,1)))
         enddo
         enddo
         call img_ker%write('test_img_ker_patching.mrc', iptcl)
