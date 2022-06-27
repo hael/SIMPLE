@@ -1938,7 +1938,7 @@ contains
         get_nmovies = 0
         do i=1,self%os_mic%get_noris()
             call self%os_mic%getter(i,'imgkind',imgkind)
-            if( trim(imgkind).eq.'movie' ) get_nmovies = get_nmovies + 1
+            if( trim(imgkind).eq.'movie' .or. trim(imgkind).eq.'mic' ) get_nmovies = get_nmovies + 1
         enddo
     end function get_nmovies
 
