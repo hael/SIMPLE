@@ -9,9 +9,10 @@ program simple_test_cont_opt_filt
     type(parameters)              :: p
     type(cmdline)                 :: cline, cline_projection
     type(reproject_commander)     :: xreproject
-    type(image)                   :: img, noise, ker, img_ker, pat_img, pat_ker
+    type(image)                   :: img, noise, ker, img_ker
     integer                       :: nptcls, iptcl, rc, gaussian_ext, k, l
     character(len=:), allocatable :: cmd
+    real,             allocatable :: pat_mat(:, :)
     logical                       :: mrc_exists
     real                          :: ave, sdev, maxv, minv, med, sh
     real, pointer                 :: img_rmat(:, :, :)
@@ -61,17 +62,15 @@ program simple_test_cont_opt_filt
     call img_ker%new(p%ldim, p%smpd)
     ! build the Gaussian kernel with sigma
     gaussian_ext = ceiling(2*p%sigma)
-    call pat_img%new([2*gaussian_ext, 2*gaussian_ext, 1], p%smpd)
-    call pat_ker%new([2*gaussian_ext, 2*gaussian_ext, 1], p%smpd)
-    do k = -gaussian_ext, gaussian_ext-1
-    do l = -gaussian_ext, gaussian_ext-1
+    allocate(pat_mat(2*gaussian_ext+1, 2*gaussian_ext+1), source = 0.)
+    do k = -gaussian_ext, gaussian_ext
+    do l = -gaussian_ext, gaussian_ext
         sh = hyp(real(k),real(l))
-        call     ker%set_rmat_at(p%ldim(1)/2  + k,   p%ldim(2)/2  + l,   1, exp(-(sh**2/(2*p%sigma**2))))
-        call pat_ker%set_rmat_at(gaussian_ext + k+1, gaussian_ext + l+1, 1, exp(-(sh**2/(2*p%sigma**2))))
+        call ker%set_rmat_at(p%ldim(1)/2 + k, p%ldim(2)/2 + l, 1, exp(-(sh**2/(2*p%sigma**2))))
+        pat_mat(gaussian_ext + k + 1, gaussian_ext + l + 1) = exp(-(sh**2/(2*p%sigma**2)))
     enddo
     enddo
-    call     ker%fft()
-    call pat_ker%fft()
+    call ker%fft()
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         call img%read(p%stk, iptcl)
@@ -82,18 +81,12 @@ program simple_test_cont_opt_filt
         img_ker = img_ker*ker
         call img_ker%ifft()
         call img_ker%write('test_img_ker.mrc', iptcl)
-        ! voxel-wise convolution using ifft(fft) trick
+        ! voxel-wise convolution
         call img_ker%zero_and_unflag_ft()
-        do l = 1+gaussian_ext, p%ldim(2)-gaussian_ext+1
-        write(*, *) 'l = ', l
-        do k = 1+gaussian_ext, p%ldim(1)-gaussian_ext+1
-            call pat_img%new([2*gaussian_ext, 2*gaussian_ext, 1], p%smpd)
-            call pat_img%set_rmat(img_rmat(k - gaussian_ext:k+gaussian_ext-1,&
-                                          &l - gaussian_ext:l+gaussian_ext-1,:), .false.)
-            call pat_img%fft()
-            pat_img = pat_img*pat_ker
-            call pat_img%ifft()
-            call img_ker%set_rmat_at(k, l, 1, pat_img%get_rmat_at(gaussian_ext, gaussian_ext,1))
+        do l = 1+gaussian_ext, p%ldim(2)-gaussian_ext
+        do k = 1+gaussian_ext, p%ldim(1)-gaussian_ext
+            call img_ker%set_rmat_at(k, l, 1, sum(pat_mat*img_rmat(k - gaussian_ext:k+gaussian_ext-1,&
+                                                                  &l - gaussian_ext:l+gaussian_ext-1,1)))
         enddo
         enddo
         call img_ker%write('test_img_ker_patching.mrc', iptcl)
