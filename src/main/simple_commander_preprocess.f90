@@ -421,7 +421,6 @@ contains
                 integer :: i, n_spprojs, n_old, nptcls_here, state, j, n2import, nprev_imports, n_completed
                 n_completed = 0
                 nimported   = 0
-
                 ! projects to import
                 n_spprojs = size(completed_jobs_clines)
                 if( n_spprojs == 0 )return
@@ -1110,19 +1109,19 @@ contains
         cnt = 0
         do imovie=fromto(1),fromto(2)
             call spproj%os_mic%get_ori(imovie, o)
-            if( o%isthere('imgkind').and.o%isthere('movie') )then
-                cnt = cnt + 1
-                call o%getter('imgkind', imgkind)
-                if( imgkind.ne.'movie' )cycle
-                call o%getter('movie', moviename)
-                ctfvars = spproj%get_micparams(imovie)
-                if( cline%defined('gainref') )then
-                    call mciter%iterate(cline, ctfvars, o, fbody, frame_counter, moviename, trim(output_dir), gainref_fname=params%gainref)
-                else
-                    call mciter%iterate(cline, ctfvars, o, fbody, frame_counter, moviename, trim(output_dir))
+            if( o%isthere('imgkind') )then
+                if( o%isthere('movie') .or. o%isthere('mic') )then
+                    cnt = cnt + 1
+                    call o%getter('movie', moviename)
+                    ctfvars = spproj%get_micparams(imovie)
+                    if( cline%defined('gainref') )then
+                        call mciter%iterate(cline, ctfvars, o, fbody, frame_counter, moviename, trim(output_dir), gainref_fname=params%gainref)
+                    else
+                        call mciter%iterate(cline, ctfvars, o, fbody, frame_counter, moviename, trim(output_dir))
+                    endif
+                    call spproj%os_mic%set_ori(imovie, o)
+                    write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the movies processed'
                 endif
-                call spproj%os_mic%set_ori(imovie, o)
-                write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the movies processed'
             endif
         end do
         ! output
