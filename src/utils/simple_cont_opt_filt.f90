@@ -35,7 +35,9 @@ module simple_cont_opt_filt
                 do k = ldim(1)/2-2, ldim(1)/2+2
                     call img_ker%copy(even_img)
                     call butterworth_filter(cur_filt, BW_ORDER, x_mat(k,l))
+                    call img_ker%fft()
                     call img_ker%apply_filter(cur_filt)
+                    call img_ker%ifft()
                     call img_ker%sqeuclid_matrix(odd_img, cur_diff)
                     r = r + cur_diff(k,l,1)
                 enddo
@@ -60,11 +62,15 @@ module simple_cont_opt_filt
                     call img_minus%copy(even_img)
                     call img_plus%copy(even_img)
                     call butterworth_filter(cur_filt, BW_ORDER, x_mat(k,l)-EPS)
+                    call img_minus%fft()
                     call img_minus%apply_filter(cur_filt)
+                    call img_minus%ifft()
                     call img_minus%sqeuclid_matrix(odd_img, cur_diff)
                     grad_mat(k,l) = cur_diff(k,l,1)
                     call butterworth_filter(cur_filt, BW_ORDER, x_mat(k,l)+EPS)
+                    call img_plus%fft()
                     call img_plus%apply_filter(cur_filt)
+                    call img_plus%ifft()
                     call img_plus%sqeuclid_matrix(odd_img, cur_diff)
                     grad_mat(k,l) = (cur_diff(k,l,1)-grad_mat(k,l))/(2*EPS)
                 enddo
