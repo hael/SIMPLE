@@ -13,21 +13,20 @@ program simple_test_cont_opt_filt
     type(cmdline)                 :: cline, cline_projection
     type(reproject_commander)     :: xreproject
     type(image)                   :: img, noise
-    integer                       :: nptcls, iptcl, rc
-    integer, parameter            :: ndim = 1, NRESTARTS = 1
+    integer                       :: nptcls, iptcl, rc, ndim
+    integer, parameter            :: NRESTARTS = 1
     character(len=:), allocatable :: cmd
+    real,             allocatable :: cur_filt(:), lims(:,:), x_mat(:,:)
     logical                       :: mrc_exists
-    real                          :: ave, sdev, maxv, minv, med, sh
+    real                          :: ave, sdev, maxv, minv, med, sh, lowest_cost
+    type(opt_factory)             :: ofac                 ! the optimization factory object
+    type(opt_spec)                :: spec                 ! the optimizer specification object
+    character(len=8)              :: str_opts             ! string descriptors for the NOPTS optimizers
     procedure(fun_interface), pointer :: costfun_ptr      !< pointer 2 cost function
     class(optimizer),         pointer :: opt_ptr=>null()  ! the generic optimizer object
-    type(opt_factory)   :: ofac                           ! the optimization factory object
-    type(opt_spec)      :: spec                           ! the optimizer specification object
-    character(len=8)    :: str_opts                       ! string descriptors for the NOPTS optimizers
-    real                :: lims(ndim,2), lowest_cost
-    real,   allocatable :: cur_filt(:)
-    if( command_argument_count() < 5 )then
-        write(logfhandle,'(a)') 'Usage: simple_test_CED smpd=xx nthr=yy stk=stk.mrc mskdiam=zz sigma=tt'
-        write(logfhandle,'(a)') 'Example: projections of https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180 sigma=0.7'
+    if( command_argument_count() < 4 )then
+        write(logfhandle,'(a)') 'Usage: simple_test_cont_opt smpd=xx nthr=yy stk=stk.mrc mskdiam=zz'
+        write(logfhandle,'(a)') 'Example: projections of https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
         write(logfhandle,'(a)') 'DEFAULT TEST (example above) is running now...'
         inquire(file="1JYX.mrc", exist=mrc_exists)
         if( .not. mrc_exists )then
@@ -52,7 +51,6 @@ program simple_test_cont_opt_filt
         call cline%set('nthr'   , 16.)
         call cline%set('stk'    , 'reprojs.mrcs')
         call cline%set('mskdiam', 180.)
-        call cline%set('sigma'  , 0.7)
     else
         call cline%parse_oldschool
     endif
@@ -60,26 +58,25 @@ program simple_test_cont_opt_filt
     call cline%checkvar('nthr',    2)
     call cline%checkvar('stk' ,    3)
     call cline%checkvar('mskdiam', 4)
-    call cline%checkvar('sigma',   5)
     call cline%check
     call p%new(cline)
     call find_ldim_nptcls(p%stk, p%ldim, nptcls)
     p%ldim(3) = 1 ! because we operate on stacks
-    call img%new(p%ldim, p%smpd)
-    call noise%new(p%ldim, p%smpd)
+    ndim      = product(p%ldim)
+    call      img%new(p%ldim, p%smpd)
+    call    noise%new(p%ldim, p%smpd)
     call  odd_img%new(p%ldim, p%smpd)
     call even_img%new(p%ldim, p%smpd)
-    lims(1,1) = calc_fourier_index(30., p%ldim(1), p%smpd)
-    lims(1,2) = calc_fourier_index(0.5, p%ldim(1), p%smpd)
-    allocate(cur_filt(p%ldim(1)), source=0.)
-    write(*, *) 'lims = ', lims
+    allocate(cur_filt(p%ldim(1)), lims(ndim,2), x_mat(p%ldim(1),p%ldim(2)), source=0.)
+    lims(:,1) = calc_fourier_index(30., p%ldim(1), p%smpd)
+    lims(:,2) = calc_fourier_index(0.5, p%ldim(1), p%smpd)
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         call img%read(p%stk, iptcl)
         call odd_img%copy_fast(img)
         call img%stats('foreground', ave, sdev, maxv, minv)
         ! addding noise
-        call noise%gauran(0., .5 * sdev)
+        call noise%gauran(0., 0.5 * sdev)
         call noise%mask(2. * p%msk, 'soft')
         call img%add(noise)
         call img%write('stk_noisy.mrc', iptcl)
@@ -94,8 +91,9 @@ program simple_test_cont_opt_filt
         call ofac%new(spec, opt_ptr)                                        ! generate optimizer object with the factory
         spec%x = (lims(1,1) + lims(1,2))/2.                                 ! set initial guess
         call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
-        write(*, *) 'cost = ', lowest_cost, '; x = ', spec%x(1)
-        call butterworth_filter(cur_filt, 8, spec%x(1))
+        x_mat = reshape(spec%x, [p%ldim(1), p%ldim(2)])
+        write(*, *) 'cost = ', lowest_cost, '; x = ', x_mat(p%ldim(1)/2-2:p%ldim(1)/2+2, p%ldim(2)/2-2:p%ldim(2)/2+2)
+        call butterworth_filter(cur_filt, 8, x_mat(p%ldim(1)/2, p%ldim(2)/2))
         call even_img%apply_filter(cur_filt)
         call even_img%write('cont_opt_filt_out.mrc', iptcl)
     enddo
