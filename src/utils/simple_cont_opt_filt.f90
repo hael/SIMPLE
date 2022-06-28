@@ -23,18 +23,23 @@ module simple_cont_opt_filt
             integer,  intent(in)     :: d
             real,     intent(in)     :: x(d)
             real                     :: r
-            integer                  :: ldim(3)
+            integer                  :: ldim(3), k, l
             type(image)              :: img_ker
             integer,     parameter   :: BW_ORDER = 8
-            real,        allocatable :: cur_diff(:,:,:), cur_filt(:)
+            real,        allocatable :: cur_diff(:,:,:), cur_filt(:), x_mat(:, :)
             ldim = odd_img%get_ldim()
-            call img_ker%copy(even_img)
-            allocate(cur_diff(ldim(1),ldim(2),1), cur_filt(ldim(1)), source=0.)
-            call butterworth_filter(cur_filt, BW_ORDER, x(1))
-            call img_ker%apply_filter(cur_filt)
-            call img_ker%sqeuclid_matrix(odd_img, cur_diff)
-            r = sum(cur_diff)
-            write(*, *) 'x = ', x(1), 'cost = ', r
+            allocate(cur_diff(ldim(1),ldim(2),1), x_mat(ldim(1),ldim(2)), cur_filt(ldim(1)), source=0.)
+            x_mat = reshape(x, [ldim(1), ldim(2)])
+            r     = 0.
+            do l = ldim(2)/2-2, ldim(2)/2+2
+                do k = ldim(1)/2-2, ldim(1)/2+2
+                    call img_ker%copy(even_img)
+                    call butterworth_filter(cur_filt, BW_ORDER, x_mat(k,l))
+                    call img_ker%apply_filter(cur_filt)
+                    call img_ker%sqeuclid_matrix(odd_img, cur_diff)
+                    r = r + cur_diff(k,l,1)
+                enddo
+            enddo
         end function
 
         subroutine filt_gcost( fun_self, x, grad, d )
@@ -42,22 +47,28 @@ module simple_cont_opt_filt
             integer,  intent(in)     :: d
             real,     intent(inout)  :: x(d)
             real,     intent(out)    :: grad(d)
-            integer                  :: ldim(3)
+            integer                  :: ldim(3), k, l
             type(image)              :: img_plus, img_minus
             integer,     parameter   :: BW_ORDER = 8
-            real,        allocatable :: cur_diff(:,:,:), cur_filt(:)
             real,        parameter   :: EPS = 0.1
+            real,        allocatable :: cur_diff(:,:,:), cur_filt(:), x_mat(:, :), grad_mat(:, :)
             ldim = odd_img%get_ldim()
-            allocate(cur_diff(ldim(1),ldim(2),1), cur_filt(ldim(1)), source=0.)
-            call img_minus%copy(even_img)
-            call img_plus%copy(even_img)
-            call butterworth_filter(cur_filt, BW_ORDER, x(1)-EPS)
-            call img_minus%apply_filter(cur_filt)
-            call img_minus%sqeuclid_matrix(odd_img, cur_diff)
-            grad(1) = sum(cur_diff)
-            call butterworth_filter(cur_filt, BW_ORDER, x(1)+EPS)
-            call img_plus%apply_filter(cur_filt)
-            call img_plus%sqeuclid_matrix(odd_img, cur_diff)
-            grad(1) = (sum(cur_diff)-grad(1))/(2*EPS)
+            allocate(cur_diff(ldim(1),ldim(2),1), grad_mat(ldim(1),ldim(2)), x_mat(ldim(1),ldim(2)), cur_filt(ldim(1)), source=0.)
+            x_mat = reshape(x, [ldim(1), ldim(2)])
+            do l = ldim(2)/2-2, ldim(2)/2+2
+                do k = ldim(1)/2-2, ldim(1)/2+2
+                    call img_minus%copy(even_img)
+                    call img_plus%copy(even_img)
+                    call butterworth_filter(cur_filt, BW_ORDER, x_mat(k,l)-EPS)
+                    call img_minus%apply_filter(cur_filt)
+                    call img_minus%sqeuclid_matrix(odd_img, cur_diff)
+                    grad_mat(k,l) = cur_diff(k,l,1)
+                    call butterworth_filter(cur_filt, BW_ORDER, x_mat(k,l)+EPS)
+                    call img_plus%apply_filter(cur_filt)
+                    call img_plus%sqeuclid_matrix(odd_img, cur_diff)
+                    grad_mat(k,l) = (cur_diff(k,l,1)-grad_mat(k,l))/(2*EPS)
+                enddo
+            enddo
+            grad = reshape(grad_mat, [product(ldim)])
         end subroutine
 end module
