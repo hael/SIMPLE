@@ -69,7 +69,7 @@ program simple_test_cont_opt_filt
     call even_img%new(p%ldim, p%smpd)
     allocate(cur_filt(p%ldim(1)), lims(ndim,2), x_mat(p%ldim(1),p%ldim(2)), source=0.)
     lims(:,1) = calc_fourier_index(30., p%ldim(1), p%smpd)
-    lims(:,2) = calc_fourier_index(0.5, p%ldim(1), p%smpd)
+    lims(:,2) = calc_fourier_index( 2., p%ldim(1), p%smpd)
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         call img%read(p%stk, iptcl)
@@ -89,7 +89,7 @@ program simple_test_cont_opt_filt
         call spec%set_costfun(costfun_ptr)                                  ! set pointer to costfun
         call spec%set_gcostfun(filt_gcost)                                  ! set pointer to gradient of costfun
         call ofac%new(spec, opt_ptr)                                        ! generate optimizer object with the factory
-        spec%x = (lims(1,1) + lims(1,2))/2.                                 ! set initial guess
+        spec%x = (lims(:,1) + lims(:,2))/2.                                 ! set initial guess
         call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
         x_mat = reshape(spec%x, [p%ldim(1), p%ldim(2)])
         write(*, *) 'cost = ', lowest_cost, '; x = ', x_mat(p%ldim(1)/2-2:p%ldim(1)/2+2, p%ldim(2)/2-2:p%ldim(2)/2+2)
