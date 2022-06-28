@@ -4,18 +4,27 @@ program simple_test_cont_opt_filt
     use simple_parameters,         only: parameters
     use simple_commander_volops,   only: reproject_commander
     use simple_image,              only: image
-    use simple_ced_filter,         only: ced_filter_2D
+    use simple_cont_opt_filt
+    use simple_optimizer,          only: optimizer
+    use simple_opt_factory,        only: opt_factory
+    use simple_opt_spec,           only: opt_spec
     implicit none
     type(parameters)              :: p
     type(cmdline)                 :: cline, cline_projection
     type(reproject_commander)     :: xreproject
-    type(image)                   :: img, noise, ker, img_ker, img_pad
-    integer                       :: nptcls, iptcl, rc, gaussian_ext, k, l
+    type(image)                   :: img, noise
+    integer                       :: nptcls, iptcl, rc
+    integer, parameter            :: ndim = 1, NRESTARTS = 1
     character(len=:), allocatable :: cmd
-    real,             allocatable :: pat_mat(:, :)
     logical                       :: mrc_exists
     real                          :: ave, sdev, maxv, minv, med, sh
-    real, pointer                 :: img_rmat(:, :, :)
+    procedure(fun_interface), pointer :: costfun_ptr      !< pointer 2 cost function
+    class(optimizer),         pointer :: opt_ptr=>null()  ! the generic optimizer object
+    type(opt_factory)   :: ofac                           ! the optimization factory object
+    type(opt_spec)      :: spec                           ! the optimizer specification object
+    character(len=8)    :: str_opts                       ! string descriptors for the NOPTS optimizers
+    real                :: lims(ndim,2), lowest_cost
+    real,   allocatable :: cur_filt(:)
     if( command_argument_count() < 5 )then
         write(logfhandle,'(a)') 'Usage: simple_test_CED smpd=xx nthr=yy stk=stk.mrc mskdiam=zz sigma=tt'
         write(logfhandle,'(a)') 'Example: projections of https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180 sigma=0.7'
@@ -56,41 +65,38 @@ program simple_test_cont_opt_filt
     call p%new(cline)
     call find_ldim_nptcls(p%stk, p%ldim, nptcls)
     p%ldim(3) = 1 ! because we operate on stacks
-    call     img%new(p%ldim, p%smpd)
-    call   noise%new(p%ldim, p%smpd)
-    call     ker%new(p%ldim, p%smpd)
-    call img_ker%new(p%ldim, p%smpd)
-    ! build the Gaussian kernel with sigma
-    gaussian_ext = ceiling(2*p%sigma)
-    allocate(pat_mat(2*gaussian_ext, 2*gaussian_ext), source = 0.)
-    do k = -gaussian_ext, gaussian_ext-1
-    do l = -gaussian_ext, gaussian_ext-1
-        sh = hyp(real(k),real(l))
-        call ker%set_rmat_at(p%ldim(1)/2 + k, p%ldim(2)/2 + l, 1, exp(-(sh**2/(2*p%sigma**2))))
-        pat_mat(gaussian_ext + k + 1, gaussian_ext + l + 1) = exp(-(sh**2/(2*p%sigma**2)))
-    enddo
-    enddo
-    call ker%fft()
+    call img%new(p%ldim, p%smpd)
+    call noise%new(p%ldim, p%smpd)
+    call  odd_img%new(p%ldim, p%smpd)
+    call even_img%new(p%ldim, p%smpd)
+    lims(1,1) = calc_fourier_index(30., p%ldim(1), p%smpd)
+    lims(1,2) = calc_fourier_index(0.5, p%ldim(1), p%smpd)
+    allocate(cur_filt(p%ldim(1)), source=0.)
+    write(*, *) 'lims = ', lims
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         call img%read(p%stk, iptcl)
-        call img_ker%copy_fast(img)
-        ! convolving img with the kernel
-        call img_ker%fft()
-        img_ker = img_ker*ker
-        call img_ker%ifft()
-        call img_ker%write('test_img_ker.mrc', iptcl)
-        ! voxel-wise convolution
-        call img_ker%zero_and_unflag_ft()
-        call img_pad%new([p%ldim(1)+2*gaussian_ext,p%ldim(2)+2*gaussian_ext,1],1.)
-        call img%pad(img_pad)
-        call img_pad%get_rmat_ptr(img_rmat)
-        do l = 1, p%ldim(2)
-        do k = 1, p%ldim(1)
-            call img_ker%set_rmat_at(k, l, 1, sum(pat_mat*img_rmat(k:k+2*gaussian_ext,&
-                                                                  &l:l+2*gaussian_ext,1)))
-        enddo
-        enddo
-        call img_ker%write('test_img_ker_patching.mrc', iptcl)
+        call odd_img%copy_fast(img)
+        call img%stats('foreground', ave, sdev, maxv, minv)
+        ! addding noise
+        call noise%gauran(0., .5 * sdev)
+        call noise%mask(2. * p%msk, 'soft')
+        call img%add(noise)
+        call img%write('stk_noisy.mrc', iptcl)
+        call even_img%copy_fast(img)
+        ! do the optimization here to get the optimized cut-off frequency
+        write(*, *) 'Cut-off frequency optimization in progress:'
+        costfun_ptr  => filt_cost
+        str_opts  = 'lbfgsb'
+        call spec%specify(str_opts, ndim, limits=lims, nrestarts=NRESTARTS) ! make optimizer spec
+        call spec%set_costfun(costfun_ptr)                                  ! set pointer to costfun
+        call spec%set_gcostfun(filt_gcost)                                  ! set pointer to gradient of costfun
+        call ofac%new(spec, opt_ptr)                                        ! generate optimizer object with the factory
+        spec%x = (lims(1,1) + lims(1,2))/2.                                 ! set initial guess
+        call opt_ptr%minimize(spec, opt_ptr, lowest_cost)                   ! minimize the test function
+        write(*, *) 'cost = ', lowest_cost, '; x = ', spec%x(1)
+        call butterworth_filter(cur_filt, 8, spec%x(1))
+        call even_img%apply_filter(cur_filt)
+        call even_img%write('cont_opt_filt_out.mrc', iptcl)
     enddo
 end program simple_test_cont_opt_filt
