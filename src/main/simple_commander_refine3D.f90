@@ -189,7 +189,7 @@ contains
         call cline_postprocess%set('mkdir',   'no')
         call cline_postprocess%set('imgkind', 'vol')
         if( trim(params%oritype).eq.'cls3D' ) call cline_postprocess%set('imgkind', 'vol_cavg')
-        call cline_postprocess%delete('nonuniform') ! to save time in the iterations
+        call cline_postprocess%delete('l_nonuniform') ! to save time in the iterations
         ! for parallel volassemble over states
         allocate(state_assemble_finished(params%nstates))
         ! removes unnecessary volume keys and generates volassemble finished names
