@@ -323,7 +323,8 @@ contains
     procedure          :: mask
     procedure          :: neg
     procedure          :: pad
-    procedure          :: pad_mirr
+    procedure, private :: pad_mirr_1, pad_mirr_2
+    generic            :: pad_mirr => pad_mirr_1, pad_mirr_2
     procedure          :: clip
     procedure          :: clip_inplace
     procedure          :: scale_pixels
@@ -6679,8 +6680,8 @@ contains
     !> \brief pad_mirr is a constructor that pads the input image to input ldim in real space using mirroring
     !! \param self_in image object
     !! \param self_out image object
-    subroutine pad_mirr( self_in, self_out )
-        class(image),   intent(inout) :: self_in, self_out
+    subroutine pad_mirr_1( self_in, self_out )
+        class(image), intent(inout) :: self_in, self_out
         integer :: starts(3), stops(3)
         integer :: i,j, i_in, j_in
         if( self_in.eqdims.self_out )then
@@ -6728,7 +6729,17 @@ contains
         else
             THROW_HARD('inconsistent dimensions; pad_mirr')
         endif
-    end subroutine pad_mirr
+    end subroutine pad_mirr_1
+
+    subroutine pad_mirr_2( self, ldim )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: ldim(3)
+        type(image) :: tmp
+        call tmp%new(ldim , self%smpd)
+        call self%pad_mirr_1(tmp)
+        call self%copy(tmp)
+        call tmp%kill
+    end subroutine pad_mirr_2
 
     !> \brief clip is a constructor that clips the input image to input ldim
     !!             DO NOT PARALLELISE

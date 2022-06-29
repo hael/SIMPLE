@@ -313,7 +313,7 @@ contains
         endif
         if( l_automsk )then
             call cline_refine3D_refine%set('automsk',   'yes')
-            call cline_refine3D_refine%set('l_nonuniform', 'no') ! for speed
+            call cline_refine3D_refine%set('nonuniform', 'no') ! for speed
         endif
         ! (5) RE-CONSTRUCT & RE-PROJECT VOLUME
         call cline_reconstruct3D%set('prg',     'reconstruct3D')

@@ -20,7 +20,7 @@ use simple_strategy2D_tseries,  only: strategy2D_tseries
 use simple_strategy2D_snhc,     only: strategy2D_snhc
 use simple_strategy2D_inpl,     only: strategy2D_inpl
 use simple_strategy2D_eval,     only: strategy2D_eval
-use simple_commander_resolest,  only: opt_2D_filter_commander
+use simple_opt_filter,          only: opt_2D_filter_sub
 use simple_classaverager
 implicit none
 
@@ -44,11 +44,9 @@ contains
         logical,                 intent(inout) :: converged
         type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
         type(strategy2D_spec),     allocatable :: strategy2Dspecs(:)
-        character(len=:), allocatable :: odd_stk, even_stk
-        integer,          allocatable :: pinds(:), batches(:,:)
-        logical,          allocatable :: ptcl_mask(:)
-        real,             allocatable :: states(:)
-        type(opt_2D_filter_commander) :: xfilt
+        integer,                   allocatable :: pinds(:), batches(:,:)
+        logical,                   allocatable :: ptcl_mask(:)
+        real,                      allocatable :: states(:)
         type(convergence) :: conv
         type(cmdline)     :: cline_opt_filt
         real    :: frac_srch_space, snhc_sz, frac
@@ -146,19 +144,6 @@ contains
         endif
 
         ! PREP REFERENCES
-        if( params_glob%l_nonuniform .and. have_frcs )then
-            cline_opt_filt = cline
-            call cline_opt_filt%set('stk',     trim(params_glob%refs_odd))
-            call cline_opt_filt%set('stk2',    trim(params_glob%refs_even))
-            call cline_opt_filt%set('smpd',    params_glob%smpd)
-            call cline_opt_filt%set('mskdiam', params_glob%mskdiam)
-            call cline_opt_filt%set('nthr',    real(params_glob%nthr))
-            call xfilt%execute(cline_opt_filt)
-            odd_stk  = cline_opt_filt%get_carg('odd_stk')
-            even_stk = cline_opt_filt%get_carg('even_stk')
-            call simple_copy_file(odd_stk,  trim(params_glob%refs_odd))
-            call simple_copy_file(even_stk, trim(params_glob%refs_even))
-        endif
         call cavger_new(ptcl_mask)
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
             if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; cluster2D_exec')
@@ -178,7 +163,13 @@ contains
         else
             call cavger_read(params_glob%refs, 'odd')
         endif
-
+        if( params_glob%l_opt_filter )then
+            call opt_2D_filter_sub(cavgs_even, cavgs_odd)
+            do iptcl = 1,size(cavgs_even)
+                call cavgs_even(iptcl)%write('filtered_refs_iter'//int2str_pad(which_iter,2)//'.mrc', iptcl)
+            enddo
+        endif
+        
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D(cline, which_iter, frac_srch_space)
 
@@ -405,7 +396,11 @@ contains
         logical   :: do_center, has_been_searched
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! create the polarft_corrcalc object
-        call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%l_match_filt)
+        if( params_glob%l_opt_filter )then
+            call pftcc%new(params_glob%ncls, [1,batchsz_max], .false.)
+        else
+            call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%l_match_filt)
+        endif
         ! prepare the polarizer images
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         allocate(match_imgs(params_glob%ncls))
