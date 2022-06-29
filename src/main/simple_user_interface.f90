@@ -924,7 +924,7 @@ contains
         call set_param(nparts_pool,   'nparts_pool',   'num',    'Number of computing nodes for the pooled subsets', 'Number of computing nodes allocated to 2D classification of the pooled particles subsets', '# of nodes for the pooled subsets', .false., 2.0)
         call set_param(nthr,          'nthr',          'num',    'Number of threads per computing node, give 0 if unsure', 'Number of shared-memory OpenMP threads with close affinity per partition. Typically the same as the number of &
         &logical threads in a socket.', '# shared-memory CPU threads', .true., 0.)
-        call set_param(nonuniform,    'l_nonuniform',    'binary', 'Nonuniform filter', 'Apply nonuniform filter(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(nonuniform,    'nonuniform',    'binary', 'Nonuniform filter', 'Apply nonuniform filter(yes|no){yes}', '(yes|no){no}', .false., 'yes')
         call set_param(update_frac,   'update_frac',   'num',    'Fractional update per iteration', 'Fraction of particles to update per iteration in incremental learning scheme for accelerated convergence &
         &rate(0.1-0.5){1.}', 'update this fraction per iter(0.1-0.5){1.0}', .false., 1.0)
         call set_param(frac,          'frac',          'num',    'Fraction of particles to include', 'Fraction of particles to include based on spectral score (median of FRC between reference and particle)',&
@@ -2647,7 +2647,7 @@ contains
         &'Optimization (search) based 2D filter (uniform/nonuniform)',&     ! descr_short
         &'is a program for 2D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                                    ! executable
-        &2, 1, 0, 0, 7, 2, 1, .false.)                                      ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 7, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call opt_2D_filter%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
@@ -2660,7 +2660,7 @@ contains
         ! <empty>
         ! filter controls
         call opt_2D_filter%set_input('filt_ctrls', 1, nonuniform)
-        call opt_2D_filter%set_input('filt_ctrls', 2, 'smooth_ext', 'num', 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{20}', .false., 0.)
+        call opt_2D_filter%set_input('filt_ctrls', 2, 'smooth_ext', 'num', 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{20}', .false., 20.)
         call opt_2D_filter%set_input('filt_ctrls', 3, 'filter', 'multi', 'Filter type(butterworth|lp|tv){butterworth}', 'Filter type(butterworth|lp|tv){butterworth}', '(butterworth|lp|tv){butterworth}', .false., 'butterworth')
         call opt_2D_filter%set_input('filt_ctrls', 4, lp_lowres)
         call opt_2D_filter%set_input('filt_ctrls', 5, nsearch)
@@ -2668,8 +2668,7 @@ contains
         frcs%required = .true.
         call opt_2D_filter%set_input('filt_ctrls', 7, frcs)
         ! mask controls
-        call opt_2D_filter%set_input('mask_ctrls', 1, mskdiam)
-        call opt_2D_filter%set_input('mask_ctrls', 2, mskfile)
+        ! <empty>
         ! computer controls
         call opt_2D_filter%set_input('comp_ctrls', 1, nthr)
     end subroutine new_opt_2D_filter
@@ -2694,7 +2693,7 @@ contains
         ! <empty>
         ! filter controls
         call opt_3D_filter%set_input('filt_ctrls', 1, nonuniform)
-        call opt_3D_filter%set_input('filt_ctrls', 2, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{0}', .false., 0.)
+        call opt_3D_filter%set_input('filt_ctrls', 2, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{20}', .false., 20.)
         call opt_3D_filter%set_input('filt_ctrls', 3, 'filter'     , 'multi' , 'Filter type(butterworth|lp|tv){butterworth}', 'Filter type(butterworth|lp|tv){butterworth}', '(butterworth|lp){butterworth}', .false., 'butterworth')
         call opt_3D_filter%set_input('filt_ctrls', 4, lp_lowres)
         call opt_3D_filter%set_input('filt_ctrls', 5, nsearch)

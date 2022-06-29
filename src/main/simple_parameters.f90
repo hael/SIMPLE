@@ -65,6 +65,7 @@ type :: parameters
     character(len=3)      :: neg='no'             !< invert contrast of images(yes|no){no}
     character(len=3)      :: noise_norm ='no'
     character(len=3)      :: norm='no'            !< do statistical normalisation avg
+    character(len=3)      :: nonuniform='no'      !< nonuniform filtering(yes|no){no}
     character(len=3)      :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
     character(len=3)      :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
@@ -330,8 +331,7 @@ type :: parameters
     integer :: update=1000
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
     integer :: which_iter=0        !< iteration nr
-    integer :: smooth_ext=1        !< smoothing window extension{1} 
-    integer :: smooth_ext_lb=3     !< lb of searching smoothing window extension{3} 
+    integer :: smooth_ext=20       !< smoothing window extension{20} 
     integer :: xcoord=0            !< x coordinate{0}
     integer :: ycoord=0            !< y coordinate{0}
     integer :: xdim=0              !< x dimension(in pixles)
@@ -454,6 +454,7 @@ type :: parameters
     logical :: l_match_filt   = .true.
     logical :: l_needs_sigma  = .false.
     logical :: l_nonuniform   = .false.
+    logical :: l_opt_filter   = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_ran_noise_ph = .true.
     logical :: l_refine_inpl  = .false.
@@ -577,6 +578,7 @@ contains
         call check_carg('neg',            self%neg)
         call check_carg('noise_norm',     self%noise_norm)
         call check_carg('norm',           self%norm)
+        call check_carg('nonuniform',     self%nonuniform)
         call check_carg('objfun',         self%objfun)
         call check_carg('omit_neg',       self%omit_neg)
         call check_carg('opt',            self%opt)
@@ -770,7 +772,6 @@ contains
         call check_iarg('update',         self%update)
         call check_iarg('which_iter',     self%which_iter)
         call check_iarg('smooth_ext',     self%smooth_ext)
-        call check_iarg('smooth_ext_lb',  self%smooth_ext_lb)
         call check_iarg('walltime',       self%walltime)
         call check_iarg('xdim',           self%xdim)
         call check_iarg('xcoord',         self%xcoord)
@@ -1290,6 +1291,9 @@ contains
         self%l_envfsc = self%envfsc .ne. 'no'
         ! set nonuniform flag
         self%l_nonuniform = cline%defined('filter')
+        if( cline%defined('nonuniform') ) self%l_nonuniform = trim(self%nonuniform).eq.'yes'
+        ! set opt filter flag
+        self%l_opt_filter = cline%defined('filter')
         ! set correlation weighting scheme
         self%l_corrw = self%wcrit .ne. 'no'
         ! set wiener mode
