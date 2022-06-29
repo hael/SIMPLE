@@ -165,9 +165,11 @@ contains
         endif
         if( params_glob%l_opt_filter )then
             call opt_2D_filter_sub(cavgs_even, cavgs_odd)
-            do iptcl = 1,size(cavgs_even)
-                call cavgs_even(iptcl)%write('filtered_refs_iter'//int2str_pad(which_iter,2)//'.mrc', iptcl)
-            enddo
+            if( params_glob%part.eq.1 )then
+                do iptcl = 1,size(cavgs_even)
+                    call cavgs_even(iptcl)%write('filtered_refs_iter'//int2str_pad(which_iter,2)//'.mrc', iptcl)
+                enddo
+            endif
         endif
         
         ! SET FOURIER INDEX RANGE
