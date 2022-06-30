@@ -15,8 +15,7 @@ program simple_test_real_butterworth
     logical                       :: mrc_exists
     real,             allocatable :: cur_filt(:), pat_mat(:, :)
     integer,          parameter   :: BW_ORDER = 8
-    real,             pointer     :: rmat_ptr(:,:,:), img_rmat(:,:,:)
-    complex,          pointer     :: cmat_ptr(:,:,:)
+    real,             pointer     :: img_rmat(:,:,:)
     if( command_argument_count() < 5 )then
         write(logfhandle,'(a)') 'Usage: simple_test_real_butterworth smpd=xx nthr=yy stk=stk.mrc mskdiam=zz sigma=tt'
         write(logfhandle,'(a)') 'Example: projections of https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180 sigma=50.'
@@ -62,8 +61,7 @@ program simple_test_real_butterworth
     call butterworth_filter(cur_filt, BW_ORDER, p%sigma)
     call filt_img%new([p%ldim(1), p%ldim(2), 1], p%smpd)
     call filt_img%set_ft(.true.)
-    call filt_img%get_cmat_ptr(cmat_ptr)
-    cmat_ptr = 1.
+    call filt_img%set_cmat((1., 0.))
     do l = -p%ldim(2)/2, p%ldim(2)/2-1
         do k = 0, p%ldim(1)/2
             sh = nint(hyp(real(k),real(l),0.))
@@ -78,8 +76,7 @@ program simple_test_real_butterworth
     enddo
     call filt_img%ifft()
     call filt_img%write('filt_2D.mrc')
-    call filt_img%get_rmat_ptr(rmat_ptr)
-    pat_mat = rmat_ptr(1:p%ldim(1), 1:p%ldim(2), 1)
+    call filt_img%get_rmat_sub(pat_mat)
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         call img%read(p%stk, iptcl)
