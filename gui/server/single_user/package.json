@@ -20,6 +20,7 @@
   "scripts": {
     "start": "electron .",
     "build": "electron-builder",
+    "rebuild": "electron-rebuild -f -w sqlite3",
     "postinstall": "install-app-deps"
   },
   "keywords": [],
@@ -45,7 +46,7 @@
     "pug": "^3.0.2",
     "require": "^2.4.20",
     "sharp": "^0.25.1",
-    "sqlite3": "^5.0.2"
+    "sqlite3": "^5.0.0"
   },
   "devDependencies": {
     "electron": "^3.0.11",
