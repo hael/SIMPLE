@@ -18,7 +18,7 @@ program simple_test_cont_opt_filt
     character(len=:), allocatable :: cmd
     real,             allocatable :: cur_filt(:), lims(:,:), x_mat(:,:)
     logical                       :: mrc_exists
-    real                          :: ave, sdev, maxv, minv, med, sh, lowest_cost
+    real                          :: ave, sdev, maxv, minv, lowest_cost
     type(opt_factory)             :: ofac                 ! the optimization factory object
     type(opt_spec)                :: spec                 ! the optimizer specification object
     character(len=8)              :: str_opts             ! string descriptors for the NOPTS optimizers
@@ -69,7 +69,8 @@ program simple_test_cont_opt_filt
     call even_img%new(p%ldim, p%smpd)
     allocate(cur_filt(p%ldim(1)), lims(ndim,2), x_mat(p%ldim(1),p%ldim(2)), source=0.)
     lims(:,1) = calc_fourier_index(30., p%ldim(1), p%smpd)
-    lims(:,2) = calc_fourier_index( 2., p%ldim(1), p%smpd)
+    lims(:,2) = calc_fourier_index(10., p%ldim(1), p%smpd)
+    write(*, *) calc_fourier_index(30., p%ldim(1), p%smpd), calc_fourier_index(10., p%ldim(1), p%smpd)
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         call img%read(p%stk, iptcl)
