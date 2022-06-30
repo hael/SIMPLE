@@ -22,26 +22,46 @@ module simple_cont_opt_filt
             class(*), intent(inout)  :: fun_self
             integer,  intent(in)     :: d
             real,     intent(in)     :: x(d)
-            real                     :: r
-            integer                  :: ldim(3), k, l
-            type(image)              :: img_ker
+            real                     :: r, smpd
+            integer                  :: ldim(3), k, l, ext, k1, l1, sh
+            type(image)              :: img_ker, filt_img, img_pad
             integer,     parameter   :: BW_ORDER = 8
-            real,        allocatable :: cur_diff(:,:,:), cur_filt(:), x_mat(:, :)
+            real,        allocatable :: cur_filt(:), x_mat(:, :)
+            real,        pointer     :: img_rmat(:,:,:), filt_rmat(:,:,:)
             ldim = odd_img%get_ldim()
-            allocate(cur_diff(ldim(1),ldim(2),1), x_mat(ldim(1),ldim(2)), cur_filt(ldim(1)), source=0.)
+            allocate(x_mat(ldim(1),ldim(2)), cur_filt(ldim(1)), source=0.)
             x_mat = reshape(x, [ldim(1), ldim(2)])
             r     = 0.
-            do l = ldim(2)/2-2, ldim(2)/2+2
-                do k = ldim(1)/2-2, ldim(1)/2+2
+            smpd  = 1.
+            do l = 1,ldim(2)
+                do k = 1,ldim(1)
                     call img_ker%copy(even_img)
                     call butterworth_filter(cur_filt, BW_ORDER, x_mat(k,l))
-                    call img_ker%fft()
-                    call img_ker%apply_filter(cur_filt)
-                    call img_ker%ifft()
-                    call img_ker%sqeuclid_matrix(odd_img, cur_diff)
-                    r = r + cur_diff(k,l,1)
+                    ext = nint(minval([real(x_mat(k,l)) + 10, real(ldim(1)/2)]))
+                    call filt_img%new([2*ext, 2*ext, 1], smpd)
+                    call filt_img%set_ft(.true.)
+                    call filt_img%set_cmat((1., 0.))
+                    do l1 = -ext, ext-1
+                        do k1 = 0, ext
+                            sh = nint(hyp(real(k1),real(l1),0.)*ldim(1)/(2*ext))
+                            if( sh == 0 )then 
+                                call filt_img%mul([k1,l1,0], maxval(cur_filt))
+                            elseif( sh <= ldim(1) )then
+                                call filt_img%mul([k1,l1,0], cur_filt(sh))
+                            else
+                                call filt_img%mul([k1,l1,0], 0.)
+                            endif
+                        enddo
+                    enddo
+                    call filt_img%ifft()
+                    call filt_img%get_rmat_ptr(filt_rmat)
+                    call img_pad%new([ldim(1) + 2*ext, ldim(2) + 2*ext,1], smpd)
+                    call img_ker%pad(img_pad)
+                    call img_pad%get_rmat_ptr(img_rmat)                    
+                    r = r + abs(sum(filt_rmat(1:2*ext, 1:2*ext,1)*img_rmat(k:k+2*ext-1,l:l+2*ext-1,1)) - odd_img%get_rmat_at(k,l,1))
                 enddo
             enddo
+            write(*, *) 'cost = ', r
         end function
 
         subroutine filt_gcost( fun_self, x, grad, d )
@@ -49,30 +69,67 @@ module simple_cont_opt_filt
             integer,  intent(in)     :: d
             real,     intent(inout)  :: x(d)
             real,     intent(out)    :: grad(d)
-            integer                  :: ldim(3), k, l
-            type(image)              :: img_plus, img_minus
+            integer                  :: ldim(3), k, l, k1, l1, sh, ext
+            real                     :: smpd
+            type(image)              :: img_plus, img_minus, filt_img, img_pad
             integer,     parameter   :: BW_ORDER = 8
             real,        parameter   :: EPS = 0.1
             real,        allocatable :: cur_diff(:,:,:), cur_filt(:), x_mat(:, :), grad_mat(:, :)
+            real,        pointer     :: img_rmat(:,:,:), filt_rmat(:,:,:)
             ldim = odd_img%get_ldim()
+            smpd = 1.
             allocate(cur_diff(ldim(1),ldim(2),1), grad_mat(ldim(1),ldim(2)), x_mat(ldim(1),ldim(2)), cur_filt(ldim(1)), source=0.)
             x_mat = reshape(x, [ldim(1), ldim(2)])
-            do l = ldim(2)/2-2, ldim(2)/2+2
-                do k = ldim(1)/2-2, ldim(1)/2+2
+            do l = 1,ldim(2)
+                do k = 1,ldim(1)
                     call img_minus%copy(even_img)
                     call img_plus%copy(even_img)
                     call butterworth_filter(cur_filt, BW_ORDER, x_mat(k,l)-EPS)
-                    call img_minus%fft()
-                    call img_minus%apply_filter(cur_filt)
-                    call img_minus%ifft()
-                    call img_minus%sqeuclid_matrix(odd_img, cur_diff)
-                    grad_mat(k,l) = cur_diff(k,l,1)
+                    ext = nint(minval([real(x_mat(k,l)) + 10, real(ldim(1)/2)]))
+                    call filt_img%new([2*ext, 2*ext, 1], smpd)
+                    call filt_img%set_ft(.true.)
+                    call filt_img%set_cmat((1., 0.))
+                    do l1 = -ext, ext-1
+                        do k1 = 0, ext
+                            sh = nint(hyp(real(k1),real(l1),0.)*ldim(1)/(2*ext))
+                            if( sh == 0 )then 
+                                call filt_img%mul([k1,l1,0], maxval(cur_filt))
+                            elseif( sh <= ldim(1) )then
+                                call filt_img%mul([k1,l1,0], cur_filt(sh))
+                            else
+                                call filt_img%mul([k1,l1,0], 0.)
+                            endif
+                        enddo
+                    enddo
+                    call filt_img%ifft()
+                    call filt_img%get_rmat_ptr(filt_rmat)
+                    call img_pad%new([ldim(1) + 2*ext, ldim(2) + 2*ext,1], smpd)
+                    call img_minus%pad(img_pad)
+                    call img_pad%get_rmat_ptr(img_rmat)
+                    grad_mat(k,l) = abs(sum(filt_rmat(1:2*ext, 1:2*ext,1)*img_rmat(k:k+2*ext-1,l:l+2*ext-1,1)) - odd_img%get_rmat_at(k,l,1))
                     call butterworth_filter(cur_filt, BW_ORDER, x_mat(k,l)+EPS)
-                    call img_plus%fft()
-                    call img_plus%apply_filter(cur_filt)
-                    call img_plus%ifft()
-                    call img_plus%sqeuclid_matrix(odd_img, cur_diff)
-                    grad_mat(k,l) = (cur_diff(k,l,1)-grad_mat(k,l))/(2*EPS)
+                    ext = nint(minval([real(x_mat(k,l)) + 10, real(ldim(1)/2)]))
+                    call filt_img%new([2*ext, 2*ext, 1], smpd)
+                    call filt_img%set_ft(.true.)
+                    call filt_img%set_cmat((1., 0.))
+                    do l1 = -ext, ext-1
+                        do k1 = 0, ext
+                            sh = nint(hyp(real(k1),real(l1),0.)*ldim(1)/(2*ext))
+                            if( sh == 0 )then 
+                                call filt_img%mul([k1,l1,0], maxval(cur_filt))
+                            elseif( sh <= ldim(1) )then
+                                call filt_img%mul([k1,l1,0], cur_filt(sh))
+                            else
+                                call filt_img%mul([k1,l1,0], 0.)
+                            endif
+                        enddo
+                    enddo
+                    call filt_img%ifft()
+                    call filt_img%get_rmat_ptr(filt_rmat)
+                    call img_pad%new([ldim(1) + 2*ext, ldim(2) + 2*ext,1], smpd)
+                    call img_plus%pad(img_pad)
+                    call img_pad%get_rmat_ptr(img_rmat)
+                    grad_mat(k,l) = (abs(sum(filt_rmat(1:2*ext, 1:2*ext,1)*img_rmat(k:k+2*ext-1,l:l+2*ext-1,1)) - odd_img%get_rmat_at(k,l,1))-grad_mat(k,l))/(2*EPS)
                 enddo
             enddo
             grad = reshape(grad_mat, [product(ldim)])

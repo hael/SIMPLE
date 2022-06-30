@@ -68,7 +68,7 @@ program simple_test_real_butterworth
             sh = nint(hyp(real(k),real(l),0.)*p%ldim(1)/(2*ext))
             if( sh == 0 )then 
                 call filt_img%mul([k,l,0], maxval(cur_filt))
-            elseif( sh <= ext )then
+            elseif( sh <= p%ldim(1) )then
                 call filt_img%mul([k,l,0], cur_filt(sh))
             else
                 call filt_img%mul([k,l,0], 0.)
