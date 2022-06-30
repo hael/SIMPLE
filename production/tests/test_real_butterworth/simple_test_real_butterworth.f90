@@ -58,26 +58,28 @@ program simple_test_real_butterworth
     call find_ldim_nptcls(p%stk, p%ldim, nptcls)
     p%ldim(3) = 1 ! because we operate on stacks
     call img%new(p%ldim, p%smpd)
-    allocate(pat_mat(p%ldim(1)+1, p%ldim(2)+1), cur_filt(p%ldim(1)), source=0.)
+    allocate(pat_mat(p%ldim(1), p%ldim(2)), cur_filt(p%ldim(1)), source=0.)
     call butterworth_filter(cur_filt, BW_ORDER, p%sigma)
-    call filt_img%new([p%ldim(1)*2, p%ldim(2)*2, 1], p%smpd)
-    call filt_img%fft()
+    call filt_img%new([p%ldim(1), p%ldim(2), 1], p%smpd)
+    call filt_img%set_ft(.true.)
     call filt_img%get_cmat_ptr(cmat_ptr)
-    do l = 1, p%ldim(2)*2
-        do k = 1, p%ldim(1)
-            sh = nint(hyp(real(p%ldim(1)-k),real(l - p%ldim(2) - 1)))
-            if( sh < p%ldim(1) ) cmat_ptr(k,l,1) = cur_filt(sh+1)
+    cmat_ptr = 1.
+    do l = -p%ldim(2)/2, p%ldim(2)/2-1
+        do k = 0, p%ldim(1)/2
+            sh = nint(hyp(real(k),real(l),0.))
+            if( sh == 0 )then 
+                call filt_img%mul([k,l,0], maxval(cur_filt))
+            elseif( sh <= p%ldim(1)/2 )then
+                call filt_img%mul([k,l,0], cur_filt(sh))
+            else
+                call filt_img%mul([k,l,0], 0.)
+            endif
         enddo
     enddo
     call filt_img%ifft()
+    call filt_img%write('filt_2D.mrc')
     call filt_img%get_rmat_ptr(rmat_ptr)
-    do l = 1, p%ldim(2)+1
-        do k = 1, p%ldim(1)+1
-            pat_mat(k, l) = rmat_ptr(p%ldim(1)/2+k,p%ldim(2)/2+l,1)
-        enddo
-    enddo
-    write(*, *) rmat_ptr(1:p%ldim(1)*2,p%ldim(2)+1,1)
-    pat_mat = pat_mat/sum(pat_mat)
+    pat_mat = rmat_ptr(1:p%ldim(1), 1:p%ldim(2), 1)
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         call img%read(p%stk, iptcl)
@@ -86,14 +88,15 @@ program simple_test_real_butterworth
         call img%apply_filter(cur_filt)
         call img%ifft()
         call img%write('img_butterworth.mrc', iptcl)
-        call img_pad%new([p%ldim(1)*2,p%ldim(2)*2,1],1.)
+        call img_pad%new([p%ldim(1)*2,p%ldim(2)*2,1], p%smpd)
+        call img%copy(img_real)
         call img%pad(img_pad)
         call img_pad%get_rmat_ptr(img_rmat)
         !$omp parallel do collapse(2) default(shared) private(k,l) schedule(static) proc_bind(close)
         do l = 1, p%ldim(2)
         do k = 1, p%ldim(1)
-            call img_real%set_rmat_at(k, l, 1, sum(pat_mat*img_rmat(k:k+p%ldim(1),&
-                                                                   &l:l+p%ldim(2),1)))
+            call img_real%set_rmat_at(k, l, 1, sum(pat_mat*img_rmat(k:k+p%ldim(1)-1,&
+                                                                   &l:l+p%ldim(2)-1,1)))
         enddo
         enddo
         !$omp end parallel do
