@@ -2258,7 +2258,7 @@ contains
     !>   for selecting kth largest, array is modified
     real function selec(k,n,arr)
         integer, intent(in)    :: k,n
-        real,    intent(inout) :: arr(n)
+        real,    intent(inout) :: arr(:)
         integer :: i,ir,j,l,mid
         real    :: a,temp
         l = 1
