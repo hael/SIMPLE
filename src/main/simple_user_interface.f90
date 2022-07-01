@@ -196,6 +196,7 @@ type(simple_input_param) :: eer_upsampling
 type(simple_input_param) :: element
 type(simple_input_param) :: eo
 type(simple_input_param) :: exp_time
+type(simple_input_param) :: filter_type
 type(simple_input_param) :: focusmskdiam
 type(simple_input_param) :: frac
 type(simple_input_param) :: fraca
@@ -210,6 +211,7 @@ type(simple_input_param) :: lp
 type(simple_input_param) :: lp_backgr
 type(simple_input_param) :: lp_lowres
 type(simple_input_param) :: lplim_crit
+type(simple_input_param) :: lpthresh
 type(simple_input_param) :: match_filt 
 type(simple_input_param) :: max_dose
 type(simple_input_param) :: max_rad
@@ -267,6 +269,7 @@ type(simple_input_param) :: scale_movies
 type(simple_input_param) :: script
 type(simple_input_param) :: sherr
 type(simple_input_param) :: sigma
+type(simple_input_param) :: smooth_ext
 type(simple_input_param) :: smpd
 type(simple_input_param) :: star_datadir
 type(simple_input_param) :: starfile
@@ -942,7 +945,7 @@ contains
         call set_param(dose_rate,     'dose_rate',     'num',    'Dose rate (e/Ang^2/s)', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 1.)
         call set_param(exp_time,      'exp_time',      'num',    'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
         call set_param(fraca,         'fraca',         'num',    'Amplitude contrast fraction', 'Fraction of amplitude contrast used for fitting CTF{0.1}', 'fraction{0.1}', .false., 0.1)
-        call set_param(pspecsz,       'pspecsz',       'num',    'Size of power spectrum', 'Size of power spectrum in pixels', 'in pixels', .false., 512.)
+        call set_param(pspecsz,       'pspecsz',       'num',    'Size of power spectrum', 'Size of power spectrum in pixels{512}', 'give # pixels{512}', .false., 512.)
         call set_param(dfmin,         'dfmin',         'num',    'Expected minimum defocus', 'Expected minimum defocus in microns{0.3}', 'in microns{0.3}', .false., 0.3)
         call set_param(dfmax,         'dfmax',         'num',    'Expected maximum defocus', 'Expected maximum defocus in microns{5.0}', 'in microns{5.0}', .false., 5.0)
         call set_param(astigtol,      'astigtol',      'num',    'Expected astigmatism', 'expected (tolerated) astigmatism(in microns){0.05}', 'in microns{0.05}',  .false., 0.05)
@@ -1023,9 +1026,12 @@ contains
         call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (full|partial){full}','(full|partial){full}', .false., 'full')
         call set_param(max_dose,       'max_dose',     'num',    'Maximum dose threshold(e/A2)', 'Threshold for maximum dose and number of frames used during movie alignment(e/A2), if <=0 all frames are used{0.0}','{0.0}',.false., 0.0)
         call set_param(script,         'script',       'binary', 'Generate script for shared-mem exec on cluster', 'Generate script for shared-mem exec on cluster(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(lp_lowres,      'lp_lowres',    'num',    'Low-pass low-res limit', 'Low-pass low-res limit{30 A}', 'Low-pass low-resolution limit{30 A}', .false., 30.)
-        call set_param(nsearch,        'nsearch',      'num',    'Number of points to search', 'Number of points to search{40}', 'Number of points to search{40}', .false., 40.)
+        call set_param(lp_lowres,      'lp_lowres',    'num',    'Low resolution limit, nonuniform filter', 'Low-pass limit in discrete nonuniform filter search{30 A}', 'input low-pass limit{30 A}', .false., 30.)
+        call set_param(nsearch,        'nsearch',      'num',    'Number of points to search in nonuniform filter', 'Number of points to search in discrete nonuniform filter{40}', '# points to search{40}', .false., 40.)
         call set_param(match_filt,     'match_filt',   'binary', 'Matched filter', 'Filter to maximize the signal-to-noise ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(smooth_ext,     'smooth_ext',   'num'   , 'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization', 'give # pixels{20}', .false., 20.)
+        call set_param(filter_type,    'filter',       'multi',  'Filter type', 'Nonuniform filter type(butterworth|lp|tv){butterworth}','(butterworth|lp|tv){butterworth}', .false., 'butterworth')
+        call set_param(lpthresh,       'lpthresh',     'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1346,8 +1352,8 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images',& ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
-        &'simple_exec',&                                                  ! executable
-        &1, 0, 0, 11, 9, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &'simple_exec',&                                                        ! executable
+        &1, 0, 0, 10, 13, 1, 2, .true.)                                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
@@ -1369,8 +1375,7 @@ contains
         call cluster2D%set_input('srch_ctrls', 7, update_frac)
         call cluster2D%set_input('srch_ctrls', 8, frac)
         call cluster2D%set_input('srch_ctrls', 9, objfun)
-        call cluster2D%set_input('srch_ctrls',10, nrestarts)
-        call cluster2D%set_input('srch_ctrls',11, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|greedy){snhc}', '(snhc|greedy){snhc}', .false., 'snhc')
+        call cluster2D%set_input('srch_ctrls',10, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|greedy){snhc}', '(snhc|greedy){snhc}', .false., 'snhc')
         ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, hp)
         call cluster2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -1383,10 +1388,14 @@ contains
         &phase', 'initial low-pass limit in Angstroms', .false., 15.)
         call cluster2D%set_input('filt_ctrls', 5, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit that controls the degree of &
         &downsampling in the second phase. Give estimated best final resolution', 'final low-pass limit in Angstroms', .false., 8.)
-        call cluster2D%set_input('filt_ctrls', 6, match_filt)
-        call cluster2D%set_input('filt_ctrls', 7, wiener)
-        call cluster2D%set_input('filt_ctrls', 8, graphene_filt)
-        call cluster2D%set_input('filt_ctrls', 9, 'lambda', 'num', 'TV regularization lambda parameter', 'Strength of noise reduction', '(0.5-3.0){1.0}', .false., 1.0)
+        call cluster2D%set_input('filt_ctrls', 6,  match_filt)
+        call cluster2D%set_input('filt_ctrls', 7,  wiener)
+        call cluster2D%set_input('filt_ctrls', 8,  graphene_filt)
+        call cluster2D%set_input('filt_ctrls', 9,  nonuniform)
+        call cluster2D%set_input('filt_ctrls', 10, smooth_ext)
+        call cluster2D%set_input('filt_ctrls', 11, filter_type)
+        call cluster2D%set_input('filt_ctrls', 12, lp_lowres)
+        call cluster2D%set_input('filt_ctrls', 13, nsearch)
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
@@ -1441,7 +1450,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 1, 0, 7, 6, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 1, 0, 7, 11, 1, 5, .true.)                                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1462,8 +1471,7 @@ contains
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call cluster2D_stream%set_input('srch_ctrls', 5, 'ncls', 'num', 'Maximum number of 2D clusters',&
         &'Maximum number of groups to sort the particles into prior to averaging to create 2D class averages with improved SNR', 'Maximum # 2D clusters', .true., 200.)
-        call cluster2D_stream%set_input('srch_ctrls', 6, 'lpthresh', 'num', 'Resolution rejection threshold',&
-        &'Classes with lower resolution are iteratively rejected{30}', 'Resolution rejection threshold in angstroms{30}', .false., 30.)
+        call cluster2D_stream%set_input('srch_ctrls', 6, lpthresh)
         call cluster2D_stream%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
         ! filter controls
         call cluster2D_stream%set_input('filt_ctrls', 1, hp)
@@ -1472,8 +1480,13 @@ contains
         &Angstroms{30}', .false., 30.)
         call cluster2D_stream%set_input('filt_ctrls', 3, 'lp',         'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
         call cluster2D_stream%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit in Angstroms', .false., 2.0*MAX_SMPD)
-        call cluster2D_stream%set_input('filt_ctrls', 5, match_filt)
-        call cluster2D_stream%set_input('filt_ctrls', 6, 'wiener',     'multi', 'Wiener restoration', 'Wiener restoration, full or partial (full|partial){partial}','(full|partial){partial}', .false., 'partial')
+        call cluster2D_stream%set_input('filt_ctrls', 5,  match_filt)
+        call cluster2D_stream%set_input('filt_ctrls', 6,  wiener)
+        call cluster2D_stream%set_input('filt_ctrls', 7,  nonuniform)
+        call cluster2D_stream%set_input('filt_ctrls', 8,  smooth_ext)
+        call cluster2D_stream%set_input('filt_ctrls', 9,  filter_type)
+        call cluster2D_stream%set_input('filt_ctrls', 10, lp_lowres)
+        call cluster2D_stream%set_input('filt_ctrls', 11, nsearch)
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
@@ -1491,7 +1504,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 0, 0, 7, 6, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 0, 0, 7, 11, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1511,8 +1524,7 @@ contains
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call cluster2D_subsets%set_input('srch_ctrls', 5, 'ncls', 'num', 'Maximum number of 2D clusters',&
         &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .true., 200.)
-        call cluster2D_subsets%set_input('srch_ctrls', 6, 'lpthresh', 'num', 'Resolution rejection threshold',&
-        &'Classes with lower resolution are iteratively rejected{30}', 'Resolution rejection threshold in angstroms{30}', .false., 30.)
+        call cluster2D_subsets%set_input('srch_ctrls', 6, lpthresh)
         call cluster2D_subsets%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
         ! filter controls
         call cluster2D_subsets%set_input('filt_ctrls', 1, hp)
@@ -1522,7 +1534,12 @@ contains
         call cluster2D_subsets%set_input('filt_ctrls', 3, 'lp',         'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
         call cluster2D_subsets%set_input('filt_ctrls', 4, 'lpstop',     'num', 'Resolution limit', 'Resolution limit', 'Resolution limit in Angstroms', .false., 2.0*MAX_SMPD)
         call cluster2D_subsets%set_input('filt_ctrls', 5, match_filt)
-        call cluster2D_subsets%set_input('filt_ctrls', 6, 'wiener',     'multi', 'Wiener restoration', 'Wiener restoration, full or partial (full|partial){partial}','(full|partial){partial}', .false., 'partial')
+        call cluster2D_subsets%set_input('filt_ctrls', 6,  wiener)
+        call cluster2D_subsets%set_input('filt_ctrls', 7,  nonuniform)
+        call cluster2D_subsets%set_input('filt_ctrls', 8,  smooth_ext)
+        call cluster2D_subsets%set_input('filt_ctrls', 9,  filter_type)
+        call cluster2D_subsets%set_input('filt_ctrls', 10, lp_lowres)
+        call cluster2D_subsets%set_input('filt_ctrls', 11, nsearch)
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
@@ -1647,8 +1664,7 @@ contains
         call cluster_cavgs%set_input('filt_ctrls', 1, hp)
         call cluster_cavgs%set_input('filt_ctrls', 2, lp)
         cluster_cavgs%filt_ctrls(2)%required = .true.
-        call cluster_cavgs%set_input('filt_ctrls', 3, 'lpthresh', 'num', 'Resolution rejection threshold',&
-        &'Classes with lower resolution aren rejected{30}', 'Resolution rejection threshold in angstroms{30}', .false., 30.)
+        call cluster_cavgs%set_input('filt_ctrls', 3, lpthresh)
         ! mask controls
         call cluster_cavgs%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
@@ -2660,8 +2676,8 @@ contains
         ! <empty>
         ! filter controls
         call opt_2D_filter%set_input('filt_ctrls', 1, nonuniform)
-        call opt_2D_filter%set_input('filt_ctrls', 2, 'smooth_ext', 'num', 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{20}', .false., 20.)
-        call opt_2D_filter%set_input('filt_ctrls', 3, 'filter', 'multi', 'Filter type(butterworth|lp|tv){butterworth}', 'Filter type(butterworth|lp|tv){butterworth}', '(butterworth|lp|tv){butterworth}', .false., 'butterworth')
+        call opt_2D_filter%set_input('filt_ctrls', 2, smooth_ext)
+        call opt_2D_filter%set_input('filt_ctrls', 3, filter_type)
         call opt_2D_filter%set_input('filt_ctrls', 4, lp_lowres)
         call opt_2D_filter%set_input('filt_ctrls', 5, nsearch)
         call opt_2D_filter%set_input('filt_ctrls', 6, match_filt)
@@ -2693,8 +2709,8 @@ contains
         ! <empty>
         ! filter controls
         call opt_3D_filter%set_input('filt_ctrls', 1, nonuniform)
-        call opt_3D_filter%set_input('filt_ctrls', 2, 'smooth_ext' , 'num'   , 'Smoothing window extension', 'Smoothing window extension', 'Smoothing window extension in number of pixels{20}', .false., 20.)
-        call opt_3D_filter%set_input('filt_ctrls', 3, 'filter'     , 'multi' , 'Filter type(butterworth|lp|tv){butterworth}', 'Filter type(butterworth|lp|tv){butterworth}', '(butterworth|lp){butterworth}', .false., 'butterworth')
+        call opt_3D_filter%set_input('filt_ctrls', 2, smooth_ext)
+        call opt_3D_filter%set_input('filt_ctrls', 3, filter_type)
         call opt_3D_filter%set_input('filt_ctrls', 4, lp_lowres)
         call opt_3D_filter%set_input('filt_ctrls', 5, nsearch)
         call opt_3D_filter%set_input('filt_ctrls', 6, match_filt)
@@ -2966,7 +2982,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 15, 0, 20, 9, 1, 6, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 15, 0, 20, 14, 1, 6, .true.)                                                     ! # entries in each group, requires sp_project
         ! image input/output
         call preprocess_stream_dev%set_input('img_ios', 1, dir_movies)
         call preprocess_stream_dev%set_input('img_ios', 2, gainref)
@@ -3024,8 +3040,7 @@ contains
         &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call preprocess_stream_dev%set_input('srch_ctrls',18, 'ncls', 'num', 'Maximum number of 2D clusters*',&
         &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .false., 200.)
-        call preprocess_stream_dev%set_input('srch_ctrls',19, 'lpthresh', 'num', 'Resolution rejection threshold',&
-        &'Classes with lower resolution are iteratively rejected{30}', 'Resolution rejection threshold in angstroms{30}', .false., 30.)
+        call preprocess_stream_dev%set_input('srch_ctrls',19, lpthresh)
         call preprocess_stream_dev%set_input('srch_ctrls',20, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
         ! filter controls
         call preprocess_stream_dev%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
@@ -3043,10 +3058,13 @@ contains
         &Angstroms{30}', .false., 30.)
         call preprocess_stream_dev%set_input('filt_ctrls', 7, 'lp2D', 'num', 'Static low-pass limit for 2D classification', 'Static low-pass limit for 2D classification',&
         &'low-pass limit in Angstroms', .false., 15.)
-        call preprocess_stream_dev%set_input('filt_ctrls', 8, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise ratio (SNR) in the presence of additive &
-        &stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call preprocess_stream_dev%set_input('filt_ctrls', 9, 'wiener', 'multi', 'Wiener restoration', 'Wiener restoration, full or partial (full|partial){partial}',&
-        &'(full|partial){partial}', .false., 'partial')
+        call preprocess_stream_dev%set_input('filt_ctrls', 8,  match_filt)
+        call preprocess_stream_dev%set_input('filt_ctrls', 9,  wiener)
+        call preprocess_stream_dev%set_input('filt_ctrls', 10, nonuniform)
+        call preprocess_stream_dev%set_input('filt_ctrls', 11, smooth_ext)
+        call preprocess_stream_dev%set_input('filt_ctrls', 12, filter_type)
+        call preprocess_stream_dev%set_input('filt_ctrls', 13, lp_lowres)
+        call preprocess_stream_dev%set_input('filt_ctrls', 14, nsearch)
         ! mask controls
         call preprocess_stream_dev%set_input('mask_ctrls', 1, mskdiam)
         preprocess_stream_dev%mask_ctrls(1)%required = .false.
