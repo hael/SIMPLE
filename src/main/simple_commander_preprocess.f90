@@ -1469,11 +1469,12 @@ contains
         if( cline%defined('refs') .and. cline%defined('vol1') )then
             THROW_HARD('REFS and VOL1 cannot be both provided!')
         endif
-        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',       'yes')
-        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
-        if( .not. cline%defined('oritype')   ) call cline%set('oritype',     'mic')
-        if( .not. cline%defined('ndev')      ) call cline%set('ndev',              2.)
-        if( .not. cline%defined('thres')     ) call cline%set('thres',            24.)
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',         'yes')
+        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast',   'black')
+        if( .not. cline%defined('oritype')   ) call cline%set('oritype',       'mic')
+        if( .not. cline%defined('ndev')      ) call cline%set('ndev',             2.)
+        if( .not. cline%defined('thres')     ) call cline%set('thres',           24.)
+        if( .not. cline%defined('picker')    ) call cline%set('picker', 'old_school')
         call params%new(cline)
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
