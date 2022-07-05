@@ -2209,7 +2209,7 @@ contains
         incl     = self%included()
         vals     = self%get_all(which)
         vals4med = pack(vals, incl)
-        med      = median_nocopy(vals)
+        med      = median_nocopy(vals4med)
     end function median_1
 
     !>  \brief  is for calculating variable statistics
