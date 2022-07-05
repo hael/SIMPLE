@@ -376,7 +376,6 @@ contains
         integer                    :: k,l,m, box, ldim(3), find_start, find_stop, iter_no, fnr
         integer                    :: best_ind, cur_ind, lb(3), ub(3), ext
         real                       :: min_sum_odd, min_sum_even, rad, find_stepsz, val
-        logical                    :: mskimg_present
         character(len=90)          :: file_tag
         integer,       parameter   :: CHUNKSZ = 20
         real,          pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), ref_odd_rmat(:,:,:), ref_even_rmat(:,:,:)
@@ -386,7 +385,6 @@ contains
         character(len=LONGSTRLEN)  :: benchfname
         integer(timer_int_kind)    ::  t_tot,  t_filter_odd,  t_filter_even,  t_search_opt,  t_chop_copy,  t_chop_filter,  t_chop_sqeu
         real(timer_int_kind)       :: rt_tot, rt_filter_odd, rt_filter_even, rt_search_opt, rt_chop_copy, rt_chop_filter, rt_chop_sqeu
-        mskimg_present   = present(mskimg)
         ldim        = odd%get_ldim()
         box         = ldim(1)
         ext         = params_glob%smooth_ext
@@ -408,10 +406,9 @@ contains
         call even_copy_shellnorm%copy(even)
         call even_copy_shellnorm%shellnorm(return_ft=.true.)
         allocate(cur_diff_odd( box,box,box), cur_diff_even(box,box,box),&
-                &cur_fil(box), weights_3D(ext*2+1,&
-                &ext*2+1, ext*2+1), source=0.)
+                &cur_fil(box), weights_3D(ext*2+1,ext*2+1, ext*2+1), source=0.)
         allocate(opt_odd(box,box,box), opt_even(box,box,box))
-        if( mskimg_present )then
+        if( present(mskimg) )then
             call bounds_from_mask3D(mskimg%bin2logical(), lb, ub)
         else
             lb = (/ 1, 1, 1/)
