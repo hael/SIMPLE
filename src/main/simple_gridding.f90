@@ -21,7 +21,7 @@ contains
         class(kbinterpol), optional, intent(in)    :: kbwin
         integer,           optional, intent(in)    :: padded_dim
         real, allocatable :: w(:)
-        real    :: arg
+        real    :: g, arg
         integer :: ldim(3), center(3), i,j,k, iarg, dim
         ldim = instrfun_img%get_ldim()
         if( any(ldim==0) .or. instrfun_img%is_ft() .or. .not.instrfun_img%square_dims() )then
