@@ -559,11 +559,10 @@ contains
         !$omp end parallel workshare
     end subroutine sum_reduce
 
-    subroutine add_invtausq2rho( self, fsc, evenodd )
+    subroutine add_invtausq2rho( self, fsc)
         use simple_estimate_ssnr, only: fsc2optlp_sub
         class(reconstructor), intent(inout) :: self !< this instance
         real,    allocatable, intent(in)    :: fsc(:)
-        integer,              intent(in)    :: evenodd
         real, allocatable :: optlp(:), ssnr(:)
         real(dp)          :: rsum(0:self%nyq)
         real              :: tau2(0:self%nyq), invtau2, sig2, ri, d, ssnri, cc

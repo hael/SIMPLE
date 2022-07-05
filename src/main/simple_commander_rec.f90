@@ -173,6 +173,7 @@ contains
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
         integer                       :: part, s, n, ss, state, find4eoavg, fnr
+        logical                       :: l_euclid_reg
         integer(timer_int_kind)       :: t_init, t_read, t_sum_reduce, t_sum_eos, t_sampl_dens_correct_eos
         integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_tot
         real(timer_int_kind)          :: rt_init, rt_read, rt_sum_reduce, rt_sum_eos, rt_sampl_dens_correct_eos
@@ -190,6 +191,7 @@ contains
         call eorecvol_read%new( build%spproj)
         call eorecvol_read%kill_exp ! reduced memory usage
         n = params%nstates*params%nparts
+        l_euclid_reg = (params%cc_objfun==OBJFUN_EUCLID) .or. params%l_needs_sigma
         if( L_BENCH_GLOB )then
             ! end of init
             rt_init = toc(t_init)
@@ -232,15 +234,24 @@ contains
             eonames(1) = trim(recname)//'_even'//params%ext
             eonames(2) = trim(recname)//'_odd'//params%ext
             resmskname = params%mskfile
-            if( L_BENCH_GLOB ) t_sum_eos = tic()
-            call build%eorecvol%sum_eos
+            if( l_euclid_reg )then
+                ! the sum is done after regularization
+            else
+                if( L_BENCH_GLOB ) t_sum_eos = tic()
+                call build%eorecvol%sum_eos
+                if( L_BENCH_GLOB ) rt_sum_eos = rt_sum_eos + toc(t_sum_eos)
+            endif
             if( L_BENCH_GLOB )then
-                rt_sum_eos               = rt_sum_eos + toc(t_sum_eos)
                 t_sampl_dens_correct_eos = tic()
             endif
             call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
             if( L_BENCH_GLOB )then
                 rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
+            endif
+            if( l_euclid_reg )then
+                if( L_BENCH_GLOB ) t_sum_eos = tic()
+                call build%eorecvol%sum_eos
+                if( L_BENCH_GLOB ) rt_sum_eos = rt_sum_eos + toc(t_sum_eos)
             endif
             call build%eorecvol%get_res(res05s(s), res0143s(s))
             if( L_BENCH_GLOB ) t_sampl_dens_correct_sum = tic()

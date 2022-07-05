@@ -358,26 +358,31 @@ contains
             filtsz = even%get_filtsz()
             allocate(corrs(filtsz))
             call even%fsc(odd, corrs)
-            call even%kill
-            call odd%kill
-            ! regularization for objfun = euclid
-            call self%even%add_invtausq2rho(corrs, 1)
-            call self%odd %add_invtausq2rho(corrs, 2)
-            ! correct for the uneven sampling density
+            ! regularization
+            call self%even%add_invtausq2rho(corrs)
+            call self%odd%add_invtausq2rho(corrs)
+            ! Even: uneven sampling density correction, clip, & write
+            cmat = self%even%get_cmat()
             call self%even%sampl_dens_correct(do_gridcorr=.false.)
+            call self%even%ifft
+            call even%zero_and_unflag_ft
+            call self%even%clip(even)
+            call even%div(self%pad_correction)
+            call even%write(trim(fname_even), del_if_exists=.true.)
+            call self%even%set_cmat(cmat)
+            call even%kill
+            deallocate(cmat)
+            ! Odd: uneven sampling density correction, clip, & write
+            cmat = self%odd%get_cmat()
             call self%odd%sampl_dens_correct(do_gridcorr=.false.)
-            ! reverse FT
-            call self%even%ifft()
-            call self%odd%ifft()
-            ! Clip
-            call self%even%clip_inplace([self%box,self%box,self%box])
-            call self%odd%clip_inplace([self%box,self%box,self%box])
-            ! FFTW padding correction
-            call self%even%div(self%pad_correction)
-            call self%odd%div(self%pad_correction)
-            ! write unnormalised unmasked even/odd volumes
-            call self%even%write(trim(fname_even), del_if_exists=.true.)
-            call self%odd%write(trim(fname_odd),   del_if_exists=.true.)
+            call self%odd%ifft
+            call odd%zero_and_unflag_ft
+            call self%odd%clip(odd)
+            call odd%div(self%pad_correction)
+            call odd%write(trim(fname_odd), del_if_exists=.true.)
+            call self%odd%set_cmat(cmat)
+            call odd%kill
+            deallocate(cmat)
         else
             ! make clipped volumes
             call even%new([self%box,self%box,self%box],self%smpd)
@@ -563,8 +568,13 @@ contains
             allocate(volname, source=recname//params_glob%ext)
             eonames(1) = trim(recname)//'_even'//params_glob%ext
             eonames(2) = trim(recname)//'_odd'//params_glob%ext
-            call self%sum_eos
-            call self%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
+            if( (params_glob%cc_objfun==OBJFUN_EUCLID) .or. params_glob%l_needs_sigma )then
+                call self%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
+                call self%sum_eos
+            else
+                call self%sum_eos
+                call self%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
+            endif
             call self%sampl_dens_correct_sum(vol)
             call vol%write(volname, del_if_exists=.true.)
         endif

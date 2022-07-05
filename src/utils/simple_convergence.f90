@@ -155,8 +155,8 @@ contains
         real    :: min_state_mi_joint, avg_updatecnt, percen_nonzero_pw, overlap_lim, fracsrch_lim
         logical :: converged
         integer :: iptcl, istate
-        601 format(A,1X,F8.3)
-        604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
+        601 format(A,1X,F12.3)
+        604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         updatecnts = build_glob%spproj_field%get_all('updatecnt')
         avg_updatecnt = sum(updatecnts) / size(updatecnts)
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
