@@ -118,7 +118,7 @@ contains
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
-        logical :: l_projmatch, l_lp_iters, l_switch2euclid, l_continue, l_multistates, l_automsk
+        logical :: l_projmatch, l_lp_iters, l_switch2euclid, l_continue, l_multistates, l_automsk, l_final_iter
         real    :: corr, corr_prev, smpd, lplim
         integer :: ldim(3), i, state, iter, box, nfiles, niters, iter_switch2euclid, ifoo
         integer :: ncls, icls, ind, fnr
@@ -343,9 +343,10 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! MAIN LOOP
-        niters = 0
-        iter   = params%startit - 1
-        corr   = -1.
+        l_final_iter = .true.
+        niters       = 0
+        iter         = params%startit - 1
+        corr         = -1.
         do
             if( L_BENCH_GLOB )then
                 t_init = tic()
@@ -535,6 +536,17 @@ contains
                     endif
             end select
             if( iter >= params%maxits ) converged = .true.
+            if ( l_final_iter .and. converged .and. (params%cc_objfun == OBJFUN_EUCLID) .and. l_lp_iters)then
+                converged     = .false.
+                l_final_iter  = .false.
+                params%lplim_crit = 0.143
+                call cline%set('lplim_crit',params%lplim_crit)
+                call job_descr%set('lplim_crit',real2str(params%lplim_crit))
+                write(logfhandle,'(A)')'>>>'
+                write(logfhandle,'(A)')'>>> PERFORMING FINAL ITERATION WITH MERGED EVEN/ODD REFERENCES AND FSC CRITERION = 0.143'
+                call simple_copy_file(trim(VOL_FBODY)//trim(str_state)//params%ext, trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext)
+                call simple_copy_file(trim(VOL_FBODY)//trim(str_state)//params%ext, trim(VOL_FBODY)//trim(str_state)//'_odd'//params%ext)
+            endif
             if( converged )then
                 if(trim(params%oritype).eq.'cls3D') call build%spproj%map2ptcls
                 ! safest to write the whole thing here as multiple fields updated
@@ -896,9 +908,9 @@ contains
                 call build%imgbatch(imatch)%noise_norm(build%lmsk, sdev_noise)
                 !  mask
                 if( params%l_focusmsk )then
-                    call build%imgbatch(imatch)%mask(params%focusmsk, 'soft')
+                    call build%imgbatch(imatch)%mask(params%focusmsk, 'softavg')
                 else
-                    call build%imgbatch(imatch)%mask(params%msk, 'soft')
+                    call build%imgbatch(imatch)%mask(params%msk, 'softavg')
                 endif
                 call build%imgbatch(imatch)%fft
                 ! power spectrum
