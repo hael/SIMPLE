@@ -206,7 +206,7 @@ type :: parameters
     character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN) :: pgrp_start='c1'      !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN) :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
-    character(len=STDLEN) :: picker='phasecorr'   !< picker approach (seg|phasecorr|old_school){phasecorr}
+    character(len=STDLEN) :: picker='old_school'  !< picker approach (seg|phasecorr|old_school){old_school}
     character(len=STDLEN) :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN) :: projname=''          !< SIMPLE  project name
     character(len=STDLEN) :: ptclw='yes'          !< use particle weights(yes|no){yes}
