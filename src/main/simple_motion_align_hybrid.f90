@@ -75,6 +75,7 @@ contains
     ! Doers
     procedure, private :: calc_shifts
     procedure          :: align
+    procedure          :: refine
     procedure, private :: align_dcorr
     procedure, private :: align_corr
     procedure, private :: gen_weights
@@ -331,6 +332,48 @@ contains
         self%shifts_toplot = self%opt_shifts
     end subroutine align
 
+    subroutine refine( self, ini_shifts, frameweights )
+        class(motion_align_hybrid), intent(inout) :: self
+        real,                       intent(in)    :: ini_shifts(self%nframes,2)
+        real, optional,intent(in)::frameweights(self%nframes)
+        if( self%L_BENCH )then
+            self%t_init = tic()
+            self%t_tot  = self%t_init
+            self%rt_calc_shift = 0.
+            self%rt_shift      = 0.
+            self%rt_genref     = 0.
+        endif
+        if ( .not. self%existence ) then
+            THROW_HARD('not instantiated; simple_motion_align_hybrid: align')
+        end if
+        if (( self%hp < 0. ) .or. ( self%lp < 0.)) then
+            THROW_HARD('hp or lp < 0; simple_motion_align_hybrid: align')
+        end if
+        self%fitshifts = .false.
+        write(logfhandle,'(A,2I3)') '>>> PERFORMING REFINEMENT FOR PATCH',self%px,self%py
+        ! correlation continuous search
+        self%opt_shifts = ini_shifts
+        call self%init_ftexps
+        if( self%L_BENCH )then
+            self%rt_initftexp = toc(self%t_initftexp)
+            self%t_cont = tic()
+        endif
+        self%lp = self%lpstop
+        call self%align_corr( frameweights )
+        call self%dealloc_ftexps
+        if( self%L_BENCH )then
+            self%rt_tot   = toc(self%t_tot)
+            print *,'PATCH:',self%px,self%py
+            print *,'t_init:                ',self%rt_init
+            print *,'t_shift:               ',self%rt_shift
+            print *,'t_genref:              ',self%rt_genref
+            print *,'t_calc_shift:          ',self%rt_calc_shift
+            print *,'t_tot:                 ',self%rt_tot
+        endif
+        ! the end
+        self%shifts_toplot = self%opt_shifts
+    end subroutine refine
+
     ! semi-discrete correlation based alignment
     subroutine align_dcorr( self, ini_shifts, frameweights )
         class(motion_align_hybrid), intent(inout) :: self
@@ -369,6 +412,10 @@ contains
         call self%gen_weights
         ! main loop
         do iter=1,self%maxits_dcorr
+            if(iter == self%maxits_dcorr)then
+                self%lp = self%lpstop
+                call self%gen_weights
+            endif
             opt_shifts_prev = self%opt_shifts
             if( iter > 1 .and. self%fitshifts )then
                 ! optional shifts fitting
