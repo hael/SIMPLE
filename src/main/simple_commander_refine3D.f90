@@ -542,8 +542,9 @@ contains
                 params%lplim_crit = 0.143
                 call cline%set('lplim_crit',params%lplim_crit)
                 call job_descr%set('lplim_crit',real2str(params%lplim_crit))
+                call cline_volassemble%set('combine_eo', 'yes')
                 write(logfhandle,'(A)')'>>>'
-                write(logfhandle,'(A)')'>>> PERFORMING FINAL ITERATION WITH MERGED EVEN/ODD REFERENCES AND FSC CRITERION = 0.143'
+                write(logfhandle,'(A)')'>>> PERFORMING FINAL ITERATION WITH COMBINED EVEN/ODD VOLUMES & RESOLUTION LIMIT BEYOND FSC=0.143'
                 call simple_copy_file(trim(VOL_FBODY)//trim(str_state)//params%ext, trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext)
                 call simple_copy_file(trim(VOL_FBODY)//trim(str_state)//params%ext, trim(VOL_FBODY)//trim(str_state)//'_odd'//params%ext)
             endif
@@ -596,11 +597,13 @@ contains
             if( l_switch2euclid .and. niters.eq.iter_switch2euclid )then
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
-                call cline%set('objfun','euclid')
+                call cline%set('objfun',    'euclid')
                 call cline%set('match_filt','no')
+                call cline%set('gridding',  'yes')
                 call cline%delete('lp')
-                call job_descr%set('objfun','euclid')
+                call job_descr%set('objfun',    'euclid')
                 call job_descr%set('match_filt','no')
+                call job_descr%set('gridding',  'yes')
                 call job_descr%delete('lp')
                 call cline_volassemble%set('objfun','euclid')
                 call cline_postprocess%delete('lp')

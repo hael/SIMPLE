@@ -567,6 +567,8 @@ contains
         real(dp)          :: rsum(0:self%nyq)
         real              :: tau2(0:self%nyq), invtau2, sig2, ri, d, ssnri, cc
         integer           :: cnt(0:self%nyq), h, k, m, sh, phys(3), sz, reslim_ind, il,ir
+        logical           :: l_combined
+        l_combined = trim(params_glob%combine_eo).eq.'yes'
         sz = size(fsc) ! original image size
         allocate(optlp(sz), ssnr(sz), source=0.)
         rsum = 0.d0
@@ -586,11 +588,12 @@ contains
         enddo
         !$omp end parallel do
         ! tau2 & ssnr are determined from the corrected fsc (Henderson & Rosenthal, JMB, 2002)...
-        ! call fsc2optlp_sub(sz, fsc, optlp)
-        ! ssnr = optlp / (1.-optlp)
-        ! ...but when working with two random halves no sqrt nor factor two
         do k = 1,sz
             cc = max(0.001,min(0.999,fsc(k)))
+            if( l_combined )then
+                ! update to filtering scheme since e/o were identical during alignment
+                cc = sqrt(2.*cc / (cc+1.))
+            endif
             ssnr(k) = cc / (1.-cc)
         enddo
         ! Tau2
