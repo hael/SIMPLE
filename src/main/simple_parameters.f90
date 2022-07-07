@@ -26,6 +26,7 @@ type :: parameters
     character(len=3)      :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)      :: classtats='no'       !< calculate class population statistics(yes|no){no}
     character(len=3)      :: clustvalid='no'      !< validate clustering(yes|homo|no){no}
+    character(len=3)      :: combine_eo='no'      !< Whether combined e/o volumes have been used for alignment(yes|no){no}
     character(len=3)      :: compare='no'         !< do comparison(yes|no){no}
     character(len=3)      :: continue='no'        !< continue previous refinement(yes|no){no}
     character(len=3)      :: countvox='no'        !< count # voxels(yes|no){no}
@@ -520,6 +521,7 @@ contains
         call check_carg('clustermode',    self%clustermode)
         call check_carg('clustvalid',     self%clustvalid)
         call check_carg('cn_type',        self%cn_type)
+        call check_carg('combine_eo',     self%combine_eo)
         call check_carg('compare',        self%compare)
         call check_carg('continue',       self%continue)
         call check_carg('countvox',       self%countvox)

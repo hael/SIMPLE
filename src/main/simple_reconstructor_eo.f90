@@ -317,19 +317,21 @@ contains
         real,     allocatable :: res(:), corrs(:), fsc_t(:), fsc_n(:)
         real                  :: lp_rand, msk
         integer               :: k,k_rand, find_plate, filtsz
+        logical               :: l_combined
         msk = real(self%box / 2) - COSMSKHALFWIDTH - 1.
         ! msk = self%msk ! for a tighter spherical mask
+        l_combined = trim(params_glob%combine_eo).eq.'yes'
         if( (params_glob%cc_objfun==OBJFUN_EUCLID) .or. params_glob%l_needs_sigma )then
+            ! preprocessing for FSC calculation
             ! even
             cmat = self%even%get_cmat()
             call self%even%sampl_dens_correct(do_gridcorr=.false.)
             even = self%even
             call self%even%set_cmat(cmat)
             deallocate(cmat)
-            ! should be using fsc_scaled instead to avoid clipping and Fourier artefacts
-            ! for FSC calculation
             call even%ifft()
             call even%clip_inplace([self%box,self%box,self%box])
+            if( l_combined ) call even%write(add2fbody(fname_even,params_glob%ext,'_unfil'))
             ! odd
             cmat = self%odd%get_cmat()
             call self%odd%sampl_dens_correct(do_gridcorr=.false.)
@@ -338,6 +340,7 @@ contains
             deallocate(cmat)
             call odd%ifft()
             call odd%clip_inplace([self%box,self%box,self%box])
+            if( l_combined ) call odd%write(add2fbody(fname_odd,params_glob%ext,'_unfil'))
             ! masking
             if( self%automsk )then
                 ! mask provided, no phase-randomization just yet
