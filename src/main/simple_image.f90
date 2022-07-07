@@ -4458,8 +4458,7 @@ contains
                                          Dr(self%ldim(1), self%ldim(2), self%ldim(3)), & ! derivates row matrix
                                          Dz(self%ldim(1), self%ldim(2), self%ldim(3))    ! derivates z matrix
         real, optional, intent(out)   :: grad(self%ldim(1), self%ldim(2), self%ldim(3))  ! gradient matrix
-        integer :: ldim(3) ! dimension of the image, save just for comfort
-        integer :: i,j,k   ! loop indeces
+        integer :: ldim(3), k
         real    :: Ddc(self%ldim(1),self%ldim(2),self%ldim(3))
         real    :: Ddr(self%ldim(1),self%ldim(2),self%ldim(3))
         real    :: Ddz(self%ldim(1),self%ldim(2),self%ldim(3))
@@ -4473,10 +4472,10 @@ contains
         do k = 2, ldim(2)-1
             Ddr(1:ldim(1),k,1:ldim(3)) = 0.5*(self%rmat(1:ldim(1),k+1,1:ldim(3)) - self%rmat(1:ldim(1),k-1,1:ldim(3)))
         enddo
-        Ddc(1,1:ldim(2),1:ldim(3))       = self%rmat(2,1:ldim(2),1:ldim(3)) - self%rmat(1,1:ldim(2),1:ldim(3))
-        Ddc(ldim(1),1:ldim(2),1:ldim(3)) = self%rmat(ldim(1),1:ldim(2),1:ldim(3)) - self%rmat(ldim(1)-1,1:ldim(2),1:ldim(3))
-        Ddr(1:ldim(1),1,1:ldim(3))       = self%rmat(1:ldim(1),2,1:ldim(3)) - self%rmat(1:ldim(1),1,1:ldim(3))
-        Ddr(1:ldim(1),ldim(2),1:ldim(3)) = self%rmat(1:ldim(1),ldim(2),1:ldim(3)) - self%rmat(1:ldim(1),ldim(2)-1,1:ldim(3))
+        Ddc(1        ,1:ldim(2),1:ldim(3)) = self%rmat(2        ,1:ldim(2),1:ldim(3)) - self%rmat(1          ,1:ldim(2)  ,1:ldim(3))
+        Ddc(  ldim(1),1:ldim(2),1:ldim(3)) = self%rmat(  ldim(1),1:ldim(2),1:ldim(3)) - self%rmat(  ldim(1)-1,1:ldim(2)  ,1:ldim(3))
+        Ddr(1:ldim(1),1        ,1:ldim(3)) = self%rmat(1:ldim(1),2        ,1:ldim(3)) - self%rmat(1:ldim(1)  ,1          ,1:ldim(3))
+        Ddr(1:ldim(1),  ldim(2),1:ldim(3)) = self%rmat(1:ldim(1),  ldim(2),1:ldim(3)) - self%rmat(1:ldim(1)  ,  ldim(2)-1,1:ldim(3))
         if( ldim(3) > 1 )then
             do k = 2, ldim(3)-1
                 Ddz(1:ldim(1),1:ldim(2),k) = 0.5*(self%rmat(1:ldim(1),1:ldim(2),k+1) - self%rmat(1:ldim(1),1:ldim(2),k-1))
