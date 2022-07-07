@@ -856,14 +856,13 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer :: h,k,sh
         if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
-        allocate(self%pxls_p_shell(params_glob%kfromto(1):params_glob%kfromto(2)))
-        self%pxls_p_shell = 0.
-        do h = 1,params_glob%kfromto(2)
-            do k=1,params_glob%kfromto(2)
+        allocate(self%pxls_p_shell(params_glob%kfromto(1):params_glob%kfromto(2)),source=0.0)
+        do h = 0,params_glob%kfromto(2)
+            do k = -params_glob%kfromto(2),params_glob%kfromto(2)
                 sh = nint(sqrt(real(h**2+k**2)))
-                if( ( sh >= params_glob%kfromto(1)) .and. ( sh <= params_glob%kfromto(2)) ) then
-                    self%pxls_p_shell(sh) = self%pxls_p_shell(sh) + 1.
-                end if
+                if( sh < params_glob%kfromto(1) ) cycle
+                if( sh > params_glob%kfromto(2) ) cycle
+                self%pxls_p_shell(sh) = self%pxls_p_shell(sh) + 1.0
             end do
         end do
     end subroutine setup_pxls_p_shell
@@ -1207,7 +1206,7 @@ contains
                 tmp =       sum(csq_fast(pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
                 tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
             end if
-            euclid = euclid - real(k,dp) * tmp / ( 2.d0 * self%sigma2_noise(k, iptcl)) * self%pxls_p_shell(k) / self%pftsz !!!!!!!!!!!!!!!!!!!!!
+            euclid = euclid - real(k,dp) * tmp / ( 2.d0 * self%sigma2_noise(k, iptcl)) * self%pxls_p_shell(k) / self%pftsz
         end do
     end function calc_euclid_for_rot_8
 
@@ -2110,14 +2109,12 @@ contains
         end do
     end subroutine gencorr_euclid_grad_only_for_rot_8
 
-    subroutine gencorr_sigma_contrib( self, iref, iptcl, shvec, irot, sigma_contrib, ptcl_sumsq, ref_sumsq )
+    subroutine gencorr_sigma_contrib( self, iref, iptcl, shvec, irot, sigma_contrib)
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
         real(sp),                intent(out)   :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
-        real(sp), optional,      intent(out)   :: ptcl_sumsq(params_glob%kfromto(1):params_glob%kfromto(2))
-        real(sp), optional,      intent(out)   :: ref_sumsq (params_glob%kfromto(1):params_glob%kfromto(2))
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         integer  :: i, ithr, k
         i       =  self%pinds(iptcl)
@@ -2138,16 +2135,6 @@ contains
         do k = params_glob%kfromto(1), params_glob%kfromto(2)
             sigma_contrib(k) = 0.5 * self%calc_euclidk_for_rot(pft_ref, i, k, irot) / real(self%pftsz)
         end do
-        if( present(ptcl_sumsq) )then
-            do k = params_glob%kfromto(1), params_glob%kfromto(2)
-                ptcl_sumsq(k) = sum(csq_fast(self%pfts_ptcls(:,k,i)))
-            end do
-        end if
-        if( present(ref_sumsq) )then
-            do k = params_glob%kfromto(1), params_glob%kfromto(2)
-                ref_sumsq(k)  = sum(csq_fast(pft_ref(:,k)))
-            end do
-        end if
     end subroutine gencorr_sigma_contrib
 
     real function specscore_1( self, iref, iptcl, irot )
