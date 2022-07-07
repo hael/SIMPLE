@@ -83,24 +83,21 @@ contains
         class(euclid_sigma2), intent(inout) :: self
         class(oris),          intent(inout) :: os
         logical,              intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
-        integer                             :: iptcl,igroup,fromm,tom,eo
+        integer                             :: iptcl,igroup,tom,eo
         call pftcc_glob%assign_pinds(self%pinds)
         ! determine number of groups
-        fromm = HUGE(fromm)
         tom   = -1000
         do iptcl = 1, params_glob%nptcls
             igroup = nint(os%get(iptcl, 'stkind'))
-            fromm  = min(fromm, igroup)
             tom    = max(tom,   igroup)
         end do
         call self%read_groups_starfile( params_glob%which_iter, self%sigma2_groups, tom )
-        ! copy sigmas to particles
+        ! copy group sigmas to particles
         do iptcl = params_glob%fromp, params_glob%top
             igroup  = nint(os%get(iptcl, 'stkind'))
             eo      = nint(os%get(iptcl, 'eo'    )) ! 0/1
-            self%sigma2_noise(:,iptcl) = self%sigma2_groups(eo+1,igroup,:)
+            self%sigma2_noise(:,iptcl) = self%sigma2_groups(eo+1,igroup,:) / 2.0
         end do
-        self%sigma2_noise = self%sigma2_noise / 2.
     end subroutine read_groups
 
     !>  For soft assignment
