@@ -331,6 +331,7 @@ contains
             deallocate(cmat)
             call even%ifft()
             call even%clip_inplace([self%box,self%box,self%box])
+            call even%div(self%pad_correction)
             if( l_combined ) call even%write(add2fbody(fname_even,params_glob%ext,'_unfil'))
             ! odd
             cmat = self%odd%get_cmat()
@@ -340,6 +341,7 @@ contains
             deallocate(cmat)
             call odd%ifft()
             call odd%clip_inplace([self%box,self%box,self%box])
+            call odd%div(self%pad_correction)
             if( l_combined ) call odd%write(add2fbody(fname_odd,params_glob%ext,'_unfil'))
             ! masking
             if( self%automsk )then

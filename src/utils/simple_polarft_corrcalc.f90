@@ -1178,7 +1178,7 @@ contains
                 tmp =       sum(csq_fast(pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
                 tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
             end if
-            euclid = euclid - real(k) * tmp / ( 2. * self%sigma2_noise(k, iptcl)) * self%pxls_p_shell(k) / self%pftsz
+            euclid = euclid - tmp / ( 2. * self%sigma2_noise(k, iptcl)) * self%pxls_p_shell(k) / self%pftsz
         end do
     end function calc_euclid_for_rot
 
@@ -1206,7 +1206,7 @@ contains
                 tmp =       sum(csq_fast(pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
                 tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
             end if
-            euclid = euclid - real(k,dp) * tmp / ( 2.d0 * self%sigma2_noise(k, iptcl)) * self%pxls_p_shell(k) / self%pftsz
+            euclid = euclid - tmp / ( 2.d0 * self%sigma2_noise(k, iptcl)) * self%pxls_p_shell(k) / self%pftsz
         end do
     end function calc_euclid_for_rot_8
 
@@ -2060,13 +2060,13 @@ contains
         pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
         do k = params_glob%kfromto(1), params_glob%kstop
             diffsq  = self%calc_corrk_for_rot_8(pft_ref_tmp, i, k, irot) - real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k))))
-            grad(1) = grad(1) + real(k,dp) * diffsq / self%sigma2_noise(k, iptcl) * real(self%pxls_p_shell(k),dp) / real(self%pftsz,dp)
+            grad(1) = grad(1) + diffsq / self%sigma2_noise(k, iptcl) * real(self%pxls_p_shell(k),dp) / real(self%pftsz,dp)
         end do
         grad(2)     = 0._dp
         pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
         do k = params_glob%kfromto(1), params_glob%kstop
             diffsq  = self%calc_corrk_for_rot_8(pft_ref_tmp, i, k, irot) - real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k))))
-            grad(2) = grad(2) + real(k,dp) * diffsq / self%sigma2_noise(k, iptcl) * real(self%pxls_p_shell(k),dp) / real(self%pftsz,dp)
+            grad(2) = grad(2) + diffsq / self%sigma2_noise(k, iptcl) * real(self%pxls_p_shell(k),dp) / real(self%pftsz,dp)
         end do
     end subroutine gencorr_euclid_grad_for_rot_8
 
@@ -2099,13 +2099,13 @@ contains
         pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
         do k = params_glob%kfromto(1), params_glob%kstop
             diffsq  = self%calc_corrk_for_rot_8(pft_ref_tmp, i, k, irot) - real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k))))
-            grad(1) = grad(1) + real(k,dp) * diffsq / self%sigma2_noise(k, iptcl) * real(self%pxls_p_shell(k),dp) / real(self%pftsz,dp)
+            grad(1) = grad(1) + diffsq / self%sigma2_noise(k, iptcl) * real(self%pxls_p_shell(k),dp) / real(self%pftsz,dp)
         end do
         grad(2)     = 0._dp
         pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
         do k = params_glob%kfromto(1), params_glob%kstop
             diffsq  = self%calc_corrk_for_rot_8(pft_ref_tmp, i, k, irot) - real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k))))
-            grad(2) = grad(2) + real(k,dp) * diffsq / self%sigma2_noise(k, iptcl) * real(self%pxls_p_shell(k),dp) / real(self%pftsz,dp)
+            grad(2) = grad(2) + diffsq / self%sigma2_noise(k, iptcl) * real(self%pxls_p_shell(k),dp) / real(self%pftsz,dp)
         end do
     end subroutine gencorr_euclid_grad_only_for_rot_8
 
