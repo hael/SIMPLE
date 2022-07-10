@@ -473,7 +473,7 @@ contains
         corr_avg = corr_avg / real(params_glob%nxpatch*params_glob%nypatch)
         write(logfhandle,'(A,F8.5)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
         allocate(shifts(self%nframes,2))
-        call self%robust_fit_polynomial()
+        call self%robust_fit_polynomial
         corr_avg = 0.0
         !$omp parallel do collapse(2) default(shared) private(i,j,iframe,opt_shifts,shifts,s)&
         !$omp proc_bind(close) schedule(dynamic) reduction(+:corr_avg)
@@ -482,12 +482,13 @@ contains
                 call align_hybrid(i,j)%set_group_frames(.false.)
                 call align_hybrid(i,j)%set_reslims(self%hp, params_glob%lpstop, params_glob%lpstop)
                 call align_hybrid(i,j)%set_fitshifts(.false.)
-                ! shifts
+                call align_hybrid(i,j)%set_shsrch_tol(1.e-4)
+                ! patch shifts from global model
                 do iframe=1,self%nframes
                     call self%get_local_shift(iframe, self%patch_centers(i,j,1),self%patch_centers(i,j,2),s)
                     shifts(iframe,:) = s
                 enddo
-                ! align
+                ! refine
                 call align_hybrid(i,j)%refine(shifts,frameweights=self%frameweights)
                 ! fetch info
                 corr_avg = corr_avg + align_hybrid(i,j)%get_corr()
@@ -506,6 +507,7 @@ contains
         !$omp end parallel do
         self%shifts_patches_for_fit = self%shifts_patches
         corr_avg = corr_avg / real(params_glob%nxpatch*params_glob%nypatch)
+        write(logfhandle,'(A,2I3)') '>>> PERFORMING PATCH REFINEMENT'
         write(logfhandle,'(A,F8.5)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
         deallocate(align_hybrid,res)
         call ftexp_transfmat_kill

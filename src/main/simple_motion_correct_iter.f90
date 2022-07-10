@@ -154,7 +154,15 @@ contains
             ! Patch based approach
             if( motion_correct_with_patched ) then
                 call motion_correct_patched(bfac_here, PATCH_FIT_THRESHOLD, goodnessoffit)
-                patch_success = all(goodnessoffit < PATCH_FIT_THRESHOLD)
+                if( trim(params_glob%mcpatch_threshold).eq.'no' )then
+                    patch_success = .true. ! always accept patch solution
+                    if( any(goodnessoffit >= PATCH_FIT_THRESHOLD) )then
+                        THROW_WARN('Polynomial fitting to patch-determined shifts was of insufficient quality')
+                        THROW_WARN('The patch-based correction will however be used')
+                    endif
+                else
+                    patch_success = all(goodnessoffit < PATCH_FIT_THRESHOLD)
+                endif
                 ! generate sums
                 if( patch_success )then
                     call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf)

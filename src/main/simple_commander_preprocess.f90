@@ -162,6 +162,7 @@ contains
         if( .not. cline%defined('eer_fraction')    ) call cline%set('eer_fraction',     20.)
         if( .not. cline%defined('eer_upsampling')  ) call cline%set('eer_upsampling',    1.)
         if( .not. cline%defined('mcpatch')         ) call cline%set('mcpatch',        'yes')
+        if( .not. cline%defined('mcpatch_threshold'))call cline%set('mcpatch_threshold','yes')
         if( .not. cline%defined('algorithm')       ) call cline%set('algorithm',    'patch')
         ! ctf estimation
         if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
@@ -699,6 +700,7 @@ contains
         if( .not. cline%defined('eer_fraction')    ) call cline%set('eer_fraction',     20.)
         if( .not. cline%defined('eer_upsampling')  ) call cline%set('eer_upsampling',    1.)
         if( .not. cline%defined('mcpatch')         ) call cline%set('mcpatch',        'yes')
+        if( .not. cline%defined('mcpatch_threshold')) call cline%set('mcpatch_threshold','yes')
         if( .not. cline%defined('algorithm')       ) call cline%set('algorithm',    'patch')
         ! ctf estimation
         if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
@@ -954,6 +956,7 @@ contains
         if( .not. cline%defined('eer_fraction')  ) call cline%set('eer_fraction',  20.)
         if( .not. cline%defined('eer_upsampling')) call cline%set('eer_upsampling', 1.)
         if( .not. cline%defined('mcpatch')       ) call cline%set('mcpatch',      'yes')
+        if( .not. cline%defined('mcpatch_threshold'))call cline%set('mcpatch_threshold','yes')
         if( .not. cline%defined('algorithm')     ) call cline%set('algorithm', 'patch')
         call cline%set('oritype', 'mic')
         call params%new(cline)
