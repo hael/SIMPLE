@@ -217,6 +217,7 @@ type(simple_input_param) :: max_dose
 type(simple_input_param) :: max_rad
 type(simple_input_param) :: maxits
 type(simple_input_param) :: mcpatch
+type(simple_input_param) :: mcpatch_threshold
 type(simple_input_param) :: mcconvention
 type(simple_input_param) :: min_rad
 type(simple_input_param) :: mirr
@@ -983,6 +984,7 @@ contains
         call set_param(gainref,        'gainref',      'file',   'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
         call set_param(groupframes,    'groupframes',  'binary', 'Patch motion correction frames averaging', 'Whether to perform frames averaging during motion correction - for patchesonly(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(mcpatch,        'mcpatch',      'binary', 'Patch-based motion correction', 'Whether to perform Patch-based motion correction(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call set_param(mcpatch_threshold,'mcpatch_threshold','binary','Use motion correction patch threshold', 'Whether to use the threshold for motion correction patch solution(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(mcconvention,   'mcconvention', 'str',    'Frame of reference during movie alignment', 'Frame of reference during movie alignment; simple/unblur:central; relion/motioncorr:first(simple|unblur|relion|motioncorr){simple}', '(simple|unblur|relion|motioncorr){simple}', .false., 'simple')
         call set_param(nxpatch,        'nxpatch',      'num',    '# of patches along x-axis', 'Motion correction # of patches along x-axis', '# x-patches{5}', .false., 5.)
         call set_param(nypatch,        'nypatch',      'num',    '# of patches along y-axis', 'Motion correction # of patches along y-axis', '# y-patches{5}', .false., 5.)
@@ -2568,7 +2570,7 @@ contains
         & the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will&
         & be pre-averaged in the given chunk size (Falcon 3 movies).',&     ! descr_long
         &'simple_exec',&                                                    ! executable
-        &1, 8, 0, 8, 3, 0, 2, .true.)                                       ! # entries in each group, requires sp_project
+        &1, 8, 0, 9, 3, 0, 2, .true.)                                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call motion_correct%set_input('img_ios', 1, gainref)
@@ -2595,6 +2597,7 @@ contains
         call motion_correct%set_input('srch_ctrls', 6, nypatch)
         call motion_correct%set_input('srch_ctrls', 7, mcconvention)
         call motion_correct%set_input('srch_ctrls', 8, algorithm)
+        call motion_correct%set_input('srch_ctrls', 9, mcpatch_threshold)
         ! filter controls
         call motion_correct%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment (in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -2842,7 +2845,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_exec',&                                                                    ! executable
-        &3, 12, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &3, 12, 0, 15, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, gainref)
@@ -2882,6 +2885,7 @@ contains
         call preprocess%set_input('srch_ctrls',12, nypatch)
         call preprocess%set_input('srch_ctrls',13, mcconvention)
         call preprocess%set_input('srch_ctrls',14, algorithm)
+        call preprocess%set_input('srch_ctrls',15, mcpatch_threshold)
         ! filter controls
         call preprocess%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -2908,7 +2912,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 15, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 15, 0, 14, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, dir_movies)
@@ -2956,6 +2960,7 @@ contains
         call preprocess_stream%set_input('srch_ctrls',11, nypatch)
         call preprocess_stream%set_input('srch_ctrls',12, mcconvention)
         call preprocess_stream%set_input('srch_ctrls',13, algorithm)
+        call preprocess_stream%set_input('srch_ctrls',14, mcpatch_threshold)
         ! filter controls
         call preprocess_stream%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -2982,7 +2987,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 15, 0, 20, 14, 1, 6, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 15, 0, 21, 14, 1, 6, .true.)                                                     ! # entries in each group, requires sp_project
         ! image input/output
         call preprocess_stream_dev%set_input('img_ios', 1, dir_movies)
         call preprocess_stream_dev%set_input('img_ios', 2, gainref)
@@ -3042,6 +3047,7 @@ contains
         &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .false., 200.)
         call preprocess_stream_dev%set_input('srch_ctrls',19, lpthresh)
         call preprocess_stream_dev%set_input('srch_ctrls',20, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
+        call preprocess_stream_dev%set_input('srch_ctrls',21, mcpatch_threshold)
         ! filter controls
         call preprocess_stream_dev%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)

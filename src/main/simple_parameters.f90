@@ -59,6 +59,7 @@ type :: parameters
     character(len=3)      :: masscen='no'         !< center to center of gravity(yes|no){no}
     character(len=3)      :: match_filt='yes'     !< matched filter on (yes|no){yes}
     character(len=3)      :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
+    character(len=3)      :: mcpatch_threshold='yes' !< whether to use the threshold for motion correction patch solution(yes|no){yes}
     character(len=3)      :: merge='no'
     character(len=3)      :: mirr='no'            !< mirror(no|x|y){no}
     character(len=3)      :: mkdir='no'           !< make auto-named execution directory(yes|no){no}
@@ -571,6 +572,7 @@ contains
         call check_carg('masscen',        self%masscen)
         call check_carg('match_filt',     self%match_filt)
         call check_carg('mcpatch',        self%mcpatch)
+        call check_carg('mcpatch_threshold', self%mcpatch_threshold)
         call check_carg('merge',          self%merge)
         call check_carg('mirr',           self%mirr)
         call check_carg('mkdir',          self%mkdir)
