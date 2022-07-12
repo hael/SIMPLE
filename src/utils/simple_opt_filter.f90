@@ -252,7 +252,7 @@ contains
         class(image),   intent(in)    :: odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm,&
                                         &even_copy_rmat, even_copy_cmat, even_copy_shellnorm
         type(tvfilter), intent(inout) :: tvfilt_in
-        real,           intent(inout) :: cur_diff_odd( :,:,:), cur_diff_even(:,:,:)
+        real,           intent(inout) :: cur_diff_odd(:,:,:), cur_diff_even(:,:,:)
         real,           intent(inout) :: cur_fil(:), weights_2D(:,:)
         integer,        intent(in)    :: kstop
         type(opt_vol),  intent(inout) :: opt_odd(:,:,:), opt_even(:,:,:)
@@ -260,7 +260,8 @@ contains
         integer           :: k,l,m,n, box, dim3, ldim(3), find_start, find_stop, iter_no, ext
         integer           :: best_ind, cur_ind, lb(3), ub(3)
         real              :: min_sum_odd, min_sum_even, rad, find_stepsz, val
-        real, pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), ref_odd_rmat(:,:,:), ref_even_rmat(:,:,:)
+        real, pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:)
+        type(image_ptr)   :: podd, peven, pweights
         ! init
         ldim              = odd%get_ldim()
         box               = ldim(1)
@@ -284,6 +285,18 @@ contains
         opt_even%opt_freq = 0.
         opt_odd( lb(1):ub(1),lb(2):ub(2),lb(3):ub(3))%opt_diff = huge(min_sum_odd)
         opt_even(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3))%opt_diff = huge(min_sum_odd)
+        call       weights_img%get_mat_ptrs(pweights)
+        call  ref_diff_odd_img%get_mat_ptrs(podd)
+        call ref_diff_even_img%get_mat_ptrs(peven)
+        call weights_img%zero_and_unflag_ft()
+        do m = -ext, ext
+            do n = -ext, ext
+                rad = hyp(real(m), real(n))
+                val = -rad/(ext + 1) + 1.
+                if( val > 0 ) call weights_img%set_rmat_at(box/2+m, box/2+n, 1, val)
+            enddo
+        enddo
+        call weights_img%fft()
         do iter_no = 1, params_glob%nsearch
             cur_ind = nint(find_start + (iter_no - 1)*find_stepsz)
             if( L_VERBOSE_GLOB ) write(*,*) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current Fourier index = ', cur_ind
@@ -307,37 +320,26 @@ contains
             call even%get_rmat_ptr(rmat_even)
             ! do the non-uniform, i.e. optimizing at each voxel
             if( params_glob%l_nonuniform )then                    
-                call weights_img%zero_and_unflag_ft()
-                do m = -ext, ext
-                    do n = -ext, ext
-                        rad = hyp(real(m), real(n))
-                        val = -rad/(ext + 1) + 1.
-                        if( val > 0 ) call weights_img%set_rmat_at(box/2+m, box/2+n, 1, val)
-                    enddo
-                enddo
-                call weights_img%fft()
-                call ref_diff_odd_img%zero_and_unflag_ft()
-                call ref_diff_odd_img%set_rmat(cur_diff_odd, .false.)
-                call ref_diff_odd_img%fft()
-                ref_diff_odd_img = ref_diff_odd_img * weights_img
-                call ref_diff_odd_img%ifft()
-                call ref_diff_odd_img%get_rmat_ptr(ref_odd_rmat)
-                call ref_diff_even_img%zero_and_unflag_ft()
-                call ref_diff_even_img%set_rmat(cur_diff_even, .false.)
+                call  ref_diff_odd_img%set_ft(.false.)
+                call ref_diff_even_img%set_ft(.false.)
+                podd%rmat( :box,:box,:dim3) = cur_diff_odd
+                peven%rmat(:box,:box,:dim3) = cur_diff_even
+                call  ref_diff_odd_img%fft()
                 call ref_diff_even_img%fft()
-                ref_diff_even_img = ref_diff_even_img * weights_img
+                podd%cmat  =  podd%cmat * pweights%cmat
+                peven%cmat = peven%cmat * pweights%cmat
+                call  ref_diff_odd_img%ifft()
                 call ref_diff_even_img%ifft()
-                call ref_diff_even_img%get_rmat_ptr(ref_even_rmat)
                 do l = lb(2),ub(2)
                     do k = lb(1),ub(1)
-                        if (ref_odd_rmat(k,l,1) < opt_odd(k,l,1)%opt_diff) then
+                        if (podd%rmat(k,l,1) < opt_odd(k,l,1)%opt_diff) then
                             opt_odd(k,l,1)%opt_val  = rmat_odd(k,l,1)
-                            opt_odd(k,l,1)%opt_diff = ref_odd_rmat(k,l,1)
+                            opt_odd(k,l,1)%opt_diff = podd%rmat(k,l,1)
                             opt_odd(k,l,1)%opt_freq = cur_ind
                         endif
-                        if (ref_even_rmat(k,l,1) < opt_even(k,l,1)%opt_diff) then
+                        if (peven%rmat(k,l,1) < opt_even(k,l,1)%opt_diff) then
                             opt_even(k,l,1)%opt_val  = rmat_even(k,l,1)
-                            opt_even(k,l,1)%opt_diff = ref_even_rmat(k,l,1)
+                            opt_even(k,l,1)%opt_diff = peven%rmat(k,l,1)
                             opt_even(k,l,1)%opt_freq = cur_ind
                         endif
                     enddo
@@ -361,8 +363,12 @@ contains
         if( L_VERBOSE_GLOB )then
             if( .not. params_glob%l_nonuniform ) write(*,*) 'minimized cost at resolution = ', box*params_glob%smpd/best_ind
         endif
-        call odd%set_rmat( opt_odd( :,:,:)%opt_val, .false.)
-        call even%set_rmat(opt_even(:,:,:)%opt_val, .false.)
+        do k = 1,ldim(1)
+            do l = 1,ldim(2)
+                call  odd%set_rmat_at(k,l,1,opt_odd( k,l,1)%opt_val)
+                call even%set_rmat_at(k,l,1,opt_even(k,l,1)%opt_val)
+            enddo
+        enddo
     end subroutine opt_filter_2D
 
     ! 3D optimization(search)-based uniform/nonuniform filter, paralellized version
@@ -503,19 +509,19 @@ contains
             endif
             ! do the non-uniform, i.e. optimizing at each voxel
             if( params_glob%l_nonuniform )then
-                call ref_diff_odd_img%set_ft(.false.)
+                call  ref_diff_odd_img%set_ft(.false.)
                 call ref_diff_even_img%set_ft(.false.)
                 !$omp parallel workshare
                 podd%rmat( :box,:box,:box) = cur_diff_odd
                 peven%rmat(:box,:box,:box) = cur_diff_even
                 !$omp end parallel workshare
-                call ref_diff_odd_img%fft()
+                call  ref_diff_odd_img%fft()
                 call ref_diff_even_img%fft()
                 !$omp parallel workshare
                 podd%cmat  =  podd%cmat * pweights%cmat
                 peven%cmat = peven%cmat * pweights%cmat
                 !$omp end parallel workshare
-                call ref_diff_odd_img%ifft()
+                call  ref_diff_odd_img%ifft()
                 call ref_diff_even_img%ifft()
                 !$omp parallel do collapse(3) default(shared) private(k,l,m) schedule(dynamic,CHUNKSZ) proc_bind(close)
                 do m = lb(3),ub(3)
@@ -584,7 +590,7 @@ contains
         do k = 1,ldim(1)
             do l = 1,ldim(2)
                 do m = 1,ldim(3)
-                    call      odd%set_rmat_at(k,l,m, opt_odd(k,l,m)%opt_val)
+                    call      odd%set_rmat_at(k,l,m,opt_odd( k,l,m)%opt_val)
                     call     even%set_rmat_at(k,l,m,opt_even(k,l,m)%opt_val)
                     call freq_img%set_rmat_at(k,l,m,box*params_glob%smpd/opt_odd(k,l,m)%opt_freq) ! resolution map
                 enddo
@@ -601,8 +607,10 @@ contains
         deallocate(opt_odd, opt_even, cur_diff_odd, cur_diff_even, cur_fil, weights_3D)
         call odd_copy_rmat%kill
         call odd_copy_cmat%kill
+        call odd_copy_shellnorm%kill
         call even_copy_rmat%kill
         call even_copy_cmat%kill
+        call even_copy_shellnorm%kill
     end subroutine opt_filter_3D
 
 end module simple_opt_filter
