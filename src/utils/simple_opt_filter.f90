@@ -4,7 +4,7 @@ module simple_opt_filter
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_defs
-use simple_image,      only: image
+use simple_image,      only: image, image_ptr
 use simple_parameters, only: params_glob
 implicit none
 #include "simple_local_flags.inc"
@@ -378,7 +378,8 @@ contains
         real                       :: min_sum_odd, min_sum_even, rad, find_stepsz, val
         character(len=90)          :: file_tag
         integer,       parameter   :: CHUNKSZ = 20
-        real,          pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:), ref_odd_rmat(:,:,:), ref_even_rmat(:,:,:)
+        type(image_ptr)            :: podd, peven, pweights
+        real,          pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:)
         real,          allocatable :: cur_diff_odd( :,:,:), cur_diff_even(:,:,:)
         real,          allocatable :: cur_fil(:), weights_3D(:,:,:)
         type(opt_vol), allocatable :: opt_odd(:,:,:), opt_even(:,:,:)
@@ -395,6 +396,9 @@ contains
         call       weights_img%new(ldim, params_glob%smpd)
         call  ref_diff_odd_img%new(ldim, params_glob%smpd)
         call ref_diff_even_img%new(ldim, params_glob%smpd)
+        call       weights_img%get_mat_ptrs(pweights)
+        call  ref_diff_odd_img%get_mat_ptrs(podd)
+        call ref_diff_even_img%get_mat_ptrs(peven)
         call odd_copy_rmat%copy(odd)
         call odd_copy_cmat%copy(odd)
         call odd_copy_cmat%fft
@@ -418,6 +422,17 @@ contains
             if( lb(k) < ext + 1 )   lb(k) = ext+1
             if( ub(k) > box - ext ) ub(k) = box - ext
         enddo
+        call weights_img%zero_and_unflag_ft()
+        do k = -ext, ext
+            do l = -ext, ext
+                do m = -ext, ext
+                    rad = hyp(real(k), real(l), real(m))
+                    val = -rad/(ext + 1) + 1.
+                    if( val > 0 ) call weights_img%set_rmat_at(box/2+k, box/2+l, box/2+m, val)
+                enddo
+            enddo
+        enddo
+        call weights_img%fft()
         ! searching for the best fourier index from here and generating the optimized filter
         min_sum_odd       = huge(min_sum_odd)
         min_sum_even      = huge(min_sum_even)
@@ -488,29 +503,20 @@ contains
             endif
             ! do the non-uniform, i.e. optimizing at each voxel
             if( params_glob%l_nonuniform )then
-                call weights_img%zero_and_unflag_ft()
-                do k = -ext, ext
-                    do l = -ext, ext
-                        do m = -ext, ext
-                            rad = hyp(real(k), real(l), real(m))
-                            val = -rad/(ext + 1) + 1.
-                            if( val > 0 ) call weights_img%set_rmat_at(box/2+k, box/2+l, box/2+m, val)
-                        enddo
-                    enddo
-                enddo
-                call weights_img%fft()
-                call ref_diff_odd_img%zero_and_unflag_ft()
-                call ref_diff_odd_img%set_rmat(cur_diff_odd, .false.)
+                call ref_diff_odd_img%set_ft(.false.)
+                call ref_diff_even_img%set_ft(.false.)
+                !$omp parallel workshare
+                podd%rmat( :box,:box,:box) = cur_diff_odd
+                peven%rmat(:box,:box,:box) = cur_diff_even
+                !$omp end parallel workshare
                 call ref_diff_odd_img%fft()
-                ref_diff_odd_img = ref_diff_odd_img * weights_img
-                call ref_diff_odd_img%ifft()
-                call ref_diff_odd_img%get_rmat_ptr(ref_odd_rmat)
-                call ref_diff_even_img%zero_and_unflag_ft()
-                call ref_diff_even_img%set_rmat(cur_diff_even, .false.)
                 call ref_diff_even_img%fft()
-                ref_diff_even_img = ref_diff_even_img * weights_img
+                !$omp parallel workshare
+                podd%cmat  =  podd%cmat * pweights%cmat
+                peven%cmat = peven%cmat * pweights%cmat
+                !$omp end parallel workshare
+                call ref_diff_odd_img%ifft()
                 call ref_diff_even_img%ifft()
-                call ref_diff_even_img%get_rmat_ptr(ref_even_rmat)
                 !$omp parallel do collapse(3) default(shared) private(k,l,m) schedule(dynamic,CHUNKSZ) proc_bind(close)
                 do m = lb(3),ub(3)
                     do l = lb(2),ub(2)
@@ -518,14 +524,14 @@ contains
                             ! opt_diff keeps the minimized cost value at each voxel of the search
                             ! opt_odd  keeps the best voxel of the form B*odd
                             ! opt_even keeps the best voxel of the form B*even
-                            if (ref_odd_rmat(k,l,m) < opt_odd(k,l,m)%opt_diff) then
-                                opt_odd(k,l,m)%opt_val  = rmat_odd(k,l,m)
-                                opt_odd(k,l,m)%opt_diff = ref_odd_rmat(k,l,m)
+                            if (podd%rmat(k,l,m) < opt_odd(k,l,m)%opt_diff) then
+                                opt_odd(k,l,m)%opt_val  =  rmat_odd(k,l,m)
+                                opt_odd(k,l,m)%opt_diff = podd%rmat(k,l,m)
                                 opt_odd(k,l,m)%opt_freq = cur_ind
                             endif
-                            if (ref_even_rmat(k,l,m) < opt_even(k,l,m)%opt_diff) then
-                                opt_even(k,l,m)%opt_val  = rmat_even(k,l,m)
-                                opt_even(k,l,m)%opt_diff = ref_even_rmat(k,l,m)
+                            if (peven%rmat(k,l,m) < opt_even(k,l,m)%opt_diff) then
+                                opt_even(k,l,m)%opt_val  =  rmat_even(k,l,m)
+                                opt_even(k,l,m)%opt_diff = peven%rmat(k,l,m)
                                 opt_even(k,l,m)%opt_freq = cur_ind
                             endif
                         enddo
