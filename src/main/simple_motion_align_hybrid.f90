@@ -75,6 +75,7 @@ contains
     ! Doers
     procedure, private :: calc_shifts
     procedure          :: align
+    procedure          :: align_discrete
     procedure          :: refine
     procedure, private :: align_dcorr
     procedure, private :: align_corr
@@ -288,7 +289,6 @@ contains
         if (( self%hp < 0. ) .or. ( self%lp < 0.))  THROW_HARD('hp or lp < 0; simple_motion_align_hybrid: align')
         ! deactivating polynomial fitting for low number of frames
         self%fitshifts = self%fitshifts .and. (self%nframes < 3*POLYDIM)
-        write(logfhandle,'(A,2I3)') '>>> PERFORMING OPTIMIZATION FOR PATCH',self%px,self%py
         ! discrete correlation search
         call self%init_images
         if( self%L_BENCH )then
@@ -328,7 +328,22 @@ contains
         self%shifts_toplot = self%opt_shifts
     end subroutine align
 
-    ! Continuous refinement
+    ! Driver for Fourier correlation theorem based alignement
+    subroutine align_discrete( self, ini_shifts, frameweights )
+        class(motion_align_hybrid), intent(inout) :: self
+        real,             optional, intent(in)    :: ini_shifts(self%nframes,2), frameweights(self%nframes)
+        if ( .not. self%existence ) THROW_HARD('not instantiated; simple_motion_align_hybrid: align')
+        if (( self%hp < 0. ) .or. ( self%lp < 0.))  THROW_HARD('hp or lp < 0; simple_motion_align_hybrid: align')
+        ! deactivating polynomial fitting for low number of frames
+        self%fitshifts = self%fitshifts .and. (self%nframes < 3*POLYDIM)
+        call self%init_images
+        call self%align_dcorr( ini_shifts, frameweights )
+        call self%dealloc_images
+        self%opt_shifts = self%opt_shifts / self%scale_factor
+        self%shifts_toplot = self%opt_shifts
+    end subroutine align_discrete
+
+    ! Driver for Continuous refinement
     subroutine refine( self, ini_shifts, frameweights )
         class(motion_align_hybrid), intent(inout) :: self
         real,                       intent(in)    :: ini_shifts(self%nframes,2)
