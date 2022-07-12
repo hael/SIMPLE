@@ -1022,7 +1022,7 @@ contains
         call set_param(picker,         'picker',       'multi',  'Picking approach','Picking approach(phasecorr|old_school){phasecorr}','(phasecorr|old_school){phasecorr}', .false.,'phasecorr')
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
         call set_param(mul,            'mul',          'num',    'Multiplication factor', 'Multiplication factor{1.}','{1.}',.false., 1.)
-        call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(patch|wpatch|poly|poly2){patch}','(patch|wpatch|poly|poly2){patch}', .false.,'patch')
+        call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(patch|patch_refine|wpatch|poly|poly2){patch}','(patch|patch_refine|wpatch|poly|poly2){patch}', .false.,'patch')
         call set_param(width,          'width',        'num',    'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
         call set_param(automsk,        'automsk',      'multi',  'Perform envelope masking', 'Whether to generate/apply an envelope mask(yes|no|file){no}', '(yes|no|file){no}', .false., 'no')
         call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (full|partial){full}','(full|partial){full}', .false., 'full')

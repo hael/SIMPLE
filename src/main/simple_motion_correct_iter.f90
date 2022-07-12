@@ -16,6 +16,7 @@ private
 real,             parameter :: PATCH_FIT_THRESHOLD = 4.0 ! threshold for polynomial fitting in pixels
 real,             parameter :: SMPD4VIZ_NANO = 0.9
 character(len=*), parameter :: speckind = 'sqrt'
+real                        :: effective_patch_fit_threshold = PATCH_FIT_THRESHOLD
 
 type :: motion_correct_iter
     private
@@ -153,15 +154,23 @@ contains
             call motion_correct_iso_kill
             ! Patch based approach
             if( motion_correct_with_patched ) then
-                call motion_correct_patched(bfac_here, PATCH_FIT_THRESHOLD, goodnessoffit)
+                select case(trim(params_glob%mcconvention))
+                case('first','relion')
+                    ! the threshold is slighly increased because goodness of fit is always higher
+                    ! when calculated with reference to the first frame
+                    effective_patch_fit_threshold = PATCH_FIT_THRESHOLD + 1.0
+                case DEFAULT
+                    effective_patch_fit_threshold = PATCH_FIT_THRESHOLD
+                end select
+                call motion_correct_patched(bfac_here, effective_patch_fit_threshold, goodnessoffit)
                 if( trim(params_glob%mcpatch_threshold).eq.'no' )then
                     patch_success = .true. ! always accept patch solution
-                    if( any(goodnessoffit >= PATCH_FIT_THRESHOLD) )then
+                    if( any(goodnessoffit >= effective_patch_fit_threshold) )then
                         THROW_WARN('Polynomial fitting to patch-determined shifts was of insufficient quality')
                         THROW_WARN('The patch-based correction will however be used')
                     endif
                 else
-                    patch_success = all(goodnessoffit < PATCH_FIT_THRESHOLD)
+                    patch_success = all(goodnessoffit < effective_patch_fit_threshold)
                 endif
                 ! generate sums
                 if( patch_success )then
