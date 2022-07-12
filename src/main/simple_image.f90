@@ -71,6 +71,7 @@ contains
     procedure          :: get_shconst
     procedure          :: get
     procedure          :: get_rmat
+    procedure          :: get_mat_ptrs
     procedure          :: get_rmat_ptr
     procedure          :: get_rmat_sub
     procedure          :: get_cmat
@@ -1266,6 +1267,13 @@ contains
         ldim = self%ldim
         allocate(rmat(ldim(1),ldim(2),ldim(3)), source=self%rmat(:ldim(1),:ldim(2),:ldim(3)))
     end function get_rmat
+
+    subroutine get_mat_ptrs( self, mat_ptrs )
+        class(image),      target, intent(in)  :: self
+        class(image_ptr),          intent(out) :: mat_ptrs
+        mat_ptrs%cmat => self%cmat
+        mat_ptrs%rmat => self%rmat
+    end subroutine get_mat_ptrs
 
     subroutine get_rmat_ptr( self, rmat_ptr )
         class(image), target,        intent(in)  :: self
