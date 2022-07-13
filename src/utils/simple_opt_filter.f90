@@ -293,7 +293,7 @@ contains
             do n = -ext, ext
                 rad = hyp(real(m), real(n))
                 val = -rad/(ext + 1) + 1.
-                if( val > 0 ) call weights_img%set_rmat_at(box/2+m, box/2+n, 1, val)
+                if( val > 0 ) call weights_img%set_rmat_at(box/2+m+1, box/2+n+1, 1, val)
             enddo
         enddo
         call weights_img%fft()
@@ -434,7 +434,7 @@ contains
                 do m = -ext, ext
                     rad = hyp(real(k), real(l), real(m))
                     val = -rad/(ext + 1) + 1.
-                    if( val > 0 ) call weights_img%set_rmat_at(box/2+k, box/2+l, box/2+m, val)
+                    if( val > 0 ) call weights_img%set_rmat_at(box/2+k+1, box/2+l+1, box/2+m+1, val)
                 enddo
             enddo
         enddo
@@ -611,6 +611,9 @@ contains
         call even_copy_rmat%kill
         call even_copy_cmat%kill
         call even_copy_shellnorm%kill
+        call weights_img%kill
+        call ref_diff_odd_img%kill
+        call ref_diff_even_img%kill
     end subroutine opt_filter_3D
 
 end module simple_opt_filter
