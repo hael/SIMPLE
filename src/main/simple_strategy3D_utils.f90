@@ -18,7 +18,7 @@ contains
         class(strategy3D_srch), intent(inout) :: s
         type(ori) :: osym, o_prev, o_new
         integer   :: ref, inpl, state, neff_states, loc(1)
-        real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, corr, mi_proj, frac
+        real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, corr, mi_proj, frac, pw
         logical   :: l_multistates
         ! stash previous ori
         call build_glob%spproj_field%get_ori(s%iptcl, o_prev)
@@ -101,5 +101,24 @@ contains
         call o_prev%kill
         call o_new%kill
     end subroutine extract_peak_ori
+
+    subroutine calc_ori_weight( s, ref, pw )
+        class(strategy3D_srch), intent(in)  :: s
+        integer,                intent(in)  :: ref
+        real,                   intent(out) :: pw
+        real(dp) :: sumw, diff2, max_diff2
+        integer  :: iref
+        pw = 1.0
+        if( params_glob%cc_objfun /= OBJFUN_EUCLID ) return
+        max_diff2 = s3D%proj_space_corrs(s%ithr,ref)
+        sumw      = 0.d0
+        do iref = 1,s%nrefs
+            if( s3D%proj_space_mask(iref,s%ithr) )then
+                diff2 = real(max_diff2 - s3D%proj_space_corrs(s%ithr,iref),dp)
+                if( diff2 < 700.d0 ) sumw = sumw + exp(-diff2)
+            endif
+        enddo
+        pw = real(1.d0 / sumw)
+    end subroutine calc_ori_weight
 
 end module simple_strategy3D_utils
