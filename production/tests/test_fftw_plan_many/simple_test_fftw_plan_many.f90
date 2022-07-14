@@ -10,7 +10,7 @@ implicit none
 type(parameters)              :: p
 type(cmdline)                 :: cline, cline_projection
 type(reproject_commander)     :: xreproject
-integer                       :: k, l, nptcls, rc, iptcl, cnt, phys(3)
+integer                       :: k, l, nptcls, rc, iptcl, cnt
 type(image)     , allocatable :: imgs(:)
 character(len=:), allocatable :: cmd
 complex,          pointer     :: cmat_img(:,:,:)
@@ -18,7 +18,7 @@ real,             pointer     :: rmat_img(:,:,:)
 logical                       :: mrc_exists
 integer(timer_int_kind)       ::  t_tot
 real(timer_int_kind)          :: rt_tot
-type(c_ptr)                   :: plan_fwd             !< fftw plan for the image (fwd)
+type(c_ptr)                   :: plan_fwd, plan_bwd             !< fftw plan for the image (fwd)
 real(   kind=c_float),         allocatable ::  in(:)
 complex(kind=c_float_complex), allocatable :: out(:)
 if( command_argument_count() < 4 )then
@@ -69,11 +69,11 @@ do iptcl = 1, nptcls
     call imgs(iptcl)%fft()
     call imgs(iptcl)%get_cmat_ptr(cmat_img)
     cmat_img = cmat_img/sum(cmat_img)
+    call imgs(iptcl)%ifft()
 enddo
 rt_tot = toc(t_tot)
 print *, 'total time = ', rt_tot
 do iptcl = 1, nptcls
-    call imgs(iptcl)%ifft()
     call imgs(iptcl)%write('test1.mrc', iptcl)
 enddo
 ! with fft_plan_many
@@ -84,12 +84,16 @@ call fftwf_plan_with_nthreads(nthr_glob)
 plan_fwd = fftwf_plan_many_dft_r2c(2,  [p%ldim(1)+2, p%ldim(2)],nptcls,&
                                   &in ,[p%ldim(1)+2, p%ldim(2)],1,size(rmat_img),&
                                   &out,[p%ldim(1)+2, p%ldim(2)],1,size(rmat_img),FFTW_ESTIMATE)
+plan_bwd = fftwf_plan_many_dft_c2r(2,  [p%ldim(1)+2, p%ldim(2)],nptcls,&
+                                  &out,[p%ldim(1)+2, p%ldim(2)],1,size(rmat_img),&
+                                  &in ,[p%ldim(1)+2, p%ldim(2)],1,size(rmat_img),FFTW_ESTIMATE)
 !$omp end critical
 do iptcl = 1, nptcls
     call imgs(iptcl)%new(p%ldim, p%smpd)
     call imgs(iptcl)%read(p%stk, iptcl)
 enddo
 cnt = 1
+t_tot = tic()
 do iptcl = 1, nptcls
     call imgs(iptcl)%get_rmat_ptr(rmat_img)
     do k = 1, p%ldim(1)+2
@@ -99,25 +103,21 @@ do iptcl = 1, nptcls
         enddo
     enddo
 enddo
-do iptcl = 1, nptcls
-    call imgs(iptcl)%fft()
-enddo
-t_tot = tic()
 call fftwf_execute_dft_r2c(plan_fwd,in,out)
+out = out/sum(out)
+call fftwf_execute_dft_c2r(plan_bwd,out,in)
 cnt = 1
 do iptcl = 1, nptcls
-    call imgs(iptcl)%get_cmat_ptr(cmat_img)
-    do k = 0, p%ldim(1)/2
-        do l = 0, p%ldim(2)-1
-            phys = imgs(iptcl)%comp_addr_phys([k,l,0])
-            cmat_img(phys(1),phys(2),phys(3)) = out(cnt)
+    call imgs(iptcl)%get_rmat_ptr(rmat_img)
+    do k = 1, p%ldim(1)+2
+        do l = 1, p%ldim(2)
+            rmat_img(k,l,1) = in(cnt)
             cnt = cnt + 1
         enddo
     enddo
 enddo
 rt_tot = toc(t_tot)
 do iptcl = 1, nptcls
-    call imgs(iptcl)%ifft()
     call imgs(iptcl)%write('test2.mrc', iptcl)
 enddo
 print *, 'total time = ', rt_tot
