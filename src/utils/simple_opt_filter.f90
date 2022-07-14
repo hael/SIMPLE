@@ -390,8 +390,8 @@ contains
         real,          allocatable :: cur_fil(:), weights_3D(:,:,:)
         type(opt_vol), allocatable :: opt_odd(:,:,:), opt_even(:,:,:)
         character(len=LONGSTRLEN)  :: benchfname
-        integer(timer_int_kind)    ::  t_tot,  t_filter_odd,  t_filter_even,  t_search_opt,  t_chop_copy,  t_chop_filter,  t_chop_sqeu
-        real(timer_int_kind)       :: rt_tot, rt_filter_odd, rt_filter_even, rt_search_opt, rt_chop_copy, rt_chop_filter, rt_chop_sqeu
+        integer(timer_int_kind)    ::  t_tot,  t_filter_all,  t_search_opt,  t_chop_copy,  t_chop_filter,  t_chop_sqeu
+        real(timer_int_kind)       :: rt_tot, rt_filter_all, rt_search_opt, rt_chop_copy, rt_chop_filter, rt_chop_sqeu
         ldim        = odd%get_ldim()
         box         = ldim(1)
         ext         = params_glob%smooth_ext
@@ -453,8 +453,7 @@ contains
         opt_even(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3))%opt_diff = huge(min_sum_odd)
         if( L_BENCH_GLOB )then
             t_tot          = tic()
-            rt_filter_odd  = 0.
-            rt_filter_even = 0.
+            rt_filter_all  = 0.
             rt_search_opt  = 0.
             rt_chop_copy   = 0.
             rt_tot         = 0.
@@ -465,46 +464,41 @@ contains
             cur_ind = nint(find_start + (iter_no - 1)*find_stepsz)
             if( L_VERBOSE_GLOB ) write(*,*) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current Fourier index = ', cur_ind
             if( L_BENCH_GLOB )then
-                t_filter_odd = tic()
+                t_filter_all = tic()
                 t_chop_copy  = tic()
             endif
-            ! filtering odd
-            call odd%copy_fast(odd_copy_cmat)
+            ! filtering odd/even
+            call  odd%copy_fast( odd_copy_cmat)
+            call even%copy_fast(even_copy_cmat)
             if( L_BENCH_GLOB )then
                 rt_chop_copy  = rt_chop_copy + toc(t_chop_copy)
                 t_chop_filter = tic()
             endif
-            call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false.)
+            call apply_opt_filter(odd , cur_ind, find_start, find_stop, cur_fil, .false.)
+            call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .true.)
             if( L_BENCH_GLOB )then
                 rt_chop_filter = rt_chop_filter + toc(t_chop_filter)
                 t_chop_sqeu    = tic()
             endif
-            call odd%sqeuclid_matrix(even_copy_rmat, cur_diff_odd)
+            call  odd%sqeuclid_matrix(even_copy_rmat, cur_diff_odd)
+            call even%sqeuclid_matrix( odd_copy_rmat, cur_diff_even)
             if( L_BENCH_GLOB )then
                 rt_chop_sqeu = rt_chop_sqeu + toc(t_chop_sqeu)
             endif
             if( params_glob%l_match_filt )then
-                call odd%copy_fast(odd_copy_shellnorm)
+                call  odd%copy_fast(odd_copy_shellnorm)
+                call even%copy_fast(even_copy_shellnorm)
                 if( L_BENCH_GLOB ) t_chop_filter = tic()
-                call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false.)
+                call apply_opt_filter( odd, cur_ind, find_start, find_stop, cur_fil, .false.)
+                call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .false.)
                 if( L_BENCH_GLOB ) rt_chop_filter = rt_chop_filter + toc(t_chop_filter)
             endif
-            call odd%get_rmat_ptr(rmat_odd)
-            if( L_BENCH_GLOB )then
-                rt_filter_odd = rt_filter_odd + toc(t_filter_odd)
-                t_filter_even = tic()
-            endif
-            ! filtering even
-            call even%copy_fast(even_copy_cmat)
-            call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .true.)
-            call even%sqeuclid_matrix(odd_copy_rmat, cur_diff_even)
-            if( params_glob%l_match_filt )then
-                call even%copy_fast(even_copy_shellnorm)
-                call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .false.)
-            endif
+            call  odd%get_rmat_ptr(rmat_odd)
             call even%get_rmat_ptr(rmat_even)
             if( L_BENCH_GLOB )then
-                rt_filter_even = rt_filter_even + toc(t_filter_even)
+                rt_filter_all = rt_filter_all + toc(t_filter_all)
+            endif
+            if( L_BENCH_GLOB )then
                 t_search_opt   = tic()
             endif
             ! do the non-uniform, i.e. optimizing at each voxel
@@ -571,17 +565,14 @@ contains
             write(fnr,'(a,1x,f9.2)') 'copy_fast            : ', rt_chop_copy
             write(fnr,'(a,1x,f9.2)') 'lp_filter and ifft   : ', rt_chop_filter
             write(fnr,'(a,1x,f9.2)') 'sqeuclid_matrix      : ', rt_chop_sqeu
-            write(fnr,'(a,1x,f9.2)') 'odd filtering        : ', rt_filter_odd
-            write(fnr,'(a,1x,f9.2)') 'even filtering       : ', rt_filter_even
+            write(fnr,'(a,1x,f9.2)') 'filtering            : ', rt_filter_all
             write(fnr,'(a,1x,f9.2)') 'searching/optimizing : ', rt_search_opt
             write(fnr,'(a,1x,f9.2)') 'total time           : ', rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-            write(fnr,'(a,1x,f9.2)') 'odd filtering        : ', (rt_filter_odd /rt_tot) * 100. 
-            write(fnr,'(a,1x,f9.2)') 'even filtering       : ', (rt_filter_even/rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') 'filtering            : ', (rt_filter_all /rt_tot) * 100. 
             write(fnr,'(a,1x,f9.2)') 'searching/optimizing : ', (rt_search_opt /rt_tot) * 100.
-            write(fnr,'(a,1x,f9.2)') '% accounted for      : ',&
-            &((rt_filter_odd+rt_filter_even+rt_search_opt)/rt_tot) * 100.
+            write(fnr,'(a,1x,f9.2)') '% accounted for      : ', ((rt_filter_all+rt_search_opt)/rt_tot) * 100.
             call fclose(fnr)
         endif
         if( L_VERBOSE_GLOB )then
