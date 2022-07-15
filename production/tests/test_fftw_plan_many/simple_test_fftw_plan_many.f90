@@ -10,7 +10,7 @@ implicit none
 type(parameters)              :: p
 type(cmdline)                 :: cline, cline_projection
 type(reproject_commander)     :: xreproject
-integer                       :: k, l, nptcls, rc, iptcl, cnt
+integer                       :: k, l, nptcls, rc, iptcl, cnt, c_shape(3)
 type(image)     , allocatable :: imgs(:)
 character(len=:), allocatable :: cmd
 complex,          pointer     :: cmat_img(:,:,:)
@@ -18,9 +18,9 @@ real,             pointer     :: rmat_img(:,:,:)
 logical                       :: mrc_exists
 integer(timer_int_kind)       ::  t_tot
 real(timer_int_kind)          :: rt_tot
-type(c_ptr)                   :: plan_fwd, plan_bwd             !< fftw plan for the image (fwd)
-real(   kind=c_float),         allocatable ::  in(:)
-complex(kind=c_float_complex), allocatable :: out(:)
+type(c_ptr)                   :: plan_fwd, plan_bwd, ptr             !< fftw plan for the image (fwd)
+real(   kind=c_float),         pointer ::  in(:,:,:)
+complex(kind=c_float_complex), pointer :: out(:,:,:)
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)') 'Usage: simple_test_fftw_plan_many smpd=xx nthr=yy stk=stk.mrc, mskdiam=zz'
     write(logfhandle,'(a)') 'Example: projections of https://www.rcsb.org/structure/1jyx with smpd=1. mskdiam=180'
@@ -40,7 +40,7 @@ if( command_argument_count() < 4 )then
         call cline_projection%set('smpd'      , 1.)
         call cline_projection%set('pgrp'      , 'c1')
         call cline_projection%set('mskdiam'   , 180.)
-        call cline_projection%set('nspace'    , 100.)
+        call cline_projection%set('nspace'    , 2.)
         call cline_projection%set('nthr'      , 16.)
         call xreproject%execute(cline_projection)
     endif
@@ -58,6 +58,7 @@ call cline%checkvar('mskdiam', 4)
 call cline%check
 call p%new(cline)
 call find_ldim_nptcls(p%stk, p%ldim, nptcls)
+nptcls = 1
 p%ldim(3) = 1 ! because we operate on stacks
 allocate(imgs(nptcls))
 do iptcl = 1, nptcls
@@ -68,6 +69,7 @@ t_tot = tic()
 do iptcl = 1, nptcls
     call imgs(iptcl)%fft()
     call imgs(iptcl)%get_cmat_ptr(cmat_img)
+    if( iptcl == 1 ) print *, cmat_img(1,162:166,1)
     cmat_img = cmat_img/sum(cmat_img)
     call imgs(iptcl)%ifft()
 enddo
@@ -77,16 +79,23 @@ do iptcl = 1, nptcls
     call imgs(iptcl)%write('test1.mrc', iptcl)
 enddo
 ! with fft_plan_many
-call imgs(1)%get_rmat_ptr(rmat_img)
-allocate(in(nptcls*size(rmat_img)), out(nptcls*size(rmat_img)))
+c_shape = [p%ldim(2), p%ldim(1)/2+1, nptcls]
+ptr = fftwf_alloc_complex(int(product(c_shape),c_size_t))
+! Set up the complex array which will point at the allocated memory
+call c_f_pointer(ptr,out,c_shape)
+! Work out the shape of the real array
+c_shape(2) = c_shape(2)*2
+! Set up the real array
+call c_f_pointer(ptr,in,c_shape)
+c_shape(2) = c_shape(2)/2
 !$omp critical
 call fftwf_plan_with_nthreads(nthr_glob)
-plan_fwd = fftwf_plan_many_dft_r2c(2,  [p%ldim(1)+2, p%ldim(2)],nptcls,&
-                                  &in ,[p%ldim(1)+2, p%ldim(2)],1,size(rmat_img),&
-                                  &out,[p%ldim(1)+2, p%ldim(2)],1,size(rmat_img),FFTW_ESTIMATE)
-plan_bwd = fftwf_plan_many_dft_c2r(2,  [p%ldim(1)+2, p%ldim(2)],nptcls,&
-                                  &out,[p%ldim(1)+2, p%ldim(2)],1,size(rmat_img),&
-                                  &in ,[p%ldim(1)+2, p%ldim(2)],1,size(rmat_img),FFTW_ESTIMATE)
+plan_fwd = fftwf_plan_many_dft_r2c(2,  [p%ldim(2), p%ldim(1)],nptcls,&
+                                  &in ,[p%ldim(2), p%ldim(1)],1,product([p%ldim(1), p%ldim(2)]),&
+                                  &out,[p%ldim(2), p%ldim(1)],1,product([p%ldim(1), p%ldim(2)]),FFTW_ESTIMATE)
+plan_bwd = fftwf_plan_many_dft_c2r(2,  [p%ldim(2), p%ldim(1)],nptcls,&
+                                  &out,[p%ldim(2), p%ldim(1)],1,product([p%ldim(1), p%ldim(2)]),&
+                                  &in ,[p%ldim(2), p%ldim(1)],1,product([p%ldim(1), p%ldim(2)]),FFTW_ESTIMATE)
 !$omp end critical
 do iptcl = 1, nptcls
     call imgs(iptcl)%new(p%ldim, p%smpd)
@@ -98,25 +107,28 @@ do iptcl = 1, nptcls
     call imgs(iptcl)%get_rmat_ptr(rmat_img)
     do k = 1, p%ldim(1)+2
         do l = 1, p%ldim(2)
-            in(cnt) = rmat_img(k,l,1)
+            in(l,k,iptcl) = rmat_img(k,l,1)
             cnt = cnt + 1
         enddo
     enddo
 enddo
 call fftwf_execute_dft_r2c(plan_fwd,in,out)
-out = out/sum(out)
-call fftwf_execute_dft_c2r(plan_bwd,out,in)
+rt_tot = toc(t_tot)
 cnt = 1
 do iptcl = 1, nptcls
-    call imgs(iptcl)%get_rmat_ptr(rmat_img)
-    do k = 1, p%ldim(1)+2
+    call imgs(iptcl)%fft()
+    call imgs(iptcl)%get_cmat_ptr(cmat_img)
+    do k = 1, p%ldim(1)/2+1
         do l = 1, p%ldim(2)
-            rmat_img(k,l,1) = in(cnt)
+            cmat_img(k,l,1) = out(l,k,iptcl)/product([p%ldim(1), p%ldim(2)])
+            if( mod(k+l,2) == 1 ) cmat_img(k,l,1) = -cmat_img(k,l,1)
             cnt = cnt + 1
         enddo
     enddo
+    if( iptcl == 1 ) print *, cmat_img(1,162:166,1)
+    call imgs(iptcl)%ifft()
 enddo
-rt_tot = toc(t_tot)
+!print *, out(1:10)
 do iptcl = 1, nptcls
     call imgs(iptcl)%write('test2.mrc', iptcl)
 enddo
