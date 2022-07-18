@@ -2987,7 +2987,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 15, 0, 21, 14, 1, 6, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 15, 0, 21, 14, 1, 7, .true.)                                                     ! # entries in each group, requires sp_project
         ! image input/output
         call preprocess_stream_dev%set_input('img_ios', 1, dir_movies)
         call preprocess_stream_dev%set_input('img_ios', 2, gainref)
@@ -3083,7 +3083,12 @@ contains
         call preprocess_stream_dev%set_input('comp_ctrls', 4, nparts)
         preprocess_stream_dev%comp_ctrls(4)%descr_short = 'Number of computing nodes allocated to preprocessing'
         call preprocess_stream_dev%set_input('comp_ctrls', 5, nthr)
-        call preprocess_stream_dev%set_input('comp_ctrls', 6, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)', 'in seconds(29mins){1740}', .false., 1740.)
+        preprocess_stream_dev%comp_ctrls(5)%descr_short = 'Number of threads/node for preprocessing'
+        preprocess_stream_dev%comp_ctrls(5)%descr_long  = 'Number of threads per node allocated to preprocessing steps (motion correction, CTF estimation, picking)'
+        call preprocess_stream_dev%set_input('comp_ctrls', 6, 'nthr2D', 'num', 'Number of threads/node for 2D classification', 'Number of threads per node allocated to 2D classification',&
+        &'# of threads for per', .true., 1.)
+        call preprocess_stream_dev%set_input('comp_ctrls', 7, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
+        &'in seconds(29mins){1740}', .false., 1740.)
     end subroutine new_preprocess_stream_dev
 
     subroutine new_print_dose_weights

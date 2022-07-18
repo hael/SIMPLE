@@ -305,6 +305,7 @@ type :: parameters
     integer :: nstates=1           !< # states to reconstruct
     integer :: nsym=1
     integer :: nthr=1              !< # OpenMP threads{1}
+    integer :: nthr2D=1            !< # OpenMP threads{1}
     integer :: numlen=0            !< length of number string
     integer :: numlen_tomo=3       !< length of number string tomo series index{3}
     integer :: nvalid=0
@@ -756,6 +757,7 @@ contains
         call check_iarg('nptcls',         self%nptcls)
         call check_iarg('nptcls_per_cls', self%nptcls_per_cls)
         call check_iarg('nthr',           self%nthr)
+        call check_iarg('nthr2D',         self%nthr2D)
         call check_iarg('numlen',         self%numlen)
         call check_iarg('numlen_tomo',    self%numlen_tomo)
         call check_iarg('nvars',          self%nvars)
