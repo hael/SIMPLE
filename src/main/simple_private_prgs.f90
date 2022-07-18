@@ -396,6 +396,7 @@ contains
         call cmd_dict%push('nstates',       '# states to reconstruct')
         call cmd_dict%push('nsub',          '# proj dirs in coarse grid search{300}')
         call cmd_dict%push('nthr',          '# OpenMP threads{1}')
+        call cmd_dict%push('nthr2D',        '# OpenMP threads for 2D classification{1}')
         call cmd_dict%push('numlen',        'length of number string')
         call cmd_dict%push('numlen_tomo',   'length of number string tomo series index{3}')
         call cmd_dict%push('nvox',          '# voxels{0}')

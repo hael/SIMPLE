@@ -86,6 +86,10 @@ contains
         logical,           intent(inout) :: do2D
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
         integer :: ldim(3), ichunk, maybe2D, ifoo
+        ! check on strictly required parameters
+        if( .not.cline%defined('nthr2D') )then
+            THROW_HARD('Missing required agrument NTHR2D')
+        endif
         ! check whether 2D classification will be performed based on 6 strictly required parameters
         maybe2D = merge(1,0,cline%defined('ncls'))
         maybe2D = maybe2D + merge(1,0,cline%defined('nptcls_per_cls'))
@@ -158,7 +162,7 @@ contains
         call cline_cluster2D_chunk%set('startit',   1.)
         call cline_cluster2D_chunk%set('mskdiam',   mskdiam)
         call cline_cluster2D_chunk%set('ncls',      real(params_glob%ncls_start))
-        call cline_cluster2D_chunk%set('nthr',      real(params_glob%nthr))
+        call cline_cluster2D_chunk%set('nthr',      real(params_glob%nthr2D))
         if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
         allocate(chunks(params_glob%nchunks))
         do ichunk = 1,params_glob%nchunks
@@ -183,7 +187,7 @@ contains
         call cline_cluster2D_pool%set('mskdiam',   mskdiam)
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment
-        call cline_cluster2D_pool%set('nthr',     real(params_glob%nthr))
+        call cline_cluster2D_pool%set('nthr',     real(params_glob%nthr2D))
         call cline_cluster2D_pool%set('nparts',   real(params_glob%nparts_pool))
         call qenv_pool%new(params_glob%nparts_pool,exec_bin='simple_private_exec',qsys_name='local')
         ! auto-scaling
