@@ -128,12 +128,6 @@ contains
         real                          :: smpd, lpstart, lp
         integer                       :: iptcl, box, filtsz, ldim(3), ldim_pd(3), smooth_ext, nptcls, hpind_fsc, find
         logical                       :: lpstart_fallback, l_nonuniform, l_phaseplate
-        integer(timer_int_kind)       :: t_tot
-        type(c_ptr)                   :: ptr, plan_fwd, plan_bwd
-        real(   kind=c_float),         pointer ::  in(:,:,:)
-        complex(kind=c_float_complex), pointer :: out(:,:,:)
-        integer :: c_shape(3)
-        integer, parameter :: N_IMGS = 2
         ! init
         ldim         = even(1)%get_ldim()
         filtsz       = even(1)%get_filtsz()
@@ -198,29 +192,17 @@ contains
         do iptcl = 1, nptcls
             call even(iptcl)%pad_mirr(ldim_pd)
             call odd( iptcl)%pad_mirr(ldim_pd)
-        enddo
-        ! construct
-        call fftwf_plan_with_nthreads(nthr_glob)
-        c_shape = [ldim_pd(2), ldim_pd(1), N_IMGS]
-        ptr = fftwf_alloc_complex(int(product(c_shape),c_size_t))
-        call c_f_pointer(ptr,out,c_shape)
-        call c_f_pointer(ptr,in ,c_shape)
-        !$omp critical
-        plan_fwd = fftwf_plan_many_dft_r2c(2, [ldim_pd(2), ldim_pd(1)], N_IMGS,&
-                                         &in ,[ldim_pd(2), ldim_pd(1)], 1, product([ldim_pd(2), ldim_pd(1)]),&
-                                         &out,[ldim_pd(2), ldim_pd(1)], 1, product([ldim_pd(2), ldim_pd(1)]),FFTW_ESTIMATE)
-        !$omp end critical
-        do iptcl = 1, nptcls
             call weights_img(iptcl)%new(ldim_pd, smpd, .false.)
             call ref_diff_odd_img( iptcl)%new(ldim_pd, smpd, .false.)
             call ref_diff_even_img(iptcl)%new(ldim_pd, smpd, .false.)
             call odd_copy_rmat(iptcl)%copy(odd(iptcl))
             call odd_copy_cmat(iptcl)%copy(odd(iptcl))
+            call odd_copy_cmat(iptcl)%fft
             call odd_copy_shellnorm(iptcl)%copy(odd(iptcl))
             call odd_copy_shellnorm(iptcl)%shellnorm(return_ft=.true.)
             call even_copy_rmat(iptcl)%copy(even(iptcl))
             call even_copy_cmat(iptcl)%copy(even(iptcl))
-            call batch_fft_2D(even_copy_cmat(iptcl), odd_copy_cmat(iptcl), in, out, plan_fwd)
+            call even_copy_cmat(iptcl)%fft
             call even_copy_shellnorm(iptcl)%copy(even(iptcl))
             call even_copy_shellnorm(iptcl)%shellnorm(return_ft=.true.)
         enddo
