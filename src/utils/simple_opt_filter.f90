@@ -4,6 +4,7 @@ module simple_opt_filter
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_defs
+use simple_fftw3
 use simple_image,      only: image, image_ptr
 use simple_parameters, only: params_glob
 implicit none
@@ -19,6 +20,96 @@ type opt_vol
 end type opt_vol
 
 contains
+    subroutine batch_fft_2D( even, odd, in, out, plan_fwd )
+        class(image),                           intent(inout) :: even, odd
+        real(   kind=c_float),         pointer, intent(in)    ::  in(:,:,:)
+        complex(kind=c_float_complex), pointer, intent(in)    :: out(:,:,:)
+        type(c_ptr)                           , intent(in)    :: plan_fwd
+        integer            :: ldim(3), k, l
+        type(image_ptr)    :: peven, podd
+        ldim = even%get_ldim()
+        call even%set_ft(.false.)
+        call  odd%set_ft(.false.)
+        call even%get_mat_ptrs(peven)
+        call  odd%get_mat_ptrs(podd)
+        !$omp parallel do collapse(2) default(shared) private(k,l) schedule(static) proc_bind(close)
+        do k = 1, ldim(1)
+            do l = 1, ldim(2)
+                in(k,l,1) = peven%rmat(k,l,1)
+                in(k,l,2) =  podd%rmat(k,l,1)
+            enddo
+        enddo
+        !$omp end parallel do
+        call fftwf_execute_dft_r2c(plan_fwd, in, out)
+        call even%set_ft(.true.)
+        call  odd%set_ft(.true.)
+        !$omp parallel do collapse(2) default(shared) private(k,l) schedule(static) proc_bind(close)
+        do k = 1, ldim(1)/2
+            do l = 1, ldim(2)
+                if( mod(k+l,2) == 1 )then
+                    peven%cmat(k,l,1) = -out(k,l,1)/product(ldim(1:2))
+                    podd %cmat(k,l,1) = -out(k,l,2)/product(ldim(1:2))
+                else
+                    peven%cmat(k,l,1) =  out(k,l,1)/product(ldim(1:2))
+                    podd %cmat(k,l,1) =  out(k,l,2)/product(ldim(1:2))
+                endif
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine batch_fft_2D
+
+    subroutine batch_fft_3D( even, odd, in, out )
+        class(image),                           intent(inout) :: even, odd
+        real(   kind=c_float),         pointer, intent(inout) ::  in(:,:,:,:)
+        complex(kind=c_float_complex), pointer, intent(inout) :: out(:,:,:,:)
+        integer            :: ldim(3), k, l, m
+        integer, parameter :: N_IMGS = 2
+        type(image_ptr)    :: peven, podd
+        type(c_ptr)        :: plan_fwd, plan_bwd
+        integer(timer_int_kind)    ::  t_fft
+        ldim = even%get_ldim()
+        !$omp critical
+        call fftwf_plan_with_nthreads(nthr_glob)
+        plan_fwd = fftwf_plan_many_dft_r2c(3, ldim, N_IMGS, in , ldim, 1, product(ldim), out, ldim, 1, product(ldim),FFTW_ESTIMATE)
+        plan_bwd = fftwf_plan_many_dft_c2r(3, ldim, N_IMGS, out, ldim, 1, product(ldim),  in, ldim, 1, product(ldim),FFTW_ESTIMATE)
+        !$omp end critical
+        call even%set_ft(.false.)
+        call  odd%set_ft(.false.)
+        call even%get_mat_ptrs(peven)
+        call  odd%get_mat_ptrs(podd)
+        !$omp parallel do collapse(3) default(shared) private(k,l,m) schedule(static) proc_bind(close)
+        do k = 1, ldim(1)
+            do l = 1, ldim(2)
+                do m = 1, ldim(3)
+                    in(k,l,m,1) = peven%rmat(k,l,m)
+                    in(k,l,m,2) =  podd%rmat(k,l,m)
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        t_fft = tic()
+        call fftwf_execute_dft_r2c(plan_fwd, in, out)
+        print *, 'fftwf time = ', toc()
+        call even%set_ft(.true.)
+        call  odd%set_ft(.true.)
+        call even%get_mat_ptrs(peven)
+        call  odd%get_mat_ptrs(podd)
+        !$omp parallel do collapse(3) default(shared) private(k,l,m) schedule(static) proc_bind(close)
+        do k = 1, ldim(1)/2
+            do l = 1, ldim(2)/2
+                do m = 1, ldim(3)/2
+                    if( mod(k+l+m,2) == 1 )then
+                        peven%cmat(k,l,m) = -out(k,l,m,1)/product(ldim)
+                        podd %cmat(k,l,m) = -out(k,l,m,2)/product(ldim)
+                    else
+                        peven%cmat(k,l,m) =  out(k,l,m,1)/product(ldim)
+                        podd %cmat(k,l,m) =  out(k,l,m,2)/product(ldim)
+                    endif
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine batch_fft_3D
 
     subroutine opt_2D_filter_sub( even, odd )
         use simple_tvfilter,   only: tvfilter
@@ -37,6 +128,12 @@ contains
         real                          :: smpd, lpstart, lp
         integer                       :: iptcl, box, filtsz, ldim(3), ldim_pd(3), smooth_ext, nptcls, hpind_fsc, find
         logical                       :: lpstart_fallback, l_nonuniform, l_phaseplate
+        integer(timer_int_kind)       :: t_tot
+        type(c_ptr)                   :: ptr, plan_fwd, plan_bwd
+        real(   kind=c_float),         pointer ::  in(:,:,:)
+        complex(kind=c_float_complex), pointer :: out(:,:,:)
+        integer :: c_shape(3)
+        integer, parameter :: N_IMGS = 2
         ! init
         ldim         = even(1)%get_ldim()
         filtsz       = even(1)%get_filtsz()
@@ -98,21 +195,32 @@ contains
                 lplims_hres(iptcl) = calc_fourier_index(lp, box, smpd) ! this is the Fourier index limit for the padded images
             end do
         endif
-        ! construct
         do iptcl = 1, nptcls
             call even(iptcl)%pad_mirr(ldim_pd)
-            call odd(iptcl)%pad_mirr(ldim_pd)
+            call odd( iptcl)%pad_mirr(ldim_pd)
+        enddo
+        ! construct
+        call fftwf_plan_with_nthreads(nthr_glob)
+        c_shape = [ldim_pd(2), ldim_pd(1), N_IMGS]
+        ptr = fftwf_alloc_complex(int(product(c_shape),c_size_t))
+        call c_f_pointer(ptr,out,c_shape)
+        call c_f_pointer(ptr,in ,c_shape)
+        !$omp critical
+        plan_fwd = fftwf_plan_many_dft_r2c(2, [ldim_pd(2), ldim_pd(1)], N_IMGS,&
+                                         &in ,[ldim_pd(2), ldim_pd(1)], 1, product([ldim_pd(2), ldim_pd(1)]),&
+                                         &out,[ldim_pd(2), ldim_pd(1)], 1, product([ldim_pd(2), ldim_pd(1)]),FFTW_ESTIMATE)
+        !$omp end critical
+        do iptcl = 1, nptcls
             call weights_img(iptcl)%new(ldim_pd, smpd, .false.)
             call ref_diff_odd_img( iptcl)%new(ldim_pd, smpd, .false.)
             call ref_diff_even_img(iptcl)%new(ldim_pd, smpd, .false.)
             call odd_copy_rmat(iptcl)%copy(odd(iptcl))
             call odd_copy_cmat(iptcl)%copy(odd(iptcl))
-            call odd_copy_cmat(iptcl)%fft
             call odd_copy_shellnorm(iptcl)%copy(odd(iptcl))
             call odd_copy_shellnorm(iptcl)%shellnorm(return_ft=.true.)
             call even_copy_rmat(iptcl)%copy(even(iptcl))
             call even_copy_cmat(iptcl)%copy(even(iptcl))
-            call even_copy_cmat(iptcl)%fft
+            call batch_fft_2D(even_copy_cmat(iptcl), odd_copy_cmat(iptcl), in, out, plan_fwd)
             call even_copy_shellnorm(iptcl)%copy(even(iptcl))
             call even_copy_shellnorm(iptcl)%shellnorm(return_ft=.true.)
         enddo

@@ -58,6 +58,7 @@ call cline%checkvar('mskdiam', 4)
 call cline%check
 call p%new(cline)
 call find_ldim_nptcls(p%stk, p%ldim, nptcls)
+nptcls = 2
 p%ldim(3) = 1 ! because we operate on stacks
 allocate(imgs(nptcls))
 do iptcl = 1, nptcls
@@ -77,18 +78,15 @@ do iptcl = 1, nptcls
     call imgs(iptcl)%write('test1.mrc', iptcl)
 enddo
 ! with fft_plan_many
-c_shape = [p%ldim(2), p%ldim(1), nptcls]
+c_shape = [p%ldim(1), p%ldim(2), nptcls]
 ptr = fftwf_alloc_complex(int(product(c_shape),c_size_t))
 call c_f_pointer(ptr,out,c_shape)
 call c_f_pointer(ptr,in,c_shape)
 !$omp critical
 call fftwf_plan_with_nthreads(nthr_glob)
-plan_fwd = fftwf_plan_many_dft_r2c(2,  [p%ldim(2), p%ldim(1)],nptcls,&
-                                  &in ,[p%ldim(2), p%ldim(1)],1,product([p%ldim(1), p%ldim(2)]),&
-                                  &out,[p%ldim(2), p%ldim(1)],1,product([p%ldim(1), p%ldim(2)]),FFTW_ESTIMATE)
-plan_bwd = fftwf_plan_many_dft_c2r(2,  [p%ldim(2), p%ldim(1)],nptcls,&
-                                  &out,[p%ldim(2), p%ldim(1)],1,product([p%ldim(1), p%ldim(2)]),&
-                                  &in ,[p%ldim(2), p%ldim(1)],1,product([p%ldim(1), p%ldim(2)]),FFTW_ESTIMATE)
+plan_fwd = fftwf_plan_many_dft_r2c(2,  [p%ldim(1), p%ldim(2)],nptcls,&
+                                  &in ,[p%ldim(1), p%ldim(2)],1,product([p%ldim(1), p%ldim(2)]),&
+                                  &out,[p%ldim(1), p%ldim(2)],1,product([p%ldim(1), p%ldim(2)]),FFTW_ESTIMATE)
 !$omp end critical
 do iptcl = 1, nptcls
     call imgs(iptcl)%new(p%ldim, p%smpd)
@@ -98,7 +96,7 @@ do iptcl = 1, nptcls
     call imgs(iptcl)%get_rmat_ptr(rmat_img)
     do k = 1, p%ldim(1)
         do l = 1, p%ldim(2)
-            in(l,k,iptcl) = rmat_img(k,l,1)
+            in(k,l,iptcl) = rmat_img(k,l,1)
         enddo
     enddo
 enddo
@@ -106,11 +104,11 @@ t_tot = tic()
 call fftwf_execute_dft_r2c(plan_fwd,in,out)
 rt_tot = toc(t_tot)
 do iptcl = 1, nptcls
-    call imgs(iptcl)%fft()
+    call imgs(iptcl)%set_ft(.true.)
     call imgs(iptcl)%get_cmat_ptr(cmat_img)
     do k = 1, p%ldim(1)/2
-        do l = 1, p%ldim(2)/2
-            cmat_img(k,l,1) = out(l,k,iptcl)/product([p%ldim(1), p%ldim(2)])
+        do l = 1, p%ldim(2)
+            cmat_img(k,l,1) = out(k,l,iptcl)/product([p%ldim(1), p%ldim(2)])
             if( mod(k+l,2) == 1 ) cmat_img(k,l,1) = -cmat_img(k,l,1)
         enddo
     enddo
