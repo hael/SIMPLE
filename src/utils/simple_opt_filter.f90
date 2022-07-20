@@ -62,11 +62,9 @@ contains
         !$omp end parallel do
     end subroutine batch_fft_2D
 
-    subroutine batch_ifft_2D( even, odd, in, out, plan_bwd )
+    subroutine batch_ifft_2D( even, odd, fft_vars )
         class(image),                           intent(inout) :: even, odd
-        real(   kind=c_float),         pointer, intent(in)    ::  in(:,:,:)
-        complex(kind=c_float_complex), pointer, intent(in)    :: out(:,:,:)
-        type(c_ptr)                           , intent(in)    :: plan_bwd
+        type(fft_vars_type)                   , intent(in)    :: fft_vars
         integer            :: ldim(3), k, l
         type(image_ptr)    :: peven, podd
         ldim = even%get_ldim()
@@ -76,25 +74,25 @@ contains
         call  odd%get_mat_ptrs(podd)
         !$omp parallel do collapse(2) default(shared) private(k,l) schedule(static) proc_bind(close)
         do l = 1, ldim(2)
-            do k = 1, ldim(1)/2
+            do k = 1, ldim(1)/2+1
                 if( mod(k+l,2) == 1 )then
-                    out(k,l,1) = -peven%cmat(k,l,1)*product(ldim(1:2))
-                    out(k,l,2) = - podd%cmat(k,l,1)*product(ldim(1:2))
+                    fft_vars%out(k,l,1) = -peven%cmat(k,l,1)
+                    fft_vars%out(k,l,2) = - podd%cmat(k,l,1)
                 else
-                    out(k,l,1) = peven%cmat(k,l,1)*product(ldim(1:2))
-                    out(k,l,2) =  podd%cmat(k,l,1)*product(ldim(1:2))
+                    fft_vars%out(k,l,1) = peven%cmat(k,l,1)
+                    fft_vars%out(k,l,2) =  podd%cmat(k,l,1)
                 endif
             enddo
         enddo
         !$omp end parallel do
-        call fftwf_execute_dft_c2r(plan_bwd, out, in)
+        call fftwf_execute_dft_c2r(fft_vars%plan_bwd, fft_vars%out, fft_vars%in)
         call even%set_ft(.false.)
         call  odd%set_ft(.false.)
         !$omp parallel do collapse(2) default(shared) private(k,l) schedule(static) proc_bind(close)
         do l = 1, ldim(2)
             do k = 1, ldim(1)
-                peven%rmat(k,l,1) = in(k,l,1)
-                podd %rmat(k,l,1) = in(k,l,2)
+                peven%rmat(k,l,1) = fft_vars%in(k,l,1)
+                podd %rmat(k,l,1) = fft_vars%in(k,l,2)
             enddo
         enddo
         !$omp end parallel do
@@ -304,6 +302,47 @@ contains
         call tvfilt%kill()
     end subroutine opt_2D_filter_sub_test
 
+    subroutine apply_opt_filter_test(img, cur_ind, find_start, find_stop, cur_fil, use_cache, tvfilt_in)
+        use simple_tvfilter, only: tvfilter
+        class(image), intent(inout) :: img
+        integer,      intent(in)    :: cur_ind
+        integer,      intent(in)    :: find_start
+        integer,      intent(in)    :: find_stop
+        real,         intent(inout) :: cur_fil(:)
+        logical,      intent(in)    :: use_cache
+        type(tvfilter), optional, intent(inout) :: tvfilt_in
+        integer, parameter :: BW_ORDER = 8
+        real,    parameter :: LAMBDA_MIN = .5 , LAMBDA_MAX = 5.    ! for TV filter
+        real               :: param
+        type(tvfilter)     :: tvfilt_loc
+        select case(params_glob%filt_enum)
+            case(FILT_LP)
+                call img%lp(cur_ind)
+            case(FILT_TV)
+                param = LAMBDA_MIN + (cur_ind - find_start)*(LAMBDA_MAX - LAMBDA_MIN)/(find_stop - find_start)
+                if( .not. present(tvfilt_in) )then
+                    call tvfilt_loc%new
+                    if( img%is_2d() )then
+                        call tvfilt_loc%apply_filter(img, param)
+                    else
+                        call tvfilt_loc%apply_filter_3d(img, param)
+                    endif
+                    call tvfilt_loc%kill
+                else
+                    if( img%is_2d() )then
+                        call tvfilt_in%apply_filter(img, param)
+                    else
+                        call tvfilt_in%apply_filter_3d(img, param)
+                    endif
+                endif
+            case(FILT_BW8)
+                if( .not. use_cache ) call butterworth_filter(cur_fil, BW_ORDER, real(cur_ind))
+                call img%apply_filter(cur_fil)
+            case DEFAULT
+                THROW_HARD('unsupported filter type')
+        end select
+    end subroutine apply_opt_filter_test
+
     ! 2D optimization(search)-based uniform/nonuniform filter, serial (strictly non-paralellized) version
     subroutine opt_filter_2D_test(odd, even,&
                                  &odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm,&
@@ -366,23 +405,22 @@ contains
         do iter_no = 1, params_glob%nsearch
             cur_ind = nint(find_start + (iter_no - 1)*find_stepsz)
             if( L_VERBOSE_GLOB ) write(*,*) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current Fourier index = ', cur_ind
-            ! filtering odd
-            call odd%copy_fast(odd_copy_cmat)
-            call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
-            call odd%sqeuclid_matrix(even_copy_rmat, cur_diff_odd)
-            if( params_glob%l_match_filt )then
-                call odd%copy_fast(odd_copy_shellnorm)
-                call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
-            endif
-            call odd%get_rmat_ptr(rmat_odd)
-            ! filtering even
+            ! filtering odd/even
+            call  odd%copy_fast( odd_copy_cmat)
             call even%copy_fast(even_copy_cmat)
-            call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .true., tvfilt_in)
-            call even%sqeuclid_matrix(odd_copy_rmat, cur_diff_even)
+            call apply_opt_filter_test( odd, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
+            call apply_opt_filter_test(even, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
+            call batch_ifft_2D(even, odd, fft_vars)
+            call  odd%sqeuclid_matrix(even_copy_rmat, cur_diff_odd)
+            call even%sqeuclid_matrix( odd_copy_rmat, cur_diff_even)
             if( params_glob%l_match_filt )then
+                call  odd%copy_fast( odd_copy_shellnorm)
                 call even%copy_fast(even_copy_shellnorm)
-                call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
+                call apply_opt_filter_test( odd, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
+                call apply_opt_filter_test(even, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
+                call batch_ifft_2D(even, odd, fft_vars)
             endif
+            call  odd%get_rmat_ptr(rmat_odd)
             call even%get_rmat_ptr(rmat_even)
             ! do the non-uniform, i.e. optimizing at each voxel
             if( params_glob%l_nonuniform )then                    
@@ -391,13 +429,9 @@ contains
                 podd%rmat( :box,:box,:dim3) = cur_diff_odd
                 peven%rmat(:box,:box,:dim3) = cur_diff_even
                 call batch_fft_2D(ref_diff_even_img, ref_diff_odd_img, fft_vars)
-                !call  ref_diff_odd_img%fft()
-                !call ref_diff_even_img%fft()
                 podd%cmat  =  podd%cmat * pweights%cmat
                 peven%cmat = peven%cmat * pweights%cmat
-                call  ref_diff_odd_img%ifft()
-                call ref_diff_even_img%ifft()
-                !call batch_ifft_2D(ref_diff_even_img, ref_diff_odd_img, in, out, plan_bwd)
+                call batch_ifft_2D(ref_diff_even_img, ref_diff_odd_img, fft_vars)
                 do l = lb(2),ub(2)
                     do k = lb(1),ub(1)
                         if (podd%rmat(k,l,1) < opt_odd(k,l,1)%opt_diff) then
