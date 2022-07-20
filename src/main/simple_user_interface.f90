@@ -72,6 +72,7 @@ type(simple_program), target :: automask
 type(simple_program), target :: autorefine3D_nano
 type(simple_program), target :: binarize
 type(simple_program), target :: calc_pspec
+type(simple_program), target :: ced_2D_filter
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
 type(simple_program), target :: center2D_nano
@@ -321,6 +322,7 @@ contains
         call new_autorefine3D_nano
         call new_binarize
         call new_calc_pspec
+        call new_ced_2D_filter
         call new_center
         call new_cleanup2D
         call new_center2D_nano
@@ -426,6 +428,7 @@ contains
         call push2prg_ptr_array(autorefine3D_nano)
         call push2prg_ptr_array(binarize)
         call push2prg_ptr_array(calc_pspec)
+        call push2prg_ptr_array(ced_2D_filter)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(center2D_nano)
@@ -544,6 +547,8 @@ contains
                 ptr2prg => binarize
             case('calc_pspec')
                 ptr2prg => calc_pspec
+            case('ced_2D_filter')
+                ptr2prg => ced_2D_filter
             case('center')
                 ptr2prg => center
             case('cleanup2D')
@@ -742,6 +747,7 @@ contains
         write(logfhandle,'(A)') automask%name
         write(logfhandle,'(A)') binarize%name
         write(logfhandle,'(A)') calc_pspec%name
+        write(logfhandle,'(A)') ced_2D_filter%name
         write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') cleanup2D%name
         write(logfhandle,'(A)') cluster_cavgs%name
@@ -1237,6 +1243,33 @@ contains
         call calc_pspec%set_input('comp_ctrls', 1, nparts)
         call calc_pspec%set_input('comp_ctrls', 2, nthr)
     end subroutine new_calc_pspec
+
+    subroutine new_ced_2D_filter
+        ! PROGRAM SPECIFICATION
+        call ced_2D_filter%new(&
+        &'ced_2D_filter',&             ! name
+        &'Coherence-Enhancing Diffution 2D Filter',&             ! descr_short
+        &'is a filter that smoothes images in a 2D stack using the diffusion equation.',& ! descr_long
+        &'simple_exec',&               ! executable
+        &1, 1, 0, 0, 1, 1, 1, .false.)                                      ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call ced_2D_filter%set_input('img_ios', 1, 'stk',  'file', 'Stack',  'Stack',  'stack.mrc file', .true., '')
+        ! parameter input/output
+        call ced_2D_filter%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        !sigma.required = .true.
+        call ced_2D_filter%set_input('filt_ctrls',1, 'sigma', 'num', 'Sigma, for Gaussian generation', 'Sigma, for Gaussian generation(in pixels)', &
+        & '{1.}', .false., 1.0)
+        ! mask controls
+        call ced_2D_filter%set_input('mask_ctrls', 1, mskdiam)
+        ! computer controls
+        call ced_2D_filter%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_ced_2D_filter
 
     subroutine new_center
         ! PROGRAM SPECIFICATION

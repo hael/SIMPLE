@@ -25,6 +25,7 @@ use simple_commander_relion
 use simple_commander_sim
 use simple_commander_volops
 use simple_commander_resolest
+use simple_commander_ced
 implicit none
 #include "simple_local_flags.inc"
 
@@ -106,6 +107,7 @@ type(normalize_commander)                   :: xnormalize
 type(scale_commander)                       :: xscale
 type(stack_commander)                       :: xstack
 type(stackops_commander)                    :: xstackops
+type(ced_2D_filter_commander)               :: xced_2D_filter
 
 ! ORIENTATION PROCESSING PROGRAMS
 type(make_oris_commander)                   :: xmake_oris
@@ -301,6 +303,8 @@ select case(trim(prg))
         call xstack%execute(cline)
     case( 'stackops' )
         call xstackops%execute(cline)
+    case( 'ced_2D_filter' )
+        call xced_2D_filter%execute(cline)
 
     ! ORIENTATION PROCESSING PROGRAMS
     case( 'make_oris' )
