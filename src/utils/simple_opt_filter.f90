@@ -27,8 +27,8 @@ end type fft_vars_type
 
 contains
     subroutine batch_fft_2D( even, odd, fft_vars )
-        class(image),                           intent(inout) :: even, odd
-        type(fft_vars_type)                   , intent(in)    :: fft_vars
+        class(image),        intent(inout) :: even, odd
+        type(fft_vars_type), intent(in)    :: fft_vars
         integer            :: ldim(3), k, l
         type(image_ptr)    :: peven, podd
         ldim = even%get_ldim()
@@ -63,8 +63,8 @@ contains
     end subroutine batch_fft_2D
 
     subroutine batch_ifft_2D( even, odd, fft_vars )
-        class(image),                           intent(inout) :: even, odd
-        type(fft_vars_type)                   , intent(in)    :: fft_vars
+        class(image),        intent(inout) :: even, odd
+        type(fft_vars_type), intent(in)    :: fft_vars
         integer            :: ldim(3), k, l
         type(image_ptr)    :: peven, podd
         ldim = even%get_ldim()
@@ -298,6 +298,9 @@ contains
             call ref_diff_even_img(iptcl)%kill
             call even(iptcl)%clip_inplace(ldim)
             call odd(iptcl)%clip_inplace(ldim)
+            call fftwf_destroy_plan(fft_vars(iptcl)%plan_fwd)
+            call fftwf_destroy_plan(fft_vars(iptcl)%plan_bwd)
+            call fftwf_plan_with_nthreads(1)
         enddo
         call tvfilt%kill()
     end subroutine opt_2D_filter_sub_test
