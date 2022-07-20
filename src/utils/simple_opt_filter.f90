@@ -304,6 +304,145 @@ contains
         call tvfilt%kill()
     end subroutine opt_2D_filter_sub_test
 
+    ! 2D optimization(search)-based uniform/nonuniform filter, serial (strictly non-paralellized) version
+    subroutine opt_filter_2D_test(odd, even,&
+                                 &odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm,&
+                                 &even_copy_rmat, even_copy_cmat, even_copy_shellnorm,&
+                                 &tvfilt_in, cur_diff_odd, cur_diff_even, cur_fil, weights_2D, kstop,&
+                                 &opt_odd, opt_even, weights_img, ref_diff_odd_img, ref_diff_even_img,&
+                                 &fft_vars)
+        use simple_tvfilter, only: tvfilter
+        class(image),   intent(inout) :: odd
+        class(image),   intent(inout) :: even
+        class(image),   intent(in)    :: odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm,&
+                                        &even_copy_rmat, even_copy_cmat, even_copy_shellnorm
+        type(tvfilter), intent(inout) :: tvfilt_in
+        real,           intent(inout) :: cur_diff_odd(:,:,:), cur_diff_even(:,:,:)
+        real,           intent(inout) :: cur_fil(:), weights_2D(:,:)
+        integer,        intent(in)    :: kstop
+        type(opt_vol),  intent(inout) :: opt_odd(:,:,:), opt_even(:,:,:)
+        class(image),   intent(inout) :: weights_img, ref_diff_odd_img, ref_diff_even_img
+        type(fft_vars_type) , intent(in) :: fft_vars
+        integer           :: k,l,m,n, box, dim3, ldim(3), find_start, find_stop, iter_no, ext
+        integer           :: best_ind, cur_ind, lb(3), ub(3)
+        real              :: min_sum_odd, min_sum_even, rad, find_stepsz, val
+        real, pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:)
+        type(image_ptr)   :: podd, peven, pweights
+        ! init
+        ldim              = odd%get_ldim()
+        box               = ldim(1)
+        dim3              = ldim(3)
+        if( dim3 > 1 ) THROW_HARD('This opt_filter_2D is strictly for 2D case only!')
+        ext               = params_glob%smooth_ext
+        find_stop         = kstop
+        find_start        = calc_fourier_index(params_glob%lp_lowres,  box, params_glob%smpd)
+        find_stepsz       = real(find_stop - find_start)/(params_glob%nsearch - 1)
+        lb                = (/ ext+1  , ext+1  , 1/)
+        ub                = (/ box-ext, box-ext, dim3 /)
+        ! searching for the best fourier index from here and generating the optimized filter
+        min_sum_odd       = huge(min_sum_odd)
+        min_sum_even      = huge(min_sum_even)
+        best_ind          = find_start
+        opt_odd%opt_val   = 0.
+        opt_odd%opt_diff  = 0.
+        opt_odd%opt_freq  = 0.
+        opt_even%opt_val  = 0.
+        opt_even%opt_diff = 0.
+        opt_even%opt_freq = 0.
+        opt_odd( lb(1):ub(1),lb(2):ub(2),lb(3):ub(3))%opt_diff = huge(min_sum_odd)
+        opt_even(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3))%opt_diff = huge(min_sum_odd)
+        call       weights_img%get_mat_ptrs(pweights)
+        call  ref_diff_odd_img%get_mat_ptrs(podd)
+        call ref_diff_even_img%get_mat_ptrs(peven)
+        call weights_img%zero_and_unflag_ft()
+        do m = -ext, ext
+            do n = -ext, ext
+                rad = hyp(real(m), real(n))
+                val = -rad/(ext + 1) + 1.
+                if( val > 0 ) call weights_img%set_rmat_at(box/2+m+1, box/2+n+1, 1, val)
+            enddo
+        enddo
+        call weights_img%fft()
+        do iter_no = 1, params_glob%nsearch
+            cur_ind = nint(find_start + (iter_no - 1)*find_stepsz)
+            if( L_VERBOSE_GLOB ) write(*,*) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current Fourier index = ', cur_ind
+            ! filtering odd
+            call odd%copy_fast(odd_copy_cmat)
+            call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
+            call odd%sqeuclid_matrix(even_copy_rmat, cur_diff_odd)
+            if( params_glob%l_match_filt )then
+                call odd%copy_fast(odd_copy_shellnorm)
+                call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
+            endif
+            call odd%get_rmat_ptr(rmat_odd)
+            ! filtering even
+            call even%copy_fast(even_copy_cmat)
+            call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .true., tvfilt_in)
+            call even%sqeuclid_matrix(odd_copy_rmat, cur_diff_even)
+            if( params_glob%l_match_filt )then
+                call even%copy_fast(even_copy_shellnorm)
+                call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
+            endif
+            call even%get_rmat_ptr(rmat_even)
+            ! do the non-uniform, i.e. optimizing at each voxel
+            if( params_glob%l_nonuniform )then                    
+                call  ref_diff_odd_img%set_ft(.false.)
+                call ref_diff_even_img%set_ft(.false.)
+                podd%rmat( :box,:box,:dim3) = cur_diff_odd
+                peven%rmat(:box,:box,:dim3) = cur_diff_even
+                call batch_fft_2D(ref_diff_even_img, ref_diff_odd_img, fft_vars)
+                !call  ref_diff_odd_img%fft()
+                !call ref_diff_even_img%fft()
+                podd%cmat  =  podd%cmat * pweights%cmat
+                peven%cmat = peven%cmat * pweights%cmat
+                call  ref_diff_odd_img%ifft()
+                call ref_diff_even_img%ifft()
+                !call batch_ifft_2D(ref_diff_even_img, ref_diff_odd_img, in, out, plan_bwd)
+                do l = lb(2),ub(2)
+                    do k = lb(1),ub(1)
+                        if (podd%rmat(k,l,1) < opt_odd(k,l,1)%opt_diff) then
+                            opt_odd(k,l,1)%opt_val  = rmat_odd(k,l,1)
+                            opt_odd(k,l,1)%opt_diff = podd%rmat(k,l,1)
+                            opt_odd(k,l,1)%opt_freq = cur_ind
+                        endif
+                        if (peven%rmat(k,l,1) < opt_even(k,l,1)%opt_diff) then
+                            opt_even(k,l,1)%opt_val  = rmat_even(k,l,1)
+                            opt_even(k,l,1)%opt_diff = peven%rmat(k,l,1)
+                            opt_even(k,l,1)%opt_freq = cur_ind
+                        endif
+                    enddo
+                enddo
+            else
+                ! keep the theta which gives the lowest cost (over all voxels)
+                if (sum(cur_diff_odd) < min_sum_odd) then
+                    opt_odd(:,:,:)%opt_val  = rmat_odd(1:box, 1:box, 1:dim3)
+                    opt_odd(:,:,:)%opt_freq = cur_ind
+                    min_sum_odd  = sum(cur_diff_odd)
+                    best_ind     = cur_ind
+                endif
+                if (sum(cur_diff_even) < min_sum_even) then
+                    opt_even(:,:,:)%opt_val  = rmat_even(1:box, 1:box, 1:dim3)
+                    opt_even(:,:,:)%opt_freq = cur_ind
+                    min_sum_even  = sum(cur_diff_even)
+                endif
+            endif
+            if( L_VERBOSE_GLOB ) write(*,*) 'current cost (odd) = ', sum(cur_diff_odd)
+        enddo
+        if( L_VERBOSE_GLOB )then
+            if( .not. params_glob%l_nonuniform ) write(*,*) 'minimized cost at resolution = ', box*params_glob%smpd/best_ind
+        endif
+        do k = 1,ldim(1)
+            do l = 1,ldim(2)
+                call  odd%set_rmat_at(k,l,1,opt_odd( k,l,1)%opt_val)
+                call even%set_rmat_at(k,l,1,opt_even(k,l,1)%opt_val)
+            enddo
+        enddo
+    end subroutine opt_filter_2D_test
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !! STUFFS BELOW THIS LINE ARE STABLE
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
     subroutine opt_2D_filter_sub( even, odd )
         use simple_tvfilter,   only: tvfilter
         use simple_class_frcs, only: class_frcs
@@ -522,141 +661,6 @@ contains
                 THROW_HARD('unsupported filter type')
         end select
     end subroutine apply_opt_filter
-
-    ! 2D optimization(search)-based uniform/nonuniform filter, serial (strictly non-paralellized) version
-    subroutine opt_filter_2D_test(odd, even,&
-                            &odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm,&
-                            &even_copy_rmat, even_copy_cmat, even_copy_shellnorm,&
-                            &tvfilt_in, cur_diff_odd, cur_diff_even, cur_fil, weights_2D, kstop,&
-                            &opt_odd, opt_even, weights_img, ref_diff_odd_img, ref_diff_even_img,&
-                            &fft_vars)
-        use simple_tvfilter, only: tvfilter
-        class(image),   intent(inout) :: odd
-        class(image),   intent(inout) :: even
-        class(image),   intent(in)    :: odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm,&
-                                        &even_copy_rmat, even_copy_cmat, even_copy_shellnorm
-        type(tvfilter), intent(inout) :: tvfilt_in
-        real,           intent(inout) :: cur_diff_odd(:,:,:), cur_diff_even(:,:,:)
-        real,           intent(inout) :: cur_fil(:), weights_2D(:,:)
-        integer,        intent(in)    :: kstop
-        type(opt_vol),  intent(inout) :: opt_odd(:,:,:), opt_even(:,:,:)
-        class(image),   intent(inout) :: weights_img, ref_diff_odd_img, ref_diff_even_img
-        type(fft_vars_type) , intent(in) :: fft_vars
-        integer           :: k,l,m,n, box, dim3, ldim(3), find_start, find_stop, iter_no, ext
-        integer           :: best_ind, cur_ind, lb(3), ub(3)
-        real              :: min_sum_odd, min_sum_even, rad, find_stepsz, val
-        real, pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:)
-        type(image_ptr)   :: podd, peven, pweights
-        ! init
-        ldim              = odd%get_ldim()
-        box               = ldim(1)
-        dim3              = ldim(3)
-        if( dim3 > 1 ) THROW_HARD('This opt_filter_2D is strictly for 2D case only!')
-        ext               = params_glob%smooth_ext
-        find_stop         = kstop
-        find_start        = calc_fourier_index(params_glob%lp_lowres,  box, params_glob%smpd)
-        find_stepsz       = real(find_stop - find_start)/(params_glob%nsearch - 1)
-        lb                = (/ ext+1  , ext+1  , 1/)
-        ub                = (/ box-ext, box-ext, dim3 /)
-        ! searching for the best fourier index from here and generating the optimized filter
-        min_sum_odd       = huge(min_sum_odd)
-        min_sum_even      = huge(min_sum_even)
-        best_ind          = find_start
-        opt_odd%opt_val   = 0.
-        opt_odd%opt_diff  = 0.
-        opt_odd%opt_freq  = 0.
-        opt_even%opt_val  = 0.
-        opt_even%opt_diff = 0.
-        opt_even%opt_freq = 0.
-        opt_odd( lb(1):ub(1),lb(2):ub(2),lb(3):ub(3))%opt_diff = huge(min_sum_odd)
-        opt_even(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3))%opt_diff = huge(min_sum_odd)
-        call       weights_img%get_mat_ptrs(pweights)
-        call  ref_diff_odd_img%get_mat_ptrs(podd)
-        call ref_diff_even_img%get_mat_ptrs(peven)
-        call weights_img%zero_and_unflag_ft()
-        do m = -ext, ext
-            do n = -ext, ext
-                rad = hyp(real(m), real(n))
-                val = -rad/(ext + 1) + 1.
-                if( val > 0 ) call weights_img%set_rmat_at(box/2+m+1, box/2+n+1, 1, val)
-            enddo
-        enddo
-        call weights_img%fft()
-        do iter_no = 1, params_glob%nsearch
-            cur_ind = nint(find_start + (iter_no - 1)*find_stepsz)
-            if( L_VERBOSE_GLOB ) write(*,*) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current Fourier index = ', cur_ind
-            ! filtering odd
-            call odd%copy_fast(odd_copy_cmat)
-            call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
-            call odd%sqeuclid_matrix(even_copy_rmat, cur_diff_odd)
-            if( params_glob%l_match_filt )then
-                call odd%copy_fast(odd_copy_shellnorm)
-                call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
-            endif
-            call odd%get_rmat_ptr(rmat_odd)
-            ! filtering even
-            call even%copy_fast(even_copy_cmat)
-            call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .true., tvfilt_in)
-            call even%sqeuclid_matrix(odd_copy_rmat, cur_diff_even)
-            if( params_glob%l_match_filt )then
-                call even%copy_fast(even_copy_shellnorm)
-                call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
-            endif
-            call even%get_rmat_ptr(rmat_even)
-            ! do the non-uniform, i.e. optimizing at each voxel
-            if( params_glob%l_nonuniform )then                    
-                call  ref_diff_odd_img%set_ft(.false.)
-                call ref_diff_even_img%set_ft(.false.)
-                podd%rmat( :box,:box,:dim3) = cur_diff_odd
-                peven%rmat(:box,:box,:dim3) = cur_diff_even
-                call batch_fft_2D(ref_diff_even_img, ref_diff_odd_img, fft_vars)
-                !call  ref_diff_odd_img%fft()
-                !call ref_diff_even_img%fft()
-                podd%cmat  =  podd%cmat * pweights%cmat
-                peven%cmat = peven%cmat * pweights%cmat
-                call  ref_diff_odd_img%ifft()
-                call ref_diff_even_img%ifft()
-                !call batch_ifft_2D(ref_diff_even_img, ref_diff_odd_img, in, out, plan_bwd)
-                do l = lb(2),ub(2)
-                    do k = lb(1),ub(1)
-                        if (podd%rmat(k,l,1) < opt_odd(k,l,1)%opt_diff) then
-                            opt_odd(k,l,1)%opt_val  = rmat_odd(k,l,1)
-                            opt_odd(k,l,1)%opt_diff = podd%rmat(k,l,1)
-                            opt_odd(k,l,1)%opt_freq = cur_ind
-                        endif
-                        if (peven%rmat(k,l,1) < opt_even(k,l,1)%opt_diff) then
-                            opt_even(k,l,1)%opt_val  = rmat_even(k,l,1)
-                            opt_even(k,l,1)%opt_diff = peven%rmat(k,l,1)
-                            opt_even(k,l,1)%opt_freq = cur_ind
-                        endif
-                    enddo
-                enddo
-            else
-                ! keep the theta which gives the lowest cost (over all voxels)
-                if (sum(cur_diff_odd) < min_sum_odd) then
-                    opt_odd(:,:,:)%opt_val  = rmat_odd(1:box, 1:box, 1:dim3)
-                    opt_odd(:,:,:)%opt_freq = cur_ind
-                    min_sum_odd  = sum(cur_diff_odd)
-                    best_ind     = cur_ind
-                endif
-                if (sum(cur_diff_even) < min_sum_even) then
-                    opt_even(:,:,:)%opt_val  = rmat_even(1:box, 1:box, 1:dim3)
-                    opt_even(:,:,:)%opt_freq = cur_ind
-                    min_sum_even  = sum(cur_diff_even)
-                endif
-            endif
-            if( L_VERBOSE_GLOB ) write(*,*) 'current cost (odd) = ', sum(cur_diff_odd)
-        enddo
-        if( L_VERBOSE_GLOB )then
-            if( .not. params_glob%l_nonuniform ) write(*,*) 'minimized cost at resolution = ', box*params_glob%smpd/best_ind
-        endif
-        do k = 1,ldim(1)
-            do l = 1,ldim(2)
-                call  odd%set_rmat_at(k,l,1,opt_odd( k,l,1)%opt_val)
-                call even%set_rmat_at(k,l,1,opt_even(k,l,1)%opt_val)
-            enddo
-        enddo
-    end subroutine opt_filter_2D_test
 
     subroutine opt_filter_2D(odd, even,&
                             &odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm,&
