@@ -66,6 +66,10 @@ contains
         call build_glob%spproj_field%set(s%iptcl, 'corr', corr)
         ! specscore
         call build_glob%spproj_field%set(s%iptcl, 'specscore', s%specscore)
+        ! weight
+        pw = 1.0
+        if( s%l_ptclw ) call calc_ori_weight(s, ref, pw)
+        call build_glob%spproj_field%set(s%iptcl, 'w', pw)
         ! angular distances
         call build_glob%spproj_field%get_ori(s%iptcl, o_new)
         call build_glob%pgrpsyms%sym_dists(o_prev, o_new, osym, euldist, dist_inpl)
@@ -118,7 +122,7 @@ contains
                 if( diff2 < 700.d0 ) sumw = sumw + exp(-diff2)
             endif
         enddo
-        pw = real(1.d0 / sumw)
+        pw = min(1.0,real(1.d0 / sumw))
     end subroutine calc_ori_weight
 
 end module simple_strategy3D_utils

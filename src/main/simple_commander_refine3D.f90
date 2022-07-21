@@ -118,7 +118,7 @@ contains
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
-        logical :: l_projmatch, l_lp_iters, l_switch2euclid, l_continue, l_multistates, l_automsk, l_final_iter
+        logical :: l_projmatch, l_lp_iters, l_switch2euclid, l_continue, l_multistates, l_automsk, l_final_iter, l_ptclw
         real    :: corr, corr_prev, smpd, lplim
         integer :: ldim(3), i, state, iter, box, nfiles, niters, iter_switch2euclid, ifoo
         integer :: ncls, icls, ind, fnr
@@ -141,6 +141,8 @@ contains
             if( (trim(cline%get_carg('objfun')).eq.'euclid') .and. .not.l_continue )then
                 l_switch2euclid = .true.
                 call cline%set('objfun','cc')
+                l_ptclw = trim(cline%get_carg('ptclw')).eq.'yes'
+                call cline%set('ptclw', 'no')
             endif
         endif
         ! init
@@ -607,6 +609,10 @@ contains
                 call job_descr%delete('lp')
                 call cline_volassemble%set('objfun','euclid')
                 call cline_postprocess%delete('lp')
+                if( l_ptclw )then
+                    call cline%set('ptclw',    'yes')
+                    call job_descr%set('ptclw','yes')
+                endif
                 params%objfun    = 'euclid'
                 params%cc_objfun = OBJFUN_EUCLID
                 l_switch2euclid  = .false.
@@ -1099,14 +1105,14 @@ contains
         class(cmdline),                       intent(inout) :: cline
         character(len=STDLEN), parameter :: PSPEC_FBODY = 'pspec_'
         type(parameters)                 :: params
-        type(image)                      :: avg_img
         type(builder)                    :: build
         type(sigma2_binfile)             :: binfile
         type(sigma_array), allocatable   :: sigma2_arrays(:)
-        character(len=:),  allocatable   :: part_fname,starfile_fname,outbin_fname
-        integer                          :: iptcl,ipart,nptcls,nptcls_sel,eo,ngroups,igroup,nyq,pspec_l,pspec_u
-        real,              allocatable   :: group_pspecs(:,:,:),pspec_ave(:),pspecs(:,:),sigma2_output(:,:)
-        integer,           allocatable   :: group_weights(:,:)
+        character(len=:),  allocatable   :: starfile_fname
+        real,              allocatable   :: group_pspecs(:,:,:),pspecs(:,:)
+        real,              allocatable   :: group_weights(:,:)
+        real                             :: w
+        integer                          :: iptcl,ipart,eo,ngroups,igroup,pspec_l,pspec_u
         call cline%set('mkdir', 'no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
@@ -1136,17 +1142,19 @@ contains
         enddo
         !$omp end parallel do
         allocate(group_pspecs(2,ngroups,params%kfromto(1):params%kfromto(2)),source=0.)
-        allocate(group_weights(2,ngroups),source=0)
+        allocate(group_weights(2,ngroups),source=0.)
         do iptcl = 1,params%nptcls
             if( build%spproj_field%get_state(iptcl) == 0 ) cycle
             eo     = nint(build%spproj_field%get(iptcl,'eo'    )) ! 0/1
             igroup = nint(build%spproj_field%get(iptcl,'stkind'))
-            group_pspecs(eo+1,igroup,:) = group_pspecs (eo+1,igroup,:) + pspecs(:, iptcl)
-            group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)   + 1
+            w      = build%spproj_field%get(iptcl,'w')
+            if( w < TINY )cycle
+            group_pspecs(eo+1,igroup,:) = group_pspecs (eo+1,igroup,:) + w*pspecs(:, iptcl)
+            group_weights(eo+1,igroup)  = group_weights(eo+1,igroup)   + w
         enddo
         do eo = 1,2
             do igroup = 1,ngroups
-                if( group_weights(eo,igroup) < 1 ) cycle
+                if( group_weights(eo,igroup) < TINY ) cycle
                 group_pspecs(eo,igroup,:) = group_pspecs(eo,igroup,:) / real(group_weights(eo,igroup))
             end do
         end do

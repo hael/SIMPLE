@@ -964,7 +964,7 @@ contains
         call imgs4read(4)%get_cmat_ptr(cmat_ptr4)
         ! construct complex matrices for parallel summation
         array_shape = imgs4read(1)%get_array_shape()
-        allocate(csums(4,array_shape(1),array_shape(2),array_shape(3)), source=cmplx(0.,0.))
+        allocate(csums(array_shape(1),array_shape(2),array_shape(3),4), source=cmplx(0.,0.))
         if( L_BENCH_GLOB )then
             ! end of init
             rt_init = toc(t_init)
@@ -991,10 +991,10 @@ contains
             endif
             ! parallel summation
             !$omp parallel workshare proc_bind(close)
-            csums(1,:,:,:) = csums(1,:,:,:) + cmat_ptr1(:,:,:)
-            csums(2,:,:,:) = csums(2,:,:,:) + cmat_ptr2(:,:,:)
-            csums(3,:,:,:) = csums(3,:,:,:) + cmat_ptr3(:,:,:)
-            csums(4,:,:,:) = csums(4,:,:,:) + cmat_ptr4(:,:,:)
+            csums(:,:,:,1) = csums(:,:,:,1) + cmat_ptr1(:,:,:)
+            csums(:,:,:,2) = csums(:,:,:,2) + cmat_ptr2(:,:,:)
+            csums(:,:,:,3) = csums(:,:,:,3) + cmat_ptr3(:,:,:)
+            csums(:,:,:,4) = csums(:,:,:,4) + cmat_ptr4(:,:,:)
             !$omp end parallel workshare
             if( L_BENCH_GLOB ) rt_workshare_sum = rt_workshare_sum + toc(t_workshare_sum)
         end do
@@ -1002,10 +1002,10 @@ contains
         ! update image objects in parallel
         !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
         do icls=1,ncls
-            call cavgs_even(icls)    %set_cmat(csums(1,:,:,icls))
-            call cavgs_odd(icls)     %set_cmat(csums(2,:,:,icls))
-            call ctfsqsums_even(icls)%set_cmat(csums(3,:,:,icls))
-            call ctfsqsums_odd(icls) %set_cmat(csums(4,:,:,icls))
+            call cavgs_even(icls)    %set_cmat(csums(:,:,icls,1))
+            call cavgs_odd(icls)     %set_cmat(csums(:,:,icls,2))
+            call ctfsqsums_even(icls)%set_cmat(csums(:,:,icls,3))
+            call ctfsqsums_odd(icls) %set_cmat(csums(:,:,icls,4))
         end do
         !$omp end parallel do
         if( l_stream )then
@@ -1032,10 +1032,10 @@ contains
                 endif
                 ! parallel summation
                 !$omp parallel workshare proc_bind(close)
-                csums(1,:,:,:) = csums(1,:,:,:) + cmat_ptr1(:,:,:)
-                csums(2,:,:,:) = csums(2,:,:,:) + cmat_ptr2(:,:,:)
-                csums(3,:,:,:) = csums(3,:,:,:) + cmat_ptr3(:,:,:)
-                csums(4,:,:,:) = csums(4,:,:,:) + cmat_ptr4(:,:,:)
+                csums(:,:,:,1) = csums(:,:,:,1) + cmat_ptr1(:,:,:)
+                csums(:,:,:,2) = csums(:,:,:,2) + cmat_ptr2(:,:,:)
+                csums(:,:,:,3) = csums(:,:,:,3) + cmat_ptr3(:,:,:)
+                csums(:,:,:,4) = csums(:,:,:,4) + cmat_ptr4(:,:,:)
                 !$omp end parallel workshare
                 if( L_BENCH_GLOB ) rt_workshare_sum = rt_workshare_sum + toc(t_workshare_sum)
             end do
@@ -1043,10 +1043,10 @@ contains
             ! update image objects in parallel
             !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
             do icls=1,ncls
-                call cavgs_even_wfilt(icls)    %set_cmat(csums(1,:,:,icls))
-                call cavgs_odd_wfilt(icls)     %set_cmat(csums(2,:,:,icls))
-                call ctfsqsums_even_wfilt(icls)%set_cmat(csums(3,:,:,icls))
-                call ctfsqsums_odd_wfilt(icls) %set_cmat(csums(4,:,:,icls))
+                call cavgs_even(icls)    %set_cmat(csums(:,:,icls,1))
+                call cavgs_odd(icls)     %set_cmat(csums(:,:,icls,2))
+                call ctfsqsums_even(icls)%set_cmat(csums(:,:,icls,3))
+                call ctfsqsums_odd(icls) %set_cmat(csums(:,:,icls,4))
             end do
             !$omp end parallel do
         endif
