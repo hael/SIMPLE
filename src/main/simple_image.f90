@@ -278,7 +278,9 @@ contains
     procedure, private :: real_corr_prenorm_2
     generic            :: real_corr_prenorm => real_corr_prenorm_1, real_corr_prenorm_2
     procedure          :: sqeuclid
-    procedure          :: sqeuclid_matrix
+    procedure, private :: sqeuclid_matrix_1
+    procedure, private :: sqeuclid_matrix_2
+    generic            :: sqeuclid_matrix => sqeuclid_matrix_1, sqeuclid_matrix_2
     procedure          :: fsc, fsc_scaled
     procedure          :: get_res
     procedure, private :: oshift_1
@@ -4935,12 +4937,18 @@ contains
         &self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)))**2.0, mask=mask)
     end function sqeuclid
 
-    subroutine sqeuclid_matrix( self1, self2, sqdiff )
+    subroutine sqeuclid_matrix_1( self1, self2, sqdiff )
         class(image), intent(in)    :: self1, self2
         real,         intent(inout) :: sqdiff(self1%ldim(1),self1%ldim(2),self1%ldim(3))
         sqdiff = (self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) -&
         &self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)))**2.0
-    end subroutine sqeuclid_matrix
+    end subroutine sqeuclid_matrix_1
+
+    subroutine sqeuclid_matrix_2( self1, self2, sqdiff_img )
+        class(image), intent(in)    :: self1, self2
+        class(image), intent(inout) :: sqdiff_img
+        sqdiff_img%rmat = (self1%rmat - self2%rmat)**2.0
+    end subroutine sqeuclid_matrix_2
 
     !> \brief fsc is for calculation of Fourier ring/shell correlation in double precision
     subroutine fsc( self1, self2, corrs )
