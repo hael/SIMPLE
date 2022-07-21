@@ -213,7 +213,6 @@ contains
                 deallocate(self%nlopt)
             end if
             call self%ospec%kill
-            pftcc_glob => null()
             self%exists = .false.
         endif
     end subroutine kill

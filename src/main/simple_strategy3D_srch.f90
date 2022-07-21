@@ -26,7 +26,6 @@ end type strategy3D_spec
 type strategy3D_srch
     type(pftcc_shsrch_grad)  :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
     type(pftcc_orisrch_grad) :: grad_orisrch_obj          !< obj 4 search over all df:s, L-BFGS with gradient
-    type(ori)                :: o_cls                     !< 3D ori of class average
     integer                  :: iptcl         = 0         !< global particle index
     integer                  :: ithr          = 0         !< thread index
     integer                  :: nrefs         = 0         !< total # references (nstates*nprojs)
@@ -48,6 +47,7 @@ type strategy3D_srch
     logical                  :: l_neigh       = .false.   !< neighbourhood refinement flag
     logical                  :: l_greedy      = .false.   !< greedy        refinement flag
     logical                  :: l_cont        = .false.   !< continuous    refinement flag
+    logical                  :: l_ptclw       = .false.   !< whether to calculate particle weight
     logical                  :: doshift       = .true.    !< 2 indicate whether 2 serch shifts
     logical                  :: exists        = .false.   !< 2 indicate existence
   contains
@@ -133,6 +133,7 @@ contains
         self%l_neigh    = str_has_substr(params_glob%refine, 'neigh')
         self%l_greedy   = str_has_substr(params_glob%refine, 'greedy')
         self%l_cont     = str_has_substr(params_glob%refine, 'cont')
+        self%l_ptclw    = trim(params_glob%ptclw).eq.'yes'
         ! create in-plane search object
         lims(:,1)       = -params_glob%trs
         lims(:,2)       =  params_glob%trs
@@ -241,7 +242,7 @@ contains
     subroutine kill( self )
         class(strategy3D_srch), intent(inout) :: self
         call self%grad_shsrch_obj%kill
-        call self%o_cls%kill
+        call self%grad_orisrch_obj%kill
     end subroutine kill
 
 end module simple_strategy3D_srch
