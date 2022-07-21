@@ -117,6 +117,8 @@ contains
         if( .not. build%spproj_field%isthere('dfx') )then
             if( apply_ctf ) call build%spproj_field%rnd_ctf(params%kv, params%cs, params%fraca, params%defocus, params%dferr, params%astigerr)
         endif
+        call build%spproj_field%set_all2single('state', 1.0)
+        call build%spproj_field%set_all2single('w',     1.0)
         call build%spproj_field%write(params%outfile, [1,params%nptcls])
         ! prepare for image generation
         call build%vol%read(params%vols(1))

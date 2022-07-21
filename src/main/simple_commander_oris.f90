@@ -96,6 +96,7 @@ contains
         else
             call build%spproj_field%set_all2single('state',1.)
         endif
+        call build%spproj_field%set_all2single('w',1.)
         call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, [1,build%spproj_field%get_noris()])
         call orientation%kill
         call os_even%kill
