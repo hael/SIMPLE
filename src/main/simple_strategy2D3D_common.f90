@@ -459,23 +459,22 @@ contains
         call build_glob%vol_odd%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         call build_glob%vol_odd%read(fname_odd)
         did_filter = .false.
-        if( cline%defined('mskfile') .and. params_glob%l_nonuniform )then
+        if( params_glob%l_nonuniform )then
             call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
-            call mskvol%read(params_glob%mskfile)
+            if( cline%defined('mskfile') )then
+                call mskvol%read(params_glob%mskfile)
+            else
+                mskvol = 1.0
+                call mskvol%mask(params_glob%msk, 'soft', backgr=0.0)
+            endif
             call mskvol%one_at_edge ! to expand before masking of reference
             call opt_filter_3D(build_glob%vol_odd, build_glob%vol, mskvol)
             did_filter = .true.
-            ! envelope masking
-            call mskvol%read(params_glob%mskfile) ! to bring back the edge
-            call build_glob%vol%zero_env_background(mskvol)
-            call build_glob%vol_odd%zero_env_background(mskvol)
-            call build_glob%vol%mul(mskvol)
-            call build_glob%vol_odd%mul(mskvol)
+            ! e/o masking is performed in preprefvol
             call mskvol%kill
             call build_glob%vol%fft
             call build_glob%vol_odd%fft
         else
-            ! expand for fast interpolation
             call build_glob%vol%fft
             call build_glob%vol_odd%fft
             if( params_glob%l_ran_noise_ph )then
@@ -497,7 +496,8 @@ contains
         logical,                 intent(in)    :: do_center
         real,                    intent(in)    :: xyz(3)
         logical,                 intent(in)    :: iseven
-        type(projector),  pointer     :: vol_ptr => null()
+        type(projector),  pointer :: vol_ptr => null()
+        type(image)               :: mskvol
         real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
         integer :: iref, iproj, filtsz
         if( iseven )then
@@ -549,7 +549,12 @@ contains
         call vol_ptr%ifft()
         ! masking
         if( cline%defined('mskfile') )then
-            ! masking performed in readrefvols_filter_nonuniformly, above
+            ! envelope masking
+            call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
+            call mskvol%read(params_glob%mskfile)
+            call vol_ptr%zero_env_background(mskvol)
+            call vol_ptr%mul(mskvol)
+            call mskvol%kill
         else
             ! circular masking
             if( params_glob%cc_objfun == OBJFUN_EUCLID )then
