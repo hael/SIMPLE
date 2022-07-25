@@ -161,7 +161,7 @@ contains
         avg_updatecnt = sum(updatecnts) / size(updatecnts)
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
         pws = build_glob%spproj_field%get_all('w')
-        percen_nonzero_pw = (real(count(pws > TINY)) / real(size(pws))) * 100.
+        percen_nonzero_pw = (real(count(mask .and. (pws > TINY))) / real(count(mask))) * 100.
         call build_glob%spproj_field%stats('corr',      self%corr,      mask=mask)
         call build_glob%spproj_field%stats('specscore', self%specscore, mask=mask)
         call build_glob%spproj_field%stats('dist',      self%dist,      mask=mask)
