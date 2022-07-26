@@ -215,7 +215,7 @@ type :: parameters
     character(len=STDLEN) :: rmsd_file=''         !< per-atom e/o rmsd:s
     character(len=STDLEN) :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
     character(len=STDLEN) :: real_filter=''
-    character(len=STDLEN) :: refine='shc'         !< refinement mode(snhc|shc|neigh|inpl|proj|cluster|clustersym){shc}
+    character(len=STDLEN) :: refine='shc'         !< refinement mode(snhc|shc|neigh|cluster|clustersym){shc}
     character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stats='no'           !< provide statistics(yes|no|print){no}

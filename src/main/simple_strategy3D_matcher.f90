@@ -24,8 +24,6 @@ use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedy_neigh, only: strategy3D_greedy_neigh
 use simple_strategy3D_neigh,        only: strategy3D_neigh
 use simple_strategy3D_cont,         only: strategy3D_cont
-use simple_strategy3D_inpl,         only: strategy3D_inpl
-use simple_strategy3D_proj,         only: strategy3D_proj
 use simple_strategy3D,              only: strategy3D
 use simple_strategy3D_srch,         only: strategy3D_spec, set_ptcl_stats, eval_ptcl
 use simple_convergence,             only: convergence
@@ -97,17 +95,6 @@ contains
 
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
-
-        ! INPL REFINEMENT REQUIRES MODIFICATION OF THE SEARCH SPACE (build_glob%eulspace)
-        if( params_glob%l_refine_inpl )then
-            ! check that we have class orientations
-            ncavgs = build_glob%spproj%os_cls3D%get_noris()
-            if( ncavgs == 0 ) THROW_HARD('refine=inpl requires class 3D orientations search space generation')
-            ! the projection directions for in-plane refinement are defined by those assigned to the class averages
-            build_glob%eulspace = build_glob%spproj%os_cls3D
-            call build_glob%eulspace%zero('e3')
-            params_glob%nspace  = ncavgs
-        endif
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
@@ -229,10 +216,6 @@ contains
                 select case(trim(params_glob%refine))
                     case('snhc')
                         allocate(strategy3D_snhc                 :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('inpl')
-                        allocate(strategy3D_inpl                 :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('proj')
-                        allocate(strategy3D_proj                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc')
                         if( .not. has_been_searched )then
                             allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)

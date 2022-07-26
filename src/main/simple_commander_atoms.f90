@@ -12,7 +12,6 @@ use simple_nanoparticle_utils
 implicit none
 
 public :: detect_atoms_commander
-public :: detect_atoms_eo_commander
 public :: atoms_stats_commander
 public :: tseries_atoms_analysis_commander
 public :: dock_coords_commander
@@ -24,11 +23,6 @@ type, extends(commander_base) :: detect_atoms_commander
   contains
     procedure :: execute      => exec_detect_atoms
 end type detect_atoms_commander
-
-type, extends(commander_base) :: detect_atoms_eo_commander
-  contains
-    procedure :: execute      => exec_detect_atoms_eo
-end type detect_atoms_eo_commander
 
 type, extends(commander_base) :: atoms_stats_commander
   contains
@@ -108,133 +102,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
-
-    subroutine exec_detect_atoms_eo( self, cline )
-        use simple_defs_autorefine, only: EVEN_SPLIT, ODD_SPLIT
-        class(detect_atoms_eo_commander), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
-        type(parameters)   :: params
-        type(nanoparticle) :: nano
-        type(image)        :: even, odd, mskvol, sim_density
-        type(common_atoms) :: atms_common
-        real, allocatable  :: pdbmat(:,:), valid_corrs(:)
-        real               :: a(3)
-        character(len=2)   :: el
-        integer            :: k
-        logical            :: use_auto_corr_thres, use_cs_thres
-        real,    parameter :: FRAC_DIAM=0.6
-        type(stats_struct) :: dist_stats
-        character(len=:), allocatable :: ename, oname, eatms, oatms
-        character(len=:), allocatable :: fname_avg, map_avg, tmp, eatms_common, atms_avg_valid
-        character(len=:), allocatable :: oatms_common, oatms_sim, eatms_sim, atms_avg, atms_avg_sim
-        call cline%set('use_thres',  'no')
-        call cline%set('lp_lowres',    3.)
-        call cline%set('match_filt', 'no')
-        use_auto_corr_thres = .not.cline%defined('corr_thres')
-        use_cs_thres        = .false.
-        call params%new(cline)
-        ! read e/o:s
-        call odd %new([params%box,params%box,params%box], params%smpd)
-        call even%new([params%box,params%box,params%box], params%smpd)
-        call odd %read(params%vols_odd(1))
-        call even%read(params%vols_even(1))
-        ! spherical masking
-        call even%mask(params%msk, 'soft')
-        call odd%mask(params%msk, 'soft')
-        oname          = trim(params%vols_odd(1))
-        ename          = trim(params%vols_even(1))
-        tmp            = rm_from_fbody(params%vols_odd(1), trim(params%ext), '_odd')
-        map_avg        = add2fbody(tmp,                    trim(params%ext), '_AVG')
-        atms_avg_sim   = add2fbody(tmp,                    trim(params%ext), '_ATMS_AVG_SIM')
-        fname_avg      = swap_suffix(tmp, '.pdb',          trim(params%ext) )
-        atms_avg       = add2fbody(fname_avg ,             '.pdb',           '_ATMS_AVG')
-        atms_avg_valid = add2fbody(fname_avg ,             '.pdb',           '_ATMS_AVG_VALID')
-        ! detect atoms in odd
-        call nano%new(oname)
-        call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=USE_CS_THRES,&
-        &use_auto_corr_thres=use_auto_corr_thres, split_fname=ODD_SPLIT)
-        ! detect atoms in even
-        call nano%new(ename)
-        call nano%identify_atomic_pos(a, l_fit_lattice=.true., use_cs_thres=USE_CS_THRES,&
-        &use_auto_corr_thres=use_auto_corr_thres, split_fname=EVEN_SPLIT)
-        ! compare independent atomic models
-        el               = trim(adjustl(params%element))
-        tmp              = add2fbody(oname, trim(params%ext), '_ATMS')
-        oatms            = swap_suffix(tmp, '.pdb', trim(params%ext) )
-        tmp              = add2fbody(ename, trim(params%ext), '_ATMS')
-        eatms            = swap_suffix(tmp, '.pdb', trim(params%ext) )
-        tmp              = add2fbody(oname, trim(params%ext), '_ATMS_COMMON')
-        oatms_sim        = add2fbody(oname, trim(params%ext), '_ATMS_COMMON_SIM')
-        oatms_common     = swap_suffix(tmp, '.pdb', trim(params%ext) )
-        tmp              = add2fbody(ename, trim(params%ext), '_ATMS_COMMON')
-        eatms_sim        = add2fbody(ename, trim(params%ext), '_ATMS_COMMON_SIM')
-        eatms_common     = swap_suffix(tmp, '.pdb', trim(params%ext) )
-        atms_common%ind1 = 1
-        atms_common%ind2 = 2
-        call read_pdb2matrix(oatms, pdbmat)
-        allocate(atms_common%coords1(3,size(pdbmat,dim=2)), source=pdbmat)
-        deallocate(pdbmat)
-        call read_pdb2matrix(eatms, pdbmat)
-        allocate(atms_common%coords2(3,size(pdbmat,dim=2)), source=pdbmat)
-        deallocate(pdbmat)
-        ! identify couples
-        call find_couples( atms_common%coords1, atms_common%coords2, el, atms_common%common1, atms_common%common2, frac_diam=FRAC_DIAM)
-        atms_common%ncommon = size(atms_common%common1, dim=2)
-        ! calculate displacements and distances
-        allocate( atms_common%displacements(3,atms_common%ncommon), atms_common%dists(atms_common%ncommon) )
-        do k = 1, atms_common%ncommon
-            atms_common%displacements(:,k) = atms_common%common2(:,k) - atms_common%common1(:,k)
-            atms_common%dists(k) = sqrt(sum((atms_common%displacements(:,k))**2.))
-        end do
-        ! write a binary file containing the per-atom RMSDs
-        call arr2txtfile(atms_common%dists, 'per_atom_rmsds.txt')
-        call arr2file(   atms_common%dists, 'per_atom_rmsds.bin')
-        ! write pdb files for the e/o:s
-        call write_matrix2pdb(el, atms_common%common1, oatms_common)
-        call write_matrix2pdb(el, atms_common%common2, eatms_common)
-        ! write the average atomic positions (with the per-atom RMSDS in the B-factor field)
-        atms_common%common1 = (atms_common%common1 + atms_common%common2) / 2.
-        call write_matrix2pdb(el, atms_common%common1, atms_avg, betas=atms_common%dists)
-        ! RMSD reporting
-        call calc_stats(atms_common%dists(:), dist_stats)
-        write(logfhandle,'(A)') '>>> DISTANCE STATS (IN A) FOR COMMON ATOMS BELOW'
-        write(logfhandle,'(A,F8.4)') 'Average: ', dist_stats%avg
-        write(logfhandle,'(A,F8.4)') 'Median : ', dist_stats%med
-        write(logfhandle,'(A,F8.4)') 'Sigma  : ', dist_stats%sdev
-        write(logfhandle,'(A,F8.4)') 'Max    : ', dist_stats%maxv
-        write(logfhandle,'(A,F8.4)') 'Min    : ', dist_stats%minv
-        ! generate simulated densities for the e/o pairs
-        call sim_density%new([params%box,params%box,params%box], params%smpd)
-        call nano%set_atomic_coords(oatms_common)
-        call nano%simulate_atoms(sim_density)
-        call sim_density%write(oatms_sim)
-        call nano%set_atomic_coords(eatms_common)
-        call nano%simulate_atoms(sim_density)
-        call sim_density%write(eatms_sim)
-        call nano%set_atomic_coords(oatms_common)
-        ! simulate density for the average atomic positions
-        call nano%set_atomic_coords(atms_avg)
-        call nano%simulate_atoms(sim_density)
-        call sim_density%write(atms_avg_sim)
-        ! write average map
-        call even%add(odd)
-        call even%mul(0.5)
-        call even%write(map_avg)
-        ! write a PDB file for the average atomic positions with the valid_corrs in the B-factor field
-        call nano%set_img(map_avg, 'img_raw')
-        call nano%validate_atoms(sim_density)
-        valid_corrs = nano%get_valid_corrs()
-        call write_matrix2pdb(el, atms_common%common1, atms_avg_valid, betas=valid_corrs)
-        ! kill
-        deallocate(valid_corrs)
-        call nano%kill
-        call even%kill
-        call odd%kill
-        call mskvol%kill
-        call sim_density%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_DETECT_ATOMS_EO NORMAL STOP ****')
-    end subroutine exec_detect_atoms_eo
 
     subroutine exec_atoms_stats( self, cline )
         class(atoms_stats_commander), intent(inout) :: self

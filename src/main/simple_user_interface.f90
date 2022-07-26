@@ -88,7 +88,6 @@ type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
 type(simple_program), target :: detect_atoms
-type(simple_program), target :: detect_atoms_eo
 type(simple_program), target :: dock_volpair
 type(simple_program), target :: estimate_diam
 type(simple_program), target :: export_relion
@@ -340,7 +339,6 @@ contains
         call new_ctf_estimate
         call new_ctfops
         call new_detect_atoms
-        call new_detect_atoms_eo
         call new_dock_volpair
         call new_estimate_diam
         call new_extract
@@ -448,7 +446,6 @@ contains
         call push2prg_ptr_array(ctf_estimate)
         call push2prg_ptr_array(ctfops)
         call push2prg_ptr_array(detect_atoms)
-        call push2prg_ptr_array(detect_atoms_eo)
         call push2prg_ptr_array(dock_volpair)
         call push2prg_ptr_array(extract)
         call push2prg_ptr_array(export_relion)
@@ -585,8 +582,6 @@ contains
                 ptr2prg => ctfops
             case('detect_atoms')
                 ptr2prg => detect_atoms
-            case('detect_atoms_eo')
-                ptr2prg => detect_atoms_eo
             case('dock_volpair')
                 ptr2prg => dock_volpair
             case('estimate_diam')
@@ -873,7 +868,6 @@ contains
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') format_str('MODEL BULDING/ANALYSIS PROGRAMS:', C_UNDERLINED)
         write(logfhandle,'(A)') detect_atoms%name
-        write(logfhandle,'(A)') detect_atoms_eo%name
         write(logfhandle,'(A)') atoms_stats%name
         write(logfhandle,'(A)') tseries_atoms_analysis%name
     end subroutine list_single_prgs_in_ui
@@ -1868,34 +1862,6 @@ contains
         ! computer controls
         call detect_atoms%set_input('comp_ctrls', 1, nthr)
     end subroutine new_detect_atoms
-
-    subroutine new_detect_atoms_eo
-        ! PROGRAM SPECIFICATION
-        call detect_atoms_eo%new(&
-        &'detect_atoms_eo', &                                                   ! name
-        &'Detect atoms in atomic-resolution nanoparticle map, with 2-fold CV',& ! descr_short
-        &'is a program for identifying atoms in atomic-resolution nanoparticle maps using 2-fold cross-validation',& ! descr long
-        &'single_exec',&                                                        ! executable
-        &2, 2, 0, 0, 1, 1, 1, .false.)                                          ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call detect_atoms_eo%set_input('img_ios', 1, 'vol_odd',  'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
-        call detect_atoms_eo%set_input('img_ios', 2, 'vol_even', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
-        ! parameter input/output
-        call detect_atoms_eo%set_input('parm_ios', 1, smpd)
-        call detect_atoms_eo%set_input('parm_ios', 2, 'corr_thres', 'num', 'Per-atom corr threshold', 'Per-atom validation correlation threshold for discarding atoms(0.3-0.5){0.5}', &
-        & 'Corr threshold for discarding atoms(0.3-0.5){0.5}', .false., 0.5)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call detect_atoms_eo%set_input('filt_ctrls', 1, element)
-        ! mask controls
-        call detect_atoms_eo%set_input('mask_ctrls', 1, mskdiam)
-        ! computer controls
-        call detect_atoms_eo%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_detect_atoms_eo
 
     subroutine new_dock_volpair
         ! PROGRAM SPECIFICATION
