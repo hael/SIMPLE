@@ -70,7 +70,7 @@ type :: polarft_corrcalc
     integer                          :: pfromto(2) = 0              !< particle index range
     integer                          :: ldim(3)    = 0              !< logical dimensions of original cartesian image
     integer,             allocatable :: pinds(:)                    !< index array (to reduce memory when frac_update < 1)
-    real,                allocatable :: pxls_p_shell(:)             !< number of (cartesian) pixels per shell
+    real,                allocatable :: npix_per_shell(:)           !< number of (cartesian) pixels per shell
     real(sp),            allocatable :: sqsums_ptcls(:)             !< memoized square sums for the correlation calculations (taken from kfromto(1):kstop)
     real(sp),            allocatable :: angtab(:)                   !< table of in-plane angles (in degrees)
     real(dp),            allocatable :: argtransf(:,:)              !< argument transfer constants for shifting the references
@@ -131,6 +131,7 @@ type :: polarft_corrcalc
     procedure          :: ptcl_iseven
     procedure          :: get_nptcls
     procedure          :: assign_pinds
+    procedure          :: get_npix
     ! PRINTERS/VISUALISERS
     procedure          :: print
     procedure          :: vis_ptcl
@@ -145,7 +146,7 @@ type :: polarft_corrcalc
     procedure, private :: memoize_sqsum_ptcl
     procedure, private :: memoize_fft
     procedure          :: memoize_ffts
-    procedure, private :: setup_pxls_p_shell
+    procedure, private :: setup_npix_per_shell
     ! CALCULATORS
     procedure          :: create_polar_absctfmats
     procedure, private :: prep_ref4corr
@@ -402,8 +403,8 @@ contains
         end do
         ! 2Dclass/3Drefs mapping on/off
         self%l_clsfrcs = params_glob%clsfrcs.eq.'yes'
-        ! setup pxls_p_shell
-        call self%setup_pxls_p_shell
+        ! setup npix_per_shell
+        call self%setup_npix_per_shell
         ! flag existence
         self%existence = .true.
         ! set pointer to global instance
@@ -702,6 +703,11 @@ contains
         pinds = self%pinds
     end subroutine assign_pinds
 
+    integer function get_npix( self )
+        class(polarft_corrcalc), intent(in) :: self
+        get_npix = sum(self%npix_per_shell)
+    end function get_npix
+
     ! PRINTERS/VISUALISERS
 
     subroutine vis_ptcl( self, iptcl )
@@ -852,20 +858,21 @@ contains
         end do
     end subroutine memoize_fft
 
-    subroutine setup_pxls_p_shell( self )
+    subroutine setup_npix_per_shell( self )
         class(polarft_corrcalc), intent(inout) :: self
         integer :: h,k,sh
-        if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
-        allocate(self%pxls_p_shell(params_glob%kfromto(1):params_glob%kfromto(2)),source=0.0)
+        if( allocated(self%npix_per_shell) ) deallocate(self%npix_per_shell)
+        allocate(self%npix_per_shell(params_glob%kfromto(1):params_glob%kfromto(2)),source=0.0)
         do h = 0,params_glob%kfromto(2)
             do k = -params_glob%kfromto(2),params_glob%kfromto(2)
+                if( (h==0) .and. (k>0) ) cycle
                 sh = nint(sqrt(real(h**2+k**2)))
                 if( sh < params_glob%kfromto(1) ) cycle
                 if( sh > params_glob%kfromto(2) ) cycle
-                self%pxls_p_shell(sh) = self%pxls_p_shell(sh) + 1.0
+                self%npix_per_shell(sh) = self%npix_per_shell(sh) + 1.0
             end do
         end do
-    end subroutine setup_pxls_p_shell
+    end subroutine setup_npix_per_shell
 
     ! CALCULATORS
 
@@ -1178,7 +1185,7 @@ contains
                 tmp =       sum(csq_fast(pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
                 tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
             end if
-            euclid = euclid - tmp / ( 2. * self%sigma2_noise(k, iptcl)) * self%pxls_p_shell(k) / self%pftsz
+            euclid = euclid - tmp / ( 2. * self%sigma2_noise(k, iptcl)) * self%npix_per_shell(k) / self%pftsz
         end do
     end function calc_euclid_for_rot
 
@@ -1206,7 +1213,7 @@ contains
                 tmp =       sum(csq_fast(pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
                 tmp = tmp + sum(csq_fast(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
             end if
-            euclid = euclid - tmp / ( 2.d0 * self%sigma2_noise(k, iptcl)) * self%pxls_p_shell(k) / self%pftsz
+            euclid = euclid - tmp / ( 2.d0 * self%sigma2_noise(k, iptcl)) * self%npix_per_shell(k) / self%pftsz
         end do
     end function calc_euclid_for_rot_8
 
@@ -1476,7 +1483,7 @@ contains
             call self%calc_k_corrs(pft_ref, i, k, keuclids)
             sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
             sumsqref  = sum(csq_fast(pft_ref(:,k)))
-            euclids   = euclids + self%pxls_p_shell(k) / real(self%pftsz) *&
+            euclids   = euclids + self%npix_per_shell(k) / real(self%pftsz) *&
                 (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,iptcl))
         end do
     end subroutine gencorrs_euclid_1
@@ -1511,7 +1518,7 @@ contains
             call self%calc_k_corrs(pft_ref, i, k, keuclids)
             sumsqptcl = sum(csq_fast(self%pfts_ptcls(:,k,i)))
             sumsqref  = sum(csq_fast(pft_ref(:,k)))
-            euclids   = euclids + self%pxls_p_shell(k) / real(self%pftsz) *&
+            euclids   = euclids + self%npix_per_shell(k) / real(self%pftsz) *&
                 (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,iptcl))
         end do
     end subroutine gencorrs_euclid_2
@@ -2060,13 +2067,13 @@ contains
         pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
         do k = params_glob%kfromto(1), params_glob%kstop
             diffsq  = self%calc_corrk_for_rot_8(pft_ref_tmp, i, k, irot) - real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k))))
-            grad(1) = grad(1) + diffsq / self%sigma2_noise(k, iptcl) * real(self%pxls_p_shell(k),dp) / real(self%pftsz,dp)
+            grad(1) = grad(1) + diffsq / self%sigma2_noise(k, iptcl) * real(self%npix_per_shell(k),dp) / real(self%pftsz,dp)
         end do
         grad(2)     = 0._dp
         pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
         do k = params_glob%kfromto(1), params_glob%kstop
             diffsq  = self%calc_corrk_for_rot_8(pft_ref_tmp, i, k, irot) - real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k))))
-            grad(2) = grad(2) + diffsq / self%sigma2_noise(k, iptcl) * real(self%pxls_p_shell(k),dp) / real(self%pftsz,dp)
+            grad(2) = grad(2) + diffsq / self%sigma2_noise(k, iptcl) * real(self%npix_per_shell(k),dp) / real(self%pftsz,dp)
         end do
     end subroutine gencorr_euclid_grad_for_rot_8
 
@@ -2099,13 +2106,13 @@ contains
         pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
         do k = params_glob%kfromto(1), params_glob%kstop
             diffsq  = self%calc_corrk_for_rot_8(pft_ref_tmp, i, k, irot) - real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k))))
-            grad(1) = grad(1) + diffsq / self%sigma2_noise(k, iptcl) * real(self%pxls_p_shell(k),dp) / real(self%pftsz,dp)
+            grad(1) = grad(1) + diffsq / self%sigma2_noise(k, iptcl) * real(self%npix_per_shell(k),dp) / real(self%pftsz,dp)
         end do
         grad(2)     = 0._dp
         pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
         do k = params_glob%kfromto(1), params_glob%kstop
             diffsq  = self%calc_corrk_for_rot_8(pft_ref_tmp, i, k, irot) - real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k))))
-            grad(2) = grad(2) + diffsq / self%sigma2_noise(k, iptcl) * real(self%pxls_p_shell(k),dp) / real(self%pftsz,dp)
+            grad(2) = grad(2) + diffsq / self%sigma2_noise(k, iptcl) * real(self%npix_per_shell(k),dp) / real(self%pftsz,dp)
         end do
     end subroutine gencorr_euclid_grad_only_for_rot_8
 
@@ -2212,7 +2219,7 @@ contains
             end do
             if( allocated(self%ctfmats)    ) deallocate(self%ctfmats)
             if( allocated(self%ref_optlp)  ) deallocate(self%ref_optlp)
-            if( allocated(self%pxls_p_shell))deallocate(self%pxls_p_shell)
+            if( allocated(self%npix_per_shell))deallocate(self%npix_per_shell)
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&

@@ -1311,6 +1311,14 @@ contains
         end do
     end function get_lplim_at_corr
 
+    !>   returns the Fourier index of the resolution limit at corr following relion
+    function get_lplim_at_corr_relion( fsc, corr ) result( k )
+        real, intent(in) :: fsc(:), corr
+        integer          :: k
+        k = get_lplim_at_corr(fsc, corr)
+        k = min(k+10,size(fsc))
+    end function get_lplim_at_corr_relion
+
     !>   returns the Fourier index of resolution
     integer pure function calc_fourier_index( res, box, smpd )
         real, intent(in)    :: res, smpd
