@@ -1043,10 +1043,10 @@ contains
             ! update image objects in parallel
             !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
             do icls=1,ncls
-                call cavgs_even(icls)    %set_cmat(csums(:,:,icls,1))
-                call cavgs_odd(icls)     %set_cmat(csums(:,:,icls,2))
-                call ctfsqsums_even(icls)%set_cmat(csums(:,:,icls,3))
-                call ctfsqsums_odd(icls) %set_cmat(csums(:,:,icls,4))
+                call cavgs_even_wfilt(icls)    %set_cmat(csums(:,:,icls,1))
+                call cavgs_odd_wfilt(icls)     %set_cmat(csums(:,:,icls,2))
+                call ctfsqsums_even_wfilt(icls)%set_cmat(csums(:,:,icls,3))
+                call ctfsqsums_odd_wfilt(icls) %set_cmat(csums(:,:,icls,4))
             end do
             !$omp end parallel do
         endif
