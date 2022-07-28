@@ -143,14 +143,14 @@ contains
                 if( params_glob%nstates == 1 )then
                     ! get median updatecnt
                     if( build_glob%spproj_field%median('updatecnt') > 1.0 )then ! more than half have been updated
-                        lp_ind = get_lplim_at_corr(build_glob%fsc(1,:), params_glob%lplim_crit)
+                        lp_ind = get_lplim_at_corr(build_glob%fsc(1,:), params_glob%lplim_crit, incrreslim=params_glob%l_incrreslim)
                     else
-                        lp_ind = get_lplim_at_corr(build_glob%fsc(1,:), 0.5) ! more conservative limit @ start
+                        lp_ind = get_lplim_at_corr(build_glob%fsc(1,:), 0.5, incrreslim=params_glob%l_incrreslim) ! more conservative limit @ start
                     endif
                 else
                     lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
                 endif
-                if( params_glob%cc_objfun == OBJFUN_EUCLID ) lp_ind = get_lplim_at_corr_relion(build_glob%fsc(1,:), 0.5)
+                if( params_glob%cc_objfun == OBJFUN_EUCLID ) lp_ind = get_lplim_at_corr(build_glob%fsc(1,:), 0.5, incrreslim=params_glob%l_incrreslim)
                 ! interpolation limit is NOT Nyqvist in correlation search
                 params_glob%kfromto(2) = calc_fourier_index(resarr(lp_ind), params_glob%box, params_glob%smpd)
             else if( build_glob%spproj_field%isthere(params_glob%fromp,'lp') )then
