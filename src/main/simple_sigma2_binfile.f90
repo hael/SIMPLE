@@ -78,7 +78,7 @@ contains
         logical :: success
         integer :: iptcl, addr
         real    :: sigma2_noise_n(self%kfromto(1):self%kfromto(2))
-        allocate(sigma2(self%kfromto(1):self%kfromto(2),self%fromp:self%top))
+        allocate(sigma2(self%kfromto(1):self%kfromto(2),self%fromp:self%top),source=0.0)
         success = self%open_and_check_header( funit, .true. )
         if( .not. success ) return
         do iptcl = self%fromp, self%top

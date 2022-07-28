@@ -118,7 +118,7 @@ contains
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
-        logical :: l_projmatch, l_lp_iters, l_switch2euclid, l_continue, l_multistates, l_automsk, l_final_iter, l_ptclw
+        logical :: l_projmatch, l_lp_iters, l_switch2euclid, l_continue, l_multistates, l_automsk, l_ptclw, l_combine_eo
         real    :: corr, corr_prev, smpd, lplim
         integer :: ldim(3), i, state, iter, box, nfiles, niters, iter_switch2euclid, ifoo
         integer :: ncls, icls, ind, fnr
@@ -168,6 +168,13 @@ contains
             call cline%delete('automsk')
         endif
         if( l_automsk .and. l_multistates ) THROW_HARD('automsk=yes not currenty supported for multi-state refinement')
+        ! final iteration with combined e/o
+        l_combine_eo = .false.
+        if( cline%defined('combine_eo') )then
+            l_combine_eo = .true.
+            call cline%set('combine_eo','no')
+            params%combine_eo = 'no'
+        endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
@@ -345,7 +352,6 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! MAIN LOOP
-        l_final_iter = .true.
         niters       = 0
         iter         = params%startit - 1
         corr         = -1.
@@ -538,10 +544,12 @@ contains
                     endif
             end select
             if( iter >= params%maxits ) converged = .true.
-            if ( l_final_iter .and. converged .and. (params%cc_objfun == OBJFUN_EUCLID) .and. l_lp_iters)then
-                converged     = .false.
-                l_final_iter  = .false.
-                params%lplim_crit = 0.143
+            ! if ( l_final_iter .and. converged .and. (params%cc_objfun == OBJFUN_EUCLID) .and. l_lp_iters)then
+            if ( l_combine_eo .and. converged )then
+                converged         = .false.
+                l_combine_eo      = .false.
+                params%combine_eo = 'yes'
+                params%lplim_crit = min(0.143,params%lplim_crit)
                 call cline%set('lplim_crit',params%lplim_crit)
                 call job_descr%set('lplim_crit',real2str(params%lplim_crit))
                 call cline_volassemble%set('combine_eo', 'yes')
@@ -1063,39 +1071,39 @@ contains
 
     contains
 
-    subroutine remove_negative_sigmas(eo, igroup)
-        integer, intent(in) :: eo, igroup
-        logical :: is_positive
-        logical :: fixed_from_prev
-        integer :: nn, idx
-        ! remove any negative sigma2 noise values: replace by positive neighboring value
-        do idx = 1, size(group_pspecs, 3)
-            if( group_pspecs(eo,igroup,idx) < 0. )then
-                ! first try the previous value
-                fixed_from_prev = .false.
-                if( idx - 1 >= 1 )then
-                    if( group_pspecs(eo,igroup,idx-1) > 0. )then
-                        group_pspecs(eo,igroup,idx) = group_pspecs(eo,igroup,idx-1)
-                        fixed_from_prev = .true.
+        subroutine remove_negative_sigmas(eo, igroup)
+            integer, intent(in) :: eo, igroup
+            logical :: is_positive
+            logical :: fixed_from_prev
+            integer :: nn, idx
+            ! remove any negative sigma2 noise values: replace by positive neighboring value
+            do idx = 1, size(group_pspecs, 3)
+                if( group_pspecs(eo,igroup,idx) < 0. )then
+                    ! first try the previous value
+                    fixed_from_prev = .false.
+                    if( idx - 1 >= 1 )then
+                        if( group_pspecs(eo,igroup,idx-1) > 0. )then
+                            group_pspecs(eo,igroup,idx) = group_pspecs(eo,igroup,idx-1)
+                            fixed_from_prev = .true.
+                        end if
+                    end if
+                    if( .not. fixed_from_prev )then
+                        is_positive = .false.
+                        nn          = idx
+                        do while (.not. is_positive)
+                            nn = nn + 1
+                            if( nn > size(group_pspecs,3) )then
+                                THROW_HARD('BUG! Cannot find positive values in sigma2 noise spectrum; eo=' // trim(int2str(eo)) // ', igroup=' // trim(int2str(igroup)))
+                            end if
+                            if( group_pspecs(eo,igroup,nn) > 0. )then
+                                is_positive = .true.
+                                group_pspecs(eo,igroup,idx) = group_pspecs(eo,igroup,nn)
+                            end if
+                        end do
                     end if
                 end if
-                if( .not. fixed_from_prev )then
-                    is_positive = .false.
-                    nn          = idx
-                    do while (.not. is_positive)
-                        nn = nn + 1
-                        if( nn > size(group_pspecs,3) )then
-                            THROW_HARD('BUG! Cannot find positive values in sigma2 noise spectrum; eo=' // trim(int2str(eo)) // ', igroup=' // trim(int2str(igroup)))
-                        end if
-                        if( group_pspecs(eo,igroup,nn) > 0. )then
-                            is_positive = .true.
-                            group_pspecs(eo,igroup,idx) = group_pspecs(eo,igroup,nn)
-                        end if
-                    end do
-                end if
-            end if
-        end do
-    end subroutine remove_negative_sigmas
+            end do
+        end subroutine remove_negative_sigmas
 
     end subroutine exec_calc_pspec_assemble
 

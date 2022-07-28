@@ -563,14 +563,14 @@ contains
         use simple_estimate_ssnr, only: fsc2optlp_sub
         class(reconstructor), intent(inout) :: self !< this instance
         real,    allocatable, intent(in)    :: fsc(:)
-        real, allocatable :: optlp(:), ssnr(:)
+        real, allocatable :: ssnr(:)
         real(dp)          :: rsum(0:self%nyq)
         real              :: tau2(0:self%nyq), invtau2, sig2, ri, d, ssnri, cc
         integer           :: cnt(0:self%nyq), h, k, m, sh, phys(3), sz, reslim_ind, il,ir
         logical           :: l_combined
         l_combined = trim(params_glob%combine_eo).eq.'yes'
         sz = size(fsc) ! original image size
-        allocate(optlp(sz), ssnr(sz), source=0.)
+        allocate(ssnr(sz), source=0.)
         rsum = 0.d0
         cnt  = 0
         !$omp parallel do collapse(3) default(shared) schedule(static)&
@@ -635,7 +635,7 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        deallocate(ssnr,optlp)
+        deallocate(ssnr)
     end subroutine add_invtausq2rho
 
     ! DESTRUCTORS
