@@ -224,6 +224,8 @@ contains
         endif
         ! GENERATE INITIAL NOISE POWER ESTIMATES
         if( l_switch2euclid .and. params%continue.ne.'yes' )then
+            call build%spproj_field%set_all2single('w', 1.0)
+            call build%spproj%write_segment_inside(params%oritype)
             call xcalc_pspec_distr%execute( cline_calc_pspec_distr )
         endif
         ! GENERATE STARTING MODELS & ORIENTATIONS

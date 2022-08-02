@@ -645,12 +645,14 @@ contains
             endif
             ! state = 1 by default
             call os%set_all2single('state', 1.0)
+            call os%set_all2single('w',     1.0)
             call spproj%add_single_stk(params%stk, ctfvars, os)
         endif
         ! add list of stacks (stktab) if present
         if( cline%defined('stktab') )then
             ! state = 1 by default
             call os%set_all2single('state', 1.0)
+            call os%set_all2single('w',     1.0)
             if( l_stktab_per_stk_parms )then
                 ! per stack parameters
                 call spproj%add_stktab(stkfnames, os)
