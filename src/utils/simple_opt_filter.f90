@@ -1170,10 +1170,10 @@ contains
         best_ind          = find_start
         opt_odd%opt_val   = 0.
         opt_odd%opt_diff  = 0.
-        opt_odd%opt_freq  = 0.
+        opt_odd%opt_freq  = real(find_start)
         opt_even%opt_val  = 0.
         opt_even%opt_diff = 0.
-        opt_even%opt_freq = 0.
+        opt_even%opt_freq = real(find_start)
         opt_odd( lb(1):ub(1),lb(2):ub(2),lb(3):ub(3))%opt_diff = huge(min_sum_odd)
         opt_even(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3))%opt_diff = huge(min_sum_odd)
         if( L_BENCH_GLOB )then
@@ -1308,7 +1308,7 @@ contains
                 do m = 1,ldim(3)
                     call      odd%set_rmat_at(k,l,m,opt_odd( k,l,m)%opt_val)
                     call     even%set_rmat_at(k,l,m,opt_even(k,l,m)%opt_val)
-                    call freq_img%set_rmat_at(k,l,m,box*params_glob%smpd/opt_odd(k,l,m)%opt_freq) ! resolution map
+                    call freq_img%set_rmat_at(k,l,m,calc_lowpass_lim(nint(opt_odd(k,l,m)%opt_freq), box, params_glob%smpd)) ! resolution map
                 enddo
             enddo
         enddo
