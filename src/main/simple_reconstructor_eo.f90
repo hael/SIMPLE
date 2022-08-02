@@ -346,23 +346,81 @@ contains
             ! masking
             if( self%automsk )then
                 ! mask provided, no phase-randomization just yet
-                call even%zero_env_background(self%envmask)
-                call odd%zero_env_background(self%envmask)
-                call even%mul(self%envmask)
+                ! calculate FSC according to Chen et al,JSB,2013
+                allocate(corrs(filtsz),fsc_t(filtsz),fsc_n(filtsz), source=0.)
+                ! Masked FSC
+                call even%mul(self%envmask)             ! mask
                 call odd%mul(self%envmask)
+                call even%fft()                         ! Fourier space
+                call odd%fft()
+                call even%fsc(odd, fsc_t)               ! FSC
+                ! re-generates e/o volumes
+                cmat = self%even%get_cmat()
+                call self%even%sampl_dens_correct(do_gridcorr=.false.)
+                even = self%even
+                call self%even%set_cmat(cmat)
+                deallocate(cmat)
+                call even%ifft()
+                call even%clip_inplace([self%box,self%box,self%box])
+                call even%div(self%pad_correction)
+                cmat = self%odd%get_cmat()
+                call self%odd%sampl_dens_correct(do_gridcorr=.false.)
+                odd = self%odd
+                call self%odd%set_cmat(cmat)
+                deallocate(cmat)
+                call odd%ifft()
+                call odd%clip_inplace([self%box,self%box,self%box])
+                call odd%div(self%pad_correction)
+                ! Randomize then calculate masked FSC
+                k_rand = get_lplim_at_corr(fsc_t, ENVMSK_FSC_THRESH) ! randomization frequency
+                if( k_rand > filtsz-3 )then
+                    ! reverts to provided sherical masking
+                    call even%mask(self%msk, 'soft', backgr=0.)
+                    call odd%mask(self%msk,  'soft', backgr=0.)
+                    call even%fft()
+                    call odd%fft()
+                    call even%fsc(odd, corrs)
+                else
+                    lp_rand = calc_lowpass_lim(k_rand, self%box, self%smpd)
+                    ! randomize
+                    call even%fft()
+                    call odd%fft()
+                    call even%phase_rand(lp_rand)
+                    call odd%phase_rand(lp_rand)
+                    ! mask
+                    call even%ifft()
+                    call odd%ifft()
+                    call even%mul(self%envmask)
+                    call odd%mul(self%envmask)
+                    ! FSC & correction
+                    call even%fft()
+                    call odd%fft()
+                    call even%fsc(odd, fsc_n)
+                    corrs = fsc_t
+                    do k = k_rand+2,filtsz
+                        if( fsc_n(k) > fsc_t(k) )then
+                            corrs(k) = 0.
+                        else
+                            corrs(k) = (fsc_t(k)-fsc_n(k)) / (1.-fsc_n(k))
+                        endif
+                    enddo
+                    call arr2file(fsc_t, 'fsct_state'//int2str_pad(state,2)//BIN_EXT)
+                    call arr2file(fsc_n, 'fscn_state'//int2str_pad(state,2)//BIN_EXT)
+                    deallocate(fsc_t,fsc_n)
+                endif
             else
                 ! spherical masking
                 call even%mask(msk, 'soft', backgr=0.)
                 call odd%mask(msk, 'soft', backgr=0.)
+                ! forward FT
+                call even%fft()
+                call odd%fft()
+                ! calculate FSC
+                res    = even%get_res()
+                filtsz = even%get_filtsz()
+                allocate(corrs(filtsz))
+                call even%fsc(odd, corrs)
             endif
-            ! forward FT
-            call even%fft()
-            call odd%fft()
-            ! calculate FSC
-            res    = even%get_res()
-            filtsz = even%get_filtsz()
-            allocate(corrs(filtsz))
-            call even%fsc(odd, corrs)
             ! regularization
             call self%even%add_invtausq2rho(corrs)
             call self%odd%add_invtausq2rho(corrs)
