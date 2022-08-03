@@ -9,6 +9,13 @@ type bit_cost
     integer              :: cost
 end type bit_cost
 
+abstract interface
+        function objective_func(bitstring) result(val)
+            integer, intent(in)  :: bitstring(:)
+            real                 :: val
+        end function objective_func
+    end interface
+
 interface
 subroutine qsort_C(array, elem_count, elem_size, compare) bind(C,name="qsort")     
     use iso_c_binding, only: c_ptr, c_size_t, c_funptr
@@ -22,19 +29,22 @@ end interface
 
 contains
     ! simple translation of rb's compute_count_for_edges
-    subroutine compute_count_for_edges(population, indexes, counts)
-        integer    , intent(in)    :: population(:,:)
+    subroutine compute_count_for_edges(obj_func, population, indexes, counts)
+        procedure(objective_func), pointer :: obj_func
+        integer    , intent(inout) :: population(:,:)
         type(stack), intent(in)    :: indexes
         integer    , intent(inout) :: counts(:)
         integer :: k, l, index, val
+        real    :: cur_cost
         counts = 0
         do k = 1, size(population, 1)
             index = 1
             do l = 1, indexes%size_of()
                 val = indexes%get_at(indexes%size_of() - l + 1)
-                if (population(k, val) == 1) then
-                    index = index + 2**(l-1)
-                endif
+                cur_cost = obj_func(population(k, :))
+                population(k, val) = 1 - population(k, val)
+                if( obj_func(population(k, :)) < cur_cost ) index = index + 2**(l-1)
+                population(k, val) = 1 - population(k, val)
             enddo
             counts(index) = counts(index) + 1
         enddo
@@ -47,10 +57,11 @@ contains
         if( n > 1 ) ret = n*fact(n-1)
     end function fact
 
-    function k2equation(node, candidates, pop) result(total)
+    function k2equation(obj_func, node, candidates, pop) result(total)
+        procedure(objective_func), pointer :: obj_func
         integer, intent(in)  :: node
         integer, intent(in)  :: candidates(:)
-        integer, intent(in)  :: pop(:,:)
+        integer, intent(inout) :: pop(:,:)
         type(stack)          :: indexes
         integer, allocatable :: counts(:)
         real    :: total, rs
@@ -59,7 +70,7 @@ contains
         call indexes%new()
         call indexes%push(node)
         call indexes%push(candidates)
-        call compute_count_for_edges(pop, indexes, counts)
+        call compute_count_for_edges(obj_func, pop, indexes, counts)
         total = -1.
         do k = 0, int(size(counts)/2)-1
             a1 = counts(k*2 + 1)
@@ -118,10 +129,11 @@ contains
         enddo
     end subroutine get_viable_parents
 
-    subroutine compute_gains(node, graph, population, gains, max_in)
+    subroutine compute_gains(obj_func, node, graph, population, gains, max_in)
+        procedure(objective_func), pointer :: obj_func
         integer,           intent(in)    :: node
         real   ,           intent(in)    :: graph(:,:)
-        integer,           intent(in)    :: population(:,:)
+        integer,           intent(inout)    :: population(:,:)
         real   ,           intent(inout) :: gains(:)
         integer, optional, intent(in)    :: max_in
         integer              :: max, k, l, k_in_cnt, node_in_cnt
@@ -156,13 +168,14 @@ contains
             enddo
             if( k_in_cnt < max .and. viable%contains(k) )then
                 node_in(size(node_in)) = k
-                gains(k)               = k2equation(node, node_in, population)
+                gains(k)               = k2equation(obj_func, node, node_in, population)
             endif
         enddo
     end subroutine compute_gains
 
-    subroutine construct_network(population, prob_size, graph, max_edges_in)
-        integer,           intent(in)    :: population(:,:)
+    subroutine construct_network(obj_func, population, prob_size, graph, max_edges_in)
+        procedure(objective_func), pointer :: obj_func
+        integer,           intent(inout) :: population(:,:)
         integer,           intent(in)    :: prob_size
         real   ,           intent(inout) :: graph(:,:)
         integer, optional, intent(in)    :: max_edges_in
@@ -177,7 +190,7 @@ contains
             from = -1
             to   = -1
             do l = 1, size(graph, 1)
-                call compute_gains(l, graph, population, gains)
+                call compute_gains(obj_func, l, graph, population, gains)
                 do m = 1, size(gains)
                     if( gains(m) > max )then
                         from = l
@@ -245,13 +258,14 @@ contains
         enddo
     end function count_in
 
-    function calculate_probability(node, bitstring, graph, ordered, population) result(val)
+    function calculate_probability(obj_func, node, bitstring, graph, ordered, population) result(val)
+        procedure(objective_func), pointer :: obj_func
         integer, intent(in)  :: node
-        integer, intent(in)  :: bitstring(:)
+        integer, intent(inout) :: bitstring(:)
         real   , intent(in)  :: graph(:,:)
         integer, intent(in)  :: ordered(:)
-        integer, intent(in)  :: population(:,:)
-        real                 :: val
+        integer, intent(inout)  :: population(:,:)
+        real                 :: val, cur_cost
         type(stack)          :: indexes
         integer              :: k, index, i1, i2, cnt
         integer, allocatable :: counts(:)
@@ -266,14 +280,15 @@ contains
         do k = 1, size(graph, 1)
             if( graph(k, node) > 0. ) call indexes%push(k)
         enddo
-        call compute_count_for_edges(population, indexes, counts)
+        call compute_count_for_edges(obj_func, population, indexes, counts)
         index = 0
         cnt   = 0
         do k = 1, size(graph, 1)
             if( graph(ordered(k), node) > 0. )then
-                if( bitstring(ordered(k)) == 1 )then
-                    index = index + 2**cnt
-                endif
+                cur_cost = obj_func(bitstring)
+                bitstring(ordered(k)) = 1 - bitstring(ordered(k))
+                if( obj_func(bitstring) < cur_cost ) index = index + 2**cnt
+                bitstring(ordered(k)) = 1 - bitstring(ordered(k))
                 cnt = cnt + 1
             endif
         enddo
@@ -286,10 +301,11 @@ contains
         endif
     end function calculate_probability
 
-    subroutine probabilistic_logic_sample(graph, ordered, population, bitstring, seed)
+    subroutine probabilistic_logic_sample(obj_func, graph, ordered, population, bitstring, seed)
+        procedure(objective_func), pointer :: obj_func
         real   ,           intent(in)    :: graph(:,:)
         integer,           intent(in)    :: ordered(:)
-        integer,           intent(in)    :: population(:,:)
+        integer,           intent(inout) :: population(:,:)
         integer,           intent(inout) :: bitstring(:)
         integer, optional, intent(in)    :: seed
         integer :: k, ordered_ind
@@ -299,15 +315,16 @@ contains
         do k = 1, size(graph, 1)
             ordered_ind = ordered(k)
             rand_val    = rand()
-            prob_val    = calculate_probability(ordered_ind, bitstring, graph, ordered, population) 
+            prob_val    = calculate_probability(obj_func, ordered_ind, bitstring, graph, ordered, population) 
             if( rand_val < prob_val )then
                 bitstring(ordered_ind) = 1
             endif
         enddo
     end subroutine probabilistic_logic_sample
 
-    subroutine sample_from_network(population, graph, num_samples, samples, seed)
-        integer,           intent(in)    :: population(:,:)
+    subroutine sample_from_network(obj_func, population, graph, num_samples, samples, seed)
+        procedure(objective_func), pointer :: obj_func
+        integer,           intent(inout) :: population(:,:)
         real   ,           intent(in)    :: graph(:,:)
         integer,           intent(in)    :: num_samples
         integer,           intent(inout) :: samples(:, :)
@@ -323,12 +340,13 @@ contains
             call srand(time())
         endif
         do k = 1, num_samples
-            call probabilistic_logic_sample(graph, ordered, population, bitstring)
+            call probabilistic_logic_sample(obj_func, graph, ordered, population, bitstring)
             samples(k, :) = bitstring
         enddo
     end subroutine sample_from_network
 
-    subroutine bayesian_search(num_bits, max_iter, pop_size, select_size, num_child, best, seed)
+    subroutine bayesian_search(obj_func, num_bits, max_iter, pop_size, select_size, num_child, best, seed)
+        procedure(objective_func), pointer :: obj_func
         integer, intent(in)           :: num_bits
         integer, intent(in)           :: max_iter
         integer, intent(in)           :: pop_size
@@ -356,13 +374,12 @@ contains
         endif
         do k = 1, pop_size
             pop_cost(k)%bitstr = 0
-            pop_cost(k)%cost   = 0
             do l = 1, num_bits
                 if( rand() < 0.5 )then
                     pop_cost(k)%bitstr(l) = 1
-                    pop_cost(k)%cost      = pop_cost(k)%cost + 1
                 endif
             enddo
+            pop_cost(k)%cost = obj_func(pop_cost(k)%bitstr)
         enddo
         do k = pop_size+1,pop_size-select_size+num_child
             pop_cost(k)%bitstr = 0
@@ -380,15 +397,12 @@ contains
             do l = 1, select_size
                 selected(l, :) = pop_cost(l)%bitstr
             enddo
-            call construct_network(selected, num_bits, network)
-            call sample_from_network(selected, network, num_child, children)
+            call construct_network(obj_func, selected, num_bits, network)
+            call sample_from_network(obj_func, selected, network, num_child, children)
             do l = 1, num_child
                 ind = pop_size-select_size+l
                 pop_cost(ind)%bitstr = children(l, :)
-                pop_cost(ind)%cost   = 0
-                do m = 1, num_bits
-                    if( children(l,m) == 1 ) pop_cost(ind)%cost = pop_cost(ind)%cost+1
-                enddo
+                pop_cost(ind)%cost   = obj_func(pop_cost(ind)%bitstr)
             enddo
             ! In-place sort of the pop_cost
             call qsort_C( c_loc(pop_cost(1)), & 
