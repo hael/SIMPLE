@@ -1,4 +1,4 @@
-program simple_test_bayesian
+program simple_test_ori_bayesian
     include 'simple_lib.f08'
     use simple_opt_bayesian
     use simple_stack
@@ -35,4 +35,4 @@ contains
             if( bitstring(k) == goal(k) ) val = val + 1
         enddo
     end function objective
-end program simple_test_bayesian
+end program simple_test_ori_bayesian
