@@ -10,11 +10,11 @@ type bit_cost
 end type bit_cost
 
 abstract interface
-        function objective_func(bitstring) result(val)
-            integer, intent(in)  :: bitstring(:)
-            real                 :: val
-        end function objective_func
-    end interface
+    function objective_func(bitstring) result(val)
+        integer, intent(in)  :: bitstring(:)
+        real                 :: val
+    end function objective_func
+end interface
 
 interface
 subroutine qsort_C(array, elem_count, elem_size, compare) bind(C,name="qsort")     
@@ -30,10 +30,10 @@ end interface
 contains
     ! simple translation of rb's compute_count_for_edges
     subroutine compute_count_for_edges(obj_func, population, indexes, counts)
-        procedure(objective_func), pointer :: obj_func
-        integer    , intent(inout) :: population(:,:)
-        type(stack), intent(in)    :: indexes
-        integer    , intent(inout) :: counts(:)
+        procedure(objective_func), pointer       :: obj_func
+        integer    ,               intent(inout) :: population(:,:)
+        type(stack),               intent(in)    :: indexes
+        integer    ,               intent(inout) :: counts(:)
         integer :: k, l, index, val
         real    :: cur_cost
         counts = 0
@@ -58,14 +58,14 @@ contains
     end function fact
 
     function k2equation(obj_func, node, candidates, pop) result(total)
-        procedure(objective_func), pointer :: obj_func
-        integer, intent(in)  :: node
-        integer, intent(in)  :: candidates(:)
-        integer, intent(inout) :: pop(:,:)
+        procedure(objective_func), pointer       :: obj_func
+        integer,                   intent(in)    :: node
+        integer,                   intent(in)    :: candidates(:)
+        integer,                   intent(inout) :: pop(:,:)
         type(stack)          :: indexes
         integer, allocatable :: counts(:)
-        real    :: total, rs
-        integer :: k, a1, a2
+        real                 :: total, rs
+        integer              :: k, a1, a2
         allocate(counts(int(2**(size(candidates)+1))), source=0)
         call indexes%new()
         call indexes%push(node)
@@ -130,15 +130,15 @@ contains
     end subroutine get_viable_parents
 
     subroutine compute_gains(obj_func, node, graph, population, gains, max_in)
-        procedure(objective_func), pointer :: obj_func
-        integer,           intent(in)    :: node
-        real   ,           intent(in)    :: graph(:,:)
-        integer,           intent(inout)    :: population(:,:)
-        real   ,           intent(inout) :: gains(:)
-        integer, optional, intent(in)    :: max_in
+        procedure(objective_func), pointer       :: obj_func
+        integer,                   intent(in)    :: node
+        real   ,                   intent(in)    :: graph(:,:)
+        integer,                   intent(inout) :: population(:,:)
+        real   ,                   intent(inout) :: gains(:)
+        integer,         optional, intent(in)    :: max_in
         integer              :: max, k, l, k_in_cnt, node_in_cnt
         integer, allocatable :: node_in(:)
-        type(stack) :: viable
+        type(stack)          :: viable
         if( present(max_in) )then
             max = max_in
         else
@@ -174,11 +174,11 @@ contains
     end subroutine compute_gains
 
     subroutine construct_network(obj_func, population, prob_size, graph, max_edges_in)
-        procedure(objective_func), pointer :: obj_func
-        integer,           intent(inout) :: population(:,:)
-        integer,           intent(in)    :: prob_size
-        real   ,           intent(inout) :: graph(:,:)
-        integer, optional, intent(in)    :: max_edges_in
+        procedure(objective_func), pointer       :: obj_func
+        integer,                   intent(inout) :: population(:,:)
+        integer,                   intent(in)    :: prob_size
+        real   ,                   intent(inout) :: graph(:,:)
+        integer,         optional, intent(in)    :: max_edges_in
         real    :: gains(prob_size), max
         integer :: k, l, m, from, to, max_edges
         max_edges = 3*size(population, 1)
@@ -259,12 +259,12 @@ contains
     end function count_in
 
     function calculate_probability(obj_func, node, bitstring, graph, ordered, population) result(val)
-        procedure(objective_func), pointer :: obj_func
-        integer, intent(in)  :: node
-        integer, intent(inout) :: bitstring(:)
-        real   , intent(in)  :: graph(:,:)
-        integer, intent(in)  :: ordered(:)
-        integer, intent(inout)  :: population(:,:)
+        procedure(objective_func), pointer       :: obj_func
+        integer,                   intent(in)    :: node
+        integer,                   intent(inout) :: bitstring(:)
+        real   ,                   intent(in)    :: graph(:,:)
+        integer,                   intent(in)    :: ordered(:)
+        integer,                   intent(inout) :: population(:,:)
         real                 :: val, cur_cost
         type(stack)          :: indexes
         integer              :: k, index, i1, i2, cnt
@@ -302,12 +302,12 @@ contains
     end function calculate_probability
 
     subroutine probabilistic_logic_sample(obj_func, graph, ordered, population, bitstring, seed)
-        procedure(objective_func), pointer :: obj_func
-        real   ,           intent(in)    :: graph(:,:)
-        integer,           intent(in)    :: ordered(:)
-        integer,           intent(inout) :: population(:,:)
-        integer,           intent(inout) :: bitstring(:)
-        integer, optional, intent(in)    :: seed
+        procedure(objective_func), pointer       :: obj_func
+        real   ,                   intent(in)    :: graph(:,:)
+        integer,                   intent(in)    :: ordered(:)
+        integer,                   intent(inout) :: population(:,:)
+        integer,                   intent(inout) :: bitstring(:)
+        integer,         optional, intent(in)    :: seed
         integer :: k, ordered_ind
         real    :: rand_val, prob_val
         bitstring = 0
@@ -316,21 +316,19 @@ contains
             ordered_ind = ordered(k)
             rand_val    = rand()
             prob_val    = calculate_probability(obj_func, ordered_ind, bitstring, graph, ordered, population) 
-            if( rand_val < prob_val )then
-                bitstring(ordered_ind) = 1
-            endif
+            if( rand_val < prob_val ) bitstring(ordered_ind) = 1
         enddo
     end subroutine probabilistic_logic_sample
 
     subroutine sample_from_network(obj_func, population, graph, num_samples, samples, seed)
-        procedure(objective_func), pointer :: obj_func
-        integer,           intent(inout) :: population(:,:)
-        real   ,           intent(in)    :: graph(:,:)
-        integer,           intent(in)    :: num_samples
-        integer,           intent(inout) :: samples(:, :)
-        integer, optional, intent(in)    :: seed
-        integer, allocatable   :: ordered(:), bitstring(:)
-        integer :: k
+        procedure(objective_func), pointer       :: obj_func
+        integer,                   intent(inout) :: population(:,:)
+        real   ,                   intent(in)    :: graph(:,:)
+        integer,                   intent(in)    :: num_samples
+        integer,                   intent(inout) :: samples(:, :)
+        integer,         optional, intent(in)    :: seed
+        integer, allocatable :: ordered(:), bitstring(:)
+        integer              :: k
         allocate(ordered(  size(graph, 1)), source=0)
         allocate(bitstring(size(graph, 1)), source=-1)
         call topological_ordering(graph, ordered)
@@ -346,22 +344,21 @@ contains
     end subroutine sample_from_network
 
     subroutine bayesian_search(obj_func, num_bits, max_iter, pop_size, select_size, num_child, best, seed)
-        procedure(objective_func), pointer :: obj_func
-        integer, intent(in)           :: num_bits
-        integer, intent(in)           :: max_iter
-        integer, intent(in)           :: pop_size
-        integer, intent(in)           :: select_size
-        integer, intent(in)           :: num_child
-        integer, intent(inout)        :: best(:)
-        integer, optional, intent(in) :: seed
-        integer, allocatable          :: children(:, :), selected(:, :)
-        integer                       :: k, l, m, best_cost, ind, cnt
-        real   , allocatable          :: network(:, :)
-        integer, parameter            :: BITS_IN_BYTE = 8
-        logical                       :: converged
+        procedure(objective_func), pointer       :: obj_func
+        integer,                   intent(in)    :: num_bits
+        integer,                   intent(in)    :: max_iter
+        integer,                   intent(in)    :: pop_size
+        integer,                   intent(in)    :: select_size
+        integer,                   intent(in)    :: num_child
+        integer,                   intent(inout) :: best(:)
+        integer,         optional, intent(in)    :: seed
+        integer, allocatable :: children(:, :), selected(:, :)
+        integer              :: k, l, m, best_cost, ind, cnt
+        real   , allocatable :: network(:, :)
+        integer, parameter   :: BITS_IN_BYTE = 8
+        logical              :: converged
         type(bit_cost), allocatable, target :: pop_cost(:)
-        allocate(selected(select_size, num_bits), children(num_child, num_bits),&
-                &source=0)
+        allocate(selected(select_size, num_bits), children(num_child, num_bits), source=0)
         allocate(network(num_bits, num_bits), source=0.)
         allocate(pop_cost(pop_size-select_size+num_child))
         do k = 1, pop_size-select_size+num_child
@@ -375,9 +372,7 @@ contains
         do k = 1, pop_size
             pop_cost(k)%bitstr = 0
             do l = 1, num_bits
-                if( rand() < 0.5 )then
-                    pop_cost(k)%bitstr(l) = 1
-                endif
+                if( rand() < 0.5 ) pop_cost(k)%bitstr(l) = 1
             enddo
             pop_cost(k)%cost = obj_func(pop_cost(k)%bitstr)
         enddo
@@ -426,8 +421,8 @@ contains
 
     function cost_compare(i1ptr, i2ptr) result(sgn) bind(C)
         type(c_ptr), value, intent(in) :: i1ptr, i2ptr
-        type(bit_cost), pointer :: i1, i2
-        integer(c_int)   :: sgn
+        type(bit_cost),     pointer    :: i1, i2
+        integer(c_int) :: sgn
         call c_f_pointer(i1ptr, i1)
         call c_f_pointer(i2ptr, i2)
         ! The user defines what 'less than', 'equal', 'greater than' means by setting 'sgn'
