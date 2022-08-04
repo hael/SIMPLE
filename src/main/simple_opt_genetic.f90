@@ -22,12 +22,23 @@ contains
         endif
     end subroutine crossover
 
-    subroutine mutation(bitstring, mut_rate)
-        integer, intent(inout) :: bitstring(:)
-        real   , intent(in)    :: mut_rate
-        integer :: k
+    subroutine mutation(bitstring, nrefs, mut_rate, bits)
+        use simple_stack
+        integer,     intent(inout) :: bitstring(:)
+        integer,     intent(in)    :: nrefs
+        real   ,     intent(in)    :: mut_rate
+        type(stack), intent(inout) :: bits
+        integer     :: k
+        real        :: val
+        call bits%clear()
+        do k = 1, nrefs
+            call bits%push(k)
+        enddo
+        call bits%remove(real(bitstring(k)))
         do k = 1, size(bitstring)
-            if( rand() < mut_rate ) bitstring(k) = 1 - bitstring(k)
+            if( rand() < mut_rate )then
+                bitstring(k) = bits%get_at(floor(rand()*(nrefs-1)))
+            endif
         enddo
     end subroutine mutation
 
@@ -44,51 +55,53 @@ contains
         enddo
     end function select_pop
 
-    subroutine genetic_opt(obj_func, num_bits, max_iter, pop_size, cross_rate, mut_rate, best, best_val)
+    subroutine genetic_opt(obj_func, num_bits, nrefs, max_iter, pop_size, cross_rate, mut_rate, best, best_val)
+        use simple_stack
         procedure(objective_func), pointer :: obj_func
         integer, intent(in)    :: num_bits
+        integer, intent(in)    :: nrefs
         integer, intent(in)    :: max_iter
         integer, intent(in)    :: pop_size
         real   , intent(in)    :: cross_rate
         real   , intent(in)    :: mut_rate
         integer, intent(inout) :: best(:)
         real   , intent(inout) :: best_val
-        integer, allocatable :: pop(:,:), selected(:,:)
-        real   , allocatable :: costs(:)
+        integer, allocatable   :: population(:,:), selected(:,:)
+        real   , allocatable   :: costs(:)
+        type(stack)            :: bits
         integer :: k,l
         logical :: got_new_best
-        call srand(time())
-        allocate(pop(pop_size, num_bits), selected(pop_size, num_bits), source = 0)
+        call srand(time()+13)
+        allocate(population(pop_size, num_bits), selected(pop_size, num_bits), source = 0)
         allocate(costs(pop_size), source = 0.)
+        call bits%new(nrefs)
         do k = 1, pop_size
             do l = 1, num_bits
-                pop(k,l) = floor(rand()*2)
+                population(k,l) = floor(rand()*nrefs)
             enddo
         enddo
-        best     = pop(1,:)
+        best     = population(1,:)
         best_val = obj_func(best)
         do k = 1, max_iter
             got_new_best = .false.
             do l = 1, pop_size
-                costs(l) = obj_func(pop(l,:))
+                costs(l) = obj_func(population(l,:))
                 if( costs(l) > best_val )then
-                    best         = pop(l,:)
+                    best         = population(l,:)
                     best_val     = costs(l)
                     got_new_best = .true.
                 endif
             enddo
-            if( got_new_best )then
-                print *, 'new best = ', best
-                print *, 'current cost = ', best_val
-            endif
+            print *, 'current cost = ', best_val
             do l = 1, pop_size, 2
-                selected(l  ,:) = pop(select_pop(pop, costs, times = 3), :)
-                selected(l+1,:) = pop(select_pop(pop, costs, times = 3), :)
+                selected(l  ,:) = population(select_pop(population, costs, times = 3), :)
+                selected(l+1,:) = population(select_pop(population, costs, times = 3), :)
                 call crossover(selected(l,:), selected(l+1,:), cross_rate)
-                call mutation(selected(l  ,:), mut_rate)
-                call mutation(selected(l+1,:), mut_rate)
+                call mutation(selected(l  ,:), nrefs, mut_rate, bits)
+                call mutation(selected(l+1,:), nrefs, mut_rate, bits)
             enddo
-            pop = selected
+            population = selected
+            if( best_val == num_bits ) return
         enddo
     end subroutine genetic_opt
 end module simple_opt_genetic
