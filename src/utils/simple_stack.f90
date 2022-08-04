@@ -3,7 +3,7 @@ module simple_stack
 include 'simple_lib.f08'
 implicit none
 private
-public :: stack, pop, contains, is_empty
+public :: stack, pop, contains, is_empty, remove
 #include "simple_local_flags.inc"
 
 type :: stack
@@ -20,7 +20,9 @@ procedure :: pop
 procedure :: get_at
 procedure :: is_empty
 procedure :: contains
+procedure :: remove
 procedure :: size_of
+procedure :: clear
 ! DESTRUCTOR
 !procedure :: kill
 end type stack
@@ -62,6 +64,11 @@ contains
         endif
     end subroutine new
 
+    subroutine clear(self)
+        class(stack), intent(inout) :: self
+        self%last_ind = 1
+    end subroutine clear
+
     subroutine push_obj(self, obj)
         class(stack), intent(inout) :: self
         integer     , intent(in)    :: obj
@@ -89,6 +96,21 @@ contains
             ret = -1
         endif
     end function pop
+
+    subroutine remove(self, val)
+        class(stack), intent(inout) :: self
+        real    :: val
+        integer :: k, l, N
+        N = self%last_ind
+        do k = 1, N
+            if( self%val_arr(k) == val )then
+                do l = k, N-1
+                    self%val_arr(l) = self%val_arr(l+1)
+                enddo
+                self%last_ind = self%last_ind - 1
+            endif
+        enddo
+    end subroutine remove
     
     function get_at(self, ind) result(ret)
         class(stack), intent(in) :: self
