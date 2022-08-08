@@ -304,68 +304,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_OPT_3D_FILTER NORMAL STOP ****')
     end subroutine exec_opt_3D_filter
-
-    subroutine exec_opt_3D_filter_test(self, cline)
-        use simple_opt_filter, only: opt_filter_3D_test
-        class(opt_3D_filter_test_commander), intent(inout) :: self
-        class(cmdline),                      intent(inout) :: cline
-        type(parameters)  :: params
-        type(image)       :: even, odd, mskvol
-        logical           :: have_mask_file
-        character(len=90) :: file_tag
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call params%new(cline)
-        call odd %new([params%box,params%box,params%box], params%smpd)
-        call even%new([params%box,params%box,params%box], params%smpd)
-        call odd %read(params%vols(1))
-        call even%read(params%vols(2))
-        if( params%l_nonuniform )then
-            file_tag = 'nonuniform_opt_3D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
-        else
-            file_tag = 'uniform_opt_3D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
-        endif
-        have_mask_file = .false.
-        if( cline%defined('mskfile') )then
-            if( file_exists(params%mskfile) )then
-                call mskvol%new([params%box,params%box,params%box], params%smpd)
-                call mskvol%read(params%mskfile)
-                call even%zero_background
-                call odd%zero_background
-                call even%mul(mskvol)
-                call odd%mul(mskvol)
-                call mskvol%one_at_edge ! to expand before masking of reference internally
-                have_mask_file = .true.
-            else
-                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_opt_3D_filter')
-            endif
-        else
-            ! spherical masking
-            call even%mask(params%msk, 'soft')
-            call odd%mask(params%msk, 'soft')
-            call mskvol%disc([params%box,params%box,params%box], params%smpd,&
-            &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
-        endif        
-        call opt_filter_3D_test(odd, even, mskvol)
-        if( have_mask_file )then
-            call mskvol%read(params%mskfile) ! restore the soft edge
-            call even%mul(mskvol)
-            call odd%mul(mskvol)
-        else
-            call even%mask(params%msk, 'soft')
-            call odd%mask(params%msk, 'soft')
-        endif
-        call odd%write(trim(file_tag)//'_odd.mrc')
-        call even%write(trim(file_tag)//'_even.mrc')
-        call odd%add(even)
-        call odd%mul(0.5)
-        call odd%write(trim(file_tag)//'_avg.mrc')
-        ! destruct
-        call odd%kill
-        call even%kill
-        call mskvol%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_OPT_3D_FILTER NORMAL STOP ****')
-    end subroutine exec_opt_3D_filter_test
     
     subroutine exec_opt_2D_filter( self, cline )
         use simple_opt_filter, only: opt_2D_filter_sub
@@ -411,9 +349,71 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_OPT_2D_FILTER NORMAL STOP ****')
     end subroutine exec_opt_2D_filter
+
+    subroutine exec_opt_3D_filter_test(self, cline)
+        use simple_opt_filter_test, only: opt_filter_3D
+        class(opt_3D_filter_test_commander), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline
+        type(parameters)  :: params
+        type(image)       :: even, odd, mskvol
+        logical           :: have_mask_file
+        character(len=90) :: file_tag
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        call odd %new([params%box,params%box,params%box], params%smpd)
+        call even%new([params%box,params%box,params%box], params%smpd)
+        call odd %read(params%vols(1))
+        call even%read(params%vols(2))
+        if( params%l_nonuniform )then
+            file_tag = 'nonuniform_opt_3D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
+        else
+            file_tag = 'uniform_opt_3D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
+        endif
+        have_mask_file = .false.
+        if( cline%defined('mskfile') )then
+            if( file_exists(params%mskfile) )then
+                call mskvol%new([params%box,params%box,params%box], params%smpd)
+                call mskvol%read(params%mskfile)
+                call even%zero_background
+                call odd%zero_background
+                call even%mul(mskvol)
+                call odd%mul(mskvol)
+                call mskvol%one_at_edge ! to expand before masking of reference internally
+                have_mask_file = .true.
+            else
+                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_opt_3D_filter')
+            endif
+        else
+            ! spherical masking
+            call even%mask(params%msk, 'soft')
+            call odd%mask(params%msk, 'soft')
+            call mskvol%disc([params%box,params%box,params%box], params%smpd,&
+            &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
+        endif        
+        call opt_filter_3D(odd, even, mskvol)
+        if( have_mask_file )then
+            call mskvol%read(params%mskfile) ! restore the soft edge
+            call even%mul(mskvol)
+            call odd%mul(mskvol)
+        else
+            call even%mask(params%msk, 'soft')
+            call odd%mask(params%msk, 'soft')
+        endif
+        call odd%write(trim(file_tag)//'_odd.mrc')
+        call even%write(trim(file_tag)//'_even.mrc')
+        call odd%add(even)
+        call odd%mul(0.5)
+        call odd%write(trim(file_tag)//'_avg.mrc')
+        ! destruct
+        call odd%kill
+        call even%kill
+        call mskvol%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_OPT_3D_FILTER NORMAL STOP ****')
+    end subroutine exec_opt_3D_filter_test
     
     subroutine exec_opt_2D_filter_test( self, cline )
-        use simple_opt_filter, only: opt_2D_filter_sub_test
+        use simple_opt_filter_test, only: opt_2D_filter_sub
         use simple_tvfilter,   only: tvfilter
         use simple_class_frcs, only: class_frcs
         class(opt_2D_filter_test_commander), intent(inout) :: self
@@ -443,7 +443,7 @@ contains
             call even(iptcl)%read(params%stk,  iptcl)
         enddo
         ! filter
-        call opt_2D_filter_sub_test( even, odd )
+        call opt_2D_filter_sub( even, odd )
         ! destruct
         do iptcl = 1, params%nptcls
             call odd( iptcl)%write(trim(file_tag)//'_odd.mrc',  iptcl)
