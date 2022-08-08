@@ -382,7 +382,7 @@ contains
             call fsc2optlp_sub(frcs%get_filtsz(), frc, filter)
             where( filter < TINY )filter = 0.
             call img%fft()
-            call img%shellnorm_and_apply_filter(frc)
+            call img%shellnorm_and_apply_filter(filter)
             call img%ifft()
             call stkio_w%write(i, img)
             deallocate(frc,filter)

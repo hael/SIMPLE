@@ -26,6 +26,7 @@ type fft_vars_type
 end type fft_vars_type
 
 contains
+
     subroutine batch_fft_2D( even, odd, fft_vars )
         class(image),        intent(inout) :: even, odd
         type(fft_vars_type), intent(in)    :: fft_vars
@@ -396,32 +397,8 @@ contains
         real,    parameter :: LAMBDA_MIN = .5 , LAMBDA_MAX = 5.    ! for TV filter
         real               :: param
         type(tvfilter)     :: tvfilt_loc
-        select case(params_glob%filt_enum)
-            case(FILT_LP)
-                call img%lp(cur_ind)
-            case(FILT_TV)
-                param = LAMBDA_MIN + (cur_ind - find_start)*(LAMBDA_MAX - LAMBDA_MIN)/(find_stop - find_start)
-                if( .not. present(tvfilt_in) )then
-                    call tvfilt_loc%new
-                    if( img%is_2d() )then
-                        call tvfilt_loc%apply_filter(img, param)
-                    else
-                        call tvfilt_loc%apply_filter_3d(img, param)
-                    endif
-                    call tvfilt_loc%kill
-                else
-                    if( img%is_2d() )then
-                        call tvfilt_in%apply_filter(img, param)
-                    else
-                        call tvfilt_in%apply_filter_3d(img, param)
-                    endif
-                endif
-            case(FILT_BW8)
-                if( .not. use_cache ) call butterworth_filter(cur_fil, BW_ORDER, real(cur_ind))
-                call img%apply_filter(cur_fil)
-            case DEFAULT
-                THROW_HARD('unsupported filter type')
-        end select
+        if( .not. use_cache ) call butterworth_filter(cur_fil, BW_ORDER, real(cur_ind))
+        call img%apply_filter(cur_fil)
     end subroutine apply_opt_filter
 
     ! 2D optimization(search)-based uniform/nonuniform filter, serial (strictly non-paralellized) version

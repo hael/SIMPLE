@@ -320,8 +320,7 @@ contains
                 if( present(xyz_out) ) xyz_out = xyz
             endif
         endif
-        ! filter (filtering and masking only done if params_glob%l_opt_filter == .false.)
-        if( .not. params_glob%l_opt_filter )then
+        if( .not. params_glob%l_nonuniform )then
             call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
             if( any(frc > 0.143) )then
                 call fsc2optlp_sub(filtsz, frc, filter)

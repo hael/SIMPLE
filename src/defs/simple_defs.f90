@@ -74,12 +74,6 @@ enum, bind(c)
     enumerator :: OBJFUN_CC = 0, OBJFUN_EUCLID = 1
 end enum
 
-! Filter kind in nonuniform regularization
-enum, bind(c)
-    enumerator :: ENUM_FILT = -1
-    enumerator :: FILT_LP = 0, FILT_TV = 1, FILT_BW8 = 2
-end enum
-
 ! type for CTF parameters
 type ctfparams
     integer(kind(ENUM_CTFFLAG)) :: ctfflag = CTFFLAG_YES

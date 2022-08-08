@@ -163,7 +163,7 @@ contains
         else
             call cavger_read(params_glob%refs, 'odd')
         endif
-        if( params_glob%l_opt_filter )then
+        if( params_glob%l_nonuniform )then
             call opt_2D_filter_sub(cavgs_even, cavgs_odd)
             if( params_glob%part.eq.1 )then
                 do iptcl = 1,size(cavgs_even)
@@ -398,7 +398,7 @@ contains
         logical   :: do_center, has_been_searched
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! create the polarft_corrcalc object
-        if( params_glob%l_opt_filter )then
+        if( params_glob%l_nonuniform )then
             call pftcc%new(params_glob%ncls, [1,batchsz_max], .false.)
         else
             call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%l_match_filt)
