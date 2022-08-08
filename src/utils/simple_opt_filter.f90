@@ -20,23 +20,23 @@ type opt_vol
 end type opt_vol
 
 contains
+
     subroutine opt_2D_filter_sub( even, odd )
-        use simple_tvfilter,   only: tvfilter
-        use simple_class_frcs, only: class_frcs
+        use simple_class_frcs,    only: class_frcs
+        use simple_estimate_ssnr, only: fsc2optlp_sub
         class(image),   intent(inout) :: even(:), odd(:)
-        character(len=:), allocatable :: filter, frcs_fname
-        type(tvfilter)                :: tvfilt
+        character(len=:), allocatable :: frcs_fname
         type(class_frcs)              :: clsfrcs 
         type(image),      allocatable :: weights_img(:), ref_diff_odd_img(:), ref_diff_even_img(:),&
-                                        &odd_copy_rmat(:),  odd_copy_cmat(:),  odd_copy_shellnorm(:),&
-                                        &even_copy_rmat(:), even_copy_cmat(:), even_copy_shellnorm(:)
+                                        &odd_copy_rmat(:),  odd_copy_cmat(:),&
+                                        &even_copy_rmat(:), even_copy_cmat(:)
         real,             allocatable :: cur_diff_odd(:,:,:,:), cur_diff_even(:,:,:,:), cur_fil(:,:),&
-                                        &weights_2D(:,:,:), frc(:)
+                                        &weights_2D(:,:,:), frc(:), filt(:)
         integer,          allocatable :: lplims_hres(:)
         type(opt_vol),    allocatable :: opt_odd(:,:,:,:), opt_even(:,:,:,:)
         real                          :: smpd, lpstart, lp
         integer                       :: iptcl, box, filtsz, ldim(3), ldim_pd(3), smooth_ext, nptcls, hpind_fsc, find
-        logical                       :: lpstart_fallback, l_nonuniform, l_phaseplate
+        logical                       :: lpstart_fallback, l_nonuniform, l_phaseplate, l_have_frcs      
         ! init
         ldim         = even(1)%get_ldim()
         filtsz       = even(1)%get_filtsz()
@@ -45,7 +45,6 @@ contains
         ldim_pd      = ldim + 2 * smooth_ext
         ldim_pd(3)   = 1 ! because we operate on stacks
         box          = ldim_pd(1)
-        filter       = trim(params_glob%filter)
         l_nonuniform = params_glob%l_nonuniform
         frcs_fname   = trim(params_glob%frcs)
         smpd         = params_glob%smpd
@@ -53,40 +52,31 @@ contains
         lpstart      = params_glob%lpstart
         hpind_fsc    = params_glob%hpind_fsc
         l_phaseplate = params_glob%l_phaseplate
-
-        ! print *, 'ldim         ', ldim(1),    ldim(2),    ldim(3)
-        ! print *, 'ldim_pd      ', ldim_pd(1), ldim_pd(2), ldim_pd(3)
-        ! print *, 'filtsz       ', filtsz
-        ! print *, 'box          ', box
-        ! print *, 'filter       ', filter
-        ! print *, 'l_nonuniform ', l_nonuniform
-        ! print *, 'smooth_ext   ', smooth_ext
-        ! print *, 'frcs_fname   ', frcs_fname
-        ! print *, 'smpd         ', smpd
-        ! print *, 'nptcls       ', nptcls
-        ! print *, 'lpstart      ', lpstart
-        ! print *, 'hpind_fsc    ', hpind_fsc
-        ! print *, 'l_phaseplate ', l_phaseplate
-
         ! retrieve FRCs
         call clsfrcs%new(nptcls, box, smpd, 1)
         lpstart_fallback = .false.
         if( file_exists(frcs_fname) )then
             call clsfrcs%read(frcs_fname)
+            if( clsfrcs%get_filtsz().ne.even(1)%get_filtsz() )then
+                write(logfhandle,*) 'img filtsz:  ', even(1)%get_filtsz()
+                write(logfhandle,*) 'frcs filtsz: ', clsfrcs%get_filtsz()
+                THROW_HARD('Inconsistent filter dimensions; opt_2D_filter_sub')
+            endif
         else
             THROW_WARN('Class average FRCs file '//frcs_fname//' does not exist, falling back on lpstart: '//real2str(lpstart))
             lpstart_fallback = .true.
         endif
         filtsz = clsfrcs%get_filtsz()
         ! allocate
-        allocate(odd_copy_rmat(nptcls),  odd_copy_cmat(nptcls),  odd_copy_shellnorm(nptcls),&
-                &even_copy_rmat(nptcls), even_copy_cmat(nptcls), even_copy_shellnorm(nptcls),&
+        allocate(odd_copy_rmat(nptcls),  odd_copy_cmat(nptcls),&
+                &even_copy_rmat(nptcls), even_copy_cmat(nptcls),&
                 &weights_img(nptcls), ref_diff_odd_img(nptcls), ref_diff_even_img(nptcls))
         allocate(cur_diff_odd(box,box,1,nptcls), cur_diff_even(box,box,1,nptcls),&
                 &cur_fil(box,nptcls),weights_2D(smooth_ext*2+1,&
                 &smooth_ext*2+1,nptcls), frc(filtsz), source=0.)
         allocate(opt_odd(box,box,1,nptcls), opt_even(box,box,1,nptcls), lplims_hres(nptcls))
         ! calculate high-res low-pass limits
+        l_have_frcs = .false.
         if( lpstart_fallback )then
             lplims_hres = calc_fourier_index(lpstart, box, smpd)
         else
@@ -97,8 +87,32 @@ contains
                 lp   = calc_lowpass_lim(find, box, smpd)               ! box is the padded box size
                 lplims_hres(iptcl) = calc_fourier_index(lp, box, smpd) ! this is the Fourier index limit for the padded images
             end do
+            l_have_frcs = .true.
         endif
         do iptcl = 1, nptcls
+            if( l_have_frcs )then
+                frc = clsfrcs%get_frc(iptcl, ldim(1))
+                allocate(filt(size(frc)), source=1.)
+                call fsc2optlp_sub(clsfrcs%get_filtsz(), frc, filt)
+                where( filt < TINY ) filt = 0.
+                if( params_glob%l_match_filt )then
+                    call even(iptcl)%fft()
+                    call even(iptcl)%shellnorm_and_apply_filter(filt)
+                    call even(iptcl)%ifft()
+                    call odd(iptcl)%fft()
+                    call odd(iptcl)%shellnorm_and_apply_filter(filt)
+                    call odd(iptcl)%ifft()
+                else
+                    call even(iptcl)%fft()
+                    call even(iptcl)%apply_filter(frc)
+                    call even(iptcl)%ifft()
+                    call odd(iptcl)%fft()
+                    call odd(iptcl)%apply_filter(frc)
+                    call odd(iptcl)%ifft()
+                endif
+                deallocate(frc, filt)
+            endif
+            call even(iptcl)%write('filtered_by_opt2D.mrcs', iptcl)
             call even(iptcl)%pad_mirr(ldim_pd)
             call odd( iptcl)%pad_mirr(ldim_pd)
             call weights_img(iptcl)%new(ldim_pd, smpd, .false.)
@@ -107,22 +121,17 @@ contains
             call odd_copy_rmat(iptcl)%copy(odd(iptcl))
             call odd_copy_cmat(iptcl)%copy(odd(iptcl))
             call odd_copy_cmat(iptcl)%fft
-            call odd_copy_shellnorm(iptcl)%copy(odd(iptcl))
-            call odd_copy_shellnorm(iptcl)%shellnorm(return_ft=.true.)
             call even_copy_rmat(iptcl)%copy(even(iptcl))
             call even_copy_cmat(iptcl)%copy(even(iptcl))
             call even_copy_cmat(iptcl)%fft
-            call even_copy_shellnorm(iptcl)%copy(even(iptcl))
-            call even_copy_shellnorm(iptcl)%shellnorm(return_ft=.true.)
         enddo
-        call tvfilt%new(odd(1))
         ! filter
         !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
         do iptcl = 1, nptcls
             call opt_filter_2D(odd(iptcl), even(iptcl),&
-                            & odd_copy_rmat(iptcl),  odd_copy_cmat(iptcl),  odd_copy_shellnorm(iptcl),&
-                            &even_copy_rmat(iptcl), even_copy_cmat(iptcl), even_copy_shellnorm(iptcl),&
-                            &tvfilt, cur_diff_odd(:,:,:,iptcl), cur_diff_even(:,:,:,iptcl),&
+                            & odd_copy_rmat(iptcl),  odd_copy_cmat(iptcl),&
+                            &even_copy_rmat(iptcl), even_copy_cmat(iptcl),&
+                            &cur_diff_odd(:,:,:,iptcl), cur_diff_even(:,:,:,iptcl),&
                             &cur_fil(:,iptcl), weights_2D(:,:,iptcl), lplims_hres(iptcl),&
                             &opt_odd(:,:,:,iptcl), opt_even(:,:,:,iptcl),&
                             &weights_img(iptcl), ref_diff_odd_img(iptcl), ref_diff_even_img(iptcl))
@@ -134,15 +143,12 @@ contains
             call even_copy_rmat(iptcl)%kill
             call odd_copy_cmat( iptcl)%kill
             call even_copy_cmat(iptcl)%kill
-            call odd_copy_shellnorm( iptcl)%kill
-            call even_copy_shellnorm(iptcl)%kill
             call weights_img(iptcl)%kill
             call ref_diff_odd_img( iptcl)%kill
             call ref_diff_even_img(iptcl)%kill
             call even(iptcl)%clip_inplace(ldim)
             call odd(iptcl)%clip_inplace(ldim)
         enddo
-        call tvfilt%kill()
     end subroutine opt_2D_filter_sub
 
     ! Compute the value of the Butterworth transfer function of order n(th)
@@ -195,61 +201,28 @@ contains
         enddo        
     end subroutine butterworth_filter
 
-    subroutine apply_opt_filter(img, cur_ind, find_start, find_stop, cur_fil, use_cache, tvfilt_in)
-        use simple_tvfilter, only: tvfilter
+    subroutine apply_opt_filter(img, cur_ind, find_start, find_stop, cur_fil, use_cache)
         class(image), intent(inout) :: img
         integer,      intent(in)    :: cur_ind
         integer,      intent(in)    :: find_start
         integer,      intent(in)    :: find_stop
         real,         intent(inout) :: cur_fil(:)
         logical,      intent(in)    :: use_cache
-        type(tvfilter), optional, intent(inout) :: tvfilt_in
         integer, parameter :: BW_ORDER = 8
-        real,    parameter :: LAMBDA_MIN = .5 , LAMBDA_MAX = 5.    ! for TV filter
-        real               :: param
-        type(tvfilter)     :: tvfilt_loc
-        select case(params_glob%filt_enum)
-            case(FILT_LP)
-                call img%lp(cur_ind)
-                call img%ifft()
-            case(FILT_TV)
-                param = LAMBDA_MIN + (cur_ind - find_start)*(LAMBDA_MAX - LAMBDA_MIN)/(find_stop - find_start)
-                if( .not. present(tvfilt_in) )then
-                    call tvfilt_loc%new
-                    if( img%is_2d() )then
-                        call tvfilt_loc%apply_filter(img, param)
-                    else
-                        call tvfilt_loc%apply_filter_3d(img, param)
-                    endif
-                    call tvfilt_loc%kill
-                else
-                    if( img%is_2d() )then
-                        call tvfilt_in%apply_filter(img, param)
-                    else
-                        call tvfilt_in%apply_filter_3d(img, param)
-                    endif
-                endif
-                call img%ifft()
-            case(FILT_BW8)
-                if( .not. use_cache ) call butterworth_filter(cur_fil, BW_ORDER, real(cur_ind))
-                call img%apply_filter(cur_fil)
-                call img%ifft()
-            case DEFAULT
-                THROW_HARD('unsupported filter type')
-        end select
+        if( .not. use_cache ) call butterworth_filter(cur_fil, BW_ORDER, real(cur_ind))
+        call img%apply_filter(cur_fil)
+        call img%ifft()
     end subroutine apply_opt_filter
 
     subroutine opt_filter_2D(odd, even,&
-                            &odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm,&
-                            &even_copy_rmat, even_copy_cmat, even_copy_shellnorm,&
-                            &tvfilt_in, cur_diff_odd, cur_diff_even, cur_fil, weights_2D, kstop,&
+                            &odd_copy_rmat,  odd_copy_cmat,&
+                            &even_copy_rmat, even_copy_cmat,&
+                            &cur_diff_odd, cur_diff_even, cur_fil, weights_2D, kstop,&
                             &opt_odd, opt_even, weights_img, ref_diff_odd_img, ref_diff_even_img)
-        use simple_tvfilter, only: tvfilter
         class(image),   intent(inout) :: odd
         class(image),   intent(inout) :: even
-        class(image),   intent(in)    :: odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm,&
-                                        &even_copy_rmat, even_copy_cmat, even_copy_shellnorm
-        type(tvfilter), intent(inout) :: tvfilt_in
+        class(image),   intent(in)    :: odd_copy_rmat,  odd_copy_cmat,&
+                                        &even_copy_rmat, even_copy_cmat
         real,           intent(inout) :: cur_diff_odd(:,:,:), cur_diff_even(:,:,:)
         real,           intent(inout) :: cur_fil(:), weights_2D(:,:)
         integer,        intent(in)    :: kstop
@@ -300,21 +273,13 @@ contains
             if( L_VERBOSE_GLOB ) write(*,*) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current Fourier index = ', cur_ind
             ! filtering odd
             call odd%copy_fast(odd_copy_cmat)
-            call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
+            call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false.)
             call odd%sqeuclid_matrix(even_copy_rmat, cur_diff_odd)
-            if( params_glob%l_match_filt )then
-                call odd%copy_fast(odd_copy_shellnorm)
-                call apply_opt_filter(odd, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
-            endif
             call odd%get_rmat_ptr(rmat_odd)
             ! filtering even
             call even%copy_fast(even_copy_cmat)
-            call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .true., tvfilt_in)
+            call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .true.)
             call even%sqeuclid_matrix(odd_copy_rmat, cur_diff_even)
-            if( params_glob%l_match_filt )then
-                call even%copy_fast(even_copy_shellnorm)
-                call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .false., tvfilt_in)
-            endif
             call even%get_rmat_ptr(rmat_even)
             ! do the non-uniform, i.e. optimizing at each voxel
             if( params_glob%l_nonuniform )then                    

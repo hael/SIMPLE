@@ -232,7 +232,6 @@ type :: parameters
     integer(kind(ENUM_ORISEG))     :: spproj_iseg = PTCL3D_SEG    !< sp-project segments that b%a points to
     integer(kind(ENUM_OBJFUN))     :: cc_objfun   = OBJFUN_CC     !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1)
     integer(kind=kind(ENUM_WCRIT)) :: wcrit_enum  = CORRW_CRIT    !< criterium for correlation-based weights
-    integer(kind(ENUM_FILT))       :: filt_enum   = FILT_BW8      !< filter type, see simple_defs.f90 for definitions
     ! integer variables in ascending alphabetical order
     integer :: angstep=5
     integer :: avgsz=0
@@ -459,7 +458,6 @@ type :: parameters
     logical :: l_match_filt   = .true.
     logical :: l_needs_sigma  = .false.
     logical :: l_nonuniform   = .false.
-    logical :: l_opt_filter   = .false.
     logical :: l_phaseplate   = .false.
     logical :: l_ran_noise_ph = .true.
     logical :: l_refine_inpl  = .false.
@@ -1299,10 +1297,7 @@ contains
         ! set envfsc flag
         self%l_envfsc = self%envfsc .ne. 'no'
         ! set nonuniform flag
-        self%l_nonuniform = cline%defined('filter')
         if( cline%defined('nonuniform') ) self%l_nonuniform = trim(self%nonuniform).eq.'yes'
-        ! set opt filter flag
-        self%l_opt_filter = cline%defined('filter')
         ! set correlation weighting scheme
         self%l_corrw = self%wcrit .ne. 'no'
         ! set wiener mode
@@ -1324,21 +1319,6 @@ contains
                 case DEFAULT
                     THROW_HARD('unsupported correlation weighting method')
             end select
-        endif
-        ! set filter type
-        if( cline%defined('filter') )then
-            select case(trim(self%filter))
-                case('lp')
-                    self%filt_enum = FILT_LP    
-                case('tv') 
-                    self%filt_enum = FILT_TV
-                case('butterworth')
-                    self%filt_enum = FILT_BW8
-                case DEFAULT
-                    THROW_HARD('unsupported filter type')
-            end select
-        else
-            self%filter = 'butterworth'
         endif
         ! set graphene flag
         self%l_graphene = self%graphene_filt .ne. 'no'
