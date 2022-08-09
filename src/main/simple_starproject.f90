@@ -275,6 +275,7 @@ contains
                     else
                         entrystr = trim(adjustl(splitline(stardata%flags(flagsindex)%ind)))
                     end if 
+                    
                     if(stardata%flags(flagsindex)%string) then
                         if(index(entrystr, "/") > 1) then ! handles leading slash of absolute paths
                             if(index(self%starfile%rootdir, "job") > 0) then ! relion
@@ -405,9 +406,9 @@ contains
                     flagindex  = 0
                     flagsopen  = .true.
                     dataopen   = .false.
-                    delimindex = index(line, "data_ ") + 6
+                    delimindex = index(line, "data_") + 5
                     blockname  = line(delimindex:)
-                else if(flagsopen .AND. index(line, "_rln") > 0) then
+                else if(flagsopen .AND. (index(line, "_rln") > 0 .OR. index(line, "_spl") > 0)) then
                     delimindex = index(line, "#")
                     if(delimindex > 0) then
                         flagname = line(2:delimindex - 1)
@@ -433,6 +434,7 @@ contains
                             call enable_rlnflag(flagname, self%starfile%clusters2D%flags, flagindex)
                             self%starfile%clusters2D%flagscount = self%starfile%clusters2D%flagscount + 1 
                     end select
+                
                 else if(flagsopen .AND. index(line, "loop_") == 0) then
                     dataopen = .true.
                     flagsopen = .false.

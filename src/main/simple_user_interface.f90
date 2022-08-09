@@ -15,9 +15,13 @@ type simple_input_param
     character(len=:), allocatable :: descr_short
     character(len=:), allocatable :: descr_long
     character(len=:), allocatable :: descr_placeholder
+    character(len=:), allocatable :: gui_submenu
+    character(len=:), allocatable :: active_flags
+    character(len=:), allocatable :: exclusive_group
     character(len=:), allocatable :: cval_default
     real                          :: rval_default = 0.
     logical :: required = .true.
+    logical :: advanced = .true.
 end type simple_input_param
 
 type :: simple_program
@@ -26,6 +30,8 @@ type :: simple_program
     character(len=:), allocatable :: descr_short
     character(len=:), allocatable :: descr_long
     character(len=:), allocatable :: executable
+    character(len=:), allocatable :: gui_submenu_list
+    logical                       :: advanced = .true.
     ! image input/output
     type(simple_input_param), allocatable :: img_ios(:)
     ! parameter input/output
@@ -50,6 +56,7 @@ type :: simple_program
     procedure, private :: set_input_2
     procedure, private :: set_input_3
     generic,   private :: set_input => set_input_1, set_input_2, set_input_3
+    procedure, private :: set_gui_params
     procedure          :: print_ui
     procedure          :: print_cmdline
     procedure          :: print_cmdline_latex
@@ -1098,9 +1105,9 @@ contains
         ! PROGRAM SPECIFICATION
         call assign_optics_groups%new(&
         &'assign_optics_groups', &                                              ! name
-        &'Assign optics groups',&                     							! descr_short
-        &'is a program to assign optics groups',& 								! descr long
-        &'simple_exec',&                                                  		! executable
+        &'Assign optics groups',&                                               ! descr_short
+        &'is a program to assign optics groups',&                               ! descr long
+        &'simple_exec',&                                                        ! executable
         &0, 4, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1959,9 +1966,9 @@ contains
         ! PROGRAM SPECIFICATION
         call export_starproject%new(&
         &'export_starproject', &                                                ! name
-        &'Export projectfile in star format',&                     				! descr_short
-        &'is a program to export a SIMPLE projectfile in star format',& 		! descr long
-        &'simple_exec',&                                                  		! executable
+        &'Export projectfile in star format',&                                  ! descr_short
+        &'is a program to export a SIMPLE projectfile in star format',&         ! descr long
+        &'simple_exec',&                                                        ! executable
         &0, 0, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2082,9 +2089,9 @@ contains
         ! PROGRAM SPECIFICATION
         call import_starproject%new(&
         &'import_starproject', &                                                ! name
-        &'Import project in in star format',&                     				! descr_short
-        &'is a program to import a SIMPLE projectfile from star format',& 		! descr long
-        &'simple_exec',&                                                  		! executable
+        &'Import project in in star format',&                                   ! descr_short
+        &'is a program to import a SIMPLE projectfile from star format',&       ! descr long
+        &'simple_exec',&                                                        ! executable
         &0, 0, 0, 0, 0, 0, 0, .false.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2850,23 +2857,33 @@ contains
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_exec',&                                             ! executable
         &2, 3, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        pick%gui_submenu_list = "picking"
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call pick%set_input('img_ios', 1, 'refs', 'file', 'Stack of class-averages for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
+        call pick%set_gui_params('img_ios', 1, submenu="picking", advanced=.false.)
         call pick%set_input('img_ios', 2, 'vol1', 'file', 'Volume for picking', 'Volume for picking', 'e.g. vol.mrc file', .false., '')
+        call pick%set_gui_params('img_ios', 2, submenu="picking", advanced=.false.)
         ! parameter input/output
         call pick%set_input('parm_ios', 1, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
+        call pick%set_gui_params('parm_ios', 1, submenu="picking")
         call pick%set_input('parm_ios', 2, pcontrast)
+        call pick%set_gui_params('parm_ios', 2, submenu="picking")
         call pick%set_input('parm_ios', 3, picker)
+        call pick%set_gui_params('parm_ios', 3, submenu="picking")
         ! alternative inputs
         ! <empty>
         ! search controls
         call pick%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold in Angs','Distance filter in Angs{24}', '{24}', .false., 24.)
+        call pick%set_gui_params('srch_ctrls', 1, submenu="picking", advanced=.false.)
         call pick%set_input('srch_ctrls', 2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
+        call pick%set_gui_params('srch_ctrls', 2, submenu="picking", advanced=.false.)
         call pick%set_input('srch_ctrls', 3, pgrp)
+        call pick%set_gui_params('srch_ctrls', 3, submenu="picking", advanced=.false.)
         pick%srch_ctrls(3)%required = .false.
         ! filter controls
         call pick%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
+        call pick%set_gui_params('filt_ctrls', 1, submenu="picking")
         ! mask controls
         ! <empty>
         ! computer controls
@@ -3064,108 +3081,176 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 15, 0, 21, 14, 1, 7, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 15, 0, 21, 14, 1, 7, .true.)                                                    ! # entries in each group, requires sp_project
+        preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D"
+        preprocess_stream_dev%advanced = .false.
         ! image input/output
         call preprocess_stream_dev%set_input('img_ios', 1, dir_movies)
+        call preprocess_stream_dev%set_gui_params('img_ios', 1, submenu="data", advanced=.false.)
         call preprocess_stream_dev%set_input('img_ios', 2, gainref)
+        call preprocess_stream_dev%set_gui_params('img_ios', 2, submenu="data", advanced=.false.)
         call preprocess_stream_dev%set_input('img_ios', 3, 'refs', 'file', 'References images for picking*', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
+        call preprocess_stream_dev%set_gui_params('img_ios', 3, submenu="picking", advanced=.false., exclusive_group="refs" )
         call preprocess_stream_dev%set_input('img_ios', 4, 'vol1', 'file', 'Reference volume for picking*', 'Reference volume for picking', 'e.g. vol.mrc', .false., '')
+        call preprocess_stream_dev%set_gui_params('img_ios', 4, submenu="picking", advanced=.false., exclusive_group="refs")
         call preprocess_stream_dev%set_input('img_ios', 5, 'dir_prev', 'file', 'Previous run directory',&
             &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preprocess_stream', .false., '')
+        call preprocess_stream_dev%set_gui_params('img_ios', 5, submenu="data")
         ! parameter input/output
         call preprocess_stream_dev%set_input('parm_ios', 1, dose_rate)
+        call preprocess_stream_dev%set_gui_params('parm_ios', 1, submenu="data", advanced=.false.)
         call preprocess_stream_dev%set_input('parm_ios', 2, exp_time)
+        call preprocess_stream_dev%set_gui_params('parm_ios', 2, submenu="data", advanced=.false.)
         call preprocess_stream_dev%set_input('parm_ios', 3, scale_movies)
+        call preprocess_stream_dev%set_gui_params('parm_ios', 3, submenu="motion correction", advanced=.false.)
         call preprocess_stream_dev%set_input('parm_ios', 4, eer_fraction)
+        call preprocess_stream_dev%set_gui_params('parm_ios', 4, submenu="motion correction", advanced=.false.)
         call preprocess_stream_dev%set_input('parm_ios', 5, eer_upsampling)
+        call preprocess_stream_dev%set_gui_params('parm_ios', 5, submenu="motion correction", advanced=.false.)
         call preprocess_stream_dev%set_input('parm_ios', 6, pcontrast)
+        call preprocess_stream_dev%set_gui_params('parm_ios', 6, submenu="picking")
         call preprocess_stream_dev%set_input('parm_ios', 7, box_extract)
+        call preprocess_stream_dev%set_gui_params('parm_ios', 7, submenu="picking")
         call preprocess_stream_dev%set_input('parm_ios', 8, pspecsz)
+        call preprocess_stream_dev%set_gui_params('parm_ios', 8, submenu="picking")
         call preprocess_stream_dev%set_input('parm_ios', 9, max_dose)
+        call preprocess_stream_dev%set_gui_params('parm_ios', 9, submenu="motion correction")
         call preprocess_stream_dev%set_input('parm_ios',10, kv)
         preprocess_stream_dev%parm_ios(10)%required = .true.
+        call preprocess_stream_dev%set_gui_params('parm_ios', 10, submenu="data", advanced=.false.)
         call preprocess_stream_dev%set_input('parm_ios',11, cs)
         preprocess_stream_dev%parm_ios(11)%required = .true.
+        call preprocess_stream_dev%set_gui_params('parm_ios', 11, submenu="data", advanced=.false.)
         call preprocess_stream_dev%set_input('parm_ios',12, fraca)
         preprocess_stream_dev%parm_ios(12)%required = .true.
+        call preprocess_stream_dev%set_gui_params('parm_ios', 12, submenu="data", advanced=.false.)
         call preprocess_stream_dev%set_input('parm_ios',13, smpd)
         preprocess_stream_dev%parm_ios(13)%required = .true.
+        call preprocess_stream_dev%set_gui_params('parm_ios', 13, submenu="data", advanced=.false.)
         call preprocess_stream_dev%set_input('parm_ios',14, ctfpatch)
+        call preprocess_stream_dev%set_gui_params('parm_ios', 14, submenu="CTF estimation")
         call preprocess_stream_dev%set_input('parm_ios',15, picker)
+        call preprocess_stream_dev%set_gui_params('parm_ios', 15, submenu="picking")
+        
         ! alternative inputs
         ! <empty>
         ! search controls
         call preprocess_stream_dev%set_input('srch_ctrls', 1, trs)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 1, submenu="motion correction")
         preprocess_stream_dev%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{20}'
         preprocess_stream_dev%srch_ctrls(1)%rval_default      = 20.
         call preprocess_stream_dev%set_input('srch_ctrls', 2, dfmin)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 2, submenu="CTF estimation")
         call preprocess_stream_dev%set_input('srch_ctrls', 3, dfmax)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 3, submenu="CTF estimation")
         call preprocess_stream_dev%set_input('srch_ctrls', 4, astigtol)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 4, submenu="CTF estimation")
         call preprocess_stream_dev%set_input('srch_ctrls', 5, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 5, submenu="picking")
         call preprocess_stream_dev%set_input('srch_ctrls', 6, 'ndev',  'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 6, submenu="picking", advanced=.false.)
         call preprocess_stream_dev%set_input('srch_ctrls', 7, pgrp)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 7, submenu="picking", advanced=.false.)
         preprocess_stream_dev%srch_ctrls(7)%required = .false.
         call preprocess_stream_dev%set_input('srch_ctrls', 8, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{50}', .false., 50.)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 8, submenu="motion correction")
         call preprocess_stream_dev%set_input('srch_ctrls', 9, mcpatch)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 9, submenu="motion correction")
         call preprocess_stream_dev%set_input('srch_ctrls',10, nxpatch)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 10, submenu="motion correction")
         call preprocess_stream_dev%set_input('srch_ctrls',11, nypatch)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 11, submenu="motion correction")
         call preprocess_stream_dev%set_input('srch_ctrls',12, mcconvention)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 12, submenu="motion correction")
         call preprocess_stream_dev%set_input('srch_ctrls',13, algorithm)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 13, submenu="motion correction")
         call preprocess_stream_dev%set_input('srch_ctrls',14, ncls_start)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 14, submenu="cluster 2D", advanced=.false.)
         preprocess_stream_dev%srch_ctrls(14)%required = .false.
         call preprocess_stream_dev%set_input('srch_ctrls',15, nptcls_per_cls)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 15, submenu="cluster 2D", advanced=.false.)
         preprocess_stream_dev%srch_ctrls(15)%required = .true.
         preprocess_stream_dev%srch_ctrls(15)%rval_default = 300.
         call preprocess_stream_dev%set_input('srch_ctrls',16, 'autoscale', 'binary', 'Automatic down-scaling for 2D classification', 'Automatic down-scaling of images &
         &for accelerated convergence rate. (yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 16, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('srch_ctrls',17, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
         &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 17, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('srch_ctrls',18, 'ncls', 'num', 'Maximum number of 2D clusters*',&
         &'Maximum number of 2D class averages for the pooled particles subsets', 'Maximum # 2D clusters', .false., 200.)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 18, submenu="cluster 2D", advanced=.false.)
         call preprocess_stream_dev%set_input('srch_ctrls',19, lpthresh)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 19, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('srch_ctrls',20, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 20, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('srch_ctrls',21, mcpatch_threshold)
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 21, submenu="motion correction")
+        
         ! filter controls
         call preprocess_stream_dev%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 1, submenu="motion correction")
         call preprocess_stream_dev%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit for movie alignment', 'Low-pass limit to be applied in the last &
         &iterations of movie alignment(in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 2, submenu="motion correction")
         call preprocess_stream_dev%set_input('filt_ctrls', 3, 'lp_ctf_estimate', 'num', 'Low-pass limit for CTF parameter estimation',&
         & 'Low-pass limit for CTF parameter estimation in Angstroms{5}', 'in Angstroms{5}', .false., 5.)
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 3, submenu="CTF estimation")
         call preprocess_stream_dev%set_input('filt_ctrls', 4, 'hp_ctf_estimate', 'num', 'High-pass limit for CTF parameter estimation',&
         & 'High-pass limit for CTF parameter estimation  in Angstroms{30}', 'in Angstroms{30}', .false., 30.)
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 4, submenu="CTF estimation")
         call preprocess_stream_dev%set_input('filt_ctrls', 5, 'lp_pick', 'num', 'Low-pass limit for picking',&
         & 'Low-pass limit for picking in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 5, submenu="picking")
         call preprocess_stream_dev%set_input('filt_ctrls', 6, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 6, submenu="picking")
         call preprocess_stream_dev%set_input('filt_ctrls', 7, 'lp2D', 'num', 'Static low-pass limit for 2D classification', 'Static low-pass limit for 2D classification',&
         &'low-pass limit in Angstroms', .false., 15.)
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 7, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('filt_ctrls', 8,  match_filt)
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 8, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('filt_ctrls', 9,  wiener)
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 9, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('filt_ctrls', 10, nonuniform)
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 10, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('filt_ctrls', 11, smooth_ext)
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 11, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('filt_ctrls', 12, filter_type)
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 12, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('filt_ctrls', 13, lp_lowres)
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 13, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('filt_ctrls', 14, nsearch)
+        call preprocess_stream_dev%set_gui_params('filt_ctrls', 14, submenu="cluster 2D")
         ! mask controls
         call preprocess_stream_dev%set_input('mask_ctrls', 1, mskdiam)
+        call preprocess_stream_dev%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)
         preprocess_stream_dev%mask_ctrls(1)%required = .false.
         preprocess_stream_dev%mask_ctrls(1)%descr_short = 'Mask Diameter*'
         ! computer controls
         call preprocess_stream_dev%set_input('comp_ctrls', 1, nchunks)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 1, advanced=.false.)
         preprocess_stream_dev%comp_ctrls(1)%required = .false.
         call preprocess_stream_dev%set_input('comp_ctrls', 2, nparts_chunk)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 2, advanced=.false.)
         call preprocess_stream_dev%set_input('comp_ctrls', 3, nparts_pool)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 3, advanced=.false.)
         call preprocess_stream_dev%set_input('comp_ctrls', 4, nparts)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 4, advanced=.false.)
         preprocess_stream_dev%comp_ctrls(4)%descr_short = 'Number of computing nodes allocated to preprocessing'
         call preprocess_stream_dev%set_input('comp_ctrls', 5, nthr)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 5, advanced=.false.)
         preprocess_stream_dev%comp_ctrls(5)%descr_short = 'Number of threads/node for preprocessing'
         preprocess_stream_dev%comp_ctrls(5)%descr_long  = 'Number of threads per node allocated to preprocessing steps (motion correction, CTF estimation, picking)'
         call preprocess_stream_dev%set_input('comp_ctrls', 6, 'nthr2D', 'num', 'Number of threads/node for 2D classification', 'Number of threads per node allocated to 2D classification',&
         &'# of threads for per', .true., 1.)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 6)
         call preprocess_stream_dev%set_input('comp_ctrls', 7, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740.)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 7)
+
     end subroutine new_preprocess_stream_dev
 
     subroutine new_print_dose_weights
@@ -3729,7 +3814,7 @@ contains
         &'Reports external selection through state 0/1 tags to project',&               ! descr_short
         &'is a program for reporting external (GUI) selections to the SIMPLE project',& ! descr_long
         &'simple_exec',&                                                                ! executable
-        &0, 2, 0, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
+        &0, 3, 0, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3737,6 +3822,7 @@ contains
         call selection%set_input('parm_ios', 1, 'infile', 'file', 'File with selection state (0/1) flags', 'Plain text file (.txt) with selection state (0/1) flags',&
         &'give .txt selection file', .true., '')
         call selection%set_input('parm_ios', 2, oritype)
+        call selection%set_input('parm_ios', 3, 'state', 'num', 'State number', 'Map selection to oris with this state only', '{1}', .false., 1.0)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -4818,6 +4904,54 @@ contains
             end subroutine set
 
     end subroutine set_input_3
+    
+    subroutine set_gui_params( self, which, i, submenu, exclusive_group, advanced, active_flags)
+        class(simple_program), target, intent(inout) :: self
+        character(len=*),              intent(in)    :: which
+        character(len=*),              intent(in),optional    :: submenu
+        character(len=*),              intent(in),optional    :: exclusive_group
+        character(len=*),              intent(in),optional    :: active_flags
+        logical,                       intent(in),optional    :: advanced
+        integer,                       intent(in)    :: i
+        select case(trim(which))
+            case('img_ios')
+                call set(self%img_ios, i)
+            case('parm_ios')
+                call set(self%parm_ios, i)
+            case('alt_ios')
+                call set(self%alt_ios, i)
+            case('srch_ctrls')
+                call set(self%srch_ctrls, i)
+            case('filt_ctrls')
+                call set(self%filt_ctrls, i)
+            case('mask_ctrls')
+                call set(self%mask_ctrls, i)
+            case('comp_ctrls')
+                call set(self%comp_ctrls, i)
+            case DEFAULT
+                THROW_HARD('which field selector: '//trim(which)//' is unsupported; simple_program :: set_input_3')
+        end select
+
+        contains
+
+            subroutine set( arr, i )
+                integer,                  intent(in)  :: i
+                type(simple_input_param), intent(inout) :: arr(:)
+                if( present(submenu) ) then
+                  allocate(arr(i)%gui_submenu, source=trim(submenu))
+                endif
+                if( present (exclusive_group) ) then
+                  allocate(arr(i)%exclusive_group, source=trim(exclusive_group))
+                endif
+                if( present(advanced) ) then
+                  arr(i)%advanced = advanced
+                endif
+                if( present(active_flags) ) then
+                  allocate(arr(i)%active_flags, source=trim(active_flags))
+                endif
+            end subroutine set
+
+    end subroutine set_gui_params
 
     subroutine print_ui( self )
         class(simple_program), intent(in) :: self
@@ -5029,6 +5163,10 @@ contains
                 call json%add(program, 'descr_short', prg_ptr_array(iprg)%ptr2prg%descr_short)
                 call json%add(program, 'descr_long',  prg_ptr_array(iprg)%ptr2prg%descr_long)
                 call json%add(program, 'executable',  prg_ptr_array(iprg)%ptr2prg%executable)
+                call json%add(program, 'advanced', prg_ptr_array(iprg)%ptr2prg%advanced)
+                if( allocated(prg_ptr_array(iprg)%ptr2prg%gui_submenu_list)) then
+                    call json%add(program, 'gui_submenu_list', prg_ptr_array(iprg)%ptr2prg%gui_submenu_list)
+                endif
                 ! all sections
                 call create_section( 'image input/output',     prg_ptr_array(iprg)%ptr2prg%img_ios )
                 call create_section( 'parameter input/output', prg_ptr_array(iprg)%ptr2prg%parm_ios )
@@ -5058,6 +5196,16 @@ contains
                         call json%add(entry, 'descr_long', trim(arr(i)%descr_long))
                         call json%add(entry, 'descr_placeholder', trim(arr(i)%descr_placeholder))
                         call json%add(entry, 'required', arr(i)%required)
+                        if( allocated(arr(i)%gui_submenu) ) then
+                          call json%add(entry, 'gui_submenu', trim(arr(i)%gui_submenu))
+                        endif
+                        if( allocated(arr(i)%exclusive_group) ) then
+                          call json%add(entry, 'exclusive_group', trim(arr(i)%exclusive_group))
+                        endif
+                        if( allocated(arr(i)%active_flags) ) then
+                          call json%add(entry, 'active_flags', trim(arr(i)%active_flags))
+                        endif
+                        call json%add(entry, 'advanced', arr(i)%advanced)
                         param_is_multi  = trim(arr(i)%keytype).eq.'multi'
                         param_is_binary = trim(arr(i)%keytype).eq.'binary'
                         if( param_is_multi .or. param_is_binary )then

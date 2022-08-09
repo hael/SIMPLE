@@ -22,7 +22,7 @@ type sp_project
     type(oris) :: os_cls3D  ! per-cluster 3D os,        segment 5
     type(oris) :: os_ptcl3D ! per-particle 3D os,       segment 6
     type(oris) :: os_out    ! critical project outputs, segment 7
-    type(oris) :: os_optics ! optics groups, 			segment 8
+    type(oris) :: os_optics ! optics groups,            segment 8
 
     ! ORIS REPRESENTATIONS OF PROJECT DATA / DISTRIBUTED SYSTEM INFO / SYSTEM MANAGEMENT STUFF
     ! segments 11-20 reserved for project info, job management etc.
@@ -72,6 +72,7 @@ contains
     procedure          :: get_imginfo_from_osout
     ! getters
     procedure          :: get_n_insegment
+    procedure          :: get_n_insegment_state
     procedure          :: get_nptcls
     procedure          :: get_box
     procedure          :: has_boxcoords
@@ -1869,7 +1870,33 @@ contains
                 nullify(pos)
         end select
     end function get_n_insegment
-
+    
+    integer function get_n_insegment_state( self, oritype, state )
+        class(sp_project), target, intent(inout) :: self
+        character(len=*),          intent(in)    :: oritype
+        real,                      intent(in)    :: state
+        class(oris), pointer :: pos => NULL()
+        integer              :: iori
+        get_n_insegment_state = 0
+        select case(oritype)
+            case('ptcl2D','ptcl3D')
+                ! # ptcl2D = # ptcl3D
+                if( self%os_ptcl2D%get_noris() /= self%os_ptcl3D%get_noris() )then
+                   THROW_HARD('Inconstitent number of particles in STK/PTCL2D/PTCL3D segments; get_n_insegment_state')
+                endif
+        end select
+        call self%ptr2oritype(oritype, pos)
+        do iori=1,pos%get_noris()
+            if(.not. pos%isthere(iori,'state') )then
+                THROW_HARD('state flag missing from ori; get_n_insegment_state')
+            endif
+            if( pos%get_state(iori) == state )then
+                get_n_insegment_state = get_n_insegment_state + 1
+            endif
+        enddo
+        nullify(pos)
+    end function get_n_insegment_state
+    
     integer function get_nptcls( self )
         class(sp_project), target, intent(inout) :: self
         integer :: i, nos
