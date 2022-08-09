@@ -55,7 +55,7 @@ contains
         enddo
     end function select_pop
 
-    subroutine genetic_opt(obj_func, num_bits, nrefs, max_iter, pop_size, cross_rate, mut_rate, best, best_val)
+    subroutine genetic_opt(obj_func, num_bits, nrefs, max_iter, pop_size, cross_rate, mut_rate, best, best_val, tol)
         use simple_stack
         procedure(objective_func), pointer :: obj_func
         integer, intent(in)    :: num_bits
@@ -66,11 +66,12 @@ contains
         real   , intent(in)    :: mut_rate
         integer, intent(inout) :: best(:)
         real   , intent(inout) :: best_val
+        real   , intent(in), optional :: tol
         integer, allocatable   :: population(:,:), selected(:,:)
         real   , allocatable   :: costs(:)
         type(stack)            :: bits
         integer :: k,l
-        logical :: got_new_best
+        real    :: prev_best_val
         call srand(time()+13)
         allocate(population(pop_size, num_bits), selected(pop_size, num_bits), source = 0)
         allocate(costs(pop_size), source = 0.)
@@ -80,16 +81,16 @@ contains
                 population(k,l) = floor(rand()*nrefs)
             enddo
         enddo
-        best     = population(1,:)
-        best_val = obj_func(best)
+        best          = population(1,:)
+        best_val      = obj_func(best)
+        prev_best_val = 0.
         do k = 1, max_iter
-            got_new_best = .false.
             do l = 1, pop_size
                 costs(l) = obj_func(population(l,:))
                 if( costs(l) > best_val )then
-                    best         = population(l,:)
-                    best_val     = costs(l)
-                    got_new_best = .true.
+                    best          = population(l,:)
+                    prev_best_val = best_val
+                    best_val      = costs(l)
                 endif
             enddo
             print *, 'current cost = ', best_val
@@ -102,6 +103,7 @@ contains
             enddo
             population = selected
             if( best_val == num_bits ) return
+            if( present(tol) .and. abs(prev_best_val - best_val) < tol ) return
         enddo
     end subroutine genetic_opt
 end module simple_opt_genetic
