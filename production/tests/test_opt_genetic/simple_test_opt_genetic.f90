@@ -5,7 +5,7 @@ program simple_test_opt_genetic
     procedure(objective_func), pointer :: obj_func => null()
     integer, allocatable :: best(:), goal(:)
     integer              :: nptcls, max_iter, pop_size, k, nrefs
-    real                 :: best_val, cross_rate, mut_rate, val, bounds(2)
+    real                 :: best_val, cross_rate, mut_rate, bounds(2)
     call srand(time())
     ! testing genetic algo with continuous function f(x) = 2 - (x-4)^2
     bounds      = [-5., 15.]
