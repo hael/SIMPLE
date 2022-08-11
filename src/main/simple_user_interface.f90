@@ -2075,11 +2075,11 @@ contains
         &'Import project in in star format',&                                   ! descr_short
         &'is a program to import a SIMPLE projectfile from star format',&       ! descr long
         &'simple_exec',&                                                        ! executable
-        &0, 0, 0, 0, 0, 0, 0, .false.)                                           ! # entries in each group, requires sp_project
+        &0, 1, 0, 0, 0, 0, 0, .false.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! parameter input/output
-    !    call import_starproject%set_input('parm_ios', 1, 'import_dir', 'file', 'Import directory containing external job output in star format', 'Directory to import star files from', 'e.g. MotionCorr/job001', .true., '')
+        call import_starproject%set_input('parm_ios', 1, 'import_dir', 'dir', 'Import directory containing external job output in star format', 'Directory to import star files from', 'e.g. MotionCorr/job001', .true., '')
         ! alternative inputs
         ! <empty>
         ! search controls
