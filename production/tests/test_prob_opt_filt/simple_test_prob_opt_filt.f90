@@ -11,16 +11,17 @@ program simple_test_prob_opt_filt
     type(parameters)              :: p
     type(cmdline)                 :: cline, cline_projection
     type(reproject_commander)     :: xreproject
-    type(image)                   :: img, noise, odd_img, even_img
+    type(image)                   :: img, noise, odd_img, even_img, img_ker, img_pad
+    type(image),      allocatable :: filt_img(:)
     integer                       :: npixels, iptcl, rc, ndim
-    integer, parameter            :: NRESTARTS = 1
+    integer, parameter            :: NRESTARTS = 1, BW_ORDER = 8
     character(len=:), allocatable :: cmd
     real,             allocatable :: cur_filt(:)
     logical                       :: mrc_exists
     real                          :: ave, sdev, maxv, minv, lowest_cost
     integer,          allocatable :: best(:), x_mat(:,:)
-    integer                       :: max_iter, pop_size, k, nspace
-    real                          :: cross_rate, mut_rate, bounds(2)
+    integer                       :: max_iter, pop_size, k, nspace, int_ind, k1, l1, sh
+    real                          :: cross_rate, mut_rate, bounds(2), real_ind
     procedure(objective_func), pointer :: obj_func => null()
     if( command_argument_count() < 4 )then
         write(logfhandle,'(a)') 'Usage: simple_test_prob_opt_filt smpd=xx nthr=yy stk=stk.mrc mskdiam=zz'
@@ -67,6 +68,42 @@ program simple_test_prob_opt_filt
     call even_img%new(p%ldim, p%smpd)
     allocate(cur_filt(p%ldim(1)),        source=0.)
     allocate(x_mat(p%ldim(1),p%ldim(2)), source=0)
+    nspace      = 40
+    npixels     = p%ldim(1)*p%ldim(2)       ! number of pixels
+    max_iter    = 20
+    pop_size    = 10                        ! the population size is a magnitude of the number of pixels
+    cross_rate  = 0.9
+    mut_rate    = 1./npixels
+    obj_func    => objective_cont
+    allocate(filt_img(nspace))
+    allocate(best(npixels), source=0)
+    call srand(time())
+    bounds      = [calc_fourier_index(30.        , p%ldim(1), p%smpd),&
+                  &calc_fourier_index(2. * p%smpd, p%ldim(1), p%smpd)]
+    print *, bounds
+    print *, p%ldim
+    ! caching all the filters (nspace of filters)
+    do k = 1, nspace
+        real_ind = bounds(1) + (k - 1.)*(bounds(2) - bounds(1))/(nspace - 1.)
+        int_ind  = nint(real_ind)
+        call filt_img(k)%new([2*int_ind, 2*int_ind, 1], p%smpd)
+        call butterworth_filter(cur_filt, BW_ORDER, real_ind)
+        call filt_img(k)%set_ft(.true.)
+        call filt_img(k)%set_cmat((1., 0.))
+        do l1 = -int_ind, int_ind-1
+            do k1 = 0, int_ind
+                sh = nint(hyp(real(k1),real(l1),0.)*p%ldim(1)/(2*int_ind))
+                if( sh == 0 )then 
+                    call filt_img(k)%mul([k1,l1,0], maxval(cur_filt))
+                elseif( sh <= p%ldim(1) )then
+                    call filt_img(k)%mul([k1,l1,0], cur_filt(sh))
+                else
+                    call filt_img(k)%mul([k1,l1,0], 0.)
+                endif
+            enddo
+        enddo
+        call filt_img(k)%ifft()
+    enddo
     do iptcl = 1, p%nptcls
         write(*, *) 'Particle # ', iptcl
         call img%read(p%stk, iptcl)
@@ -78,19 +115,11 @@ program simple_test_prob_opt_filt
         call img%add(noise)
         call img%write('stk_noisy.mrc', iptcl)
         call even_img%copy_fast(img)
+        call img_pad%new([p%ldim(1) + 2*int(bounds(2)), p%ldim(2) + 2*int(bounds(2)),1], p%smpd)
+        call img_ker%copy(even_img)
+        call img_ker%pad(img_pad)
         ! do the optimization here to get the optimized cut-off frequency
         write(*, *) 'Cut-off frequency optimization in progress:'
-        call srand(time())
-        bounds      = [calc_fourier_index(30.        , p%ldim(1), p%smpd),&
-                      &calc_fourier_index(2. * p%smpd, p%ldim(1), p%smpd)]
-        nspace      = 40
-        npixels     = p%ldim(1)*p%ldim(2)       ! number of pixels
-        max_iter    = 20
-        pop_size    = 10                        ! the population size is a magnitude of the number of pixels
-        cross_rate  = 0.9
-        mut_rate    = 1./npixels
-        obj_func    => objective_cont
-        allocate(best(npixels), source=0)
         call genetic_opt(obj_func, npixels, nspace, max_iter, pop_size, cross_rate, mut_rate, best, lowest_cost)
         write(*, *) 'cost = ', lowest_cost, '; x = ', x_mat(p%ldim(1)/2-2:p%ldim(1)/2+2, p%ldim(2)/2-2:p%ldim(2)/2+2)
         call butterworth_filter(cur_filt, 8, real(to_ind(x_mat(p%ldim(1)/2, p%ldim(2)/2))))
@@ -106,25 +135,21 @@ contains
 
     function objective_cont(bitstring) result(val)
         integer,     intent(in) :: bitstring(:)
-        real,        pointer    :: img_rmat(:,:,:), odd_rmat(:,:,:)
-        integer,     parameter  :: BW_ORDER = 8
+        real,        pointer    :: img_rmat(:,:,:), odd_rmat(:,:,:), filt_rmat(:,:,:)
         real                    :: val
-        integer                 :: k, l, ldim(3)
-        type(image)             :: img_ker, filt_img
+        integer                 :: k, l, ldim(3), ext, k_tmp, l_tmp
         ldim  = odd_img%get_ldim()
         x_mat = reshape(bitstring, [ldim(1), ldim(2)])
         val   = 0.
         call odd_img%get_rmat_ptr(odd_rmat)
         do l = 1,ldim(2)
-            print *, 'current l = ', l
             do k = 1,ldim(1)
-                call butterworth_filter(cur_filt, BW_ORDER, real(to_ind(x_mat(k,l))))
-                call img_ker%copy(even_img)
-                call img_ker%fft()
-                call img_ker%apply_filter(cur_filt)
-                call img_ker%ifft()
-                call img_ker%get_rmat_ptr(img_rmat)                    
-                val = val + (img_rmat(k,l,1) - odd_rmat(k,l,1))**2
+                ext   = to_ind(x_mat(k,l))
+                k_tmp = k+int(bounds(2) - ext)
+                l_tmp = l+int(bounds(2) - ext)
+                call img_pad%get_rmat_ptr(img_rmat)
+                call filt_img(x_mat(k,l)+1)%get_rmat_ptr(filt_rmat)
+                val = val + abs(sum(filt_rmat(1:2*ext, 1:2*ext,1)*img_rmat(k_tmp:k_tmp+2*ext-1,l_tmp:l_tmp+2*ext-1,1)) - odd_rmat(k,l,1))**2
             enddo
         enddo
     end function objective_cont

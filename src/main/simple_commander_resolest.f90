@@ -246,9 +246,9 @@ contains
         call odd %read(params%vols(1))
         call even%read(params%vols(2))
         if( params%l_nonuniform )then
-            file_tag = 'nonuniform_opt_3D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
+            file_tag = 'nonuniform_3D_filter_ext_'//int2str(params%smooth_ext)
         else
-            file_tag = 'uniform_opt_3D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
+            file_tag = 'uniform_3D_filter_ext_'//int2str(params%smooth_ext)
         endif
         have_mask_file = .false.
         if( cline%defined('mskfile') )then
@@ -310,9 +310,9 @@ contains
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
         params%ldim(3) = 1 ! because we operate on stacks
         if( params%l_nonuniform )then
-            file_tag = 'nonuniform_opt_2D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
+            file_tag = 'nonuniform_2D_filter_ext_'//int2str(params%smooth_ext)
         else
-            file_tag = 'uniform_opt_2D_filter_'//trim(params%filter)//'_ext_'//int2str(params%smooth_ext)
+            file_tag = 'uniform_2D_filter_ext_'//int2str(params%smooth_ext)
         endif
         ! allocate
         allocate(odd(params%nptcls), even(params%nptcls))
