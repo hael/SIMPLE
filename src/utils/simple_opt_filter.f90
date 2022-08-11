@@ -529,16 +529,18 @@ contains
         real                          :: min_sum_odd, min_sum_even, rad, find_stepsz, val, smpd, fsc05, fsc0143
         character(len=90)             :: file_tag
         type(image_ptr)               :: podd, peven, pweights
-        integer,          parameter   :: CHUNKSZ = 20
+        type(c_ptr)                   :: plan_fwd, plan_bwd
+        integer,          parameter   :: CHUNKSZ = 20, N_IMGS = 2
         real,             pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:)
-        real,             allocatable :: cur_diff_odd( :,:,:), cur_diff_even(:,:,:), fsc(:)
-        real,             allocatable :: optlp(:), res(:), cur_fil(:), weights_3D(:,:,:)
+        real,             allocatable :: optlp(:), res(:), cur_fil(:), weights_3D(:,:,:), fsc(:)
         type(opt_vol),    allocatable :: opt_odd(:,:,:), opt_even(:,:,:)
         character(len=:), allocatable :: fsc_fname
         character(len=LONGSTRLEN)     :: benchfname
         logical                       :: l_nonuniform
         integer(timer_int_kind)       ::  t_tot,  t_filter_all,  t_search_opt,  t_chop_copy,  t_chop_filter,  t_chop_sqeu
         real(timer_int_kind)          :: rt_tot, rt_filter_all, rt_search_opt, rt_chop_copy, rt_chop_filter, rt_chop_sqeu
+        real(   kind=c_float),         pointer ::  in(:,:,:,:)
+        complex(kind=c_float_complex), pointer :: out(:,:,:,:)
         ldim         = odd%get_ldim()
         filtsz       = odd%get_filtsz()
         smooth_ext   = params_glob%smooth_ext
@@ -570,6 +572,14 @@ contains
             call even%apply_filter(optlp)
             call odd%apply_filter(optlp)
         endif
+        allocate( in(ldim(1), ldim(2), ldim(3), 2))
+        allocate(out(ldim(1), ldim(2), ldim(3), 2))
+        !$omp critical
+        call fftwf_plan_with_nthreads(nthr_glob)
+        plan_fwd = fftwf_plan_many_dft_r2c(3, ldim, N_IMGS, in , ldim, 1, product(ldim), out, ldim, 1, product(ldim),FFTW_ESTIMATE)
+        plan_bwd = fftwf_plan_many_dft_c2r(3, ldim, N_IMGS, out, ldim, 1, product(ldim),  in, ldim, 1, product(ldim),FFTW_ESTIMATE)
+        call fftwf_plan_with_nthreads(1)
+        !$omp end critical
         call          freq_img%new(ldim, smpd)
         call       weights_img%new(ldim, smpd)
         call  ref_diff_odd_img%new(ldim, smpd)
@@ -577,14 +587,12 @@ contains
         call       weights_img%get_mat_ptrs(pweights)
         call  ref_diff_odd_img%get_mat_ptrs(podd)
         call ref_diff_even_img%get_mat_ptrs(peven)
-        call odd_copy_rmat%copy(odd)
-        call odd_copy_cmat%copy(odd)
-        call odd_copy_cmat%fft
+        call  odd_copy_rmat%copy(odd)
         call even_copy_rmat%copy(even)
+        call  odd_copy_cmat%copy(odd)
         call even_copy_cmat%copy(even)
-        call even_copy_cmat%fft
-        allocate(cur_diff_odd( box,box,box), cur_diff_even(box,box,box),&
-                &cur_fil(box), weights_3D(smooth_ext*2+1,smooth_ext*2+1, smooth_ext*2+1), source=0.)
+        call batch_fft_3D(even_copy_cmat, odd_copy_cmat, in, out, plan_fwd)
+        allocate(cur_fil(box), weights_3D(smooth_ext*2+1,smooth_ext*2+1, smooth_ext*2+1), source=0.)
         allocate(opt_odd(box,box,box), opt_even(box,box,box))
         if( present(mskimg) )then
             call bounds_from_mask3D(mskimg%bin2logical(), lb, ub)
@@ -642,14 +650,15 @@ contains
                 rt_chop_copy  = rt_chop_copy + toc(t_chop_copy)
                 t_chop_filter = tic()
             endif
-            call apply_opt_filter(odd , cur_ind, find_start, find_stop, cur_fil, .false.)
-            call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .true.)
+            call apply_opt_filter(odd , cur_ind, find_start, find_stop, cur_fil, .false., .false.)
+            call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .true. , .false.)
+            call batch_ifft_3D(even, odd, in, out, plan_bwd)
             if( L_BENCH_GLOB )then
                 rt_chop_filter = rt_chop_filter + toc(t_chop_filter)
                 t_chop_sqeu    = tic()
             endif
-            call  odd%sqeuclid_matrix(even_copy_rmat, cur_diff_odd)
-            call even%sqeuclid_matrix( odd_copy_rmat, cur_diff_even)
+            call  odd%sqeuclid_matrix(even_copy_rmat,  ref_diff_odd_img)
+            call even%sqeuclid_matrix( odd_copy_rmat, ref_diff_even_img)
             if( L_BENCH_GLOB )then
                 rt_chop_sqeu = rt_chop_sqeu + toc(t_chop_sqeu)
             endif
@@ -665,18 +674,12 @@ contains
             if( params_glob%l_nonuniform )then
                 call  ref_diff_odd_img%set_ft(.false.)
                 call ref_diff_even_img%set_ft(.false.)
-                !$omp parallel workshare
-                podd%rmat( :box,:box,:box) = cur_diff_odd
-                peven%rmat(:box,:box,:box) = cur_diff_even
-                !$omp end parallel workshare
-                call  ref_diff_odd_img%fft()
-                call ref_diff_even_img%fft()
+                call batch_fft_3D(ref_diff_even_img, ref_diff_odd_img, in, out, plan_fwd)
                 !$omp parallel workshare
                 podd%cmat  =  podd%cmat * pweights%cmat
                 peven%cmat = peven%cmat * pweights%cmat
                 !$omp end parallel workshare
-                call  ref_diff_odd_img%ifft()
-                call ref_diff_even_img%ifft()
+                call batch_ifft_3D(ref_diff_even_img, ref_diff_odd_img, in, out, plan_bwd)
                 !$omp parallel do collapse(3) default(shared) private(k,l,m) schedule(dynamic,CHUNKSZ) proc_bind(close)
                 do m = lb(3),ub(3)
                     do l = lb(2),ub(2)
@@ -700,19 +703,19 @@ contains
                 !$omp end parallel do
             else
                 ! keep the theta which gives the lowest cost (over all voxels)
-                if (sum(cur_diff_odd) < min_sum_odd) then
+                if (sum(podd%rmat) < min_sum_odd) then
                     opt_odd(:,:,:)%opt_val  = rmat_odd(1:box, 1:box, 1:box)
                     opt_odd(:,:,:)%opt_freq = cur_ind
-                    min_sum_odd  = sum(cur_diff_odd)
+                    min_sum_odd  = sum(podd%rmat)
                     best_ind     = cur_ind
                 endif
-                if (sum(cur_diff_even) < min_sum_even) then
+                if (sum(peven%rmat) < min_sum_even) then
                     opt_even(:,:,:)%opt_val  = rmat_even(1:box, 1:box, 1:box)
                     opt_even(:,:,:)%opt_freq = cur_ind
-                    min_sum_even  = sum(cur_diff_even)
+                    min_sum_even  = sum(peven%rmat)
                 endif
             endif
-            if( L_VERBOSE_GLOB ) write(*,*) 'current cost (odd) = ', sum(cur_diff_odd)
+            if( L_VERBOSE_GLOB ) write(*,*) 'current cost (odd) = ', sum(podd%rmat)
             if( L_BENCH_GLOB )then
                 rt_search_opt = rt_search_opt + toc(t_search_opt)
             endif
@@ -755,7 +758,7 @@ contains
         endif
         call freq_img%write('opt_resolution_odd_map_'//trim(file_tag)//'.mrc')
         call freq_img%kill
-        deallocate(opt_odd, opt_even, cur_diff_odd, cur_diff_even, cur_fil, weights_3D)
+        deallocate(opt_odd, opt_even, cur_fil, weights_3D)
         call odd_copy_rmat%kill
         call odd_copy_cmat%kill
         call even_copy_rmat%kill
@@ -763,6 +766,8 @@ contains
         call weights_img%kill
         call ref_diff_odd_img%kill
         call ref_diff_even_img%kill
+        call fftwf_destroy_plan(plan_fwd)
+        call fftwf_destroy_plan(plan_bwd)
     end subroutine opt_filter_3D
 
 end module simple_opt_filter
