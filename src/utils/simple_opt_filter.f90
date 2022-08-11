@@ -752,11 +752,11 @@ contains
         enddo
         ! output the optimized frequency map to see the nonuniform parts
         if( params_glob%l_nonuniform )then
-            file_tag = 'nonuniform_filter_'//trim(params_glob%filter)//'_smooth_ext_'//int2str(smooth_ext)
+            file_tag = 'nonuniform_filter_ext_'//int2str(smooth_ext)
         else
-            file_tag = 'uniform_filter_'//trim(params_glob%filter)//'_smooth_ext_'//int2str(smooth_ext)
+            file_tag = 'uniform_filter_ext_'//int2str(smooth_ext)
         endif
-        call freq_img%write('opt_resolution_odd_map_'//trim(file_tag)//'.mrc')
+        call freq_img%write('resolution_odd_map_'//trim(file_tag)//'.mrc')
         call freq_img%kill
         deallocate(opt_odd, opt_even, cur_fil, weights_3D)
         call odd_copy_rmat%kill
