@@ -247,7 +247,7 @@ contains
             do iptcl = 1, nptcls
                 call clsfrcs%frc_getter(iptcl, hpind_fsc, l_phaseplate, frc)
                 ! the below required to retrieve the right Fouirer index limit when we are padding
-                find = get_lplim_at_corr(frc, LPLIM_CRIT2D)
+                find = get_lplim_at_corr(frc, params_glob%lplim_crit)
                 lp   = calc_lowpass_lim(find, box, smpd)               ! box is the padded box size
                 lplims_hres(iptcl) = calc_fourier_index(lp, box, smpd) ! this is the Fourier index limit for the padded images
             end do
@@ -517,50 +517,74 @@ contains
 
     ! 3D optimization(search)-based uniform/nonuniform filter, paralellized version
     subroutine opt_filter_3D(odd, even, mskimg)
+        use simple_estimate_ssnr, only: fsc2optlp
         class(image),           intent(inout) :: odd
         class(image),           intent(inout) :: even
         class(image), optional, intent(inout) :: mskimg
-        type(image)                ::  odd_copy_rmat,  odd_copy_cmat,  odd_copy_shellnorm, freq_img,&
-                                        &even_copy_rmat, even_copy_cmat, even_copy_shellnorm, &
+        type(image)                   ::  odd_copy_rmat,  odd_copy_cmat, freq_img,&
+                                        &even_copy_rmat, even_copy_cmat, &
                                         &weights_img, ref_diff_odd_img, ref_diff_even_img
-        integer                    :: k,l,m, box, ldim(3), find_start, find_stop, iter_no, fnr
-        integer                    :: best_ind, cur_ind, lb(3), ub(3), ext
-        real                       :: min_sum_odd, min_sum_even, rad, find_stepsz, val
-        character(len=90)          :: file_tag
-        integer,       parameter   :: CHUNKSZ = 20
-        type(image_ptr)            :: podd, peven, pweights
-        real,          pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:)
-        real,          allocatable :: cur_diff_odd( :,:,:), cur_diff_even(:,:,:)
-        real,          allocatable :: cur_fil(:), weights_3D(:,:,:)
-        type(opt_vol), allocatable :: opt_odd(:,:,:), opt_even(:,:,:)
-        character(len=LONGSTRLEN)  :: benchfname
-        integer(timer_int_kind)    ::  t_tot,  t_filter_all,  t_search_opt,  t_chop_copy,  t_chop_filter,  t_chop_sqeu
-        real(timer_int_kind)       :: rt_tot, rt_filter_all, rt_search_opt, rt_chop_copy, rt_chop_filter, rt_chop_sqeu
-        ldim        = odd%get_ldim()
-        box         = ldim(1)
-        ext         = params_glob%smooth_ext
-        find_stop   = calc_fourier_index(2. * params_glob%smpd,      box, params_glob%smpd)
-        find_start  = calc_fourier_index(     params_glob%lp_lowres, box, params_glob%smpd)
+        integer                       :: k,l,m, box, ldim(3), find_start, find_stop, iter_no, fnr
+        integer                       :: filtsz, best_ind, cur_ind, lb(3), ub(3), smooth_ext
+        real                          :: min_sum_odd, min_sum_even, rad, find_stepsz, val, smpd, fsc05, fsc0143
+        character(len=90)             :: file_tag
+        type(image_ptr)               :: podd, peven, pweights
+        integer,          parameter   :: CHUNKSZ = 20
+        real,             pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:)
+        real,             allocatable :: cur_diff_odd( :,:,:), cur_diff_even(:,:,:), fsc(:)
+        real,             allocatable :: optlp(:), res(:), cur_fil(:), weights_3D(:,:,:)
+        type(opt_vol),    allocatable :: opt_odd(:,:,:), opt_even(:,:,:)
+        character(len=:), allocatable :: fsc_fname
+        character(len=LONGSTRLEN)     :: benchfname
+        logical                       :: l_nonuniform
+        integer(timer_int_kind)       ::  t_tot,  t_filter_all,  t_search_opt,  t_chop_copy,  t_chop_filter,  t_chop_sqeu
+        real(timer_int_kind)          :: rt_tot, rt_filter_all, rt_search_opt, rt_chop_copy, rt_chop_filter, rt_chop_sqeu
+        ldim         = odd%get_ldim()
+        filtsz       = odd%get_filtsz()
+        smooth_ext   = params_glob%smooth_ext
+        box          = ldim(1)
+        l_nonuniform = params_glob%l_nonuniform
+        fsc_fname    = trim(params_glob%fsc)
+        smpd         = params_glob%smpd
+        ! retrieve FSC and calculate optimal filter
+        if( .not.file_exists(fsc_fname) ) THROW_HARD('FSC file: '//fsc_fname//' not found')
+        res   = odd%get_res()
+        fsc   = file2rarr(fsc_fname)
+        optlp = fsc2optlp(fsc)
+        call get_resolution(fsc, res, fsc05, fsc0143)
+        where( res < TINY ) optlp = 0.
+        if( size(optlp) .ne. filtsz )then
+            write(logfhandle,*) 'optlp filtsz: ', size(optlp)
+            write(logfhandle,*) 'odd   filtsz: ', filtsz
+            THROW_HARD('Inconsistent filter dimensions; opt_filter_3D')
+        endif
+        ! calculate Fourier index limits for search
+        find_stop   = get_lplim_at_corr(fsc, 0.1)
+        find_start  = calc_fourier_index(params_glob%lp_lowres, box, smpd)
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
-        call          freq_img%new(ldim, params_glob%smpd)
-        call       weights_img%new(ldim, params_glob%smpd)
-        call  ref_diff_odd_img%new(ldim, params_glob%smpd)
-        call ref_diff_even_img%new(ldim, params_glob%smpd)
+        ! pre-filter odd & even volumes
+        if( params_glob%l_match_filt )then
+            call even%shellnorm_and_apply_filter(optlp)
+            call odd%shellnorm_and_apply_filter(optlp)
+        else
+            call even%apply_filter(optlp)
+            call odd%apply_filter(optlp)
+        endif
+        call          freq_img%new(ldim, smpd)
+        call       weights_img%new(ldim, smpd)
+        call  ref_diff_odd_img%new(ldim, smpd)
+        call ref_diff_even_img%new(ldim, smpd)
         call       weights_img%get_mat_ptrs(pweights)
         call  ref_diff_odd_img%get_mat_ptrs(podd)
         call ref_diff_even_img%get_mat_ptrs(peven)
         call odd_copy_rmat%copy(odd)
         call odd_copy_cmat%copy(odd)
         call odd_copy_cmat%fft
-        call odd_copy_shellnorm%copy(odd)
-        call odd_copy_shellnorm%shellnorm(return_ft=.true.)
         call even_copy_rmat%copy(even)
         call even_copy_cmat%copy(even)
         call even_copy_cmat%fft
-        call even_copy_shellnorm%copy(even)
-        call even_copy_shellnorm%shellnorm(return_ft=.true.)
         allocate(cur_diff_odd( box,box,box), cur_diff_even(box,box,box),&
-                &cur_fil(box), weights_3D(ext*2+1,ext*2+1, ext*2+1), source=0.)
+                &cur_fil(box), weights_3D(smooth_ext*2+1,smooth_ext*2+1, smooth_ext*2+1), source=0.)
         allocate(opt_odd(box,box,box), opt_even(box,box,box))
         if( present(mskimg) )then
             call bounds_from_mask3D(mskimg%bin2logical(), lb, ub)
@@ -569,15 +593,15 @@ contains
             ub = (/ box, box, box /)
         endif
         do k = 1, 3
-            if( lb(k) < ext + 1 )   lb(k) = ext+1
-            if( ub(k) > box - ext ) ub(k) = box - ext
+            if( lb(k) < smooth_ext + 1 )   lb(k) = smooth_ext+1
+            if( ub(k) > box - smooth_ext ) ub(k) = box - smooth_ext
         enddo
         call weights_img%zero_and_unflag_ft()
-        do k = -ext, ext
-            do l = -ext, ext
-                do m = -ext, ext
+        do k = -smooth_ext, smooth_ext
+            do l = -smooth_ext, smooth_ext
+                do m = -smooth_ext, smooth_ext
                     rad = hyp(real(k), real(l), real(m))
-                    val = -rad/(ext + 1) + 1.
+                    val = -rad/(smooth_ext + 1) + 1.
                     if( val > 0 ) call weights_img%set_rmat_at(box/2+k+1, box/2+l+1, box/2+m+1, val)
                 enddo
             enddo
@@ -628,14 +652,6 @@ contains
             call even%sqeuclid_matrix( odd_copy_rmat, cur_diff_even)
             if( L_BENCH_GLOB )then
                 rt_chop_sqeu = rt_chop_sqeu + toc(t_chop_sqeu)
-            endif
-            if( params_glob%l_match_filt )then
-                call  odd%copy_fast(odd_copy_shellnorm)
-                call even%copy_fast(even_copy_shellnorm)
-                if( L_BENCH_GLOB ) t_chop_filter = tic()
-                call apply_opt_filter( odd, cur_ind, find_start, find_stop, cur_fil, .false.)
-                call apply_opt_filter(even, cur_ind, find_start, find_stop, cur_fil, .false.)
-                if( L_BENCH_GLOB ) rt_chop_filter = rt_chop_filter + toc(t_chop_filter)
             endif
             call  odd%get_rmat_ptr(rmat_odd)
             call even%get_rmat_ptr(rmat_even)
@@ -720,32 +736,30 @@ contains
             call fclose(fnr)
         endif
         if( L_VERBOSE_GLOB )then
-            if( .not. params_glob%l_nonuniform ) write(*,*) 'minimized cost at resolution = ', box*params_glob%smpd/best_ind
+            if( .not. params_glob%l_nonuniform ) write(*,*) 'minimized cost at resolution = ', box*smpd/best_ind
         endif
         do k = 1,ldim(1)
             do l = 1,ldim(2)
                 do m = 1,ldim(3)
                     call      odd%set_rmat_at(k,l,m,opt_odd( k,l,m)%opt_val)
                     call     even%set_rmat_at(k,l,m,opt_even(k,l,m)%opt_val)
-                    call freq_img%set_rmat_at(k,l,m,calc_lowpass_lim(nint(opt_odd(k,l,m)%opt_freq), box, params_glob%smpd)) ! resolution map
+                    call freq_img%set_rmat_at(k,l,m,calc_lowpass_lim(nint(opt_odd(k,l,m)%opt_freq), box, smpd)) ! resolution map
                 enddo
             enddo
         enddo
         ! output the optimized frequency map to see the nonuniform parts
         if( params_glob%l_nonuniform )then
-            file_tag = 'nonuniform_filter_'//trim(params_glob%filter)//'_ext_'//int2str(ext)
+            file_tag = 'nonuniform_filter_'//trim(params_glob%filter)//'_smooth_ext_'//int2str(smooth_ext)
         else
-            file_tag = 'uniform_filter_'//trim(params_glob%filter)//'_ext_'//int2str(ext)
+            file_tag = 'uniform_filter_'//trim(params_glob%filter)//'_smooth_ext_'//int2str(smooth_ext)
         endif
         call freq_img%write('opt_resolution_odd_map_'//trim(file_tag)//'.mrc')
         call freq_img%kill
         deallocate(opt_odd, opt_even, cur_diff_odd, cur_diff_even, cur_fil, weights_3D)
         call odd_copy_rmat%kill
         call odd_copy_cmat%kill
-        call odd_copy_shellnorm%kill
         call even_copy_rmat%kill
         call even_copy_cmat%kill
-        call even_copy_shellnorm%kill
         call weights_img%kill
         call ref_diff_odd_img%kill
         call ref_diff_even_img%kill

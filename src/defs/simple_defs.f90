@@ -158,7 +158,6 @@ real, parameter    :: GREEDY_FREQ          = 0.2       !< frequency of greedy se
 real, parameter    :: GLOB_FREQ            = 0.1       !< frequency of global stoachastic search in  with refine=neigh
 real, parameter    :: LP2SMPDFAC           = 0.4125    !< low-pass limit scaling constant
 real, parameter    :: LP2SMPDFAC2D         = 0.4       !< low-pass limit scaling constant
-real, parameter    :: LPLIM_CRIT2D         = 0.143     !< this works the best for the nonuniform 2D refinement
 real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)ch
 real, parameter    :: STREAM_SRCHFRAC      = 0.4       !< fraction of times full 2D search is performed in the pool
 real, parameter    :: MC_PATCHSZ           = 740.      !< recommended patch size (in pixels) for motion correction
