@@ -189,17 +189,18 @@ contains
         class(image),   intent(inout) :: even(:), odd(:)
         character(len=:), allocatable :: frcs_fname
         type(class_frcs)              :: clsfrcs 
-        type(image),      allocatable :: weights_img(:), ref_diff_odd_img(:), ref_diff_even_img(:),&
+        type(image)                   :: weights_img
+        type(image),      allocatable :: ref_diff_odd_img(:), ref_diff_even_img(:),&
                                         &odd_copy_rmat(:),  odd_copy_cmat(:),&
                                         &even_copy_rmat(:), even_copy_cmat(:)
         real,             allocatable :: cur_fil(:,:), weights_2D(:,:,:), frc(:), filt(:)
         integer,          allocatable :: lplims_hres(:)
         type(opt_vol),    allocatable :: opt_odd(:,:,:,:), opt_even(:,:,:,:)
-        real                          :: smpd, lpstart, lp
+        real                          :: smpd, lpstart, lp, val
         integer                       :: iptcl, box, filtsz, ldim(3), ldim_pd(3), smooth_ext, nptcls, hpind_fsc, find
         logical                       :: lpstart_fallback, l_nonuniform, l_phaseplate, l_have_frcs      
         type(c_ptr)                   :: ptr
-        integer                       :: c_shape(3)
+        integer                       :: c_shape(3), m, n
         integer,             parameter   :: N_IMGS = 2  ! for batch_fft (2 images batch)
         type(fft_vars_type), allocatable :: fft_vars(:)
         ! init
@@ -233,9 +234,9 @@ contains
         endif
         filtsz = clsfrcs%get_filtsz()
         ! allocate
-        allocate( odd_copy_rmat(nptcls),  odd_copy_cmat(nptcls),&
-                &even_copy_rmat(nptcls), even_copy_cmat(nptcls),&
-                &weights_img(nptcls), ref_diff_odd_img(nptcls), ref_diff_even_img(nptcls))
+        allocate(   odd_copy_rmat(nptcls),     odd_copy_cmat(nptcls),&
+                &  even_copy_rmat(nptcls),    even_copy_cmat(nptcls),&
+                &ref_diff_odd_img(nptcls), ref_diff_even_img(nptcls))
         allocate(cur_fil(box,nptcls),weights_2D(smooth_ext*2+1,&
                 &smooth_ext*2+1,nptcls), frc(filtsz), source=0.)
         allocate(opt_odd(box,box,1,nptcls), opt_even(box,box,1,nptcls), lplims_hres(nptcls))
@@ -254,6 +255,15 @@ contains
             l_have_frcs = .true.
         endif
         ! construct: all allocations and initialization
+        call weights_img%new(ldim_pd, smpd, .false.)
+        call weights_img%zero_and_unflag_ft()
+        do m = -params_glob%smooth_ext, params_glob%smooth_ext
+            do n = -params_glob%smooth_ext, params_glob%smooth_ext
+                val = -hyp(real(m), real(n))/(params_glob%smooth_ext + 1) + 1.
+                if( val > 0 ) call weights_img%set_rmat_at(box/2+m+1, box/2+n+1, 1, val)
+            enddo
+        enddo
+        call weights_img%fft()
         do iptcl = 1, nptcls
             if( l_have_frcs )then
                 frc = clsfrcs%get_frc(iptcl, ldim(1))
@@ -280,7 +290,6 @@ contains
             call even(iptcl)%write('filtered_by_opt2D.mrcs', iptcl)
             call even(iptcl)%pad_mirr(ldim_pd)
             call odd( iptcl)%pad_mirr(ldim_pd)
-            call weights_img(iptcl)%new(ldim_pd, smpd, .false.)
             call ref_diff_odd_img( iptcl)%new(ldim_pd, smpd, .false.)
             call ref_diff_even_img(iptcl)%new(ldim_pd, smpd, .false.)
             call odd_copy_rmat(iptcl)%copy(odd(iptcl))
@@ -316,17 +325,17 @@ contains
                             &even_copy_rmat(iptcl), even_copy_cmat(iptcl),&
                             &cur_fil(:,iptcl), weights_2D(:,:,iptcl), lplims_hres(iptcl),&
                             &opt_odd(:,:,:,iptcl), opt_even(:,:,:,iptcl),&
-                            &weights_img(iptcl), ref_diff_odd_img(iptcl), ref_diff_even_img(iptcl),&
+                            &weights_img, ref_diff_odd_img(iptcl), ref_diff_even_img(iptcl),&
                             &fft_vars(iptcl))
         enddo
         !$omp end parallel do
         ! destruct
+        call weights_img%kill
         do iptcl = 1, nptcls
             call odd_copy_rmat( iptcl)%kill
             call even_copy_rmat(iptcl)%kill
             call odd_copy_cmat( iptcl)%kill
             call even_copy_cmat(iptcl)%kill
-            call weights_img(iptcl)%kill
             call ref_diff_odd_img( iptcl)%kill
             call ref_diff_even_img(iptcl)%kill
             call even(iptcl)%clip_inplace(ldim)
@@ -446,15 +455,6 @@ contains
         call       weights_img%get_mat_ptrs(pweights)
         call  ref_diff_odd_img%get_mat_ptrs(podd)
         call ref_diff_even_img%get_mat_ptrs(peven)
-        call weights_img%zero_and_unflag_ft()
-        do m = -ext, ext
-            do n = -ext, ext
-                rad = hyp(real(m), real(n))
-                val = -rad/(ext + 1) + 1.
-                if( val > 0 ) call weights_img%set_rmat_at(box/2+m+1, box/2+n+1, 1, val)
-            enddo
-        enddo
-        call weights_img%fft()
         do iter_no = 1, params_glob%nsearch
             cur_ind = nint(find_start + (iter_no - 1)*find_stepsz)
             if( L_VERBOSE_GLOB ) write(*,*) '('//int2str(iter_no)//'/'//int2str(params_glob%nsearch)//') current Fourier index = ', cur_ind
