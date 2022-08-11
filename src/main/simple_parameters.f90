@@ -68,7 +68,7 @@ type :: parameters
     character(len=3)      :: neg='no'             !< invert contrast of images(yes|no){no}
     character(len=3)      :: noise_norm ='no'
     character(len=3)      :: norm='no'            !< do statistical normalisation avg
-    character(len=3)      :: nonuniform='yes'     !< nonuniform filtering(yes|no){yes}
+    character(len=3)      :: nonuniform='no'      !< nonuniform filtering(yes|no){no}
     character(len=3)      :: omit_neg='no'        !< omit negative pixels(yes|no){no}
     character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
     character(len=3)      :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
@@ -400,7 +400,7 @@ type :: parameters
     real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
     real    :: lp_lowres = 30.     !< optimization(search)-based low-pass limit lower bound
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
-    real    :: lplim_crit=0.5      !< corr criterion low-pass limit assignment(0.143-0.5){0.5}
+    real    :: lplim_crit=0.143    !< corr criterion low-pass limit assignment(0.143-0.5){0.143}
     real    :: lplims2D(3)
     real    :: lpmed=20.
     real    :: lpstart=0.          !< start low-pass limit(in A){15}

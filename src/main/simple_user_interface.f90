@@ -203,7 +203,6 @@ type(simple_input_param) :: eer_upsampling
 type(simple_input_param) :: element
 type(simple_input_param) :: eo
 type(simple_input_param) :: exp_time
-type(simple_input_param) :: filter_type
 type(simple_input_param) :: focusmskdiam
 type(simple_input_param) :: frac
 type(simple_input_param) :: fraca
@@ -947,8 +946,8 @@ contains
         call set_param(objfun,        'objfun',        'multi',  'Objective function', 'Objective function(cc|euclid){cc}', '(cc|euclid){cc}', .false., 'cc')
         call set_param(remap_cls,     'remap_cls',     'binary', 'Whether to remap 2D clusters', 'Whether to remap the number of 2D clusters(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV{300}', 'in kV{300}', .false., 300.)
-        call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.5}',&
-        &'low-pass FSC criterion(0.143-0.5){0.5}', .false., 0.5)
+        call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.143}',&
+        &'low-pass FSC criterion(0.143-0.5){0.5}', .false., 0.143)
         call set_param(cs,            'cs',            'num',    'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in mm{2.7}', .false., 2.7)
         call set_param(dose_rate,     'dose_rate',     'num',    'Dose rate (e/Ang^2/s)', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 1.)
         call set_param(exp_time,      'exp_time',      'num',    'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
@@ -1039,7 +1038,6 @@ contains
         call set_param(nsearch,        'nsearch',      'num',    'Number of points to search in nonuniform filter', 'Number of points to search in discrete nonuniform filter{40}', '# points to search{40}', .false., 40.)
         call set_param(match_filt,     'match_filt',   'binary', 'Matched filter', 'Filter to maximize the signal-to-noise ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(smooth_ext,     'smooth_ext',   'num'   , 'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization', 'give # pixels{20}', .false., 20.)
-        call set_param(filter_type,    'filter',       'multi',  'Filter type', 'Nonuniform filter type(butterworth|lp|tv){butterworth}','(butterworth|lp|tv){butterworth}', .false., 'butterworth')
         call set_param(lpthresh,       'lpthresh',     'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
@@ -1389,7 +1387,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
-        &1, 0, 0, 10, 13, 1, 2, .true.)                                         ! # entries in each group, requires sp_project
+        &1, 0, 0, 10, 12, 1, 2, .true.)                                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
@@ -1429,9 +1427,8 @@ contains
         call cluster2D%set_input('filt_ctrls', 8,  graphene_filt)
         call cluster2D%set_input('filt_ctrls', 9,  nonuniform)
         call cluster2D%set_input('filt_ctrls', 10, smooth_ext)
-        call cluster2D%set_input('filt_ctrls', 11, filter_type)
-        call cluster2D%set_input('filt_ctrls', 12, lp_lowres)
-        call cluster2D%set_input('filt_ctrls', 13, nsearch)
+        call cluster2D%set_input('filt_ctrls', 11, lp_lowres)
+        call cluster2D%set_input('filt_ctrls', 12, nsearch)
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
@@ -1486,7 +1483,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 1, 0, 7, 11, 1, 5, .true.)                                                            ! # entries in each group, requires sp_project
+        &0, 1, 0, 7, 10, 1, 5, .true.)                                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1520,9 +1517,8 @@ contains
         call cluster2D_stream%set_input('filt_ctrls', 6,  wiener)
         call cluster2D_stream%set_input('filt_ctrls', 7,  nonuniform)
         call cluster2D_stream%set_input('filt_ctrls', 8,  smooth_ext)
-        call cluster2D_stream%set_input('filt_ctrls', 9,  filter_type)
-        call cluster2D_stream%set_input('filt_ctrls', 10, lp_lowres)
-        call cluster2D_stream%set_input('filt_ctrls', 11, nsearch)
+        call cluster2D_stream%set_input('filt_ctrls', 9,  lp_lowres)
+        call cluster2D_stream%set_input('filt_ctrls', 10, nsearch)
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
@@ -1540,7 +1536,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 0, 0, 7, 11, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 0, 0, 7, 10, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1573,9 +1569,8 @@ contains
         call cluster2D_subsets%set_input('filt_ctrls', 6,  wiener)
         call cluster2D_subsets%set_input('filt_ctrls', 7,  nonuniform)
         call cluster2D_subsets%set_input('filt_ctrls', 8,  smooth_ext)
-        call cluster2D_subsets%set_input('filt_ctrls', 9,  filter_type)
-        call cluster2D_subsets%set_input('filt_ctrls', 10, lp_lowres)
-        call cluster2D_subsets%set_input('filt_ctrls', 11, nsearch)
+        call cluster2D_subsets%set_input('filt_ctrls', 9,  lp_lowres)
+        call cluster2D_subsets%set_input('filt_ctrls', 10, nsearch)
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
@@ -2672,7 +2667,7 @@ contains
         &'Optimization (search) based 2D filter (uniform/nonuniform)',&     ! descr_short
         &'is a program for 2D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                                    ! executable
-        &2, 1, 0, 0, 7, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 6, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call opt_2D_filter%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
@@ -2686,18 +2681,52 @@ contains
         ! filter controls
         call opt_2D_filter%set_input('filt_ctrls', 1, nonuniform)
         call opt_2D_filter%set_input('filt_ctrls', 2, smooth_ext)
-        call opt_2D_filter%set_input('filt_ctrls', 3, filter_type)
-        call opt_2D_filter%set_input('filt_ctrls', 4, lp_lowres)
-        call opt_2D_filter%set_input('filt_ctrls', 5, nsearch)
-        call opt_2D_filter%set_input('filt_ctrls', 6, match_filt)
+        call opt_2D_filter%set_input('filt_ctrls', 3, lp_lowres)
+        call opt_2D_filter%set_input('filt_ctrls', 4, nsearch)
+        call opt_2D_filter%set_input('filt_ctrls', 5, match_filt)
         frcs%required = .true.
-        call opt_2D_filter%set_input('filt_ctrls', 7, frcs)
+        call opt_2D_filter%set_input('filt_ctrls', 6, frcs)
         ! mask controls
         ! <empty>
         ! computer controls
         call opt_2D_filter%set_input('comp_ctrls', 1, nthr)
     end subroutine new_opt_2D_filter
 
+<<<<<<< HEAD
+=======
+    subroutine new_opt_2D_filter_test
+        ! PROGRAM SPECIFICATION
+        call opt_2D_filter_test%new(&
+        &'opt_2D_filter_test',&                                             ! name
+        &'Optimization (search) based 2D filter (uniform/nonuniform)',&     ! descr_short
+        &'is a program for 2D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function. Test: Uses batch fft',& ! descr_long
+        &'simple_exec',&                                                    ! executable
+        &2, 1, 0, 0, 6, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call opt_2D_filter_test%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
+        call opt_2D_filter_test%set_input('img_ios', 2, 'stk2', 'file', 'Even stack', 'Even Stack', 'stack_odd.mrc file',  .true., '')
+        ! parameter input/output
+        call opt_2D_filter_test%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call opt_2D_filter_test%set_input('filt_ctrls', 1, nonuniform)
+        call opt_2D_filter_test%set_input('filt_ctrls', 2, smooth_ext)
+        call opt_2D_filter_test%set_input('filt_ctrls', 3, lp_lowres)
+        call opt_2D_filter_test%set_input('filt_ctrls', 4, nsearch)
+        call opt_2D_filter_test%set_input('filt_ctrls', 5, match_filt)
+        frcs%required = .true.
+        call opt_2D_filter_test%set_input('filt_ctrls', 6, frcs)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call opt_2D_filter_test%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_opt_2D_filter_test
+
+>>>>>>> 2ad5cb3 (FSC prefiltering in nonuniform 3D filter)
     subroutine new_opt_3D_filter
         ! PROGRAM SPECIFICATION
         call opt_3D_filter%new(&
@@ -2708,8 +2737,8 @@ contains
         &2, 1, 0, 0, 6, 2, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call opt_3D_filter%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',       'Odd volume',       'vol1.mrc file', .true., '')
-        call opt_3D_filter%set_input('img_ios', 2, 'vol2', 'file', 'Even volume',      'Even volume',      'vol2.mrc file', .true., '')
+        call opt_3D_filter%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
+        call opt_3D_filter%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
         ! parameter input/output
         call opt_3D_filter%set_input('parm_ios', 1, smpd)
         ! alternative inputs
@@ -2719,16 +2748,48 @@ contains
         ! filter controls
         call opt_3D_filter%set_input('filt_ctrls', 1, nonuniform)
         call opt_3D_filter%set_input('filt_ctrls', 2, smooth_ext)
-        call opt_3D_filter%set_input('filt_ctrls', 3, filter_type)
-        call opt_3D_filter%set_input('filt_ctrls', 4, lp_lowres)
-        call opt_3D_filter%set_input('filt_ctrls', 5, nsearch)
-        call opt_3D_filter%set_input('filt_ctrls', 6, match_filt)
+        call opt_3D_filter%set_input('filt_ctrls', 3, lp_lowres)
+        call opt_3D_filter%set_input('filt_ctrls', 4, nsearch)
+        call opt_3D_filter%set_input('filt_ctrls', 5, match_filt)
+        call opt_3D_filter%set_input('filt_ctrls', 6, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
         ! mask controls
         call opt_3D_filter%set_input('mask_ctrls', 1, mskdiam)
         call opt_3D_filter%set_input('mask_ctrls', 2, mskfile)
         ! computer controls
         call opt_3D_filter%set_input('comp_ctrls', 1, nthr)
     end subroutine new_opt_3D_filter
+
+    subroutine new_opt_3D_filter_test
+        ! PROGRAM SPECIFICATION
+        call opt_3D_filter_test%new(&
+        &'opt_3D_filter_test',&                                      ! name
+        &'Butterworth 3D filter (uniform/nonuniform)',&         ! descr_short
+        &'is a program for 3D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function. Test: Using batch fft.',& ! descr_long
+        &'simple_exec',&                                        ! executable
+        &2, 1, 0, 0, 6, 2, 1, .false.)                          ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call opt_3D_filter_test%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',       'Odd volume',       'vol1.mrc file', .true., '')
+        call opt_3D_filter_test%set_input('img_ios', 2, 'vol2', 'file', 'Even volume',      'Even volume',      'vol2.mrc file', .true., '')
+        ! parameter input/output
+        call opt_3D_filter_test%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call opt_3D_filter_test%set_input('filt_ctrls', 1, nonuniform)
+        call opt_3D_filter_test%set_input('filt_ctrls', 2, smooth_ext)
+        call opt_3D_filter_test%set_input('filt_ctrls', 3, lp_lowres)
+        call opt_3D_filter_test%set_input('filt_ctrls', 4, nsearch)
+        call opt_3D_filter_test%set_input('filt_ctrls', 5, match_filt)
+        call opt_3D_filter_test%set_input('filt_ctrls', 6, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
+        ! mask controls
+        call opt_3D_filter_test%set_input('mask_ctrls', 1, mskdiam)
+        call opt_3D_filter_test%set_input('mask_ctrls', 2, mskfile)
+        ! computer controls
+        call opt_3D_filter_test%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_opt_3D_filter_test
 
     subroutine new_new_project
         ! PROGRAM SPECIFICATION
@@ -3003,7 +3064,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 15, 0, 21, 14, 1, 7, .true.)                                                    ! # entries in each group, requires sp_project
+        &5, 15, 0, 21, 13, 1, 7, .true.)                                                    ! # entries in each group, requires sp_project
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3140,12 +3201,10 @@ contains
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 10, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('filt_ctrls', 11, smooth_ext)
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 11, submenu="cluster 2D")
-        call preprocess_stream_dev%set_input('filt_ctrls', 12, filter_type)
+        call preprocess_stream_dev%set_input('filt_ctrls', 12, lp_lowres)
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 12, submenu="cluster 2D")
-        call preprocess_stream_dev%set_input('filt_ctrls', 13, lp_lowres)
+        call preprocess_stream_dev%set_input('filt_ctrls', 13, nsearch)
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 13, submenu="cluster 2D")
-        call preprocess_stream_dev%set_input('filt_ctrls', 14, nsearch)
-        call preprocess_stream_dev%set_gui_params('filt_ctrls', 14, submenu="cluster 2D")
         ! mask controls
         call preprocess_stream_dev%set_input('mask_ctrls', 1, mskdiam)
         call preprocess_stream_dev%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)
