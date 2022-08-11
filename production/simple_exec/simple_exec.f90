@@ -96,9 +96,7 @@ type(binarize_commander)                    :: xbinarize
 type(mask_commander)                        :: xmask
 type(fsc_commander)                         :: xfsc
 type(opt_2D_filter_commander)               :: xopt_2D_filter
-type(opt_2D_filter_test_commander)          :: xopt_2D_filter_test
 type(opt_3D_filter_commander)               :: xopt_3D_filter
-type(opt_3D_filter_test_commander)          :: xopt_3D_filter_test
 type(centervol_commander)                   :: xcenter
 type(reproject_commander)                   :: xreproject
 type(volops_commander)                      :: xvolops
@@ -283,12 +281,8 @@ select case(trim(prg))
         call xfsc%execute(cline)
     case( 'opt_2D_filter' )
         call xopt_2D_filter%execute(cline)
-    case( 'opt_2D_filter_test' )
-        call xopt_2D_filter_test%execute(cline)
     case( 'opt_3D_filter' )
         call xopt_3D_filter%execute(cline)
-    case( 'opt_3D_filter_test' )
-        call xopt_3D_filter_test%execute(cline)
     case( 'center' )
         call xcenter%execute(cline)
     case( 'reproject' )
