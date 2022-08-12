@@ -13,14 +13,15 @@ program simple_test_prob_opt_filt
     type(reproject_commander)     :: xreproject
     type(image)                   :: img, noise, odd_img, even_img, img_ker, img_pad
     type(image),      allocatable :: filt_img(:)
-    integer                       :: npixels, iptcl, rc, ndim
+    integer                       :: npixels, iptcl, rc, ndim, l
     integer, parameter            :: NRESTARTS = 1, BW_ORDER = 8
     character(len=:), allocatable :: cmd
     real,             allocatable :: cur_filt(:)
+    real,             pointer     :: img_rmat(:,:,:), odd_rmat(:,:,:), filt_rmat(:,:,:)
     logical                       :: mrc_exists
     real                          :: ave, sdev, maxv, minv, lowest_cost
     integer,          allocatable :: best(:), x_mat(:,:)
-    integer                       :: max_iter, pop_size, k, nspace, int_ind, k1, l1, sh
+    integer                       :: max_iter, pop_size, k, nspace, int_ind, k1, l1, sh, ext, k_tmp, l_tmp
     real                          :: cross_rate, mut_rate, bounds(2), real_ind
     procedure(objective_func), pointer :: obj_func => null()
     if( command_argument_count() < 4 )then
@@ -70,8 +71,8 @@ program simple_test_prob_opt_filt
     allocate(x_mat(p%ldim(1),p%ldim(2)), source=0)
     nspace      = 40
     npixels     = p%ldim(1)*p%ldim(2)       ! number of pixels
-    max_iter    = 20
-    pop_size    = 10                        ! the population size is a magnitude of the number of pixels
+    max_iter    = 100
+    pop_size    = 100                        ! the population size is a magnitude of the number of pixels
     cross_rate  = 0.9
     mut_rate    = 1./npixels
     obj_func    => objective_cont
@@ -118,12 +119,22 @@ program simple_test_prob_opt_filt
         call img_pad%new([p%ldim(1) + 2*int(bounds(2)), p%ldim(2) + 2*int(bounds(2)),1], p%smpd)
         call img_ker%copy(even_img)
         call img_ker%pad(img_pad)
+        call odd_img%get_rmat_ptr(odd_rmat)
+        call img_pad%get_rmat_ptr(img_rmat)
         ! do the optimization here to get the optimized cut-off frequency
         write(*, *) 'Cut-off frequency optimization in progress:'
         call genetic_opt(obj_func, npixels, nspace, max_iter, pop_size, cross_rate, mut_rate, best, lowest_cost)
-        write(*, *) 'cost = ', lowest_cost, '; x = ', x_mat(p%ldim(1)/2-2:p%ldim(1)/2+2, p%ldim(2)/2-2:p%ldim(2)/2+2)
-        call butterworth_filter(cur_filt, 8, real(to_ind(x_mat(p%ldim(1)/2, p%ldim(2)/2))))
-        call even_img%apply_filter(cur_filt)
+        !$omp parallel do collapse(2) default(shared) private(k,l,ext,k_tmp,l_tmp,filt_rmat) schedule(static) proc_bind(close)
+        do l = 1,p%ldim(2)
+            do k = 1,p%ldim(1)
+                ext   = to_ind(x_mat(k,l))
+                k_tmp = k+int(bounds(2) - ext)
+                l_tmp = l+int(bounds(2) - ext)
+                call filt_img(x_mat(k,l)+1)%get_rmat_ptr(filt_rmat)
+                call even_img%set_rmat_at(k,l,1,(sum(filt_rmat(1:2*ext, 1:2*ext,1)*img_rmat(k_tmp:k_tmp+2*ext-1,l_tmp:l_tmp+2*ext-1,1)) - odd_rmat(k,l,1))**2)
+            enddo
+        enddo
+        !$omp end parallel do
         call even_img%write('cont_opt_filt_out.mrc', iptcl)
     enddo
 contains
@@ -135,22 +146,22 @@ contains
 
     function objective_cont(bitstring) result(val)
         integer,     intent(in) :: bitstring(:)
-        real,        pointer    :: img_rmat(:,:,:), odd_rmat(:,:,:), filt_rmat(:,:,:)
         real                    :: val
         integer                 :: k, l, ldim(3), ext, k_tmp, l_tmp
         ldim  = odd_img%get_ldim()
         x_mat = reshape(bitstring, [ldim(1), ldim(2)])
         val   = 0.
-        call odd_img%get_rmat_ptr(odd_rmat)
+        !$omp parallel do collapse(2) default(shared) private(k,l,ext,k_tmp,l_tmp,filt_rmat) schedule(static) proc_bind(close)
         do l = 1,ldim(2)
             do k = 1,ldim(1)
                 ext   = to_ind(x_mat(k,l))
                 k_tmp = k+int(bounds(2) - ext)
                 l_tmp = l+int(bounds(2) - ext)
-                call img_pad%get_rmat_ptr(img_rmat)
                 call filt_img(x_mat(k,l)+1)%get_rmat_ptr(filt_rmat)
-                val = val + abs(sum(filt_rmat(1:2*ext, 1:2*ext,1)*img_rmat(k_tmp:k_tmp+2*ext-1,l_tmp:l_tmp+2*ext-1,1)) - odd_rmat(k,l,1))**2
+                val = val + (sum(filt_rmat(1:2*ext, 1:2*ext,1)*img_rmat(k_tmp:k_tmp+2*ext-1,l_tmp:l_tmp+2*ext-1,1)) - odd_rmat(k,l,1))**2
             enddo
         enddo
+        !$omp end parallel do
+        val = -val
     end function objective_cont
 end program simple_test_prob_opt_filt
