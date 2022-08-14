@@ -1309,6 +1309,8 @@ contains
         & suitable for the first pass of cleanup after picking',&               ! descr_long
         &'simple_exec',&                                                        ! executable
         &0, 0, 0, 6, 4, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
+        cleanup2D%gui_submenu_list = "search,mask,filter"
+        cleanup2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1318,22 +1320,33 @@ contains
         ! <empty>
         ! search controls
         call cleanup2D%set_input('srch_ctrls', 1, ncls)
+        call cleanup2D%set_gui_params('srch_ctrls', 1, submenu="search", advanced=.false.)
         call cleanup2D%set_input('srch_ctrls', 2, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
         &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call cleanup2D%set_gui_params('srch_ctrls', 2, submenu="search")
         call cleanup2D%set_input('srch_ctrls', 3, maxits)
+        call cleanup2D%set_gui_params('srch_ctrls', 3, submenu="search")
         call cleanup2D%set_input('srch_ctrls', 4, update_frac)
+        call cleanup2D%set_gui_params('srch_ctrls', 4, submenu="search")
         call cleanup2D%set_input('srch_ctrls', 5, objfun)
+        call cleanup2D%set_gui_params('srch_ctrls', 5, submenu="search")
         call cleanup2D%set_input('srch_ctrls', 6, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated execution(yes|no){yes}','(yes|no){yes}', .false., 'yes')
+        call cleanup2D%set_gui_params('srch_ctrls', 6, submenu="search")
         ! filter controls
         call cleanup2D%set_input('filt_ctrls', 1, hp)
+        call cleanup2D%set_gui_params('filt_ctrls', 1, submenu="filter")
         call cleanup2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
+        call cleanup2D%set_gui_params('filt_ctrls', 2, submenu="filter")
         call cleanup2D%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 15.)
+        call cleanup2D%set_gui_params('filt_ctrls', 3, submenu="filter")
         call cleanup2D%set_input('filt_ctrls', 4, wiener)
+        call cleanup2D%set_gui_params('filt_ctrls', 4, submenu="filter")
         ! mask controls
         call cleanup2D%set_input('mask_ctrls', 1, mskdiam)
+        call cleanup2D%set_gui_params('mask_ctrls', 1, submenu="mask", advanced=.false.)
         cleanup2D%mask_ctrls(1)%required = .false.
         ! computer controls
         call cleanup2D%set_input('comp_ctrls', 1, nparts)
@@ -1388,49 +1401,75 @@ contains
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
         &1, 0, 0, 10, 12, 1, 2, .true.)                                         ! # entries in each group, requires sp_project
+        cluster2D%gui_submenu_list = "search,mask,filter"
+        cluster2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
         &'Initial 2D references used to bootstrap the search', 'xxx.mrc file with references', .false., 'refs.mrc')
+        call cluster2D%set_gui_params('img_ios', 1, submenu="search")
         ! parameter input/output
         ! <empty>
         ! alternative inputs
         ! <empty>
         ! search controls
         call cluster2D%set_input('srch_ctrls', 1, ncls)
+        call cluster2D%set_gui_params('srch_ctrls', 1, submenu="search", advanced=.false.)
         call cluster2D%set_input('srch_ctrls', 2, startit)
+        call cluster2D%set_gui_params('srch_ctrls', 2, submenu="search")
         call cluster2D%set_input('srch_ctrls', 3, trs)
+        call cluster2D%set_gui_params('srch_ctrls', 3, submenu="search")
         call cluster2D%set_input('srch_ctrls', 4, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated convergence rate. Initial/Final low-pass limits control the degree of down-scaling(yes|no){yes}',&
         &'(yes|no){yes}', .false., 'yes')
+        call cluster2D%set_gui_params('srch_ctrls', 4, submenu="search")
         call cluster2D%set_input('srch_ctrls', 5, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
         &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call cluster2D%set_gui_params('srch_ctrls', 5, submenu="search")
         call cluster2D%set_input('srch_ctrls', 6, maxits)
+        call cluster2D%set_gui_params('srch_ctrls', 6, submenu="search")
         call cluster2D%set_input('srch_ctrls', 7, update_frac)
+        call cluster2D%set_gui_params('srch_ctrls', 7, submenu="search")
         call cluster2D%set_input('srch_ctrls', 8, frac)
+        call cluster2D%set_gui_params('srch_ctrls', 8, submenu="search")
         call cluster2D%set_input('srch_ctrls', 9, objfun)
+        call cluster2D%set_gui_params('srch_ctrls', 9, submenu="search")
         call cluster2D%set_input('srch_ctrls',10, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|greedy){snhc}', '(snhc|greedy){snhc}', .false., 'snhc')
+        call cluster2D%set_gui_params('srch_ctrls', 10, submenu="search")
         ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, hp)
+        call cluster2D%set_gui_params('filt_ctrls', 1, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
+        call cluster2D%set_gui_params('filt_ctrls', 2, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit to apply to diagnose possible &
         &issues with the dynamic update scheme used by default', 'low-pass limit in Angstroms', .false., 20.)
+        call cluster2D%set_gui_params('filt_ctrls', 3, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 4, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &few iterations of search, before the automatic scheme kicks in. Also controls the degree of downsampling in the first &
         &phase', 'initial low-pass limit in Angstroms', .false., 15.)
+        call cluster2D%set_gui_params('filt_ctrls', 4, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 5, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit that controls the degree of &
         &downsampling in the second phase. Give estimated best final resolution', 'final low-pass limit in Angstroms', .false., 8.)
+        call cluster2D%set_gui_params('filt_ctrls', 5, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 6,  match_filt)
+        call cluster2D%set_gui_params('filt_ctrls', 6, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 7,  wiener)
+        call cluster2D%set_gui_params('filt_ctrls', 7, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 8,  graphene_filt)
+        call cluster2D%set_gui_params('filt_ctrls', 8, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 9,  nonuniform)
+        call cluster2D%set_gui_params('filt_ctrls', 9, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 10, smooth_ext)
+        call cluster2D%set_gui_params('filt_ctrls', 10, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 11, lp_lowres)
+        call cluster2D%set_gui_params('filt_ctrls', 11, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 12, nsearch)
+        call cluster2D%set_gui_params('filt_ctrls', 12, submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
+        call cluster2D%set_gui_params('mask_ctrls', 1, submenu="mask")
         ! computer controls
         call cluster2D%set_input('comp_ctrls', 1, nparts)
         cluster2D%comp_ctrls(1)%required = .false.
@@ -1924,15 +1963,22 @@ contains
         &'is a program for extracting particle images from integrated movies',& ! descr long
         &'simple_exec',&                                                  ! executable
         &1, 4, 0, 0, 0, 0, 1, .true.)                                           ! # entries in each group, requires sp_project
+        extract%gui_submenu_list = "extract"
+        extract%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call extract%set_input('img_ios', 1, 'dir_box', 'file', 'Box files directory', 'Directory to read the box files from', 'e.g. boxes/', .false., '')
+        call extract%set_gui_params('img_ios', 1, submenu="extract")
         ! parameter input/output
         call extract%set_input('parm_ios', 1, box)
+        call extract%set_gui_params('parm_ios', 1, submenu="extract", advanced=.false.)
         extract%parm_ios(1)%required = .false.
         call extract%set_input('parm_ios', 2, pcontrast)
+        call extract%set_gui_params('parm_ios', 2, submenu="extract", advanced=.false.)
         call extract%set_input('parm_ios', 3, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call extract%set_gui_params('parm_ios', 3, submenu="extract")
         call extract%set_input('parm_ios', 4, 'ctf', 'multi', 'Whether to extract particles with phases flipped', 'Whether to extract particles with phases flipped(flip|no){no}', '(flip|no){no}', .false., 'no')
+        call extract%set_gui_params('parm_ios', 4, submenu="extract")
         ! alternative inputs
         ! <empty>
         ! search controls
