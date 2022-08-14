@@ -2321,13 +2321,11 @@ contains
                 mic2stk_inds(imic) = istk
                 stk2mic_inds(istk) = imic
             enddo
-            if( any(mic2stk_inds==0) .or. any(stk2mic_inds==0) )then
-                THROW_HARD('MIC & STK fileds indexing error 2! get_mic2stk_inds')
-            endif
         endif
         ! state consistency
         do imic = 1,nmics
             istk = mic2stk_inds(imic)
+            if( istk == 0 ) cycle
             nptcls_mic = nint(self%os_mic%get(imic,'nptcls'))
             nptcls_stk = nint(self%os_stk%get(istk,'nptcls'))
             if( nptcls_mic /= nptcls_stk )then

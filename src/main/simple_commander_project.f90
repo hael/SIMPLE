@@ -1159,11 +1159,6 @@ contains
         call spproj%read_segment('ptcl3D', params%projfile)
         call spproj_out%os_ptcl2D%new(nptcls_part, is_ptcl=.true.)
         call spproj_out%os_ptcl3D%new(nptcls_part, is_ptcl=.true.)
-        ! particle indices
-        do iptcl = 1,nptcls_tot
-            call spproj%os_ptcl2D%set(iptcl, 'pind', real(iptcl))
-            call spproj%os_ptcl3D%set(iptcl, 'pind', real(iptcl))
-        enddo
         ! stacks
         call spproj%read_segment('stk', params%projfile)
         nstks_tot = spproj%get_nstks()
