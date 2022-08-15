@@ -458,7 +458,7 @@ contains
         call build_glob%vol_odd%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         call build_glob%vol_odd%read(fname_odd)
         did_filter = .false.
-        if( params_glob%l_nonuniform )then
+        if( params_glob%l_nonuniform  .and. (.not.params_glob%l_lpset) )then
             call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
             if( cline%defined('mskfile') )then
                 call mskvol%read(params_glob%mskfile)
