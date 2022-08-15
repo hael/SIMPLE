@@ -100,6 +100,7 @@ contains
         write(logfhandle,'(A,1X,F8.4)') '>>> MEDIAN FSC (SPECSCORE):', median_nocopy(corrs(k_hp:k_lp))
         call even%kill
         call odd%kill
+        call arr2file(corrs, 'FSC.bin')
         ! end gracefully
         call simple_end('**** SIMPLE_FSC NORMAL STOP ****')
     end subroutine exec_fsc

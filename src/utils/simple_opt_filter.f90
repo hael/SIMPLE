@@ -564,14 +564,6 @@ contains
         find_stop   = get_lplim_at_corr(fsc, 0.1)
         find_start  = calc_fourier_index(params_glob%lp_lowres, box, smpd)
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
-        ! pre-filter odd & even volumes
-        if( params_glob%l_match_filt )then
-            call even%shellnorm_and_apply_filter(optlp)
-            call odd%shellnorm_and_apply_filter(optlp)
-        else
-            call even%apply_filter(optlp)
-            call odd%apply_filter(optlp)
-        endif
         allocate( in(ldim(1), ldim(2), ldim(3), 2))
         allocate(out(ldim(1), ldim(2), ldim(3), 2))
         !$omp critical
@@ -580,6 +572,16 @@ contains
         plan_bwd = fftwf_plan_many_dft_c2r(3, ldim, N_IMGS, out, ldim, 1, product(ldim),  in, ldim, 1, product(ldim),FFTW_ESTIMATE)
         call fftwf_plan_with_nthreads(1)
         !$omp end critical
+        ! pre-filter odd & even volumes
+        if( params_glob%l_match_filt )then
+            call batch_fft_3D(even, odd, in, out, plan_fwd)
+            call even%shellnorm_and_apply_filter(optlp)
+            call odd%shellnorm_and_apply_filter(optlp)
+            call batch_ifft_3D(even, odd, in, out, plan_bwd)
+        else
+            call even%apply_filter(optlp)
+            call odd%apply_filter(optlp)
+        endif
         call          freq_img%new(ldim, smpd)
         call       weights_img%new(ldim, smpd)
         call  ref_diff_odd_img%new(ldim, smpd)
