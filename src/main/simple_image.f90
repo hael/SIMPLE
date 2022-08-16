@@ -5004,7 +5004,7 @@ contains
         real        :: scale, rsh
         complex(dp) :: comp1, comp2
         integer     :: lims(3,2), phys(3), sh, sh_sc, h, k, l, n
-        scale = real(sz) / real(fdim(self1%ldim(1))-1)
+        scale   = real(2*sz) / real(self1%ldim(1))
         corrs_8 = 0.d0
         sumasq  = 0.d0
         sumbsq  = 0.d0
@@ -5024,11 +5024,11 @@ contains
                     ! compute physical address
                     phys = self1%fit%comp_addr_phys(h,k,l)
                     ! real part of the complex mult btw self1 and targ*
-                    comp1 = self1%cmat(phys(1),phys(2),phys(3))
-                    comp2 = self2%cmat(phys(1),phys(2),phys(3))
+                    comp1          = self1%cmat(phys(1),phys(2),phys(3))
+                    comp2          = self2%cmat(phys(1),phys(2),phys(3))
                     corrs_8(sh_sc) = corrs_8(sh_sc)+ real(comp1 * conjg(comp2), kind=dp)
-                    sumasq(sh_sc) = sumasq(sh_sc) + csq_fast(comp1)
-                    sumbsq(sh_sc) = sumbsq(sh_sc) + csq_fast(comp2)
+                    sumasq(sh_sc)  = sumasq(sh_sc) + csq_fast(comp1)
+                    sumbsq(sh_sc)  = sumbsq(sh_sc) + csq_fast(comp2)
                 end do
             end do
         end do
