@@ -350,11 +350,9 @@ contains
         character(len=:), allocatable :: part_str
         real,    allocatable :: resarr(:)
         integer, allocatable :: pops(:)
-        real    :: lplim_rec, fsc05, fsc0143
         integer :: istate
         allocate(part_str, source=int2str_pad(params_glob%part,params_glob%numlen))
         call build_glob%spproj_field%get_pops(pops, 'state')
-        lplim_rec = huge(lplim_rec)
         resarr    = build_glob%img%get_res()
         do istate = 1, params_glob%nstates
             if( pops(istate) > 0)then
@@ -366,11 +364,6 @@ contains
                     call build_glob%eorecvols(istate)%expand_exp
                     call build_glob%eorecvols(istate)%apply_weight(1.0 - &
                         params_glob%update_frac)
-                endif
-                ! determining resolution for low-pass limited reconstruction
-                if( any(build_glob%fsc(istate,:) > 0.143) )then
-                    call get_resolution(build_glob%fsc(istate,:), resarr, fsc05, fsc0143)
-                    lplim_rec = min(lplim_rec, fsc0143)
                 endif
             endif
         end do
