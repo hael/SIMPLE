@@ -399,6 +399,7 @@ type :: parameters
     real    :: lp_backgr=20.       !< low-pass for solvent blurring (in A)
     real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
     real    :: lp_lowres = 30.     !< optimization(search)-based low-pass limit lower bound
+    real    :: lp_stopres = -1.    !< optimization(search)-based stoping resolution
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
     real    :: lplim_crit=0.143    !< corr criterion low-pass limit assignment(0.143-0.5){0.143}
     real    :: lplims2D(3)
@@ -837,6 +838,7 @@ contains
         call check_rarg('lp_backgr',      self%lp_backgr)
         call check_rarg('lp_ctf_estimate',self%lp_ctf_estimate)
         call check_rarg('lp_lowres',      self%lp_lowres)
+        call check_rarg('lp_stopres',     self%lp_stopres)
         call check_rarg('lp_pick',        self%lp_pick)
         call check_rarg('lplim_crit',     self%lplim_crit)
         call check_rarg('lpstart',        self%lpstart)
