@@ -429,6 +429,7 @@ type :: parameters
     real    :: smpd=2.             !< sampling distance, same as EMANs apix(in A)
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio
+    real    :: tau=TAU_DEFAULT     !< for empirical scaling of cc-based particle weights
     real    :: tilt_thres=0.05
     real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
     real    :: thres_low=0.        !< lower threshold for canny edge detection
@@ -864,6 +865,7 @@ contains
         call check_rarg('smpd',           self%smpd)
         call check_rarg('sigma',          self%sigma)
         call check_rarg('snr',            self%snr)
+        call check_rarg('tau',            self%tau)
         call check_rarg('tilt_thres',     self%tilt_thres)
         call check_rarg('thres',          self%thres)
         call check_rarg('thres_low',      self%thres_low)

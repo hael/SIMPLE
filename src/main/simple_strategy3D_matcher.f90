@@ -290,11 +290,7 @@ contains
         ! CALCULATE PARTICLE WEIGHTS
         select case(trim(params_glob%ptclw))
             case('yes')
-                if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-                    ! done during search
-                else
-                    call build_glob%spproj_field%calc_soft_weights(params_glob%frac)
-                endif
+                ! weights are set at search time, so nothing to do here.
             case DEFAULT
                 call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
         end select

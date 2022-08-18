@@ -111,17 +111,27 @@ contains
         integer,                intent(in)  :: ref
         real,                   intent(out) :: pw
         real(dp) :: sumw, diff2, max_diff2
-        integer  :: iref
-        pw = 1.0
-        if( params_glob%cc_objfun /= OBJFUN_EUCLID ) return
-        max_diff2 = s3D%proj_space_corrs(s%ithr,ref)
-        sumw      = 0.d0
-        do iref = 1,s%nrefs
-            if( s3D%proj_space_mask(iref,s%ithr) )then
-                diff2 = real(max_diff2 - s3D%proj_space_corrs(s%ithr,iref),dp)
-                if( diff2 < 700.d0 ) sumw = sumw + exp(-diff2)
-            endif
-        enddo
+        integer  :: iref, npix
+        if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
+            npix      = pftcc_glob%get_npix()
+            max_diff2 = corr2distweight(s3D%proj_space_corrs(s%ithr,ref), npix, params_glob%tau)
+            sumw      = 0.d0
+            do iref = 1,s%nrefs
+                if( s3D%proj_space_mask(iref,s%ithr) )then
+                    diff2 = corr2distweight(s3D%proj_space_corrs(s%ithr,iref), npix, params_glob%tau) - max_diff2
+                    if( diff2 < 700.d0 ) sumw = sumw + exp(-diff2)
+                endif
+            enddo
+        else
+            max_diff2 = s3D%proj_space_corrs(s%ithr,ref)
+            sumw      = 0.d0
+            do iref = 1,s%nrefs
+                if( s3D%proj_space_mask(iref,s%ithr) )then
+                    diff2 = real(max_diff2 - s3D%proj_space_corrs(s%ithr,iref),dp)
+                    if( diff2 < 700.d0 ) sumw = sumw + exp(-diff2)
+                endif
+            enddo
+        endif
         pw = min(1.0,real(1.d0 / sumw))
     end subroutine calc_ori_weight
 

@@ -41,6 +41,7 @@ type :: reconstructor_eo
     procedure, private :: reset_odd
     procedure          :: reset_sum
     procedure          :: apply_weight
+    procedure          :: set_sh_lim
     ! GETTERS
     procedure          :: get_kbwin
     procedure          :: get_res
@@ -163,6 +164,13 @@ contains
         call self%even%apply_weight(w)
         call self%odd%apply_weight(w)
     end subroutine apply_weight
+
+    subroutine set_sh_lim(self, sh_lim)
+        class(reconstructor_eo), intent(inout) :: self
+        integer,                 intent(in)    :: sh_lim
+        call self%even%set_sh_lim(sh_lim)
+        call self%odd%set_sh_lim(sh_lim)
+    end subroutine set_sh_lim
 
     ! GETTERS
 
