@@ -80,7 +80,7 @@ contains
         ! particle weights
         select case(trim(params%ptclw))
             case('yes')
-                call build%spproj_field%calc_soft_weights(params%frac)
+                ! weights are set at search time, so nothing to do here.
             case DEFAULT
                 call build%spproj_field%calc_hard_weights(params%frac)
         end select
@@ -143,7 +143,7 @@ contains
             ! particle weights
             select case(trim(params%ptclw))
                 case('yes')
-                    call build%spproj_field%calc_soft_weights(params%frac)
+                ! weights are set at search time, so nothing to do here.
                 case DEFAULT
                     call build%spproj_field%calc_hard_weights(params%frac)
             end select

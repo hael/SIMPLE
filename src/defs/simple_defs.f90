@@ -163,6 +163,7 @@ real, parameter    :: STREAM_SRCHFRAC      = 0.4       !< fraction of times full
 real, parameter    :: MC_PATCHSZ           = 740.      !< recommended patch size (in pixels) for motion correction
 real, parameter    :: ENVMSK_FSC_THRESH    = 0.8       !< FSC value after which phase-randomization and FSC correction is applied in enveloppe masking
 real, parameter    :: MAX_SMPD             = 2.67      !< maximum sampling distance in scaling
+real, parameter    :: TAU_DEFAULT          = 20.0      !< to control strength of correlation-based particles weights
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)

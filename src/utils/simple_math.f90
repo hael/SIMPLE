@@ -1302,16 +1302,34 @@ contains
             call simple_exception('nonconforming size of fsc array; get_lplim_at_corr', __FILENAME__ , __LINE__)
         endif
         get_lplim_at_corr = n-1
-        do h=3,n-1
-            if( fsc(h) >= corr )then
-                cycle
-            else
-                get_lplim_at_corr = h - 1
-                exit
-            endif
-        end do
         if( present(incrreslim) )then
-            if( incrreslim ) get_lplim_at_corr = min(get_lplim_at_corr+10,size(fsc))
+            if( incrreslim )then
+                do h = n-1,3,-1
+                    if( fsc(h) > corr )then
+                        get_lplim_at_corr = h
+                        exit
+                    endif
+                enddo
+                get_lplim_at_corr = min(get_lplim_at_corr+10,n-1)
+            else
+                do h=3,n-1
+                    if( fsc(h) >= corr )then
+                        cycle
+                    else
+                        get_lplim_at_corr = h - 1
+                        exit
+                    endif
+                end do
+            endif
+        else
+            do h=3,n-1
+                if( fsc(h) >= corr )then
+                    cycle
+                else
+                    get_lplim_at_corr = h - 1
+                    exit
+                endif
+            end do
         endif
     end function get_lplim_at_corr
 

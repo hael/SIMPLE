@@ -45,6 +45,7 @@ type, extends(image) :: reconstructor
     procedure          :: reset
     procedure          :: reset_exp
     procedure          :: apply_weight
+    procedure          :: set_sh_lim
     ! GETTER
     procedure          :: get_kbwin
     ! I/O
@@ -181,6 +182,16 @@ contains
             !$omp end parallel do
         endif
     end subroutine apply_weight
+
+    subroutine set_sh_lim(self, sh_lim)
+        class(reconstructor), intent(inout) :: self !< this instance
+        integer,              intent(in)    :: sh_lim
+        if( sh_lim < 1 )then
+            self%sh_lim = self%nyq
+        else
+            self%sh_lim = min(sh_lim,self%nyq)
+        endif
+    end subroutine set_sh_lim
 
     ! GETTERS
 
