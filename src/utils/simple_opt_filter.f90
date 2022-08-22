@@ -188,7 +188,7 @@ contains
         use simple_estimate_ssnr, only: fsc2optlp_sub
         class(image),   intent(inout) :: even(:), odd(:)
         character(len=:), allocatable :: frcs_fname
-        type(class_frcs)              :: clsfrcs 
+        type(class_frcs)              :: clsfrcs
         type(image)                   :: weights_img
         type(image),      allocatable :: ref_diff_odd_img(:), ref_diff_even_img(:),&
                                         &odd_copy_rmat(:),  odd_copy_cmat(:),&
@@ -198,7 +198,7 @@ contains
         type(opt_vol),    allocatable :: opt_odd(:,:,:,:), opt_even(:,:,:,:)
         real                          :: smpd, lpstart, lp, val
         integer                       :: iptcl, box, filtsz, ldim(3), ldim_pd(3), smooth_ext, nptcls, hpind_fsc, find
-        logical                       :: lpstart_fallback, l_nonuniform, l_phaseplate, l_have_frcs      
+        logical                       :: lpstart_fallback, l_nonuniform, l_phaseplate, l_have_frcs
         type(c_ptr)                   :: ptr
         integer                       :: c_shape(3), m, n
         integer,             parameter   :: N_IMGS = 2  ! for batch_fft (2 images batch)
@@ -279,10 +279,10 @@ contains
                     call odd(iptcl)%ifft()
                 else
                     call even(iptcl)%fft()
-                    call even(iptcl)%apply_filter(frc)
+                    call even(iptcl)%apply_filter(filt)
                     call even(iptcl)%ifft()
                     call odd(iptcl)%fft()
-                    call odd(iptcl)%apply_filter(frc)
+                    call odd(iptcl)%apply_filter(filt)
                     call odd(iptcl)%ifft()
                 endif
                 deallocate(frc, filt)
@@ -392,7 +392,7 @@ contains
         integer :: freq_val
         do freq_val = 1, size(ker)
             ker(freq_val) = butterworth(real(freq_val-1), n, fc)
-        enddo        
+        enddo
     end subroutine butterworth_filter
 
     subroutine apply_opt_filter(img, cur_ind, find_start, find_stop, cur_fil, use_cache, do_ifft)
@@ -469,7 +469,7 @@ contains
             call  odd%get_rmat_ptr(rmat_odd)
             call even%get_rmat_ptr(rmat_even)
             ! do the non-uniform, i.e. optimizing at each voxel
-            if( params_glob%l_nonuniform )then                    
+            if( params_glob%l_nonuniform )then
                 call batch_fft_2D(ref_diff_even_img, ref_diff_odd_img, fft_vars)
                 podd%cmat  =  podd%cmat * pweights%cmat
                 peven%cmat = peven%cmat * pweights%cmat
@@ -711,7 +711,7 @@ contains
             write(fnr,'(a,1x,f9.2)') 'total time           : ', rt_tot
             write(fnr,'(a)') ''
             write(fnr,'(a)') '*** RELATIVE TIMINGS (%) ***'
-            write(fnr,'(a,1x,f9.2)') 'filtering            : ', (rt_filter_all /rt_tot) * 100. 
+            write(fnr,'(a,1x,f9.2)') 'filtering            : ', (rt_filter_all /rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') 'searching/optimizing : ', (rt_search_opt /rt_tot) * 100.
             write(fnr,'(a,1x,f9.2)') '% accounted for      : ', ((rt_filter_all+rt_search_opt)/rt_tot) * 100.
             call fclose(fnr)
@@ -749,4 +749,3 @@ contains
     end subroutine opt_filter_3D
 
 end module simple_opt_filter
-    
