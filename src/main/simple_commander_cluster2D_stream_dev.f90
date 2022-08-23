@@ -142,6 +142,10 @@ contains
         pool_proj%compenv  = spproj%compenv
         call pool_proj%projinfo%delete_entry('projname')
         call pool_proj%projinfo%delete_entry('projfile')
+        if( cline%defined('job_memory_per_task2D') )then
+            ! setting new memory requirement for pool, will be transferred to chunks upon init
+            call pool_proj%compenv%set(1,'job_memory_per_task', real(params_glob%job_memory_per_task2D))
+        endif
         call pool_proj%write(trim(POOL_DIR)//trim(PROJFILE_POOL))
         ! initialize chunks parameters and objects
         if( params_glob%nparts_chunk > 1 )then
