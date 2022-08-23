@@ -887,8 +887,10 @@ contains
 
     ! gain correction, calculate image sum and identify outliers
     subroutine cure_outliers( frames )
+        use simple_image, only: image_ptr
         class(image), intent(inout) :: frames(nframes)
         integer, parameter   :: hwinsz = 5
+        type(image_ptr)      :: prmats(nframes)
         real,        pointer :: prmat(:,:,:)
         real,    allocatable :: rsum(:,:), new_vals(:,:), vals(:)
         integer, allocatable :: pos_outliers_here(:,:)
@@ -970,10 +972,10 @@ contains
             sdev = sdev / real(nframes)
             uthresh = uthresh / real(nframes)
             lthresh = lthresh / real(nframes)
-            !$omp parallel do default(shared) private(iframe,k,i,j,n,ii,jj,vals,prmat,l,u,localave)&
+            !$omp parallel do default(shared) private(iframe,k,i,j,n,ii,jj,vals,l,u,localave)&
             !$omp proc_bind(close) schedule(static)
             do iframe=1,nframes
-                call frames(iframe)%get_rmat_ptr(prmat)
+                call frames(iframe)%get_rmat_ptr(prmats(iframe)%rmat)
                 ! calulate new values
                 do k = 1,noutliers
                     i = pos_outliers_here(1,k)
@@ -985,7 +987,7 @@ contains
                             if( ii < 1 .or. ii > ldim(1) ) cycle
                             if( outliers(ii,jj) ) cycle
                             n = n + 1
-                            vals(n) = prmat(ii,jj,1)
+                            vals(n) = prmats(iframe)%rmat(ii,jj,1)
                         enddo
                     enddo
                     if( n > 1 )then
@@ -993,6 +995,7 @@ contains
                             ! high defect area
                             l = minval(vals(:n))
                             u = maxval(vals(:n))
+                            if( abs(u-l) < sdev/1000.0 ) u = uthresh
                             localave = sum(vals(:n)) / real(n)
                             new_vals(k,iframe) = gasdev(localave, sdev, [l,u])
                         else
@@ -1006,7 +1009,7 @@ contains
                 do k = 1,noutliers
                     i = pos_outliers_here(1,k)
                     j = pos_outliers_here(2,k)
-                    prmat(i,j,1) = new_vals(k,iframe)
+                    prmats(iframe)%rmat(i,j,1) = new_vals(k,iframe)
                 enddo
             enddo
             !$omp end parallel do
