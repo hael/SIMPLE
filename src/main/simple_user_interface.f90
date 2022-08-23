@@ -962,7 +962,7 @@ contains
         call set_param(outvol,        'outvol',        'file',   'Output volume name', 'Output volume name', 'e.g. outvol.mrc', .false., '')
         call set_param(eo,            'eo',            'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
         &filtering and resolution estimation(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(job_memory_per_task, 'job_memory_per_task','str', 'Memory per part', 'Memory in MB per part in distributed execution{16000}', 'MB per part{16000}', .false., 16000.)
+        call set_param(job_memory_per_task, 'job_memory_per_task','str', 'Memory per computing node', 'Memory in MB per part/computing node in distributed execution{16000}', 'MB per part{16000}', .false., 16000.)
         call set_param(qsys_name,     'qsys_name',     'multi',  'Queue system kind', 'Queue system kind(local|slurm|pbs)', '(local|slurm|pbs)', .false., 'local')
         call set_param(qsys_partition,'qsys_partition','str',    'Name of SLURM/PBS partition', 'Name of target partition of distributed computer system (SLURM/PBS)', 'give part name', .false., '')
         call set_param(qsys_qos,      'qsys_qos',      'str',    'Schedule priority', 'Job scheduling priority (SLURM/PBS)', 'give priority', .false., '')
@@ -1028,7 +1028,7 @@ contains
         call set_param(picker,         'picker',       'multi',  'Picking approach','Picking approach(phasecorr|old_school){phasecorr}','(phasecorr|old_school){phasecorr}', .false.,'phasecorr')
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
         call set_param(mul,            'mul',          'num',    'Multiplication factor', 'Multiplication factor{1.}','{1.}',.false., 1.)
-        call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(patch|patch_refine|wpatch|poly|poly2){patch}','(patch|patch_refine|wpatch|poly|poly2){patch}', .false.,'patch')
+        call set_param(algorithm,      'algorithm',    'multi',  'Algorithm for motion correction','Algorithm for motion correction(patch|patch_refine){patch}','(patch|patch_refine){patch}', .false.,'patch')
         call set_param(width,          'width',        'num',    'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
         call set_param(automsk,        'automsk',      'multi',  'Perform envelope masking', 'Whether to generate/apply an envelope mask(yes|no|file){no}', '(yes|no|file){no}', .false., 'no')
         call set_param(wiener,         'wiener',       'multi',  'Wiener restoration', 'Wiener restoration, full or partial (full|partial){full}','(full|partial){full}', .false., 'full')
@@ -3044,7 +3044,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 15, 0, 21, 13, 1, 7, .true.)                                                    ! # entries in each group, requires sp_project
+        &5, 15, 0, 21, 13, 1, 8, .true.)                                                    ! # entries in each group, requires sp_project
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3211,7 +3211,8 @@ contains
         call preprocess_stream_dev%set_input('comp_ctrls', 7, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740.)
         call preprocess_stream_dev%set_gui_params('comp_ctrls', 7)
-
+        call preprocess_stream_dev%set_input('comp_ctrls', 8, 'job_memory_per_task2D','str', 'Memory per 2D computing node', 'Memory dedicated to 2D classification per computing node (in MB){16000}', 'MB per part{16000}', .false., 16000.)
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 8)
     end subroutine new_preprocess_stream_dev
 
     subroutine new_print_dose_weights

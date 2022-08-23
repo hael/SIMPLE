@@ -265,7 +265,7 @@ type :: parameters
     integer :: iares=10            !< integer angular resolution{10}
     integer :: ind=0
     integer :: iptcl=1
-    integer :: jptcl=1
+    integer :: job_memory_per_task2D=JOB_MEMORY_PER_TASK_DEFAULT
     integer :: jumpsz=0            !< size of contigous segment
     integer :: kfromto(2)
     integer :: kstop=0
@@ -727,6 +727,7 @@ contains
         call check_iarg('grow',           self%grow)
         call check_iarg('iares',          self%iares)
         call check_iarg('ind',            self%ind)
+        call check_iarg('job_memory_per_task2D', self%job_memory_per_task2D)
         call check_iarg('jumpsz',         self%jumpsz)
         call check_iarg('lp_iters',       self%lp_iters)
         call check_iarg('maxits',         self%maxits)
