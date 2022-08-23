@@ -676,7 +676,7 @@ contains
 
     integer function get_npix( self )
         class(polarft_corrcalc), intent(in) :: self
-        get_npix = sum(nint(self%npix_per_shell))
+        get_npix = sum(nint(self%npix_per_shell(params_glob%kfromto(1):params_glob%kstop)))
     end function get_npix
 
     ! PRINTERS/VISUALISERS
