@@ -525,15 +525,16 @@ contains
                                         &even_copy_rmat, even_copy_cmat, &
                                         &weights_img, ref_diff_odd_img, ref_diff_even_img
         integer                       :: k,l,m, box, ldim(3), find_start, find_stop, iter_no, fnr
-        integer                       :: best_ind, cur_ind, lb(3), ub(3), smooth_ext
-        real                          :: min_sum_odd, min_sum_even, rad, find_stepsz, val, smpd
+        integer                       :: filtsz, best_ind, cur_ind, lb(3), ub(3), smooth_ext
+        real                          :: min_sum_odd, min_sum_even, rad, find_stepsz, val, smpd, fsc05, fsc0143
         character(len=90)             :: file_tag
         type(image_ptr)               :: podd, peven, pweights
         type(c_ptr)                   :: plan_fwd, plan_bwd
         integer,          parameter   :: CHUNKSZ = 20, N_IMGS = 2
         real,             pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:)
-        real,             allocatable :: cur_fil(:), weights_3D(:,:,:)
+        real,             allocatable :: optlp(:), res(:), cur_fil(:), weights_3D(:,:,:), fsc(:)
         type(opt_vol),    allocatable :: opt_odd(:,:,:), opt_even(:,:,:)
+        character(len=:), allocatable :: fsc_fname
         character(len=LONGSTRLEN)     :: benchfname
         logical                       :: l_nonuniform
         integer(timer_int_kind)       ::  t_tot,  t_filter_all,  t_search_opt,  t_chop_copy,  t_chop_filter,  t_chop_sqeu
@@ -541,15 +542,29 @@ contains
         real(   kind=c_float),         pointer ::  in(:,:,:,:)
         complex(kind=c_float_complex), pointer :: out(:,:,:,:)
         ldim         = odd%get_ldim()
+        filtsz       = odd%get_filtsz()
         smooth_ext   = params_glob%smooth_ext
         box          = ldim(1)
         l_nonuniform = params_glob%l_nonuniform
+        fsc_fname    = trim(params_glob%fsc)
         smpd         = params_glob%smpd
+        ! retrieve FSC and calculate optimal filter
+        if( .not.file_exists(fsc_fname) ) THROW_HARD('FSC file: '//fsc_fname//' not found')
+        res   = odd%get_res()
+        fsc   = file2rarr(fsc_fname)
+        optlp = fsc2optlp(fsc)
+        call get_resolution(fsc, res, fsc05, fsc0143)
+        where( res < TINY ) optlp = 0.
+        if( size(optlp) .ne. filtsz )then
+            write(logfhandle,*) 'optlp filtsz: ', size(optlp)
+            write(logfhandle,*) 'odd   filtsz: ', filtsz
+            THROW_HARD('Inconsistent filter dimensions; opt_filter_3D')
+        endif
         ! calculate Fourier index limits for search
-        find_stop   = calc_fourier_index(2. * smpd            , box, smpd)
+        find_stop   = get_lplim_at_corr(fsc, 0.1)
+        if( params_glob%lp_stopres > 0 ) find_stop = calc_fourier_index(params_glob%lp_stopres, box, smpd)
         find_start  = calc_fourier_index(params_glob%lp_lowres, box, smpd)
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
-        if( params_glob%lp_stopres > 0 ) find_stop = calc_fourier_index(params_glob%lp_stopres, box, smpd)
         allocate( in(ldim(1), ldim(2), ldim(3), 2))
         allocate(out(ldim(1), ldim(2), ldim(3), 2))
         !$omp critical
@@ -558,6 +573,16 @@ contains
         plan_bwd = fftwf_plan_many_dft_c2r(3, ldim, N_IMGS, out, ldim, 1, product(ldim),  in, ldim, 1, product(ldim),FFTW_ESTIMATE)
         call fftwf_plan_with_nthreads(1)
         !$omp end critical
+        ! pre-filter odd & even volumes
+        if( params_glob%l_match_filt )then
+            call batch_fft_3D(even, odd, in, out, plan_fwd)
+            call even%shellnorm_and_apply_filter(optlp)
+            call odd%shellnorm_and_apply_filter(optlp)
+            call batch_ifft_3D(even, odd, in, out, plan_bwd)
+        else
+            call even%apply_filter(optlp)
+            call odd%apply_filter(optlp)
+        endif
         call          freq_img%new(ldim, smpd)
         call       weights_img%new(ldim, smpd)
         call  ref_diff_odd_img%new(ldim, smpd)
