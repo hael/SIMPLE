@@ -19,7 +19,7 @@ implicit none
 
 public :: cluster2D_commander_subsets
 public :: init_cluster2D_stream, update_projects_mask, write_project_stream2D, terminate_stream2D
-public :: update_pool_status, update_pool, reject_from_pool, classify_pool
+public :: update_pool_status, update_pool, reject_from_pool, reject_from_pool_online, classify_pool
 public :: update_chunks, classify_new_chunks, import_chunks_into_pool
 public :: update_path
 
@@ -724,9 +724,16 @@ contains
                     endif
                     img = 0.
                     call img%write(trim(POOL_DIR)//trim(refs_glob),icls)
+                    if( l_wfilt )then
+                        call img%write(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))),icls)
+                    endif
                 enddo
                 call img%read(trim(POOL_DIR)//trim(refs_glob), ncls_glob)
                 call img%write(trim(POOL_DIR)//trim(refs_glob), ncls_glob)
+                if( l_wfilt )then
+                    call img%read(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), ncls_glob)
+                    call img%write(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), ncls_glob)
+                endif
                 deallocate(cls_mask)
                 write(logfhandle,'(A,I4,A,I6,A)')'>>> REJECTED FROM POOL: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTER(S)'
             endif
@@ -735,6 +742,65 @@ contains
         endif
         call img%kill
     end subroutine reject_from_pool
+
+    subroutine reject_from_pool_online
+        type(image)          :: img
+        type(oris)           :: cls2reject
+        logical, allocatable :: cls_mask(:)
+        integer              :: nptcls_rejected, ncls_rejected, iptcl
+        integer              :: icls, jcls, i, nl
+        if( .not.pool_available )return
+        if( pool_proj%os_cls2D%get_noris() == 0 ) return
+        if( .not.file_exists(STREAM_REJECT_CLS) ) return
+        nl = nlines(STREAM_REJECT_CLS)
+        call cls2reject%new(nl,is_ptcl=.false.)
+        call cls2reject%read(STREAM_REJECT_CLS)
+        call del_file(STREAM_REJECT_CLS)
+        if( cls2reject%get_noris() == 0 ) return
+        allocate(cls_mask(ncls_glob), source=.false.)
+        do i = 1,cls2reject%get_noris()
+            icls = nint(cls2reject%get(i,'class'))
+            if( icls == 0 ) cycle
+            if( icls > ncls_glob ) cycle
+            if( nint(pool_proj%os_cls2D%get(icls,'pop')) == 0 ) cycle
+            cls_mask(icls) = .true.
+        enddo
+        call cls2reject%kill
+        if( count(cls_mask) == 0 ) return
+        call img%new([box,box,1],smpd)
+        img = 0.
+        ncls_rejected   = 0
+        do icls = 1,ncls_glob
+            if( .not.cls_mask(icls) ) cycle
+            nptcls_rejected = 0
+            do iptcl=1,pool_proj%os_ptcl2D%get_noris()
+                if( pool_proj%os_ptcl2D%get_state(iptcl) == 0 )cycle
+                jcls = nint(pool_proj%os_ptcl2D%get(iptcl,'class'))
+                if( jcls == icls )then
+                    call pool_proj%os_ptcl2D%reject(iptcl)
+                    nptcls_rejected = nptcls_rejected + 1
+                endif
+            enddo
+            if( nptcls_rejected > 0 )then
+                ncls_rejected = ncls_rejected + 1
+                call pool_proj%os_cls2D%set(icls,'pop',0.)
+                call pool_proj%os_cls2D%set(icls,'corr',-1.)
+                call img%write(trim(POOL_DIR)//trim(refs_glob),icls)
+                if( l_wfilt )then
+                    call img%write(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), icls)
+                endif
+                write(logfhandle,'(A,I6,A,I4)')'>>> USER REJECTED FROM POOL: ',nptcls_rejected,' PARTICLE(S) IN CLASS ',icls
+            endif
+
+        enddo
+        call img%read(trim(POOL_DIR)//trim(refs_glob), ncls_glob)
+        call img%write(trim(POOL_DIR)//trim(refs_glob), ncls_glob)
+        if( l_wfilt )then
+            call img%read(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), ncls_glob)
+            call img%write(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), ncls_glob)
+        endif
+        call img%kill
+    end subroutine reject_from_pool_online
 
     subroutine classify_pool
         use simple_ran_tabu
