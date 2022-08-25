@@ -71,6 +71,7 @@ type :: polarft_corrcalc
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:)    !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_drefs_odd(:,:,:,:)     !< derivatives w.r.t. orientation angles of 3D complex matrices
     complex(sp),         allocatable :: pfts_ptcls(:,:,:)           !< 3D complex matrix of particle sections
+    complex(sp),         allocatable :: indat(:,:), cdat(:,:)
     type(fftw_vars),     allocatable :: fftdat(:)                   !< arrays for accelerated gencorrs routines
     type(fftw_carr),     allocatable :: fftdat_ptcls(:,:)           !< for memoization of particle FFTs
     type(heap_vars),     allocatable :: heap_vars(:)                !< allocated fields to save stack allocation in subroutines and functions
@@ -83,6 +84,7 @@ type :: polarft_corrcalc
     logical                          :: l_filt_set   = .false.      !< to indicate whether filter is set
     logical                          :: with_ctf     = .false.      !< CTF flag
     logical                          :: existence    = .false.      !< to indicate existence
+    type(c_ptr)                      :: plan_many_fwd, plan_many_bwd
     contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -204,7 +206,7 @@ contains
         real(dp)              :: A(2)
         real(sp)              :: ang
         integer(kind=c_int)   :: wsdm_ret
-        integer               :: local_stat,irot, k, ithr, i, ik, cnt
+        integer               :: local_stat,irot, k, ithr, i, ik, cnt, narrays
         logical               :: even_dims, test(2)
         ! kill possibly pre-existing object
         call self%kill
@@ -306,6 +308,15 @@ contains
                     &self%pfts_ptcls(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls),&
                     &self%sqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr), self%heap_vars(params_glob%nthr),&
                     &self%fftdat_ptcls(1:self%nptcls,params_glob%kfromto(1):params_glob%kfromto(2)))
+        ! 1d plan_many setup
+        narrays = 1
+        allocate(self%indat(narrays*self%nrots, params_glob%nthr), self%cdat(narrays*self%nrots, params_glob%nthr), source=zero)
+        print *, params_glob%nthr
+        call fftwf_plan_with_nthreads(params_glob%nthr)
+        self%plan_many_fwd = fftwf_plan_many_dft(1, [self%nrots], narrays, self%indat(:,1),&
+                                                   &[self%nrots], 1, self%nrots, self%cdat(:,1),&
+                                                   &[self%nrots], 1, self%nrots, FFTW_FORWARD, FFTW_PATIENT)
+        call fftwf_plan_with_nthreads(1)
         local_stat=0
         do ithr=1,params_glob%nthr
             allocate(self%heap_vars(ithr)%pft_ref(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2)),&
@@ -940,10 +951,12 @@ contains
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
         ! shell normalization and filtering
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
+        if( .not. params_glob%l_nonuniform )then
+            if( self%l_clsfrcs )then
+                call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
+            else
+                call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
+            endif
         endif
         ! multiply with CTF
         if( self%with_ctf ) pft_ref = pft_ref * self%ctfmats(:,:,i)
@@ -991,21 +1004,38 @@ contains
         integer,                 intent(in)    :: i, kfromto(2)
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         real,                    intent(out)   :: corrs_over_k(self%nrots)
-        integer :: ithr, ik, k
+        integer :: ithr, ik, k, offset
         ! get thread index
         ithr = omp_get_thread_num() + 1
+        print *, ithr
         corrs_over_k = 0.
+        ik = 0
+        do k = kfromto(1), kfromto(1)
+            offset = ik*self%nrots
+            self%indat((offset+1           ):(offset+self%pftsz), ithr) = pft_ref(:,k)
+            self%indat((offset+self%pftsz+1):(offset+self%nrots), ithr) = conjg(self%fftdat(ithr)%ref(1:self%pftsz))
+            ik = ik + 1
+        enddo
+        call fftwf_execute_dft(self%plan_many_fwd, self%indat(:, ithr), self%cdat(:, ithr))
+        ik = 0
         do k = kfromto(1),kfromto(2)
+            offset = ik*self%nrots
+            ! retrieve fft values
+            if( k == kfromto(1) ) self%fftdat(ithr)%ref_fft = self%cdat((offset+1):(offset+self%nrots), ithr)
+            if( k == kfromto(1) ) print *, self%fftdat(ithr)%ref_fft(1:5)
             ! reference forward FT
             self%fftdat(ithr)%ref(1:self%pftsz)            = pft_ref(:,k)
             self%fftdat(ithr)%ref(self%pftsz+1:self%nrots) = conjg(self%fftdat(ithr)%ref(1:self%pftsz))
             call fftwf_execute_dft(self%plan_fwd_1, self%fftdat(ithr)%ref, self%fftdat(ithr)%ref_fft)
+            if( k == kfromto(1) ) print *, self%fftdat(ithr)%ref_fft(1:5)
             ! non-redudant product and conjugaison
             self%fftdat(ithr)%product = conjg(self%fftdat(ithr)%ref_fft(1:self%pftsz+1)) * self%fftdat_ptcls(i,k)%ptcl_fft
             ! in-place backward FT
             call fftwf_execute_dft_c2r(self%plan_bwd_1, self%fftdat(ithr)%product, self%fftdat(ithr)%cc)
             corrs_over_k = corrs_over_k + self%fftdat(ithr)%cc(1:self%nrots)
+            ik = ik + 1
         enddo
+        print *, shape(self%fftdat(ithr)%ref), shape(self%fftdat(ithr)%ref_fft), self%nrots
         ! normalization
         corrs_over_k = corrs_over_k  / real(2*self%nrots)
     end subroutine calc_corrs_over_k
@@ -1298,10 +1328,12 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
+        if( .not. params_glob%l_nonuniform )then
+            if( self%l_clsfrcs )then
+                call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
+            else
+                call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
+            endif
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,i)) * shmat
@@ -1356,10 +1388,12 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
+        if( .not. params_glob%l_nonuniform )then
+            if( self%l_clsfrcs )then
+                call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
+            else
+                call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
+            endif
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1545,10 +1579,12 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
+        if( .not. params_glob%l_nonuniform )then
+            if( self%l_clsfrcs )then
+                call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
+            else
+                call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
+            endif
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1590,10 +1626,12 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
+        if( .not. params_glob%l_nonuniform )then
+            if( self%l_clsfrcs )then
+                call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
+            else
+                call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
+            endif
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1643,10 +1681,12 @@ contains
             pft_ref  = self%pfts_refs_odd(:,:,iref)
             pft_dref = self%pfts_drefs_odd(:,:,:,iref)
         endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
+        if( .not. params_glob%l_nonuniform )then
+            if( self%l_clsfrcs )then
+                call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
+            else
+                call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
+            endif
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1690,10 +1730,12 @@ contains
         else
             pft_ref  = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
+        if( .not. params_glob%l_nonuniform )then
+            if( self%l_clsfrcs )then
+                call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
+            else
+                call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
+            endif
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1735,10 +1777,12 @@ contains
             pft_ref  = self%pfts_refs_odd(:,:,iref)
             pft_dref = self%pfts_drefs_odd(:,:,:,iref)
         endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
+        if( .not. params_glob%l_nonuniform )then
+            if( self%l_clsfrcs )then
+                call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
+            else
+                call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
+            endif
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1802,10 +1846,12 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
+        if( .not. params_glob%l_nonuniform )then
+            if( self%l_clsfrcs )then
+                call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
+            else
+                call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
+            endif
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1881,10 +1927,12 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-        else
-            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
+        if( .not. params_glob%l_nonuniform )then
+            if( self%l_clsfrcs )then
+                call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
+            else
+                call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
+            endif
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
