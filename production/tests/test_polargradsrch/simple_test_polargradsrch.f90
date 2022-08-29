@@ -40,7 +40,7 @@ call o%print_ori
 print *,'Shift= 0.0 0.0'
 print *,'---------------------'
 
-call pftcc%new(p%nptcls, [1, p%nptcls], .false.)
+call pftcc%new(p%nptcls, [1, p%nptcls])
 call b%vol%read(p%vols(1))
 call b%vol%mask(p%msk,'soft')
 if( p%gridding.eq.'yes' ) call b%vol%div_w_instrfun(p%interpfun, alpha=p%alpha)

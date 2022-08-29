@@ -376,7 +376,7 @@ contains
         character(len=:), allocatable :: fname
         nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
-        call pftcc%new(nrefs, [1,batchsz_max], params_glob%l_match_filt)
+        call pftcc%new(nrefs, [1,batchsz_max])
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
             call eucl_sigma%new(fname)
