@@ -46,7 +46,9 @@ type, extends(image) :: projector
     procedure, private :: fproject_serial_1
     procedure, private :: fproject_serial_2
     generic            :: fproject_serial => fproject_serial_1, fproject_serial_2
-    procedure          :: fproject_polar
+    generic            :: fproject_polar  => fproject_polar_calc, fproject_polar_cache
+    procedure, private :: fproject_polar_calc
+    procedure, private :: fproject_polar_cache
     procedure          :: fdf_project_polar
     procedure          :: interp_fcomp_norm
     procedure          :: interp_fcomp_grid
@@ -279,7 +281,7 @@ contains
     end subroutine fproject_serial_2
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
-    subroutine fproject_polar( self, iref, e, pftcc, iseven, mask )
+    subroutine fproject_polar_calc( self, iref, e, pftcc, iseven, mask )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         class(projector),        intent(inout) :: self    !< projector object
         integer,                 intent(in)    :: iref    !< which reference
@@ -303,7 +305,34 @@ contains
                 endif
             end do
         end do
-    end subroutine fproject_polar
+    end subroutine fproject_polar_calc
+
+    !> \brief  extracts a polar FT from a volume's expanded FT (self)
+    subroutine fproject_polar_cache( self, iref, e, pftcc, iseven, mask )
+        use simple_polarft_corrcache, only: polarft_corrcache
+        class(projector),         intent(inout) :: self    !< projector object
+        integer,                  intent(in)    :: iref    !< which reference
+        class(ori),               intent(in)    :: e       !< orientation
+        class(polarft_corrcache), intent(inout) :: pftcc   !< object that holds the polar image
+        logical,                  intent(in)    :: iseven  !< eo flag
+        logical,                  intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
+        integer :: irot, k, pdim(3)
+        real    :: vec(3), loc(3), e_rotmat(3,3)
+        pdim = pftcc%get_pdim()
+        e_rotmat = e%get_mat()
+        do irot=1,pdim(1)
+            do k=pdim(2),pdim(3)
+                if( mask(k) )then
+                    vec(:2) = pftcc%get_coord(irot,k)
+                    vec(3)  = 0.
+                    loc     = matmul(vec,e_rotmat)
+                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
+                else
+                    call pftcc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
+                endif
+            end do
+        end do
+    end subroutine fproject_polar_cache
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
     subroutine fdf_project_polar( self, iref, euls, pftcc, iseven, mask )
