@@ -323,10 +323,10 @@ contains
             call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
             if( any(frc > 0.143) )then
                 call fsc2optlp_sub(filtsz, frc, filter)
+                call img_in%fft() ! needs to be here in case the shift was never applied (above)
                 if( params_glob%l_match_filt )then
-                    call pftcc%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kstop))
-                else
-                    call img_in%fft() ! needs to be here in case the shift was never applied (above)
+                    call img_in%shellnorm_and_apply_filter_serial(filter)
+                else                  
                     call img_in%apply_filter_serial(filter)
                 endif
             endif
@@ -461,18 +461,14 @@ contains
             call mskvol%one_at_edge ! to expand before masking of reference
             call opt_filter_3D(build_glob%vol_odd, build_glob%vol, mskvol)
             did_filter = .true.
-            ! e/o masking is performed in preprefvol
+            ! e/o masking is performed in preprefvol, below
             call mskvol%kill
             call build_glob%vol%fft
             call build_glob%vol_odd%fft
         else
             call build_glob%vol%fft
             call build_glob%vol_odd%fft
-            if( params_glob%l_ran_noise_ph )then
-                ! randomize Fourier phases below noise power in a global manner
-                if( params_glob%clsfrcs.eq.'no' )&
-                &call build_glob%vol%ran_phases_below_noise_power(build_glob%vol_odd)
-            endif
+            ! filtering is done in preprefvol, below
         endif
     end subroutine read_and_filter_refvols
 
@@ -489,8 +485,8 @@ contains
         logical,                 intent(in)    :: iseven
         type(projector),  pointer :: vol_ptr => null()
         type(image)               :: mskvol
-        real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
-        integer :: iref, iproj, filtsz
+        real    :: filter(build_glob%img%get_filtsz())
+        integer :: filtsz
         if( iseven )then
             vol_ptr => build_glob%vol
         else
@@ -502,36 +498,19 @@ contains
         endif
         ! Volume filtering
         filtsz = build_glob%img%get_filtsz()
-        if( params_glob%l_match_filt .and. .not. did_filter )then
-            ! stores filters in pftcc
-            if( params_glob%clsfrcs.eq.'yes')then
-                if( file_exists(params_glob%frcs) )then
-                    iproj = 0
-                    do iref = 1,2*build_glob%clsfrcs%get_nprojs()
-                        iproj = iproj+1
-                        if( iproj > build_glob%clsfrcs%get_nprojs() ) iproj = 1
-                        call build_glob%clsfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-                        call fsc2optlp_sub(filtsz, frc, filter)
-                        call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kstop))
-                    enddo
-                endif
-            else
+        if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+            ! no filtering
+        else
+            if( .not. did_filter )then
                 if( any(build_glob%fsc(s,:) > 0.143) )then
                     call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
                 else
                     filter = 1.
                 endif
-                do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
-                    call pftcc%set_ref_optlp(iref, filter(params_glob%kfromto(1):params_glob%kstop))
-                enddo
-            endif
-        else
-            if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-                ! no filtering
-            else if( .not. did_filter )then
                 call vol_ptr%fft()
-                if( any(build_glob%fsc(s,:) > 0.143) )then
-                    call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
+                if( params_glob%l_match_filt )then
+                    call vol_ptr%shellnorm_and_apply_filter(filter)
+                else
                     call vol_ptr%apply_filter(filter)
                 endif
             endif

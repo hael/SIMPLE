@@ -218,14 +218,8 @@ contains
     procedure          :: guinier
     procedure          :: spectrum
     procedure          :: shellnorm
-    procedure, private :: shellnorm_and_apply_filter_1
-    procedure, private :: shellnorm_and_apply_filter_2
-    generic            :: shellnorm_and_apply_filter =>&
-        &shellnorm_and_apply_filter_1, shellnorm_and_apply_filter_2
-    procedure, private :: shellnorm_and_apply_filter_serial_1
-    procedure, private :: shellnorm_and_apply_filter_serial_2
-    generic            :: shellnorm_and_apply_filter_serial =>&
-        &shellnorm_and_apply_filter_serial_1, shellnorm_and_apply_filter_serial_2
+    procedure          :: shellnorm_and_apply_filter
+    procedure          :: shellnorm_and_apply_filter_serial
     procedure          :: ran_phases_below_noise_power
     procedure          :: fcomps_below_noise_power_stats
     procedure          :: apply_bfac
@@ -3077,7 +3071,7 @@ contains
 
     !> \brief  for normalising each shell to uniform (=1) power (assuming average has been
     !!         subtracted in real-space) and applying a filter function
-    subroutine shellnorm_and_apply_filter_serial_1( self, filter )
+    subroutine shellnorm_and_apply_filter_serial( self, filter )
         class(image), intent(inout) :: self
         real,         intent(in)    :: filter(:)
         real, allocatable  :: expec_pow(:)
@@ -3119,50 +3113,11 @@ contains
         phys  = self%fit%comp_addr_phys([0,0,0])
         icomp = aimag(self%cmat(phys(1),phys(2),phys(3)))
         self%cmat(phys(1),phys(2),phys(3)) = cmplx(wzero,icomp)
-    end subroutine shellnorm_and_apply_filter_serial_1
+    end subroutine shellnorm_and_apply_filter_serial
 
     !> \brief  for normalising each shell to uniform (=1) power (assuming average has been
     !!         subtracted in real-space) and applying a filter function
-    subroutine shellnorm_and_apply_filter_serial_2( self, filter )
-        class(image), intent(inout) :: self, filter
-        real, allocatable  :: expec_pow(:)
-        complex            :: comp
-        integer            :: sh, h, k, l, phys(3), lfny, lims(3,2)
-        real               :: icomp, fwght
-        lfny      = self%get_lfny(1)
-        lims      = self%fit%loop_lims(2)
-        ! calculate the expectation value of the signal power in each shell
-        call self%spectrum('power',expec_pow)
-        ! normalise
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    sh   = nint(hyp(real(h),real(k),real(l)))
-                    phys = self%fit%comp_addr_phys([h,k,l])
-                    comp  = filter%get_fcomp([h,k,l],phys)
-                    fwght = real(comp)
-                    if( sh > lfny )then
-                        self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                    else
-                        if( sh == 0 ) cycle
-                        if( expec_pow(sh) > 0. )then
-                            self%cmat(phys(1),phys(2),phys(3)) =&
-                                &fwght * (self%cmat(phys(1),phys(2),phys(3)) / sqrt(expec_pow(sh)))
-                        endif
-                    endif
-                end do
-            end do
-        end do
-        ! take care of the central spot
-        phys  = self%fit%comp_addr_phys([0,0,0])
-        comp  = filter%get_fcomp([0,0,0],phys)
-        icomp = aimag(self%cmat(phys(1),phys(2),phys(3)))
-        self%cmat(phys(1),phys(2),phys(3)) = cmplx(real(comp),icomp)
-    end subroutine shellnorm_and_apply_filter_serial_2
-
-    !> \brief  for normalising each shell to uniform (=1) power (assuming average has been
-    !!         subtracted in real-space) and applying a filter function
-    subroutine shellnorm_and_apply_filter_1( self, filter )
+    subroutine shellnorm_and_apply_filter( self, filter )
         class(image), intent(inout) :: self
         real,         intent(in)    :: filter(:)
         real, allocatable  :: expec_pow(:)
@@ -3207,49 +3162,7 @@ contains
         phys  = self%fit%comp_addr_phys([0,0,0])
         icomp = aimag(self%cmat(phys(1),phys(2),phys(3)))
         self%cmat(phys(1),phys(2),phys(3)) = cmplx(wzero,icomp)
-    end subroutine shellnorm_and_apply_filter_1
-
-    !> \brief  for normalising each shell to uniform (=1) power (assuming average has been
-    !!         subtracted in real-space) and applying a filter function
-    subroutine shellnorm_and_apply_filter_2( self, filter )
-        class(image), intent(inout) :: self, filter
-        real, allocatable  :: expec_pow(:)
-        complex            :: comp
-        integer            :: sh, h, k, l, phys(3), lfny, lims(3,2)
-        real               :: icomp, fwght
-        lfny      = self%get_lfny(1)
-        lims      = self%fit%loop_lims(2)
-        ! calculate the expectation value of the signal power in each shell
-        call self%spectrum('power',expec_pow )
-        ! normalise
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys,comp,fwght)&
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    sh   = nint(hyp(real(h),real(k),real(l)))
-                    phys = self%fit%comp_addr_phys([h,k,l])
-                    comp  = filter%get_fcomp([h,k,l],phys)
-                    fwght = real(comp)
-                    if( sh > lfny )then
-                        self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                    else
-                        if( sh == 0 ) cycle
-                        if( expec_pow(sh) > 0. )then
-                            self%cmat(phys(1),phys(2),phys(3)) =&
-                                &fwght * (self%cmat(phys(1),phys(2),phys(3)) / sqrt(expec_pow(sh)))
-                        endif
-                    endif
-                end do
-            end do
-        end do
-        !$omp end parallel do
-        ! take care of the central spot
-        phys  = self%fit%comp_addr_phys([0,0,0])
-        comp  = filter%get_fcomp([0,0,0],phys)
-        icomp = aimag(self%cmat(phys(1),phys(2),phys(3)))
-        self%cmat(phys(1),phys(2),phys(3)) = cmplx(real(comp),icomp)
-    end subroutine shellnorm_and_apply_filter_2
+    end subroutine shellnorm_and_apply_filter
 
     !> \brief apply_bfac  is for applying bfactor to an image
     subroutine apply_bfac( self, b )

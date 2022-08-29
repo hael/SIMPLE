@@ -36,7 +36,7 @@ p%kfromto(1)  = 3
 p%kfromto(2)  = calc_fourier_index(p%lp, p%box, p%smpd)
 p%kstop       = p%kfromto(2)
 call b%build_general_tbox(p, cline)
-call cftcc%new(1, [1, 1], .false.)
+call cftcc%new(1, [1, 1])
 call img%new([p%box,p%box,1], p%smpd)
 img = 0.0
 call img%add_gauran(0.5)
@@ -47,7 +47,7 @@ call cftcc%set_ref(1, img, .true.)
 print *,'cc=',cftcc%calc_corr( 1, 1, [0.0,0.0] )
 
 ! check orientation assignment
-call cftcc%new(p%nptcls, [1, p%nptcls], .false.)
+call cftcc%new(p%nptcls, [1, p%nptcls])
 do iref = 1, p%nptcls
     call img%read(p%stk, iref)
     call img%fft
@@ -78,7 +78,7 @@ else
 endif
 
 ! check shift search
-call cftcc%new(p%nptcls, [1, p%nptcls], .false.)
+call cftcc%new(p%nptcls, [1, p%nptcls])
 do iref = 1, p%nptcls
     call img%read(p%stk, iref)
     call img%fft
