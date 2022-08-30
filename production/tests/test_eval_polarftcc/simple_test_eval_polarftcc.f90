@@ -1,7 +1,6 @@
 program simple_test_eval_polarftcc
     include 'simple_lib.f08'
     use simple_polarft_corrcalc,    only: polarft_corrcalc
-    use simple_polarft_corrcache,   only: polarft_corrcache
     use simple_cmdline,             only: cmdline
     use simple_builder,             only: builder, build_glob
     use simple_parameters,          only: parameters
@@ -11,7 +10,6 @@ program simple_test_eval_polarftcc
     implicit none
     type(parameters)         :: p
     type(polarft_corrcalc)   :: pftcc
-    type(polarft_corrcache)  :: pftcc_cache
     type(cmdline)            :: cline
     type(builder)            :: b
     type(ori)                :: o
@@ -45,18 +43,14 @@ program simple_test_eval_polarftcc
     print *,'---------------------'
     
     call pftcc%new(p%nptcls, [1, p%nptcls])
-    call pftcc_cache%new(p%nptcls, [1, p%nptcls], .false.)
     call b%vol%read(p%vols(1))
     call b%vol%mask(p%msk,'soft')
     if( p%gridding.eq.'yes' ) call b%vol%div_w_instrfun(p%interpfun, alpha=p%alpha)
     call b%vol%fft()
     call b%vol%expand_cmat(p%alpha,norm4proj=.true.)
     call b%vol%fproject_polar(1, o, pftcc,       iseven=.true., mask=b%l_resmsk)
-    call b%vol%fproject_polar(1, o, pftcc_cache, iseven=.true., mask=b%l_resmsk)
     call pftcc%cp_even_ref2ptcl(1,1)
-    call pftcc_cache%cp_even_ref2ptcl(1,1)
     call pftcc%set_eo(1, .true. )
-    call pftcc_cache%set_eo(1, .true. )
         
     if( o%e3get() < 0.)then
         call o%e3set(o%e3get() - 29.5)
@@ -64,7 +58,6 @@ program simple_test_eval_polarftcc
         call o%e3set(o%e3get() + 29.5)
     endif
     call b%vol%fproject_polar(1, o, pftcc,       iseven=.true., mask=b%l_resmsk)
-    call b%vol%fproject_polar(1, o, pftcc_cache, iseven=.true., mask=b%l_resmsk)
     shvec(1) = -2.
     shvec(2) =  2.
     print *,'Ref orientation:'
@@ -73,24 +66,15 @@ program simple_test_eval_polarftcc
     print *,'---------------------'
     
     call pftcc%shift_ptcl(1,shvec)
-    call pftcc_cache%shift_ptcl(1,shvec)
     call pftcc%memoize_ffts
-    call pftcc_cache%memoize_ffts
 
     !### TIMING
     allocate(cc_fft(pftcc%get_nrots()))
     tfft = tic()
-    call pftcc_cache%gencorrs(1, 1, cc_fft)
+    call pftcc%gencorrs(1, 1, cc_fft)
     print *, 'time of gencorrs (no cache): ', toc(tfft)
     loc = maxloc(cc_fft, dim=1)
     print *, pftcc%get_rot(loc)
-
-    cc_fft = 0.
-    tfft = tic()
-    call pftcc_cache%gencorrs_cache(1, 1, cc_fft)
-    print *, 'time of gencorrs (with cache): ', toc(tfft)
-    loc = maxloc(cc_fft, dim=1)
-    print *, pftcc_cache%get_rot(loc)
 
     ! searching
     lims(:,1) = -5.
