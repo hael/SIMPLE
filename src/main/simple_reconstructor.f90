@@ -49,7 +49,7 @@ type, extends(image) :: reconstructor
     ! GETTER
     procedure          :: get_kbwin
     ! I/O
-    procedure          :: write_rho
+    procedure          :: write_rho, write_rho_as_mrc
     procedure          :: read_rho
     ! CONVOLUTION INTERPOLATION
     procedure          :: insert_plane
@@ -553,6 +553,35 @@ contains
         end do
         !$omp end parallel do
     end subroutine expand_exp
+
+    subroutine write_rho_as_mrc( self, fname )
+        class(reconstructor), intent(inout) :: self
+        character(len=*), intent(in) :: fname
+        type(image) :: img
+        integer :: c,phys(3),h,k,m
+        call img%new([self%rho_shape(2),self%rho_shape(2),self%rho_shape(2)], 1.0)
+        c = self%rho_shape(2)/2+1
+        !$omp parallel do collapse(3) private(h,k,m,phys) schedule(static) default(shared) proc_bind(close)
+        do h = 0,self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                do m = self%lims(3,1),self%lims(3,2)
+                    if (h > 0) then
+                        phys(1) = h + 1
+                        phys(2) = k + 1 + MERGE(self%ldim_img(2),0,k < 0)
+                        phys(3) = m + 1 + MERGE(self%ldim_img(3),0,m < 0)
+                    else
+                        phys(1) = -h + 1
+                        phys(2) = -k + 1 + MERGE(self%ldim_img(2),0,-k < 0)
+                        phys(3) = -m + 1 + MERGE(self%ldim_img(3),0,-m < 0)
+                    endif
+                    call img%set([1+h,k+c,m+c], self%rho(phys(1),phys(2),phys(3)))
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        call img%write(fname)
+        call img%kill
+    end subroutine write_rho_as_mrc
 
     ! SUMMATION
 
