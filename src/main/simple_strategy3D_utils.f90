@@ -17,7 +17,7 @@ contains
         use simple_ori, only: ori
         class(strategy3D_srch), intent(inout) :: s
         type(ori) :: osym, o_prev, o_new
-        integer   :: ref, inpl, state, neff_states, loc(1)
+        integer   :: ref, inpl, state, neff_states, loc(1), nrefs_eval, nrefs_tot
         real      :: shvec(2), shvec_incr(2), mi_state, euldist, dist_inpl, corr, mi_proj, frac, pw
         logical   :: l_multistates
         ! stash previous ori
@@ -66,10 +66,6 @@ contains
         call build_glob%spproj_field%set(s%iptcl, 'corr', corr)
         ! specscore
         call build_glob%spproj_field%set(s%iptcl, 'specscore', s%specscore)
-        ! weight
-        pw = 1.0
-        if( s%l_ptclw ) call calc_ori_weight(s, ref, pw)
-        call build_glob%spproj_field%set(s%iptcl, 'w', pw)
         ! angular distances
         call build_glob%spproj_field%get_ori(s%iptcl, o_new)
         call build_glob%pgrpsyms%sym_dists(o_prev, o_new, osym, euldist, dist_inpl)
@@ -88,30 +84,40 @@ contains
         neff_states = 1
         if( l_multistates ) neff_states = count(s3D%state_exists)
         if( s%l_neigh )then
+            nrefs_tot  = s%nnn * neff_states
             if( s%nnn > 1 )then
-                frac = 100. * real(s%nrefs_eval) / real(s%nnn * neff_states)
+                nrefs_eval = s%nrefs_eval
             else
-                ! the case of global srch
-                frac = 100.
+                nrefs_eval = nrefs_tot  ! the case of global srch
             endif
         else if( s%l_greedy .or. s%l_cont )then
-            frac = 100.
+            nrefs_tot  = s%nprojs * neff_states
+            nrefs_eval = nrefs_tot
         else
-            frac = 100. * real(s%nrefs_eval) / real(s%nprojs * neff_states)
+            nrefs_eval = s%nrefs_eval
+            nrefs_tot  = s%nprojs * neff_states
         endif
+        frac = 100.0 * real(nrefs_eval) / real(nrefs_tot)
         call build_glob%spproj_field%set(s%iptcl, 'frac', frac)
+        ! weight
+        pw = 1.0
+        if( s%l_ptclw ) call calc_ori_weight(s, ref, nrefs_eval, nrefs_tot, frac, pw)
+        call build_glob%spproj_field%set(s%iptcl, 'w', pw)
         ! destruct
         call osym%kill
         call o_prev%kill
         call o_new%kill
     end subroutine extract_peak_ori
 
-    subroutine calc_ori_weight( s, ref, pw )
+    subroutine calc_ori_weight( s, ref, nrefs_eval, nrefs_tot, frac, pw )
         class(strategy3D_srch), intent(in)  :: s
-        integer,                intent(in)  :: ref
+        integer,                intent(in)  :: ref, nrefs_eval, nrefs_tot
+        real,                   intent(in)  :: frac ! in %
         real,                   intent(out) :: pw
         real(dp) :: sumw, diff2, max_diff2
         integer  :: iref, npix
+        pw = 1.0
+        ! Accumulate sum of significant individual weights
         if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
             npix      = pftcc_glob%get_npix()
             max_diff2 = corr2distweight(s3D%proj_space_corrs(s%ithr,ref), npix, params_glob%tau)
@@ -132,7 +138,12 @@ contains
                 endif
             enddo
         endif
-        pw = min(1.0,real(1.d0 / sumw))
+        ! adjust sum for size of the stochastic search space
+        if( frac < 99.0 )then
+            if( nrefs_eval > 1 ) sumw = 1.d0 + (sumw-1.d0) * real(nrefs_tot-1,dp)/real(nrefs_eval-1,dp)
+        endif
+        ! weight
+        pw = max(0.0,min(1.0,real(1.d0 / sumw)))
     end subroutine calc_ori_weight
 
 end module simple_strategy3D_utils
