@@ -1364,6 +1364,7 @@ contains
         call cline%set('dir_exec', 'selection')
         call cline%set('mkdir',    'yes')
         call build%init_params_and_build_spproj(cline,params)
+        call build%spproj%update_projinfo(cline)
         ! find number of selected cavgs
         call find_ldim_nptcls(params%stk2, lfoo, nsel)
         ! find number of original cavgs
@@ -1415,6 +1416,7 @@ contains
         call cline%set('dir_exec', 'state_mapping')
         call cline%set('mkdir',    'yes')
         call build%init_params_and_build_spproj(cline,params)
+        call build%spproj%update_projinfo(cline)
         call read_filetable(params%stktab, stkfnames)
         ! find number of original cavgs
         if( .not. cline%defined('stk' ) )then
