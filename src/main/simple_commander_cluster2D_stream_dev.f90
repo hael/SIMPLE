@@ -19,7 +19,7 @@ implicit none
 
 public :: cluster2D_commander_subsets
 public :: init_cluster2D_stream, update_projects_mask, write_project_stream2D, terminate_stream2D
-public :: update_pool_status, update_pool, reject_from_pool, reject_from_pool_online, classify_pool
+public :: update_pool_status, update_pool, reject_from_pool, reject_from_pool_user, classify_pool
 public :: update_chunks, classify_new_chunks, import_chunks_into_pool
 public :: update_path
 
@@ -743,7 +743,7 @@ contains
         call img%kill
     end subroutine reject_from_pool
 
-    subroutine reject_from_pool_online
+    subroutine reject_from_pool_user
         type(image)          :: img
         type(oris)           :: cls2reject
         logical, allocatable :: cls_mask(:)
@@ -753,6 +753,7 @@ contains
         if( pool_proj%os_cls2D%get_noris() == 0 ) return
         if( .not.file_exists(STREAM_REJECT_CLS) ) return
         nl = nlines(STREAM_REJECT_CLS)
+        if( nl == 0 ) return
         call cls2reject%new(nl,is_ptcl=.false.)
         call cls2reject%read(STREAM_REJECT_CLS)
         call del_file(STREAM_REJECT_CLS)
@@ -800,7 +801,7 @@ contains
             call img%write(trim(POOL_DIR)//trim(add2fbody(refs_glob, params_glob%ext,trim(WFILT_SUFFIX))), ncls_glob)
         endif
         call img%kill
-    end subroutine reject_from_pool_online
+    end subroutine reject_from_pool_user
 
     subroutine classify_pool
         use simple_ran_tabu
