@@ -1638,14 +1638,6 @@ contains
                 THROW_HARD('box directory does not exist; exec_extract')
             endif
             call cline%set('dir_box', params%dir_box)
-            ! all micrographs are re-activated
-            do imic = 1, nmics_tot
-                call spproj%os_mic%get_ori(imic, o_mic)
-                if( o_mic%isthere('imgkind') )then
-                    call o_mic%getter('imgkind', imgkind)
-                    if( trim(imgkind) .eq. 'mic' ) call spproj%os_mic%set(imic,'state',1.)
-                endif
-            enddo
         endif
         call spproj%write(params%projfile)
         ! sanity checks
