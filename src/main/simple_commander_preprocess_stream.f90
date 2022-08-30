@@ -284,7 +284,7 @@ contains
                 call update_pool_status
                 call update_pool
                 call reject_from_pool
-                ! call reject_from_pool_online
+                ! call reject_from_pool_user
                 call write_project_stream2D(.true.)
                 call import_chunks_into_pool(.false., nchunks_imported)
                 call classify_pool
