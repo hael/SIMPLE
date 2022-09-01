@@ -549,7 +549,8 @@ contains
         fsc_fname    = trim(params_glob%fsc)
         smpd         = params_glob%smpd
         ! retrieve FSC and calculate optimal filter
-        if( params_glob%l_fsc_prefilt )then
+        print *, params_glob%fsc_prefilt
+        if( params_glob%fsc_prefilt == 'yes' )then
             if( .not.file_exists(fsc_fname) ) THROW_HARD('FSC file: '//fsc_fname//' not found')
             res   = odd%get_res()
             fsc   = file2rarr(fsc_fname)
@@ -581,7 +582,7 @@ contains
             call even%shellnorm()
             call  odd%shellnorm()
         endif
-        if( params_glob%l_fsc_prefilt )then
+        if( params_glob%fsc_prefilt == 'yes' )then
             call even%apply_filter(optlp)
             call  odd%apply_filter(optlp)
         endif

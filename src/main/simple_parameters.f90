@@ -47,6 +47,7 @@ type :: parameters
     character(len=3)      :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)      :: for3D='yes'          !< for 3D analysis(yes|no){yes}
+    character(len=3)      :: fsc_prefilt='yes'    !< fsc prefiltering(yes|no){yes}
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)      :: graphene_filt='no'   !< filter out graphene bands in correcation search
     character(len=3)      :: gridding='no'        !< to test gridding correction
@@ -453,7 +454,6 @@ type :: parameters
     logical :: l_envfsc       = .false.
     logical :: l_focusmsk     = .false.
     logical :: l_frac_update  = .false.
-    logical :: l_fsc_prefilt  = .true.
     logical :: l_graphene     = .false.
     logical :: l_incrreslim   = .false.
     logical :: l_lpset        = .false.
@@ -556,6 +556,7 @@ contains
         call check_carg('fill_holes',     self%fill_holes)
         call check_carg('filter',         self%filter)
         call check_carg('for3D',          self%for3D)
+        call check_carg('fsc_prefilt',    self%fsc_prefilt)
         call check_carg('groupframes',    self%groupframes)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
