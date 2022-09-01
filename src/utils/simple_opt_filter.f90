@@ -549,16 +549,18 @@ contains
         fsc_fname    = trim(params_glob%fsc)
         smpd         = params_glob%smpd
         ! retrieve FSC and calculate optimal filter
-        if( .not.file_exists(fsc_fname) ) THROW_HARD('FSC file: '//fsc_fname//' not found')
-        res   = odd%get_res()
-        fsc   = file2rarr(fsc_fname)
-        optlp = fsc2optlp(fsc)
-        call get_resolution(fsc, res, fsc05, fsc0143)
-        where( res < TINY ) optlp = 0.
-        if( size(optlp) .ne. filtsz )then
-            write(logfhandle,*) 'optlp filtsz: ', size(optlp)
-            write(logfhandle,*) 'odd   filtsz: ', filtsz
-            THROW_HARD('Inconsistent filter dimensions; opt_filter_3D')
+        if( params_glob%l_fsc_prefilt )then
+            if( .not.file_exists(fsc_fname) ) THROW_HARD('FSC file: '//fsc_fname//' not found')
+            res   = odd%get_res()
+            fsc   = file2rarr(fsc_fname)
+            optlp = fsc2optlp(fsc)
+            call get_resolution(fsc, res, fsc05, fsc0143)
+            where( res < TINY ) optlp = 0.
+            if( size(optlp) .ne. filtsz )then
+                write(logfhandle,*) 'optlp filtsz: ', size(optlp)
+                write(logfhandle,*) 'odd   filtsz: ', filtsz
+                THROW_HARD('Inconsistent filter dimensions; opt_filter_3D')
+            endif
         endif
         ! calculate Fourier index limits for search
         find_stop   = get_lplim_at_corr(fsc, 0.1)
@@ -574,15 +576,16 @@ contains
         call fftwf_plan_with_nthreads(1)
         !$omp end critical
         ! pre-filter odd & even volumes
+        call batch_fft_3D(even, odd, in, out, plan_fwd)
         if( params_glob%l_match_filt )then
-            call batch_fft_3D(even, odd, in, out, plan_fwd)
-            call even%shellnorm_and_apply_filter(optlp)
-            call odd%shellnorm_and_apply_filter(optlp)
-            call batch_ifft_3D(even, odd, in, out, plan_bwd)
-        else
-            call even%apply_filter(optlp)
-            call odd%apply_filter(optlp)
+            call even%shellnorm()
+            call  odd%shellnorm()
         endif
+        if( params_glob%l_fsc_prefilt )then
+            call even%apply_filter(optlp)
+            call  odd%apply_filter(optlp)
+        endif
+        call batch_ifft_3D(even, odd, in, out, plan_bwd)
         call          freq_img%new(ldim, smpd)
         call       weights_img%new(ldim, smpd)
         call  ref_diff_odd_img%new(ldim, smpd)

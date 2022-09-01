@@ -453,6 +453,7 @@ type :: parameters
     logical :: l_envfsc       = .false.
     logical :: l_focusmsk     = .false.
     logical :: l_frac_update  = .false.
+    logical :: l_fsc_prefilt  = .true.
     logical :: l_graphene     = .false.
     logical :: l_incrreslim   = .false.
     logical :: l_lpset        = .false.

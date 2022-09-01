@@ -508,11 +508,8 @@ contains
                     filter = 1.
                 endif
                 call vol_ptr%fft()
-                if( params_glob%l_match_filt )then
-                    call vol_ptr%shellnorm_and_apply_filter(filter)
-                else
-                    call vol_ptr%apply_filter(filter)
-                endif
+                if( params_glob%l_match_filt )  call vol_ptr%shellnorm
+                if( params_glob%l_fsc_prefilt ) call vol_ptr%apply_filter(filter)
             endif
         endif
         ! back to real space

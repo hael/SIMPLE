@@ -1458,16 +1458,22 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        sqsum_ref  = 0.
-        sqsum_ptcl = 0.
-        corr       = 0.
-        do ik = params_glob%kfromto(1),params_glob%kstop
-            sqsum_ref  = sqsum_ref  + real(ik) * sum(csq_fast(pft_ref(:,ik)))
-            sqsum_ptcl = sqsum_ptcl + real(ik) * sum(csq_fast(self%pfts_ptcls(:,ik,self%pinds(iptcl))))
-            corr       = corr + &
-                real(ik) * self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), ik, irot)
-        end do
-        cc = corr / sqrt(sqsum_ref * sqsum_ptcl)
+        if( .not.params_glob%l_match_filt )then
+            sqsum_ref  = 0.
+            sqsum_ptcl = 0.
+            corr       = 0.
+            do ik = params_glob%kfromto(1),params_glob%kstop
+                sqsum_ref  = sqsum_ref  + real(ik) * sum(csq_fast(pft_ref(:,ik)))
+                sqsum_ptcl = sqsum_ptcl + real(ik) * sum(csq_fast(self%pfts_ptcls(:,ik,self%pinds(iptcl))))
+                corr       = corr + &
+                    real(ik) * self%calc_corrk_for_rot(pft_ref, self%pinds(iptcl), ik, irot)
+            end do
+            cc = corr / sqrt(sqsum_ref * sqsum_ptcl)
+        else
+            sqsum_ref = sum(csq_fast(pft_ref(:,params_glob%kfromto(1):params_glob%kstop)))
+            corr      = self%calc_corr_for_rot(pft_ref, self%pinds(iptcl), irot)
+            cc        = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
+        endif
     end function gencorr_cc_for_rot
 
     function gencorr_cc_for_rot_8( self, iref, iptcl, shvec, irot ) result( cc )
@@ -1492,16 +1498,22 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        sqsum_ref  = 0._dp
-        sqsum_ptcl = 0._dp
-        corr       = 0._dp
-        do ik = params_glob%kfromto(1),params_glob%kstop
-            sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * sum(csq_fast(pft_ref(:,ik)))
-            sqsum_ptcl = sqsum_ptcl + real(ik,kind=dp) * sum(csq_fast(self%pfts_ptcls(:,ik,self%pinds(iptcl))))
-            corr       = corr + &
-                real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), ik, irot)
-        end do
-        cc = corr / sqrt(sqsum_ref * sqsum_ptcl)
+        if( .not.params_glob%l_match_filt )then
+            sqsum_ref  = 0._dp
+            sqsum_ptcl = 0._dp
+            corr       = 0._dp
+            do ik = params_glob%kfromto(1),params_glob%kstop
+                sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * sum(csq_fast(pft_ref(:,ik)))
+                sqsum_ptcl = sqsum_ptcl + real(ik,kind=dp) * sum(csq_fast(self%pfts_ptcls(:,ik,self%pinds(iptcl))))
+                corr       = corr + &
+                    real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), ik, irot)
+            end do
+            cc = corr / sqrt(sqsum_ref * sqsum_ptcl)
+        else
+            sqsum_ref = sum(csq_fast(pft_ref(:,params_glob%kfromto(1):params_glob%kstop)))
+            corr      = self%calc_corr_for_rot_8(pft_ref, self%pinds(iptcl), irot)
+            cc        = corr  / sqrt(sqsum_ref * self%sqsums_ptcls(self%pinds(iptcl)))
+        endif
     end function gencorr_cc_for_rot_8
 
     function gencorr_cont_grad_cc_for_rot_8( self, iref, iptcl, shvec, irot, dcc ) result( cc )
@@ -1678,27 +1690,39 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        ! use jacobian resolution weights
-        sqsum_ref  = 0._dp
-        sqsum_ptcl = 0._dp
-        corr       = 0._dp
-        grad(1)    = 0._dp
-        grad(2)    = 0._dp
-        do ik = params_glob%kfromto(1),params_glob%kstop
-            sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * sum(csq_fast(pft_ref(:,ik)))
-            sqsum_ptcl = sqsum_ptcl + real(ik,kind=dp) * sum(csq_fast(self%pfts_ptcls(:,ik,self%pinds(iptcl))))
-            corr       = corr + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), ik, irot)
-        end do
-        pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
-        do ik = params_glob%kfromto(1),params_glob%kstop
-            grad(1) = grad(1) + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), ik, irot)
-        end do
-        pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
-        do ik = params_glob%kfromto(1),params_glob%kstop
-            grad(2) = grad(2) + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), ik, irot)
-        end do
-        f    = corr / sqrt(sqsum_ref*sqsum_ptcl)
-        grad = grad / sqrt(sqsum_ref*sqsum_ptcl)
+        if( params_glob%l_match_filt )then
+            denom       = sqrt(sum(csq_fast(pft_ref(:,params_glob%kfromto(1):params_glob%kstop))) * self%sqsums_ptcls(self%pinds(iptcl)))
+            corr        = self%calc_corr_for_rot_8(pft_ref, self%pinds(iptcl), irot)
+            f           = corr  / denom
+            pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
+            corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
+            grad(1)     = corr / denom
+            pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
+            corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
+            grad(2)     = corr / denom
+        else
+            ! use jacobian resolution weights
+            sqsum_ref  = 0._dp
+            sqsum_ptcl = 0._dp
+            corr       = 0._dp
+            grad(1)    = 0._dp
+            grad(2)    = 0._dp
+            do ik = params_glob%kfromto(1),params_glob%kstop
+                sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * sum(csq_fast(pft_ref(:,ik)))
+                sqsum_ptcl = sqsum_ptcl + real(ik,kind=dp) * sum(csq_fast(self%pfts_ptcls(:,ik,self%pinds(iptcl))))
+                corr       = corr + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), ik, irot)
+            end do
+            pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
+            do ik = params_glob%kfromto(1),params_glob%kstop
+                grad(1) = grad(1) + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), ik, irot)
+            end do
+            pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
+            do ik = params_glob%kfromto(1),params_glob%kstop
+                grad(2) = grad(2) + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), ik, irot)
+            end do
+            f    = corr / sqrt(sqsum_ref*sqsum_ptcl)
+            grad = grad / sqrt(sqsum_ref*sqsum_ptcl)
+        endif
     end subroutine gencorr_cc_grad_for_rot_8
 
     subroutine gencorr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
@@ -1740,25 +1764,35 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        sqsum_ref  = 0._dp
-        sqsum_ptcl = 0._dp
-        grad(1)    = 0._dp
-        grad(2)    = 0._dp
-        do ik = params_glob%kfromto(1),params_glob%kstop
-            sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * sum(csq_fast(pft_ref(:,ik)))
-            sqsum_ptcl = sqsum_ptcl + real(ik,kind=dp) * sum(csq_fast(self%pfts_ptcls(:,ik,self%pinds(iptcl))))
-        end do
-        pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
-        do ik = params_glob%kfromto(1),params_glob%kstop
-            grad(1) = grad(1) + &
-                real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), ik, irot)
-        end do
-        pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
-        do ik = params_glob%kfromto(1),params_glob%kstop
-            grad(2) = grad(2) + &
-                real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), ik, irot)
-        end do
-        grad = grad / sqrt(sqsum_ref*sqsum_ptcl)
+        if( params_glob%l_match_filt )then
+            denom       = sqrt(sum(csq_fast(pft_ref(:,params_glob%kfromto(1):params_glob%kstop))) * self%sqsums_ptcls(self%pinds(iptcl)))
+            pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
+            corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
+            grad(1)     = corr / denom
+            pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
+            corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
+            grad(2)     = corr / denom
+        else
+            sqsum_ref  = 0._dp
+            sqsum_ptcl = 0._dp
+            grad(1)    = 0._dp
+            grad(2)    = 0._dp
+            do ik = params_glob%kfromto(1),params_glob%kstop
+                sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * sum(csq_fast(pft_ref(:,ik)))
+                sqsum_ptcl = sqsum_ptcl + real(ik,kind=dp) * sum(csq_fast(self%pfts_ptcls(:,ik,self%pinds(iptcl))))
+            end do
+            pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(:self%pftsz,:)
+            do ik = params_glob%kfromto(1),params_glob%kstop
+                grad(1) = grad(1) + &
+                    real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), ik, irot)
+            end do
+            pft_ref_tmp = pft_ref * (0.d0, 1.d0) * self%argtransf(self%pftsz + 1:,:)
+            do ik = params_glob%kfromto(1),params_glob%kstop
+                grad(2) = grad(2) + &
+                    real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), ik, irot)
+            end do
+            grad = grad / sqrt(sqsum_ref*sqsum_ptcl)
+        endif
     end subroutine gencorr_cc_grad_only_for_rot_8
 
     real(sp) function gencorr_euclid_for_rot( self, iref, iptcl, shvec, irot )
