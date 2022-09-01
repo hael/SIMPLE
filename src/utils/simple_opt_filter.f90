@@ -549,7 +549,6 @@ contains
         fsc_fname    = trim(params_glob%fsc)
         smpd         = params_glob%smpd
         ! retrieve FSC and calculate optimal filter
-        print *, params_glob%fsc_prefilt
         if( params_glob%fsc_prefilt == 'yes' )then
             if( .not.file_exists(fsc_fname) ) THROW_HARD('FSC file: '//fsc_fname//' not found')
             res   = odd%get_res()
