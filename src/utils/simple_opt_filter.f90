@@ -549,18 +549,16 @@ contains
         fsc_fname    = trim(params_glob%fsc)
         smpd         = params_glob%smpd
         ! retrieve FSC and calculate optimal filter
-        if( params_glob%fsc_prefilt == 'yes' )then
-            if( .not.file_exists(fsc_fname) ) THROW_HARD('FSC file: '//fsc_fname//' not found')
-            res   = odd%get_res()
-            fsc   = file2rarr(fsc_fname)
-            optlp = fsc2optlp(fsc)
-            call get_resolution(fsc, res, fsc05, fsc0143)
-            where( res < TINY ) optlp = 0.
-            if( size(optlp) .ne. filtsz )then
-                write(logfhandle,*) 'optlp filtsz: ', size(optlp)
-                write(logfhandle,*) 'odd   filtsz: ', filtsz
-                THROW_HARD('Inconsistent filter dimensions; opt_filter_3D')
-            endif
+        if( .not.file_exists(fsc_fname) ) THROW_HARD('FSC file: '//fsc_fname//' not found')
+        res   = odd%get_res()
+        fsc   = file2rarr(fsc_fname)
+        optlp = fsc2optlp(fsc)
+        call get_resolution(fsc, res, fsc05, fsc0143)
+        where( res < TINY ) optlp = 0.
+        if( size(optlp) .ne. filtsz )then
+            write(logfhandle,*) 'optlp filtsz: ', size(optlp)
+            write(logfhandle,*) 'odd   filtsz: ', filtsz
+            THROW_HARD('Inconsistent filter dimensions; opt_filter_3D')
         endif
         ! calculate Fourier index limits for search
         find_stop   = get_lplim_at_corr(fsc, 0.1)
