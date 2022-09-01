@@ -574,16 +574,15 @@ contains
         call fftwf_plan_with_nthreads(1)
         !$omp end critical
         ! pre-filter odd & even volumes
-        call batch_fft_3D(even, odd, in, out, plan_fwd)
         if( params_glob%l_match_filt )then
-            call even%shellnorm()
-            call  odd%shellnorm()
-        endif
-        if( params_glob%fsc_prefilt == 'yes' )then
+            call batch_fft_3D(even, odd, in, out, plan_fwd)
+            call even%shellnorm_and_apply_filter(optlp)
+            call odd%shellnorm_and_apply_filter(optlp)
+            call batch_ifft_3D(even, odd, in, out, plan_bwd)
+        else
             call even%apply_filter(optlp)
-            call  odd%apply_filter(optlp)
+            call odd%apply_filter(optlp)
         endif
-        call batch_ifft_3D(even, odd, in, out, plan_bwd)
         call          freq_img%new(ldim, smpd)
         call       weights_img%new(ldim, smpd)
         call  ref_diff_odd_img%new(ldim, smpd)

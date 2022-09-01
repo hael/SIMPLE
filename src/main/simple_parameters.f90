@@ -47,7 +47,6 @@ type :: parameters
     character(len=3)      :: fill_holes='no'      !< fill the holes post binarisation(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)      :: for3D='yes'          !< for 3D analysis(yes|no){yes}
-    character(len=3)      :: fsc_prefilt='yes'    !< fsc prefiltering(yes|no){yes}
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)      :: graphene_filt='no'   !< filter out graphene bands in correcation search
     character(len=3)      :: gridding='no'        !< to test gridding correction
@@ -82,7 +81,6 @@ type :: parameters
     character(len=3)      :: projstats='no'
     character(len=3)      :: roavg='no'           !< rotationally average images in stack
     character(len=3)      :: clsfrcs='no'
-    character(len=3)      :: ran_noise_ph='yes'   !< randomize phases below the noise power
     character(len=3)      :: readwrite='no'
     character(len=3)      :: remap_cls='no'
     character(len=3)      :: restart='no'
@@ -462,7 +460,6 @@ type :: parameters
     logical :: l_needs_sigma  = .false.
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
-    logical :: l_ran_noise_ph = .true.
     logical :: l_refine_inpl  = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
@@ -557,7 +554,6 @@ contains
         call check_carg('fill_holes',     self%fill_holes)
         call check_carg('filter',         self%filter)
         call check_carg('for3D',          self%for3D)
-        call check_carg('fsc_prefilt',    self%fsc_prefilt)
         call check_carg('groupframes',    self%groupframes)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
@@ -611,7 +607,6 @@ contains
         call check_carg('ptclw',          self%ptclw)
         call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('qsys_name',      self%qsys_name)
-        call check_carg('ran_noise_ph',   self%ran_noise_ph)
         call check_carg('readwrite',      self%readwrite)
         call check_carg('real_filter',    self%real_filter)
         call check_carg('refine',         self%refine)
@@ -1479,11 +1474,6 @@ contains
                 if( self%l_needs_sigma ) self%l_match_filt = .false.
         end select
         self%l_incrreslim = .not.self%l_lpset
-        ! phase randomization below noise power
-        self%l_ran_noise_ph = .true.
-        if( cline%defined('ran_noise_ph') )then
-            self%l_ran_noise_ph = (self%ran_noise_ph .eq. 'yes')
-        endif
         ! atoms
         if( cline%defined('element') )then
             if( .not. atoms_obj%element_exists(self%element) )then
