@@ -468,11 +468,6 @@ contains
         else
             call build_glob%vol%fft
             call build_glob%vol_odd%fft
-            if( params_glob%l_ran_noise_ph )then
-                ! randomize Fourier phases below noise power in a global manner
-                if( params_glob%clsfrcs.eq.'no' )&
-                &call build_glob%vol%ran_phases_below_noise_power(build_glob%vol_odd)
-            endif
             ! filtering is done in preprefvol, below
         endif
     end subroutine read_and_filter_refvols
@@ -513,8 +508,11 @@ contains
                     filter = 1.
                 endif
                 call vol_ptr%fft()
-                if( params_glob%l_match_filt )         call vol_ptr%shellnorm
-                if( params_glob%fsc_prefilt == 'yes' ) call vol_ptr%apply_filter(filter)
+                if( params_glob%l_match_filt )then
+                    call vol_ptr%shellnorm_and_apply_filter(filter)
+                else
+                    call vol_ptr%apply_filter(filter)
+                endif
             endif
         endif
         ! back to real space
