@@ -462,6 +462,7 @@ type :: parameters
     logical :: l_needs_sigma  = .false.
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
+    logical :: l_ran_noise_ph = .true.
     logical :: l_refine_inpl  = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
@@ -1478,6 +1479,11 @@ contains
                 if( self%l_needs_sigma ) self%l_match_filt = .false.
         end select
         self%l_incrreslim = .not.self%l_lpset
+        ! phase randomization below noise power
+        self%l_ran_noise_ph = .true.
+        if( cline%defined('ran_noise_ph') )then
+            self%l_ran_noise_ph = (self%ran_noise_ph .eq. 'yes')
+        endif
         ! atoms
         if( cline%defined('element') )then
             if( .not. atoms_obj%element_exists(self%element) )then
