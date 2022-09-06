@@ -546,11 +546,11 @@ contains
                     endif
             end select
             if( iter >= params%maxits ) converged = .true.
-            ! if ( l_final_iter .and. converged .and. (params%cc_objfun == OBJFUN_EUCLID) .and. l_lp_iters)then
             if ( l_combine_eo .and. converged )then
                 converged         = .false.
                 l_combine_eo      = .false.
                 params%combine_eo = 'yes'
+                params%maxits     = iter + 1
                 params%lplim_crit = min(0.143,params%lplim_crit)
                 call cline%set('lplim_crit',params%lplim_crit)
                 call job_descr%set('lplim_crit',real2str(params%lplim_crit))
