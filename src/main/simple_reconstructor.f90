@@ -603,31 +603,23 @@ contains
         use simple_estimate_ssnr, only: fsc2optlp_sub
         class(reconstructor), intent(inout) :: self !< this instance
         real,    allocatable, intent(in)    :: fsc(:)
-        real, allocatable :: ssnr(:)
-        real(dp)          :: rsum(0:self%nyq)
-        real              :: tau2(0:self%nyq), invtau2, sig2, ri, d, ssnri, cc
-        integer           :: cnt(0:self%nyq), h, k, m, sh, phys(3), sz, reslim_ind, il,ir
+        real,   allocatable   :: sig2(:), tau2(:), ssnr(:)
+        integer, allocatable  :: cnt(:)
+        real(dp), allocatable :: rsum(:)
+        real              :: cc, scale, pad_factor
+        integer           :: h, k, m, sh, phys(3), sz, reslim_ind
         logical           :: l_combined
         l_combined = trim(params_glob%combine_eo).eq.'yes'
-        sz = size(fsc) ! original image size
-        allocate(ssnr(sz), source=0.)
+        sz = size(fsc)
+        allocate(ssnr(0:sz), rsum(0:sz), cnt(0:sz), tau2(0:sz), sig2(0:sz))
         rsum = 0.d0
         cnt  = 0
-        !$omp parallel do collapse(3) default(shared) schedule(static)&
-        !$omp private(h,k,m,phys,sh) proc_bind(close) reduction(+:cnt,rsum)
-        do h = self%lims(1,1),self%lims(1,2)
-            do k = self%lims(2,1),self%lims(2,2)
-                do m = self%lims(3,1),self%lims(3,2)
-                    sh = nint(sqrt(real(h*h + k*k + m*m)))
-                    if( sh > self%nyq ) cycle
-                    phys     = self%comp_addr_phys(h, k, m)
-                    cnt(sh)  = cnt(sh) + 1
-                    rsum(sh) = rsum(sh) + real(self%rho(phys(1),phys(2),phys(3)),dp)
-                enddo
-            enddo
-        enddo
-        !$omp end parallel do
-        ! tau2 & ssnr are determined from the corrected fsc (Henderson & Rosenthal, JMB, 2002)...
+        ssnr = 0.0
+        tau2 = 0.0
+        sig2 = 0.0
+        scale = real(params_glob%box) / real(params_glob%boxpd)
+        pad_factor = 1.0 / scale**3
+        ! SSNR
         do k = 1,sz
             cc = max(0.001,fsc(k))
             if( l_combined )then
@@ -637,46 +629,51 @@ contains
             cc      = min(0.999,cc)
             ssnr(k) = cc / (1.-cc)
         enddo
-        ! Tau2
-        do k = 1,self%nyq
-            ! SSNR linear interpolation
-            ri = real(k * sz) / real(self%nyq)
-            il = max(1, floor(ri))
-            ir = min(sz, ceiling(ri))
-            d  = ri - real(il)
-            ssnri = ssnr(il) * (1. - d) + ssnr(ir) * d
-            ! Voxel average noise power
-            if( rsum(k) < TINY )then
-                tau2(k) = ssnri * 0.0001
-            else
-                sig2 = real(real(cnt(k),dp) / rsum(k))
-                ! Signal power
-                tau2(k) = ssnri * sig2
-            endif
-        enddo
-        ! add Tau2 inverse to denominator
-        ! because signal assumed infinite at very low resolution there is no addition
-        reslim_ind = max(6, calc_fourier_index(params_glob%hp, self%ldim_img(1), params_glob%smpd))
-        tau2(:reslim_ind - 1) = 1.
+        ! Noise
         !$omp parallel do collapse(3) default(shared) schedule(static)&
-        !$omp private(h,k,m,phys,sh,invtau2) proc_bind(close)
+        !$omp private(h,k,m,phys,sh) proc_bind(close) reduction(+:cnt,rsum)
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
                 do m = self%lims(3,1),self%lims(3,2)
-                    sh = nint(sqrt(real(h*h + k*k + m*m)))
-                    if( (sh < reslim_ind) .or. (sh > self%nyq) ) cycle
-                    phys = self%comp_addr_phys(h, k, m)
-                    if( tau2(sh) > TINY )then
-                        invtau2 = 1. / tau2(sh)
-                    else
-                        invtau2 = min(1.e3, 1.e3 * self%rho(phys(1),phys(2),phys(3)))
-                    endif
-                    self%rho(phys(1),phys(2),phys(3)) = self%rho(phys(1),phys(2),phys(3)) + invtau2
+                    sh = nint(scale * sqrt(real(h*h + k*k + m*m)))
+                    if( sh > sz ) cycle
+                    phys     = self%comp_addr_phys(h, k, m)
+                    cnt(sh)  = cnt(sh) + 1
+                    rsum(sh) = rsum(sh) + real(self%rho(phys(1),phys(2),phys(3)),dp)
                 enddo
             enddo
         enddo
         !$omp end parallel do
-        deallocate(ssnr)
+        rsum = rsum * pad_factor
+        where( rsum > 1.d-10 )
+            sig2 = real(real(cnt,dp) / rsum)
+        else where
+            sig2 = 0.0
+        end where
+        ! Signal
+        tau2 = ssnr * sig2
+        ! add Tau2 inverse to denominator
+        ! because signal assumed infinite at very low resolution there is no addition
+        reslim_ind = max(6, calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
+        !$omp parallel do collapse(3) default(shared) schedule(static)&
+        !$omp private(h,k,m,phys,sh) proc_bind(close)
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                do m = self%lims(3,1),self%lims(3,2)
+                    sh = nint(scale*sqrt(real(h*h + k*k + m*m)))
+                    if( (sh < reslim_ind) .or. (sh > sz) ) cycle
+                    phys = self%comp_addr_phys(h, k, m)
+                    if( tau2(sh) > TINY)then
+                        self%rho(phys(1),phys(2),phys(3)) = self%rho(phys(1),phys(2),phys(3)) + 1.0/(pad_factor*tau2(sh))
+                    else
+                        if( self%rho(phys(1),phys(2),phys(3)) > TINY )then
+                            self%rho(phys(1),phys(2),phys(3)) = 1.0e3 / self%rho(phys(1),phys(2),phys(3))
+                        endif
+                    endif
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
     end subroutine add_invtausq2rho
 
     ! DESTRUCTORS
