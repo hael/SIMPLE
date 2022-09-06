@@ -341,6 +341,7 @@ contains
             call even%clip_inplace([self%box,self%box,self%box])
             call even%div(self%pad_correction)
             if( l_combined ) call even%write(add2fbody(fname_even,params_glob%ext,'_unfil'))
+            if( params_glob%l_nonuniform ) call even%write(fname_odd)
             ! odd
             cmat = self%odd%get_cmat()
             call self%odd%sampl_dens_correct(do_gridcorr=.false.)
@@ -351,6 +352,7 @@ contains
             call odd%clip_inplace([self%box,self%box,self%box])
             call odd%div(self%pad_correction)
             if( l_combined ) call odd%write(add2fbody(fname_odd,params_glob%ext,'_unfil'))
+            if( params_glob%l_nonuniform ) call odd%write(fname_odd)
             ! masking
             if( self%automsk )then
                 ! mask provided, no phase-randomization just yet
@@ -429,31 +431,36 @@ contains
                 allocate(corrs(filtsz))
                 call even%fsc(odd, corrs)
             endif
-            ! regularization
-            call self%even%add_invtausq2rho(corrs)
-            call self%odd%add_invtausq2rho(corrs)
-            ! Even: uneven sampling density correction, clip, & write
-            cmat = self%even%get_cmat()
-            call self%even%sampl_dens_correct(do_gridcorr=.false.)
-            call self%even%ifft
-            call even%zero_and_unflag_ft
-            call self%even%clip(even)
-            call even%div(self%pad_correction)
-            call even%write(trim(fname_even), del_if_exists=.true.)
-            call self%even%set_cmat(cmat)
-            call even%kill
-            deallocate(cmat)
-            ! Odd: uneven sampling density correction, clip, & write
-            cmat = self%odd%get_cmat()
-            call self%odd%sampl_dens_correct(do_gridcorr=.false.)
-            call self%odd%ifft
-            call odd%zero_and_unflag_ft
-            call self%odd%clip(odd)
-            call odd%div(self%pad_correction)
-            call odd%write(trim(fname_odd), del_if_exists=.true.)
-            call self%odd%set_cmat(cmat)
-            call odd%kill
-            deallocate(cmat)
+            if( params_glob%l_nonuniform )then
+                call even%kill
+                call odd%kill
+            else
+                ! regularization
+                call self%even%add_invtausq2rho(corrs)
+                call self%odd%add_invtausq2rho(corrs)
+                ! Even: uneven sampling density correction, clip, & write
+                cmat = self%even%get_cmat()
+                call self%even%sampl_dens_correct(do_gridcorr=.false.)
+                call self%even%ifft
+                call even%zero_and_unflag_ft
+                call self%even%clip(even)
+                call even%div(self%pad_correction)
+                call even%write(trim(fname_even), del_if_exists=.true.)
+                call self%even%set_cmat(cmat)
+                call even%kill
+                deallocate(cmat)
+                ! Odd: uneven sampling density correction, clip, & write
+                cmat = self%odd%get_cmat()
+                call self%odd%sampl_dens_correct(do_gridcorr=.false.)
+                call self%odd%ifft
+                call odd%zero_and_unflag_ft
+                call self%odd%clip(odd)
+                call odd%div(self%pad_correction)
+                call odd%write(trim(fname_odd), del_if_exists=.true.)
+                call self%odd%set_cmat(cmat)
+                call odd%kill
+                deallocate(cmat)
+            endif
         else
             ! make clipped volumes
             call even%new([self%box,self%box,self%box],self%smpd)

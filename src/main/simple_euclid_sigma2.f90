@@ -96,7 +96,7 @@ contains
         do iptcl = params_glob%fromp, params_glob%top
             igroup  = nint(os%get(iptcl, 'stkind'))
             eo      = nint(os%get(iptcl, 'eo'    )) ! 0/1
-            self%sigma2_noise(:,iptcl) = self%sigma2_groups(eo+1,igroup,:) / 2.0
+            self%sigma2_noise(:,iptcl) = self%sigma2_groups(eo+1,igroup,:)
         end do
     end subroutine read_groups
 
