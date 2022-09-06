@@ -934,7 +934,7 @@ contains
                 call build%imgbatch(imatch)%fft
                 ! power spectrum
                 call build%imgbatch(imatch)%spectrum('power',pspec,norm=.true.)
-                pspecs(:,iptcl-params_glob%fromp+1) = pspec
+                pspecs(:,iptcl-params_glob%fromp+1) = pspec / 2.0
             end do
             !$omp end parallel do
             ! global average
@@ -998,6 +998,7 @@ contains
         call avg_img%div(real(nptcls_sel))
         ! calculate power spectrum
         call avg_img%spectrum('power',pspec_ave,norm=.true.)
+        pspec_ave = pspec_ave / 2.0
         nyq = avg_img%get_nyq()
         ! read power spectra of particles
         allocate(pspecs(nyq,params%nptcls),sigma2_arrays(params%nparts))
@@ -1070,7 +1071,6 @@ contains
         call simple_touch('CALC_PSPEC_FINISHED',errmsg='In: commander_refine3D::calc_pspec_assemble')
         call build%kill_general_tbox
         call simple_end('**** SIMPLE_CALC_PSPEC_ASSEMBLE NORMAL STOP ****', print_simple=.false.)
-
     contains
 
         subroutine remove_negative_sigmas(eo, igroup)

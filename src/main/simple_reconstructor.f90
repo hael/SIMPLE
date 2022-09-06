@@ -629,11 +629,12 @@ contains
         !$omp end parallel do
         ! tau2 & ssnr are determined from the corrected fsc (Henderson & Rosenthal, JMB, 2002)...
         do k = 1,sz
-            cc = max(0.001,min(0.999,fsc(k)))
+            cc = max(0.001,fsc(k))
             if( l_combined )then
                 ! update to filtering scheme since e/o were identical during alignment
                 cc = sqrt(2.*cc / (cc+1.))
             endif
+            cc      = min(0.999,cc)
             ssnr(k) = cc / (1.-cc)
         enddo
         ! Tau2
