@@ -46,7 +46,7 @@ imgs     = reproject(b%vol, b%eulspace)
 call b%vol%fft
 call b%vol%expand_cmat(KBALPHA) ! necessary for re-projection
 ! prep correlator
-call cftcc%new(p%nptcls, [1, p%nptcls])
+call cftcc%new(p%nptcls, [1, p%nptcls], .false.)
 do iref = 1, p%nptcls
     call imgs(iref)%fft
     call cftcc%set_ref(iref, imgs(iref), .true.)

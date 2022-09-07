@@ -198,7 +198,7 @@ contains
         type(opt_vol),    allocatable :: opt_odd(:,:,:,:), opt_even(:,:,:,:)
         real                          :: smpd, lpstart, lp, val
         integer                       :: iptcl, box, filtsz, ldim(3), ldim_pd(3), smooth_ext, nptcls, hpind_fsc, find
-        logical                       :: lpstart_fallback, l_nonuniform, l_phaseplate, l_have_frcs
+        logical                       :: lpstart_fallback, l_nonuniform, l_phaseplate
         type(c_ptr)                   :: ptr
         integer                       :: c_shape(3), m, n
         integer,             parameter   :: N_IMGS = 2  ! for batch_fft (2 images batch)
@@ -241,18 +241,16 @@ contains
                 &smooth_ext*2+1,nptcls), frc(filtsz), source=0.)
         allocate(opt_odd(box,box,1,nptcls), opt_even(box,box,1,nptcls), lplims_hres(nptcls))
         ! calculate high-res low-pass limits
-        l_have_frcs = .false.
         if( lpstart_fallback )then
             lplims_hres = calc_fourier_index(lpstart, box, smpd)
         else
             do iptcl = 1, nptcls
                 call clsfrcs%frc_getter(iptcl, hpind_fsc, l_phaseplate, frc)
                 ! the below required to retrieve the right Fouirer index limit when we are padding
-                find = get_lplim_at_corr(frc, params_glob%lplim_crit)
+                find = get_lplim_at_corr(frc, 0.1)                     ! little overshoot, filter function anyway applied in polarft_corrcalc
                 lp   = calc_lowpass_lim(find, box, smpd)               ! box is the padded box size
                 lplims_hres(iptcl) = calc_fourier_index(lp, box, smpd) ! this is the Fourier index limit for the padded images
             end do
-            l_have_frcs = .true.
         endif
         ! construct: all allocations and initialization
         call weights_img%new(ldim_pd, smpd, .false.)
@@ -265,29 +263,6 @@ contains
         enddo
         call weights_img%fft()
         do iptcl = 1, nptcls
-            if( l_have_frcs )then
-                frc = clsfrcs%get_frc(iptcl, ldim(1))
-                allocate(filt(size(frc)), source=1.)
-                call fsc2optlp_sub(clsfrcs%get_filtsz(), frc, filt)
-                where( filt < TINY ) filt = 0.
-                if( params_glob%l_match_filt )then
-                    call even(iptcl)%fft()
-                    call even(iptcl)%shellnorm_and_apply_filter(filt)
-                    call even(iptcl)%ifft()
-                    call odd(iptcl)%fft()
-                    call odd(iptcl)%shellnorm_and_apply_filter(filt)
-                    call odd(iptcl)%ifft()
-                else
-                    call even(iptcl)%fft()
-                    call even(iptcl)%apply_filter(filt)
-                    call even(iptcl)%ifft()
-                    call odd(iptcl)%fft()
-                    call odd(iptcl)%apply_filter(filt)
-                    call odd(iptcl)%ifft()
-                endif
-                deallocate(frc, filt)
-            endif
-            call even(iptcl)%write('filtered_by_opt2D.mrcs', iptcl)
             call even(iptcl)%pad_mirr(ldim_pd)
             call odd( iptcl)%pad_mirr(ldim_pd)
             call ref_diff_odd_img( iptcl)%new(ldim_pd, smpd, .false.)
@@ -561,7 +536,7 @@ contains
             THROW_HARD('Inconsistent filter dimensions; opt_filter_3D')
         endif
         ! calculate Fourier index limits for search
-        find_stop   = get_lplim_at_corr(fsc, 0.1)
+        find_stop   = get_lplim_at_corr(fsc, 0.1) ! little overshoot, filter function anyway applied in polarft_corrcalc
         if( params_glob%lp_stopres > 0 ) find_stop = calc_fourier_index(params_glob%lp_stopres, box, smpd)
         find_start  = calc_fourier_index(params_glob%lp_lowres, box, smpd)
         find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
@@ -573,16 +548,6 @@ contains
         plan_bwd = fftwf_plan_many_dft_c2r(3, ldim, N_IMGS, out, ldim, 1, product(ldim),  in, ldim, 1, product(ldim),FFTW_ESTIMATE)
         call fftwf_plan_with_nthreads(1)
         !$omp end critical
-        ! pre-filter odd & even volumes
-        if( params_glob%l_match_filt )then
-            call batch_fft_3D(even, odd, in, out, plan_fwd)
-            call even%shellnorm_and_apply_filter(optlp)
-            call odd%shellnorm_and_apply_filter(optlp)
-            call batch_ifft_3D(even, odd, in, out, plan_bwd)
-        else
-            call even%apply_filter(optlp)
-            call odd%apply_filter(optlp)
-        endif
         call          freq_img%new(ldim, smpd)
         call       weights_img%new(ldim, smpd)
         call  ref_diff_odd_img%new(ldim, smpd)

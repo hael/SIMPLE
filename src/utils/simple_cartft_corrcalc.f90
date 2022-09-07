@@ -34,11 +34,13 @@ type :: cartft_corrcalc
     type(image),     allocatable :: particles(:)            !< particle images
     logical,         allocatable :: iseven(:)               !< e/o assignment for gold-standard FSC
     logical,         allocatable :: resmsk(:,:,:)           !< resolution mask for corr calc
+    logical                      :: l_clsfrcs    = .false.  !< CLS2D/3DRefs flag
+    logical                      :: l_match_filt = .false.  !< matched filter flag
     logical                      :: l_filt_set   = .false.  !< to indicate whether filter is set
     logical                      :: with_ctf     = .false.  !< CTF flag
     logical                      :: existence    = .false.  !< to indicate existence
     type(heap_vars), allocatable :: heap_vars(:)            !< allocated fields to save stack allocation in subroutines and functions
-  contains
+    contains
     ! CONSTRUCTOR
     procedure          :: new
     ! SETTERS
@@ -55,6 +57,8 @@ type :: cartft_corrcalc
     procedure          :: ptcl_iseven
     procedure          :: get_nptcls
     procedure          :: assign_pinds
+    ! MODIFIERS
+    procedure, private :: shellnorm_and_filter_ref
     ! MEMOIZERS
     procedure, private :: memoize_resmsk
     procedure, private :: setup_pxls_p_shell
@@ -75,10 +79,11 @@ contains
 
     ! CONSTRUCTOR
 
-    subroutine new( self, nrefs, pfromto, ptcl_mask, eoarr )
+    subroutine new( self, nrefs, pfromto, l_match_filt, ptcl_mask, eoarr )
         class(cartft_corrcalc), target, intent(inout) :: self
         integer,                        intent(in)    :: nrefs
         integer,                        intent(in)    :: pfromto(2)
+        logical,                        intent(in)    :: l_match_filt
         logical, optional,              intent(in)    :: ptcl_mask(pfromto(1):pfromto(2))
         integer, optional,              intent(in)    :: eoarr(pfromto(1):pfromto(2))
         logical :: even_dims, test(2)
@@ -107,6 +112,7 @@ contains
         endif
         ! set constants
         self%filtsz = fdim(params_glob%box) - 1
+        self%l_match_filt = l_match_filt !< do shellnorm and filtering here (needs to be local because in 3D we do it on the reference volumes)
         if( present(ptcl_mask) )then
             self%nptcls  = count(ptcl_mask)                      !< the total number of particles in partition
         else
@@ -162,6 +168,8 @@ contains
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
+        ! 2Dclass/3Drefs mapping on/off
+        self%l_clsfrcs = params_glob%clsfrcs.eq.'yes'
         ! setup pxls_p_shell
         call self%setup_pxls_p_shell
         ! memoize resolution mask
@@ -199,14 +207,14 @@ contains
             do i = 1,self%nptcls
                 call self%particles(i)%new(self%ldim, params_glob%smpd)
             end do
-         endif
-         self%sqsums_ptcls = 1.
-         self%iseven       = .true.
-         allocate(self%pinds(self%pfromto(1):self%pfromto(2)), source=0)
-         do i = 1,self%nptcls
-             iptcl = pinds(i)
-             self%pinds( iptcl ) = i
-         enddo
+            endif
+            self%sqsums_ptcls = 1.
+            self%iseven       = .true.
+            allocate(self%pinds(self%pfromto(1):self%pfromto(2)), source=0)
+            do i = 1,self%nptcls
+                iptcl = pinds(i)
+                self%pinds( iptcl ) = i
+            enddo
     end subroutine reallocate_ptcls
 
     subroutine set_ref( self, iref, img, iseven )
@@ -298,6 +306,19 @@ contains
         integer, allocatable,    intent(out)   :: pinds(:)
         pinds = self%pinds
     end subroutine assign_pinds
+
+    ! MODIFIERS
+
+    subroutine shellnorm_and_filter_ref( self, iref, ref_img )
+        class(cartft_corrcalc), intent(in)    :: self
+        integer,                intent(in)    :: iref
+        class(image),           intent(inout) :: ref_img
+        if( self%l_match_filt .and. self%l_filt_set )then
+            call ref_img%shellnorm_and_apply_filter_serial(self%ref_optlp(:,iref))
+        else if( .not. params_glob%l_lpset .and. self%l_filt_set )then
+            call ref_img%apply_filter_serial(self%ref_optlp(:,iref))
+        endif
+    end subroutine shellnorm_and_filter_ref
 
     ! MEMOIZERS
 
@@ -409,6 +430,12 @@ contains
             call img_ref%copy_fast(self%refs_eo(iref,2))
         else
             call img_ref%copy_fast(self%refs_eo(iref,1))
+        endif
+        ! shell normalization and filtering
+        if( self%l_clsfrcs )then
+            call self%shellnorm_and_filter_ref(iptcl, img_ref)
+        else
+            call self%shellnorm_and_filter_ref(iref,  img_ref)
         endif
         ! multiply with CTF
         if( self%with_ctf ) call img_ref%mul_cmat(self%ctfmats(:,:,:,i), self%resmsk)

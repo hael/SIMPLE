@@ -16,7 +16,7 @@ private
 #include "simple_local_flags.inc"
 
 type, extends(commander_base) :: initial_3Dmodel_commander
-  contains
+    contains
     procedure :: execute => exec_initial_3Dmodel
 end type initial_3Dmodel_commander
 
@@ -184,9 +184,10 @@ contains
         ! set lplims
         call mskdiam2lplimits(params%mskdiam, lplims(1), lplims(2), cenlp)
 
+        ! print *, 'lplims after mskdiam2lplimits'
         ! print *, 'lplims(1) ', lplims(1)
         ! print *, 'lplims(2) ', lplims(2)
-
+        
         if( .not. cline%defined('cenlp') ) params_glob%cenlp = cenlp
         if( l_lpset )then
             lplims(1) = params%lpstart
@@ -199,17 +200,17 @@ contains
                 tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
                 res       = pack(tmp_rarr, mask=(tmp_iarr>0))
                 call hpsort(res)
-                lplims(2) = median_nocopy(res(:3)) ! low-pass limit is median of three best (as in 2D)
+                ! old way
+                ! lplims(1) = max(median_nocopy(res(:3)), lplims(2)) ! low-pass limit is median of three best (as in 2D)
+                ! new way
+                lplims(2) = max(median_nocopy(res(:3)), lplims(2)) ! low-pass limit is median of three best (as in 2D)
                 deallocate(res, tmp_iarr, tmp_rarr)
             endif
         endif
 
+        ! print *, 'lplims after resolution-based update'
         ! print *, 'lplims(1) ', lplims(1)
         ! print *, 'lplims(2) ', lplims(2)
-        ! stop
-
-        !!!!!!!!!!!!!!!!!!!!! TO ACCOUNT FOR THE CHANGE IN LOGIC OF SHELL NORMALIZATION AND FILTERING
-        l_lpset = .true.
 
         write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lplims(1)
         write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', lplims(2)
