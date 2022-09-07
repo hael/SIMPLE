@@ -398,7 +398,7 @@ contains
         logical   :: do_center, has_been_searched
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! create the polarft_corrcalc object
-        call pftcc%new(params_glob%ncls, [1,batchsz_max])
+        call pftcc%new(params_glob%ncls, [1,batchsz_max], params_glob%l_match_filt)
         ! prepare the polarizer images
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         allocate(match_imgs(params_glob%ncls))

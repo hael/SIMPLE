@@ -1305,7 +1305,7 @@ contains
         params%kfromto(1) = max(2, calc_fourier_index(params%hp, params%box, params%smpd))
         params%kfromto(2) =        calc_fourier_index(params%lp, params%box, params%smpd)
         params%kstop      = params%kfromto(2)
-        call pftcc%new(ncls_sel, [1,1])
+        call pftcc%new(ncls_sel, [1,1], .false.) ! matched filter turned off
         if( trim(params%bin_cls).ne.'no' .and. .not. DEBUG )then
             ! initialize polarizer for the first image, then copy it to the rest
             call cavg_imgs(1)%init_polarizer(pftcc, params%alpha)
@@ -1404,7 +1404,7 @@ contains
             write(logfhandle,'(A)') '>>> CALCULATING COMMON-LINE CORRELATION MATRIX'
             ! re-create the polarft_corrcalc object
             call pftcc%kill
-            call pftcc%new(ncls_sel, [1,1])
+            call pftcc%new(ncls_sel, [1,1], .false.) ! matched filter turned off
             ! initialize polarizer for the first image, then copy it to the rest
             call cavg_imgs_good(1)%init_polarizer(pftcc, params%alpha)
             !$omp parallel do default(shared) private(icls) schedule(static) proc_bind(close)
