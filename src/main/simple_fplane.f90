@@ -114,20 +114,19 @@ contains
                     if( ctfvars%ctfflag == CTFFLAG_FLIP ) tval = abs(tval)
                     ! CTF pre-multiplied Fourier component
                     c = tval * img%get_fcomp2D(h,k)
-                endif
-                ! set
-                if( use_sigmas) then
-                    if(sh < sigma2_kfromto(1))then
-                        self%cmplx_plane(h,k) = c      / eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1),iptcl)
-                        self%ctfsq_plane(h,k) = tvalsq / eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1),iptcl)
-                    else
-                        self%cmplx_plane(h,k) = c      / eucl_sigma2_glob%sigma2_noise(sh,iptcl)
-                        self%ctfsq_plane(h,k) = tvalsq / eucl_sigma2_glob%sigma2_noise(sh,iptcl)
+                    ! sigma2 weighing
+                    if( use_sigmas) then
+                        if(sh < sigma2_kfromto(1))then
+                            self%cmplx_plane(h,k) = c      / eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1),iptcl)
+                            self%ctfsq_plane(h,k) = tvalsq / eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1),iptcl)
+                        else
+                            self%cmplx_plane(h,k) = c      / eucl_sigma2_glob%sigma2_noise(sh,iptcl)
+                            self%ctfsq_plane(h,k) = tvalsq / eucl_sigma2_glob%sigma2_noise(sh,iptcl)
+                        endif
                     endif
-                else
-                    self%cmplx_plane(h,k) = c
-                    self%ctfsq_plane(h,k) = tvalsq
-                end if
+                endif
+                self%cmplx_plane(h,k) = c
+                self%ctfsq_plane(h,k) = tvalsq
             enddo
         enddo
         !$omp end parallel do

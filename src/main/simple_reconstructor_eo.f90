@@ -341,7 +341,7 @@ contains
             call even%clip_inplace([self%box,self%box,self%box])
             call even%div(self%pad_correction)
             if( l_combined ) call even%write(add2fbody(fname_even,params_glob%ext,'_unfil'))
-            if( params_glob%l_nonuniform ) call even%write(fname_odd)
+            if( params_glob%l_nonuniform ) call even%write(fname_even)
             ! odd
             cmat = self%odd%get_cmat()
             call self%odd%sampl_dens_correct(do_gridcorr=.false.)
