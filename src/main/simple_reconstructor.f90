@@ -601,12 +601,13 @@ contains
 
     subroutine add_invtausq2rho( self, fsc)
         use simple_estimate_ssnr, only: fsc2optlp_sub
-        class(reconstructor), intent(inout) :: self !< this instance
-        real,    allocatable, intent(in)    :: fsc(:)
-        real,   allocatable   :: sig2(:), tau2(:), ssnr(:)
-        integer, allocatable  :: cnt(:)
+        class(reconstructor),  intent(inout) :: self !< this instance
+        real,     allocatable, intent(in)    :: fsc(:)
+        real,     allocatable :: sig2(:), tau2(:), ssnr(:)
+        integer,  allocatable :: cnt(:)
         real(dp), allocatable :: rsum(:)
-        real              :: cc, scale, pad_factor
+        real, parameter   :: fudge = 1.0
+        real              :: cc, scale, pad_factor, invtau2
         integer           :: h, k, m, sh, phys(3), sz, reslim_ind
         logical           :: l_combined
         l_combined = trim(params_glob%combine_eo).eq.'yes'
@@ -627,7 +628,7 @@ contains
                 cc = sqrt(2.*cc / (cc+1.))
             endif
             cc      = min(0.999,cc)
-            ssnr(k) = cc / (1.-cc)
+            ssnr(k) = fudge * cc / (1.-cc)
         enddo
         ! Noise
         !$omp parallel do collapse(3) default(shared) schedule(static)&
@@ -652,11 +653,17 @@ contains
         end where
         ! Signal
         tau2 = ssnr * sig2
+
+        do k=1,sz
+            print *,k,sig2(k), tau2(k), ssnr(k)
+        enddo
+
+
         ! add Tau2 inverse to denominator
         ! because signal assumed infinite at very low resolution there is no addition
         reslim_ind = max(6, calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
         !$omp parallel do collapse(3) default(shared) schedule(static)&
-        !$omp private(h,k,m,phys,sh) proc_bind(close)
+        !$omp private(h,k,m,phys,sh,invtau2) proc_bind(close)
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
                 do m = self%lims(3,1),self%lims(3,2)
@@ -664,12 +671,11 @@ contains
                     if( (sh < reslim_ind) .or. (sh > sz) ) cycle
                     phys = self%comp_addr_phys(h, k, m)
                     if( tau2(sh) > TINY)then
-                        self%rho(phys(1),phys(2),phys(3)) = self%rho(phys(1),phys(2),phys(3)) + 1.0/(pad_factor*tau2(sh))
+                        invtau2 = 1.0/(pad_factor*fudge*tau2(sh))
                     else
-                        if( self%rho(phys(1),phys(2),phys(3)) > TINY )then
-                            self%rho(phys(1),phys(2),phys(3)) = 1.0e3 / self%rho(phys(1),phys(2),phys(3))
-                        endif
+                        invtau2 = min(1.e3, 1.e3 * self%rho(phys(1),phys(2),phys(3)))
                     endif
+                    self%rho(phys(1),phys(2),phys(3)) = self%rho(phys(1),phys(2),phys(3)) + invtau2
                 enddo
             enddo
         enddo
