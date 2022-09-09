@@ -15,7 +15,7 @@ type(cartft_corrcalc)    :: cftcc
 type(cmdline)            :: cline
 type(builder)            :: b
 integer,     parameter   :: NSPACE=1    ! set to 1 for fast test
-real                     :: corrs(NSPACE), corrs2(NSPACE)
+real                     :: corrs(NSPACE), corrs2(NSPACE), grad(2, NSPACE)
 type(image), allocatable :: imgs(:)
 real,        allocatable :: pshifts(:,:)
 integer                  :: iref, iptcl, loc(1), cnt, x, y
@@ -66,6 +66,9 @@ end do
 cnt = 0
 do iptcl = 1,p%nptcls
     call evalcc%project_and_correlate(iptcl, corrs)
+    print *, corrs
+    call evalcc%project_and_correlate(iptcl, corrs, grad)
+    print *, corrs, grad
     loc = maxloc(corrs)
     if( loc(1) == iptcl ) cnt = cnt + 1
     if( .not. loc(1) == iptcl ) write(*, *) pshifts(iptcl, :)
@@ -73,18 +76,19 @@ end do
 print *, 'initial corr = ', corrs(loc)
 ! numerical gradient
 iptcl = 1
+print *, pshifts(iref, 1)
 do iref = 1,p%nptcls
     ! dcc/dx
-    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [pshifts(iref, 1) - 0.1, pshifts(iref, 2)])
-    call evalcc%project_and_correlate(iptcl, corrs)
-    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [pshifts(iref, 1) + 0.1, pshifts(iref, 2)])
-    call evalcc%project_and_correlate(iptcl, corrs2)
-    print *, 'numerical d_corr/dx = ', (corrs2(1) - corrs(1))/2.
+    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [pshifts(iref, 1) - 0.00001, pshifts(iref, 2)])
+    call evalcc%project_and_correlate(iptcl, corrs, grad)
+    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [pshifts(iref, 1) + 0.00001, pshifts(iref, 2)])
+    call evalcc%project_and_correlate(iptcl, corrs2, grad)
+    print *, 'numerical d_corr/dx = ', (corrs2(1) - corrs(1))/0.00002
     ! dcc/dy
-    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [pshifts(iref, 1), pshifts(iref, 2) - 0.1])
+    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [pshifts(iref, 1), pshifts(iref, 2) - 0.00001])
     call evalcc%project_and_correlate(iptcl, corrs)
-    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [pshifts(iref, 1), pshifts(iref, 2) + 0.1])
+    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [pshifts(iref, 1), pshifts(iref, 2) + 0.00001])
     call evalcc%project_and_correlate(iptcl, corrs2)
-    print *, 'numerical d_corr/dy = ', (corrs2(1) - corrs(1))/2.
+    print *, 'numerical d_corr/dy = ', (corrs2(1) - corrs(1))/0.00002
 end do
 end program simple_test_grad_cartftcc

@@ -258,6 +258,7 @@ contains
     procedure, private :: corr_1
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
+    procedure          :: corr_grad
     procedure          :: calc_sumsq
     procedure          :: corr_shifted
     procedure, private :: real_corr_1
@@ -340,6 +341,7 @@ contains
     procedure, private :: shift2Dserial_1
     procedure, private :: shift2Dserial_2
     generic            :: shift2Dserial => shift2Dserial_1, shift2Dserial_2
+    procedure          :: shift2Dserial_grad
     procedure          :: set_within
     procedure          :: ft2img
     procedure          :: img2ft
@@ -4535,6 +4537,45 @@ contains
         endif
     end function corr_2
 
+    function corr_grad( self_ref, self_r4cc, self_ptcl, sumsq_ptcl, resmsk, shvec, grad, self_r4grad) result( cc )
+        class(image), target, intent(inout) :: self_ref, self_r4cc, self_r4grad(2)
+        class(image),         intent(in)    :: self_ptcl
+        real,                 intent(in)    :: sumsq_ptcl
+        logical,              intent(in)    :: resmsk(self_ref%array_shape(1),self_ref%array_shape(2),self_ref%array_shape(3))
+        real,                 intent(in)    :: shvec(2)
+        real,                 intent(inout) :: grad(2)
+        class(image),         pointer       :: ref_ptr => null()
+        real                                :: sumsq_ref, cc, eps, denom ! numerator and denominator of the cc
+        complex(dp)                         :: numer_der, denom_der, numer, temp
+        call self_ref%shift2Dserial_grad(shvec, self_r4cc, self_r4grad)
+        if( arg(shvec) > 1e-5 )then
+            ref_ptr => self_r4cc
+        else
+            ref_ptr => self_ref
+        endif
+        sumsq_ref = ref_ptr%calc_sumsq(resmsk)
+        eps       = epsilon(sumsq_ref)
+        cc        = real(sum(ref_ptr%cmat * conjg(self_ptcl%cmat), mask=resmsk))
+        numer     = sum(self_r4cc%cmat * conjg(self_ptcl%cmat))
+        denom     = sqrt(sumsq_ref * sumsq_ptcl)
+        if( cc < eps .and. sumsq_ref < eps .and. sumsq_ptcl < eps )then
+            cc = 1.
+        elseif( sqrt(sumsq_ref * sumsq_ptcl) < eps )then
+            cc = 0.
+        else
+            cc = cc / sqrt(sumsq_ref * sumsq_ptcl)
+        endif
+        ! calculating the gradient using the chain rule: (a/b)' = (a'b - ab')/b^2
+        numer_der = sum(self_r4grad(1)%cmat * conjg(self_ptcl%cmat))
+        denom_der = sqrt(sumsq_ptcl)*sum(self_r4grad(1)%cmat * conjg(self_r4cc%cmat) + self_r4cc%cmat * conjg(self_r4grad(1)%cmat))/2./sqrt(sumsq_ref)
+        temp      = numer_der*denom - numer*denom_der
+        grad(1)   = (temp + conjg(temp))/2./denom**2
+        numer_der = sum(self_r4grad(2)%cmat * conjg(self_ptcl%cmat))
+        denom_der = sqrt(sumsq_ptcl)*sum(self_r4grad(2)%cmat * conjg(self_r4cc%cmat) + self_r4cc%cmat * conjg(self_r4grad(2)%cmat))/2./sqrt(sumsq_ref)
+        temp      = numer_der*denom - numer*denom_der
+        grad(2)   = (temp + conjg(temp))/2./denom**2
+    end function corr_grad
+
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
         class(image),   intent(inout) :: self_ref, self_ptcl
         real,           intent(in)    :: shvec(3)
@@ -6326,6 +6367,27 @@ contains
             end do
         end do
     end subroutine shift2Dserial_2
+
+    subroutine shift2Dserial_grad( self, shvec, self_out, grad_img)
+        class(image), intent(inout) :: self, self_out, grad_img(2)
+        real,         intent(in)    :: shvec(2)
+        real(dp)                    :: shconst(2), arg, arg_k, arg_h
+        integer                     :: h,k, hphys,kphys, lims(3,2)
+        lims    = self%fit%loop_lims(2)
+        shconst = real(shvec * self%shconst(1:2),dp)
+        do k=lims(2,1),lims(2,2)
+            kphys = k + 1 + merge(self%ldim(2),0,k<0)
+            arg_k = real(k,dp)*shconst(2)
+            do h=lims(1,1),lims(1,2)
+                arg_h = real(h,dp)*shconst(1)
+                arg   = arg_h + arg_k
+                hphys = h + 1
+                self_out%cmat(   hphys,kphys,1) =     self%cmat(hphys,kphys,1) * cmplx(dcos(arg), dsin(arg),sp)
+                grad_img(1)%cmat(hphys,kphys,1) = self_out%cmat(hphys,kphys,1) * cmplx(0,1,sp)*real(h,dp)*self%shconst(1)
+                grad_img(2)%cmat(hphys,kphys,1) = self_out%cmat(hphys,kphys,1) * cmplx(0,1,sp)*real(k,dp)*self%shconst(2)
+            end do
+        end do
+    end subroutine shift2Dserial_grad
 
     !> \brief mask  is for spherical masking
     !! \param mskrad mask radius in pixels
