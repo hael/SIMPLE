@@ -13,6 +13,7 @@ private
 type heap_vars
     type(image)   :: img_ref
     type(image)   :: img_ref_tmp
+    type(image)   :: img_ref_grad_tmp(2)
     real, pointer :: frc(:) => null()
 end type heap_vars
 
@@ -163,6 +164,8 @@ contains
         do ithr = 1,params_glob%nthr
             call self%heap_vars(ithr)%img_ref%new(self%ldim, params_glob%smpd)
             call self%heap_vars(ithr)%img_ref_tmp%new(self%ldim, params_glob%smpd)
+            call self%heap_vars(ithr)%img_ref_grad_tmp(1)%new(self%ldim, params_glob%smpd)
+            call self%heap_vars(ithr)%img_ref_grad_tmp(2)%new(self%ldim, params_glob%smpd)
             allocate(self%heap_vars(ithr)%frc(self%filtsz), source = 0.)
         end do
         ! set CTF flag
@@ -441,10 +444,11 @@ contains
         if( self%with_ctf ) call img_ref%mul_cmat(self%ctfmats(:,:,:,i), self%resmsk)
     end subroutine prep_ref4corr
 
-    function calc_corr( self, iref, iptcl, shvec ) result( cc )
+    function calc_corr( self, iref, iptcl, shvec, grad ) result( cc )
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iref, iptcl
         real,                   intent(in)    :: shvec(2)
+        real,         optional, intent(inout) :: grad(2)
         real(sp) :: cc
         integer  :: i, ithr
         i    =  self%pinds(iptcl)
@@ -458,8 +462,13 @@ contains
         ! prep ref
         call self%prep_ref4corr(iref, iptcl, self%heap_vars(ithr)%img_ref)
         ! calc corr
-        cc = real(self%heap_vars(ithr)%img_ref%corr(self%heap_vars(ithr)%img_ref_tmp,&
-            &self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec), kind=sp)
+        if( present(grad) )then
+            cc = real(self%heap_vars(ithr)%img_ref%corr_grad(self%heap_vars(ithr)%img_ref_tmp,&
+                &self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec, grad, self%heap_vars(ithr)%img_ref_grad_tmp), kind=sp)
+        else
+            cc = real(self%heap_vars(ithr)%img_ref%corr(self%heap_vars(ithr)%img_ref_tmp,&
+                &self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec), kind=sp)
+        endif
     end function calc_corr
 
     function specscore( self, iref, iptcl, shvec ) result( spec )
@@ -507,6 +516,8 @@ contains
             do ithr = 1,params_glob%nthr
                 call self%heap_vars(ithr)%img_ref%kill
                 call self%heap_vars(ithr)%img_ref_tmp%kill
+                call self%heap_vars(ithr)%img_ref_grad_tmp(1)%kill
+                call self%heap_vars(ithr)%img_ref_grad_tmp(2)%kill
                 deallocate(self%heap_vars(ithr)%frc)
                 self%heap_vars(ithr)%frc => null()
             end do
