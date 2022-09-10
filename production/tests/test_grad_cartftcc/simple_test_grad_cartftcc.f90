@@ -18,7 +18,7 @@ integer,     parameter   :: NSPACE=1    ! set to 1 for fast test
 real                     :: corrs(NSPACE), corrs2(NSPACE), grad(2, NSPACE)
 type(image), allocatable :: imgs(:)
 real,        allocatable :: pshifts(:,:)
-integer                  :: iref, iptcl, loc(1), cnt, x, y
+integer                  :: iref, iptcl, loc(1), cnt, x, y, iter
 type(eval_cartftcc)      :: evalcc
 if( command_argument_count() < 3 )then
     write(logfhandle,'(a)') 'simple_test_eval_cartftcc lp=xx smpd=yy nthr=zz vol1=vol1.mrc'
@@ -76,7 +76,7 @@ end do
 print *, 'initial corr = ', corrs(loc)
 ! numerical gradient
 iptcl = 1
-print *, pshifts(iref, 1)
+print *, pshifts(iref, :)
 do iref = 1,p%nptcls
     ! dcc/dx
     call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [pshifts(iref, 1) - 0.00001, pshifts(iref, 2)])
@@ -91,4 +91,18 @@ do iref = 1,p%nptcls
     call evalcc%project_and_correlate(iptcl, corrs2)
     print *, 'numerical d_corr/dy = ', (corrs2(1) - corrs(1))/0.00002
 end do
+! testing with basic gradient descent
+iref = 1
+pshifts(iref, :) = [1., .5]
+print *, 'initial shift = ', pshifts(iref, :)
+do iter = 1, 1000
+    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), pshifts(iref, :))
+    call evalcc%project_and_correlate(iptcl, corrs, grad)
+    if( mod(iter, 100) == 0)then
+        print *, 'iter = ', iter
+        print *, 'cost = ', corrs(1)
+        print *, 'shifts = ', pshifts(iref, :)
+    endif
+    pshifts(iref, :) = pshifts(iref, :) + grad(2, iref)
+enddo
 end program simple_test_grad_cartftcc
