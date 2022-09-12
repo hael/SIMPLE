@@ -217,7 +217,6 @@ contains
             end do
             call stkio_w%close
         else
-            ext      = '.'//fname2ext( stk )
             stk_even = add2fbody(trim(stk), trim(ext), '_even')
             stk_odd  = add2fbody(trim(stk), trim(ext), '_odd')
         endif
