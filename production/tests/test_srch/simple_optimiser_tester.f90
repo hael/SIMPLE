@@ -10,7 +10,7 @@ private
 #include "simple_local_flags.inc"
 
 ! module global constants
-integer, parameter        :: NOPTS=5         ! nr of optimizers
+integer, parameter        :: NOPTS=2         ! nr of optimizers
 integer, parameter        :: NRFUNS=19       ! nr of general test functions
 integer, parameter        :: LAST2DFUN=32    ! index of last 2D function
 integer, parameter        :: NTESTS=50       ! nr of independent tests
@@ -135,11 +135,8 @@ contains
         integer :: i, j, k, cnt, nfuns
         real    :: maxeval, neval
         logical :: err
-        str_opts(1) = 'powell'
-        str_opts(2) = 'simplex'
-        str_opts(3) = 'oasis'
-        str_opts(4) = 'pso'
-        str_opts(5) = 'de'
+        str_opts(1) = 'simplex'
+        str_opts(2) = 'de'
         if( NRDIMS == 2 )then
             nfuns = LAST2DFUN
         else

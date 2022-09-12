@@ -2197,7 +2197,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class&
         & averages obtained with cluster2D',&                                         ! descr_long
         &'simple_exec',&                                                              ! executable
-        &0, 0, 0, 5, 5, 2, 2, .true.)                                                 ! # entries in each group, requires sp_project
+        &0, 0, 0, 5, 6, 2, 2, .true.)                                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2225,6 +2225,7 @@ contains
             &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 8.)
         call initial_3Dmodel%set_input('filt_ctrls', 5, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
             & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
+        call initial_3Dmodel%set_input('filt_ctrls', 6, nonuniform)
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, mskdiam)
         call initial_3Dmodel%set_input('mask_ctrls', 2, 'automsk', 'binary', 'Perform envelope masking',&
