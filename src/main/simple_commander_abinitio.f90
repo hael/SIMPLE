@@ -35,6 +35,7 @@ contains
         use simple_image,              only: image
         use simple_sym,                only: sym
         use simple_builder,            only: builder
+        use simple_opt_filter,         only: opt_2D_filter_sub
         class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! constants
@@ -64,10 +65,11 @@ contains
         type(cmdline) :: cline_reproject
         type(cmdline) :: cline_scale1, cline_scale2, cline_scale_msk
         ! other
-        character(len=:), allocatable :: stk, orig_stk, frcs_fname, shifted_stk
+        character(len=:), allocatable :: stk, orig_stk, frcs_fname, shifted_stk, stk_even, stk_odd, ext
         character(len=:), allocatable :: WORK_PROJFILE
         real,             allocatable :: res(:), tmp_rarr(:)
         integer,          allocatable :: states(:), tmp_iarr(:)
+        type(image),      allocatable :: cavgs_eo(:,:)
         class(parameters), pointer    :: params_ptr => null()
         character(len=2)      :: str_state
         type(qsys_env)        :: qenv
@@ -82,7 +84,7 @@ contains
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine, vol_iter_pproc, vol_iter_pproc_mirr
         real                  :: iter, smpd_target, lplims(2), orig_smpd, cenlp
         real                  :: scale_factor1, scale_factor2, lp3(3)
-        integer               :: icls, ncavgs, orig_box, box, istk, cnt
+        integer               :: icls, ncavgs, orig_box, box, istk, cnt, ifoo, ldim(3)
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset, l_shmem, l_automsk
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
@@ -157,10 +159,72 @@ contains
         call spproj%update_projinfo(cline)
         ! retrieve cavgs stack & FRCS info
         call spproj%get_cavgs_stk(stk, ncavgs, orig_smpd)
+        ext = '.'//fname2ext( stk )
+        ! e/o
+        if( l_lpset )then
+            ! no filtering
+        else
+            call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
+            if( .not.file_exists(frcs_fname) )then
+                THROW_HARD('the project file does not contain enough information for e/o alignment, use a low-pass instead: LPSTART/LPSTOP')
+            endif
+            ! update params
+            params%frcs = trim(frcs_fname)
+        endif
+        if( params%l_nonuniform )then
+            ! retrieve even/odd stack names
+            stk_even = add2fbody(stk, ext, '_even')
+            stk_odd  = add2fbody(stk, ext, '_odd')
+            if( .not. file_exists(trim(stk_even)) ) THROW_HARD('Even stack '//trim(stk_even)//' does not exist!')
+            if( .not. file_exists(trim(stk_odd))  ) THROW_HARD('Odd stack '//trim(stk_even)//' does not exist!')
+            ! read even/odd class averages into array
+            allocate( cavgs_eo(ncavgs,2) )
+            call find_ldim_nptcls(stk_even, ldim, ifoo)
+            ldim(3) = 1 ! class averages
+            call stkio_r%open(stk_odd,   orig_smpd, 'read', bufsz=500)
+            call stkio_r2%open(stk_even, orig_smpd, 'read', bufsz=500)
+            do icls = 1, ncavgs
+                call cavgs_eo(icls,1)%new(ldim, orig_smpd)
+                call cavgs_eo(icls,2)%new(ldim, orig_smpd)
+                call stkio_r%read(icls, cavgs_eo(icls,1))
+                call stkio_r2%read(icls, cavgs_eo(icls,2))
+            end do
+            call stkio_r%close
+            call stkio_r2%close
+            ! nonuniform filtering
+            call opt_2D_filter_sub(cavgs_eo(:,2), cavgs_eo(:,1))
+            ! write even filtered cavgs
+            stk_even = 'cavgs_nonuniform_even.mrc'
+            call stkio_w%open(stk_even, orig_smpd, 'write', box=ldim(1), is_ft=.false., bufsz=500)
+            do icls = 1, ncavgs
+                call stkio_w%write(icls, cavgs_eo(icls,2))
+            end do
+            call stkio_w%close
+            ! write odd filtered cavgs
+            stk_odd = 'cavgs_nonuniform_odd.mrc'
+            call stkio_w%open(stk_odd, orig_smpd, 'write', box=ldim(1), is_ft=.false., bufsz=500)
+            do icls = 1, ncavgs
+                call stkio_w%write(icls, cavgs_eo(icls,1))
+            end do
+            call stkio_w%close
+            ! write merged filtered cavgs
+            stk = 'cavgs_nonuniform.mrc'
+            call stkio_w%open(stk, orig_smpd, 'write', box=ldim(1), is_ft=.false., bufsz=500)
+            do icls = 1, ncavgs
+                call cavgs_eo(icls,1)%add(cavgs_eo(icls,2))
+                call cavgs_eo(icls,1)%mul(0.5)
+                call stkio_w%write(icls, cavgs_eo(icls,1))
+            end do
+            call stkio_w%close
+        else
+            ext      = '.'//fname2ext( stk )
+            stk_even = add2fbody(trim(stk), trim(ext), '_even')
+            stk_odd  = add2fbody(trim(stk), trim(ext), '_odd')
+        endif
         ctfvars%smpd = orig_smpd
         params%smpd  = orig_smpd
         orig_stk     = stk
-        shifted_stk  = basename(add2fbody(stk, params%ext, '_shifted'))
+        shifted_stk  = basename(add2fbody(stk, ext, '_shifted'))
         if( .not.spproj%os_cls2D%isthere('state') )then
             ! start from import
             allocate(states(ncavgs), source=1)
@@ -171,23 +235,8 @@ contains
         if( count(states==0) .eq. ncavgs )then
             THROW_HARD('no class averages detected in project file: '//trim(params%projfile)//'; initial_3Dmodel')
         endif
-        ! SANITY CHECKS
-        ! e/o
-        if( l_lpset )then
-            ! no filtering
-        else
-            call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
-            if( .not.file_exists(frcs_fname) )then
-                THROW_HARD('the project file does not contain enough information for e/o alignment, use a low-pass instead: LPSTART/LPSTOP')
-            endif
-        endif
         ! set lplims
         call mskdiam2lplimits(params%mskdiam, lplims(1), lplims(2), cenlp)
-
-        ! print *, 'lplims after mskdiam2lplimits'
-        ! print *, 'lplims(1) ', lplims(1)
-        ! print *, 'lplims(2) ', lplims(2)
-        
         if( .not. cline%defined('cenlp') ) params_glob%cenlp = cenlp
         if( l_lpset )then
             lplims(1) = params%lpstart
@@ -200,18 +249,11 @@ contains
                 tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
                 res       = pack(tmp_rarr, mask=(tmp_iarr>0))
                 call hpsort(res)
-                ! old way
-                ! lplims(1) = max(median_nocopy(res(:3)), lplims(2)) ! low-pass limit is median of three best (as in 2D)
                 ! new way
                 lplims(2) = max(median_nocopy(res(:3)), lplims(2)) ! low-pass limit is median of three best (as in 2D)
                 deallocate(res, tmp_iarr, tmp_rarr)
             endif
         endif
-
-        ! print *, 'lplims after resolution-based update'
-        ! print *, 'lplims(1) ', lplims(1)
-        ! print *, 'lplims(2) ', lplims(2)
-
         write(logfhandle,'(A,F5.1)') '>>> DID SET STARTING  LOW-PASS LIMIT (IN A) TO: ', lplims(1)
         write(logfhandle,'(A,F5.1)') '>>> DID SET HARD      LOW-PASS LIMIT (IN A) TO: ', lplims(2)
         write(logfhandle,'(A,F5.1)') '>>> DID SET CENTERING LOW-PASS LIMIT (IN A) TO: ', params_glob%cenlp
@@ -289,7 +331,7 @@ contains
         call cline_refine3D_init%set('match_filt','no')
         call cline_refine3D_init%set('ptclw',     'no')   ! no soft particle weights in init phase
         call cline_refine3D_init%set('silence_fsc','yes') ! no FSC plot printing in 2nd phase
-        call cline_refine3D_init%set('vol1',     trim(SNHCVOL)//trim(str_state)//params%ext)
+        call cline_refine3D_init%set('vol1',     trim(SNHCVOL)//trim(str_state)//ext)
         call cline_refine3D_init%delete('frac')           ! no rejections in 2nd phase
         ! (3) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
@@ -346,7 +388,7 @@ contains
         endif
         call cline_reproject%set('prg',     'reproject')
         call cline_reproject%set('pgrp',    trim(pgrp_refine))
-        call cline_reproject%set('outstk',  'reprojs'//params%ext)
+        call cline_reproject%set('outstk',  'reprojs'//ext)
         call cline_reproject%set('smpd',    params%smpd)
         call cline_reproject%set('box',     real(orig_box))
         ! execute commanders
@@ -377,7 +419,7 @@ contains
             call xrefine3D_distr%execute(cline_refine3D_init)
         endif
         iter     = cline_refine3D_init%get_rarg('endit')
-        vol_iter = trim(VOL_FBODY)//trim(str_state)//params%ext
+        vol_iter = trim(VOL_FBODY)//trim(str_state)//ext
         if( .not. file_exists(vol_iter) ) THROW_HARD('input volume to symmetry axis search does not exist')
         if( symran_before_refine )then
             call work_proj1%read_segment('ptcl3D', trim(WORK_PROJFILE))
@@ -486,17 +528,17 @@ contains
             write(logfhandle,'(A)') '>>>'
             if( l_automsk )then
                 ! scale the mask
-                if( .not. file_exists('automask'//trim(params%ext)) ) THROW_HARD('file '//'automask'//trim(params%ext)//' does not exist')
+                if( .not. file_exists('automask'//trim(ext)) ) THROW_HARD('file '//'automask'//trim(ext)//' does not exist')
                 call cline_scale_msk%set('smpd',   smpd_target)
-                call cline_scale_msk%set('vol1',   'automask'//trim(params%ext))
+                call cline_scale_msk%set('vol1',   'automask'//trim(ext))
                 call cline_scale_msk%set('newbox', real(orig_box))
-                call cline_scale_msk%set('outvol', 'automask_scaled'//trim(params%ext))
+                call cline_scale_msk%set('outvol', 'automask_scaled'//trim(ext))
                 call cline_scale_msk%set('mkdir',  'no')
                 call cline_scale_msk%set('nthr',   real(params%nthr))
                 call xscale_msk%execute(cline_scale_msk)
-                call del_file('automask'//trim(params%ext))
-                call simple_rename('automask_scaled'//trim(params%ext), 'automask'//trim(params%ext))
-                call cline_reconstruct3D%set('mskfile', 'automask'//trim(params%ext))
+                call del_file('automask'//trim(ext))
+                call simple_rename('automask_scaled'//trim(ext), 'automask'//trim(ext))
+                call cline_reconstruct3D%set('mskfile', 'automask'//trim(ext))
             endif
             ! modulates shifts
             os = work_proj2%os_ptcl3D
@@ -515,7 +557,7 @@ contains
             else
                 call xreconstruct3D_distr%execute(cline_reconstruct3D)
             endif
-            vol_iter = trim(VOL_FBODY)//trim(str_state)//params%ext
+            vol_iter = trim(VOL_FBODY)//trim(str_state)//ext
             ! because postprocess only updates project file when mkdir=yes
             call work_proj2%read_segment('out', ORIG_WORK_PROJFILE)
             call work_proj2%add_vol2os_out(vol_iter, params%smpd, 1, 'vol')
@@ -526,18 +568,18 @@ contains
             call xpostprocess%execute(cline_postprocess)
             call os%kill
         else
-            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(nint(iter),3)//params%ext
+            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(nint(iter),3)//ext
             call vol%new([orig_box,orig_box,orig_box],orig_smpd)
             call vol%read(vol_iter)
             call vol%mirror('x')
-            call vol%write(add2fbody(vol_iter,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX)))
+            call vol%write(add2fbody(vol_iter,ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX)))
             call vol%kill
         endif
-        vol_iter_pproc      = add2fbody(vol_iter,params%ext,PPROC_SUFFIX)
-        vol_iter_pproc_mirr = add2fbody(vol_iter,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX))
-        if( file_exists(vol_iter)            ) call simple_rename(vol_iter,            trim(REC_FBODY)//params%ext)
-        if( file_exists(vol_iter_pproc)      ) call simple_rename(vol_iter_pproc,      trim(REC_PPROC_FBODY)//params%ext)
-        if( file_exists(vol_iter_pproc_mirr) ) call simple_rename(vol_iter_pproc_mirr, trim(REC_PPROC_MIRR_FBODY)//params%ext)
+        vol_iter_pproc      = add2fbody(vol_iter,ext,PPROC_SUFFIX)
+        vol_iter_pproc_mirr = add2fbody(vol_iter,ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX))
+        if( file_exists(vol_iter)            ) call simple_rename(vol_iter,            trim(REC_FBODY)//ext)
+        if( file_exists(vol_iter_pproc)      ) call simple_rename(vol_iter_pproc,      trim(REC_PPROC_FBODY)//ext)
+        if( file_exists(vol_iter_pproc_mirr) ) call simple_rename(vol_iter_pproc_mirr, trim(REC_PPROC_MIRR_FBODY)//ext)
         ! updates original cls3D segment
         call work_proj2%os_ptcl3D%delete_entry('stkind')
         call work_proj2%os_ptcl3D%delete_entry('eo')
@@ -558,13 +600,13 @@ contains
         ! map the orientation parameters obtained for the clusters back to the particles
         call spproj%map2ptcls
         ! add rec_final to os_out
-        call spproj%add_vol2os_out(trim(REC_FBODY)//params%ext, params%smpd, 1, 'vol_cavg')
+        call spproj%add_vol2os_out(trim(REC_FBODY)//ext, params%smpd, 1, 'vol_cavg')
         ! reprojections
         call spproj%os_cls3D%write('final_oris.txt')
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
         write(logfhandle,'(A)') '>>>'
-        call cline_reproject%set('vol1',   trim(REC_PPROC_FBODY)//params%ext)
+        call cline_reproject%set('vol1',   trim(REC_PPROC_FBODY)//ext)
         call cline_reproject%set('oritab', 'final_oris.txt')
         call xreproject%execute(cline_reproject)
         ! write alternated stack
@@ -630,17 +672,13 @@ contains
 
             subroutine prep_eo_stks_refine
                 use simple_ori, only: ori
-                type(ori)                     :: o, o_even, o_odd
-                character(len=:), allocatable :: eostk, ext
-                integer :: even_ind, odd_ind, state, icls
+                type(ori) :: o, o_even, o_odd
+                integer   :: even_ind, odd_ind, state, icls
                 call os%delete_entry('lp')
                 call cline_refine3D_refine%set('frcs',frcs_fname)
                 ! add stks
-                ext   = '.'//fname2ext( stk )
-                eostk = add2fbody(trim(orig_stk), trim(ext), '_even')
-                call work_proj2%add_stk(eostk, ctfvars)
-                eostk = add2fbody(trim(orig_stk), trim(ext), '_odd')
-                call work_proj2%add_stk(eostk, ctfvars)
+                call work_proj2%add_stk(stk_even, ctfvars)
+                call work_proj2%add_stk(stk_odd,  ctfvars)
                 ! update orientations parameters
                 do icls=1,ncavgs
                     even_ind = icls
@@ -660,8 +698,6 @@ contains
                     call o_odd%set('stkind', work_proj2%os_ptcl3D%get(odd_ind,'stkind'))
                     call work_proj2%os_ptcl3D%set_ori(odd_ind, o_odd)
                 enddo
-                ! cleanup
-                deallocate(eostk, ext)
                 call o%kill
                 call o_even%kill
                 call o_odd%kill

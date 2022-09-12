@@ -9,9 +9,10 @@ public :: opt_de
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: N_GENERAL = 136,    N_VALLEY = 126,    N_MULTIMODAL = 103,    N_FLAT = 106
-real,    parameter :: F_GENERAL = 0.2790, F_VALLEY = 0.4027, F_MULTIMODAL = 0.3976, F_FLAT = 0.5860
-real,    parameter :: X_GENERAL = 0.9813, X_VALLEY = 0.9211, X_MULTIMODAL = 0.9794, X_FLAT = 0.3345
+integer, parameter :: N_COMMON = 100, N_GENERAL = 136,    N_VALLEY = 126,    N_MULTIMODAL = 103,    N_FLAT = 106
+real,    parameter :: F_COMMON = 0.5, F_GENERAL = 0.2790, F_VALLEY = 0.4027, F_MULTIMODAL = 0.3976, F_FLAT = 0.5860
+real,    parameter :: X_COMMON = 0.5, X_GENERAL = 0.9813, X_VALLEY = 0.9211, X_MULTIMODAL = 0.9794, X_FLAT = 0.3345
+
 
 
 type, extends(optimizer) :: opt_de
@@ -56,9 +57,9 @@ contains
                 self%F    = F_FLAT
                 self%CR   = X_FLAT
             case DEFAULT
-                spec%npop = N_MULTIMODAL
-                self%F    = F_MULTIMODAL
-                self%CR   = X_MULTIMODAL
+                spec%npop = N_GENERAL
+                self%F    = F_GENERAL
+                self%CR   = X_GENERAL
         end select
         ! allocate
         allocate(self%pop(spec%ndim,spec%npop), self%costs(spec%npop))
@@ -74,7 +75,7 @@ contains
         real,            intent(out)   :: lowest_cost !< lowest cost
         real    :: rtol
         real    :: trial(spec%ndim), cost_trial, L
-        integer :: a, rb, b, i, j, X, t, loc(1), nworse
+        integer :: ab(2), i, j, X, t, loc(1), nworse
         if( .not. associated(spec%costfun) )then
             THROW_HARD('cost function not associated in opt_spec; de_minimize')
         endif
@@ -97,26 +98,20 @@ contains
             self%costs(i) = spec%costfun(fun_self, self%pop(:,i), spec%ndim)
             spec%nevals = spec%nevals + 1
         end do
-        loc = minloc(self%costs)
-        self%best = loc(1)
-        loc = maxloc(self%costs)
+        loc        = minloc(self%costs)
+        self%best  = loc(1)
+        loc        = maxloc(self%costs)
         self%worst = loc(1)
         nworse = 0
         do t=1,spec%maxits ! generations loop
             ! select solution to modify
             X  = irnd_uni(spec%npop)
             ! select random disjoint pair
-            a  = irnd_uni(spec%npop)
-            rb = irnd_uni(spec%npop - 1)
-            b  = a + rb
-            if( b <= spec%npop )then
-            else
-                b = a + rb - spec%npop
-            endif
+            ab = irnd_uni_pair(spec%npop)
             ! create a trial solution
             do i=1,spec%ndim
-                if( i == X .or. ran3() < self%CR )then
-                    trial(i) = self%pop(i,self%best) + self%F * (self%pop(i,a) - self%pop(i,b))
+                if( i == X .or. ran3() <= self%CR )then
+                    trial(i) = self%pop(i,self%best) + self%F * (self%pop(i,ab(1)) - self%pop(i,ab(2)))
                 else
                     trial(i) = self%pop(i,X)
                 endif
@@ -128,23 +123,23 @@ contains
             cost_trial  = spec%costfun(fun_self, trial, spec%ndim)
             spec%nevals = spec%nevals + 1
             ! update pop if better solution is found
-            if( cost_trial < self%costs(X) )then
+            if( cost_trial <= self%costs(X) )then
                 nworse = 0
                 self%pop(:,X) = trial
                 self%costs(X) = cost_trial
                 ! update global best if needed
-                if( cost_trial < self%costs(self%best) ) self%best = X
+                if( cost_trial <= self%costs(self%best) ) self%best = X
             else
                 nworse = nworse + 1
                 if( cost_trial > self%costs(self%worst) ) self%worst = X
             endif
             ! relative tolerance
             rtol = 2.0 * abs(self%costs(self%best) - self%costs(self%worst)) / &
-                   &(abs(self%costs(self%best))+abs(self%costs(self%worst)) + TINY)
-            if( nworse > spec%npop .or. rtol <= spec%ftol ) exit
+                   &(abs(self%costs(self%best)) + abs(self%costs(self%worst)) + TINY)
+            if( rtol <= spec%ftol ) exit
         end do
         lowest_cost = self%costs(self%best)
-        spec%x = self%pop(:,self%best)
+        spec%x      = self%pop(:,self%best)
     end subroutine de_minimize
 
     ! GETTERS

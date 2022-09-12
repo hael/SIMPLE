@@ -141,4 +141,5 @@ contains
             self%exists = .false.
         endif
     end subroutine kill_opt_stde
+    
 end module simple_opt_stde
