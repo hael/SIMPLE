@@ -76,14 +76,15 @@ contains
 
     ! CALCULATORS
 
-    subroutine project_and_correlate( self, iptcl, corrs, grad)
+    subroutine project_and_correlate( self, iptcl, corrs, grad )
         class(eval_cartftcc), intent(inout) :: self
         integer,              intent(in)    :: iptcl
         real,                 intent(inout) :: corrs(  self%nspace)
         real, optional,       intent(inout) :: grad(2, self%nspace)
         type(projector), pointer :: vol_ptr => null()
         integer :: iref, ithr
-        logical :: iseven
+        logical :: iseven, present_grad
+        present_grad = present(grad)
         iseven = cartftcc_glob%ptcl_iseven(iptcl)
         if( iseven )then
             vol_ptr => self%vol_even
@@ -91,15 +92,19 @@ contains
             vol_ptr => self%vol_odd
         endif
         ithr = omp_get_thread_num() + 1 ! needs to be moved into the loop if we want to parallelize here
-        do iref = 1,self%nspace
-            call vol_ptr%fproject_serial(self%orispace, iref, self%projs(ithr), params_glob%kstop)
-            call cartftcc_glob%set_ref(iref, self%projs(ithr), iseven)
-            if( present(grad) )then
+        if( present_grad )then
+            do iref = 1,self%nspace
+                call vol_ptr%fproject_serial(self%orispace, iref, self%projs(ithr), params_glob%kstop)
+                call cartftcc_glob%set_ref(iref, self%projs(ithr), iseven)
                 corrs(iref) = cartftcc_glob%calc_corr(iref, iptcl, self%orispace%get_2Dshift(iptcl), grad(:, iref))
-            else
+            end do
+        else
+            do iref = 1,self%nspace
+                call vol_ptr%fproject_serial(self%orispace, iref, self%projs(ithr), params_glob%kstop)
+                call cartftcc_glob%set_ref(iref, self%projs(ithr), iseven)
                 corrs(iref) = cartftcc_glob%calc_corr(iref, iptcl, self%orispace%get_2Dshift(iptcl))
-            endif
-        end do
+            end do
+        endif
     end subroutine project_and_correlate
 
     ! DESTRUCTOR
