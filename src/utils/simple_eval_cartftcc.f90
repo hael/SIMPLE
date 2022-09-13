@@ -6,6 +6,7 @@ use simple_image,           only: image
 use simple_projector,       only: projector
 use simple_parameters,      only: params_glob
 use simple_oris,            only: oris
+use simple_ori,             only: ori
 use simple_cartft_corrcalc, only: cartftcc_glob
 use simple_parameters,      only: params_glob
 implicit none
@@ -39,12 +40,17 @@ contains
     ! CONSTRUCTOR
 
     subroutine new( self, vol_even, vol_odd, nspace )
-        class(eval_cartftcc),    intent(inout) :: self
-        type(projector), target, intent(in)    :: vol_even, vol_odd
-        integer,                 intent(in)    :: nspace
+        class(eval_cartftcc),      intent(inout) :: self
+        type(projector), target,   intent(in)    :: vol_even, vol_odd
+        integer,         optional, intent(in)    :: nspace
         integer :: ithr
+        if( present(nspace) )then
+            if( nspace < nthr_glob ) THROW_HARD('nspace must be > nthr_glob due to thread safety')
+            self%nspace = nspace
+        else
+            self%nspace = nthr_glob
+        endif
         call self%set_eo_ptrs(vol_even, vol_odd)
-        self%nspace = nspace
         self%ldim   = vol_even%get_ldim()
         call self%orispace%new(self%nspace, is_ptcl=.false.)
         allocate(self%projs(nthr_glob))
@@ -76,6 +82,34 @@ contains
 
     ! CALCULATORS
 
+    subroutine project_and_correlate_1( self, iptcl, o, corr, grad )
+        class(eval_cartftcc), intent(inout) :: self
+        integer,              intent(in)    :: iptcl
+        class(ori),           intent(in)    :: o
+        real,                 intent(inout) :: corr
+        real, optional,       intent(inout) :: grad(2)
+        type(projector), pointer :: vol_ptr => null()
+        logical :: iseven, present_grad
+        integer :: ithr
+        present_grad = present(grad)
+        iseven = cartftcc_glob%ptcl_iseven(iptcl)
+        if( iseven )then
+            vol_ptr => self%vol_even
+        else
+            vol_ptr => self%vol_odd
+        endif
+        ithr = omp_get_thread_num() + 1
+        if( present_grad )then
+            call vol_ptr%fproject_serial(o, self%projs(ithr), params_glob%kstop)
+            call cartftcc_glob%set_ref(ithr, self%projs(ithr), iseven)
+            corr = cartftcc_glob%calc_corr(ithr, iptcl, o%get_2Dshift(), grad(:))
+        else
+            call vol_ptr%fproject_serial(o, self%projs(ithr), params_glob%kstop)
+            call cartftcc_glob%set_ref(ithr, self%projs(ithr), iseven)
+            corr = cartftcc_glob%calc_corr(ithr, iptcl, o%get_2Dshift())
+        endif
+    end subroutine project_and_correlate_1
+
     subroutine project_and_correlate( self, iptcl, corrs, grad )
         class(eval_cartftcc), intent(inout) :: self
         integer,              intent(in)    :: iptcl
@@ -91,7 +125,8 @@ contains
         else
             vol_ptr => self%vol_odd
         endif
-        ithr = omp_get_thread_num() + 1 ! needs to be moved into the loop if we want to parallelize here
+         ! get the thread index
+        ithr = omp_get_thread_num() + 1
         if( present_grad )then
             do iref = 1,self%nspace
                 call vol_ptr%fproject_serial(self%orispace, iref, self%projs(ithr), params_glob%kstop)
