@@ -117,11 +117,11 @@ contains
                     ! sigma2 weighing
                     if( use_sigmas) then
                         if(sh < sigma2_kfromto(1))then
-                            self%cmplx_plane(h,k) = c      / eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1),iptcl)
-                            self%ctfsq_plane(h,k) = tvalsq / eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1),iptcl)
+                            c      = c      / eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1),iptcl)
+                            tvalsq = tvalsq / eucl_sigma2_glob%sigma2_noise(sigma2_kfromto(1),iptcl)
                         else
-                            self%cmplx_plane(h,k) = c      / eucl_sigma2_glob%sigma2_noise(sh,iptcl)
-                            self%ctfsq_plane(h,k) = tvalsq / eucl_sigma2_glob%sigma2_noise(sh,iptcl)
+                            c      = c      / eucl_sigma2_glob%sigma2_noise(sh,iptcl)
+                            tvalsq = tvalsq / eucl_sigma2_glob%sigma2_noise(sh,iptcl)
                         endif
                     endif
                 endif

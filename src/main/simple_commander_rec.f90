@@ -192,6 +192,7 @@ contains
         call eorecvol_read%kill_exp ! reduced memory usage
         n = params%nstates*params%nparts
         l_euclid_reg = (params%cc_objfun==OBJFUN_EUCLID) .or. params%l_needs_sigma
+        if( params%l_nonuniform ) l_euclid_reg = .false.
         if( L_BENCH_GLOB )then
             ! end of init
             rt_init = toc(t_init)

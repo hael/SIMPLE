@@ -653,12 +653,6 @@ contains
         end where
         ! Signal
         tau2 = ssnr * sig2
-
-        do k=1,sz
-            print *,k,sig2(k), tau2(k), ssnr(k)
-        enddo
-
-
         ! add Tau2 inverse to denominator
         ! because signal assumed infinite at very low resolution there is no addition
         reslim_ind = max(6, calc_fourier_index(params_glob%hp, params_glob%box, params_glob%smpd))
