@@ -209,15 +209,20 @@ contains
     end subroutine fproject
 
     !> \brief  extracts a Fourier plane from the expanded FT matrix of a volume (self)
-    subroutine fproject_serial_1( self, e, fplane )
+    subroutine fproject_serial_1( self, e, fplane, find_lp )
         class(projector),  intent(inout) :: self
         class(ori),        intent(in)    :: e
         class(image),      intent(inout) :: fplane
+        integer, optional, intent(in)    :: find_lp
         real        :: loc(3), e_rotmat(3,3)
         integer     :: h, k, sqarg, sqlp, lims(3,2), phys(3), ldim(3)
         complex(sp) :: comp
         lims = self%loop_lims(2)
-        sqlp = (maxval(lims(:,2)))**2
+        if( present(find_lp) )then
+            sqlp = find_lp * find_lp
+        else
+            sqlp = (maxval(lims(:,2)))**2
+        endif
         ldim = fplane%get_ldim()
         call fplane%zero_and_flag_ft()
         e_rotmat = e%get_mat()
@@ -253,7 +258,11 @@ contains
         integer     :: h, k, sqarg, sqlp, lims(3,2), phys(3), ldim(3)
         complex(sp) :: comp
         lims = self%loop_lims(2)
-        sqlp = find_lp * find_lp
+        if( present(find_lp) )then
+            sqlp = find_lp * find_lp
+        else
+            sqlp = (maxval(lims(:,2)))**2
+        endif
         ldim = fplane%get_ldim()
         call fplane%zero_and_flag_ft()
         e_rotmat = ospace%get_mat(iref)
