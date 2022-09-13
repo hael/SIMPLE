@@ -4547,6 +4547,7 @@ contains
         class(image),         pointer       :: ref_ptr => null()
         real                                :: sumsq_ref, cc, eps, denom ! numerator and denominator of the cc
         complex(dp)                         :: numer_der, denom_der, numer, temp
+        integer                             :: ind
         call self_ref%shift2Dserial_grad(shvec, self_r4cc, self_r4grad)
         if( arg(shvec) > 1e-5 )then
             ref_ptr => self_r4cc
@@ -4555,8 +4556,8 @@ contains
         endif
         sumsq_ref = ref_ptr%calc_sumsq(resmsk)
         eps       = epsilon(sumsq_ref)
-        cc        = real(sum(ref_ptr%cmat * conjg(self_ptcl%cmat), mask=resmsk))
-        numer     = sum(self_r4cc%cmat * conjg(self_ptcl%cmat))
+        numer     = sum(self_r4cc%cmat * conjg(self_ptcl%cmat), mask=resmsk)
+        cc        = real(numer)
         denom     = sqrt(sumsq_ref * sumsq_ptcl)
         if( cc < eps .and. sumsq_ref < eps .and. sumsq_ptcl < eps )then
             cc = 1.
@@ -4566,14 +4567,12 @@ contains
             cc = cc / sqrt(sumsq_ref * sumsq_ptcl)
         endif
         ! calculating the gradient using the chain rule: (a/b)' = (a'b - ab')/b^2
-        numer_der = sum(self_r4grad(1)%cmat * conjg(self_ptcl%cmat))
-        denom_der = sqrt(sumsq_ptcl)*sum(self_r4grad(1)%cmat * conjg(self_r4cc%cmat) + self_r4cc%cmat * conjg(self_r4grad(1)%cmat))/2./sqrt(sumsq_ref)
-        temp      = numer_der*denom - numer*denom_der
-        grad(1)   = (temp + conjg(temp))/2./denom**2
-        numer_der = sum(self_r4grad(2)%cmat * conjg(self_ptcl%cmat))
-        denom_der = sqrt(sumsq_ptcl)*sum(self_r4grad(2)%cmat * conjg(self_r4cc%cmat) + self_r4cc%cmat * conjg(self_r4grad(2)%cmat))/2./sqrt(sumsq_ref)
-        temp      = numer_der*denom - numer*denom_der
-        grad(2)   = (temp + conjg(temp))/2./denom**2
+        do ind = 1, size(grad)
+            numer_der = sum(self_r4grad(ind)%cmat * conjg(self_ptcl%cmat), mask=resmsk)
+            denom_der = sqrt(sumsq_ptcl)*sum(self_r4grad(ind)%cmat * conjg(self_r4cc%cmat) + self_r4cc%cmat * conjg(self_r4grad(ind)%cmat), mask=resmsk)/2./sqrt(sumsq_ref)
+            temp      = numer_der*denom - numer*denom_der
+            grad(ind) = (temp + conjg(temp))/2./denom**2
+        enddo
     end function corr_grad
 
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
