@@ -102,6 +102,7 @@ contains
 
     subroutine exec_postprocess( self, cline )
         use simple_sp_project, only: sp_project
+        use simple_opt_filter, only: opt_filter_3D
         class(postprocess_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
         character(len=:), allocatable :: fname_vol, fname_fsc, fname_msk, fname_mirr
@@ -109,18 +110,17 @@ contains
         real,             allocatable :: fsc(:), optlp(:), res(:)
         type(parameters) :: params
         type(image)      :: vol, vol_copy, vol_even, vol_odd
-        type(masker)     :: mskvol
+        type(masker)     :: mskvol, sphere
         type(sp_project) :: spproj
         real    :: fsc0143, fsc05, smpd, mskfile_smpd, lplim
         integer :: state, box, fsc_box, mskfile_box, ldim(3), flims(3,2)
-        logical :: has_fsc, has_mskfile, l_nonuniform
+        logical :: has_fsc, has_mskfile
         ! set defaults
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('nonuniform') ) call cline%set('nonuniform', 'no')
         call cline%set('oritype', 'out')
         ! parse commad-line
         call params%new(cline)
-        l_nonuniform = cline%defined('filter')
         ! read project segment
         call spproj%read_segment(params%oritype, params%projfile)
         ! state
@@ -136,7 +136,7 @@ contains
             call spproj%get_vol('vol', state, fname_vol, smpd, box)
         endif
         if( .not.file_exists(fname_vol) )then
-            THROW_HARD('volume: '//trim(fname_vol)//' does not exist; exec_postprocess')
+            THROW_HARD('volume: '//trim(fname_vol)//' does not exist')
         endif
         ! generate file names
         fname_even  = add2fbody(trim(fname_vol), params%ext, '_even')
@@ -148,7 +148,9 @@ contains
         ldim = [box,box,box]
         call vol%new(ldim, smpd)
         call vol%read(fname_vol)
-        if( l_nonuniform )then
+        if( params%l_nonuniform )then
+            if( .not. file_exists(trim(fname_even)) ) THROW_HARD('volume: '//trim(fname_even)//' does not exists')
+            if( .not. file_exists(trim(fname_odd))  ) THROW_HARD('volume: '//trim(fname_odd)//' does not exists')
             call vol_even%new(ldim, smpd)
             call vol_even%read(fname_even)
             call vol_odd%new(ldim, smpd)
@@ -199,7 +201,6 @@ contains
             params%mskfile = trim(fname_msk)
             if( file_exists(params%mskfile) ) has_mskfile = .true.
         endif
-        if( l_nonuniform .and. .not. has_mskfile ) THROW_HARD('nonuniform filter requires mask file input')
         if( has_mskfile )then
             call mskvol%new(ldim, smpd)
             call mskvol%read(params%mskfile)
@@ -213,18 +214,22 @@ contains
             ! low-pass overrides all input
             call vol%bp(0., params%lp)
             call vol_copy%bp(0., params%lp)
-        else if( l_nonuniform )then
-            call vol_even%ifft
-            call vol_odd%ifft
-            call vol%ifft
-            call vol_copy%ifft
-            ! nonuniform low-pass filter based on windowed FSCs and TV regularization
-            call nonuniform_fsc_filt(vol_even, vol_odd, mskvol,&
-            &l_match_filt=.false., map2filt=vol, phran=.false. )
-            call nonuniform_fsc_filt(vol_even, vol_odd, mskvol,&
-            &l_match_filt=.false., map2filt=vol_copy, phran=.false. )
-            call vol%fft
-            call vol_copy%fft
+        else if( params%l_nonuniform .and. has_fsc )then
+            call sphere%new(ldim, smpd)
+            sphere = 1.0
+            call sphere%mask(params%msk, 'soft', backgr=0.0)
+            call sphere%one_at_edge
+            call opt_filter_3D(vol_odd, vol_even, sphere)
+            call sphere%kill
+            ! merge volumes
+            call vol_odd%add(vol_even)
+            call vol_odd%mul(0.5)
+            vol_copy = vol_odd
+            vol      = vol_odd
+            call vol%apply_bfac(params%bfac)
+            ! final low-pass filtering for smoothness
+            call vol%bp(0., fsc0143)
+            call vol_copy%bp(0., fsc0143)
         else if( has_fsc )then
             ! optimal low-pass filter of unfiltered volumes from FSC
             if( params%cc_objfun == OBJFUN_EUCLID )then
@@ -278,14 +283,7 @@ contains
             endif
             call mskvol%kill
         else
-            if( has_mskfile )then
-                call mskvol%new(ldim, smpd)
-                call mskvol%read(params%mskfile)
-                call vol%mul(mskvol)
-                call mskvol%kill
-            else
-                call vol%mask(params%msk, 'soft')
-            endif
+            call vol%mask(params%msk, 'soft')
         endif
         ! output in cwd
         call vol%write(fname_pproc)
