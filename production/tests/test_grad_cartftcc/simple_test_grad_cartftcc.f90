@@ -63,37 +63,9 @@ do iref = 1,p%nptcls
     pshifts(iref, 2) = floor(ran3()*10.99) - 5
     call evalcc%set_ori(iref, b%eulspace%get_euler(iref), pshifts(iref, :))
 end do
-cnt = 0
-do iptcl = 1,p%nptcls
-    call evalcc%project_and_correlate(iptcl, corrs)
-    print *, corrs
-    call evalcc%project_and_correlate(iptcl, corrs, grad)
-    print *, corrs, grad
-    loc = maxloc(corrs)
-    if( loc(1) == iptcl ) cnt = cnt + 1
-    if( .not. loc(1) == iptcl ) write(*, *) pshifts(iptcl, :)
-end do
-print *, 'initial corr = ', corrs(loc)
-! numerical gradient
-iptcl = 1
-print *, pshifts(iref, :)
-do iref = 1,p%nptcls
-    ! dcc/dx
-    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [pshifts(iref, 1) - 0.00001, pshifts(iref, 2)])
-    call evalcc%project_and_correlate(iptcl, corrs, grad)
-    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [pshifts(iref, 1) + 0.00001, pshifts(iref, 2)])
-    call evalcc%project_and_correlate(iptcl, corrs2, grad)
-    print *, 'numerical d_corr/dx = ', (corrs2(1) - corrs(1))/0.00002
-    ! dcc/dy
-    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [pshifts(iref, 1), pshifts(iref, 2) - 0.00001])
-    call evalcc%project_and_correlate(iptcl, corrs)
-    call evalcc%set_ori(iref, b%eulspace%get_euler(iref), [pshifts(iref, 1), pshifts(iref, 2) + 0.00001])
-    call evalcc%project_and_correlate(iptcl, corrs2)
-    print *, 'numerical d_corr/dy = ', (corrs2(1) - corrs(1))/0.00002
-end do
 ! testing with basic gradient descent
-iref = 1
-pshifts(iref, :) = [1., .5]
+iptcl = 1
+iref  = 1
 print *, 'initial shift = ', pshifts(iref, :)
 do iter = 1, 1000
     call evalcc%set_ori(iref, b%eulspace%get_euler(iref), pshifts(iref, :))
@@ -103,6 +75,6 @@ do iter = 1, 1000
         print *, 'cost = ', corrs(1)
         print *, 'shifts = ', pshifts(iref, :)
     endif
-    pshifts(iref, :) = pshifts(iref, :) + grad(2, iref)
+    pshifts(iref, :) = pshifts(iref, :) + grad(:, iref)
 enddo
 end program simple_test_grad_cartftcc
