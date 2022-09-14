@@ -126,11 +126,7 @@ contains
             if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
             call nano%set_img(params%vols(2), 'img_cc')
             call nano%update_ncc()
-            if( cline%defined('rmsd_file') )then
-                call nano%fillin_atominfo( a, trim(params%rmsd_file) )
-            else
-                call nano%fillin_atominfo( a )
-            endif
+            call nano%fillin_atominfo( a )
             call nano%write_csv_files
             call nano%kill
         else
@@ -140,11 +136,7 @@ contains
             if( use_subset_coords ) call nano%set_coords4stats(params%pdbfile2)
             call nano%set_img(params%vols(2), 'img_cc')
             call nano%update_ncc()
-            if( cline%defined('rmsd_file') )then
-                call nano%fillin_atominfo( rmsd_file=trim(params%rmsd_file) )
-            else
-                call nano%fillin_atominfo()
-            endif
+            call nano%fillin_atominfo()
             call nano%write_csv_files
             call nano%kill
         endif
