@@ -32,14 +32,14 @@ character(len=*), parameter :: ATOM_VAR_CORRS_FILE = 'atom_param_corrs.txt'
 
 character(len=*), parameter :: ATOM_STATS_HEAD = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//&
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
-&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'RMSD'//&
-&CSV_DELIM//'X'//CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//&
+&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//&
+&'X'//CSV_DELIM//'Y'//CSV_DELIM//'Z'//CSV_DELIM//'EXX_STRAIN'//CSV_DELIM//'EYY_STRAIN'//&
 &CSV_DELIM//'EZZ_STRAIN'//CSV_DELIM//'EXY_STRAIN'//CSV_DELIM//'EYZ_STRAIN'//CSV_DELIM//&
 &'EXZ_STRAIN'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: ATOM_STATS_HEAD_OMIT = 'INDEX'//CSV_DELIM//'NVOX'//CSV_DELIM//&
 &'CN_STD'//CSV_DELIM//'NN_BONDL'//CSV_DELIM//'CN_GEN'//CSV_DELIM//'DIAM'//CSV_DELIM//'AVG_INT'//&
-&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'RMSD'//CSV_DELIM//'RADIAL_STRAIN'
+&CSV_DELIM//'MAX_INT'//CSV_DELIM//'CENDIST'//CSV_DELIM//'VALID_CORR'//CSV_DELIM//'RADIAL_STRAIN'
 
 character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_NVOX'//CSV_DELIM//'MED_NVOX'//CSV_DELIM//'SDEV_NVOX'//&
@@ -50,7 +50,6 @@ character(len=*), parameter :: NP_STATS_HEAD = 'NATOMS'//CSV_DELIM//'DIAM'//&
 &CSV_DELIM//'AVG_AVG_INT'//CSV_DELIM//'MED_AVG_INT'//CSV_DELIM//'SDEV_AVG_INT'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'MED_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
 &CSV_DELIM//'AVG_VALID_CORR'//CSV_DELIM//'MED_VALID_CORR'//CSV_DELIM//'SDEV_VALID_CORR'//&
-&CSV_DELIM//'AVG_RMSD'//CSV_DELIM//'MED_RMSD'//CSV_DELIM//'SDEV_RMSD'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
 
@@ -62,7 +61,6 @@ character(len=*), parameter :: CN_STATS_HEAD = 'CN_STD'//CSV_DELIM//'NATOMS'//&
 &CSV_DELIM//'AVG_AVG_INT'//CSV_DELIM//'MED_AVG_INT'//CSV_DELIM//'SDEV_AVG_INT'//&
 &CSV_DELIM//'AVG_MAX_INT'//CSV_DELIM//'MED_MAX_INT'//CSV_DELIM//'SDEV_MAX_INT'//&
 &CSV_DELIM//'AVG_VALID_CORR'//CSV_DELIM//'MED_VALID_CORR'//CSV_DELIM//'SDEV_VALID_CORR'//&
-&CSV_DELIM//'AVG_RMSD'//CSV_DELIM//'MED_RMSD'//CSV_DELIM//'SDEV_RMSD'//&
 &CSV_DELIM//'AVG_RADIAL_STRAIN'//CSV_DELIM//'MED_RADIAL_STRAIN'//CSV_DELIM//'SDEV_RADIAL_STRAIN'//&
 &CSV_DELIM//'MIN_RADIAL_STRAIN'//CSV_DELIM//'MAX_RADIAL_STRAIN'
 
@@ -80,7 +78,6 @@ type :: atom_stats
     real    :: cendist           = 0. ! distance from the centre of mass of the nanoparticle        CENDIST
     real    :: valid_corr        = 0. ! per-atom correlation with the simulated map                 VALID_CORR
     real    :: center(3)         = 0. ! atom center                                                 X Y Z
-    real    :: rmsd              = 0. ! rmsd between e/o atoms                                      RMSD
     ! strain
     real    :: exx_strain        = 0. ! tensile strain in %                                         EXX_STRAIN
     real    :: eyy_strain        = 0. ! -"-                                                         EYY_STRAIN
@@ -114,7 +111,6 @@ type :: nanoparticle
     type(stats_struct)    :: max_int_stats
     type(stats_struct)    :: valid_corr_stats
     type(stats_struct)    :: radial_strain_stats
-    type(stats_struct)    :: rmsd_stats
     ! CN-DEPENDENT STATS
     ! -- # atoms
     real                  :: natoms_cns(CNMIN:CNMAX) = 0. ! # of atoms per cn_std                            NATOMS
@@ -127,7 +123,6 @@ type :: nanoparticle
     type(stats_struct)    :: max_int_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: valid_corr_stats_cns(CNMIN:CNMAX)
     type(stats_struct)    :: radial_strain_stats_cns(CNMIN:CNMAX)
-    type(stats_struct)    :: rmsd_stats_cns(CNMIN:CNMAX)
     ! PER-ATOM STATISTICS
     type(atom_stats), allocatable :: atominfo(:)
     real,             allocatable :: coords4stats(:,:)
@@ -1080,13 +1075,12 @@ contains
 
     ! calc stats
 
-    subroutine fillin_atominfo( self, a0, rmsd_file )
+    subroutine fillin_atominfo( self, a0 )
         class(nanoparticle),        intent(inout) :: self
         real,             optional, intent(in)    :: a0(3) ! lattice parameters
-        character(len=*), optional, intent(in)    :: rmsd_file
         type(image)          :: simatms
         logical, allocatable :: mask(:,:,:)
-        real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:), rmsds(:)
+        real,    allocatable :: centers_A(:,:), tmpcens(:,:), strain_array(:,:)
         real,    pointer     :: rmat_raw(:,:,:)
         integer, allocatable :: imat_cc(:,:,:)
         character(len=256)   :: io_msg
@@ -1100,12 +1094,6 @@ contains
             a = a0
         else
             call fit_lattice(self%element, centers_A, a)
-        endif
-        ! per-atom e/o RMSDs
-        if( present(rmsd_file) )then
-            rmsds = file2rarr(rmsd_file)
-            if( size(rmsds) /= self%n_cc ) THROW_HARD('incongruent array dims atominfo vs rmsd:s')
-            self%atominfo(:)%rmsd = rmsds
         endif
         call run_cn_analysis(self%element,centers_A,a,self%atominfo(:)%cn_std,self%atominfo(:)%cn_gen)
         ! calc strain for all atoms
@@ -1177,7 +1165,6 @@ contains
         call calc_stats(  self%atominfo(:)%max_int,       self%max_int_stats       )
         call calc_stats(  self%atominfo(:)%valid_corr,    self%valid_corr_stats    )
         call calc_stats(  self%atominfo(:)%radial_strain, self%radial_strain_stats )
-        call calc_stats(  self%atominfo(:)%rmsd,          self%rmsd_stats          )
         ! CALCULATE CN-DEPENDENT STATS & WRITE CN-ATOMS
         do cn = CNMIN, CNMAX
             call calc_cn_stats( cn )
@@ -1219,7 +1206,6 @@ contains
                 call calc_stats( self%atominfo(:)%max_int,       self%max_int_stats_cns(cn),       mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%valid_corr,    self%valid_corr_stats_cns(cn),    mask=cn_mask   )
                 call calc_stats( self%atominfo(:)%radial_strain, self%radial_strain_stats_cns(cn), mask=cn_mask   )
-                call calc_stats( self%atominfo(:)%rmsd,          self%rmsd_stats_cns(cn),          mask=cn_mask   )
             end subroutine calc_cn_stats
 
             subroutine write_cn_atoms( cn_std )
@@ -1491,7 +1477,6 @@ contains
         write(funit,601,advance='no') self%atominfo(cc)%max_int,                CSV_DELIM ! MAX_INT
         write(funit,601,advance='no') self%atominfo(cc)%cendist,                CSV_DELIM ! CENDIST
         write(funit,601,advance='no') self%atominfo(cc)%valid_corr,             CSV_DELIM ! VALID_CORR
-        write(funit,601,advance='no') self%atominfo(cc)%rmsd,                   CSV_DELIM ! RMSD
         if( .not. omit_here )then
         write(funit,601,advance='no') self%atominfo(cc)%center(1),              CSV_DELIM ! X
         write(funit,601,advance='no') self%atominfo(cc)%center(2),              CSV_DELIM ! Y
@@ -1552,10 +1537,6 @@ contains
         write(funit,601,advance='no') self%valid_corr_stats%avg,     CSV_DELIM ! AVG_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats%med,     CSV_DELIM ! MED_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats%sdev,    CSV_DELIM ! SDEV_VALID_CORR
-        ! -- e/o atom rmsd
-        write(funit,601,advance='no') self%rmsd_stats%avg,           CSV_DELIM ! AVG_RMSD
-        write(funit,601,advance='no') self%rmsd_stats%med,           CSV_DELIM ! MED_RMSD
-        write(funit,601,advance='no') self%rmsd_stats%sdev,          CSV_DELIM ! SDEV_RMSD
         ! -- radial strain
         write(funit,601,advance='no') self%radial_strain_stats%avg,  CSV_DELIM ! AVG_RADIAL_STRAIN
         write(funit,601,advance='no') self%radial_strain_stats%med,  CSV_DELIM ! MED_RADIAL_STRAIN
@@ -1602,10 +1583,6 @@ contains
         write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%avg,     CSV_DELIM ! AVG_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%med,     CSV_DELIM ! MED_VALID_CORR
         write(funit,601,advance='no') self%valid_corr_stats_cns(cn)%sdev,    CSV_DELIM ! SDEV_VALID_CORR
-        ! -- e/o atom rmsd
-        write(funit,601,advance='no') self%rmsd_stats_cns(cn)%avg,           CSV_DELIM ! AVG_RMSD
-        write(funit,601,advance='no') self%rmsd_stats_cns(cn)%med,           CSV_DELIM ! MED_RMSD
-        write(funit,601,advance='no') self%rmsd_stats_cns(cn)%sdev,          CSV_DELIM ! SDEV_RMSD
         ! -- radial strain
         write(funit,601,advance='no') self%radial_strain_stats_cns(cn)%avg,  CSV_DELIM ! AVG_RADIAL_STRAIN
         write(funit,601,advance='no') self%radial_strain_stats_cns(cn)%med,  CSV_DELIM ! MED_RADIAL_STRAIN
