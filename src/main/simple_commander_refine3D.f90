@@ -118,7 +118,8 @@ contains
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
-        logical :: l_projmatch, l_lp_iters, l_switch2euclid, l_continue, l_multistates, l_automsk, l_ptclw, l_combine_eo
+        logical :: l_projmatch, l_switch2eo, l_switch2euclid, l_continue, l_multistates, l_automsk
+        logical :: l_ptclw, l_combine_eo, l_lpset, l_griddingset
         real    :: corr, corr_prev, smpd, lplim
         integer :: ldim(3), i, state, iter, box, nfiles, niters, iter_switch2euclid, ifoo
         integer :: ncls, icls, ind, fnr
@@ -126,12 +127,13 @@ contains
             call xrefine3D_shmem%execute(cline)
             return
         endif
-        l_multistates = .false.
-        if( cline%defined('nstates') ) l_multistates = .true.
-        l_lp_iters = cline%defined('lp_iters')
+        l_multistates = cline%defined('nstates')
+        l_lpset       = cline%defined('lp')
+        l_griddingset = cline%defined('gridding')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',      'yes')
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',        30.)
         if( .not. cline%defined('ptclw')   ) call cline%set('ptclw',       'no')
+        if( .not. cline%defined('lp_iters')) call cline%set('lp_iters',      1.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! objfun=euclid logics, part 1
         l_switch2euclid  = .false.
@@ -168,6 +170,9 @@ contains
             call cline%delete('automsk')
         endif
         if( l_automsk .and. l_multistates ) THROW_HARD('automsk=yes not currenty supported for multi-state refinement')
+        ! switch from low-pass to e/o refinement
+        l_switch2eo = params%lp_iters >= 1
+        if( .not.l_lpset ) l_switch2eo = .false. ! is already e/o
         ! final iteration with combined e/o
         l_combine_eo = .false.
         if( cline%defined('combine_eo') )then
@@ -270,6 +275,10 @@ contains
             endif
             ! if we are doing objfun=euclid the sigm estimates need to be carried over
             if( trim(params%objfun) .eq. 'euclid' )then
+                call cline%set('needs_sigma','yes')
+                call cline_reconstruct3D_distr%set('needs_sigma','yes')
+                call cline_volassemble%set('needs_sigma','yes')
+                if( .not.l_griddingset ) call cline%set('gridding','yes')
                 call simple_list_files(prev_refine_path//trim(SIGMA2_FBODY)//'*', list)
                 nfiles = size(list)
                 if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
@@ -326,7 +335,7 @@ contains
                     THROW_HARD('neigh refinement mode requires input orientations')
                 endif
             endif
-            if( .not.cline%defined('lp') )then
+            if( .not.l_lpset )then
                 THROW_HARD('LP needs be defined for the first step of projection matching!')
                 call cline%delete('update_frac')
             endif
@@ -348,7 +357,7 @@ contains
         if( l_switch2euclid )then
             iter_switch2euclid = 1
             if( cline%defined('update_frac') ) iter_switch2euclid = ceiling(1./(params%update_frac+0.001))
-            if( l_projmatch .and. l_lp_iters ) iter_switch2euclid = params%lp_iters
+            if( l_projmatch .and. l_switch2eo ) iter_switch2euclid = params%lp_iters
             call cline%set('needs_sigma','yes')
         endif
         ! prepare job description
@@ -370,7 +379,6 @@ contains
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
             write(logfhandle,'(A)')   '>>>'
             if( l_switch2euclid .or. trim(params%objfun).eq.'euclid' )then
-                ! use of l_needs_sigma?
                 call cline_calc_group_sigmas%set('which_iter',real(iter))
                 call qenv%exec_simple_prg_in_queue(cline_calc_group_sigmas, 'CALC_GROUP_SIGMAS_FINISHED')
             endif
@@ -399,7 +407,7 @@ contains
             if( cline%defined('frcs') )then
                 ! all good
             else
-                call job_descr%set('frcs', trim(FRCS_FILE))
+                if( l_multistates )call job_descr%set('frcs', trim(FRCS_FILE))
             endif
             ! schedule
             if( L_BENCH_GLOB )then
@@ -531,7 +539,6 @@ contains
                     endif
             end select
             if( L_BENCH_GLOB ) rt_volassemble = toc(t_volassemble)
-
             ! CONVERGENCE
             converged = .false.
             select case(trim(params%refine))
@@ -573,7 +580,7 @@ contains
                 call job_descr%set( 'trs', trim(str) )
                 call cline%set( 'trs', cline_check_3Dconv%get_rarg('trs') )
             endif
-            if( l_lp_iters .and. (niters == params%lp_iters ) )then
+            if( l_switch2eo .and. (niters == params%lp_iters ) )then
                 ! e/o projection matching
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A)')'>>> SWITCHING TO EVEN/ODD RESOLUTION LIMIT'
@@ -611,11 +618,13 @@ contains
                 write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
                 call cline%set('objfun',    'euclid')
                 call cline%set('match_filt','no')
-                call cline%set('gridding',  'yes')
+                if(.not.l_griddingset )then
+                    call cline%set('gridding',     'yes')
+                    call job_descr%set('gridding', 'yes')
+                endif
                 call cline%delete('lp')
                 call job_descr%set('objfun',    'euclid')
                 call job_descr%set('match_filt','no')
-                call job_descr%set('gridding',  'yes')
                 call job_descr%delete('lp')
                 call cline_volassemble%set('objfun','euclid')
                 call cline_postprocess%delete('lp')
