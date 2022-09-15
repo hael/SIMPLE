@@ -914,6 +914,7 @@ contains
         if( .not. cline%defined('ptclw')         ) call cline%set('ptclw',          'no')
         if( .not. cline%defined('trs')           ) call cline%set('trs',             5.0)
         if( .not. cline%defined('ran_noise_ph')  ) call cline%set('ran_noise_ph',   'no')
+        call cline%set('lp_iters',0.) ! low-pass limited resolution, no e/o
         call xrefine3D_distr%execute(cline)
     end subroutine exec_refine3D_nano
 
@@ -962,6 +963,7 @@ contains
         if( .not. cline%defined('fracsrch')       ) call cline%set('fracsrch',       0.9)
         if( .not. cline%defined('ran_noise_ph')   ) call cline%set('ran_noise_ph',  'no')
         call cline%set('mkdir', 'yes') ! because we want to create the directory X_autorefine3D_nano & copy the project file
+        call cline%set('lp_iters', 0.) ! low-pass limited resolution, no e/o
         call params%new(cline)         ! because the parameters class manages directory creation and project file copying, mkdir = yes
         params%mkdir = 'no'            ! to prevent the input vol to be appended with ../
         call cline%set('mkdir', 'no')  ! because we do not want a nested directory structure in the execution directory

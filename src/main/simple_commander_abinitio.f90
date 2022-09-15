@@ -317,12 +317,14 @@ contains
         call cline_refine3D_snhc%set('match_filt', 'no')
         call cline_refine3D_snhc%set('ptclw',      'no')  ! no soft particle weights in first phase
         call cline_refine3D_snhc%set('silence_fsc','yes') ! no FSC plot printing in snhc phase
+        call cline_refine3D_snhc%set('lp_iters',    0.)   ! low-pass limited resolution, no e/o
         call cline_refine3D_snhc%delete('frac')           ! no rejections in first phase
         ! (2) REFINE3D_INIT
         call cline_refine3D_init%set('projfile', trim(WORK_PROJFILE))
         call cline_refine3D_init%set('box',      real(box))
         call cline_refine3D_init%set('prg',      'refine3D')
         call cline_refine3D_init%set('lp',       lplims(1))
+        call cline_refine3D_init%set('lp_iters', 0.)   ! low-pass limited resolution, no e/o
         if( .not. cline_refine3D_init%defined('nspace') )then
             call cline_refine3D_init%set('nspace', real(NSPACE_INIT))
         endif
@@ -356,8 +358,10 @@ contains
         call cline_refine3D_refine%set('trs',      real(MINSHIFT)) ! activates shift search
         if( l_lpset )then
             call cline_refine3D_refine%set('lp', lplims(2))
+            call cline_refine3D_refine%set('lp_iters', 0.)   ! low-pass limited resolution, no e/o
         else
             call cline_refine3D_refine%delete('lp')
+            call cline_refine3D_refine%set('lp_iters', 0.)   ! no lp, e/o only
             call cline_refine3D_refine%set('lpstop',      lplims(2))
             call cline_refine3D_refine%set('clsfrcs',    'yes')
             call cline_refine3D_refine%set('match_filt', 'yes')
