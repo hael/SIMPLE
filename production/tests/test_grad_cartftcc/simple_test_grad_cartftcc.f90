@@ -5,6 +5,7 @@ use simple_eval_cartftcc,   only: eval_cartftcc
 use simple_cmdline,         only: cmdline
 use simple_builder,         only: builder
 use simple_parameters,      only: parameters
+use simple_cftcc_shsrch_grad,   only: cftcc_shsrch_grad
 use simple_projector_hlev
 use simple_timer
 use simple_oris
@@ -15,11 +16,12 @@ type(cartft_corrcalc)    :: cftcc
 type(cmdline)            :: cline
 type(builder)            :: b
 integer,     parameter   :: NSPACE=1    ! set to 1 for fast test
-real                     :: corrs(NSPACE), corrs2(NSPACE), grad(2, NSPACE)
+real                     :: corrs(NSPACE), corrs2(NSPACE), grad(2, NSPACE), lims(2,2), cxy(3)
 type(image), allocatable :: imgs(:)
 real,        allocatable :: pshifts(:,:)
 integer                  :: iref, iptcl, loc(1), cnt, x, y, iter
 type(eval_cartftcc)      :: evalcc
+type(cftcc_shsrch_grad)  :: grad_carshsrch_obj
 if( command_argument_count() < 3 )then
     write(logfhandle,'(a)') 'simple_test_eval_cartftcc lp=xx smpd=yy nthr=zz vol1=vol1.mrc'
     stop
@@ -63,6 +65,13 @@ do iref = 1,p%nptcls
     pshifts(iref, 2) = floor(ran3()*10.99) - 5
     call evalcc%set_ori(iref, b%eulspace%get_euler(iref), pshifts(iref, :))
 end do
+! testing with lbfgsb
+lims(:,1) = -5.
+lims(:,2) =  5.
+call grad_carshsrch_obj%new(lims)
+call grad_carshsrch_obj%set_indices(1, 1)
+cxy = grad_carshsrch_obj%minimize()
+print *, cxy
 ! testing with basic gradient descent
 iptcl = 1
 iref  = 1
