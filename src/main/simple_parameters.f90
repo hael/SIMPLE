@@ -214,6 +214,7 @@ type :: parameters
     character(len=STDLEN) :: ptclw='yes'          !< use particle weights(yes|no){yes}
     character(len=STDLEN) :: rmsd_file=''         !< per-atom e/o rmsd:s
     character(len=STDLEN) :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
+    character(len=STDLEN) :: qsys_partition2D=''  !< partition name for streaming 2d classification
     character(len=STDLEN) :: real_filter=''
     character(len=STDLEN) :: refine='shc'         !< refinement mode(snhc|shc|neigh|cluster|clustersym){shc}
     character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
@@ -607,6 +608,7 @@ contains
         call check_carg('ptclw',          self%ptclw)
         call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('qsys_name',      self%qsys_name)
+        call check_carg('qsys_partition2D',self%qsys_partition2D)
         call check_carg('readwrite',      self%readwrite)
         call check_carg('real_filter',    self%real_filter)
         call check_carg('refine',         self%refine)

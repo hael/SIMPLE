@@ -964,7 +964,7 @@ contains
         &filtering and resolution estimation(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(job_memory_per_task, 'job_memory_per_task','str', 'Memory per computing node', 'Memory in MB per part/computing node in distributed execution{16000}', 'MB per part{16000}', .false., 16000.)
         call set_param(qsys_name,     'qsys_name',     'multi',  'Queue system kind', 'Queue system kind(local|slurm|pbs)', '(local|slurm|pbs)', .false., 'local')
-        call set_param(qsys_partition,'qsys_partition','str',    'Name of SLURM/PBS partition', 'Name of target partition of distributed computer system (SLURM/PBS)', 'give part name', .false., '')
+        call set_param(qsys_partition,'qsys_partition','str',    'Name of SLURM/PBS partition', 'Name of target partition of distributed computer system (SLURM/PBS)', 'give partition name', .false., '')
         call set_param(qsys_qos,      'qsys_qos',      'str',    'Schedule priority', 'Job scheduling priority (SLURM/PBS)', 'give priority', .false., '')
         call set_param(qsys_reservation, 'qsys_reservation', 'str', 'Name of reserved partition', 'Name of reserved target partition of distributed computer system (SLURM/PBS)', 'give your part', .false., '')
         call set_param(box,            'box',          'num',    'Particle box size', 'Particle box size(in pixels)', '# pixels of box', .true., 0.)
@@ -3045,7 +3045,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 15, 0, 21, 13, 1, 8, .true.)                                                    ! # entries in each group, requires sp_project
+        &5, 15, 0, 21, 13, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3095,7 +3095,6 @@ contains
         call preprocess_stream_dev%set_gui_params('parm_ios', 14, submenu="CTF estimation")
         call preprocess_stream_dev%set_input('parm_ios',15, picker)
         call preprocess_stream_dev%set_gui_params('parm_ios', 15, submenu="picking")
-        
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3150,7 +3149,6 @@ contains
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 20, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('srch_ctrls',21, mcpatch_threshold)
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 21, submenu="motion correction")
-        
         ! filter controls
         call preprocess_stream_dev%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
@@ -3212,8 +3210,12 @@ contains
         call preprocess_stream_dev%set_input('comp_ctrls', 7, 'walltime', 'num', 'Walltime', 'Maximum execution time for job scheduling and management in seconds{1740}(29mins)',&
         &'in seconds(29mins){1740}', .false., 1740.)
         call preprocess_stream_dev%set_gui_params('comp_ctrls', 7)
-        call preprocess_stream_dev%set_input('comp_ctrls', 8, 'job_memory_per_task2D','str', 'Memory per 2D computing node', 'Memory dedicated to 2D classification per computing node (in MB){16000}', 'MB per part{16000}', .false., 16000.)
+        call preprocess_stream_dev%set_input('comp_ctrls', 8, 'job_memory_per_task2D','str', 'Memory per 2D computing node',&
+        &'Memory dedicated to 2D classification per computing node (in MB){16000}', 'MB per part{16000}', .false., 16000.)
         call preprocess_stream_dev%set_gui_params('comp_ctrls', 8)
+        call preprocess_stream_dev%set_input('comp_ctrls', 9, 'qsys_partition2D','str', 'Name of SLURM/PBS partition for 2D classification',&
+        &'Name of target partition of distributed computer system (SLURM/PBS) dedicated to 2D classification', 'parttion name', .false., '')
+        call preprocess_stream_dev%set_gui_params('comp_ctrls', 9)
     end subroutine new_preprocess_stream_dev
 
     subroutine new_print_dose_weights

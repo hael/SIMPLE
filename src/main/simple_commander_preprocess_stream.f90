@@ -168,6 +168,7 @@ contains
         if( l_pick )then
             call init_cluster2D_stream(cline, spproj, trim(PICKREFS)//trim(params%ext), micspproj_fname, l_cluster2D)
             call cline%delete('job_memory_per_task2D')
+            call cline%delete('qsys_partition2D')
         endif
         call cline%delete('ncls')
         ! movie watcher init
