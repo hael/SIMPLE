@@ -1173,6 +1173,7 @@ contains
         ! write pdf files with valid_corr and max_int in the B-factor field (for validation/visualisation)
         call self%write_centers('valid_corr_in_bfac_field', 'valid_corr')
         call self%write_centers('max_int_in_bfac_field',    'max_int')
+        call self%write_centers('cn_std_in_bfac_field',     'cn_std')
         ! destruct
         deallocate(cc_mask, imat_cc, tmpcens, strain_array, centers_A)
         call simatms%kill
@@ -1391,6 +1392,8 @@ contains
           select case(which)
               case('cn_gen')
                   call centers_pdb%set_beta(cc,self%atominfo(cc)%cn_gen)      ! use generalised coordination number
+              case('cn_std')
+                  call centers_pdb%set_beta(cc,real(self%atominfo(cc)%cn_std))! use standard coordination number
               case('max_int')
                   call centers_pdb%set_beta(cc,self%atominfo(cc)%max_int)     ! use z-score of maximum intensity
               case DEFAULT
