@@ -540,6 +540,13 @@ else()
 endif()
 
 #############################################
+# NLOpt library
+#############################################
+if(USE_NLOPT)
+  set(EXTRA_LIBS ${EXTRA_LIBS} -I/usr/local/include -L/usr/local/lib -lnlopt -lm )
+endif()
+
+#############################################
 # TIFF library & dependencies
 #############################################
 if(USE_LIBTIFF)
