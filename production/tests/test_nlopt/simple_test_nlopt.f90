@@ -35,7 +35,7 @@ program simple_test_nlopt
     type(cftcc_shsrch_grad)  :: grad_carshsrch_obj
     ! setting up for shift search
     if( command_argument_count() < 3 )then
-        write(logfhandle,'(a)') 'simple_test_nlopt lp=xx smpd=yy nthr=zz vol1=vol1.mrc'
+        write(logfhandle,'(a)') 'simple_test_nlopt lp=xx smpd=yy nthr=zz vol1=vol1.mrc opt=oo'
         stop
     endif
     call cline%parse_oldschool
@@ -43,6 +43,7 @@ program simple_test_nlopt
     call cline%checkvar('smpd', 2)
     call cline%checkvar('nthr', 3)
     call cline%checkvar('vol1', 4)
+    call cline%checkvar('opt',  5)
     call cline%set('ctf', 'no')
     call cline%set('match_filt', 'no')
     call cline%check
@@ -78,7 +79,7 @@ program simple_test_nlopt
         call evalcc%set_ori(iref, b%eulspace%get_euler(iref), pshifts(iref, :))
     end do
     ! nlopt-f default unit test
-    call create(opt, algorithm_from_string("LD_MMA"), 2)
+    call create(opt, algorithm_from_string(trim(p%opt)), 2)
     call opt%get_lower_bounds(lb)
     lb(2) = 0.0_wp
     call opt%set_lower_bounds(lb)
@@ -102,8 +103,8 @@ program simple_test_nlopt
     write(*, '(a, *(1x, g0))') "Found minimum at", x
     write(*, '(a, *(1x, g0))') "Minimum value is", minf
     call destroy(opt)
-    ! a unit test with no constraint
-    call create(opt, algorithm_from_string("LN_COBYLA"), 2)
+    ! a unit test with no constraint and with derivative-free optimizer
+    call create(opt, algorithm_from_string(trim(p%opt)), 2)
     lb(1) = -100.0_wp
     lb(2) = -100.0_wp
     call opt%set_lower_bounds(lb)
@@ -124,12 +125,12 @@ program simple_test_nlopt
     write(*, '(a, *(1x, g0))') "Found minimum at", x
     write(*, '(a, *(1x, g0))') "Minimum value is", minf
     call destroy(opt)
-    ! testing with basic gradient descent
+    ! testing with basic NLOpt's gradient optimizer
     iptcl = 1
     iref  = 1
-    print *, '---Shift search test---'
+    print *, '---Shift search test using NLOpt optimizer---'
     print *, 'initial shift = ', pshifts(iref, :)
-    call create(opt, algorithm_from_string("LD_MMA"), 2)
+    call create(opt, algorithm_from_string(trim(p%opt)), 2)
     lb(1) = -6.0_wp
     lb(2) = -6.0_wp
     call opt%set_lower_bounds(lb)
@@ -149,6 +150,15 @@ program simple_test_nlopt
     write(*, '(a, *(1x, g0))') "Found minimum at", x
     write(*, '(a, *(1x, g0))') "Minimum value is", minf
     call destroy(opt)
+    ! testing with lbfgsb
+    print *, '---Shift search test using SIMPLE lbfgsb optimizer---'
+    lims(:,1) = -5.
+    lims(:,2) =  5.
+    call grad_carshsrch_obj%new(lims)
+    call grad_carshsrch_obj%set_indices(1, 1)
+    cxy = grad_carshsrch_obj%minimize()
+    write(*, '(a, *(1x, g0))') "Found minimum at", cxy(2:)
+    write(*, '(a, *(1x, g0))') "Minimum value is", cxy(1)
 
 contains
     function nloptf_myfunc(x, gradient, func_data) result(f)
