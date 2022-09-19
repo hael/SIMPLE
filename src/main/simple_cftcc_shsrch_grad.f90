@@ -151,7 +151,6 @@ contains
             self%ospec%x        = real(init_xy)
         end if
         ! shift search
-        print *, 'initial value (before lbfgsb) = ', self%ospec%x
         call self%nlopt%minimize(self%ospec, self, lowest_cost)
         cxy(1)  = - real(lowest_cost)  ! correlation
         cxy(2:) =   lowest_shift       ! shift
