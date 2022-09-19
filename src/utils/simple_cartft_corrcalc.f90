@@ -463,7 +463,7 @@ contains
         call self%prep_ref4corr(iref, iptcl, self%heap_vars(ithr)%img_ref)
         ! calc corr
         if( present(grad) )then
-            cc = real(self%heap_vars(ithr)%img_ref%corr_grad(self%heap_vars(ithr)%img_ref_tmp,&
+            cc = real(self%heap_vars(ithr)%img_ref%corr_grad_ad(self%heap_vars(ithr)%img_ref_tmp,&
                 &self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec, grad, self%heap_vars(ithr)%img_ref_grad_tmp), kind=sp)
         else
             cc = real(self%heap_vars(ithr)%img_ref%corr(self%heap_vars(ithr)%img_ref_tmp,&

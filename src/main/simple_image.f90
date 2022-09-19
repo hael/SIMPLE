@@ -259,6 +259,7 @@ contains
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
     procedure          :: corr_grad
+    procedure          :: corr_grad_ad
     procedure          :: calc_sumsq
     procedure          :: corr_shifted
     procedure, private :: real_corr_1
@@ -4574,6 +4575,56 @@ contains
             grad(ind) = (temp + conjg(temp))/2./denom**2
         enddo
     end function corr_grad
+
+    function corr_grad_ad( self_ref, self_r4cc, self_ptcl, sumsq_ptcl, resmsk, shvec, grad, self_r4grad) result( cc )
+        use ADLib_NumParameters_m
+        use ADdnSVM_m
+        class(image), target, intent(inout) :: self_ref, self_r4cc, self_r4grad(2)
+        class(image),         intent(in)    :: self_ptcl
+        real,                 intent(in)    :: sumsq_ptcl
+        logical,              intent(in)    :: resmsk(self_ref%array_shape(1),self_ref%array_shape(2),self_ref%array_shape(3))
+        real,                 intent(in)    :: shvec(2)
+        real,                 intent(inout) :: grad(2)
+        class(image),         pointer       :: ref_ptr => null()
+        real                                :: cc, eps, d0(2), sumsq_ref
+        complex(dp)                         :: numer_der, denom_der, numer, temp
+        integer                             :: ind, lims(3,2), h, k, hphys,kphys
+        type(dnS_t)                         :: shvec_ad(2), cc_ad, numer_ad, denom_ad, shconst_vec(2), arg_a, arg_k, arg_h
+        shvec_ad(1) = Variable( Val=real(shvec(1), kind=Rkind), nVar=2, iVar=1, nderiv=1 )
+        shvec_ad(2) = Variable( Val=real(shvec(2), kind=Rkind), nVar=2, iVar=2, nderiv=1 )
+        lims        = self_ref%fit%loop_lims(2)
+        numer_ad    = ZERO
+        denom_ad    = ZERO
+        do k=lims(2,1),lims(2,2)
+            kphys = k + 1 + merge(self_ref%ldim(2),0,k<0)
+            arg_k = k*shvec_ad(2)
+            !arg_k = arg_k*self_ref%shconst(2)
+            do h=lims(1,1),lims(1,2)
+                arg_h = h*shvec_ad(1)
+                !arg_h = arg_h*self_ref%shconst(1)
+                arg_a = arg_h + arg_k
+                hphys = h + 1
+                if( resmsk(hphys, kphys, 1) )then
+                    !numer_ad = numer_ad + self_ref%cmat(hphys,kphys,1) * cmplx(cos(arg_a), sin(arg_a))*conjg(self_ptcl%cmat)
+                    !denom_ad = numer_ad + self_ref%cmat(hphys,kphys,1) * cmplx(cos(arg_a), sin(arg_a))
+                endif
+            end do
+        end do
+        d0        = get_d0(denom_ad)
+        sumsq_ref = d0(1)
+        !denom_ad  = sqrt(denom_ad * sumsq_ptcl)
+        !cc_ad     = real(numer_ad/denom_ad)
+        d0        = get_d0(cc_ad)
+        cc        = d0(1)
+        if( cc < eps .and. sumsq_ref < eps .and. sumsq_ptcl < eps )then
+            cc = 1.
+        elseif( sqrt(sumsq_ref * sumsq_ptcl) < eps )then
+            cc = 0.
+        else
+            cc = cc / sqrt(sumsq_ref * sumsq_ptcl)
+        endif
+        grad = get_d1(cc_ad)
+    end function corr_grad_ad
 
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
         class(image),   intent(inout) :: self_ref, self_ptcl
