@@ -79,7 +79,7 @@ program simple_test_nlopt
         call evalcc%set_ori(iref, b%eulspace%get_euler(iref), pshifts(iref, :))
     end do
     ! nlopt-f default unit test
-    call create(opt, algorithm_from_string(trim(p%opt)), 2)
+    call create(opt, algorithm_from_string(trim('LD_MMA')), 2)
     call opt%get_lower_bounds(lb)
     lb(2) = 0.0_wp
     call opt%set_lower_bounds(lb)
@@ -104,7 +104,7 @@ program simple_test_nlopt
     write(*, '(a, *(1x, g0))') "Minimum value is", minf
     call destroy(opt)
     ! a unit test with no constraint and with derivative-free optimizer
-    call create(opt, algorithm_from_string(trim(p%opt)), 2)
+    call create(opt, algorithm_from_string(trim('LN_COBYLA')), 2)
     lb(1) = -100.0_wp
     lb(2) = -100.0_wp
     call opt%set_lower_bounds(lb)

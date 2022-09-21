@@ -4585,27 +4585,31 @@ contains
         logical,              intent(in)    :: resmsk(self_ref%array_shape(1),self_ref%array_shape(2),self_ref%array_shape(3))
         real,                 intent(in)    :: shvec(2)
         real,                 intent(inout) :: grad(2)
-        class(image),         pointer       :: ref_ptr => null()
         real                                :: cc, eps, d0(2), sumsq_ref
-        complex(dp)                         :: numer_der, denom_der, numer, temp
-        integer                             :: ind, lims(3,2), h, k, hphys,kphys
-        type(dnS_t)                         :: shvec_ad(2), cc_ad, numer_ad, denom_ad, arg_a, arg_k, arg_h, A, B
-        shvec_ad(1)   = Variable( Val=real(shvec(1), kind=Rkind), nVar=2, iVar=1,  nderiv=1 )
-        shvec_ad(2)   = Variable( Val=real(shvec(2), kind=Rkind), nVar=2, iVar=2,  nderiv=1 )
+        real(kind=Rkind)                    :: ref_re, ref_im
+        integer                             :: lims(3,2), h, k, hphys,kphys
+        type(dnS_t)                         :: shvec_ad(2), cc_ad, numer_ad, denom_ad, arg, arg_k, A, B, cos_arg, sin_arg
+        shvec_ad(1)   = Variable( Val=real(shvec(1), kind=Rkind), nVar=2, iVar=1, nderiv=1 )
+        shvec_ad(2)   = Variable( Val=real(shvec(2), kind=Rkind), nVar=2, iVar=2, nderiv=1 )
+        shvec_ad(1)   = shvec_ad(1)*real(self_ref%shconst(1), kind=Rkind)
+        shvec_ad(2)   = shvec_ad(2)*real(self_ref%shconst(2), kind=Rkind)
         numer_ad      = ZERO
         denom_ad      = ZERO
         cc_ad         = ZERO
         lims          = self_ref%fit%loop_lims(2)
         do k=lims(2,1),lims(2,2)
             kphys = k + 1 + merge(self_ref%ldim(2),0,k<0)
-            arg_k = k*shvec_ad(2)*real(self_ref%shconst(2), kind=Rkind)
+            arg_k = k*shvec_ad(2)
             do h=lims(1,1),lims(1,2)
-                arg_h = h*shvec_ad(1)*real(self_ref%shconst(1), kind=Rkind)
-                arg_a = arg_h + arg_k
-                hphys = h + 1
+                arg     = h*shvec_ad(1) + arg_k
+                cos_arg = cos(arg)
+                sin_arg = sin(arg)
+                hphys   = h + 1
                 if( resmsk(hphys, kphys, 1) )then
-                    A        = cos(arg_a)*real(realpart(self_ref%cmat(hphys,kphys,1)), kind=Rkind) - sin(arg_a)*real(imagpart(self_ref%cmat(hphys,kphys,1)), kind=Rkind)
-                    B        = cos(arg_a)*real(imagpart(self_ref%cmat(hphys,kphys,1)), kind=Rkind) + sin(arg_a)*real(realpart(self_ref%cmat(hphys,kphys,1)), kind=Rkind)
+                    ref_re   = real(realpart(self_ref%cmat(hphys,kphys,1)), kind=Rkind)
+                    ref_im   = real(imagpart(self_ref%cmat(hphys,kphys,1)), kind=Rkind)
+                    A        = cos_arg*ref_re - sin_arg*ref_im
+                    B        = cos_arg*ref_im + sin_arg*ref_re
                     numer_ad = numer_ad +  A*real(realpart(self_ptcl%cmat(hphys,kphys,1)), kind=Rkind)&
                                        &+  B*real(imagpart(self_ptcl%cmat(hphys,kphys,1)), kind=Rkind)
                     denom_ad = denom_ad + A**2 + B**2
@@ -4614,18 +4618,17 @@ contains
         end do
         d0        = get_d0(denom_ad)
         sumsq_ref = d0(1)
+        denom_ad  = sqrt(denom_ad * real(sumsq_ptcl, kind=Rkind))
+        cc_ad     = numer_ad/denom_ad
+        grad      = get_d1(cc_ad)
+        d0        = get_d0(cc_ad)
+        cc        = d0(1)
         if( cc < eps .and. sumsq_ref < eps .and. sumsq_ptcl < eps )then
             cc   = 1.
             grad = 0.
         elseif( sqrt(sumsq_ref * sumsq_ptcl) < eps )then
             cc   = 0.
-            grad = 0.
-        else
-            denom_ad  = sqrt(denom_ad * real(sumsq_ptcl, kind=Rkind))
-            cc_ad     = numer_ad/denom_ad
-            d0        = get_d0(cc_ad)
-            grad      = get_d1(cc_ad)
-            cc        = d0(1)
+            grad = 0.  
         endif
     end function corr_grad_ad
 
