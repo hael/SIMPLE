@@ -132,11 +132,8 @@ contains
     !> minimisation routine
     function grad_carshsrch_minimize( self ) result( cxy )
         class(cftcc_shsrch_grad), intent(inout) :: self
-        real     :: corrs(self%nrots), cxy(3), lowest_shift(2), lowest_cost
+        real     :: cxy(3), lowest_cost
         real(dp) :: init_xy(2), coarse_cost
-        integer  :: loc, i, lowest_rot, init_rot
-        logical  :: found_better
-        found_better      = .false.
         self%ospec%x      = [0.,0.]
         self%ospec%x_8    = [0.d0,0.d0]
         if( perform_rndstart )then
@@ -153,7 +150,7 @@ contains
         ! shift search
         call self%nlopt%minimize(self%ospec, self, lowest_cost)
         cxy(1)  = - real(lowest_cost)  ! correlation
-        cxy(2:) =   lowest_shift       ! shift
+        cxy(2:) =   self%ospec%x       ! shift
     end function grad_carshsrch_minimize
 
     subroutine coarse_search(self, lowest_cost, init_xy)
