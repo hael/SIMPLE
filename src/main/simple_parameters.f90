@@ -334,7 +334,7 @@ type :: parameters
     integer :: update=1000
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
     integer :: which_iter=0        !< iteration nr
-    integer :: smooth_ext=20       !< smoothing window extension{20} 
+    integer :: smooth_ext=20       !< smoothing window extension{2D=20, 3D=8} 
     integer :: xcoord=0            !< x coordinate{0}
     integer :: ycoord=0            !< y coordinate{0}
     integer :: xdim=0              !< x dimension(in pixles)
@@ -494,7 +494,7 @@ contains
         real             :: smpd, mskdiam_default, msk_default
         integer          :: i, ncls, ifoo, lfoo(3), cntfile, istate
         integer          :: idir, nsp_files, box, nptcls, nthr
-        logical          :: nparts_set, ssilent, def_vol1, def_even, def_odd
+        logical          :: nparts_set, ssilent, def_vol1, def_even, def_odd, is_2D
         ssilent = .false.
         if( present(silent) ) ssilent = silent
         ! seed random number generator
@@ -902,6 +902,15 @@ contains
         l_distr_exec_glob = self%l_distr_exec
         ! get pointer to program user interface
         call get_prg_ptr(self%prg, self%ptr2prg)
+        is_2D = .false.
+        if( str_has_substr(self%prg, '2D') ) is_2D = .true.
+        if( .not. cline%defined('smooth_ext') )then
+            if( is_2D )then
+                self%smooth_ext = 20
+            else
+                self%smooth_ext = 8
+            endif
+        endif
         ! look for the last previous execution directory and get next directory number
         if( allocated(self%last_prev_dir) ) deallocate(self%last_prev_dir)
         idir = find_next_int_dir_prefix(self%cwd, self%last_prev_dir)
