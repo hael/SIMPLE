@@ -49,7 +49,7 @@ logical,          parameter   :: L_USE_SLURM_ARR    = .false.  !< use SLURM arra
 logical,          parameter   :: L_DEV_GLOB         = .true.   !< global development flag
 logical,          parameter   :: L_VERBOSE_GLOB     = .false.  !< verbose output or not
 real,             parameter   :: HPLIM_GUINIER      = 20.      !< high-pass limit for Guinier plot
-integer,          parameter   :: AUTOMSK_FREQ       = 5        !< frequency of automasking
+integer,          parameter   :: AUTOMSK_FREQ       = 3        !< frequency of automasking
 
 ! type for arrays of allocatable strings
 type str4arr

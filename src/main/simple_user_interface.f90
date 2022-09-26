@@ -947,7 +947,7 @@ contains
         call set_param(remap_cls,     'remap_cls',     'binary', 'Whether to remap 2D clusters', 'Whether to remap the number of 2D clusters(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV{300}', 'in kV{300}', .false., 300.)
         call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.143}',&
-        &'low-pass FSC criterion(0.143-0.5){0.5}', .false., 0.143)
+        &'low-pass FSC criterion(0.143-0.5){0.143}', .false., 0.143)
         call set_param(cs,            'cs',            'num',    'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in mm{2.7}', .false., 2.7)
         call set_param(dose_rate,     'dose_rate',     'num',    'Dose rate (e/Ang^2/s)', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 1.)
         call set_param(exp_time,      'exp_time',      'num',    'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
@@ -3614,7 +3614,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_exec',&                                                                            ! executable
-        &1, 0, 0, 12, 11, 4, 2, .true.)                                                              ! # entries in each group, requires sp_project
+        &1, 0, 0, 12, 11, 4, 2, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &

@@ -500,7 +500,6 @@ contains
                     ! automasking in postprocess
                     if( l_automsk )then
                         if( mod(iter,AUTOMSK_FREQ) == 0 .or. iter == params%startit )then
-                            call cline%delete('mskfile')
                             call cline_postprocess%delete('mskfile')
                             call cline_postprocess%set('automsk', 'yes')
                         endif
@@ -531,9 +530,10 @@ contains
                     ! update command-lines to use the mskfile for the next AUTOMSK_FREQ - 1 iterations
                     if( l_automsk )then
                         if( mod(iter,AUTOMSK_FREQ) == 0 .or. iter == params%startit )then
-                            call cline_postprocess%set('mskfile', 'automask'//params%ext)
-                            call cline%set('mskfile', 'automask'//params%ext)
                             params%mskfile = 'automask'//params%ext
+                            call cline_postprocess%set('mskfile', trim(params%mskfile))
+                            call cline%set('mskfile', trim(params%mskfile))
+                            call job_descr%set( 'mskfile', trim(params%mskfile))
                             call cline_postprocess%delete('automsk')
                         endif
                     endif
