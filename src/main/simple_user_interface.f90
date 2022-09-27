@@ -1522,7 +1522,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 1, 0, 7, 10, 1, 5, .true.)                                                            ! # entries in each group, requires sp_project
+        &0, 1, 0, 7, 11, 1, 5, .true.)                                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1558,6 +1558,7 @@ contains
         call cluster2D_stream%set_input('filt_ctrls', 8,  smooth_ext)
         call cluster2D_stream%set_input('filt_ctrls', 9,  lp_lowres)
         call cluster2D_stream%set_input('filt_ctrls', 10, nsearch)
+        call cluster2D_stream%set_input('filt_ctrls', 11, lplim_crit)
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
