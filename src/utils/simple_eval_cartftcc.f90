@@ -31,6 +31,7 @@ type :: eval_cartftcc
     procedure          :: set_ori
     ! CALCULATORS      
     procedure          :: project_and_correlate
+    procedure          :: project_and_euclid
     ! DESTRUCTOR
     procedure          :: kill
 end type eval_cartftcc
@@ -81,35 +82,6 @@ contains
     end subroutine set_ori
 
     ! CALCULATORS
-
-    subroutine project_and_correlate_1( self, iptcl, o, corr, grad )
-        class(eval_cartftcc), intent(inout) :: self
-        integer,              intent(in)    :: iptcl
-        class(ori),           intent(in)    :: o
-        real,                 intent(inout) :: corr
-        real, optional,       intent(inout) :: grad(2)
-        type(projector), pointer :: vol_ptr => null()
-        logical :: iseven, present_grad
-        integer :: ithr
-        present_grad = present(grad)
-        iseven = cartftcc_glob%ptcl_iseven(iptcl)
-        if( iseven )then
-            vol_ptr => self%vol_even
-        else
-            vol_ptr => self%vol_odd
-        endif
-        ithr = omp_get_thread_num() + 1
-        if( present_grad )then
-            call vol_ptr%fproject_serial(o, self%projs(ithr), params_glob%kstop)
-            call cartftcc_glob%set_ref(ithr, self%projs(ithr), iseven)
-            corr = cartftcc_glob%calc_corr(ithr, iptcl, o%get_2Dshift(), grad(:))
-        else
-            call vol_ptr%fproject_serial(o, self%projs(ithr), params_glob%kstop)
-            call cartftcc_glob%set_ref(ithr, self%projs(ithr), iseven)
-            corr = cartftcc_glob%calc_corr(ithr, iptcl, o%get_2Dshift())
-        endif
-    end subroutine project_and_correlate_1
-
     subroutine project_and_correlate( self, iptcl, corrs, grad )
         class(eval_cartftcc), intent(inout) :: self
         integer,              intent(in)    :: iptcl
@@ -141,6 +113,30 @@ contains
             end do
         endif
     end subroutine project_and_correlate
+
+    subroutine project_and_euclid( self, iptcl, corrs, grad )
+        class(eval_cartftcc), intent(inout) :: self
+        integer,              intent(in)    :: iptcl
+        real,                 intent(inout) :: corrs(  self%nspace)
+        real, optional,       intent(inout) :: grad(2, self%nspace)
+        type(projector), pointer :: vol_ptr => null()
+        integer :: iref, ithr
+        logical :: iseven, present_grad
+        present_grad = present(grad)
+        iseven = cartftcc_glob%ptcl_iseven(iptcl)
+        if( iseven )then
+            vol_ptr => self%vol_even
+        else
+            vol_ptr => self%vol_odd
+        endif
+         ! get the thread index
+        ithr = omp_get_thread_num() + 1
+        do iref = 1,self%nspace
+            call vol_ptr%fproject_serial(self%orispace, iref, self%projs(ithr), params_glob%kstop)
+            call cartftcc_glob%set_ref(iref, self%projs(ithr), iseven)
+            corrs(iref) = cartftcc_glob%calc_euclid(iref, iptcl, self%orispace%get_2Dshift(iptcl))
+        end do
+    end subroutine project_and_euclid
 
     ! DESTRUCTOR
 
