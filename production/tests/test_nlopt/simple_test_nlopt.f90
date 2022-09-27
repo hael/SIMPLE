@@ -159,29 +159,6 @@ program simple_test_nlopt
     cxy = grad_carshsrch_obj%minimize()
     write(*, '(a, *(1x, g0))') "Found minimum at", cxy(2:)
     write(*, '(a, *(1x, g0))') "Minimum value is", cxy(1)
-    ! testing with euclidean cost function with NLOpt's derivative-free optimizer
-    print *, '---Shift search test using NLOpt derivative-free optimizer---'
-    print *, 'initial shift = ', pshifts(iref, :)
-    call create(opt, algorithm_from_string(trim('LN_COBYLA')), 2)
-    lb(1) = -6.0_wp
-    lb(2) = -6.0_wp
-    call opt%set_lower_bounds(lb)
-    ub(1) = 6.0_wp
-    ub(2) = 6.0_wp
-    call opt%set_upper_bounds(ub)
-    associate(f => nlopt_func(shift_euclid_func))
-        call opt%set_min_objective(f)
-        call opt%set_xtol_rel(xtol)
-        x = pshifts(iref, :)
-        call opt%optimize(x, minf, stat)
-    end associate
-    if (stat < NLOPT_SUCCESS) then
-        write(*, '(a)') "NLopt failed!"
-        stop 1
-    endif
-    write(*, '(a, *(1x, g0))') "Found minimum at", x
-    write(*, '(a, *(1x, g0))') "Minimum value is", minf
-    call destroy(opt)
 
 contains
     function nloptf_myfunc(x, gradient, func_data) result(f)
@@ -239,17 +216,4 @@ contains
         f = - corrs(1)
     end function shift_grad_func
 
-    function shift_euclid_func(x, gradient, func_data) result(f)
-        real(wp), intent(in)              :: x(:)
-        real(wp), intent(inout), optional :: gradient(:)
-        class(*), intent(in),    optional :: func_data
-        real(wp) :: f
-        call evalcc%set_ori(iref, b%eulspace%get_euler(iref), real(x))
-        call evalcc%project_and_euclid(iptcl, corrs, grad)
-        if (present(gradient)) then
-            gradient(1) = - grad(1,1)
-            gradient(2) = - grad(2,1)
-        endif
-        f = corrs(1)
-    end function shift_euclid_func
 end program simple_test_nlopt
