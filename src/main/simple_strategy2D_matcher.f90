@@ -34,6 +34,7 @@ integer                      :: batchsz_max
 real(timer_int_kind)         :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio, rt_tot
 integer(timer_int_kind)      ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
 character(len=STDLEN)        :: benchfname
+logical                      :: l_phrand
 
 contains
 
@@ -106,6 +107,7 @@ contains
                 params_glob%update_frac = 1.
             endif
         endif
+        l_phrand = trim(params_glob%phrand).eq.'yes'
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
@@ -426,11 +428,15 @@ contains
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! randomize Fourier phases below noise power in a global manner
-                        ! call cavgs_even(icls)%fft
-                        ! call cavgs_odd(icls)%fft
-                        ! call cavgs_even(icls)%ran_phases_below_noise_power(cavgs_odd(icls))
-                        ! call cavgs_even(icls)%ifft
-                        ! call cavgs_odd(icls)%ifft
+                        if( params_glob%l_nonuniform )then
+                            ! nothing to do
+                        else if( l_phrand )then
+                            call cavgs_even(icls)%fft
+                            call cavgs_odd(icls)%fft
+                            call cavgs_even(icls)%ran_phases_below_noise_power(cavgs_odd(icls))
+                            call cavgs_even(icls)%ifft
+                            call cavgs_odd(icls)%ifft
+                        endif
                         ! here we are passing in the shifts and do NOT map them back to classes
                         call prep2Dref(pftcc, cavgs_even(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
                         call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)  ! 2 polar coords

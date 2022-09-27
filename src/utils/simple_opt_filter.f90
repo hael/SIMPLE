@@ -266,10 +266,10 @@ contains
         do iptcl = 1, nptcls
             if( l_phrand )then
                 call even(iptcl)%fft
-                call even(iptcl)%fft
+                call odd(iptcl)%fft
                 call even(iptcl)%ran_phases_below_noise_power(odd(iptcl))
                 call even(iptcl)%ifft
-                call even(iptcl)%ifft
+                call odd(iptcl)%ifft
             endif
             call even(iptcl)%pad_mirr(ldim_pd)
             call odd( iptcl)%pad_mirr(ldim_pd)
