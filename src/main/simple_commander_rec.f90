@@ -51,14 +51,14 @@ contains
         type(chash)      :: job_descr
         integer          :: state, ipart, sz_list
         logical          :: fall_over
-        if( .not. cline%defined('nparts') )then
-            call xrec3D_shmem%execute(cline)
-            return
-        endif
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call cline%delete('refine')
+        if( .not. cline%defined('nparts') )then
+            call xrec3D_shmem%execute(cline)
+            return
+        endif
         call build%init_params_and_build_spproj(cline, params)
         ! sanity check
         fall_over = .false.

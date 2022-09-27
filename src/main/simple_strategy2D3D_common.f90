@@ -318,16 +318,14 @@ contains
                 if( present(xyz_out) ) xyz_out = xyz
             endif
         endif
-        if( .not. params_glob%l_nonuniform )then
-            call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-            if( any(frc > 0.143) )then
-                call fsc2optlp_sub(filtsz, frc, filter)
-                if( params_glob%l_match_filt )then
-                    call pftcc%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kstop))
-                else
-                    call img_in%fft() ! needs to be here in case the shift was never applied (above)
-                    call img_in%apply_filter_serial(filter)
-                endif
+        call build_glob%clsfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+        if( any(frc > 0.143) )then
+            call fsc2optlp_sub(filtsz, frc, filter)
+            if( params_glob%l_match_filt )then
+                call pftcc%set_ref_optlp(icls, filter(params_glob%kfromto(1):params_glob%kstop))
+            else
+                call img_in%fft() ! needs to be here in case the shift was never applied (above)
+                call img_in%apply_filter_serial(filter)
             endif
         endif
         ! ensure we are in real-space
