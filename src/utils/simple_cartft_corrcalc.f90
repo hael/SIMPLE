@@ -68,6 +68,7 @@ type :: cartft_corrcalc
     procedure          :: create_absctfmats
     procedure, private :: prep_ref4corr
     procedure          :: calc_corr
+    procedure          :: calc_euclid
     procedure          :: specscore
     ! DESTRUCTOR
     procedure          :: kill
@@ -470,6 +471,28 @@ contains
                 &self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec), kind=sp)
         endif
     end function calc_corr
+
+    function calc_euclid( self, iref, iptcl, shvec, grad ) result( cost )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iref, iptcl
+        real,                   intent(in)    :: shvec(2)
+        real,         optional, intent(inout) :: grad(2)
+        real(sp) :: cost
+        integer  :: i, ithr
+        i    =  self%pinds(iptcl)
+        ithr =  omp_get_thread_num() + 1
+        ! copy
+        if( self%iseven(i) )then
+            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(iref,2))
+        else
+            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(iref,1))
+        endif
+        ! prep ref
+        call self%prep_ref4corr(iref, iptcl, self%heap_vars(ithr)%img_ref)
+        ! calc the euclidean cost
+        cost = real(self%heap_vars(ithr)%img_ref%euclid_cost(self%heap_vars(ithr)%img_ref_tmp,&
+                &self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec), kind=sp)
+    end function calc_euclid
 
     function specscore( self, iref, iptcl, shvec ) result( spec )
         class(cartft_corrcalc), intent(inout) :: self

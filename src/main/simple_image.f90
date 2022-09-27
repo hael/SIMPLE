@@ -258,6 +258,7 @@ contains
     procedure, private :: corr_1
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
+    procedure          :: euclid_cost
     procedure          :: corr_grad
     procedure          :: corr_grad_ad
     procedure          :: calc_sumsq
@@ -4537,6 +4538,19 @@ contains
             cc = cc / sqrt(sumsq_ref * sumsq_ptcl)
         endif
     end function corr_2
+
+    function euclid_cost( self_ref, self_r4cc, self_ptcl, sumsq_ptcl, resmsk, shvec ) result( cost )
+        class(image), target, intent(inout) :: self_ref, self_r4cc
+        class(image),         intent(in)    :: self_ptcl
+        real,                 intent(in)    :: sumsq_ptcl
+        logical,              intent(in)    :: resmsk(self_ref%array_shape(1),self_ref%array_shape(2),self_ref%array_shape(3))
+        real,                 intent(in)    :: shvec(2)
+        class(image), pointer :: ref_ptr => null()
+        real                  :: cost
+        call self_ref%shift2Dserial(shvec, self_r4cc)
+        ref_ptr => self_r4cc
+        cost = sum(csq_fast(ref_ptr%cmat - self_ptcl%cmat), mask=resmsk)/product(self_ref%array_shape)
+    end function euclid_cost
 
     function corr_grad( self_ref, self_r4cc, self_ptcl, sumsq_ptcl, resmsk, shvec, grad, self_r4grad) result( cc )
         class(image), target, intent(inout) :: self_ref, self_r4cc, self_r4grad(2)
