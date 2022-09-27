@@ -258,8 +258,6 @@ contains
     procedure, private :: corr_1
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
-    procedure          :: euclid_cost
-    procedure          :: corr_grad
     procedure          :: corr_grad_ad
     procedure          :: calc_sumsq
     procedure          :: corr_shifted
@@ -343,7 +341,6 @@ contains
     procedure, private :: shift2Dserial_1
     procedure, private :: shift2Dserial_2
     generic            :: shift2Dserial => shift2Dserial_1, shift2Dserial_2
-    procedure          :: shift2Dserial_grad
     procedure          :: set_within
     procedure          :: ft2img
     procedure          :: img2ft
@@ -4539,78 +4536,30 @@ contains
         endif
     end function corr_2
 
-    function euclid_cost( self_ref, self_r4cc, self_ptcl, sumsq_ptcl, resmsk, shvec ) result( cost )
-        class(image), target, intent(inout) :: self_ref, self_r4cc
-        class(image),         intent(in)    :: self_ptcl
-        real,                 intent(in)    :: sumsq_ptcl
-        logical,              intent(in)    :: resmsk(self_ref%array_shape(1),self_ref%array_shape(2),self_ref%array_shape(3))
-        real,                 intent(in)    :: shvec(2)
-        class(image), pointer :: ref_ptr => null()
-        real                  :: cost
-        call self_ref%shift2Dserial(shvec, self_r4cc)
-        ref_ptr => self_r4cc
-        cost = sum(csq_fast(ref_ptr%cmat - self_ptcl%cmat), mask=resmsk)/product(self_ref%array_shape)
-    end function euclid_cost
-
-    function corr_grad( self_ref, self_r4cc, self_ptcl, sumsq_ptcl, resmsk, shvec, grad, self_r4grad) result( cc )
-        class(image), target, intent(inout) :: self_ref, self_r4cc, self_r4grad(2)
-        class(image),         intent(in)    :: self_ptcl
-        real,                 intent(in)    :: sumsq_ptcl
-        logical,              intent(in)    :: resmsk(self_ref%array_shape(1),self_ref%array_shape(2),self_ref%array_shape(3))
-        real,                 intent(in)    :: shvec(2)
-        real,                 intent(inout) :: grad(2)
-        class(image),         pointer       :: ref_ptr => null()
-        real                                :: sumsq_ref, cc, eps, denom ! numerator and denominator of the cc
-        complex(dp)                         :: numer_der, denom_der, numer, temp
-        integer                             :: ind
-        call self_ref%shift2Dserial_grad(shvec, self_r4cc, self_r4grad)
-        if( arg(shvec) > 1e-5 )then
-            ref_ptr => self_r4cc
-        else
-            ref_ptr => self_ref
-        endif
-        sumsq_ref = ref_ptr%calc_sumsq(resmsk)
-        eps       = epsilon(sumsq_ref)
-        numer     = sum(self_r4cc%cmat * conjg(self_ptcl%cmat), mask=resmsk)
-        cc        = real(numer)
-        denom     = sqrt(sumsq_ref * sumsq_ptcl)
-        if( cc < eps .and. sumsq_ref < eps .and. sumsq_ptcl < eps )then
-            cc = 1.
-        elseif( sqrt(sumsq_ref * sumsq_ptcl) < eps )then
-            cc = 0.
-        else
-            cc = cc / sqrt(sumsq_ref * sumsq_ptcl)
-        endif
-        ! calculating the gradient using the chain rule: (a/b)' = (a'b - ab')/b^2
-        do ind = 1, size(grad)
-            numer_der = sum(self_r4grad(ind)%cmat * conjg(self_ptcl%cmat), mask=resmsk)
-            denom_der = sqrt(sumsq_ptcl)*sum(self_r4grad(ind)%cmat * conjg(self_r4cc%cmat) + self_r4cc%cmat * conjg(self_r4grad(ind)%cmat), mask=resmsk)/2./sqrt(sumsq_ref)
-            temp      = numer_der*denom - numer*denom_der
-            grad(ind) = (temp + conjg(temp))/2./denom**2
-        enddo
-    end function corr_grad
-
-    function corr_grad_ad( self_ref, self_r4cc, self_ptcl, sumsq_ptcl, resmsk, shvec, grad, self_r4grad) result( cc )
+    function corr_grad_ad( self_ref, self_ptcl, sumsq_ptcl, resmsk, shvec, grad, objfun) result( cc )
         use ADLib_NumParameters_m
         use ADdnSVM_m
-        class(image), target, intent(inout) :: self_ref, self_r4cc, self_r4grad(2)
+        class(image), target, intent(inout) :: self_ref
         class(image),         intent(in)    :: self_ptcl
+        integer,              intent(in)    :: objfun
         real,                 intent(in)    :: sumsq_ptcl
         logical,              intent(in)    :: resmsk(self_ref%array_shape(1),self_ref%array_shape(2),self_ref%array_shape(3))
         real,                 intent(in)    :: shvec(2)
         real,                 intent(inout) :: grad(2)
-        real                                :: cc, eps, d0(2), sumsq_ref
+        real                                :: cc, eps, d0(2), sumsq_ref, denom
         real(kind=Rkind)                    :: ref_re, ref_im
         integer                             :: lims(3,2), h, k, hphys,kphys
-        type(dnS_t)                         :: shvec_ad(2), cc_ad, numer_ad, denom_ad, arg, arg_k, A, B, cos_arg, sin_arg
+        type(dnS_t)                         :: shvec_ad(2), numer_ad, numer_re, numer_im, arg, arg_k, A, B, cos_arg, sin_arg, ptl_re, ptl_im
         shvec_ad(1)   = Variable( Val=real(shvec(1), kind=Rkind), nVar=2, iVar=1, nderiv=1 )
         shvec_ad(2)   = Variable( Val=real(shvec(2), kind=Rkind), nVar=2, iVar=2, nderiv=1 )
         shvec_ad(1)   = shvec_ad(1)*real(self_ref%shconst(1), kind=Rkind)
         shvec_ad(2)   = shvec_ad(2)*real(self_ref%shconst(2), kind=Rkind)
         numer_ad      = ZERO
-        denom_ad      = ZERO
-        cc_ad         = ZERO
+        numer_re      = ZERO
+        numer_im      = ZERO
         lims          = self_ref%fit%loop_lims(2)
+        sumsq_ref     = self_ref%calc_sumsq(resmsk)
+        denom         = 1.
         do k=lims(2,1),lims(2,2)
             kphys = k + 1 + merge(self_ref%ldim(2),0,k<0)
             arg_k = k*shvec_ad(2)
@@ -4620,30 +4569,30 @@ contains
                 sin_arg = sin(arg)
                 hphys   = h + 1
                 if( resmsk(hphys, kphys, 1) )then
-                    ref_re   = real(realpart(self_ref%cmat(hphys,kphys,1)), kind=Rkind)
-                    ref_im   = real(imagpart(self_ref%cmat(hphys,kphys,1)), kind=Rkind)
-                    A        = cos_arg*ref_re - sin_arg*ref_im
-                    B        = cos_arg*ref_im + sin_arg*ref_re
-                    numer_ad = numer_ad +  A*real(realpart(self_ptcl%cmat(hphys,kphys,1)), kind=Rkind)&
-                                       &+  B*real(imagpart(self_ptcl%cmat(hphys,kphys,1)), kind=Rkind)
-                    denom_ad = denom_ad + A**2 + B**2
+                    ref_re    = real(realpart( self_ref%cmat(hphys,kphys,1)), kind=Rkind)
+                    ref_im    = real(imagpart( self_ref%cmat(hphys,kphys,1)), kind=Rkind)
+                    ptl_re    = real(realpart(self_ptcl%cmat(hphys,kphys,1)), kind=Rkind)
+                    ptl_im    = real(imagpart(self_ptcl%cmat(hphys,kphys,1)), kind=Rkind)
+                    A         = cos_arg*ref_re - sin_arg*ref_im
+                    B         = cos_arg*ref_im + sin_arg*ref_re
+                    select case(objfun)
+                        case(OBJFUN_CC)
+                            numer_re  = numer_re  + A*ptl_re + B*ptl_im
+                            numer_im  = numer_im  + B*ptl_re - A*ptl_im
+                        case(OBJFUN_EUCLID)
+                            numer_ad  = numer_ad - (A - ptl_re)**2 - (B - ptl_im)**2
+                    end select
                 endif
             end do
         end do
-        d0        = get_d0(denom_ad)
-        sumsq_ref = d0(1)
-        denom_ad  = sqrt(denom_ad * real(sumsq_ptcl, kind=Rkind))
-        cc_ad     = numer_ad/denom_ad
-        grad      = get_d1(cc_ad)
-        d0        = get_d0(cc_ad)
-        cc        = d0(1)
-        if( cc < eps .and. sumsq_ref < eps .and. sumsq_ptcl < eps )then
-            cc   = 1.
-            grad = 0.
-        elseif( sqrt(sumsq_ref * sumsq_ptcl) < eps )then
-            cc   = 0.
-            grad = 0.  
-        endif
+        select case(objfun)
+            case(OBJFUN_CC)
+                numer_ad = sqrt(numer_re**2 + numer_im**2)
+                denom    = sqrt(sumsq_ref * sumsq_ptcl)
+        end select
+        grad     = get_d1(numer_ad)/denom
+        d0       = get_d0(numer_ad)/denom
+        cc       = d0(1)
     end function corr_grad_ad
 
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
@@ -6437,27 +6386,6 @@ contains
             end do
         end do
     end subroutine shift2Dserial_2
-
-    subroutine shift2Dserial_grad( self, shvec, self_out, grad_img)
-        class(image), intent(inout) :: self, self_out, grad_img(2)
-        real,         intent(in)    :: shvec(2)
-        real(dp)                    :: shconst(2), arg, arg_k, arg_h
-        integer                     :: h,k, hphys,kphys, lims(3,2)
-        lims    = self%fit%loop_lims(2)
-        shconst = real(shvec * self%shconst(1:2),dp)
-        do k=lims(2,1),lims(2,2)
-            kphys = k + 1 + merge(self%ldim(2),0,k<0)
-            arg_k = real(k,dp)*shconst(2)
-            do h=lims(1,1),lims(1,2)
-                arg_h = real(h,dp)*shconst(1)
-                arg   = arg_h + arg_k
-                hphys = h + 1
-                self_out%cmat(   hphys,kphys,1) =     self%cmat(hphys,kphys,1) * cmplx(dcos(arg), dsin(arg),sp)
-                grad_img(1)%cmat(hphys,kphys,1) = self_out%cmat(hphys,kphys,1) * cmplx(0,1,sp)*real(h,dp)*self%shconst(1)
-                grad_img(2)%cmat(hphys,kphys,1) = self_out%cmat(hphys,kphys,1) * cmplx(0,1,sp)*real(k,dp)*self%shconst(2)
-            end do
-        end do
-    end subroutine shift2Dserial_grad
 
     !> \brief mask  is for spherical masking
     !! \param mskrad mask radius in pixels
