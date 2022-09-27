@@ -12,7 +12,6 @@ private
 
 type heap_vars
     type(image)   :: img_ref
-    type(image)   :: img_ref_tmp
     real, pointer :: frc(:) => null()
 end type heap_vars
 
@@ -162,7 +161,6 @@ contains
         end do
         do ithr = 1,params_glob%nthr
             call self%heap_vars(ithr)%img_ref%new(self%ldim, params_glob%smpd)
-            call self%heap_vars(ithr)%img_ref_tmp%new(self%ldim, params_glob%smpd)
             allocate(self%heap_vars(ithr)%frc(self%filtsz), source = 0.)
         end do
         ! set CTF flag
@@ -460,10 +458,9 @@ contains
         call self%prep_ref4corr(iref, iptcl, self%heap_vars(ithr)%img_ref)
         ! calc corr
         if( present(grad) )then
-            cc = real(self%heap_vars(ithr)%img_ref%corr_grad_ad(self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec, grad, params_glob%cc_objfun), kind=sp)
+            cc = real(self%heap_vars(ithr)%img_ref%corr_grad_ad(self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec, params_glob%cc_objfun, grad), kind=sp)
         else
-            cc = real(self%heap_vars(ithr)%img_ref%corr(self%heap_vars(ithr)%img_ref_tmp,&
-                &self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec), kind=sp)
+            cc = real(self%heap_vars(ithr)%img_ref%corr_grad_ad(self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec, params_glob%cc_objfun), kind=sp)
         endif
     end function calc_corr
 
@@ -511,7 +508,6 @@ contains
             end do
             do ithr = 1,params_glob%nthr
                 call self%heap_vars(ithr)%img_ref%kill
-                call self%heap_vars(ithr)%img_ref_tmp%kill
                 deallocate(self%heap_vars(ithr)%frc)
                 self%heap_vars(ithr)%frc => null()
             end do
