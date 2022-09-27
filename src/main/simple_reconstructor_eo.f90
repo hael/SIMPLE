@@ -326,8 +326,11 @@ contains
         real                  :: lp_rand, msk
         integer               :: k,k_rand, find_plate, filtsz
         logical               :: l_combined, l_ML_regularization
-        msk = real(self%box / 2) - COSMSKHALFWIDTH - 1.
-        ! msk = self%msk ! for a tighter spherical mask
+        msk    = real(self%box / 2) - COSMSKHALFWIDTH - 1.
+        ! msk  = self%msk ! for a tighter spherical mask
+        filtsz = fdim(self%box) - 1
+        res    = get_resarr(self%box, self%smpd)
+        allocate(corrs(filtsz),fsc_t(filtsz),fsc_n(filtsz), source=0.)
         ! if e=o then SSNR will be adjusted
         l_combined = trim(params_glob%combine_eo).eq.'yes'
         ! ML-regularization
@@ -359,7 +362,6 @@ contains
             if( self%automsk )then
                 ! mask provided, no phase-randomization just yet
                 ! calculate FSC according to Chen et al,JSB,2013
-                allocate(corrs(filtsz),fsc_t(filtsz),fsc_n(filtsz), source=0.)
                 ! Masked FSC
                 call even%mul(self%envmask)             ! mask
                 call odd%mul(self%envmask)
@@ -428,9 +430,6 @@ contains
                 call even%fft()
                 call odd%fft()
                 ! calculate FSC
-                res    = even%get_res()
-                filtsz = even%get_filtsz()
-                allocate(corrs(filtsz))
                 call even%fsc(odd, corrs)
             endif
             ! regularization
@@ -477,11 +476,8 @@ contains
             ! write un-normalised unmasked even/odd volumes
             call even%write(trim(fname_even), del_if_exists=.true.)
             call odd%write(trim(fname_odd),   del_if_exists=.true.)
-            filtsz = even%get_filtsz()
-            res    = even%get_res()
             if( self%automsk )then
                 ! calculate FSC according to Chen et al,JSB,2013
-                allocate(corrs(filtsz),fsc_t(filtsz),fsc_n(filtsz), source=0.)
                 ! Masked FSC
                 call even%zero_background
                 call odd%zero_background
@@ -542,7 +538,6 @@ contains
                 call even%fft()
                 call odd%fft()
                 ! calculate FSC
-                allocate(corrs(filtsz), source=0.)
                 call even%fsc(odd, corrs)
             endif
         endif
