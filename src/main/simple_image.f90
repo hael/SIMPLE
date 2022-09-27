@@ -4536,7 +4536,7 @@ contains
         endif
     end function corr_2
 
-    function corr_grad_ad( self_ref, self_ptcl, sumsq_ptcl, resmsk, shvec, grad, objfun) result( cc )
+    function corr_grad_ad( self_ref, self_ptcl, sumsq_ptcl, resmsk, shvec, objfun, grad) result( cc )
         use ADLib_NumParameters_m
         use ADdnSVM_m
         class(image), target, intent(inout) :: self_ref
@@ -4545,7 +4545,7 @@ contains
         real,                 intent(in)    :: sumsq_ptcl
         logical,              intent(in)    :: resmsk(self_ref%array_shape(1),self_ref%array_shape(2),self_ref%array_shape(3))
         real,                 intent(in)    :: shvec(2)
-        real,                 intent(inout) :: grad(2)
+        real, optional,       intent(inout) :: grad(2)
         real                                :: cc, eps, d0(2), sumsq_ref, denom
         real(kind=Rkind)                    :: ref_re, ref_im
         integer                             :: lims(3,2), h, k, hphys,kphys
@@ -4590,9 +4590,9 @@ contains
                 numer_ad = sqrt(numer_re**2 + numer_im**2)
                 denom    = sqrt(sumsq_ref * sumsq_ptcl)
         end select
-        grad     = get_d1(numer_ad)/denom
-        d0       = get_d0(numer_ad)/denom
-        cc       = d0(1)
+        if( present(grad) ) grad = get_d1(numer_ad)/denom
+        d0 = get_d0(numer_ad)/denom
+        cc = d0(1)
     end function corr_grad_ad
 
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
