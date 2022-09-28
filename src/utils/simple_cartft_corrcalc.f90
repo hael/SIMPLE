@@ -12,6 +12,7 @@ private
 
 type heap_vars
     type(image)   :: img_ref
+    type(image)   :: img_ref_tmp
     real, pointer :: frc(:) => null()
 end type heap_vars
 
@@ -66,6 +67,7 @@ type :: cartft_corrcalc
     procedure          :: create_absctfmats
     procedure, private :: prep_ref4corr
     procedure          :: calc_corr
+    procedure          :: calc_corr_analytic
     procedure          :: specscore
     ! DESTRUCTOR
     procedure          :: kill
@@ -161,6 +163,7 @@ contains
         end do
         do ithr = 1,params_glob%nthr
             call self%heap_vars(ithr)%img_ref%new(self%ldim, params_glob%smpd)
+            call self%heap_vars(ithr)%img_ref_tmp%new(self%ldim, params_glob%smpd)
             allocate(self%heap_vars(ithr)%frc(self%filtsz), source = 0.)
         end do
         ! set CTF flag
@@ -464,6 +467,27 @@ contains
         endif
     end function calc_corr
 
+    function calc_corr_analytic( self, iref, iptcl, shvec ) result( cc )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iref, iptcl
+        real,                   intent(in)    :: shvec(2)
+        real(sp) :: cc
+        integer  :: i, ithr
+        i    =  self%pinds(iptcl)
+        ithr =  omp_get_thread_num() + 1
+        ! copy
+        if( self%iseven(i) )then
+            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(iref,2))
+        else
+            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(iref,1))
+        endif
+        ! prep ref
+        call self%prep_ref4corr(iref, iptcl, self%heap_vars(ithr)%img_ref)
+        ! calc corr
+        cc = real(self%heap_vars(ithr)%img_ref%corr(self%heap_vars(ithr)%img_ref_tmp,&
+                 &self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec), kind=sp)
+    end function calc_corr_analytic
+
     function specscore( self, iref, iptcl, shvec ) result( spec )
         class(cartft_corrcalc), intent(inout) :: self
         integer,                intent(in)    :: iref, iptcl
@@ -508,6 +532,7 @@ contains
             end do
             do ithr = 1,params_glob%nthr
                 call self%heap_vars(ithr)%img_ref%kill
+                call self%heap_vars(ithr)%img_ref_tmp%kill
                 deallocate(self%heap_vars(ithr)%frc)
                 self%heap_vars(ithr)%frc => null()
             end do
