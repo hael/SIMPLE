@@ -170,6 +170,65 @@ program simple_test_nlopt
     enddo
     print *, 'SIMPLE lbfgsb time = ', toc(t_tot)
 
+    ! comparing analytic vs autodiff's performances
+    print *, ''
+    print *, '---Comparing analytic vs autodiff performances using NLOpt derivative-free optimizer ---'
+    print *, ''
+    print *, '---Shift search test using analytic cc function---'
+    call create(opt, algorithm_from_string(trim('LN_COBYLA')), 2)
+    lb(1) = -6.0_wp
+    lb(2) = -6.0_wp
+    call opt%set_lower_bounds(lb)
+    ub(1) = 6.0_wp
+    ub(2) = 6.0_wp
+    call opt%set_upper_bounds(ub)
+    t_tot = tic()
+    associate(f => nlopt_func(shift_analytic_func))
+        call opt%set_min_objective(f)
+        call opt%set_ftol_rel(funtol)
+        do iref = 1,p%nptcls
+            iptcl = iref
+            x     = pshifts(iref, :)
+            call opt%optimize(x, minf, stat)
+            print *, 'initial shift = ', pshifts(iref, :)
+            print *, '#', iref, ': optimized shifts = ', x, '; optimized cost = ', minf
+        enddo
+    end associate
+    print *, 'NLOpt analytic-cc time = ', toc(t_tot)
+    if (stat < NLOPT_SUCCESS) then
+        write(*, '(a)') "NLopt failed!"
+        stop 1
+    endif
+    call destroy(opt)
+
+    print *, ''
+    print *, '---Shift search test using autodiff cc function---'
+    call create(opt, algorithm_from_string(trim('LN_COBYLA')), 2)
+    lb(1) = -6.0_wp
+    lb(2) = -6.0_wp
+    call opt%set_lower_bounds(lb)
+    ub(1) = 6.0_wp
+    ub(2) = 6.0_wp
+    call opt%set_upper_bounds(ub)
+    t_tot = tic()
+    associate(f => nlopt_func(shift_autodiff_func))
+        call opt%set_min_objective(f)
+        call opt%set_ftol_rel(funtol)
+        do iref = 1,p%nptcls
+            iptcl = iref
+            x     = pshifts(iref, :)
+            call opt%optimize(x, minf, stat)
+            print *, 'initial shift = ', pshifts(iref, :)
+            print *, '#', iref, ': optimized shifts = ', x, '; optimized cost = ', minf
+        enddo
+    end associate
+    print *, 'NLOpt autodiff-cc time = ', toc(t_tot)
+    if (stat < NLOPT_SUCCESS) then
+        write(*, '(a)') "NLopt failed!"
+        stop 1
+    endif
+    call destroy(opt)
+
 contains
     function nloptf_myfunc(x, gradient, func_data) result(f)
         real(wp), intent(in)              :: x(:)
@@ -223,5 +282,21 @@ contains
             gradient(2) = - grad(2,1)
         endif
     end function shift_grad_func
+
+    function shift_analytic_func(x, gradient, func_data) result(f)
+        real(wp), intent(in)              :: x(:)
+        real(wp), intent(inout), optional :: gradient(:)
+        class(*), intent(in),    optional :: func_data
+        real(wp) :: f
+        f = - cftcc%calc_corr_analytic(iref, iptcl, real(x))
+    end function shift_analytic_func
+
+    function shift_autodiff_func(x, gradient, func_data) result(f)
+        real(wp), intent(in)              :: x(:)
+        real(wp), intent(inout), optional :: gradient(:)
+        class(*), intent(in),    optional :: func_data
+        real(wp) :: f
+        f = - cftcc%calc_corr(iref, iptcl, real(x))
+    end function shift_autodiff_func
 
 end program simple_test_nlopt
