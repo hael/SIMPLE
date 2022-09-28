@@ -1,7 +1,7 @@
 program simple_test_nlopt
     include 'simple_lib.f08'
-    use nlopt_wrap,                 only : nlopt_opt, nlopt_func, create, destroy
-    use nlopt_enum,                 only : NLOPT_SUCCESS, algorithm_from_string
+    use nlopt_wrap,                 only: nlopt_opt, nlopt_func, create, destroy
+    use nlopt_enum,                 only: NLOPT_SUCCESS, algorithm_from_string
     use simple_cartft_corrcalc,     only: cartft_corrcalc
     use simple_eval_cartftcc,       only: eval_cartftcc
     use simple_cmdline,             only: cmdline
@@ -21,18 +21,19 @@ program simple_test_nlopt
     real(wp)        :: lb(2), ub(2), x(2), minf
     integer         :: stat
     type(constraint_data), target    :: d1, d2
-    real(wp),              parameter :: xtol = 1.0e-8_wp
+    real(wp),              parameter :: funtol = 1.0e-3_wp
     type(parameters)         :: p
     type(cartft_corrcalc)    :: cftcc
     type(cmdline)            :: cline
     type(builder)            :: b
-    integer,     parameter   :: NSPACE=1    ! set to 1 for fast test
-    real                     :: corrs(NSPACE), corrs2(NSPACE), grad(2, NSPACE), lims(2,2), cxy(3)
+    integer,     parameter   :: NSPACE=20
+    real                     :: grad(2, NSPACE), lims(2,2), cxy(3)
     type(image), allocatable :: imgs(:)
     real,        allocatable :: pshifts(:,:)
     integer                  :: iref, iptcl, loc(1), iter
     type(eval_cartftcc)      :: evalcc
     type(cftcc_shsrch_grad)  :: grad_carshsrch_obj
+    integer(timer_int_kind)  ::  t_tot
     ! setting up for shift search
     if( command_argument_count() < 3 )then
         write(logfhandle,'(a)') 'simple_test_nlopt lp=xx smpd=yy nthr=zz vol1=vol1.mrc opt=oo'
@@ -91,7 +92,7 @@ program simple_test_nlopt
         call opt%set_min_objective(f)
         call opt%add_inequality_constraint(fc1, 1.0e-8_wp)
         call opt%add_inequality_constraint(fc2, 1.0e-8_wp)
-        call opt%set_xtol_rel(xtol)
+        call opt%set_ftol_rel(funtol)
         x = [1.234_wp, 5.678_wp]
         call opt%optimize(x, minf, stat)
     end associate
@@ -113,7 +114,7 @@ program simple_test_nlopt
     call opt%set_upper_bounds(ub)
     associate(f => nlopt_func(xy_mixed_func))
         call opt%set_min_objective(f)
-        call opt%set_xtol_rel(xtol)
+        call opt%set_ftol_rel(funtol)
         x = [1.234_wp, 5.678_wp]
         call opt%optimize(x, minf, stat)
     end associate
@@ -126,10 +127,8 @@ program simple_test_nlopt
     write(*, '(a, *(1x, g0))') "Minimum value is", minf
     call destroy(opt)
     ! testing with basic NLOpt's gradient optimizer
-    iptcl = 1
-    iref  = 1
+    print *, ''
     print *, '---Shift search test using NLOpt optimizer---'
-    print *, 'initial shift = ', pshifts(iref, :)
     call create(opt, algorithm_from_string(trim(p%opt)), 2)
     lb(1) = -6.0_wp
     lb(2) = -6.0_wp
@@ -137,28 +136,39 @@ program simple_test_nlopt
     ub(1) = 6.0_wp
     ub(2) = 6.0_wp
     call opt%set_upper_bounds(ub)
+    t_tot = tic()
     associate(f => nlopt_func(shift_grad_func))
         call opt%set_min_objective(f)
-        call opt%set_xtol_rel(xtol)
-        x = pshifts(iref, :)
-        call opt%optimize(x, minf, stat)
+        call opt%set_ftol_rel(funtol)
+        do iref = 1,p%nptcls
+            iptcl = iref
+            x     = pshifts(iref, :)
+            call opt%optimize(x, minf, stat)
+            print *, 'initial shift = ', pshifts(iref, :)
+            print *, '#', iref, ': optimized shifts = ', x, '; optimized cost = ', minf
+        enddo
     end associate
+    print *, 'NLOpt time = ', toc(t_tot)
     if (stat < NLOPT_SUCCESS) then
         write(*, '(a)') "NLopt failed!"
         stop 1
     endif
-    write(*, '(a, *(1x, g0))') "Found minimum at", x
-    write(*, '(a, *(1x, g0))') "Minimum value is", minf
     call destroy(opt)
     ! testing with lbfgsb
+    print *, ''
     print *, '---Shift search test using SIMPLE lbfgsb optimizer---'
-    lims(:,1) = -5.
-    lims(:,2) =  5.
+    lims(:,1) = -6.
+    lims(:,2) =  6.
     call grad_carshsrch_obj%new(lims)
-    call grad_carshsrch_obj%set_indices(1, 1)
-    cxy = grad_carshsrch_obj%minimize()
-    write(*, '(a, *(1x, g0))') "Found minimum at", cxy(2:)
-    write(*, '(a, *(1x, g0))') "Minimum value is", cxy(1)
+    t_tot = tic()
+    do iref = 1,p%nptcls
+        iptcl = iref
+        call grad_carshsrch_obj%set_indices(iref, iptcl)
+        cxy = grad_carshsrch_obj%minimize()
+        print *, 'initial shift = ', pshifts(iref, :)
+        print *, '#', iref, ': optimized shifts = ', cxy(2:), '; optimized cost = ', cxy(1)
+    enddo
+    print *, 'SIMPLE lbfgsb time = ', toc(t_tot)
 
 contains
     function nloptf_myfunc(x, gradient, func_data) result(f)
@@ -207,13 +217,11 @@ contains
         real(wp), intent(inout), optional :: gradient(:)
         class(*), intent(in),    optional :: func_data
         real(wp) :: f
-        call evalcc%set_ori(iref, b%eulspace%get_euler(iref), real(x))
-        call evalcc%project_and_correlate(iptcl, corrs, grad)
+        f = - cftcc%calc_corr(iref, iptcl, real(x), grad)
         if (present(gradient)) then
             gradient(1) = - grad(1,1)
             gradient(2) = - grad(2,1)
         endif
-        f = - corrs(1)
     end function shift_grad_func
 
 end program simple_test_nlopt
