@@ -2064,7 +2064,7 @@ contains
         &'Calculate FSC between the two input volumes',&                        ! descr_short
         &'is a program for calculating the FSC between the two input volumes',& ! descr_long
         &'simple_exec',&                                                        ! executable
-        &2, 1, 0, 0, 3, 2, 1, .false.)                                          ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 2, 2, 1, .false.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call fsc%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
@@ -2076,11 +2076,10 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call fsc%set_input('filt_ctrls', 1, envfsc)
         hp%required = .false.
         lp%required = .false.
-        call fsc%set_input('filt_ctrls', 2, hp)
-        call fsc%set_input('filt_ctrls', 3, lp)
+        call fsc%set_input('filt_ctrls', 1, hp)
+        call fsc%set_input('filt_ctrls', 2, lp)
         ! mask controls
         call fsc%set_input('mask_ctrls', 1, mskdiam)
         call fsc%set_input('mask_ctrls', 2, mskfile)

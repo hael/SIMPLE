@@ -161,8 +161,10 @@ contains
         if( cline%defined('lp') )then
             lplim = params%lp
         else
-            call spproj%get_fsc(state, fname_fsc, fsc_box)
-            params%fsc = trim(fname_fsc)
+            if( .not.cline%defined('fsc') )then
+                call spproj%get_fsc(state, fname_fsc, fsc_box)
+                params%fsc = trim(fname_fsc)
+            endif
             if( .not.file_exists(params%fsc) )then
                 THROW_HARD('FSC file: '//trim(params%fsc)//' not found')
             else
