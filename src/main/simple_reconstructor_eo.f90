@@ -315,14 +315,13 @@ contains
 
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, find4eoavg )
-        use simple_estimate_ssnr, only: fsc2ssnr
         class(reconstructor_eo), intent(inout) :: self                  !< instance
         integer,                 intent(in)    :: state                 !< state
         character(len=*),        intent(in)    :: fname_even, fname_odd !< even/odd filenames
         integer,                 intent(out)   :: find4eoavg            !< Fourier index for eo averaging
         type(image)           :: even, odd
         complex,  allocatable :: cmat(:,:,:)
-        real,     allocatable :: res(:), corrs(:), fsc_t(:), fsc_n(:)
+        real,     allocatable :: res(:), fsc(:)
         real                  :: lp_rand, msk
         integer               :: k,k_rand, find_plate, filtsz
         logical               :: l_combined, l_ML_regularization
@@ -330,7 +329,7 @@ contains
         ! msk  = self%msk ! for a tighter spherical mask
         filtsz = fdim(self%box) - 1
         res    = get_resarr(self%box, self%smpd)
-        allocate(corrs(filtsz),fsc_t(filtsz),fsc_n(filtsz), source=0.)
+        allocate(fsc(filtsz),source=0.)
         ! if e=o then SSNR will be adjusted
         l_combined = trim(params_glob%combine_eo).eq.'yes'
         ! ML-regularization
@@ -360,81 +359,19 @@ contains
             if( l_combined ) call odd%write(add2fbody(fname_odd,params_glob%ext,'_unfil'))
             ! masking
             if( self%automsk )then
-                ! mask provided, no phase-randomization just yet
-                ! calculate FSC according to Chen et al,JSB,2013
-                ! Masked FSC
-                call even%mul(self%envmask)             ! mask
+                call even%mul(self%envmask)
                 call odd%mul(self%envmask)
-                call even%fft()                         ! Fourier space
-                call odd%fft()
-                call even%fsc(odd, fsc_t)               ! FSC
-                ! re-generates e/o volumes
-                cmat = self%even%get_cmat()
-                call self%even%sampl_dens_correct(do_gridcorr=.false.)
-                even = self%even
-                call self%even%set_cmat(cmat)
-                deallocate(cmat)
-                call even%ifft()
-                call even%clip_inplace([self%box,self%box,self%box])
-                call even%div(self%pad_correction)
-                cmat = self%odd%get_cmat()
-                call self%odd%sampl_dens_correct(do_gridcorr=.false.)
-                odd = self%odd
-                call self%odd%set_cmat(cmat)
-                deallocate(cmat)
-                call odd%ifft()
-                call odd%clip_inplace([self%box,self%box,self%box])
-                call odd%div(self%pad_correction)
-                ! Randomize then calculate masked FSC
-                k_rand = get_lplim_at_corr(fsc_t, ENVMSK_FSC_THRESH) ! randomization frequency
-                if( k_rand > filtsz-3 )then
-                    ! reverts to provided sherical masking
-                    call even%mask(self%msk, 'soft', backgr=0.)
-                    call odd%mask(self%msk,  'soft', backgr=0.)
-                    call even%fft()
-                    call odd%fft()
-                    call even%fsc(odd, corrs)
-                else
-                    lp_rand = calc_lowpass_lim(k_rand, self%box, self%smpd)
-                    ! randomize
-                    call even%fft()
-                    call odd%fft()
-                    call even%phase_rand(lp_rand)
-                    call odd%phase_rand(lp_rand)
-                    ! mask
-                    call even%ifft()
-                    call odd%ifft()
-                    call even%mul(self%envmask)
-                    call odd%mul(self%envmask)
-                    ! FSC & correction
-                    call even%fft()
-                    call odd%fft()
-                    call even%fsc(odd, fsc_n)
-                    corrs = fsc_t
-                    do k = k_rand+2,filtsz
-                        if( fsc_n(k) > fsc_t(k) )then
-                            corrs(k) = 0.
-                        else
-                            corrs(k) = (fsc_t(k)-fsc_n(k)) / (1.-fsc_n(k))
-                        endif
-                    enddo
-                    call arr2file(fsc_t, 'fsct_state'//int2str_pad(state,2)//BIN_EXT)
-                    call arr2file(fsc_n, 'fscn_state'//int2str_pad(state,2)//BIN_EXT)
-                    deallocate(fsc_t,fsc_n)
-                endif
             else
-                ! spherical masking
                 call even%mask(msk, 'soft', backgr=0.)
                 call odd%mask(msk, 'soft', backgr=0.)
-                ! forward FT
-                call even%fft()
-                call odd%fft()
-                ! calculate FSC
-                call even%fsc(odd, corrs)
             endif
+            ! calculate FSC
+            call even%fft()
+            call odd%fft()
+            call even%fsc(odd, fsc)
             ! regularization
-            call self%even%add_invtausq2rho(corrs)
-            call self%odd%add_invtausq2rho(corrs)
+            call self%even%add_invtausq2rho(fsc)
+            call self%odd%add_invtausq2rho(fsc)
             ! Even: uneven sampling density correction, clip, & write
             cmat = self%even%get_cmat()
             call self%even%sampl_dens_correct(do_gridcorr=.false.)
@@ -476,82 +413,30 @@ contains
             ! write un-normalised unmasked even/odd volumes
             call even%write(trim(fname_even), del_if_exists=.true.)
             call odd%write(trim(fname_odd),   del_if_exists=.true.)
+            ! masking
             if( self%automsk )then
-                ! calculate FSC according to Chen et al,JSB,2013
-                ! Masked FSC
-                call even%zero_background
-                call odd%zero_background
-                call even%mul(self%envmask)             ! mask
+                call even%mul(self%envmask)
                 call odd%mul(self%envmask)
-                call even%fft()                         ! Fourier space
-                call odd%fft()
-                call even%fsc(odd, fsc_t)               ! FSC
-                ! re-generates e/o volumes
-                call even%zero_and_unflag_ft
-                call odd%zero_and_unflag_ft
-                call self%even%clip(even)
-                call self%odd%clip(odd)
-                ! Randomize then calculate masked FSC
-                k_rand = get_lplim_at_corr(fsc_t, ENVMSK_FSC_THRESH) ! randomization frequency
-                if( k_rand > filtsz-3 )then
-                    ! reverts to provided sherical masking
-                    call even%mask(self%msk, 'soft')
-                    call odd%mask(self%msk,  'soft')
-                    call even%fft()
-                    call odd%fft()
-                    call even%fsc(odd, corrs)
-                else
-                    lp_rand = calc_lowpass_lim(k_rand, self%box, self%smpd)
-                    ! randomize
-                    call even%fft()
-                    call odd%fft()
-                    call even%phase_rand(lp_rand)
-                    call odd%phase_rand(lp_rand)
-                    ! mask
-                    call even%ifft()
-                    call odd%ifft()
-                    call even%zero_background
-                    call odd%zero_background
-                    call even%mul(self%envmask)
-                    call odd%mul(self%envmask)
-                    ! FSC & correction
-                    call even%fft()
-                    call odd%fft()
-                    call even%fsc(odd, fsc_n)
-                    corrs = fsc_t
-                    do k = k_rand+2,filtsz
-                        if( fsc_n(k) > fsc_t(k) )then
-                            corrs(k) = 0.
-                        else
-                            corrs(k) = (fsc_t(k)-fsc_n(k)) / (1.-fsc_n(k))
-                        endif
-                    enddo
-                    call arr2file(fsc_t, 'fsct_state'//int2str_pad(state,2)//BIN_EXT)
-                    call arr2file(fsc_n, 'fscn_state'//int2str_pad(state,2)//BIN_EXT)
-                    deallocate(fsc_t,fsc_n)
-                endif
             else
-                ! spherical masking
-                call even%mask(msk, 'soft')
-                call odd%mask(msk, 'soft')
-                ! forward FT
-                call even%fft()
-                call odd%fft()
-                ! calculate FSC
-                call even%fsc(odd, corrs)
+                call even%mask(msk, 'soft', backgr=0.)
+                call odd%mask(msk, 'soft', backgr=0.)
             endif
+            ! calculate FSC
+            call even%fft()
+            call odd%fft()
+            call even%fsc(odd, fsc)
         endif
         find_plate = 0
-        if( self%phaseplate ) call phaseplate_correct_fsc(corrs, find_plate)
-        if( self%hpind_fsc > 0 ) corrs(:self%hpind_fsc) = corrs(self%hpind_fsc + 1)
+        if( self%phaseplate ) call phaseplate_correct_fsc(fsc, find_plate)
+        if( self%hpind_fsc > 0 ) fsc(:self%hpind_fsc) = fsc(self%hpind_fsc + 1)
         ! save, get & print resolution
-        call arr2file(corrs, 'fsc_state'//int2str_pad(state,2)//BIN_EXT)
-        call get_resolution(corrs, res, self%res_fsc05, self%res_fsc0143)
+        call arr2file(fsc, 'fsc_state'//int2str_pad(state,2)//BIN_EXT)
+        call get_resolution(fsc, res, self%res_fsc05, self%res_fsc0143)
         self%res_fsc05   = max(self%res_fsc05,self%fny)
         self%res_fsc0143 = max(self%res_fsc0143,self%fny)
         if( trim(params_glob%silence_fsc) .eq. 'no' )then
             do k=1,size(res)
-               write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(k), '>>> CORRELATION:', corrs(k)
+               write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(k), '>>> CORRELATION:', fsc(k)
             end do
             write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%res_fsc05
             write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%res_fsc0143
@@ -561,10 +446,10 @@ contains
             find4eoavg = self%hpind_fsc
         else
             find4eoavg = max(K4EOAVGLB,  calc_fourier_index(FREQ4EOAVG3D,self%box,self%smpd))
-            find4eoavg = min(find4eoavg, get_lplim_at_corr(corrs, FSC4EOAVG3D))
+            find4eoavg = min(find4eoavg, get_lplim_at_corr(fsc, FSC4EOAVG3D))
             find4eoavg = max(find4eoavg, find_plate)
         endif
-        deallocate(corrs, res)
+        deallocate(fsc, res)
         call even%kill
         call odd%kill
     end subroutine sampl_dens_correct_eos

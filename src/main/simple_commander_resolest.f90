@@ -36,15 +36,16 @@ contains
 
     !> calculates Fourier shell correlation from Even/Odd Volume pairs
     subroutine exec_fsc( self, cline )
-        use simple_estimate_ssnr, only: fsc2optlp_sub, fsc2TVfilt
+        use simple_estimate_ssnr, only: phase_rand_fsc, plot_fsc, plot_phrand_fsc
         class(fsc_commander), intent(inout) :: self
         class(cmdline),       intent(inout) :: cline
-        type(parameters)  :: params
-        type(image)       :: even, odd
-        type(masker)      :: mskvol
-        integer           :: j, find_plate, k_hp, k_lp, nyq
-        real              :: res_fsc05, res_fsc0143
-        real, allocatable :: res(:), corrs(:)
+        type(parameters)               :: params
+        type(image)                    :: even, odd
+        type(masker)                   :: mskvol
+        character(len=LONGSTRLEN) :: fsc_templ
+        real,              allocatable :: res(:), fsc(:), fsc_t(:), fsc_n(:)
+        integer :: j, find_plate, k_hp, k_lp, nyq
+        real    :: res_fsc05, res_fsc0143
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         ! read even/odd pair
@@ -52,43 +53,40 @@ contains
         call odd%new([params%box,params%box,params%box], params%smpd)
         call odd%read(params%vols(1))
         call even%read(params%vols(2))
+        res = even%get_res()
+        nyq = even%get_filtsz()
         if( cline%defined('mskfile') )then
-            if( file_exists(params%mskfile) )then
-                call mskvol%new([params%box,params%box,params%box], params%smpd)
-                call mskvol%read(params%mskfile)
-                call even%zero_background
-                call odd%zero_background
-                call even%mul(mskvol)
-                call odd%mul(mskvol)
-            else
-                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_fsc')
-            endif
+            if( .not.file_exists(params%mskfile) ) THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_fsc')
+            call mskvol%new([params%box,params%box,params%box], params%smpd)
+            call mskvol%read(params%mskfile)
+            call phase_rand_fsc(even, odd, mskvol, params%msk, 1, nyq, fsc, fsc_t, fsc_n)
         else
             ! spherical masking
             call even%mask(params%msk, 'soft')
             call odd%mask(params%msk, 'soft')
+            call even%fft()
+            call odd%fft()
+            allocate(fsc(nyq),source=0.)
+            call even%fsc(odd, fsc)
         endif
-        ! forward FT
-        call even%fft()
-        call odd%fft()
-        ! calculate FSC
-        res = even%get_res()
-        nyq = even%get_filtsz()
-        allocate(corrs(nyq))
-        call even%fsc(odd, corrs)
-        if( params%l_phaseplate ) call phaseplate_correct_fsc(corrs, find_plate)
+        if( params%l_phaseplate ) call phaseplate_correct_fsc(fsc, find_plate)
         do j=1,nyq
-           write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
+            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', fsc(j)
         end do
-        call get_resolution(corrs, res, res_fsc05, res_fsc0143)
+        call get_resolution(fsc, res, res_fsc05, res_fsc0143)
         k_hp = calc_fourier_index(params%hp, params%box, params%smpd)
         k_lp = calc_fourier_index(params%lp, params%box, params%smpd)
         write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
         write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
-        write(logfhandle,'(A,1X,F8.4)') '>>> MEDIAN FSC (SPECSCORE):', median_nocopy(corrs(k_hp:k_lp))
         call even%kill
         call odd%kill
-        call arr2file(corrs, 'FSC.bin')
+        fsc_templ = trim(FSC_FBODY)//int2str_pad(1,2)
+        call arr2file(fsc, trim(fsc_templ)//trim(BIN_EXT))
+        if( cline%defined('mskfile') )then
+            call plot_phrand_fsc(size(fsc), fsc, fsc_t, fsc_n, res, params%smpd, fsc_templ)
+        else
+            call plot_fsc(size(fsc), fsc, res, params%smpd, fsc_templ)
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_FSC NORMAL STOP ****')
     end subroutine exec_fsc
