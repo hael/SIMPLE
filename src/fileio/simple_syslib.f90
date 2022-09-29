@@ -47,11 +47,11 @@ interface
     end function fsync
 
     ! For float parsing only!
-    function sscanf(str, fmt, val) bind(C)
+    function sscanf(str, fmt, val) bind(C, name="sscanf")
         use iso_c_binding, only : c_int, c_char, c_float
         integer(kind=c_int) :: sscanf
-        character(kind=c_char, len=1), dimension(*) :: str, fmt
-        real(kind=c_float),             intent(out) :: val
+        character(kind=c_char,len=1), dimension(*),intent(in)  :: str, fmt
+        real(kind=c_float),                        intent(out) :: val
     end function sscanf
 
 end interface

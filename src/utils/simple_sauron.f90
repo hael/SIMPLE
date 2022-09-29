@@ -36,7 +36,13 @@ contains
         ! directory
         if( index(str, PATH_SEPARATOR) /= 0 ) return
         ! real
-        isreal = sscanf(str(1:l)//C_NULL_CHAR,"%f"//C_NULL_CHAR,rvar) /= 0
+        ! On Apple M1 some combinations of XCode & GNU compilers make sscanf fail systematically,
+        ! Fortran instrinsic is a bit slower but safer it seems
+        read(str, *, iostat=i) rvar
+        isreal = i==0
+        ! isreal = .true.
+        ! rvar = str2real(str)
+        ! isreal = sscanf(str(1:l)//C_NULL_CHAR,"%f"//C_NULL_CHAR,rvar) /= 0
     end subroutine str2real_local
 
     !> This parser is optimised for real/character output types.
