@@ -96,6 +96,12 @@ contains
             call spproj%os_ptcl3D%set_all2single("e1", 0.0)
             call spproj%os_ptcl3D%set_all2single("e2", 0.0)
             call spproj%os_ptcl3D%set_all2single("e3", 0.0)
+        else if(file_exists(cline%get_carg("import_dir") // "/" // "particles2D.star")) then
+            call starproj%import_ptcls2D(cline, spproj, cline%get_carg("import_dir") // "/" // "particles2D.star")
+            call spproj%os_ptcl3D%copy(spproj%os_ptcl2D, is_ptcl=.true.)
+            call spproj%os_ptcl3D%set_all2single("e1", 0.0)
+            call spproj%os_ptcl3D%set_all2single("e2", 0.0)
+            call spproj%os_ptcl3D%set_all2single("e3", 0.0)
         else if(file_exists(cline%get_carg("import_dir") // "/" // "micrographs_ctf.star")) then
             call starproj%import_mics(cline, spproj, cline%get_carg("import_dir") // "/" // "micrographs_ctf.star")
         else if(file_exists(cline%get_carg("import_dir") // "/" // "corrected_micrographs.star")) then
