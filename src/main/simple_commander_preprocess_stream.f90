@@ -15,6 +15,8 @@ use simple_starproject,                    only: starproject
 use simple_commander_cluster2D_stream_dev
 use simple_qsys_funs
 use simple_commander_preprocess
+use simple_progress
+use FoX_dom
 implicit none
 
 public :: preprocess_commander_stream_dev
@@ -55,7 +57,7 @@ contains
         character(len=LONGSTRLEN)              :: movie
         real                                   :: pickref_scale
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, last_injection, nchunks_imported
-        integer                                :: cnt, n_imported, nptcls_glob, n_failed_jobs, n_fail_iter, ncls_in
+        integer                                :: cnt, n_imported, n_added, nptcls_glob, n_failed_jobs, n_fail_iter, ncls_in
         logical                                :: l_pick, l_movies_left, l_haschanged, l_cluster2d
         integer(timer_int_kind) :: t0
         real(timer_int_kind)    :: rt_write
@@ -121,6 +123,8 @@ contains
             params_glob%nparts_pool = params_glob%nparts
             call cline%set('nparts_pool', real(params_glob%nparts_pool))
         endif
+        ! initialise progress monitor
+        call progressfile_init()
         ! master project file
         call spproj%read( params%projfile )
         call spproj%update_projinfo(cline)
@@ -183,6 +187,7 @@ contains
         iter          = 0
         n_imported    = 0
         n_failed_jobs = 0
+        n_added       = 0
         l_movies_left = .false.
         l_haschanged  = .false.
         do
@@ -204,6 +209,7 @@ contains
                     call qenv%qscripts%schedule_streaming( qenv%qdescr, path=output_dir )
                     call movie_buff%add2history( movies(imovie) )
                     cnt = cnt+1
+                    n_added = n_added+1
                     if( cnt == min(params%nparts,nmovies) ) exit
                 enddo
                 l_movies_left = cnt .ne. nmovies
@@ -247,6 +253,8 @@ contains
                 if( l_pick ) write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED:          ',nptcls_glob
                 write(logfhandle,'(A,I3,A1,I3)')       '>>> # OF COMPUTING UNITS IN USE/TOTAL:   ',qenv%get_navail_computing_units(),'/',params%nparts
                 if( n_failed_jobs > 0 ) write(logfhandle,'(A,I5)')             '>>> # FAILED JOBS                :     ',n_failed_jobs
+                ! update progress monitor
+                call progressfile_update(progress_estimate_preprocess_stream(n_imported, n_added))
                 ! write project for gui, micrographs field only
                 call spproj%write_segment_inside('mic',micspproj_fname)
                 last_injection = simple_gettime()
@@ -481,14 +489,38 @@ contains
                 type(sp_project)             :: spproj_here
                 type(cmdline)                :: cline_here
                 type(ctfparams)              :: ctfvars
+                type(Node), pointer          :: xmldoc, beamtiltnode, beamtiltnodex, beamtiltnodey
                 character(len=STDLEN)        :: ext, movie_here
-                character(len=LONGSTRLEN)    :: projname, projfile
+                character(len=LONGSTRLEN)    :: projname, projfile,xmlfile,xmldir
                 character(len=XLONGSTRLEN)   :: cwd, cwd_old
+                real                         :: tiltx, tilty
                 cwd_old = trim(cwd_glob)
                 call chdir(output_dir)
                 call simple_getcwd(cwd)
                 cwd_glob = trim(cwd)
                 movie_here = basename(trim(movie))
+                tiltx = 0.0
+                tilty = 0.0
+                if(cline%defined('dir_meta')) then
+                    xmlfile = basename(trim(movie))
+                    xmldir = cline%get_carg('dir_meta')
+                    if(index(xmlfile, '_fractions') > 0) then
+                        xmlfile = xmlfile(:index(xmlfile, '_fractions') - 1)
+                    end if
+                    if(index(xmlfile, '_EER') > 0) then
+                        xmlfile = xmlfile(:index(xmlfile, '_EER') - 1)
+                    end if
+                    xmlfile = trim(adjustl(xmlfile)) // '.xml'
+                    if( file_exists( trim( adjustl(xmldir) ) // '/' // trim( adjustl(xmlfile) ) ) ) then
+                        xmldoc => parseFile( trim( adjustl(xmldir) ) // '/' // trim( adjustl(xmlfile) ) )
+                        beamtiltnode => item(getElementsByTagname(xmldoc, "BeamShift"), 0)
+                        beamtiltnodex => item(getElementsByTagname(beamtiltnode, "a:_x"), 0)
+                        beamtiltnodey => item(getElementsByTagname(beamtiltnode, "a:_y"), 0)
+                        tiltx = str2real(getTextContent(beamtiltnodex))
+                        tilty = str2real(getTextContent(beamtiltnodey))
+                        call destroy(xmldoc) 
+                    end if
+                end if
                 ext        = fname2ext(trim(movie_here))
                 projname   = trim(PREPROCESS_PREFIX)//trim(get_fbody(trim(movie_here), trim(ext)))
                 projfile   = trim(projname)//trim(METADATA_EXT)
@@ -504,6 +536,8 @@ contains
                 ctfvars%fraca        = params%fraca
                 ctfvars%l_phaseplate = params%phaseplate.eq.'yes'
                 call spproj_here%add_single_movie(trim(movie), ctfvars)
+                call spproj_here%os_mic%set(1, "tiltx", tiltx)
+                call spproj_here%os_mic%set(1, "tilty", tilty)
                 call spproj_here%write
                 call cline%set('projname', trim(projname))
                 call cline%set('projfile', trim(projfile))

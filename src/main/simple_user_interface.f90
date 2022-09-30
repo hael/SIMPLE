@@ -3045,7 +3045,8 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &5, 15, 0, 21, 13, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
+        &6, 15, 0, 21, 13, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
+
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3060,6 +3061,9 @@ contains
         call preprocess_stream_dev%set_input('img_ios', 5, 'dir_prev', 'file', 'Previous run directory',&
             &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preprocess_stream', .false., '')
         call preprocess_stream_dev%set_gui_params('img_ios', 5, submenu="data")
+        call preprocess_stream_dev%set_input('img_ios', 6, 'dir_meta', 'dir', 'Directory containing per-movie metadata in XML format',&
+            &'Directory containing per-movie metadata XML files from EPU', 'e.g. /dataset/metadata', .false., '')
+        call preprocess_stream_dev%set_gui_params('img_ios', 6, submenu="data", advanced=.false.)
         ! parameter input/output
         call preprocess_stream_dev%set_input('parm_ios', 1, dose_rate)
         call preprocess_stream_dev%set_gui_params('parm_ios', 1, submenu="data", advanced=.false.)

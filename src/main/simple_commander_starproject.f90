@@ -129,12 +129,16 @@ contains
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), "no optics groups are set in the project file. Auto assigning optics groups. You may wish to run assign_optics_groups prior to export_starproject"
             write(logfhandle,*) ''
+            if(cline%get_rarg("tilt_thres") == 0) then
+                call cline%set("tilt_thres", 0.05)
+            end if
             call starproj%assign_optics(cline, spproj)
+            call spproj%write(basename(params%projfile))
         end if
         if (spproj%os_mic%get_noris() > 0) then
             call starproj%export_mics(cline, spproj)
         end if
-    if (spproj%os_cls2D%get_noris() > 0) then
+        if (spproj%os_cls2D%get_noris() > 0) then
             call starproj%export_cls2D(spproj)
         end if
         if (spproj%os_ptcl2D%get_noris() > 0) then

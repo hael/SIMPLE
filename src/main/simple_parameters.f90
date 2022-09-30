@@ -113,6 +113,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: cwd=''
     character(len=LONGSTRLEN) :: deftab=''            !< file with CTF info(.txt|.simple)
     character(len=LONGSTRLEN) :: dir=''               !< directory
+    character(len=LONGSTRLEN) :: dir_meta=''          !< grab xml files from here
     character(len=LONGSTRLEN) :: dir_movies=''        !< grab mrc mrcs files from here
     character(len=LONGSTRLEN) :: dir_prev=''          !< grab previous projects for streaming
     character(len=LONGSTRLEN) :: dir_refine=''        !< refinement directory

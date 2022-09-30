@@ -5,6 +5,7 @@ use simple_oris,       only: oris
 use simple_parameters, only: params_glob
 use simple_builder,    only: build_glob
 use simple_cmdline,    only: cmdline
+use simple_progress
 implicit none
 
 public :: convergence
@@ -23,6 +24,7 @@ type convergence
     real :: mi_class = 0.           !< class parameter distribution overlap
     real :: mi_proj  = 0.           !< projection parameter distribution overlap
     real :: mi_state = 0.           !< state parameter distribution overlap
+    real :: progress = 0.           !< progress estimation
   contains
     procedure :: check_conv2D
     procedure :: check_conv3D
@@ -110,13 +112,17 @@ contains
                 ! test for convergence
                 if( (params_glob%l_frac_update) .or. (params_glob%stream.eq.'yes') )then
                     converged = ( self%mi_class > overlap_lim .and. self%frac_srch%avg > fracsrch_lim )
+                    self%progress = progress_estimate_2D(real(params_glob%which_iter), self%mi_class, overlap_lim, self%frac_srch%avg, fracsrch_lim, 0.0, 0.0)
                 else if( trim(params_glob%tseries) .eq. 'yes' )then
                     converged = self%mi_class > overlap_lim
+                    self%progress = progress_estimate_2D(real(params_glob%which_iter), self%mi_class, overlap_lim, 0.0, 0.0, 0.0, 0.0)
                 else
                     converged = ( self%mi_class > overlap_lim .and. self%frac_srch%avg > fracsrch_lim )
+                    self%progress = progress_estimate_2D(real(params_glob%which_iter), self%mi_class, overlap_lim, self%frac_srch%avg, fracsrch_lim, 0.0, 0.0)
                 endif
                 if( params_glob%l_refine_inpl )then
                     converged = self%dist_inpl%avg < 0.02
+                    self%progress = progress_estimate_2D(real(params_glob%which_iter), 0.0, 0.0, 0.0, 0.0, self%dist_inpl%avg, 0.02) 
                 endif
                 if( converged )then
                     write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
@@ -343,6 +349,8 @@ contains
                 get = self%mi_proj
             case('mi_state')
                 get = self%mi_state
+            case('progress')
+                get = self%progress
         end select
     end function get
 

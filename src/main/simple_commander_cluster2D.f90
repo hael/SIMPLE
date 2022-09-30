@@ -13,6 +13,7 @@ use simple_starproject,    only: starproject
 use simple_estimate_ssnr,  only: mskdiam2lplimits, fsc2optlp_sub
 use simple_qsys_funs
 use simple_procimgstk
+use simple_progress
 implicit none
 
 public :: cleanup2D_commander_hlev
@@ -106,6 +107,7 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
+        type(starproject):: starproj
         integer :: ncls_here
         logical :: l_shmem
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
@@ -351,6 +353,8 @@ contains
         call cline_cluster2D1%set('refs', params%refs)
         call cline_cluster2D1%set('lp',   lp1)
         call cline_cluster2D2%set('lp',   lp2)
+        ! initialise progress monitor
+        call progressfile_init()
         ! execution 1
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A,F6.1)') '>>> STAGE 1, LOW-PASS LIMIT: ',lp1
@@ -864,6 +868,8 @@ contains
             call build%spproj_field%partition_eo
             call build%spproj%write_segment_inside(params%oritype,params%projfile)
         endif
+        ! initialise progress monitor
+        if(.not. l_stream) call progressfile_init()
         ! main loop
         iter = params%startit - 1
         do
@@ -973,7 +979,7 @@ contains
         type(builder), target      :: build
         type(starproject)          :: starproj
         character(len=LONGSTRLEN)  :: finalcavgs
-        logical                    :: converged
+        logical                    :: converged, l_stream
         integer                    :: startit, ncls_from_refs, lfoo(3), i, cnt, iptcl, ptclind
         call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('maxits') ) call cline%set('maxits', 30.)
@@ -982,6 +988,10 @@ contains
             call find_ldim_nptcls(params%refs, lfoo, ncls_from_refs)
             ! consistency check
             if( params%ncls /=  ncls_from_refs ) THROW_HARD('nrefs /= inputted ncls')
+        endif
+        l_stream = .false.
+        if( cline%defined('stream') )then
+            l_stream = trim(cline%get_carg('stream'))=='yes'
         endif
         startit = 1
         if( cline%defined('startit') )startit = params%startit
@@ -1049,6 +1059,8 @@ contains
             else
                 params%extr_iter = params%startit - 1
             endif
+            ! initialise progress monitor
+            if(.not. l_stream) call progressfile_init()
             do i = 1, params%maxits
                 params%which_iter = params%startit
                 write(logfhandle,'(A)')   '>>>'
@@ -1060,7 +1072,6 @@ contains
                 params%extr_iter = params%extr_iter + 1
                 ! update project with the new orientations (this needs to be here rather than after convergence for the current implementation to work)
                 call build%spproj%write_segment_inside(params%oritype)
-
                 ! update class information and write cavgs starfile for iteration
                 call cavger_gen2Dclassdoc(build%spproj)
                 call starproj%export_cls2D(build%spproj, params%which_iter)
@@ -1091,8 +1102,10 @@ contains
         class(cmdline),                intent(inout) :: cline
         type(parameters)  :: params
         type(builder)     :: build
+        type(starproject) :: starproj
         real, allocatable :: states(:)
         logical           :: l_stream
+        integer           :: iterstr_start, iterstr_end, iter, io_stat
         call cline%set('oritype', 'ptcl2D')
         l_stream = .false.
         if( cline%defined('stream') )then
@@ -1119,6 +1132,15 @@ contains
         call cavger_calc_and_write_frcs_and_eoavg(params%frcs)
         ! classdoc gen needs to be after calc of FRCs
         call cavger_gen2Dclassdoc(build%spproj)
+        ! get iteration from which_iter else from refs filename and write cavgs starfile
+        if( cline%defined('which_iter') ) then
+            call starproj%export_cls2D(build%spproj, params%which_iter)
+        else if( cline%defined('refs') ) then          
+            iterstr_start = index(params%refs, trim(CAVGS_ITER_FBODY)) + 10
+            iterstr_end = index(params%refs, trim(params%ext)) - 1
+            call str2int(params%refs(iterstr_start:iterstr_end), io_stat, iter)
+            call starproj%export_cls2D(build%spproj, iter)
+        end if
         ! write references
         call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 2')
         call cavger_write(trim(params%refs),      'merged')
@@ -1672,11 +1694,17 @@ contains
         class(oris),    intent(inout) :: os
         type(parameters)  :: params
         type(convergence) :: conv
-        logical :: converged
+        logical :: converged, l_stream
         call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
+        l_stream = .false.
+        if( cline%defined('stream') )then
+            l_stream = trim(cline%get_carg('stream'))=='yes'
+        endif
         ! convergence check
         converged = conv%check_conv2D(cline, os, os%get_n('class'), params%msk)
+        ! Update progress file
+        if(.not. l_stream) call progressfile_update(conv%get('progress'))
         call cline%set('frac_srch', conv%get('frac_srch'))
         ! activates shift search
         if( params_glob%l_doshift ) call cline%set('trs', params_glob%trs)
