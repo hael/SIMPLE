@@ -22,6 +22,7 @@ use simple_strategy2D_inpl,     only: strategy2D_inpl
 use simple_strategy2D_eval,     only: strategy2D_eval
 use simple_opt_filter,          only: opt_2D_filter_sub
 use simple_classaverager
+use simple_progress
 implicit none
 
 public :: cluster2D_exec
@@ -303,6 +304,8 @@ contains
         else
             ! check convergence
             converged = conv%check_conv2D(cline, build_glob%spproj_field, build_glob%spproj_field%get_n('class'), params_glob%msk)
+            ! Update progress file if not stream
+            if(.not. l_stream) call progressfile_update(conv%get('progress'))
             ! finalize classes
             if( converged .or. which_iter == params_glob%maxits)then
                 call cavger_readwrite_partial_sums('write')

@@ -834,23 +834,28 @@ contains
                 call spproj%os_ptcl3D%set(i, 'ogid', spproj%os_stk%get(ptclstkid, 'ogid'))
             end do
         end if
-        if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
-        if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating optics groups in project file ... "
-        call spproj%os_optics%new(maxval(self%tiltinfo%finaltiltgroupid) - minval(self%tiltinfo%finaltiltgroupid) + 1, is_ptcl=.false.)
-        do i = minval(self%tiltinfo%finaltiltgroupid), maxval(self%tiltinfo%finaltiltgroupid)
-            element = findloc(self%tiltinfo%finaltiltgroupid, i, 1)
-            if(element > 0) then
-                write(ogname,"(I6)") i
-                call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "ogid", real(i))
-                call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "ogname", "opticsgroup" // trim(adjustl(ogname)))
-                call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "smpd", self%tiltinfo(element)%smpd)
-                call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "cs", self%tiltinfo(element)%cs)
-                call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "kv", self%tiltinfo(element)%kv)
-                call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "fraca", self%tiltinfo(element)%fraca)
-                call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "box", self%tiltinfo(element)%box)
-                call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "state", 1.0)
-            end if
-        end do
+        
+        if(size(self%tiltinfo) > 0) then
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
+            if( VERBOSE_OUTPUT ) write(logfhandle,*) char(9), "updating optics groups in project file ... "
+            
+            call spproj%os_optics%new(maxval(self%tiltinfo%finaltiltgroupid) - minval(self%tiltinfo%finaltiltgroupid) + 1, is_ptcl=.false.)
+            do i = minval(self%tiltinfo%finaltiltgroupid), maxval(self%tiltinfo%finaltiltgroupid)
+                element = findloc(self%tiltinfo%finaltiltgroupid, i, 1)
+                if(element > 0) then
+                    write(ogname,"(I6)") i
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "ogid", real(i))
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "ogname", "opticsgroup" // trim(adjustl(ogname)))
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "smpd", self%tiltinfo(element)%smpd)
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "cs", self%tiltinfo(element)%cs)
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "kv", self%tiltinfo(element)%kv)
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "fraca", self%tiltinfo(element)%fraca)
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "box", self%tiltinfo(element)%box)
+                    call spproj%os_optics%set(i - minval(self%tiltinfo%finaltiltgroupid) + 1, "state", 1.0)
+                end if
+            end do
+        end if
+       
         deallocate(self%tiltinfo)
         if( VERBOSE_OUTPUT ) write(logfhandle,*) ''
     end subroutine assign_optics
@@ -964,6 +969,16 @@ contains
                 tiltinfo%fraca    = sporis%get(i, "fraca")
                 tiltinfo%cs       = sporis%get(i, "cs")
                 tiltinfo%box      = sporis%get(i, "box")
+                if(sporis%isthere(i,'tiltx')) then
+                    tiltinfo%tiltx = sporis%get(i, "tiltx")
+                else
+                    tiltinfo%tiltx = 0.0
+                end if
+                if(sporis%isthere(i,'tilty')) then
+                    tiltinfo%tilty = sporis%get(i, "tilty")
+                else
+                    tiltinfo%tilty = 0.0
+                end if
                 self%tiltinfo     = [self%tiltinfo, tiltinfo]
             else
                 if(self%tiltinfo(tiltind)%box < sporis%get(i, "box")) then
@@ -974,8 +989,8 @@ contains
     end subroutine get_image_basename
     
     subroutine set_verbose(self)
-		class(starproject), intent(inout) :: self
-		VERBOSE_OUTPUT = .true.
+        class(starproject), intent(inout) :: self
+        VERBOSE_OUTPUT = .true.
     end subroutine set_verbose
     
 end module simple_starproject
