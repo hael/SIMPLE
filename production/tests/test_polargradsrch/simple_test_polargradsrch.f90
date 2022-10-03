@@ -7,6 +7,7 @@ use simple_parameters,          only: parameters
 use simple_pftcc_orisrch_grad,  only: pftcc_orisrch_grad
 use simple_strategy2D3D_common, only: set_bp_range
 use simple_ori,                 only: ori
+use simple_image
 implicit none
 type(parameters)         :: p
 type(polarft_corrcalc)   :: pftcc
@@ -14,7 +15,8 @@ type(cmdline)            :: cline
 type(builder)            :: b
 type(pftcc_orisrch_grad) :: orisrch
 type(ori)                :: o
-real                     :: cxy(3), shvec(2), shift_err, ang_err
+type(image)              :: noise, vol_copy
+real                     :: cxy(3), shvec(2), shift_err, ang_err, ave, sdev, maxv, minv
 logical :: found_better
 if( command_argument_count() < 4 )then
     write(logfhandle,'(a)',advance='no') 'simple_test_srch vol1=xx mskdiam=xx lp=xx'
@@ -41,7 +43,16 @@ print *,'Shift= 0.0 0.0'
 print *,'---------------------'
 
 call pftcc%new(p%nptcls, [1, p%nptcls], .false.)
+call noise%new(p%ldim, p%smpd)
 call b%vol%read(p%vols(1))
+call vol_copy%new(p%ldim, p%smpd)
+call vol_copy%copy(b%vol)
+call b%vol%stats('foreground', ave, sdev, maxv, minv)
+! add noise in a small center region of the even
+call noise%gauran(0., 15. * sdev)
+call noise%mask(0.4 * p%msk, 'soft')
+call b%vol%add(noise)
+call b%vol%write('particle_noisy.mrc')
 call b%vol%mask(p%msk,'soft')
 if( p%gridding.eq.'yes' ) call b%vol%div_w_instrfun(p%interpfun, alpha=p%alpha)
 call b%vol%fft()
@@ -49,7 +60,14 @@ call b%vol%expand_cmat(p%alpha,norm4proj=.true.)
 call b%vol%fproject_polar(1, o, pftcc, iseven=.true., mask=b%l_resmsk)
 call pftcc%cp_even_ref2ptcl(1,1)
 call pftcc%set_eo(1, .true. )
-
+call b%vol%copy_fast(vol_copy)
+call noise%gauran(0., 15. * sdev)
+call noise%mask(0.4 * p%msk, 'soft')
+call b%vol%add(noise)
+call b%vol%write('reference_noisy.mrc')
+call b%vol%fft()
+call b%vol%expand_cmat(p%alpha,norm4proj=.true.)
+call b%vol%fproject_polar(1, o, pftcc, iseven=.true., mask=b%l_resmsk)
 
 call o%e1set(o%e1get() + 2.*(ran3()-0.5)*ang_err)
 call o%e2set(o%e2get() + 2.*(ran3()-0.5)*ang_err)
