@@ -446,6 +446,7 @@ type :: parameters
     real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in (roughly) ascending alphabetical order
     logical :: l_autoscale    = .false.
+    logical :: l_bfac         = .false.
     logical :: l_corrw        = .false.
     logical :: l_distr_exec   = .false.
     logical :: l_dev          = .false.
@@ -1486,6 +1487,8 @@ contains
                 if( self%l_needs_sigma ) self%l_match_filt = .false.
         end select
         self%l_incrreslim = .not.self%l_lpset
+        ! B-facor
+        self%l_bfac = cline%defined('bfac')
         ! atoms
         if( cline%defined('element') )then
             if( .not. atoms_obj%element_exists(self%element) )then

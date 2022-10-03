@@ -73,6 +73,7 @@ type :: polarft_corrcalc
     real,                allocatable :: npix_per_shell(:)           !< number of (cartesian) pixels per shell
     real(sp),            allocatable :: sqsums_ptcls(:)             !< memoized square sums for the correlation calculations (taken from kfromto(1):kstop)
     real(sp),            allocatable :: angtab(:)                   !< table of in-plane angles (in degrees)
+    real(sp),            allocatable :: bfactor(:)                  !< B-factor weights
     real(dp),            allocatable :: argtransf(:,:)              !< argument transfer constants for shifting the references
     real(sp),            allocatable :: polar(:,:)                  !< table of polar coordinates (in Cartesian coordinates)
     real(sp),            allocatable :: ctfmats(:,:,:)              !< expand set of CTF matrices (for efficient parallel exec)
@@ -95,6 +96,7 @@ type :: polarft_corrcalc
     logical                          :: l_clsfrcs    = .false.      !< CLS2D/3DRefs flag
     logical                          :: l_match_filt = .false.      !< matched filter flag
     logical                          :: l_filt_set   = .false.      !< to indicate whether filter is set
+    logical                          :: l_bfac       = .false.      !< to indicate whether noise supressing B-factor is being useed
     logical                          :: with_ctf     = .false.      !< CTF flag
     logical                          :: existence    = .false.      !< to indicate existence
     type(heap_vars),     allocatable :: heap_vars(:)                !< allocated fields to save stack allocation in subroutines and functions
@@ -207,17 +209,18 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new( self, nrefs, pfromto, l_match_filt, ptcl_mask, eoarr )
+    subroutine new( self, nrefs, pfromto, l_match_filt, ptcl_mask, eoarr, bfac )
         class(polarft_corrcalc), target, intent(inout) :: self
         integer,                         intent(in)    :: nrefs
         integer,                         intent(in)    :: pfromto(2)
         logical,                         intent(in)    :: l_match_filt
         logical, optional,               intent(in)    :: ptcl_mask(pfromto(1):pfromto(2))
         integer, optional,               intent(in)    :: eoarr(pfromto(1):pfromto(2))
+        real,    optional,               intent(in)    :: bfac
         character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
         real(sp), allocatable :: polar_here(:)
         real(dp)              :: A(2)
-        real(sp)              :: ang
+        real(sp)              :: ang, freq
         integer(kind=c_int)   :: wsdm_ret
         integer               :: local_stat,irot, k, ithr, i, ik, cnt
         logical               :: even_dims, test(2)
@@ -254,7 +257,17 @@ contains
         self%pftsz = magic_pftsz(nint(params_glob%msk)) !< size of reference (number of vectors used for matching,determined by radius of molecule)
         self%nrots = 2 * self%pftsz                     !< number of in-plane rotations for one pft  (pftsz*2)
         ! allocate optimal low-pass filter
-        allocate(self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,self%nrefs),source=1.)
+        allocate(self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,self%nrefs),&
+                &self%bfactor(params_glob%kfromto(1):params_glob%kfromto(2)), source=1.)
+        ! set B-factor values
+        self%l_bfac = .false.
+        if( present(bfac) )then
+            self%l_bfac = .true.
+            do k = params_glob%kfromto(1), params_glob%kfromto(2)
+                freq            = real(k) / (real(self%ldim(1)) * params_glob%smpd)
+                self%bfactor(k) = max(0.,exp(-(bfac/4.)*freq*freq))
+            end do
+        endif
         ! generate polar coordinates
         allocate( self%polar(2*self%nrots,params_glob%kfromto(1):params_glob%kfromto(2)),&
                     &self%angtab(self%nrots), self%iseven(1:self%nptcls), polar_here(2*self%nrots))
@@ -770,7 +783,7 @@ contains
         integer,                 intent(in)    :: iptcl, iref
         complex(sp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         real    :: pw
-        integer :: k
+        integer :: k, irot
         if( self%l_match_filt .and. self%l_filt_set ) then
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = real(sum(csq_fast(dcmplx(pft(:,k)))) / real(self%pftsz,dp))
@@ -781,6 +794,11 @@ contains
                 endif
             enddo
         endif
+        if( self%l_bfac )then
+            do irot=1,self%pftsz
+                pft(irot,:) = pft(irot,:) * self%bfactor
+            end do
+        endif
     end subroutine shellnorm_and_filter_ref
 
     subroutine shellnorm_and_filter_ref_8( self, iptcl, iref, pft )
@@ -788,7 +806,7 @@ contains
         integer,                 intent(in)    :: iptcl, iref
         complex(dp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         real(dp) :: pw
-        integer  :: k
+        integer  :: k, irot
         if( self%l_match_filt .and. self%l_filt_set ) then
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
@@ -799,6 +817,11 @@ contains
                 endif
             enddo
         endif
+        if( self%l_bfac )then
+            do irot=1,self%pftsz
+                pft(irot,:) = pft(irot,:) * real(self%bfactor,kind=dp)
+            end do
+        endif
     end subroutine shellnorm_and_filter_ref_8
 
     subroutine shellnorm_and_filter_ref_dref_8( self, iptcl, iref, pft, dpft )
@@ -806,8 +829,8 @@ contains
         integer,                 intent(in)    :: iptcl, iref
         complex(dp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         complex(dp),             intent(inout) :: dpft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),3)
-        real(dp) :: w, pw
-        integer  :: k
+        real(dp) :: w, pw, bfactor(params_glob%kfromto(1):params_glob%kfromto(2))
+        integer  :: k, irot
         if( self%l_match_filt .and. self%l_filt_set ) then
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = sum(csq_fast(pft(:,k))) / real(self%pftsz,kind=dp)
@@ -819,6 +842,15 @@ contains
                 pft(:,k)    = w * pft(:,k)
                 dpft(:,k,:) = w * dpft(:,k,:)
             enddo
+        endif
+        if( self%l_bfac )then
+            bfactor = real(self%bfactor,kind=dp)
+            do irot=1,self%pftsz
+                pft(irot,:)    = pft(irot,:)    * bfactor
+                dpft(irot,:,1) = dpft(irot,:,1) * bfactor
+                dpft(irot,:,2) = dpft(irot,:,2) * bfactor
+                dpft(irot,:,3) = dpft(irot,:,3) * bfactor
+            end do
         endif
     end subroutine shellnorm_and_filter_ref_dref_8
 
