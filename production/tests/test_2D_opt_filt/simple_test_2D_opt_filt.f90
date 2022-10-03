@@ -130,7 +130,6 @@ do ext = 0, 20, 10
     cline_opt_filt = cline
     if( cline%defined('smooth_ext') ) smooth_ext = p%smooth_ext
     if( cline%defined('filter') )     filter     = p%filter
-    if( .not. cline%defined('match_filt') ) call cline_opt_filt%set('match_filt', 'no')
     call cline_opt_filt%set('stk'       , 'stk_noisy.mrc')
     call cline_opt_filt%set('stk2'      , 'stk_clean.mrc')
     call cline_opt_filt%set('filter'    , trim(filter))
@@ -171,7 +170,6 @@ do ext = 0, 20, 10
     cline_opt_filt = cline
     if( cline%defined('smooth_ext') ) smooth_ext = p%smooth_ext
     if( cline%defined('filter') )     filter     = p%filter
-    if( .not. cline%defined('match_filt') ) call cline_opt_filt%set('match_filt', 'no')
     call cline_opt_filt%set('stk'       , 'stk_phase_rand.mrc')
     call cline_opt_filt%set('stk2'      , 'stk_clean_phase_rand.mrc')
     call cline_opt_filt%set('filter'    , trim(filter))
@@ -218,7 +216,6 @@ do k = 1, size(FIL_ARR)
     cline_opt_filt = cline
     if( cline%defined('smooth_ext') ) smooth_ext = p%smooth_ext
     if( cline%defined('filter') )     filter     = p%filter
-    if( .not. cline%defined('match_filt') ) call cline_opt_filt%set('match_filt', 'no')
     call cline_opt_filt%set('stk'       , 'stk_noisy.mrc')
     call cline_opt_filt%set('stk2'      , 'stk_clean.mrc')
     call cline_opt_filt%set('filter'    , trim(filter))
@@ -260,7 +257,6 @@ do k = 1, size(FIL_ARR)
     cline_opt_filt = cline
     if( cline%defined('smooth_ext') ) smooth_ext = p%smooth_ext
     if( cline%defined('filter') )     filter     = p%filter
-    if( .not. cline%defined('match_filt') ) call cline_opt_filt%set('match_filt', 'no')
     call cline_opt_filt%set('stk'       , 'stk_phase_rand.mrc')
     call cline_opt_filt%set('stk2'      , 'stk_clean_phase_rand.mrc')
     call cline_opt_filt%set('filter'    , trim(filter))

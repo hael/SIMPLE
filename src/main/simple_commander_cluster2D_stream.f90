@@ -61,7 +61,7 @@ contains
         ! others
         type(sp_project)                   :: orig_proj, transfer_spproj
         type(starproject)                  :: starproj
-        character(len=:),      allocatable :: spproj_list_fname, orig_projfile
+        character(len=:),      allocatable :: spproj_list_fname, orig_projfile, carg
         character(len=LONGSTRLEN)          :: prev_snapshot_frcs, prev_snapshot_cavgs
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
         real    :: orig_smpd, scale_factor, smpd, lp_greedy, lpstart_stoch
@@ -160,7 +160,13 @@ contains
         call cline_cluster2D%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
         call cline_cluster2D%set('objfun',    'cc')
         call cline_cluster2D%set('ptclw',     'no')
-        if( .not.cline%defined('match_filt') ) call cline_cluster2D%set('match_filt','no')
+        if( cline%defined('match_filt') )then
+            carg = cline%get_carg('match_filt')
+            call cline_cluster2D%set('match_filt',carg)
+            deallocate(carg)
+        else
+            call cline_cluster2D%set('match_filt','no')
+        endif
         call cline_cluster2D%set('extr_iter', 100.)
         call cline_cluster2D%set('mkdir',     'no')
         call cline_cluster2D%set('async',     'yes') ! to enable hard termination

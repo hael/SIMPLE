@@ -119,7 +119,6 @@ filter         = 'butterworth'
 smooth_ext     = 1
 if( cline%defined('smooth_ext') ) smooth_ext = p%smooth_ext
 if( cline%defined('filter') )     filter     = p%filter
-if( .not. cline%defined('match_filt') ) call cline_opt_filt%set('match_filt', 'no')
 call cline_opt_filt%set('vol1'      , 'vol_noisy.mrc')
 call cline_opt_filt%set('vol2'      , 'vol_clean.mrc')
 call cline_opt_filt%set('filter'    , trim(filter))
@@ -157,7 +156,6 @@ filter         = 'butterworth'
 smooth_ext     = 0
 if( cline%defined('smooth_ext') ) smooth_ext = p%smooth_ext
 if( cline%defined('filter') )     filter     = p%filter
-if( .not. cline%defined('match_filt') ) call cline_opt_filt%set('match_filt', 'no')
 call cline_opt_filt%set('vol1'      , 'vol_phase_rand.mrc')
 call cline_opt_filt%set('vol2'      , 'vol_clean_phase_rand.mrc')
 call cline_opt_filt%set('filter'    , trim(filter))

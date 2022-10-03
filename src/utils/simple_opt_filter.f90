@@ -198,7 +198,7 @@ contains
         type(opt_vol),    allocatable :: opt_odd(:,:,:,:), opt_even(:,:,:,:)
         real                          :: smpd, lpstart, lp, val
         integer                       :: iptcl, box, filtsz, ldim(3), ldim_pd(3), smooth_ext, nptcls, hpind_fsc, find
-        logical                       :: lpstart_fallback, l_nonuniform, l_phaseplate, l_phrand
+        logical                       :: lpstart_fallback, l_nonuniform, l_phaseplate
         type(c_ptr)                   :: ptr
         integer                       :: c_shape(3), m, n
         integer,             parameter   :: N_IMGS = 2  ! for batch_fft (2 images batch)
@@ -218,7 +218,6 @@ contains
         lpstart      = params_glob%lpstart
         hpind_fsc    = params_glob%hpind_fsc
         l_phaseplate = params_glob%l_phaseplate
-        l_phrand     = trim(params_glob%phrand).eq.'yes'
         ! retrieve FRCs
         call clsfrcs%new(nptcls, box, smpd, 1)
         lpstart_fallback = .false.
@@ -264,13 +263,6 @@ contains
         enddo
         call weights_img%fft()
         do iptcl = 1, nptcls
-            if( l_phrand )then
-                call even(iptcl)%fft
-                call odd(iptcl)%fft
-                call even(iptcl)%ran_phases_below_noise_power(odd(iptcl))
-                call even(iptcl)%ifft
-                call odd(iptcl)%ifft
-            endif
             call even(iptcl)%pad_mirr(ldim_pd)
             call odd( iptcl)%pad_mirr(ldim_pd)
             call ref_diff_odd_img( iptcl)%new(ldim_pd, smpd, .false.)
