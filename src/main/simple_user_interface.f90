@@ -1040,7 +1040,7 @@ contains
         call set_param(match_filt,     'match_filt',   'binary', 'Matched filter', 'Filter to maximize the signal-to-noise ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(smooth_ext,     'smooth_ext',   'num'   , 'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization', 'give # pixels{2D=20,3D=8}', .false., 20.)
         call set_param(lpthresh,       'lpthresh',     'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
-        call set_param(phrand,          'phrand',      'binary', 'Phase randomization', 'Fouirer phase randomization of components below noise power(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(phrand,         'phrand',       'binary', 'Phase randomization', 'Fouirer phase randomization of components below noise power(yes|no){no}', '(yes|no){no}', .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1616,7 +1616,7 @@ contains
         call cluster2D_subsets%set_input('filt_ctrls', 8,  smooth_ext)
         call cluster2D_subsets%set_input('filt_ctrls', 9,  lp_lowres)
         call cluster2D_subsets%set_input('filt_ctrls', 10, nsearch)
-        call cluster2D_stream%set_input('filt_ctrls', 11, phrand)
+        call cluster2D_subsets%set_input('filt_ctrls', 11, phrand)
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
