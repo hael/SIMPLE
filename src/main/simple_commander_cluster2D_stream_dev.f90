@@ -84,7 +84,10 @@ contains
         character(len=*),  intent(in)    :: refs
         character(len=*),  intent(in)    :: projfilegui
         logical,           intent(inout) :: do2D
+        character(len=:), allocatable :: carg
+        real, parameter :: CENLP_2DSTREAM = 30.
         real    :: SMPD_TARGET = MAX_SMPD  ! target sampling distance
+        real    :: rarg
         integer :: ldim(3), ichunk, maybe2D, ifoo
         ! check on strictly required parameters
         if( .not.cline%defined('nthr2D') )then
@@ -185,9 +188,26 @@ contains
         call cline_cluster2D_pool%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
         call cline_cluster2D_pool%set('objfun',    'cc')
         call cline_cluster2D_pool%set('ptclw',     'no')
-        if( .not.cline%defined('match_filt') ) call cline_cluster2D_pool%set('match_filt','no')
-        if( .not. cline%defined('cenlp')     ) call cline_cluster2D_pool%set('cenlp',     30.0)
-        if( .not. cline%defined('center')    ) call cline_cluster2D_pool%set('center',   'yes')
+        if( cline%defined('match_filt') )then
+            carg = cline%get_carg('match_filt')
+            call cline_cluster2D_pool%set('match_filt',carg)
+            deallocate(carg)
+        else
+            call cline_cluster2D_pool%set('match_filt','no')
+        endif
+        if( cline%defined('cenlp') )then
+            rarg = cline%get_rarg('cenlp')
+            call cline_cluster2D_pool%set('cenlp', rarg)
+        else
+            call cline_cluster2D_pool%set('cenlp', CENLP_2DSTREAM)
+        endif
+        if( cline%defined('center') )then
+            carg = cline%get_carg('center')
+            call cline_cluster2D_pool%set('match_filt',carg)
+            deallocate(carg)
+        else
+            call cline_cluster2D_pool%set('center','yes')
+        endif
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
         call cline_cluster2D_pool%set('extr_iter', 100.)
         call cline_cluster2D_pool%set('mkdir',     'no')
@@ -1328,11 +1348,12 @@ contains
         character(len=STDLEN),    parameter :: dir_preprocess = trim(PATH_HERE)//'spprojs/'
         integer,                  parameter :: WAITTIME       = 3
         real                                :: SMPD_TARGET    = MAX_SMPD  ! target sampling distance
+        real                                   :: rarg
         type(parameters)                       :: params
         type(sp_project)                       :: spproj
         type(class_frcs)                       :: frcs, frcs_sc
         character(len=LONGSTRLEN), allocatable :: completed_fnames(:), tmp_fnames(:), pool_stacks(:)
-        character(len=:),          allocatable :: one_projfile, one_projname, fname, stack_fname, orig_stack_fname
+        character(len=:),          allocatable :: one_projfile, one_projname, fname, stack_fname, orig_stack_fname, carg
         character(len=:),          allocatable :: frcsfname, src
         integer,                   allocatable :: stk_nptcls(:), stk_all_nptcls(:), chunks_map(:,:)
         logical,                   allocatable :: pool_stk_mask(:)
@@ -1418,7 +1439,13 @@ contains
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment
         call cline_cluster2D_pool%set('nparts',    real(params%nparts_pool))
-        if( .not.cline%defined('match_filt') ) call cline_cluster2D_pool%set('match_filt','no')
+        if( cline%defined('match_filt') )then
+            carg = cline%get_carg('match_filt')
+            call cline_cluster2D_pool%set('match_filt',carg)
+            deallocate(carg)
+        else
+            call cline_cluster2D_pool%set('match_filt','no')
+        endif
         if( l_wfilt ) call cline_cluster2D_pool%set('wiener', 'partial')
         call cline_cluster2D_pool%delete('lpstop')
         ! read strictly required fields project

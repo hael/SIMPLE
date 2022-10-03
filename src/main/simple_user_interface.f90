@@ -1400,7 +1400,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
-        &1, 0, 0, 10, 12, 1, 2, .true.)                                         ! # entries in each group, requires sp_project
+        &1, 0, 0, 10, 13, 1, 2, .true.)                                         ! # entries in each group, requires sp_project
         cluster2D%gui_submenu_list = "search,mask,filter"
         cluster2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1467,6 +1467,8 @@ contains
         call cluster2D%set_gui_params('filt_ctrls', 11, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 12, nsearch)
         call cluster2D%set_gui_params('filt_ctrls', 12, submenu="filter")
+        call cluster2D%set_input('filt_ctrls', 13, 'phrand', 'binary', 'Phase randomization', 'Fouirer phase randomization of components below noise power(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call cluster2D%set_gui_params('filt_ctrls', 13, submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D%set_gui_params('mask_ctrls', 1, submenu="mask")
@@ -2714,7 +2716,7 @@ contains
         &'Optimization (search) based 2D filter (uniform/nonuniform)',&     ! descr_short
         &'is a program for 2D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                                    ! executable
-        &2, 1, 0, 0, 6, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 5, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call opt_2D_filter%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
@@ -2730,9 +2732,8 @@ contains
         call opt_2D_filter%set_input('filt_ctrls', 2, smooth_ext)
         call opt_2D_filter%set_input('filt_ctrls', 3, lp_lowres)
         call opt_2D_filter%set_input('filt_ctrls', 4, nsearch)
-        call opt_2D_filter%set_input('filt_ctrls', 5, match_filt)
         frcs%required = .true.
-        call opt_2D_filter%set_input('filt_ctrls', 6, frcs)
+        call opt_2D_filter%set_input('filt_ctrls', 5, frcs)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -2746,7 +2747,7 @@ contains
         &'Butterworth 3D filter (uniform/nonuniform)',&         ! descr_short
         &'is a program for 3D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                        ! executable
-        &2, 1, 0, 0, 7, 2, 1, .false.)                          ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 6, 2, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call opt_3D_filter%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
@@ -2762,9 +2763,8 @@ contains
         call opt_3D_filter%set_input('filt_ctrls', 2, smooth_ext)
         call opt_3D_filter%set_input('filt_ctrls', 3, lp_lowres)
         call opt_3D_filter%set_input('filt_ctrls', 4, nsearch)
-        call opt_3D_filter%set_input('filt_ctrls', 5, match_filt)
-        call opt_3D_filter%set_input('filt_ctrls', 6, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
-        call opt_3D_filter%set_input('filt_ctrls', 7, 'lp_stopres', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
+        call opt_3D_filter%set_input('filt_ctrls', 5, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
+        call opt_3D_filter%set_input('filt_ctrls', 6, 'lp_stopres', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
         ! mask controls
         call opt_3D_filter%set_input('mask_ctrls', 1, mskdiam)
         call opt_3D_filter%set_input('mask_ctrls', 2, mskfile)
