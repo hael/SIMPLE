@@ -218,7 +218,7 @@ type(simple_input_param) :: lp_backgr
 type(simple_input_param) :: lp_lowres
 type(simple_input_param) :: lplim_crit
 type(simple_input_param) :: lpthresh
-type(simple_input_param) :: match_filt 
+type(simple_input_param) :: match_filt
 type(simple_input_param) :: max_dose
 type(simple_input_param) :: max_rad
 type(simple_input_param) :: maxits
@@ -3623,7 +3623,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_exec',&                                                                            ! executable
-        &1, 0, 0, 12, 11, 4, 2, .true.)                                                             ! # entries in each group, requires sp_project
+        &1, 0, 0, 12, 12, 4, 2, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -3664,6 +3664,7 @@ contains
         call refine3D%set_input('filt_ctrls', 10, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12.)
         call refine3D%set_input('filt_ctrls', 11, wiener)
+        call refine3D%set_input('filt_ctrls', 12, phrand)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, mskdiam)
         call refine3D%set_input('mask_ctrls', 2, mskfile)
@@ -4879,7 +4880,7 @@ contains
             end subroutine set
 
     end subroutine set_input_3
-    
+
     subroutine set_gui_params( self, which, i, submenu, exclusive_group, advanced, active_flags)
         class(simple_program), target, intent(inout) :: self
         character(len=*),              intent(in)    :: which
