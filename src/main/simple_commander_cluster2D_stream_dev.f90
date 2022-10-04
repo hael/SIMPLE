@@ -174,6 +174,10 @@ contains
         call cline_cluster2D_chunk%set('ncls',      real(params_glob%ncls_start))
         call cline_cluster2D_chunk%set('nthr',      real(params_glob%nthr2D))
         call cline_cluster2D_chunk%set('nonuniform',params_glob%nonuniform)
+        call cline_cluster2D_chunk%set('nsearch',   real(params_glob%nsearch))
+        call cline_cluster2D_chunk%set('smooth_ext',real(params_glob%smooth_ext))
+        call cline_cluster2D_chunk%set('lp_lowres', real(params_glob%lp_lowres))
+        call cline_cluster2D_chunk%set('phrand',    params_glob%phrand)
         if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
         allocate(chunks(params_glob%nchunks))
         do ichunk = 1,params_glob%nchunks
@@ -190,6 +194,10 @@ contains
         call cline_cluster2D_pool%set('objfun',    'cc')
         call cline_cluster2D_pool%set('ptclw',     'no')
         call cline_cluster2D_pool%set('nonuniform',params_glob%nonuniform)
+        call cline_cluster2D_pool%set('nsearch',   real(params_glob%nsearch))
+        call cline_cluster2D_pool%set('smooth_ext',real(params_glob%smooth_ext))
+        call cline_cluster2D_pool%set('lp_lowres',real(params_glob%lp_lowres))
+        call cline_cluster2D_pool%set('phrand',    params_glob%phrand)
         if( cline%defined('match_filt') )then
             carg = cline%get_carg('match_filt')
             call cline_cluster2D_pool%set('match_filt',carg)
@@ -1376,6 +1384,7 @@ contains
         if( .not. cline%defined('nchunks')      ) call cline%set('nchunks',      2.0)
         if( .not. cline%defined('numlen')       ) call cline%set('numlen',       5.0)
         if( .not. cline%defined('match_filt')   ) call cline%set('match_filt',    'no')
+        if( .not. cline%defined('nonuniform')   ) call cline%set('nonuniform',    'no')
         call cline%set('ptclw',      'no')
         call seed_rnd
         call params%new(cline)
@@ -1423,7 +1432,6 @@ contains
         call cline_cluster2D_chunk%set('stream',    'no')
         call cline_cluster2D_chunk%set('startit',   1.)
         call cline_cluster2D_chunk%set('ncls',      real(params%ncls_start))
-        call cline_cluster2D_chunk%set('nonuniform',params_glob%nonuniform)
         if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
         call cline_cluster2D_chunk%delete('update_frac')
         call cline_cluster2D_chunk%delete('dir_target')
@@ -1442,7 +1450,6 @@ contains
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment
         call cline_cluster2D_pool%set('nparts',    real(params%nparts_pool))
-        call cline_cluster2D_pool%set('nonuniform',params_glob%nonuniform)
         if( cline%defined('match_filt') )then
             carg = cline%get_carg('match_filt')
             call cline_cluster2D_pool%set('match_filt',carg)
