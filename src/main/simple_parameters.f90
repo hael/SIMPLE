@@ -335,7 +335,7 @@ type :: parameters
     integer :: update=1000
     integer :: walltime=WALLTIME_DEFAULT  !< Walltime in seconds for workload management
     integer :: which_iter=0        !< iteration nr
-    integer :: smooth_ext=20       !< smoothing window extension{2D=20, 3D=8} 
+    integer :: smooth_ext=20       !< smoothing window extension{2D=20, 3D=8}
     integer :: xcoord=0            !< x coordinate{0}
     integer :: ycoord=0            !< y coordinate{0}
     integer :: xdim=0              !< x dimension(in pixles)
@@ -463,6 +463,7 @@ type :: parameters
     logical :: l_needs_sigma  = .false.
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
+    logical :: l_phrand       = .false.
     logical :: l_refine_inpl  = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
@@ -674,7 +675,7 @@ contains
         call check_file('projfile',       self%projfile,     'O')
         call check_file('projfile_target',self%projfile_target,'O')
         call check_file('refs',           self%refs,         notAllowed='T')
-        call check_file('rmsd_file',      self%rmsd_file,    'B') 
+        call check_file('rmsd_file',      self%rmsd_file,    'B')
         call check_file('starfile',       self%starfile,     'R')  ! R for relion, S taken by SPIDER
         call check_file('star_mic',       self%star_mic,     'R')  ! R for relion, S taken by SPIDER
         call check_file('star_model',     self%star_model,   'R')  ! R for relion, S taken by SPIDER
@@ -1489,6 +1490,8 @@ contains
         self%l_incrreslim = .not.self%l_lpset
         ! B-facor
         self%l_bfac = cline%defined('bfac')
+        ! phase randomization
+        self%l_phrand = trim(self%phrand).eq.'yes'
         ! atoms
         if( cline%defined('element') )then
             if( .not. atoms_obj%element_exists(self%element) )then
@@ -1544,7 +1547,7 @@ contains
             if( present(is_even) )then
                 if( is_even )then
                     key = 'vol_even'
-                else    
+                else
                     key = 'vol_odd'
                 endif
             else

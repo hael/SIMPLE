@@ -35,7 +35,6 @@ integer                      :: batchsz_max
 real(timer_int_kind)         :: rt_init, rt_prep_pftcc, rt_align, rt_cavg, rt_projio, rt_tot
 integer(timer_int_kind)      ::  t_init,  t_prep_pftcc,  t_align,  t_cavg,  t_projio,  t_tot
 character(len=STDLEN)        :: benchfname
-logical                      :: l_phrand
 
 contains
 
@@ -108,7 +107,6 @@ contains
                 params_glob%update_frac = 1.
             endif
         endif
-        l_phrand = trim(params_glob%phrand).eq.'yes'
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
@@ -174,7 +172,7 @@ contains
                 enddo
             endif
         endif
-        
+
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D(cline, which_iter, frac_srch_space)
 
@@ -434,7 +432,7 @@ contains
                 call prep2Dref(pftcc, cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
                 if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
-                        if( l_phrand )then
+                        if( params_glob%l_phrand )then
                              ! randomize Fourier phases below noise power in a global manner
                             call cavgs_even(icls)%fft
                             call cavgs_odd(icls)%fft
