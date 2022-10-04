@@ -976,7 +976,7 @@ contains
         states = spproj%os_ptcl2D%get_all('state')
         allocate(pinds(nptcls), source=(/(i,i=1,nptcls)/))
         if( cline%defined('state') )then
-            pinds = pack(pinds, mask=(states - real(params%state)) < 0.1)
+            pinds = pack(pinds, mask=abs(states - real(params%state)) < 0.1)
         else
             pinds = pack(pinds, mask=states > 0.5)
         endif
