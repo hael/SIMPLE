@@ -45,7 +45,7 @@ type, extends(commander_base) :: atoms_mask_commander
 end type atoms_mask_commander
 
 integer, parameter :: CNMIN             = 5
-integer, parameter :: CNMAX             = 12
+integer, parameter :: CNMAX             = 13
 integer, parameter :: CN_THRESH_DEFAULT = 5
 
 type :: common_atoms
