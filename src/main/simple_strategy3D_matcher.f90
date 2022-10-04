@@ -17,8 +17,10 @@ use simple_parameters,              only: params_glob
 use simple_builder,                 only: build_glob
 use simple_polarizer,               only: polarizer
 use simple_polarft_corrcalc,        only: polarft_corrcalc
+use simple_cartft_corrcalc,         only: cartft_corrcalc
 use simple_strategy3D_cluster,      only: strategy3D_cluster
 use simple_strategy3D_shc,          only: strategy3D_shc
+use simple_strategy3D_shcc,         only: strategy3D_shcc
 use simple_strategy3D_snhc,         only: strategy3D_snhc
 use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedy_neigh, only: strategy3D_greedy_neigh
@@ -38,6 +40,7 @@ private
 logical, parameter             :: DEBUG_HERE = .false.
 logical                        :: has_been_searched
 type(polarft_corrcalc), target :: pftcc
+type(cartft_corrcalc),  target :: cftcc
 type(polarizer),   allocatable :: match_imgs(:)
 integer,           allocatable :: prev_states(:), pinds(:)
 logical,           allocatable :: ptcl_mask(:)
@@ -74,11 +77,13 @@ contains
         integer :: nbatches, batchsz_max, batch_start, batch_end, batchsz, imatch
         integer :: iptcl, fnr, ithr, state, n_nozero, iptcl_batch, iptcl_map
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start, ncavgs
-        logical :: doprint, do_extr, l_ctf
+        logical :: doprint, do_extr, l_ctf, l_cartesian
         if( L_BENCH_GLOB )then
             t_init = tic()
             t_tot  = t_init
         endif
+        ! CARTESIAN REFINEMENT FLAG
+        l_cartesian = trim(params_glob%cartesian).eq.'yes'
 
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
@@ -159,14 +164,17 @@ contains
             t_prep_pftcc = tic()
         endif
 
-        call preppftcc4align(cline, batchsz_max)
+        if( l_cartesian )then
+            call prepcftcc4align(cline, batchsz_max)
+        else
+            call preppftcc4align(cline, batchsz_max)
+        endif
         if( L_BENCH_GLOB ) rt_prep_pftcc = toc(t_prep_pftcc)
-
         if( L_BENCH_GLOB ) t_prep_orisrch = tic()
         ! clean big objects before starting to allocate new big memory chunks
         ! cannot kill build_glob%vol since used in continuous search
         call build_glob%vol2%kill
-        call build_glob%vol_odd%kill
+        ! call build_glob%vol_odd%kill ! cannot kill when we support cftcc refinement (Cartesian)
         ! array allocation for strategy3D
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D'
         call prep_strategy3D(ptcl_mask) ! allocate s3D singleton
@@ -201,8 +209,13 @@ contains
             batchsz     = batch_end - batch_start + 1
             ! Prep particles in pftcc
             if( L_BENCH_GLOB ) t_prep_pftcc = tic()
-            call build_pftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
-            if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
+            if( l_cartesian )then
+                call build_cftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
+                if( l_ctf ) call cftcc%create_absctfmats(build_glob%spproj, 'ptcl3D')
+            else
+                call build_pftcc_batch_particles(batchsz, pinds(batch_start:batch_end))
+                if( l_ctf ) call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl3D')
+            endif
             if( L_BENCH_GLOB ) rt_prep_pftcc = rt_prep_pftcc + toc(t_prep_pftcc)
             ! Particles loop
             if( L_BENCH_GLOB ) t_align = tic()
@@ -226,6 +239,8 @@ contains
                                 allocate(strategy3D_shc          :: strategy3Dsrch(iptcl_batch)%ptr)
                             endif
                         endif
+                    case('shcc')
+                        allocate(strategy3D_shcc                 :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('neigh')
                         if( ran3() < GLOB_FREQ )then
                             allocate(strategy3D_shc              :: strategy3Dsrch(iptcl_batch)%ptr)
@@ -285,7 +300,7 @@ contains
         if( params_glob%l_needs_sigma ) call eucl_sigma%write_sigma2
 
         ! UPDATE PARTICLE STATS
-        call calc_ptcl_stats( batchsz_max, l_ctf )
+        if( .not. l_cartesian ) call calc_ptcl_stats( batchsz_max, l_ctf )
 
         ! CALCULATE PARTICLE WEIGHTS
         select case(trim(params_glob%ptclw))
@@ -298,6 +313,7 @@ contains
         ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton
         call pftcc%kill
+        call cftcc%kill
         call build_glob%vol%kill
         call build_glob%vol_odd%kill
         call orientation%kill
@@ -363,10 +379,8 @@ contains
         endif
     end subroutine refine3D_exec
 
-    !> Prepare alignment search using polar projection Fourier cross correlation
+    !> Prepare discrete search using polar projection Fourier cross correlation
     subroutine preppftcc4align( cline, batchsz_max )
-        use simple_cmdline,             only: cmdline
-        use simple_strategy2D3D_common, only: calcrefvolshift_and_mapshifts2ptcls, preprefvol
         class(cmdline), intent(inout) :: cline !< command line
         integer,        intent(in)    :: batchsz_max
         type(ori) :: o_tmp
@@ -434,6 +448,26 @@ contains
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 
+    !> Prepare continuous search using Cartesian projection Fourier cross correlation
+    subroutine prepcftcc4align( cline, batchsz_max )
+        class(cmdline), intent(inout) :: cline !< command line
+        integer,        intent(in)    :: batchsz_max
+        real      :: xyz(3)
+        integer   :: s
+        logical   :: do_center
+        character(len=:), allocatable :: fname
+        ! must be done here since params_glob%kfromto is dynamically set
+        call cftcc%new(build_glob%vol, build_glob%vol_odd, [1,batchsz_max], params_glob%l_match_filt)
+        do s = 1,params_glob%nstates
+            call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
+            call read_and_filter_refvols(cline, params_glob%vols_even(s), params_glob%vols_odd(s))
+            ! odd refvol
+            call preprefvol(cftcc, cline, s, do_center, xyz, .false.)
+            ! even refvol
+            call preprefvol(cftcc, cline, s, do_center, xyz, .true.)
+        end do
+    end subroutine prepcftcc4align
+
     !>  \brief  prepares batch particle images for alignment
     subroutine build_pftcc_batch_particles( nptcls_here, pinds_here )
         use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
@@ -458,6 +492,28 @@ contains
         ! Memoize particles FFT parameters
         call pftcc%memoize_ffts
     end subroutine build_pftcc_batch_particles
+
+    !>  \brief  prepares batch particle images for alignment
+    subroutine build_cftcc_batch_particles( nptcls_here, pinds_here )
+        use simple_strategy2D3D_common, only: read_imgbatch, prepimg4align
+        integer, intent(in) :: nptcls_here
+        integer, intent(in) :: pinds_here(nptcls_here)
+        integer :: iptcl_batch, iptcl
+        call read_imgbatch( nptcls_here, pinds_here, [1,nptcls_here] )
+        ! reassign particles indices & associated variables
+        call cftcc%reallocate_ptcls(nptcls_here, pinds_here)
+        !$omp parallel do default(shared) private(iptcl,iptcl_batch) schedule(static) proc_bind(close)
+        do iptcl_batch = 1,nptcls_here
+            iptcl = pinds_here(iptcl_batch)
+            ! prep
+            call match_imgs(iptcl_batch)%zero_and_unflag_ft
+            call prepimg4align(iptcl, build_glob%imgbatch(iptcl_batch), match_imgs(iptcl_batch))
+            call cftcc%set_ptcl(iptcl, match_imgs(iptcl_batch))
+            ! e/o flag
+            call cftcc%set_eo(iptcl, nint(build_glob%spproj_field%get(iptcl,'eo'))<=0 )
+        end do
+        !$omp end parallel do
+    end subroutine build_cftcc_batch_particles
 
     !> Prepare alignment search using polar projection Fourier cross correlation
     subroutine calc_ptcl_stats( batchsz_max, l_ctf )

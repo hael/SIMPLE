@@ -4,6 +4,8 @@ module simple_cartft_corrcalc
 include 'simple_lib.f08'
 use simple_image,      only: image
 use simple_parameters, only: params_glob
+use simple_projector,  only: projector
+use simple_ori,        only: ori
 implicit none
 
 public :: cartft_corrcalc, cartftcc_glob
@@ -18,19 +20,20 @@ end type heap_vars
 
 type :: cartft_corrcalc
     private
+    type(projector), pointer     :: vol_even => null(), vol_odd => null() ! prepared e/o vols
     integer                      :: nptcls        = 1       !< the total number of particles in partition (logically indexded [fromp,top])
-    integer                      :: nrefs         = 1       !< the number of references (logically indexded [1,nrefs])
     integer                      :: filtsz        = 0       !< Nyqvist limit
     integer                      :: pfromto(2)    = 0       !< particle index range
     integer                      :: ldim(3)       = 0       !< logical dimensions of original cartesian image
     integer                      :: lims(3,2)     = 0       !< resolution mask limits
     integer                      :: cmat_shape(3) = 0       !< shape of complex matrix (dictated by the FFTW library)
+    type(image)                  :: refs_eo(2)              !< reference images even/odd
+    type(image)                  :: proj                    !< volume projection
     integer,         allocatable :: pinds(:)                !< index array (to reduce memory when frac_update < 1)
     real,            allocatable :: pxls_p_shell(:)         !< number of (cartesian) pixels per shell
     real(sp),        allocatable :: sqsums_ptcls(:)         !< memoized square sums for the correlation calculations (taken from kfromto(1):kstop)
     real(sp),        allocatable :: ctfmats(:,:,:,:)        !< expand set of CTF matrices (for efficient parallel exec)
-    real(sp),        allocatable :: ref_optlp(:,:)          !< references optimal filter
-    type(image),     allocatable :: refs_eo(:,:)            !< reference images even/odd, dim1=1:nrefs, dim2=1:2 (1 is even 2 is odd)
+    real(sp),        allocatable :: optlp(:)                !< references optimal filter
     type(image),     allocatable :: particles(:)            !< particle images
     logical,         allocatable :: iseven(:)               !< e/o assignment for gold-standard FSC
     logical,         allocatable :: resmsk(:,:,:)           !< resolution mask for corr calc
@@ -47,12 +50,11 @@ type :: cartft_corrcalc
     procedure          :: reallocate_ptcls
     procedure          :: set_ptcl
     procedure          :: set_ref
-    procedure          :: set_ref_optlp
+    procedure          :: set_optlp
     procedure          :: set_eo
     ! GETTERS
     procedure          :: get_box
     procedure          :: get_ref_img
-    procedure          :: get_nrefs
     procedure          :: exists
     procedure          :: ptcl_iseven
     procedure          :: get_nptcls
@@ -68,7 +70,8 @@ type :: cartft_corrcalc
     procedure, private :: prep_ref4corr
     procedure          :: calc_corr
     procedure          :: calc_corr_analytic
-    procedure          :: specscore
+    procedure          :: specscore    
+    procedure          :: project_and_correlate
     ! DESTRUCTOR
     procedure          :: kill
 end type cartft_corrcalc
@@ -80,9 +83,9 @@ contains
 
     ! CONSTRUCTOR
 
-    subroutine new( self, nrefs, pfromto, l_match_filt, ptcl_mask, eoarr )
+    subroutine new( self, vol_even, vol_odd, pfromto, l_match_filt, ptcl_mask, eoarr )
         class(cartft_corrcalc), target, intent(inout) :: self
-        integer,                        intent(in)    :: nrefs
+        type(projector),        target, intent(in)    :: vol_even, vol_odd
         integer,                        intent(in)    :: pfromto(2)
         logical,                        intent(in)    :: l_match_filt
         logical, optional,              intent(in)    :: ptcl_mask(pfromto(1):pfromto(2))
@@ -97,10 +100,6 @@ contains
         if( self%pfromto(2) - self%pfromto(1) + 1 < 1 )then
             write(logfhandle,*) 'pfromto: ', self%pfromto(1), self%pfromto(2)
             THROW_HARD ('nptcls (# of particles) must be > 0; new')
-        endif
-        if( nrefs < 1 )then
-            write(logfhandle,*) 'nrefs: ', nrefs
-            THROW_HARD ('nrefs (# of reference sections) must be > 0; new')
         endif
         self%ldim = [params_glob%box,params_glob%box,1] !< logical dimensions of original cartesian image
         test      = .false.
@@ -119,9 +118,15 @@ contains
         else
             self%nptcls  = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
         endif
-        self%nrefs = nrefs               !< the number of references (logically indexded [1,nrefs])
+        ! set pointers to projectors
+        if( .not. vol_even%is_expanded() ) THROW_HARD('input vol_even expected to be prepared for interpolation') 
+        if( .not. vol_odd%is_expanded()  ) THROW_HARD('input vol_odd expected to be prepared for interpolation')
+        self%vol_even => vol_even
+        self%vol_odd  => vol_odd
+        ! container for projection
+        call self%proj%new([self%ldim(1),self%ldim(2),1], params_glob%smpd)
         ! allocate optimal low-pass filter & memoized sqsums
-        allocate(self%ref_optlp(1:self%filtsz,self%nrefs), self%sqsums_ptcls(1:self%nptcls), source=1.)
+        allocate(self%optlp(1:self%filtsz), self%sqsums_ptcls(1:self%nptcls), source=1.)
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
         if( present(ptcl_mask) )then
@@ -153,11 +158,9 @@ contains
             endif
         endif
         ! allocate the rest
-        allocate( self%refs_eo(self%nrefs,2), self%particles(self%nptcls), self%heap_vars(params_glob%nthr) )
-        do i = 1,self%nrefs
-            call self%refs_eo(i,1)%new(self%ldim, params_glob%smpd)
-            call self%refs_eo(i,2)%new(self%ldim, params_glob%smpd)
-        end do
+        allocate(self%particles(self%nptcls), self%heap_vars(params_glob%nthr))
+        call self%refs_eo(1)%new(self%ldim, params_glob%smpd)
+        call self%refs_eo(2)%new(self%ldim, params_glob%smpd)
         do i = 1,self%nptcls
             call self%particles(i)%new(self%ldim, params_glob%smpd)
         end do
@@ -218,18 +221,17 @@ contains
             enddo
     end subroutine reallocate_ptcls
 
-    subroutine set_ref( self, iref, img, iseven )
+    subroutine set_ref( self, img, iseven )
         class(cartft_corrcalc), intent(inout) :: self   !< this object
-        integer,                intent(in)   :: iref    !< reference index
         class(image),           intent(in)   :: img     !< reference image
         logical,                intent(in)   :: iseven  !< logical eo-flag
         if( .not. img%is_ft() ) THROW_HARD('input image expected to be FTed')
         if( iseven )then
-            if( .not. (img.eqdims.self%refs_eo(iref,2)) ) THROW_HARD('inconsistent image dimensions, input vs class internal') 
-            call self%refs_eo(iref,2)%copy_fast(img)
+            if( .not. (img.eqdims.self%refs_eo(2)) ) THROW_HARD('inconsistent image dimensions, input vs class internal') 
+            call self%refs_eo(2)%copy_fast(img)
         else
-            if( .not. (img.eqdims.self%refs_eo(iref,1)) ) THROW_HARD('inconsistent image dimensions, input vs class internal') 
-            call self%refs_eo(iref,1)%copy_fast(img)
+            if( .not. (img.eqdims.self%refs_eo(1)) ) THROW_HARD('inconsistent image dimensions, input vs class internal') 
+            call self%refs_eo(1)%copy_fast(img)
         endif
     end subroutine set_ref
 
@@ -244,15 +246,12 @@ contains
         call self%memoize_sqsum_ptcl(self%pinds(iptcl))
     end subroutine set_ptcl
 
-    subroutine set_ref_optlp( self, iref, optlp )
+    subroutine set_optlp( self, optlp )
         class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: iref
         real,                   intent(in)    :: optlp(params_glob%kfromto(1):params_glob%kstop)
-        self%ref_optlp(1:params_glob%kfromto(1) - 1,iref) = maxval(optlp)
-        self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,iref) = optlp(params_glob%kfromto(1):params_glob%kstop)
-        self%ref_optlp(params_glob%kstop + 1:,iref) = 0.
+        self%optlp(:) = optlp(:)
         self%l_filt_set = .true.
-    end subroutine set_ref_optlp
+    end subroutine set_optlp
 
     subroutine set_eo( self, iptcl, is_even )
         class(cartft_corrcalc), intent(inout) :: self
@@ -269,22 +268,16 @@ contains
         box = self%ldim(1)
     end function get_box
 
-    function get_ref_img( self, iref, iseven ) result( ref )
+    function get_ref_img( self, iseven ) result( ref )
         class(cartft_corrcalc), intent(in) :: self
-        integer,                intent(in) :: iref
         logical,                intent(in) :: iseven
         type(image) :: ref
         if( iseven )then
-            call ref%copy(self%refs_eo(iref,2))
+            call ref%copy(self%refs_eo(2))
         else
-            call ref%copy(self%refs_eo(iref,1))
+            call ref%copy(self%refs_eo(1))
         endif
     end function get_ref_img
-
-    integer function get_nrefs( self )
-        class(cartft_corrcalc), intent(in) :: self
-        get_nrefs = self%nrefs
-    end function get_nrefs
 
     logical function exists( self )
         class(cartft_corrcalc), intent(in) :: self
@@ -310,14 +303,13 @@ contains
 
     ! MODIFIERS
 
-    subroutine shellnorm_and_filter_ref( self, iref, ref_img )
+    subroutine shellnorm_and_filter_ref( self, ref_img )
         class(cartft_corrcalc), intent(in)    :: self
-        integer,                intent(in)    :: iref
         class(image),           intent(inout) :: ref_img
         if( self%l_match_filt .and. self%l_filt_set )then
-            call ref_img%shellnorm_and_apply_filter_serial(self%ref_optlp(:,iref))
+            call ref_img%shellnorm_and_apply_filter_serial(self%optlp(:))
         else if( .not. params_glob%l_lpset .and. self%l_filt_set )then
-            call ref_img%apply_filter_serial(self%ref_optlp(:,iref))
+            call ref_img%apply_filter_serial(self%optlp(:))
         endif
     end subroutine shellnorm_and_filter_ref
 
@@ -420,31 +412,27 @@ contains
         !$omp end parallel do
     end subroutine create_absctfmats
 
-    subroutine prep_ref4corr( self, iref, iptcl, img_ref )
+    subroutine prep_ref4corr( self, iptcl, img_ref )
         class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: iref, iptcl
+        integer,                intent(in)    :: iptcl
         class(image),           intent(inout) :: img_ref
         integer :: i
         i = self%pinds(iptcl)
         ! copy
         if( self%iseven(i) )then
-            call img_ref%copy_fast(self%refs_eo(iref,2))
+            call img_ref%copy_fast(self%refs_eo(2))
         else
-            call img_ref%copy_fast(self%refs_eo(iref,1))
+            call img_ref%copy_fast(self%refs_eo(1))
         endif
         ! shell normalization and filtering
-        if( self%l_clsfrcs )then
-            call self%shellnorm_and_filter_ref(iptcl, img_ref)
-        else
-            call self%shellnorm_and_filter_ref(iref,  img_ref)
-        endif
+        call self%shellnorm_and_filter_ref(img_ref)
         ! multiply with CTF
         if( self%with_ctf ) call img_ref%mul_cmat(self%ctfmats(:,:,:,i), self%resmsk)
     end subroutine prep_ref4corr
 
-    function calc_corr( self, iref, iptcl, shvec, grad ) result( cc )
+    function calc_corr( self, iptcl, shvec, grad ) result( cc )
         class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: iref, iptcl
+        integer,                intent(in)    :: iptcl
         real,                   intent(in)    :: shvec(2)
         real,         optional, intent(inout) :: grad(2)
         real(sp) :: cc
@@ -453,12 +441,12 @@ contains
         ithr =  omp_get_thread_num() + 1
         ! copy
         if( self%iseven(i) )then
-            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(iref,2))
+            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(2))
         else
-            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(iref,1))
+            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(1))
         endif
         ! prep ref
-        call self%prep_ref4corr(iref, iptcl, self%heap_vars(ithr)%img_ref)
+        call self%prep_ref4corr(iptcl, self%heap_vars(ithr)%img_ref)
         ! calc corr
         if( present(grad) )then
             cc = real(self%heap_vars(ithr)%img_ref%corr_grad_ad(self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec, params_glob%cc_objfun, grad), kind=sp)
@@ -467,9 +455,9 @@ contains
         endif
     end function calc_corr
 
-    function calc_corr_analytic( self, iref, iptcl, shvec ) result( cc )
+    function calc_corr_analytic( self, iptcl, shvec ) result( cc )
         class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: iref, iptcl
+        integer,                intent(in)    :: iptcl
         real,                   intent(in)    :: shvec(2)
         real(sp) :: cc
         integer  :: i, ithr
@@ -477,20 +465,20 @@ contains
         ithr =  omp_get_thread_num() + 1
         ! copy
         if( self%iseven(i) )then
-            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(iref,2))
+            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(2))
         else
-            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(iref,1))
+            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(1))
         endif
         ! prep ref
-        call self%prep_ref4corr(iref, iptcl, self%heap_vars(ithr)%img_ref)
+        call self%prep_ref4corr(iptcl, self%heap_vars(ithr)%img_ref)
         ! calc corr
         cc = real(self%heap_vars(ithr)%img_ref%corr(self%heap_vars(ithr)%img_ref_tmp,&
                  &self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec), kind=sp)
     end function calc_corr_analytic
 
-    function specscore( self, iref, iptcl, shvec ) result( spec )
+    function specscore( self, iptcl, shvec ) result( spec )
         class(cartft_corrcalc), intent(inout) :: self
-        integer,                intent(in)    :: iref, iptcl
+        integer,                intent(in)    :: iptcl
         real,                   intent(in)    :: shvec(2)
         real,         pointer :: frc(:)  => null()
         real    :: spec
@@ -499,17 +487,43 @@ contains
         ithr =  omp_get_thread_num() + 1
         frc  => self%heap_vars(ithr)%frc
         if( self%iseven(i) )then
-            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(iref,2))
+            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(2))
         else
-            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(iref,1))
+            call self%heap_vars(ithr)%img_ref%copy_fast(self%refs_eo(1))
         endif
         ! prep ref
-        call self%prep_ref4corr(iref, iptcl, self%heap_vars(ithr)%img_ref)
+        call self%prep_ref4corr(iptcl, self%heap_vars(ithr)%img_ref)
         ! calc FRC
         call self%heap_vars(ithr)%img_ref%fsc(self%particles(i), frc)
         ! calc specscore
         spec = max(0.,median_nocopy(frc))
     end function specscore
+
+    subroutine project_and_correlate( self, iptcl, o, corr, grad )
+        class(cartft_corrcalc), intent(inout) :: self
+        integer,                intent(in)    :: iptcl
+        class(ori),             intent(in)    :: o
+        real,                   intent(inout) :: corr
+        real, optional,         intent(inout) :: grad(2)
+        type(projector), pointer :: vol_ptr => null()
+        logical :: iseven, present_grad
+        integer :: ithr
+        present_grad = present(grad)
+        iseven = self%ptcl_iseven(iptcl)
+        if( iseven )then
+            vol_ptr => self%vol_even
+        else
+            vol_ptr => self%vol_odd
+        endif
+        ithr = omp_get_thread_num() + 1
+        if( present_grad )then
+            call vol_ptr%fproject_serial(o, self%proj, params_glob%kstop)
+            corr = self%calc_corr(iptcl, o%get_2Dshift(), grad(:))
+        else
+            call vol_ptr%fproject_serial(o, self%proj, params_glob%kstop)
+            corr = self%calc_corr(iptcl, o%get_2Dshift())
+        endif
+    end subroutine project_and_correlate
 
     ! DESTRUCTOR
 
@@ -517,16 +531,18 @@ contains
         class(cartft_corrcalc), intent(inout) :: self
         integer :: i, ithr
         if( self%existence )then
+            self%ldim     = 0
+            self%vol_even => null()
+            self%vol_odd  => null()
+            call self%proj%kill
             if( allocated(self%pinds)        ) deallocate(self%pinds)
             if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
             if( allocated(self%sqsums_ptcls) ) deallocate(self%sqsums_ptcls)
             if( allocated(self%ctfmats)      ) deallocate(self%ctfmats)
-            if( allocated(self%ref_optlp)    ) deallocate(self%ref_optlp)
+            if( allocated(self%optlp)        ) deallocate(self%optlp)
             if( allocated(self%iseven)       ) deallocate(self%iseven)
-            do i = 1,self%nrefs
-                call self%refs_eo(i,1)%kill
-                call self%refs_eo(i,2)%kill
-            end do
+            call self%refs_eo(1)%kill
+            call self%refs_eo(2)%kill
             do i = 1,self%nptcls
                 call self%particles(i)%kill
             end do
@@ -536,7 +552,7 @@ contains
                 deallocate(self%heap_vars(ithr)%frc)
                 self%heap_vars(ithr)%frc => null()
             end do
-            deallocate(self%refs_eo, self%particles, self%heap_vars)
+            deallocate(self%particles, self%heap_vars)
             self%l_filt_set = .false.
             self%existence  = .false.
         endif
