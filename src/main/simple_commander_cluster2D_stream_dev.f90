@@ -173,6 +173,7 @@ contains
         call cline_cluster2D_chunk%set('mskdiam',   mskdiam)
         call cline_cluster2D_chunk%set('ncls',      real(params_glob%ncls_start))
         call cline_cluster2D_chunk%set('nthr',      real(params_glob%nthr2D))
+        call cline_cluster2D_chunk%set('nonuniform',params_glob%nonuniform)
         if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
         allocate(chunks(params_glob%nchunks))
         do ichunk = 1,params_glob%nchunks
@@ -188,6 +189,7 @@ contains
         call cline_cluster2D_pool%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
         call cline_cluster2D_pool%set('objfun',    'cc')
         call cline_cluster2D_pool%set('ptclw',     'no')
+        call cline_cluster2D_pool%set('nonuniform',params_glob%nonuniform)
         if( cline%defined('match_filt') )then
             carg = cline%get_carg('match_filt')
             call cline_cluster2D_pool%set('match_filt',carg)
