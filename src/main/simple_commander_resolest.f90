@@ -132,6 +132,13 @@ contains
             &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
         endif        
         call opt_filter_3D(odd, even, mskvol)
+        if( params%l_phrand )then
+            call even%fft
+            call odd%fft
+            call even%ran_phases_below_noise_power(odd)
+            call even%ifft
+            call odd%ifft
+        endif
         if( have_mask_file )then
             call mskvol%read(params%mskfile) ! restore the soft edge
             call even%mul(mskvol)
@@ -187,6 +194,13 @@ contains
         call opt_2D_filter_sub( even, odd )
         ! destruct
         do iptcl = 1, params%nptcls
+            if( params%l_phrand )then
+                call even(iptcl)%fft
+                call odd( iptcl)%fft
+                call even(iptcl)%ran_phases_below_noise_power(odd(iptcl))
+                call even(iptcl)%ifft
+                call odd( iptcl)%ifft
+            endif
             call odd( iptcl)%write(trim(file_tag)//'_odd.mrc',  iptcl)
             call even(iptcl)%write(trim(file_tag)//'_even.mrc', iptcl)
             call odd( iptcl)%kill()
