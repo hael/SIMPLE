@@ -9,7 +9,7 @@ private
 public :: cmdarg, cmdline, cmdline_err
 #include "simple_local_flags.inc"
 
-integer, parameter :: MAX_CMDARGS = 60
+integer, parameter :: MAX_CMDARGS = 100
 logical, parameter :: DEBUG_HERE  = .false.
 !> cmdarg key/value pair command-line type
 type cmdarg
