@@ -2251,6 +2251,7 @@ contains
             end do
             if( allocated(self%ctfmats)    ) deallocate(self%ctfmats)
             if( allocated(self%ref_optlp)  ) deallocate(self%ref_optlp)
+            if( allocated(self%bfactor)    ) deallocate(self%bfactor)
             if( allocated(self%npix_per_shell))deallocate(self%npix_per_shell)
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
