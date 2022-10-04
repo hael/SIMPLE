@@ -213,7 +213,7 @@ contains
         endif
         if( cline%defined('center') )then
             carg = cline%get_carg('center')
-            call cline_cluster2D_pool%set('match_filt',carg)
+            call cline_cluster2D_pool%set('center',carg)
             deallocate(carg)
         else
             call cline_cluster2D_pool%set('center','yes')
@@ -409,7 +409,7 @@ contains
                 call chunks(ichunk)%exec_classify(cline_cluster2D_chunk, orig_smpd, orig_box, box)
                 ! to avoid cycling through all projects
                 first2import = last2import + 1
-            endif            
+            endif
         enddo
     end subroutine classify_new_chunks
 
@@ -1829,4 +1829,3 @@ contains
     end subroutine create_individual_project
 
 end module simple_commander_cluster2D_stream_dev
-    
