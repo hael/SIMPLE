@@ -464,6 +464,11 @@ contains
             call build_glob%vol%fft
             call build_glob%vol_odd%fft
         endif
+        if( params_glob%l_phrand )then
+            ! randomize Fourier phases below noise power in a global manner
+            if( params_glob%clsfrcs.eq.'no' )&
+            &call build_glob%vol%ran_phases_below_noise_power(build_glob%vol_odd)
+        endif
     end subroutine read_and_filter_refvols
 
     !>  \brief  prepares one volume for references extraction
