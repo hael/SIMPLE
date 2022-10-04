@@ -23,7 +23,7 @@ logical,          parameter :: WRITE_OUTPUT        = .false. ! for figures gener
 integer,          parameter :: SOFT_EDGE           = 6
 integer,          parameter :: N_DISCRET           = 1000
 integer,          parameter :: CNMIN               = 3
-integer,          parameter :: CNMAX               = 12
+integer,          parameter :: CNMAX               = 13
 integer,          parameter :: NSTRAIN_COMPS       = 7
 character(len=*), parameter :: ATOMS_STATS_FILE    = 'atoms_stats.csv'
 character(len=*), parameter :: NP_STATS_FILE       = 'nanoparticle_stats.csv'
