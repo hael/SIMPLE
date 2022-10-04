@@ -324,7 +324,7 @@ contains
         real,     allocatable :: res(:), fsc(:)
         real                  :: lp_rand, msk
         integer               :: k,k_rand, find_plate, filtsz
-        logical               :: l_combined, l_ML_regularization
+        logical               :: l_combined, l_euclid_regularization
         msk    = real(self%box / 2) - COSMSKHALFWIDTH - 1.
         ! msk  = self%msk ! for a tighter spherical mask
         filtsz = fdim(self%box) - 1
@@ -333,9 +333,9 @@ contains
         ! if e=o then SSNR will be adjusted
         l_combined = trim(params_glob%combine_eo).eq.'yes'
         ! ML-regularization
-        l_ML_regularization = (params_glob%cc_objfun==OBJFUN_EUCLID) .or. params_glob%l_needs_sigma
-        if( params_glob%l_nonuniform ) l_ML_regularization = .false. ! ML regularization is overriden by non-uniform
-        if( l_ML_regularization )then
+        l_euclid_regularization = (params_glob%cc_objfun==OBJFUN_EUCLID) .or. params_glob%l_needs_sigma
+        if( params_glob%l_nonuniform ) l_euclid_regularization = .false. ! regularization is overriden by non-uniform
+        if( l_euclid_regularization )then
             ! preprocessing for FSC calculation
             ! even
             cmat = self%even%get_cmat()
