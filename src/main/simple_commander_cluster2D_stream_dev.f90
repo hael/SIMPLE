@@ -1423,6 +1423,7 @@ contains
         call cline_cluster2D_chunk%set('stream',    'no')
         call cline_cluster2D_chunk%set('startit',   1.)
         call cline_cluster2D_chunk%set('ncls',      real(params%ncls_start))
+        call cline_cluster2D_chunk%set('nonuniform',params_glob%nonuniform)
         if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
         call cline_cluster2D_chunk%delete('update_frac')
         call cline_cluster2D_chunk%delete('dir_target')
@@ -1441,6 +1442,7 @@ contains
         call cline_cluster2D_pool%set('async',     'yes') ! to enable hard termination
         call cline_cluster2D_pool%set('stream',    'yes') ! use for dual CTF treatment
         call cline_cluster2D_pool%set('nparts',    real(params%nparts_pool))
+        call cline_cluster2D_pool%set('nonuniform',params_glob%nonuniform)
         if( cline%defined('match_filt') )then
             carg = cline%get_carg('match_filt')
             call cline_cluster2D_pool%set('match_filt',carg)
