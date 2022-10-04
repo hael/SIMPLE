@@ -45,6 +45,9 @@ type sym
     procedure          :: rotall_to_asym
     procedure          :: symrandomize
     procedure          :: build_refspiral
+    procedure, private :: rnd_euler_1
+    procedure, private :: rnd_euler_2
+    generic            :: rnd_euler => rnd_euler_1, rnd_euler_2
     ! calculators
     procedure          :: sym_dists
     procedure          :: nearest_sym_neighbors
@@ -311,9 +314,9 @@ contains
         if( self%within_asymunit(osym, incl_mirr=.true.) )then
             ! already in asymetric unit
         else
-            do nsym=2,self%n     ! nsym=1 is the identity operator
+            do nsym=2,self%n ! nsym=1 is the identity operator
                 call self%apply(osym, nsym, oasym)
-                if( self%within_asymunit(oasym, incl_mirr=.true.) )exit
+                if( self%within_asymunit(oasym, incl_mirr=.true.) ) exit
             enddo
             osym = oasym
         endif
@@ -691,6 +694,22 @@ contains
             end subroutine gen_c1
 
     end subroutine build_refspiral
+
+    subroutine rnd_euler_1( self, osym )
+        class(sym), intent(inout) :: self
+        class(ori), intent(inout) :: osym
+        call osym%rnd_euler
+        call self%rot_to_asym(osym)
+    end subroutine rnd_euler_1
+
+    subroutine rnd_euler_2( self, o_prev, athres, osym )
+        class(sym), intent(inout) :: self
+        class(ori), intent(in)    :: o_prev
+        real,       intent(in)    :: athres
+        class(ori), intent(inout) :: osym
+        call osym%rnd_euler(o_prev, athres)
+        call self%rot_to_asym(osym)
+    end subroutine rnd_euler_2
 
     !>  \brief  SPIDER code for making c and d symmetries
     subroutine make_c_and_d( self )

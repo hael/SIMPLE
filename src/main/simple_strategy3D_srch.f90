@@ -7,6 +7,7 @@ use simple_sym,                only: sym
 use simple_pftcc_shsrch_grad,  only: pftcc_shsrch_grad  ! gradient-based in-plane angle and shift search
 use simple_pftcc_orisrch_grad, only: pftcc_orisrch_grad ! gradient-based search over all df:s
 use simple_polarft_corrcalc,   only: pftcc_glob, polarft_corrcalc
+use simple_cartft_corrcalc,    only: cartftcc_glob
 use simple_parameters,         only: params_glob
 use simple_builder,            only: build_glob
 use simple_strategy3D_alloc    ! singleton s3D
@@ -26,9 +27,11 @@ end type strategy3D_spec
 type strategy3D_srch
     type(pftcc_shsrch_grad)  :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
     type(pftcc_orisrch_grad) :: grad_orisrch_obj          !< obj 4 search over all df:s, L-BFGS with gradient
+    type(ori)                :: o_prev                    !< previous orientation, used in continuous search 
     integer                  :: iptcl         = 0         !< global particle index
     integer                  :: ithr          = 0         !< thread index
     integer                  :: nrefs         = 0         !< total # references (nstates*nprojs)
+    integer                  :: nsample       = 0         !< # of continuous orientations to sample
     integer                  :: nstates       = 0         !< # states
     integer                  :: nprojs        = 0         !< # projections
     integer                  :: nrots         = 0         !< # in-plane rotations in polar representation
@@ -53,6 +56,7 @@ type strategy3D_srch
   contains
     procedure          :: new
     procedure          :: prep4srch
+    procedure          :: prep4_cont_srch
     procedure, private :: inpl_srch_1
     procedure, private :: inpl_srch_2
     generic            :: inpl_srch => inpl_srch_1, inpl_srch_2
@@ -125,6 +129,7 @@ contains
         self%nstates    = params_glob%nstates
         self%nprojs     = params_glob%nspace
         self%nrefs      = self%nprojs*self%nstates
+        self%nsample    = params_glob%nsample
         self%nrots      = pftcc_glob%get_nrots()
         self%nbetter    = 0
         self%nrefs_eval = 0
@@ -186,6 +191,21 @@ contains
         call o_prev%kill
     end subroutine prep4srch
 
+    subroutine prep4_cont_srch( self )
+        class(strategy3D_srch), intent(inout) :: self
+        ! previous parameters
+        call build_glob%spproj_field%get_ori(self%iptcl, self%o_prev) ! previous ori
+        self%prev_state = self%o_prev%get_state()                     ! state index
+        self%prev_shvec = self%o_prev%get_2Dshift()                   ! shift vector
+        ! sanity check
+        if( self%prev_state > 0 )then
+            if( self%prev_state > self%nstates )          THROW_HARD('previous best state outside boundary; prep4_cont_srch')
+            if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4_cont_srch')
+        endif
+        ! prep corr
+        call cartftcc_glob%project_and_correlate(self%iptcl, self%o_prev, self%prev_corr)
+    end subroutine prep4_cont_srch
+
     subroutine inpl_srch_1( self )
         class(strategy3D_srch), intent(inout) :: self
         real      :: cxy(3)
@@ -243,6 +263,7 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         call self%grad_shsrch_obj%kill
         call self%grad_orisrch_obj%kill
+        call self%o_prev%kill
     end subroutine kill
 
 end module simple_strategy3D_srch

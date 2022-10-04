@@ -20,6 +20,11 @@ interface read_imgbatch
     module procedure read_imgbatch_2
 end interface read_imgbatch
 
+interface preprefvol
+    module procedure preprefvol_1
+    module procedure preprefvol_2
+end interface preprefvol
+
 real, parameter :: SHTHRESH  = 0.001
 real, parameter :: CENTHRESH = 0.5    ! threshold for performing volume/cavg centering in pixels
 type(stack_io)  :: stkio_r
@@ -472,7 +477,7 @@ contains
     end subroutine read_and_filter_refvols
 
     !>  \brief  prepares one volume for references extraction
-    subroutine preprefvol( pftcc, cline, s, do_center, xyz, iseven )
+    subroutine preprefvol_1( pftcc, cline, s, do_center, xyz, iseven )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_estimate_ssnr,    only: fsc2optlp_sub
         use simple_projector,        only: projector
@@ -557,7 +562,86 @@ contains
         call vol_ptr%fft()
         ! expand for fast interpolation & correct for norm when clipped
         call vol_ptr%expand_cmat(params_glob%alpha,norm4proj=.true.)
-    end subroutine preprefvol
+    end subroutine preprefvol_1
+
+    !>  \brief  prepares one volume for references extraction
+    subroutine preprefvol_2( cftcc, cline, s, do_center, xyz, iseven )
+        use simple_cartft_corrcalc, only: cartft_corrcalc
+        use simple_estimate_ssnr,   only: fsc2optlp_sub
+        use simple_projector,       only: projector
+        class(cartft_corrcalc),  intent(inout) :: cftcc
+        class(cmdline),          intent(inout) :: cline
+        integer,                 intent(in)    :: s
+        logical,                 intent(in)    :: do_center
+        real,                    intent(in)    :: xyz(3)
+        logical,                 intent(in)    :: iseven
+        type(projector),  pointer :: vol_ptr => null()
+        type(image)               :: mskvol
+        real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
+        integer :: iref, iproj, filtsz
+        if( iseven )then
+            vol_ptr => build_glob%vol
+        else
+            vol_ptr => build_glob%vol_odd
+        endif
+        if( do_center )then
+            call vol_ptr%fft()
+            call vol_ptr%shift([xyz(1),xyz(2),xyz(3)])
+        endif
+        ! Volume filtering
+        filtsz = build_glob%img%get_filtsz()
+        if( params_glob%l_match_filt )then
+            ! stores filters in pftcc
+            if( params_glob%clsfrcs.eq.'yes')then
+                THROW_HARD('clsfrcs eq yes not suported in Cartesian refinement')
+            else
+                if( any(build_glob%fsc(s,:) > 0.143) )then
+                    call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
+                else
+                    filter = 1.
+                endif
+                do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
+                    call cftcc%set_optlp(filter(params_glob%kfromto(1):params_glob%kstop))
+                enddo
+            endif
+        else
+            if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%l_lpset )then
+                ! no filtering
+            else
+                call vol_ptr%fft()
+                if( any(build_glob%fsc(s,:) > 0.143) )then
+                    call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
+                    call vol_ptr%apply_filter(filter)
+                endif
+            endif
+        endif
+        ! back to real space
+        call vol_ptr%ifft()
+        ! masking
+        if( cline%defined('mskfile') )then
+            ! envelope masking
+            call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
+            call mskvol%read(params_glob%mskfile)
+            call vol_ptr%zero_env_background(mskvol)
+            call vol_ptr%mul(mskvol)
+            call mskvol%kill
+        else
+            ! circular masking
+            if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+                call vol_ptr%mask(params_glob%msk, 'soft', backgr=0.0)
+            else
+                call vol_ptr%mask(params_glob%msk, 'soft')
+            endif
+        endif
+        ! gridding prep
+        if( params_glob%gridding.eq.'yes' )then
+            call vol_ptr%div_w_instrfun(params_glob%interpfun, alpha=params_glob%alpha)
+        endif
+        ! FT volume
+        call vol_ptr%fft()
+        ! expand for fast interpolation & correct for norm when clipped
+        call vol_ptr%expand_cmat(params_glob%alpha,norm4proj=.true.)
+    end subroutine preprefvol_2
 
     subroutine norm_struct_facts( cline, which_iter )
         use simple_masker, only: masker
