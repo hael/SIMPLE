@@ -1096,7 +1096,7 @@ contains
         endif
         write(logfhandle,'(A,I8,A,I8)')'>>> # OF PARTICLES  :',nptcls_orig,' -> ', nptcls
         ! final write
-        call spproj%write
+        call spproj%write(params%projfile)
         ! clean up
         call spproj%kill
         call qsys_cleanup
