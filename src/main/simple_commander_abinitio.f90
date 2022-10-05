@@ -580,13 +580,6 @@ contains
             call work_proj2%write_segment_inside('out',ORIG_WORK_PROJFILE)
             call xpostprocess%execute(cline_postprocess)
             call os%kill
-        else
-            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(nint(iter),3)//ext
-            call vol%new([orig_box,orig_box,orig_box],orig_smpd)
-            call vol%read(vol_iter)
-            call vol%mirror('x')
-            call vol%write(add2fbody(vol_iter,ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX)))
-            call vol%kill
         endif
         vol_iter_pproc      = add2fbody(vol_iter,ext,PPROC_SUFFIX)
         vol_iter_pproc_mirr = add2fbody(vol_iter,ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX))
