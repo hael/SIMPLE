@@ -399,7 +399,7 @@ contains
         type(opt_vol),        intent(inout) :: opt_odd(:,:,:), opt_even(:,:,:)
         class(image),         intent(inout) :: weights_img, ref_diff_odd_img, ref_diff_even_img
         type(fft_vars_type) , intent(in)    :: fft_vars
-        integer           :: k,l,m,n, box, dim3, ldim(3), find_start, find_stop, iter_no, ext
+        integer           :: k,l, box, dim3, ldim(3), find_start, find_stop, iter_no, ext
         integer           :: best_ind, cur_ind, lb(3), ub(3)
         real              :: min_sum_odd, min_sum_even, rad, find_stepsz, val
         real, pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:)
@@ -449,18 +449,14 @@ contains
                 podd%cmat  =  podd%cmat * pweights%cmat
                 peven%cmat = peven%cmat * pweights%cmat
                 call batch_ifft_2D(ref_diff_even_img, ref_diff_odd_img, fft_vars)
-                do l = lb(2),ub(2)
-                    do k = lb(1),ub(1)
-                        if (podd%rmat(k,l,1) + peven%rmat(k,l,1) < opt_odd(k,l,1)%opt_diff + opt_even(k,l,1)%opt_diff) then
-                            opt_odd( k,l,1)%opt_val  = rmat_odd(k,l,1)
-                            opt_odd( k,l,1)%opt_diff = podd%rmat(k,l,1) + peven%rmat(k,l,1)
-                            opt_odd( k,l,1)%opt_freq = cur_ind
-                            opt_even(k,l,1)%opt_val  = rmat_even(k,l,1)
-                            opt_even(k,l,1)%opt_diff = podd%rmat(k,l,1) + peven%rmat(k,l,1)
-                            opt_even(k,l,1)%opt_freq = cur_ind
-                        endif
-                    enddo
-                enddo
+                where(podd%rmat + peven%rmat < opt_odd%opt_diff + opt_even%opt_diff)
+                    opt_odd%opt_val   = rmat_odd
+                    opt_odd%opt_diff  = podd%rmat + peven%rmat
+                    opt_odd%opt_freq  = cur_ind
+                    opt_even%opt_val  = rmat_even
+                    opt_even%opt_diff = podd%rmat + peven%rmat
+                    opt_even%opt_freq = cur_ind
+                endwhere
             else
                 ! keep the theta which gives the lowest cost (over all voxels)
                 if (sum(podd%rmat) < min_sum_odd) then
@@ -646,25 +642,16 @@ contains
                 peven%cmat = peven%cmat * pweights%cmat
                 !$omp end parallel workshare
                 call batch_ifft_3D(ref_diff_even_img, ref_diff_odd_img, in, out, plan_bwd)
-                !$omp parallel do collapse(3) default(shared) private(k,l,m) schedule(dynamic,CHUNKSZ) proc_bind(close)
-                do m = lb(3),ub(3)
-                    do l = lb(2),ub(2)
-                        do k = lb(1),ub(1)
-                            ! opt_diff keeps the minimized cost value at each voxel of the search
-                            ! opt_odd  keeps the best voxel of the form B*odd
-                            ! opt_even keeps the best voxel of the form B*even
-                            if (podd%rmat(k,l,m) + peven%rmat(k,l,m) < opt_odd(k,l,m)%opt_diff + opt_even(k,l,m)%opt_diff) then
-                                opt_odd( k,l,m)%opt_val  =  rmat_odd(k,l,m)
-                                opt_odd( k,l,m)%opt_diff = podd%rmat(k,l,m)
-                                opt_odd( k,l,m)%opt_freq = cur_ind
-                                opt_even(k,l,m)%opt_val  =  rmat_even(k,l,m)
-                                opt_even(k,l,m)%opt_diff = peven%rmat(k,l,m)
-                                opt_even(k,l,m)%opt_freq = cur_ind
-                            endif
-                        enddo
-                    enddo
-                enddo
-                !$omp end parallel do
+                !$omp parallel
+                where(podd%rmat + peven%rmat < opt_odd%opt_diff + opt_even%opt_diff)
+                    opt_odd%opt_val   = rmat_odd
+                    opt_odd%opt_diff  = podd%rmat + peven%rmat
+                    opt_odd%opt_freq  = cur_ind
+                    opt_even%opt_val  = rmat_even
+                    opt_even%opt_diff = podd%rmat + peven%rmat
+                    opt_even%opt_freq = cur_ind
+                endwhere
+                !$omp end parallel
             else
                 ! keep the theta which gives the lowest cost (over all voxels)
                 if (sum(podd%rmat) < min_sum_odd) then
