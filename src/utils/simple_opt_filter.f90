@@ -451,14 +451,12 @@ contains
                 call batch_ifft_2D(ref_diff_even_img, ref_diff_odd_img, fft_vars)
                 do l = lb(2),ub(2)
                     do k = lb(1),ub(1)
-                        if (podd%rmat(k,l,1) < opt_odd(k,l,1)%opt_diff) then
-                            opt_odd(k,l,1)%opt_val  = rmat_odd(k,l,1)
-                            opt_odd(k,l,1)%opt_diff = podd%rmat(k,l,1)
-                            opt_odd(k,l,1)%opt_freq = cur_ind
-                        endif
-                        if (peven%rmat(k,l,1) < opt_even(k,l,1)%opt_diff) then
+                        if (podd%rmat(k,l,1) + peven%rmat(k,l,1) < opt_odd(k,l,1)%opt_diff + opt_even(k,l,1)%opt_diff) then
+                            opt_odd( k,l,1)%opt_val  = rmat_odd(k,l,1)
+                            opt_odd( k,l,1)%opt_diff = podd%rmat(k,l,1) + peven%rmat(k,l,1)
+                            opt_odd( k,l,1)%opt_freq = cur_ind
                             opt_even(k,l,1)%opt_val  = rmat_even(k,l,1)
-                            opt_even(k,l,1)%opt_diff = peven%rmat(k,l,1)
+                            opt_even(k,l,1)%opt_diff = podd%rmat(k,l,1) + peven%rmat(k,l,1)
                             opt_even(k,l,1)%opt_freq = cur_ind
                         endif
                     enddo
@@ -655,12 +653,10 @@ contains
                             ! opt_diff keeps the minimized cost value at each voxel of the search
                             ! opt_odd  keeps the best voxel of the form B*odd
                             ! opt_even keeps the best voxel of the form B*even
-                            if (podd%rmat(k,l,m) < opt_odd(k,l,m)%opt_diff) then
-                                opt_odd(k,l,m)%opt_val  =  rmat_odd(k,l,m)
-                                opt_odd(k,l,m)%opt_diff = podd%rmat(k,l,m)
-                                opt_odd(k,l,m)%opt_freq = cur_ind
-                            endif
-                            if (peven%rmat(k,l,m) < opt_even(k,l,m)%opt_diff) then
+                            if (podd%rmat(k,l,m) + peven%rmat(k,l,m) < opt_odd(k,l,m)%opt_diff + opt_even(k,l,m)%opt_diff) then
+                                opt_odd( k,l,m)%opt_val  =  rmat_odd(k,l,m)
+                                opt_odd( k,l,m)%opt_diff = podd%rmat(k,l,m)
+                                opt_odd( k,l,m)%opt_freq = cur_ind
                                 opt_even(k,l,m)%opt_val  =  rmat_even(k,l,m)
                                 opt_even(k,l,m)%opt_diff = peven%rmat(k,l,m)
                                 opt_even(k,l,m)%opt_freq = cur_ind
