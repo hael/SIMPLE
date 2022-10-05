@@ -166,6 +166,8 @@ contains
 
         if( l_cartesian )then
             call prepcftcc4align(cline, batchsz_max)
+            ! pftcc still needs to be initiated due to build_glob%img_match%init_polarizer
+            call pftcc%new(params_glob%nrefs, [1,batchsz_max], params_glob%l_match_filt)
         else
             call preppftcc4align(cline, batchsz_max)
         endif
