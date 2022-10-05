@@ -1296,7 +1296,6 @@ contains
         ! output directory
         output_dir = PATH_HERE
         ! parameters & loop range
-        l_del_forctf = .false.
         if( params%stream .eq. 'yes' )then
             ! determine loop range
             fromto(:) = 1
@@ -1320,9 +1319,16 @@ contains
             if( o%isthere('imgkind') )then
                 call o%getter('imgkind', imgkind)
                 if( imgkind.ne.'mic' )cycle
+                l_del_forctf = .false.
                 if( o%isthere('forctf') )then
                     call o%getter('forctf', intg_forctf)
-                    l_del_forctf = .true.
+                    if( file_exists(intg_forctf) )then
+                        l_del_forctf = .true.
+                    else
+                        if( o%isthere('intg') )then
+                            call o%getter('intg', intg_forctf)
+                        endif
+                    endif
                 else if( o%isthere('intg') )then
                     call o%getter('intg', intg_forctf)
                 else
