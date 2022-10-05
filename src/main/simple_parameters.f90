@@ -52,7 +52,7 @@ type :: parameters
     character(len=3)      :: graphene_filt='no'   !< filter out graphene bands in correcation search
     character(len=3)      :: gridding='no'        !< to test gridding correction
     character(len=3)      :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
-    character(len=3)      :: incrreslim='no'      !< Whether to add ten shells to the FSC resolution limit
+    character(len=3)      :: incrreslim='yes'     !< Whether to add ten shells to the FSC resolution limit
     character(len=3)      :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
@@ -1472,8 +1472,6 @@ contains
                 THROW_HARD('eer_upsampling not supported: '//int2str(self%eer_upsampling))
         end select
         if( self%eer_fraction < 1 )THROW_HARD('invalid eer_fraction: '//int2str(self%eer_fraction))
-        ! resolution limit
-        self%l_incrreslim = trim(self%incrreslim) == 'yes'
         ! FILTERS
         ! matched filter and sigma needs flags
         select case(self%cc_objfun)
@@ -1491,7 +1489,8 @@ contains
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
                 if( self%l_needs_sigma ) self%l_match_filt = .false.
         end select
-        self%l_incrreslim = .not.self%l_lpset
+        ! resolution limit
+        self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not.self%l_lpset
         ! B-facor
         self%l_bfac = cline%defined('bfac')
         ! phase randomization
