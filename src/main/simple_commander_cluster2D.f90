@@ -1199,6 +1199,7 @@ contains
                 write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', order(icls),&
                     &'RANK:', icls ,'POP:', nint(spproj%os_cls2D%get(order(icls), 'pop')),&
                     &'RES:', spproj%os_cls2D%get(order(icls), 'res')
+                call flush(logfhandle)
                 call stkio_r%get_image(order(icls), img)
                 call stkio_w%write(icls, img)
             end do

@@ -670,7 +670,7 @@ contains
         type(CPlot2D_type)        :: plot2D
         type(CDataSet_type)       :: dataSetStart, dataSet, fit, obs, patch_start
         type(CDataPoint_type)     :: point2, p_obs, p_fit, point
-        character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf, ps2jpeg_cmd, fname_jpeg
+        character(len=LONGSTRLEN) :: ps2pdf_cmd, fname_pdf
         integer :: l, ipx,ipy, iframe, j, iostat
         real    :: shifts(self%nframes,2), loc_shift(2), ref_shift(2), xcenter,ycenter, cx,cy
         call CPlot2D__new(plot2D, self%shift_fname)
@@ -759,11 +759,6 @@ contains
         ! Format conversion
         l = len_trim(self%shift_fname)
         self%shift_fname = self%shift_fname(:l-1) ! removing trailing C NULL character
-        ! conversion to JPEG
-        fname_jpeg  = trim(get_fbody(self%shift_fname,'eps'))//'.jpeg'
-        ps2jpeg_cmd = 'gs -q -sDEVICE=jpeg -dJPEGQ=92 -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=760 -dDEVICEHEIGHTPOINTS=760 -sOutputFile='&
-            //trim(fname_jpeg)//' '//trim(self%shift_fname)
-        call exec_cmdline(trim(adjustl(ps2jpeg_cmd)), suppress_errors=.true., exitstat=iostat)
         ! conversion to PDF
         fname_pdf  = trim(get_fbody(self%shift_fname,'eps'))//'.pdf'
         ps2pdf_cmd = 'gs -q -sDEVICE=pdfwrite -dNOPAUSE -dBATCH -dSAFER -dDEVICEWIDTHPOINTS=760 -dDEVICEHEIGHTPOINTS=760 -sOutputFile='&
