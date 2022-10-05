@@ -118,9 +118,10 @@ contains
         else
             self%nptcls  = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
         endif
+        ! input vols are prepared in preprefvol_2
+        ! if( .not. vol_even%is_expanded() ) THROW_HARD('input vol_even expected to be prepared for interpolation') 
+        ! if( .not. vol_odd%is_expanded()  ) THROW_HARD('input vol_odd expected to be prepared for interpolation')
         ! set pointers to projectors
-        if( .not. vol_even%is_expanded() ) THROW_HARD('input vol_even expected to be prepared for interpolation') 
-        if( .not. vol_odd%is_expanded()  ) THROW_HARD('input vol_odd expected to be prepared for interpolation')
         self%vol_even => vol_even
         self%vol_odd  => vol_odd
         ! container for projection
