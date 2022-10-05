@@ -44,8 +44,7 @@ contains
             self%s%ithr = ithr
             ! initialize
             call self%s%prep4srch
-            self%s%nbetter    = 0
-            self%s%nrefs_eval = 0
+            self%s%nbetter = 0
             ! search
             do isample=1,self%spec%szsn
                 iref = s3D%srch_order(self%s%ithr,isample)  ! set the stochastic reference index
