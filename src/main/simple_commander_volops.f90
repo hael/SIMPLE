@@ -276,7 +276,7 @@ contains
             call vol%zero_background
             call vol%mul(mskvol)
             call mskvol%kill
-        else if( trim(params%automsk) .eq. 'file' .and. has_mskfile )then
+        else if( has_mskfile )then
             call vol%zero_background
             if( cline%defined('lp_backgr') )then
                 call vol%lp_background(mskvol,params%lp_backgr)

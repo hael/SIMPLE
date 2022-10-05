@@ -532,9 +532,9 @@ contains
                         if( mod(iter,AUTOMSK_FREQ) == 0 .or. iter == params%startit )then
                             params%mskfile = 'automask'//params%ext
                             call cline_postprocess%set('mskfile', trim(params%mskfile))
+                            call cline_postprocess%delete('automsk')
                             call cline%set('mskfile', trim(params%mskfile))
                             call job_descr%set( 'mskfile', trim(params%mskfile))
-                            call cline_postprocess%delete('automsk')
                         endif
                     endif
             end select
