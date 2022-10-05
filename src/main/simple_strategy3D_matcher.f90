@@ -25,6 +25,7 @@ use simple_strategy3D_snhc,         only: strategy3D_snhc
 use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedy_neigh, only: strategy3D_greedy_neigh
 use simple_strategy3D_neigh,        only: strategy3D_neigh
+use simple_strategy3D_neighc,       only: strategy3D_neighc
 use simple_strategy3D_cont,         only: strategy3D_cont
 use simple_strategy3D,              only: strategy3D
 use simple_strategy3D_srch,         only: strategy3D_spec, set_ptcl_stats, eval_ptcl
@@ -82,9 +83,15 @@ contains
             t_init = tic()
             t_tot  = t_init
         endif
-        ! CARTESIAN REFINEMENT FLAG
-        l_cartesian = trim(params_glob%cartesian).eq.'yes'
 
+        ! CARTESIAN REFINEMENT FLAG
+        select case(trim(params_glob%refine))
+            case('shcc','neighc')
+                l_cartesian = .true.
+            case DEFAULT
+                l_cartesian = .false.
+        end select
+        
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
             if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; refine3D_exec')
@@ -253,6 +260,8 @@ contains
                                 allocate(strategy3D_neigh        :: strategy3Dsrch(iptcl_batch)%ptr)
                             endif
                         endif
+                    case('neighc')
+                        allocate(strategy3D_neighc               :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedy')
                         allocate(strategy3D_greedy               :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('greedy_neigh')

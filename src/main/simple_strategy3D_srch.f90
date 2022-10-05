@@ -44,6 +44,7 @@ type strategy3D_srch
     integer                  :: class         = 0         !< 2D class index
     integer                  :: prev_ref      = 0         !< previous reference index
     integer                  :: prev_proj     = 0         !< previous projection direction index
+    real                     :: athres        = 7.        !< angular treshold (refine=neighc) for neighborhood continuous Cartesian search
     real                     :: prev_corr     = 1.        !< previous best correlation
     real                     :: specscore     = 0.        !< spectral score
     real                     :: prev_shvec(2) = 0.        !< previous origin shift vector
@@ -130,6 +131,7 @@ contains
         self%nprojs     = params_glob%nspace
         self%nrefs      = self%nprojs*self%nstates
         self%nsample    = params_glob%nsample
+        self%athres     = params_glob%athres
         self%nrots      = pftcc_glob%get_nrots()
         self%nbetter    = 0
         self%nrefs_eval = 0
