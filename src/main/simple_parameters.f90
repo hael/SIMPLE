@@ -1489,7 +1489,7 @@ contains
         if( str_has_substr(self%prg, '2D') ) is_2D = .true.
         if( .not. cline%defined('smooth_ext') )then
             if( is_2D )then
-                self%smooth_ext = round2even(real(self%box) * 0.16) 
+                self%smooth_ext = round2even(real(self%box) * 0.16)
             else
                 self%smooth_ext = 8
             endif
