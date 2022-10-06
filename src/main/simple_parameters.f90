@@ -457,7 +457,7 @@ type :: parameters
     logical :: l_focusmsk     = .false.
     logical :: l_frac_update  = .false.
     logical :: l_graphene     = .false.
-    logical :: l_incrreslim   = .false.
+    logical :: l_incrreslim   = .true.
     logical :: l_lpset        = .false.
     logical :: l_locres       = .false.
     logical :: l_match_filt   = .true.
@@ -907,15 +907,6 @@ contains
         l_distr_exec_glob = self%l_distr_exec
         ! get pointer to program user interface
         call get_prg_ptr(self%prg, self%ptr2prg)
-        is_2D = .false.
-        if( str_has_substr(self%prg, '2D') ) is_2D = .true.
-        if( .not. cline%defined('smooth_ext') )then
-            if( is_2D )then
-                self%smooth_ext = 20
-            else
-                self%smooth_ext = 8
-            endif
-        endif
         ! look for the last previous execution directory and get next directory number
         if( allocated(self%last_prev_dir) ) deallocate(self%last_prev_dir)
         idir = find_next_int_dir_prefix(self%cwd, self%last_prev_dir)
@@ -1493,6 +1484,16 @@ contains
         self%l_bfac = cline%defined('bfac')
         ! phase randomization
         self%l_phrand = trim(self%phrand).eq.'yes'
+        ! smoothing extension
+        is_2D = .false.
+        if( str_has_substr(self%prg, '2D') ) is_2D = .true.
+        if( .not. cline%defined('smooth_ext') )then
+            if( is_2D )then
+                self%smooth_ext = round2even(real(self%box) * 0.16) 
+            else
+                self%smooth_ext = 8
+            endif
+        endif
         ! atoms
         if( cline%defined('element') )then
             if( .not. atoms_obj%element_exists(self%element) )then

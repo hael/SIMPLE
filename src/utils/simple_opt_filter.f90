@@ -192,7 +192,7 @@ contains
         type(image),      allocatable :: diff_img(:), diff_img_opt(:),&
                                         &odd_copy_rmat(:),  odd_copy_cmat(:),&
                                         &even_copy_rmat(:), even_copy_cmat(:)
-        real,             allocatable :: cur_fil(:,:), weights_2D(:,:,:), frc(:), filt(:)
+        real,             allocatable :: weights_2D(:,:,:), frc(:), filt(:), cur_fil(:,:)
         integer,          allocatable :: lplims_hres(:)
         type(opt_vol),    allocatable :: opt_odd(:,:,:,:), opt_even(:,:,:,:)
         real                          :: smpd, lpstart, lp, val
@@ -236,8 +236,7 @@ contains
         allocate(   odd_copy_rmat(nptcls),     odd_copy_cmat(nptcls),&
                 &  even_copy_rmat(nptcls),    even_copy_cmat(nptcls),&
                 &diff_img(nptcls), diff_img_opt(nptcls))
-        allocate(cur_fil(box,nptcls),weights_2D(smooth_ext*2+1,&
-                &smooth_ext*2+1,nptcls), frc(filtsz), source=0.)
+        allocate(weights_2D(smooth_ext*2+1,smooth_ext*2+1,nptcls), frc(filtsz), cur_fil(box,nptcls), source=0.)
         allocate(opt_odd(box,box,1,nptcls), opt_even(box,box,1,nptcls), lplims_hres(nptcls))
         ! calculate high-res low-pass limits
         if( lpstart_fallback )then
@@ -350,7 +349,8 @@ contains
                 Bn  = Bn + AN(k+1,n)*js**k
             end do
             Kn  = 1/Bn
-            val = sqrt(real(Kn)**2 + aimag(Kn)**2)
+            ! val = sqrt(real(Kn)**2 + aimag(Kn)**2)
+            val = cabs(Kn)
         else
             val = epsilon(val)
         endif
@@ -391,7 +391,7 @@ contains
                             &fft_vars)
         class(image),         intent(inout) :: odd, even
         class(image),         intent(in)    :: odd_copy_rmat,  odd_copy_cmat,&
-                                             &even_copy_rmat, even_copy_cmat
+                                             &even_copy_rmat, even_copy_cmat 
         real,                 intent(inout) :: cur_fil(:), weights_2D(:,:)
         integer,              intent(in)    :: kstop
         type(opt_vol),        intent(inout) :: opt_odd(:,:,:), opt_even(:,:,:)
@@ -400,7 +400,6 @@ contains
         real(kind=c_float), pointer :: rmat_odd(:,:,:), rmat_even(:,:,:)
         integer :: k,l, box, dim3, ldim(3), find_start, find_stop, iter_no, ext, best_ind, cur_ind, lb(3), ub(3) 
         real    :: rad, find_stepsz, val
-        
         type(image_ptr) :: pdiff_opt, pdiff, pweights
         ! init
         ldim              = odd%get_ldim()
@@ -439,13 +438,17 @@ contains
             call diff_img%fft
             pdiff%cmat  = pdiff%cmat * pweights%cmat
             call diff_img%ifft
-            where(pdiff%rmat < pdiff_opt%rmat)
-                opt_odd%opt_val   = rmat_odd
-                opt_odd%opt_freq  = cur_ind
-                opt_even%opt_val  = rmat_even
-                opt_even%opt_freq = cur_ind
-                pdiff_opt%rmat    = pdiff%rmat
-            endwhere
+            do l = lb(2),ub(2)
+                do k = lb(1),ub(1)
+                    if( pdiff%rmat(k,l,1) < pdiff_opt%rmat(k,l,1) )then
+                        opt_odd(k,l,1)%opt_val   = rmat_odd(k,l,1)
+                        opt_odd(k,l,1)%opt_freq  = cur_ind
+                        opt_even(k,l,1)%opt_val  = rmat_even(k,l,1)
+                        opt_even(k,l,1)%opt_freq = cur_ind
+                        pdiff_opt%rmat(k,l,1)    = pdiff%rmat(k,l,1)
+                    endif
+                enddo
+            enddo
         enddo
         do k = 1,ldim(1)
             do l = 1,ldim(2)
@@ -471,7 +474,7 @@ contains
         type(c_ptr)                   :: plan_fwd, plan_bwd
         integer,          parameter   :: CHUNKSZ = 20, N_IMGS = 2
         real,             pointer     :: rmat_odd(:,:,:), rmat_even(:,:,:)
-        real,             allocatable :: optlp(:), res(:), cur_fil(:), weights_3D(:,:,:), fsc(:)
+        real,             allocatable :: optlp(:), res(:), weights_3D(:,:,:), fsc(:), cur_fil(:)
         type(opt_vol),    allocatable :: opt_odd(:,:,:), opt_even(:,:,:)
         character(len=:), allocatable :: fsc_fname
         character(len=LONGSTRLEN)     :: benchfname
@@ -524,7 +527,7 @@ contains
         call  odd_copy_cmat%copy(odd)
         call even_copy_cmat%copy(even)
         call batch_fft_3D(even_copy_cmat, odd_copy_cmat, in, out, plan_fwd)
-        allocate(cur_fil(box), weights_3D(smooth_ext*2+1,smooth_ext*2+1, smooth_ext*2+1), source=0.)
+        allocate(weights_3D(smooth_ext*2+1,smooth_ext*2+1, smooth_ext*2+1), cur_fil(box), source=0.)
         allocate(opt_odd(box,box,box), opt_even(box,box,box))
         if( present(mskimg) )then
             call bounds_from_mask3D(mskimg%bin2logical(), lb, ub)
@@ -604,12 +607,12 @@ contains
             !$omp end parallel workshare
             call diff_img%ifft
             !$omp parallel workshare
-            where( pdiff%rmat < pdiff_opt%rmat )
+            where( pdiff%rmat(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) < pdiff_opt%rmat(lb(1):ub(1),lb(2):ub(2),lb(3):ub(3)) )
                 opt_odd%opt_val   = rmat_odd
                 opt_odd%opt_freq  = cur_ind
                 opt_even%opt_val  = rmat_even
                 opt_even%opt_freq = cur_ind
-                pdiff_opt%rmat     = pdiff%rmat
+                pdiff_opt%rmat    = pdiff%rmat
             endwhere
             !$omp end parallel workshare
             if( L_BENCH_GLOB )then

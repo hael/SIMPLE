@@ -172,7 +172,6 @@ contains
         integer          :: iptcl
         ! init
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',    'yes')
-        if( .not. cline%defined('smooth_ext') ) call cline%set('smooth_ext', 20.)
         call params%new(cline) 
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
         params%ldim(3) = 1 ! because we operate on stacks
