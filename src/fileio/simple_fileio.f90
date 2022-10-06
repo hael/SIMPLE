@@ -876,19 +876,23 @@ contains
     ! given absolute paths of directory and filename returns file relative path
     ! with respect to working directory (minus execution directory, eg 1_xxx)
     ! if the file lies outside the working directory then the absolute file path is kept
-    subroutine make_relativepath(cwd, fname, newfname)
+    subroutine make_relativepath(cwd, fname, newfname, checkexists)
         character(len=*),          intent(in)  :: cwd, fname
         character(len=LONGSTRLEN), intent(out) :: newfname
+        logical,      optional,    intent(in)  :: checkexists
         character(len=:), allocatable :: fname_here
         character(LONGSTRLEN)         :: cwd_here, projdir
         integer                       :: l_cwd, l_fname, l, slashpos_left, slashpos_right, ipos
+        logical                       :: checkexists_here
+        checkexists_here = .true.
+        if( present(checkexists) ) checkexists_here = checkexists 
         ! get absolute filename if necessary
         if( fname(1:1).eq.'/' )then
             ! was already absolute
             fname_here = trim(fname)
-            if( .not.file_exists(fname_here) )THROW_HARD('File does not exist: '//trim(fname_here))
+            if(checkexists_here .and. .not.file_exists(fname_here) )THROW_HARD('File does not exist: '//trim(fname_here))
         else
-            fname_here = simple_abspath(fname, errmsg='simple_fileio::make_relativepath: '//trim(fname))
+            fname_here = simple_abspath(fname, errmsg='simple_fileio::make_relativepath: '//trim(fname), check_exists=checkexists_here)
         endif
         ! remove final '/' from cwd for safety
         l_cwd = len_trim(cwd)
