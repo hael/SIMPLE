@@ -76,6 +76,7 @@ end type simple_program
 type(simple_program), target :: analysis2D_nano
 type(simple_program), target :: assign_optics_groups
 type(simple_program), target :: automask
+type(simple_program), target :: automask2D
 type(simple_program), target :: autorefine3D_nano
 type(simple_program), target :: binarize
 type(simple_program), target :: calc_pspec
@@ -325,6 +326,7 @@ contains
         call new_analysis2D_nano
         call new_assign_optics_groups
         call new_automask
+        call new_automask2D
         call new_autorefine3D_nano
         call new_binarize
         call new_calc_pspec
@@ -430,6 +432,7 @@ contains
         call push2prg_ptr_array(analysis2D_nano)
         call push2prg_ptr_array(assign_optics_groups)
         call push2prg_ptr_array(automask)
+        call push2prg_ptr_array(automask2D)
         call push2prg_ptr_array(autorefine3D_nano)
         call push2prg_ptr_array(binarize)
         call push2prg_ptr_array(calc_pspec)
@@ -545,6 +548,8 @@ contains
                 ptr2prg => assign_optics_groups
             case('automask')
                 ptr2prg => automask
+            case('automask2D')
+                ptr2prg => automask2D
             case('autorefine3D_nano')
                 ptr2prg => autorefine3D_nano
             case('binarize')
@@ -747,6 +752,7 @@ contains
     subroutine list_simple_prgs_in_ui
         write(logfhandle,'(A)') assign_optics_groups%name
         write(logfhandle,'(A)') automask%name
+        write(logfhandle,'(A)') automask2D%name
         write(logfhandle,'(A)') binarize%name
         write(logfhandle,'(A)') calc_pspec%name
         write(logfhandle,'(A)') ced_2D_filter%name
@@ -1151,6 +1157,38 @@ contains
         ! computer controls
         call automask%set_input('comp_ctrls', 1, nthr)
     end subroutine new_automask
+
+    subroutine new_automask2D
+        ! PROGRAM SPECIFICATION
+        call automask2D%new(&
+        &'automask2D',&                                        ! name
+        &'2D envelope masking',&                               ! descr_short
+        &'is a program for automated envelope masking in 2D',& ! descr_long
+        &'simple_exec',&                                       ! executable
+        &1, 2, 0, 0, 1, 3, 1, .false.)                         ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call automask2D%set_input('img_ios', 1, stk)
+        ! parameter input/output
+        call automask2D%set_input('parm_ios', 1, smpd)
+        call automask2D%set_input('parm_ios', 2, 'winsz', 'num', 'Window size for median filter',&
+        &'Window size for median filter(in pixels)', 'winsz in pixels', .false., 5.0)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call automask2D%set_input('filt_ctrls', 1, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
+        ! mask controls
+        call automask2D%set_input('mask_ctrls', 1, mskdiam)
+        call automask2D%set_input('mask_ctrls', 2, 'ngrow', 'num', '# layers to grow',&
+        &'Binary layers grown for molecular envelope in pixels{3}', 'width of binary layers grown in pixels{3}', .false., 3.)
+        call automask2D%set_input('mask_ctrls', 3, 'edge', 'num', 'Envelope mask soft edge',&
+        &'Cosine edge size for softening molecular envelope in pixels{6}', '# pixels cosine edge{6}', .false., 6.)
+        ! computer controls
+        call automask2D%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_automask2D
 
     subroutine new_autorefine3D_nano
         ! PROGRAM SPECIFICATION

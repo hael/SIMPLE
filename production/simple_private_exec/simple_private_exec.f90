@@ -230,5 +230,5 @@ select case(prg)
     end select
 !end timer and print
 rt_exec = toc(t0)
-call simple_print_timer(rt_exec)
+! call simple_print_timer(rt_exec)
 end program simple_private_exec

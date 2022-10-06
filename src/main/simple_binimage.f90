@@ -620,10 +620,11 @@ contains
         type (binimage)      :: img_cc ! connected component image
         integer, allocatable :: imat_cc(:,:,:)
         integer :: seed
-        if(self%bldim(3) > 1) then
+        if( self%bldim(3) > 1 ) then
             THROW_WARN('Not implemented for volumes! fill_holes')
             return
         endif
+        if( .not. self%bimat_is_set ) call self%set_imat
         call self%find_ccs(img_cc, black=.true.) ! detect the connnected components in the background as well
         imat_cc = nint(img_cc%get_rmat())
         seed    = img_cc%bimat(1,1,1) ! the pxl (1,1,1) should belong to the background

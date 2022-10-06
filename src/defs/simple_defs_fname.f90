@@ -36,8 +36,9 @@ character(len=*), parameter :: CLUSTER2D_FINISHED   = 'CLUSTER2D_FINISHED'
 character(len=*), parameter :: WFILT_SUFFIX         = '_wfilt'
 ! AUTOMASK2D
 character(len=*), parameter :: BIN_OTSU             = 'binarized_otsu.mrc'
-character(len=*), parameter :: BIN_OTSU_GROW        = 'binarized_otsu_grown.mrc'
-character(len=*), parameter :: BIN_OTSU_GROW_MED    = 'binarized_otsu_grown_median.mrc'
+character(len=*), parameter :: BIN_OTSU_GROWN       = 'binarized_otsu_grown.mrc'
+character(len=*), parameter :: BIN_OTSU_MED         = 'binarized_otsu_median.mrc'
+character(len=*), parameter :: BIN_OTSU_HOLES_FILL  = 'binarized_otsu_holes_fill.mrc'
 character(len=*), parameter :: MSK_OTSU             = 'masks_otsu.mrc'
 character(len=*), parameter :: AMSK_OTSU            = 'automasked_otsu.mrc'
 ! REFINE3D
