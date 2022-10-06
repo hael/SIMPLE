@@ -2721,7 +2721,7 @@ contains
         &'Optimization (search) based 2D filter (uniform/nonuniform)',&     ! descr_short
         &'is a program for 2D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                                    ! executable
-        &2, 1, 0, 0, 6, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 5, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call opt_2D_filter%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
@@ -2733,13 +2733,12 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call opt_2D_filter%set_input('filt_ctrls', 1, nonuniform)
-        call opt_2D_filter%set_input('filt_ctrls', 2, smooth_ext)
-        call opt_2D_filter%set_input('filt_ctrls', 3, lp_lowres)
-        call opt_2D_filter%set_input('filt_ctrls', 4, nsearch)
+        call opt_2D_filter%set_input('filt_ctrls', 1, smooth_ext)
+        call opt_2D_filter%set_input('filt_ctrls', 2, lp_lowres)
+        call opt_2D_filter%set_input('filt_ctrls', 3, nsearch)
         frcs%required = .true.
-        call opt_2D_filter%set_input('filt_ctrls', 5, frcs)
-        call opt_2D_filter%set_input('filt_ctrls', 6, phrand)
+        call opt_2D_filter%set_input('filt_ctrls', 4, frcs)
+        call opt_2D_filter%set_input('filt_ctrls', 5, phrand)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -2753,7 +2752,7 @@ contains
         &'Butterworth 3D filter (uniform/nonuniform)',&         ! descr_short
         &'is a program for 3D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                        ! executable
-        &2, 1, 0, 0, 7, 2, 1, .false.)                          ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 6, 2, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call opt_3D_filter%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
@@ -2765,13 +2764,12 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call opt_3D_filter%set_input('filt_ctrls', 1, nonuniform)
-        call opt_3D_filter%set_input('filt_ctrls', 2, smooth_ext)
-        call opt_3D_filter%set_input('filt_ctrls', 3, lp_lowres)
-        call opt_3D_filter%set_input('filt_ctrls', 4, nsearch)
-        call opt_3D_filter%set_input('filt_ctrls', 5, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
-        call opt_3D_filter%set_input('filt_ctrls', 6, 'lp_stopres', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
-        call opt_3D_filter%set_input('filt_ctrls', 7, phrand)
+        call opt_3D_filter%set_input('filt_ctrls', 1, smooth_ext)
+        call opt_3D_filter%set_input('filt_ctrls', 2, lp_lowres)
+        call opt_3D_filter%set_input('filt_ctrls', 3, nsearch)
+        call opt_3D_filter%set_input('filt_ctrls', 4, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
+        call opt_3D_filter%set_input('filt_ctrls', 5, 'lp_stopres', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
+        call opt_3D_filter%set_input('filt_ctrls', 6, phrand)
         ! mask controls
         call opt_3D_filter%set_input('mask_ctrls', 1, mskdiam)
         call opt_3D_filter%set_input('mask_ctrls', 2, mskfile)
