@@ -15,7 +15,7 @@ use simple_commander_oris
 use simple_commander_atoms
 implicit none
 #include "simple_local_flags.inc"
-include 'git_version.inc'
+! include 'git_version.inc'
 
 ! PROJECT MANAGEMENT PROGRAMS
 type(new_project_commander)                   :: xnew_project
@@ -64,7 +64,7 @@ real(timer_int_kind)                        :: rt_exec
 t0 = tic()  
 
 ! print git version
-call simple_print_git_version(GIT_HASH)
+! call simple_print_git_version(GIT_HASH)
 
 ! parse command line
 call get_command_argument(1, args, cmdlen, cmdstat)
