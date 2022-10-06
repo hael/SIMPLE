@@ -165,6 +165,7 @@ contains
         class(sp_project),  intent(inout) :: spproj
         character(len=*),   intent(in)    :: filename
         integer :: i
+        
         if( VERBOSE_OUTPUT )then
             write(logfhandle,*) ''
             write(logfhandle,*) char(9), 'importing ' // filename // " to ptcls2D"
@@ -259,10 +260,10 @@ contains
                 projindex = self%starfile%stkmap(lineindex, 2)
             else
                 projindex = lineindex
-            end if
-            read(fhandle, '(A)', iostat=ios) line
+            end if     
+            read(fhandle, '(A)', iostat=ios) line  
             call split_dataline(line, splitline)
-            do flagsindex = 1,size(stardata%flags)
+            do flagsindex = 1,size(stardata%flags)    
                 if(stardata%flags(flagsindex)%present) then
                     if(stardata%flags(flagsindex)%imagesplit) then
                         splitimage = trim(adjustl(splitline(stardata%flags(flagsindex)%ind)))
@@ -275,17 +276,16 @@ contains
                     else
                         entrystr = trim(adjustl(splitline(stardata%flags(flagsindex)%ind)))
                     end if 
-                    
                     if(stardata%flags(flagsindex)%string) then
                         if(index(entrystr, "/") > 1) then ! handles leading slash of absolute paths
                             if(index(self%starfile%rootdir, "job") > 0) then ! relion
                                 if(index(entrystr, ":mrc") > 0) then ! relion ctf names!
                                     entrystr = trim(adjustl(entrystr(:index(entrystr, ":mrc") - 1)))
                                 end if
-                                call make_relativepath(cwd, stemname(stemname(trim(adjustl(self%starfile%rootdir)))) // "/" // trim(adjustl(entrystr)), abspath)
+                                call make_relativepath(cwd, stemname(stemname(trim(adjustl(self%starfile%rootdir)))) // "/" // trim(adjustl(entrystr)), abspath, checkexists=.false.)
                                 call sporis%set(projindex, stardata%flags(flagsindex)%splflag, trim(adjustl(abspath)))
-                            else ! other
-                                call make_relativepath(cwd, stemname(trim(adjustl(self%starfile%rootdir))) // "/" // trim(adjustl(entrystr)), abspath)
+                            else ! other\
+                                call make_relativepath(cwd, stemname(trim(adjustl(self%starfile%rootdir))) // "/" // trim(adjustl(entrystr)), abspath, checkexists=.false.)
                                 call sporis%set(projindex, stardata%flags(flagsindex)%splflag, trim(adjustl(abspath)))
                             end if
                         else
@@ -304,8 +304,9 @@ contains
                         end if
                         call sporis%set(projindex, stardata%flags(flagsindex)%splflag, rval)
                     end if
-                end if
-            end do
+                    
+                end if 
+            end do            
             if(present(spoptics)) then
                 ogid = sporis%get(lineindex, "ogid")
                 if(ogid > 0) then

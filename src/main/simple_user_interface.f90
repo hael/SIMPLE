@@ -3119,7 +3119,7 @@ contains
         call preprocess_stream_dev%set_input('srch_ctrls', 4, astigtol)
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 4, submenu="CTF estimation")
         call preprocess_stream_dev%set_input('srch_ctrls', 5, 'thres', 'num', 'Picking distance threshold','Picking distance filter (in Angs)', 'in Angs{24.}', .false., 24.)
-        call preprocess_stream_dev%set_gui_params('srch_ctrls', 5, submenu="picking")
+        call preprocess_stream_dev%set_gui_params('srch_ctrls', 5, submenu="picking", advanced=.false.)
         call preprocess_stream_dev%set_input('srch_ctrls', 6, 'ndev',  'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
         call preprocess_stream_dev%set_gui_params('srch_ctrls', 6, submenu="picking", advanced=.false.)
         call preprocess_stream_dev%set_input('srch_ctrls', 7, pgrp)
