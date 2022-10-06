@@ -15,6 +15,7 @@ use simple_commander_oris
 use simple_commander_atoms
 implicit none
 #include "simple_local_flags.inc"
+include 'git_version.inc'
 
 ! PROJECT MANAGEMENT PROGRAMS
 type(new_project_commander)                   :: xnew_project
@@ -56,6 +57,14 @@ type(tseries_atoms_analysis_commander)        :: xtseries_atoms_analysis
 character(len=STDLEN) :: args, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
+integer(timer_int_kind)                     :: t0
+real(timer_int_kind)                        :: rt_exec
+
+! start timer
+t0 = tic()  
+
+! print git version
+call simple_print_git_version(GIT_HASH)
 
 ! parse command line
 call get_command_argument(1, args, cmdlen, cmdstat)
@@ -154,4 +163,7 @@ call update_job_descriptions_in_project( cline )
 if( logfhandle .ne. OUTPUT_UNIT )then
     if( is_open(logfhandle) ) call fclose(logfhandle)
 endif
+!end timer and print
+rt_exec = toc(t0)
+call simple_print_timer(rt_exec)
 end program single_exec

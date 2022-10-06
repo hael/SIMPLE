@@ -5,9 +5,9 @@ add_executable(${SIMPLE_PRIVATE_EXE}
 "${CMAKE_CURRENT_SOURCE_DIR}/simple_private_exec/simple_private_exec.f90")
 set(SIMPLE_MAIN_TARGETS ${SIMPLE_EXE} ${SINGLE_EXE} ${SIMPLE_PRIVATE_EXE})
 # target_link_libraries(${SIMPLE_MAIN_TARGETS} LINK_PUBLIC ${EXTRA_LIBS})
-target_link_libraries(${SIMPLE_EXE} LINK_PUBLIC ${EXTRA_LIBS})
-target_link_libraries(${SINGLE_EXE} LINK_PUBLIC ${EXTRA_LIBS})
-target_link_libraries(${SIMPLE_PRIVATE_EXE} LINK_PUBLIC ${EXTRA_LIBS})
+target_link_libraries(${SIMPLE_EXE} LINK_PUBLIC ${EXTRA_LIBS} git_version)
+target_link_libraries(${SINGLE_EXE} LINK_PUBLIC ${EXTRA_LIBS} git_version)
+target_link_libraries(${SIMPLE_PRIVATE_EXE} LINK_PUBLIC ${EXTRA_LIBS} git_version)
 if(USE_OPENMPI AND USE_MPI)
   set_target_properties(${SIMPLE_MAIN_TARGETS}
     PROPERTIES

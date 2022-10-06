@@ -20,6 +20,7 @@ use simple_commander_volops
 use simple_commander_tseries
 implicit none
 #include "simple_local_flags.inc"
+include 'git_version.inc'
 
 ! PRE-PROCESSING PROGRAMS
 type(preprocess_commander)            :: xpreprocess
@@ -89,7 +90,14 @@ type(split_commander)                   :: xsplit
 character(len=STDLEN) :: xarg, prg
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
+integer(timer_int_kind)                     :: t0
+real(timer_int_kind)                        :: rt_exec
 
+! start timer
+t0 = tic()  
+
+! print git version
+call simple_print_git_version(GIT_HASH)
 ! parse command-line
 call get_command_argument(1, xarg, cmdlen, cmdstat)
 pos = index(xarg, '=') ! position of '='
@@ -220,5 +228,7 @@ select case(prg)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
     end select
-
+!end timer and print
+rt_exec = toc(t0)
+call simple_print_timer(rt_exec)
 end program simple_private_exec
