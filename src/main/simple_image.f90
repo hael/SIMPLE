@@ -4957,14 +4957,14 @@ contains
     subroutine opt_filter_costfun( even_filt, odd_raw, odd_filt, even_raw, sqdiff_img )
         class(image), intent(in)    :: even_filt, odd_raw, odd_filt, even_raw
         class(image), intent(inout) :: sqdiff_img
-        sqdiff_img%rmat = (even_filt%rmat - odd_raw%rmat + odd_filt%rmat - even_raw%rmat)**2.0
+        sqdiff_img%rmat = abs(even_filt%rmat - odd_raw%rmat + odd_filt%rmat - even_raw%rmat)
     end subroutine opt_filter_costfun
 
     subroutine opt_filter_costfun_workshare( even_filt, odd_raw, odd_filt, even_raw, sqdiff_img )
         class(image), intent(in)    :: even_filt, odd_raw, odd_filt, even_raw
         class(image), intent(inout) :: sqdiff_img
         !$omp parallel workshare
-        sqdiff_img%rmat = (even_filt%rmat - odd_raw%rmat + odd_filt%rmat - even_raw%rmat)**2.0
+        sqdiff_img%rmat = abs(even_filt%rmat - odd_raw%rmat + odd_filt%rmat - even_raw%rmat)
         !$omp end parallel workshare
     end subroutine opt_filter_costfun_workshare
 
