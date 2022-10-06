@@ -276,6 +276,8 @@ contains
     procedure, private :: sqeuclid_matrix_1
     procedure, private :: sqeuclid_matrix_2
     generic            :: sqeuclid_matrix => sqeuclid_matrix_1, sqeuclid_matrix_2
+    procedure          :: opt_filter_costfun
+    procedure          :: opt_filter_costfun_workshare
     procedure          :: fsc, fsc_scaled
     procedure          :: get_res
     procedure, private :: oshift_1
@@ -4933,6 +4935,20 @@ contains
         class(image), intent(inout) :: sqdiff_img
         sqdiff_img%rmat = (self1%rmat - self2%rmat)**2.0
     end subroutine sqeuclid_matrix_2
+
+    subroutine opt_filter_costfun( even_filt, odd_raw, odd_filt, even_raw, sqdiff_img )
+        class(image), intent(in)    :: even_filt, odd_raw, odd_filt, even_raw
+        class(image), intent(inout) :: sqdiff_img
+        sqdiff_img%rmat = (even_filt%rmat - odd_raw%rmat)**2.0 + (odd_filt%rmat - even_raw%rmat)**2.0
+    end subroutine opt_filter_costfun
+
+    subroutine opt_filter_costfun_workshare( even_filt, odd_raw, odd_filt, even_raw, sqdiff_img )
+        class(image), intent(in)    :: even_filt, odd_raw, odd_filt, even_raw
+        class(image), intent(inout) :: sqdiff_img
+        !$omp parallel workshare
+        sqdiff_img%rmat = (even_filt%rmat - odd_raw%rmat)**2.0 + (odd_filt%rmat - even_raw%rmat)**2.0
+        !$omp end parallel workshare
+    end subroutine opt_filter_costfun_workshare
 
     !> \brief fsc is for calculation of Fourier ring/shell correlation in double precision
     subroutine fsc( self1, self2, corrs )
