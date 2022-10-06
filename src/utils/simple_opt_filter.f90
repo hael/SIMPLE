@@ -451,10 +451,10 @@ contains
                 call batch_ifft_2D(ref_diff_even_img, ref_diff_odd_img, fft_vars)
                 where(podd%rmat + peven%rmat < opt_odd%opt_diff + opt_even%opt_diff)
                     opt_odd%opt_val   = rmat_odd
-                    opt_odd%opt_diff  = podd%rmat + peven%rmat
+                    opt_odd%opt_diff  = podd%rmat
                     opt_odd%opt_freq  = cur_ind
                     opt_even%opt_val  = rmat_even
-                    opt_even%opt_diff = podd%rmat + peven%rmat
+                    opt_even%opt_diff = peven%rmat
                     opt_even%opt_freq = cur_ind
                 endwhere
             else
@@ -645,10 +645,10 @@ contains
                 !$omp parallel workshare
                 where(podd%rmat + peven%rmat < opt_odd%opt_diff + opt_even%opt_diff)
                     opt_odd%opt_val   = rmat_odd
-                    opt_odd%opt_diff  = podd%rmat + peven%rmat
+                    opt_odd%opt_diff  = podd%rmat
                     opt_odd%opt_freq  = cur_ind
                     opt_even%opt_val  = rmat_even
-                    opt_even%opt_diff = podd%rmat + peven%rmat
+                    opt_even%opt_diff = peven%rmat
                     opt_even%opt_freq = cur_ind
                 endwhere
                 !$omp end parallel workshare
