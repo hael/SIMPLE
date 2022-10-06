@@ -11,6 +11,7 @@ use simple_stack_io,       only: stack_io
 implicit none
 
 public :: binarize_commander
+public :: automask2D_commander
 public :: edge_detect_commander
 public :: convert_commander
 public :: ctfops_commander
@@ -28,6 +29,10 @@ type, extends(commander_base) :: binarize_commander
   contains
     procedure :: execute      => exec_binarize
 end type binarize_commander
+type, extends(commander_base) :: automask2D_commander
+  contains
+    procedure :: execute      => exec_automask2D
+end type automask2D_commander
 type, extends(commander_base) :: edge_detect_commander
   contains
     procedure :: execute      => exec_edge_detect
@@ -141,10 +146,8 @@ contains
                     else
                         if( trim(params%omit_neg) .eq. 'yes' )then
                             call otsu_img(img_or_vol)
-                            ! call otsu_robust_fast(img_or_vol, is2D, noneg=.true., thresh=thresh)
                         else
                             call otsu_img(img_or_vol)
-                            ! call otsu_robust_fast(img_or_vol, is2D, noneg=.false., thresh=thresh)
                         endif
                         otsu = .true.
                     endif
@@ -161,6 +164,39 @@ contains
             end subroutine doit
 
     end subroutine exec_binarize
+
+    !> for automasking of class averages
+    subroutine exec_automask2D( self, cline )
+        use simple_masker, only: automask2D
+        class(automask2D_commander), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        type(parameters)         :: params
+        type(image), allocatable :: imgs(:)
+        real,        allocatable :: diams(:)
+        logical,     allocatable :: mask(:)
+        integer :: ldim(3), n, i
+        if( .not. cline%defined('ngrow')  ) call cline%set('ngrow',   5.)
+        if( .not. cline%defined('winsz')  ) call cline%set('winsz',   5.)
+        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 20.)
+        if( .not. cline%defined('edge')   ) call cline%set('edge',    4.)
+        call params%new(cline)
+        call find_ldim_nptcls(params%stk, ldim, n)
+        ldim(3) = 1 ! 2D
+        allocate(imgs(n), diams(n), mask(n))
+        diams = 0.
+        mask  = .true.
+        do i = 1,n
+            call imgs(i)%new(ldim, params%smpd)
+            call imgs(i)%read(params%stk, i)
+        end do
+        call automask2D(imgs, mask, params%ngrow, nint(params%winsz), params%edge, diams)
+        do i = 1,n
+            call imgs(i)%kill
+        end do
+        deallocate(imgs, diams, mask)
+        ! end gracefully
+        call simple_end('**** SIMPLE_AUTOMASK2D NORMAL STOP ****')
+    end subroutine exec_automask2D
 
     !> for edge detection of stacks
     subroutine exec_edge_detect( self, cline )

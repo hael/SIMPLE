@@ -95,6 +95,7 @@ type(comparemc_commander)                   :: xcomparemc
 ! IMAGE PROCESSING PROGRAMS
 type(binarize_commander)                    :: xbinarize
 type(mask_commander)                        :: xmask
+type(automask2D_commander)                  :: xautomask2D
 type(fsc_commander)                         :: xfsc
 type(opt_2D_filter_commander)               :: xopt_2D_filter
 type(opt_3D_filter_commander)               :: xopt_3D_filter
@@ -285,6 +286,8 @@ select case(trim(prg))
         call xbinarize%execute(cline)
     case( 'mask' )
         call xmask%execute(cline)
+    case( 'automask2D' )
+        call xautomask2D%execute(cline)
     case( 'fsc' )
         call xfsc%execute(cline)
     case( 'opt_2D_filter' )
@@ -369,5 +372,5 @@ if( logfhandle .ne. OUTPUT_UNIT )then
 endif
 !end timer and print
 rt_exec = toc(t0)
-call simple_print_timer(rt_exec)
+! call simple_print_timer(rt_exec)
 end program simple_exec
