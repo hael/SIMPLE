@@ -642,7 +642,7 @@ contains
                 peven%cmat = peven%cmat * pweights%cmat
                 !$omp end parallel workshare
                 call batch_ifft_3D(ref_diff_even_img, ref_diff_odd_img, in, out, plan_bwd)
-                !$omp parallel
+                !$omp parallel workshare
                 where(podd%rmat + peven%rmat < opt_odd%opt_diff + opt_even%opt_diff)
                     opt_odd%opt_val   = rmat_odd
                     opt_odd%opt_diff  = podd%rmat + peven%rmat
@@ -651,7 +651,7 @@ contains
                     opt_even%opt_diff = podd%rmat + peven%rmat
                     opt_even%opt_freq = cur_ind
                 endwhere
-                !$omp end parallel
+                !$omp end parallel workshare
             else
                 ! keep the theta which gives the lowest cost (over all voxels)
                 if (sum(podd%rmat) < min_sum_odd) then
