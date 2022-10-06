@@ -172,7 +172,8 @@ contains
     procedure, private :: mul_2
     procedure, private :: mul_3
     procedure, private :: mul_4
-    generic            :: mul => mul_1, mul_2, mul_3, mul_4
+    procedure, private :: mul_5
+    generic            :: mul => mul_1, mul_2, mul_3, mul_4, mul_5
     procedure, private :: conjugate
     generic            :: conjg => conjugate
     procedure, private :: mul_rmat_at_1
@@ -2368,6 +2369,16 @@ contains
         endif
     end subroutine mul_4
 
+    !>  \brief mul_1 is for component-wise multiplication of an image with a complex constant
+    subroutine mul_5( self, logi, c)
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: logi(3)
+        complex,      intent(in)    :: c
+        integer :: phys(3)
+        phys = self%fit%comp_addr_phys(logi)
+        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * c
+    end subroutine mul_5
+
     !>  \brief division is for image division(/)
     function division( self1, self2 ) result( self )
         class(image), intent(in) :: self1, self2
@@ -3413,37 +3424,44 @@ contains
         if( didft ) call self%ifft()
     end subroutine apply_filter_1
 
-    !> \brief apply_filter_2  is for application of an arbitrary filter function
+    !> \brief apply_filter_2  is for application of an arbitrary 1D complex-valued filter function
     subroutine apply_filter_2( self, filter )
-        class(image), intent(inout) :: self, filter
-        real    :: fwght
-        integer :: phys(3), lims(3,2), h, k, l
-        complex :: comp
-        if( self.eqdims.filter )then
-            if( filter%ft )then
-                if( .not. self%ft )then
-                    THROW_HARD('image to be filtered is not in the Fourier domain; apply_filter_2')
-                endif
-                lims = self%fit%loop_lims(2)
-                !$omp parallel do collapse(3) default(shared) private(h,k,l,comp,fwght,phys)&
-                !$omp schedule(static) proc_bind(close)
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        do l=lims(3,1),lims(3,2)
-                            phys  = self%comp_addr_phys([h,k,l])
-                            comp  = filter%get_fcomp([h,k,l],phys)
-                            fwght = real(comp)
-                            call self%mul([h,k,l],fwght,phys_in=phys)
-                        end do
-                    end do
-                end do
-                !$omp end parallel do
-            else
-                THROW_HARD('assumed that the inputted filter is in the Fourier domain; apply_filter_2')
-            endif
-        else
-            THROW_HARD('equal dims assumed; apply_filter_2')
+        class(image), intent(inout) :: self
+        complex,      intent(in)    :: filter(:)
+        integer :: nyq, sh, h, k, l, lims(3,2)
+        logical :: didft
+        complex :: fwght, wzero, wnyq
+        nyq = size(filter)
+        didft = .false.
+        if( .not. self%ft )then
+            call self%fft()
+            didft = .true.
         endif
+        wzero = filter(1)
+        wnyq  = cmplx(0.,0.)
+        lims = self%fit%loop_lims(2)
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,fwght)&
+        !$omp schedule(static) proc_bind(close)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    ! find shell
+                    sh = nint(hyp(real(h),real(k),real(l)))
+                    ! set filter weight
+                    if( sh > nyq )then
+                        fwght = wnyq
+                    else if( sh == 0 )then
+                        fwght = wzero
+                    else
+                        fwght = filter(sh)
+                    endif
+                    ! multiply with the weight
+                    call self%mul([h,k,l], fwght)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+        if( didft ) call self%ifft()
     end subroutine apply_filter_2
 
     !> \brief apply_filter_1  is for application of an arbitrary 1D filter function
