@@ -464,7 +464,6 @@ type :: parameters
     logical :: l_needs_sigma  = .false.
     logical :: l_nonuniform   = .false.
     logical :: l_phaseplate   = .false.
-    logical :: l_phrand       = .false.
     logical :: l_refine_inpl  = .false.
     logical :: l_remap_cls    = .false.
     logical :: l_wiener_part  = .false.
@@ -1482,8 +1481,6 @@ contains
         self%l_incrreslim = trim(self%incrreslim) == 'yes' .and. .not.self%l_lpset
         ! B-facor
         self%l_bfac = cline%defined('bfac')
-        ! phase randomization
-        self%l_phrand = trim(self%phrand).eq.'yes'
         ! smoothing extension
         is_2D = .false.
         if( str_has_substr(self%prg, '2D') ) is_2D = .true.
