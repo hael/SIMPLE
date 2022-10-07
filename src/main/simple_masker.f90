@@ -341,13 +341,12 @@ contains
         !$omp end parallel do
         ! destruct
         do i = 1,n
-            call img_bin(i)%write('img_bin_array.mrc', i)
             call img_bin(i)%kill_bimg
-            call cc_img(i)%write(  'cc_img_array.mrc', i)
+            call cc_img(i)%write('binarized_automask2D.mrc', i)
             call cc_img(i)%kill_bimg
-            call cos_img(i)%write('cos_img_array.mrc', i)
+            call cos_img(i)%write(   'masks_automask2D.mrc', i)
             call cos_img(i)%kill
-            call imgs(i)%write(      'imgs_array.mrc', i)
+            call imgs(i)%write( 'automasked_automask2D.mrc', i)
         end do
         deallocate(img_bin, cc_img, cos_img)
         if( allocated(ccsizes) ) deallocate(ccsizes)
