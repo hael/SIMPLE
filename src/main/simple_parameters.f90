@@ -212,7 +212,7 @@ type :: parameters
     character(len=STDLEN) :: picker='old_school'  !< picker approach (seg|phasecorr|old_school){old_school}
     character(len=STDLEN) :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN) :: projname=''          !< SIMPLE  project name
-    character(len=STDLEN) :: ptclw='yes'          !< use particle weights(yes|no){yes}
+    character(len=STDLEN) :: ptclw='no'           !< use particle weights(yes|no){no}
     character(len=STDLEN) :: rmsd_file=''         !< per-atom e/o rmsd:s
     character(len=STDLEN) :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
     character(len=STDLEN) :: qsys_partition2D=''  !< partition name for streaming 2d classification
