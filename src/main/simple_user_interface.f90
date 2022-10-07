@@ -262,7 +262,6 @@ type(simple_input_param) :: outvol
 type(simple_input_param) :: pcontrast
 type(simple_input_param) :: pgrp
 type(simple_input_param) :: phaseplate
-type(simple_input_param) :: phrand
 type(simple_input_param) :: picker
 type(simple_input_param) :: projfile
 type(simple_input_param) :: projfile_target
@@ -1046,7 +1045,6 @@ contains
         call set_param(match_filt,     'match_filt',   'binary', 'Matched filter', 'Filter to maximize the signal-to-noise ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call set_param(smooth_ext,     'smooth_ext',   'num'   , 'Smoothing window extension', 'Smoothing window extension for nonuniform filter optimization in pixels{20}', 'give # pixels{2D=20,3D=8}', .false., 20.)
         call set_param(lpthresh,       'lpthresh',     'num',    'Resolution rejection threshold', 'Classes with lower resolution are iteratively rejected in Angstroms{30}', 'give rejection threshold in angstroms{30}', .false., 30.)
-        call set_param(phrand,         'phrand',       'binary', 'Phase randomization', 'Fourier phase randomization of components below noise power(yes|no){no}', '(yes|no){no}', .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1440,7 +1438,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
-        &1, 0, 0, 10, 13, 1, 2, .true.)                                         ! # entries in each group, requires sp_project
+        &1, 0, 0, 10, 12, 1, 2, .true.)                                         ! # entries in each group, requires sp_project
         cluster2D%gui_submenu_list = "search,mask,filter"
         cluster2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1507,8 +1505,6 @@ contains
         call cluster2D%set_gui_params('filt_ctrls', 11, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 12, nsearch)
         call cluster2D%set_gui_params('filt_ctrls', 12, submenu="filter")
-        call cluster2D%set_input('filt_ctrls', 13, phrand)
-        call cluster2D%set_gui_params('filt_ctrls', 13, submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D%set_gui_params('mask_ctrls', 1, submenu="mask")
@@ -1564,7 +1560,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 1, 0, 7, 12, 1, 5, .true.)                                                            ! # entries in each group, requires sp_project
+        &0, 1, 0, 7, 11, 1, 5, .true.)                                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1601,7 +1597,6 @@ contains
         call cluster2D_stream%set_input('filt_ctrls', 9,  lp_lowres)
         call cluster2D_stream%set_input('filt_ctrls', 10, nsearch)
         call cluster2D_stream%set_input('filt_ctrls', 11, lplim_crit)
-        call cluster2D_stream%set_input('filt_ctrls', 12, phrand)
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
@@ -1619,7 +1614,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &0, 0, 0, 7, 11, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 0, 0, 7, 10, 1, 5, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1654,7 +1649,6 @@ contains
         call cluster2D_subsets%set_input('filt_ctrls', 8,  smooth_ext)
         call cluster2D_subsets%set_input('filt_ctrls', 9,  lp_lowres)
         call cluster2D_subsets%set_input('filt_ctrls', 10, nsearch)
-        call cluster2D_subsets%set_input('filt_ctrls', 11, phrand)
         ! mask controls
         call cluster2D_subsets%set_input('mask_ctrls', 1, mskdiam)
         ! computer controls
@@ -2241,7 +2235,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class&
         & averages obtained with cluster2D',&                                         ! descr_long
         &'simple_exec',&                                                              ! executable
-        &0, 0, 0, 5, 7, 2, 2, .true.)                                                 ! # entries in each group, requires sp_project
+        &0, 0, 0, 5, 6, 2, 2, .true.)                                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2270,7 +2264,6 @@ contains
         call initial_3Dmodel%set_input('filt_ctrls', 5, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
             & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
         call initial_3Dmodel%set_input('filt_ctrls', 6, nonuniform)
-        call initial_3Dmodel%set_input('filt_ctrls', 7, phrand)
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, mskdiam)
         call initial_3Dmodel%set_input('mask_ctrls', 2, 'automsk', 'binary', 'Perform envelope masking',&
@@ -2759,7 +2752,7 @@ contains
         &'Optimization (search) based 2D filter (uniform/nonuniform)',&     ! descr_short
         &'is a program for 2D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                                    ! executable
-        &2, 1, 0, 0, 5, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 4, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call opt_2D_filter%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
@@ -2776,7 +2769,6 @@ contains
         call opt_2D_filter%set_input('filt_ctrls', 3, nsearch)
         frcs%required = .true.
         call opt_2D_filter%set_input('filt_ctrls', 4, frcs)
-        call opt_2D_filter%set_input('filt_ctrls', 5, phrand)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -2790,7 +2782,7 @@ contains
         &'Butterworth 3D filter (uniform/nonuniform)',&         ! descr_short
         &'is a program for 3D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                        ! executable
-        &2, 1, 0, 0, 6, 2, 1, .false.)                          ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 5, 2, 1, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call opt_3D_filter%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
@@ -2807,7 +2799,6 @@ contains
         call opt_3D_filter%set_input('filt_ctrls', 3, nsearch)
         call opt_3D_filter%set_input('filt_ctrls', 4, 'fsc', 'file', 'FSC file', 'FSC file', 'e.g. fsc_state01.bin file', .true., '')
         call opt_3D_filter%set_input('filt_ctrls', 5, 'lp_stopres', 'num', 'Stopping resolution limit', 'Stopping resolution limit (in Angstroms)', 'in Angstroms', .false., -1.)
-        call opt_3D_filter%set_input('filt_ctrls', 6, phrand)
         ! mask controls
         call opt_3D_filter%set_input('mask_ctrls', 1, mskdiam)
         call opt_3D_filter%set_input('mask_ctrls', 2, mskfile)
@@ -3088,7 +3079,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_exec',&                                                                    ! executable
-        &6, 15, 0, 21, 14, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
+        &6, 15, 0, 21, 13, 1, 9, .true.)                                                    ! # entries in each group, requires sp_project
         preprocess_stream_dev%gui_submenu_list = "data,motion correction,CTF estimation,picking,cluster 2D"
         preprocess_stream_dev%advanced = .false.
         ! image input/output
@@ -3230,8 +3221,6 @@ contains
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 12, submenu="cluster 2D")
         call preprocess_stream_dev%set_input('filt_ctrls', 13, nsearch)
         call preprocess_stream_dev%set_gui_params('filt_ctrls', 13, submenu="cluster 2D")
-        call preprocess_stream_dev%set_input('filt_ctrls', 14, phrand)
-        call preprocess_stream_dev%set_gui_params('filt_ctrls', 14, submenu="cluster 2D")
         ! mask controls
         call preprocess_stream_dev%set_input('mask_ctrls', 1, mskdiam)
         call preprocess_stream_dev%set_gui_params('mask_ctrls', 1, submenu="cluster 2D", advanced=.false.)
@@ -3662,7 +3651,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_exec',&                                                                            ! executable
-        &1, 0, 0, 12, 12, 4, 2, .true.)                                                             ! # entries in each group, requires sp_project
+        &1, 0, 0, 12, 11, 4, 2, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -3703,7 +3692,6 @@ contains
         call refine3D%set_input('filt_ctrls', 10, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 12.)
         call refine3D%set_input('filt_ctrls', 11, wiener)
-        call refine3D%set_input('filt_ctrls', 12, phrand)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, mskdiam)
         call refine3D%set_input('mask_ctrls', 2, mskfile)

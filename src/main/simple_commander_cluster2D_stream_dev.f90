@@ -177,7 +177,6 @@ contains
         call cline_cluster2D_chunk%set('nsearch',   real(params_glob%nsearch))
         call cline_cluster2D_chunk%set('smooth_ext',real(params_glob%smooth_ext))
         call cline_cluster2D_chunk%set('lp_lowres', real(params_glob%lp_lowres))
-        call cline_cluster2D_chunk%set('phrand',    params_glob%phrand)
         if( l_wfilt ) call cline_cluster2D_chunk%set('wiener', 'partial')
         allocate(chunks(params_glob%nchunks))
         do ichunk = 1,params_glob%nchunks
@@ -197,7 +196,6 @@ contains
         call cline_cluster2D_pool%set('nsearch',   real(params_glob%nsearch))
         call cline_cluster2D_pool%set('smooth_ext',real(params_glob%smooth_ext))
         call cline_cluster2D_pool%set('lp_lowres',real(params_glob%lp_lowres))
-        call cline_cluster2D_pool%set('phrand',    params_glob%phrand)
         if( cline%defined('match_filt') )then
             carg = cline%get_carg('match_filt')
             call cline_cluster2D_pool%set('match_filt',carg)

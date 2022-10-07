@@ -193,16 +193,6 @@ contains
             call stkio_r2%close
             ! nonuniform filtering
             call opt_2D_filter_sub(cavgs_eo(:,2), cavgs_eo(:,1))
-            ! phase-randomization of F-comps below noise power
-            if( params%l_phrand )then
-                do icls = 1, ncavgs
-                    call cavgs_eo(icls,1)%fft
-                    call cavgs_eo(icls,2)%fft
-                    call cavgs_eo(icls,1)%ran_phases_below_noise_power(cavgs_eo(icls,2))
-                    call cavgs_eo(icls,1)%ifft
-                    call cavgs_eo(icls,2)%ifft
-                end do
-            endif
             ! write even filtered cavgs
             stk_even = 'cavgs_nonuniform_even.mrc'
             call stkio_w%open(stk_even, orig_smpd, 'write', box=ldim(1), is_ft=.false., bufsz=500)
