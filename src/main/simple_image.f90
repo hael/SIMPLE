@@ -324,6 +324,7 @@ contains
     procedure          :: mask
     procedure          :: neg
     procedure          :: pad
+    procedure          :: pad_inplace
     procedure, private :: pad_mirr_1, pad_mirr_2
     generic            :: pad_mirr => pad_mirr_1, pad_mirr_2
     procedure          :: clip
@@ -6710,6 +6711,16 @@ contains
         endif
     end subroutine pad
 
+    subroutine pad_inplace( self, ldim )
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: ldim(3)
+        type(image) :: tmp
+        call tmp%new(ldim, self%smpd, wthreads=self%wthreads)
+        call self%pad(tmp)
+        call self%copy(tmp)
+        call tmp%kill()
+    end subroutine pad_inplace
+
     !> \brief pad_mirr is a constructor that pads the input image to input ldim in real space using mirroring
     !! \param self_in image object
     !! \param self_out image object
@@ -6825,12 +6836,10 @@ contains
         endif
     end subroutine clip
 
-    !> \brief clip_inplace is a constructor that clips the input image to input ldim
-    !! \param ldim
     subroutine clip_inplace( self, ldim )
         class(image), intent(inout) :: self
-        integer, intent(in)         :: ldim(3)
-        type(image)                 :: tmp
+        integer,      intent(in)    :: ldim(3)
+        type(image) :: tmp
         call tmp%new(ldim, self%smpd, wthreads=self%wthreads)
         call self%clip(tmp)
         call self%copy(tmp)
