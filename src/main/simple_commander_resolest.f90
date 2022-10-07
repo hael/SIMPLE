@@ -175,7 +175,7 @@ contains
             call even(iptcl)%read(params%stk,  iptcl)
         enddo
         ! filter
-        call opt_2D_filter_sub( even, odd, destruct_objs=.false. )
+        call opt_2D_filter_sub(even, odd)
         ! write output and destruct
         do iptcl = 1, params%nptcls
             call odd( iptcl)%write(trim(file_tag)//'_odd.mrc',  iptcl)
@@ -183,7 +183,9 @@ contains
             call odd(iptcl)%add(even(iptcl))
             call odd(iptcl)%mul(0.5)
             call odd(iptcl)%write(trim(file_tag)//'_avg.mrc', iptcl)
-        enddo
+            call odd( iptcl)%kill()
+            call even(iptcl)%kill()
+        end do
         ! end gracefully
         call simple_end('**** SIMPLE_OPT_2D_FILTER NORMAL STOP ****')
     end subroutine exec_opt_2D_filter

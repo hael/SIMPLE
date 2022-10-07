@@ -177,10 +177,9 @@ contains
         !$omp end parallel do
     end subroutine batch_ifft_3D
 
-    subroutine opt_2D_filter_sub( even, odd, destruct_objs )
+    subroutine opt_2D_filter_sub( even, odd )
         use simple_class_frcs, only: class_frcs
         class(image),      intent(inout) :: even(:), odd(:)
-        logical, optional, intent(in)    :: destruct_objs 
         character(len=:),    allocatable :: frcs_fname
         type(class_frcs)                 :: clsfrcs
         type(image)                      :: weights_img
@@ -192,7 +191,7 @@ contains
         real                             :: smpd, lpstart, lp, val
         integer                          :: iptcl, box, filtsz, ldim(3), ldim_pd(3), smooth_ext
         integer                          :: nptcls, hpind_fsc, find, c_shape(3), m, n
-        logical                          :: lpstart_fallback, l_phaseplate, ddestruct_objs
+        logical                          :: lpstart_fallback, l_phaseplate
         type(c_ptr)                      :: ptr
         integer,             parameter   :: N_IMGS = 2  ! for batch_fft (2 images batch)
         type(fft_vars_type), allocatable :: fft_vars(:)
@@ -210,8 +209,6 @@ contains
         lpstart        = params_glob%lpstart
         hpind_fsc      = params_glob%hpind_fsc
         l_phaseplate   = params_glob%l_phaseplate
-        ddestruct_objs = .true.
-        if( present(destruct_objs) ) ddestruct_objs = destruct_objs
         ! retrieve FRCs
         call clsfrcs%new(nptcls, box, smpd, 1)
         lpstart_fallback = .false.
@@ -296,23 +293,21 @@ contains
         enddo
         !$omp end parallel do
         ! destruct
-        if( ddestruct_objs )then
-            call weights_img%kill
-            do iptcl = 1, nptcls
-                call odd_copy_rmat( iptcl)%kill
-                call even_copy_rmat(iptcl)%kill
-                call odd_copy_cmat( iptcl)%kill
-                call even_copy_cmat(iptcl)%kill
-                call even_filt(     iptcl)%kill
-                call odd_filt(      iptcl)%kill
-                call diff_img(      iptcl)%kill
-                call diff_img_opt(  iptcl)%kill
-                call even(iptcl)%clip_inplace(ldim)
-                call odd( iptcl)%clip_inplace(ldim)
-                call fftwf_destroy_plan(fft_vars(iptcl)%plan_fwd)
-                call fftwf_destroy_plan(fft_vars(iptcl)%plan_bwd)
-            enddo
-        endif
+        call weights_img%kill
+        do iptcl = 1, nptcls
+            call odd_copy_rmat( iptcl)%kill
+            call even_copy_rmat(iptcl)%kill
+            call odd_copy_cmat( iptcl)%kill
+            call even_copy_cmat(iptcl)%kill
+            call even_filt(     iptcl)%kill
+            call odd_filt(      iptcl)%kill
+            call diff_img(      iptcl)%kill
+            call diff_img_opt(  iptcl)%kill
+            call even(iptcl)%clip_inplace(ldim)
+            call odd( iptcl)%clip_inplace(ldim)
+            call fftwf_destroy_plan(fft_vars(iptcl)%plan_fwd)
+            call fftwf_destroy_plan(fft_vars(iptcl)%plan_bwd)
+        enddo
     end subroutine opt_2D_filter_sub
 
     ! Compute the value of the Butterworth transfer function of order n(th)
