@@ -18,7 +18,6 @@ implicit none
 
 public :: centervol_commander
 public :: postprocess_commander
-public :: automask_commander
 public :: reproject_commander
 public :: volops_commander
 public :: volume_smat_commander
@@ -38,10 +37,6 @@ type, extends(commander_base) :: postprocess_commander
  contains
    procedure :: execute      => exec_postprocess
 end type postprocess_commander
-type, extends(commander_base) :: automask_commander
- contains
-   procedure :: execute      => exec_automask
-end type automask_commander
 type, extends(commander_base) :: reproject_commander
  contains
    procedure :: execute      => exec_reproject
@@ -300,29 +295,6 @@ contains
         call vol_copy%kill
         call simple_end('**** SIMPLE_POSTPROCESS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_postprocess
-
-    subroutine exec_automask( self, cline )
-        class(automask_commander), intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
-        type(builder)    :: build
-        type(parameters) :: params
-        type(masker)     :: mskvol
-        character(len=:), allocatable :: fname_out
-        call params%new(cline)
-        call build%build_spproj(params, cline)
-        call build%build_general_tbox(params, cline)
-        call build%vol%read(params%vols(1))
-        if( cline%defined('mw') .and. cline%defined('thres') )then
-            call mskvol%automask3D(build%vol)
-        else
-            call mskvol%automask3D_otsu(build%vol)
-        endif
-        call mskvol%write('automask'//params%ext)
-        fname_out = basename(add2fbody(trim(params%vols(1)), params%ext, '_automsk'))
-        call build%vol%write(fname_out)
-        write(logfhandle,'(A)') '>>> WROTE OUTPUT '//'automask'//params%ext//' & '//fname_out
-        call simple_end('**** SIMPLE_AUTOMASK NORMAL STOP ****')
-    end subroutine exec_automask
 
     !> exec_project generate projections from volume
     subroutine exec_reproject( self, cline )

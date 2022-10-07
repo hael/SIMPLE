@@ -5,9 +5,13 @@ use simple_builder,        only: builder
 use simple_parameters,     only: parameters
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
+use simple_image,          only: image
+use simple_masker,         only: masker
 implicit none
 
 public :: mask_commander
+public :: automask2D_commander
+public :: automask_commander
 private
 #include "simple_local_flags.inc"
 
@@ -15,15 +19,21 @@ type, extends(commander_base) :: mask_commander
  contains
    procedure :: execute      => exec_mask
 end type mask_commander
+type, extends(commander_base) :: automask2D_commander
+  contains
+    procedure :: execute      => exec_automask2D
+end type automask2D_commander
+type, extends(commander_base) :: automask_commander
+ contains
+   procedure :: execute      => exec_automask
+end type automask_commander
 
 contains
 
     !> for masking images and volumes
     subroutine exec_mask( self, cline )
-        use simple_image,       only: image
-        use simple_procimgstk,  only: mask_imgfile, taper_edges_imgfile
-        use simple_atoms,       only: atoms
-        use simple_masker,      only: masker
+        use simple_procimgstk, only: mask_imgfile, taper_edges_imgfile
+        use simple_atoms,      only: atoms
         class(mask_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline
         type(parameters)           :: params
@@ -91,5 +101,62 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MASK NORMAL STOP ****')
     end subroutine exec_mask
+
+    !> for automasking of class averages
+    subroutine exec_automask2D( self, cline )
+        use simple_masker, only: automask2D
+        class(automask2D_commander), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline
+        type(parameters)         :: params
+        type(image), allocatable :: imgs(:)
+        real,        allocatable :: diams(:)
+        logical,     allocatable :: mask(:)
+        integer :: ldim(3), n, i
+        if( .not. cline%defined('ngrow')  ) call cline%set('ngrow',   5.)
+        if( .not. cline%defined('winsz')  ) call cline%set('winsz',   5.)
+        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 20.)
+        if( .not. cline%defined('edge')   ) call cline%set('edge',    6.)
+        call params%new(cline)
+        call find_ldim_nptcls(params%stk, ldim, n)
+        ldim(3) = 1 ! 2D
+        allocate(imgs(n), diams(n), mask(n))
+        diams = 0.
+        mask  = .true.
+        do i = 1,n
+            call imgs(i)%new(ldim, params%smpd)
+            call imgs(i)%read(params%stk, i)
+        end do
+        call automask2D(imgs, mask, params%ngrow, nint(params%winsz), params%edge, diams)
+        do i = 1,n
+            call imgs(i)%kill
+        end do
+        deallocate(imgs, diams, mask)
+        ! end gracefully
+        call simple_end('**** SIMPLE_AUTOMASK2D NORMAL STOP ****')
+    end subroutine exec_automask2D
+
+    !> for automasking of volume
+    subroutine exec_automask( self, cline )
+        class(automask_commander), intent(inout) :: self
+        class(cmdline),            intent(inout) :: cline
+        type(builder)    :: build
+        type(parameters) :: params
+        type(masker)     :: mskvol
+        character(len=:), allocatable :: fname_out
+        call params%new(cline)
+        call build%build_spproj(params, cline)
+        call build%build_general_tbox(params, cline)
+        call build%vol%read(params%vols(1))
+        if( cline%defined('mw') .and. cline%defined('thres') )then
+            call mskvol%automask3D(build%vol)
+        else
+            call mskvol%automask3D_otsu(build%vol)
+        endif
+        call mskvol%write('automask'//params%ext)
+        fname_out = basename(add2fbody(trim(params%vols(1)), params%ext, '_automsk'))
+        call build%vol%write(fname_out)
+        write(logfhandle,'(A)') '>>> WROTE OUTPUT '//'automask'//params%ext//' & '//fname_out
+        call simple_end('**** SIMPLE_AUTOMASK NORMAL STOP ****')
+    end subroutine exec_automask
 
 end module simple_commander_mask

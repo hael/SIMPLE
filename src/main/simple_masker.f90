@@ -1,5 +1,7 @@
 ! 2D/3D envelope and adaptive masking
 module simple_masker
+!$ use omp_lib
+!$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_image,      only: image
 use simple_binimage,   only: binimage
@@ -208,8 +210,6 @@ contains
 
     !>  \brief  volume mask projector
     subroutine env_rproject(self, e, img)
-        !$ use omp_lib
-        !$ use omp_lib_kinds
         use simple_ori,    only: ori
         class(masker), intent(inout) :: self   !< projector instance
         class(ori),    intent(inout) :: e      !< Euler angle
@@ -273,15 +273,15 @@ contains
         integer,           intent(in)    :: ngrow, winsz, edge
         real, allocatable, intent(inout) :: diams(:)
         logical, optional, intent(in)    :: write2disk
-        type(binimage), allocatable :: img_bin(:), cc_img(:)
-        real,           allocatable :: ccsizes(:)
-        type(image),    allocatable :: cos_img(:)
-        integer        :: i, n, loc(1), ldim(3)
-        real           :: smpd
-        logical        :: l_write
+        type(binimage),    allocatable   :: img_bin(:), cc_img(:)
+        real,              allocatable   :: ccsizes(:)
+        type(image),       allocatable   :: cos_img(:)
+        integer :: i, n, loc(1), ldim(3)
+        real    :: smpd
+        logical :: l_write
         n = size(imgs)
         if( size(mask) /= n ) THROW_HARD('mask array size does not conform with image array; automask2D')
-        l_write = .true.
+        l_write = .false.
         if( present(write2disk) ) l_write = write2disk
         if( allocated(diams) ) deallocate(diams)
         ! allocate
@@ -296,7 +296,7 @@ contains
             call cos_img(i)%new(     ldim, smpd, wthreads=.false.)
         end do
         write(logfhandle,'(A)') '>>> 2D AUTOMASKING'
-        ! parallelize over this loop
+        !$omp parallel do default(shared) private(i,ccsizes,loc) schedule(static) proc_bind(close)
         do i = 1,n
             if( mask(i) )then
                 call img_bin(i)%zero_edgeavg
@@ -304,13 +304,13 @@ contains
                 call img_bin(i)%bp(0., params_glob%amsklp)
                 ! filter with non-local means
                 call img_bin(i)%NLmean 
-                if( l_write ) call img_bin(i)%write('filtered.mrc', i)
+                ! if( l_write ) call img_bin(i)%write('filtered.mrc', i)
                 ! binarize with Otsu
                 call otsu_img(img_bin(i))
-                if( l_write   ) call img_bin(i)%write(BIN_OTSU, i)
+                ! if( l_write   ) call img_bin(i)%write(BIN_OTSU, i)
                 ! grow ngrow layers
                 if( ngrow > 0 ) call img_bin(i)%grow_bins(ngrow)
-                if( l_write   ) call img_bin(i)%write(BIN_OTSU_GROWN, i)
+                ! if( l_write   ) call img_bin(i)%write(BIN_OTSU_GROWN, i)
                 ! hard masking
                 call img_bin(i)%mask(params_glob%msk, 'hard')
                 ! find the largest connected component
@@ -325,26 +325,27 @@ contains
                 if( winsz > 0 )then
                     call cc_img(i)%real_space_filter(winsz, 'median')
                     call cc_img(i)%set_imat
-                    if( l_write ) call cc_img(i)%write(BIN_OTSU_MED, i)
+                    ! if( l_write ) call cc_img(i)%write(BIN_OTSU_MED, i)
                 endif
                 ! fill-in holes
                 call cc_img(i)%fill_holes
-                if( l_write ) call cc_img(i)%write(BIN_OTSU_HOLES_FILL, i)
+                ! if( l_write ) call cc_img(i)%write(BIN_OTSU_HOLES_FILL, i)
                 ! apply cosine egde to soften mask (to avoid Fourier artefacts)
                 call cc_img(i)%cos_edge(edge,cos_img(i))
-                if( l_write ) call cos_img(i)%write(MSK_OTSU, i)
+                ! if( l_write ) call cos_img(i)%write(MSK_OTSU, i)
                 ! apply
                 call imgs(i)%mul(cos_img(i))
-                if( l_write ) call imgs(i)%write(AMSK_OTSU, i)
+                ! if( l_write ) call imgs(i)%write(AMSK_OTSU, i)
             endif
         end do
+        !$omp end parallel do
         ! destruct
         do i = 1,n
             call img_bin(i)%write('img_bin_array.mrc', i)
             call img_bin(i)%kill_bimg
             call cc_img(i)%write(  'cc_img_array.mrc', i)
             call cc_img(i)%kill_bimg
-            call cc_img(i)%write( 'cos_img_array.mrc', i)
+            call cos_img(i)%write('cos_img_array.mrc', i)
             call cos_img(i)%kill
             call imgs(i)%write(      'imgs_array.mrc', i)
         end do

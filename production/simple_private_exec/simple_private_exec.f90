@@ -9,6 +9,7 @@ use simple_commander_project
 use simple_commander_checks
 use simple_commander_distr
 use simple_commander_misc
+use simple_commander_mask
 use simple_commander_imgproc
 use simple_commander_oris
 use simple_commander_preprocess
