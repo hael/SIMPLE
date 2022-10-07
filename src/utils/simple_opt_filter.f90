@@ -19,6 +19,27 @@ type fft_vars_type
     complex(kind=c_float_complex), pointer :: out(:,:,:)
 end type fft_vars_type
 
+type opt_filt_2D_struct
+    integer                     :: iptcl = 0          ! index
+    type(image)                 :: e                  ! padded version of even
+    type(image)                 :: o                  ! padded version of odd
+    type(image)                 :: e_filt             ! padded and filtered version of even (prev even_filt)
+    type(image)                 :: o_filt             ! padded and filtered version of odd (prev odd_filt)
+    type(image)                 :: d                  ! difference image (prev diff_img)
+    type(image)                 :: d_opt              ! optimal difference image (prev diff_img_opt)
+    type(image_ptr)             :: pd                 ! image_ptr to difference image (prev pdiff)
+    type(image_ptr)             :: pd_opt             ! image_ptr to optimal difference image (prev pdiff_opt)
+    type(image)                 :: o_cp_rmat          ! copy of real-space padded odd (prev odd_copy_rmat)
+    type(image)                 :: o_cp_cmat          ! copy of FT padded odd (prev odd_copy_cmat)
+    type(image)                 :: e_cp_rmat          ! copy of real-space padded even (prev even_copy_rmat)
+    type(image)                 :: e_cp_cmat          ! copy of FT padded even (prev even_copy_cmat)
+    real(kind=c_float), pointer :: o_prmat(:,:,:)     ! pointer to odd rmat (prev rmat_odd)
+    real(kind=c_float), pointer :: e_prmat(:,:,:)     ! pointer to even rmat (prev rmat_even)
+    type(image)                 :: m                  ! padded version of mask
+    real(kind=c_float), pointer :: m_prmat(:,:,:)     ! pointer to mask rmat
+    logical                     :: m_exists = .false. ! mask exists flag
+end type opt_filt_2D_struct
+
 contains
 
     subroutine batch_fft_2D( even, odd, fft_vars )
