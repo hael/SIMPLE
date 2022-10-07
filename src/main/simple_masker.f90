@@ -291,7 +291,7 @@ contains
         allocate(img_bin(n), cc_img(n), cos_img(n)) 
         do i = 1,n
             call img_bin(i)%new_bimg(ldim, smpd, wthreads=.false.)
-            call img_bin%copy(imgs(i))
+            call img_bin(i)%copy(imgs(i))
             call cc_img(i)%new_bimg( ldim, smpd, wthreads=.false.)
             call cos_img(i)%new(     ldim, smpd, wthreads=.false.)
         end do
@@ -346,7 +346,7 @@ contains
             call cc_img(i)%kill_bimg
             call cc_img(i)%write( 'cos_img_array.mrc', i)
             call cos_img(i)%kill
-            call imgs%write(         'imgs_array.mrc', i)
+            call imgs(i)%write(      'imgs_array.mrc', i)
         end do
         deallocate(img_bin, cc_img, cos_img)
         if( allocated(ccsizes) ) deallocate(ccsizes)
