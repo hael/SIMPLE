@@ -1167,6 +1167,7 @@ contains
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call automask2D%set_input('img_ios', 1, stk)
+        automask2D%img_ios(1)%required = .true.
         ! parameter input/output
         call automask2D%set_input('parm_ios', 1, smpd)
         call automask2D%set_input('parm_ios', 2, 'winsz', 'num', 'Window size for median filter',&
