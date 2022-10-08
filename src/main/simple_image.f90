@@ -3023,7 +3023,7 @@ contains
             didbwdft   = .true.
             rretrun_ft = .false.
         endif
-        if( present(return_ft) ) rretrun_ft = return_ft 
+        if( present(return_ft) ) rretrun_ft = return_ft
         avg = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))/real(product(self%ldim))
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
             self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))-avg
@@ -4620,7 +4620,7 @@ contains
                             numer_ad  = numer_ad - (A - ptl_re)**2 - (B - ptl_im)**2
                         endif
                     end do
-                end do        
+                end do
         end select
         if( present(grad) ) grad = get_d1(numer_ad)/denom
         d0 = get_d0(numer_ad)/denom
@@ -6711,12 +6711,13 @@ contains
         endif
     end subroutine pad
 
-    subroutine pad_inplace( self, ldim )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: ldim(3)
+    subroutine pad_inplace( self, ldim, backgr )
+        class(image),   intent(inout) :: self
+        integer,        intent(in)    :: ldim(3)
+        real, optional, intent(in)    :: backgr
         type(image) :: tmp
         call tmp%new(ldim, self%smpd, wthreads=self%wthreads)
-        call self%pad(tmp)
+        call self%pad(tmp, backgr)
         call self%copy(tmp)
         call tmp%kill()
     end subroutine pad_inplace
