@@ -156,26 +156,37 @@ contains
         class(opt_2D_filter_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         character(len=:), allocatable :: file_tag
-        type(image),      allocatable :: even(:), odd(:)
+        type(image),      allocatable :: even(:), odd(:), mask(:)
         type(parameters) :: params
         integer          :: iptcl
+        logical          :: have_mask
         ! init
-        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',    'yes')
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        have_mask = cline%defined('stk3')
         call params%new(cline) 
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
         params%ldim(3) = 1 ! because we operate on stacks
         file_tag = 'nonuniform_2D_filter_ext_'//int2str(params%smooth_ext)
         ! allocate
-        allocate(odd(params%nptcls), even(params%nptcls))
+        if( have_mask )then
+            allocate(odd(params%nptcls), even(params%nptcls), mask(params%nptcls))
+        else
+            allocate(odd(params%nptcls), even(params%nptcls))
+        endif
         ! construct & read
         do iptcl = 1, params%nptcls
             call odd( iptcl)%new(params%ldim, params%smpd, .false.)
             call even(iptcl)%new(params%ldim, params%smpd, .false.)
-            call odd( iptcl)%read(params%stk2, iptcl)
-            call even(iptcl)%read(params%stk,  iptcl)
+            call odd( iptcl)%read(params%stk,  iptcl)
+            call even(iptcl)%read(params%stk2, iptcl)
+            if( have_mask ) call mask(iptcl)%read(params%stk3, iptcl)
         enddo
         ! filter
-        call opt_2D_filter_sub(even, odd)
+        if( have_mask )then
+            call opt_2D_filter_sub(even, odd, mask)
+        else
+            call opt_2D_filter_sub(even, odd)
+        endif
         ! write output and destruct
         do iptcl = 1, params%nptcls
             call odd( iptcl)%write(trim(file_tag)//'_odd.mrc',  iptcl)

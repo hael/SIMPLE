@@ -2753,11 +2753,12 @@ contains
         &'Optimization (search) based 2D filter (uniform/nonuniform)',&     ! descr_short
         &'is a program for 2D uniform/nonuniform filter by minimizing/searching the fourier index of the CV cost function',& ! descr_long
         &'simple_exec',&                                                    ! executable
-        &2, 1, 0, 0, 4, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
+        &3, 1, 0, 0, 4, 0, 1, .false.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call opt_2D_filter%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
-        call opt_2D_filter%set_input('img_ios', 2, 'stk2', 'file', 'Even stack', 'Even Stack', 'stack_odd.mrc file',  .true., '')
+        call opt_2D_filter%set_input('img_ios', 2, 'stk2', 'file', 'Even stack', 'Even stack', 'stack_odd.mrc file',  .true., '')
+        call opt_2D_filter%set_input('img_ios', 3, 'stk3', 'file', 'Mask stack', 'Mask stack', 'stack_mask.mrc file',  .true., '')
         ! parameter input/output
         call opt_2D_filter%set_input('parm_ios', 1, smpd)
         ! alternative inputs

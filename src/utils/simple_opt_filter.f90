@@ -230,8 +230,8 @@ contains
         endif
         filtsz = clsfrcs%get_filtsz()
         ! allocate
-        allocate(optf2Dvars(nptcls))
-        allocate(frc(filtsz), source=0.)
+        allocate(optf2Dvars(nptcls), frc(filtsz))
+        frc = 0.
         ! calculate high-res low-pass limits
         if( lpstart_fallback )then
             optf2Dvars(:)%lplim_hres = calc_fourier_index(lpstart, box, smpd)
@@ -300,7 +300,7 @@ contains
         if( have_mask )then
             !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
             do iptcl = 1, nptcls
-                call opt_filter_2D_masked(odd(iptcl), even(iptcl), weights_img, mask(iptcl), optf2Dvars(iptcl))
+                call opt_filter_2D_masked(odd(iptcl), even(iptcl), mask(iptcl), weights_img, optf2Dvars(iptcl))
             enddo
             !$omp end parallel do
         else
@@ -394,16 +394,16 @@ contains
         real            :: find_stepsz, val
         type(image_ptr) :: pdiff_opt, pdiff, pweights
         ! init
-        ldim              = odd%get_ldim()
-        box               = ldim(1)
-        dim3              = ldim(3)
+        ldim        = odd%get_ldim()
+        box         = ldim(1)
+        dim3        = ldim(3)
         if( dim3 > 1 ) THROW_HARD('This opt_filter_2D is strictly for 2D!')
-        ext               = params_glob%smooth_ext
-        find_stop         = optf2Dvars%lplim_hres
-        find_start        = calc_fourier_index(params_glob%lp_lowres, box, params_glob%smpd)
-        find_stepsz       = real(find_stop - find_start)/(params_glob%nsearch - 1)
-        lb                = (/ ext+1  , ext+1  , 1/)
-        ub                = (/ box-ext, box-ext, dim3 /)
+        ext         = params_glob%smooth_ext
+        find_stop   = optf2Dvars%lplim_hres
+        find_start  = calc_fourier_index(params_glob%lp_lowres, box, params_glob%smpd)
+        find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
+        lb          = (/ ext+1  , ext+1  , 1/)
+        ub          = (/ box-ext, box-ext, dim3 /)
         ! searching for the best fourier index from here and generating the optimized filter
         call weights_img%get_mat_ptrs(pweights)
         call optf2Dvars%diff_img%get_mat_ptrs(pdiff)
@@ -455,16 +455,16 @@ contains
             return
         endif
         ! init
-        ldim              = odd%get_ldim()
-        box               = ldim(1)
-        dim3              = ldim(3)
+        ldim        = odd%get_ldim()
+        box         = ldim(1)
+        dim3        = ldim(3)
         if( dim3 > 1 ) THROW_HARD('This opt_filter_2D is strictly for 2D!')
-        ext               = params_glob%smooth_ext
-        find_stop         = optf2Dvars%lplim_hres
-        find_start        = calc_fourier_index(params_glob%lp_lowres, box, params_glob%smpd)
-        find_stepsz       = real(find_stop - find_start)/(params_glob%nsearch - 1)
-        lb                = (/ ext+1  , ext+1  , 1/)
-        ub                = (/ box-ext, box-ext, dim3 /)
+        ext         = params_glob%smooth_ext
+        find_stop   = optf2Dvars%lplim_hres
+        find_start  = calc_fourier_index(params_glob%lp_lowres, box, params_glob%smpd)
+        find_stepsz = real(find_stop - find_start)/(params_glob%nsearch - 1)
+        lb          = (/ ext+1  , ext+1  , 1/)
+        ub          = (/ box-ext, box-ext, dim3 /)
         ! searching for the best fourier index from here and generating the optimized filter
         call weights_img%get_mat_ptrs(pweights)
         call optf2Dvars%diff_img%get_mat_ptrs(pdiff)
