@@ -453,6 +453,10 @@ contains
         integer         :: k, l, box, dim3, ldim(3), find_start, find_stop, iter_no, ext, best_ind, cur_ind, lb(3), ub(3)
         real            :: rad, find_stepsz, val, m
         type(image_ptr) :: pdiff_opt, pdiff, pweights
+        if( .not. optf2Dvars%have_mask )then
+            call opt_filter_2D(odd, even, weights_img, optf2Dvars)
+            return
+        endif
         ! init
         ldim              = odd%get_ldim()
         box               = ldim(1)
