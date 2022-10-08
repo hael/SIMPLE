@@ -13,38 +13,24 @@ implicit none
 public :: opt_2D_filter_sub, opt_filter_2D, opt_filter_3D, butterworth_filter
 private
 
-type fft_vars_type
-    type(c_ptr)                            :: plan_fwd, plan_bwd
-    real(   kind=c_float),         pointer ::  in(:,:,:)
+type optfilt2Dvars
+    ! FFT vars
+    real(kind=c_float),            pointer :: in(:,:,:)
     complex(kind=c_float_complex), pointer :: out(:,:,:)
-end type fft_vars_type
-
-type opt_filt_2D_struct
-    integer                     :: iptcl = 0          ! index
-    type(image)                 :: e                  ! padded version of even
-    type(image)                 :: o                  ! padded version of odd
-    type(image)                 :: e_filt             ! padded and filtered version of even (prev even_filt)
-    type(image)                 :: o_filt             ! padded and filtered version of odd (prev odd_filt)
-    type(image)                 :: d                  ! difference image (prev diff_img)
-    type(image)                 :: d_opt              ! optimal difference image (prev diff_img_opt)
-    type(image_ptr)             :: pd                 ! image_ptr to difference image (prev pdiff)
-    type(image_ptr)             :: pd_opt             ! image_ptr to optimal difference image (prev pdiff_opt)
-    type(image)                 :: o_cp_rmat          ! copy of real-space padded odd (prev odd_copy_rmat)
-    type(image)                 :: o_cp_cmat          ! copy of FT padded odd (prev odd_copy_cmat)
-    type(image)                 :: e_cp_rmat          ! copy of real-space padded even (prev even_copy_rmat)
-    type(image)                 :: e_cp_cmat          ! copy of FT padded even (prev even_copy_cmat)
-    real(kind=c_float), pointer :: o_prmat(:,:,:)     ! pointer to odd rmat (prev rmat_odd)
-    real(kind=c_float), pointer :: e_prmat(:,:,:)     ! pointer to even rmat (prev rmat_even)
-    type(image)                 :: m                  ! padded version of mask
-    real(kind=c_float), pointer :: m_prmat(:,:,:)     ! pointer to mask rmat
-    logical                     :: m_exists = .false. ! mask exists flag
-end type opt_filt_2D_struct
+    type(c_ptr) :: fft_ptr, plan_fwd, plan_bwd
+    ! others
+    real, allocatable :: cur_fil(:)
+    type(image)       :: odd_copy_rmat, even_copy_rmat
+    type(image)       :: odd_copy_cmat, even_copy_cmat
+    type(image)       :: odd_filt, even_filt, diff_img, diff_img_opt
+    integer           :: lplim_hres
+end type optfilt2Dvars
 
 contains
 
-    subroutine batch_fft_2D( even, odd, fft_vars )
+    subroutine batch_fft_2D( even, odd, optf2Dvars )
         class(image),        intent(inout) :: even, odd
-        type(fft_vars_type), intent(in)    :: fft_vars
+        type(optfilt2Dvars), intent(in)    :: optf2Dvars
         integer            :: ldim(3), k, l
         type(image_ptr)    :: peven, podd
         ldim = even%get_ldim()
@@ -55,32 +41,32 @@ contains
         !$omp parallel do collapse(2) default(shared) private(k,l) schedule(static) proc_bind(close)
         do l = 1, ldim(2)
             do k = 1, ldim(1)
-                fft_vars%in(k,l,1) = peven%rmat(k,l,1)
-                fft_vars%in(k,l,2) =  podd%rmat(k,l,1)
+                optf2Dvars%in(k,l,1) = peven%rmat(k,l,1)
+                optf2Dvars%in(k,l,2) =  podd%rmat(k,l,1)
             enddo
         enddo
         !$omp end parallel do
-        call fftwf_execute_dft_r2c(fft_vars%plan_fwd, fft_vars%in, fft_vars%out)
+        call fftwf_execute_dft_r2c(optf2Dvars%plan_fwd, optf2Dvars%in, optf2Dvars%out)
         call even%set_ft(.true.)
         call  odd%set_ft(.true.)
         !$omp parallel do collapse(2) default(shared) private(k,l) schedule(static) proc_bind(close)
         do l = 1, ldim(2)
             do k = 1, ldim(1)/2+1
                 if( mod(k+l,2) == 1 )then
-                    peven%cmat(k,l,1) = -fft_vars%out(k,l,1)/product(ldim(1:2))
-                    podd %cmat(k,l,1) = -fft_vars%out(k,l,2)/product(ldim(1:2))
+                    peven%cmat(k,l,1) = -optf2Dvars%out(k,l,1)/product(ldim(1:2))
+                    podd %cmat(k,l,1) = -optf2Dvars%out(k,l,2)/product(ldim(1:2))
                 else
-                    peven%cmat(k,l,1) =  fft_vars%out(k,l,1)/product(ldim(1:2))
-                    podd %cmat(k,l,1) =  fft_vars%out(k,l,2)/product(ldim(1:2))
+                    peven%cmat(k,l,1) =  optf2Dvars%out(k,l,1)/product(ldim(1:2))
+                    podd %cmat(k,l,1) =  optf2Dvars%out(k,l,2)/product(ldim(1:2))
                 endif
             enddo
         enddo
         !$omp end parallel do
     end subroutine batch_fft_2D
 
-    subroutine batch_ifft_2D( even, odd, fft_vars )
+    subroutine batch_ifft_2D( even, odd, optf2Dvars )
         class(image),        intent(inout) :: even, odd
-        type(fft_vars_type), intent(in)    :: fft_vars
+        type(optfilt2Dvars), intent(in)    :: optf2Dvars
         integer            :: ldim(3), k, l
         type(image_ptr)    :: peven, podd
         ldim = even%get_ldim()
@@ -92,23 +78,23 @@ contains
         do l = 1, ldim(2)
             do k = 1, ldim(1)/2+1
                 if( mod(k+l,2) == 1 )then
-                    fft_vars%out(k,l,1) = -peven%cmat(k,l,1)
-                    fft_vars%out(k,l,2) = - podd%cmat(k,l,1)
+                    optf2Dvars%out(k,l,1) = -peven%cmat(k,l,1)
+                    optf2Dvars%out(k,l,2) = - podd%cmat(k,l,1)
                 else
-                    fft_vars%out(k,l,1) = peven%cmat(k,l,1)
-                    fft_vars%out(k,l,2) =  podd%cmat(k,l,1)
+                    optf2Dvars%out(k,l,1) = peven%cmat(k,l,1)
+                    optf2Dvars%out(k,l,2) =  podd%cmat(k,l,1)
                 endif
             enddo
         enddo
         !$omp end parallel do
-        call fftwf_execute_dft_c2r(fft_vars%plan_bwd, fft_vars%out, fft_vars%in)
+        call fftwf_execute_dft_c2r(optf2Dvars%plan_bwd, optf2Dvars%out, optf2Dvars%in)
         call even%set_ft(.false.)
         call  odd%set_ft(.false.)
         !$omp parallel do collapse(2) default(shared) private(k,l) schedule(static) proc_bind(close)
         do l = 1, ldim(2)
             do k = 1, ldim(1)
-                peven%rmat(k,l,1) = fft_vars%in(k,l,1)
-                podd %rmat(k,l,1) = fft_vars%in(k,l,2)
+                peven%rmat(k,l,1) = optf2Dvars%in(k,l,1)
+                podd %rmat(k,l,1) = optf2Dvars%in(k,l,2)
             enddo
         enddo
         !$omp end parallel do
@@ -202,34 +188,29 @@ contains
         use simple_class_frcs, only: class_frcs
         class(image),      intent(inout) :: even(:), odd(:)
         character(len=:),    allocatable :: frcs_fname
-        type(class_frcs)                 :: clsfrcs
-        type(image)                      :: weights_img
-        type(image),         allocatable :: diff_img(:), diff_img_opt(:), even_filt(:), odd_filt(:),&
-                                             &odd_copy_rmat(:),  odd_copy_cmat(:),&
-                                            &even_copy_rmat(:), even_copy_cmat(:)
-        real,                allocatable :: weights_2D(:,:,:), frc(:), filt(:), cur_fil(:,:)
-        integer,             allocatable :: lplims_hres(:)
-        real                             :: smpd, lpstart, lp, val
-        integer                          :: iptcl, box, filtsz, ldim(3), ldim_pd(3), smooth_ext
-        integer                          :: nptcls, hpind_fsc, find, c_shape(3), m, n
-        logical                          :: lpstart_fallback, l_phaseplate
-        type(c_ptr)                      :: ptr
-        integer,             parameter   :: N_IMGS = 2  ! for batch_fft (2 images batch)
-        type(fft_vars_type), allocatable :: fft_vars(:)
+        type(optfilt2Dvars), allocatable :: optf2Dvars(:)
+        real,                allocatable :: frc(:)
+        integer,             parameter   :: N_IMGS = 2 ! for batch_fft (2 images batch)
+        type(class_frcs) :: clsfrcs
+        type(image)      :: weights_img
+        real             :: smpd, lpstart, lp, val
+        integer          :: iptcl, box, filtsz, ldim(3), ldim_pd(3), smooth_ext
+        integer          :: nptcls, hpind_fsc, find, c_shape(3), m, n
+        logical          :: lpstart_fallback, l_phaseplate
         ! init
-        ldim           = even(1)%get_ldim()
-        filtsz         = even(1)%get_filtsz()
-        ldim(3)        = 1 ! because we operate on stacks
-        smooth_ext     = params_glob%smooth_ext
-        ldim_pd        = ldim + 2 * smooth_ext
-        ldim_pd(3)     = 1 ! because we operate on stacks
-        box            = ldim_pd(1)
-        frcs_fname     = trim(params_glob%frcs)
-        smpd           = params_glob%smpd
-        nptcls         = size(even)
-        lpstart        = params_glob%lpstart
-        hpind_fsc      = params_glob%hpind_fsc
-        l_phaseplate   = params_glob%l_phaseplate
+        ldim         = even(1)%get_ldim()
+        filtsz       = even(1)%get_filtsz()
+        ldim(3)      = 1 ! because we operate on stacks
+        smooth_ext   = params_glob%smooth_ext
+        ldim_pd      = ldim + 2 * smooth_ext
+        ldim_pd(3)   = 1 ! because we operate on stacks
+        box          = ldim_pd(1)
+        frcs_fname   = trim(params_glob%frcs)
+        smpd         = params_glob%smpd
+        nptcls       = size(even)
+        lpstart      = params_glob%lpstart
+        hpind_fsc    = params_glob%hpind_fsc
+        l_phaseplate = params_glob%l_phaseplate
         ! retrieve FRCs
         call clsfrcs%new(nptcls, box, smpd, 1)
         lpstart_fallback = .false.
@@ -246,23 +227,56 @@ contains
         endif
         filtsz = clsfrcs%get_filtsz()
         ! allocate
-        allocate( odd_copy_rmat(nptcls), odd_copy_cmat(nptcls), even_copy_rmat(nptcls), even_copy_cmat(nptcls),&
-                      &diff_img(nptcls),  diff_img_opt(nptcls),      even_filt(nptcls),       odd_filt(nptcls))
-        allocate(weights_2D(smooth_ext*2+1,smooth_ext*2+1,nptcls), frc(filtsz), cur_fil(box,nptcls), source=0.)
-        allocate(lplims_hres(nptcls))
+        allocate(optf2Dvars(nptcls))
+        allocate(frc(filtsz), source=0.)
         ! calculate high-res low-pass limits
         if( lpstart_fallback )then
-            lplims_hres = calc_fourier_index(lpstart, box, smpd)
+            optf2Dvars(:)%lplim_hres = calc_fourier_index(lpstart, box, smpd)
         else
             do iptcl = 1, nptcls
                 call clsfrcs%frc_getter(iptcl, hpind_fsc, l_phaseplate, frc)
                 ! the below required to retrieve the right Fouirer index limit when we are padding
-                find = get_lplim_at_corr(frc, 0.1)                     ! little overshoot, filter function anyway applied in polarft_corrcalc
-                lp   = calc_lowpass_lim(find, box, smpd)               ! box is the padded box size
-                lplims_hres(iptcl) = calc_fourier_index(lp, box, smpd) ! this is the Fourier index limit for the padded images
+                find = get_lplim_at_corr(frc, 0.1)                ! little overshoot, filter function anyway applied in polarft_corrcalc
+                lp   = calc_lowpass_lim(find, box, smpd)          ! box is the padded box size
+                optf2Dvars(iptcl)%lplim_hres = calc_fourier_index(lp, box, smpd) ! this is the Fourier index limit for the padded images
             end do
         endif
-        ! construct: all allocations and initialization
+        ! fill up optf2Dvars struct
+        !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
+        do iptcl = 1, nptcls
+            call even(iptcl)%pad_mirr(ldim_pd)
+            call odd(iptcl)%pad_mirr(ldim_pd)
+            call optf2Dvars(iptcl)%even_filt%copy(even(iptcl))
+            call optf2Dvars(iptcl)%odd_filt %copy( odd(iptcl))
+            call optf2Dvars(iptcl)%diff_img    %new(ldim_pd, smpd, .false.)
+            call optf2Dvars(iptcl)%diff_img_opt%new(ldim_pd, smpd, .false.)
+            call optf2Dvars(iptcl)%odd_copy_rmat%copy(odd(iptcl))
+            call optf2Dvars(iptcl)%odd_copy_cmat%copy(odd(iptcl))
+            call optf2Dvars(iptcl)%odd_copy_cmat%fft
+            call optf2Dvars(iptcl)%even_copy_rmat%copy(even(iptcl))
+            call optf2Dvars(iptcl)%even_copy_cmat%copy(even(iptcl))
+            call optf2Dvars(iptcl)%even_copy_cmat%fft
+        end do
+        !$omp end parallel do
+        ! fill up fft vars
+        call fftwf_plan_with_nthreads(nthr_glob)
+        c_shape = [ldim_pd(1), ldim_pd(2), N_IMGS]
+        do iptcl = 1, nptcls
+            optf2Dvars(iptcl)%fft_ptr = fftwf_alloc_complex(int(product(c_shape),c_size_t))
+            call c_f_pointer(optf2Dvars(iptcl)%fft_ptr,optf2Dvars(iptcl)%out,c_shape)
+            call c_f_pointer(optf2Dvars(iptcl)%fft_ptr,optf2Dvars(iptcl)%in ,c_shape)
+            !$omp critical
+            optf2Dvars(iptcl)%plan_fwd = fftwf_plan_many_dft_r2c(2,    [ldim_pd(2), ldim_pd(1)], N_IMGS,&
+                                                &optf2Dvars(iptcl)%in ,[ldim_pd(2), ldim_pd(1)], 1, product([ldim_pd(2), ldim_pd(1)]),&
+                                                &optf2Dvars(iptcl)%out,[ldim_pd(2), ldim_pd(1)], 1, product([ldim_pd(2), ldim_pd(1)]),FFTW_ESTIMATE)
+            optf2Dvars(iptcl)%plan_bwd = fftwf_plan_many_dft_c2r(2,    [ldim_pd(2), ldim_pd(1)], N_IMGS,&
+                                                &optf2Dvars(iptcl)%out,[ldim_pd(2), ldim_pd(1)], 1, product([ldim_pd(2), ldim_pd(1)]),&
+                                                &optf2Dvars(iptcl)%in ,[ldim_pd(2), ldim_pd(1)], 1, product([ldim_pd(2), ldim_pd(1)]),FFTW_ESTIMATE)
+            !$omp end critical
+            allocate(optf2Dvars(iptcl)%cur_fil(box), source=0.)
+        enddo
+        call fftwf_plan_with_nthreads(1)
+        ! make weight image for diff convolution
         call weights_img%new(ldim_pd, smpd, .false.)
         call weights_img%zero_and_unflag_ft()
         do m = -params_glob%smooth_ext, params_glob%smooth_ext
@@ -272,62 +286,28 @@ contains
             enddo
         enddo
         call weights_img%fft()
-        do iptcl = 1, nptcls
-            call even(iptcl)%pad_mirr(ldim_pd)
-            call odd( iptcl)%pad_mirr(ldim_pd)
-            call even_filt(iptcl)%copy(even(iptcl))
-            call odd_filt( iptcl)%copy(odd( iptcl))
-            call diff_img( iptcl)%new(ldim_pd, smpd, .false.)
-            call diff_img_opt( iptcl)%new(ldim_pd, smpd, .false.)
-            call odd_copy_rmat(iptcl)%copy(odd(iptcl))
-            call odd_copy_cmat(iptcl)%copy(odd(iptcl))
-            call odd_copy_cmat(iptcl)%fft
-            call even_copy_rmat(iptcl)%copy(even(iptcl))
-            call even_copy_cmat(iptcl)%copy(even(iptcl))
-            call even_copy_cmat(iptcl)%fft
-        enddo
-        ! batch_fft stuffs
-        allocate(fft_vars(nptcls))
-        call fftwf_plan_with_nthreads(nthr_glob)
-        c_shape = [ldim_pd(1), ldim_pd(2), N_IMGS]
-        do iptcl = 1, nptcls
-            ptr = fftwf_alloc_complex(int(product(c_shape),c_size_t))
-            call c_f_pointer(ptr,fft_vars(iptcl)%out,c_shape)
-            call c_f_pointer(ptr,fft_vars(iptcl)%in ,c_shape)
-            !$omp critical
-            fft_vars(iptcl)%plan_fwd = fftwf_plan_many_dft_r2c(2,    [ldim_pd(2), ldim_pd(1)], N_IMGS,&
-                                                &fft_vars(iptcl)%in ,[ldim_pd(2), ldim_pd(1)], 1, product([ldim_pd(2), ldim_pd(1)]),&
-                                                &fft_vars(iptcl)%out,[ldim_pd(2), ldim_pd(1)], 1, product([ldim_pd(2), ldim_pd(1)]),FFTW_ESTIMATE)
-            fft_vars(iptcl)%plan_bwd = fftwf_plan_many_dft_c2r(2,    [ldim_pd(2), ldim_pd(1)], N_IMGS,&
-                                                &fft_vars(iptcl)%out,[ldim_pd(2), ldim_pd(1)], 1, product([ldim_pd(2), ldim_pd(1)]),&
-                                                &fft_vars(iptcl)%in ,[ldim_pd(2), ldim_pd(1)], 1, product([ldim_pd(2), ldim_pd(1)]),FFTW_ESTIMATE)
-            !$omp end critical
-        enddo
-        call fftwf_plan_with_nthreads(1)
         ! filter
         !$omp parallel do default(shared) private(iptcl) schedule(static) proc_bind(close)
         do iptcl = 1, nptcls
-            call opt_filter_2D(odd(iptcl), even(iptcl), odd_copy_rmat(iptcl), odd_copy_cmat(iptcl),&
-            &even_copy_rmat(iptcl), even_copy_cmat(iptcl), odd_filt(iptcl), even_filt(iptcl),&
-            &cur_fil(:,iptcl), weights_2D(:,:,iptcl), lplims_hres(iptcl), weights_img, diff_img(iptcl),&
-            &diff_img_opt(iptcl), fft_vars(iptcl))
+            call opt_filter_2D(odd(iptcl), even(iptcl), optf2Dvars(iptcl), weights_img)
         enddo
         !$omp end parallel do
         ! destruct
         call weights_img%kill
         do iptcl = 1, nptcls
-            call odd_copy_rmat( iptcl)%kill
-            call even_copy_rmat(iptcl)%kill
-            call odd_copy_cmat( iptcl)%kill
-            call even_copy_cmat(iptcl)%kill
-            call even_filt(     iptcl)%kill
-            call odd_filt(      iptcl)%kill
-            call diff_img(      iptcl)%kill
-            call diff_img_opt(  iptcl)%kill
+            call optf2Dvars(iptcl)%odd_copy_rmat%kill
+            call optf2Dvars(iptcl)%even_copy_rmat%kill
+            call optf2Dvars(iptcl)%odd_copy_cmat%kill
+            call optf2Dvars(iptcl)%even_copy_cmat%kill
+            call optf2Dvars(iptcl)%even_filt%kill
+            call optf2Dvars(iptcl)%odd_filt%kill
+            call optf2Dvars(iptcl)%diff_img%kill
+            call optf2Dvars(iptcl)%diff_img_opt%kill
             call even(iptcl)%clip_inplace(ldim)
             call odd( iptcl)%clip_inplace(ldim)
-            call fftwf_destroy_plan(fft_vars(iptcl)%plan_fwd)
-            call fftwf_destroy_plan(fft_vars(iptcl)%plan_bwd)
+            call fftwf_free(optf2Dvars(iptcl)%fft_ptr)
+            call fftwf_destroy_plan(optf2Dvars(iptcl)%plan_fwd)
+            call fftwf_destroy_plan(optf2Dvars(iptcl)%plan_bwd)
         enddo
     end subroutine opt_2D_filter_sub
 
@@ -368,13 +348,14 @@ contains
         endif
     end function butterworth
 
-    subroutine butterworth_filter(img, cur_ind, cur_fil)
-        class(image),   intent(inout) :: img
-        integer,        intent(in)    :: cur_ind
-        real, optional, intent(inout) :: cur_fil(:)
-        integer,        parameter     :: BW_ORDER = 8
+    subroutine butterworth_filter(img, cur_ind, cur_fil, use_cache)
+        class(image), intent(inout) :: img
+        integer,      intent(in)    :: cur_ind
+        real,         intent(inout) :: cur_fil(:)
+        logical,      intent(in)    :: use_cache
+        integer,      parameter     :: BW_ORDER = 8
         integer                       :: freq_val
-        if( .not. present(cur_fil) )then
+        if( .not. use_cache )then
             do freq_val = 1, size(cur_fil)
                 cur_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(cur_ind))
             enddo
@@ -382,17 +363,12 @@ contains
         call img%apply_filter(cur_fil)
     end subroutine butterworth_filter
 
-    subroutine opt_filter_2D(odd, even, odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat,&
-    &odd_filt, even_filt, cur_fil, weights_2D, kstop, weights_img, diff_img, diff_img_opt, fft_vars)
-        class(image),         intent(inout) :: odd, even, odd_filt, even_filt
-        class(image),         intent(in)    :: odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat
-        real,                 intent(inout) :: cur_fil(:), weights_2D(:,:)
-        integer,              intent(in)    :: kstop
-        class(image),         intent(inout) :: weights_img, diff_img, diff_img_opt
-        type(fft_vars_type) , intent(in)    :: fft_vars
-        real(kind=c_float),   pointer       :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
-        integer :: k,l, box, dim3, ldim(3), find_start, find_stop, iter_no, ext, best_ind, cur_ind, lb(3), ub(3) 
-        real    :: rad, find_stepsz, val
+    subroutine opt_filter_2D(odd, even, optf2Dvars, weights_img)
+        class(image),        intent(inout) :: odd, even, weights_img
+        type(optfilt2Dvars), intent(inout) :: optf2Dvars
+        real(kind=c_float), pointer :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
+        integer         :: k,l, box, dim3, ldim(3), find_start, find_stop, iter_no, ext, best_ind, cur_ind, lb(3), ub(3)
+        real            :: rad, find_stepsz, val
         type(image_ptr) :: pdiff_opt, pdiff, pweights
         ! init
         ldim              = odd%get_ldim()
@@ -400,36 +376,37 @@ contains
         dim3              = ldim(3)
         if( dim3 > 1 ) THROW_HARD('This opt_filter_2D is strictly for 2D!')
         ext               = params_glob%smooth_ext
-        find_stop         = kstop
+        find_stop         = optf2Dvars%lplim_hres
         find_start        = calc_fourier_index(params_glob%lp_lowres,  box, params_glob%smpd)
         find_stepsz       = real(find_stop - find_start)/(params_glob%nsearch - 1)
         lb                = (/ ext+1  , ext+1  , 1/)
         ub                = (/ box-ext, box-ext, dim3 /)
         ! searching for the best fourier index from here and generating the optimized filter
         best_ind          = find_start
-        call  weights_img%get_mat_ptrs(pweights)
-        call     diff_img%get_mat_ptrs(pdiff)
-        call diff_img_opt%get_mat_ptrs(pdiff_opt)
+        call weights_img%get_mat_ptrs(pweights)
+        call optf2Dvars%diff_img%get_mat_ptrs(pdiff)
+        call optf2Dvars%diff_img_opt%get_mat_ptrs(pdiff_opt)
         pdiff_opt%rmat = huge(val)
-        call  odd%get_rmat_ptr(rmat_odd)
+        call odd%get_rmat_ptr(rmat_odd)
         call even%get_rmat_ptr(rmat_even)
-        call  odd_filt%get_rmat_ptr(rmat_odd_filt)
-        call even_filt%get_rmat_ptr(rmat_even_filt)
+        call optf2Dvars%odd_filt%get_rmat_ptr(rmat_odd_filt)
+        call optf2Dvars%even_filt%get_rmat_ptr(rmat_even_filt)
         rmat_odd  = 0.
         rmat_even = 0.
         do iter_no = 1, params_glob%nsearch
             cur_ind = nint(find_start + (iter_no - 1)*find_stepsz)
             ! filtering odd/even
-            call  odd_filt%copy_fast(odd_copy_cmat)
-            call even_filt%copy_fast(even_copy_cmat)
-            call butterworth_filter( odd_filt, cur_ind)
-            call butterworth_filter(even_filt, cur_ind, cur_fil)
-            call batch_ifft_2D(even_filt, odd_filt, fft_vars)
-            call even_filt%opt_filter_costfun(odd_copy_rmat, odd_filt, even_copy_rmat, diff_img)
+            call optf2Dvars%odd_filt%copy_fast(optf2Dvars%odd_copy_cmat)
+            call optf2Dvars%even_filt%copy_fast(optf2Dvars%even_copy_cmat)
+            call butterworth_filter(optf2Dvars%odd_filt,  cur_ind, optf2Dvars%cur_fil, use_cache=.false.)
+            call butterworth_filter(optf2Dvars%even_filt, cur_ind, optf2Dvars%cur_fil, use_cache=.true.)
+            call batch_ifft_2D(optf2Dvars%even_filt, optf2Dvars%odd_filt, optf2Dvars)
+            call optf2Dvars%even_filt%opt_filter_costfun(optf2Dvars%odd_copy_rmat,&
+            &optf2Dvars%odd_filt, optf2Dvars%even_copy_rmat, optf2Dvars%diff_img)
             ! do the non-uniform, i.e. optimizing at each voxel
-            call diff_img%fft
+            call optf2Dvars%diff_img%fft
             pdiff%cmat  = pdiff%cmat * pweights%cmat
-            call diff_img%ifft
+            call optf2Dvars%diff_img%ifft
             do l = lb(2),ub(2)
                 do k = lb(1),ub(1)
                     if( pdiff%rmat(k,l,1) < pdiff_opt%rmat(k,l,1) )then
@@ -529,8 +506,8 @@ contains
             ! filtering odd/even
             call  odd_filt%copy_fast( odd_copy_cmat)
             call even_filt%copy_fast(even_copy_cmat)
-            call butterworth_filter( odd_filt, cur_ind)
-            call butterworth_filter(even_filt, cur_ind, cur_fil)
+            call butterworth_filter( odd_filt, cur_ind, cur_fil, use_cache=.false.)
+            call butterworth_filter(even_filt, cur_ind, cur_fil, use_cache=.true.)
             call batch_ifft_3D(even_filt, odd_filt, in, out, plan_bwd)
             call even_filt%opt_filter_costfun_workshare(odd_copy_rmat, odd_filt, even_copy_rmat, diff_img)
             ! do the non-uniform, i.e. optimizing at each voxel
