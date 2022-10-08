@@ -390,11 +390,9 @@ contains
         class(image),        intent(inout) :: odd, even, weights_img
         type(optfilt2Dvars), intent(inout) :: optf2Dvars
         real(kind=c_float),        pointer :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
-        type(image)     :: odd_filt_lowres, even_filt_lowres
-        integer         :: k,l, box, dim3, ldim(3), find_start, find_stop, iter_no, ext, best_ind, cur_ind, lb(3), ub(3)
-        real            :: rad, find_stepsz, val
+        integer         :: k,l, box, dim3, ldim(3), find_start, find_stop, iter_no, ext, cur_ind, lb(3), ub(3)
+        real            :: find_stepsz, val
         type(image_ptr) :: pdiff_opt, pdiff, pweights
-        logical         :: present_mask
         ! init
         ldim              = odd%get_ldim()
         box               = ldim(1)
@@ -407,7 +405,6 @@ contains
         lb                = (/ ext+1  , ext+1  , 1/)
         ub                = (/ box-ext, box-ext, dim3 /)
         ! searching for the best fourier index from here and generating the optimized filter
-        best_ind          = find_start
         call weights_img%get_mat_ptrs(pweights)
         call optf2Dvars%diff_img%get_mat_ptrs(pdiff)
         call optf2Dvars%diff_img_opt%get_mat_ptrs(pdiff_opt)
@@ -450,8 +447,8 @@ contains
         real(kind=c_float),        pointer :: rmat_odd(:,:,:), rmat_even(:,:,:), rmat_odd_filt(:,:,:), rmat_even_filt(:,:,:)
         real(kind=c_float),        pointer :: rmat_mask(:,:,:), rmat_odd_lowres(:,:,:), rmat_even_lowres(:,:,:)
         type(image)     :: odd_filt_lowres, even_filt_lowres
-        integer         :: k, l, box, dim3, ldim(3), find_start, find_stop, iter_no, ext, best_ind, cur_ind, lb(3), ub(3)
-        real            :: rad, find_stepsz, val, m
+        integer         :: k, l, box, dim3, ldim(3), find_start, find_stop, iter_no, ext, cur_ind, lb(3), ub(3)
+        real            :: find_stepsz, val, m
         type(image_ptr) :: pdiff_opt, pdiff, pweights
         if( .not. optf2Dvars%have_mask )then
             call opt_filter_2D(odd, even, weights_img, optf2Dvars)
@@ -469,7 +466,6 @@ contains
         lb                = (/ ext+1  , ext+1  , 1/)
         ub                = (/ box-ext, box-ext, dim3 /)
         ! searching for the best fourier index from here and generating the optimized filter
-        best_ind          = find_start
         call weights_img%get_mat_ptrs(pweights)
         call optf2Dvars%diff_img%get_mat_ptrs(pdiff)
         call optf2Dvars%diff_img_opt%get_mat_ptrs(pdiff_opt)
