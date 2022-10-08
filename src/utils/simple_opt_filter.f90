@@ -533,6 +533,8 @@ contains
         pdiff_opt%rmat = huge(val)
         call  odd%get_rmat_ptr(rmat_odd)
         call even%get_rmat_ptr(rmat_even)
+        rmat_odd  = 0.
+        rmat_even = 0.
         call  odd_filt%get_rmat_ptr( rmat_odd_filt)
         call even_filt%get_rmat_ptr(rmat_even_filt)
         do iter_no = 1, params_glob%nsearch
