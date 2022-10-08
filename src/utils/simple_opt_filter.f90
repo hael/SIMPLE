@@ -368,32 +368,19 @@ contains
         endif
     end function butterworth
 
-    ! Compute the Butterworth kernel of the order n-th of width w
-    ! with the cut-off frequency fc
-    ! https://en.wikipedia.org/wiki/Butterworth_filter
-    subroutine butterworth_filter(ker, n, fc)
-        real,    intent(inout) :: ker(:)
-        integer, intent(in)    :: n
-        real   , intent(in)    :: fc
-        integer :: freq_val
-        do freq_val = 1, size(ker)
-            ker(freq_val) = butterworth(real(freq_val-1), n, fc)
-        enddo
-    end subroutine butterworth_filter
-
-    subroutine apply_opt_filter(img, cur_ind, find_start, find_stop, cur_fil, use_cache, do_ifft)
-        class(image), intent(inout) :: img
-        integer,      intent(in)    :: cur_ind
-        integer,      intent(in)    :: find_start
-        integer,      intent(in)    :: find_stop
-        real,         intent(inout) :: cur_fil(:)
-        logical,      intent(in)    :: use_cache
-        logical,      intent(in), optional :: do_ifft
-        integer, parameter :: BW_ORDER = 8
-        if( .not. use_cache ) call butterworth_filter(cur_fil, BW_ORDER, real(cur_ind))
+    subroutine butterworth_filter(img, cur_ind, cur_fil)
+        class(image),   intent(inout) :: img
+        integer,        intent(in)    :: cur_ind
+        real, optional, intent(inout) :: cur_fil(:)
+        integer,        parameter     :: BW_ORDER = 8
+        integer                       :: freq_val
+        if( .not. present(cur_fil) )then
+            do freq_val = 1, size(cur_fil)
+                cur_fil(freq_val) = butterworth(real(freq_val-1), BW_ORDER, real(cur_ind))
+            enddo
+        endif
         call img%apply_filter(cur_fil)
-        if( (.not. present(do_ifft)) .or. do_ifft ) call img%ifft()
-    end subroutine apply_opt_filter
+    end subroutine butterworth_filter
 
     subroutine opt_filter_2D(odd, even, odd_copy_rmat, odd_copy_cmat, even_copy_rmat, even_copy_cmat,&
     &odd_filt, even_filt, cur_fil, weights_2D, kstop, weights_img, diff_img, diff_img_opt, fft_vars)
@@ -435,8 +422,8 @@ contains
             ! filtering odd/even
             call  odd_filt%copy_fast(odd_copy_cmat)
             call even_filt%copy_fast(even_copy_cmat)
-            call apply_opt_filter( odd_filt, cur_ind, find_start, find_stop, cur_fil, .false., do_ifft=.false.)
-            call apply_opt_filter(even_filt, cur_ind, find_start, find_stop, cur_fil, .true. , do_ifft=.false.)
+            call butterworth_filter( odd_filt, cur_ind)
+            call butterworth_filter(even_filt, cur_ind, cur_fil)
             call batch_ifft_2D(even_filt, odd_filt, fft_vars)
             call even_filt%opt_filter_costfun(odd_copy_rmat, odd_filt, even_copy_rmat, diff_img)
             ! do the non-uniform, i.e. optimizing at each voxel
@@ -542,8 +529,8 @@ contains
             ! filtering odd/even
             call  odd_filt%copy_fast( odd_copy_cmat)
             call even_filt%copy_fast(even_copy_cmat)
-            call apply_opt_filter( odd_filt, cur_ind, find_start, find_stop, cur_fil, .false., .false.)
-            call apply_opt_filter(even_filt, cur_ind, find_start, find_stop, cur_fil, .true. , .false.)
+            call butterworth_filter( odd_filt, cur_ind)
+            call butterworth_filter(even_filt, cur_ind, cur_fil)
             call batch_ifft_3D(even_filt, odd_filt, in, out, plan_bwd)
             call even_filt%opt_filter_costfun_workshare(odd_copy_rmat, odd_filt, even_copy_rmat, diff_img)
             ! do the non-uniform, i.e. optimizing at each voxel
