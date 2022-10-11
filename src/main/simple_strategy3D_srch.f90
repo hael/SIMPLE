@@ -8,6 +8,7 @@ use simple_pftcc_shsrch_grad,  only: pftcc_shsrch_grad  ! gradient-based in-plan
 use simple_pftcc_orisrch_grad, only: pftcc_orisrch_grad ! gradient-based search over all df:s
 use simple_polarft_corrcalc,   only: pftcc_glob, polarft_corrcalc
 use simple_cartft_corrcalc,    only: cartftcc_glob
+use simple_cftcc_shsrch_grad,  only: cftcc_shsrch_grad
 use simple_parameters,         only: params_glob
 use simple_builder,            only: build_glob
 use simple_strategy3D_alloc    ! singleton s3D
@@ -27,6 +28,7 @@ end type strategy3D_spec
 type strategy3D_srch
     type(pftcc_shsrch_grad)  :: grad_shsrch_obj           !< origin shift search object, L-BFGS with gradient
     type(pftcc_orisrch_grad) :: grad_orisrch_obj          !< obj 4 search over all df:s, L-BFGS with gradient
+    type(cftcc_shsrch_grad)  :: cart_shsrch_obj           !< origin shift search object in cartesian, L-BFGS with gradient
     type(ori)                :: o_prev                    !< previous orientation, used in continuous search 
     integer                  :: iptcl         = 0         !< global particle index
     integer                  :: ithr          = 0         !< thread index
@@ -62,6 +64,7 @@ type strategy3D_srch
     procedure, private :: inpl_srch_2
     generic            :: inpl_srch => inpl_srch_1, inpl_srch_2
     procedure          :: store_solution
+    procedure          :: cart_shsearch
     procedure          :: kill
 end type strategy3D_srch
 
@@ -148,13 +151,15 @@ contains
         self%l_greedy   = str_has_substr(params_glob%refine, 'greedy')
         self%l_cont     = str_has_substr(params_glob%refine, 'cont')
         self%l_ptclw    = trim(params_glob%ptclw).eq.'yes'
+        lims(:,1)       = -params_glob%trs
+        lims(:,2)       =  params_glob%trs
+        lims_init(:,1)  = -SHC_INPL_TRSHWDTH
+        lims_init(:,2)  =  SHC_INPL_TRSHWDTH
         ! create in-plane search object
-        if( .not. l_cartesian )then
+        if( l_cartesian )then
+            call self%cart_shsrch_obj%new(lims, lims_init=lims_init, shbarrier=params_glob%shbarrier, maxits=MAXITS)
+        else
             self%nrots      = pftcc_glob%get_nrots()
-            lims(:,1)       = -params_glob%trs
-            lims(:,2)       =  params_glob%trs
-            lims_init(:,1)  = -SHC_INPL_TRSHWDTH
-            lims_init(:,2)  =  SHC_INPL_TRSHWDTH
             call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
                 &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.true.)
             ! create all df:s search object
@@ -217,6 +222,16 @@ contains
         ! prep corr
         call cartftcc_glob%project_and_correlate(self%iptcl, self%o_prev, self%prev_corr)
     end subroutine prep4_cont_srch
+
+    subroutine cart_shsearch( self, o )
+        class(strategy3D_srch), intent(inout) :: self
+        type(ori),              intent(inout) :: o
+        real :: cxy(3)
+        call self%cart_shsrch_obj%set_pind( self%iptcl )
+        cxy = self%cart_shsrch_obj%minimize()
+        call o%set('x', cxy(2))
+        call o%set('y', cxy(3))
+    end subroutine cart_shsearch
 
     subroutine inpl_srch_1( self )
         class(strategy3D_srch), intent(inout) :: self
