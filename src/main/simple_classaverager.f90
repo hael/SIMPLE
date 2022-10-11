@@ -661,20 +661,39 @@ contains
     end subroutine cavger_merge_eos_and_norm
 
     !>  \brief  calculates Fourier ring correlations
-    subroutine cavger_calc_and_write_frcs_and_eoavg( fname )
+    subroutine cavger_calc_and_write_frcs_and_eoavg( fname, which_iter )
+        use simple_masker, only: automask2D
         character(len=*), intent(in) :: fname
-        type(image), allocatable     :: even_imgs(:), odd_imgs(:)
-        real,        allocatable     :: frc(:)
+        integer,          intent(in) :: which_iter
+        type(image), allocatable     :: even_imgs(:), odd_imgs(:), mask_imgs(:)
+        real,        allocatable     :: frc(:), diams(:)
         integer :: icls, find, find_plate
-        allocate(even_imgs(ncls), odd_imgs(ncls), frc(filtsz))
+        logical :: l_automsk
+        allocate(even_imgs(ncls), odd_imgs(ncls), mask_imgs(ncls), frc(filtsz), diams(ncls))
         do icls=1,ncls
             call even_imgs(icls)%copy(cavgs_even(icls))
             call odd_imgs(icls)%copy(cavgs_odd(icls))
+            call mask_imgs(icls)%copy(cavgs_even(icls))
+            call mask_imgs(icls)%add(cavgs_odd(icls))
+            call mask_imgs(icls)%mul(0.5)
         end do
+        l_automsk = trim(params_glob%automsk).eq.'yes' .and. which_iter > AMSK2D_ITERLIM
+
+        ! print *, ' in cavger_calc_and_write_frcs_and_eoavg, which_iter: ', which_iter
+        ! print *, ' in cavger_calc_and_write_frcs_and_eoavg, l_automsk:  ', l_automsk
+
+        if( l_automsk )then
+            call automask2D(mask_imgs, params_glob%ngrow, nint(params_glob%winsz), params_glob%edge, diams)
+        endif
         !$omp parallel do default(shared) private(icls,frc,find,find_plate) schedule(static) proc_bind(close)
         do icls=1,ncls
-            call even_imgs(icls)%mask(params_glob%msk, 'soft')
-            call odd_imgs(icls)%mask(params_glob%msk, 'soft')
+            if( l_automsk )then
+                call even_imgs(icls)%mul(mask_imgs(icls))
+                call odd_imgs(icls)%mul(mask_imgs(icls))
+            else
+                call even_imgs(icls)%mask(params_glob%msk, 'soft')
+                call odd_imgs(icls)%mask(params_glob%msk, 'soft')
+            endif
             call even_imgs(icls)%fft()
             call odd_imgs(icls)%fft()
             call even_imgs(icls)%fsc(odd_imgs(icls), frc)
@@ -711,7 +730,7 @@ contains
             call even_imgs(icls)%kill
             call odd_imgs(icls)%kill
         end do
-        deallocate(even_imgs, odd_imgs, frc)
+        deallocate(even_imgs, odd_imgs, frc, diams)
     end subroutine cavger_calc_and_write_frcs_and_eoavg
 
     ! I/O

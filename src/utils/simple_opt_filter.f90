@@ -199,6 +199,7 @@ contains
         integer          :: iptcl, box, filtsz, ldim(3), ldim_pd(3), smooth_ext
         integer          :: nptcls, hpind_fsc, find, c_shape(3), m, n
         logical          :: lpstart_fallback, l_phaseplate, have_mask
+        write(logfhandle,'(A)') '>>> 2D NONUNIFORM FILTERING'
         ! init
         ldim         = even(1)%get_ldim()
         filtsz       = even(1)%get_filtsz()

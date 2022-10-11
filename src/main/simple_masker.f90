@@ -274,7 +274,6 @@ contains
         logical, optional, intent(in)    :: write2disk
         type(binimage),    allocatable   :: img_bin(:), cc_img(:)
         real,              allocatable   :: ccsizes(:)
-        type(image),       allocatable   :: cos_img(:)
         integer :: i, n, loc(1), ldim(3)
         real    :: smpd
         logical :: l_write
@@ -286,12 +285,11 @@ contains
         allocate(diams(n), source=0.)
         ldim = imgs(1)%get_ldim()
         smpd = imgs(1)%get_smpd()
-        allocate(img_bin(n), cc_img(n), cos_img(n))
+        allocate(img_bin(n), cc_img(n))
         do i = 1,n
             call img_bin(i)%new_bimg(ldim, smpd, wthreads=.false.)
             call img_bin(i)%copy(imgs(i))
             call cc_img(i)%new_bimg( ldim, smpd, wthreads=.false.)
-            call cos_img(i)%new(     ldim, smpd, wthreads=.false.)
         end do
         write(logfhandle,'(A)') '>>> 2D AUTOMASKING'
         !$omp parallel do default(shared) private(i,ccsizes,loc) schedule(static) proc_bind(close)
@@ -304,14 +302,14 @@ contains
             ! if( l_write ) call img_bin(i)%write('filtered.mrc', i)
             ! binarize with Otsu
             call otsu_img(img_bin(i), mskrad=params_glob%msk, positive=trim(params_glob%positive).eq.'yes')
-            ! if( l_write   ) call img_bin(i)%write(BIN_OTSU, i)
+            ! if( l_write ) call img_bin(i)%write(BIN_OTSU, i)
             ! grow ngrow layers
             if( ngrow > 0 ) call img_bin(i)%grow_bins(ngrow)
-            ! if( l_write   ) call img_bin(i)%write(BIN_OTSU_GROWN, i)
+            ! if( l_write ) call img_bin(i)%write(BIN_OTSU_GROWN, i)
             ! find the largest connected component
             call img_bin(i)%find_ccs(cc_img(i))
             ccsizes = cc_img(i)%size_ccs()
-            loc = maxloc(ccsizes)
+            loc     = maxloc(ccsizes)
             ! estimate its diameter
             call cc_img(i)%diameter_cc(loc(1), diams(i))
             ! turn it into a binary image for mask creation
@@ -326,32 +324,18 @@ contains
             call cc_img(i)%fill_holes
             ! if( l_write ) call cc_img(i)%write(BIN_OTSU_HOLES_FILL, i)
             ! apply cosine egde to soften mask (to avoid Fourier artefacts)
-            call cc_img(i)%cos_edge(edge,cos_img(i))
-            ! if( l_write ) call cos_img(i)%write(MSK_OTSU, i)
-            ! apply
-            call imgs(i)%mul(cos_img(i))
-            ! if( l_write ) call imgs(i)%write(AMSK_OTSU, i)
-            ! fill-in holes
-            call cc_img(i)%fill_holes
-            ! if( l_write ) call cc_img(i)%write(BIN_OTSU_HOLES_FILL, i)
-            ! apply cosine egde to soften mask (to avoid Fourier artefacts)
-            call cc_img(i)%cos_edge(edge,cos_img(i))
-            ! if( l_write ) call cos_img(i)%write(MSK_OTSU, i)
-            ! apply
-            call imgs(i)%mul(cos_img(i))
-            ! if( l_write ) call imgs(i)%write(AMSK_OTSU, i)
-    end do
+            call imgs(i)%zero_and_unflag_ft
+            call cc_img(i)%cos_edge(edge,imgs(i))
+        end do
         !$omp end parallel do
         ! destruct
         do i = 1,n
             call img_bin(i)%kill_bimg
             call cc_img(i)%write('binarized_automask2D.mrc', i)
             call cc_img(i)%kill_bimg
-            call cos_img(i)%write(   'masks_automask2D.mrc', i)
-            call cos_img(i)%kill
-            call imgs(i)%write( 'automasked_automask2D.mrc', i)
+            call imgs(i)%write('masks_automask2D.mrc', i)
         end do
-        deallocate(img_bin, cc_img, cos_img)
+        deallocate(img_bin, cc_img)
         if( allocated(ccsizes) ) deallocate(ccsizes)
     end subroutine automask2D
 

@@ -215,7 +215,7 @@ contains
         rt_align         = 0.
         l_ctf            = build_glob%spproj%get_ctfflag('ptcl2D',iptcl=params_glob%fromp).ne.'no'
         l_np_cls_defined = cline%defined('nptcls_per_cls')
-        if( L_VERBOSE_GLOB ) write(logfhandle,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
+        write(logfhandle,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         ! Batch loop
         do ibatch=1,nbatches
             batch_start = batches(ibatch,1)
@@ -327,7 +327,7 @@ contains
             else
                 THROW_HARD('which_iter expected to be part of command line in shared-memory execution')
             endif
-            call cavger_calc_and_write_frcs_and_eoavg(params_glob%frcs)
+            call cavger_calc_and_write_frcs_and_eoavg(params_glob%frcs, params_glob%which_iter)
             ! classdoc gen needs to be after calc of FRCs
             call cavger_gen2Dclassdoc(build_glob%spproj)
             ! write references

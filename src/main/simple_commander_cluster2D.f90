@@ -170,7 +170,7 @@ contains
         call cavger_assemble_sums( .false. )
         if( l_shmem )then
             call cavger_merge_eos_and_norm
-            call cavger_calc_and_write_frcs_and_eoavg(params%frcs)
+            call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%which_iter)
             ! classdoc gen needs to be after calc of FRCs
             call cavger_gen2Dclassdoc(build%spproj)
             ! write references
@@ -677,7 +677,8 @@ contains
                 call cline_make_cavgs%set('projfile', orig_projfile)
                 call cline_make_cavgs%set('nparts',   real(params%nparts))
                 call cline_make_cavgs%set('refs',     trim(finalcavgs))
-                call cline_make_cavgs%delete('wiener') ! to ensure that full Wiener restoration is doen for the final cavgs
+                call cline_make_cavgs%delete('wiener') ! to ensure that full Wiener restoration is done for the final cavgs
+                call cline_make_cavgs%set('which_iter', real(last_iter_stage2)) ! to ensure masks are generated and used when automsk.eq.yes
                 if( l_shmem )then
                     params_ptr  => params_glob
                     params_glob => null()
@@ -860,6 +861,7 @@ contains
             endif
             iter = iter + 1
             params_glob%which_iter = iter
+            call cline%set('which_iter', real(iter))
             str_iter = int2str_pad(iter,3)
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
@@ -1109,7 +1111,7 @@ contains
             params%refs_odd  = 'start2Drefs_odd'//params%ext
         endif
         call terminate_stream('SIMPLE_CAVGASSEMBLE HARD STOP 1')
-        call cavger_calc_and_write_frcs_and_eoavg(params%frcs)
+        call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%which_iter)
         ! classdoc gen needs to be after calc of FRCs
         call cavger_gen2Dclassdoc(build%spproj)
         ! get iteration from which_iter else from refs filename and write cavgs starfile
