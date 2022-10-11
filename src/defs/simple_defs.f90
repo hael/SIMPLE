@@ -180,6 +180,7 @@ integer, parameter :: BATCHTHRSZ           = 50        !< # of images per thread
 integer, parameter :: FAST2D_MINSZ         = 25000     !< Minimum # of particles to sample for fast subset 2D classification
 integer, parameter :: FAST2D_NPTCLS_PER_CLS = 500      !< # of particles per class to sample for fast subset 2D classification
 integer, parameter :: FAST2D_ITER_BATCH    = 3         !< # of iterations after which # of particles is updated
+integer, parameter :: AMSK2D_ITERLIM       = 10        !< envelope masking from iteration 11 and onwards
 
 ! weighting scheme
 real, parameter :: RANKW_EXP = 2.0              !< Exponent for exponential rank weights

@@ -166,7 +166,7 @@ contains
             call cavger_read(params_glob%refs, 'odd')
         endif
         if( params_glob%l_nonuniform )then
-            if( trim(params_glob%automsk).eq.'yes' .and. which_iter > 10 )then
+            if( trim(params_glob%automsk).eq.'yes' .and. which_iter > AMSK2D_ITERLIM )then
                 do icls = 1,params_glob%ncls
                     call build_glob%env_masks(icls)%copy(cavgs_even(icls))
                     call build_glob%env_masks(icls)%add(cavgs_odd(icls))
