@@ -10,10 +10,11 @@ use simple_qsys_env,       only: qsys_env
 use simple_image,          only: image
 use simple_stack_io,       only: stack_io
 use simple_starproject,    only: starproject
-use simple_estimate_ssnr,  only: mskdiam2lplimits, fsc2optlp_sub
+use simple_estimate_ssnr,  only: fsc2optlp_sub
 use simple_qsys_funs
 use simple_procimgstk
 use simple_progress
+use simple_default_clines
 implicit none
 
 public :: cleanup2D_commander_hlev
@@ -492,21 +493,10 @@ contains
         type(sp_project)              :: spproj, spproj_sc
         character(len=:), allocatable :: projfile_sc, orig_projfile
         character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
-        real     :: scale_stage1, scale_stage2, trs_stage2, mskdiam, lpstart, lpstop, lpcen
+        real     :: scale_stage1, scale_stage2, trs_stage2, lpstart, lpstop, lpcen
         integer  :: last_iter_stage1, last_iter_stage2
         logical  :: scaling, l_shmem
-        mskdiam = cline%get_rarg('mskdiam')
-        call mskdiam2lplimits(cline%get_rarg('mskdiam'), lpstart, lpstop, lpcen)
-        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',      'yes')
-        if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
-        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',  lpstart)
-        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',    lpstop)
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      lpcen)
-        if( .not. cline%defined('maxits')    ) call cline%set('maxits',      30. )
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
-        if( .not.cline%defined('refine')     ) call cline%set('refine',    'snhc')
-        if( .not. cline%defined('wiener')    ) call cline%set('wiener',    'full')
-        if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',       'no')
+        call set_cluster2D_defaults( cline )
         call cline%delete('clip')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
@@ -765,19 +755,10 @@ contains
         character(len=LONGSTRLEN) :: refs, refs_even, refs_odd, str, str_iter, finalcavgs
         integer                   :: iter, cnt, iptcl, ptclind, fnr
         type(chash)               :: job_descr
-        real                      :: frac_srch_space, mskdiam, lpstart, lpstop, lpcen
+        real                      :: frac_srch_space, lpstart, lpstop, lpcen
         logical :: l_stream
-        mskdiam = cline%get_rarg('mskdiam')
-        call mskdiam2lplimits(cline%get_rarg('mskdiam'), lpstart, lpstop, lpcen)
         call cline%set('prg','cluster2D')
-        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',  lpstart)
-        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',    lpstop)
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      lpcen)
-        if( .not. cline%defined('maxits')    ) call cline%set('maxits',      30. )
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale',  'yes')
-        if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
-        if( .not. cline%defined('wiener')    ) call cline%set('wiener',    'full')
-        if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',    'no')
+        call set_cluster2D_defaults( cline )
         l_stream = .false.
         if( cline%defined('stream') )then
             l_stream = trim(cline%get_carg('stream'))=='yes'
@@ -1075,7 +1056,6 @@ contains
                 ! update class information and write cavgs starfile for iteration
                 call cavger_gen2Dclassdoc(build%spproj)
                 call starproj%export_cls2D(build%spproj, params%which_iter)
-
                 if( converged .or. i == params%maxits )then
                     ! report the last iteration on exit
                     call cline%delete( 'startit' )
@@ -1135,7 +1115,7 @@ contains
         ! get iteration from which_iter else from refs filename and write cavgs starfile
         if( cline%defined('which_iter') ) then
             call starproj%export_cls2D(build%spproj, params%which_iter)
-        else if( cline%defined('refs') ) then          
+        else if( cline%defined('refs') ) then
             iterstr_start = index(params%refs, trim(CAVGS_ITER_FBODY)) + 10
             iterstr_end = index(params%refs, trim(params%ext)) - 1
             call str2int(params%refs(iterstr_start:iterstr_end), io_stat, iter)
@@ -1724,8 +1704,7 @@ contains
             if( file_exists(TERM_STREAM) )then
                 call simple_end('**** '//trim(msg)//' ****', print_simple=.false.)
             endif
-
         endif
-    end
+    end subroutine terminate_stream
 
 end module simple_commander_cluster2D

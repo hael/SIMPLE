@@ -7,6 +7,7 @@ use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_image,          only: image
 use simple_masker,         only: masker
+use simple_default_clines
 implicit none
 
 public :: mask_commander
@@ -111,10 +112,7 @@ contains
         type(image), allocatable :: imgs(:)
         real,        allocatable :: diams(:)
         integer :: ldim(3), n, i
-        if( .not. cline%defined('ngrow')  ) call cline%set('ngrow',   5.)
-        if( .not. cline%defined('winsz')  ) call cline%set('winsz',   5.)
-        if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 20.)
-        if( .not. cline%defined('edge')   ) call cline%set('edge',    6.)
+        call set_automask2D_defaults( cline )
         call params%new(cline)
         call find_ldim_nptcls(params%stk, ldim, n)
         ldim(3) = 1 ! 2D

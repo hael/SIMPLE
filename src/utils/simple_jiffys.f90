@@ -50,26 +50,18 @@ contains
             endif
         endif
     end subroutine progress_gfortran
-    
+
     !> \brief  is for pretty elapsed time printing
     subroutine simple_print_timer( elapsed )
         real(timer_int_kind),  intent(in) :: elapsed
-       
-        write(logfhandle,'(A)') " "
         write(logfhandle,'(A,F9.2,A)') ">>> Execution time : ", elapsed, " seconds"
-        write(logfhandle,'(A)') " "
-        
     end subroutine simple_print_timer
-    
+
     subroutine simple_print_git_version( git_hash )
         character(len=*), intent(in) :: git_hash
-       
-        write(logfhandle,'(A)') " "
         write(logfhandle,'(A,A)') ">>> SIMPLE Version : ", git_hash
-        write(logfhandle,'(A)') " "
-        
     end subroutine simple_print_git_version
-    
+
     !> \brief  is for pretty ending
     subroutine simple_end( str, print_simple )
         use simple_syslib,  only: get_process_id, del_file
