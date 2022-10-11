@@ -179,7 +179,10 @@ contains
             call even(iptcl)%new(params%ldim, params%smpd, .false.)
             call odd( iptcl)%read(params%stk,  iptcl)
             call even(iptcl)%read(params%stk2, iptcl)
-            if( have_mask ) call mask(iptcl)%read(params%stk3, iptcl)
+            if( have_mask )then
+                call mask(iptcl)%new(params%ldim, params%smpd, .false.)
+                call mask(iptcl)%read(params%stk3, iptcl)
+            endif
         enddo
         ! filter
         if( have_mask )then

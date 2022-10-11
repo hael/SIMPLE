@@ -317,24 +317,39 @@ contains
 
     ! otsu binarization for images, based on the implementation
     ! of otsu algo for 1D vectors
-    subroutine otsu_img( img, thresh, positive )
-        use simple_math, only : otsu
+    subroutine otsu_img( img, thresh, mskrad, positive )
+        use simple_math, only: otsu
         class(image),      intent(inout) :: img
         real,    optional, intent(inout) :: thresh
+        real,    optional, intent(in)    :: mskrad
         logical, optional, intent(in)    :: positive ! consider just the positive range (specific for nanoparticles)
-        real, pointer     :: rmat(:,:,:)
-        real, allocatable :: x(:)
-        integer           :: ldim(3)
-        logical           :: ppositive
-        real              :: selected_t
+        real,    pointer     :: rmat(:,:,:)
+        real,    allocatable :: x(:)
+        logical, allocatable :: lmsk(:,:,:)
+        type(image) :: tmpimg
+        integer     :: ldim(3)
+        logical     :: ppositive
+        real        :: selected_t
+        ldim = img%get_ldim()
+        if( present(mskrad) )then
+            call tmpimg%disc(ldim, img%get_smpd(), mskrad, lmsk)
+            call tmpimg%kill
+        endif
         ppositive = .false.
         if( present(positive) ) ppositive = positive
-        ldim = img%get_ldim()
         call img%get_rmat_ptr(rmat)
         if( ppositive ) then
-            x = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), rmat(1:ldim(1),1:ldim(2),1:ldim(3)) > 0.)
+            if( allocated(lmsk) )then
+                x = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), rmat(1:ldim(1),1:ldim(2),1:ldim(3)) > 0. .and. lmsk)
+            else
+                x = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), rmat(1:ldim(1),1:ldim(2),1:ldim(3)) > 0. )
+            endif
         else
-            x = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), .true.)
+            if( allocated(lmsk) )then
+                x = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), lmsk)
+            else
+                x = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), .true.)
+            endif
         endif
         call otsu(x, selected_t)
         if(present(thresh)) thresh= selected_t
@@ -344,6 +359,7 @@ contains
         elsewhere
             rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = 0.
         endwhere
+        if( allocated(lmsk) ) deallocate(lmsk)
     end subroutine otsu_img
 
     ! Source : An Equivalent 3D Otsu’s Thresholding Method,

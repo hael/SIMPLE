@@ -306,13 +306,11 @@ contains
                 call img_bin(i)%NLmean 
                 ! if( l_write ) call img_bin(i)%write('filtered.mrc', i)
                 ! binarize with Otsu
-                call otsu_img(img_bin(i))
+                call otsu_img(img_bin(i), mskrad=params_glob%msk, positive=trim(params_glob%positive).eq.'yes')
                 ! if( l_write   ) call img_bin(i)%write(BIN_OTSU, i)
                 ! grow ngrow layers
                 if( ngrow > 0 ) call img_bin(i)%grow_bins(ngrow)
                 ! if( l_write   ) call img_bin(i)%write(BIN_OTSU_GROWN, i)
-                ! hard masking
-                call img_bin(i)%mask(params_glob%msk, 'hard')
                 ! find the largest connected component
                 call img_bin(i)%find_ccs(cc_img(i))
                 ccsizes = cc_img(i)%size_ccs()
