@@ -126,7 +126,7 @@ contains
             call odd%mask(params%msk, 'soft')
             call mskvol%disc([params%box,params%box,params%box], params%smpd,&
             &real(min(params%box/2, int(params%msk + COSMSKHALFWIDTH))))
-        endif        
+        endif
         call opt_filter_3D(odd, even, mskvol)
         if( have_mask_file )then
             call mskvol%read(params%mskfile) ! restore the soft edge
@@ -148,44 +148,42 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_OPT_3D_FILTER NORMAL STOP ****')
     end subroutine exec_opt_3D_filter
-    
+
     subroutine exec_opt_2D_filter( self, cline )
         use simple_opt_filter, only: opt_2D_filter_sub
         use simple_tvfilter,   only: tvfilter
         use simple_class_frcs, only: class_frcs
+        use simple_masker,     only: automask2D
+        use simple_default_clines
         class(opt_2D_filter_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         character(len=:), allocatable :: file_tag
         type(image),      allocatable :: even(:), odd(:), mask(:)
+        real,             allocatable :: diams(:)
         type(parameters) :: params
         integer          :: iptcl
-        logical          :: have_mask
         ! init
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        have_mask = cline%defined('stk3')
-        call params%new(cline) 
+        call set_automask2D_defaults(cline)
+        call params%new(cline)
         call find_ldim_nptcls(params%stk, params%ldim, params%nptcls)
         params%ldim(3) = 1 ! because we operate on stacks
         file_tag = 'nonuniform_2D_filter_ext_'//int2str(params%smooth_ext)
         ! allocate
-        if( have_mask )then
-            allocate(odd(params%nptcls), even(params%nptcls), mask(params%nptcls))
-        else
-            allocate(odd(params%nptcls), even(params%nptcls))
-        endif
+        allocate(odd(params%nptcls), even(params%nptcls), mask(params%nptcls))
         ! construct & read
         do iptcl = 1, params%nptcls
             call odd( iptcl)%new(params%ldim, params%smpd, .false.)
             call even(iptcl)%new(params%ldim, params%smpd, .false.)
             call odd( iptcl)%read(params%stk,  iptcl)
             call even(iptcl)%read(params%stk2, iptcl)
-            if( have_mask )then
-                call mask(iptcl)%new(params%ldim, params%smpd, .false.)
-                call mask(iptcl)%read(params%stk3, iptcl)
-            endif
+            call mask(iptcl)%copy(odd(iptcl))
+            call mask(iptcl)%add(even(iptcl))
+            call mask(iptcl)%mul(0.5)
         enddo
         ! filter
-        if( have_mask )then
+        if( trim(params%automsk).eq.'yes' )then
+            call automask2D(mask, params%ngrow, nint(params%winsz), params%edge, diams)
             call opt_2D_filter_sub(even, odd, mask)
         else
             call opt_2D_filter_sub(even, odd)
@@ -200,6 +198,7 @@ contains
             call odd( iptcl)%kill()
             call even(iptcl)%kill()
         end do
+        if( allocated(diams) ) deallocate(diams)
         ! end gracefully
         call simple_end('**** SIMPLE_OPT_2D_FILTER NORMAL STOP ****')
     end subroutine exec_opt_2D_filter

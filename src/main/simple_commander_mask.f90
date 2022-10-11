@@ -109,24 +109,29 @@ contains
         class(automask2D_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
         type(parameters)         :: params
-        type(image), allocatable :: imgs(:)
+        type(image), allocatable :: imgs(:), masks(:)
         real,        allocatable :: diams(:)
         integer :: ldim(3), n, i
-        call set_automask2D_defaults( cline )
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call set_automask2D_defaults(cline)
         call params%new(cline)
         call find_ldim_nptcls(params%stk, ldim, n)
         ldim(3) = 1 ! 2D
-        allocate(imgs(n), diams(n))
+        allocate(imgs(n), masks(n), diams(n))
         diams = 0.
         do i = 1,n
             call imgs(i)%new(ldim, params%smpd)
             call imgs(i)%read(params%stk, i)
+            call masks(i)%copy(imgs(i))
         end do
-        call automask2D(imgs, params%ngrow, nint(params%winsz), params%edge, diams)
+        call automask2D(masks, params%ngrow, nint(params%winsz), params%edge, diams)
         do i = 1,n
+            call imgs(i)%mul(masks(i))
+            call imgs(i)%write('automasked.mrc', i)
+            call masks(i)%kill
             call imgs(i)%kill
         end do
-        deallocate(imgs, diams)
+        deallocate(imgs, masks, diams)
         ! end gracefully
         call simple_end('**** SIMPLE_AUTOMASK2D NORMAL STOP ****')
     end subroutine exec_automask2D
