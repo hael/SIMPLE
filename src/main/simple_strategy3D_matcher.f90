@@ -295,11 +295,9 @@ contains
                 call strategy3Dsrch(iptcl_batch)%ptr%kill
                 ! calculate sigma2 for ML-based refinement
                 if ( params_glob%l_needs_sigma ) then
-                    if( params_glob%which_iter > 1 )then
-                        call build_glob%spproj_field%get_ori(iptcl, orientation)
-                        if( orientation%isstatezero() ) cycle
-                        call eucl_sigma%calc_sigma2(build_glob%spproj_field, iptcl, orientation)
-                    endif
+                    call build_glob%spproj_field%get_ori(iptcl, orientation)
+                    if( orientation%isstatezero() ) cycle
+                    call eucl_sigma%calc_sigma2(build_glob%spproj_field, iptcl, orientation)
                 end if
             enddo ! Particles loop
             !$omp end parallel do
@@ -408,7 +406,7 @@ contains
         call pftcc%new(nrefs, [1,batchsz_max], params_glob%l_match_filt)
         if( params_glob%l_needs_sigma )then
             fname = SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat'
-            call eucl_sigma%new(fname)
+            call eucl_sigma%new(fname, params_glob%box)
             call eucl_sigma%read_part(  build_glob%spproj_field, ptcl_mask)
             call eucl_sigma%read_groups(build_glob%spproj_field, ptcl_mask)
         end if
@@ -455,11 +453,6 @@ contains
             end do
             !$omp end parallel do
         end do
-        if( params_glob%l_needs_sigma .and. params_glob%cc_objfun /= OBJFUN_EUCLID ) then
-            ! When calculating sigma2 prior to OBJFUN_EUCLID the references are zeroed out
-            !  beyond the resolution limit such that sigma2 is the weighted sum of particle power spectrum
-            call pftcc%zero_refs_beyond_kstop
-        endif
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 
@@ -621,7 +614,7 @@ contains
                         call build_glob%imgbatch(ibatch)%noise_norm(build_glob%lmsk, sdev_noise)
                         call build_glob%imgbatch(ibatch)%fft
                         ctfparms(ibatch) = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-                        call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), iptcl=iptcl)
+                        call fpls(ibatch)%gen_planes(build_glob%imgbatch(ibatch), ctfparms(ibatch), iptcl=iptcl, serial=.true.)
                     end do
                     !$omp end parallel do
                     ! gridding

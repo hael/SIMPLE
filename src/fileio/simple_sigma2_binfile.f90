@@ -24,6 +24,7 @@ contains
     ! I/O
     procedure                     :: read
     procedure                     :: write
+    procedure                     :: write_info
     procedure, private            :: create_empty
     procedure, private            :: open_and_check_header
     procedure, private            :: read_header
@@ -68,6 +69,16 @@ contains
         self%sigmassz         = sizeof(r)*(self%kfromto(2)-self%kfromto(1)+1)
         self%exists = .true.
     end subroutine new_from_file
+
+    ! utils
+
+    subroutine write_info( self )
+        class(sigma2_binfile), intent(in) :: self
+        write(logfhandle,*) 'fromto:   ',self%kfromto
+        write(logfhandle,*) 'fromp:    ',self%fromp
+        write(logfhandle,*) 'top:      ',self%top
+        write(logfhandle,*) 'sigmassz: ',self%sigmassz
+    end subroutine write_info
 
     ! I/O
 

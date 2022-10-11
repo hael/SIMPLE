@@ -139,7 +139,6 @@ type :: polarft_corrcalc
     procedure          :: vis_ptcl
     procedure          :: vis_ref
     ! MODIFIERS
-    procedure          :: zero_refs_beyond_kstop
     procedure          :: shift_ptcl
     procedure, private :: shellnorm_and_filter_ref
     procedure, private :: shellnorm_and_filter_ref_8
@@ -755,15 +754,6 @@ contains
     end subroutine print
 
     ! MODIFIERS
-
-    subroutine zero_refs_beyond_kstop( self )
-        class(polarft_corrcalc), intent(inout) :: self
-        if( params_glob%kstop == params_glob%kfromto(2) ) return
-        !$omp workshare
-        self%pfts_refs_even(:,params_glob%kstop+1:params_glob%kfromto(2),:) = zero
-        self%pfts_refs_odd( :,params_glob%kstop+1:params_glob%kfromto(2),:) = zero
-        !$omp end workshare
-    end subroutine zero_refs_beyond_kstop
 
     subroutine shift_ptcl( self, iptcl, shvec)
         class(polarft_corrcalc),  intent(inout) :: self
@@ -2153,7 +2143,7 @@ contains
         integer,                 intent(in)    :: iref, iptcl
         real(sp),                intent(in)    :: shvec(2)
         integer,                 intent(in)    :: irot
-        real(sp),                intent(out)   :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
+        real(sp),                intent(out)   :: sigma_contrib(params_glob%kfromto(1):params_glob%kstop)
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         integer  :: i, ithr, k
         i       =  self%pinds(iptcl)
@@ -2171,7 +2161,7 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        do k = params_glob%kfromto(1), params_glob%kfromto(2)
+        do k = params_glob%kfromto(1), params_glob%kstop
             sigma_contrib(k) = 0.5 * self%calc_euclidk_for_rot(pft_ref, i, k, irot) / real(self%pftsz)
         end do
     end subroutine gencorr_sigma_contrib

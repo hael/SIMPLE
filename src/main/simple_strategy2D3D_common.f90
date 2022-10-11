@@ -639,7 +639,8 @@ contains
     end subroutine preprefvol_2
 
     subroutine norm_struct_facts( cline, which_iter )
-        use simple_masker, only: masker
+        use simple_masker,        only: masker
+        use simple_euclid_sigma2, only: apply_euclid_regularization
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         character(len=:), allocatable :: mskfile
@@ -682,10 +683,17 @@ contains
                 endif
                 params_glob%vols_even(s) = add2fbody(params_glob%vols(s), params_glob%ext, '_even')
                 params_glob%vols_odd(s)  = add2fbody(params_glob%vols(s), params_glob%ext, '_odd')
-                call build_glob%eorecvols(s)%sum_eos
-                call build_glob%eorecvols(s)%sampl_dens_correct_eos(s, params_glob%vols_even(s), &
-                    &params_glob%vols_odd(s), find4eoavg)
-                call build_glob%eorecvols(s)%get_res(res05s(s), res0143s(s))
+                if( apply_euclid_regularization() )then
+                    call build_glob%eorecvols(s)%sampl_dens_correct_eos(s, params_glob%vols_even(s), &
+                        &params_glob%vols_odd(s), find4eoavg)
+                    call build_glob%eorecvols(s)%get_res(res05s(s), res0143s(s))
+                    call build_glob%eorecvols(s)%sum_eos
+                else
+                    call build_glob%eorecvols(s)%sum_eos
+                    call build_glob%eorecvols(s)%sampl_dens_correct_eos(s, params_glob%vols_even(s), &
+                        &params_glob%vols_odd(s), find4eoavg)
+                    call build_glob%eorecvols(s)%get_res(res05s(s), res0143s(s))
+                endif
                 call build_glob%eorecvols(s)%sampl_dens_correct_sum(build_glob%vol)
                 call build_glob%vol%write(params_glob%vols(s), del_if_exists=.true.)
                 call simple_copy_file(trim(params_glob%vols(s)),trim(VOL_FBODY)//int2str_pad(s,2)//params_glob%ext)
