@@ -38,8 +38,7 @@ contains
             call self%s%prep4srch
             corr = -huge(corr)
             do iref=1,self%s%nrefs
-                if( .not.s2D%cls_mask(iref,self%s%ithr) )cycle
-                ! if( s2D%cls_pops(iref) == 0 )cycle
+                if( s2D%cls_pops(iref) == 0 )cycle
                 ! class best
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs)
                 inpl_ind  = maxloc(corrs, dim=1)
