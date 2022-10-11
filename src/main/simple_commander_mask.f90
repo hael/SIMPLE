@@ -110,7 +110,6 @@ contains
         type(parameters)         :: params
         type(image), allocatable :: imgs(:)
         real,        allocatable :: diams(:)
-        logical,     allocatable :: mask(:)
         integer :: ldim(3), n, i
         if( .not. cline%defined('ngrow')  ) call cline%set('ngrow',   5.)
         if( .not. cline%defined('winsz')  ) call cline%set('winsz',   5.)
@@ -119,18 +118,17 @@ contains
         call params%new(cline)
         call find_ldim_nptcls(params%stk, ldim, n)
         ldim(3) = 1 ! 2D
-        allocate(imgs(n), diams(n), mask(n))
+        allocate(imgs(n), diams(n))
         diams = 0.
-        mask  = .true.
         do i = 1,n
             call imgs(i)%new(ldim, params%smpd)
             call imgs(i)%read(params%stk, i)
         end do
-        call automask2D(imgs, mask, params%ngrow, nint(params%winsz), params%edge, diams)
+        call automask2D(imgs, params%ngrow, nint(params%winsz), params%edge, diams)
         do i = 1,n
             call imgs(i)%kill
         end do
-        deallocate(imgs, diams, mask)
+        deallocate(imgs, diams)
         ! end gracefully
         call simple_end('**** SIMPLE_AUTOMASK2D NORMAL STOP ****')
     end subroutine exec_automask2D

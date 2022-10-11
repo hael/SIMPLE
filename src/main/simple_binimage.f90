@@ -259,7 +259,7 @@ contains
         integer :: n_cc, imax
         if( .not. any(self%bimat > 0) )then
             allocate(sz(1), source=0)
-            THROW_WARN('Inputted non-existent cc; size_ccs')
+            ! THROW_WARN('Inputted non-existent cc; size_ccs')
             return
         endif
         if( allocated(sz) ) deallocate( sz )
@@ -424,7 +424,7 @@ contains
         real  :: radius
         if(.not. any(self%bimat > 0)) then
             diam = 0.
-            THROW_WARN('Inputted non-existent cc; diameter_cc')
+            ! THROW_WARN('Inputted non-existent cc; diameter_cc')
             return
         endif
         allocate(imat_cc(self%bldim(1),self%bldim(2),self%bldim(3)), source=self%bimat)
@@ -494,7 +494,7 @@ contains
         class(binimage), intent(inout) :: self  ! cc image
         integer,         intent(in)    :: n_cc  ! label of the cc to keep
         if(.not. any(self%bimat > 0)) then
-            THROW_WARN('Inputted non-existent cc; cc2bin')
+            ! THROW_WARN('Inputted non-existent cc; cc2bin')
             return
         endif
         where(self%bimat .ne. n_cc) self%bimat = 0

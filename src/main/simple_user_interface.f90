@@ -1163,22 +1163,22 @@ contains
         &'2D envelope masking',&                               ! descr_short
         &'is a program for automated envelope masking in 2D',& ! descr_long
         &'simple_exec',&                                       ! executable
-        &1, 2, 0, 0, 1, 4, 1, .false.)                         ! # entries in each group, requires sp_project
+        &1, 1, 0, 0, 2, 4, 1, .false.)                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call automask2D%set_input('img_ios', 1, stk)
         automask2D%img_ios(1)%required = .true.
         ! parameter input/output
         call automask2D%set_input('parm_ios', 1, smpd)
-        call automask2D%set_input('parm_ios', 2, 'winsz', 'num', 'Window size for median filter',&
-        &'Window size for median filter(in pixels)', 'winsz in pixels', .false., 5.0)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
         call automask2D%set_input('filt_ctrls', 1, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
-        & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
+        & 'Low-pass limit for envelope mask generation in Angstroms{20 A}', 'low-pass limit in Angstroms{20 A}', .false., 20.)
+        call automask2D%set_input('filt_ctrls', 2, 'winsz', 'num', 'Window size for median filter',&
+        &'Window size for median filter(in pixels)', 'winsz in pixels', .false., 5.0)
         ! mask controls
         call automask2D%set_input('mask_ctrls', 1, mskdiam)
         call automask2D%set_input('mask_ctrls', 2, 'ngrow', 'num', '# layers to grow',&
@@ -1441,7 +1441,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_exec',&                                                        ! executable
-        &1, 0, 0, 10, 12, 1, 2, .true.)                                         ! # entries in each group, requires sp_project
+        &1, 0, 0, 10, 14, 4, 2, .true.)                                         ! # entries in each group, requires sp_project
         cluster2D%gui_submenu_list = "search,mask,filter"
         cluster2D%advanced = .false.
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1508,9 +1508,23 @@ contains
         call cluster2D%set_gui_params('filt_ctrls', 11, submenu="filter")
         call cluster2D%set_input('filt_ctrls', 12, nsearch)
         call cluster2D%set_gui_params('filt_ctrls', 12, submenu="filter")
+        call cluster2D%set_input('filt_ctrls', 13, 'winsz', 'num', 'Window size for median filter',&
+        &'Window size for median filter(in pixels)', 'winsz in pixels', .false., 5.0)
+        call cluster2D%set_gui_params('filt_ctrls', 13, submenu="filter")
+        call cluster2D%set_input('filt_ctrls', 14, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
+        & 'Low-pass limit for envelope mask generation in Angstroms{20 A}', 'low-pass limit in Angstroms{20 A}', .false., 20.)
+        call cluster2D%set_gui_params('filt_ctrls', 14, submenu="filter")
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, mskdiam)
         call cluster2D%set_gui_params('mask_ctrls', 1, submenu="mask")
+        call cluster2D%set_input('mask_ctrls', 2, 'edge', 'num', 'Envelope mask soft edge',&
+        &'Cosine edge size for softening molecular envelope in pixels{6}', '# pixels cosine edge{6}', .false., 6.)
+        call cluster2D%set_gui_params('mask_ctrls', 2, submenu="mask")
+        call cluster2D%set_input('mask_ctrls', 3, 'ngrow', 'num', '# layers to grow',&
+        &'Binary layers grown for molecular envelope in pixels{3}', 'width of binary layers grown in pixels{3}', .false., 3.)
+        call cluster2D%set_gui_params('mask_ctrls', 3, submenu="mask")
+        call cluster2D%set_input('mask_ctrls', 4, automsk)
+        call cluster2D%set_gui_params('mask_ctrls', 4, submenu="mask")
         ! computer controls
         call cluster2D%set_input('comp_ctrls', 1, nparts)
         cluster2D%comp_ctrls(1)%required = .false.
