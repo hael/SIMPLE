@@ -21,6 +21,7 @@ use simple_strategy2D_snhc,     only: strategy2D_snhc
 use simple_strategy2D_inpl,     only: strategy2D_inpl
 use simple_strategy2D_eval,     only: strategy2D_eval
 use simple_opt_filter,          only: opt_2D_filter_sub
+use simple_masker,              only: automask2D
 use simple_classaverager
 use simple_progress
 implicit none
@@ -51,7 +52,7 @@ contains
         type(convergence) :: conv
         type(cmdline)     :: cline_opt_filt
         real    :: frac_srch_space, snhc_sz, frac
-        integer :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update, min_nsamples
+        integer :: iptcl, fnr, updatecnt, iptcl_map, nptcls2update, min_nsamples, icls
         integer :: batchsz, nbatches, batch_start, batch_end, iptcl_batch, ibatch
         logical :: doprint, l_partial_sums, l_frac_update, l_ctf, have_frcs
         logical :: l_snhc, l_greedy, l_stream, l_np_cls_defined
@@ -165,10 +166,20 @@ contains
             call cavger_read(params_glob%refs, 'odd')
         endif
         if( params_glob%l_nonuniform )then
-            call opt_2D_filter_sub(cavgs_even, cavgs_odd)
+            if( trim(params_glob%automsk).eq.'yes' .and. which_iter > 10 )then
+                do icls = 1,params_glob%ncls
+                    call build_glob%env_masks(icls)%copy(cavgs_even(icls))
+                    call build_glob%env_masks(icls)%add(cavgs_odd(icls))
+                    call build_glob%env_masks(icls)%mul(0.5)
+                enddo
+                call automask2D(build_glob%env_masks, params_glob%ngrow, nint(params_glob%winsz), params_glob%edge, build_glob%diams)
+                call opt_2D_filter_sub(cavgs_even, cavgs_odd, build_glob%env_masks)
+            else
+                call opt_2D_filter_sub(cavgs_even, cavgs_odd)
+            endif
             if( params_glob%part.eq.1 )then
-                do iptcl = 1,size(cavgs_even)
-                    call cavgs_even(iptcl)%write('filtered_refs_iter'//int2str_pad(which_iter,2)//'.mrc', iptcl)
+                do icls = 1,params_glob%ncls
+                    call cavgs_even(icls)%write('filtered_refs_iter'//int2str_pad(which_iter,2)//'.mrc', icls)
                 enddo
             endif
         endif

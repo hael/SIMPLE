@@ -265,11 +265,10 @@ contains
         deallocate(rmat)
     end subroutine env_rproject
 
-    subroutine automask2D( imgs, mask, ngrow, winsz, edge, diams, write2disk )
+    subroutine automask2D( imgs, ngrow, winsz, edge, diams, write2disk )
         use simple_segmentation
         use simple_binimage, only: binimage
         class(image),      intent(inout) :: imgs(:)
-        logical,           intent(in)    :: mask(:)
         integer,           intent(in)    :: ngrow, winsz, edge
         real, allocatable, intent(inout) :: diams(:)
         logical, optional, intent(in)    :: write2disk
@@ -280,7 +279,6 @@ contains
         real    :: smpd
         logical :: l_write
         n = size(imgs)
-        if( size(mask) /= n ) THROW_HARD('mask array size does not conform with image array; automask2D')
         l_write = .false.
         if( present(write2disk) ) l_write = write2disk
         if( allocated(diams) ) deallocate(diams)
@@ -288,7 +286,7 @@ contains
         allocate(diams(n), source=0.)
         ldim = imgs(1)%get_ldim()
         smpd = imgs(1)%get_smpd()
-        allocate(img_bin(n), cc_img(n), cos_img(n)) 
+        allocate(img_bin(n), cc_img(n), cos_img(n))
         do i = 1,n
             call img_bin(i)%new_bimg(ldim, smpd, wthreads=.false.)
             call img_bin(i)%copy(imgs(i))
@@ -298,44 +296,51 @@ contains
         write(logfhandle,'(A)') '>>> 2D AUTOMASKING'
         !$omp parallel do default(shared) private(i,ccsizes,loc) schedule(static) proc_bind(close)
         do i = 1,n
-            if( mask(i) )then
-                call img_bin(i)%zero_edgeavg
-                ! low-pass filter
-                call img_bin(i)%bp(0., params_glob%amsklp)
-                ! filter with non-local means
-                call img_bin(i)%NLmean 
-                ! if( l_write ) call img_bin(i)%write('filtered.mrc', i)
-                ! binarize with Otsu
-                call otsu_img(img_bin(i), mskrad=params_glob%msk, positive=trim(params_glob%positive).eq.'yes')
-                ! if( l_write   ) call img_bin(i)%write(BIN_OTSU, i)
-                ! grow ngrow layers
-                if( ngrow > 0 ) call img_bin(i)%grow_bins(ngrow)
-                ! if( l_write   ) call img_bin(i)%write(BIN_OTSU_GROWN, i)
-                ! find the largest connected component
-                call img_bin(i)%find_ccs(cc_img(i))
-                ccsizes = cc_img(i)%size_ccs()
-                loc = maxloc(ccsizes)
-                ! estimate its diameter
-                call cc_img(i)%diameter_cc(loc(1), diams(i))
-                ! turn it into a binary image for mask creation
-                call cc_img(i)%cc2bin(loc(1))
-                ! median filter to smoothen
-                if( winsz > 0 )then
-                    call cc_img(i)%real_space_filter(winsz, 'median')
-                    call cc_img(i)%set_imat
-                    ! if( l_write ) call cc_img(i)%write(BIN_OTSU_MED, i)
-                endif
-                ! fill-in holes
-                call cc_img(i)%fill_holes
-                ! if( l_write ) call cc_img(i)%write(BIN_OTSU_HOLES_FILL, i)
-                ! apply cosine egde to soften mask (to avoid Fourier artefacts)
-                call cc_img(i)%cos_edge(edge,cos_img(i))
-                ! if( l_write ) call cos_img(i)%write(MSK_OTSU, i)
-                ! apply
-                call imgs(i)%mul(cos_img(i))
-                ! if( l_write ) call imgs(i)%write(AMSK_OTSU, i)
+            call img_bin(i)%zero_edgeavg
+            ! low-pass filter
+            call img_bin(i)%bp(0., params_glob%amsklp)
+            ! filter with non-local means
+            call img_bin(i)%NLmean
+            ! if( l_write ) call img_bin(i)%write('filtered.mrc', i)
+            ! binarize with Otsu
+            call otsu_img(img_bin(i), mskrad=params_glob%msk, positive=trim(params_glob%positive).eq.'yes')
+            ! if( l_write   ) call img_bin(i)%write(BIN_OTSU, i)
+            ! grow ngrow layers
+            if( ngrow > 0 ) call img_bin(i)%grow_bins(ngrow)
+            ! if( l_write   ) call img_bin(i)%write(BIN_OTSU_GROWN, i)
+            ! find the largest connected component
+            call img_bin(i)%find_ccs(cc_img(i))
+            ccsizes = cc_img(i)%size_ccs()
+            loc = maxloc(ccsizes)
+            ! estimate its diameter
+            call cc_img(i)%diameter_cc(loc(1), diams(i))
+            ! turn it into a binary image for mask creation
+            call cc_img(i)%cc2bin(loc(1))
+            ! median filter to smoothen
+            if( winsz > 0 )then
+                call cc_img(i)%real_space_filter(winsz, 'median')
+                call cc_img(i)%set_imat
+                ! if( l_write ) call cc_img(i)%write(BIN_OTSU_MED, i)
             endif
-        end do
+            ! fill-in holes
+            call cc_img(i)%fill_holes
+            ! if( l_write ) call cc_img(i)%write(BIN_OTSU_HOLES_FILL, i)
+            ! apply cosine egde to soften mask (to avoid Fourier artefacts)
+            call cc_img(i)%cos_edge(edge,cos_img(i))
+            ! if( l_write ) call cos_img(i)%write(MSK_OTSU, i)
+            ! apply
+            call imgs(i)%mul(cos_img(i))
+            ! if( l_write ) call imgs(i)%write(AMSK_OTSU, i)
+            ! fill-in holes
+            call cc_img(i)%fill_holes
+            ! if( l_write ) call cc_img(i)%write(BIN_OTSU_HOLES_FILL, i)
+            ! apply cosine egde to soften mask (to avoid Fourier artefacts)
+            call cc_img(i)%cos_edge(edge,cos_img(i))
+            ! if( l_write ) call cos_img(i)%write(MSK_OTSU, i)
+            ! apply
+            call imgs(i)%mul(cos_img(i))
+            ! if( l_write ) call imgs(i)%write(AMSK_OTSU, i)
+    end do
         !$omp end parallel do
         ! destruct
         do i = 1,n

@@ -36,8 +36,11 @@ type :: builder
     type(projector)                     :: vol, vol_odd
     type(image)                         :: vol2                   !< -"-
     type(masker)                        :: mskimg                 !< mask image
-    type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
     type(image),            allocatable :: imgbatch(:)            !< batch of images
+    ! STRATEGY2D TOOLBOX
+    type(class_frcs)                    :: clsfrcs                !< projection FRC's used cluster2D
+    type(image),            allocatable :: env_masks(:)           !< 2D envelope masks
+    real,                   allocatable :: diams(:)               !< class average diameters
     ! RECONSTRUCTION TOOLBOX
     type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction
     ! STRATEGY3D TOOLBOX
@@ -334,8 +337,16 @@ contains
     subroutine build_strategy2D_tbox( self, params )
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
+        integer :: i
         call self%kill_strategy2D_tbox
         call self%clsfrcs%new(params%ncls, params%box, params%smpd, params%nstates)
+        if( trim(params%automsk).eq.'yes' )then
+            allocate(self%env_masks(params%ncls), self%diams(params%ncls))
+            self%diams = 0.
+            do i = 1,params%ncls
+                call self%env_masks(i)%new([params%box,params%box,1], params%smpd)
+            end do
+        endif
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy2D_tbox_exists = .true.
         if( L_VERBOSE_GLOB ) write(logfhandle,'(A)') '>>> DONE BUILDING STRATEGY2D TOOLBOX'
@@ -343,8 +354,16 @@ contains
 
     subroutine kill_strategy2D_tbox( self )
         class(builder), intent(inout) :: self
+        integer :: i
         if( self%strategy2D_tbox_exists )then
             call self%clsfrcs%kill
+            if( allocated(self%env_masks) )then
+                do i = 1,size(self%env_masks)
+                    call self%env_masks(i)%kill
+                end do
+                deallocate(self%env_masks)
+            endif
+            if( allocated(self%diams) ) deallocate(self%diams)
             self%strategy2D_tbox_exists = .false.
         endif
     end subroutine kill_strategy2D_tbox
