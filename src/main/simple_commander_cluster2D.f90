@@ -231,6 +231,7 @@ contains
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('wiener')    ) call cline%set('wiener',    'full')
         if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',       'no')
+        ! if( .not. cline%defined('nchunks')   ) call cline%set('nchunks',       1.)
         call cline%set('stream', 'no')
         ! set shared-memory flag
         if( cline%defined('nparts') )then
@@ -289,6 +290,10 @@ contains
         call cline_cluster2D2%set('autoscale',  'no')
         call cline_cluster2D2%set('trs',    MINSHIFT)
         call cline_cluster2D2%set('objfun',     'cc')
+        ! if( cline%defined('nchunks') )then
+        !     call cline_cluster2D2%delete('nchunks')
+        !     call cline_cluster2D2%set('overlap',0.95)
+        ! endif
         if( .not.cline%defined('maxits') )then
             call cline_cluster2D2%set('maxits', MAXITS)
         endif

@@ -9,6 +9,7 @@ use simple_masker,        only: masker
 use simple_parameters,    only: params_glob
 use simple_image,         only: image
 use simple_sp_project,    only: sp_project
+use simple_euclid_sigma2, only: apply_euclid_regularization
 implicit none
 
 public :: reconstructor_eo
@@ -333,8 +334,7 @@ contains
         ! if e=o then SSNR will be adjusted
         l_combined = trim(params_glob%combine_eo).eq.'yes'
         ! ML-regularization
-        l_euclid_regularization = (params_glob%cc_objfun==OBJFUN_EUCLID) .or. params_glob%l_needs_sigma
-        if( params_glob%l_nonuniform ) l_euclid_regularization = .false. ! regularization is overriden by non-uniform
+        l_euclid_regularization = apply_euclid_regularization()
         if( l_euclid_regularization )then
             ! preprocessing for FSC calculation
             ! even
@@ -523,7 +523,7 @@ contains
             allocate(volname, source=recname//params_glob%ext)
             eonames(1) = trim(recname)//'_even'//params_glob%ext
             eonames(2) = trim(recname)//'_odd'//params_glob%ext
-            if( (params_glob%cc_objfun==OBJFUN_EUCLID) .or. params_glob%l_needs_sigma )then
+            if( apply_euclid_regularization() )then
                 call self%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
                 call self%sum_eos
             else

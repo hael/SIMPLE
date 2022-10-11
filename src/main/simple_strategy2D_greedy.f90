@@ -38,7 +38,8 @@ contains
             call self%s%prep4srch
             corr = -huge(corr)
             do iref=1,self%s%nrefs
-                if( s2D%cls_pops(iref) == 0 )cycle
+                if( .not.s2D%cls_mask(iref,self%s%ithr) )cycle
+                ! if( s2D%cls_pops(iref) == 0 )cycle
                 ! class best
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs)
                 inpl_ind  = maxloc(corrs, dim=1)
@@ -52,7 +53,7 @@ contains
                 endif
                 ! keep track of visited classes
                 if( self%s%l_ptclw )then
-                    s2D%cls_mask(iref,self%s%ithr)  = .true.
+                    s2D%cls_searched(iref,self%s%ithr)  = .true.
                     s2D%cls_corrs(iref,self%s%ithr) = inpl_corr
                 endif
             end do

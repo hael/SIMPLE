@@ -8,7 +8,7 @@ use simple_sigma2_binfile,   only: sigma2_binfile
 use simple_starfile_wrappers
 implicit none
 
-public :: euclid_sigma2, eucl_sigma2_glob, write_groups_starfile
+public :: euclid_sigma2, eucl_sigma2_glob, write_groups_starfile, apply_euclid_regularization
 private
 #include "simple_local_flags.inc"
 
@@ -16,8 +16,7 @@ type euclid_sigma2
     private
     real,    allocatable, public  :: sigma2_noise(:,:)      !< the sigmas for alignment & reconstruction (from groups)
     real,    allocatable          :: sigma2_part(:,:)       !< the actual sigmas per particle (this part only)
-    real,    allocatable, public  :: sigma2_groups(:,:,:)   !< sigmas for groups
-    real,    allocatable          :: mic_sigma2_noise(:,:)  !< weighted average for euclidian distance calculation and reconstruction
+    real,    allocatable          :: sigma2_groups(:,:,:)   !< sigmas for groups
     integer, allocatable          :: pinds(:)
     integer, allocatable          :: micinds(:)
     integer                       :: fromp
@@ -30,6 +29,8 @@ type euclid_sigma2
 contains
     ! constructor
     procedure          :: new
+    ! utils
+    procedure          :: write_info
     ! I/O
     procedure          :: read_part
     procedure          :: read_groups
@@ -45,15 +46,24 @@ class(euclid_sigma2), pointer :: eucl_sigma2_glob => null()
 
 contains
 
-    subroutine new( self, binfname )
+    ! Utilities
+
+    logical function apply_euclid_regularization()
+        apply_euclid_regularization = params_glob%l_needs_sigma .or. (params_glob%cc_objfun==OBJFUN_EUCLID)
+        if( params_glob%l_nonuniform ) apply_euclid_regularization = .false.
+    end function apply_euclid_regularization
+
+    ! TYPE euclid_sigma2
+
+    subroutine new( self, binfname, box )
         ! read individual sigmas from binary file, to be modified at the end of the iteration
         ! read group sigmas from starfile, to be used for alignment and volume reconstruction
         ! set up fields for fast access to sigmas
         class(euclid_sigma2), target, intent(inout) :: self
         character(len=*),             intent(in)    :: binfname
-        real(sp) :: r
+        integer,                      intent(in)    :: box
         call self%kill
-        self%kfromto = params_glob%kfromto
+        self%kfromto = [1, fdim(box)-1]
         allocate( self%sigma2_noise(self%kfromto(1):self%kfromto(2),params_glob%fromp:params_glob%top),&
                   self%pinds(params_glob%fromp:params_glob%top) )
         call pftcc_glob%assign_sigma2_noise(self%sigma2_noise)
@@ -61,12 +71,19 @@ contains
         self%binfname         = trim(binfname)
         self%fromp            = params_glob%fromp
         self%top              = params_glob%top
-        self%kfromto          = self%kfromto
         self%pftsz            = pftcc_glob%get_pftsz()
         self%sigma2_noise     = 0.
         self%exists           = .true.
         eucl_sigma2_glob      => self
     end subroutine new
+
+    subroutine write_info(self)
+        class(euclid_sigma2), intent(in) :: self
+        write(logfhandle,*) 'kfromto: ',self%kfromto
+        write(logfhandle,*) 'fromp:   ',self%fromp
+        write(logfhandle,*) 'top:     ',self%top
+        write(logfhandle,*) 'pftsz:   ',self%pftsz
+    end subroutine write_info
 
     ! I/O
 
@@ -86,7 +103,7 @@ contains
         integer                             :: iptcl,igroup,tom,eo
         call pftcc_glob%assign_pinds(self%pinds)
         ! determine number of groups
-        tom   = -1000
+        tom   = 0
         do iptcl = 1, params_glob%nptcls
             igroup = nint(os%get(iptcl, 'stkind'))
             tom    = max(tom,   igroup)
@@ -100,20 +117,21 @@ contains
         end do
     end subroutine read_groups
 
-    !>  For soft assignment
+    !>  Calculates and updates sigma2 within search resolution range
     subroutine calc_sigma2( self, os, iptcl, o )
         class(euclid_sigma2), intent(inout) :: self
         class(oris),          intent(inout) :: os
         class(ori),           intent(in)    :: o
         integer,              intent(in)    :: iptcl
         integer              :: iref, irot
-        real                 :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        real                 :: sigma_contrib(params_glob%kfromto(1):params_glob%kstop)
         real                 :: shvec(2)
         if ( os%get_state(iptcl)==0 ) return
         iref       = nint(o%get('proj'))
         shvec      = o%get_2Dshift()
         irot       = pftcc_glob%get_roind(360. - o%e3get())
-        call pftcc_glob%gencorr_sigma_contrib(iref, iptcl, shvec, irot, self%sigma2_part(:,iptcl))
+        call pftcc_glob%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
+        self%sigma2_part(params_glob%kfromto(1):params_glob%kstop,iptcl) = sigma_contrib
     end subroutine calc_sigma2
 
     subroutine write_sigma2( self )
@@ -136,7 +154,6 @@ contains
         if( self%exists )then
             call self%kill_ptclsigma2
             if(allocated(self%pinds))             deallocate(self%pinds)
-            if(allocated(self%mic_sigma2_noise))  deallocate(self%mic_sigma2_noise)
             if(allocated(self%micinds))           deallocate(self%micinds)
             self%kfromto      = 0
             self%fromp        = -1
@@ -187,7 +204,7 @@ contains
         type(str4arr),    allocatable :: names(:)
         type(starfile_table_type)     :: istarfile
         character                     :: eo_char
-        integer                       :: stat, spec_idx, nyq, eo, igroup, idx
+        integer                       :: stat, spec_idx, eo, igroup, idx
         real(dp)                      :: val
         logical                       :: ares
         integer(C_long)               :: num_objs, object_id
@@ -204,7 +221,7 @@ contains
             if( names(idx)%str(2:8) .ne. '_group_' ) cycle
             eo_char = names(idx)%str(1:1)
             if ((eo_char .ne. '1').and.(eo_char .ne. '2')) cycle
-            if (eo_char == '1') eo = 1
+            eo = 1
             if (eo_char == '2') eo = 2
             call str2int( names(idx)%str(9:len_trim(names(idx)%str)), stat, igroup )
             if( stat > 0 ) cycle

@@ -17,7 +17,7 @@ type strategy2D_alloc
     logical, allocatable :: do_inplsrch(:)
     ! per thread
     real,    allocatable :: cls_corrs(:,:)
-    logical, allocatable :: cls_mask(:,:)
+    logical, allocatable :: cls_mask(:,:), cls_searched(:,:)
 end type strategy2D_alloc
 
 type(strategy2D_alloc) :: s2D
@@ -31,8 +31,9 @@ contains
         if( allocated(s2D%srch_order) ) deallocate(s2D%srch_order)
         if( allocated(s2D%do_inplsrch)) deallocate(s2D%do_inplsrch)
         ! per thread
-        if( allocated(s2D%cls_corrs)) deallocate(s2D%cls_corrs)
-        if( allocated(s2D%cls_mask) ) deallocate(s2D%cls_mask)
+        if( allocated(s2D%cls_corrs))    deallocate(s2D%cls_corrs)
+        if( allocated(s2D%cls_mask) )    deallocate(s2D%cls_mask)
+        if( allocated(s2D%cls_searched)) deallocate(s2D%cls_searched)
     end subroutine clean_strategy2D
 
     !>  prep class & global parameters
@@ -62,7 +63,7 @@ contains
         if( all(s2D%cls_pops == 0) ) THROW_HARD('All class pops cannot be zero!')
         ! per-thread allocations
         allocate(s2D%cls_corrs(params_glob%ncls,nthr_glob),source=0.0)
-        allocate(s2D%cls_mask(params_glob%ncls,nthr_glob),source=.false.)
+        allocate(s2D%cls_mask(params_glob%ncls,nthr_glob),s2D%cls_searched(params_glob%ncls,nthr_glob),source=.false.)
     end subroutine prep_strategy2D_glob
 
     !>  prep batch related parameters (particles level)

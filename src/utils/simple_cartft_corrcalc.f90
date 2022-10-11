@@ -344,8 +344,9 @@ contains
         if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
         allocate(self%pxls_p_shell(params_glob%kfromto(1):params_glob%kfromto(2)))
         self%pxls_p_shell = 0.
-        do h = 1,params_glob%kfromto(2)
-            do k = 1,params_glob%kfromto(2)
+        do h = 0,params_glob%kfromto(2)
+            do k = -params_glob%kfromto(2),params_glob%kfromto(2)
+                if( (h==0) .and. (k>0) ) cycle
                 sh = nint(hyp(real(h),real(k)))
                 if( ( sh >= params_glob%kfromto(1)) .and. ( sh <= params_glob%kfromto(2)) ) then
                     self%pxls_p_shell(sh) = self%pxls_p_shell(sh) + 1.

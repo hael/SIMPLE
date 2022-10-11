@@ -86,14 +86,12 @@ contains
     subroutine prep4srch( self )
         class(strategy2D_srch), intent(inout) :: self
         real    :: corrs(pftcc_glob%get_nrots())
-        integer :: prev_roind
+        integer :: prev_roind, iref, i, chunksz
         self%nrefs_eval = 0
         self%ithr       = omp_get_thread_num() + 1
         ! init thread objects
-        if( self%l_ptclw )then
-            s2D%cls_corrs(:,self%ithr) = 0.0
-            s2D%cls_mask(:,self%ithr)  = .false.
-        endif
+        s2D%cls_corrs(:,self%ithr)    = 0.0
+        s2D%cls_searched(:,self%ithr) = .false.
         ! find previous discrete alignment parameters
         self%prev_class = nint(build_glob%spproj_field%get(self%iptcl,'class'))                ! class index
         prev_roind      = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl)) ! in-plane angle index
@@ -115,6 +113,21 @@ contains
             do while( s2D%cls_pops(self%prev_class) <= 0 )
                 self%prev_class = irnd_uni(self%nrefs)
             enddo
+        endif
+        if( params_glob%nchunks > 1 )then
+            s2D%cls_mask(:,self%ithr) = .false.
+            chunksz = ceiling(real(self%nrefs) / real(params_glob%nchunks))
+            do i = 1,self%nrefs
+                iref = s2D%srch_order(self%iptcl_map,i)
+                if( s2D%cls_pops(iref) > 0 )then
+                    s2D%cls_mask(iref,self%ithr) = .true.
+                    chunksz = chunksz-1
+                    if( chunksz == 0 ) exit
+                endif
+            enddo
+            s2D%cls_mask(self%prev_class,self%ithr) = .false.
+        else
+            s2D%cls_mask(:,self%ithr) = s2D%cls_pops > 0
         endif
         ! set best to previous best by default
         self%best_class = self%prev_class

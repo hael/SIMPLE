@@ -990,8 +990,8 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! set Fourier index range
-        params%kfromto(1) = max(2, calc_fourier_index(params%hp, params%box, params%smpd))
-        params%kfromto(2) =        calc_fourier_index(2.*params%smpd, params%box, params%smpd)
+        params%kfromto(1) = 1
+        params%kfromto(2) = calc_fourier_index(2.*params%smpd, params%box, params%smpd)
         ! generate average power spectrum
         nptcls     = build%spproj_field%get_noris(consider_state=.false.)
         nptcls_sel = build%spproj_field%get_noris(consider_state=.true.)
@@ -1136,8 +1136,8 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         ! set Fourier index range
-        params%kfromto(1) = max(2, calc_fourier_index(params%hp, params%box, params%smpd))
-        params%kfromto(2) =        calc_fourier_index(2.*params%smpd, params%box, params%smpd)
+        params%kfromto(1) = 1
+        params%kfromto(2) = calc_fourier_index(2.*params%smpd, params%box, params%smpd)
         ! read sigmas from binfiles
         allocate(pspecs(params%kfromto(1):params%kfromto(2),params%nptcls),sigma2_arrays(params%nparts))
         do ipart = 1,params%nparts

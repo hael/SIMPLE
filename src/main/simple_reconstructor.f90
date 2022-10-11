@@ -8,7 +8,6 @@ use simple_sym,           only: sym
 use simple_kbinterpol,    only: kbinterpol
 use simple_image,         only: image
 use simple_parameters,    only: params_glob
-use simple_euclid_sigma2, only: euclid_sigma2, eucl_sigma2_glob
 use simple_fftw3
 implicit none
 
