@@ -1529,8 +1529,8 @@ contains
 
     subroutine mul_cmat( self, rmat, resmsk )
         class(image), intent(inout) :: self
-        real,         intent(in)    :: rmat(self%array_shape(1),self%array_shape(3),self%array_shape(3))
-        logical,      intent(in)    :: resmsk(self%array_shape(1),self%array_shape(3),self%array_shape(3))
+        real,         intent(in)    :: rmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+        logical,      intent(in)    :: resmsk(self%array_shape(1),self%array_shape(2),self%array_shape(3))
         where( resmsk )
             self%cmat = self%cmat * rmat
         end where
