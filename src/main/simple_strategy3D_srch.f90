@@ -125,6 +125,14 @@ contains
         class(strategy3D_spec), intent(in)    :: spec
         integer, parameter :: MAXITS = 60
         real    :: lims(2,2), lims_init(2,2)
+        logical :: l_cartesian
+        ! CARTESIAN REFINEMENT FLAG
+        select case(trim(params_glob%refine))
+            case('shcc','neighc','snhcc')
+                l_cartesian = .true.
+            case DEFAULT
+                l_cartesian = .false.
+        end select
         ! set constants
         self%iptcl      = spec%iptcl
         self%nstates    = params_glob%nstates
@@ -132,7 +140,6 @@ contains
         self%nrefs      = self%nprojs*self%nstates
         self%nsample    = params_glob%nsample
         self%athres     = params_glob%athres
-        self%nrots      = pftcc_glob%get_nrots()
         self%nbetter    = 0
         self%nrefs_eval = 0
         self%nsym       = build_glob%pgrpsyms%get_nsym()
@@ -142,14 +149,17 @@ contains
         self%l_cont     = str_has_substr(params_glob%refine, 'cont')
         self%l_ptclw    = trim(params_glob%ptclw).eq.'yes'
         ! create in-plane search object
-        lims(:,1)       = -params_glob%trs
-        lims(:,2)       =  params_glob%trs
-        lims_init(:,1)  = -SHC_INPL_TRSHWDTH
-        lims_init(:,2)  =  SHC_INPL_TRSHWDTH
-        call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
-            &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.true.)
-        ! create all df:s search object
-        call self%grad_orisrch_obj%new
+        if( .not. l_cartesian )then
+            self%nrots      = pftcc_glob%get_nrots()
+            lims(:,1)       = -params_glob%trs
+            lims(:,2)       =  params_glob%trs
+            lims_init(:,1)  = -SHC_INPL_TRSHWDTH
+            lims_init(:,2)  =  SHC_INPL_TRSHWDTH
+            call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
+                &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.true.)
+            ! create all df:s search object
+            call self%grad_orisrch_obj%new
+        endif
         self%exists = .true.
     end subroutine new
 

@@ -573,7 +573,7 @@ contains
         type(projector),  pointer :: vol_ptr => null()
         type(image)               :: mskvol
         real    :: filter(build_glob%img%get_filtsz()), frc(build_glob%img%get_filtsz())
-        integer :: iref, iproj, filtsz
+        integer :: filtsz
         if( iseven )then
             vol_ptr => build_glob%vol
         else
@@ -595,9 +595,7 @@ contains
                 else
                     filter = 1.
                 endif
-                do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
-                    call cftcc%set_optlp(filter(params_glob%kfromto(1):params_glob%kstop))
-                enddo
+                call cftcc%set_optlp(filter(params_glob%kfromto(1):params_glob%kstop))
             endif
         else
             if( params_glob%cc_objfun == OBJFUN_EUCLID .or. params_glob%l_lpset )then

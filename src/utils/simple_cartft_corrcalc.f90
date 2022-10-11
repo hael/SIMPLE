@@ -127,7 +127,8 @@ contains
         ! container for projection
         call self%proj%new([self%ldim(1),self%ldim(2),1], params_glob%smpd)
         ! allocate optimal low-pass filter & memoized sqsums
-        allocate(self%optlp(1:self%filtsz), self%sqsums_ptcls(1:self%nptcls), source=1.)
+        allocate(self%optlp(params_glob%kfromto(1):params_glob%kstop), source=0.)
+        allocate(self%sqsums_ptcls(1:self%nptcls), source=1.)
         ! index translation table
         allocate( self%pinds(self%pfromto(1):self%pfromto(2)), source=0 )
         if( present(ptcl_mask) )then
@@ -398,7 +399,7 @@ contains
                 do h = self%lims(1,1),self%lims(1,2)
                     do k = self%lims(2,1),self%lims(2,2)
                         ! compute physical address
-                        phys = self%particles(1)%comp_addr_phys(h,k,1)        
+                        phys = self%particles(1)%comp_addr_phys(h,k,0)        
                         inv  = real([h,k]) * inv_ldim(1:2)
                         if( ctfparms(ithr)%l_phaseplate )then
                             self%ctfmats(phys(1),phys(2),phys(3),self%pinds(ctfmatind))= abs(tfuns(ithr)%eval(dot_product(inv,inv), atan2(real(k),real(h)),&

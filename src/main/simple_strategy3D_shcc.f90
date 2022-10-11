@@ -40,10 +40,6 @@ contains
         integer   :: isample
         type(ori) :: o
         real      :: corr
-        o = self%s%o_prev
-        ! zero shifts because particle is shifted to its previous origin
-        call o%set('x', 0.)
-        call o%set('y', 0.)
         ! continuous sochastic search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
@@ -52,6 +48,10 @@ contains
             call self%s%prep4_cont_srch
             ! init counter
             self%s%nrefs_eval = 0
+            o = self%s%o_prev
+            ! zero shifts because particle is shifted to its previous origin
+            call o%set('x', 0.)
+            call o%set('y', 0.)
             do isample=1,self%s%nsample
                 ! make a random rotation matrix within the assymetric unit
                 call build_glob%pgrpsyms%rnd_euler(o)

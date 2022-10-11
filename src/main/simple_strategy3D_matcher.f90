@@ -174,8 +174,6 @@ contains
 
         if( l_cartesian )then
             call prepcftcc4align(cline, batchsz_max)
-            ! pftcc still needs to be initiated due to build_glob%img_match%init_polarizer
-            call pftcc%new(params_glob%nrefs, [1,batchsz_max], params_glob%l_match_filt)
         else
             call preppftcc4align(cline, batchsz_max)
         endif
@@ -190,15 +188,23 @@ contains
         call prep_strategy3D(ptcl_mask) ! allocate s3D singleton
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D, DONE'
         ! generate particles image objects
-        call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         allocate(match_imgs(batchsz_max),strategy3Dspecs(batchsz_max),strategy3Dsrch(batchsz_max))
         call prepimgbatch(batchsz_max)
-        !$omp parallel do default(shared) private(imatch) schedule(static) proc_bind(close)
-        do imatch=1,batchsz_max
-            call match_imgs(imatch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd)
-            call match_imgs(imatch)%copy_polarizer(build_glob%img_match)
-        end do
-        !$omp end parallel do
+        if( l_cartesian )then
+            !$omp parallel do default(shared) private(imatch) schedule(static) proc_bind(close)
+            do imatch=1,batchsz_max
+                call match_imgs(imatch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd)
+            end do
+            !$omp end parallel do
+        else
+            call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
+            !$omp parallel do default(shared) private(imatch) schedule(static) proc_bind(close)
+            do imatch=1,batchsz_max
+                call match_imgs(imatch)%new([params_glob%box, params_glob%box, 1], params_glob%smpd)
+                call match_imgs(imatch)%copy_polarizer(build_glob%img_match)
+            end do
+            !$omp end parallel do
+        endif
 
         ! STOCHASTIC IMAGE ALIGNMENT
         if( trim(params_glob%oritype) .eq. 'ptcl3D' )then
@@ -325,15 +331,21 @@ contains
 
         ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton
-        call pftcc%kill
-        call cftcc%kill
+        if( l_cartesian )then
+            call cftcc%kill
+            do ibatch=1,batchsz_max
+                call match_imgs(ibatch)%kill
+            end do
+        else
+            call pftcc%kill
+            do ibatch=1,batchsz_max
+                call match_imgs(ibatch)%kill_polarizer
+                call match_imgs(ibatch)%kill
+            end do
+        endif
         call build_glob%vol%kill
         call build_glob%vol_odd%kill
         call orientation%kill
-        do ibatch=1,batchsz_max
-            call match_imgs(ibatch)%kill_polarizer
-            call match_imgs(ibatch)%kill
-        end do
         deallocate(match_imgs)
         if( allocated(symmat)   ) deallocate(symmat)
         if( allocated(het_mask) ) deallocate(het_mask)
