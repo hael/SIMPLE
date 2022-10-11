@@ -1163,7 +1163,7 @@ contains
         &'2D envelope masking',&                               ! descr_short
         &'is a program for automated envelope masking in 2D',& ! descr_long
         &'simple_exec',&                                       ! executable
-        &1, 2, 0, 0, 1, 3, 1, .false.)                         ! # entries in each group, requires sp_project
+        &1, 2, 0, 0, 1, 4, 1, .false.)                         ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call automask2D%set_input('img_ios', 1, stk)
@@ -1185,6 +1185,8 @@ contains
         &'Binary layers grown for molecular envelope in pixels{3}', 'width of binary layers grown in pixels{3}', .false., 3.)
         call automask2D%set_input('mask_ctrls', 3, 'edge', 'num', 'Envelope mask soft edge',&
         &'Cosine edge size for softening molecular envelope in pixels{6}', '# pixels cosine edge{6}', .false., 6.)
+        call automask2D%set_input('mask_ctrls', 4, 'positive', 'binary', 'Consider only positive pixels',&
+        &'Consider only positive pixels for threshold determination(yes|no){no}', 'only positive(yes|no){no}', .false., 'no')
         ! computer controls
         call automask2D%set_input('comp_ctrls', 1, nthr)
     end subroutine new_automask2D
@@ -2758,7 +2760,7 @@ contains
         ! image input/output
         call opt_2D_filter%set_input('img_ios', 1, 'stk',  'file', 'Odd stack',  'Odd stack',  'stack_even.mrc file', .true., '')
         call opt_2D_filter%set_input('img_ios', 2, 'stk2', 'file', 'Even stack', 'Even stack', 'stack_odd.mrc file',  .true., '')
-        call opt_2D_filter%set_input('img_ios', 3, 'stk3', 'file', 'Mask stack', 'Mask stack', 'stack_mask.mrc file',  .true., '')
+        call opt_2D_filter%set_input('img_ios', 3, 'stk3', 'file', 'Mask stack', 'Mask stack', 'stack_mask.mrc file',  .false., '')
         ! parameter input/output
         call opt_2D_filter%set_input('parm_ios', 1, smpd)
         ! alternative inputs

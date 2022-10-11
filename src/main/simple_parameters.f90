@@ -77,6 +77,7 @@ type :: parameters
     character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)      :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
+    character(len=3)      :: positive='no'        !< consider only positive pixels/voxels for threshold determination(yes|no){no}
     character(len=3)      :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)      :: projstats='no'
     character(len=3)      :: roavg='no'           !< rotationally average images in stack
@@ -604,6 +605,7 @@ contains
         call check_carg('phshiftunit',    self%phshiftunit)
         call check_carg('picker',         self%picker)
         call check_carg('platonic',       self%platonic)
+        call check_carg('positive',       self%positive)
         call check_carg('prg',            self%prg)
         call check_carg('projname',       self%projname)
         call check_carg('proj_is_class',  self%proj_is_class)
