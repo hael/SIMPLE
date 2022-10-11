@@ -86,7 +86,7 @@ contains
     subroutine prep4srch( self )
         class(strategy2D_srch), intent(inout) :: self
         real    :: corrs(pftcc_glob%get_nrots())
-        integer :: prev_roind, iref, i, chunksz
+        integer :: prev_roind
         self%nrefs_eval = 0
         self%ithr       = omp_get_thread_num() + 1
         ! init thread objects
@@ -113,21 +113,6 @@ contains
             do while( s2D%cls_pops(self%prev_class) <= 0 )
                 self%prev_class = irnd_uni(self%nrefs)
             enddo
-        endif
-        if( params_glob%nchunks > 1 )then
-            s2D%cls_mask(:,self%ithr) = .false.
-            chunksz = ceiling(real(self%nrefs) / real(params_glob%nchunks))
-            do i = 1,self%nrefs
-                iref = s2D%srch_order(self%iptcl_map,i)
-                if( s2D%cls_pops(iref) > 0 )then
-                    s2D%cls_mask(iref,self%ithr) = .true.
-                    chunksz = chunksz-1
-                    if( chunksz == 0 ) exit
-                endif
-            enddo
-            s2D%cls_mask(self%prev_class,self%ithr) = .false.
-        else
-            s2D%cls_mask(:,self%ithr) = s2D%cls_pops > 0
         endif
         ! set best to previous best by default
         self%best_class = self%prev_class
@@ -223,7 +208,7 @@ contains
                 if( s2D%cls_corrs(self%best_class,self%ithr) < 0.0 )then
                     w = MIN_2DWEIGHT
                 else
-                    call normalize(s2D%cls_corrs(:,self%ithr), err, s2D%cls_mask(:,self%ithr))
+                    call normalize(s2D%cls_corrs(:,self%ithr), err, s2D%cls_searched(:,self%ithr))
                     if( err )then
                         w = MIN_2DWEIGHT
                     else
