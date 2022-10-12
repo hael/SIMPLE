@@ -20,7 +20,7 @@ implicit none
 public :: cluster2D_commander_subsets
 public :: init_cluster2D_stream, update_projects_mask, write_project_stream2D, terminate_stream2D
 public :: update_pool_status, update_pool, reject_from_pool, reject_from_pool_user, classify_pool
-public :: update_chunks, classify_new_chunks, import_chunks_into_pool
+public :: update_chunks, classify_new_chunks, import_chunks_into_pool, update_user_params
 public :: update_path
 
 private
@@ -833,6 +833,32 @@ contains
         endif
         call img%kill
     end subroutine reject_from_pool_user
+
+    !> updates current parameters with user input
+    subroutine update_user_params
+        type(oris) :: os
+        real       :: lpthresh, ndev
+        call os%new(1, is_ptcl=.false.)
+        if( file_exists(USER_PARAMS) )then
+            call os%read(USER_PARAMS)
+            if( os%isthere(1,'lpthresh') )then
+                lpthresh = os%get(1,'lpthresh')
+                if( abs(lpthresh-params_glob%lpthresh) > 0.001 )then
+                    params_glob%lpthresh = lpthresh
+                    write(logfhandle,'(A,F8.2)')'>>> REJECTION LPTHRESH UPDATED TO: ',params_glob%lpthresh
+                endif
+            endif
+            if( os%isthere(1,'ndev2D') )then
+                ndev = os%get(1,'ndev2D')
+                if( abs(ndev-params_glob%ndev2D) > 0.001 )then
+                    params_glob%ndev2D = ndev
+                    write(logfhandle,'(A,F8.2)')'>>> REJECTION NDEV2D   UPDATED TO: ',params_glob%ndev2D
+                endif
+            endif
+            call del_file(USER_PARAMS)
+        endif
+        call os%kill
+    end subroutine update_user_params
 
     subroutine classify_pool
         use simple_ran_tabu
