@@ -62,16 +62,9 @@ contains
                 ! exit condition
                 if( corr > self%s%prev_corr )then
                     ! cartesian shift search
-                    call self%s%cart_shsearch(o)
-                    ! computing the correlation with the new shift
-                    call cartftcc_glob%project_and_correlate(self%s%iptcl, o, corr)
-                    if( corr > self%s%prev_corr )then
-                        call build_glob%spproj_field%set_ori(self%s%iptcl, o)
-                        exit
-                    else
-                        call o%set('x', 0.)
-                        call o%set('y', 0.)
-                    endif
+                    ! call self%s%cart_shsearch(o)
+                    call build_glob%spproj_field%set_ori(self%s%iptcl, o)
+                    exit
                 endif
             end do
         else
