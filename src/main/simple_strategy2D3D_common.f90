@@ -422,7 +422,7 @@ contains
         ! centering
         if( params_glob%center .eq. 'no' .or. params_glob%nstates > 1 .or. &
             .not. params_glob%l_doshift .or. params_glob%pgrp(:1) .ne. 'c' .or. &
-            cline%defined('mskfile') .or. params_glob%l_frac_update )then
+            params_glob%l_filemsk .or. params_glob%l_automsk .or. params_glob%l_frac_update )then
             do_center = .false.
             xyz       = 0.
             return
@@ -453,7 +453,7 @@ contains
         call build_glob%vol_odd%read(fname_odd)
         if( params_glob%l_nonuniform  .and. (.not.params_glob%l_lpset) )then
             call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
-            if( cline%defined('mskfile') )then
+            if( params_glob%l_filemsk )then
                 call mskvol%read(params_glob%mskfile)
             else
                 mskvol = 1.0
@@ -534,7 +534,7 @@ contains
         ! back to real space
         call vol_ptr%ifft()
         ! masking
-        if( cline%defined('mskfile') )then
+        if( params_glob%l_filemsk )then
             ! envelope masking
             call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
             call mskvol%read(params_glob%mskfile)
@@ -611,7 +611,7 @@ contains
         ! back to real space
         call vol_ptr%ifft()
         ! masking
-        if( cline%defined('mskfile') )then
+        if( params_glob%l_filemsk )then
             ! envelope masking
             call mskvol%new([params_glob%box, params_glob%box, params_glob%box], params_glob%smpd)
             call mskvol%read(params_glob%mskfile)
@@ -647,12 +647,6 @@ contains
         type(masker)          :: envmsk
         integer               :: s, find4eoavg, ldim(3)
         real                  :: res05s(params_glob%nstates), res0143s(params_glob%nstates), lplim, bfac
-        logical               :: l_automsk
-        ! set automask flag
-        l_automsk = .false.
-        if( cline%defined('automsk') )then
-            l_automsk = cline%get_carg('automsk') .eq. 'yes'
-        endif
         ! init
         ldim = [params_glob%box,params_glob%box,params_glob%box]
         call build_glob%vol%new(ldim,params_glob%smpd)
@@ -676,7 +670,7 @@ contains
                 else
                     params_glob%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//int2str_pad(which_iter,3)//params_glob%ext
                 endif
-                if( cline%defined('mskfile') .and. params_glob%l_envfsc )then
+                if( params_glob%l_filemsk .and. params_glob%l_envfsc )then
                     call build_glob%eorecvols(s)%set_automsk(.true.)
                 endif
                 params_glob%vols_even(s) = add2fbody(params_glob%vols(s), params_glob%ext, '_even')
@@ -750,8 +744,8 @@ contains
                 ! write low-pass filtered without B-factor or mask
                 call build_glob%vol2%write(lpvol)
                 ! masking
-                if( l_automsk .or. cline%defined('mskfile') )then
-                    if( l_automsk )then
+                if( params_glob%l_automsk .or. params_glob%l_filemsk )then
+                    if( params_glob%l_automsk )then
                         call cline%delete('mskfile')
                         ! use the non-sharpened volume to make a mask
                         call envmsk%automask3D_otsu(build_glob%vol2, do_apply=.false.)
@@ -760,12 +754,9 @@ contains
                         call cline%set('mskfile', mskfile)
                         params_glob%mskfile = mskfile
                     endif
-                    if( cline%defined('mskfile') )then
-                        mskfile = cline%get_carg('mskfile')
-                        if( .not. file_exists(mskfile) ) THROW_HARD('File '//mskfile//' does not exist')
-                        params_glob%mskfile = mskfile
+                    if( params_glob%l_filemsk )then
                         call envmsk%new(ldim, params_glob%smpd)
-                        call envmsk%read(mskfile)
+                        call envmsk%read(params_glob%mskfile)
                     endif
                     call build_glob%vol%zero_background
                     if( cline%defined('lp_backgr') )then

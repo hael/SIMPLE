@@ -291,7 +291,11 @@ contains
             call img_bin(i)%copy(imgs(i))
             call cc_img(i)%new_bimg( ldim, smpd, wthreads=.false.)
         end do
-        write(logfhandle,'(A)') '>>> 2D AUTOMASKING'
+        if( trim(params_glob%automsk).eq.'tight' )then
+            write(logfhandle,'(A)') '>>> 2D AUTOMASKING, TIGHT'
+        else
+            write(logfhandle,'(A)') '>>> 2D AUTOMASKING'
+        endif
         !$omp parallel do default(shared) private(i,ccsizes,loc) schedule(static) proc_bind(close)
         do i = 1,n
             call img_bin(i)%zero_edgeavg
@@ -301,7 +305,7 @@ contains
             call img_bin(i)%NLmean
             ! if( l_write ) call img_bin(i)%write('filtered.mrc', i)
             ! binarize with Otsu
-            call otsu_img(img_bin(i), mskrad=params_glob%msk, positive=trim(params_glob%positive).eq.'yes')
+            call otsu_img(img_bin(i), mskrad=params_glob%msk, positive=trim(params_glob%automsk).eq.'tight')
             ! if( l_write ) call img_bin(i)%write(BIN_OTSU, i)
             ! grow ngrow layers
             if( ngrow > 0 ) call img_bin(i)%grow_bins(ngrow)

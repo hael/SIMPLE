@@ -226,7 +226,7 @@ contains
         call cmd_dict%push('astigtol',      'expected (tolerated) astigmatism(in microns){0.05}')
         call cmd_dict%push('async',         'asynchronous mode of operation(yes|no){no}')
         call cmd_dict%push('automatic',     'automatic threshold selection for edge detection(yes|no)')
-        call cmd_dict%push('automsk',       'envelope masking(yes|no|file){no}')
+        call cmd_dict%push('automsk',       'envelope masking(yes|tight|no){no}')
         call cmd_dict%push('autoscale',     'automatic down-scaling(yes|no)')
         call cmd_dict%push('avg',           'calculate average(yes|no)')
         call cmd_dict%push('bfac',          'bfactor for sharpening/low-pass filtering(in A**2){200.}')

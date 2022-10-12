@@ -678,7 +678,7 @@ contains
                 call cline_make_cavgs%set('nparts',   real(params%nparts))
                 call cline_make_cavgs%set('refs',     trim(finalcavgs))
                 call cline_make_cavgs%delete('wiener') ! to ensure that full Wiener restoration is done for the final cavgs
-                call cline_make_cavgs%set('which_iter', real(last_iter_stage2)) ! to ensure masks are generated and used when automsk.eq.yes
+                call cline_make_cavgs%set('which_iter', real(last_iter_stage2)) ! to ensure masks are generated and used
                 if( l_shmem )then
                     params_ptr  => params_glob
                     params_glob => null()

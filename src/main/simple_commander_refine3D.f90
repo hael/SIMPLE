@@ -84,8 +84,8 @@ contains
     end subroutine exec_nspace
 
     subroutine exec_refine3D_distr( self, cline )
-        use simple_commander_rec,    only: reconstruct3D_commander_distr
-        use simple_estimate_ssnr,    only: plot_fsc
+        use simple_commander_rec, only: reconstruct3D_commander_distr
+        use simple_estimate_ssnr, only: plot_fsc
         class(refine3D_commander_distr), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
@@ -118,7 +118,7 @@ contains
         character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc, vollp
         character(len=LONGSTRLEN) :: volassemble_output
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
-        logical :: l_projmatch, l_switch2eo, l_switch2euclid, l_continue, l_multistates, l_automsk
+        logical :: l_projmatch, l_switch2eo, l_switch2euclid, l_continue, l_multistates
         logical :: l_ptclw, l_combine_eo, l_lpset, l_griddingset
         real    :: corr, corr_prev, smpd, lplim
         integer :: ldim(3), i, state, iter, box, nfiles, niters, iter_switch2euclid, ifoo
@@ -164,12 +164,8 @@ contains
         if( fall_over ) THROW_HARD('no particles found! exec_refine3D_distr')
         if( .not. l_multistates .and. params%nstates >  1 ) THROW_HARD('nstates > 1 but refine mode is single')
         ! take care of automask flag
-        l_automsk = .false.
-        if( cline%defined('automsk') )then
-            l_automsk = trim(params%automsk) .eq. 'yes'
-            call cline%delete('automsk')
-        endif
-        if( l_automsk .and. l_multistates ) THROW_HARD('automsk=yes not currenty supported for multi-state refinement')
+        if( cline%defined('automsk') ) call cline%delete('automsk')
+        if( params%l_automsk .and. l_multistates ) THROW_HARD('automsk.ne.no not currenty supported for multi-state refinement')
         ! switch from low-pass to e/o refinement
         l_switch2eo = params%lp_iters >= 1
         if( .not.l_lpset ) l_switch2eo = .false. ! is already e/o
@@ -498,10 +494,10 @@ contains
                     ! writes os_out
                     call build%spproj%write_segment_inside('out')
                     ! automasking in postprocess
-                    if( l_automsk )then
+                    if( params%l_automsk )then
                         if( mod(iter,AUTOMSK_FREQ) == 0 .or. iter == params%startit )then
                             call cline_postprocess%delete('mskfile')
-                            call cline_postprocess%set('automsk', 'yes')
+                            call cline_postprocess%set('automsk', trim(params%automsk))
                         endif
                     endif
                     ! per state post-process
@@ -528,7 +524,7 @@ contains
                         endif
                     enddo
                     ! update command-lines to use the mskfile for the next AUTOMSK_FREQ - 1 iterations
-                    if( l_automsk )then
+                    if( params%l_automsk )then
                         if( mod(iter,AUTOMSK_FREQ) == 0 .or. iter == params%startit )then
                             params%mskfile = 'automask'//params%ext
                             call cline_postprocess%set('mskfile', trim(params%mskfile))
@@ -658,7 +654,7 @@ contains
             endif
         end do
         ! put back automsk flag if needed
-        if( l_automsk ) call cline%set('automsk', 'yes')
+        if( params%l_automsk ) call cline%set('automsk', trim(params%automsk))
         call qsys_cleanup
         ! report the last iteration on exit
         call cline%delete( 'startit' )
@@ -676,7 +672,7 @@ contains
         type(builder)            :: build
         integer                  :: startit, i, state
         character(len=STDLEN)    :: str_state, fsc_file, vol, vol_iter
-        logical                  :: converged, l_automsk
+        logical                  :: converged
         real                     :: corr, corr_prev
         call build%init_params_and_build_strategy3D_tbox(cline,params)
         startit = 1
@@ -690,12 +686,8 @@ contains
             if( trim(params%continue) == 'yes'    ) THROW_HARD('shared-memory implementation of refine3D does not support continue=yes')
             if( .not. file_exists(params%vols(1)) ) THROW_HARD('shared-memory implementation of refine3D requires starting volume(s) input')
             ! take care of automask flag
-            l_automsk = .false.
-            if( cline%defined('automsk') )then
-                l_automsk = trim(params%automsk) .eq. 'yes'
-                call cline%delete('automsk')
-            endif
-            if( l_automsk .and. params%nstates > 1 ) THROW_HARD('automsk=yes not currenty supported for multi-state refinement')
+            if( cline%defined('automsk') ) call cline%delete('automsk')
+            if( params%l_automsk .and. params%nstates > 1 ) THROW_HARD('automsk.ne.no not currenty supported for multi-state refinement')
             params%startit     = startit
             params%outfile     = 'algndoc'//METADATA_EXT
             params%extr_iter   = params%startit - 1
@@ -713,9 +705,9 @@ contains
                 ! exponential cooling of the randomization rate
                 params%extr_iter = params%extr_iter + 1
                 ! to control the masking behaviour in simple_strategy2D3D_common :: norm_struct_facts
-                if( l_automsk )then
+                if( params%l_automsk )then
                     if( mod(params%startit,AUTOMSK_FREQ) == 0 .or. i == 1 )then
-                        call cline%set('automsk', 'yes')
+                        call cline%set('automsk', trim(params%automsk))
                     else
                         call cline%delete('automsk')
                     endif
@@ -754,7 +746,7 @@ contains
                 params%startit = params%startit + 1
             end do
             ! put back automsk flag if needed
-            if( l_automsk ) call cline%set('automsk', 'yes')
+            if( params%l_automsk ) call cline%set('automsk', trim(params%automsk))
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')

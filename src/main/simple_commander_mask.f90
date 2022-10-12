@@ -62,9 +62,8 @@ contains
             call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
             if( .not. file_exists(params%vols(1)) ) THROW_HARD('Cannot find input volume')
             call build%vol%read(params%vols(1))
-            if( cline%defined('mskfile') )then
+            if( params%l_filemsk )then
                 ! from file
-                if( .not. file_exists(params%mskfile) ) THROW_HARD('Cannot find input mskfile')
                 ldim = build%vol%get_ldim()
                 call mskvol%new(ldim, params%smpd)
                 call mskvol%read(params%mskfile)

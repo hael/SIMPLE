@@ -170,7 +170,7 @@ contains
         type(builder)                 :: build
         type(reconstructor_eo)        :: eorecvol_read
         character(len=:), allocatable :: finished_fname, recname, volname
-        character(len=LONGSTRLEN)     :: eonames(2), resmskname, benchfname
+        character(len=LONGSTRLEN)     :: eonames(2), benchfname
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
         integer                       :: part, s, n, ss, state, find4eoavg, fnr
@@ -234,7 +234,6 @@ contains
             allocate(volname, source=recname//params%ext)
             eonames(1) = trim(recname)//'_even'//params%ext
             eonames(2) = trim(recname)//'_odd'//params%ext
-            resmskname = params%mskfile
             if( l_euclid_regularization )then
                 ! the sum is done after regularization
             else

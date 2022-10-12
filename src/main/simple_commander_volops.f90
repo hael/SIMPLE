@@ -186,14 +186,8 @@ contains
             endif
         endif
         ! check volume mask
-        has_mskfile = .false.
-        if( cline%defined('mskfile') )then
-            if( .not.file_exists(params%mskfile) )then
-                THROW_HARD('volume mask file: '//trim(params%mskfile)//' not found')
-            else
-                has_mskfile = .true.
-            endif
-        else
+        has_mskfile = params%l_filemsk
+        if( .not. has_mskfile )then
             call spproj%get_vol('vol_msk', 1, fname_msk, mskfile_smpd, mskfile_box)
             params%mskfile = trim(fname_msk)
             if( file_exists(params%mskfile) ) has_mskfile = .true.
@@ -247,16 +241,13 @@ contains
         call vol_copy%read(fname_vol)
         ! mask
         call vol%ifft()
-        if( cline%defined('automsk') )then
-            if( cline%get_carg('automsk').eq.'no' ) has_mskfile = .false. ! turn off masking
-        endif
-        if( params%automsk .eq. 'yes' )then
+        if( params%l_automsk ) has_mskfile = .false. ! turn off masking using file
+        if( params%l_automsk )then
             if( .not. cline%defined('thres') .and. cline%defined('mw') )then
                 write(logfhandle,*) 'Need a pixel threshold > 0. for the binarisation'
                 write(logfhandle,*) 'Procedure for obtaining thresh:'
-                write(logfhandle,*) '(1) postproc vol without bfac or automsk'
-                write(logfhandle,*) '(2) Use UCSF Chimera to look at the volume'
-                write(logfhandle,*) '(3) Identify the pixel threshold that excludes any background noise'
+                write(logfhandle,*) '(1) Use UCSF Chimera to look at the *_lp.mrc volume'
+                write(logfhandle,*) '(2) Identify the pixel threshold that excludes any background noise'
                 THROW_HARD('postprocess')
             endif
             if( cline%defined('thres') .and. .not. cline%defined('mw') )then
@@ -403,7 +394,7 @@ contains
             if( cline%defined('xsh') .or. cline%defined('ysh') .or. cline%defined('zsh') )then
                 call build%vol%shift([params%xsh,params%ysh,params%zsh])
             endif
-            if( cline%defined('lp_backgr') .and. cline%defined('mskfile') )then
+            if( cline%defined('lp_backgr') .and. params%l_filemsk )then
                 call build%vol2%new(build%vol%get_ldim(), build%vol%get_smpd())
                 call build%vol2%read(params%mskfile)
                 call build%vol%lp_background(build%vol2, params%lp_backgr)

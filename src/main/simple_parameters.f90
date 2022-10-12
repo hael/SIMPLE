@@ -77,7 +77,6 @@ type :: parameters
     character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)      :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
-    character(len=3)      :: positive='no'        !< consider only positive pixels/voxels for threshold determination(yes|no){no}
     character(len=3)      :: proj_is_class='no'   !< intepret projection directions as classes
     character(len=3)      :: projstats='no'
     character(len=3)      :: roavg='no'           !< rotationally average images in stack
@@ -177,8 +176,8 @@ type :: parameters
     character(len=STDLEN) :: bin_cls='yes'        !< binary clustering applied(yes|no|only){yes}
     character(len=STDLEN) :: cn_type='cn_std'     !< generalised coordination number (cn_gen) or stardard (cn_std)
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
-    character(len=4)      :: automatic='no'       !< automatic thres for edge detect (yes|no) {no}
-    character(len=4)      :: automsk='no'
+    character(len=4)      :: automatic='no'       !< automatic thres for edge detect (yes|no){no}
+    character(len=4)      :: automsk='no'         !< automatic envelope masking (yes|tight|no){no}
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|no){sum}
     character(len=STDLEN) :: clustermode = 'ar'   !< feature used for clustering (ar|dist|ang|maxint){ar}
@@ -448,6 +447,7 @@ type :: parameters
     real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in (roughly) ascending alphabetical order
     logical :: l_autoscale    = .false.
+    logical :: l_automsk      = .false.
     logical :: l_bfac         = .false.
     logical :: l_corrw        = .false.
     logical :: l_distr_exec   = .false.
@@ -455,6 +455,7 @@ type :: parameters
     logical :: l_dose_weight  = .false.
     logical :: l_doshift      = .false.
     logical :: l_envfsc       = .false.
+    logical :: l_filemsk      = .false.
     logical :: l_focusmsk     = .false.
     logical :: l_frac_update  = .false.
     logical :: l_graphene     = .false.
@@ -605,7 +606,6 @@ contains
         call check_carg('phshiftunit',    self%phshiftunit)
         call check_carg('picker',         self%picker)
         call check_carg('platonic',       self%platonic)
-        call check_carg('positive',       self%positive)
         call check_carg('prg',            self%prg)
         call check_carg('projname',       self%projname)
         call check_carg('proj_is_class',  self%proj_is_class)
@@ -1302,6 +1302,21 @@ contains
             self%mskdiam = mskdiam_default
             self%msk     = msk_default
         endif
+        ! automasking options
+        self%l_filemsk = .false.
+        self%l_automsk = .false.
+        if( cline%defined('mskfile') )then
+            if( .not.file_exists(trim(self%mskfile)) ) THROW_HARD('Inputted mask file '//trim(self%mskfile)//' does not exist')
+            self%l_filemsk = .true.  ! indicate file is inputted
+        endif
+        select case(trim(self%automsk))
+            case('yes','tight')
+                self%l_automsk = .true.
+            case('no')
+                self%l_automsk = .false.
+            case DEFAULT
+                THROW_HARD('automsk flag value: '//trim(self%automsk)//' is unsupported')
+        end select
         ! set lpset flag
         self%l_lpset  = cline%defined('lp')
         ! set envfsc flag

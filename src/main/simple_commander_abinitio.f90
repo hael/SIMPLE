@@ -86,7 +86,7 @@ contains
         real                  :: iter, smpd_target, lplims(2), orig_smpd, cenlp
         real                  :: scale_factor1, scale_factor2, lp3(3)
         integer               :: icls, ncavgs, orig_box, box, istk, cnt, ifoo, ldim(3)
-        logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset, l_shmem, l_automsk
+        logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset, l_shmem
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('ptclw')     ) call cline%set('ptclw',      'no')
@@ -124,11 +124,7 @@ contains
         ! make master parameters
         call params%new(cline)
         ! take care of automask flag
-        l_automsk = .true.
-        if( cline%defined('automsk') )then
-            l_automsk = trim(params%automsk) .eq. 'yes'
-            call cline%delete('automsk')
-        endif
+        if( cline%defined('automsk') ) call cline%delete('automsk')
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! from now on we are in the ptcl3D segment, final report is in the cls3D segment
@@ -195,7 +191,7 @@ contains
             call stkio_r%close
             call stkio_r2%close
             ! nonuniform filtering
-            if( l_automsk )then
+            if( params%l_automsk )then
                 call automask2D(masks, params%ngrow, WINSZ_AUTOMSK, params%edge, diams)
                 call opt_2D_filter_sub(cavgs_eo(:,2), cavgs_eo(:,1), masks)
             else
@@ -380,8 +376,8 @@ contains
             call cline_refine3D_refine%set('nspace', real(NSPACE_REFINE))
         endif
         call cline_refine3D_refine%set('nonuniform', 'no') ! done in 2D
-        if( l_automsk )then
-            call cline_refine3D_refine%set('automsk',   'yes')
+        if( params%l_automsk )then
+            call cline_refine3D_refine%set('automsk', trim(params%automsk))
             call cline_refine3D_refine%set('amsklp', AMSKLP3D)
         endif
         ! (5) RE-CONSTRUCT & RE-PROJECT VOLUME
@@ -397,8 +393,8 @@ contains
         else
             call cline_postprocess%delete('lp')
         endif
-        if( l_automsk )then
-            call cline_postprocess%set('automsk', 'yes')
+        if( params%l_automsk )then
+            call cline_postprocess%set('automsk', trim(params%automsk))
         endif
         call cline_reproject%set('prg',     'reproject')
         call cline_reproject%set('pgrp',    trim(pgrp_refine))
@@ -540,7 +536,7 @@ contains
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> RECONSTRUCTION AT ORIGINAL SAMPLING'
             write(logfhandle,'(A)') '>>>'
-            if( l_automsk )then
+            if( params%l_automsk )then
                 ! scale the mask
                 if( .not. file_exists('automask'//trim(ext)) ) THROW_HARD('file '//'automask'//trim(ext)//' does not exist')
                 call cline_scale_msk%set('smpd',   smpd_target)
