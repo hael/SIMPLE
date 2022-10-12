@@ -55,8 +55,7 @@ contains
         call even%read(params%vols(2))
         res = even%get_res()
         nyq = even%get_filtsz()
-        if( cline%defined('mskfile') )then
-            if( .not.file_exists(params%mskfile) ) THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_fsc')
+        if( params%l_filemsk )then
             call mskvol%new([params%box,params%box,params%box], params%smpd)
             call mskvol%read(params%mskfile)
             call phase_rand_fsc(even, odd, mskvol, params%msk, 1, nyq, fsc, fsc_t, fsc_n)
@@ -82,7 +81,7 @@ contains
         call odd%kill
         fsc_templ = trim(FSC_FBODY)//int2str_pad(1,2)
         call arr2file(fsc, trim(fsc_templ)//trim(BIN_EXT))
-        if( cline%defined('mskfile') )then
+        if( params%l_filemsk )then
             call plot_phrand_fsc(size(fsc), fsc, fsc_t, fsc_n, res, params%smpd, fsc_templ)
         else
             call plot_fsc(size(fsc), fsc, res, params%smpd, fsc_templ)
@@ -107,19 +106,15 @@ contains
         call even%read(params%vols(2))
         file_tag = 'nonuniform_3D_filter_ext_'//int2str(params%smooth_ext)
         have_mask_file = .false.
-        if( cline%defined('mskfile') )then
-            if( file_exists(params%mskfile) )then
-                call mskvol%new([params%box,params%box,params%box], params%smpd)
-                call mskvol%read(params%mskfile)
-                call even%zero_background
-                call odd%zero_background
-                call even%mul(mskvol)
-                call odd%mul(mskvol)
-                call mskvol%one_at_edge ! to expand before masking of reference internally
-                have_mask_file = .true.
-            else
-                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_opt_3D_filter')
-            endif
+        if( params%l_filemsk )then
+            call mskvol%new([params%box,params%box,params%box], params%smpd)
+            call mskvol%read(params%mskfile)
+            call even%zero_background
+            call odd%zero_background
+            call even%mul(mskvol)
+            call odd%mul(mskvol)
+            call mskvol%one_at_edge ! to expand before masking of reference internally
+            have_mask_file = .true.
         else
             ! spherical masking
             call even%mask(params%msk, 'soft')
@@ -182,7 +177,7 @@ contains
             call mask(iptcl)%mul(0.5)
         enddo
         ! filter
-        if( trim(params%automsk).eq.'yes' )then
+        if( params%l_automsk )then
             call automask2D(mask, params%ngrow, nint(params%winsz), params%edge, diams)
             call opt_2D_filter_sub(even, odd, mask)
         else

@@ -677,7 +677,7 @@ contains
             call mask_imgs(icls)%add(cavgs_odd(icls))
             call mask_imgs(icls)%mul(0.5)
         end do
-        l_automsk = trim(params_glob%automsk).eq.'yes' .and. which_iter > AMSK2D_ITERLIM
+        l_automsk = params_glob%l_automsk .and. which_iter > AMSK2D_ITERLIM
         if( l_automsk )then
             call automask2D(mask_imgs, params_glob%ngrow, nint(params_glob%winsz), params_glob%edge, diams)
         endif

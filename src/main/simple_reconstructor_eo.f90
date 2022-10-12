@@ -90,7 +90,7 @@ contains
         self%ext        = params_glob%ext
         self%numlen     = params_glob%numlen
         self%msk        = params_glob%msk
-        self%automsk    = file_exists(params_glob%mskfile) .and. params_glob%l_envfsc
+        self%automsk    = params_glob%l_filemsk .and. params_glob%l_envfsc
         self%phaseplate = params_glob%l_phaseplate
         self%hpind_fsc  = params_glob%hpind_fsc
         self%pad_correction = (real(params_glob%boxpd)/real(self%box))**3. * real(self%box)

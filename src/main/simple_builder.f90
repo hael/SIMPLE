@@ -340,7 +340,7 @@ contains
         integer :: i
         call self%kill_strategy2D_tbox
         call self%clsfrcs%new(params%ncls, params%box, params%smpd, params%nstates)
-        if( trim(params%automsk).eq.'yes' )then
+        if( params%l_automsk )then
             allocate(self%env_masks(params%ncls), self%diams(params%ncls))
             self%diams = 0.
             do i = 1,params%ncls
