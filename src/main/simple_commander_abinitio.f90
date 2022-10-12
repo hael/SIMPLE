@@ -93,7 +93,7 @@ contains
         if( .not. cline%defined('overlap')   ) call cline%set('overlap',     0.8)
         if( .not. cline%defined('fracsrch')  ) call cline%set('fracsrch',    0.9)
         if( .not. cline%defined('envfsc')    ) call cline%set('envfsc',     'no')
-        if( .not. cline%defined('ngrow')     ) call cline%set('ngrow',        5.)
+        if( .not. cline%defined('ngrow')     ) call cline%set('ngrow',        3.)
         if( .not. cline%defined('amsklp')    ) call cline%set('amsklp',      20.)
         if( .not. cline%defined('edge')      ) call cline%set('edge',         6.)
         ! call set_automask2D_defaults(cline)
