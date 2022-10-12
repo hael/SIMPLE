@@ -174,7 +174,7 @@ contains
                 enddo
                 call automask2D(build_glob%env_masks, params_glob%ngrow, nint(params_glob%winsz), params_glob%edge, build_glob%diams)
                 call opt_2D_filter_sub(cavgs_even, cavgs_odd, build_glob%env_masks)
-            else
+            else if( which_iter > OPTFILT2D_ITERLIM )then
                 call opt_2D_filter_sub(cavgs_even, cavgs_odd)
             endif
             if( params_glob%part.eq.1 )then
