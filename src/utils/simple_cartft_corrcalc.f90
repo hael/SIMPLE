@@ -27,7 +27,6 @@ type :: cartft_corrcalc
     integer                      :: ldim(3)       = 0       !< logical dimensions of original cartesian image
     integer                      :: lims(3,2)     = 0       !< resolution mask limits
     integer                      :: cmat_shape(3) = 0       !< shape of complex matrix (dictated by the FFTW library)
-    type(image)                  :: proj                    !< volume projection
     integer,         allocatable :: pinds(:)                !< index array (to reduce memory when frac_update < 1)
     real,            allocatable :: pxls_p_shell(:)         !< number of (cartesian) pixels per shell
     real(sp),        allocatable :: sqsums_ptcls(:)         !< memoized square sums for the correlation calculations (taken from kfromto(1):kstop)
@@ -118,8 +117,6 @@ contains
         ! set pointers to projectors
         self%vol_even => vol_even
         self%vol_odd  => vol_odd
-        ! container for projection
-        call self%proj%new([self%ldim(1),self%ldim(2),1], params_glob%smpd)
         ! allocate optimal low-pass filter & memoized sqsums
         allocate(self%optlp(params_glob%kfromto(1):params_glob%kstop), source=0.)
         allocate(self%sqsums_ptcls(1:self%nptcls), source=1.)
@@ -205,14 +202,14 @@ contains
             do i = 1,self%nptcls
                 call self%particles(i)%new(self%ldim, params_glob%smpd)
             end do
-            endif
-            self%sqsums_ptcls = 1.
-            self%iseven       = .true.
-            allocate(self%pinds(self%pfromto(1):self%pfromto(2)), source=0)
-            do i = 1,self%nptcls
-                iptcl = pinds(i)
-                self%pinds( iptcl ) = i
-            enddo
+        endif
+        self%sqsums_ptcls = 1.
+        self%iseven       = .true.
+        allocate(self%pinds(self%pfromto(1):self%pfromto(2)), source=0)
+        do i = 1,self%nptcls
+            iptcl = pinds(i)
+            self%pinds( iptcl ) = i
+        enddo
     end subroutine reallocate_ptcls
 
     subroutine set_ptcl( self, iptcl, img )
@@ -388,19 +385,20 @@ contains
         real,                   intent(in)    :: shvec(2)
         real,         optional, intent(inout) :: grad(2)
         real(sp) :: cc
-        integer  :: i
+        integer  :: i, ithr
         i    =  self%pinds(iptcl)
+        ithr = omp_get_thread_num() + 1
         ! prep ref
-        call self%proj%fft
+        call self%heap_vars(ithr)%img_ref%fft
         ! shell normalization and filtering
-        call self%shellnorm_and_filter_ref(self%proj)
+        call self%shellnorm_and_filter_ref(self%heap_vars(ithr)%img_ref)
         ! multiply with CTF
-        if( self%with_ctf ) call self%proj%mul_cmat(self%ctfmats(:,:,:,i), self%resmsk)
+        if( self%with_ctf ) call self%heap_vars(ithr)%img_ref%mul_cmat(self%ctfmats(:,:,:,i), self%resmsk)
         ! calc corr
         if( present(grad) )then
-            cc = real(self%proj%corr_grad_ad(self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec, params_glob%cc_objfun, grad), kind=sp)
+            cc = real(self%heap_vars(ithr)%img_ref%corr_grad_ad(self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec, params_glob%cc_objfun, grad), kind=sp)
         else
-            cc = real(self%proj%corr_grad_ad(self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec, params_glob%cc_objfun), kind=sp)
+            cc = real(self%heap_vars(ithr)%img_ref%corr_grad_ad(self%particles(i), self%sqsums_ptcls(i), self%resmsk, shvec, params_glob%cc_objfun), kind=sp)
         endif
     end function calc_corr
 
@@ -422,10 +420,10 @@ contains
         endif
         ithr = omp_get_thread_num() + 1
         if( present_grad )then
-            call vol_ptr%fproject_serial(o, self%proj, params_glob%kstop)
+            call vol_ptr%fproject_serial(o, self%heap_vars(ithr)%img_ref, params_glob%kstop)
             corr = self%calc_corr(iptcl, o%get_2Dshift(), grad(:))
         else
-            call vol_ptr%fproject_serial(o, self%proj, params_glob%kstop)
+            call vol_ptr%fproject_serial(o, self%heap_vars(ithr)%img_ref, params_glob%kstop)
             corr = self%calc_corr(iptcl, o%get_2Dshift())
         endif
     end subroutine project_and_correlate
@@ -439,7 +437,6 @@ contains
             self%ldim     = 0
             self%vol_even => null()
             self%vol_odd  => null()
-            call self%proj%kill
             if( allocated(self%pinds)        ) deallocate(self%pinds)
             if( allocated(self%pxls_p_shell) ) deallocate(self%pxls_p_shell)
             if( allocated(self%sqsums_ptcls) ) deallocate(self%sqsums_ptcls)
