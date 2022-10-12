@@ -117,8 +117,6 @@ contains
         was_ft = vol_inout%is_ft()
         if( was_ft ) call vol_inout%ifft()
         call self%transfer2bimg(vol_inout)
-        ! normalize volume
-        call self%zero_edgeavg
         ! low-pass filter volume
         call self%bp(0., self%amsklp)
         ! binarize volume
