@@ -530,7 +530,7 @@ contains
                             call cline_postprocess%set('mskfile', trim(params%mskfile))
                             call cline_postprocess%delete('automsk')
                             call cline%set('mskfile', trim(params%mskfile))
-                            call job_descr%set( 'mskfile', trim(params%mskfile))
+                            call job_descr%set('mskfile', trim(params%mskfile))
                         endif
                     endif
             end select
@@ -672,9 +672,10 @@ contains
         type(builder)            :: build
         integer                  :: startit, i, state
         character(len=STDLEN)    :: str_state, fsc_file, vol, vol_iter
-        logical                  :: converged
+        logical                  :: converged, l_automsk
         real                     :: corr, corr_prev
         call build%init_params_and_build_strategy3D_tbox(cline,params)
+        l_automsk = params%l_automsk
         startit = 1
         if( cline%defined('startit') ) startit = params%startit
         if( startit == 1 ) call build%spproj_field%clean_updatecnt
@@ -688,6 +689,7 @@ contains
             ! take care of automask flag
             if( cline%defined('automsk') ) call cline%delete('automsk')
             if( params%l_automsk .and. params%nstates > 1 ) THROW_HARD('automsk.ne.no not currenty supported for multi-state refinement')
+            params%l_automsk   = .false.
             params%startit     = startit
             params%outfile     = 'algndoc'//METADATA_EXT
             params%extr_iter   = params%startit - 1
@@ -705,11 +707,13 @@ contains
                 ! exponential cooling of the randomization rate
                 params%extr_iter = params%extr_iter + 1
                 ! to control the masking behaviour in simple_strategy2D3D_common :: norm_struct_facts
-                if( params%l_automsk )then
+                if( l_automsk )then
                     if( mod(params%startit,AUTOMSK_FREQ) == 0 .or. i == 1 )then
                         call cline%set('automsk', trim(params%automsk))
+                        params%l_automsk = .true.
                     else
                         call cline%delete('automsk')
+                        params%l_automsk = .false.
                     endif
                 endif
                 ! in strategy3D_matcher:
@@ -746,7 +750,7 @@ contains
                 params%startit = params%startit + 1
             end do
             ! put back automsk flag if needed
-            if( params%l_automsk ) call cline%set('automsk', trim(params%automsk))
+            if( l_automsk ) call cline%set('automsk', trim(params%automsk))
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')

@@ -220,6 +220,12 @@ contains
                 call stkio_w%write(icls, cavgs_eo(icls,1))
             end do
             call stkio_w%close
+            do icls = 1, ncavgs
+                call cavgs_eo(icls,1)%kill
+                call cavgs_eo(icls,2)%kill
+                call masks(icls)%kill
+            end do
+            deallocate(cavgs_eo, masks)
         else
             stk_even = add2fbody(trim(stk), trim(ext), '_even')
             stk_odd  = add2fbody(trim(stk), trim(ext), '_odd')
@@ -644,13 +650,6 @@ contains
         ! write results (this needs to be a full write as multiple segments are updated)
         call spproj%write()
         ! end gracefully
-        if( params_glob%l_nonuniform )then
-            do icls = 1, ncavgs
-                call cavgs_eo(icls,1)%kill
-                call cavgs_eo(icls,2)%kill
-                call masks(icls)%kill
-            end do
-        endif
         call se1%kill
         call se2%kill
         call img%kill
