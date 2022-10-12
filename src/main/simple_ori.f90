@@ -470,7 +470,7 @@ contains
     !>  \brief  for generating a random Euler angle
     subroutine rnd_euler_1( self, eullims )
         class(ori),     intent(inout) :: self
-        real, optional, intent(inout) :: eullims(3,2) !< Euler angles
+        real, optional, intent(inout) :: eullims(3,2) !< Euler angle limits
         logical :: found
         real    :: euls(3), rmat(3,3)
         if( present(eullims) )then
@@ -494,17 +494,26 @@ contains
     end subroutine rnd_euler_1
 
     !>  \brief  for generating a random Euler angle neighbour to o_prev
-    subroutine rnd_euler_2( self, o_prev, athres )
-        class(ori), intent(inout) :: self   !< instance
-        class(ori), intent(in)    :: o_prev !< template ori
-        real,       intent(in)    :: athres !< angle threshold in degrees
-        real    :: athres_rad, dist
+    subroutine rnd_euler_2( self, o_prev, athres, eullims )
+        class(ori),     intent(inout) :: self         !< instance
+        class(ori),     intent(in)    :: o_prev       !< template ori
+        real,           intent(in)    :: athres       !< Euler angle threshold in degrees
+        real, optional, intent(inout) :: eullims(3,2) !< Euler angle limits
+        real    :: athres_rad, dist, rnd_perm, euls(3)
         athres_rad = deg2rad(athres)
-        dist = 2.*athres_rad
+        dist       = 2.*athres_rad
         do while( dist > athres_rad )
-            call self%rnd_euler_1
+            call self%rnd_euler_1(eullims)
             dist = self.euldist.o_prev
         end do
+        euls(1) = self%e1get()
+        euls(2) = self%e2get()
+        if( ran3() <= 0.5 )then
+            euls(3) = self%e3get() + ran3() * athres
+        else
+            euls(3) = self%e3get() - ran3() * athres
+        endif
+        call self%set_euler(euls)
     end subroutine rnd_euler_2
 
     !>  \brief  for generating random ori

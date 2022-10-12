@@ -38,18 +38,18 @@ contains
         class(strategy3D_neighc), intent(inout) :: self
         integer,                  intent(in)    :: ithr
         integer   :: isample
-        type(ori) :: o
-        real      :: corr
-        o = self%s%o_prev
-        ! zero shifts because particle is shifted to its previous origin
-        call o%set('x', 0.)
-        call o%set('y', 0.)
+        type(ori) :: o, osym
+        real      :: corr, euldist, dist_inpl
         ! continuous sochastic search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
             ! prep
             call self%s%prep4_cont_srch
+            o = self%s%o_prev
+            ! zero shifts because particle is shifted to its previous origin
+            call o%set('x', 0.)
+            call o%set('y', 0.)
             ! init counter
             self%s%nrefs_eval = 0
             do isample=1,self%s%nsample
@@ -61,6 +61,8 @@ contains
                 self%s%nrefs_eval = self%s%nrefs_eval + 1
                 ! exit condition
                 if( corr > self%s%prev_corr )then
+                    call build_glob%pgrpsyms%sym_dists(self%s%o_prev, o, osym, euldist, dist_inpl)
+                    call o%set('dist', euldist)
                     call build_glob%spproj_field%set_ori(self%s%iptcl, o)
                     exit
                 endif

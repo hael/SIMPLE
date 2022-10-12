@@ -699,7 +699,7 @@ contains
         class(sym), intent(inout) :: self
         class(ori), intent(inout) :: osym
         call osym%rnd_euler
-        call self%rot_to_asym(osym)
+        if( self%n > 1 ) call self%rot_to_asym(osym)
     end subroutine rnd_euler_1
 
     subroutine rnd_euler_2( self, o_prev, athres, osym )
@@ -708,7 +708,7 @@ contains
         real,       intent(in)    :: athres
         class(ori), intent(inout) :: osym
         call osym%rnd_euler(o_prev, athres)
-        call self%rot_to_asym(osym)
+        if( self%n > 1 ) call self%rot_to_asym(osym)
     end subroutine rnd_euler_2
 
     !>  \brief  SPIDER code for making c and d symmetries
