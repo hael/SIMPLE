@@ -678,10 +678,6 @@ contains
             call mask_imgs(icls)%mul(0.5)
         end do
         l_automsk = trim(params_glob%automsk).eq.'yes' .and. which_iter > AMSK2D_ITERLIM
-
-        ! print *, ' in cavger_calc_and_write_frcs_and_eoavg, which_iter: ', which_iter
-        ! print *, ' in cavger_calc_and_write_frcs_and_eoavg, l_automsk:  ', l_automsk
-
         if( l_automsk )then
             call automask2D(mask_imgs, params_glob%ngrow, nint(params_glob%winsz), params_glob%edge, diams)
         endif

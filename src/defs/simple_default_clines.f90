@@ -7,7 +7,7 @@ contains
 
     subroutine set_automask2D_defaults( cline )
         class(cmdline), intent(inout) :: cline
-        if( .not. cline%defined('ngrow')  ) call cline%set('ngrow',   5.)
+        if( .not. cline%defined('ngrow')  ) call cline%set('ngrow',   3.)
         if( .not. cline%defined('winsz')  ) call cline%set('winsz',   5.)
         if( .not. cline%defined('amsklp') ) call cline%set('amsklp', 20.)
         if( .not. cline%defined('edge')   ) call cline%set('edge',    6.)
