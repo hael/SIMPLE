@@ -469,7 +469,7 @@ contains
         use simple_commander_project, only: scale_project_commander_distr
         use simple_commander_imgproc, only: scale_commander, pspec_int_rank_commander
         class(cluster2D_autoscale_commander), intent(inout) :: self
-        class(cmdline),                            intent(inout) :: cline
+        class(cmdline),                       intent(inout) :: cline
         ! constants
         integer,               parameter :: MAXITS_STAGE1      = 10
         integer,               parameter :: MAXITS_STAGE1_EXTR = 15
