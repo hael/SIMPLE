@@ -30,7 +30,6 @@ type, extends(binimage) :: masker
     procedure          :: automask3D
     procedure          :: automask3D_otsu
     procedure          :: mask_from_pdb
-    procedure, private :: bin_vol_thres
     procedure, private :: env_rproject
 end type masker
 
@@ -41,7 +40,10 @@ contains
     subroutine automask3D( self, vol_inout )
         class(masker), intent(inout) :: self
         class(image),  intent(inout) :: vol_inout
-        logical     :: was_ft
+        integer, allocatable :: ccsizes(:), imat_cc(:,:,:)
+        logical        :: was_ft
+        integer        :: imax, sz, nnvox
+        type(binimage) :: ccimage
         if( vol_inout%is_2d() )THROW_HARD('automask3D is intended for volumes only; automask3D')
         self%msk       = params_glob%msk
         self%amsklp    = params_glob%amsklp
@@ -56,8 +58,33 @@ contains
         was_ft = vol_inout%is_ft()
         if( was_ft ) call vol_inout%ifft()
         call self%transfer2bimg(vol_inout)
-        ! binarize volume
-        call self%bin_vol_thres
+        ! pre-process volume
+        call self%zero_below(self%pix_thres)
+        call self%real_space_filter(WINSZ, 'average')
+        call self%bp(0., self%amsklp)
+        ! find nr of voxels corresponding to mw
+        nnvox = nvoxfind(self%get_smpd(), self%mw)
+        ! binarize
+        call self%binarize(nnvox)
+        ! identify connected components
+        call self%find_ccs(ccimage, update_imat=.true.)
+        ! extract all cc sizes (in # pixels)
+        ccsizes = self%size_ccs()
+        sz      = size(ccsizes)
+        if( sz > 1 )then
+            ! identify the largest connected component
+            imax = maxval(ccsizes)
+            ! eliminate all but the largest one
+            call self%elim_ccs([imax,imax])
+            call self%get_imat(imat_cc)
+            ! convert to binary
+            where( imat_cc > 0 ) imat_cc = 1
+            ! this also updates the real-valued image object
+            call self%set_imat(imat_cc)
+        endif
+        ! binary layers
+        call self%set_imat
+        call self%grow_bins(self%binwidth)
         ! add volume soft edge
         call self%cos_edge(self%edge)
         ! apply mask to volume
@@ -78,7 +105,7 @@ contains
         type(binimage) :: ccimage
         ddo_apply = .true.
         if( present(do_apply) ) ddo_apply = do_apply
-        if( vol_inout%is_2d() )THROW_HARD('automask3D is intended for volumes only; automask3D')
+        if( vol_inout%is_2d() )THROW_HARD('automask3D_otsu is intended for volumes only; automask3D')
         self%msk       = params_glob%msk
         self%amsklp    = params_glob%amsklp
         self%binwidth  = params_glob%binwidth
@@ -90,10 +117,12 @@ contains
         was_ft = vol_inout%is_ft()
         if( was_ft ) call vol_inout%ifft()
         call self%transfer2bimg(vol_inout)
-        ! binarize volume
+        ! normalize volume
+        call self%zero_edgeavg
+        ! low-pass filter volume
         call self%bp(0., self%amsklp)
-        call otsu_img(self)
-        call self%set_imat
+        ! binarize volume
+        call otsu_img(self, mskrad=params_glob%msk, positive=trim(params_glob%automsk).eq.'tight')
         ! identify connected components
         call self%find_ccs(ccimage, update_imat=.true.)
         ! extract all cc sizes (in # pixels)
@@ -188,24 +217,6 @@ contains
         call cos_img%kill
     end subroutine mask_from_pdb
 
-    ! BINARISATION ROUTINES
-
-    !>  \brief  is for binarizing the 3D image using thresholding
-    subroutine bin_vol_thres( self )
-        class(masker), intent(inout) :: self
-        integer :: nnvox
-        call self%zero_below(self%pix_thres)
-        call self%real_space_filter( WINSZ, 'average')
-        call self%bp(0., self%amsklp)
-        ! find nr of voxels corresponding to mw
-        nnvox = nvoxfind(self%get_smpd(), self%mw)
-        ! binarize again
-        call self%binarize(nnvox)
-        ! binary layers
-        call self%set_imat
-        call self%grow_bins(self%binwidth)
-    end subroutine bin_vol_thres
-
     ! CALCULATORS
 
     !>  \brief  volume mask projector
@@ -280,6 +291,7 @@ contains
         n = size(imgs)
         l_write = .false.
         if( present(write2disk) ) l_write = write2disk
+        l_write = l_write .and. params_glob%part.eq.1
         if( allocated(diams) ) deallocate(diams)
         ! allocate
         allocate(diams(n), source=0.)
@@ -306,6 +318,7 @@ contains
             ! if( l_write ) call img_bin(i)%write('filtered.mrc', i)
             ! binarize with Otsu
             call otsu_img(img_bin(i), mskrad=params_glob%msk, positive=trim(params_glob%automsk).eq.'tight')
+            call img_bin(i)%set_imat
             ! if( l_write ) call img_bin(i)%write(BIN_OTSU, i)
             ! grow ngrow layers
             if( ngrow > 0 ) call img_bin(i)%grow_bins(ngrow)
