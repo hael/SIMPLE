@@ -443,9 +443,12 @@ contains
             do l = lb(2),ub(2)
                 do k = lb(1),ub(1)
                     if( pdiff_odd%rmat(k,l,1) < pdiff_opt_odd%rmat(k,l,1) )then
-                        rmat_odd( k,l,1)      = rmat_odd_filt( k,l,1)
-                        rmat_even(k,l,1)      = rmat_even_filt(k,l,1)
+                        rmat_odd(          k,l,1) = rmat_odd_filt( k,l,1)
                         pdiff_opt_odd%rmat(k,l,1) = pdiff_odd%rmat(k,l,1)
+                    endif
+                    if( pdiff_even%rmat(k,l,1) < pdiff_opt_even%rmat(k,l,1) )then
+                        rmat_even(          k,l,1) = rmat_even_filt(k,l,1)
+                        pdiff_opt_even%rmat(k,l,1) = pdiff_even%rmat(k,l,1)
                     endif
                 enddo
             enddo
@@ -523,15 +526,23 @@ contains
                         m = rmat_mask(k,l,1)
                         if( m > 0.99 )then
                             rmat_odd( k,l,1) = rmat_odd_filt( k,l,1)
-                            rmat_even(k,l,1) = rmat_even_filt(k,l,1)
                         else if( m < 0.01 )then
                             rmat_odd( k,l,1) = rmat_odd_lowres( k,l,1)
-                            rmat_even(k,l,1) = rmat_even_lowres(k,l,1)
                         else
                             rmat_odd( k,l,1) = m * rmat_odd_filt( k,l,1) + (1. - m) * rmat_odd_lowres( k,l,1)
-                            rmat_even(k,l,1) = m * rmat_even_filt(k,l,1) + (1. - m) * rmat_even_lowres(k,l,1)
                         endif
                         pdiff_opt_odd%rmat(k,l,1) = pdiff_odd%rmat(k,l,1)
+                    endif
+                    if( pdiff_even%rmat(k,l,1) < pdiff_opt_even%rmat(k,l,1) )then
+                        m = rmat_mask(k,l,1)
+                        if( m > 0.99 )then
+                            rmat_even(k,l,1) = rmat_even_filt(k,l,1)
+                        else if( m < 0.01 )then
+                            rmat_even(k,l,1) = rmat_even_lowres(k,l,1)
+                        else
+                            rmat_even(k,l,1) = m * rmat_even_filt(k,l,1) + (1. - m) * rmat_even_lowres(k,l,1)
+                        endif
+                        pdiff_opt_even%rmat(k,l,1) = pdiff_even%rmat(k,l,1)
                     endif
                 enddo
             enddo
