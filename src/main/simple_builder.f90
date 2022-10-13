@@ -207,7 +207,7 @@ contains
         if( params%sp_required )then
             read_spproj = .true.
         else
-            if( cline%defined('projfile') )read_spproj = .true.
+            if( cline%defined('projfile') ) read_spproj = .true.
         endif
         if( read_spproj )then
             call self%spproj%read(params%projfile, wthreads=wthreads)

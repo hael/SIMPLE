@@ -36,7 +36,7 @@ contains
 
     subroutine srch_snhc( self, ithr )
         class(strategy3D_snhc), intent(inout) :: self
-        integer,                       intent(in)    :: ithr
+        integer,                intent(in)    :: ithr
         integer :: iref, isample
         real    ::  inpl_corrs(self%s%nrots)
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then

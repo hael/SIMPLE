@@ -22,7 +22,6 @@ use simple_strategy3D_cluster,      only: strategy3D_cluster
 use simple_strategy3D_shc,          only: strategy3D_shc
 use simple_strategy3D_shcc,         only: strategy3D_shcc
 use simple_strategy3D_snhc,         only: strategy3D_snhc
-use simple_strategy3D_snhcc,        only: strategy3D_snhcc
 use simple_strategy3D_greedy,       only: strategy3D_greedy
 use simple_strategy3D_greedy_neigh, only: strategy3D_greedy_neigh
 use simple_strategy3D_neigh,        only: strategy3D_neigh
@@ -87,12 +86,12 @@ contains
 
         ! CARTESIAN REFINEMENT FLAG
         select case(trim(params_glob%refine))
-            case('shcc','neighc','snhcc')
+            case('shcc','neighc')
                 l_cartesian = .true.
             case DEFAULT
                 l_cartesian = .false.
         end select
-        
+
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
             if( l_distr_exec_glob ) THROW_HARD('no eo partitioning available; refine3D_exec')
@@ -217,6 +216,7 @@ contains
             rt_prep_orisrch = toc(t_prep_orisrch)
             rt_align        = 0.
         endif
+
         ! Batch loop
         do ibatch=1,nbatches
             batch_start = batches(ibatch,1)
@@ -244,8 +244,6 @@ contains
                 select case(trim(params_glob%refine))
                     case('snhc')
                         allocate(strategy3D_snhc                 :: strategy3Dsrch(iptcl_batch)%ptr)
-                    case('snhcc')
-                        allocate(strategy3D_snhcc                :: strategy3Dsrch(iptcl_batch)%ptr)
                     case('shc')
                         if( .not. has_been_searched )then
                             allocate(strategy3D_greedy           :: strategy3Dsrch(iptcl_batch)%ptr)
